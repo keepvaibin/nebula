@@ -382,7 +382,7 @@ impl Blob {
     }
 }
 
-/// How much light crosses inside each material (RT-MASTER-PLAN 13.2): over the meshes it draws, their bounds, area and
+/// How much light crosses inside each material: over the meshes it draws, their bounds, area and
 /// enclosed volume, and whether together they close (every edge, corners welded by place, shared by two triangles).
 #[derive(Clone, Copy)]
 struct Measure {
@@ -443,11 +443,11 @@ impl Measure {
     }
 }
 
-/// Below this share of smooth residual a model's paint holds detail shadows of its own (RT-MASTER-PLAN 14.6).
+/// Below this share of smooth residual a model's paint holds detail shadows of its own.
 const PAINTED_SHADOW_SMOOTH: f64 = 0.5;
 
-/// The painted light of a model's vertex-coloured meshes (RT-MASTER-PLAN 14.6; agents/rt/tools/debake_study.py does the
-/// same over a pak): each mesh's vertex luminance fitted by an ambient and one directional light (least squares over
+/// The painted light of a model's vertex-coloured meshes:
+/// each mesh's vertex luminance fitted by an ambient and one directional light (least squares over
 /// its vertices, unclamped), and the share of what the fit leaves that is smooth over the surface (the variance of
 /// the residual's triangle means against the residual's own), weighted by vertices over the model.
 #[derive(Default)]

@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaCore registries (agents/LUMACORE-PLAN.md C1, 8.7): every kind of thing a mod can add is a row, and the game's own
+// LumaCore registries: every kind of thing a mod can add is a row, and the game's own
 // things are rows of the same kinds, so a mod row has every option a game row has. Rows are found by kind and name
 // through one hash; a later row of the same kind and name replaces the earlier one (the later mod wins, logged).
 

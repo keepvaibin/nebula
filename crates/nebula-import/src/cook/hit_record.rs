@@ -615,7 +615,7 @@ fn unit_colour(c: [f32; 3]) -> [f32; 3] {
     c.map(|v| (v / top).clamp(0.0, 1.0))
 }
 
-/// Which of the material's colours carries what it shows unlit (RT-MASTER-PLAN 8.1 L-1), as NebulaModelHit.glow_source:
+/// Which of the material's colours carries what it shows unlit, as NebulaModelHit.glow_source:
 /// 1 + the NEBULA_ROW_* code (registers 1 to 3: 0 to 2, constants 0 to 3: 3 to 6, material colours: 7, 8) of the one
 /// whose loss darkens the unlit result most, when that is a quarter of it or more; 16 the vertex colour; 0 none (a
 /// glow then keeps the colour it was cooked with).
@@ -666,11 +666,11 @@ pub fn glow_source(m: &MaterialIr) -> u8 {
     }
 }
 
-/// Water surfaces (data/rt_water.tsv, RT-MASTER-PLAN 13.3): a model's file stem and a material name (a trailing `*`:
+/// Water surfaces (data/rt_water.tsv): a model's file stem and a material name (a trailing `*`:
 /// names that begin so), both in any case.
 const WATER_TABLE: &str = include_str!("../../data/rt_water.tsv");
 
-/// The review's overrides (data/rt_materials.tsv, RT-MASTER-PLAN 14.2 change 8 and 14.4).
+/// The review's overrides (data/rt_materials.tsv).
 const MATERIALS_TABLE: &str = include_str!("../../data/rt_materials.tsv");
 
 fn name_matches(pattern: &str, name: &str) -> bool {

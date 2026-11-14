@@ -52,7 +52,7 @@ The base types are the same fundamental types on every host (`types.h`): `s32` i
 
 ## Platform boundary
 
-- The game's objects reference only the C and C++ runtimes and the host's services (`tools/progress/census.py`, `native/tools/boundary.py`).
+- The game's objects reference only the C and C++ runtimes and the host's services (`native/tools/boundary.py`).
 - **Drawing**: typed records (docs/GRAPHICS_ARCHITECTURE.md). Rectangles count `NEBULA_FRAME_UNITS` across a frame or target; `Game/Render/FrameList.cpp` turns the game's screen units into them.
 - **Depth and brightness questions**: screen probes. The game names its points, the renderer reads those pixels where the drawing has reached, and the answers come back a frame later.
 - **Audio**: voices and effect lines are records the host's mixer reads (`voices_setup`, `voices_mix`, `voices_frame`), mixed in float at the device's rate. The sound clock runs 400 ticks a second; voices name samples a second. All banks' waves are mapped when the sound system starts; a sequence's data is its file's (`SoundArchive`).

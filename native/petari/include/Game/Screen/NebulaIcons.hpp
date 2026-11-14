@@ -27,7 +27,7 @@ namespace NebulaIcons {
     const u16 cKeyCodeFirst = 0xE000;
     u16 keyCode(s32 key);
     // The Pair Joy-Con picture: each half (0 left, 1 right) in each look, textures of Nebula's own covering cJoyConBox
-    // units of the owner's drawing (a half's body, cJoyConBody, in its middle). setJoyConDensity asks for them at
+    // units of the drawing (a half's body, cJoyConBody, in its middle). setJoyConDensity asks for them at
     // the screen's pixels per unit on each axis; paintJoyConAhead paints toward that for about `budgetMicros` (true
     // while there is more). joyConPicture is null until every look has been painted once; pictures painted for a new
     // density replace the shown ones once all of them are. joyConPictureSize: the shown pictures' size in units (the

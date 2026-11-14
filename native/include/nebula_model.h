@@ -291,7 +291,7 @@ enum {
                                            traces shadows neither draws it nor lets it cast one */
     NEBULA_HIT_PAINTED_SHADOW = 1u << 6, /* painted (vertex colour, not lit) on a model whose paint holds the shadows
                                             things cast on it (the cooker's study of its vertex light): a renderer that
-                                            traces shadows lets only lit things shadow it (RT-MASTER-PLAN 14.6) */
+                                            traces shadows lets only lit things shadow it */
 };
 
 /* One combiner stage as the game's file orders it (the cooker's StageIr). */

@@ -1,6 +1,6 @@
 #pragma once
 
-// Mod classes on the game's actors (agents/LUMACORE-PLAN.md C4, C5, 8.6): what runs on every actor placed by a name, a
+// Mod classes on the game's actors: what runs on every actor placed by a name, a
 // game class ("Kuribo") or a mod's made like one (luma.json "object_classes"). Scripts (every platform) and plugin hooks
 // (NebulaClassHooks) answer the same dispatch points: after the class's init, each frame before its control (and in
 // place of it), appear, kill, every message it receives and every sensor of it touching another.

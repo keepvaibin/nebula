@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The sky and bounce light (the master plan's section 11; work list 22.10): I, the cosine-weighted mean of what a
+// The sky and bounce light: I, the cosine-weighted mean of what a
 // surface sees over its half of the world, as a ratio to the stage's authored ambient. Open sky gives 1 (tinted where
 // the dome is brighter); a crevice sees dark surfaces and falls (contact shadow, grounding); a sunlit wall beside it
 // lifts it in the wall's colour (bounce light); a lava sea below lifts it in orange.

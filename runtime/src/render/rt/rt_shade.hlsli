@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Hit shading: what every ray that meets a surface knows of it and what light it sends back (the master plan's
-// sections 3 and 10). One model for the real-time passes (the sky and bounce light, reflections, the light volume)
+// Hit shading: what every ray that meets a surface knows of it and what light it sends back.
+// One model for the real-time passes (the sky and bounce light, reflections, the light volume)
 // and for the reference path tracer, so a difference between them is a difference of sampling, never of the model.
 //
 // Built on rt_common.hlsli (the frame's bindings, b0, the mesh readers, the surface images). A pass that shades hits
@@ -49,13 +49,13 @@ void rt_shade_begin(uint at) {
 static const uint kRtDielectric = 0u, kRtGloss = 1u, kRtMetal = 2u, kRtGlass = 3u, kRtCutoutClass = 4u, kRtRamp = 5u,
                   kRtEmissive = 6u, kRtPainted = 7u, kRtTranslucent = 8u;
 static const uint kRtHitVertexColour = 8u, kRtHitEnvironment = 16u;
-// Item word 1: an area light (FC's c07: a glowing mesh too big to be a point of the emitter list).
+// Item word 1: an area light (a glowing mesh too big to be a point of the emitter list).
 static const uint kRtItemArea = 32u;
 static const float kRtPi = 3.14159265f;
 static const float kRtFarAway = 200000.0f;
 
-// How many frames a history holds, as a share of what it holds at 60 a second (FA's rt_history_scale, rt_frame.hlsli,
-// 16.5: every history lasts the same time at any frame rate); 1 before that is in the frame's constants.
+// How many frames a history holds, as a share of what it holds at 60 a second (rt_history_scale, rt_frame.hlsli:
+// every history lasts the same time at any frame rate); 1 before that is in the frame's constants.
 float fb_history_scale() {
 #ifdef NEBULA_RT_HISTORY_SCALE
     return rt_history_scale();

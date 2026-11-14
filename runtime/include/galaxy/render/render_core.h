@@ -300,7 +300,7 @@ private:
     std::uint64_t rt_budget_ = 0u;    // this frame's build budget, in triangles
     void rt_start();
     void rt_stop() noexcept;
-    // The setting changed while the game runs (plan 5.3 G-6): the tracer starts or stops at the start of a walk.
+    // The setting changed while the game runs: the tracer starts or stops at the start of a walk.
     void rt_follow_setting(const RenderConfig& render);
     int rt_setting_ = -1;  // what the tracer last followed (-1: the device's start)
     std::uint32_t rt_toggle_walks_ = 0u;
@@ -372,7 +372,7 @@ private:
     // The drops by the 16-pixel screen tiles their reach covers: rt_tiles_ (two words a tile: its first entry, how
     // many) and rt_tile_entries_ (a drop each).
     void rt_drop_bins(unsigned width, unsigned height, const float ray[4]);
-    // The stage's shadow sun (RT-MASTER-PLAN 7.1): one direction every sun shadow of the scene comes from, in the
+    // The stage's shadow sun: one direction every sun shadow of the scene comes from, in the
     // scene camera's eye space; false: the scene has none. The stage's row (rt_stages.tsv `sun`) decides; by default
     // the visible sun where the stage draws one, else its key light, none where the key is off (under 0.05). A key
     // the game moves with the camera is latched in the world when the zone's light changes (and at a cut) and held,
@@ -403,8 +403,8 @@ private:
     void rt_prepass(const NebulaFramePass& begin);
     void rt_light();
     void rt_light_end() noexcept;
-    void rt_reactive();  // the reactive mask where the added light changed (plan 16.4)
-    bool rt_lamps_own_ = false;  // local lights off (plan 19.1): the programs light by their own lamp (view_flags bit 32)
+    void rt_reactive();  // the reactive mask where the added light changed
+    bool rt_lamps_own_ = false;  // local lights off: the programs light by their own lamp (view_flags bit 32)
     // The second layer, at the opaque phases' end: the scene's blended surfaces (water, glass, crystal) drawn into the
     // item target and the light pass run over them, into the picture the opaque draws are done reading.
     void rt_blended(const NebulaFramePass& end);
@@ -433,7 +433,7 @@ private:
     // the light volume; then the filters, and the report (--diagnostics rt-inputs).
     void rt_tables(const Affine34& world_from_now);
     [[nodiscard]] rt::BufferView rt_pass_constants(std::uint32_t layer, std::uint32_t step, std::uint32_t last, std::uint32_t free = 0u);
-    // The blue noise into its image once it is made (rt_sample.hlsli), and the sun's filter (plan 7.3).
+    // The blue noise into its image once it is made (rt_sample.hlsli), and the sun's filter.
     void rt_noise_fill();
     void rt_sun_filter();
     bool rt_noise_filled_ = false;
@@ -501,8 +501,8 @@ private:
     std::uint32_t rt_mirror_slot_ = 0u;  // the mirror picture's place among the textures
     std::uint32_t rt_added_slot_ = 0u;  // the added light's place among the textures
     std::uint32_t rt_facing_slot_ = 0u;  // the facing picture's (how a painted surface faces the sun)
-    // The stage's ambient (A) and key (K) colours the programs' painted composite takes (ViewRows::stage_a/k,
-    // RT-MASTER-PLAN 3.4); rt_stage_a_[3] is kShadowTint.
+    // The stage's ambient (A) and key (K) colours the programs' painted composite takes (ViewRows::stage_a/k);
+    // rt_stage_a_[3] is kShadowTint.
     float rt_stage_a_[4]{}, rt_stage_k_[4]{};
     // What glows in the scene: a draw of a mesh whose material glows (nebula_model.h NebulaModelHit.glow, from the
     // cooker's table of glowing models and from surfaces added to what is behind them). One a block; the light pass
@@ -547,7 +547,7 @@ private:
     std::uint64_t rt_light_walk_before_ = 0u;
     std::int64_t rt_light_ticks_before_ = 0;  // when the light pass ran last (qpc)
     float rt_frame_rate_ = 60.0f;             // the rate it runs at, smoothed: the filters' histories follow it
-    // Plan 19.2 (rt_measure): settled frames in a row, the sun pass's times taken, done (measured, or not to be).
+    // The measure (rt_measure): settled frames in a row, the sun pass's times taken, done (measured, or not to be).
     static constexpr unsigned kRtMeasureFrames = 31u;
     unsigned rt_measure_settled_ = 0u;
     unsigned rt_measure_count_ = 0u;
@@ -587,8 +587,8 @@ private:
     [[nodiscard]] bool rt_holds() const noexcept;
     void rt_hold(ListEntry& entry, const core::WalkTime& time, const std::string& picture);
     void rt_bounce_stop() noexcept;
-    unsigned rt_quality_ = 1u;  // render.rt_quality: 0 medium, 1 high, 2 low (3 reference, 4 custom: FA's l32)
-    // Each part's level, in FA's RtPart order (sun, lights, indirect, reflect, transmit, volume): 0 off, 1 low,
+    unsigned rt_quality_ = 1u;  // render.rt_quality: 0 medium, 1 high, 2 low (3 reference, 4 custom)
+    // Each part's level, in RtPart order (sun, lights, indirect, reflect, transmit, volume): 0 off, 1 low,
     // 2 medium, 3 high (begin_walk_frame).
     std::uint8_t rt_levels_[6] = {2u, 2u, 2u, 2u, 2u, 2u};
     static constexpr unsigned kFbIndirect = 2u, kFbReflect = 3u, kFbVolume = 5u;

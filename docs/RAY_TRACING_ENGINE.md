@@ -113,7 +113,7 @@ is not traced and shows the game's picture.
   75, 61 % at 85, a mirror at grazing angles; the reflection takes the place of that share of the water's own light
   (cover 1). F0 0.2-0.5 by quality with cover 0.3-0.6 (builds 55-102) laid a third to a half of the bright
   surroundings over water seen from above: the near lagoon turned milky (b103). Water's reflections (from above and
-  falling) are taken at 1.2 x Fresnel: the owner's choice (26 October 2026) over the physical 1.
+  falling) are taken at 1.2 x Fresnel, chosen by eye over the physical 1.
 - Falling water: a draw that maps a `waterfall` texture is falling water whichever texture comes first (Beach Bowl's
   and the Twin Falls' sheets map a ripple map and an indirect warp before their fall texture: they were a calm lake on
   its side); FallMask and the Observatory's and Honeyhive's Fall are waterfall rows, and identity rows name the falls'
@@ -398,7 +398,7 @@ reached (port/tools/hlsl_reach.py: 2278 lines). Still to go: the art model's kno
 longer read, the old passes' buffers (light history, reservoirs: 242 MB), CaptureCS's picture feedback, GlowEmitCS /
 AuthoredEmitCS / EmitMergeCS, the night model, RtReflections for opaque surfaces (skipped under the engine; the water
 pass stays). The game's point lights and the star core stay: they are the game's own
-light sources (dropping them in build 39 left the Octoombas' lamps unlit, owner report 10-20).
+light sources (dropping them in build 39 left the Octoombas' lamps unlit).
 
 ## 8. Budget (reference GPU, 2x frame 1280x1056, 60 fps)
 G-buffer 0.3 ms, DI 1.2 ms, GI 1.5 ms, specular 1.0 ms, denoise 1.0 ms, composite + camera 0.4 ms: 5.4 ms.

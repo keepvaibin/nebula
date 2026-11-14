@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The light volume (rt_volume.hlsl; the master plan's 15.2): the light in the air over the scene camera's view, 96 x
+// The light volume (rt_volume.hlsl): the light in the air over the scene camera's view, 96 x
 // 54 x 48 froxels, this frame's and the frame before's by turns (VolumeA, VolumeB). On High where the stage has air,
 // the light the air scatters toward the eye, integrated through it (rt_scatter.hlsl, 15.4: Scatter). Published after
 // the light pass as pictures the programs sample (rt_walk.cpp rt_light, pictures 4 and 5): a particle draw that is

@@ -24,7 +24,7 @@ static const float kEnhEnvGraze = 0.80;      // gain added at grazing angles, Sc
 bool enh_on() { return (view_flags & 2u) != 0u; }
 
 #if NATIVE_TRACED
-// The pixel's traced light (program.hlsli traced_at, RT-MASTER-PLAN 3.4): how much of the light set's key (light 0:
+// The pixel's traced light (program.hlsli traced_at): how much of the light set's key (light 0:
 // V, a channel) and fill (light 1: O, the sky's share: the fill is the artists' bounce light) reaches it, and none
 // of its point light (light 4: an emitter, in the added light; all of it when view_flags bit 32 says the local lights
 // are off); all of lights 2 and 3 (alpha tricks). Its ambient by O.

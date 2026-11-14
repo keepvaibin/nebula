@@ -1,4 +1,4 @@
-# Water surfaces (RT-MASTER-PLAN 13.3; the audit: agents/rt/census/water.tsv, tools/water_audit.py): a model's file
+# Water surfaces: a model's file
 # stem and a material (a trailing * matches names that begin so). Waterfalls, splashes and foam are not water: they
 # stay translucent sheets. Code-drawn water (OceanBowl, OceanRing, OceanSphere, WaterRoad, WhirlPool) is the game's
 # draw category, not this table.

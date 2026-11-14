@@ -33,7 +33,7 @@ cbuffer View : register(b0) {
     float4 view_scale;         // x: the frame scale; y: particles' time in this frame; z: their time in the frame before
     float4 view_traced;        // with bit 3: x the traced light's place among the textures, y the added light's,
                                // z the mirror's, w the facing's
-    float4 view_stage_a;       // with bit 3: rgb the stage's ambient colour A, w kShadowTint (RT-MASTER-PLAN 3.4)
+    float4 view_stage_a;       // with bit 3: rgb the stage's ambient colour A, w kShadowTint
     float4 view_stage_k;       // with bit 3: rgb the stage's key colour K
     float4 view_volume[3];     // with bit 3 in the scene's view: the light volume (traced_air), [2].z 1 where it is
 };
@@ -273,7 +273,7 @@ float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
         return float4(colour, alpha);  // a substitute: the environment fetch took the mirror in (env_fetch)
     }
     if (mirror.a > 3.5) {
-        // Glass and water (RT-MASTER-PLAN 13.2, 13.3): F = a - 4, the body's share of the alpha in the added
+        // Glass and water: F = a - 4, the body's share of the alpha in the added
         // picture's a, rgb F R.
         const float f = saturate(mirror.a - 4.0);
         const float body = (1.0 - f) * saturate(gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).a) * alpha;
@@ -288,8 +288,8 @@ float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
     }
     return float4(colour * mirror.a + mirror.rgb, alpha);
 }
-// A painted environment map's texel where the light pass traced what the surface mirrors (RT-MASTER-PLAN 12.4
-// SUBSTITUTE): the mirror picture holds rgb R tinted by the map's own colour and the class's gain, a -(1 + keep), keep
+// A painted environment map's texel where the light pass traced what the surface mirrors (SUBSTITUTE):
+// the mirror picture holds rgb R tinted by the map's own colour and the class's gain, a -(1 + keep), keep
 // how much of the painted shine comes back where R is dark. Elsewhere the texel as it is.
 float4 env_fetch(float4 painted, float4 pixel) {
     if ((view_flags & 8u) == 0u) {
@@ -300,7 +300,7 @@ float4 env_fetch(float4 painted, float4 pixel) {
 }
 // The program's fetch of a painted environment map (the generator wraps it); `i` holds the pixel.
 #define ENV_FETCH(t) env_fetch(t, i.pos)
-// The light under a painted surface (RT-MASTER-PLAN 3.4): its art holds the stage's light, ambient A and key K by how
+// The light under a painted surface: its art holds the stage's light, ambient A and key K by how
 // it faces the key (nl); the traced light keeps the key's part by V and the ambient's by O, a channel at a time
 // (a shadow takes the sky's colour, and a coloured thing's shadow its colour) and in luminance, mixed by
 // kShadowTint. In open sun with nothing near: 1.
@@ -333,7 +333,7 @@ float4 traced_colour(float4 c, float4 pixel) {
     const float3 base = g_traced_lit ? c.rgb / max(g_traced_level, kBaseFloor) : c.rgb;
     return traced_mirror(c.rgb * share + base * added, c.a, pixel);
 }
-// The light in the air (rt/rt_volume.hlsl, the master plan's 15.2), for a draw that is lit and not a light (draw flag
+// The light in the air (rt/rt_volume.hlsl), for a draw that is lit and not a light (draw flag
 // 4: a particle that is no light): its colour times what of the stage's light and the local lights' reaches the air
 // at the pixel's place, one trilinear fetch of the volume (96 x 54 across the viewport view_volume[1], 48 slices
 // at z = 50 (20000 / 50)^(k / 48); view_volume[0] the depth's eye terms, as rt_eye_z). Every texture is also a

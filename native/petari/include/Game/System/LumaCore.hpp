@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaCore: what scripts and plugins reach the game through (docs/modding, agents/LUMACORE-PLAN.md section 8).
+// LumaCore: what scripts and plugins reach the game through (docs/modding).
 // Values (NebulaValue), handles with their class checked, the toolkit table (every MR:: utility by name), the class
 // tree and the fields of the game's classes. The generated parts are in src/Game/System/generated (tools/lumacore).
 

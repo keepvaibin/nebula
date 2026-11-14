@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The sun pass: how much of the stage's one shadow sun reaches each pixel's surface (plan 7.2). One ray a pixel
+// The sun pass: how much of the stage's one shadow sun reaches each pixel's surface. One ray a pixel
 // toward a point of the sun's disc, from a place within the pixel (both by rt_sample: another each frame, so the
 // average over time holds the share of the disc and of the pixel a hard edge covers). Writes V raw:
 //   rgb  1 where the ray reaches the sun, 0 where something solid stands on it, else what the blended things on it
@@ -73,7 +73,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             InterlockedAdd(g_counters[18], 1u);
         } else {
             float first;
-            float3 tint = float3(1.0f, 1.0f, 1.0f);  // below high, blended things cast no shadow (plan 19.1)
+            float3 tint = float3(1.0f, 1.0f, 1.0f);  // below high, blended things cast no shadow
             first = -1.0f;
             if (rt_part(kPartSun) >= 3u) {
                 tint = let_through(from, toward, 200000.0f, first);

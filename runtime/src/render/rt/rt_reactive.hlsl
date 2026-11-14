@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The upscaler's reactive mask where the added light changed (plan 16.4): rt_lights_time.hlsl puts in its moments' a
+// The upscaler's reactive mask where the added light changed: rt_lights_time.hlsl puts in its moments' a
 // whether the filtered light moved by more than a quarter from its history; there FSR 3, DLSS and XeSS take this
 // frame's colour (0.9: as much as AMD's guide gives a mask), so a flickering or flashing light leaves no trail behind
 // it. Run at the scene's end, after the blended draws wrote their alpha into the mask; elsewhere it is left alone.

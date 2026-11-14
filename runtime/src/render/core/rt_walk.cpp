@@ -100,10 +100,10 @@ void RenderCore::rt_start() {
     registries_.tell_retired_meshes(true);
     rt_log_at_ = 0u;
     rt_building_ = false;
-    set_render_tracing(true, fsr3_available());  // single-sampled, anti-aliased temporally (plan 16.3)
+    set_render_tracing(true, fsr3_available());  // single-sampled, anti-aliased temporally
 }
 
-// The setting changed while the game runs (plan 5.3 G-6): the tracer starts or stops here, between frames, on the same
+// The setting changed while the game runs: the tracer starts or stops here, between frames, on the same
 // device. The GPU finishes first, so nothing it still reads goes; the draws give back the light pictures. With
 // --diagnostics rt-toggle (and the setting on) it is switched off and on every 90 walks.
 void RenderCore::rt_follow_setting(const RenderConfig& render) {
@@ -748,7 +748,7 @@ bool RenderCore::rt_prepass_draws(const NebulaFrameItem& item, std::uint32_t sta
 // over time follows) and the pictures the opaque draws read, done with, take the result. The blended draws then read
 // them in their traced form.
 void RenderCore::rt_blended(const NebulaFramePass& end) {
-    // Glass and water below medium: no second layer (plan 19.1; blended things read the opaque layer's light).
+    // Glass and water below medium: no second layer (blended things read the opaque layer's light).
     if (!rt_light_on_ || rt_light_frame_.across == 0u || rt_scene_view_ == NEBULA_NONE32 ||
         rt_part(get_render_config(), RtPart::Transmit) < 2u) {
         return;
@@ -1057,9 +1057,9 @@ void RenderCore::rt_noise_fill() {
     rt_noise_filled_ = true;
 }
 
-// The sun's V filtered (plan 7.3): the tiles that hold a penumbra (rt_sun_tiles), the average over time with the
-// occluder's distance (rt_sun_time), then two blurs as wide as the penumbra is (rt_sun_blur; one on the second layer,
-// plan 13.1). Each layer keeps its own averages. The light pass reads the last.
+// The sun's V filtered: the tiles that hold a penumbra (rt_sun_tiles), the average over time with the
+// occluder's distance (rt_sun_time), then two blurs as wide as the penumbra is (rt_sun_blur; one on the second layer).
+// Each layer keeps its own averages. The light pass reads the last.
 void RenderCore::rt_sun_filter() {
     const RtFrame& frame = rt_light_frame_;
     const bool second = frame.layer != 0u;
@@ -1480,11 +1480,11 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     if (!(ambient > 0.02f) || !(key > 0.02f)) {
         ambient = key = 0.5f;  // a stage that names no light of its own: an even split
     }
-    // The stage's own numbers where its row gives them (rt_stages.tsv, RT-MASTER-PLAN 23.2).
+    // The stage's own numbers where its row gives them (rt_stages.tsv).
     const RtStage& stage_row = rt_stage(list.stage_hash) != nullptr ? *rt_stage(list.stage_hash) : kRtStageDefaults;
     key *= stage_row.sun_gain;
     ambient *= stage_row.ambient_gain / kRtStageDefaults.ambient_gain;
-    // The stage's ambient and key colours for the programs' painted composite (RT-MASTER-PLAN 3.4): a shadow takes
+    // The stage's ambient and key colours for the programs' painted composite: a shadow takes
     // the sky's colour, a channel at a time, by kShadowTint. By the row's gains; an even grey where the stage names
     // no light of its own.
     {
@@ -1634,8 +1634,8 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     // No bit 2: the landing blob under an actor is a shadow drawn by hand, traced outline or not (the
     // owner, 11-09: no fake shadows with ray tracing on). What stands on the ground darkens it by the sun's
     // shadow and by the sky it hides (bit 3), as it would.
-    // The player's parts (plan 19.1): two bits each in more[3] (rt_part), bit 12 the reference preset. Sun off: no
-    // traced sun; reflections off or low: no mirror rays (the painted maps stay, plan 19.1).
+    // The player's parts: two bits each in more[3] (rt_part), bit 12 the reference preset. Sun off: no
+    // traced sun; reflections off or low: no mirror rays (the painted maps stay).
     const RenderConfig render = get_render_config();
     for (unsigned part = 0u; part < static_cast<unsigned>(RtPart::Count); ++part) {
         constants.more[3] |= rt_part(render, static_cast<RtPart>(part)) << (part * 2u);
@@ -1647,7 +1647,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
     std::memcpy(constants.up, sky_up_, sizeof(sky_up_));
     if (rt_pass_indirect_on()) {
         // The sky and bounce light pass gives the sky's share (bit 8): no sky rays here. A painted surface keeps
-        // kShadowTint of its colour from it (traced_painted: plan 11.4's faint cast; the light pass takes none back).
+        // kShadowTint of its colour from it (traced_painted: a faint cast; the light pass takes none back).
         constants.more[2] = (constants.more[2] & ~8u) | 256u;
     }
     if (rt_pass_reflect_on()) {
@@ -1663,7 +1663,7 @@ void RenderCore::rt_tables(const Affine34& world_from_now) {
         constants.kept[2] = 1u;  // the filters' history and the frame before's reservoirs count
     }
     // The rate frames are traced at, smoothed: the filters count frames, so at 30 a second each history holds half as
-    // many and at 120 twice as many, as many seconds either way (plan 16.5).
+    // many and at 120 twice as many, as many seconds either way.
     const std::int64_t ticks = ::galaxy::qpc_now();
     if (rt_light_ticks_before_ != 0) {
         const double seconds = static_cast<double>(ticks - rt_light_ticks_before_) / static_cast<double>(::galaxy::qpc_frequency());
@@ -1816,7 +1816,7 @@ void RenderCore::rt_light() {
     rt_report();
 }
 
-// Plan 19.2: the default preset by measurement, not by device lists. Once a config (rt_probe_ms 0), in the first stage
+// The default preset by measurement, not by device lists. Once a config (rt_probe_ms 0), in the first stage
 // traced with a sun: the sun pass, one shadow ray a pixel, timed by the GPU over kRtMeasureFrames frames after 60
 // settled ones (a sun, history unbroken); the median scaled to the output's pixels is the measure. High under 0.35 ms,
 // medium under 1.2, low above (over 3.5 the log says so; the player turned tracing on, so it stays on). It sets the
@@ -1935,7 +1935,7 @@ void RenderCore::rt_report() {
 }
 
 // The scene's blended draws wrote their alpha into the upscaler's reactive mask; the tracer raises it where the added
-// light changed by more than a quarter since the frame before (plan 16.4: rt_reactive.hlsl), so the upscaler takes
+// light changed by more than a quarter since the frame before (rt_reactive.hlsl), so the upscaler takes
 // this frame's colour there and a flickering light leaves no trail. Only with a temporal upscaler (its mask).
 void RenderCore::rt_reactive() {
     if (!rt_light_on_ || !temporal_scene_ || rt_light_frame_.across == 0u) {
@@ -1953,7 +1953,7 @@ void RenderCore::rt_reactive() {
         binds.constants = rt_light_frame_.binds.constants;
         binds.pass_constants = rt_light_frame_.pass;
         binds.reads[0] = moments;
-        // FB: where the reflections changed too (plan 16.4's R), when the reflection pass wrote it this frame.
+        // FB: where the reflections changed too, when the reflection pass wrote it this frame.
         const std::uint32_t reflect_moved = rt_reflect_moved_ ? rt_image(RtImage::ReflectMoved) : rt::kNoImage;
         if (reflect_moved != rt::kNoImage) {
             binds.reads[1] = reflect_moved;

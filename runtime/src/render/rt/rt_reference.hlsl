@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The reference path tracer (the master plan's section 18): the truth every preset is compared with. Per pixel of
+// The reference path tracer: the truth every preset is compared with. Per pixel of
 // the scene's opaque surfaces it estimates the same signals the real-time passes make, by the same lighting model
 // (rt_shade.hlsli), with every bounce traced instead of cached, and accumulates them while nothing moves:
 //   V  the sun's share: a ray to a uniform point of the sun's disc (from a place within the pixel, as the sun pass);

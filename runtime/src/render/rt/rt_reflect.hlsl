@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The reflections (the master plan's section 12; work list 22.11): what glass, water, metal and glossy things mirror.
+// The reflections: what glass, water, metal and glossy things mirror.
 // Per pixel of the opaque layer whose class reflects (and, on Medium, metal and gloss only up to roughness 0.15 with
 // a painted share of 0.5 or more): one ray along the view turned at the smooth normal, a mirror's own under roughness
 // 0.03, else about a normal of the GGX distribution as the view sees it (Heitz 2018), from the frame's blue noise; a

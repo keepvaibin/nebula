@@ -120,13 +120,13 @@ struct RenderConfig {
 
     // Ray tracing, on a device that can trace (rt_caps.h); ignored elsewhere.
     bool     ray_tracing_enabled = false;
-    // The preset (plan 19.1): 0 medium, 1 high, 2 low, 3 reference (path traced, to compare), 4 custom (the parts as
+    // The preset: 0 medium, 1 high, 2 low, 3 reference (path traced, to compare), 4 custom (the parts as
     // set one by one). A preset sets every part (rt_apply_preset).
     unsigned rt_quality          = 0;
     // The parts, each its own setting, in RtPart's order (sun shadows, local lights, sky and bounce light, reflections,
     // glass and water, light in the air): 0 off, 1 low, 2 medium, 3 high.
     std::array<std::uint8_t, 6> rt_parts{2u, 2u, 2u, 2u, 2u, 2u};
-    // Plan 19.2: what one shadow ray a pixel cost this GPU at the output size (ms), measured once by the tracer in the
+    // What one shadow ray a pixel cost this GPU at the output size (ms), measured once by the tracer in the
     // first stage it traced with a sun (0: not yet). It sets the preset (high under 0.35 ms, medium under 1.2, else
     // low) unless the player chose one: rt_chosen, set by the Settings rows.
     float    rt_probe_ms         = 0.0f;
@@ -284,7 +284,7 @@ struct RenderFeatureCaps {
     const char* reason);
 
 // The settings as the renderer runs them, a copy taken under the lock (never a partial update): the player's, except
-// while the tracer runs, when the scene renders single-sampled and is anti-aliased temporally (plan 16.3: the tracer
+// while the tracer runs, when the scene renders single-sampled and is anti-aliased temporally (the tracer
 // reads one depth and one item a pixel): MSAA is set aside and, without a temporal upscaler chosen, FSR 3 runs, in its
 // native anti-aliasing mode or at FSR 1's chosen scale.
 [[nodiscard]] RenderConfig get_render_config();
@@ -315,15 +315,15 @@ void note_camera_water(float depth) noexcept;
 }
 void set_render_config(const RenderConfig& cfg);
 
-// Ray tracing's parts (plan 19.1), in RenderConfig::rt_parts' order; each 0 off, 1 low, 2 medium, 3 high.
+// Ray tracing's parts, in RenderConfig::rt_parts' order; each 0 off, 1 low, 2 medium, 3 high.
 enum class RtPart : std::uint8_t { Sun, Lights, Indirect, Reflect, Transmit, Volume, Count };
 inline constexpr unsigned kRtPresetReference = 3u, kRtPresetCustom = 4u;
 inline unsigned rt_part(const RenderConfig& cfg, RtPart part) noexcept {
     return part < RtPart::Count ? std::min<unsigned>(cfg.rt_parts[static_cast<std::size_t>(part)], 3u) : 0u;
 }
 
-// The presets' parts (plan 19.1): low leaves the painted reflections; reference takes high's parts and the reference
-// path tracer draws the picture (FB's 22.9).
+// The presets' parts: low leaves the painted reflections; reference takes high's parts and the reference
+// path tracer draws the picture.
 inline void rt_apply_preset(RenderConfig& cfg) noexcept {
     constexpr std::uint8_t kParts[4][6] = {
         {2u, 2u, 2u, 2u, 2u, 2u},  // medium

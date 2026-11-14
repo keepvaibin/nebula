@@ -1,6 +1,6 @@
 #pragma once
 
-// An outside denoiser of the traced light (the master plan's section 17, work list 22.20). The built-in filters are
+// An outside denoiser of the traced light. The built-in filters are
 // the default and run unless the renderer runs a denoiser that takes the signals raw: today DLSS Ray Reconstruction
 // through Streamline, which replaces the filters and the upscaler both while the player has chosen DLSS, the tracer
 // runs and NVIDIA's plug-in is installed and supported. Then the tracer's filters pass this frame's signals through as

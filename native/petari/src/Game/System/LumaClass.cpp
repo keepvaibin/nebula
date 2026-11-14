@@ -1,4 +1,4 @@
-// Mod classes on the game's actors (LumaClass.hpp; agents/LUMACORE-PLAN.md C4, C5, 8.6).
+// Mod classes on the game's actors (LumaClass.hpp).
 #include "Game/System/LumaClass.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"

@@ -66,8 +66,8 @@ inline constexpr std::uint64_t kRangeAlign = 256u;
 inline constexpr std::uint32_t kSizeSlots = 1024u;
 // What was last named in a frame's commands may go this many frames later (begin_frame has waited for it by then).
 inline constexpr std::uint64_t kFramesToRelease = kFramesInFlight + 1u;
-// The stretches of a frame's commands the GPU times (Backend::time_mark): the sun pass (the measure of plan 19.2) and
-// the structures' builds (the build budget, 5.3 G-3).
+// The stretches of a frame's commands the GPU times (Backend::time_mark): the sun pass (the preset's measure) and
+// the structures' builds (the build budget).
 inline constexpr unsigned kTimedSun = 0u, kTimedBuilds = 1u, kTimedStretches = 2u;
 
 // A pass: one of the tracer's compute shaders (rt_shaders.h) and what it binds, by the registers of rt_bindings.hlsli.

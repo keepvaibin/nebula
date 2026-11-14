@@ -9,7 +9,7 @@ namespace {
     static LightInfoCoin sDefaultLightSetCoin = {{{0xFF, 0xFF, 0, 0}, {0.0f, 0.0f, 0.0f}, true}, {0xFF, 0xFF, 0xFF, 0}, 65.0f};
 
     // Shadow light sets whose lit partner their names do not give, paired by their colours (the shadow set's key is
-    // the partner's dimmed: agents/rt/tools/stage_lights.py --unpaired).
+    // the partner's dimmed).
     const char* const cHandPartners[][2] = {
         {"[共通]昼の影（新エデン下）", "[共通]昼（どら焼き）"},
         {"[共通]昼の影（明るい）", "[共通]昼（どら焼き）"},

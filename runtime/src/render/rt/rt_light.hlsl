@@ -5,7 +5,7 @@
 // and the mirror a first cut. What the programs read (program.hlsli traced_colour, program_lit.hlsli), both layers:
 //   Light   rgb V, the sun's share as a colour (what blended things on its ray let through tints it); a O, the sky's
 //           share (what stands near or over the surface hides of it). The programs put sun, sky, fill and the
-//           stage's colours together themselves (plan 3.4); every point light is an emitter (the added light);
+//           stage's colours together themselves; every point light is an emitter (the added light);
 //   Facing  how the surface faces the sun as a painted surface takes it (from g_look.z of full facing up: all of
 //           it); a lit program takes n.l itself.
 // The opaque layer's sky rays are noisy: this pass writes, for the filter (rt_light_time, rt_light_space), r V (one
@@ -24,11 +24,11 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 // colour stays under it, plus 2 in the second layer (program.hlsli traced_mirror).
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_mirror : register(u1);
 RT_FORMAT(r8) RWTexture2D<float> g_facing : register(u2);  // how a painted surface faces the sun (0: no surface: 1)
-RT_FORMAT(r8) RWTexture2D<unorm float> g_body : register(u3);  // the second layer's body (glass and water, FC's c16)
+RT_FORMAT(r8) RWTexture2D<unorm float> g_body : register(u3);  // the second layer's body (glass and water)
 Texture2D<float4> g_guide_opaque : register(t15);  // the opaque layer's guide: under water, how deep it is
 
-// Glass and water on the second layer (plan 13.2, 13.3; FC's c16): the Schlick reflectance of the material's ior times
-// its shine, at most 1, and its body. Item word 15 (FC's c15): ior bits 12-19 as (ior - 1) * 100, shine bits 20-25 as
+// Glass and water on the second layer: the Schlick reflectance of the material's ior times
+// its shine, at most 1, and its body. Item word 15: ior bits 12-19 as (ior - 1) * 100, shine bits 20-25 as
 // shine * 4 (63: the class's own), body bits 26-31 as body * 62 (63: the class's own); 0 when nothing wrote it.
 struct ClearSurface {
     float f;     // how much of R it shows

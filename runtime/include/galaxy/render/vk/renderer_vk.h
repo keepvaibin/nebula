@@ -168,7 +168,7 @@ public:
     // The scene's depth and the item target as a pass reads them, until rt_light_end.
     [[nodiscard]] bool rt_light_begin(rt::TextureView& depth, rt::TextureView& items, unsigned& width, unsigned& height);
     void rt_light_end();
-    // The reactive mask as the tracer writes it (plan 16.4), at the scene's end: false without one this frame or where
+    // The reactive mask as the tracer writes it, at the scene's end: false without one this frame or where
     // the device cannot. Until rt_reactive_end.
     [[nodiscard]] bool rt_reactive_begin(rt::TextureView& reactive);
     void rt_reactive_end();

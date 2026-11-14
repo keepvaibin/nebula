@@ -1,4 +1,4 @@
-// The mods' scripts in the game (agents/LUMACORE-PLAN.md 8.5, 8.6): programs by mod and path, an instance per object
+// The mods' scripts in the game: programs by mod and path, an instance per object
 // that runs one, events between scripts, saved values through the mod's store.
 #include "Game/System/LumaHost.hpp"
 #include "Game/System/LumaCore.hpp"

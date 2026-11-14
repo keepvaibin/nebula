@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The sun filter's blur (plan 7.3), run twice (g_pass.y 0, then 1: the disc turned a quarter and half as wide): V
+// The sun filter's blur, run twice (g_pass.y 0, then 1: the disc turned a quarter and half as wide): V
 // spread over a disc as wide as the penumbra really is at the pixel. The sun's disc seen from the surface is
 // 2 * tan(its half angle) wide a unit of way, so a shadow whose caster stands d away has a penumbra
 // w = 2 * g_sun.w * d wide: sharp where the caster touches the ground, wide under a high branch (the method of

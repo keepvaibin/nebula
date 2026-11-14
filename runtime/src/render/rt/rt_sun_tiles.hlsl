@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The sun filter's first pass (plan 7.3): each 16 x 16 tile of the picture, one group a tile, says whether its raw V
+// The sun filter's first pass: each 16 x 16 tile of the picture, one group a tile, says whether its raw V
 // is all lit (0), all shadowed (0.5) or both (1: a penumbra or an edge there). The later passes take a pixel as
 // penumbra where its tile or one next to it is (a dilation by one tile); everywhere else they copy V through, which
 // is most of the screen and what makes the filter cheap.

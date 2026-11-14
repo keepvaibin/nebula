@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The guides an outside denoiser that takes the composited picture reads (the master plan's section 17: DLSS Ray
+// The guides an outside denoiser that takes the composited picture reads (DLSS Ray
 // Reconstruction through Streamline), written only while the tracer hands its signals over raw (g_more.z bit 2048),
 // from the surface pass's images of this frame, at the picture's size:
 //   diffuse albedo: S.base where there is a surface, white where the sky is (it is shown as it is);

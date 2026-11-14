@@ -1,4 +1,4 @@
-# Models that glow: with ray tracing on, each is a light that lights what is near it (the owner's list of 11-09, and
+# Models that glow: with ray tracing on, each is a light that lights what is near it (chosen by hand for
 # what the material audit cannot see: a glow that is in the art's intent, not in the material's data).
 # model (file stem, lower case)	colour (r g b, 0 to 1; "own": the material's own bright colour)	intensity in candela
 # The intensity is the source's luminous intensity as a lighting artist would set it: 100 units of the game are a
@@ -71,7 +71,7 @@ tripodbossheadlight	1.0 0.90 0.70	3000
 teresaroomglaringlight	1.0 0.95 0.80	1200
 dashring	own	100
 prizering	own	120
-# Decided by agents/rt/tools/glow_audit.py's review (census/glow_decisions.tsv, 11-11). `model/material`: that material alone.
+# Decided by a review of every glowing material. `model/material`: that material alone.
 meramera	1.0 0.55 0.20	150
 mariofireball	1.0 0.50 0.15	500
 ballbeamer/ray_v	1.0 0.90 0.77	300

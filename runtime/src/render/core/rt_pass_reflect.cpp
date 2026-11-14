@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The reflections (rt_reflect.hlsl; the master plan's section 12): what glass, water, metal and glossy things mirror,
+// The reflections (rt_reflect.hlsl): what glass, water, metal and glossy things mirror,
 // one ray a pixel of the opaque layer; over time by the mirror image's own point (rt_reflect_time), over space by the
 // reflection's lobe (rt_reflect_space, two steps; mirrors stay sharp); then into the mirror picture the programs read
 // (rt_reflect_out: ADD by Fresnel, or the first cut's multiply where a painted environment map is until 22.13). The
@@ -84,7 +84,7 @@ void RenderCore::rt_pass_reflect() {
     rt_backend_.dispatch(RtShader::ReflectOut, into, frame.across, frame.down);
 }
 
-// The guides of an outside denoiser that takes the signals raw (rt_rr_guides.hlsl; the master plan's section 17), the
+// The guides of an outside denoiser that takes the signals raw (rt_rr_guides.hlsl), the
 // opaque layer's, after the passes: the world's turn from the eye's in the pass's values.
 void RenderCore::rt_pass_guides() {
     const RtFrame& frame = rt_light_frame_;

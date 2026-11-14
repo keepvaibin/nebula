@@ -65,14 +65,14 @@ bool rt_second_layer() {
 }
 
 // How long the filters' histories are against 60 frames a second: clamp(frames a second / 60, 0.5, 2), so a history
-// lasts as many seconds at 30 or 120 frames a second (plan 16.5).
+// lasts as many seconds at 30 or 120 frames a second.
 #define NEBULA_RT_HISTORY_SCALE 1
 float rt_history_scale() {
     const float scale = asfloat(g_kept.w);
     return scale > 0.0f ? scale : 1.0f;
 }
 
-// Ray tracing's parts as the player set them (plan 19.1; RtPart's order): 0 off, 1 low, 2 medium, 3 high.
+// Ray tracing's parts as the player set them (RtPart's order): 0 off, 1 low, 2 medium, 3 high.
 static const uint kPartSun = 0u, kPartLights = 1u, kPartIndirect = 2u, kPartReflect = 3u, kPartTransmit = 4u, kPartVolume = 5u;
 uint rt_part(uint part) {
     return g_more.w >> (part * 2u) & 3u;

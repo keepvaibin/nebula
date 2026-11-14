@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The light volume (the master plan's 15.2): the light in the air over the scene camera's view, for what is drawn
+// The light volume: the light in the air over the scene camera's view, for what is drawn
 // unlit in it (smoke, dust, steam: particles that are not lights themselves) as Unreal's translucency lighting
 // volume and the froxel volumetrics of Frostbite and others. Froxels: 96 x 54 across the scene's viewport, 48 slices
 // in depth at z = 50 (20000 / 50)^(k / 48). Each frame each froxel takes a point of its cell (the blue noise, a new one

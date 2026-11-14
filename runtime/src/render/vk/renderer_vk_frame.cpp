@@ -1055,7 +1055,7 @@ bool RendererVk::ensure_motion_targets() {
     const VkImageUsageFlags usage =
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     gpu::TextureRef motion = context.create_texture(width, height, 1u, VK_FORMAT_R16G16_SFLOAT, usage, true, "motion vectors");
-    // The tracer writes into the reactive mask too (plan 16.4) where the device traces and R8 images store.
+    // The tracer writes into the reactive mask too where the device traces and R8 images store.
     VkImageUsageFlags reactive_usage = usage;
     reactive_storable_ = false;
     if (rt_capable(rt_caps())) {

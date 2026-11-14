@@ -20,8 +20,8 @@ namespace galaxy::render {
 
 namespace {
 
-// The light model's tunables (the master plan's appendix G).
-constexpr float kAmbientGain = 1.10f;  // the owner's "10 % light back"
+// The light model's tunables.
+constexpr float kAmbientGain = 1.10f;  // 10 % light back
 constexpr float kShadowTint = 0.2f;    // how much of the per-channel ratio a painted surface's P takes
 constexpr float kWrap = 0.25f;         // the wrap of a local light's facing
 constexpr float kSkyGain = 1.0f;       // the dome as light
@@ -33,7 +33,7 @@ constexpr float kSkyMin = 0.25f;
 constexpr float kHitDark = 0.15f;      // a hit's light in sky-only mode
 constexpr float kSunGlint = 4.0f;      // the sun as a mirror shows it
 
-// The world light grid (the plan's 10.3): 32 x 16 x 32 cells of 400 units about the eye, the middle axis the player's up.
+// The world light grid: 32 x 16 x 32 cells of 400 units about the eye, the middle axis the player's up.
 constexpr unsigned kGridAcross = 32u, kGridUp = 16u, kGridCells = kGridAcross * kGridUp * kGridAcross;
 constexpr float kGridCell = 400.0f;
 constexpr std::size_t kGridMostEntries = std::size_t{1} << 19u;
@@ -54,7 +54,7 @@ struct BouncePassConstants {
     float value[3][4];
 };
 
-// The signals a kept picture is given (the plan's 2.2 names): which signal, its channels (0 r, 1 rgb, 2 a), and 1
+// The signals a kept picture is given: which signal, its channels (0 r, 1 rgb, 2 a), and 1
 // when it goes over 1 (written as x / (1 + x)).
 enum class SignalOf : std::uint8_t { Light, Added, Mirror, Indirect };
 struct Signal {

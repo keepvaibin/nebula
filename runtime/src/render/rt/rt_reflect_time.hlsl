@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The reflections over time (the master plan's 12.3). A mirror image does not move with the surface it is seen in:
+// The reflections over time. A mirror image does not move with the surface it is seen in:
 // it moves as if it stood behind the surface, at the ray's length. So the history is looked for in two places of the
 // frame before: (a) where the surface point was (its motion), (b) where the mirror image's own point was (the
 // "virtual" point: the surface's place carried on along the view by the ray's length, seen by the frame before's
@@ -9,7 +9,7 @@
 // to 32 at 0.3.
 // Channels: rgb the radiance seen, a the ray's length (0: no reflection here; in R raw -1: a pixel Medium did not
 // trace this frame, which keeps its history, held inside what its traced neighbours saw, or takes their mean).
-// g_moved (the master plan's 16.4, R): 1 where the reflection's average moved by more than a quarter from its history
+// g_moved (R): 1 where the reflection's average moved by more than a quarter from its history
 // before the clamp, as rt_lights_time.hlsl marks D; rt_reactive.hlsl puts it into the upscaler's reactive mask.
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"
@@ -25,8 +25,8 @@ RT_FORMAT(r8) RWTexture2D<unorm float> g_moved : register(u1);
 
 static const float3 kLum = float3(0.2126f, 0.7152f, 0.0722f);
 
-// How many frames a history holds, as a share of what it holds at 60 a second (FA's rt_history_scale, rt_frame.hlsli,
-// 16.5: every history lasts the same time at any frame rate); 1 before that is in the frame's constants.
+// How many frames a history holds, as a share of what it holds at 60 a second (rt_history_scale, rt_frame.hlsli:
+// every history lasts the same time at any frame rate); 1 before that is in the frame's constants.
 float fb_history_scale() {
 #ifdef NEBULA_RT_HISTORY_SCALE
     return rt_history_scale();

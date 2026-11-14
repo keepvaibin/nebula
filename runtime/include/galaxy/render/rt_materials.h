@@ -177,7 +177,7 @@ private:
     std::size_t skipped_ = 0;
 };
 
-// A stage's ray tracing numbers (RT-MASTER-PLAN 23.2): the pak's NebulaData/RtStages.tsv, cooked from
+// A stage's ray tracing numbers: the pak's NebulaData/RtStages.tsv, cooked from
 // crates/nebula-import/data/rt_stages.tsv (a mod's pack may carry rows for its own stages). Tab-separated, a header
 // row naming the columns (a column's words may be joined by '_'; columns not named here are ignored):
 //   stage  sun  sun gain  sun size  ambient gain  sky gain  exposure low  exposure high  air  water clear  shadow sets
@@ -216,7 +216,7 @@ private:
 [[nodiscard]] std::uint32_t rt_stage_hash(std::string_view name) noexcept;
 
 // The particle effects as lights: the pak's NebulaData/RtEffects.tsv, cooked from crates/nebula-import/data/
-// rt_effects.tsv (RT-MASTER-PLAN 8.1 L-4; a mod's pack may carry rows for its own effects). Tab-separated, a header
+// rt_effects.tsv (a mod's pack may carry rows for its own effects). Tab-separated, a header
 // row naming the columns:
 //   effect  luminance  behaviour  (others ignored)
 // effect: the effect's name (ParticleNames). luminance: candela a square metre of what its particles show; 0 not a

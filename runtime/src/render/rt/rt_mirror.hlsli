@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// How much of what a surface mirrors reaches the picture (the master plan's 12.4), shared by the reflections pass
+// How much of what a surface mirrors reaches the picture, shared by the reflections pass
 // (which carries the local lights' highlights through the filter as radiance: highlight / weight) and its composite.
 //   ADD (water; glass, metal and gloss with no painted environment map): F = F0 + (1 - F0) * (1 - n.v)^5 (Schlick);
-//     F0 = ((ior - 1) / (ior + 1))^2 * kShine (glass 2.0, water 1.5: the owner's "fully reflective and clear and
-//     shiny"), a metal's own colour, gloss 0.04; F never over 1. The colour under it keeps 1 - F.
-//   SUBSTITUTE (a painted environment map): until the programs fetch R in place of the painted map (work list 22.13),
+//     F0 = ((ior - 1) / (ior + 1))^2 * kShine (glass 2.0, water 1.5: fully reflective, clear and
+//     shiny), a metal's own colour, gloss 0.04; F never over 1. The colour under it keeps 1 - F.
+//   SUBSTITUTE (a painted environment map): until the programs fetch R in place of the painted map,
 //     the first cut's multiply: tint * (head-on share + Schlick's rise), the colour under it 1 - 0.6 * the painted
 //     share (rt_light.hlsl's numbers, so only R itself changes).
 #ifndef NEBULA_RT_MIRROR_HLSLI

@@ -28,7 +28,7 @@ Texture2D<float4> g_indirect : register(t13);    // the last step's: I (rt_indir
 #endif
 #ifdef RT_LIGHTS
 Texture2D<float4> g_moments : register(t10);  // b: the variance of the average's luminance
-Texture2D<float4> g_body : register(t12);     // the second layer's last step: glass's and water's body, in a (FC's c16)
+Texture2D<float4> g_body : register(t12);     // the second layer's last step: glass's and water's body, in a
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
 #endif
 

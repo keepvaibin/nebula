@@ -101,7 +101,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     // A temporal upscaler antialiases the scene itself: anti-aliasing and MSAA have no part in its picture (the
     // renderers skip both under it), so their rows go while it runs.
     const bool temporal = state.temporal_upscaling;
-    // With ray tracing on and no temporal upscaler chosen, FSR 3 anti-aliases the scene (plan 16.3): the row says so,
+    // With ray tracing on and no temporal upscaler chosen, FSR 3 anti-aliases the scene: the row says so,
     // and MSAA and SMAA have no part in the picture until ray tracing is off again.
     const bool traced_temporal = rt_on && !temporal && state.traced_temporal;
     if (traced_temporal) {
@@ -141,7 +141,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
     }
     if (rt_on) {
-        // The preset sets every part (plan 19.1); a part changed by itself makes it CUSTOM. All switch live.
+        // The preset sets every part; a part changed by itself makes it CUSTOM. All switch live.
         static constexpr unsigned kOrder[] = {2u, 0u, 1u, kRtPresetReference};  // low, medium, high, reference
         static constexpr const char* kNames[] = {"MEDIUM", "HIGH", "LOW", "REFERENCE", "CUSTOM"};
         rows.push_back({"RAY TRACING QUALITY", kNames[std::min(render.rt_quality, kRtPresetCustom)],

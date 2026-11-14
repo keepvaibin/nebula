@@ -1,6 +1,6 @@
 #pragma once
 
-// LumaScript: a mod's logic as data (agents/LUMACORE-PLAN.md 8.5). LumaLink compiles graphs and the text form into a
+// LumaScript: a mod's logic as data. LumaLink compiles graphs and the text form into a
 // .lumascript; the game runs it here on every platform: a fixed evaluator over a step list, no code generated.
 
 #include <nebula_mod_api.h>

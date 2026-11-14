@@ -194,7 +194,7 @@ int main() {
         }
 #if !defined(NEBULA_GPU_METAL)
         {
-            // The tracer running: the scene single-sampled, anti-aliased by FSR 3; the player's choices kept (plan 16.3).
+            // The tracer running: the scene single-sampled, anti-aliased by FSR 3; the player's choices kept.
             galaxy::render::RenderConfig chosen{};
             chosen.msaa_samples = 4u;
             chosen.upscaler = 1u;
@@ -225,7 +225,7 @@ int main() {
                 "frame-rate caps survive exact float round trips");
         }
         {
-            // The bloom's strength and ray tracing's parts, each away from its default (plan 19.1).
+            // The bloom's strength and ray tracing's parts, each away from its default.
             using galaxy::render::RtPart;
             galaxy::render::RenderConfig original{};
             original.bloom = 140u;

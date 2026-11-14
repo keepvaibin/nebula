@@ -229,7 +229,7 @@ float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool 
     return query.CommittedRayT();
 }
 
-// What the blended things on a ray let through (plan 13.4), rgb; `first`: how far along the first of them stands (-1:
+// What the blended things on a ray let through, rgb; `first`: how far along the first of them stands (-1:
 // none). Every candidate is weighed and none committed (the product does not care for order), at most four: glass and
 // crystal their colour's square root (the absorption exp(-sigma t) with kGlassTint 0.5: the thickness cancels) by
 // 1 - F at normal incidence (index 1.5); water 0.9; a translucent thing (a cloud, a ghost, jelly) 1 - 0.5 alpha at

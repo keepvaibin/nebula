@@ -16,8 +16,8 @@
 // NATIVE_LIT (set by a written material that sums the game's lights in its vertex stage: fur, the Mii face, the
 // trample star): its traced form (NATIVE_TRACED, a vertex form of its own) carries where the vertex is, its normal,
 // its light set and its colour 0 to the pixel stage, which sums the same lights again, each by its share
-// (program_lit.hlsli: light_term by traced_light, the ambient by AMBIENT_TERM), through material_relight
-// (RT-MASTER-PLAN 14.3 item 4). Its other forms are as they were.
+// (program_lit.hlsli: light_term by traced_light, the ambient by AMBIENT_TERM), through material_relight.
+// Its other forms are as they were.
 #if NATIVE_LIT
 #include "program_lit.hlsli"
 #else

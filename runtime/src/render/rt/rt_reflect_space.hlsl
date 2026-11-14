@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The reflections over space (the master plan's 12.3): an a-trous step (5 by 5 taps `step` pixels apart; run with
+// The reflections over space: an a-trous step (5 by 5 taps `step` pixels apart; run with
 // steps 1 and 2). A mirror (roughness under 0.05) stays as it is: it must stay sharp. Otherwise a neighbour counts
 // by the same object, the same plane, the reflection lobe (its normal against the pixel's, sharper the smoother the
 // surface) and a like ray length, so near and far reflections do not mix.

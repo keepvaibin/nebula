@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // One lighting signal as a picture (--diagnostics rt-signals), in the scene target's own format so it is copied over
 // the scene colour and read back as signal_<name>_<n>.ppm. A share of 0 to 1 is written as it is; a signal that goes
-// over 1 (the local lights, the bounce, a mirror) as x / (1 + x), which agents/rt/tools/ref_compare.py turns back.
+// over 1 (the local lights, the bounce, a mirror) as x / (1 + x), turned back on reading.
 // Pass constants: g_pass.w low byte 0 the red channel, 1 rgb, 2 the alpha channel; bit 8: x / (1 + x).
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"

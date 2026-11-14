@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The sun filter's second pass (plan 7.3): V averaged with what the same surface point had in the frames before,
+// The sun filter's second pass: V averaged with what the same surface point had in the frames before,
 // found by where it was (S.motion) and taken only where the pixel there was the same object at the same depth. At
 // most 16 frames: a shadow must follow its moving caster (the lights keep 32). The history is held inside what this
 // frame's rays saw around the pixel (their mean, give or take 1.25 of their spread, over five by five pixels of the
@@ -34,7 +34,7 @@ bool in_penumbra(uint2 pixel) {
     return most > 0.75f;
 }
 
-// The most frames a history holds: 16 at 60 frames a second, as many seconds at any rate (plan 16.5).
+// The most frames a history holds: 16 at 60 frames a second, as many seconds at any rate.
 float most_frames() {
     return 16.0f * rt_history_scale();
 }

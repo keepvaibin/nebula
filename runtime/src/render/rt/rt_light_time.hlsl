@@ -36,7 +36,7 @@ static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
 #endif
 
 
-// The most frames a history holds: 32 at 60 frames a second, as many seconds at any rate (plan 16.5).
+// The most frames a history holds: 32 at 60 frames a second, as many seconds at any rate.
 float most_frames() {
     return 32.0f * rt_history_scale();
 }
@@ -185,7 +185,7 @@ void main(uint3 id : SV_DispatchThreadID) {
 #ifdef RT_LIGHTS
     const float2 both = lerp(moments / weight, float2(bright, bright * bright), max(1.0f / count, 0.06f / rt_history_scale()));
     const float over_time = max(both.y - both.x * both.x, 0.0f);
-    // The upscaler's history lags a light that changed: its reactive mask takes this frame there (plan 16.4). The
+    // The upscaler's history lags a light that changed: its reactive mask takes this frame there. The
     // averages are compared, not this frame's rays (their noise is no change), and the history before its clamp.
     const float changed = abs(dot(now, kLuminance) - dot(sum / weight, kLuminance)) > 0.25f ? 1.0f : 0.0f;
     g_moments[id.xy] = float4(both, (count < 4.0f ? max(over_time, around) : over_time) / min(count, 16.0f), changed);

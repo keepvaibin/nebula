@@ -4427,7 +4427,7 @@ bool RendererD3D12::ensure_motion_target() {
     }
     rd.Format = kReactiveMaskFormat;
     cv.Format = kReactiveMaskFormat;
-    // The tracer writes into it too where the device can trace (plan 16.4: where the added light changed).
+    // The tracer writes into it too where the device can trace (where the added light changed).
     if (rt_capable(rt_caps())) {
         rd.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     }

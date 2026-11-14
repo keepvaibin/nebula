@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The reflections into the mirror picture the programs read (program.hlsli traced_mirror: colour * a + rgb), the
-// opaque layer (the master plan's 12.4): rgb R * its weight, a what stays of the colour under it (rt_mirror.hlsli:
+// opaque layer: rgb R * its weight, a what stays of the colour under it (rt_mirror.hlsli:
 // ADD by Fresnel, or the first cut's multiply where a painted environment map is until 22.13). R already carries the
 // local lights' highlights (rt_reflect.hlsl); a pixel that does not reflect under the preset takes its highlights
 // here, over it and its four neighbours on the same object, as the light pass did.
-// SUBSTITUTE (12.4, FC's 22.13 item 2, when the programs fetch a painted environment map through ENV_FETCH: b11 sets
+// SUBSTITUTE (when the programs fetch a painted environment map through ENV_FETCH: b11 sets
 // FB_ENV_SUBSTITUTE then): at a painted pixel that is not water, with a traced R, the mirror picture holds rgb R times
 // the painted map's own colour (item word 15 bits 0-11, 4 bits a channel; none: white) and the class's gain, a
 // -(1 + keep (1 - saturate(lum(R) / 0.25))): how much of the painted shine comes back where R is dark. The programs

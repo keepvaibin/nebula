@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 /// Where the store keeps the disc's wave layout.
 pub const WAVE_LAYOUT: &str = "NebulaData/WaveLayout.txt";
 
-/// A pack's ray tracing tables in its merge/ folder (RT-MASTER-PLAN 20), lower case: three class its models as they
+/// A pack's ray tracing tables in its merge/ folder, lower case: three class its models as they
 /// cook (read before them, kept out of the store; hit_record), two are rows the host reads, added to the game's.
 const RT_CLASSING: [&str; 3] = ["nebuladata/rtmaterials.tsv", "nebuladata/rtglow.tsv", "nebuladata/rtwater.tsv"];
 const RT_ROWS: [&str; 2] = ["nebuladata/rtstages.tsv", "nebuladata/rteffects.tsv"];

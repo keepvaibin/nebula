@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The sky and bounce light from half to full resolution (the master plan's 11.3): each pixel takes the four nearest
+// The sky and bounce light from half to full resolution: each pixel takes the four nearest
 // half-res values (the filter's last step: rgb in r, g, b), weighed by where they lie and by how surely they are its
 // own surface: the same object, the same distance, facing the same way (joint bilateral upsampling, Kopf et al.
 // 2007), so I stays inside the edges the picture has. Where none of the four is its surface, the nearest of any.

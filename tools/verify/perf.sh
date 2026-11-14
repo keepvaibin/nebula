@@ -1,6 +1,6 @@
 #!/bin/sh
 # perf.sh BIN TAG: the fixed-scene GPU-timer measurement each pushed batch records (perf.tsv): the low-end stand-in
-# (NEBULA_GPU, else the integrated GPU of docs/NATIVE_PERFORMANCE.md's machine; 4 CPU threads) at the Battlerock stop,
+# (NEBULA_GPU, else the integrated GPU; 4 CPU threads) at the Battlerock stop,
 # 1280x720, 1x, 60 fps, 75 s, in the build's own app-data. Run it once to warm the build's caches, then measure; prints
 # the median GPU busy time per second and per frame and the render and game threads' CPU after the stop is reached.
 . "$(dirname "$0")/common.sh"

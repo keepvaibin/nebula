@@ -4,7 +4,7 @@
 // filters, over what they wrote.
 //   Light: r the sun's share V; g 1; b 0; a the ground share: a lit surface keeps its ambient, a painted one falls to
 //     the shadow's share as the sun leaves it, and either takes the sky and the bounce light by mean(I) where the sun
-//     does not reach (the interim of work list 22.10, until the programs take I themselves).
+//     does not reach (until the programs take I themselves).
 //   Added: rgb D.   Mirror: rgb, a as the first cut.
 // Pass constants: g_pass_value[0].x kSkyMin, .y kBounceMax.
 #include "rt_bindings.hlsli"

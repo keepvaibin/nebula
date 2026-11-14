@@ -87,7 +87,7 @@ namespace {
     NEBULA_TUNABLE(f32, cQuestionHeight, 180.0f);
     NEBULA_TUNABLE(f32, cQuestionMargin, 22.0f);  // the answers from the window's sides and foot
     NEBULA_TUNABLE(f32, cQuestionRing, 6.4f);     // the window's white ring (measured), inside its edges
-    // The Pair Joy-Con question: the letters L and R, the halves (the owner's drawing, cJoyConUnit of the menu's units
+    // The Pair Joy-Con question: the letters L and R, the halves (the drawing, cJoyConUnit of the menu's units
     // to its each; NebulaIcons paints them), its text and its answer, as far from each other as the answer is from the
     // window's ring.
     NEBULA_TUNABLE(f32, cJoyConUnit, 3.4f);

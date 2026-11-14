@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The sky and bounce light (rt_indirect.hlsl; the master plan's section 11): at half resolution, what the sky and the
+// The sky and bounce light (rt_indirect.hlsl): at half resolution, what the sky and the
 // lit surfaces near each surface give it, as a ratio to the stage's ambient; averaged over time and space at half
 // resolution by the local lights' filters (rt_lights_time, rt_lights_space: they keep the moments of a noise of any
 // size), then brought to full resolution by the picture's own edges (rt_indirect_up.hlsl). The light pass takes its
-// mean through the ground share (bit 8 of the frame's flags) until the programs take it themselves (work list 22.13).
+// mean through the ground share (bit 8 of the frame's flags) until the programs take it themselves.
 #include "galaxy/render/render_core.h"
 
 #include "galaxy/launch_args.h"

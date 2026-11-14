@@ -74,8 +74,8 @@ if(NEBULA_AUDIT_FLOAT_CASTS AND Python3_Interpreter_FOUND)
         VERBATIM)
 endif()
 
-# The game builds warning free: a new warning stops the build. The names turned off are the ones still to be cleared
-# (rows in helpers/warnings_b11.tsv); offsetof, register, pragmas, constructor initializer order and unused private
+# The game builds warning free: a new warning stops the build. The names turned off are the ones still to be cleared;
+# offsetof, register, pragmas, constructor initializer order and unused private
 # fields are on.
 # An audit build replaces all of it, e.g. -Wshorten-64-to-32 for tools/narrowing.py.
 set(NEBULA_AUDIT_FLAGS "" CACHE STRING "Diagnostics for an audit build")
@@ -88,7 +88,7 @@ else()
         -Wno-deprecated-copy-with-user-provided-copy -Wno-undefined-var-template -D_CRT_SECURE_NO_WARNINGS)
 endif()
 
-# docs/NATIVE_PORT.md, "Build of the game code", has the reason for each, and docs/NATIVE_PERFORMANCE.md the cost:
+# docs/NATIVE_PORT.md, "Build of the game code", has the reason for each:
 # -fno-math-errno (the game never reads errno; sqrtf and friends stay single instructions), -fno-stack-protector
 # (pinned off for every toolchain: distribution compilers turn it on by default).
 # The same language on every platform: clang enables Microsoft extensions by default only when targeting Windows
@@ -148,7 +148,7 @@ else()
 endif()
 
 # A build for players: ThinLTO with the profile of a tour (native/pgo/game.profdata, tools/verify/pgo_profile.sh): the game's CPU falls about
-# 17 % (docs/NATIVE_PERFORMANCE.md). A profile older than the code still applies to what has not changed.
+# 17 %. A profile older than the code still applies to what has not changed.
 option(NEBULA_PGO "Build the game with ThinLTO and its profile" OFF)
 if(NEBULA_PGO)
     set(game_profile "${CMAKE_CURRENT_SOURCE_DIR}/pgo/game.profdata")

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Light in the air (the master plan's 15.4, High): sunlight and lamplight scattered toward the eye by the air between
+// Light in the air (High): sunlight and lamplight scattered toward the eye by the air between
 // it and what it sees: shafts of sun between Honeyhive's trees, a glow in dusty air about a fire, nothing in space
 // (no air: the pass does not run). Single scattering integrated through the light volume front to back (Wronski 2014,
 // Hillaire 2015: the froxel integration of Frostbite and Unreal's volumetric fog), so each pixel takes the air in
