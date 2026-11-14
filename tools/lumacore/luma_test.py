@@ -1,7 +1,7 @@
 """luma_test.py: the proof harness's runner (contract `harness`, revision 1; plan task 0.3). Python 3, standard library.
 
     luma_test.py run <test folder | suite.json> --bin <folder> [--renderer r] [--work <folder>] [--who F|G]
-                 [--module hooks|plain]
+                 [--module hooks|plain] [--gpu vendor:device:subsystem]
     luma_test.py refs <test folder> --run <run folder> --looked
 
 `run` reads each test strictly, gives it a private run folder, installs the game half first and then the test's mods,
@@ -193,6 +193,9 @@ def class_names(types_path):
 
 # The classes class:<Class> may name (run_tests sets it from the bin folder's luma_types.json; read_test's `types`).
 CLASSES = None
+# The GPU every run is started on, as the settings name it (vendor:device:subsystem in lowercase hex, config.ini gpu);
+# None: the game's own choice. run_tests sets it from --gpu.
+GPU = None
 
 
 def object_ref(value, path, classes):
@@ -1275,6 +1278,8 @@ def write_run_settings(test, settings):
         if LANGUAGES[test["language"]] is None:
             raise HarnessError("language %s: not built yet (the language packs' setting, task 3.8)" % test["language"])
         assignments.append("GALAXY_LANGUAGE=%s" % LANGUAGES[test["language"]])
+    if GPU is not None:
+        assignments.append("GALAXY_GPU=%s" % GPU)
     subprocess.run([sys.executable, "-I", str(TREE / "tools" / "verify" / "settings_args.py"), str(settings)] + assignments,
                    check=True, capture_output=True)
 
@@ -1996,7 +2001,10 @@ def run_tests(args):
     lock = pathlib.Path(args.lock)
     if lock.exists():
         raise SystemExit("run.lock held: " + lock.read_text(encoding="utf-8", errors="replace").strip())
-    global CLASSES
+    global CLASSES, GPU
+    if args.gpu is not None and not re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{4}:[0-9a-f]{8}", args.gpu):
+        raise SystemExit("--gpu: vendor:device:subsystem in lowercase hex, as the game's config.ini gpu (10de:2b85:89ef1043)")
+    GPU = args.gpu
     types = pathlib.Path(args.bin).resolve() / "luma_types.json"
     CLASSES = class_names(types) if types.is_file() else None
     lock.write_text("%s %s luma-test %s\n" % (args.who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), suite_name), encoding="utf-8")
@@ -2108,6 +2116,9 @@ def main():
                      "of these bins wrote); a test with \"fresh\": true starts without it")
     run.add_argument("--diagnostics", default=os.environ.get("LUMA_TEST_DIAGNOSTICS"),
                      help="the game's --diagnostics for every run (or LUMA_TEST_DIAGNOSTICS), e.g. ring-stress")
+    run.add_argument("--gpu", default=os.environ.get("LUMA_TEST_GPU") or None,
+                     help="the GPU every run starts on (or LUMA_TEST_GPU): vendor:device:subsystem in lowercase hex, as "
+                          "Nebula Settings writes config.ini gpu; result.json's gpu names the adapter the game used")
     run.add_argument("--lock", default=os.environ.get("LUMA_TEST_LOCK"),
                      help="the run lock file (or LUMA_TEST_LOCK); the runner refuses to start while it exists")
     refs = sub.add_parser("refs")
