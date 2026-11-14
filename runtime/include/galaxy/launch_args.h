@@ -122,6 +122,9 @@ struct LaunchArgs {
     // status, and no keyboard, mouse, controller motor or Wii Remote of the player's.
     bool started_hidden = false;
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
+    // --renderer d3d12|d3d11 (0: not given): the Direct3D 12 host runs NebulaNativeD11 for d3d11 without starting Direct3D
+    // 12, and for d3d12 never falls back to it (host_main.cpp hand_off_to_d3d11). The Direct3D 11 host never hands back.
+    unsigned renderer = 0u;  // 1 d3d12, 2 d3d11
     std::vector<std::filesystem::path> extensions;  // --extension, each time given: host extensions (host_extension.h)
 };
 

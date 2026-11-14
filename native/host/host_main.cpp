@@ -10,6 +10,7 @@
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
 #include "galaxy/windows_paths.h"
+#include "run_sibling_win32.h"
 #endif
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
 #include <dwmapi.h>
@@ -3336,6 +3337,60 @@ void hold_runtime_lease() {
 }
 #endif
 
+#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_D3D12)
+// Direct3D 11 in place of Direct3D 12: asked for (--renderer d3d11, before Direct3D 12 starts), or no adapter runs the
+// Direct3D 12 renderer (its probe passed over every one: "No hardware D3D12 adapter ..."; not with --renderer d3d12).
+// The Direct3D 11 host of this program's CPU level (NebulaNativeD11.exe, or NebulaNativeD11-x86-64-v2.exe beside the
+// SSE4.2 host) runs in this one's place as the AVX2 entry runs the SSE4.2 build (nebula_run_sibling: same command line,
+// startup information, handles, environment and folder, in a job, waited for); this process ends with its exit code.
+// The Direct3D 11 host has no hand-off, so the chain ends there. Returns when that program is not there or did not start.
+void hand_off_to_d3d11(const char* why) {
+    const std::wstring self = ::galaxy::windows::executable_path();
+    const std::size_t slash = self.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) {
+        return;
+    }
+    constexpr std::wstring_view kBaseline = L"-x86-64-v2.exe";
+    const bool baseline = self.size() > kBaseline.size() &&
+                          _wcsicmp(self.c_str() + self.size() - kBaseline.size(), kBaseline.data()) == 0;
+    const std::wstring path = self.substr(0, slash + 1u) + L"NebulaNativeD11" + (baseline ? L"-x86-64-v2.exe" : L".exe");
+    if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        log_line("host: Direct3D 11 is wanted and its program is not beside the game:", why);
+        return;
+    }
+    log_line("host: Direct3D 11 takes the start:", why);
+    std::fflush(stdout);
+    std::fflush(stderr);
+    // The Direct3D 11 host takes the one-game lock and the launcher's lease; this process's window (opened by the
+    // Direct3D 12 start) is hidden while it waits.
+    if (gOneGame != nullptr) {
+        CloseHandle(gOneGame);
+        gOneGame = nullptr;
+    }
+    if (gRuntimeLease != nullptr) {
+        CloseHandle(gRuntimeLease);
+        gRuntimeLease = nullptr;
+    }
+    EnumWindows(
+        [](HWND window, LPARAM) -> BOOL {
+            DWORD process = 0;
+            GetWindowThreadProcessId(window, &process);
+            if (process == GetCurrentProcessId()) {
+                ShowWindow(window, SW_HIDE);
+            }
+            return TRUE;
+        },
+        0);
+    unsigned long code = 1u;
+    if (!nebula_run_sibling(path.c_str(), &code)) {
+        log_line("host: the Direct3D 11 program did not start:", why);
+        return;
+    }
+    std::fflush(stdout);
+    TerminateProcess(GetCurrentProcess(), static_cast<UINT>(code));
+}
+#endif
+
 [[noreturn]] void finish_and_exit(bool restart) {
 #if defined(_WIN32)
     game_profile::finish();
@@ -3825,6 +3880,9 @@ void read_launch_args(int argc, char** argv) {
             args.console_log = argv[i + 1][0] == '1';
         } else if (key == "--gpu-start-retry") {
             args.gpu_start_retry = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
+        } else if (key == "--renderer") {
+            const std::string_view api = argv[i + 1];
+            args.renderer = api == "d3d12" ? 1u : api == "d3d11" ? 2u : 0u;
         } else if (key == "--timeline") {
             args.timeline = path_at(i + 1);
         } else if (key == "--dump-tunables") {
@@ -3969,7 +4027,8 @@ int main(int argc, char** argv) {
             module = arg_path(i + 1);
         } else if (key == "--diagnostics" || key == "--timeline" || key == "--data" || key == "--settings" ||
                    key == "--crash-dumps" || key == "--gpu-validation" || key == "--console-log" ||
-                   key == "--gpu-start-retry" || key == "--dump-tunables" || key == "--extension") {
+                   key == "--gpu-start-retry" || key == "--dump-tunables" || key == "--extension" ||
+                   key == "--renderer") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
@@ -4228,6 +4287,12 @@ int main(int argc, char** argv) {
     } catch (const std::exception& failure) {
         die("the settings did not load: %s", failure.what());
     }
+    // Asked for Direct3D 11: its program runs in this one's place, before the Discord status and the renderer start.
+#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_D3D12)
+    if (::galaxy::launch_args().renderer == 2u) {
+        hand_off_to_d3d11("--renderer d3d11");
+    }
+#endif
     // Discord: never from a hidden start (a test), which must leave the player's status alone.
     if (!::galaxy::launch_args().started_hidden) {
         galaxy::discord::set_enabled_provider([] { return galaxy::get_runtime_settings().discord_status; });
@@ -4240,6 +4305,11 @@ int main(int argc, char** argv) {
         if (retry_start_for_gpu_memory(reason)) {
             finish_and_exit(true);
         }
+#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_D3D12)
+        if (::galaxy::launch_args().renderer != 1u && reason.rfind("No hardware D3D12 adapter", 0) == 0u) {
+            hand_off_to_d3d11(reason.c_str());
+        }
+#endif
         die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
     boot_mark("renderer started");

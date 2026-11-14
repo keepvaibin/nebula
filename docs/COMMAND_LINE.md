@@ -21,6 +21,7 @@ and a value. The launcher passes `--pak` and `--saves`; the Android app also pas
 | `--benchmark 1` | Runs the benchmark and exits: real stages (the list in `benchmark.tsv` beside `game.pak`, else the built-in one), then a probe of internal heights and optional passes, on a blank save kept in memory. The settings are read, never written; no save, Mii, achievement or statistic is read or written, and no mod loads. The result is `diagnostics/benchmark-<utc>.json` in the data folder: the measurements, the recommended settings and a summary (exit 0 and `"status":"complete"` when it finished). |
 | `--benchmark-out <file>` | With `--benchmark 1`: the result goes to this file instead. |
 | `--gpu-start-retry <n>` | Set by the game itself when it starts again because no graphics memory was free: the tries so far (5 at most). |
+| `--renderer d3d12\|d3d11` | Windows, `NebulaNative`: `d3d11` runs `NebulaNativeD11` (the build of the same CPU level) in its place without starting Direct3D 12; `d3d12` never falls back. Not given: Direct3D 11 runs when no adapter can run Direct3D 12. One process lifetime and exit code either way. |
 
 The GPU is a setting: `gpu=` in `config.ini`, chosen in Nebula Settings (empty: the high-performance GPU).
 
