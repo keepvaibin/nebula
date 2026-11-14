@@ -336,7 +336,9 @@ struct Result {
     std::uint64_t gpu_memory_peak = 0u, gpu_budget = 0u, process_peak = 0u;
     double p50 = 0.0, p95 = 0.0, p99 = 0.0, worst = 0.0;
     std::uint32_t over_16 = 0u, over_33 = 0u;
-    double pixels = 0.0;     // the scene's pixels at the item's settings
+    double pixels = 0.0;     // the scene's pixels at the item's settings and the output below
+    unsigned output_w = 0u, output_h = 0u;  // the output (back buffer) when its window began
+    bool output_moved = false;              // the output's size changed inside its window
     bool applied = true;     // the settings asked for are the ones that ran (a pass the device cannot run is clamped)
 };
 
@@ -445,9 +447,9 @@ unsigned output_lines() {
                : 480u;
 }
 
-// The scene's pixels at a configuration: the internal height (0: the panel's), or an upscaler's ratio of the output.
-double scene_pixels(const render::RenderConfig& cfg) {
-    const unsigned width = output_width(), lines = output_lines();
+// The scene's pixels at a configuration on a `width` x `lines` output: the internal height (0: the panel's), or an
+// upscaler's ratio of the output.
+double scene_pixels(const render::RenderConfig& cfg, unsigned width, unsigned lines) {
     if (cfg.upscaler == 0u) {
         return render::scene_pixels(render::render_internal_height(cfg), width, lines);
     }
@@ -527,6 +529,7 @@ void sample_frame(Result& result) {
 void end_window(Result& result) {
     Run& r = g_run;
     g_measuring.store(false, std::memory_order_relaxed);
+    result.output_moved = output_width() != result.output_w || output_lines() != result.output_h;
     std::vector<std::uint64_t> pictures;
     {
         const std::lock_guard<std::mutex> lock(g_picture_mutex);
@@ -633,12 +636,28 @@ std::size_t finished_items() {
     return std::min({g_run.results.size(), g_run.items.size(), g_run.index});
 }
 
-// The recommendation's inputs from the results.
+// Every finished step measured at one output size, unchanged inside each window: that size in `width` x `lines`.
+// False (no recommendation: its pixels would mix sizes) when a step's differs from the first's or moved in its window;
+// true with 0 x 0 when no step finished.
+bool output_held(unsigned& width, unsigned& lines) {
+    width = 0u;
+    lines = 0u;
+    for (std::size_t i = 0; i < finished_items(); ++i) {
+        const Result& r = g_run.results[i];
+        if (i == 0u) {
+            width = r.output_w;
+            lines = r.output_h;
+        }
+        if (r.output_moved || r.output_w != width || r.output_h != lines) return false;
+    }
+    return true;
+}
+
+// The recommendation's inputs from the results, at the output size the steps were measured at (output_held).
 Measured measured_inputs() {
     Run& run = g_run;
     Measured m;
-    m.output_width = output_width();
-    m.output_lines = output_lines();
+    (void)output_held(m.output_width, m.output_lines);
     const render::RenderConfig& c = run.chosen;
     m.current.internal_height = c.internal_height;
     m.current.msaa_samples = c.msaa_samples;
@@ -648,7 +667,7 @@ Measured measured_inputs() {
     m.current.smaa_quality = c.smaa_quality;
     m.current.bloom = c.bloom;
     m.upscaler = c.upscaler != 0u;
-    m.current_pixels = scene_pixels(run.phase1);
+    m.current_pixels = scene_pixels(run.phase1, m.output_width, m.output_lines);
     const Result* worst = nullptr;
     const Result* probe[static_cast<std::size_t>(ProbeCase::Count)] = {};
     for (std::size_t i = 0; i < finished_items(); ++i) {
@@ -713,6 +732,12 @@ void write_result(bool complete) {
         // Never set up: no config.ini when the process started. The game's defaults stand as the player's.
         out << ",\"no config.ini yet: settings are the game's defaults (a first start's height calibration has not run)\"";
     }
+    unsigned held_width = 0u, held_lines = 0u;
+    const bool held = output_held(held_width, held_lines);
+    if (!held) {
+        out << ",\"the output size changed during the run: its steps were measured at different sizes, so there is no "
+               "recommendation\"";
+    }
     out << "],\"scenes\":[";
     bool first = true;
     for (std::size_t i = 0; i < finished_items(); ++i) {
@@ -756,7 +781,7 @@ void write_result(bool complete) {
         out << "null";
     }
     out << ",\"recommendation\":";
-    const Recommendation rec = complete ? recommend(m) : Recommendation{};
+    const Recommendation rec = complete && held ? recommend(m) : Recommendation{};
     if (!rec.valid) {
         out << "null";
     } else {
@@ -955,7 +980,9 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
             Result& result = r.results.back();
             const render::RenderConfig asked = item_config(r.items[r.index]);
             result.applied = config_holds(asked);
-            result.pixels = scene_pixels(asked);
+            result.output_w = output_width();
+            result.output_h = output_lines();
+            result.pixels = scene_pixels(asked, result.output_w, result.output_h);
             begin_window();
             enter(Phase::Measure);
         }
