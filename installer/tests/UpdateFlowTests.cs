@@ -32,6 +32,8 @@ namespace Nebula.Setup
         static volatile int releasesDelayMs;
         static int setupRequests;
         static int port;
+        // Setup stand-ins built by the run script, each carrying a product version (setup-<version>.exe).
+        static string stubs;
 
         static void Check(bool condition, string what)
         {
@@ -112,6 +114,7 @@ namespace Nebula.Setup
                         Interlocked.Increment(ref setupRequests);
                         byte[] body = setupBytes;
                         if (setupMode == "missing") Reply(stream, 404, new byte[0], 0, -1);
+                        else if (rangeFrom >= body.Length) Reply(stream, 416, new byte[0], 0, -1);
                         else if (setupMode == "truncated") Reply(stream, rangeFrom > 0 ? 206 : 200, body, rangeFrom, 20000);
                         else if (setupMode == "slow") Reply(stream, 200, body, rangeFrom, -1, 40);
                         else Reply(stream, rangeFrom > 0 ? 206 : 200, body, rangeFrom, -1);
@@ -129,7 +132,7 @@ namespace Nebula.Setup
         {
             long length = body.Length - from;
             var head = new StringBuilder();
-            head.Append("HTTP/1.1 " + status + (status == 404 ? " Not Found" : status == 206 ? " Partial Content" : " OK") + "\r\n");
+            head.Append("HTTP/1.1 " + status + (status == 404 ? " Not Found" : status == 206 ? " Partial Content" : status == 416 ? " Range Not Satisfiable" : " OK") + "\r\n");
             head.Append("Content-Length: " + length + "\r\n");
             if (status == 206) head.Append("Content-Range: bytes " + from + "-" + (body.Length - 1) + "/" + body.Length + "\r\n");
             head.Append("Connection: close\r\n\r\n");
@@ -146,6 +149,17 @@ namespace Nebula.Setup
             }
         }
 
+        // A setup of `version`: its stand-in executable, then `bytes` of noise (another build of the same version).
+        static byte[] SetupPayload(string version, int bytes, int seed)
+        {
+            byte[] exe = File.ReadAllBytes(Path.Combine(stubs, "setup-" + version + ".exe"));
+            byte[] noise = Payload(bytes, seed);
+            var data = new byte[exe.Length + noise.Length];
+            exe.CopyTo(data, 0);
+            noise.CopyTo(data, exe.Length);
+            return data;
+        }
+
         static byte[] Payload(int bytes, int seed)
         {
             var data = new byte[bytes];
@@ -159,7 +173,7 @@ namespace Nebula.Setup
             string exe = Path.Combine(staging, "update-9.9.9-beta.1", "Nebula-Setup.exe");
 
             // The check: the newer beta, its notes and its setup.
-            setupBytes = Payload(300000, 1);
+            setupBytes = SetupPayload("9.9.9-beta.1", 300000, 1);
             signatureText = Sign(setupBytes);
             releasesJson = Release("9.9.9-beta.1", "What's new: everything.");
             var found = Updater.FindNewer(3000);
@@ -167,6 +181,17 @@ namespace Nebula.Setup
                   found.SetupSize == setupBytes.Length, "the check finds the newer beta with its notes");
             releasesJson = Release("2.0.7-beta.1", "old");
             Check(Updater.FindNewer(3000) == null, "no newer release: nothing is offered");
+
+            // Malformed listings: items that are not releases are passed over; an answer that is not a list (a rate
+            // limit's message, a portal's page) is no answer.
+            releasesJson = "[1, \"text\", null, {\"tag_name\": 5, \"assets\": [7, null]}]";
+            Check(Updater.FindNewer(3000) == null, "a listing of things that are not releases offers nothing");
+            releasesJson = "{\"message\": \"API rate limit exceeded\"}";
+            Throws<InvalidDataException>(() => Updater.FindNewer(3000), "a rate limit's message is no listing");
+            releasesJson = "<html>Sign in to the network</html>";
+            Throws<Exception>(() => Updater.FindNewer(3000), "a captive portal's page is no listing");
+            releasesJson = Release("9.9.9-beta.1", "plain http").Replace("http://127.0.0.1:" + port, "http://example.org");
+            Check(Updater.FindNewer(3000) == null, "a release whose setup is not served over HTTPS is not offered");
 
             // Offline and slow: the check gives up within its time, so the game starts as it would.
             string answering = Updater.ReleasesUrl;
@@ -238,7 +263,7 @@ namespace Nebula.Setup
 
             // A release published again under its version (a new setup and signature): the old signature and a partial
             // download of the old setup are not used.
-            byte[] republished = Payload(300000, 3);
+            byte[] republished = SetupPayload("9.9.9-beta.1", 300000, 3);
             setupBytes = republished;
             signatureText = Sign(republished);
             File.Delete(exe);
@@ -257,6 +282,33 @@ namespace Nebula.Setup
                               "a download cut off on every try fails");
             Check(!File.Exists(exe), "a cut-off download leaves no setup to run");
             setupMode = "ok";
+
+            // A signed setup of another version offered under this release's tag (an old setup published again, a
+            // downgrade): refused like an unsigned one.
+            setupBytes = SetupPayload("2.0.1-beta.1", 300000, 4);
+            signatureText = Sign(setupBytes);
+            releasesJson = Release("9.9.9-beta.1", "replayed");
+            release = Updater.FindNewer(3000);
+            Throws<InvalidDataException>(() => Updater.Download(release, staging, null, CancellationToken.None),
+                                         "a signed setup of 2.0.1-beta.1 offered as 9.9.9-beta.1 is refused");
+            Check(!File.Exists(exe), "and deleted, never run");
+
+            // Larger than the release says (a server sending something else): stopped at the listed size.
+            setupBytes = good;
+            signatureText = Sign(good);
+            releasesJson = Release("9.9.9-beta.1", "notes");
+            release = Updater.FindNewer(3000);
+            var smaller = new ReleaseInfo { Version = release.Version, Tag = release.Tag, SetupUrl = release.SetupUrl, SignatureUrl = release.SignatureUrl, SetupSize = 100000 };
+            Throws<InvalidDataException>(() => Updater.Download(smaller, staging, null, CancellationToken.None),
+                                         "a download larger than its listed size is stopped");
+            Check(!File.Exists(exe) && (!File.Exists(exe + ".partial") || new FileInfo(exe + ".partial").Length <= 100000),
+                  "nothing beyond the listed size is kept");
+
+            // A partial file as long as the setup (a download that ended before its rename): the server answers 416,
+            // and the download starts again from the beginning.
+            File.WriteAllBytes(exe + ".partial", Payload(good.Length, 5));
+            path = Updater.Download(release, staging, null, CancellationToken.None);
+            Check(FileEquals(path, good), "a partial file the server cannot continue is downloaded again whole");
         }
 
         static bool FileEquals(string path, byte[] bytes)
@@ -482,6 +534,7 @@ namespace Nebula.Setup
             key = new RSACryptoServiceProvider();
             key.PersistKeyInCsp = false;
             key.FromXmlString(File.ReadAllText(args[1]));
+            stubs = args[2];
             Environment.SetEnvironmentVariable("LOCALAPPDATA", Path.Combine(scratch, "localappdata"));
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();

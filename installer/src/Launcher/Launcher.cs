@@ -54,7 +54,12 @@ namespace Nebula.Launcher
                 {
                     if (UpdateCheck.OfferBeforeLaunch(session)) return 0;
                     string error = session.TryLaunch();
-                    if (error == null) return 0;
+                    if (error == null)
+                    {
+                        // The game is up; the check for the next start runs here, behind it.
+                        UpdateCheck.Refresh(session);
+                        return 0;
+                    }
                     MessageBox.Show(error, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
                 Application.Run(new SettingsForm(session));
@@ -99,6 +104,7 @@ namespace Nebula.Launcher
         public bool SetupComplete;
         public RecordingMode Recording = RecordingMode.None;
         public bool AskAboutUpdates = true;  // a newer release is offered at each start (UpdateCheck)
+        public string SkippedUpdate;         // the release Skip this version passed over; only newer ones are offered
 
         public string SettingsFile { get { return Portable ? Path.Combine(App, "portable-settings.json") : NebulaPaths.SettingsFile; } }
 
@@ -121,6 +127,7 @@ namespace Nebula.Launcher
                 if (Json.Long(settings, "settingsVersion") >= 4 && recording >= 0 && recording <= 2)
                     Recording = (RecordingMode)recording;
                 if (settings.ContainsKey("askAboutUpdates")) AskAboutUpdates = Json.Bool(settings, "askAboutUpdates");
+                SkippedUpdate = Json.Str(settings, "skippedUpdate");
             }
             catch (Exception) { }
         }
@@ -130,7 +137,7 @@ namespace Nebula.Launcher
             Json.Save(SettingsFile, new Dictionary<string, object>
             {
                 { "settingsVersion", 4 }, { "content", Content }, { "recording", (int)Recording },
-                { "askAboutUpdates", AskAboutUpdates }
+                { "askAboutUpdates", AskAboutUpdates }, { "skippedUpdate", SkippedUpdate }
             });
             SetupComplete = true;
         }
@@ -646,6 +653,8 @@ namespace Nebula.Launcher
 #endif
 
             LoadValues();
+            // The update check for the next start, behind the open settings (UpdateCheck.Refresh).
+            Shown += delegate { new Thread(() => UpdateCheck.Refresh(session)) { IsBackground = true }.Start(); };
             monitor.SelectedIndexChanged += delegate
             {
                 if (loading) return;

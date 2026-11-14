@@ -46,18 +46,19 @@ namespace Nebula.Launcher
                   command.Arguments == "/select,\"" + Path.GetFullPath(zip) + "\"", "Open folder shows the recording selected in Explorer");
         }
 
-        // The update offer: Update and Not now, Don't ask again unticked; Update ignores the box, Not now keeps it.
-        // Rendered to update-prompt.png.
+        // The update offer: Update by default, Not now, Skip this version, the download's size; each button's choice.
+        // Rendered to update-prompt.png. Then the service's rules: an offer comes only from the last check's answer,
+        // never from the network before the game starts.
         static void UpdatePromptCases(string outDir)
         {
-            var release = new ReleaseInfo { Version = "9.9.9", Notes = "What changed in this release.\n\n- One fix.\n- Another." };
+            var release = new ReleaseInfo { Version = "9.9.9", Notes = "What changed in this release.\n\n- One fix.\n- Another.", SetupSize = 150L << 20 };
             using (var form = new UpdatePromptForm(release))
             {
                 var buttons = All(form).OfType<Button>().ToList();
-                // Don't ask again (a ray tracing machine's offer also holds Prepare ray tracing shaders).
-                var box = All(form).OfType<CheckBox>().Single(b => b.Text == "Don't ask again");
-                Check(buttons.Any(b => b.Text == "Update") && buttons.Any(b => b.Text == "Not now") && !box.Checked &&
-                      form.AcceptButton == buttons.First(b => b.Text == "Update"), "the update offer: Update by default, Not now, Don't ask again unticked");
+                Check(buttons.Any(b => b.Text == "Update") && buttons.Any(b => b.Text == "Not now") && buttons.Any(b => b.Text == "Skip this version") &&
+                      form.AcceptButton == buttons.First(b => b.Text == "Update") && form.CancelButton == buttons.First(b => b.Text == "Not now"),
+                      "the update offer: Update by default, Not now, Skip this version");
+                Check(All(form).OfType<Label>().Any(l => l.Text == "Download: 150 MB"), "the offer names the download's size");
                 CreateHandles(form);
                 form.PerformLayout();
                 using (var bitmap = new Bitmap(form.Width, form.Height))
@@ -65,16 +66,19 @@ namespace Nebula.Launcher
                     form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
                     bitmap.Save(Path.Combine(outDir, "update-prompt.png"), ImageFormat.Png);
                 }
-                box.Checked = true;
-                form.Choose(true);
-                Check(form.DialogResult == DialogResult.Yes && !form.DontAskAgain, "Update ignores Don't ask again");
+                form.Choose(UpdateChoice.Update);
+                Check(form.DialogResult == DialogResult.Yes && form.Choice == UpdateChoice.Update, "Update chooses the update");
             }
             using (var form = new UpdatePromptForm(release))
             {
-                All(form).OfType<CheckBox>().Single(b => b.Text == "Don't ask again").Checked = true;
-                form.Choose(false);
-                Check(form.DialogResult == DialogResult.No && form.DontAskAgain, "Not now keeps Don't ask again");
+                form.Choose(UpdateChoice.Skip);
+                Check(form.DialogResult == DialogResult.No && form.Choice == UpdateChoice.Skip, "Skip this version chooses no update");
             }
+            using (var form = new UpdatePromptForm(release))
+            {
+                Check(form.Choice == UpdateChoice.Later, "a prompt closed any other way is Not now");
+            }
+            UpdateServiceCases();
             // A release's notes as GitHub holds them (Markdown, 1.0.2's opening): plain text in the prompt.
             var marked = new ReleaseInfo
             {
@@ -958,6 +962,47 @@ namespace Nebula.Launcher
 
             FileUtil.DeleteTree(saves);
             foreach (string backup in Directory.GetDirectories(parent, "saves-backup-*")) FileUtil.DeleteTree(backup);
+        }
+
+        // UpdateCheck's rules on the test's data root: what a cached answer offers, Skip this version, the channel, a
+        // damaged or missing cache, and a refresh that fails (offline) keeping the last answer.
+        static void UpdateServiceCases()
+        {
+            var session = new LaunchSession();
+            string cache = UpdateCheck.CachePath;
+            if (File.Exists(cache)) File.Delete(cache);
+            Check(UpdateCheck.Pending(session) == null, "no check yet: nothing is offered");
+            var newer = new ReleaseInfo { Version = "9.9.9", Tag = "v9.9.9", Notes = "notes", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig", SetupSize = 5 };
+            UpdateCheck.WriteCache(newer, DateTime.UtcNow);
+            var pending = UpdateCheck.Pending(session);
+            Check(pending != null && pending.Version == "9.9.9" && pending.Notes == "notes" && pending.SetupSize == 5, "the last check's newer release is offered at start");
+            session.SkippedUpdate = "9.9.9";
+            Check(UpdateCheck.Pending(session) == null, "a skipped version is not offered again");
+            session.SkippedUpdate = "9.9.8";
+            Check(UpdateCheck.Pending(session) != null, "a version newer than the skipped one is");
+            session.SkippedUpdate = null;
+            session.AskAboutUpdates = false;
+            Check(UpdateCheck.Pending(session) == null, "the service turned off offers nothing");
+            session.AskAboutUpdates = true;
+            UpdateCheck.WriteCache(new ReleaseInfo { Version = "0.0.0-test", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig" }, DateTime.UtcNow);
+            Check(UpdateCheck.Pending(session) == null, "a cached release no newer than this install is not offered");
+            UpdateCheck.WriteCache(new ReleaseInfo { Version = "9.9.9-beta.1", SetupUrl = "https://example.org/s", SignatureUrl = "https://example.org/s.sig" }, DateTime.UtcNow);
+            Check(UpdateCheck.Pending(session) == null, "a release of the other channel is not offered");
+            File.WriteAllText(cache, "{ not json");
+            Check(UpdateCheck.Pending(session) == null, "a damaged cache offers nothing");
+            UpdateCheck.WriteCache(newer, DateTime.UtcNow.AddDays(-1));
+            string listing = Updater.ReleasesUrl;
+            var closed = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            closed.Start();
+            int port = ((System.Net.IPEndPoint)closed.LocalEndpoint).Port;
+            closed.Stop();
+            Updater.ReleasesUrl = "http://127.0.0.1:" + port + "/releases";
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            UpdateCheck.Refresh(session);
+            Updater.ReleasesUrl = listing;
+            pending = UpdateCheck.Pending(session);
+            Check(pending != null && pending.Version == "9.9.9", "offline, a refresh keeps the last answer (" + clock.ElapsedMilliseconds + " ms)");
+            File.Delete(cache);
         }
 
         [STAThread]

@@ -1,50 +1,63 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Nebula.Launcher
 {
     /// <summary>
-    /// The update offer at each start: a newer release on GitHub is offered before the game starts; offline, or when
-    /// GitHub does not answer within a few seconds, the game starts without a word. Update downloads the release's
-    /// Setup, checks its signature and runs it, which installs the release and starts the game. NebulaText.Of("Don't ask again")
-    /// applies only to NebulaText.Of("Not now"); the launcher's Advanced tab turns the offer back on.
+    /// The update service. Nothing touches the network before the game starts: a start offers the newer release an
+    /// earlier check found (update-check.json in the data folder), and once the game has started the launcher reads
+    /// the release list behind it for the next start (at most once an hour; offline, a captive portal, a rate limit
+    /// or a malformed answer leave the last answer as it was). Update downloads the release's Setup, checks its
+    /// signature and version and runs it, which installs the release and starts the game; Not now asks again at the
+    /// next start; Skip this version asks again for a newer one. The launcher's Advanced tab turns the service off.
     /// </summary>
     internal static class UpdateCheck
     {
-        private const int CheckMilliseconds = 3000;
+        private const int CheckMilliseconds = 15000;
+        private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(1);
+
+        internal static string CachePath { get { return Path.Combine(NebulaPaths.DataRoot, "update-check.json"); } }
+
+        /// <summary>The release to offer at this start, from the last check; null for none.</summary>
+        internal static ReleaseInfo Pending(LaunchSession session)
+        {
+            if (session.Portable || !session.AskAboutUpdates) return null;
+            ReleaseInfo release;
+            DateTime checkedUtc;
+            if (!ReadCache(out release, out checkedUtc) || release == null) return null;
+            // A check made by an older install, or on the other channel, offers nothing this install would take.
+            if (Updater.CompareVersions(release.Version, BuildInfo.Version) <= 0 ||
+                Updater.IsBetaVersion(release.Version) != Updater.IsBetaVersion(BuildInfo.Version)) return null;
+            if (!string.IsNullOrEmpty(session.SkippedUpdate) && Updater.CompareVersions(release.Version, session.SkippedUpdate) <= 0) return null;
+            return release;
+        }
 
         /// <summary>True when an update was started: it starts the game itself once installed.</summary>
         public static bool OfferBeforeLaunch(LaunchSession session)
         {
-            if (session.Portable || !session.AskAboutUpdates) return false;
-            ReleaseInfo release;
-            try
-            {
-                var check = Task.Run(() => Updater.FindNewer(CheckMilliseconds));
-                if (!check.Wait(CheckMilliseconds + 500)) return false;
-                release = check.Result;
-            }
-            catch (Exception) { return false; }
+            ReleaseInfo release = Pending(session);
             if (release == null) return false;
+            UpdateChoice choice;
             bool prepareRayTracing;
             using (var prompt = new UpdatePromptForm(release))
             {
-                if (prompt.ShowDialog() != DialogResult.Yes)
-                {
-                    if (prompt.DontAskAgain)
-                    {
-                        session.AskAboutUpdates = false;
-                        session.Save();
-                    }
-                    return false;
-                }
+                prompt.ShowDialog();
+                choice = prompt.Choice;
                 prepareRayTracing = prompt.PrepareRayTracing;
             }
+            if (choice == UpdateChoice.Skip)
+            {
+                session.SkippedUpdate = release.Version;
+                try { session.Save(); } catch (Exception) { }
+                return false;
+            }
+            if (choice != UpdateChoice.Update) return false;
             string setup;
             using (var download = new UpdateDownloadForm(release, new InstallLayout(session.Root).Staging))
             {
@@ -58,20 +71,79 @@ namespace Nebula.Launcher
             });
             return true;
         }
+
+        /// <summary>
+        /// Reads the release list and keeps the answer for the next start; called once the game has started or while
+        /// the settings are open, never before Play. A check dated after now (a clock set wrong) is checked again.
+        /// </summary>
+        public static void Refresh(LaunchSession session)
+        {
+            if (session.Portable || !session.AskAboutUpdates) return;
+            try
+            {
+                ReleaseInfo cached;
+                DateTime checkedUtc, now = DateTime.UtcNow;
+                if (ReadCache(out cached, out checkedUtc) && checkedUtc <= now && now - checkedUtc < CheckInterval) return;
+                WriteCache(Updater.FindNewer(CheckMilliseconds), now);
+            }
+            catch (Exception) { }
+        }
+
+        internal static void WriteCache(ReleaseInfo release, DateTime checkedUtc)
+        {
+            var values = new Dictionary<string, object> { { "checkedUtc", checkedUtc.ToString("o", CultureInfo.InvariantCulture) } };
+            if (release != null)
+            {
+                values["version"] = release.Version;
+                values["tag"] = release.Tag;
+                values["notes"] = release.Notes;
+                values["setupUrl"] = release.SetupUrl;
+                values["signatureUrl"] = release.SignatureUrl;
+                values["setupSize"] = release.SetupSize;
+                values["prerelease"] = release.Prerelease;
+            }
+            Json.Save(CachePath, values);
+        }
+
+        // False without a readable cache; release null when the last check found nothing newer.
+        internal static bool ReadCache(out ReleaseInfo release, out DateTime checkedUtc)
+        {
+            release = null;
+            checkedUtc = DateTime.MinValue;
+            try
+            {
+                if (!File.Exists(CachePath)) return false;
+                var values = Json.Load(CachePath);
+                if (!DateTime.TryParse(Json.Str(values, "checkedUtc"), CultureInfo.InvariantCulture,
+                                       DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out checkedUtc)) return false;
+                string version = Json.Str(values, "version");
+                if (string.IsNullOrEmpty(version)) return true;
+                release = new ReleaseInfo
+                {
+                    Version = version, Tag = Json.Str(values, "tag"), Notes = Json.Str(values, "notes") ?? "",
+                    SetupUrl = Json.Str(values, "setupUrl"), SignatureUrl = Json.Str(values, "signatureUrl"),
+                    SetupSize = Json.Long(values, "setupSize"), Prerelease = Json.Bool(values, "prerelease")
+                };
+                if (release.SetupUrl == null || release.SignatureUrl == null) release = null;
+                return true;
+            }
+            catch (Exception) { return false; }
+        }
     }
+
+    internal enum UpdateChoice { Later, Update, Skip }
 
     internal sealed class UpdatePromptForm : Form
     {
-        private readonly CheckBox dontAsk = new CheckBox(), prepare = new CheckBox();
+        private readonly CheckBox prepare = new CheckBox();
 
-        public bool DontAskAgain { get { return dontAsk.Checked; } }
+        public UpdateChoice Choice { get; private set; }
         public bool PrepareRayTracing { get { return prepare.Checked; } }
 
-        // Update never turns the offer off, whatever the box says; Not now keeps the box.
-        internal void Choose(bool update)
+        internal void Choose(UpdateChoice choice)
         {
-            if (update) dontAsk.Checked = false;
-            DialogResult = update ? DialogResult.Yes : DialogResult.No;
+            Choice = choice;
+            DialogResult = choice == UpdateChoice.Update ? DialogResult.Yes : DialogResult.No;
             Close();
         }
 
@@ -80,7 +152,7 @@ namespace Nebula.Launcher
             Text = NebulaText.Of("Nebula update");
             Font = new Font("Segoe UI", 9.5f);
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(520, 290);
+            ClientSize = new Size(560, 320);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -90,31 +162,38 @@ namespace Nebula.Launcher
             Controls.Add(new Label
             {
                 Text = NebulaText.Of("Nebula {0} is available", release.Version),
-                Font = new Font("Segoe UI", 11f, FontStyle.Bold), Location = new Point(16, 14), Size = new Size(488, 26)
+                Font = new Font("Segoe UI", 11f, FontStyle.Bold), Location = new Point(16, 14), Size = new Size(528, 26)
             });
+            if (release.SetupSize > 0)
+            {
+                Controls.Add(new Label
+                {
+                    Text = NebulaText.Of("Download: {0}", FileUtil.FormatBytes(release.SetupSize)),
+                    ForeColor = SystemColors.GrayText, Location = new Point(16, 40), Size = new Size(528, 20)
+                });
+            }
             bool offerRayTracing = RayTracingPreparation.Offered();
             string notes = ReleaseNotes.Plain(release.Notes, 1500);
             Controls.Add(new TextBox
             {
                 Text = notes, Multiline = true, ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical, Location = new Point(16, 46), Size = new Size(488, offerRayTracing ? 162 : 190),
+                ScrollBars = ScrollBars.Vertical, Location = new Point(16, 64), Size = new Size(528, offerRayTracing ? 168 : 196),
                 TabStop = false
             });
             if (offerRayTracing)
             {
                 prepare.Text = NebulaText.Of("Prepare ray tracing shaders");
-                prepare.Location = new Point(16, 218);
-                prepare.Size = new Size(488, 24);
+                prepare.Location = new Point(16, 240);
+                prepare.Size = new Size(528, 24);
                 Controls.Add(prepare);
             }
-            dontAsk.Text = NebulaText.Of("Don't ask again");
-            dontAsk.Location = new Point(16, 250);
-            dontAsk.Size = new Size(200, 24);
-            Controls.Add(dontAsk);
-            var update = new Button { Text = NebulaText.Of("Update"), Location = new Point(300, 246), Size = new Size(100, 32) };
-            update.Click += delegate { Choose(true); };
-            var later = new Button { Text = NebulaText.Of("Not now"), Location = new Point(404, 246), Size = new Size(100, 32) };
-            later.Click += delegate { Choose(false); };
+            var skip = new Button { Text = NebulaText.Of("Skip this version"), Location = new Point(16, 274), Size = new Size(200, 32) };
+            skip.Click += delegate { Choose(UpdateChoice.Skip); };
+            var update = new Button { Text = NebulaText.Of("Update"), Location = new Point(316, 274), Size = new Size(112, 32) };
+            update.Click += delegate { Choose(UpdateChoice.Update); };
+            var later = new Button { Text = NebulaText.Of("Not now"), Location = new Point(432, 274), Size = new Size(112, 32) };
+            later.Click += delegate { Choose(UpdateChoice.Later); };
+            Controls.Add(skip);
             Controls.Add(update);
             Controls.Add(later);
             AcceptButton = update;
