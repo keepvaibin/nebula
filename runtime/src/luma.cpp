@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <initializer_list>
 #include <fstream>
 #include <iterator>
@@ -770,11 +771,7 @@ Text form_text(const Value* fallback, const Value* text, std::initializer_list<s
 std::string when_value(const Value& value) {
     if (const std::string* text = value.string()) return *text;
     if (const bool* flag = std::get_if<bool>(&value.data)) return *flag ? "on" : "off";
-    if (const double* number = value.number()) {
-        char text[32];
-        std::snprintf(text, sizeof(text), "%g", *number);
-        return text;
-    }
+    if (const double* number = value.number()) return number_text(*number);
     return {};
 }
 
@@ -812,10 +809,11 @@ When read_form_when(const Value* value) {
     return when;
 }
 
-// The form's options: choice (values, value_names), number (min..max by step, each a choice) and toggle (on, off);
-// text (max_length, its default text) has no choices: the player types it on the Mods page (J's 6.3) and a mod reads
-// it as text (services-mods 8). Key options are the mod's input actions (Manifest.keys, services-input 2), bound in
-// Controls, not on the Mods page; they are options too, which a mod reads as its default control's name.
+// The form's options: choice (values, value_names) and toggle (on, off) have choices; number is a range (min, max,
+// step), however many values it holds, and nothing lists them; text (max_length, its default text) has no choices: the
+// player types it on the Mods page and a mod reads it as text. Key options are the mod's input actions
+// (Manifest.keys), bound in Controls, not on the Mods page; they are options too, which a mod reads as its default
+// control's name.
 void read_options(const Value& root, Manifest& out) {
     const Value* options = root.get("options");
     const Value* text = root.get("text");
@@ -839,22 +837,19 @@ void read_options(const Value& root, Manifest& out) {
                 const Value* value = entry.get(key);
                 return value != nullptr && value->number() != nullptr ? *value->number() : missing;
             };
-            const double from = number("min", 0.0);
-            const double to = number("max", from);
-            const double step = number("step", 1.0);
-            if (step > 0.0 && to >= from && (to - from) / step <= 10000.0) {
-                // Counted, so that a step too small for the numbers' size (1e300 + 1) cannot loop for ever.
-                const std::size_t count = static_cast<std::size_t>((to - from) / step + 0.001) + 1u;
-                for (std::size_t i = 0; i < count; ++i) {
-                    char id[32];
-                    std::snprintf(id, sizeof(id), "%g", from + static_cast<double>(i) * step);
-                    Choice choice;
-                    choice.id = id;
-                    choice.name.fallback = id;
-                    option.choices.push_back(std::move(choice));
-                }
+            option.min = number("min", 0.0);
+            option.max = number("max", option.min);
+            option.step = number("step", 1.0);
+            // A range with no values (a step not above 0, max below min) is the validator's error: no option.
+            if (option.id.empty() || !(option.step > 0.0) || !(option.max >= option.min) || !std::isfinite(option.max - option.min)) {
+                continue;
             }
-            option.fallback = start != nullptr ? when_value(*start) : std::string();
+            // A default that is not one of its values (the validator's error too) starts on min.
+            const std::optional<std::string> fallback =
+                start != nullptr && start->number() != nullptr ? number_value(option, number_text(*start->number())) : std::nullopt;
+            option.fallback = fallback ? *fallback : number_text(option.min);
+            out.options.push_back(std::move(option));
+            continue;
         } else if (kind == "key") {
             // An input action (services-input 2): in keys for Controls and the input service, and an option too, so
             // that mods.option reads its default control's name as text (services-mods 8). The validator keeps the
@@ -897,6 +892,96 @@ const std::string& Text::in(std::string_view language) const {
         if (const auto it = languages.find(std::string(language.substr(0, dash))); it != languages.end()) return it->second;
     }
     return fallback;
+}
+
+std::string number_text(double value) {
+    if (!std::isfinite(value)) return "0";
+    if (value == 0.0) return "0";  // never "-0"
+    char text[48];
+    for (int digits = 1; digits <= 17; ++digits) {
+        std::snprintf(text, sizeof(text), "%.*g", digits, value);
+        if (std::strtod(text, nullptr) == value) break;
+    }
+    // Plain digits where a person writes them (20000, not 2e+04): the fewest decimals that read back.
+    if (std::strchr(text, 'e') != nullptr && std::fabs(value) >= 1e-4 && std::fabs(value) < 1e15) {
+        for (int decimals = 0; decimals <= 17; ++decimals) {
+            std::snprintf(text, sizeof(text), "%.*f", decimals, value);
+            if (std::strtod(text, nullptr) == value) break;
+        }
+    }
+    return text;
+}
+
+namespace {
+
+// The whole steps from min to max (k from 0 to this one are the option's values).
+double last_step(const Option& option) {
+    return std::floor((option.max - option.min) / option.step + 1e-9);
+}
+
+// Step k as number_text writes the shortest decimal that is nearest to step k of all the option's values: 0.1 + 2 * 0.1
+// is written 0.3, not 0.30000000000000004.
+std::string step_text(const Option& option, double k) {
+    const double exact = option.min + k * option.step;
+    char text[32];
+    for (int digits = 1; digits <= 17; ++digits) {
+        std::snprintf(text, sizeof(text), "%.*g", digits, exact);
+        const double back = std::strtod(text, nullptr);
+        if (std::fabs((back - option.min) / option.step - k) < 1e-6) return number_text(back);
+    }
+    return number_text(exact);
+}
+
+// The step a value is on, or nothing: within the range, at most a millionth of a step off a whole one (decimals are
+// not exact in binary).
+std::optional<double> step_of(const Option& option, double value) {
+    if (!std::isfinite(value)) return std::nullopt;
+    const double k = (value - option.min) / option.step;
+    const double whole = std::round(k);
+    if (std::fabs(k - whole) > 1e-6 || whole < 0.0 || whole > last_step(option)) return std::nullopt;
+    return whole;
+}
+
+}  // namespace
+
+std::optional<std::string> number_value(const Option& option, std::string_view text) {
+    // A decimal number as a person writes it: an optional minus, digits with at most one point, an optional exponent.
+    // No spaces, no plus, no hexadecimal, infinity or not-a-number, which strtod alone would take.
+    if (text.empty() || text.size() > 64u) return std::nullopt;
+    std::size_t at = text[0] == '-' ? 1u : 0u;
+    std::size_t digits = 0u;
+    bool point = false;
+    for (; at < text.size(); ++at) {
+        const char c = text[at];
+        if (c >= '0' && c <= '9') {
+            ++digits;
+        } else if (c == '.' && !point) {
+            point = true;
+        } else {
+            break;
+        }
+    }
+    if (digits == 0u) return std::nullopt;
+    if (at < text.size() && (text[at] == 'e' || text[at] == 'E')) {
+        ++at;
+        if (at < text.size() && (text[at] == '+' || text[at] == '-')) ++at;
+        const std::size_t power = at;
+        while (at < text.size() && text[at] >= '0' && text[at] <= '9') ++at;
+        if (at == power) return std::nullopt;
+    }
+    if (at != text.size()) return std::nullopt;
+    const std::string copy(text);
+    const double value = std::strtod(copy.c_str(), nullptr);
+    if (!step_of(option, value)) return std::nullopt;
+    return number_text(value);
+}
+
+std::string number_stepped(const Option& option, std::string_view text, double steps) {
+    std::optional<double> k;
+    if (const std::optional<std::string> now = number_value(option, text)) k = step_of(option, std::strtod(now->c_str(), nullptr));
+    if (!k) k = step_of(option, std::strtod(option.fallback.c_str(), nullptr));
+    const double next = std::clamp(std::round(k.value_or(0.0) + steps), 0.0, last_step(option));
+    return step_text(option, next);
 }
 
 std::optional<Manifest> parse_manifest(std::string_view text) {

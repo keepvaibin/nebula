@@ -396,20 +396,51 @@ int main() {
         }
     }
     {
-        // A number option: min to max by step, each a choice; counted, so numbers too large for the step cannot loop.
+        // A number option is a range (min, max, step), however many values it holds; nothing lists them.
         const std::optional<Manifest> ranged = parse_manifest(one_form("abc", std::string(R"(,"layers":[],"options":[)") +
             R"({"key":"r1","kind":"number","name":"R","default":1,"min":1,"max":5,"step":1},)" +
             R"({"key":"r2","kind":"number","name":"R","default":1e300,"min":1e300,"max":1e300,"step":1},)" +
             R"({"key":"r3","kind":"number","name":"R","default":1,"min":5,"max":1,"step":1},)" +
-            R"({"key":"r4","kind":"number","name":"R","default":0.5,"min":0,"max":1,"step":0.25}])"));
-        check(ranged && ranged->options.size() == 3u, "number options read; one with min above max has no choices and is not");
-        if (ranged && ranged->options.size() == 3u) {
-            check(ranged->options[0].choices.size() == 5u && ranged->options[0].choices[4].id == "5" && ranged->options[0].fallback == "1",
-                  "1 to 5 gives five choices");
-            check(ranged->options[1].choices.size() == 1u, "a range of one huge number gives one choice and ends");
-            check(ranged->options[2].choices.size() == 5u && ranged->options[2].choices[1].id == "0.25" && ranged->options[2].fallback == "0.5",
-                  "fractional steps");
+            R"({"key":"r4","kind":"number","name":"R","default":0.5,"min":0,"max":1,"step":0.25},)" +
+            R"({"key":"port","kind":"number","name":"Port","default":16834,"min":1,"max":65535,"step":1},)" +
+            R"({"key":"r6","kind":"number","name":"R","default":7.5,"min":0,"max":1e12,"step":0.5},)" +
+            R"({"key":"r7","kind":"number","name":"R","default":0.3,"min":0.1,"max":0.9,"step":0.2}])"));
+        check(ranged && ranged->options.size() == 6u, "number options read; one with min above max has no values and is not");
+        if (ranged && ranged->options.size() == 6u) {
+            const Option& r1 = ranged->options[0];
+            check(r1.choices.empty() && r1.min == 1.0 && r1.max == 5.0 && r1.step == 1.0 && r1.fallback == "1", "1 to 5: a range, no choices");
+            check(ranged->options[1].fallback == "1e+300" && galaxy::luma::number_stepped(ranged->options[1], "1e+300", 5.0) == "1e+300",
+                  "a range of one huge number has one value");
+            const Option& r4 = ranged->options[2];
+            check(r4.fallback == "0.5" && galaxy::luma::number_stepped(r4, "0.5", -1.0) == "0.25" &&
+                      galaxy::luma::number_stepped(r4, "0.5", 9.0) == "1",
+                  "fractional steps, kept within the range");
+            const Option& port = ranged->options[3];
+            check(port.id == "port" && port.choices.empty() && port.fallback == "16834", "a range of 65535 values is kept, default 16834");
+            check(galaxy::luma::number_value(port, "16834") == std::optional<std::string>("16834") &&
+                      galaxy::luma::number_value(port, "65535") == std::optional<std::string>("65535") &&
+                      galaxy::luma::number_value(port, "1") == std::optional<std::string>("1"),
+                  "the port's values read back");
+            check(!galaxy::luma::number_value(port, "0") && !galaxy::luma::number_value(port, "65536") &&
+                      !galaxy::luma::number_value(port, "80.5") && !galaxy::luma::number_value(port, " 80") &&
+                      !galaxy::luma::number_value(port, "0x50") && !galaxy::luma::number_value(port, "inf") &&
+                      !galaxy::luma::number_value(port, "nan") && !galaxy::luma::number_value(port, "") &&
+                      !galaxy::luma::number_value(port, "-") && !galaxy::luma::number_value(port, "+80"),
+                  "outside the range, off the steps or not a decimal: not a value");
+            check(galaxy::luma::number_stepped(port, "16834", 10000.0) == "26834" && galaxy::luma::number_stepped(port, "65530", 100.0) == "65535" &&
+                      galaxy::luma::number_stepped(port, "70000", 1.0) == "16835",
+                  "steps from the value, kept within the range; from the default when the text is no value");
+            const Option& r6 = ranged->options[4];
+            check(r6.fallback == "7.5" && galaxy::luma::number_value(r6, "999999999999.5") == std::optional<std::string>("999999999999.5") &&
+                      galaxy::luma::number_stepped(r6, "999999999999.5", 1000.0) == "1000000000000",
+                  "two thousand billion values: kept as a range, the text exact");
+            const Option& r7 = ranged->options[5];
+            check(r7.fallback == "0.3" && galaxy::luma::number_stepped(r7, "0.3", 1.0) == "0.5" && galaxy::luma::number_value(r7, "0.7") == std::optional<std::string>("0.7"),
+                  "decimal steps written as a person writes them");
         }
+        check(galaxy::luma::number_text(16834.0) == "16834" && galaxy::luma::number_text(0.1) == "0.1" && galaxy::luma::number_text(-0.0) == "0" &&
+                  galaxy::luma::number_text(1234567.0) == "1234567" && galaxy::luma::number_text(20000.0) == "20000" && galaxy::luma::number_text(1e300) == "1e+300",
+              "numbers as the shortest decimal that reads back");
     }
     {
         // The manifest file is read only when it is a sensible size; with no "layers", layers/base when it is there.

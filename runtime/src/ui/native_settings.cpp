@@ -2588,6 +2588,7 @@ struct TextEdit {
     std::string text;
     std::uint32_t max_length = 0;
     bool pad = false;  // the last key was a pad's: its help says the pad's keys
+    bool number = false;  // a number option's value typed in: digits, a point and a minus only
 };
 std::mutex s_text_mutex;
 std::optional<TextEdit> s_text_edit;
@@ -2595,6 +2596,40 @@ std::atomic<bool> s_text_editing{false};
 
 // The characters a pad steps through (the overlay's font draws capitals).
 constexpr std::string_view kPadCharacters = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,!?-_'";
+constexpr std::string_view kPadDigits = "0123456789.-";
+constexpr std::uint32_t kNumberTyped = 24u;  // characters of a typed number at most
+
+// A number option's left or right, held: the steps it moves. Each press within a quarter second of the last one the same
+// way (a held key's repeats) counts; after 8 the step is 10 times larger, after 16 a hundred, after 24 a thousand, then
+// ten thousand: a range of 65535 values crosses in a few seconds. With s_mods_mutex held.
+struct NumberHold {
+    std::string row;
+    int direction = 0;
+    unsigned count = 0;
+    std::chrono::steady_clock::time_point last{};
+};
+NumberHold s_number_hold;
+
+double number_hold_steps(const std::string& row, int delta) {
+    const auto now = std::chrono::steady_clock::now();
+    const int direction = delta < 0 ? -1 : 1;
+    if (s_number_hold.row == row && s_number_hold.direction == direction && now - s_number_hold.last < std::chrono::milliseconds(250)) {
+        ++s_number_hold.count;
+    } else {
+        s_number_hold = NumberHold{row, direction, 0u, now};
+    }
+    s_number_hold.last = now;
+    const unsigned tier = std::min(s_number_hold.count / 8u, 4u);
+    double scale = 1.0;
+    for (unsigned i = 0; i < tier; ++i) scale *= 10.0;
+    return static_cast<double>(delta) * scale;
+}
+
+// What a typed character may add to the edit.
+bool edit_takes(const TextEdit& edit, std::string_view point) {
+    if (!edit.number) return true;
+    return point.size() == 1u && kPadDigits.find(point[0]) != std::string_view::npos;
+}
 
 std::uint32_t code_points(std::string_view text) {
     std::uint32_t n = 0u;
@@ -2610,9 +2645,9 @@ void drop_last_point(std::string& text) {
     }
 }
 
-void begin_text_edit(std::string mod, std::string key, std::string text, std::uint32_t max_length, bool pad) {
+void begin_text_edit(std::string mod, std::string key, std::string text, std::uint32_t max_length, bool pad, bool number = false) {
     const std::lock_guard<std::mutex> lock(s_text_mutex);
-    s_text_edit = TextEdit{std::move(mod), std::move(key), std::move(text), max_length, pad};
+    s_text_edit = TextEdit{std::move(mod), std::move(key), std::move(text), number ? kNumberTyped : max_length, pad, number};
     s_text_editing.store(true, std::memory_order_release);
 }
 
@@ -2630,7 +2665,14 @@ void end_text_edit(bool keep) {
     for (galaxy::mods::ModInfo& mod : s_mods) {
         if (mod.id != edit->mod) continue;
         for (galaxy::mods::ModOption& option : mod.options) {
-            if (option.key == edit->key && option.kind == "text") option.text = edit->text;
+            if (option.key != edit->key) continue;
+            if (option.kind == "text" && !edit->number) option.text = edit->text;
+            if (option.kind != "number" || !edit->number || mod.luma == nullptr) continue;
+            // A typed number is kept when it is one of the option's values; anything else leaves it as it was.
+            for (const galaxy::luma::Option& entry : mod.luma->options) {
+                if (entry.id != option.key) continue;
+                if (const std::optional<std::string> value = galaxy::luma::number_value(entry, edit->text)) option.text = *value;
+            }
         }
     }
 }
@@ -2646,6 +2688,7 @@ bool type_text(std::string_view utf8) {
         const std::string_view point = utf8.substr(i, length);
         i += length;
         s_text_edit->pad = false;
+        if (!edit_takes(*s_text_edit, point)) continue;
         std::string next = s_text_edit->text;
         next.append(point);
         if (galaxy::mods::text_option_fits(next, s_text_edit->max_length)) s_text_edit->text = std::move(next);
@@ -2672,23 +2715,26 @@ bool text_edit_key(std::uintptr_t key, bool was_down, bool accept, bool from_pad
     if (key == VK_BACK || key == VK_LEFT) {
         drop_last_point(text);
     } else if (key == VK_RIGHT) {
-        std::string next = text + (text.empty() ? 'A' : text.back() & 0x80 ? 'A' : text.back());
+        const char first = s_text_edit->number ? '0' : 'A';
+        std::string next = text + (text.empty() ? first : text.back() & 0x80 ? first : text.back());
         if (galaxy::mods::text_option_fits(next, s_text_edit->max_length)) text = std::move(next);
     } else if (key == VK_UP || key == VK_DOWN) {
+        const std::string_view characters = s_text_edit->number ? kPadDigits : kPadCharacters;
         if (text.empty()) {
-            if (galaxy::mods::text_option_fits("A", s_text_edit->max_length)) text = "A";
+            const std::string first(1u, characters[s_text_edit->number ? 0u : 1u]);
+            if (galaxy::mods::text_option_fits(first, s_text_edit->max_length)) text = first;
             return true;
         }
-        std::size_t at = kPadCharacters.find(text.back());
+        std::size_t at = characters.find(text.back());
         if ((text.back() & 0x80) != 0 || at == std::string_view::npos) {
             drop_last_point(text);
             at = 0u;
         } else {
             text.pop_back();
         }
-        const std::size_t count = kPadCharacters.size();
+        const std::size_t count = characters.size();
         at = key == VK_UP ? (at + 1u) % count : (at + count - 1u) % count;
-        text.push_back(kPadCharacters[at]);
+        text.push_back(characters[at]);
     }
     return true;
 }
@@ -3445,6 +3491,40 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
             rows.push_back(std::move(text));
             continue;
         }
+        if (option.kind == "number") {
+            std::string_view name = option.name;
+            while (!name.empty() && (name.back() == ':' || name.back() == ' ')) name.remove_suffix(1);
+            std::string value = option.text;
+            std::string help = galaxy::modlog::row_words("Mods.OptionNumber", id, {});
+            if (!option.section.empty()) help = mods_ui_text(option.section, 30u) + "  " + help;
+            {
+                const std::lock_guard<std::mutex> text_lock(s_text_mutex);
+                if (s_text_edit && s_text_edit->number && s_text_edit->mod == id && s_text_edit->key == option.key) {
+                    value = s_text_edit->text + '_';
+                    help = galaxy::modlog::row_words(s_text_edit->pad ? "Mods.OptionTypingNumberPad" : "Mods.OptionTyping", id, {});
+                }
+            }
+            SettingsRow number{mods_ui_text(name, 24u), mods_ui_text(value, 26u),
+                               [id, key = option.key](RenderConfig&, int delta) {
+                                   if (delta == 0) return;
+                                   const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                   galaxy::mods::ModInfo* const found = mod_by_id_locked(id);
+                                   if (found == nullptr || found->luma == nullptr) return;
+                                   for (const galaxy::luma::Option& entry : found->luma->options) {
+                                       if (entry.id != key) continue;
+                                       for (galaxy::mods::ModOption& o : found->options) {
+                                           if (o.key == key && o.kind == "number") {
+                                               o.text = galaxy::luma::number_stepped(entry, o.text, number_hold_steps(id + '/' + key, delta));
+                                           }
+                                       }
+                                   }
+                               },
+                               std::move(help)};
+            number.key = "number:" + option.key;
+            number.names = 1u | 2u | 4u;
+            rows.push_back(std::move(number));
+            continue;
+        }
         const std::string value = option.selected == 0u || option.selected > option.choices.size()
                                       ? std::string("OFF")
                                       : mods_ui_text(option.choices[option.selected - 1u], 22u);
@@ -4122,6 +4202,25 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
             // The consent question: Escape, Backspace or B is Not now (consent 2.4); the rest are the rows' own.
             if (key != VK_ESCAPE && key != VK_BACK) return false;
             if (!was_down) answer_consent(ConsentAnswer::NotNow);
+            return true;
+        }
+        if ((accept || key == VK_SPACE) && !rows.empty() && rows[at].key.rfind("number:", 0) == 0) {
+            // A number option: A or Space types its value in (left and right step it).
+            if (!was_down) {
+                const std::string option_key = rows[at].key.substr(7u);
+                std::string mod_id;
+                std::string now;
+                {
+                    const std::lock_guard<std::mutex> lock(s_mods_mutex);
+                    mod_id = s_mod_options;
+                    if (const galaxy::mods::ModInfo* const found = mod_by_id_locked(mod_id)) {
+                        for (const galaxy::mods::ModOption& o : found->options) {
+                            if (o.key == option_key) now = o.text;
+                        }
+                    }
+                }
+                begin_text_edit(std::move(mod_id), option_key, std::move(now), 0u, s_last_key_from_pad.load(std::memory_order_relaxed), true);
+            }
             return true;
         }
         if (key != VK_ESCAPE) return false;

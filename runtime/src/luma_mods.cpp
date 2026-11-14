@@ -860,6 +860,11 @@ std::string option_text(const galaxy::luma::Option& entry, const galaxy::mods::M
     if (entry.kind == "key") {
         return entry.fallback;  // input's store (plan 2.5, F): its binding_name once it exists
     }
+    if (entry.kind == "number") {
+        // The Mods page keeps only values of the range (scan_mods put a kept value outside it back to the default).
+        const std::optional<std::string> value = chosen != nullptr ? galaxy::luma::number_value(entry, chosen->text) : std::nullopt;
+        return value ? *value : entry.fallback;
+    }
     std::string id = entry.fallback;
     if (chosen != nullptr) {
         id = chosen->selected != 0u && chosen->selected <= chosen->choice_ids.size() ? chosen->choice_ids[chosen->selected - 1u]
@@ -868,7 +873,7 @@ std::string option_text(const galaxy::luma::Option& entry, const galaxy::mods::M
     if (entry.kind == "toggle") {
         return id == "on" ? "1" : "0";
     }
-    return id;  // a choice's value id; a number's "%g" text, as the Mods page lists it
+    return id;  // a choice's value id
 }
 
 // The texts of `mod`'s options in luma.json order (empty for a mod without a manifest).

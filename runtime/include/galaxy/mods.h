@@ -195,6 +195,16 @@ bool save_mod_settings(std::span<const ModInfo> mods);
 // A text option's value as it may be kept (services-mods 8.4): UTF-8, no control character, at most `max_length` code
 // points.
 [[nodiscard]] bool text_option_fits(std::string_view text, std::uint32_t max_length) noexcept;
+// A number option whose kept value (mods.ini) is not one of its values: outside its range or off its steps. scan_mods
+// gives it its default and keeps one record for each mod, option and kept value this session; the mod log says each
+// once.
+struct OptionReset {
+    std::string mod_id;
+    std::string key;
+    std::string kept;
+    std::string fallback;
+};
+[[nodiscard]] std::vector<OptionReset> option_resets();
 // Recomputes how the mods relate after a change to the list: order, duplicates, requirements, saves, conflicts (each
 // mod's problem) and overlaps. scan_mods calls this last.
 void settle_mods(std::vector<ModInfo>& mods);

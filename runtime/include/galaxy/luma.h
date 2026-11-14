@@ -41,12 +41,25 @@ struct Option {
     Text name;
     Text description;
     std::string kind = "choice";  // luma-format: choice, number, toggle, text or key
-    // choice, number, toggle: the choice it starts on; text: the default text; key: the default control's id
-    // (input_bindings kTargetIds).
+    // choice, toggle: the choice it starts on; number: its default as number_text writes it; text: the default text;
+    // key: the default control's id (input_bindings kTargetIds).
     std::string fallback;
-    std::vector<Choice> choices;  // none for text and key
+    std::vector<Choice> choices;  // choice and toggle only
     std::uint32_t max_length = 0;  // text: at most this many code points (1 to 256)
+    // number: a range, never a list. Its values are min + k * step for whole k from 0 while not above max.
+    double min = 0.0;
+    double max = 0.0;
+    double step = 1.0;
 };
+
+// A number as the Mods page shows it and a mod reads it: the shortest decimal that reads back as the same double.
+[[nodiscard]] std::string number_text(double value);
+// A number option's value from its text (number_text's, or typed): the value as number_text writes it when the text is
+// a whole decimal number within the option's range and on one of its steps; nothing otherwise.
+[[nodiscard]] std::optional<std::string> number_value(const Option& option, std::string_view text);
+// A number option's value `steps` steps from `text` (its default when `text` is not one of its values), kept within the
+// range.
+[[nodiscard]] std::string number_stepped(const Option& option, std::string_view text, double steps);
 
 // A mod's own achievement. It appears on the Mods tab of the achievement board and is saved in achievements.ini as
 // "mod:<mod id>/<id>". A plugin unlocks it (unlock_achievement), or the game does when `event` happens.

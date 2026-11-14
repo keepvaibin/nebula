@@ -659,10 +659,28 @@ luma::Situation situation_of(const ModInfo& mod, const std::string& game_id, con
                          return plugin.binaries.count(std::string(luma::plugin_target())) != 0u;
                      });
     for (const ModOption& option : mod.options) {
+        if (option.kind == "number") {
+            situation.options[option.key] = option.text;  // number_text's, as a layer's `when` writes a number
+            continue;
+        }
         situation.options[option.key] =
             option.selected != 0u && option.selected <= option.choice_ids.size() ? option.choice_ids[option.selected - 1u] : std::string("off");
     }
     return situation;
+}
+
+std::mutex g_resets_lock;
+std::vector<OptionReset> g_resets;
+
+// A number option's kept value that is not one of its values: one record a mod, option and kept value this session.
+void number_reset_once(const std::string& mod_id, const luma::Option& entry, const std::string& kept) {
+    const std::lock_guard<std::mutex> lock(g_resets_lock);
+    for (const OptionReset& reset : g_resets) {
+        if (reset.mod_id == mod_id && reset.key == entry.id && reset.kept == kept) return;
+    }
+    g_resets.push_back({mod_id, entry.id, kept, entry.fallback});
+    std::fprintf(stderr, "[mods] %s: the value kept for its option %s (%s) is not one of its values; it reads %s\n", mod_id.c_str(),
+                 entry.id.c_str(), kept.c_str(), entry.fallback.c_str());
 }
 
 ModLayout layout_of(const fs::path& mod) {
@@ -815,7 +833,7 @@ std::string mods_signature(std::span<const ModInfo> mods) {
     for (const ModInfo* m : sorted) {
         if (!m->enabled || !changes_game_files(*m)) continue;
         out += m->id + (m->own_text ? "" : " text=game") + (m->code_allowed ? " code" : "") + '\n';
-        for (const ModOption& o : m->options) out += o.key + '=' + std::to_string(o.selected) + '\n';
+        for (const ModOption& o : m->options) out += o.key + '=' + (o.kind == "number" ? o.text : std::to_string(o.selected)) + '\n';
     }
     return out;
 }
@@ -1318,6 +1336,23 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                         mod.options.push_back(std::move(option));
                         continue;
                     }
+                    if (entry.kind == "number") {
+                        // A range, stepped on the Mods page: its value in .text (mods.ini choice.<key>), no choices.
+                        option.name = entry.name.in(words);
+                        option.section = entry.description.in(words);
+                        option.text = entry.fallback;
+                        if (s != nullptr) {
+                            if (const auto it_id = s->choice_ids.find(entry.id); it_id != s->choice_ids.end()) {
+                                if (const std::optional<std::string> kept = luma::number_value(entry, it_id->second)) {
+                                    option.text = *kept;
+                                } else {
+                                    number_reset_once(mod.id, entry, it_id->second);
+                                }
+                            }
+                        }
+                        mod.options.push_back(std::move(option));
+                        continue;
+                    }
                     option.name = entry.name.in(words);
                     option.section = entry.description.in(words);
                     unsigned start = 0u;
@@ -1636,6 +1671,11 @@ void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled
     for (std::size_t i = 0; i < mods.size(); ++i) mods[i].order = static_cast<unsigned>(i + 1u);
 }
 
+std::vector<OptionReset> option_resets() {
+    const std::lock_guard<std::mutex> lock(g_resets_lock);
+    return g_resets;
+}
+
 bool text_option_fits(std::string_view text, std::uint32_t max_length) noexcept {
     std::uint32_t points = 0u;
     for (std::size_t i = 0; i < text.size();) {
@@ -1712,6 +1752,11 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
             if (o.kind == "text" || o.kind == "key") {
                 // A key option is bound in input's store (plan 2.5), not here; an empty text is the default's.
                 if (o.kind == "text" && !o.text.empty()) out << "text." << escape_key(o.key) << '=' << escape_key(o.text) << '\n';
+                continue;
+            }
+            if (o.kind == "number") {
+                // The value itself (a range has no choice to number).
+                if (!o.text.empty()) out << "choice." << escape_key(o.key) << '=' << o.text << '\n';
                 continue;
             }
             out << "option." << escape_key(o.key) << '=' << o.selected << '\n';
