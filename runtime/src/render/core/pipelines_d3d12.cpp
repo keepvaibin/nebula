@@ -477,6 +477,9 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
     }
     if (FAILED(hr)) {
+        if (hr == E_OUTOFMEMORY) {
+            note_pipeline_out_of_memory();
+        }
         std::fprintf(stderr, "[pipelines] create failed %08lx: %llx %llx state %08x variant %u aux %u\n", static_cast<unsigned long>(hr),
                      static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant, aux);
         return nullptr;
