@@ -69,7 +69,7 @@ private:
     ComPtr<ID3D11RasterizerState> raster_;
     ComPtr<ID3D11DepthStencilState> no_depth_;
     std::shared_ptr<Texture> distance_;  // eye distance per occlusion pixel (R32F)
-    std::shared_ptr<Texture> raw_;       // occlusion, eye distance (RGBA16F, two used)
+    std::shared_ptr<Texture> raw_;       // occlusion, eye distance (RG16F)
     std::shared_ptr<Texture> denoised_;
     Rows objects_;  // t3: the models (float4 rows)
     Rows tiles_;    // t4: their screen tiles (uint)

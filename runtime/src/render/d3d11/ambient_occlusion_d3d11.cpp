@@ -20,7 +20,9 @@ namespace galaxy::render::d3d11 {
 namespace {
 
 using ao::Constants;
-constexpr DXGI_FORMAT kOcclusionFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+// Occlusion and eye distance: the two channels the passes write and read (a typed store to R16G16 is in every
+// feature level 11_0 device; the shaders' float4 writes keep x and y).
+constexpr DXGI_FORMAT kOcclusionFormat = DXGI_FORMAT_R16G16_FLOAT;
 constexpr DXGI_FORMAT kDistanceFormat = DXGI_FORMAT_R32_FLOAT;
 constexpr std::uint64_t kIdleFrames = 600u;
 
