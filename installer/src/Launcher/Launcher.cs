@@ -310,6 +310,14 @@ namespace Nebula.Launcher
         private AudioSettings audio = AudioSettings.Load();
         private GeneralSettings general = GeneralSettings.Load();
         private readonly ComboBox textSpeed = new ComboBox(), languageBox = new ComboBox();
+        // The rows the game's menu has and the launcher had not (settings_table.tsv, windows column).
+        private readonly CheckBox hdr = new CheckBox(), curvedSurfaces = new CheckBox(), textureDump = new CheckBox(),
+            discordStatus = new CheckBox(), coStar = new CheckBox();
+        private readonly NumericUpDown paperWhite = new NumericUpDown(), bloom = new NumericUpDown();
+        private readonly Label hdrHint = new Label();
+        private readonly ComboBox occlusionMode = new ComboBox(), texturePacks = new ComboBox(), soundOutput = new ComboBox(),
+            buttonIcons = new ComboBox(), menuTextSize = new ComboBox(), focusLoss = new ComboBox();
+        private readonly List<int> menuTextSizes = new List<int>();
         // The installed disc's languages (GeneralSettings.Offered), as the Language row lists them.
         private List<int> offeredLanguages = new List<int> { 0 };
         private readonly ControlsSettings controls = ControlsSettings.Load();
@@ -375,7 +383,7 @@ namespace Nebula.Launcher
             resolutionLabel.Text = shown == 0 ? NebulaText.Of("Internal resolution") : NebulaText.Of("Upscaler quality");
             antiAliasing.Enabled = aaQuality.Enabled = !temporal;
             msaa.Enabled = !temporal && !rt;
-            occlusion.Enabled = lighting.Enabled = !rt;
+            occlusionMode.Enabled = lighting.Enabled = !rt;
             bool exact = shown == 0 && internalResolution.SelectedIndex > 0;
             bool fixedHud = temporal || exact;
             if (fixedHud && hudOutput.Enabled) hudChosen = hudOutput.Checked;
@@ -410,7 +418,7 @@ namespace Nebula.Launcher
         private readonly Label frameRateLabel = new Label();
         private readonly List<int> interpolationChoices = new List<int>();
         private readonly NumericUpDown sharpness = new NumericUpDown();
-        private readonly CheckBox mipmaps = new CheckBox(), occlusion = new CheckBox(), hudOutput = new CheckBox(),
+        private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox(),
             rayTracing = new CheckBox();
         // The GPUs the game can run on, the automatic choice first; the Graphics card row shows with two or more.
         private readonly List<GpuAdapter> gpus = GpuAdapters.List() ?? new List<GpuAdapter>();
@@ -529,6 +537,26 @@ namespace Nebula.Launcher
             hudOutput.Location = new Point(12, y);
             hudOutput.Size = new Size(600, 28);
             display.Controls.Add(hudOutput);
+            y += 40;
+            // HDR: only while Windows shows the chosen display in HDR (the game's rule); paper white with it on.
+            hdr.Text = NebulaText.Of("HDR");
+            hdr.Location = new Point(12, y);
+            hdr.Size = new Size(300, 28);
+            display.Controls.Add(hdr);
+            hdrHint.Location = new Point(320, y + 4);
+            hdrHint.Size = new Size(390, 36);
+            hdrHint.ForeColor = SystemColors.GrayText;
+            hdrHint.Text = NebulaText.Of("Turn on HDR for this display in the Windows settings to use it.");
+            display.Controls.Add(hdrHint);
+            y += 40;
+            Label(display, NebulaText.Of("Paper white"), 12, y + 3);
+            paperWhite.Location = new Point(320, y);
+            paperWhite.Size = new Size(120, 28);
+            paperWhite.Minimum = GraphicsSettings.PaperWhiteMin;
+            paperWhite.Maximum = GraphicsSettings.PaperWhiteMax;
+            paperWhite.Increment = 10;
+            display.Controls.Add(paperWhite);
+            hdr.CheckedChanged += delegate { paperWhite.Enabled = hdr.Enabled && hdr.Checked; };
             for (int i = 0; i < monitors.Count; i++) monitor.Items.Add(monitors[i].Label(i));
             mode.Items.AddRange(GraphicsSettings.DisplayModes);
             aspect.Items.AddRange(GraphicsSettings.Aspects);
@@ -563,14 +591,31 @@ namespace Nebula.Launcher
             y += 40;
             Row(image, NebulaText.Of("Texture filtering"), textureFilter, ref y);
             Row(image, NebulaText.Of("Lighting"), lighting, ref y);
+            Row(image, NebulaText.Of("Ambient occlusion"), occlusionMode, ref y);
+            occlusionMode.Items.AddRange(GraphicsSettings.OcclusionModes);
+            Label(image, NebulaText.Of("Bloom") + " (%)", 12, y + 3);
+            bloom.Location = new Point(320, y);
+            bloom.Size = new Size(120, 28);
+            bloom.Minimum = 0;
+            bloom.Maximum = GraphicsSettings.BloomMax;
+            bloom.Increment = 10;
+            image.Controls.Add(bloom);
+            y += 40;
+            Row(image, NebulaText.Of("Texture packs"), texturePacks, ref y);
+            texturePacks.Width = 190;
+            texturePacks.Items.AddRange(GraphicsSettings.TexturePackModes);
+            textureDump.Text = NebulaText.Of("Dump textures");
+            textureDump.Location = new Point(520, y - 40 + 1);
+            textureDump.Size = new Size(190, 26);
+            image.Controls.Add(textureDump);
             mipmaps.Text = NebulaText.Of("Generated mipmaps");
             mipmaps.Location = new Point(12, y);
             mipmaps.Size = new Size(300, 28);
             image.Controls.Add(mipmaps);
-            occlusion.Text = NebulaText.Of("Ambient occlusion");
-            occlusion.Location = new Point(320, y);
-            occlusion.Size = new Size(300, 28);
-            image.Controls.Add(occlusion);
+            curvedSurfaces.Text = NebulaText.Of("Curved surfaces");
+            curvedSurfaces.Location = new Point(320, y);
+            curvedSurfaces.Size = new Size(300, 28);
+            image.Controls.Add(curvedSurfaces);
             y += 32;
             rayTracing.Text = NebulaText.Of("Ray tracing");
             rayTracing.Location = new Point(12, y);
@@ -589,6 +634,7 @@ namespace Nebula.Launcher
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             lighting.Items.AddRange(GraphicsSettings.LightingModes);
             FillInterpolationChoices();
+            image.AutoScroll = true;
 
             for (int i = 0; i < volumes.Length; i++)
             {
@@ -604,6 +650,12 @@ namespace Nebula.Launcher
                 sound.Controls.Add(value);
             }
 
+            int outputRow = 16 + volumes.Length * 52;
+            Label(sound, NebulaText.Of("Sound output"), 12, outputRow + 3);
+            Combo(sound, soundOutput, 200, outputRow);
+            soundOutput.Width = 220;
+            soundOutput.Items.AddRange(AudioSettings.SoundOutputNames);
+
             BuildControlsTab(input);
 
             y = 16;
@@ -611,6 +663,15 @@ namespace Nebula.Launcher
             textSpeed.Items.AddRange(GeneralSettings.TextSpeeds);
             Row(generalPage, NebulaText.Of("Language"), languageBox, ref y);
             foreach (int language in offeredLanguages) languageBox.Items.Add(GeneralSettings.LanguageNames[language]);
+            Row(generalPage, NebulaText.Of("Button icons"), buttonIcons, ref y);
+            buttonIcons.Items.AddRange(GeneralSettings.ButtonIconNames);
+            Row(generalPage, NebulaText.Of("Menu text size"), menuTextSize, ref y);
+            Row(generalPage, NebulaText.Of("On losing focus"), focusLoss, ref y);
+            focusLoss.Items.AddRange(GeneralSettings.FocusLossNames);
+            discordStatus.Text = NebulaText.Of("Discord status");
+            discordStatus.Location = new Point(12, y);
+            discordStatus.Size = new Size(600, 28);
+            generalPage.Controls.Add(discordStatus);
 
             y = 16;
             Label(advanced, NebulaText.Of("Game content"), 12, y + 3);
@@ -682,6 +743,7 @@ namespace Nebula.Launcher
                 FillInterpolationChoices();
                 RefreshDisplayChoices();
                 RefreshDisplayNotice();
+                RefreshHdrRow();
             };
             mode.SelectedIndexChanged += delegate { if (!loading) RefreshDisplayChoices(); };
             aspect.SelectedIndexChanged += delegate { if (!loading) RefreshDisplayChoices(); };
@@ -881,6 +943,11 @@ namespace Nebula.Launcher
             page.Controls.Add(gyroPointer);
             y += 26;
             TuningRow(page, NebulaText.Of("Gyro sensitivity"), gyroSensitivity, x, ref y, 0.2m, 5.0m, 0.1m, 1);
+            // Not per scheme: a second controller's pointer for a second player.
+            coStar.Text = NebulaText.Of("Co-Star");
+            coStar.Location = new Point(x, y + 8);
+            coStar.Size = new Size(250, 24);
+            page.Controls.Add(coStar);
 
             pointerSpeed.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].PointerSpeed = (float)pointerSpeed.Value; };
             stickDeadzone.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].StickDeadzone = (float)stickDeadzone.Value / 100f; };
@@ -1119,7 +1186,19 @@ namespace Nebula.Launcher
             textureFilter.SelectedIndex = graphics.TextureFilter;
             lighting.SelectedIndex = graphics.EnhancedLighting ? 0 : graphics.PerPixelLighting ? 1 : 2;
             mipmaps.Checked = graphics.GeneratedMipmaps;
-            occlusion.Checked = graphics.AmbientOcclusion;
+            occlusionMode.SelectedIndex = graphics.OcclusionMode;
+            bloom.Value = Math.Max(0, Math.Min(GraphicsSettings.BloomMax, graphics.Bloom));
+            curvedSurfaces.Checked = graphics.CurvedSurfaces;
+            texturePacks.SelectedIndex = graphics.TexturePackMode;
+            textureDump.Checked = graphics.TextureDump;
+            hdr.Checked = graphics.Hdr;
+            paperWhite.Value = Math.Max(GraphicsSettings.PaperWhiteMin, Math.Min(GraphicsSettings.PaperWhiteMax, graphics.PaperWhite));
+            soundOutput.SelectedIndex = Math.Max(0, Math.Min(audio.SoundOutput, AudioSettings.SoundOutputNames.Length - 1));
+            buttonIcons.SelectedIndex = Math.Max(0, Math.Min(general.ButtonIcons, GeneralSettings.ButtonIconNames.Length - 1));
+            FillMenuTextSizes(general.MenuTextSize);
+            focusLoss.SelectedIndex = Math.Max(0, Math.Min(general.FocusLoss, GeneralSettings.FocusLossNames.Length - 1));
+            discordStatus.Checked = general.DiscordStatus;
+            coStar.Checked = controls.CoStar;
             rayTracing.Checked = graphics.RayTracing;
             rtQuality.SelectedIndex = Math.Max(0, Array.IndexOf(GraphicsSettings.RtQualityOrder, graphics.RtQuality));
             rtQuality.Enabled = graphics.RayTracing;
@@ -1136,6 +1215,29 @@ namespace Nebula.Launcher
             windowSize = new Size(graphics.WindowWidth, graphics.WindowHeight);
             loading = false;
             RefreshDisplayChoices();
+            RefreshHdrRow();
+        }
+
+        // The game's menu's text sizes (Auto, 80 % to 200 %), with a size of the file's that is not a step kept in order.
+        private void FillMenuTextSizes(int current)
+        {
+            menuTextSizes.Clear();
+            menuTextSizes.AddRange(GeneralSettings.MenuTextSizes);
+            if (!menuTextSizes.Contains(current)) { menuTextSizes.Add(current); menuTextSizes.Sort(); }
+            menuTextSize.Items.Clear();
+            foreach (int size in menuTextSizes) menuTextSize.Items.Add(size == 0 ? NebulaText.Of("Auto") : size + "%");
+            menuTextSize.SelectedIndex = menuTextSizes.IndexOf(current);
+        }
+
+        // HDR is offered while Windows shows the chosen display in HDR; otherwise the row stays as saved, greyed, with
+        // the hint (the game ignores the setting on an SDR display).
+        private void RefreshHdrRow()
+        {
+            var screen = SelectedMonitor;
+            bool offered = screen != null && screen.Hdr;
+            hdr.Enabled = offered;
+            paperWhite.Enabled = offered && hdr.Checked;
+            hdrHint.Visible = !offered;
         }
 
         private void RefreshDisplayNotice()
@@ -1349,7 +1451,13 @@ namespace Nebula.Launcher
                 graphics.EnhancedLighting = lighting.SelectedIndex == 0;
                 graphics.PerPixelLighting = lighting.SelectedIndex <= 1;
                 graphics.GeneratedMipmaps = mipmaps.Checked;
-                graphics.AmbientOcclusion = occlusion.Checked;
+                graphics.OcclusionMode = Math.Max(0, occlusionMode.SelectedIndex);
+                graphics.Bloom = (int)bloom.Value;
+                graphics.CurvedSurfaces = curvedSurfaces.Checked;
+                graphics.TexturePackMode = Math.Max(0, texturePacks.SelectedIndex);
+                graphics.TextureDump = textureDump.Checked;
+                graphics.Hdr = hdr.Checked;
+                graphics.PaperWhite = (int)paperWhite.Value;
                 // A fixed HUD row shows what the game does, not the player's choice: that is kept.
                 graphics.HudOutputResolution = hudOutput.Enabled ? hudOutput.Checked : hudChosen;
                 if (rayTracingOffered)
@@ -1359,12 +1467,18 @@ namespace Nebula.Launcher
                 }
                 graphics.Save();
                 for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = volumes[i].Value;
+                audio.SoundOutput = Math.Max(0, soundOutput.SelectedIndex);
                 audio.Save();
                 general.TextSpeed = Math.Max(0, textSpeed.SelectedIndex) + 1;
                 general.Language = offeredLanguages[Math.Max(0, Math.Min(languageBox.SelectedIndex, offeredLanguages.Count - 1))];
+                general.ButtonIcons = Math.Max(0, buttonIcons.SelectedIndex);
+                general.MenuTextSize = menuTextSizes[Math.Max(0, Math.Min(menuTextSize.SelectedIndex, menuTextSizes.Count - 1))];
+                general.FocusLoss = Math.Max(0, focusLoss.SelectedIndex);
+                general.DiscordStatus = discordStatus.Checked;
                 general.Save();
                 EndCapture();
                 if (controls.InputMode != ControlsSettings.ModeRealWiimote) controls.InputMode = Math.Max(0, inputSource.SelectedIndex);
+                controls.CoStar = coStar.Checked;
                 controls.Save();
                 session.Recording = (RecordingMode)Math.Max(0, recording.SelectedIndex);
                 if (!session.Portable) session.AskAboutUpdates = askUpdates.Checked;

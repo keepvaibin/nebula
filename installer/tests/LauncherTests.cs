@@ -722,6 +722,47 @@ namespace Nebula.Launcher
             return pak;
         }
 
+        // The rows added from the game's menu (settings_table.tsv): the engine's defaults for a file without them, the
+        // file's values in the runtime's spellings, a save that writes them back and keeps every other line.
+        static void AddedRowsCases()
+        {
+            string config = GraphicsSettings.ConfigPath, runtime = AudioSettings.SettingsPath;
+            if (File.Exists(config)) File.Delete(config);
+            if (File.Exists(runtime)) File.Delete(runtime);
+            var g = GraphicsSettings.Load();
+            var a = AudioSettings.Load();
+            var gen = GeneralSettings.Load();
+            Check(!g.Hdr && g.PaperWhite == 200 && g.CurvedSurfaces && g.Bloom == 100 && g.OcclusionMode == 0 && g.TexturePackMode == 1 && !g.TextureDump &&
+                  a.SoundOutput == 1 && gen.ButtonIcons == 0 && gen.MenuTextSize == 0 && gen.FocusLoss == 0 && gen.DiscordStatus &&
+                  !ControlsSettings.Load().CoStar,
+                  "the added rows start at the engine's defaults (render_config.h, runtime_settings.h)");
+            File.WriteAllText(config, "hdr=1\npaper_white=900\nbloom=140\nambient_occlusion=1\nambient_occlusion_ssao=true\ncurved_surfaces=0\n" +
+                                      "texture_packs=1\ntexture_pack_preload=1\ntexture_dump=on\nkeep_me=1\n");
+            File.WriteAllText(runtime, "audio_sound_output=SURROUND\nbutton_icons=wii\nmenu_text_size=75\nfocus_loss=mute\ndiscord_status=0\nco_star=1\n");
+            g = GraphicsSettings.Load();
+            a = AudioSettings.Load();
+            gen = GeneralSettings.Load();
+            Check(g.Hdr && g.PaperWhite == 500 && g.Bloom == 140 && g.OcclusionMode == 1 && !g.CurvedSurfaces && g.TexturePackMode == 2 && g.TextureDump,
+                  "config.ini's added keys read as the runtime reads them (paper white clamped to 500)");
+            Check(a.SoundOutput == 2 && gen.ButtonIcons == 1 && gen.MenuTextSize == 75 && gen.FocusLoss == 2 && !gen.DiscordStatus && ControlsSettings.Load().CoStar,
+                  "runtime_settings.ini's added keys read in any case, the old wii icons as the game's");
+            g.OcclusionMode = 2;
+            g.TexturePackMode = 0;
+            g.Bloom = 0;
+            g.Save();
+            string saved = File.ReadAllText(config);
+            Check(saved.Contains("ambient_occlusion=1") && saved.Contains("ambient_occlusion_ssao=0") && saved.Contains("texture_packs=0") &&
+                  saved.Contains("texture_pack_preload=0") && saved.Contains("bloom=0") && saved.Contains("keep_me=1") && saved.Contains("paper_white=900"),
+                  "a save writes the changed keys (GTAO, packs off, bloom off) and keeps the unchanged ones as the file had them");
+            gen.FocusLoss = 1;
+            gen.Save();
+            saved = File.ReadAllText(runtime);
+            Check(saved.Contains("focus_loss=pause") && saved.Contains("menu_text_size=75") && saved.Contains("co_star=1"), "runtime_settings.ini likewise");
+            Check(Directory.GetFiles(Path.GetDirectoryName(runtime), "*.tmp*").Length == 0, "an atomic save leaves no temporary file");
+            File.Delete(config);
+            File.Delete(runtime);
+        }
+
         static void GeneralCases()
         {
             string path = AudioSettings.SettingsPath;
@@ -1039,6 +1080,7 @@ namespace Nebula.Launcher
                 PadMenuCases();
                 AudioCases();
                 GeneralCases();
+                AddedRowsCases();
                 SharedFileCases();
                 AspectNameCases();
                 SaveArchiveCases(outDir);

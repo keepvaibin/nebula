@@ -194,6 +194,34 @@ namespace Nebula.Launcher
         public int SpatialQuality = 0;
         public bool GeneratedMipmaps = false, PerPixelLighting = false, EnhancedLighting = false, AmbientOcclusion = false;
         public bool HudOutputResolution = false, RayTracing = false;
+        // HDR (only while Windows shows the display in HDR) and its paper white, 80 to 500 nits.
+        public bool Hdr = false;
+        public int PaperWhite = 200;
+        public const int PaperWhiteMin = 80, PaperWhiteMax = 500;
+        // Ambient occlusion's kind when on: SSAO, else GTAO (ambient_occlusion_ssao).
+        public bool AmbientOcclusionSsao = false;
+        public bool CurvedSurfaces = true;
+        // Bloom strength, percent in steps of ten, 0 off (render_config.h kMaxBloom).
+        public int Bloom = 100;
+        public const int BloomMax = 200;
+        // Texture packs Off, On (as textures appear) or Preload (all at once); dumping the game's textures for a pack.
+        public bool TexturePacks = true, TexturePackPreload = false, TextureDump = false;
+        public static readonly string[] OcclusionModes = { NebulaText.Of("Off"), "SSAO", "GTAO" };
+        public static readonly string[] TexturePackModes = { NebulaText.Of("Off"), NebulaText.Of("On"), NebulaText.Of("Preload") };
+
+        /// <summary>Ambient occlusion as one choice: 0 off, 1 SSAO, 2 GTAO (the game's menu's order).</summary>
+        public int OcclusionMode
+        {
+            get { return !AmbientOcclusion ? 0 : AmbientOcclusionSsao ? 1 : 2; }
+            set { AmbientOcclusion = value != 0; AmbientOcclusionSsao = value == 1; }
+        }
+
+        /// <summary>Texture packs as one choice: 0 off, 1 on, 2 preload.</summary>
+        public int TexturePackMode
+        {
+            get { return !TexturePacks ? 0 : TexturePackPreload ? 2 : 1; }
+            set { TexturePacks = value != 0; TexturePackPreload = value == 2; }
+        }
         // Ray tracing quality (config rt_quality): 0 medium (one sample per 2 x 2 pixels of the internal
         // resolution), 1 high (every internal pixel, more rays, reflections shaded where they land), 2 low (one
         // per 3 x 3, single rays: RTX 3050-class cards). Shown Low, Medium, High (RtQualityOrder).
@@ -274,6 +302,14 @@ namespace Nebula.Launcher
             string occlusion;
             if (values.TryGetValue("ambient_occlusion", out occlusion)) settings.AmbientOcclusion = occlusion.Trim() != "0";
             if (values.TryGetValue("hud_output_resolution", out hud)) settings.HudOutputResolution = hud.Trim() != "0";
+            settings.Hdr = Flag(values, "hdr", settings.Hdr);
+            settings.PaperWhite = Math.Max(PaperWhiteMin, Math.Min(Number(values, "paper_white", settings.PaperWhite), PaperWhiteMax));
+            settings.AmbientOcclusionSsao = Flag(values, "ambient_occlusion_ssao", settings.AmbientOcclusionSsao);
+            settings.CurvedSurfaces = Flag(values, "curved_surfaces", settings.CurvedSurfaces);
+            settings.Bloom = Math.Max(0, Math.Min(Number(values, "bloom", settings.Bloom), BloomMax));
+            settings.TexturePacks = Flag(values, "texture_packs", settings.TexturePacks);
+            settings.TexturePackPreload = Flag(values, "texture_pack_preload", settings.TexturePackPreload);
+            settings.TextureDump = Flag(values, "texture_dump", settings.TextureDump);
             if (values.TryGetValue("ray_tracing_enabled", out rt)) settings.RayTracing = rt.Trim() != "0";
             string quality;
             if (values.TryGetValue("rt_quality", out quality))
@@ -318,6 +354,14 @@ namespace Nebula.Launcher
                 new KeyValuePair<string, string>("hud_output_resolution", HudOutputResolution ? "1" : "0"),
                 new KeyValuePair<string, string>("ray_tracing_enabled", RayTracing ? "1" : "0"),
                 new KeyValuePair<string, string>("rt_quality", RtQuality == 0 ? "medium" : RtQuality == 2 ? "low" : "high"),
+                new KeyValuePair<string, string>("hdr", Hdr ? "1" : "0"),
+                new KeyValuePair<string, string>("paper_white", n(Math.Max(PaperWhiteMin, Math.Min(PaperWhite, PaperWhiteMax)))),
+                new KeyValuePair<string, string>("ambient_occlusion_ssao", AmbientOcclusionSsao ? "1" : "0"),
+                new KeyValuePair<string, string>("curved_surfaces", CurvedSurfaces ? "1" : "0"),
+                new KeyValuePair<string, string>("bloom", n(Math.Max(0, Math.Min(Bloom, BloomMax)))),
+                new KeyValuePair<string, string>("texture_packs", TexturePacks ? "1" : "0"),
+                new KeyValuePair<string, string>("texture_pack_preload", TexturePackPreload ? "1" : "0"),
+                new KeyValuePair<string, string>("texture_dump", TextureDump ? "1" : "0"),
             };
         }
 
@@ -355,6 +399,26 @@ namespace Nebula.Launcher
                 return index >= 0 && index < AspectsBefore3To2.Length ? AspectsBefore3To2[index] : fallback;
             int named = Array.FindIndex(AspectNames, name => string.Equals(name, text, StringComparison.OrdinalIgnoreCase));
             return named >= 0 ? named : fallback;
+        }
+
+        // A bool as the runtime reads it (parse_bool): 0/1, false/true, off/on, no/yes; anything else keeps the fallback.
+        private static bool Flag(Dictionary<string, string> values, string key, bool fallback)
+        {
+            string text;
+            if (!values.TryGetValue(key, out text)) return fallback;
+            switch (text.Trim().ToLowerInvariant())
+            {
+                case "1": case "true": case "on": case "yes": return true;
+                case "0": case "false": case "off": case "no": return false;
+                default: return fallback;
+            }
+        }
+
+        private static int Number(Dictionary<string, string> values, string key, int fallback)
+        {
+            string text;
+            int value;
+            return values.TryGetValue(key, out text) && int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value) ? value : fallback;
         }
 
         private static int Choice(Dictionary<string, string> values, string key, int count, int fallback)
