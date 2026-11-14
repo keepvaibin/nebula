@@ -210,7 +210,7 @@ namespace Nebula.Launcher
         /// <summary>The game started for a benchmark: its own arguments without the saves, its output read.</summary>
         public static ProcessStartInfo Create(string app, string content, string resultFile)
         {
-            var start = new ProcessStartInfo(Path.Combine(app, "NebulaNative.exe"),
+            var start = new ProcessStartInfo(GamePrograms.Start(app),
                 "--pak " + ProcessRunner.Quote(Path.Combine(content, "game.pak")) + " --benchmark 1 --benchmark-out " + ProcessRunner.Quote(resultFile));
             start.UseShellExecute = false;
             start.CreateNoWindow = true;

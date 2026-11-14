@@ -288,20 +288,10 @@ namespace Nebula.Launcher
         }
 
         // A game that stopped responding can keep the lease after its window is gone. Offers to end this
-        // install's game, then waits for the lease.
+        // install's game (any of its programs, GamePrograms), then waits for the lease.
         private bool EndRunningGame()
         {
-            string exe = Path.Combine(App, "NebulaNative.exe");
-            var running = new List<Process>();
-            foreach (var process in Process.GetProcessesByName("NebulaNative"))
-            {
-                try
-                {
-                    if (string.Equals(process.MainModule.FileName, exe, StringComparison.OrdinalIgnoreCase)) { running.Add(process); continue; }
-                }
-                catch (Exception) { }
-                process.Dispose();
-            }
+            var running = GamePrograms.Running(App);
             if (running.Count == 0) return false;
             try
             {
@@ -325,7 +315,7 @@ namespace Nebula.Launcher
             // --diagnostics 1 records the frame timeline; it is written into the session at exit.
             start.Arguments += " --timeline " + ProcessRunner.Quote(Path.Combine(session, "timeline.bin"));
             var launchFiles = new Dictionary<string, object>();
-            foreach (string name in new[] { "NebulaNative.exe", "smg_game.dll", "Nebula.exe" })
+            foreach (string name in GamePrograms.Names.Select(n => n + ".exe").Concat(new[] { "smg_game.dll", "Nebula.exe" }))
             {
                 string path = Path.Combine(App, name);
                 if (File.Exists(path)) launchFiles[name] = FileUtil.Sha256File(path);

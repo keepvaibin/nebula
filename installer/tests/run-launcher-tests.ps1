@@ -47,6 +47,7 @@ $gameStub = Join-Path $scratch 'GameStub.cs'
 @'
 using System; using System.IO;
 static class GameStub { static void Main(string[] a) {
+ if (a.Length > 0 && a[0] == "--wait") { System.Threading.Thread.Sleep(30000); return; }
  if (a.Length > 0 && a[0] == "--list-mods") { Console.WriteLine("{\"ok\":true,\"folder\":\"\",\"mods\":[]}"); return; }
  File.WriteAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "stub-launch.txt"), a); } }
 '@ | Set-Content -LiteralPath $gameStub

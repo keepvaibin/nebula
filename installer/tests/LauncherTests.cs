@@ -870,6 +870,51 @@ namespace Nebula.Launcher
             Check(small[GraphicsSettings.SnapWindowSize(small, new Size(1920, 1080))] == small[small.Count - 1], "a size taller than the screen allows snaps to the largest");
         }
 
+        // The game's programs per CPU level (GamePrograms): a start runs the one the CPU takes, so the launcher watches
+        // the game itself; a running game is found by any of the programs, only in this install's folder.
+        static void GameProgramCases(string app, string outDir)
+        {
+            string folder = Path.Combine(outDir, "cpu-levels");
+            Directory.CreateDirectory(folder);
+            string main = Path.Combine(folder, "NebulaNative.exe"), v2 = Path.Combine(folder, "NebulaNative-x86-64-v2.exe");
+            File.Copy(Path.Combine(app, "NebulaNative.exe"), main, true);
+            var avx2 = GamePrograms.Avx2;
+            try
+            {
+                GamePrograms.Avx2 = () => false;
+                Check(GamePrograms.Start(folder) == main, "game programs: without the x86-64-v2 program, NebulaNative.exe starts");
+                File.Copy(main, v2, true);
+                Check(GamePrograms.Start(folder) == v2 && LaunchOptions.Create(folder, "content", "saves", RecordingMode.None).FileName == v2
+                      && Benchmark.Create(folder, "content", "r.json").FileName == v2,
+                      "game programs: a CPU without AVX2 starts the x86-64-v2 program itself (game and benchmark)");
+                GamePrograms.Avx2 = () => true;
+                Check(GamePrograms.Start(folder) == main, "game programs: a CPU with AVX2 starts NebulaNative.exe");
+                Check(GamePrograms.IsGame(folder, v2) && GamePrograms.IsGame(folder, Path.Combine(folder, "NebulaNativeD11-x86-64-v2.exe"))
+                      && !GamePrograms.IsGame(app, v2) && !GamePrograms.IsGame(folder, Path.Combine(folder, "Nebula.exe")),
+                      "game programs: every program of this folder is the game, no other");
+                using (var game = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(v2, "--wait") { UseShellExecute = false, CreateNoWindow = true }))
+                {
+                    try
+                    {
+                        Thread.Sleep(300);
+                        var found = GamePrograms.Running(folder);
+                        var elsewhere = GamePrograms.Running(app);
+                        Check(found.Any(p => p.Id == game.Id) && !elsewhere.Any(p => p.Id == game.Id),
+                              "game programs: a running x86-64-v2 game is found (the hung-game offer), only in its own folder");
+                        foreach (var p in found.Concat(elsewhere)) p.Dispose();
+                    }
+                    finally
+                    {
+                        try { game.Kill(); game.WaitForExit(5000); } catch (Exception) { }
+                    }
+                }
+            }
+            finally
+            {
+                GamePrograms.Avx2 = avx2;
+            }
+        }
+
         static void RecordingEncodingCases(string app)
         {
             var plain = LaunchOptions.Create(app, "content", "saves", RecordingMode.None);
@@ -1485,6 +1530,7 @@ namespace Nebula.Launcher
                 BenchmarkCases(later);
                 DownloadCloseCases(outDir);
                 RecordingEncodingCases(later.App);
+                GameProgramCases(later.App, outDir);
 
                 // TryLaunch starts <App>\NebulaNative.exe, here a stub that records its arguments.
                 string marker = Path.Combine(later.App, "stub-launch.txt");
