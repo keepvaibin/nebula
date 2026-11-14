@@ -55,6 +55,13 @@ HOSTS = {
 }
 HOST = HOSTS.get(platform.system(), HOSTS["Windows"])
 HOST["code"] = "code/%s/mod%s" % (HOST["platform"], HOST["ending"])
+
+
+def library_in(pattern):
+    """A log pattern's {library}: a mod library's file name on this system (mod.dll, mod.so, mod.dylib), as a regex."""
+    return pattern.replace("{library}", re.escape("mod" + HOST["ending"]))
+
+
 EXES = HOST["exes"]
 BUTTONS = {"A", "B", "Z", "C", "PLUS", "MINUS", "ONE", "TWO", "HOME", "UP", "DOWN", "LEFT", "RIGHT"}
 KEYS = {"up", "down", "left", "right", "enter", "esc", "tab", "space", "backspace"}
@@ -521,7 +528,7 @@ def read_steps(t, bare, classes):
             if ("fact" in a) == ("log" in a):
                 raise HarnessError("%s.after needs fact or log" % path)
             if "log" in a:
-                pattern = text(a, "log", path + ".after")
+                pattern = library_in(text(a, "log", path + ".after"))
                 try:
                     re.compile(pattern)
                 except re.error:
@@ -762,7 +769,7 @@ def read_expect(t, bare, steps):
             if ("log" in c) == ("no_log" in c):
                 raise HarnessError("%s: log and no_log are separate checks" % path)
             key = "log" if "log" in c else "no_log"
-            pattern = text(c, key, path)
+            pattern = library_in(text(c, key, path))
             times = c.get("times")
             if times is not None and (key != "log" or not isinstance(times, int) or isinstance(times, bool) or times < 0):
                 raise HarnessError("%s.times must be a whole number of at least 0, on a log check" % path)
