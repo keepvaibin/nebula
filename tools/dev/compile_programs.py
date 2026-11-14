@@ -1,4 +1,4 @@
-"""Every program in every output variant, into one file. compile_programs.py dxil|spirv OUT.bin [SPIRV_TOOL]
+"""Every program in every output variant, into one file. compile_programs.py dxil|dxbc|spirv OUT.bin [SPIRV_TOOL]
 
 The generated programs are runtime/src/render/programs/ (build_programs.py); table.tsv maps every text's hash to the program
 that compiled the same. The written shaders are `WRITTEN` in NebulaShaderId order, from 1. Compiled stages are kept by
@@ -15,6 +15,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 MATERIALS = os.path.join(ROOT, "runtime", "src", "render", "materials")
 PROGRAMS = os.path.join(ROOT, "runtime", "src", "render", "programs")
 DXC = os.environ.get("GALAXY_DXC", "dxc")
+FXC = os.environ.get("GALAXY_FXC", "fxc")  # dxbc: Direct3D 11, shader model 5.0
 JOBS = int(os.environ.get("JOBS", "4"))
 SITE = 1 << 63
 
@@ -46,6 +47,11 @@ TRACED_VARIANTS = {
     "prepass_item": (15, ["NATIVE_PREPASS", "NATIVE_PREPASS_ITEM"]),
 }
 VERTEX_FORMS = ("base", "motion")
+# Direct3D 11 (dxbc): no temporal upscaler, frame generation or tracer reads motion, the reactive mask, the layer or a
+# traced form, so only these are compiled; and its pixel programs are the bound-table form only (shader model 5.0 has no
+# unbounded arrays), stored at the variant + BOUND_OFFSET with 16 maps to a table (d3d11::kBoundTableSlots).
+DXBC_FORMS = ("base", "sample")
+DXBC_TABLE = ["NEBULA_BOUND_TABLES", "NEBULA_TABLE_SLOTS=16"]
 # A Vulkan device without descriptor indexing reads each pixel program's bound-table form (program.hlsli
 # NEBULA_BOUND_TABLES): stored at the variant + BOUND_OFFSET, STORED variants to a row (core/program_table.h).
 BOUND_OFFSET = 5
@@ -83,7 +89,7 @@ def main():
     cache = out + ".stages"
     os.makedirs(cache, exist_ok=True)
     headers = "".join(read(os.path.join(MATERIALS, n)) for n in sorted(os.listdir(MATERIALS)) if n.endswith(".hlsli"))
-    tool_id = backend + (DXC if backend == "dxil" else spirv_tool or "")
+    tool_id = backend + (DXC if backend == "dxil" else FXC if backend == "dxbc" else spirv_tool or "")
     if backend == "spirv" and spirv_tool:
         # Compiler location/binding rewrites affect bytes even with unchanged HLSL.
         with open(spirv_tool, "rb") as compiler:
@@ -96,6 +102,11 @@ def main():
     coords = {}
 
     def add(stage, row, source, text, entry, defines, variant, bound_form=True):
+        if backend == "dxbc":
+            if stage == "ps":
+                defines = defines + DXBC_TABLE
+                variant += BOUND_OFFSET
+            bound_form = False
         key = hashlib.sha1(("\0".join([tool_id, headers, text, stage, entry] + defines)).encode()).hexdigest()
         jobs[key] = (source, stage, entry, defines)
         rows.setdefault((stage, row), {})[variant] = key
@@ -105,20 +116,23 @@ def main():
             jobs[bound_key] = (source, stage, entry, bound)
             rows[(stage, row)][variant + BOUND_OFFSET] = bound_key
 
+    def kept(name):
+        return backend != "dxbc" or name in DXBC_FORMS
+
     def add_program(stage, row, source, entry):
         text = read(source)
         if stage == "vs":
-            for name in VERTEX_FORMS:
+            for name in filter(kept, VERTEX_FORMS):
                 index, defines = VARIANTS[name]
                 add(stage, row, source, text, entry, defines, index)
             flags[(stage, row)] = READS_WORLD if "world_" in text else 0
             return
         for name, (index, defines) in VARIANTS.items():
-            if name == "sample" and "discard" not in text:
+            if (name == "sample" and "discard" not in text) or not kept(name):
                 continue
             add(stage, row, source, text, entry, defines, index)
         for name, (index, defines) in TRACED_VARIANTS.items():
-            if name == "prepass_item" and backend != "spirv":
+            if (name == "prepass_item" and backend != "spirv") or backend == "dxbc":
                 continue
             add(stage, row, source, text, entry, defines, index, False)
         flags[(stage, row)] = (LIT if "program_lit.hlsli" in text else 0) | (
@@ -133,7 +147,7 @@ def main():
             return 1
         coords[("vs", row)] = coords[("vs", row | 1)] = count
         add_program("vs", row, source, "native_vs")
-        if WRITTEN_LIT.search(read(source)):
+        if WRITTEN_LIT.search(read(source)) and backend != "dxbc":
             for name in ("traced", "traced_motion"):
                 index, defines = TRACED_VARIANTS[name]
                 add("vs", row, source, read(source), "native_vs", defines, index)
@@ -142,7 +156,7 @@ def main():
         add_program("ps", row, source, "native_ps")
         # Lines and points are widened in this form.
         text = read(source)
-        for form in VERTEX_FORMS:
+        for form in filter(kept, VERTEX_FORMS):
             index, defines = VARIANTS[form]
             add("vs", row | 1, source, text, "native_vs", defines + ["NATIVE_WIDE"], index)
         flags[("vs", row | 1)] = 0
@@ -168,6 +182,11 @@ def main():
                        "-I", MATERIALS, "-Fo", temp, source]
             for d in defines:
                 command.insert(1, "-D" + d + "=1")
+        elif backend == "dxbc":
+            command = [FXC, "/nologo", "/T", stage + "_5_0", "/E", entry, "/O3", "/Qstrip_debug", "/Qstrip_reflect",
+                       "/I", MATERIALS, "/Fo", temp, source]
+            for d in defines:
+                command.insert(1, "/D" + (d if "=" in d else d + "=1"))
         else:
             command = [spirv_tool, source, MATERIALS, stage, entry, temp] + defines
         result = subprocess.run(command, capture_output=True, text=True)
@@ -187,7 +206,8 @@ def main():
     # Two programs compiling the same mean the set's dedupe missed: the build fails.
     seen = {}
     for stage, row in groups.values():
-        with open(os.path.join(cache, rows[(stage, row)][0]), "rb") as f:
+        forms = rows[(stage, row)]
+        with open(os.path.join(cache, forms[0] if 0 in forms else forms[BOUND_OFFSET]), "rb") as f:
             digest = (stage, hashlib.sha256(f.read()).digest())
         if digest in seen:
             print(f"programs {seen[digest]:016x} and {row:016x} compile the same")
