@@ -634,3 +634,27 @@ fn dump_the_surface_shader() {
         }
     }
 }
+
+#[test]
+fn a_packed_mod_finds_its_shader_by_its_luma_json() {
+    // A .luma read in place (beside::packed) is a mod folder only with its luma.json among the entries: the shader is
+    // looked up from the mod's folder, which is the one holding luma.json.
+    let (dir, _) = shader_mod(&stripes_json(), STRIPES);
+    let on_disk = dir.path().join("stripes-mod");
+    let names = ["luma.json", "layers/base/assets/shaders/Stripes.shader.json", "layers/base/assets/shaders/Stripes.hlsl", "layers/base/assets/models/Ball.gltf"];
+    let empty = tempfile::tempdir().unwrap();
+    let models = empty.path().join("layers/base/assets/models");
+    for with_manifest in [true, false] {
+        let from = on_disk.clone();
+        let entries = names.iter().filter(|n| with_manifest || **n != "luma.json").map(|n| n.to_string());
+        let _packed = crate::cook::beside::packed(empty.path(), entries, move |name| std::fs::read(from.join(name)).ok());
+        let found = find(Some(&models), "Ball", "shaders/Stripes");
+        if with_manifest {
+            let (file, json, hlsl) = found.unwrap();
+            assert_eq!((file.as_str(), hlsl.as_slice()), ("assets/shaders/Stripes.hlsl", STRIPES.as_bytes()));
+            assert_eq!(json, stripes_json().to_string().into_bytes());
+        } else {
+            assert_eq!(refusal(found).0, "Cook.Shader.Missing");
+        }
+    }
+}

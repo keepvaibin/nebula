@@ -2236,12 +2236,18 @@ def write_refs(args):
     test = read_test(args.target)
     run_folder = pathlib.Path(args.run).resolve()
     renderer = run_folder.name
+    written = set()
     for c in test["expect"]:
         if c["kind"] in ("like", "unlike"):
+            # A reference is the picture of the first check that names it; a later check may hold another picture
+            # against it (after against before), and must not overwrite it with that picture.
+            target = test["folder"] / c["ref"].replace("{renderer}", renderer)
+            if target in written:
+                continue
+            written.add(target)
             source = run_folder / "pictures" / (c["picture"] + ".png")
             if not source.is_file():
                 raise SystemExit("the run kept no picture %s" % c["picture"])
-            target = test["folder"] / c["ref"].replace("{renderer}", renderer)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
             print("%s -> %s (sha256 %s)" % (source, target, sha256(target)[:16]))

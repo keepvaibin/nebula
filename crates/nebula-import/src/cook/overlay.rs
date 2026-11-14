@@ -281,21 +281,22 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
             return Err(super::refuse::refuse("Cook.Layout.NotInArchive", &[("file", change.path.clone())]));
         }
         let stem = &file[..file.len() - ".layout.json".len()];
-        // The archive's folder on disk, when the file is read from one (a mod folder, or the game's unpacked mods).
-        let on_disk = change.source.parent().map(|p| if in_blyt { p.parent().unwrap_or(p) } else { p }).filter(|p| p.is_dir());
+        // The archive's folder, when the file is read from one (a mod folder, a .luma read in place, or the game's
+        // unpacked mods).
+        let on_disk = change.source.parent().map(|p| if in_blyt { p.parent().unwrap_or(p) } else { p }).filter(|p| super::beside::is_dir(p));
         let missing_texture = |name: &str| -> Option<String> {
             let timg = on_disk?.join("timg");
             let wanted = [format!("{name}.png"), format!("{name}.tpl")];
-            let found = fs::read_dir(&timg).ok().is_some_and(|entries| {
-                entries.flatten().any(|e| wanted.iter().any(|w| e.file_name().to_string_lossy().eq_ignore_ascii_case(w)))
+            let found = super::beside::list(&timg).ok().is_some_and(|entries| {
+                entries.iter().filter_map(|e| e.file_name()).any(|name| wanted.iter().any(|w| name.to_string_lossy().eq_ignore_ascii_case(w)))
             });
             (!found).then(|| format!("{archive}/timg/{name}.png"))
         };
         // A text naming this mod's own font (Luma/<id>/<path>): the mod's folder, when the file is read from one, has its
         // source in a layer's assets (layout contract 2a). Another mod's font is that mod's to have.
-        let mod_root = change.source.ancestors().skip(1).find(|a| a.join("luma.json").is_file());
+        let mod_root = change.source.ancestors().skip(1).find(|a| super::beside::is_file(&a.join("luma.json")));
         let mod_id = mod_root
-            .and_then(|root| fs::read(root.join("luma.json")).ok())
+            .and_then(|root| super::beside::read(&root.join("luma.json")).ok())
             .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
             .and_then(|v| v["id"].as_str().map(str::to_string));
         let missing_font = |font: &str| -> Option<String> {
@@ -305,7 +306,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
                 return None;
             }
             let file = format!("{path}.font.json");
-            let found = fs::read_dir(root.join("layers")).ok()?.flatten().any(|layer| layer.path().join("assets").join(&file).is_file());
+            let found = super::beside::list(&root.join("layers")).ok()?.iter().any(|layer| super::beside::is_file(&layer.join("assets").join(&file)));
             (!found).then(|| format!("assets/{file}"))
         };
         let (brlyt, animations, facts) = super::layout_json::to_files(bytes, stem, &missing_texture, &missing_font)?;
@@ -324,7 +325,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
             return Err(super::refuse::refuse("Cook.Sound.NotAsset", &[("file", change.path.clone())]));
         }
         let folder = change.source.parent().map(Path::to_path_buf);
-        let file = |name: &str| -> Option<Vec<u8>> { fs::read(folder.as_ref()?.join(name)).ok() };
+        let file = |name: &str| -> Option<Vec<u8>> { super::beside::read(&folder.as_ref()?.join(name)).ok() };
         // The game's sound names, for `replace` (layer 2): from the store's cooked sound archive, when there is one.
         let names = base.and_then(game_sound_names);
         let game_sound = |name: &str| -> Option<bool> { names.as_ref().map(|n| n.contains(name)) };
@@ -351,7 +352,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
             return Err(super::refuse::refuse("Cook.Movie.NotAsset", &[("file", change.path.clone())]));
         }
         let folder = change.source.parent().map(Path::to_path_buf);
-        let file = |name: &str| -> Option<Vec<u8>> { fs::read(folder.as_ref()?.join(name)).ok() };
+        let file = |name: &str| -> Option<Vec<u8>> { super::beside::read(&folder.as_ref()?.join(name)).ok() };
         let game_movie = |name: &str| base.and_then(|b| store::has_file(b, &format!("MovieData/{name}.thp")).ok());
         let (made, facts) = super::movie_cook::cook(bytes, &super::movie_cook::Around { file: &file, game_movie: &game_movie })?;
         let stem = &change.path[..change.path.len() - ".movie.json".len()];
@@ -372,7 +373,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
             return Err(super::refuse::refuse("Cook.Font.NotAsset", &[("file", change.path.clone())]));
         }
         let folder = change.source.parent().map(Path::to_path_buf);
-        let file = |name: &str| -> Option<Vec<u8>> { fs::read(folder.as_ref()?.join(name)).ok() };
+        let file = |name: &str| -> Option<Vec<u8>> { super::beside::read(&folder.as_ref()?.join(name)).ok() };
         let (files, facts) = super::font_cook::cook(bytes, &change.path, &file)?;
         super::refuse::record(super::refuse::CookFact::Font { path: files[0].0.clone(), source: change.path.clone(), facts });
         return Ok(files);
@@ -384,7 +385,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         let name = stem.rsplit('/').next().unwrap_or(stem);
         // Named as the mod has them: assets/post/<name>.json and .hlsl.
         let (json_file, hlsl_file) = (format!("assets/post/{name}.json"), format!("assets/post/{name}.hlsl"));
-        let hlsl = change.source.parent().and_then(|folder| fs::read(folder.join(format!("{name}.hlsl"))).ok());
+        let hlsl = change.source.parent().and_then(|folder| super::beside::read(&folder.join(format!("{name}.hlsl"))).ok());
         let made = super::post_shader::cook(&json_file, bytes, &hlsl_file, hlsl.as_deref())?;
         return Ok(vec![(format!("{stem}.post"), made, true)]);
     }
