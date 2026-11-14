@@ -3,13 +3,7 @@
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/cpu_count.h"
-#if defined(_WIN32)
 #include "galaxy/windows_power.h"
-#endif
-
-#if defined(__APPLE__)
-#include <pthread/qos.h>
-#endif
 
 #include <algorithm>
 #include <cstdio>
@@ -249,14 +243,9 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
 }
 
 void Pipelines::worker() {
-#if defined(_WIN32)
-    // Lowest priority; started on battery, it also asks for efficiency (windows_power.h).
+    // Below the frame's threads on every platform (windows_power.h); on Windows, started on battery, it also asks for
+    // efficiency, and on Apple what the compiler does in the system's service for this thread runs at the same class.
     galaxy::host::lower_current_thread_priority();
-#elif defined(__APPLE__)
-    // The class for long work nobody waits on: the frame's threads (perf_hint.cpp: user-interactive) always run first,
-    // and what the compiler does in the system's service for this thread runs at the same class.
-    (void)pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);
-#endif
     for (;;) {
         Job job;
         {
