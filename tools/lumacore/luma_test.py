@@ -1215,17 +1215,58 @@ def run_one(test, renderer, args, run_folder, previous):
     return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name}
 
 
+def file_holders(path):
+    """The processes that have `path` open, as "name (pid)" (Windows' Restart Manager; empty elsewhere or when it
+    cannot say)."""
+    if os.name != "nt":
+        return []
+    import ctypes
+    from ctypes import wintypes
+
+    class UniqueProcess(ctypes.Structure):
+        _fields_ = [("pid", wintypes.DWORD), ("start", wintypes.FILETIME)]
+
+    class ProcessInfo(ctypes.Structure):
+        _fields_ = [("process", UniqueProcess), ("app", ctypes.c_wchar * 256), ("service", ctypes.c_wchar * 64),
+                    ("type", ctypes.c_int), ("status", wintypes.DWORD), ("session", wintypes.DWORD),
+                    ("restartable", wintypes.BOOL)]
+
+    rm = ctypes.WinDLL("rstrtmgr")
+    session = wintypes.DWORD()
+    key = ctypes.create_unicode_buffer(64)
+    if rm.RmStartSession(ctypes.byref(session), 0, key) != 0:
+        return []
+    try:
+        files = (ctypes.c_wchar_p * 1)(str(path))
+        if rm.RmRegisterResources(session, 1, files, 0, None, 0, None) != 0:
+            return []
+        needed, count, reasons = wintypes.UINT(), wintypes.UINT(16), wintypes.DWORD()
+        infos = (ProcessInfo * 16)()
+        if rm.RmGetList(session, ctypes.byref(needed), ctypes.byref(count), infos, ctypes.byref(reasons)) != 0:
+            return ["more than 16 processes" if needed.value > 16 else "unknown"]
+        return ["%s (%d)" % (infos[i].app, infos[i].process.pid) for i in range(count.value)]
+    finally:
+        rm.RmEndSession(session)
+
+
 def remove_binary(path):
-    """A run's copy of a binary, removed once the run is over. The game's crash watcher (native/host/crash_watch.h), a
-    second instance of the executable, ends when the game does and may still hold the file for a moment: tried again
-    for up to 5 s."""
-    for attempt in range(50):
+    """A run's copy of a binary, removed once the run is over; tried for up to 30 s, as the game's crash watcher
+    (native/host/crash_watch.h, a second instance of the executable) ends just after the game. Returns None when
+    removed, else what holds it (the copy is then left; the run's verdict does not depend on it)."""
+    began = time.time()
+    holders = None
+    while True:
         try:
             path.unlink()
-            return
+            if holders:
+                print("harness: %s was held %.1f s after the run by %s" % (path.name, time.time() - began,
+                                                                          ", ".join(holders)), flush=True)
+            return None
         except PermissionError:
-            if attempt == 49:
-                raise
+            if holders is None and time.time() - began > 1.0:
+                holders = file_holders(path) or ["no process the Restart Manager names"]
+            if time.time() - began > 30.0:
+                return ", ".join(file_holders(path) or holders or ["no process the Restart Manager names"])
             time.sleep(0.1)
 
 
@@ -1591,7 +1632,10 @@ def run_tests(args):
                     for p in (run_folder / "bin").iterdir():
                         if p.is_file() and (p.suffix in (".exe", ".dll", ".pdb", ".so") or p.name in EXES.values()
                                             or p.name == HOST["importer_exe"]):
-                            remove_binary(p)
+                            held = remove_binary(p)
+                            if held is not None:
+                                print("harness: %s left in %s: still held after 30 s by %s" % (p.name, p.parent, held),
+                                      flush=True)
                 setup = {f["key"]: f["value"] for f in facts if f.get("key", "").startswith("setup.")}
                 report(run_folder, test["name"], test["proves"], renderer, verdict, reason, checks, args,
                        {"setup": setup, "frames": max([f.get("frame", -1) for f in facts] or [-1]),
