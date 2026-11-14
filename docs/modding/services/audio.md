@@ -29,6 +29,7 @@ whenever less than 0.1 s waits and the mod has pushed since the last NEED; its v
 now. `stream_push` returns the frames taken (all, or as many as fit). A sample that is not finite is silence:
 Audio.NotANumber {count} once a push. A stream that runs dry plays silence and starts from silence when pushed again.
 `stream_close(drain)`: 1 plays what it holds, 0 fades it over 10 ms; no event after.
+`stream_channels` (1.1) gives a stream's channels: a push of `frames` reads `frames` x channels floats.
 
 ## 3. The mix
 

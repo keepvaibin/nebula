@@ -1255,6 +1255,24 @@ std::int64_t audio_stream_push(const LumaMod* mod, LumaHandle stream, const floa
     return static_cast<std::int64_t>(taken);
 }
 
+std::int32_t audio_stream_channels(const LumaMod* mod, LumaHandle stream, std::uint32_t* out) noexcept {
+    static constexpr const char* where = "audio.stream_channels";
+    ModState* state = nullptr;
+    if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
+        return status;
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    const std::lock_guard<std::mutex> lock(g_lock);
+    const Item* item = find_locked(state, stream, true);
+    if (item == nullptr) {
+        return bad_handle(mod, where);
+    }
+    *out = static_cast<std::uint32_t>(item->channels);
+    return LUMA_OK;
+}
+
 std::int32_t audio_stream_close(const LumaMod* mod, LumaHandle stream, std::uint32_t drain) noexcept {
     static constexpr const char* where = "audio.stream_close";
     ModState* state = nullptr;
@@ -1747,6 +1765,7 @@ const LumaAudioService kAudio = {
     audio_game_play,
     audio_game_place,
     audio_game_stop,
+    audio_stream_channels,
 };
 
 const LumaServiceRow kRows[] = {

@@ -19,7 +19,7 @@ extern "C" {
 
 #define LUMA_AUDIO_NAME "audio"
 #define LUMA_AUDIO_MAJOR 1u
-#define LUMA_AUDIO_MINOR 0u
+#define LUMA_AUDIO_MINOR 1u
 
 #define LUMA_AUDIO_VOICES_MOST 32u      /* voices a mod plays at once */
 #define LUMA_AUDIO_STREAMS_MOST 4u      /* streams a mod holds at once */
@@ -175,6 +175,9 @@ typedef struct LumaAudioService {
        frames. LUMA_OK also when it has ended; the handle is closed. A handle not the mod's game sound: LUMA_E_HANDLE,
        reported. */
     int32_t (*game_stop)(const LumaMod* mod, LumaHandle sound, uint32_t fade_ms);
+    /* 1.1. A stream's channels as its desc gave them (1 or 2): stream_push reads `frames` x that many floats. LUMA_OK
+       and *out. A handle not the mod's stream: LUMA_E_HANDLE, reported; a null out: LUMA_E_ARGUMENT, reported. */
+    int32_t (*stream_channels)(const LumaMod* mod, LumaHandle stream, uint32_t* out);
 } LumaAudioService;
 
 #ifdef __cplusplus

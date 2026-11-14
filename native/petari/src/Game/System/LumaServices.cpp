@@ -69,7 +69,7 @@ namespace luma {
                 {"input", 1, 2, nullptr, "services-input"},
                 {"input.inject", 1, 0, "input.inject", "services-input"},
                 {"input.dev", 1, 0, "input.devices", "services-input"},
-                {"audio", 1, 0, nullptr, "services-audio"},
+                {"audio", 1, 1, nullptr, "services-audio"},
                 {"audio.microphone", 1, 0, "audio.microphone", "services-audio"},
                 {"capture.camera", 1, 0, "capture.camera", "services-audio"},
                 {nullptr, 0, 0, nullptr, nullptr},

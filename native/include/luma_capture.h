@@ -87,6 +87,7 @@ typedef struct LumaCaptureCameraService {
     /* Opens the player's first camera: FRAME to fn (not null), at most one a game frame. One a mod (a 2nd:
        LUMA_E_LIMIT, reported). A desc of the wrong size or out of range, a null fn or out: LUMA_E_ARGUMENT,
        reported; no camera on this platform: LUMA_E_ABSENT. */
+    /* events: FRAME(socket, status, data), ENDED(socket, status) */
     int32_t (*open)(const LumaMod* mod, const LumaCaptureCameraDesc* desc, LumaEventFn fn, void* user,
                     LumaHandle* out);
     /* Closes it; no event after. A handle not the mod's: LUMA_E_HANDLE, reported. */
