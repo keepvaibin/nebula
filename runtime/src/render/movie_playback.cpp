@@ -424,7 +424,11 @@ private:
         // A crash while this movie plays names it (NEB-V01).
         const galaxy::crash::ScopedActivity activity(galaxy::crash::Activity::Movie, file_);
         const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        const bool mf = SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE));
+        // Media Foundation is delay-loaded: on a Windows edition without it the first call would raise the loader's
+        // exception instead of failing, so its two libraries are asked for first (once; they stay loaded).
+        static const bool present = LoadLibraryExW(L"mfplat.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32) != nullptr &&
+                                    LoadLibraryExW(L"mfreadwrite.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32) != nullptr;
+        const bool mf = present && SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE));
         decode(mf);
         if (mf) MFShutdown();
         if (SUCCEEDED(com)) CoUninitialize();
