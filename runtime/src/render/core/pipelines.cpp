@@ -297,17 +297,7 @@ void Pipelines::worker() {
             } else if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(job.entry)) {
                 if (!job.deferred && left_to_cache(form)) {
                     left_.fetch_add(1u, std::memory_order_relaxed);
-                    // Made later, after the first scene is shown (a load from the cache then, at this thread's priority, not
-                    // the draw's). Out of memory for the entry: it stays to the draw that first needs it.
-                    try {
-                        std::lock_guard guard(lock_);
-                        if (!quit_) {
-                            Job later = job;
-                            later.deferred = true;
-                            left_jobs_.push_back(std::move(later));
-                        }
-                    } catch (...) {
-                    }
+                    defer(job);  // a load from the cache then, at this thread's priority, not the draw's
                 } else if (gpu::Pipeline* built = build(job.entry, job.variant, job.aux); built != nullptr) {
                     note_target_stored(form);
                     publish(*at, built);
@@ -327,6 +317,23 @@ void Pipelines::worker() {
         if (!job.deferred && pending_.fetch_sub(1u, std::memory_order_acq_rel) == 1u) {
             drained();
         }
+    }
+}
+
+void Pipelines::defer(const Job& job) noexcept {
+    try {
+        std::lock_guard guard(lock_);
+        if (!quit_) {
+            Job later = job;
+            later.deferred = true;
+            left_jobs_.push_back(std::move(later));
+        }
+        // Taken by a waiting worker only once a scene has been shown; before that, release_left wakes them.
+    } catch (...) {
+        // Out of memory for the entry: it stays to the draw that first needs it.
+    }
+    if (scene_shown_.load(std::memory_order_relaxed)) {
+        wake_.notify_one();
     }
 }
 

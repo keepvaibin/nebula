@@ -113,8 +113,12 @@ private:
         PipelineEntry entry;
         unsigned variant, aux;
         bool optimize = false;  // a draw's quickly linked pipeline, to be replaced by the optimised link
-        bool deferred = false;  // a texture target form left to the cache at the start, made after the first scene is shown
+        bool deferred = false;  // a form left out of the start's set, made after the first scene is shown (defer)
     };
+    // A form the start's set leaves out (a texture target form no run has drawn; any other kind a caller decides the same way):
+    // queued in left_jobs_, made by a worker once jobs_ is empty and a scene has been shown, or by the draw that first needs it if
+    // that comes sooner (the deferred job then finds its cell filled). A deferred job is not deferred again.
+    void defer(const Job& job) noexcept;
     void release_left() noexcept;
     gpu::Pipeline* create_now(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
     std::atomic<gpu::Pipeline*>* cell(std::uint64_t id, unsigned variant, unsigned aux);
