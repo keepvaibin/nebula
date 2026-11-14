@@ -133,7 +133,7 @@ object Updates {
         for (i in 0 until list.length()) {
             val release = list.optJSONObject(i) ?: continue
             if (release.optBoolean("draft")) continue
-            val tag = release.optString("tag_name")
+            val tag = release.text("tag_name")
             val version = tag.removePrefix("v")
             if (isBeta(version) != beta) continue
             if (compareVersions(version, best?.version ?: installed) <= 0) continue
@@ -143,21 +143,24 @@ object Updates {
             val assets = release.optJSONArray("assets") ?: JSONArray()
             for (j in 0 until assets.length()) {
                 val item = assets.optJSONObject(j) ?: continue
-                when (item.optString("name")) {
+                when (item.text("name")) {
                     asset -> {
-                        apk = item.optString("browser_download_url")
+                        apk = item.text("browser_download_url")
                         bytes = item.optLong("size")
                     }
-                    "$asset.sig" -> signature = item.optString("browser_download_url")
+                    "$asset.sig" -> signature = item.text("browser_download_url")
                 }
             }
             if (!https(apk) || !https(signature)) continue
-            best = Release(version, tag, plainNotes(release.optString("body")), apk!!, signature!!, bytes)
+            best = Release(version, tag, plainNotes(release.text("body")), apk!!, signature!!, bytes)
         }
         return best
     }
 
     private fun https(url: String?): Boolean = url != null && url.startsWith("https://")
+
+    // A text field of the listing or the cache: "" when absent or JSON null (optString would give "null").
+    private fun JSONObject.text(name: String): String = if (isNull(name)) "" else optString(name)
 
     fun isBeta(version: String?): Boolean = version != null && version.contains("-beta.", ignoreCase = true)
 
@@ -261,7 +264,7 @@ object Updates {
     private fun readCache(context: Context): Pair<Release?, Long>? = runCatching {
         val o = JSONObject(cacheFile(context).readText())
         val release = if (o.has("version")) Release(
-            o.getString("version"), o.optString("tag"), o.optString("notes"), o.getString("apkUrl"),
+            o.getString("version"), o.text("tag"), o.text("notes"), o.getString("apkUrl"),
             o.getString("signatureUrl"), o.optLong("apkBytes"),
         ) else null
         release to o.optLong("checkedMs")
