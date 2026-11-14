@@ -88,6 +88,7 @@ namespace luma {
                 char* layout;         // the arena's copy
                 u32 layer;
                 bool busy;            // an open handle uses it
+                bool own;             // the mod's own layout (its text boxes keep the length its cook gave)
             };
 
             // A screen's menu (ui 1.2): its rows' panes, which are on, the look each had, the focus, the row taken at the
@@ -139,6 +140,12 @@ namespace luma {
                 bool sharedOn;
                 bool focused;
                 bool chosen;
+                // The animation play_pane started on this pane, until its end is given: who hears it, and whether it
+                // loops (no end).
+                bool playing;
+                bool loop;
+                LumaEventFn fn;
+                void* user;
             };
 
             const LumaServiceKernel* sKernel = nullptr;
@@ -422,12 +429,9 @@ namespace luma {
             }
 
             // The screen's animation is over (`status`): its end posted when the mod asked for one.
-            void finishPlay(Screen& rScreen, s32 status) {
-                if (!rScreen.playing) {
-                    return;
-                }
-                rScreen.playing = false;
-                if (rScreen.fn == nullptr) {
+            // An animation's end to fn, its event's handle `handle` (the screen's for play, the pane's for play_pane).
+            void postEnd(const LumaMod* pMod, LumaHandle handle, s32 status, LumaEventFn fn, void* pUser) {
+                if (fn == nullptr) {
                     return;
                 }
                 for (u32 i = 0; i < kMostEnds; i++) {
@@ -436,19 +440,36 @@ namespace luma {
                         continue;
                     }
                     rEnd.busy = true;
-                    rEnd.node.mod = rScreen.mod;
+                    rEnd.node.mod = pMod;
                     rEnd.node.deliver = deliverEnd;
                     rEnd.node.drop = dropEnd;
-                    rEnd.screen = rScreen.handle;
+                    rEnd.screen = handle;
                     rEnd.status = status;
-                    rEnd.fn = rScreen.fn;
-                    rEnd.user = rScreen.user;
+                    rEnd.fn = fn;
+                    rEnd.user = pUser;
                     if (sKernel->post(&rEnd.node) != LUMA_OK) {
                         rEnd.busy = false;  // the mod is gone: no one to tell
                     }
                     return;
                 }
-                nebula_log("ui: no room for an animation end of %s; it is not given\n", sKernel->mod_id(rScreen.mod));
+                nebula_log("ui: no room for an animation end of %s; it is not given\n", sKernel->mod_id(pMod));
+            }
+
+            void finishPlay(Screen& rScreen, s32 status) {
+                if (!rScreen.playing) {
+                    return;
+                }
+                rScreen.playing = false;
+                postEnd(rScreen.mod, rScreen.handle, status, rScreen.fn, rScreen.user);
+            }
+
+            // The pane's own animation is over (`status`).
+            void finishPanePlay(Pane& rPane, s32 status) {
+                if (!rPane.playing) {
+                    return;
+                }
+                rPane.playing = false;
+                postEnd(rPane.mod, rPane.handle, status, rPane.fn, rPane.user);
             }
 
             // ---- Ends ----
@@ -459,6 +480,7 @@ namespace luma {
                     if (rPane.handle == 0 || rPane.screen != screen) {
                         continue;
                     }
+                    finishPanePlay(rPane, LUMA_E_CANCELLED);
                     if (restore) {
                         rPane.pane->SetVisible(rPane.visible);
                     }
@@ -645,7 +667,8 @@ namespace luma {
                     pMade->layout = copyText(pLayout);
                     pMade->layer = placed;
                     // No game file at the path: a mod's own layout (one replacing the game's is the game's).
-                    pMade->actor = new ScreenActor(pMade->layout, placed, GameAssets::findGame(path.c_str()) < 0);
+                    pMade->own = GameAssets::findGame(path.c_str()) < 0;
+                    pMade->actor = new ScreenActor(pMade->layout, placed, pMade->own);
                     // Made after the scene's connecting, its connects are requests that run at the next movement
                     // run's start, which a stopped scene (the pause) never reaches: they run now, on either layer.
                     MR::connectNow(pMade->actor);
@@ -759,11 +782,15 @@ namespace luma {
                     return LUMA_E_ARGUMENT;
                 }
                 // 1.0 promises LUMA_UI_TEXT_MOST units. Every box gets the same text, so the smallest buffer cuts it
-                // (GetStringBufferLength: the units a box holds, its 0 aside: a layout's `length`).
+                // (GetStringBufferLength: the units a box holds, its 0 aside). A mod's own layout keeps its `length` as
+                // the cut; a game layout's box that has a buffer grows to the text, as the game's own setting does
+                // (MR::setTextBoxMessageRecursive's AllocStringBuffer), so its cut is LUMA_UI_TEXT_MOST.
+                const Screen* const pScreen = screenOf(pMod, pPane->screen);
+                const bool grows = pScreen != nullptr && pScreen->made != nullptr && !pScreen->made->own;
                 u32 most = LUMA_UI_TEXT_MOST;
                 for (u32 i = 0; i < boxCount; i++) {
                     const u32 holds = boxes[i]->GetStringBufferLength();
-                    if (holds < most) {
+                    if (holds < most && !(grows && holds != 0)) {
                         most = holds;
                     }
                 }
@@ -778,6 +805,17 @@ namespace luma {
                     nebula_snprintf(limit, sizeof(limit), "%u", most);
                     say(pMod, cTextCutCode, "Ui.TextCut", MR::getHashCode(pPane->pane->mName), "pane", pPane->pane->mName, "count",
                         limit);
+                }
+                if (grows) {
+                    u32 length = 0;
+                    while (text[length] != 0) {
+                        length++;
+                    }
+                    for (u32 i = 0; i < boxCount; i++) {
+                        if (const u32 holds = boxes[i]->GetStringBufferLength(); holds != 0 && length > holds) {
+                            boxes[i]->AllocStringBuffer(length);
+                        }
+                    }
                 }
                 for (u32 i = 0; i < boxCount; i++) {
                     boxes[i]->SetString(text, 0);
@@ -876,6 +914,13 @@ namespace luma {
                     return LUMA_E_NOT_FOUND;
                 }
                 finishPlay(*pScreen, LUMA_E_CANCELLED);
+                // The root's control is the screen's: a play_pane on the root pane ends here as well.
+                const Ui::Pane* const pRoot = pActor->getLayoutManager()->getPane(nullptr);
+                for (u32 i = 0; i < sPaneHigh; i++) {
+                    if (sPanes[i].handle != 0 && sPanes[i].screen == screen && sPanes[i].pane == pRoot) {
+                        finishPanePlay(sPanes[i], LUMA_E_CANCELLED);
+                    }
+                }
                 MR::startAnim(pActor, pAnimation, 0);
                 // Once or looping as the mod asks, whatever the data says.
                 MR::getAnimCtrl(pActor, 0)->setAttribute(loop ? FrameCtrl::EMode_LOOP : FrameCtrl::EMode_NONE);
@@ -1109,6 +1154,62 @@ namespace luma {
                 return LUMA_OK;
             }
 
+            int32_t svcPlayPane(const LumaMod* pMod, LumaUiScreen screen, LumaUiPane pane, const char* pAnimation, bool loop,
+                                LumaEventFn fn, void* pUser) {
+                const char* const pWhere = "ui.play_pane";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                Screen* const pScreen = screenOf(pMod, screen);
+                Pane* const pPane = paneOf(pMod, pane);
+                if (pScreen == nullptr || pPane == nullptr || pPane->screen != screen) {
+                    report(pMod, pWhere, 102u, nullptr, nullptr);
+                    return LUMA_E_HANDLE;
+                }
+                if (pAnimation == nullptr || pAnimation[0] == 0) {
+                    report(pMod, pWhere, 101u, "animation", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                ScreenActor* const pActor = pScreen->made->actor;
+                LayoutManager* const pManager = pActor->getLayoutManager();
+                if (pManager->getAnimTransform(pAnimation) == nullptr) {
+                    char column[300];
+                    nebula_snprintf(column, sizeof(column), "%s/%s", pScreen->made->layout, pAnimation);
+                    say(pMod, cMissingAnimationCode, "Ui.MissingAnimation", MR::getHashCode(column), "layout",
+                        pScreen->made->layout, "found", pAnimation);
+                    return LUMA_E_NOT_FOUND;
+                }
+                // The pane's own control, as ButtonPaneController makes one for its button: one animation layer, the
+                // animation bound to the pane and the panes under it only. Found by the pane's name, the first of that
+                // name in the tree's order, which is the pane `pane` found. The root's control is the screen's (play).
+                const char* const pName = pPane->pane->mName;
+                const bool root = pPane->pane == pManager->getPane(nullptr);
+                if (root) {
+                    finishPlay(*pScreen, LUMA_E_CANCELLED);
+                } else {
+                    MR::createAndAddPaneCtrl(pActor, pName, 1);
+                }
+                finishPanePlay(*pPane, LUMA_E_CANCELLED);
+                MR::startPaneAnim(pActor, root ? nullptr : pName, pAnimation, 0);
+                FrameCtrl* const pCtrl = MR::getPaneAnimCtrl(pActor, root ? nullptr : pName, 0);
+                pCtrl->setAttribute(loop ? FrameCtrl::EMode_LOOP : FrameCtrl::EMode_NONE);
+                pPane->playing = true;
+                pPane->loop = loop;
+                pPane->fn = fn;
+                pPane->user = pUser;
+                if (luma::modlog::facts()) {
+                    char name[160];
+                    luma::modlog::jsonString(name, sizeof(name), pAnimation);
+                    char json[256];
+                    nebula_snprintf(json, sizeof(json), "{\"animation\":%s,\"loop\":%s,\"frames\":%d}", name,
+                                    loop ? "true" : "false", static_cast< int >(pCtrl->getEnd()));
+                    char key[48];
+                    nebula_snprintf(key, sizeof(key), "ui.play_pane.%llu", static_cast< unsigned long long >(pPane->handle));
+                    luma::modlog::fact(key, json);
+                }
+                return LUMA_OK;
+            }
+
             const LumaUiService cTable = {
                 {sizeof(LumaUiService), LUMA_UI_MAJOR, LUMA_UI_MINOR},
                 svcOpen,
@@ -1126,6 +1227,7 @@ namespace luma {
                 svcSetPosition,
                 svcShareRows,
                 svcSharedFocus,
+                svcPlayPane,
             };
 
             // The service's rows (services-registry 11: ui's block, 570-619).
@@ -1331,6 +1433,20 @@ namespace luma {
                 Screen& rScreen = sScreens[i];
                 if (rScreen.handle != 0 && rScreen.playing && !rScreen.loop && MR::isAnimStopped(rScreen.made->actor, 0)) {
                     finishPlay(rScreen, LUMA_OK);
+                }
+            }
+            for (u32 i = 0; i < sPaneHigh; i++) {
+                Pane& rPane = sPanes[i];
+                if (rPane.handle == 0 || !rPane.playing || rPane.loop) {
+                    continue;
+                }
+                const Screen* const pScreen = screenOf(rPane.mod, rPane.screen);
+                const LayoutActor* const pActor = pScreen != nullptr ? pScreen->made->actor : nullptr;
+                if (pActor != nullptr) {
+                    const bool root = rPane.pane == pActor->getLayoutManager()->getPane(nullptr);
+                    if (MR::isPaneAnimStopped(pActor, root ? nullptr : rPane.pane->mName, 0)) {
+                        finishPanePlay(rPane, LUMA_OK);
+                    }
                 }
             }
             if (!luma::modlog::facts()) {

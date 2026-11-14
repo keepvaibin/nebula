@@ -2,7 +2,8 @@
 /* LumaCore's ui service (plan 2.4 layer 4 on 3.8 layer 1; contract ui): a screen layout of the mod's or the game's,
    shown over the game as the game shows its own (the game's layout drawer: picture and text panes, its fonts, its
    16:9 widening), its panes found by name, their text, visibility, scale and place set. Import: LUMA_SERVICE(slot,
-   "ui", "1.3") for set_position, share_rows and shared_focus ("1.2" menu_rows and menu_chosen, "1.1" alive and set_scale, "1.0" the rest). */
+   "ui", "1.3") for set_position, share_rows, shared_focus and play_pane ("1.2" menu_rows and menu_chosen, "1.1"
+   alive and set_scale, "1.0" the rest). */
 #ifndef LUMA_UI_H
 #define LUMA_UI_H
 
@@ -38,7 +39,7 @@ typedef struct LumaUiMenuRow {
     bool enabled;    /* false: shown at half its alpha, skipped by up and down, never taken */
 } LumaUiMenuRow;     /* 16 bytes */
 
-/* The events a screen's animation gives (LumaEvent.kind; handle: the screen). */
+/* The events a screen's animation gives (LumaEvent.kind; handle: the screen, or the pane for play_pane). */
 enum {
     LUMA_UI_EVENT_ANIMATION_END = 1 /* status LUMA_OK: it played to its end; LUMA_E_CANCELLED: another play, stop,
                                        close, the scene's end or the mod's stopped it first */
@@ -68,8 +69,10 @@ typedef struct LumaUiService {
     int32_t (*pane)(const LumaMod* mod, LumaUiScreen screen, const char* name, LumaUiPane* out);
     /* 1.0. Game thread. The text of the pane's text boxes, UTF-8 (copied; "" empties it), as the game sets its own:
        the pane itself when it holds text, and every text box under it (a counter's number and its shadow are two
-       boxes under one pane), each drawn in its font, size and alignment. Longer than LUMA_UI_TEXT_MOST units (or the
-       smallest box's buffer): cut there, LUMA_OK, Ui.TextCut in the mod log. No text box in or under the pane:
+       boxes under one pane), each drawn in its font, size and alignment. A game layout's boxes grow to the text as
+       the game's own do; a mod's own layout keeps each box's `length` (its cook's). Longer than LUMA_UI_TEXT_MOST
+       units (or, in a mod's own layout, the smallest box's length): cut there, LUMA_OK, Ui.TextCut in the mod log. No
+       text box in or under the pane:
        LUMA_E_ARGUMENT, reported (Ui.NotText); not UTF-8: LUMA_E_ARGUMENT, reported
        (Ui.NotUtf8); null: LUMA_E_ARGUMENT, reported; an ended pane: LUMA_E_HANDLE, reported. Thread and taking out
        as open. */
@@ -148,6 +151,17 @@ typedef struct LumaUiService {
        handlers, so the next frame's handlers see it, and a row taken stays until the next reading (as menu_chosen).
        LUMA_OK; a null focused or chosen: LUMA_E_ARGUMENT, reported. Thread and taking out as open. */
     int32_t (*shared_focus)(const LumaMod* mod, LumaUiPane* focused, LumaUiPane* chosen);
+    /* 1.3. Game thread. The layout's animation `animation` played from its first frame on the pane `pane` of
+       `screen` and the panes under it only, as the game plays a button's own (its ButtonSelectIn, ButtonSelectOut):
+       two buttons of one screen light one at a time. Once (`loop` false, then it stays on its last frame) or looping.
+       With `fn`, LUMA_UI_EVENT_ANIMATION_END comes to fn(user, event) as play's does, its handle the pane; another
+       play_pane on the pane, the screen's end or the mod's give LUMA_E_CANCELLED. On the screen's root pane it is the
+       screen's play (each cancels the other). LUMA_OK; no animation of that name: LUMA_E_NOT_FOUND,
+       Ui.MissingAnimation in the mod log; an ended screen or pane, or a pane not of that screen: LUMA_E_HANDLE,
+       reported; a null or empty name: LUMA_E_ARGUMENT, reported. Thread and taking out as open. */
+    /* events: ANIMATION_END(status) */
+    int32_t (*play_pane)(const LumaMod* mod, LumaUiScreen screen, LumaUiPane pane, const char* animation, bool loop,
+                         LumaEventFn fn, void* user);
 } LumaUiService;
 
 #ifdef __cplusplus
