@@ -80,6 +80,8 @@ struct RenderLayout {
     // A whole-target depth clear opening the pass: the colour loaded, the depth cleared, the stencil loaded ([0]: as the
     // depth-clearing draw keeps it) or cleared ([1]: as vkCmdClearAttachments clears it).
     std::array<std::array<std::array<VkRenderPass, 4>, 2>, 2> depth_clear_passes{};
+    // The same depth clears where the opening replaces the whole colour (discard_color_passes' colour, never loaded).
+    std::array<std::array<std::array<VkRenderPass, 4>, 2>, 2> discard_depth_clear_passes{};
     // A texture target's pass (kSceneVariantTarget): RGBA8, one sample.
     VkRenderPass target_pass = VK_NULL_HANDLE;
     VkRenderPass target_pass_clear = VK_NULL_HANDLE;

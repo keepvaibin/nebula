@@ -578,6 +578,14 @@ bool RendererVk::create_layouts() {
             attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
             vk::check(vkCreateRenderPass(device, &info, nullptr,
                 &draw_layout_.depth_clear_passes[1][wide ? 1u : 0u][samples_log2]), "depth and stencil clearing render pass");
+            attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            vk::check(vkCreateRenderPass(device, &info, nullptr,
+                &draw_layout_.discard_depth_clear_passes[1][wide ? 1u : 0u][samples_log2]),
+                "colour replacement, depth and stencil clearing render pass");
+            attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+            vk::check(vkCreateRenderPass(device, &info, nullptr,
+                &draw_layout_.discard_depth_clear_passes[0][wide ? 1u : 0u][samples_log2]),
+                "colour replacement and depth clearing render pass");
         }
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -1645,7 +1653,8 @@ void RendererVk::shutdown() {
         }
         wide_base_sampled_ = false;
         for (auto* group : {&draw_layout_.discard_color_passes, &draw_layout_.depth_clear_passes[0],
-                            &draw_layout_.depth_clear_passes[1]}) {
+                            &draw_layout_.depth_clear_passes[1], &draw_layout_.discard_depth_clear_passes[0],
+                            &draw_layout_.discard_depth_clear_passes[1]}) {
             for (auto& passes : *group) {
                 for (VkRenderPass& pass : passes) {
                     if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);

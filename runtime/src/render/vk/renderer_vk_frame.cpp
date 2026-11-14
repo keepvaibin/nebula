@@ -435,8 +435,8 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
     if (depth_clear_pending()) {
         if (clear != nullptr && (clear_depth != 0u || !discard_color || aux != 0u)) {
             pending_depth_clear_ = 0u;  // this opening clears the depth itself
-        } else if (clear == nullptr && aux == 0u && !discard_color) {
-            clear = &pending_depth_values_;  // the colour loads, the depth clears
+        } else if (clear == nullptr && aux == 0u && (!discard_color || !target_pass_active_)) {
+            clear = &pending_depth_values_;  // the colour loads (or is replaced unread), the depth clears
             clear_depth = std::exchange(pending_depth_clear_, 0u);
         } else {
             // No variant of this pass clears only the depth: one that does opens and ends first.
@@ -456,7 +456,8 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
         begin.renderPass = draw_layout_.discard_color_passes[scene_.wide ? 1u : 0u][scene_samples_log2()];
     }
     if (clear_depth != 0u && clear != nullptr && aux == 0u && !target_pass_active_) {
-        begin.renderPass = draw_layout_.depth_clear_passes[clear_depth - 1u][scene_.wide ? 1u : 0u][scene_samples_log2()];
+        const auto& passes = discard_color ? draw_layout_.discard_depth_clear_passes : draw_layout_.depth_clear_passes;
+        begin.renderPass = passes[clear_depth - 1u][scene_.wide ? 1u : 0u][scene_samples_log2()];
     }
     begin.framebuffer = aux == kAuxPrepass ? VK_NULL_HANDLE : aux != 0u ? motion_framebuffer(aux) : scene_framebuffer();
     const bool items = aux == kAuxPrepass;
