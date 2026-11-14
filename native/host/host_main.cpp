@@ -3934,6 +3934,8 @@ void read_launch_args(int argc, char** argv) {
             args.dump_tunables = path_at(i + 1);
         } else if (key == "--extension") {
             args.extensions.push_back(path_at(i + 1));
+        } else if (key == "--seconds") {
+            args.timed = std::atof(argv[i + 1]) > 0.0;
         } else if (key == "--diagnostics") {
             std::string_view unknown;
             unsigned what = 0u;
