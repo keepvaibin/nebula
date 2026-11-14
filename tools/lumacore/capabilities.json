@@ -147,6 +147,8 @@
     "ui.open": "ui opens a screen layout (the game's or the mod's cooked one) on the HUD, drawn by the game's layout drawer every frame (2.4 layer 4, 3.8 layer 1)",
     "ui.pane": "ui finds a pane of an open screen by its exact name; the same pane is the same handle (2.4, 3.8)",
     "ui.text": "ui sets a text pane's text from UTF-8, kept as given in every script (2.4, 3.8)",
+    "ui.open.boot": "ui.open asked for from a mod's start and each frame after answers LUMA_E_BUSY until a scene runs with the system archive's fonts, never a screen on the boot font; the screen made then is live on the stage with its text",
+    "ui.no_scene": "ui.open with no scene running, or before the game's fonts are loaded, answers LUMA_E_BUSY and says Ui.NoScene",
     "ui.no_glyph": "A text holding a character its pane's font cannot draw is set, LUMA_OK, and Ui.NoGlyph names the character and its code (3.8)",
     "ui.mod_font": "A text pane of a mod's layout draws in the mod's own font (Luma/<id>/<path>.brfnt): its kerning between pairs, its fallback game font for a character it lacks at its height on its baseline; a font the store lacks is said (Content.MissingFont) and the message font stands in (3.8 layer 2)",
     "draw.point": "draw.at sets a mod's function for a point of the frame (world.before, world.opaque.after, world.after, hud.before, hud.after, loading, present), called every frame through the guard, the Mods list's bottom mod first; a mod that is off draws nothing from that frame (2.4 layer 1)",
