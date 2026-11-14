@@ -1806,8 +1806,8 @@ void RendererVk::rt_copy_to_scene(void* image) {
     after.issue();
 }
 
-// The occlusion of the opaque scene: the scene target pass ends for its compute passes, which read the depth, and the
-// multiply draws in it again.
+// The occlusion of the opaque scene: the scene target pass ends for its compute passes and the multiplier's pass, which
+// read the depth, and the multiply draws in it again.
 void RendererVk::record_scene_ao() {
     if (!ao_.ready() || !scene_.color || !scene_.depth) {
         return;
@@ -1822,7 +1822,8 @@ void RendererVk::record_scene_ao() {
     const VkImageAspectFlags aspects = depth_aspects(depth_format_);
     image_barrier(commands_, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                   kDepthSampleLayout, VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                   VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
     const vk::AmbientOcclusionVk::StageMarker mark = profile_frame_
@@ -1835,7 +1836,8 @@ void RendererVk::record_scene_ao() {
                                   scene_ao_objects_, matrix_ring_, allocate, mark);
     gpu_pass(GpuPass::AoApply);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout,
-                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE,
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_NONE,
                   VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
     begin_scene_pass();
