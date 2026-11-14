@@ -38,6 +38,12 @@ UINT constants_in(std::uint64_t size, std::uint64_t offset) noexcept {
     return static_cast<UINT>(std::min<std::uint64_t>(D3D11_REQ_CONSTANT_BUFFER_ELEMENT_COUNT, left & ~std::uint64_t{15}));
 }
 
+// RendererD3D11::GpuPass by name: the settings page's, and present-stats' gpu-pass-ms (Direct3D 12's names).
+constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
+                                          "present", "camera"};
+constexpr const char* kPassStatNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom", "scene-aa", "scene-ao",
+                                          "present", "camera"};
+
 }  // namespace
 
 // FSR 3 frame generation is not built on Direct3D 11 (its interface is Direct3D 12's and Vulkan's).
@@ -543,9 +549,11 @@ void RendererD3D11::begin_frame() {
                                         std::memory_order_relaxed);
                 stats_.gpu_ms += gpu_ms;
                 ++stats_.gpu_samples;
+                read_pass_times(frame, disjoint.Frequency, end);
             }
         }
     }
+    frame.pass_mark_count = 0u;
     frame.retired.clear();
     frame.retired_buffers.clear();
     frame.tables_used = 0u;
@@ -562,9 +570,27 @@ void RendererD3D11::begin_frame() {
         frame.timed = frame.timed && SUCCEEDED(device->CreateQuery(&query, &frame.frame_time[0])) &&
                       SUCCEEDED(device->CreateQuery(&query, &frame.frame_time[1]));
     }
+    // The passes' timestamps: for the settings page while it asks, or the diagnostics.
+    pass_timing_on_ = frame.timed && (gpu_timing_on() || ::galaxy::diagnosing(::galaxy::kDiagnoseGpuPasses));
+    if (pass_timing_on_ && frame.pass_queries.empty()) {
+        D3D11_QUERY_DESC query{D3D11_QUERY_TIMESTAMP, 0u};
+        frame.pass_queries.resize(kGpuPassSlots);
+        for (d3d11::ComPtr<ID3D11Query>& q : frame.pass_queries) {
+            if (FAILED(device->CreateQuery(&query, &q))) {
+                frame.pass_queries.clear();
+                break;
+            }
+        }
+    }
+    pass_timing_on_ = pass_timing_on_ && !frame.pass_queries.empty();
     if (frame.timed) {
         context()->Begin(frame.disjoint.Get());
         context()->End(frame.frame_time[0].Get());
+        if (pass_timing_on_) {
+            context()->End(frame.pass_queries[0].Get());
+            frame.pass_marks[0] = GpuPass::Scene;
+            frame.pass_mark_count = 1u;
+        }
     }
     current_pass_ = GpuPass::Scene;
     index_ring_.begin_frame(frame_slot_);
@@ -723,25 +749,81 @@ void RendererD3D11::report_present_stats(double pace_wait_ms, double present_ms)
     } else {
         message << "unavailable";
     }
-    message << " gpu-samples=" << stats_.gpu_samples << " api=d3d11\n";
+    message << " gpu-samples=" << stats_.gpu_samples;
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseGpuPasses)) {
+        static_assert(std::size(kPassStatNames) == static_cast<std::size_t>(GpuPass::Count));
+        message << " gpu-pass-ms=";
+        for (std::size_t pass = 0u; pass < std::size(kPassStatNames); ++pass) {
+            message << (pass == 0u ? "" : ",") << kPassStatNames[pass] << ':' << telemetry_pass_ms_[pass] / presents;
+        }
+        telemetry_pass_ms_.fill(0.0);
+    }
+    message << " api=d3d11\n";
     std::cerr << message.str();
     stats_ = PresentStats{};
     stats_.window_start_qpc = now;
     stats_.last_present_qpc = now;
 }
 
+// The GPU pass timing rule of every renderer (board vk T1): the time between two timestamps is the work that fills it,
+// the pass that began at the first. A scope's end takes a timestamp of the outer pass, so work that continues after it
+// (the scene's geometry after the camera's widen draw or the bloom's composite) is the outer pass's. Direct3D 11 has no
+// render passes to keep timestamps out of; the draws recorded before the change run first (flush_draws), so they are
+// billed to the pass they were recorded in. Only while timing (the pictures do not change: the same draws, same order).
 void RendererD3D11::gpu_pass(GpuPass pass) {
+    if (pass == current_pass_) {
+        return;
+    }
     current_pass_ = pass;
+    Frame& frame = frames_[frame_slot_];
+    if (!pass_timing_on_ || frame.pass_mark_count >= frame.pass_queries.size()) {
+        return;
+    }
+    flush_draws();
+    context()->End(frame.pass_queries[frame.pass_mark_count].Get());
+    frame.pass_marks[frame.pass_mark_count++] = pass;
+}
+
+// The slot's last frame's pass times (its fence passed), to the frame's last timestamp.
+void RendererD3D11::read_pass_times(Frame& frame, UINT64 frequency, UINT64 frame_end) {
+    const unsigned marks = frame.pass_mark_count;
+    if (marks == 0u || frequency == 0u) {
+        return;
+    }
+    std::array<UINT64, kGpuPassSlots + 1u> ticks{};
+    ID3D11DeviceContext1* const ctx = context();
+    for (unsigned i = 0u; i < marks; ++i) {
+        if (ctx->GetData(frame.pass_queries[i].Get(), &ticks[i], sizeof(UINT64), D3D11_ASYNC_GETDATA_DONOTFLUSH) != S_OK) {
+            return;
+        }
+    }
+    ticks[marks] = frame_end;
+    std::array<double, static_cast<std::size_t>(GpuPass::Count)> frame_ms{};
+    for (unsigned i = 0u; i < marks; ++i) {
+        if (ticks[i + 1u] >= ticks[i]) {
+            const double ms = static_cast<double>(ticks[i + 1u] - ticks[i]) * 1000.0 / static_cast<double>(frequency);
+            frame_ms[static_cast<std::size_t>(frame.pass_marks[i])] += ms;
+        }
+    }
+    for (std::size_t pass = 0u; pass < frame_ms.size(); ++pass) {
+        telemetry_pass_ms_[pass] += frame_ms[pass];
+        if (frame_ms[pass] > 0.0) {
+            const float before = pass_ema_ms_[pass].load(std::memory_order_relaxed);
+            const float value = static_cast<float>(frame_ms[pass]);
+            pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f, std::memory_order_relaxed);
+        }
+    }
 }
 
 std::size_t RendererD3D11::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
-    // The frame as one pass: Direct3D 11 times no pass of its own yet.
-    const float ms = frame_gpu_ema_ms_.load(std::memory_order_relaxed);
-    if (capacity == 0u || ms <= 0.0f || !gpu_timing_on()) {
-        return 0u;
+    static_assert(std::size(kPassTimeNames) == static_cast<std::size_t>(GpuPass::Count));
+    std::size_t count = 0u;
+    for (std::size_t pass = 0u; pass < std::size(kPassTimeNames) && count < capacity; ++pass) {
+        if (const float ms = pass_ema_ms_[pass].load(std::memory_order_relaxed); ms > 0.0f) {
+            out[count++] = {kPassTimeNames[pass], ms};
+        }
     }
-    out[0] = {"frame", ms};
-    return 1u;
+    return count;
 }
 
 void RendererD3D11::sync_post_process() {

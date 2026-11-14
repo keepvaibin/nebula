@@ -297,6 +297,7 @@ public:
     enum class GpuPass : std::uint8_t {
         Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Present, Camera, Count
     };
+    static constexpr unsigned kGpuPassSlots = 256u;
 
 private:
     struct Frame {
@@ -309,6 +310,11 @@ private:
         // The frame's GPU time: a disjoint query and the timestamps at its start and end, read once the fence passed.
         d3d11::ComPtr<ID3D11Query> disjoint;
         std::array<d3d11::ComPtr<ID3D11Query>, 2> frame_time{};
+        // GPU time by pass (--diagnostics gpu-passes, the settings page): a timestamp where the pass changes (gpu_pass);
+        // the time to the next one, or to the frame's end, is that pass's.
+        std::vector<d3d11::ComPtr<ID3D11Query>> pass_queries;
+        std::array<GpuPass, kGpuPassSlots> pass_marks{};
+        unsigned pass_mark_count = 0;
         bool timed = false;
         bool scene_drawn = false;
     };
@@ -600,6 +606,10 @@ private:
     GpuPass current_pass_ = GpuPass::Scene;
     std::atomic<bool> gpu_timing_wanted_{false};
     std::atomic<float> frame_gpu_ema_ms_{0.0f};
+    bool pass_timing_on_ = false;  // this frame marks its passes
+    std::array<std::atomic<float>, static_cast<std::size_t>(GpuPass::Count)> pass_ema_ms_{};
+    std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
+    void read_pass_times(Frame& frame, UINT64 frequency, UINT64 frame_end);
 };
 
 using Renderer = RendererD3D11;
