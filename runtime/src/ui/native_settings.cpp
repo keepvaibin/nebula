@@ -2105,7 +2105,7 @@ std::string s_mod_held;     // a mod picked up to move with the arrows (empty: n
 std::string s_mod_options;  // the mod whose page shows instead of the lists (empty: none)
 bool s_mod_log_open = false;  // the log page shows instead of the lists (mod-log 4.2)
 bool s_mod_log_facts = false; // its rows were written as harness facts since it opened
-// The consent question (contract consent 2): a page of rows shown instead of the lists while a mod on waits for an
+// The consent question: a page of rows shown instead of the lists while a mod on waits for an
 // answer (first_code_to_allow_locked), so the menu's own rows, scrolling and input drive it. `choosing`: permission by
 // permission (Choose), `chosen` the answers so far by name; `focus`: put the focus on Not now when it next builds
 // (2.2 item 5); `facts_for`: the mod whose question was written as a harness fact. Under s_mods_mutex.
@@ -3044,7 +3044,7 @@ galaxy::mods::ModInfo* mod_by_id_locked(const std::string& id) {
     return it != s_mods.end() ? &*it : nullptr;
 }
 
-// The mod log on the MODS page (contract mod-log 4.2): what was said about the mods this session, kept by the game
+// The mod log on the MODS page: what was said about the mods this session, kept by the game
 // module and read through galaxy::modlog. Its words come in the played language already (names 1, 2 and 4).
 
 // A log row's value: where in the mod, and how many times it was said.
@@ -3099,7 +3099,7 @@ void add_log_rows(std::vector<SettingsRow>& rows, const std::vector<galaxy::modl
 
 // The log page: the entries grouped under each mod, in the MODS lists' order (the mods the lists do not have, a
 // .luma that could not be read or Nebula's own lines, after them, in the log's order); Done goes back. In a harness
-// run its rows are written as facts once each time it opens (contract 4.3). With s_mods_mutex held.
+// run its rows are written as facts once each time it opens. With s_mods_mutex held.
 std::vector<SettingsRow> log_page(const std::vector<galaxy::mods::ModInfo>& mods) {
     std::vector<SettingsRow> rows;
     const std::vector<galaxy::modlog::PageEntry> entries = galaxy::modlog::entries();
@@ -3377,7 +3377,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
         rows.push_back(button_row("TIME: " + (clock->held ? std::string("HELD") : clock_rate_text(clock->rate)), {"LET GO"},
                                   [id](RenderConfig&, unsigned) { galaxy::modlog::let_go(id); }, {}));
     }
-    // What its code costs (guard 3b, plan 6.7): the time per frame its hooks, events and calls took over the last 2
+    // What its code costs (the guard's timing): the time per frame its hooks, events and calls took over the last 2
     // seconds, average and worst, against the 16.7 ms a frame has at 60 a second. Shown once its code ran.
     if (const std::optional<galaxy::modlog::CodeTime> time = galaxy::modlog::code_time(id); time.has_value()) {
         const auto ms = [](std::uint64_t ns) {
@@ -3655,7 +3655,7 @@ std::vector<SettingsRow> mod_page(std::size_t i) {
                                   },
                                   {}));
     }
-    // What the mod log has of this mod (contract mod-log 4.2), under its options.
+    // What the mod log has of this mod, under its options.
     for (const galaxy::modlog::PageMod& said : galaxy::modlog::mods()) {
         if (said.id != mod.id) continue;
         SettingsRow heading{"LOG", {}, nullptr, {}, true};
@@ -4100,7 +4100,7 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
                                        : "NEBULA CLOSED UNEXPECTEDLY WITH MODS ON. EVERY MOD IS OFF UNTIL THE NEXT START",
                                    {}, nullptr, {}, true});
     }
-    // A part of the game that mods need was missing at this start (contract start-check 2): the log's line for it on
+    // A part of the game that mods need was missing at this start (mod_start_check.h): the log's line for it on
     // top, as the notice said it. Nebula's own lines are under the mod "nebula"; the entries are read only then.
     const std::vector<galaxy::modlog::PageMod> said = galaxy::modlog::mods();
     if (std::any_of(said.begin(), said.end(), [](const galaxy::modlog::PageMod& m) { return m.id == "nebula"; })) {

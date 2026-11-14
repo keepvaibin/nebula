@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's input services (contract services-input, luma_input.h): `input` (a mod's own actions, its luma.json `key`
-// options, read each game frame as the controls sampled them (input/mod_actions.h); the game's controller state; the
-// device kind; text entry; rumble), `input.inject` (a mod supplies a player's controller) and `input.dev` (raw HID).
+// LumaCore's input services (docs/modding/services/input.md, luma_input.h): `input` (a mod's own actions, its luma.json
+// `key` options, read each game frame as the controls sampled them (input/mod_actions.h); the game's controller state;
+// the device kind; text entry; rumble), `input.inject` (a mod supplies a player's controller) and `input.dev` (raw
+// HID).
 //
 // The host feeds it (luma_input_service.h): game_read at each of the game's controller reads, the window's text keys,
 // and whether a motor is driven. With no mod nothing here runs but one atomic load per read.

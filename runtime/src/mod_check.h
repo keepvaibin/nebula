@@ -45,8 +45,8 @@ const Validator* validator();
 
 // What a check's findings and kept reports depend on beyond the package: the platform with its processor
 // ("windows-x64", luma-format 6), the disc ("RMGE01"; empty: none, and the rules on the game's files go unchecked),
-// the played language folder, and the game's own files (validator contract item 8: the rules on game paths, rows and
-// folders, L302 and L4xx, as LumaLink's --game checks them; null: those rules go unchecked). Each check reads the
+// the played language folder, and the game's own files (docs/modding/format/validator.md: the rules on game paths, rows
+// and folders, L302 and L4xx, as LumaLink's --game checks them; null: those rules go unchecked). Each check reads the
 // store through a view of its own (luma_game_store.h), so checks on two threads never share one.
 struct Game {
     std::string platform;

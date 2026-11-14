@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's audio service (contract services-audio; plan 2.6). Layer 1: a mod's cooked sound effects (sound.md 4, the
+// LumaCore's audio service (docs/modding/services/audio.md). Layer 1: a mod's cooked sound effects (sound.md 4, the
 // NSFX the game's start cooks from `layers/<l>/assets/<path>.sound.json`), read in place from the store and played as
 // voices. Layer 2: streams, rings of float frames the mod fills from the game thread. Both are mixed on the audio
 // frame's thread (mix, from NativeGameAudio::frame) into the game's output before the master volume, so the player's

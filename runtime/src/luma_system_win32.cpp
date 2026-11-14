@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's system services on Windows (contract services-system 3 to 6): the facts, the display snapshot from the
+// LumaCore's system services on Windows (docs/modding/services/system.md): the facts, the display snapshot from the
 // game window's procedure, the clipboard through one worker thread that owns a message-only window, and links through
 // the shell on the same thread. The worker starts at the first clipboard or link request (no cost with no mod).
 

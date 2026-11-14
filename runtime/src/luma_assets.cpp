@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's assets service (contract services-assets; plan 2.8). Layer 1: `assets`, the game's files by path through
+// LumaCore's assets service (docs/modding/services/assets.md). Layer 1: `assets`, the game's files by path through
 // the host's AssetStore (game.pak, with the mods' store over it). The store is mapped for the whole session and never
 // changes once the game runs, so a call is a lookup in its index and a mapped view: nothing is copied, nothing waits.
 // Layer 2: files a mod provides, which the game is given before the store's (host_main svc_asset_*). Layer 3: a file
@@ -33,7 +33,7 @@
 #include <dlfcn.h>
 #endif
 
-// The importer's run-time cook (contract services-assets 4; nebula_import, G's): one file as the disc has it, cooked as
+// The importer's run-time cook (assets.md section 4; nebula_import): one file as the disc has it, cooked as
 // the store holds it. luma_cook_entry never returns null but for want of memory; luma_cooked_error is null when it
 // cooked (else the cooker's words, English UTF-8, valid until free); its items in the store's order, each a path inside
 // ("" the file itself) and bytes, or a folder (*folder 1, bytes null); everything valid until luma_cooked_free. Safe to
@@ -737,7 +737,7 @@ std::int32_t assets_entry(const LumaMod* mod, const char* text, std::uint32_t fl
 
 // ---- Layer 3: cook. ----
 //
-// The game's cooker (nebula_import, the same one the start's cook runs; plan 3.4 makes it part of the game) turns a file
+// The game's cooker (nebula_import, the same one the start's cook runs, part of the game) turns a file
 // as the disc has it into the game's form: luma_cook_entry, the importer's cook_entry behind a C call (contract
 // services-assets 6). One thread cooks, one file at a time, in the order asked; the answer is posted to the mod and
 // provided on the game thread when it is delivered, so the table's rules apply to the game as it is then.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Mods' input actions (mod_actions.h, contract services-input).
+// Mods' input actions (mod_actions.h, docs/modding/services/input.md).
 #include "galaxy/input/mod_actions.h"
 
 #include <algorithm>

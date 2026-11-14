@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The mod log's host half (contract mod-log 1, 3, 9; runtime/include/galaxy/mod_log.h).
+// The mod log's host half (runtime/include/galaxy/mod_log.h).
 
 #include "galaxy/mod_log.h"
 

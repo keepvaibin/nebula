@@ -491,7 +491,7 @@ bool read_rows(const Value& from, Rows& out) {
     return true;
 }
 
-// ---- pre_standard: the previous engine's rows (agents/luma/board/OLD-ROWS.md) ----
+// ---- pre_standard: the previous engine's rows ----
 // Each key here is read as before until its general replacement is proven; then it leaves this reader, and at the v1
 // gate the reader is gone. Not part of luma-format: the validator only notes each key a mod still uses.
 

@@ -1322,7 +1322,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     mod.problem = "THIS MOD HAS NO VERSION FOR THIS DEVICE";
                     std::fprintf(stderr, "[mods] %s: %s\n", mod.id.c_str(), mod.problem.c_str());
                 }
-                // Scripts for the interpreter plan 1.10b removed: none of them runs, so the mod does not, and says why.
+                // Scripts for the removed interpreter: none of them runs, so the mod does not, and says why.
                 // LumaLink builds a mod's scripts into its code now.
                 if (mod.problem.empty() &&
                     std::any_of(manifest->layers.begin(), manifest->layers.end(), [](const luma::Layer& layer) { return layer.old_scripts; })) {
@@ -1766,7 +1766,7 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         }
         for (const ModOption& o : mod.options) {
             if (o.kind == "text" || o.kind == "key") {
-                // A key option is bound in input's store (plan 2.5), not here; an empty text is the default's.
+                // A key option is bound in input's store, not here; an empty text is the default's.
                 if (o.kind == "text" && !o.text.empty()) out << "text." << escape_key(o.key) << '=' << escape_key(o.text) << '\n';
                 continue;
             }
@@ -1971,8 +1971,9 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                                                   achievement.event_value});
             }
             const luma::Situation situation = situation_of(mod, game_id, language);
-            // The mods' code binds from the top of the list down (loader contract 1): this loop goes bottom up, so
-            // each mod's libraries go in front of the lower mods' already listed, in the mod's own order.
+            // The mods' code binds from the top of the list down (docs/modding/language/compiled-form.md): this loop
+            // goes bottom up, so each mod's libraries go in front of the lower mods' already listed, in the mod's own
+            // order.
             const std::size_t lower_mods = plan.plugins.size();
             for (const luma::Plugin& plugin : mod.luma->plugins) {
                 const auto binary = plugin.binaries.find(std::string(luma::plugin_target()));
@@ -2155,7 +2156,7 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                         }
                     }
                 }
-                // Patches by key: the cooker applies them to the game's tables (contract table-keys).
+                // Patches by key: the cooker applies them to the game's tables (docs/modding/format/table-keys.md).
                 if (const std::optional<fs::path> patches = child_any_case(mod.path / fs::path(from_utf8(layer.path)), "patches", true)) {
                     std::error_code walk_error;
                     std::error_code status_error;

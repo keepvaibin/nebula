@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's capture services (contract services-audio 7; plan 2.6 layers 5 and 6): `audio.microphone` and
+// LumaCore's capture services (docs/modding/services/audio.md section 7): `audio.microphone` and
 // `capture.camera`. Each open starts a thread of its own that opens the device, reads it, converts what it gives
 // (the microphone to float at the mod's rate and channels; the camera to RGBA rows top first) and posts the item's
 // node; the game thread delivers at a frame's start. No call waits for a device: closing marks the item and lets the
@@ -7,7 +7,7 @@
 //
 // Devices: Windows, WASAPI (shared mode, the default capture endpoint) and Media Foundation (the first video
 // capture source, its video processor converting to RGB32); Android, AAudio (the default input) and the NDK's
-// Camera2 (the first camera through an image reader, YUV 4:2:0 converted to RGBA; plan 8.2 c). Other platforms
+// Camera2 (the first camera through an image reader, YUV 4:2:0 converted to RGBA). Other platforms
 // answer LUMA_E_ABSENT until their backends land (Core Audio and AVFoundation on Apple; PipeWire and V4L2 on Linux).
 #include "galaxy/luma_capture_service.h"
 
@@ -46,7 +46,7 @@
 #pragma comment(lib, "mfreadwrite.lib")
 #pragma comment(lib, "mfuuid.lib")
 #elif defined(__ANDROID__)
-// plan 8.2 c: AAudio (the microphone) and the NDK's Camera2 with an image reader (the camera).
+// Android: AAudio (the microphone) and the NDK's Camera2 with an image reader (the camera).
 #include <aaudio/AAudio.h>
 #include <camera/NdkCameraCaptureSession.h>
 #include <camera/NdkCameraDevice.h>
@@ -501,7 +501,7 @@ void camera_thread(std::shared_ptr<Item> item) {
 constexpr bool kHasDevices = true;
 #elif defined(__ANDROID__)
 
-// ---- Android (plan 8.2 c): AAudio and the NDK's Camera2 -------------------------------------------------------------
+// ---- Android: AAudio and the NDK's Camera2 --------------------------------------------------------------------------
 
 // The player's answer to the system's question for a device: -1 until it comes.
 struct Asked {
@@ -516,7 +516,7 @@ void asked_answer(void* userdata, const char*, bool granted) {
 }
 
 // Whether the app may use the device `permission` names: the system asks the player the first time (a mod reaches
-// here only after the player consented to its capture permission, contract consent); false when refused, when the
+// here only after the player consented to its capture permission); false when refused, when the
 // question cannot be asked, or when the item is closed before the answer.
 bool may_use(const Item& item, const char* permission) {
     const auto asked = std::make_shared<Asked>();

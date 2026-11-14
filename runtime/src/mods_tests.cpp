@@ -580,7 +580,7 @@ bool luma_rules() {
     ok &= expect(problem("A").empty() && problem("A copy").empty(), "another copy is the validator's (L802)");
     ok &= expect(problem("C2").empty() && problem("C1").empty(), "what a mod needs is the validator's (L800)");
     ok &= expect(problem("X").empty() && problem("Y").empty(), "what a mod can't run with is the validator's (L801)");
-    // The Mods page's draft says them as the player changes the list (mark_needs, plan 6.3): the chain loses its end
+    // The Mods page's draft says them as the player changes the list (mark_needs): the chain loses its end
     // and its start with it; the mod naming the conflict is the one off; another copy stays the validator's.
     {
         std::vector<galaxy::mods::ModInfo> draft = mods;

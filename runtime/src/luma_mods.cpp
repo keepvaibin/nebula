@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's mods services (contract services-mods): `mods` (the session's list), `mods.ids` (numbers in the game's
-// numbered spaces, kept in the record <settings>/mod-ids.json) and `mods.install` (the import screen's request; no fs
-// yet, so LUMA_E_ABSENT after its checks).
+// LumaCore's mods services (docs/modding/services/mods.md): `mods` (the session's list), `mods.ids` (numbers in the
+// game's numbered spaces, kept in the record <settings>/mod-ids.json) and `mods.install` (the import screen's request;
+// no fs yet, so LUMA_E_ABSENT after its checks).
 
 #include "galaxy/luma_mods_service.h"
 
@@ -43,7 +43,7 @@ constexpr std::size_t kNameMost = 64u;        // a name: 1 to 64 of a-z 0-9 _ - 
 constexpr std::size_t kModIdMost = 64u;       // a .luma's id (luma.cpp valid_id)
 constexpr std::uint64_t kRecordMost = 16u << 20u;  // a record bigger than this is not ours
 constexpr std::uint32_t kInfoLeast = static_cast<std::uint32_t>(sizeof(LumaModsInfo));  // 1.0's whole struct
-static_assert(sizeof(LumaModsInfo) == 260u, "LumaModsInfo 1.0 is 260 bytes (contract section 2)");
+static_assert(sizeof(LumaModsInfo) == 260u, "LumaModsInfo 1.0 is 260 bytes (mods.md section 2)");
 static_assert(sizeof(LumaModsKind) == 4u && sizeof(LumaModsState) == 4u, "the enums of LumaModsInfo are 4 bytes");
 
 const char* const kSpaces[] = {LUMA_MODS_SPACE_MESSAGE, LUMA_MODS_SPACE_SENSOR};
@@ -875,7 +875,7 @@ std::string option_text(const galaxy::luma::Option& entry, const galaxy::mods::M
         return chosen->text;
     }
     if (entry.kind == "key") {
-        return entry.fallback;  // input's store (plan 2.5, F): its binding_name once it exists
+        return entry.fallback;  // input's store: its binding_name once it exists
     }
     if (entry.kind == "number") {
         // The Mods page keeps only values of the range (scan_mods put a kept value outside it back to the default).
@@ -1028,7 +1028,7 @@ std::int32_t mods_watch_options(const LumaMod* mod, LumaEventFn fn, void* user) 
     return LUMA_OK;
 }
 
-// ---- mods: other mods stopping (watch_mods; director 08:2x, LumaKit rule 4) ---------------------------------------
+// ---- mods: other mods stopping (watch_mods; LumaKit rule 4) ---------------------------------------------------------
 
 struct StopWatch;
 struct StopNode {

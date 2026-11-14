@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's system services (contract services-system): `system` (facts and the display), `system.clipboard` and
-// `system.links`. The tables, the checks, the requests, the mod log's Notes, the deterministic clipboard and the codecs;
-// the machine's clipboard and browser are the platform layer's (luma_system_platform.h).
+// LumaCore's system services (docs/modding/services/system.md): `system` (facts and the display), `system.clipboard`
+// and `system.links`. The tables, the checks, the requests, the mod log's Notes, the deterministic clipboard and the
+// codecs; the machine's clipboard and browser are the platform layer's (luma_system_platform.h).
 
 #include "galaxy/luma_system_platform.h"
 
@@ -65,8 +65,8 @@ constexpr std::size_t kUrlMost = 2048u;                    // bytes of a link (i
 constexpr std::uint64_t kLinkSpacingNs = 10'000'000'000ull; // one link a mod in 10 seconds
 constexpr std::uint32_t kFactsLeast = static_cast<std::uint32_t>(sizeof(LumaSystemFacts));    // 1.0's whole struct
 constexpr std::uint32_t kDisplayLeast = static_cast<std::uint32_t>(sizeof(LumaSystemDisplay)); // 1.0's whole struct
-static_assert(sizeof(LumaSystemFacts) == 320u, "LumaSystemFacts 1.0 is 320 bytes (contract section 2)");
-static_assert(sizeof(LumaSystemDisplay) == 56u, "LumaSystemDisplay 1.0 is 56 bytes (contract section 2)");
+static_assert(sizeof(LumaSystemFacts) == 320u, "LumaSystemFacts 1.0 is 320 bytes (system.md section 2)");
+static_assert(sizeof(LumaSystemDisplay) == 56u, "LumaSystemDisplay 1.0 is 56 bytes (system.md section 2)");
 
 const char* const kClipboardName = LUMA_SYSTEM_CLIPBOARD_NAME;
 const char* const kLinksName = LUMA_SYSTEM_LINKS_NAME;

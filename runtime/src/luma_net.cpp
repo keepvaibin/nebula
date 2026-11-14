@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// LumaCore's net services (contract services-net; plan 2.7), layer 1: `net.local`, TCP on this machine and the local
+// LumaCore's net services (docs/modding/services/net.md), layer 1: `net.local`, TCP on this machine and the local
 // network; layer 2: `net.internet`, TCP to the hosts a mod's luma.json names, by name (looked up on a thread of its
 // own, one per lookup) or address, public addresses only. Non-blocking sockets: the game thread makes them (socket,
 // connect, bind, listen return at once; an internet connect's sockets are made by the I/O thread once its name is

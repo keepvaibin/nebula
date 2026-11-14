@@ -154,7 +154,7 @@ extern "C" void close_luma_library(void* module) {
     close_library(module);
 }
 
-// A LumaCore refusal in the validator's own words (loader contract 3): luma_validate_message from the importer's
+// A LumaCore refusal in the validator's own words: luma_validate_message from the importer's
 // library (nebula_import.dll beside the game on Windows, libnebula_import.so in the app on Android and Linux; on Apple
 // the importer is linked into the program, platform/apple/metal.cmake, and called directly). Without
 // it the line gives the code and every parameter as the loader gave them, never nothing, and the log says once why.
@@ -330,7 +330,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
     if (const auto told = reinterpret_cast<LumaSetTakenOut>(find_symbol != nullptr ? find_symbol("luma_set_taken_out") : nullptr)) {
         told([](const char* mod_id) { taken_out(mod_id); });
     }
-    // The guard (plan 1.6): its fault handler before any mod's code runs. Off, a fault in a mod's code reaches the crash
+    // The guard: its fault handler before any mod's code runs. Off, a fault in a mod's code reaches the crash
     // report, which names the mod.
     if (!plugins.empty() && !galaxy::luma_guard::install(find_symbol)) {
         if (g_log != nullptr) g_log("mods: the guard is off (the game module or the system did not take it); a fault in a mod's code ends the game with its report");
@@ -442,7 +442,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
                 say(constant.mod_id + ": the player has no number " + constant.name);
             }
         }
-        // The tunables lift is gone (plan 1.5): a number is named by LumaCore's number() and set by set_number() from a
+        // The tunables lift is gone: a number is named by LumaCore's number() and set by set_number() from a
         // mod's code. Each old row is said, never dropped unsaid.
         for (const TunableToSet& tunable : rows.tunables) {
             say(tunable.mod_id + ": " + tunable.key + " is not set: tuning numbers are set by a mod's code (LumaCore set_number)");
@@ -658,7 +658,8 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
         }
         // A LumaCore mod (luma.h): the game binds what it lists by name, whole or not at all. `plugins` is top of the
         // list first, so `index` is the mod's order: 0 binds first, holds a replace, runs its befores first and its
-        // afters last, and its wrap is outermost (loader contract 1). From the call on, the game closes the library.
+        // afters last, and its wrap is outermost (docs/modding/language/compiled-form.md). From the call on, the game
+        // closes the library.
         if (const void* const info = symbol_in(module, "luma_mod"); info != nullptr) {
             if (begin == nullptr || answered == nullptr || start == nullptr || drop == nullptr) {
                 // The game module is this build's: it always has the loader. Said, never silent.
@@ -685,7 +686,7 @@ std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows&
             begun.push_back({index, static_cast<const LumaModInfo*>(info), module, library});
             continue;
         }
-        // Code that is not a LumaCore mod (no luma_mod): the old plugin entry, nebula_plugin_start, is gone (plan 1.10a).
+        // Code that is not a LumaCore mod (no luma_mod): the old plugin entry, nebula_plugin_start, is gone.
         not_started(file, name + " not started: it is not a LumaCore mod (no luma_mod); rebuild it with luma.h",
                     "ITS CODE DID NOT START. IT WAS BUILT FOR AN OLDER NEBULA");
         close_library(module);

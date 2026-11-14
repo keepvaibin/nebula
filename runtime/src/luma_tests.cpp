@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// luma.json in the one form (board/contracts/manifest-one-form.md; the validator is the rule): what the reader takes,
+// luma.json in the one form (docs/modding/format/manifest.md; the validator is the rule): what the reader takes,
 // pre_standard's rows (OLD-ROWS.md), and what a person might get wrong. Refusals are the validator's, tested there.
 #include "galaxy/luma.h"
 #include "galaxy/test_temp.h"
@@ -278,7 +278,7 @@ int main() {
     }
 
     // The removed interpreter's rows (pre_standard "objects", "scripts", a class's "script"): nothing read, the layer
-    // marked, and the mod refused with its reason (mods.cpp); never read as if they would run (plan 1.10b).
+    // marked, and the mod refused with its reason (mods.cpp); never read as if they would run.
     {
         const std::optional<Manifest> objects = parse_manifest(old_layer(
             R"("objects":[{"name":"GlideBlock","script":"blocks/glide","archive":"Kinopio","kind":"map"}])"));
@@ -316,7 +316,7 @@ int main() {
     check(compare_versions("2.10", "2.9") > 0, "2.10 is above 2.9");
     check(compare_versions("2.1", "2.1.0") == 0, "2.1 equals 2.1.0");
     check(compare_versions("1", "1.0.1") < 0, "1 is below 1.0.1");
-    // needs' ranges (plan 6.3: the Mods page says a need outside its range as the player changes the list).
+    // needs' ranges (the Mods page says a need outside its range as the player changes the list).
     check(version_in_range("1.2.0", ">=1.2") == 0, ">=1.2 holds 1.2.0");
     check(version_in_range("1.1.9", ">=1.2") < 0, ">=1.2 is above 1.1.9");
     check(version_in_range("2.0.0", ">=1.2 <2.0") > 0, "<2.0 is below 2.0.0");

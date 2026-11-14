@@ -39,7 +39,7 @@ static const uint kMeterRows = 9u;
 // The traced relight's finish (g_finish 1).
 static const float kShoulderStart = 0.76f;      // linear light from which the shoulder (per channel) bends; below it unchanged
 static const float kAdaptLeast = 0.5f;          // the eye's least exposure (closes one stop for a bright view)
-// Its most: 1.0, the game's own exposure (l91a, director A4): the meter cannot tell a sunlit view of dark ground from a
+// Its most: 1.0, the game's own exposure: the meter cannot tell a sunlit view of dark ground from a
 // dim one, and a sunlit view is never opened.
 static const float kAdaptMost = 1.0f;
 // Its most where no sun is traced (g_finish 2, l95; PLANS-UNBUILT "Sunless places", FA's (b)): a room the art lights

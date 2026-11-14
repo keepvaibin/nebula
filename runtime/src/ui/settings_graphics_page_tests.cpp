@@ -98,7 +98,7 @@ int main() {
         rows = galaxy::ui::graphics_page(config, host);
         check(row(rows, "RAY TRACING").value == "ON", "ray tracing capability row");
         check(std::none_of(rows.begin(), rows.end(), [](const auto& r) { return r.label == "MSAA" || r.label == "AMBIENT OCCLUSION"; }), "exclusive graphics row visibility");
-        // The preset and every part (plan 19.1): a part changed alone makes the preset custom; a preset sets them all.
+        // The preset and every part: a part changed alone makes the preset custom; a preset sets them all.
         {
             auto quality = row(rows, "RAY TRACING QUALITY");
             check(quality.value == "MEDIUM" && row(rows, "SUN SHADOWS").value == "MEDIUM" && has(rows, "LIGHT IN THE AIR") &&
