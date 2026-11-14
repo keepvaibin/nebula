@@ -782,8 +782,12 @@ private:
         double cpu_over = 0.0;        // samples with the walk near the frame time or the game late on its own
         std::int64_t list_qpc = 0;
         std::uint64_t list_wait = 0u;
-        // The chosen settings as the calibration last set them: any other change, in any field, is the player's.
+        // The chosen settings as the calibration last saw them. It owns internal_height alone: a change there or to the
+        // upscaler ends it with nothing set; a change to any other field is taken in and the heights timed again.
         RenderConfig armed{};
+        bool changed = false;         // a field changed since arming: no PERFORMANCE preset at the end, only the height
+        bool first_height = true;     // heights[0] is the height set (a restart sets it again before the timing)
+        unsigned restarts = 0u;       // timings started again for a changed setting
     };
     FirstStartCalibration calibration_;
     void calibrate_first_start(bool scene, double walk_ms);

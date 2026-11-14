@@ -231,6 +231,9 @@ void RendererMtl::read_display_hdr() {
 // Apple GPU keep the display's own pixels: the Radeon Pro 560 draws the heavier galaxies at 3360 by 1856 in 7.9 ms.
 void RendererMtl::choose_first_start_scale() {
 #if TARGET_OS_OSX
+    if (!galaxy::ordinary_start()) {
+        return;  // a hidden, timed or extension-driven start (a test's, a tool's): the first start stays the player's
+    }
     std::error_code ignored;
     const std::filesystem::path settings = render_config_path();
     const mtl::DeviceCaps& caps = mtl::Context::get().caps();
