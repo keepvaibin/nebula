@@ -1900,7 +1900,14 @@ def evaluate(test, renderer, run_folder, ran):
     stop = by_key.get("harness.stop", [])
     end = by_key.get("harness.end", [])
     crash_lines = [line for line in log_lines if CRASH_LINE.match(line)]
-    crashed = bool(dumps or crash_lines)
+    # The game gone by itself before its limit and before its end step, with a code that is not 0: a crash, also when
+    # it left no crash line and no dump (Windows ends a process whose heap is found corrupt, 0xC0000374, without
+    # calling its exception handlers). A run stopped at the limit is ended by the game's own --seconds (exit 0) or by
+    # watch_run after it, never before it.
+    code = ran.get("code")
+    died = (not end and not stop and isinstance(code, int) and code != 0
+            and ran.get("seconds", float(test["limit"])) < test["limit"])
+    crashed = bool(dumps or crash_lines or died)
     # A test that must end in a crash (ends "crash") that crashed is judged by its checks, as any run that ended.
     meant = test["ends"] == "crash" and crashed
     verdict, reason = None, None
@@ -1917,6 +1924,9 @@ def evaluate(test, renderer, run_folder, ran):
     elif crashed and not meant:
         verdict = "crashed"
         reason = "dump %s; last lines: %s" % (", ".join(dumps) or "none", " | ".join(log_lines[-5:]))
+        if not dumps and not crash_lines:
+            reason = "the game ended after %.1f s with exit %d (0x%08X) before its end step, with no crash line and no dump; %s" % (
+                ran.get("seconds", 0.0), code, code & 0xFFFFFFFF, reason)
     elif stop:
         verdict = stop[-1]["value"].get("verdict", "fail")
         reason = stop[-1]["value"].get("reason", "")
