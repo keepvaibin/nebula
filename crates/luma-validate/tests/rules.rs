@@ -1051,11 +1051,25 @@ fn a_library_keeps_the_schemas_it_gives_and_checks_its_own_data_by_them() {
     let bytes = luma(&over, &[file("code/test.mod.kit/shop/1.json", SHOP_SCHEMA.as_bytes()), file("kit/shop/items.json", br#"{"price": "free"}"#)]);
     let report = check(&bytes, &NO_GAME);
     assert_eq!(report.touches.kit_schemas, vec![format!("test.mod.shop\u{1f}1\u{1f}{SHOP_SCHEMA}")]);
-    let codes: Vec<u16> = report.findings.iter().map(|f| f.code).filter(|c| *c != 500).collect();
+    let codes: Vec<u16> = report.findings.iter().map(|f| f.code).collect();
     assert_eq!(codes, vec![701]);
     // The kept report carries the schemas to the checks of the mods that use the library.
     let saved = Saved::parse(&Saved::from_report(&report, "game").to_bytes()).unwrap();
     assert_eq!(saved.touches.kit_schemas, report.touches.kit_schemas);
+}
+
+/// A library that gives data schemas and no code is a whole library: no finding, its schemas kept. Code beside them
+/// without the `code` key is still L500, and the `code` key with only schemas under code/ is too.
+#[test]
+fn a_library_of_schemas_alone_has_no_code_and_no_finding() {
+    let schemas = [file("code/test.mod.kit/shop/1.json", SHOP_SCHEMA.as_bytes()), file("code/test.mod.kit/shop/2.json", SHOP_SCHEMA.as_bytes())];
+    let report = check(&luma(&[], &schemas), &NO_GAME);
+    assert!(report.findings.is_empty(), "{:?}", report.findings.iter().map(|f| message(f, "UsEnglish")).collect::<Vec<_>>());
+    assert_eq!(report.touches.kit_schemas.len(), 2);
+    let with_code = check(&luma(&[], &[schemas[0].clone(), file("code/windows-x64/mod.dll", b"MZ")]), &NO_GAME);
+    assert!(with_code.findings.iter().any(|f| f.code == 500), "{:?}", with_code.findings);
+    let key_only = check(&luma(&[("code", r#"{"platforms": ["windows-x64"]}"#)], &schemas), &NO_GAME);
+    assert!(key_only.findings.iter().any(|f| f.code == 500), "{:?}", key_only.findings);
 }
 
 // ---------------------------------------------------------------- sources in files/ (L304)

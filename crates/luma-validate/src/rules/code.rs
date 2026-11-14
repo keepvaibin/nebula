@@ -72,7 +72,14 @@ fn kind_phrase(format: Format, machine: Machine) -> String {
 }
 
 pub(crate) fn check(ctx: &mut Ctx) {
-    let has_folder = ctx.m.items.iter().any(|i| i.name.starts_with("code/") || i.name == "code");
+    // Code is a file under code/ other than the mod's own data schemas (`code/<id>.kit/`): a library that gives only
+    // schemas has no code, and an empty folder means nothing.
+    let kit = ctx.manifest.as_ref().and_then(|r| r.get("id")).and_then(|v| v.as_str()).map(|id| format!("code/{id}.kit/"));
+    let has_folder = ctx
+        .m
+        .items
+        .iter()
+        .any(|i| i.kind == EntryKind::File && i.name.starts_with("code/") && !kit.as_deref().is_some_and(|k| i.name.starts_with(k)));
     let has_key = ctx.facts.has_code_key;
     if has_folder && !has_key {
         ctx.add(500, "luma.json", None, None, vec![("why", p("Code.FolderWithoutKey"))]);
