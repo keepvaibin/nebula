@@ -1771,6 +1771,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         // A software adapter is never selected.
         ComPtr<IDXGIAdapter1> adapter;
         DXGI_ADAPTER_DESC1 adapter_desc{};
+        std::string refused;  // the last adapter passed over for what the renderer needs, and why
         auto try_adapter = [&](IDXGIAdapter1* candidate) {
             DXGI_ADAPTER_DESC1 description{};
             if (candidate == nullptr ||
@@ -1784,6 +1785,23 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             if (FAILED(D3D12CreateDevice(
                     candidate, D3D_FEATURE_LEVEL_11_0,
                     IID_PPV_ARGS(&candidate_device)))) {
+                return false;
+            }
+            // What no draw runs without: every texture and sampler in one unbounded table each, indexed by heap slot
+            // (create_draw_root_signature; tier 1 gives a stage 128 views and 16 samplers), and the programs' DXIL
+            // (shader model 6.0). An adapter without them is passed over, so the next one can be taken.
+            D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
+            D3D12_FEATURE_DATA_SHADER_MODEL model{D3D_SHADER_MODEL_6_0};
+            const bool bindless =
+                SUCCEEDED(candidate_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
+                options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_2;
+            const bool dxil =
+                SUCCEEDED(candidate_device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &model, sizeof(model))) &&
+                model.HighestShaderModel >= D3D_SHADER_MODEL_6_0;
+            if (!bindless || !dxil) {
+                refused = narrow_utf8(description.Description) +
+                          (!bindless ? ": resource binding tier 1, tier 2 needed" : ": no shader model 6.0");
+                std::cout << "[gpu] passed over " << refused << '\n';
                 return false;
             }
             adapter = candidate;
@@ -1893,8 +1911,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             streamline_start.join();
         }
         if (!adapter || !device_) {
-            throw std::runtime_error(
-                "No hardware D3D12 adapter supports feature level 11_0");
+            throw std::runtime_error(refused.empty() ? std::string("No hardware D3D12 adapter supports feature level 11_0")
+                                                     : "No hardware D3D12 adapter can run the renderer (" + refused + ")");
         }
         if (!expect_rtx && rtx(adapter_desc)) {
             (void)streamline::startup(streamline::default_directory(), frame_generation);
