@@ -136,6 +136,108 @@ namespace Nebula.Launcher
                 "pad: what is held as a dialog opens does nothing, even held on");
             Check(opened.Step(none, 2100) == PadMenuInput.Action.None && opened.Step(confirm, 2110) == PadMenuInput.Action.Confirm,
                 "pad: released and pressed again, it acts");
+
+            // The settings window's rows: Up and Down move, Left and Right change, the shoulders change the page.
+            var rows = new PadMenuInput(true);
+            rows.HoldCurrent(none);
+            Check(rows.Step(up, 0) == PadMenuInput.Action.Previous && rows.Step(none, 10) == PadMenuInput.Action.None &&
+                  rows.Step(new PadState { Down = true }, 20) == PadMenuInput.Action.Next, "rows: up and down move between rows");
+            Check(rows.Step(new PadState { Left = true }, 30) == PadMenuInput.Action.Decrease &&
+                  rows.Step(right, 40) == PadMenuInput.Action.Increase && rows.Step(right, 340) == PadMenuInput.Action.Increase,
+                  "rows: left and right change the value, and repeat when held");
+            Check(rows.Step(new PadState { PageNext = true }, 400) == PadMenuInput.Action.PageNext &&
+                  rows.Step(new PadState { PageNext = true }, 900) == PadMenuInput.Action.None &&
+                  rows.Step(new PadState { PagePrevious = true }, 910) == PadMenuInput.Action.PagePrevious,
+                  "rows: a shoulder button changes the page once per press");
+            Check(input.Step(new PadState { PageNext = true }, 600) == PadMenuInput.Action.PageNext && input.Step(right, 610) == PadMenuInput.Action.Next,
+                  "dialogs keep left and right as previous and next");
+        }
+
+        // The settings window with a controller: from the page tabs, Down walks every row of every page that takes the
+        // focus and comes back; Left and Right change a choice, a number and the page; A ticks a box; B returns to the tabs.
+        static void SettingsPadCases(LaunchSession session)
+        {
+            using (var form = new SettingsForm(session))
+            {
+                form.StartPosition = FormStartPosition.Manual;
+                form.Location = new Point(-20000, -20000);
+                form.ShowInTaskbar = false;
+                form.Show();
+                Application.DoEvents();
+                var pad = form.padNavigator;
+                var tabs = form.Controls.OfType<TabControl>().Single();
+                Func<Control> focused = () =>
+                {
+                    Control a = form.ActiveControl;
+                    while (a is ContainerControl && !(a is UpDownBase) && ((ContainerControl)a).ActiveControl != null) a = ((ContainerControl)a).ActiveControl;
+                    return a;
+                };
+                for (int page = 0; page < tabs.TabCount; page++)
+                {
+                    tabs.SelectedIndex = page;
+                    tabs.Focus();
+                    Application.DoEvents();
+                    var reached = new HashSet<Control>();
+                    for (int i = 0; i < 400; i++)
+                    {
+                        pad.Act(PadMenuInput.Action.Next);
+                        Control now = focused();
+                        if (now == tabs) break;
+                        if (now != null) reached.Add(now);
+                    }
+                    var expected = new List<Control>();
+                    Action<Control> walk = null;
+                    walk = c =>
+                    {
+                        foreach (Control child in c.Controls)
+                        {
+                            if (child.CanSelect && child.TabStop && !(child.Parent is UpDownBase)) expected.Add(child);
+                            if (!(child is UpDownBase)) walk(child);
+                        }
+                    };
+                    walk(tabs.SelectedTab);
+                    foreach (Control c in form.Controls) if (c != tabs && c.CanSelect && c.TabStop) expected.Add(c);
+                    var missed = expected.Where(c => !reached.Contains(c)).Select(c => c.GetType().Name + " '" + c.Text + "'").ToList();
+                    Check(focused() == tabs && missed.Count == 0,
+                          "pad: Down reaches every row of the " + tabs.SelectedTab.Text + " page (" + expected.Count + ") and returns to the tabs" +
+                          (missed.Count == 0 ? "" : "; missed " + string.Join(", ", missed)));
+                }
+
+                tabs.SelectedIndex = 0;
+                tabs.Focus();
+                pad.Act(PadMenuInput.Action.Increase);
+                Check(tabs.SelectedIndex == 1, "pad: Right on the tabs opens the next page");
+                pad.Act(PadMenuInput.Action.PagePrevious);
+                Check(tabs.SelectedIndex == 0 && focused() == tabs, "pad: the left shoulder goes back a page");
+                pad.Act(PadMenuInput.Action.PagePrevious);
+                Check(tabs.SelectedIndex == 0, "pad: the first page stays the first");
+
+                var occlusion = (ComboBox)Private(form, "occlusionMode");
+                tabs.SelectedTab = (TabPage)occlusion.Parent;
+                occlusion.Focus();
+                occlusion.SelectedIndex = 0;
+                pad.Act(PadMenuInput.Action.Increase);
+                pad.Act(PadMenuInput.Action.Increase);
+                pad.Act(PadMenuInput.Action.Increase);
+                Check(occlusion.SelectedIndex == 2, "pad: Right steps a choice and stops at its last");
+                pad.Act(PadMenuInput.Action.Decrease);
+                Check(occlusion.SelectedIndex == 1, "pad: Left steps it back");
+
+                var bloom = (NumericUpDown)Private(form, "bloom");
+                bloom.Focus();
+                decimal before = bloom.Value;
+                pad.Act(PadMenuInput.Action.Increase);
+                Check(focused() == bloom && bloom.Value == Math.Min(bloom.Maximum, before + bloom.Increment), "pad: Right raises a number by its step");
+
+                var curved = (CheckBox)Private(form, "curvedSurfaces");
+                curved.Focus();
+                bool was = curved.Checked;
+                pad.Act(PadMenuInput.Action.Confirm);
+                Check(curved.Checked == !was, "pad: A ticks a box");
+                pad.Act(PadMenuInput.Action.Back);
+                Check(focused() == tabs, "pad: B returns to the page tabs");
+                form.Close();
+            }
         }
 
         // A form that is never shown creates no child windows; reading Handle creates them.
@@ -1115,6 +1217,7 @@ namespace Nebula.Launcher
                 GpuCases();
                 DisplayNoticeCases();
                 GpuFormCases(later, outDir);
+                SettingsPadCases(later);
                 RecordingEncodingCases(later.App);
 
                 // TryLaunch starts <App>\NebulaNative.exe, here a stub that records its arguments.

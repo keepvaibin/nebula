@@ -400,6 +400,7 @@ namespace Nebula.Launcher
         private readonly CheckBox invertPointer = new CheckBox(), gyroPointer = new CheckBox(), vibrationOn = new CheckBox();
         private readonly Label captureLabel = new Label();
         private int captureTarget = -1;
+        internal SettingsPadNavigator padNavigator;
         private DateTime captureDeadline;
         private PadCaptureReader padReader;
         private PadCaptureReader.Sample captureBaseline;
@@ -737,6 +738,9 @@ namespace Nebula.Launcher
 
             LoadValues();
             Shown += delegate { WatchForUpdate(); };
+            // A controller reaches every row (SettingsPadNavigator); A on a Wii input waits for its new button, and the
+            // pad does nothing else while it waits.
+            padNavigator = new SettingsPadNavigator(this, tabs, () => captureTarget >= 0, c => { if (c == bindingList) StartCapture(); });
             monitor.SelectedIndexChanged += delegate
             {
                 if (loading) return;
