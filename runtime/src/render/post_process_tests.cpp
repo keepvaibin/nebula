@@ -425,8 +425,10 @@ void scene_aa_on_warp() {
         const auto out = run(aa, kSize, ran);
         bool alpha_kept = true;
         unsigned changed = 0u;
-        for (unsigned y = 0; y < kSize; ++y) {
-            for (unsigned x = 0; x < kSize; ++x) {
+        unsigned columns = 0u;
+        for (unsigned x = 0; x < kSize; ++x) {
+            bool column = false;
+            for (unsigned y = 0; y < kSize; ++y) {
                 const unsigned i = y * kPitch + x * 4u;
                 std::uint32_t got = 0u;
                 std::uint32_t was = 0u;
@@ -435,8 +437,10 @@ void scene_aa_on_warp() {
                 alpha_kept = alpha_kept && got >> 30u == was >> 30u;
                 if ((got & 0x3FFFFFFFu) != (was & 0x3FFFFFFFu)) {
                     ++changed;
+                    column = true;
                 }
             }
+            columns += column;
         }
         std::string what = std::string(name) + " runs on the scene";
         expect(ran == want, what.c_str());
@@ -444,6 +448,12 @@ void scene_aa_on_warp() {
         expect(alpha_kept, what.c_str());
         what = std::string(name) + " smooths the edge";
         expect(changed >= 8u, what.c_str());
+        if (want == AaRun::kFxaa) {
+            // The edge runs along the rows, a step down every four columns: FXAA blends across it in every column,
+            // not only at the steps.
+            what = std::string(name) + " blends along the whole edge";
+            expect(columns == kSize, what.c_str());
+        }
     };
     check(Aa::kSmaa, AaRun::kSmaa, "SMAA");
     check(Aa::kFxaa, AaRun::kFxaa, "FXAA");

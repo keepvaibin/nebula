@@ -329,9 +329,9 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     const float lne = FxaaLumaOff(uv, int2(1, -1));
     const float lsw = FxaaLumaOff(uv, int2(-1, 1));
     const float lse = FxaaLumaOff(uv, int2(1, 1));
-    // Edge orientation from second differences of the 3x3 block.
-    const float horizontal = abs(lnw + lne - 2.0 * ln) + 2.0 * abs(lw + le - 2.0 * lc) + abs(lsw + lse - 2.0 * ls);
-    const float vertical = abs(lnw + lsw - 2.0 * lw) + 2.0 * abs(ln + ls - 2.0 * lc) + abs(lne + lse - 2.0 * le);
+    // Edge orientation from second differences of the 3x3 block: a horizontal edge changes down the columns.
+    const float horizontal = abs(lnw + lsw - 2.0 * lw) + 2.0 * abs(ln + ls - 2.0 * lc) + abs(lne + lse - 2.0 * le);
+    const float vertical = abs(lnw + lne - 2.0 * ln) + 2.0 * abs(lw + le - 2.0 * lc) + abs(lsw + lse - 2.0 * ls);
     const bool horz = horizontal >= vertical;
     // The neighbour across the edge with the larger contrast.
     float l1 = horz ? ln : lw;
