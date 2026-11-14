@@ -40,6 +40,10 @@ namespace {
 
 // ---- strict JSON (RFC 8259): one value, no duplicate keys, depth <= 12 ----
 
+// An object's entry. Not std::pair<std::string, Value>: a pair may not be instantiated while Value is incomplete
+// (libstdc++ checks it inside Value's own definition), where a vector of a declared struct may.
+struct Member;
+
 struct Value {
     enum Type { Null, Bool, Number, String, Array, Object } type = Null;
     bool boolean = false;
@@ -47,8 +51,28 @@ struct Value {
     bool integer = false;  // no fraction, no exponent
     std::string text;
     std::vector<Value> items;
-    std::vector<std::pair<std::string, Value>> fields;
+    std::vector<Member> fields;
+
+    // Defined below, where Member is complete.
+    Value();
+    Value(const Value&);
+    Value(Value&&) noexcept;
+    Value& operator=(const Value&);
+    Value& operator=(Value&&) noexcept;
+    ~Value();
 };
+
+struct Member {
+    std::string first;
+    Value second;
+};
+
+Value::Value() = default;
+Value::Value(const Value&) = default;
+Value::Value(Value&&) noexcept = default;
+Value& Value::operator=(const Value&) = default;
+Value& Value::operator=(Value&&) noexcept = default;
+Value::~Value() = default;
 
 class Parser {
 public:
@@ -159,7 +183,7 @@ private:
                 if (i_ >= s_.size() || s_[i_++] != ':') return false;
                 Value item;
                 if (!value(item, depth + 1)) return false;
-                out.fields.emplace_back(std::move(key), std::move(item));
+                out.fields.push_back(Member{std::move(key), std::move(item)});
                 space();
                 if (i_ < s_.size() && s_[i_] == ',') {
                     ++i_;
