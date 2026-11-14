@@ -348,15 +348,20 @@ galaxy::input::DeviceKey s_controls_device{};
 galaxy::input::DeviceList s_controls_devices{};
 std::uint64_t s_controls_devices_ms = 0u;
 std::size_t s_capture_target = galaxy::input::kGameInputCount;
-// The mods' input actions (services-input 6; plan 2.5 layer 1b): a row each after the game's bindings, bound per scheme
+// The mods' input actions (services-input 6): a row each after the game's bindings, bound per scheme
 // as those are. The draft holds, per scheme, only the actions edited since it was taken, by "<mod id>/<action id>"; the
 // rest show their live bindings. A capture for action i waits as s_capture_target kModCaptureBase + i.
 constexpr std::size_t kModCaptureBase = galaxy::input::kGameInputCount + 1u;
 std::array<std::map<std::string, galaxy::input::TargetBindings>, galaxy::input::kControlSchemeCount> s_mod_binds_draft;
 // The harness facts controls.<mod id> last written per action ("<mod id>/<action id>"), written when they change.
 std::map<std::string, std::string> s_mod_action_facts;
-std::uint64_t s_capture_deadline_ms = 0u;
+// A capture waits kCaptureTimeoutMs of the time the menu was seen moving: each step between two looks counts at most
+// kCaptureStepMs, so a game that stalls (a load, a machine far too busy for its frames) does not use the wait up before
+// the player sees the row asking for an input.
+std::uint64_t s_capture_left_ms = 0u;
+std::uint64_t s_capture_seen_ms = 0u;
 constexpr std::uint64_t kCaptureTimeoutMs = 6000u;
+constexpr std::uint64_t kCaptureStepMs = 100u;
 std::string s_controls_message;
 std::uint64_t s_controls_message_until_ms = 0u;
 // The window thread's left/right-resolved code for the key being handled.
@@ -882,7 +887,8 @@ void end_controls_capture() {
 // `target`: a GameInput, or kModCaptureBase + a mod action's place.
 void start_controls_capture_at(std::size_t target) {
     s_capture_target = target;
-    s_capture_deadline_ms = galaxy::steady_ms() + kCaptureTimeoutMs;
+    s_capture_left_ms = kCaptureTimeoutMs;
+    s_capture_seen_ms = galaxy::steady_ms();
     if (galaxy::input::scheme_is_gamepad(s_controls_scheme)) {
         galaxy::host::arm_controller_binding_capture(s_controls_scheme, s_controls_device.slot);
     }
@@ -930,7 +936,13 @@ void finish_controls_capture(galaxy::input::InputSource source) {
 }
 
 void expire_controls_capture() {
-    if (controls_capturing() && galaxy::steady_ms() >= s_capture_deadline_ms) {
+    if (!controls_capturing()) {
+        return;
+    }
+    const std::uint64_t now = galaxy::steady_ms();
+    s_capture_left_ms -= std::min({now - s_capture_seen_ms, kCaptureStepMs, s_capture_left_ms});
+    s_capture_seen_ms = now;
+    if (s_capture_left_ms == 0u) {
         end_controls_capture();
     }
 }
