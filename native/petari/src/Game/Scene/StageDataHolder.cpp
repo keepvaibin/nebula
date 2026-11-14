@@ -169,13 +169,22 @@ bool StageDataHolder::initPlacementStep(uint64_t deadline) {
 }
 
 TableIter StageDataHolder::getCommonPathPointInfo(const Table** ppOut, int idx) const {
+    // A zone with no rail table, or no rail of that id: no points (*ppOut null), never a read through the table.
     const Table* pInfo = findJmpInfoFromArray(&mPathObjs, "CommonPathInfo");
+    if (pInfo == nullptr) {
+        *ppOut = nullptr;
+        return TableIter();
+    }
     TableIter pathIter = pInfo->findElement< s32 >("l_id", idx, 0);
     return getCommonPathPointInfoFromRailDataIndex(ppOut, pathIter.mIndex);
 }
 
 TableIter StageDataHolder::getCommonPathPointInfoFromRailDataIndex(const Table** ppInfo, int idx) const {
     const Table* pInfo = findJmpInfoFromArray(&mPathObjs, "CommonPathInfo");
+    if (pInfo == nullptr || idx < 0 || idx >= pInfo->getNumEntries()) {
+        *ppInfo = nullptr;
+        return TableIter();
+    }
     *ppInfo = findJmpInfoFromArray(&mPathObjs, MR::FormattedName("CommonPathPointInfo.%d", idx).c_str());
     return TableIter(pInfo, idx);
 }

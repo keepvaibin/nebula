@@ -25,6 +25,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/LumaCore.hpp"
+#include <nebula_module.h>
 
 namespace NrvScenarioStarter {
     NEW_NERVE(ScenarioStarterWaitScenarioCameraEnd, ScenarioStarter, WaitScenarioCameraEnd);
@@ -44,6 +45,20 @@ ScenarioStarter::ScenarioStarter(const char* pName)
 }
 
 void ScenarioStarter::init(const TableIter& rIter) {
+    // The opening flight follows the starter's rail. A starter whose rail the stage does not have is not made: it is
+    // renamed so the scene does not find it (MR::isBeginScenarioStarter) and joins no list, and the stage starts with
+    // the player at the start position, as a stage with no starter does.
+    const Table* pPoints = nullptr;
+    TableIter rail;
+    if (MR::isConnectedWithRail(rIter)) {
+        MR::getRailInfo(&rail, &pPoints, rIter);
+    }
+    if (pPoints == nullptr || pPoints->getNumEntries() < 2) {
+        nebula_log("ScenarioStarter: its rail is not in the stage (CommonPath_ID names no rail with two points); not made, "
+                   "the stage starts without its opening flight\n");
+        setName("ScenarioStarter (no rail)");
+        return;
+    }
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
     MR::getPlacementArg0NoInit(rIter, &mFlightTime);
