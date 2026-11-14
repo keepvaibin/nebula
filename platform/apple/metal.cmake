@@ -120,7 +120,7 @@ add_dependencies(nebula_native nebula_apple_importer_file)
 target_link_libraries(nebula_native PRIVATE "${nebula_apple_importer}" "-liconv" "-lresolv" "-framework Security")
 target_link_libraries(nebula_native PRIVATE galaxy_render_mtl
     "-framework AppKit" "-framework GameController" "-framework CoreHaptics" "-framework AudioToolbox"
-    "-framework CoreAudio" "-framework CoreVideo")
+    "-framework CoreAudio" "-framework CoreVideo" "-framework IOKit")
 
 # The app's Metal libraries beside the program (a development run reads them there; build_macos.sh puts them in the
 # app's Resources).
