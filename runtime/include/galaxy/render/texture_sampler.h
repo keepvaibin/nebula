@@ -56,4 +56,9 @@ struct SamplerCacheKeyHasher {
     return (s.min_linear ? 4u : 0u) | (s.mip > 2u ? 2u : s.mip);
 }
 
+// SamplerKey::filter bit: the texture's levels were drawn by hand (a colour or fade for the distance, not a smaller
+// copy of the first level), so the level shown is the one the game showed at its authored lines (make_sampler_key's
+// bias); anisotropy and the settings' LOD bias, which pick finer levels, are left out.
+inline constexpr std::uint32_t kSamplerAuthoredLevels = 1u << 8u;
+
 }  // namespace galaxy::render

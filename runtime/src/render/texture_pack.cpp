@@ -138,7 +138,6 @@ bool parse_dds(std::span<const std::uint8_t> file, DdsLayout& out) noexcept {
 
 namespace {
 
-constexpr std::uint64_t kUploadBytesPerFrame = 48ull << 20;
 constexpr std::uint32_t kPreloadOutstanding = 8u;
 // Where a converted Dolphin pack keeps its own files (galaxy/dolphin_pack.h).
 constexpr std::string_view kDolphinKept = ".dolphin";
@@ -559,6 +558,16 @@ std::unique_ptr<TexturePacks::Load> TexturePacks::load(const Record& record, std
             pixels.offsets.clear();
             pixels.pitches.clear();
         }
+        if (pixels.staging && maker_) {
+            // Its texture too: new GPU memory takes the driver milliseconds, which here no frame waits for.
+            try {
+                TextureBackend::MadeTexture made = maker_(pixels);
+                if (made.texture) pixels.made = std::move(made);
+            } catch (const std::exception& error) {
+                // Out of video memory now: the render thread tries again when it uploads it.
+                std::cerr << "[texture-pack] texture for " << display(record.file.filename()) << ": " << error.what() << '\n';
+            }
+        }
     }
     result->ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
     return result;
@@ -633,7 +642,13 @@ bool TexturePacks::uploading(std::uint32_t slot) const noexcept {
     return slot < slots_.size() && slots_[slot].state == SlotState::Uploading;
 }
 
-bool TexturePacks::pump(std::vector<std::pair<std::uint32_t, TexturePackPixels>>& uploads) {
+bool TexturePacks::coming(std::uint32_t slot) const noexcept {
+    if (slot >= slots_.size()) return false;
+    const SlotState state = slots_[slot].state;
+    return state == SlotState::Loading || state == SlotState::Ready || state == SlotState::Uploading;
+}
+
+bool TexturePacks::pump(std::vector<std::pair<std::uint32_t, TexturePackPixels>>& uploads, std::uint64_t bytes_most) {
     bool changed = std::exchange(changed_, false);
     std::vector<std::unique_ptr<Load>> finished;
     {
@@ -686,7 +701,7 @@ bool TexturePacks::pump(std::vector<std::pair<std::uint32_t, TexturePackPixels>>
     }
     std::uint64_t handed = 0;
     const bool hand_out = uploads.empty();
-    while (hand_out && !ready_queue_.empty() && handed < kUploadBytesPerFrame) {
+    while (hand_out && !ready_queue_.empty() && handed < bytes_most) {
         const std::uint32_t i = ready_queue_.front();
         ready_queue_.pop_front();
         Slot& s = slots_[i];

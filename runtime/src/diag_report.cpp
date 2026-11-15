@@ -2,7 +2,9 @@
 // diag_report.h: the report's schema, the log tail's stripping, the one HTTPS POST and the host modes.
 #include "galaxy/diag_report.h"
 
+#include "galaxy/benchmark_stats.h"
 #include "galaxy/diag_endpoint.h"
+#include "galaxy/strict_json.h"
 #include "galaxy/platform_paths.h"
 
 #include <algorithm>
@@ -38,198 +40,11 @@
 namespace galaxy::diag {
 namespace {
 
-// ---- strict JSON (RFC 8259): one value, no duplicate keys, depth <= 12 ----
+// ---- strict JSON (strict_json.h) ----
 
-// An object's entry. Not std::pair<std::string, Value>: a pair may not be instantiated while Value is incomplete
-// (libstdc++ checks it inside Value's own definition), where a vector of a declared struct may.
-struct Member;
+using json::Value;
 
-struct Value {
-    enum Type { Null, Bool, Number, String, Array, Object } type = Null;
-    bool boolean = false;
-    double number = 0.0;
-    bool integer = false;  // no fraction, no exponent
-    std::string text;
-    std::vector<Value> items;
-    std::vector<Member> fields;
-
-    // Defined below, where Member is complete.
-    Value();
-    Value(const Value&);
-    Value(Value&&) noexcept;
-    Value& operator=(const Value&);
-    Value& operator=(Value&&) noexcept;
-    ~Value();
-};
-
-struct Member {
-    std::string first;
-    Value second;
-};
-
-Value::Value() = default;
-Value::Value(const Value&) = default;
-Value::Value(Value&&) noexcept = default;
-Value& Value::operator=(const Value&) = default;
-Value& Value::operator=(Value&&) noexcept = default;
-Value::~Value() = default;
-
-class Parser {
-public:
-    explicit Parser(std::string_view text) : s_(text) {}
-    bool parse(Value& out) {
-        if (!value(out, 0)) return false;
-        space();
-        return i_ == s_.size();
-    }
-
-private:
-    void space() {
-        while (i_ < s_.size() && (s_[i_] == ' ' || s_[i_] == '\t' || s_[i_] == '\n' || s_[i_] == '\r')) ++i_;
-    }
-    bool literal(std::string_view word) {
-        if (s_.substr(i_, word.size()) != word) return false;
-        i_ += word.size();
-        return true;
-    }
-    bool string(std::string& out) {
-        if (i_ >= s_.size() || s_[i_] != '"') return false;
-        ++i_;
-        while (i_ < s_.size()) {
-            const unsigned char c = static_cast<unsigned char>(s_[i_++]);
-            if (c == '"') return true;
-            if (c < 0x20u || c >= 0x7fu) return false;  // the schema's texts are printable ASCII
-            if (c != '\\') {
-                out.push_back(static_cast<char>(c));
-                continue;
-            }
-            if (i_ >= s_.size()) return false;
-            const char e = s_[i_++];
-            switch (e) {
-                case '"': out.push_back('"'); break;
-                case '\\': out.push_back('\\'); break;
-                case '/': out.push_back('/'); break;
-                case 'b': case 'f': case 'n': case 'r': case 't': return false;  // control characters
-                case 'u': {
-                    if (i_ + 4u > s_.size()) return false;
-                    unsigned code = 0;
-                    for (int k = 0; k < 4; ++k) {
-                        const char h = s_[i_++];
-                        code = code * 16u + (h >= '0' && h <= '9'   ? static_cast<unsigned>(h - '0')
-                                             : h >= 'a' && h <= 'f' ? static_cast<unsigned>(h - 'a' + 10)
-                                             : h >= 'A' && h <= 'F' ? static_cast<unsigned>(h - 'A' + 10)
-                                                                    : 0x10000u);
-                    }
-                    if (code < 0x20u || code >= 0x7fu) return false;
-                    out.push_back(static_cast<char>(code));
-                    break;
-                }
-                default: return false;
-            }
-        }
-        return false;
-    }
-    bool number(Value& out) {
-        const std::size_t start = i_;
-        if (i_ < s_.size() && s_[i_] == '-') ++i_;
-        if (i_ >= s_.size() || !std::isdigit(static_cast<unsigned char>(s_[i_]))) return false;
-        if (s_[i_] == '0') {
-            ++i_;
-        } else {
-            while (i_ < s_.size() && std::isdigit(static_cast<unsigned char>(s_[i_]))) ++i_;
-        }
-        bool integer = true;
-        if (i_ < s_.size() && s_[i_] == '.') {
-            integer = false;
-            ++i_;
-            if (i_ >= s_.size() || !std::isdigit(static_cast<unsigned char>(s_[i_]))) return false;
-            while (i_ < s_.size() && std::isdigit(static_cast<unsigned char>(s_[i_]))) ++i_;
-        }
-        if (i_ < s_.size() && (s_[i_] == 'e' || s_[i_] == 'E')) {
-            integer = false;
-            ++i_;
-            if (i_ < s_.size() && (s_[i_] == '+' || s_[i_] == '-')) ++i_;
-            if (i_ >= s_.size() || !std::isdigit(static_cast<unsigned char>(s_[i_]))) return false;
-            while (i_ < s_.size() && std::isdigit(static_cast<unsigned char>(s_[i_]))) ++i_;
-        }
-        if (i_ - start > 32u) return false;
-        const std::string digits(s_.substr(start, i_ - start));
-        out.type = Value::Number;
-        out.number = std::strtod(digits.c_str(), nullptr);
-        out.integer = integer;
-        return std::isfinite(out.number);
-    }
-    bool value(Value& out, int depth) {
-        if (depth > 12) return false;
-        space();
-        if (i_ >= s_.size()) return false;
-        const char c = s_[i_];
-        if (c == '{') {
-            ++i_;
-            out.type = Value::Object;
-            space();
-            if (i_ < s_.size() && s_[i_] == '}') {
-                ++i_;
-                return true;
-            }
-            for (;;) {
-                space();
-                std::string key;
-                if (!string(key)) return false;
-                for (const auto& field : out.fields) {
-                    if (field.first == key) return false;
-                }
-                space();
-                if (i_ >= s_.size() || s_[i_++] != ':') return false;
-                Value item;
-                if (!value(item, depth + 1)) return false;
-                out.fields.push_back(Member{std::move(key), std::move(item)});
-                space();
-                if (i_ < s_.size() && s_[i_] == ',') {
-                    ++i_;
-                    continue;
-                }
-                return i_ < s_.size() && s_[i_++] == '}';
-            }
-        }
-        if (c == '[') {
-            ++i_;
-            out.type = Value::Array;
-            space();
-            if (i_ < s_.size() && s_[i_] == ']') {
-                ++i_;
-                return true;
-            }
-            for (;;) {
-                Value item;
-                if (!value(item, depth + 1)) return false;
-                out.items.push_back(std::move(item));
-                space();
-                if (i_ < s_.size() && s_[i_] == ',') {
-                    ++i_;
-                    continue;
-                }
-                return i_ < s_.size() && s_[i_++] == ']';
-            }
-        }
-        if (c == '"') {
-            out.type = Value::String;
-            return string(out.text);
-        }
-        if (c == 't' || c == 'f') {
-            out.type = Value::Bool;
-            out.boolean = c == 't';
-            return literal(c == 't' ? "true" : "false");
-        }
-        if (c == 'n') return literal("null");
-        return number(out);
-    }
-
-    std::string_view s_;
-    std::size_t i_ = 0;
-};
-
-// ---- the schema: benchmark result schema 1 (benchmark.cpp write_result) ----
+// ---- the schema: the benchmark result (benchmark.cpp write_result, benchmark_recommend.h kResultSchema) ----
 
 using Rule = std::function<std::string(const Value&)>;
 struct Field {
@@ -317,63 +132,111 @@ std::vector<Field> with(std::vector<Field> a, const std::vector<Field>& b) {
 const Rule& benchmark_schema() {
     static const Rule schema = [] {
         const Rule n = nullable(number());
-        const Rule settings = object({{"internal_height", integer()}, {"upscaler", integer()}, {"msaa_samples", integer()},
-                                      {"ambient_occlusion", integer()}, {"ambient_occlusion_ssao", integer()},
-                                      {"enhanced_lighting", integer()}, {"per_pixel_lighting", integer()},
-                                      {"aa", integer()}, {"smaa_quality", integer()}, {"bloom", integer()},
-                                      {"vsync_interval", integer()}, {"max_fps", n}, {"frame_generation", integer()},
-                                      {"ray_tracing_enabled", integer()}, {"display_mode", integer()}});
-        const std::vector<Field> result = {
-            {"load_ms", n},
+        const Rule settings = object({{"internal_height", integer()}, {"aspect_mode", integer()}, {"upscaler", integer()},
+                                      {"msaa_samples", integer()}, {"aa", integer()}, {"smaa_quality", integer()},
+                                      {"ambient_occlusion", boolean()}, {"ambient_occlusion_ssao", boolean()},
+                                      {"enhanced_lighting", boolean()}, {"per_pixel_lighting", boolean()},
+                                      {"bloom", integer()}, {"vsync_interval", integer()}, {"max_fps", n},
+                                      {"frame_generation", integer()}, {"ray_tracing", boolean()},
+                                      {"display_mode", integer()}});
+        const Rule spread = nullable(object({{"average", n}, {"p99", n}, {"worst", n}}));
+        const Rule limiter = one_of({"gpu", "render thread", "game thread", "display", "game frames", "waiting"});
+        // benchmark_stats.h: average FPS, the 10%, 1% and 0.1% lows, the frame-time percentiles and the stutters.
+        const std::vector<Field> frames = {
             {"frames", integer()},
-            {"pixels", n},
-            {"settings_held", boolean()},
-            {"interval_ms", object({{"p50", n}, {"p95", n}, {"p99", n}, {"worst", n}, {"over_16_7", integer()},
-                                    {"over_33_3", integer()}})},
-            {"gpu_ms", n},
-            {"gpu_pass_ms", names_to(n, 64)},
-            {"cpu_ms", object({{"game", n}, {"render", n}, {"audio", n}, {"process", n}})},
-            {"draws", nullable(integer())},
-            {"triangles", nullable(integer())},
-            {"gpu_memory_peak_mb", integer()},
-            {"process_peak_mb", integer()},
+            {"seconds", n},
+            {"average_fps", n},
+            {"low_10_fps", n},
+            {"low_1_fps", n},
+            {"low_01_fps", n},
+            {"frame_ms", object({{"average", n}, {"p50", n}, {"p95", n}, {"p99", n}, {"p999", n}, {"worst", n}})},
+            {"stutters", integer()},
         };
-        const Rule scene =
-            object(with({{"stage", text(64)}, {"scenario", integer()}, {"grand_stars", integer()}}, result));
-        const Rule probe_run = object(with({{"case", text(48)}}, result));
+        // benchmark.h RenderPart: the render thread's time by part.
+        const Rule part_name = one_of({"frame wait", "acquire", "submit", "present", "resource free", "texture create",
+                                       "texture upload", "texture free", "upload wait", "ring resize"});
+        const auto parts_to = [part_name](Rule item) {
+            return [part_name, item](const Value& v) {
+                if (v.type != Value::Object) return std::string("not an object");
+                for (const auto& [key, value] : v.fields) {
+                    Value name;
+                    name.type = Value::String;
+                    name.text = key;
+                    if (!part_name(name).empty()) return "\"" + key + "\" is not a render part";
+                    if (std::string error = item(value); !error.empty()) return key + ": " + error;
+                }
+                return std::string();
+            };
+        };
+        const Rule slow_frame = object({{"at_s", n}, {"ms", n}, {"gpu_ms", n}, {"render_ms", n}, {"game_ms", n},
+                                        {"cause", one_of({"pipeline built", "disc read", "texture made", "gpu",
+                                                          "render thread", "game thread", "waiting"})},
+                                        {"render_parts", parts_to(number())}});
+        const Rule scene = object(with(
+            {{"stage", text(64)},
+             {"scenario", integer()},
+             {"grand_stars", integer()},
+             {"settings_held", boolean()},
+             {"output", list(integer(), 2)},
+             {"output_moved", boolean()},
+             {"pixels", n},
+             {"load", object({{"ms", n}, {"read_mb", n}, {"pipelines", integer()}, {"textures", integer()}})},
+             {"limiter", limiter},
+             {"gpu_ms", spread},
+             {"gpu_passes", names_to(object({{"average", n}, {"p99", n}, {"share", n}}), 32)},
+             {"cpu_ms", object({{"game", spread}, {"render", spread}, {"audio", n}})},
+             {"work", object({{"draw_items", n}, {"texture_uploads", integer()}, {"texture_mb", n},
+                              {"pipelines_built", integer()}, {"read_mb", n}})},
+             {"render_parts", parts_to(object({{"average", n}, {"p99", n}, {"worst", n}}))},
+             {"gpu_memory_peak_mb", integer()},
+             {"process_peak_mb", integer()},
+             {"slowest_frames", list(slow_frame, 10)}},
+            frames));
+        const Rule run = object({
+            {"part", one_of({"yours", "standard"})},
+            {"measured_with", settings},
+            {"summary", object(with({{"limiter", limiter}, {"display_limited", boolean()}}, frames))},
+            {"scenes", list(scene, 16)},
+        });
+        const Rule probe_run = object({{"case", text(48)}, {"settings_held", boolean()}, {"pixels", n},
+                                       {"gpu_ms", spread}, {"average_fps", n}});
         return object({
             {"schema", [](const Value& v) {
-                 return v.type == Value::Number && v.integer && v.number == 1.0 ? std::string() : std::string("not 1");
+                 return v.type == Value::Number && v.integer && v.number == static_cast<double>(bench::kResultSchema)
+                            ? std::string()
+                            : std::string("not the benchmark's schema");
              }},
             {"app", object({{"version", text(48)}, {"commit", nullable(text(48))}})},
             {"created_utc", text(24)},
             {"status", one_of({"complete", "aborted", "failed"})},
             {"failure", text(96)},
-            {"backend", text(16)},
+            {"backend", one_of({"d3d12", "d3d11", "vulkan", "metal"})},
             {"device", object({{"gpu", text(96)}, {"vendor_id", integer()}, {"device_id", integer()},
-                               {"driver_version", nullable(text(48))}, {"api_level", nullable(text(48))},
-                               {"shared_memory", boolean()}, {"gpu_budget_mb", integer()}, {"cpu", text(96)},
-                               {"logical_cores", integer()}, {"ram_mb", integer()}, {"os", text(96)},
-                               {"output", list(integer(), 2)}, {"refresh_hz", n}})},
+                               {"driver_version", nullable(text(48))}, {"shared_memory", boolean()},
+                               {"gpu_budget_mb", integer()}, {"cpu", text(96)}, {"logical_cores", integer()},
+                               {"ram_mb", integer()}, {"os", text(96)}, {"output", list(integer(), 2)},
+                               {"refresh_hz", n}})},
             {"mods_loaded", boolean()},
             {"settings", settings},
-            {"measured_with", settings},
             {"limits", list(text(256), 8)},
-            {"scenes", list(scene, 16)},
+            {"runs", list(run, 2)},
             {"probe", object({{"stage", text(64)},
                               {"runs", list(probe_run, 16)},
                               {"fit", object({{"valid", boolean()}, {"fixed_ms", n}, {"ms_per_mpixel", n}})},
                               {"price_ms_per_mpixel", names_to(n, 16)}})},
-            {"thermal", nullable(object({{"stage", text(64)}, {"gpu_ms_first", n}, {"gpu_ms_last", n}, {"gpu_ratio", n},
-                                         {"p95_first", n}, {"p95_last", n}}))},
+            {"thermal", nullable(object({{"stage", text(64)}, {"judged", boolean()}, {"gpu_ms_first", n},
+                                         {"gpu_ms_last", n}, {"slowdown", n}, {"average_fps_first", n},
+                                         {"average_fps_last", n}}))},
             {"recommendation",
              nullable(object({{"budget_ms", n}, {"predicted_ms", n}, {"fits", boolean()}, {"cpu_bound", boolean()},
                               {"cpu_thread", nullable(text(16))}, {"height_left_out", boolean()},
                               {"settings", list(object({{"key", text(32)}, {"current", integer()},
                                                         {"recommended", integer()}}),
                                                 16)}}))},
-            {"summary", object({{"verdict", text(16)}, {"worst_stage", text(64)}, {"worst_gpu_ms", n},
-                                {"worst_p95_ms", n}})},
+            {"summary", object({{"verdict", one_of({"fits", "cpu_bound", "below_target", "none"})},
+                                {"average_fps", n}, {"low_10_fps", n}, {"low_1_fps", n}, {"spare_percent", n},
+                                {"limiter", limiter}, {"worst_stage", text(64)}, {"standard_average_fps", n},
+                                {"standard_low_10_fps", n}, {"standard_low_1_fps", n}})},
         });
     }();
     return schema;
@@ -397,7 +260,7 @@ const Rule& report_schema() {
 std::string validate(std::string_view json, const Rule& schema, std::size_t max_size) {
     if (json.size() > max_size) return "too large";
     Value root;
-    if (!Parser(json).parse(root)) return "not strict JSON";
+    if (!json::parse(json, root)) return "not strict JSON";
     if (root.type != Value::Object) return "not an object";
     return schema(root);
 }
@@ -511,13 +374,29 @@ bool build_key(Key& key) { return key_from_hex(kPublicKey, key); }
 constexpr char kContentType[] = "application/x-nebula-report";
 
 SendResult answered(long status, std::size_t bytes) {
-    if (status >= 200 && status < 300) return {kOk, "sent: " + std::to_string(bytes) + " bytes"};
-    return {kRefused, "the server refused the report (HTTP " + std::to_string(status) + ")"};
+    if (status >= 200 && status < 300) return {kOk, "sent: " + std::to_string(bytes) + " bytes", status};
+    return {kRefused, "the server refused the report (HTTP " + std::to_string(status) + ")", status};
 }
 
 [[maybe_unused]] bool loopback_http(std::string_view url) { return url.rfind("http://127.0.0.1:", 0) == 0 || url.rfind("http://127.0.0.1/", 0) == 0; }
 
 #if defined(_WIN32)
+// WinHTTP's errors a send meets, in words; the number alone for the others.
+std::string winhttp_error(DWORD error) {
+    const char* said = nullptr;
+    switch (error) {
+    case ERROR_WINHTTP_TIMEOUT: said = "timed out"; break;
+    case ERROR_WINHTTP_NAME_NOT_RESOLVED: said = "the server's name was not found"; break;
+    case ERROR_WINHTTP_CANNOT_CONNECT: said = "could not connect"; break;
+    case ERROR_WINHTTP_CONNECTION_ERROR: said = "the connection was reset"; break;
+    case ERROR_WINHTTP_SECURE_FAILURE: said = "no secure connection could be made"; break;
+    default: break;
+    }
+    std::string text = "error " + std::to_string(error);
+    if (said != nullptr) text += std::string(": ") + said;
+    return text;
+}
+
 SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
     std::wstring wide(url.begin(), url.end());
     URL_COMPONENTS parts{};
@@ -544,7 +423,7 @@ SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
     // Name resolution, connection, sending and the answer share the 10 seconds.
     WinHttpSetTimeouts(session.h, 2000, 3000, 2500, 2500);
     connection.h = WinHttpConnect(session.h, host, parts.nPort, 0u);
-    if (connection.h == nullptr) return {kNetwork, "cannot connect"};
+    if (connection.h == nullptr) return {kNetwork, "cannot connect (" + winhttp_error(GetLastError()) + ")"};
     request.h = WinHttpOpenRequest(connection.h, L"POST", path, nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
                                    secure ? WINHTTP_FLAG_SECURE : 0u);
     if (request.h == nullptr) return {kNetwork, "cannot open the request"};
@@ -557,7 +436,7 @@ SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
                             const_cast<std::uint8_t*>(body.data()), static_cast<DWORD>(body.size()),
                             static_cast<DWORD>(body.size()), 0u) ||
         !WinHttpReceiveResponse(request.h, nullptr)) {
-        return {kNetwork, "no answer (error " + std::to_string(GetLastError()) + ")"};
+        return {kNetwork, "no answer (" + winhttp_error(GetLastError()) + ")"};
     }
     DWORD status = 0, size = sizeof(status);
     if (!WinHttpQueryHeaders(request.h, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX,
@@ -572,10 +451,33 @@ SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
     if (url.rfind("https://", 0) != 0 && !(allow_http && loopback_http(url))) return {kUsage, "the endpoint is not https"};
     auto* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
     if (env == nullptr || env->PushLocalFrame(32) != 0) return {kNetwork, "no HTTPS client"};
-    // Every call is checked: a pending Java exception ends the send, and no JNI call is made while one is pending.
-    const auto failed = [env]() {
+    // Every call is checked: a pending Java exception ends the send, and no JNI call is made while one is pending. The
+    // first one's description (Throwable.toString: its class and message) is the error the send reports.
+    std::string problem;
+    const auto failed = [env, &problem]() {
         if (!env->ExceptionCheck()) return false;
+        jthrowable thrown = env->ExceptionOccurred();
         env->ExceptionClear();
+        if (thrown == nullptr || !problem.empty()) return true;
+        problem = "an exception";
+        jclass type = env->GetObjectClass(thrown);
+        const jmethodID describe = type != nullptr ? env->GetMethodID(type, "toString", "()Ljava/lang/String;") : nullptr;
+        if (env->ExceptionCheck() || describe == nullptr) {
+            env->ExceptionClear();
+            return true;
+        }
+        auto said = static_cast<jstring>(env->CallObjectMethod(thrown, describe));
+        if (env->ExceptionCheck() || said == nullptr) {
+            env->ExceptionClear();
+            return true;
+        }
+        if (const char* chars = env->GetStringUTFChars(said, nullptr); chars != nullptr) {
+            problem.clear();
+            for (const char* c = chars; *c != '\0' && problem.size() < 160u; ++c) {
+                problem.push_back(*c >= ' ' && *c <= '~' ? *c : '?');
+            }
+            env->ReleaseStringUTFChars(said, chars);
+        }
         return true;
     };
     const auto text = [&](const char* value) {
@@ -636,6 +538,7 @@ SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
         jobject stream = env->CallObjectMethod(connection, output);
         if (failed() || stream == nullptr) {
             result.line = "cannot connect";
+            if (!problem.empty()) result.line += " (" + problem + ")";
             break;
         }
         const bool written = call(stream, stream_class, "write", "([B)V", bytes);
@@ -650,6 +553,8 @@ SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
         call(connection, http_class, "disconnect", "()V");
         if (status > 0) result = answered(status, body.size());
     } while (false);
+    // Ended without an answer at some other call: why, when Java said.
+    if (result.exit == kNetwork && result.line == "no answer" && !problem.empty()) result.line += " (" + problem + ")";
     env->PopLocalFrame(nullptr);
     return result;
 }
@@ -658,8 +563,9 @@ SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
 SendResult post(std::string_view url, const Bytes& body, bool allow_http) {
     (void)allow_http;
     if (url.rfind("https://", 0) != 0) return {kUsage, "the endpoint is not https"};
-    const int status = update::detail::platform_transport().post(std::string(url), kContentType, body, 10000);
-    if (status <= 0) return {kNetwork, "no answer (no connection, timeout or no HTTPS client)"};
+    std::string problem;
+    const int status = update::detail::platform_transport().post(std::string(url), kContentType, body, 10000, problem);
+    if (status <= 0) return {kNetwork, problem.empty() ? std::string("no answer") : "no answer (" + problem + ")"};
     return answered(status, body.size());
 }
 #else
@@ -882,13 +788,13 @@ SendResult send_report_file(const std::filesystem::path& file, bool with_log) {
     return result;
 }
 
+bool is_command_mode(std::string_view mode) noexcept {
+    return mode == "--send-report" || mode == "--save-sealed" || mode == "--report-enabled" || mode == "--open-report" ||
+           mode == "--report-keygen";
+}
+
 int run_command_line(int argc, char** argv) {
-    if (argc < 2) return -1;
-    const std::string_view mode = argv[1];
-    if (mode != "--send-report" && mode != "--save-sealed" && mode != "--report-enabled" && mode != "--open-report" &&
-        mode != "--report-keygen") {
-        return -1;
-    }
+    if (argc < 2 || !is_command_mode(argv[1])) return -1;
 #if defined(_WIN32)
     int wide_count = 0;
     LPWSTR* const wide = CommandLineToArgvW(GetCommandLineW(), &wide_count);
@@ -957,7 +863,7 @@ int run_command_line(int argc, char** argv) {
         const Key public_half = x25519_public(secret);
         const auto id = key_id(public_half);
         std::printf("public key: %s\nkey id: %s\n", hex(public_half.data(), 32u).c_str(), hex(id.data(), 8u).c_str());
-        std::printf("runtime/include/galaxy/diag_endpoint.h: kPublicKey[] = \"%s\";\n", hex(public_half.data(), 32u).c_str());
+        std::printf("runtime/include/galaxy/diag_endpoint_local.h: kPublicKey[] =\"%s\";\n", hex(public_half.data(), 32u).c_str());
         const std::u8string shown = file.u8string();
         std::printf("private key: %s\nKeep the private key offline and backed up; never commit or share it.\n",
                     reinterpret_cast<const char*>(shown.c_str()));

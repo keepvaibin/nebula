@@ -3,6 +3,7 @@
 // the SDL window and its Vulkan surface; its events (size, focus, quit, the finger and the mouse as the pointer, keys,
 // gamepads); on Android the activity's touch controls and HOME Menu through JNI.
 
+#include "galaxy/benchmark.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/switch_controller.h"
 #include "galaxy/playstation_controller.h"
@@ -44,6 +45,9 @@ namespace galaxy::render::vk {
 #include "galaxy/virtual_keys.h"
 
 #include <SDL3/SDL.h>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 #if defined(NEBULA_GPU_METAL)
 #include <SDL3/SDL_metal.h>
 #else
@@ -139,7 +143,6 @@ std::atomic<std::uint32_t> g_rumble_level{0};
 std::uint32_t g_rumble_sent_pad = 0;
 std::uint32_t g_rumble_sent_level = 0;
 std::uint64_t g_rumble_sent_ms = 0;
-bool g_imports_given = false;  // --import's files handed to the window (the pump's thread)
 
 // A finger's travel on a pointer screen, in pixels, not yet turned into the wheel's steps. Guarded by g_input_mutex.
 float g_menu_swipe_px = 0.0f;
@@ -287,7 +290,8 @@ void run_activity_calls() {
 // most variable-rate panels until it asks for more.
 std::atomic<float> g_panel_fastest_hz{0.0f};
 
-// The surface's frame-rate vote for the frame-rate setting (max_fps; 0: the display's own). The game's own 30 or 60
+// The surface's frame-rate vote for the frame-rate setting (max_fps; 0: the display's own; unlimited: the panel's
+// fastest). The game's own 30 or 60
 // frames are a fixed source, so a variable-rate panel shows each for the same time; interpolated rates are the app's
 // own rate, switched to at once (the player chose it) rather than at the next seamless moment.
 void vote_frame_rate(ANativeWindow* native, float max_fps) {
@@ -295,7 +299,7 @@ void vote_frame_rate(ANativeWindow* native, float max_fps) {
         ANativeWindow_setFrameRate(native, max_fps, ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
         return;
     }
-    const float rate = max_fps > 0.0f ? max_fps : g_panel_fastest_hz.load(std::memory_order_relaxed);
+    const float rate = max_fps > 0.0f && std::isfinite(max_fps) ? max_fps : g_panel_fastest_hz.load(std::memory_order_relaxed);
     ANativeWindow_setFrameRateWithChangeStrategy(native, rate, ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT,
                                                  ANATIVEWINDOW_CHANGE_FRAME_RATE_ALWAYS);
 }
@@ -1047,10 +1051,15 @@ void run_requests() {
         s_captured = captured;
         call_activity(captured ? "menuOpened" : "menuClosed");
     }
-    // The controls follow the game to and from a pointer screen.
+    // The controls follow the game to and from a pointer screen or the title, and its corner buttons coming, going or
+    // moving (TouchControlsView.syncMenuContext).
     static bool s_pointer_screen = false;
-    if (const bool pointer_screen = g_menu_context.load(std::memory_order_relaxed); pointer_screen != s_pointer_screen) {
+    static float s_corner_foot = -1.0f;
+    const bool pointer_screen = g_menu_context.load(std::memory_order_relaxed) || g_title_screen.load(std::memory_order_relaxed);
+    const float corner_foot = galaxy::host::corner_buttons_foot();
+    if (pointer_screen != s_pointer_screen || std::fabs(corner_foot - s_corner_foot) >= 1.0f) {
         s_pointer_screen = pointer_screen;
+        s_corner_foot = corner_foot;
         call_activity("menuContextChanged");
     }
 #endif
@@ -1130,17 +1139,10 @@ void pump_events(int timeout_ms) noexcept {
     std::vector<std::filesystem::path> dropped;
 #if !defined(__ANDROID__)
     // What the system opened Nebula with (--import; the desktop entry's %u), at the first pump: a
-    // file goes where a drop goes, as on Windows (host_window_win32.cpp). A nebula:// link is 6.1's import by link,
-    // which waits on net.internet: said in the log, nothing else.
-    if (!g_imports_given) {
-        g_imports_given = true;
-        for (const std::filesystem::path& opened : galaxy::launch_args().imports) {
-            if (galaxy::path_text(opened).rfind("nebula:", 0) == 0) {
-                std::fprintf(stderr, "[open] a nebula:// link: links are not imported yet\n");
-            } else {
-                dropped.push_back(opened);
-            }
-        }
+    // file goes where a drop goes, as on Windows (host_window_win32.cpp); a nebula:// link too, which opens the MODS
+    // page (native_settings_files_dropped).
+    for (std::filesystem::path& opened : galaxy::render::native_settings_take_launch_imports()) {
+        dropped.push_back(std::move(opened));
     }
 #endif
     bool luma_display = false;  // LumaCore's display snapshot changes (services-system 4), read after the events
@@ -1290,8 +1292,8 @@ void pump_events(int timeout_ms) noexcept {
             close_gamepad(event.gdevice.which);
             break;
 #if !defined(__ANDROID__)
-        // Files dropped on the window: mods to the importer, Mii files to the Mii import (native_settings_files_dropped,
-        // after the input lock). Android's launcher takes files there ("Open with", share, drag and drop).
+        // Files dropped on the window: a save to the save import, mods to the importer, Mii files to the Mii import
+        // (native_settings_files_dropped, after the input lock). Android's launcher takes files there ("Open with", share, drag and drop).
         case SDL_EVENT_DROP_FILE:
             if (event.drop.data != nullptr) {
                 dropped.emplace_back(galaxy::text_path(event.drop.data));
@@ -1323,7 +1325,7 @@ void pump_events(int timeout_ms) noexcept {
             const galaxy::input::NativeSettingsPadStep step = galaxy::input::native_settings_pad_step(
                 g_menu_pad, buttons, sample.axes[0], sample.axes[1],
                 galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
-                    galaxy::ui::launcher_visible(), galaxy::steady_ms());
+                    galaxy::ui::launcher_visible() || galaxy::bench::running(), galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
                 galaxy::render::native_settings_post_key(step.keys[i]);
             }
@@ -1528,6 +1530,11 @@ extern "C" JNIEXPORT jboolean JNICALL Java_dev_nebula_galaxy_GameActivity_native
     return galaxy::host::touch_target_at(x, y) ? JNI_TRUE : JNI_FALSE;
 }
 
+// How far down the game's own buttons in the top corners reach, in the picture's pixels; -1 while there are none.
+extern "C" JNIEXPORT jfloat JNICALL Java_dev_nebula_galaxy_GameActivity_nativeCornerButtonsFoot(JNIEnv*, jclass) {
+    return galaxy::host::corner_buttons_foot();
+}
+
 // Whether the game is on a pointer screen (set_menu_context), for the controls deciding what a touch is.
 extern "C" JNIEXPORT jboolean JNICALL Java_dev_nebula_galaxy_GameActivity_nativeMenuContext(JNIEnv*, jclass) {
     return galaxy::sdl::g_menu_context.load(std::memory_order_relaxed) ? JNI_TRUE : JNI_FALSE;
@@ -1605,7 +1612,14 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
 #if defined(__ANDROID__)
     flags |= SDL_WINDOW_FULLSCREEN;
 #endif
-    if (hidden) {
+#if defined(__ANDROID__) || (defined(__APPLE__) && TARGET_OS_IPHONE)
+    // The system's launch screen stands until the first picture.
+    constexpr bool kShownWithFirstPicture = false;
+#else
+    // Shown with its first picture (show_window): the start draws no empty window.
+    constexpr bool kShownWithFirstPicture = true;
+#endif
+    if (hidden || kShownWithFirstPicture) {
         flags |= SDL_WINDOW_HIDDEN;
     }
     SDL_Window* window = SDL_CreateWindow("Nebula", std::max(window_width, 320), std::max(window_height, 240), flags);
@@ -1625,7 +1639,7 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     // LumaCore's clipboard and links on SDL, and the first display snapshot (services-system 4 to 6).
     galaxy::luma_system::set_platform(galaxy::luma_system::sdl_platform());
     galaxy::luma_system::sdl_window_changed(window);
-    return {window, !hidden};
+    return {window, !hidden && !kShownWithFirstPicture};
 }
 
 void close_game_window(WindowOwner& owner) noexcept {
@@ -1637,7 +1651,13 @@ void close_game_window(WindowOwner& owner) noexcept {
 }
 
 void show_window(NativeWindow window) noexcept {
-    SDL_ShowWindow(static_cast<SDL_Window*>(window));
+    // On the main thread, as SDL asks for a window's changes; it takes the focus as a new window does.
+    (void)SDL_RunOnMainThread(
+        [](void* shown) {
+            SDL_ShowWindow(static_cast<SDL_Window*>(shown));
+            SDL_RaiseWindow(static_cast<SDL_Window*>(shown));
+        },
+        window, false);
 }
 
 // The system's vsync rate where there is one (Android: SDL's display mode can lag a refresh-rate switch), to the
@@ -1729,7 +1749,58 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
         done({});
         return;
     }
-    galaxy::sdl::call_activity(galaxy::sdl::ActivityCall{"pickFiles", true, kind == FilePick::Miis ? 0 : 1});
+    galaxy::sdl::call_activity(
+        galaxy::sdl::ActivityCall{"pickFiles", true, kind == FilePick::Miis ? 0 : kind == FilePick::Saves ? 2 : 1});
+}
+
+// The save dialog (GameActivity.saveCopy: a document the player creates, the file copied into it). One at a time.
+namespace {
+std::mutex g_save_copy_mutex;
+std::function<void(SaveCopy)> g_save_copy_done;
+std::string g_save_copy_file;
+}  // namespace
+
+void save_copy(const std::filesystem::path& file, std::function<void(SaveCopy)> done) {
+    bool busy = false;
+    {
+        const std::lock_guard<std::mutex> lock(g_save_copy_mutex);
+        busy = static_cast<bool>(g_save_copy_done);
+        if (!busy) {
+            g_save_copy_done = std::move(done);
+            g_save_copy_file = galaxy::path_text(file);
+        }
+    }
+    if (busy) {
+        done(SaveCopy::Failed);
+        return;
+    }
+    galaxy::sdl::call_activity("saveCopy");
+}
+
+// The file saveCopy offers, as UTF-8 bytes; empty when none is asked for.
+extern "C" JNIEXPORT jbyteArray JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSaveCopyFile(JNIEnv* env, jclass) {
+    std::string file;
+    {
+        const std::lock_guard<std::mutex> lock(g_save_copy_mutex);
+        if (g_save_copy_done) file = g_save_copy_file;
+    }
+    jbyteArray bytes = env->NewByteArray(static_cast<jsize>(file.size()));
+    if (bytes != nullptr && !file.empty()) {
+        env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(file.size()), reinterpret_cast<const jbyte*>(file.data()));
+    }
+    return bytes;
+}
+
+// saveCopy's answer: 0 saved, 1 cancelled, 2 failed.
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeCopySaved(JNIEnv*, jclass, jint result) {
+    std::function<void(SaveCopy)> done;
+    {
+        const std::lock_guard<std::mutex> lock(g_save_copy_mutex);
+        done = std::move(g_save_copy_done);
+        g_save_copy_done = nullptr;
+        g_save_copy_file.clear();
+    }
+    if (done) done(result == 0 ? SaveCopy::Saved : result == 1 ? SaveCopy::Cancelled : SaveCopy::Failed);
 }
 
 // The picker's answer: the copies' paths as UTF-8 bytes (JNI's own strings are modified UTF-8), none when cancelled.
@@ -1792,8 +1863,43 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
     static constexpr SDL_DialogFileFilter kMods[] = {
         {"Mods and texture packs (luma, zip, 7z, rar, tar)", "luma;zip;7z;rar;tar;tgz;gz;txz;xz;tbz2;bz2;tzst;zst"},
         {"All files", "*"}};
-    const SDL_DialogFileFilter* filters = kind == FilePick::Miis ? kMiis : kMods;
-    SDL_ShowOpenFileDialog(picked, request, galaxy::sdl::g_window, filters, 2, nullptr, true);
+    static constexpr SDL_DialogFileFilter kSaves[] = {
+        {"Saves (zip, Nebula.sav, GameData.bin, Wii SD data.bin)", "zip;sav;bin"},
+        {"All files", "*"}};
+    const SDL_DialogFileFilter* filters = kind == FilePick::Miis ? kMiis : kind == FilePick::Saves ? kSaves : kMods;
+    SDL_ShowOpenFileDialog(picked, request, galaxy::sdl::g_window, filters, 2, nullptr, kind != FilePick::Saves);
+}
+
+// SDL's save dialog; the file is copied where the player chose (a ".zip" added when the name has no extension).
+namespace {
+struct SaveRequest {
+    std::filesystem::path file;
+    std::function<void(SaveCopy)> done;
+};
+
+void SDLCALL save_chosen(void* userdata, const char* const* files, int) {
+    std::unique_ptr<SaveRequest> request(static_cast<SaveRequest*>(userdata));
+    if (files == nullptr) {
+        request->done(SaveCopy::Failed);
+        return;
+    }
+    if (files[0] == nullptr) {
+        request->done(SaveCopy::Cancelled);
+        return;
+    }
+    std::filesystem::path target(files[0]);
+    if (!target.has_extension()) target += ".zip";
+    std::error_code error;
+    std::filesystem::copy_file(request->file, target, std::filesystem::copy_options::overwrite_existing, error);
+    request->done(error ? SaveCopy::Failed : SaveCopy::Saved);
+}
+}  // namespace
+
+void save_copy(const std::filesystem::path& file, std::function<void(SaveCopy)> done) {
+    static constexpr SDL_DialogFileFilter kZip[] = {{"Zip archive", "zip"}};
+    auto* request = new SaveRequest{file, std::move(done)};
+    const std::string name = galaxy::path_text(file.filename());
+    SDL_ShowSaveFileDialog(save_chosen, request, galaxy::sdl::g_window, kZip, 1, name.c_str());
 }
 
 // The file manager at the folder (made first, as on Windows).
@@ -1833,10 +1939,6 @@ unsigned dlss_min_width(unsigned, unsigned, unsigned) noexcept {
     return 0u;
 }
 
-bool launcher_available() {
-    return false;
-}
-
 bool dlss_files_present() {
     return false;
 }
@@ -1870,14 +1972,50 @@ VendorLicense vendor_license(std::string&) {
     return VendorLicense::Failed;
 }
 
-bool restart_game(bool) {
-#if defined(__ANDROID__)
-    galaxy::sdl::call_activity("restartGame");
-    return true;
-#else
-    return false;
-#endif
+void quit_game() noexcept {
+    quit_request.store(true, std::memory_order_release);
 }
+
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+// An iOS app cannot start itself again (host_main kHostStartsAgain).
+bool restart_game(Restart) {
+    return false;
+}
+
+int restart_wanted() noexcept {
+    return 0;
+}
+
+bool can_restart() noexcept {
+    return false;
+}
+#else
+namespace {
+std::atomic<int> restart_request{0};  // restart_wanted: 0 none, else a Restart's value
+}  // namespace
+
+// The game ends as for Quit, and the host starts it again as it leaves (host_main finish_and_exit: an exec of this
+// executable with the arguments of the start `kind` asks for; on Android the activity's new process, start_again).
+bool restart_game(Restart kind) {
+    restart_request.store(static_cast<int>(kind), std::memory_order_release);
+    quit_request.store(true, std::memory_order_release);
+    return true;
+}
+
+int restart_wanted() noexcept {
+    return restart_request.load(std::memory_order_acquire);
+}
+
+bool can_restart() noexcept {
+    return true;
+}
+
+#if defined(__ANDROID__)
+void start_again(Restart kind) {
+    galaxy::sdl::call_activity(galaxy::sdl::ActivityCall{"restartGame", true, static_cast<int>(kind)});
+}
+#endif
+#endif
 
 #if defined(NEBULA_GPU_METAL)
 // The Metal renderer on this host (a development build: Apple's own host is platform/apple/host): SDL's Metal view.
@@ -2166,11 +2304,6 @@ bool keyboard_or_mouse_attached() noexcept {
 #else
     return SDL_HasKeyboard() || SDL_HasMouse();
 #endif
-}
-
-// A second player on this system: not yet.
-bool native_game_co_star(galaxy::input::PlayerInput*) noexcept {
-    return false;
 }
 
 JoyConStatus joycon_status() noexcept {

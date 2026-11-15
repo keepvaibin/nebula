@@ -278,6 +278,36 @@ int main(int argc, char** argv) {
     write_cache(data, "{\"checkedUtc\": \"2099-01-01T00:00:00Z\", \"update_check\": false}");
     galaxy::update::begin(installed);
     check(!poll() && g_transport.requests == before_future + 1, "the check turned off offers nothing and asks nothing");
+
+    // The settings: the switch, CHECK NOW and the state they show.
+    check(!check_enabled(), "the switch reads update-check.json");
+    set_check_enabled(true);
+    check(check_enabled() && read_file(data / "update-check.json").find("update_check") == std::string::npos,
+          "turned on, update-check.json leaves the key out");
+    set_check_enabled(false);
+    check(!check_enabled() && read_file(data / "update-check.json").find("\"update_check\": false") != std::string::npos,
+          "turned off, update-check.json says so");
+    g_transport.releases = listing("9.9.9-beta.1", "now");
+    const int before_now = g_transport.requests;
+    check(check_now(installed), "CHECK NOW starts a check with the switch off and the answer under an hour old");
+    finish();
+    const auto now_offer = poll();
+    check(g_transport.requests == before_now + 1 && check_state() == CheckState::Available && now_offer && now_offer->notes == "now",
+          "its answer is offered");
+    g_transport.releases = "[]";
+    check(check_now(installed), "CHECK NOW again once the first has ended");
+    finish();
+    check(check_state() == CheckState::UpToDate && !poll(), "nothing newer: up to date");
+    g_transport.offline = true;
+    check(check_now(installed), "CHECK NOW offline");
+    finish();
+    check(check_state() == CheckState::Failed, "no listing: the check failed");
+    g_transport.offline = false;
+    g_transport.delay_ms = 600;
+    check(check_now(installed) && check_state() == CheckState::Checking && !check_now(installed),
+          "a running check shows as checking and is not started twice");
+    finish();
+    g_transport.delay_ms = 0;
     detail::reset_for_tests();
 
     // The signed manifest's rules without a signature (detail::manifest_takes): the asset ties it to this build.

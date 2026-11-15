@@ -520,6 +520,12 @@ struct Pictures {
     std::uint64_t last = std::numeric_limits<std::uint64_t>::max();
     bool game_only = false;           // GALAXY_PRESENT_SNAPSHOT_GAME_ONLY: a generated present neither kept nor counted
     bool by_stop = false;             // GALAXY_PRESENT_SNAPSHOT_BY_STOP: numbered by the tour's stop and scene frame
+    // GALAXY_PRESENT_SNAPSHOT_GAME_FRAMES=<first>-<last>: every picture shown of those game frames, the interpolated
+    // ones too, named by the game frame, the picture's number within it and its kind (g: the game's, i: interpolated).
+    bool by_game_frame = false;
+    std::uint64_t game_first = 0u, game_last = 0u;
+    std::uint64_t picture_game_frame = ~std::uint64_t{0};
+    std::uint32_t picture_in_frame = 0u;
     struct Size {
         std::uint64_t at;
         std::uint32_t width, height;
@@ -551,6 +557,15 @@ void read_pictures() {
     g_pictures.last = env_u64("GALAXY_PRESENT_SNAPSHOT_LAST", std::numeric_limits<std::uint64_t>::max());
     g_pictures.game_only = env_flag("GALAXY_PRESENT_SNAPSHOT_GAME_ONLY");
     g_pictures.by_stop = env("GALAXY_PRESENT_SNAPSHOT_BY_STOP").has_value();
+    if (const std::optional<std::string> frames = env("GALAXY_PRESENT_SNAPSHOT_GAME_FRAMES")) {
+        const std::string_view text = *frames;
+        const std::size_t dash = text.find('-');
+        if (dash == std::string_view::npos || !parse_u64(text.substr(0, dash), g_pictures.game_first) ||
+            !parse_u64(text.substr(dash + 1u), g_pictures.game_last) || g_pictures.game_last < g_pictures.game_first) {
+            bad("invalid GALAXY_PRESENT_SNAPSHOT_GAME_FRAMES '" + *frames + "' (<first>-<last>)");
+        }
+        g_pictures.by_game_frame = true;
+    }
     if (const std::optional<std::string> sizes = env("GALAXY_TEST_WINDOW_SIZES")) {
         for (const std::string& item : split(*sizes, ',')) {
             const std::string_view text = item;
@@ -572,6 +587,16 @@ const char* picture_path(void*, std::uint64_t game_frame, std::uint32_t kind) {
         return harness::picture_path(game_frame, kind);
     }
     Pictures& p = g_pictures;
+    if (p.by_game_frame) {
+        if (p.folder.empty() || game_frame < p.game_first || game_frame > p.game_last) {
+            return nullptr;
+        }
+        p.picture_in_frame = game_frame == p.picture_game_frame ? p.picture_in_frame + 1u : 0u;
+        p.picture_game_frame = game_frame;
+        p.path = p.folder + "/present_" + std::to_string(game_frame) + "_" + std::to_string(p.picture_in_frame) +
+                 (kind == NEBULA_EXT_PICTURE_GENERATED ? "i" : "g") + ".ppm";
+        return p.path.c_str();
+    }
     if (p.game_only && kind == NEBULA_EXT_PICTURE_GENERATED) {
         if (++p.left_out % 300u == 0u) {
             log("[snapshot] " + std::to_string(p.left_out) + " generated presents left out");

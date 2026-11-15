@@ -38,4 +38,5 @@ private:
     Role mRole;
     s32 mShownFrames;
     bool mIsDecided;
+    f32 mFoot;  // the pill's bottom edge below the canvas's top, in layout units (0: not laid out)
 };

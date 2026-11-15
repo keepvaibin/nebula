@@ -3,6 +3,7 @@
 #include "galaxy/render/vk/post_process_vk.h"
 
 #include "galaxy/render/vk/utility_spirv.h"
+#include "galaxy/render/idle_clock.h"
 
 #include "barriers_vk.h"
 
@@ -22,7 +23,8 @@ namespace galaxy::render::vk {
 namespace {
 
 // Pictures between passes, as the scene.
-constexpr VkFormat kColorFormat = kSceneColorFormat;
+constexpr VkFormat kColorFormat = kSceneColorFormat;  // the self-test's pictures (the chain's: color_format_)
+static_assert(kSceneColorFormat == VK_FORMAT_A2B10G10R10_UNORM_PACK32, "PostProcessorVk::color_format_ starts as the scene's");
 // SMAA's blending weights: one in each channel, the alpha's as fine as the rest.
 constexpr VkFormat kWeightsFormat = VK_FORMAT_R8G8B8A8_UNORM;
 constexpr VkFormat kEdgesFormat = VK_FORMAT_R8G8_UNORM;
@@ -297,9 +299,7 @@ bool PostProcessorVk::build_pipelines() {
     }
     // The scaling passes are required (EASU's single-channel gathers carry no offset: core SPIR-V, no device feature);
     // each AA pass is optional and only reported when it cannot be built.
-    to_color_.easu = create_pipeline(kFullscreenVs, kEasuHalfPs, color_pass_, kRgba, 0);
     to_window_.easu = create_pipeline(kFullscreenVs, kEasuHalfPs, window_pass_, kRgba, 0);
-    to_color_.resample = create_pipeline(kFullscreenVs, kResamplePs, color_pass_, kRgba, 0);
     to_window_.rcas = create_pipeline(kFullscreenVs, kRcasPs, window_pass_, kRgba, 0);
     to_window_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, window_pass_, kRgba, 0);
     to_window_.resample = create_pipeline(kFullscreenVs, kResamplePs, window_pass_, kRgba, 0);
@@ -307,24 +307,19 @@ bool PostProcessorVk::build_pipelines() {
     built_ = true;
     const VkRenderPass present = std::exchange(present_pass_, VK_NULL_HANDLE);
     set_present_pass(present);
-    if (to_color_.easu == VK_NULL_HANDLE || to_window_.easu == VK_NULL_HANDLE ||
-        to_color_.resample == VK_NULL_HANDLE || to_window_.rcas == VK_NULL_HANDLE ||
-        to_window_.rcas_scaled == VK_NULL_HANDLE || to_window_.resample == VK_NULL_HANDLE ||
-        to_window_.copy == VK_NULL_HANDLE) {
-        return false;
-    }
     if (stencil_format_ != VK_FORMAT_UNDEFINED) {
         edges_pass_ = create_smaa_pass(device, kEdgesFormat, stencil_format_, true);
         weights_pass_ = create_smaa_pass(device, kWeightsFormat, stencil_format_, false);
         smaa_edges_ = create_pipeline(kSmaaEdgesVs, kSmaaEdgesPs, edges_pass_, kRgba, 1);
         smaa_weights_ = create_pipeline(kSmaaWeightsVs, kSmaaWeightsPs, weights_pass_, kRgba, 2);
     }
-    smaa_blend_ = create_pipeline(kSmaaBlendVs, kSmaaBlendPs, color_pass_, kRgba, 0);
-    smaa_blend_rgb_ = create_pipeline(kSmaaBlendVs, kSmaaBlendKeepPs, scene_pass_, kRgb, 0);
-    fxaa_ = create_pipeline(kFullscreenVs, kFxaaPs, color_pass_, kRgba, 0);
-    fxaa_rgb_ = create_pipeline(kFullscreenVs, kFxaaPs, scene_pass_, kRgb, 0);
-    smaa_blend_scene_ = create_pipeline(kSmaaBlendVs, kSmaaBlendPs, scene_pass_, kRgba, 0);
-    fxaa_scene_ = create_pipeline(kFullscreenVs, kFxaaPs, scene_pass_, kRgba, 0);
+    build_scene_pipelines();
+    if (to_color_.easu == VK_NULL_HANDLE || to_window_.easu == VK_NULL_HANDLE ||
+        to_color_.resample == VK_NULL_HANDLE || to_window_.rcas == VK_NULL_HANDLE ||
+        to_window_.rcas_scaled == VK_NULL_HANDLE || to_window_.resample == VK_NULL_HANDLE ||
+        to_window_.copy == VK_NULL_HANDLE) {
+        return false;
+    }
     const bool smaa = smaa_edges_ != VK_NULL_HANDLE && smaa_weights_ != VK_NULL_HANDLE &&
         smaa_blend_ != VK_NULL_HANDLE && smaa_blend_rgb_ != VK_NULL_HANDLE;
     const bool fxaa = fxaa_ != VK_NULL_HANDLE && fxaa_rgb_ != VK_NULL_HANDLE;
@@ -333,6 +328,55 @@ bool PostProcessorVk::build_pipelines() {
     set_reason(status_.smaa_reason, smaa ? "" : stencil_format_ == VK_FORMAT_UNDEFINED ? "NO STENCIL" : "PIPELINES");
     set_reason(status_.fxaa_reason, fxaa ? "" : "PIPELINES");
     return true;
+}
+
+void PostProcessorVk::build_scene_pipelines() {
+    to_color_.easu = create_pipeline(kFullscreenVs, kEasuHalfPs, color_pass_, kRgba, 0);
+    to_color_.resample = create_pipeline(kFullscreenVs, kResamplePs, color_pass_, kRgba, 0);
+    smaa_blend_ = create_pipeline(kSmaaBlendVs, kSmaaBlendPs, color_pass_, kRgba, 0);
+    smaa_blend_rgb_ = create_pipeline(kSmaaBlendVs, kSmaaBlendKeepPs, scene_pass_, kRgb, 0);
+    fxaa_ = create_pipeline(kFullscreenVs, kFxaaPs, color_pass_, kRgba, 0);
+    fxaa_rgb_ = create_pipeline(kFullscreenVs, kFxaaPs, scene_pass_, kRgb, 0);
+    smaa_blend_scene_ = create_pipeline(kSmaaBlendVs, kSmaaBlendPs, scene_pass_, kRgba, 0);
+    fxaa_scene_ = create_pipeline(kFullscreenVs, kFxaaPs, scene_pass_, kRgba, 0);
+}
+
+// Deferred: a frame in flight may still draw with them.
+void PostProcessorVk::destroy_scene_pipelines() noexcept {
+    Context& context = Context::get();
+    const VkDevice device = context.device();
+    const auto retire = [&](VkPipeline& pipeline) {
+        if (pipeline != VK_NULL_HANDLE) {
+            const VkPipeline old = pipeline;
+            context.defer([device, old] { vkDestroyPipeline(device, old, nullptr); });
+            pipeline = VK_NULL_HANDLE;
+        }
+    };
+    for (auto& pass : scene_pass_ms_) {
+        for (VkPipeline& pipeline : pass) retire(pipeline);
+    }
+    for (VkPipeline* pipeline : {&to_color_.easu, &to_color_.resample, &smaa_blend_, &smaa_blend_rgb_, &fxaa_, &fxaa_rgb_,
+                                 &smaa_blend_scene_, &fxaa_scene_}) {
+        retire(*pipeline);
+    }
+}
+
+void PostProcessorVk::set_wide(bool wide, VkRenderPass scene_pass, VkRenderPass color_pass) {
+    const VkFormat format = wide ? VK_FORMAT_R16G16B16A16_SFLOAT : kSceneColorFormat;
+    if (format == color_format_ && scene_pass == scene_pass_ && color_pass == color_pass_) {
+        return;
+    }
+    scene_pass_ = scene_pass;
+    color_pass_ = color_pass;
+    color_format_ = format;
+    // The scene's image traded out and the pictures between passes are made again in the new format when next asked for.
+    traded_.reset();
+    antialiased_ = {};
+    scaled_ = {};
+    if (built_) {
+        destroy_scene_pipelines();
+        build_scene_pipelines();
+    }
 }
 
 void PostProcessorVk::destroy_pipelines() noexcept {
@@ -448,7 +492,7 @@ void PostProcessorVk::apply_settings(const PostProcessSettings& settings) {
 bool PostProcessorVk::ensure_target(Target& target, unsigned width, unsigned height, VkFormat format,
                                     VkRenderPass pass, bool with_stencil) {
     if (target.texture && target.width == width && target.height == height && target.texture->format == format) {
-        target.used = clock_;
+        target.used = idle_clock();
         return true;
     }
     target = {};
@@ -479,12 +523,12 @@ bool PostProcessorVk::ensure_target(Target& target, unsigned width, unsigned hei
     target.texture = std::move(texture);
     target.width = width;
     target.height = height;
-    target.used = clock_;
+    target.used = idle_clock();
     return true;
 }
 
 bool PostProcessorVk::ensure_smaa_targets(unsigned width, unsigned height) {
-    smaa_used_ = clock_;
+    smaa_used_ = idle_clock();
     if (stencil_.texture && stencil_.width == width && stencil_.height == height && edges_.texture &&
         weights_.texture) {
         return true;
@@ -496,16 +540,15 @@ bool PostProcessorVk::ensure_smaa_targets(unsigned width, unsigned height) {
 }
 
 void PostProcessorVk::trim_idle_targets() {
-    constexpr std::uint64_t kTargetIdleFrames = 600u;
-    if (stencil_.texture && clock_ > smaa_used_ + kTargetIdleFrames) {
+    if (stencil_.texture && idle_since(smaa_used_)) {
         edges_ = weights_ = stencil_ = {};
     }
     for (Target* target : {&antialiased_, &scaled_}) {
-        if (target->texture && clock_ > target->used + kTargetIdleFrames) {
+        if (target->texture && idle_since(target->used)) {
             *target = {};
         }
     }
-    if (traded_ && clock_ > traded_used_ + kTargetIdleFrames) {
+    if (traded_ && idle_since(traded_used_)) {
         traded_.reset();
     }
 }
@@ -553,21 +596,24 @@ void PostProcessorVk::draw(VkCommandBuffer commands, VkPipeline pipeline, std::i
 
 // SMAA's edges and weights, or nothing for FXAA, from `source` (a shader-readable copy of the picture).
 bool PostProcessorVk::record_aa(VkCommandBuffer commands, AaRun pass, VkImageView source, unsigned width,
-                                unsigned height, const SetAllocator& allocate) {
+                                unsigned height, unsigned part_width, unsigned part_height, const SetAllocator& allocate) {
     if (pass != AaRun::kSmaa) {
         return true;
     }
     if (!ensure_smaa_targets(width, height)) {
         return false;
     }
-    const VkRect2D full{{0, 0}, {width, height}};
+    // The edges and weights are cleared whole (their passes' load) and drawn in the picture's part: past it they are
+    // zero, so the searches end at its edge (post_process.hlsl PicturePart).
+    const VkRect2D part{{0, 0}, {part_width, part_height}};
     PostConstants c{};
     set_post_input_size(c, width, height);
+    set_post_input_part(c, part_width, part_height);
     begin_pass(commands, edges_pass_, edges_, true);
-    draw(commands, smaa_edges_, {source}, full, c, allocate);
+    draw(commands, smaa_edges_, {source}, part, c, allocate);
     vkCmdEndRenderPass(commands);
     begin_pass(commands, weights_pass_, weights_, false);
-    draw(commands, smaa_weights_, {edges_.texture->view, area_texture_->view, search_texture_->view}, full, c,
+    draw(commands, smaa_weights_, {edges_.texture->view, area_texture_->view, search_texture_->view}, part, c,
          allocate);
     vkCmdEndRenderPass(commands);
     return true;
@@ -581,23 +627,26 @@ AaRun PostProcessorVk::prepare_scene_aa(VkCommandBuffer commands, const Texture&
     if (!ready_ || width == 0u || height == 0u) {
         return AaRun::kNone;
     }
-    ++clock_;
     trim_idle_targets();
     const PostProcessPlan plan = plan_post_process(picture_width, picture_height, display_width, display_height,
                                                    settings_, status_.smaa_ok, status_.fxaa_ok);
     AaRun pass = plan.smaa ? AaRun::kSmaa : plan.fxaa ? AaRun::kFxaa : AaRun::kNone;
+    // The part of the target the picture is drawn in (dynamic resolution's rectangle; the whole target without it).
+    part_width_ = std::min(picture_width != 0u ? picture_width : width, width);
+    part_height_ = std::min(picture_height != 0u ? picture_height : height, height);
     // SMAA's targets before the scene's image may change hands: once traded, a pass must run.
     if (pass == AaRun::kSmaa && !ensure_smaa_targets(width, height)) {
         pass = status_.fxaa_ok ? AaRun::kFxaa : AaRun::kNone;
     }
     // The passes read the scene's own image, traded out, and write every pixel and channel of the image that took its
-    // place; or they read a copy of the scene and write its colour back into the scene target.
+    // place (of the picture's part: no pass reads past it); or they read a copy of the scene and write its colour back
+    // into the scene target.
     if (pass != AaRun::kNone && trade && smaa_blend_scene_ != VK_NULL_HANDLE && fxaa_scene_ != VK_NULL_HANDLE) {
         traded_ = trade(std::move(traded_));
-        traded_used_ = clock_;
+        traded_used_ = idle_clock();
         scene_traded_ = true;
-        (void)record_aa(commands, pass, traded_->view, width, height, allocate);
-    } else if (pass != AaRun::kNone && !ensure_target(antialiased_, width, height, kColorFormat, color_pass_, false)) {
+        (void)record_aa(commands, pass, traded_->view, width, height, part_width_, part_height_, allocate);
+    } else if (pass != AaRun::kNone && !ensure_target(antialiased_, width, height, color_format_, color_pass_, false)) {
         pass = AaRun::kNone;
     } else if (pass != AaRun::kNone) {
         // The scene to a copy source and the copy's target (its last reads done) to a destination, in one call.
@@ -610,7 +659,7 @@ AaRun PostProcessorVk::prepare_scene_aa(VkCommandBuffer commands, const Texture&
         VkImageCopy region{};
         region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.extent = {width, height, 1};
+        region.extent = {part_width_, part_height_, 1};  // the picture's part (the passes read no further)
         vkCmdCopyImage(commands, color.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, antialiased_.texture->image,
                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
         BarriersVk after(commands);
@@ -619,7 +668,7 @@ AaRun PostProcessorVk::prepare_scene_aa(VkCommandBuffer commands, const Texture&
         after.image(antialiased_.texture->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::CopyDest, gpu::Use::PixelRead,
                     gpu::Contents::Keep, 1u);
         after.issue();
-        if (!record_aa(commands, pass, antialiased_.texture->view, width, height, allocate)) {
+        if (!record_aa(commands, pass, antialiased_.texture->view, width, height, part_width_, part_height_, allocate)) {
             pass = status_.fxaa_ok ? AaRun::kFxaa : AaRun::kNone;
         }
     }
@@ -644,16 +693,18 @@ void PostProcessorVk::finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsi
     if (pass == AaRun::kNone) {
         return;
     }
-    const VkRect2D full{{0, 0}, {width, height}};
+    // The picture's part prepare_scene_aa worked in.
+    const VkRect2D part{{0, 0}, {std::min(part_width_, width), std::min(part_height_, height)}};
     PostConstants c{};
     set_post_input_size(c, width, height);
+    set_post_input_part(c, part.extent.width, part.extent.height);
     const VkImageView source = scene_traded_ ? traded_->view : antialiased_.texture->view;
     if (pass == AaRun::kFxaa) {
-        draw(commands, scene_traded_ ? fxaa_scene_ : scene_pass_pipeline(false, scene_pass, samples_log2), {source}, full, c,
+        draw(commands, scene_traded_ ? fxaa_scene_ : scene_pass_pipeline(false, scene_pass, samples_log2), {source}, part, c,
              allocate);
     } else {
         draw(commands, scene_traded_ ? smaa_blend_scene_ : scene_pass_pipeline(true, scene_pass, samples_log2),
-             {source, weights_.texture->view}, full, c, allocate);
+             {source, weights_.texture->view}, part, c, allocate);
     }
 }
 
@@ -704,7 +755,7 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
     }
     // A window-sized intermediate for a scaling step that RCAS then reads.
     if ((plan.easu || plan.resample) && plan.rcas &&
-        !ensure_target(scaled_, target_width, target_height, kColorFormat, color_pass_, false)) {
+        !ensure_target(scaled_, target_width, target_height, color_format_, color_pass_, false)) {
         plan.rcas = false;
         plan.resample = !plan.easu;
         plan.resample_to_target = plan.resample;
@@ -751,12 +802,9 @@ void PostProcessorVk::finish_present(VkCommandBuffer commands, const PresentStep
     PostConstants constants = step.constants;
     constants.origin[0] = viewport.offset.x;
     constants.origin[1] = viewport.offset.y;
-    set_post_output(constants, output);
-    if (quarter_turns != 0u) {
-        constants.turn[0] = static_cast<std::int32_t>(quarter_turns & 3u);
-        constants.turn[1] = static_cast<std::int32_t>(step.width);
-        constants.turn[2] = static_cast<std::int32_t>(step.height);
-    }
+    // The picture's size, its own whatever the target's turn.
+    set_post_output(constants, output, step.width, step.height);
+    constants.turn[0] = static_cast<std::int32_t>(quarter_turns & 3u);
     draw(commands, step.pipeline, {step.input}, viewport, constants, allocate);
 }
 
@@ -849,7 +897,7 @@ void PostProcessorVk::self_test() {
         const bool ok = passes[i] == AaRun::kSmaa ? status_.smaa_ok : status_.fxaa_ok;
         if (!ok) continue;
         if (!ensure_target(antialiased_, kSize, kSize, kColorFormat, color_pass_, false) ||
-            !record_aa(commands, passes[i], source->view, kSize, kSize, allocate)) {
+            !record_aa(commands, passes[i], source->view, kSize, kSize, kSize, kSize, allocate)) {
             fail(passes[i], "NO MEMORY");
             continue;
         }

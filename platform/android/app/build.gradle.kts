@@ -12,6 +12,8 @@ plugins {
 //   nebula.jniDir   the native libraries by ABI (libmain, libSDL3, libsmg_game, libnebula_import)
 //   nebula.assetsDir  assets made by the build (licenses/, the texts the About screen shows)
 //   nebula.signing  a properties file naming the release key (storeFile, storePassword, keyAlias, keyPassword)
+//   nebula.unsigned a release build with no signature at all, signed afterwards with the release key
+//                   (installer/sign-release.ps1 signs the release workflow's build)
 val sdlDir = providers.gradleProperty("nebula.sdlDir").orNull ?: error("pass -Pnebula.sdlDir=<SDL3 source>")
 val jniDir = providers.gradleProperty("nebula.jniDir").orNull ?: rootProject.file("jniLibs").path
 val assetsDir = providers.gradleProperty("nebula.assetsDir").orNull ?: rootProject.file("build/nebula-assets").path
@@ -163,7 +165,11 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            signingConfig = if (project.hasProperty("nebula.unsigned")) {
+                null
+            } else {
+                signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            }
             isDebuggable = project.hasProperty("nebula.debuggable")
             // A debuggable test build's game screen starts from the shell (the test harness's runs, GameActivity's
             // nebula.harness); a shipped build's only from the launcher.

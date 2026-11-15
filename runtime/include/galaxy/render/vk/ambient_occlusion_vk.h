@@ -35,12 +35,16 @@ public:
     // Outside a render pass, the scene's single-sample depth readable as `depth_layout` by compute and fragment shaders: the
     // colour multiplier of each scene target pixel (drawn into an 8-bit target in a pass of its own; at one occlusion pixel
     // per scene target pixel the multiply makes it from the denoised occlusion itself). False: nothing to multiply.
-    bool prepare(VkCommandBuffer commands, const Texture& depth, VkImageLayout depth_layout, const RtView& view,
-                 bool ssao, std::span<const ao::ObjectOccluder> objects, UploadRing& ring, const SetAllocator& allocate,
+    // The scene is drawn in the top-left `part_width` x `part_height` of the depth (dynamic resolution's rectangle; 0:
+    // all of it), whose steps go down to `lowest_sixteenths` (16: none): the targets are made at the largest field of
+    // those steps and the passes work in this step's part, so a step change makes none again.
+    bool prepare(VkCommandBuffer commands, const Texture& depth, VkImageLayout depth_layout, unsigned part_width,
+                 unsigned part_height, unsigned lowest_sixteenths, const RtView& view, bool ssao,
+                 std::span<const ao::ObjectOccluder> objects, UploadRing& ring, const SetAllocator& allocate,
                  const StageMarker& mark = {});
     // Inside a scene target pass of 2^samples_log2 samples: the multiply.
     void finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate);
-    // Once a frame, outside a submission being recorded: hands back the occlusion targets after 600 frames in which prepare()
+    // Once a frame, outside a submission being recorded: hands back the occlusion targets after kIdleSteps game steps in which prepare()
     // did not run (the occlusion switched off); the next prepare() makes them again. The images go through the context's
     // deferred destruction, behind the fence of any submission naming them.
     void trim_idle();
@@ -67,9 +71,14 @@ private:
     std::array<VkPipeline, kPassCount> compute_{};
     // The denoise writing R16 float (where R16G16 storage is allowed), at one occlusion pixel per scene target pixel.
     VkPipeline denoise_r_ = VK_NULL_HANDLE;
-    // The multiply per sample count: [0] reads the multiplier, [1] makes it from the denoised occlusion (fused_).
-    std::array<std::array<VkPipeline, 4>, 2> apply_{};
-    std::array<std::array<VkRenderPass, 4>, 2> apply_pass_{};
+    // The multiply per scene target pass it draws in, both kinds made together (a dynamic resolution step may change
+    // the kind): [0] reads the multiplier, [1] makes it from the denoised occlusion (fused_). Kept while the renderer
+    // lives (its passes do), so none is made again when the pass alternates or the step changes.
+    struct Apply {
+        VkRenderPass pass = VK_NULL_HANDLE;
+        std::array<VkPipeline, 2> pipelines{};
+    };
+    std::vector<Apply> apply_;
     // This frame's occlusion is one pixel per scene target pixel: no multiplier image; the multiply reads the denoised
     // occlusion (ambient_occlusion.hlsl AO_PASS_apply_ps).
     bool fused_ = false;
@@ -82,8 +91,7 @@ private:
     std::shared_ptr<Texture> raw_;
     std::shared_ptr<Texture> denoised_;
     std::shared_ptr<Texture> scale_;  // the multiplier per scene target pixel (R8, a colour target; its framebuffer with it)
-    std::uint64_t clock_ = 0;  // trim_idle() calls
-    std::uint64_t used_ = 0;   // the clock at the last prepare()
+    std::uint64_t used_ = 0;   // idle_clock() at the last prepare()
     ao::Constants constants_{};
     std::vector<float> object_values_;
     std::vector<std::uint32_t> object_tiles_;

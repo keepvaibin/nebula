@@ -26,6 +26,7 @@ cbuffer SgsrConstants : register(b0) {
     float g_min_lerp;       // 0.3 once the camera has held still for more than 5 frames, else 0
     float g_reset;          // 1: the history is dropped
     float g_pad;
+    float2 g_clip_rcp;      // 1 / the depthclip's size (the largest render size; this frame's region at its origin)
 };
 
 struct SgsrVertex {
@@ -81,7 +82,7 @@ float ConvertPS(SgsrVertex v) : SV_Target0 {
 
 #if defined(SGSR_UPSCALE)
 Texture2D<float4> t_history : register(t0);   // the last frame's output, output size
-Texture2D<float> t_depthclip : register(t1);   // ConvertPS's, render size
+Texture2D<float> t_depthclip : register(t1);   // ConvertPS's, the render region at its origin
 Texture2D<float2> t_motion : register(t2);     // render pixels, current -> previous
 Texture2D<float4> t_color : register(t3);      // the jittered scene, render size
 SamplerState s_linear : register(s0);
@@ -120,12 +121,15 @@ SgsrOutput UpscalePS(SgsrVertex v) {
     const float2 jitter_uv = saturate(hr_uv + g_jitter * g_render_rcp);
     const int2 last = int2(g_render_size) - 1;
     const int2 input_pos = min(int2(jitter_uv * g_render_size), last);
+    // The filtered reads stay half a texel inside the render region: a smaller dynamic resolution step leaves the rest
+    // of the images unwritten (the same values as the sampler's edge clamp when the region is the whole image).
+    const float2 render_px = clamp(jitter_uv * g_render_size, 0.5f, g_render_size - 0.5f);
 
     // SGSR's motion is clip space, current minus previous (twice the uv step); the renderer's is the uv step in pixels.
-    const float2 motion_px = t_motion.SampleLevel(s_linear, jitter_uv * g_render_size * g_input_rcp, 0.0f);
+    const float2 motion_px = t_motion.SampleLevel(s_linear, render_px * g_input_rcp, 0.0f);
     const float2 motion = -2.0f * motion_px * g_render_rcp;
     const float2 prev_uv = saturate(hr_uv + motion_px * g_render_rcp);
-    const min16float depth_factor = min16float(t_depthclip.SampleLevel(s_linear, jitter_uv, 0.0f));
+    const min16float depth_factor = min16float(t_depthclip.SampleLevel(s_linear, render_px * g_clip_rcp, 0.0f));
     min16float3 history = min16float3(t_history.SampleLevel(s_linear, prev_uv, 0.0f).rgb);
 
     const min16float bias_min = max(min16float(1.0f), min16float(0.3f) + min16float(0.3f) * bias_max);

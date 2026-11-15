@@ -55,12 +55,12 @@ Texture packs and movies change no game code. A crash in the game with only thes
 
 | Code | Meaning | What to do |
 |---|---|---|
-| NEB-S01 | Nebula could not find or open the game content, `game.pak`. | Run Nebula Setup again, or choose the content in **Settings** > **Advanced**. |
+| NEB-S01 | Nebula could not find or open the game content, `game.pak`. | Open Nebula Setup and choose **Repair**. |
 | NEB-S02 | The game content is damaged. | Run Nebula Setup again to rebuild it from your disc image. |
 | NEB-S03 | Nebula's files do not match each other: the game module is missing or from another version. | Install or update Nebula again. |
-| NEB-S04 | The graphics card could not start the game. | Update the graphics driver. If your computer has two graphics cards, choose the other one in **Settings** > **Display**. |
+| NEB-S04 | The graphics card could not start the game. | Update the graphics driver. If your computer has two graphics cards, choose the other one in **Settings** > **SYSTEM** > **GRAPHICS CARD**. |
 | NEB-S05 | Nebula could not read its settings file. | Rename `config.ini` in Nebula's settings folder, then start Nebula to use the default settings. |
-| NEB-S06 | Nebula was started with arguments it does not know. | Start Nebula from its launcher or shortcut. |
+| NEB-S06 | Nebula was started with arguments it does not know. | Start Nebula from its shortcut or app menu entry. |
 
 ## Further reading
 

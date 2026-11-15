@@ -119,6 +119,61 @@ void RenderCore::scan_list(ListData& now) {
     }
 }
 
+void RenderCore::count_coverage(const ListData& now, const ListData& before) noexcept {
+    const NebulaFrameList& list = *now.list;
+    const NebulaFrameList& last = *before.list;
+    ++coverage_lists_;
+    try {
+        coverage_slots_.resize(last.item_count);
+    } catch (...) {
+        return;
+    }
+    for (std::uint32_t i = 0; i < last.item_count; ++i) coverage_slots_[i] = last.items[i].slot;
+    std::sort(coverage_slots_.begin(), coverage_slots_.end());
+    for (std::uint32_t i = 0; i < list.item_count; ++i) {
+        const NebulaFrameItem& item = list.items[i];
+        CoverageCount& count = coverage_[(item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT];
+        ++count.items;
+        const std::uint32_t pair = now.item_before[i];
+        const bool ring = (item.flags & NEBULA_ITEM_RING) != 0u && (item.flags & NEBULA_ITEM_PARTICLE) == 0u;
+        if ((item.flags & NEBULA_ITEM_DISCRETE_VERTICES) != 0u) {
+            ++count.discrete;
+        } else if (pair == NEBULA_NONE32 && (item.block >= now.block_before.size() || now.block_before[item.block] == NEBULA_NONE32)) {
+            ++count.new_items;
+            if (std::binary_search(coverage_slots_.begin(), coverage_slots_.end(), item.slot)) {
+                ++count.missed;
+                std::uint8_t& logged = coverage_misses_logged_[(item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT];
+                if (logged < 6u) {
+                    // The item of the same slot and part before (else of the slot), and what of it differs.
+                    const NebulaFrameItem* other = nullptr;
+                    for (std::uint32_t j = 0; j < last.item_count; ++j) {
+                        const NebulaFrameItem& o = last.items[j];
+                        if (o.slot == item.slot && (other == nullptr || (o.part == item.part && other->part != item.part))) other = &o;
+                    }
+                    ++logged;
+                    std::fprintf(stderr,
+                                 "[interp-miss] frame %u category %u slot %u part %u/%u generation %u/%u%s%s%s%s%s%s%s block %u/%u "
+                                 "blocks(joints %u/%u model %u/%u calc %u/%u)\n",
+                                 list.game_frame, (item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT,
+                                 item.slot, item.part, other->part, item.generation, other->generation,
+                                 item.pipeline != other->pipeline ? " pipeline" : "", item.mesh != other->mesh ? " mesh" : "",
+                                 item.textures != other->textures ? " textures" : "", item.matrix != other->matrix ? " matrix" : "",
+                                 item.flags != other->flags ? " flags" : "", item.source_hash != other->source_hash ? " source" : "",
+                                 (item.flags & NEBULA_ITEM_RING) != 0u ? " ring" : "", item.block, other->block,
+                                 item.block < list.block_count ? list.blocks[item.block].joint_count : 0u,
+                                 other->block < last.block_count ? last.blocks[other->block].joint_count : 0u,
+                                 item.block < list.block_count ? list.blocks[item.block].model : 0u,
+                                 other->block < last.block_count ? last.blocks[other->block].model : 0u,
+                                 item.block < list.block_count ? list.blocks[item.block].calc_mode : 0u,
+                                 other->block < last.block_count ? last.blocks[other->block].calc_mode : 0u);
+                }
+            }
+        } else if (ring && (pair == NEBULA_NONE32 || !core::ring_shape_matches(item, before.list->items[pair]))) {
+            ++count.ring_at_b;
+        }
+    }
+}
+
 void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& time) {
     const NebulaFrameList& list = *now.list;
     if (!now.scanned) {
@@ -130,10 +185,17 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     walk_.before = before;
     walk_.time = time;
     walk_.serial = ++walk_serial_;
-    walk_.mip_lines = static_cast<float>(std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines)));
+    // The lines the scene is drawn at (dynamic resolution's last rectangle; the render size without it) over the authored
+    // lines: levels drawn by hand are chosen as the game chose them, finer or coarser (make_sampler_key).
+    walk_.mip_lines = static_cast<float>(
+        std::log2(std::max(1.0, static_cast<double>(renderer_.scene_rectangle().height)) / kAuthoredLines));
     const bool between = time.t < 1.0f && before != nullptr;
     if (between) {
         pairing_.prepare_motion(now, *before);
+        if (!now.coverage_counted && !now.cut && ::galaxy::diagnosing(::galaxy::kDiagnosePresentStats)) {
+            now.coverage_counted = true;
+            count_coverage(now, *before);
+        }
     }
     walk_.between = between;
 
@@ -732,7 +794,7 @@ std::uint32_t RenderCore::merge_ring_run(std::uint32_t first, std::uint32_t end,
 
 void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first) {
     core::TextureTable& table = registries_.table(id);
-    table.last_frame = frame_index_;
+    table.last_frame = walk_.now->serial;
     table.retired = false;
     // A list written earlier in this walk stands unless the generation moved since (the sampler array started again, or
     // the Vulkan image array grew and its null slot moved): then it is written again.
@@ -784,13 +846,14 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
             mode.min_lod = t.min_lod;
             mode.max_lod = t.max_lod;
             const TextureHandle& handle = walk_handles_[i];
-            const bool generated = TextureStore::samples_generated(mode, handle);
-            if (handle.generated_mips && !generated) {
+            // The cook's generated levels are ray tracing's alone: a draw keeps to the game's first level.
+            if (handle.generated_mips) {
                 mode.min_lod = 0.0f;
                 mode.max_lod = 0.0f;
             }
-            table.sampler_slots[i] = renderer_.sampler_slot(make_sampler_key(mode, generated, handle.mip_levels, handle.lod_shift,
-                                                                             handle.lod_arbitrary, mip_lines, scene_mip_bias_));
+            table.sampler_slots[i] = renderer_.sampler_slot(make_sampler_key(mode, handle.mip_levels, handle.lod_shift,
+                                                                             handle.lod_arbitrary, mip_lines, scene_mip_bias_,
+                                                                             handle.authored_levels));
         }
         table.textures_revision = texture_store_.revision();
         table.samplers_generation = generation;
@@ -820,7 +883,7 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
 // (renderer_.table_slots(); program.hlsli NEBULA_BOUND_TABLES). A longer list draws with its first maps.
 void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers) {
     core::TextureTable& table = registries_.table(id);
-    table.last_frame = frame_index_;
+    table.last_frame = walk_.now->serial;
     table.retired = false;
     // The list cut to the bound table's compile-time size; told once per list.
     const std::uint32_t listed = table.count;
@@ -885,13 +948,13 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
                 mode.min_lod = t.min_lod;
                 mode.max_lod = t.max_lod;
                 const TextureHandle& handle = handles[i];
-                const bool generated = TextureStore::samples_generated(mode, handle);
-                if (handle.generated_mips && !generated) {
+                // The cook's generated levels are ray tracing's alone: a draw keeps to the game's first level.
+                if (handle.generated_mips) {
                     mode.min_lod = 0.0f;
                     mode.max_lod = 0.0f;
                 }
-                keys[i] = make_sampler_key(mode, generated, handle.mip_levels, handle.lod_shift, handle.lod_arbitrary,
-                                           mip_lines, scene_mip_bias_);
+                keys[i] = make_sampler_key(mode, handle.mip_levels, handle.lod_shift, handle.lod_arbitrary, mip_lines,
+                                           scene_mip_bias_, handle.authored_levels);
             }
             table.samplers = renderer_.sampler_table_for(keys.data(), count);
             table.samplers_generation = generation;
@@ -1404,6 +1467,8 @@ void RenderCore::set_scene_sky(const NebulaFramePass& scene_begin) {
 void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
     const NebulaFrameList& list = *walk_.now->list;
     const bool wide = wide_scene_;
+    // The scene is drawn in dynamic resolution's rectangle from here (its clear may have opened it already).
+    renderer_.begin_scene_rectangle();
     set_scene_sky(pass);
     scene_phase_ = true;
     std::array<float, 12> view_at{};
@@ -1441,6 +1506,7 @@ void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
     bool switched = false;
     if (renderer_.output_scene_active()) {
         renderer_.end_output_scene();
+        renderer_.begin_scene_rectangle();
         switched = true;
     }
     renderer_.begin_wide_scene(wide);
@@ -1539,6 +1605,8 @@ void RenderCore::walk_scene_end() {
     if (renderer_.begin_output_scene()) {
         display_pictures_.set_frame_map(renderer_.frame_map());
     }
+    // HDR output: the HUD and menus from here in the scene's 10-bit format, ending at the paper white.
+    renderer_.begin_layer_2d();
     note_layer_2d_lines(renderer_.frame_map().height);
     ++walk_view_stamp_;
 }
@@ -1869,6 +1937,10 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
             const bool starts_scene = !target_open_ && (pass.clear_channels & 5u) == 5u &&
                 p + 1u < list.pass_count && list.passes[p + 1u].kind == NEBULA_PASS_SCENE_BEGIN;
             const bool starts_hdr = starts_scene && wide_scene_ && !renderer_.temporal_mode();
+            if (starts_scene) {
+                // The scene's pass opens with this clear: in dynamic resolution's rectangle.
+                renderer_.begin_scene_rectangle();
+            }
             SceneClearValues clear = make_scene_clear_values(pass.clear_rgba, 0u);
             if (starts_hdr) {
                 // The skipped SDR attachment would have rounded the clear before widening it to FP16.
@@ -1903,7 +1975,15 @@ void RenderCore::walk_pass(ListData& now, std::uint32_t p, std::uint32_t& target
                 note_generated_written(pass.target);
             }
             request.channels = pass.channels < kCopyLayoutDisplay ? static_cast<std::uint8_t>(pass.channels) : 0u;
-            if (renderer_.draw_frame_pass(request, texture_store_)) {
+            // A copy before the list writes the frame (the camera's cover asks one in the game's step, before its frame
+            // starts) takes the picture shown last, as the console's frame buffer still held it.
+            bool before_frame = true;
+            for (std::uint32_t q = 0; q < p && before_frame; ++q) {
+                before_frame = list.passes[q].kind == NEBULA_PASS_COPY_FRAME;
+            }
+            const DisplayTexture* shown = before_frame ? display_pictures_.latest() : nullptr;
+            if (shown != nullptr ? renderer_.draw_shown_frame_pass(request, *shown, texture_store_)
+                                 : renderer_.draw_frame_pass(request, texture_store_)) {
                 ++pictures_moved_;
             }
             break;
@@ -1987,7 +2067,10 @@ void RenderCore::walk_post(const NebulaFrameList& list, const NebulaFramePass& p
         return;
     }
     ModPostConstants constants{};
-    constants.time = static_cast<float>(static_cast<double>(list.game_frame) / 60.0);
+    // The game's time at this picture: between the frame before (t = 0) and this one (t = 1) in a generated picture,
+    // so the program's animation moves at the display's rate.
+    constants.time = static_cast<float>((static_cast<double>(list.game_frame) - 1.0 + static_cast<double>(walk_.time.t)) /
+                                        kGameStepRate);
     constants.frame = list.game_frame;
     std::memcpy(constants.params, list.instance_rows + pass.first_item, sizeof(constants.params));
     // Distance along the view axis from the depth target's value D (scene_depth_view: the host's clip z is
@@ -2008,7 +2091,9 @@ void RenderCore::walk_post(const NebulaFrameList& list, const NebulaFramePass& p
         constants.depth_terms[3] = v.z_scale != 0.0f ? std::min(v.z_offset / v.z_scale, 3.0e38f) : 3.0e38f;
         depth = constants.depth_terms[0] > 0.0f && constants.depth_terms[3] > 0.0f;
     }
-    const FrameMap& map = renderer_.frame_map();
+    // The picture trades places with the scene target: its allocated size (frame_extent; the frame is drawn in a part of
+    // it under dynamic resolution).
+    const FrameMap& map = renderer_.frame_extent();
     const auto width = static_cast<std::uint32_t>(map.width);
     const auto height = static_cast<std::uint32_t>(map.height);
     if (width == 0u || height == 0u) {
@@ -2098,7 +2183,7 @@ void RenderCore::walk_show() {
     if (picture == nullptr) {
         return;
     }
-    const FrameMap& map = renderer_.frame_map();
+    const FrameMap& map = renderer_.frame_extent();  // trades places with the scene target: its allocated size
     display_pictures_.adopt_picture(*picture, renderer_.take_frame_picture(display_pictures_.take_idle_texture(
                                                   static_cast<std::uint32_t>(map.width), static_cast<std::uint32_t>(map.height))));
     renderer_.copy_fg_hudless_display(*picture);

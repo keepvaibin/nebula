@@ -7,6 +7,7 @@
 #include "galaxy/render/mtl/utility_msl.h"
 #include "galaxy/render/scene_camera_shape.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <iostream>
 
@@ -162,16 +163,18 @@ void SceneCamera::full_screen(Object encoder, Object pipeline_state, const Textu
     [pass drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
 }
 
-void SceneCamera::widen(Object encoder, Format color_format, unsigned samples, const Texture& picture) {
+void SceneCamera::widen(Object encoder, Format color_format, unsigned samples, const Texture& picture, unsigned width,
+                        unsigned height) {
     if (const Object widen_pipeline = pipeline(kWiden, color_format, samples); widen_pipeline != nullptr) {
-        full_screen(encoder, widen_pipeline, picture, picture.width, picture.height);
+        full_screen(encoder, widen_pipeline, picture, std::min(width, picture.width), std::min(height, picture.height));
     }
 }
 
-void SceneCamera::meter(Object commands, const Texture& wide, const Texture& depth, float seconds) {
+void SceneCamera::meter(Object commands, const Texture& wide, const Texture& depth, unsigned width, unsigned height,
+                        float seconds) {
     camera::Constants constants{};
-    constants.width = static_cast<float>(wide.width);
-    constants.height = static_cast<float>(wide.height);
+    constants.width = static_cast<float>(std::min(width, wide.width));
+    constants.height = static_cast<float>(std::min(height, wide.height));
     constants.seconds = exposure_ready_ ? seconds : -1.0f;
     exposure_ready_ = true;
     @autoreleasepool {
@@ -182,16 +185,17 @@ void SceneCamera::meter(Object commands, const Texture& wide, const Texture& dep
         [compute setTexture:metal(*exposure_) atIndex:2];
         [compute setTexture:metal(depth) atIndex:3];
         [compute setBytes:&constants length:sizeof(constants) atIndex:kUtilityPushBuffer];
-        // One group of MeterCS's 16 x 9 threads (scene_camera.hlsl).
+        // One group of MeterCS's 8 x 9 threads (scene_camera.hlsl).
         [compute dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(8, 9, 1)];
         [compute endEncoding];
     }
 }
 
-void SceneCamera::draw(Object encoder, Format color_format, unsigned samples, const Texture& wide, bool per_sample, bool resolve) {
+void SceneCamera::draw(Object encoder, Format color_format, unsigned samples, const Texture& wide, unsigned width,
+                       unsigned height, bool per_sample, bool resolve) {
     const Object camera_pipeline = pipeline(resolve ? kCameraResolve : per_sample ? kCameraSamples : kCamera, color_format, samples);
     if (camera_pipeline != nullptr) {
-        full_screen(encoder, camera_pipeline, wide, wide.width, wide.height);
+        full_screen(encoder, camera_pipeline, wide, std::min(width, wide.width), std::min(height, wide.height));
     }
 }
 

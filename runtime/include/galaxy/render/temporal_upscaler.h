@@ -57,6 +57,9 @@ public:
     virtual void jitter_offset(unsigned index, unsigned phase_count,
                                float& x, float& y) const = 0;
     [[nodiscard]] virtual const char* name() const noexcept = 0;
+    // The narrowest render width it evaluates for the output it was made for (dynamic resolution's floor); 0: any width
+    // down to the renderer's own lowest step.
+    [[nodiscard]] virtual unsigned smallest_render_width() const noexcept { return 0u; }
     // Its SDK records its own (legacy) barriers on the textures it is handed (FSR 3, Streamline); false: the caller's
     // barriers put them where it reads them (XeSS).
     [[nodiscard]] virtual bool own_barriers() const noexcept { return false; }
@@ -67,15 +70,17 @@ public:
 // AMD FidelityFX FSR 3.1 (statically linked, MIT). Null when the runtime was
 // built without the FidelityFX SDK or the device lacks shader model 6.2.
 // The context is sized for the given maxima; callers re-create it when a
-// render or output size exceeds them.
+// render or output size exceeds them. `wide`: the scene holds light past white (HDR output's float scene), so the colour
+// is taken as high dynamic range (every upscaler below alike), not clamped to the display's range.
 [[nodiscard]] std::unique_ptr<TemporalUpscaler> create_fsr3_upscaler(
     ID3D12Device* device,
     unsigned max_render_width, unsigned max_render_height,
-    unsigned max_output_width, unsigned max_output_height);
+    unsigned max_output_width, unsigned max_output_height, bool wide = false);
 
 // Intel XeSS Super Resolution (xess_upscaler.cpp, the library from xess_library.h). quality: the temporal_quality row. Null
 // without the library or when the device refuses.
 [[nodiscard]] std::unique_ptr<TemporalUpscaler> create_xess_upscaler(ID3D12Device* device, unsigned output_width,
-                                                                     unsigned output_height, unsigned quality);
+                                                                     unsigned output_height, unsigned quality,
+                                                                     bool wide = false);
 
 }  // namespace galaxy::render

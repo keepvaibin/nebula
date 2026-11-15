@@ -106,7 +106,8 @@ void set_frame_generation(unsigned generated, bool dynamic = false, float target
 // (rt_denoiser.h), in the same modes.
 [[nodiscard]] std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(
     unsigned render_width, unsigned render_height,
-    unsigned output_width, unsigned output_height, unsigned quality, bool ray_reconstruction = false);
+    unsigned output_width, unsigned output_height, unsigned quality, bool ray_reconstruction = false,
+    bool wide = false);  // wide: the colour holds light past white (HDR output's float scene)
 // The narrowest render width DLSS accepts for this quality and output (0: unknown).
 [[nodiscard]] unsigned dlss_min_render_width(unsigned quality, unsigned output_width,
                                              unsigned output_height) noexcept;

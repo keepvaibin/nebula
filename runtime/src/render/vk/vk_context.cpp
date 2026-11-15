@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The shared Vulkan device, its submissions and deferred destruction (vk_context.h).
 #include "galaxy/render/vk/vk_context.h"
+#include "galaxy/benchmark.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/renderer_choice.h"
 #include "galaxy/render/rt/rt_shaders.h"
 #include "galaxy/runtime_settings.h"
 
@@ -304,6 +306,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     failure_.clear();
     if (load_vulkan() != VK_SUCCESS) {
         std::fprintf(stderr, "[vulkan] no Vulkan loader\n");
+        note_no_device();
         failure_ = "no Vulkan driver";
         return false;
     }
@@ -451,7 +454,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         }
     }
 
-    // The GPU chosen in Nebula Settings, else the first discrete device; each needs a graphics queue
+    // The GPU chosen on the System page, else the first discrete device; each needs a graphics queue
     // (that presents to the surface) and the swapchain extension.
     std::uint32_t count = 0;
     vkEnumeratePhysicalDevices(instance_, &count, nullptr);
@@ -482,6 +485,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
 #endif
         std::vector<std::pair<Rank, VkPhysicalDevice>> ranked;
         ranked.reserve(devices.size());
+        std::vector<GpuChoice> choices;  // every GPU but a software renderer, for the System page's GRAPHICS CARD choice
         for (const VkPhysicalDevice device : devices) {
             VkPhysicalDeviceProperties properties{};
             vkGetPhysicalDeviceProperties(device, &properties);
@@ -495,6 +499,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             }
             const Adapter adapter = adapter_of(device);
             const bool chosen = !chosen_gpu.empty() && adapter.identity == chosen_gpu;
+            if (properties.deviceType != VK_PHYSICAL_DEVICE_TYPE_CPU) {
+                choices.push_back(GpuChoice{adapter.identity, properties.deviceName});
+            }
             std::uint64_t place = ~std::uint64_t{0};
 #if defined(_WIN32)
             for (std::size_t i = 0; i < windows_order.size() && adapter.luid != 0u; ++i) {
@@ -515,20 +522,24 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         for (std::size_t i = 0; i < ranked.size(); ++i) {
             devices[i] = ranked[i].second;
         }
+        record_gpu_choices(std::move(choices));
     }
-    bool vulkan_1_0_only = false;
+    // What the renderer needs of a device (vulkan_refusal): swapchains; Vulkan 1.1, or 1.0 with what Nebula takes from
+    // 1.1 as the extensions it came from, the physical-device queries (instance) and VK_KHR_maintenance1 (the viewports'
+    // negative height, the transfer bits of format features), the version in use the lower of the instance's and the
+    // device's; and a graphics queue that presents. The renderer check judges every card by the same rule.
+    RendererRefusal refused = RendererRefusal::kNoDevice;
     for (const VkPhysicalDevice candidate : devices) {
-        if (!has_device_extension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
-            continue;
-        }
-        // Vulkan 1.1, or 1.0 with what Nebula takes from 1.1 as the extensions it came from: the physical-device queries
-        // (instance) and VK_KHR_maintenance1 (the viewports' negative height, the transfer bits of format features). The
-        // version in use is the lower of the instance's and the device's.
         VkPhysicalDeviceProperties candidate_properties{};
         vkGetPhysicalDeviceProperties(candidate, &candidate_properties);
-        if (std::min(app.apiVersion, candidate_properties.apiVersion) < VK_API_VERSION_1_1 &&
-            !(properties2_extension && has_device_extension(candidate, VK_KHR_MAINTENANCE1_EXTENSION_NAME))) {
-            vulkan_1_0_only = true;
+        VulkanFacts facts;
+        facts.swapchain = has_device_extension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+        facts.version = std::min(app.apiVersion, candidate_properties.apiVersion);
+        facts.properties2 = properties2_extension;
+        facts.maintenance1 = has_device_extension(candidate, VK_KHR_MAINTENANCE1_EXTENSION_NAME);
+        facts.presenting_queue = true;  // the queue's own search follows
+        if (const RendererRefusal refusal = vulkan_refusal(facts); refusal != RendererRefusal::kNone) {
+            if (refused != RendererRefusal::kVulkanVersion) refused = refusal;
             continue;
         }
         std::uint32_t families = 0;
@@ -553,11 +564,14 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         if (physical_ != VK_NULL_HANDLE) {
             break;
         }
+        if (refused != RendererRefusal::kVulkanVersion) refused = RendererRefusal::kNoPresentQueue;
     }
     if (physical_ == VK_NULL_HANDLE) {
-        return fail(vulkan_1_0_only ? "the GPU's Vulkan driver is version 1.0 without VK_KHR_maintenance1 or "
-                                      "VK_KHR_get_physical_device_properties2"
-                                    : "no device with a graphics queue that presents to the window, and swapchains");
+        note_no_device();
+        return fail(refused == RendererRefusal::kVulkanVersion
+                        ? "the GPU's Vulkan driver is version 1.0 without VK_KHR_maintenance1 or "
+                          "VK_KHR_get_physical_device_properties2"
+                        : "no device with a graphics queue that presents to the window, and swapchains");
     }
     vkGetPhysicalDeviceProperties(physical_, &properties_);
     device_name_ = properties_.deviceName;
@@ -1509,6 +1523,7 @@ std::uint64_t Context::submit(std::span<const VkCommandBuffer> commands, VkSemap
     if (simulated_loss_.exchange(false, std::memory_order_acq_rel)) {
         loss_was_simulated_ = true;  // a host extension's lose_gpu_device: the commands are not submitted
     } else {
+        const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Submit);
         result = vkQueueSubmit(queue_, 1, &submit, fence);
     }
     note_driver_cpu(DriverCall::Submit, thread_cpu_ns() - cpu_start);
@@ -1974,8 +1989,14 @@ MappedBuffer Context::create_mapped_buffer(std::uint64_t size, VkBufferUsageFlag
         place = BufferPlace::Host;  // no bulk-mapped video memory: the device-local host-visible window is not for rings
     }
     VmaAllocationCreateInfo alloc_info{};
-    alloc_info.usage = place == BufferPlace::Host ? VMA_MEMORY_USAGE_AUTO_PREFER_HOST : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
-    if (place != BufferPlace::Device) {
+    alloc_info.usage = place == BufferPlace::Host || place == BufferPlace::HostRead ? VMA_MEMORY_USAGE_AUTO_PREFER_HOST
+                                                                                    : VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    if (place == BufferPlace::HostRead) {
+        // Read by the CPU too: a read of write-combined memory goes uncached, at a small part of the memory's speed.
+        alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        alloc_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        alloc_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+    } else if (place != BufferPlace::Device) {
         alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
         alloc_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     }

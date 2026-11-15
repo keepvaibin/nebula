@@ -25,6 +25,19 @@
 #include <sys/un.h>
 #include <unistd.h>
 #endif
+#elif defined(__linux__) && !defined(__ANDROID__)
+// Discord on Linux listens on a Unix socket in XDG_RUNTIME_DIR (discord-ipc-0 to 9), the Flatpak and Snap builds in
+// their own folders under it, with the same frames as Windows' pipe.
+#define NEBULA_DISCORD_SOCKET 1
+#include <cerrno>
+#include <cstdlib>
+#include <fcntl.h>
+#include <poll.h>
+#include <pthread.h>
+#include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 #endif
 #if !defined(NEBULA_DISCORD_SOCKET)
 #define NEBULA_DISCORD_SOCKET 0
@@ -199,29 +212,25 @@ public:
     Pipe(const Pipe&) = delete;
     Pipe& operator=(const Pipe&) = delete;
     bool open() {
-        // Where Discord makes it: the folder in TMPDIR on a Mac (XDG_RUNTIME_DIR, TMP and TEMP where those are set).
+        // Where Discord makes it: the folder in TMPDIR on a Mac, XDG_RUNTIME_DIR on Linux (TMP and TEMP where those are
+        // set), and on Linux the Flatpak and Snap builds' folders under it.
         const char* const folders[] = {std::getenv("XDG_RUNTIME_DIR"), std::getenv("TMPDIR"), std::getenv("TMP"),
                                        std::getenv("TEMP"), "/tmp"};
+#if defined(__linux__)
+        const char* const builds[] = {"", "/app/com.discordapp.Discord", "/snap.discord"};
+#else
+        const char* const builds[] = {""};
+#endif
         for (const char* folder : folders) {
             if (folder == nullptr || folder[0] == 0) continue;
-            std::string base = folder;
-            while (base.size() > 1u && base.back() == '/') base.pop_back();
-            for (int i = 0; i < 10; ++i) {
-                const std::string path = base + "/discord-ipc-" + std::to_string(i);
-                sockaddr_un address{};
-                if (path.size() >= sizeof(address.sun_path)) continue;
-                address.sun_family = AF_UNIX;
-                std::memcpy(address.sun_path, path.c_str(), path.size() + 1u);
-                const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-                if (fd < 0) return false;
-                const int on = 1;
-                (void)setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));  // a closed socket is an error, not a signal
-                if (connect(fd, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 &&
-                    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) == 0) {
-                    fd_ = fd;
-                    return true;
+            std::string root = folder;
+            while (root.size() > 1u && root.back() == '/') root.pop_back();
+            for (const char* build : builds) {
+                switch (connect_in(root + build)) {
+                case Found::kYes: return true;
+                case Found::kNoSocket: return false;
+                case Found::kNo: break;
                 }
-                ::close(fd);
             }
         }
         return false;
@@ -235,7 +244,7 @@ public:
         std::size_t sent = 0u;
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
         while (sent < bytes.size()) {
-            const ssize_t n = ::send(fd_, bytes.data() + sent, bytes.size() - sent, 0);
+            const ssize_t n = ::send(fd_, bytes.data() + sent, bytes.size() - sent, kNoSignal);
             if (n > 0) {
                 sent += static_cast<std::size_t>(n);
                 continue;
@@ -271,11 +280,41 @@ public:
     }
 
 private:
+    enum class Found { kYes, kNo, kNoSocket };
+    // Connects to discord-ipc-0 to 9 in `base`. kNoSocket: the system made no socket at all.
+    Found connect_in(const std::string& base) {
+        for (int i = 0; i < 10; ++i) {
+            const std::string path = base + "/discord-ipc-" + std::to_string(i);
+            sockaddr_un address{};
+            if (path.size() >= sizeof(address.sun_path)) continue;
+            address.sun_family = AF_UNIX;
+            std::memcpy(address.sun_path, path.c_str(), path.size() + 1u);
+            const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+            if (fd < 0) return Found::kNoSocket;
+#if defined(SO_NOSIGPIPE)
+            const int on = 1;
+            (void)setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));  // a closed socket is an error, not a signal
+#endif
+            if (connect(fd, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0 &&
+                fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) == 0) {
+                fd_ = fd;
+                return Found::kYes;
+            }
+            ::close(fd);
+        }
+        return Found::kNo;
+    }
     bool wait(short events, int milliseconds) {
         pollfd ready{fd_, events, 0};
         const int got = poll(&ready, 1, milliseconds);
         return got > 0 && (ready.revents & (POLLERR | POLLHUP | POLLNVAL)) == 0;
     }
+    // Linux has no SO_NOSIGPIPE: each send asks for an error rather than the signal.
+#if defined(MSG_NOSIGNAL)
+    static constexpr int kNoSignal = MSG_NOSIGNAL;
+#else
+    static constexpr int kNoSignal = 0;
+#endif
     int fd_ = -1;
 };
 #endif
@@ -350,6 +389,14 @@ void worker() {
 }  // namespace
 #endif
 
+bool supported() noexcept {
+#if defined(_WIN32) || NEBULA_DISCORD_SOCKET
+    return true;
+#else
+    return false;
+#endif
+}
+
 void start(std::string client_id) {
     std::lock_guard<std::mutex> lock(s_mutex);
     if (s_started) return;
@@ -363,8 +410,13 @@ void start(std::string client_id) {
 #elif NEBULA_DISCORD_SOCKET
     if (s_client_id.empty()) return;
     std::thread([] {
+#if defined(__APPLE__)
         (void)pthread_setname_np("Nebula Discord");
         (void)pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);  // below the game's threads
+#else
+        (void)pthread_setname_np(pthread_self(), "nebula-discord");  // 15 characters at most
+        (void)setpriority(PRIO_PROCESS, 0, 5);  // Linux: this thread only, below the game's threads
+#endif
         worker();
     }).detach();  // ends with the process
 #endif

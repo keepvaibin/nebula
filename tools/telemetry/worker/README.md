@@ -16,16 +16,28 @@ a salt of at least 32 characters every report is refused with 503.
 
 1. A Cloudflare account; `npm install -g wrangler`; `wrangler login`.
 2. Key pair, on your own machine: `python tools/telemetry/diag_reports.py keygen --exe <Nebula> --out <offline folder>`.
-   Put the printed public key in `runtime/include/galaxy/diag_endpoint.h` (`kPublicKey`). Keep the private key file
+   Put the printed public key in `runtime/include/galaxy/diag_endpoint_local.h` (`kPublicKey`; git ignores that file,
+   so a fork never sends to you). Keep the private key file
    offline and backed up: without it no report can be opened; with it anyone can open them.
 3. R2 (needs a payment card on file; nothing is charged inside the free tier):
    `wrangler r2 bucket create nebula-diag-reports`, then
    `wrangler r2 bucket lifecycle add nebula-diag-reports expire-180 --expire-days 180` (or in the dashboard: R2 >
    nebula-diag-reports > Settings > Object lifecycle rules > delete after 180 days).
-4. The address salt, once, never shown again: `openssl rand -hex 32 | wrangler secret put ADDRESS_SALT` (any 32+
+4. The address salt, once, never shown again: `openssl rand -hex 32 | wrangler secret put ADDRESS_SALT`, or on
+   Windows `python -c "import secrets; print(secrets.token_hex(32))" | wrangler secret put ADDRESS_SALT` (any 32+
    random characters; a new salt only changes which counter an address hits).
-5. Deploy, from this folder: `wrangler deploy`. Put the printed URL plus `/v1/report`
-   (`https://nebula-diag.<account>.workers.dev/v1/report`) in `diag_endpoint.h` (`kEndpoint`) and build the release.
+5. Deploy, from this folder: `wrangler deploy`. Put the printed URL plus `/v1/report` in `diag_endpoint_local.h`
+   and build. The whole file:
+
+       #pragma once
+       namespace galaxy::diag {
+       inline constexpr char kEndpoint[] = "https://nebula-diag.<account>.workers.dev/v1/report";
+       inline constexpr char kPublicKey[] = "<the 64 hex digits keygen printed>";
+       }  // namespace galaxy::diag
+
+   Release builds made by `.github/workflows/release.yml`: set the same two values as the repository variables
+   `NEBULA_DIAG_ENDPOINT` and `NEBULA_DIAG_PUBLIC_KEY` (Settings > Secrets and variables > Actions > Variables).
+   `tools/diag_endpoint_local.sh` writes the file from them; without them the build sends no reports.
 
 Fetch reports with an R2 API token (Account > R2 > Manage API tokens, Object Read only) and any S3 client, e.g.
 `rclone copy r2:nebula-diag-reports ./reports`; then `diag_reports.py open ./reports` and `summary`.

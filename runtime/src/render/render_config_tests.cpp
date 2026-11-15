@@ -3,7 +3,7 @@
 #include "galaxy/render/resolution_governor.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/test_temp.h"
-#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/display_aspect.h"
 
 #include "galaxy/windows_api.h"
 
@@ -59,12 +59,12 @@ int main() {
             passed = false;
         }
         for (unsigned mode = 1u; mode < galaxy::render::kAspectModeCount; ++mode) {
-            const auto sizes = aspect_window_sizes(mode, 2600u, 1400u);
+            const auto sizes = aspect_window_sizes(mode, 4000u, 1400u);
             bool ok = sizes.size() >= 3u;
             for (std::size_t i = 0; i < sizes.size(); ++i) {
                 const auto [w, h] = sizes[i];
                 ok = ok && w * kAspectRatios[mode][1] == h * kAspectRatios[mode][0] &&
-                     w <= 2600u && h <= 1400u && (i == 0u || sizes[i - 1u].second < h);
+                     w <= 4000u && h <= 1400u && (i == 0u || sizes[i - 1u].second < h);
             }
             if (!ok) {
                 std::cerr << "aspect " << mode << ": window sizes must have its shape, fit and grow\n";
@@ -74,6 +74,26 @@ int main() {
         const auto wide = aspect_window_sizes(5u, 2600u, 1400u);
         if (wide.empty() || wide.front() != std::pair{840u, 360u} || wide.back() != std::pair{2520u, 1080u}) {
             std::cerr << "21:9 window sizes within 2600 x 1400 must run from 840 x 360 to 2520 x 1080\n";
+            passed = false;
+        }
+        // Every shape from a phone held upright to three 32:9 panels: the game's screen width in even units, 832 at
+        // 16:9; 48:9 at 4K (11520 x 2160) three times as wide; anything wider held to 96:9.
+        const auto units = [](double aspect) {
+            const auto shape = galaxy::make_display_aspect(aspect);
+            return shape ? shape->game_screen_width : 0u;
+        };
+        const auto held = [](double aspect) {
+            const auto shape = galaxy::make_display_aspect(aspect);
+            return shape ? shape->content_aspect : 0.0;
+        };
+        if (units(16.0 / 9.0) != 832u || units(4.0 / 3.0) != 624u || units(9.0 / 21.0) != 624u ||
+            units(32.0 / 9.0) != 1664u || units(11520.0 / 2160.0) != 2496u || units(96.0 / 9.0) != 4992u ||
+            units(40.0) != 4992u || held(40.0) != galaxy::kWidestContentAspect ||
+            held(0.1) != galaxy::kNarrowestContentAspect || units(0.0) != 0u ||
+            units(std::numeric_limits<double>::quiet_NaN()) != 0u ||
+            galaxy::display_aspect_extent(11520, 2160) != (11520u << 16u | 2160u) ||
+            galaxy::display_aspect_extent(15360, 1440) != (15360u << 16u | 1440u)) {
+            std::cerr << "the game's shape must follow the output from 9:21 to 96:9 and hold beyond\n";
             passed = false;
         }
         using galaxy::render::present_frame_rate;
@@ -96,8 +116,15 @@ int main() {
             interpolated_frames_per_game_frame(165.0) != 2u ||
             interpolated_frames_per_game_frame(240.0) != 3u ||
             interpolated_frames_per_game_frame(360.0) != 5u ||
-            interpolated_frames_per_game_frame(1000.0) != 7u) {
-            std::cerr << "interpolated frames must be round(rate / 60) - 1, 0..7\n";
+            interpolated_frames_per_game_frame(480.0) != 7u ||
+            interpolated_frames_per_game_frame(500.0) != 8u ||
+            interpolated_frames_per_game_frame(540.0) != 8u ||
+            interpolated_frames_per_game_frame(1000.0) != 16u ||
+            interpolated_frames_per_game_frame(1e12) != galaxy::render::kUnboundedGeneratedFrames ||
+            interpolated_frames_per_game_frame(std::numeric_limits<double>::infinity()) !=
+                galaxy::render::kUnboundedGeneratedFrames ||
+            interpolated_frames_per_game_frame(std::numeric_limits<double>::quiet_NaN()) != 0u) {
+            std::cerr << "interpolated frames must be ceil(rate / 60) - 1, unbounded at an unlimited rate\n";
             passed = false;
         }
     }
@@ -107,7 +134,7 @@ int main() {
         const auto path = root / "config.ini";
         std::filesystem::create_directories(root);
         const ScopedSettingsFolder config_folder(root);
-        for (const char* text : {"nan", "inf", "-1", "60junk", "0.00001", "10000000", "1e100"}) {
+        for (const char* text : {"nan", "inf", "-1", "60junk", "0.00001", "1e100", "Unlimited", "unlimited60", "-inf"}) {
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
             {
                 std::ofstream file(path, std::ios::binary | std::ios::trunc);
@@ -184,7 +211,7 @@ int main() {
                 "a file without the key is the automatic choice, and saves as one");
         }
         for (float invalid : {std::numeric_limits<float>::quiet_NaN(),
-                std::numeric_limits<float>::infinity(), -1.0f, 0.00001f, 10000000.0f}) {
+                -std::numeric_limits<float>::infinity(), -1.0f, 0.00001f}) {
             galaxy::render::RenderConfig direct{};
             direct.max_fps = invalid;
             direct.texture_lod_bias = 99u;
@@ -216,7 +243,7 @@ int main() {
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
         }
 #endif
-        for (float rate : {1.0f, 30.0f, 59.940002f, 60.0f}) {
+        for (float rate : {1.0f, 30.0f, 59.940002f, 60.0f, 10000000.0f, galaxy::render::kUnlimitedFrameRate}) {
             galaxy::render::RenderConfig original{};
             original.max_fps = rate;
             galaxy::render::set_render_config(original);
@@ -341,7 +368,6 @@ int main() {
 
     galaxy::render::RenderConfig config{};
     config.msaa_samples = 8;
-    config.taa_enabled = true;
     config.ray_tracing_enabled = true;
     config.rt_quality = galaxy::render::kRtPresetCustom;
     config.rt_parts[static_cast<std::size_t>(galaxy::render::RtPart::Reflect)] = 0u;
@@ -352,9 +378,6 @@ int main() {
     passed &= expect(
         sanitized.msaa_samples == 8,
         "set_render_config keeps MSAA 8x");
-    passed &= expect(
-        !sanitized.taa_enabled,
-        "set_render_config clamps unimplemented TAA off");
     passed &= expect(
         sanitized.ray_tracing_enabled &&
             galaxy::render::rt_part(sanitized, galaxy::render::RtPart::Reflect) == 0u &&
@@ -533,23 +556,19 @@ int main() {
             "msaa_samples=8\ntaa_enabled=1\nray_tracing_enabled=1\nrt_quality=custom\nrt_reflect=off\nrt_sun=high\n");
         passed &= expect(
             loaded.msaa_samples == 8 &&
-                !loaded.taa_enabled &&
                 loaded.ray_tracing_enabled &&
                 galaxy::render::rt_part(loaded, galaxy::render::RtPart::Reflect) == 0u &&
                 galaxy::render::rt_part(loaded, galaxy::render::RtPart::Sun) == 3u,
-            "the file's render config enables ray tracing, takes its parts by name, and no unimplemented feature");
+            "the file's render config enables ray tracing and takes its parts by name; an old key it no longer has is ignored");
 
         const galaxy::render::RenderConfig quality =
-            load("texture_lod_bias=99\nanisotropic_filtering=99\nenhanced_mipmaps=0\n");
+            load("texture_lod_bias=99\nanisotropic_filtering=99\nenhanced_mipmaps=1\n");
         passed &= expect(
             quality.texture_lod_bias == 8,
             "texture LOD bias is clamped to the supported range");
         passed &= expect(
             quality.anisotropic_filtering == 16,
             "anisotropic filtering is clamped to the supported range");
-        passed &= expect(
-            !quality.enhanced_mipmaps,
-            "enhanced mipmaps off is applied");
 
         passed &= expect(
             !load("frame_rate_decouple=1\n").frame_rate_decouple,
@@ -689,11 +708,42 @@ int main() {
         galaxy::render::apply_performance_preset(preset);
         passed &= expect(preset.internal_height == 480u && preset.upscaler == 0u && preset.aa_mode == 0u && preset.msaa_samples == 1u &&
                              !preset.ambient_occlusion && preset.bloom == 0u && !preset.enhanced_lighting && !preset.per_pixel_lighting &&
-                             preset.max_fps == 60.0f && preset.frame_generation == 0u && !preset.ray_tracing_enabled && !preset.hdr &&
-                             preset.sharpness == 0u && preset.anisotropic_filtering == 1u && !preset.enhanced_mipmaps,
-                         "the performance preset turns every optional pass off at 480 lines");
+                             preset.max_fps == 0.0f && preset.dynamic_resolution && preset.frame_generation == 0u &&
+                             !preset.ray_tracing_enabled && !preset.hdr &&
+                             preset.sharpness == 0u && preset.anisotropic_filtering == 1u,
+                         "the performance preset turns every optional pass off at 480 lines, at the display's rate with "
+                         "dynamic resolution");
         passed &= expect(!preset.hud_output_resolution && preset.hud_internal_resolution && !galaxy::render::render_hud_at_output(preset),
                          "the performance preset draws the 2D layer at 480 lines and enlarges once at present");
+        {
+            // Two very different players' settings end at one standard: only the window, display and GPU stay theirs.
+            galaxy::render::RenderConfig a{};
+            a.internal_height = 2160u;
+            a.upscaler = 2u;
+            a.dynamic_resolution = true;
+            a.frame_generation = 2u;
+            a.ray_tracing_enabled = true;
+            a.hdr = true;
+            a.vsync_interval = 1u;
+            a.max_fps = 144.0f;
+            a.aspect_mode = 6u;
+            a.window_width = 2560u;
+            galaxy::render::RenderConfig b{};
+            galaxy::render::apply_performance_preset(b);
+            b.window_width = 1280u;
+            galaxy::render::apply_benchmark_standard(a);
+            galaxy::render::apply_benchmark_standard(b);
+            passed &= expect(a.internal_height == 1080u && a.aspect_mode == 4u && a.upscaler == 0u && !a.dynamic_resolution &&
+                                 a.frame_generation == 0u && !a.ray_tracing_enabled && !a.hdr && a.vsync_interval == 0u &&
+                                 galaxy::render::unlimited_frame_rate(a.max_fps) && a.msaa_samples == 4u &&
+                                 a.aa_mode == 1u && a.smaa_quality == 2u &&
+                                 a.ambient_occlusion && a.enhanced_lighting && a.per_pixel_lighting && a.bloom == 100u &&
+                                 a.anisotropic_filtering == 16u,
+                             "the benchmark standard: 1920 x 1080, high settings, nothing that changes with the device");
+            b.window_width = a.window_width;
+            passed &= expect(a == b && a.window_width == 2560u,
+                             "the benchmark standard is the same from any settings; the window stays the player's");
+        }
         galaxy::render::RenderConfig exact{};
         exact.internal_height = 720u;
         const bool before = galaxy::render::render_hud_at_output(exact);
@@ -743,48 +793,90 @@ int main() {
     {
         using galaxy::render::ResolutionGovernor;
         using galaxy::render::resolution_rectangle;
-        passed &= expect(resolution_rectangle(1920u, 1080u, 8u) == std::pair{1920u, 1080u} &&
-                             resolution_rectangle(1919u, 1081u, 8u) == std::pair{1919u, 1081u} &&
-                             resolution_rectangle(1920u, 1080u, 6u) == std::pair{1440u, 810u} &&
-                             resolution_rectangle(854u, 480u, 7u) == std::pair{747u, 420u} &&
-                             resolution_rectangle(1u, 1u, 4u) == std::pair{1u, 1u},
-                         "a step's rectangle is the target at 8/8 and n/8 of it rounded once otherwise");
+        passed &= expect(resolution_rectangle(1920u, 1080u, 16u) == std::pair{1920u, 1080u} &&
+                             resolution_rectangle(1919u, 1081u, 16u) == std::pair{1919u, 1081u} &&
+                             resolution_rectangle(1920u, 1080u, 12u) == std::pair{1440u, 810u} &&
+                             resolution_rectangle(854u, 480u, 14u) == std::pair{747u, 420u} &&
+                             resolution_rectangle(1920u, 1080u, 11u) == std::pair{1320u, 743u} &&
+                             resolution_rectangle(1u, 1u, 8u) == std::pair{1u, 1u},
+                         "a step's rectangle is the render size at 16/16 and n/16 of it rounded once otherwise");
+        using galaxy::render::resolution_step_at_least;
+        passed &= expect(resolution_step_at_least(16u) == 0u && resolution_step_at_least(12u) == 4u &&
+                             resolution_step_at_least(1u) == 8u && resolution_step_at_least(17u) == 0u,
+                         "the lowest step a floor allows");
         ResolutionGovernor governor;
         const double budget = 13.33;
+        constexpr double at50 = 20.0;  // 50 pictures a second: exact sums, the picture counts decide
         bool held = true;
         for (unsigned f = 0; f < 200u; ++f) {
-            held &= governor.update(10.0, budget) == 8u;
+            held &= governor.update(10.0, budget, at50) == 16u;
         }
-        passed &= expect(held, "a GPU inside 90 % of the budget keeps the whole target");
+        passed &= expect(held, "a GPU inside 90 % of the budget keeps the whole render size");
         unsigned frames = 0u;
-        while (governor.eighths() == 8u && frames < 100u) {
-            (void)governor.update(20.0, budget);
+        while (governor.sixteenths() == 16u && frames < 100u) {
+            (void)governor.update(20.0, budget, at50);
             ++frames;
         }
-        // 20 ms at 64/64; 80 % of the budget is 10.67 ms: 7/8 would take 15.3, 6/8 11.25, 5/8 7.8. So 5/8.
-        passed &= expect(frames == ResolutionGovernor::kOverFrames && governor.eighths() == 5u,
-                         "over the budget: down after three frames, to the largest step that fits");
-        // At 5/8 the scene takes 20 x 25/64 = 7.8 ms; 6/8 would take 11.25 ms, over 75 %: it stays.
+        // 20 ms at 256/256; 80 % of the budget is 10.66 ms: 12/16 would take 11.25 ms, 11/16 9.45 ms. So 11/16.
+        passed &= expect(frames == ResolutionGovernor::kOverPictures && governor.sixteenths() == 11u,
+                         "over the budget: down after three pictures and 50 ms, to the largest step that fits");
+        // At 11/16 the scene takes 9.45 ms; 12/16 would take 11.25 ms, over 75 %: it stays.
         held = true;
         for (unsigned f = 0; f < 300u; ++f) {
-            held &= governor.update(7.8, budget) == 5u;
+            held &= governor.update(9.45, budget, at50) == 11u;
         }
         passed &= expect(held, "no step up while the next step would pass 75 % of the budget");
-        // A lighter scene: 5 ms at 5/8 predicts 7.2 ms at 6/8: one step up after 60 frames.
+        // A lighter scene: 5 ms at 11/16 predicts 5.95 ms at 12/16: one step up after 60 pictures (1.2 s).
         frames = 0u;
-        while (governor.eighths() == 5u && frames < 400u) {
-            (void)governor.update(5.0, budget);
+        while (governor.sixteenths() == 11u && frames < 400u) {
+            (void)governor.update(5.0, budget, at50);
             ++frames;
         }
-        passed &= expect(governor.eighths() == 6u && frames == ResolutionGovernor::kRoomFrames,
-                         "room for the next step: up one step after 60 frames");
+        passed &= expect(governor.sixteenths() == 12u && frames == ResolutionGovernor::kRoomPictures,
+                         "room for the next step: up one step after 60 pictures and 1 s");
+        // The floor: a GPU far over the budget stops at 8/16.
+        for (unsigned f = 0; f < 400u; ++f) {
+            (void)governor.update(200.0, budget, at50);
+        }
+        passed &= expect(governor.sixteenths() == 8u, "never below half of each side");
         governor.reset();
-        passed &= expect(governor.eighths() == 8u, "reset returns to the whole target");
+        passed &= expect(governor.sixteenths() == 16u, "reset returns to the whole render size");
         held = true;
         for (unsigned f = 0; f < 50u; ++f) {
-            held &= governor.update(0.0, budget) == 8u;
+            held &= governor.update(0.0, budget, at50) == 16u;
         }
         passed &= expect(held, "no measurement moves nothing");
+
+        // Thousands of pictures a second: every wait is a time too, so the step changes at the same pace.
+        ResolutionGovernor fast;
+        constexpr double at4000 = 0.25;
+        unsigned pictures = 0u;
+        while (fast.sixteenths() == 16u && pictures < 10000u) {
+            (void)fast.update(20.0, budget, at4000);
+            ++pictures;
+        }
+        // 800 settling pictures (0.2 s), then 200 over (50 ms).
+        passed &= expect(pictures == 1000u && fast.sixteenths() == 11u,
+                         "at 4,000 pictures a second the settle and the run over are 0.2 s and 50 ms");
+        pictures = 0u;
+        while (fast.sixteenths() == 11u && pictures < 10000u) {
+            (void)fast.update(5.0, budget, at4000);
+            ++pictures;
+        }
+        passed &= expect(pictures == 800u + 4000u && fast.sixteenths() == 12u,
+                         "at 4,000 pictures a second a step up waits 0.2 s settling and 1 s of room");
+
+        // An upscaler's floor: no step below it, and a step below it moves up at once.
+        ResolutionGovernor floored;
+        floored.set_floor(12u);
+        for (unsigned f = 0; f < 400u; ++f) {
+            (void)floored.update(200.0, budget, at50);
+        }
+        passed &= expect(floored.sixteenths() == 12u && floored.floor_sixteenths() == 12u, "never below the floor");
+        floored.set_floor(14u);
+        passed &= expect(floored.sixteenths() == 14u, "a higher floor lifts the step at once");
+        floored.set_floor(8u);
+        passed &= expect(floored.sixteenths() == 14u, "a lower floor leaves the step");
     }
 
     if (!passed) {

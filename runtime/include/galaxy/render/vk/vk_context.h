@@ -84,9 +84,11 @@ struct Buffer {
 };
 
 // Where a buffer's memory lies. Host: host memory the GPU reads across the bus (D3D12's upload heap), for data
-// written each frame. DeviceMapped: device memory the CPU writes where the device maps it (unified memory, resizable
-// BAR), else host memory, for data the GPU reads every frame. Device: device memory only, for what the GPU writes.
-enum class BufferPlace : std::uint8_t { Host, DeviceMapped, Device };
+// written each frame; write-combined where the device has it, so the CPU must not read it. HostRead: host memory the
+// CPU reads as well (cached where the device has such a type): staging that host image copies read on the CPU.
+// DeviceMapped: device memory the CPU writes where the device maps it (unified memory, resizable BAR), else host
+// memory, for data the GPU reads every frame. Device: device memory only, for what the GPU writes.
+enum class BufferPlace : std::uint8_t { Host, HostRead, DeviceMapped, Device };
 
 // A persistently mapped buffer (unmapped in BufferPlace::Device) without a GPU address (create_buffer wraps one in a
 // Buffer).

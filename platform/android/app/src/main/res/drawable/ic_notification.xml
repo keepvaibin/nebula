@@ -1,21 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The status-bar icon: a four-point sparkle inside a tilted orbit (white; the system tints it). -->
+<!-- The status-bar icon: Nebula's icon outline (white; the system tints it). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:pivotX="54"
-        android:pivotY="54"
-        android:rotation="-24">
+        android:scaleX="0.230769"
+        android:scaleY="0.230769"
+        android:translateX="-3.1154"
+        android:translateY="-3.8077">
         <path
-            android:pathData="M24,54 A30,11 0 1,1 84,54 A30,11 0 1,1 24,54 Z"
-            android:strokeWidth="2.2"
-            android:strokeColor="#FFFFFFFF"
-            android:fillColor="#00000000" />
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M230.5 58.5 L222.5 62.0 L216.0 67.5 L207.5 78.5 L197.0 96.0 L193.5 100.5 L190.5 102.5 L186.5 102.5 L150.0 89.5 L134.0 86.5 L125.5 87.0 L120.5 88.5 L115.0 91.5 L110.5 96.0 L106.5 103.5 L105.0 109.5 L105.0 130.5 L109.0 159.5 L109.0 167.0 L108.0 171.0 L102.5 176.5 L77.5 189.0 L67.5 195.0 L58.5 202.5 L54.5 208.0 L53.0 212.0 L52.5 219.5 L56.5 230.0 L74.0 252.5 L78.0 259.5 L78.0 265.0 L76.0 269.5 L65.5 283.5 L57.5 297.0 L55.5 302.5 L55.0 310.5 L58.0 318.5 L67.0 326.5 L72.5 329.5 L84.0 333.5 L107.0 339.5 L111.5 341.5 L117.0 345.5 L119.0 354.0 L119.0 392.0 L120.0 398.5 L125.0 413.0 L131.5 420.5 L134.5 422.5 L140.5 424.5 L147.5 424.5 L168.5 417.5 L197.0 404.5 L202.5 403.0 L206.5 403.0 L209.5 404.0 L213.0 407.5 L226.0 425.0 L236.0 436.0 L244.5 441.5 L252.0 442.5 L258.0 440.5 L265.0 435.0 L273.5 425.5 L288.0 406.0 L293.5 402.0 L298.0 402.0 L303.5 403.5 L329.0 413.5 L349.0 418.5 L357.0 418.5 L363.5 417.0 L370.5 413.0 L374.0 409.0 L378.5 398.5 L379.5 387.5 L378.5 365.5 L376.5 347.5 L377.5 339.5 L381.5 335.0 L387.5 331.5 L415.0 321.0 L430.0 314.0 L434.0 311.5 L438.5 307.0 L442.0 301.0 L442.5 291.0 L439.5 283.5 L428.5 268.0 L418.0 256.0 L414.0 249.0 L413.5 246.5 L416.0 238.5 L428.0 223.0 L437.0 208.0 L438.5 203.0 L438.5 196.0 L435.0 188.5 L427.0 182.0 L415.0 177.0 L386.0 169.0 L380.0 166.5 L377.0 164.0 L375.0 160.0 L373.5 150.0 L373.5 106.0 L372.5 97.5 L368.0 85.5 L361.5 78.5 L354.0 75.0 L348.5 74.0 L339.0 75.0 L324.0 80.0 L287.0 98.0 L279.0 99.5 L272.5 94.0 L258.5 74.5 L251.0 66.5 L240.5 59.5 L237.0 58.5Z" />
     </group>
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M54,25 C55.6,44.5 62.5,52.4 81,54 C62.5,55.6 55.6,63.5 54,83 C52.4,63.5 45.5,55.6 27,54 C45.5,52.4 52.4,44.5 54,25 Z" />
 </vector>

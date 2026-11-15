@@ -10,6 +10,7 @@
 #include <limits>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace galaxy::render {
@@ -106,12 +107,21 @@ public:
         }
         return capacity;
     }
-    // After kQuietFrames frames in a row in which no frame used more than a quarter of the budget (and none was asked to), the
-    // ring can give memory back: shrunk_capacity() is the smallest capacity, a halving of this one at a time and never under the
-    // capacity the ring first had, whose budget is still twice the quiet window's peak. The caller makes the ring again at that
-    // size at a frame boundary, as for growth. The window starts over with every initialize.
+    // After a quiet window, kQuietFrames frames in a row and kQuietNs of time, in which no frame used more than a quarter of the
+    // budget (and none was asked to), the ring can give memory back: shrunk_capacity() is the smallest capacity, a halving of
+    // this one at a time and never under the capacity the ring first had, whose budget is still twice the quiet window's peak.
+    // The caller makes the ring again at that size at a frame boundary, as for growth. The window starts over with every
+    // initialize. Frames alone are no measure: a loading screen draws thousands a second, so a stage change would shrink the
+    // rings and the next stage's first frames make them again.
+    // A shrink waits for a frame without the 3D scene (set_shrink_moment: a load's, a fade's), where making the ring again
+    // shows nothing; a frame over a quarter of the budget before then calls it off.
     static constexpr unsigned kQuietFrames = 600u;
-    [[nodiscard]] bool wants_shrink() const { return mapped_ != nullptr && shrink_ready_ && !wants_growth(); }
+    static constexpr std::uint64_t kQuietNs = 30'000'000'000ull;
+    [[nodiscard]] bool wants_shrink() const { return mapped_ != nullptr && shrink_ready_ && shrink_moment_ && !wants_growth(); }
+    // Whether the frame about to begin may shrink the ring (it draws no 3D scene). Set before each frame boundary.
+    void set_shrink_moment(bool moment) noexcept { shrink_moment_ = moment; }
+    // A new size is wanted at the next frame boundary (remake_upload_rings).
+    [[nodiscard]] bool wants_new_size() const { return wants_growth() || wants_shrink(); }
     [[nodiscard]] std::size_t shrunk_capacity(unsigned segments) const {
         std::size_t capacity = capacity_;
         while (capacity / 2u >= floor_capacity_ && budget(capacity / 2u, segments) >= shrink_peak_ * 2u &&
@@ -175,12 +185,15 @@ private:
     std::size_t frame_spill_ = 0;
     std::size_t high_water_ = 0;
     std::size_t requested_ = 0;
-    // The quiet window (kQuietFrames frames): its peak use or request, how many frames it has, whether the last full one was quiet
-    // enough to shrink after (and its peak then), and the capacity the ring first had (kept across reset).
+    // The quiet window (kQuietFrames frames and kQuietNs): its peak use or request, how many frames it has and when its first
+    // began (steady clock), whether the last full one was quiet enough to shrink after (and its peak then), and the capacity
+    // the ring first had (kept across reset).
     std::size_t window_peak_ = 0;
     std::size_t shrink_peak_ = 0;
     unsigned window_frames_ = 0;
+    std::uint64_t window_start_ns_ = 0;
     bool shrink_ready_ = false;
+    bool shrink_moment_ = false;
     std::size_t floor_capacity_ = 0;
     unsigned frames_in_flight_ = 0;
     unsigned active_slot_ = 0;
@@ -193,5 +206,21 @@ private:
 
 // A mapped upload buffer that lives until it is released (RenderCore's resident decoded vertices).
 using UploadBuffer = gpu::UploadMemory;
+
+// A renderer's draw-data ring as remake_upload_rings makes it: its name, its segments, and whether it takes chunks.
+struct UploadRingSlot {
+    UploadRing* ring = nullptr;
+    const char* name = "";
+    unsigned segments = 0;
+    bool chunks = false;
+};
+
+// At a frame boundary, with no wait for the GPU: each ring that wants a new size (UploadRing::wants_new_size) made again
+// at it, the others untouched; every ring under `all` (--diagnostics ring-stress). The old buffers and chunks go to `old`
+// for the caller to release once the frames that read them are done. A growth that cannot be made keeps the size the ring
+// had and sets `failed` (the caller stops asking). Returns whether any ring was made again; throws when one cannot be
+// made even at its old size.
+bool remake_upload_rings(gpu::Device* device, std::span<const UploadRingSlot> rings, bool all, bool& failed,
+                         std::vector<gpu::BufferRef>& old);
 
 }  // namespace galaxy::render

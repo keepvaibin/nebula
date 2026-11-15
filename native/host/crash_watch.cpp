@@ -213,7 +213,7 @@ int run(int argc, char** argv) {
     }
 }
 
-void start(const std::filesystem::path& folder, std::chrono::steady_clock::time_point log_zero) {
+void start(const std::filesystem::path& folder, std::chrono::steady_clock::time_point log_zero, const std::filesystem::path& hdr_list) {
     std::size_t at = 0;
     g_folder[0] = 0;
     append(g_folder, sizeof(g_folder) / sizeof(g_folder[0]), &at, std::filesystem::absolute(folder).wstring().c_str());
@@ -247,6 +247,9 @@ void start(const std::filesystem::path& folder, std::chrono::steady_clock::time_
         return;
     }
     std::wstring command = L"\"" + std::wstring(exe) + L"\" --crash-watch " + std::to_wstring(pid) + L" " + base;
+    if (!hdr_list.empty()) {
+        command += L" \"" + hdr_list.wstring() + L"\"";
+    }
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};

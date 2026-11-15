@@ -59,16 +59,38 @@ if(ANDROID AND ANDROID_ABI STREQUAL "arm64-v8a")
     add_subdirectory("${NEBULA_ADRENOTOOLS_DIR}" "${CMAKE_BINARY_DIR}/adrenotools" EXCLUDE_FROM_ALL)
 endif()
 
-# Shaders are compiled at build time by the PC's tools (the Windows Vulkan build's galaxy_native_spirv and
-# galaxy_utility_spirv): a device compiles nothing.
-set(NEBULA_HOST_TOOLS "" CACHE PATH "Folder of galaxy_native_spirv and galaxy_utility_spirv for the build machine")
-if(NOT IS_DIRECTORY "${NEBULA_HOST_TOOLS}")
-    message(FATAL_ERROR "Set NEBULA_HOST_TOOLS to the Windows Vulkan build folder")
+# Shaders are compiled at build time by two tools that run on the build machine, galaxy_native_spirv and
+# galaxy_utility_spirv (the renderer's HLSL front end): a device compiles nothing. A build for the machine it runs on
+# (Linux) makes them itself, as the Windows Vulkan build does; a build for another system (Android, Apple's) takes them
+# from NEBULA_HOST_TOOLS, the folder of a build that made them for the build machine.
+set(NEBULA_HOST_TOOLS "" CACHE PATH "Folder of galaxy_native_spirv and galaxy_utility_spirv for the build machine (empty: built here)")
+if(NEBULA_HOST_TOOLS STREQUAL "" AND NOT CMAKE_CROSSCOMPILING)
+    include("${nebula_root}/cmake/post_shader_sources.cmake")
+    set(galaxy_post_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/post_shader_embed.cpp")
+    galaxy_embed_post_sources("${galaxy_post_embed_cpp}" "${nebula_root}")
+    add_executable(galaxy_native_spirv
+        "${nebula_root}/tools/dev/native_spirv.cpp"
+        "${nebula_root}/runtime/src/render/vk/shader_compile_vk.cpp")
+    add_executable(galaxy_utility_spirv
+        "${nebula_root}/tools/dev/utility_spirv.cpp"
+        "${nebula_root}/runtime/src/render/vk/shader_compile_vk.cpp"
+        "${nebula_root}/runtime/src/render/renderer_common.cpp"
+        "${galaxy_post_embed_cpp}")
+    foreach(tool galaxy_native_spirv galaxy_utility_spirv)
+        target_include_directories(${tool} PRIVATE "${nebula_root}/runtime/include" "${nebula_root}/native/include")
+        target_compile_features(${tool} PRIVATE cxx_std_20)
+        target_link_libraries(${tool} PRIVATE nebula_vulkan_deps nebula_shader_compiler)
+    endforeach()
+else()
+    if(NOT IS_DIRECTORY "${NEBULA_HOST_TOOLS}")
+        message(FATAL_ERROR "A build for another system than the build machine's: set NEBULA_HOST_TOOLS to the folder of "
+            "galaxy_native_spirv and galaxy_utility_spirv made for the build machine (a Windows Vulkan build's folder)")
+    endif()
+    add_executable(galaxy_native_spirv IMPORTED)
+    set_target_properties(galaxy_native_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_native_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
+    add_executable(galaxy_utility_spirv IMPORTED)
+    set_target_properties(galaxy_utility_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_utility_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
 endif()
-add_executable(galaxy_native_spirv IMPORTED)
-set_target_properties(galaxy_native_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_native_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
-add_executable(galaxy_utility_spirv IMPORTED)
-set_target_properties(galaxy_utility_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_utility_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
 # NEBULA_RAY_TRACING (cmake/rt_shaders.cmake) decides the programs' traced forms too.
 include("${nebula_root}/cmake/rt_shaders.cmake")
 include("${nebula_root}/cmake/native_materials.cmake")
@@ -78,15 +100,22 @@ file(MAKE_DIRECTORY "${galaxy_utility_spirv_dir}")
 add_custom_command(OUTPUT "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
     COMMAND galaxy_utility_spirv "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
     DEPENDS galaxy_utility_spirv VERBATIM)
+# The header as a target of its own: the Apple build's MSL tool (platform/apple/metal.cmake), in another folder, waits
+# for it.
+add_custom_target(galaxy_utility_spirv_header DEPENDS "${galaxy_utility_spirv_dir}/utility_spirv_data.h")
 
 set(rt "${nebula_root}/runtime/src")
 add_library(galaxy_render_vk STATIC
     ${rt}/render/render_api.cpp
     ${rt}/render/render_config.cpp
+    ${rt}/render/renderer_choice.cpp
     ${rt}/ui/native_settings.cpp
     ${rt}/ui/launcher.cpp
     ${rt}/ui/settings_model.cpp
     ${rt}/ui/settings_system_page.cpp
+    ${rt}/ui/settings_benchmark_page.cpp
+    ${rt}/ui/benchmark_menu.cpp
+    ${rt}/ui/hdr_calibration.cpp
     ${rt}/ui/settings_advanced_page.cpp
     ${rt}/ui/settings_display_page.cpp
     ${rt}/ui/settings_general_page.cpp
@@ -121,6 +150,10 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/galaxy_select.cpp
     ${rt}/benchmark_recommend.cpp
     ${rt}/benchmark.cpp
+    ${rt}/calibration_scene.cpp
+    ${rt}/benchmark_stats.cpp
+    ${rt}/benchmark_results.cpp
+    ${rt}/strict_json.cpp
     ${rt}/render/frame_interpolation.cpp
     ${rt}/render/rt_materials.cpp
     ${rt}/render/rt_caps.cpp
@@ -144,6 +177,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/vk/shader_compile_vk.cpp
     ${rt}/render/vk/compile_journal.cpp
     ${rt}/render/vk/renderer_vk.cpp
+    ${rt}/render/present_slots.cpp
     ${rt}/render/vk/ambient_occlusion_vk.cpp
     ${rt}/render/vk/temporal_upscaler_vk.cpp
     ${rt}/render/vk/sgsr2_vk.cpp
@@ -174,6 +208,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/input/wiimote_motion.cpp
     ${rt}/input/controls_engine.cpp
     ${rt}/input/live_controls_engine.cpp
+    ${rt}/input/co_star.cpp
     ${rt}/native_input.cpp
     ${rt}/pointer_control.cpp
     ${rt}/rumble.cpp
@@ -185,6 +220,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/atomic_file.cpp
     ${rt}/asset_store.cpp
     ${rt}/save_files.cpp
+    ${rt}/save_transfer.cpp
     ${rt}/mii_import.cpp
     ${rt}/mii_formats.cpp
     ${rt}/mod_xml.cpp
@@ -219,6 +255,8 @@ endif()
 include("${nebula_root}/third_party/boringssl.cmake")
 include("${nebula_root}/third_party/zlib_inflate.cmake")
 target_link_libraries(galaxy_render_vk PRIVATE nebula_bssl_ssl nebula_zinflate)
+# Save import (save_transfer.cpp) checks a GameData.bin with the game's own check (SaveFileFormat.hpp).
+set_property(SOURCE ${rt}/save_transfer.cpp APPEND PROPERTY INCLUDE_DIRECTORIES "${nebula_root}/native/petari/include")
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/src")
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/include")
 target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include" "${galaxy_utility_spirv_dir}")
@@ -317,7 +355,19 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT ANDROID)
     target_sources(main PRIVATE ${rt}/update/update.cpp ${rt}/update/update_crypto.cpp ${rt}/update/update_transport_curl.cpp
         ${rt}/update/update_install_linux.cpp ${rt}/update/update_probe_posix.cpp)
     target_compile_definitions(main PRIVATE NEBULA_UPDATE_CHECK=1)
+    target_compile_definitions(galaxy_render_vk PRIVATE NEBULA_UPDATE_CHECK=1)  # the settings' UPDATES rows
     target_link_libraries(main PRIVATE ${CMAKE_DL_LIBS})
+    # The program finds libSDL3.so.0 in its own folder (RUNPATH $ORIGIN), where the package puts it, and names no
+    # folder of the build machine. SDL's library is built beside the program, so a build folder runs as it is.
+    set_target_properties(SDL3-shared PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_target_properties(main PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE INSTALL_RPATH "$ORIGIN")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # macOS: NSURLSession for the check, the signed app bundle replaced in place (update_install_macos.mm).
+    target_sources(main PRIVATE ${rt}/update/update.cpp ${rt}/update/update_crypto.cpp ${rt}/update/update_transport_apple.mm
+        ${rt}/update/update_install_macos.mm ${rt}/update/update_probe_posix.cpp)
+    target_compile_definitions(main PRIVATE NEBULA_UPDATE_CHECK=1)
+    target_compile_definitions(galaxy_render_vk PRIVATE NEBULA_UPDATE_CHECK=1)
+    target_link_libraries(main PRIVATE "-framework Security" "-framework CFNetwork")
 endif()
 
 # The launcher's mod and Mii import on Android (libnebula_mods.so): the game's own importers, in the launcher's process.

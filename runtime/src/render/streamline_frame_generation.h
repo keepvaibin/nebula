@@ -3,6 +3,7 @@
 
 // DLSS Frame Generation, Reflex and the latency markers: the same on both renderers (streamline_bridge.cpp, streamline_vk.cpp).
 
+#include "galaxy/platform_time.h"
 #include "galaxy/render/streamline_bridge.h"
 
 #include <sl.h>
@@ -161,8 +162,12 @@ public:
         if (applied_ != 0u && get_state_(sl::ViewportHandle{0u}, state, nullptr) == sl::Result::eOk) {
             presented_ = std::max(state.numFramesActuallyPresented, 1u);
             const unsigned status = static_cast<unsigned>(state.status);
-            if (status != status_ || frame_index_ - reported_index_ >= 600u) {
-                reported_index_ = frame_index_;
+            // A status change at once (the next line ten seconds after it), else every ten seconds on the clock.
+            const bool changed = status != status_;
+            if (changed) {
+                report_.restart();
+            }
+            if (changed || report_.due()) {
                 std::cerr << "[dlss-g] frame " << frame_index_ << " status " << status << " presented "
                           << state.numFramesActuallyPresented << " max " << state.numFramesToGenerateMax << " min-size "
                           << state.minWidthOrHeight << '\n';
@@ -189,7 +194,7 @@ private:
     unsigned presented_ = 1u;
     unsigned status_ = 0u;
     std::uint32_t frame_index_ = 0u;
-    std::uint32_t reported_index_ = 0u;
+    galaxy::ClockInterval report_{10'000};
 };
 
 }  // namespace galaxy::render::streamline_common

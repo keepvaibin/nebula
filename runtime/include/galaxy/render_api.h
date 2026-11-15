@@ -57,7 +57,7 @@ struct HostClientExtent {
 [[nodiscard]] HostClientExtent current_host_client_extent() noexcept;
 
 // The picture shape selected by the aspect setting, latched each video frame: the window's client
-// extent limited to 4:3..32:9, or the chosen ratio.
+// extent limited to kNarrowestContentAspect..kWidestContentAspect, or the chosen ratio.
 [[nodiscard]] HostClientExtent aspect_latch_extent() noexcept;
 
 // Creates the window and the renderer (device, swap chain, queues, root signature, pipelines, upload buffers).
@@ -73,6 +73,10 @@ void set_frame_end_presents(bool enabled) noexcept;
 // Walks the frame list attached (attach_frame_list) and optionally presents: the newest picture, or black when
 // `black`. Nothing attached: at most a present.
 void render_frame(bool present_swap_chain = true, bool black = false);
+// Simulation thread, as each step starts: the moment its step clock set for it (qpc_now() ticks). The frame the next
+// render_frame hands over arrives at that moment for the interpolation's clock, not when the thread got to run: a late
+// wake would otherwise move the frame's place in time. Used once; 0 or none: render_frame's own time.
+void set_step_moment(std::int64_t qpc) noexcept;
 
 // Blocks until the render queue and every in-flight render chunk are idle.
 void wait_for_render_idle();
@@ -192,6 +196,11 @@ bool native_settings_pad_key(std::uintptr_t virtual_key);
 // A text option is being typed in: the host shows its on-screen keyboard (SDL_StartTextInput).
 [[nodiscard]] bool native_settings_text_wanted() noexcept;
 void native_settings_files_dropped(std::vector<std::filesystem::path> files);
+// The files this start was given to import (--import: Open with, a file's association), once: the window hands them to
+// native_settings_files_dropped. From then on a restart of this start leaves them out (--imports-taken), so an import
+// that restarts the game is not made again.
+[[nodiscard]] std::vector<std::filesystem::path> native_settings_take_launch_imports();
+[[nodiscard]] bool native_settings_launch_imports_taken() noexcept;
 void native_settings_window_resized(unsigned width, unsigned height);
 // The graphics device lost at the renderer's next frame, as a driver reset loses it (an extension's lose_gpu_device).
 void lose_gpu_device() noexcept;
@@ -258,6 +267,19 @@ enum class NativeSettingsStatus : unsigned {
                       // (next: Apply, before: Revert, back: Close)
     ModRemoveAsk,     // remove the mod whose page is open? status_number 1: to the recycle bin (yes: Apply, no: Close)
     ModForgetAsk,     // forget what a removed mod kept? (status_text: its id; yes: Apply, no: Close)
+    BenchmarkAsk,     // restart and run the benchmark? (yes: Apply, no: Close)
+    BenchmarkResults, // the benchmark's results, a page at a time: status_text the title, long_text the table
+                      // (settings_benchmark_page.h), status_number page << 8 | pages, the summary's picture its graph
+                      // (next: Apply, before: Revert, back: Close)
+    BenchmarkSendAsk, // send the last result? status_number 1: Revert shows the report (yes: Apply, no: Close)
+    RendererRestart,  // the new renderer applies at the next start
+    BenchmarkSending, // the report is being sent (no answer until it ends)
+    BenchmarkSent,    // the report reached the developer (OK: Apply or Close)
+    BenchmarkSendFailed, // the report was not sent: status_number's low byte why (benchmark_menu::SendOutcome),
+                         // status_text the error (OK: Apply or Close)
+    HdrCalibration,      // the HDR calibration (ui/hdr_calibration.h): status_number its step, the slider's place and its
+                         // last place, status_text the level (next or save: Apply, back: Revert, cancel: Close; the
+                         // slider: Change, SetValue)
 };
 // A picture the menu shows (a mod's icon or one of its pictures): RGBA8 rows, tightly packed, straight alpha.
 struct NativeSettingsPicture {
@@ -273,6 +295,14 @@ inline constexpr int kJoyConRightHeldBit = 8;  // its R is held
 inline constexpr int kJoyConPairedBit = 16;    // a pair was just made
 inline constexpr int kJoyConLeftPressesShift = 8;    // 4 bits: the left halves' button presses, counted round
 inline constexpr int kJoyConRightPressesShift = 12;  // 4 bits: the right halves'
+// The benchmark's frame-time graph in a NativeSettingsView's picture (nebula_game_api.h graph_*): the plot in texels,
+// the scale in milliseconds, the column where each stage starts. All 0 when the picture is no graph.
+struct NativeSettingsGraph {
+    unsigned left = 0u, top = 0u, right = 0u, bottom = 0u;
+    float top_fps = 0.0f, step_fps = 0.0f;
+    std::vector<unsigned> stage_starts;
+    bool operator==(const NativeSettingsGraph&) const = default;
+};
 struct NativeSettingsView {
     bool open = false;
     unsigned page = 0u;
@@ -289,9 +319,12 @@ struct NativeSettingsView {
     std::string status_text;
     std::string long_text;
     std::shared_ptr<const NativeSettingsPicture> picture;
+    NativeSettingsGraph graph;  // the picture's plot when it is the benchmark's frame-time graph
 };
 // The menu as it stands. The first call hands the drawing to the game: the overlay draws nothing of its own after.
 [[nodiscard]] NativeSettingsView native_settings_view();
+// What the hints name now (NativeSettingsView::input): the button style chosen, else what the player last used.
+[[nodiscard]] unsigned native_settings_hint_input();
 // The pointer's input to the menu (the game's own menu takes the pointer; the window thread the keyboard and pads).
 // CloseUnseen is the host's own: the game's close where it shows no menu (before its first 3D scene, the boot). It
 // closes a menu that asks nothing; one that asks is hidden as it stands, nothing answered, until

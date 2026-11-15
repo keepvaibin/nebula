@@ -5,6 +5,7 @@ import android.app.ActivityManager
 import android.content.Context
 import androidx.annotation.StringRes
 import android.net.Uri
+import android.provider.DocumentsContract
 import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
@@ -33,14 +34,26 @@ object SaveTransfer {
         context.getSystemService(ActivityManager::class.java).runningAppProcesses.orEmpty()
             .any { it.processName.endsWith(":game") }
 
-    /** Every save file as one .zip at [uri]. */
+    /** There is a save to export. */
+    fun hasSaves(context: Context): Boolean = saveFiles(GameFiles.saves(context)).any { SAVE_NAMES.matches(it.second.name) }
+
+    fun noSavesYet(context: Context) =
+        TransferResult(false, context.getString(R.string.NoSavesYet), context.getString(R.string.PlayFirst))
+
+    /** Every save file as one .zip at [uri], the document the player just created; removed again when not written. */
     fun export(context: Context, uri: Uri): TransferResult {
         val files = saveFiles(GameFiles.saves(context))
         if (files.none { SAVE_NAMES.matches(it.second.name) }) {
-            return TransferResult(false, context.getString(R.string.NoSavesYet), context.getString(R.string.PlayFirst))
+            discard(context, uri)
+            return noSavesYet(context)
         }
-        val output = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException(context.getString(R.string.FileUnwritable))
-        output.use { zip(files, it) }
+        try {
+            val output = context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException(context.getString(R.string.FileUnwritable))
+            output.use { zip(files, it) }
+        } catch (e: Exception) {
+            discard(context, uri)
+            throw e
+        }
         return TransferResult(
             true, context.getString(R.string.SavesExported),
             context.getString(R.string.SavesExportedText, files.size, formatBytes(files.sumOf { it.second.length() })),
@@ -121,6 +134,11 @@ object SaveTransfer {
     }
 
     // Save files under the save folder (not tmp/), by their path inside it.
+    /** Removes a document the player created for an export that did not happen. */
+    private fun discard(context: Context, uri: Uri) {
+        runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }
+    }
+
     private fun saveFiles(root: File): List<Pair<String, File>> =
         root.walkTopDown().filter { it.isFile }
             .map { it.relativeTo(root).invariantSeparatorsPath to it }

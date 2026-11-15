@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -54,7 +55,16 @@ struct FrameRateCaps {
     bool generated_dynamic = false;
     unsigned generated_max = 0;
     bool fsr_generation_offered = false;
+    // VSync off on a surface that can present before the refresh: native interpolation offers Unlimited
+    // (render_config.h kUnlimitedFrameRate).
+    bool unlimited = false;
+    // The surface presents only at its refresh (render_config.h present_waits_for_refresh): VSync stays on.
+    bool vsync_fixed = false;
 };
+// A frame-rate target as the settings list it: frames a second, 0 for the display's rate, kUnlimitedTarget for no cap.
+inline constexpr unsigned kUnlimitedTarget = std::numeric_limits<unsigned>::max();
+unsigned frame_rate_target(float max_fps);
+float frame_rate_of_target(unsigned target);
 Interpolation interpolation_of(const RenderConfig& render);
 std::vector<unsigned> interpolation_targets(Interpolation mode, const FrameRateCaps& caps);
 std::vector<Interpolation> interpolation_modes(const FrameRateCaps& caps);

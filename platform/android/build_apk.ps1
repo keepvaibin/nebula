@@ -15,6 +15,8 @@
 #                 [-ReleaseKey <the release key's private XML>: Nebula.apk.sig, the release-key signature the app's
 #                  updates check (Updates.kt); default the Windows setups' key at its usual place, '' for none]
 #                 [-ShippedMods <the folder of the .luma files that come with the game: LumaKit>]
+#                 [-Unsigned: Nebula-unsigned.apk, a release build with no signature (and no .sig), which
+#                  installer/sign-release.ps1 signs with the release key; the release workflow builds this]
 #   A release publishes the two as Nebula-Android.apk and Nebula-Android.apk.sig (a beta: Nebula-Beta-Android.apk).
 param(
     [Parameter(Mandatory = $true)][string]$Deps,
@@ -33,7 +35,8 @@ param(
     # The .luma files that come with the game (LumaKit, from LumaLink's `lumalink build` and `lumalink pack`): the app
     # carries them in its assets' mods folder and the game installs them at start. Empty: an app without them (a test
     # build); its mods that need LumaKit then need it installed by hand.
-    [string]$ShippedMods = ""
+    [string]$ShippedMods = "",
+    [switch]$Unsigned
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -168,12 +171,23 @@ if (-not $env:JAVA_HOME) { $env:JAVA_HOME = "${env:ProgramFiles}\Android\Android
 $env:ANDROID_HOME = $sdk
 $properties = @("-Pnebula.sdlDir=$Deps\SDL3-3.4.18", "-Pnebula.jniDir=$jni", "-Pnebula.assetsDir=$Work\assets")
 if ($Signing -ne "") { $properties += "-Pnebula.signing=$Signing" }
+if ($Unsigned) {
+    if ($Signing -ne "") { throw "-Unsigned and -Signing exclude each other" }
+    $properties += "-Pnebula.unsigned=true"
+}
 if ($Debuggable) { $properties += "-Pnebula.debuggable=true" }
 if ($Harness -ne "") { $properties += "-Pnebula.harness=$Harness" }
 Push-Location $android
 try {
     Invoke-Logged "$Work\gradle.log" { & .\gradlew.bat --no-daemon assembleRelease "-PnebulaAbis=$Abis" @properties }
 } finally { Pop-Location }
+if ($Unsigned) {
+    # installer/sign-release.ps1 signs it and then writes its .sig: one written now would not match the signed file.
+    $apk = Join-Path $android "app\build\outputs\apk\release\app-release-unsigned.apk"
+    Copy-Item $apk (Join-Path $Work "Nebula-unsigned.apk") -Force
+    "apk: $(Join-Path $Work 'Nebula-unsigned.apk') ($([math]::Round((Get-Item $apk).Length / 1MB, 1)) MB, not signed)"
+    return
+}
 $apk = Join-Path $android "app\build\outputs\apk\release\app-release.apk"
 Copy-Item $apk (Join-Path $Work "Nebula.apk") -Force
 "apk: $(Join-Path $Work 'Nebula.apk') ($([math]::Round((Get-Item $apk).Length / 1MB, 1)) MB)"

@@ -57,11 +57,17 @@ public:
         return made;
     }
 
-    // Queues `id` for every target kind and aux set of the settings, for the background threads: with `motion`, the aux a
-    // scene draw of its state can take (scene_aux; 4 for every other with `one_pass`, 3 only with `layer`), and while the
-    // wide variant is listed the narrow variant's left for after the first scene (defer). With `traced` (ray tracing on),
-    // aux 1 and either 4 or 2 and 3 whatever the state, the prepass of an opaque entry and a lit program's traced forms.
-    void prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,
+    // An entry to prepare: its id and a copy its jobs share.
+    struct Prepared {
+        std::uint32_t id = 0u;
+        std::shared_ptr<const PipelineEntry> entry;
+    };
+    // Queues each entry for every target kind and aux set of the settings, for the background threads: with `motion`, the
+    // aux a scene draw of its state can take (scene_aux; 4 for every other with `one_pass`, 3 only with `layer`), and while
+    // the wide variant is listed the narrow variant's left for after the first scene (defer). With `traced` (ray tracing
+    // on), aux 1 and either 4 or 2 and 3 whatever the state, the prepass of an opaque entry and a lit program's traced
+    // forms. The jobs are made before the queue's lock is taken, and the queue takes them all at once.
+    void prepare(const std::vector<Prepared>& entries, const std::vector<unsigned>& variants, bool motion, bool layer,
                  bool one_pass, bool traced = false);
     [[nodiscard]] std::uint32_t pending() const noexcept { return pending_.load(std::memory_order_relaxed); }
     [[nodiscard]] std::uint64_t created() const noexcept { return created_.load(std::memory_order_relaxed); }
@@ -122,7 +128,7 @@ private:
     }
     struct Job {
         std::uint32_t id;
-        PipelineEntry entry;
+        std::shared_ptr<const PipelineEntry> entry;  // shared by the entry's jobs
         unsigned variant, aux;
         bool optimize = false;  // a draw's quickly linked pipeline, to be replaced by the optimised link
         bool deferred = false;  // a form left out of the start's set, made after the first scene is shown (defer)

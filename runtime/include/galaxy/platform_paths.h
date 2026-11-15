@@ -122,6 +122,19 @@ namespace galaxy {
 #endif
 }
 
+// The folder of the files a package installs for the program (luma/: the game's self-description, its SDK and the mods
+// that come with it): the program's folder, or in a Mac app its Resources folder (Contents/Resources beside the
+// program's Contents/MacOS). Empty when the program's folder is unknown.
+[[nodiscard]] inline std::filesystem::path package_directory() {
+    const std::filesystem::path program = program_directory();
+#if defined(__APPLE__)
+    if (program.filename() == "MacOS" && program.parent_path().filename() == "Contents") {
+        return program.parent_path() / "Resources";
+    }
+#endif
+    return program;
+}
+
 // fopen on a path (UTF-16 on Windows); null on failure, with errno set.
 [[nodiscard]] inline std::FILE* open_path(const std::filesystem::path& path, const char* mode) {
 #if defined(_WIN32)

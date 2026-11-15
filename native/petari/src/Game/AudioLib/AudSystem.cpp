@@ -389,6 +389,7 @@ void AudSystem::resumeReset() {
     mPauseMenuToggleTime = -1;
     mIsReset = false;
     mIsResetReady = false;
+    keepSettingsHold();
 }
 
 bool AudSystem::hasReset() const {
@@ -406,6 +407,7 @@ void AudSystem::initSceneVolume() {
     mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 0);
     mPauseMenuState = MenuState_Off;
     mPauseMenuToggleTime = -1;
+    keepSettingsHold();
 }
 
 void AudSystem::pause() {
@@ -560,6 +562,16 @@ void AudSystem::holdForSettingsMenu(bool hold, bool stayFaded) {
         mPausedByWorld = false;
         unpause();
     }
+}
+
+void AudSystem::keepSettingsHold() {
+    if (!mSettingsHeld) {
+        return;
+    }
+    mSeqMgr.getParams()->moveVolume(0.0f, 0);
+    mStreamMgr.getParams()->moveVolume(0.0f, 0);
+    setVolumeZeroForce(MenuType_Pause);
+    setSeVolumeSet(AudSystemVolumeController::VolumeSet_PauseMenu, 0);
 }
 
 // LumaCore's world clock (services/time.md 7). Held: as for the settings menu, the music fades and then pauses, the

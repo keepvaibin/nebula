@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <limits>
@@ -122,15 +123,25 @@ void UploadRing::begin_frame(unsigned frame_slot) {
     if (mapped_ == nullptr || frame_slot >= frames_in_flight_) {
         throw std::runtime_error("UploadRing frame slot is out of range");
     }
-    // The frame before: what it took (segment, spill and chunks) joins the quiet window. A window of kQuietFrames frames whose
-    // peak stayed within a quarter of the budget lets the ring shrink (wants_shrink); a busier one does not.
+    // The frame before: what it took (segment, spill and chunks) joins the quiet window. A window of kQuietFrames frames and
+    // kQuietNs whose peak stayed within a quarter of the budget lets the ring shrink (wants_shrink); a busier one does not.
     if (frame_ready_) {
         window_peak_ = std::max(window_peak_, cursor_ - segment_base_ + frame_spill_);
-        if (++window_frames_ >= kQuietFrames) {
+        const auto now_ns = [] {
+            return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                  std::chrono::steady_clock::now().time_since_epoch())
+                                                  .count());
+        };
+        if (window_frames_ == 0u) {
+            window_start_ns_ = now_ns();
+        }
+        if (++window_frames_ >= kQuietFrames && now_ns() - window_start_ns_ >= kQuietNs) {
             shrink_ready_ = capacity_ > floor_capacity_ && window_peak_ <= bytes_per_frame_ / 4u;
             shrink_peak_ = window_peak_;
             window_peak_ = 0u;
             window_frames_ = 0u;
+        } else if (window_peak_ > bytes_per_frame_ / 4u) {
+            shrink_ready_ = false;  // busier since the quiet window: no shrink at the next moment
         }
     }
     active_slot_ = frame_slot;
@@ -266,6 +277,41 @@ UploadRing::Miss UploadRing::take(std::size_t size, std::size_t alignment, Alloc
         nullptr
     };
     return Miss::None;
+}
+
+bool remake_upload_rings(gpu::Device* device, std::span<const UploadRingSlot> rings, bool all, bool& failed,
+                         std::vector<gpu::BufferRef>& old) {
+    bool made = false;
+    for (const UploadRingSlot& slot : rings) {
+        UploadRing& ring = *slot.ring;
+        if (!all && !ring.wants_new_size()) {
+            continue;
+        }
+        const std::size_t had = ring.capacity();
+        std::size_t capacity = ring.wants_shrink() ? ring.shrunk_capacity(slot.segments)
+                                                   : failed ? had : ring.grown_capacity(slot.segments);
+        if (capacity == 0u) {
+            failed = true;
+            capacity = had;
+        }
+        if (capacity != had) {
+            std::cerr << "[gpu-rings] " << (capacity > had ? "grow " : "shrink ") << slot.name
+                      << " frame-high-water-kb=" << (ring.high_water() >> 10u) << " budget-kb=" << (ring.bytes_per_frame() >> 10u)
+                      << " mb=" << (had >> 20u) << "->" << (capacity >> 20u) << '\n';
+        }
+        ring.release_into(old);
+        made = true;
+        if (ring.initialize(device, slot.name, UploadRing::budget(capacity, slot.segments), slot.segments, capacity, slot.chunks)) {
+            continue;
+        }
+        // Out of upload memory: the size it had, and no further growth.
+        failed = true;
+        std::cerr << "[gpu-rings] grow " << slot.name << " failed\n";
+        if (!ring.initialize(device, slot.name, UploadRing::budget(had, slot.segments), slot.segments, had, slot.chunks)) {
+            throw std::runtime_error("upload ring resize failed");
+        }
+    }
+    return made;
 }
 
 }  // namespace galaxy::render

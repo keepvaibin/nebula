@@ -22,7 +22,8 @@ void show_fatal(const char* message) noexcept;
 void pump_events(int timeout_ms) noexcept;
 // The app is out of sight (Android: the activity stopped); the host stops the game's clocks meanwhile.
 [[nodiscard]] bool in_background() noexcept;
-// The system asked for memory (SDL_EVENT_LOW_MEMORY: Android's onTrimMemory, any level) since the last call.
+// The system asked for memory since the last call: SDL_EVENT_LOW_MEMORY (Android's onTrimMemory, any level), macOS's
+// memory pressure warning or critical level.
 [[nodiscard]] bool take_low_memory() noexcept;
 
 // The display's vsync as the game's frame clock (Android: Choreographer's vsync times, display_clock.cpp): sleeps

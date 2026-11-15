@@ -10,14 +10,16 @@ import android.view.Display;
 public final class DisplayRate {
     private DisplayRate() {}
 
-    /** The fastest mode, a multiple of 60 Hz first (each game frame then spans whole refreshes). */
+    /**
+     * The fastest mode. Any rate: interpolated pictures are timed by their moments on the display's vsyncs, and the
+     * game's own 30 or 60 frames leave the mode to the system (the surface's fixed-source vote).
+     */
     public static Display.Mode fastestMode(Display display) {
         final Display.Mode current = display.getMode();
         Display.Mode best = current;
         for (final Display.Mode mode : display.getSupportedModes()) {
             if (mode.getPhysicalWidth() == current.getPhysicalWidth() &&
-                mode.getPhysicalHeight() == current.getPhysicalHeight() &&
-                score(mode.getRefreshRate()) > score(best.getRefreshRate())) {
+                mode.getPhysicalHeight() == current.getPhysicalHeight() && mode.getRefreshRate() > best.getRefreshRate()) {
                 best = mode;
             }
         }
@@ -25,8 +27,8 @@ public final class DisplayRate {
     }
 
     /**
-     * The mode for a frame rate: the slowest that shows it (at or above it, a multiple of 60 Hz first among equals), or
-     * the fastest for 0 (the display's own rate) and for a rate above every mode.
+     * The mode for a frame rate: the slowest that shows it (at or above it), or the fastest for 0 (the display's own
+     * rate) and for a rate above every mode.
      */
     public static Display.Mode modeFor(Display display, float frameRate) {
         final Display.Mode fastest = fastestMode(display);
@@ -40,17 +42,10 @@ public final class DisplayRate {
                 mode.getPhysicalHeight() != current.getPhysicalHeight() || mode.getRefreshRate() + 0.5f < frameRate) {
                 continue;
             }
-            if (best == null || mode.getRefreshRate() < best.getRefreshRate() - 0.5f ||
-                (Math.abs(mode.getRefreshRate() - best.getRefreshRate()) <= 0.5f &&
-                 score(mode.getRefreshRate()) > score(best.getRefreshRate()))) {
+            if (best == null || mode.getRefreshRate() < best.getRefreshRate()) {
                 best = mode;
             }
         }
         return best != null ? best : fastest;
-    }
-
-    private static float score(float hz) {
-        final float multiple = Math.round(hz / 60.0f) * 60.0f;
-        return (Math.abs(hz - multiple) < 1.0f ? 1000.0f : 0.0f) + hz;
     }
 }

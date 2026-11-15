@@ -9,6 +9,7 @@
 #include "Game/System/LumaServices.hpp"
 #include "Game/System/LumaTime.hpp"
 #include "Game/System/GameSystem.hpp"
+#include "Game/System/NebulaSaveImport.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/NebulaLoadTrace.hpp"
@@ -59,7 +60,7 @@ namespace {
     // The drawers GameSystem::draw calls itself, outside the object lists, each under a draw slot of its own: they pair from
     // frame to frame by it, not by the numbers of whichever object drew before them (a full-screen fill would take a pane's
     // matrix when that pane's draw count changed).
-    enum { Own_Sequence, Own_CutsceneSkip, Own_ScreenPreserver, Own_SystemWipe, Own_ErrorWatcher, Own_Overlay, Own_Prepare, Own_Settings, Own_Restart, Own_Count };
+    enum { Own_Sequence, Own_CutsceneSkip, Own_ScreenPreserver, Own_SystemWipe, Own_ErrorWatcher, Own_Overlay, Own_Prepare, Own_Benchmark, Own_Settings, Own_Restart, Own_Count };
     u32 sOwnSlots[Own_Count];
 
     void drawOwn(u32 which) {
@@ -173,6 +174,7 @@ void GameSystem::initAfterSystemArchiveLoaded() {
     NebulaCutsceneSkip::init();
     NebulaSettingsMenu::init();
     NebulaPrepare::init();
+    NebulaBenchmarkPanel::init();
     mSceneController->initAfterSystemArchiveLoaded();
     mSequenceDirector->initAfterResourceLoaded();
 }
@@ -238,6 +240,10 @@ void GameSystem::draw() {
     mSceneController->drawSceneOverlay();
     drawOwn(Own_Prepare);
     NebulaPrepare::draw();
+    drawOwn(Own_Benchmark);
+    // A diagnostics run's start: black under its panel until its first stage shows.
+    SingletonHolder< GameSystemRestartProcess >::get()->drawHoldCover();
+    NebulaBenchmarkPanel::draw();
     // The mods' present point: every frame shown, over the game's screens and under Nebula's settings menu.
     luma::draw::point(LUMA_DRAW_PRESENT);
     if (isSettingsShown) {
@@ -259,6 +265,8 @@ void GameSystem::update() {
     }
     NebulaMenuFocus::update();
     NebulaPrepare::update();
+    NebulaBenchmarkPanel::update();
+    NebulaSaveImport::update();  // the settings' save import's read; one load when none waits
     luma::takeOutRequested();  // mods asked to be taken out (reload.md 2); one load when none is
     luma::frame();             // replaced hook lists and taken-out mods no call holds; nothing when there are none
     luma::services::frameStart();  // the services' events, then time's frame handlers; one load when nothing waits

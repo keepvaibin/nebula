@@ -141,6 +141,8 @@ Instead of a fixed frame, a step can wait for a fact or a log line:
 
 Each item is read back from the game before frame 0. An item that did not take ends the test as `setup-failed`, so a test never passes on a setup that did not happen.
 
+The window is 1280 x 720 unless the test sets `"window": [width, height]`, for example `[1920, 360]` for 48:9.
+
 ## Pressing buttons in menus
 
 In the game's menus, A presses the button that is highlighted or under the pointer. To press a menu button, point at it first, then press A:

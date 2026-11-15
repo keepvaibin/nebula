@@ -20,7 +20,8 @@ namespace {
     };
     // The host's view (NEBULA_HOME_MENU_LAUNCHER_OPEN): bit 16 marks the home screen's, bits 8-15 its page.
     const s32 cLauncherView = 1 << 16;
-    enum { cChoicePlay = 0, cChoiceQuit = 1, cChoiceBenchmark = 2 };
+    // Benchmark (2) comes back as Play: the host runs it in the game (NEBULA_HOME_MENU_RESET).
+    enum { cChoicePlay = 0, cChoiceQuit = 1, cChoiceUpdate = 3 };
 
     bool sHolding = false;
     bool sLeaving = false;
@@ -40,6 +41,16 @@ namespace NebulaLauncher {
     void open() {
         sHolding = request(NEBULA_HOME_MENU_LAUNCHER_OPEN, 0) != 0;
         sView = sHolding ? request(NEBULA_HOME_MENU_VIEW, 0) : -1;
+    }
+
+    bool openNotice() {
+        if (sHolding || sLeaving || request(NEBULA_HOME_MENU_LAUNCHER_NOTICE, 0) == 0) {
+            return false;
+        }
+        sHolding = true;
+        sView = request(NEBULA_HOME_MENU_VIEW, 0);
+        play(cSoundSelect);
+        return true;
     }
 
     void update() {
@@ -64,7 +75,7 @@ namespace NebulaLauncher {
             sHolding = false;
             break;
         case cChoiceQuit:
-        case cChoiceBenchmark: {  // the host starts again into the benchmark when the game has left
+        case cChoiceUpdate: {  // the host starts Nebula Setup to install it when the game has left
             play(cSoundGotoMenu);
             sLeaving = true;
             AudSystem* const pAudio = AudWrap::getSystem();
@@ -81,6 +92,14 @@ namespace NebulaLauncher {
 
     bool isHolding() {
         return sHolding;
+    }
+
+    bool takeReset() {
+        return request(NEBULA_HOME_MENU_RESET, 0) != 0;
+    }
+
+    void resetDone() {
+        request(NEBULA_HOME_MENU_RESET_DONE, 0);
     }
 
     s32 readText(u32 which, char16_t* pText, s32 capacity) {

@@ -1,6 +1,7 @@
 // The Win32 game window's own thread (window_owner.h).
 #include "galaxy/render/window_owner.h"
 #include "galaxy/windows_power.h"
+#include <dwmapi.h>
 #include <future>
 #include <stdexcept>
 #include <utility>
@@ -23,6 +24,10 @@ HWND WindowOwner::start(WindowOwnerConfig config) {
             config.style, config.x, config.y, config.width, config.height,
             nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
         if (window != nullptr && config.show) {
+            if (config.cloak) {
+                const BOOL cloak = TRUE;
+                (void)DwmSetWindowAttribute(window, DWMWA_CLOAK, &cloak, sizeof(cloak));
+            }
             ShowWindow(window, SW_SHOWNORMAL);
             UpdateWindow(window);
             SetForegroundWindow(window);

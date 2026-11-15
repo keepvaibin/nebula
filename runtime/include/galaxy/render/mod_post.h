@@ -32,7 +32,9 @@ struct ModPostConstants {
     float reserved0;
     float depth_terms[4];   // distance along the view axis = x / (d * y + z), d the depth target's value; w the far plane's
     float motion_scale[2];  // the motion target's value times this = where the surface was, minus uv (uv units)
-    float reserved1[2];
+    // The part of the depth and motion targets the scene was drawn in, as a share of their size from the top left
+    // (dynamic resolution's rectangle); 0 or 1: all of them.
+    float scene_share[2];
     float params[16];       // the program's parameters, 4 rows
 };
 static_assert(sizeof(ModPostConstants) == 128u);

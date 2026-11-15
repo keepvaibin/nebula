@@ -3,10 +3,12 @@
 #include "galaxy/windows_api.h"
 
 #include "galaxy/render/texture_store.h"
+#include "galaxy/benchmark.h"
 
 #include "galaxy/loss_report.h"
 #include "galaxy/render/block4_astc.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/idle_clock.h"
 #include "nebula_cooked_texture.h"
 #include "nebula_game_api.h"
 
@@ -17,6 +19,7 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -26,11 +29,10 @@ namespace {
 
 constexpr std::uint64_t kStagingChunkBytes = 16ull << 20u;
 constexpr std::size_t kFreeChunksKept = 4u;
-// Frames without a staging request before a spare chunk goes (one more for every kStagingTrimFrames after that, the chunk
-// being filled last): a scene's load keeps its chunks for the next scene's, and a run that has stopped loading gives them
-// all back.
-constexpr unsigned kStagingIdleFrames = 600u;
-constexpr unsigned kStagingTrimFrames = 120u;
+// Game steps without a staging request before a spare chunk goes (kIdleSteps; one more for every kStagingTrimSteps after
+// that, the chunk being filled last): a scene's load keeps its chunks for the next scene's, and a run that has stopped
+// loading gives them all back.
+constexpr std::uint64_t kStagingTrimSteps = 120u;
 
 // The bytes of the store's staging chunks that exist now (allocate_staging's), for the video memory breakdown.
 std::atomic<std::uint64_t> g_staging_bytes{0u};
@@ -38,6 +40,29 @@ std::atomic<std::uint64_t> g_staging_bytes{0u};
 std::uint64_t align_up(std::uint64_t value, std::uint64_t alignment) {
     return (value + alignment - 1u) & ~(alignment - 1u);
 }
+
+// sRGB's transfer both ways (IEC 61966-2-1): an 8-bit value to linear light, and linear light to an sRGB value in
+// 255ths, read from 4096 steps with linear interpolation (under 0.05 of a 255th from the exact curve).
+struct SrgbCurve {
+    float to_linear[256];
+    float to_srgb[4097];
+    SrgbCurve() noexcept {
+        for (int c = 0; c < 256; ++c) {
+            const double v = c / 255.0;
+            to_linear[c] = static_cast<float>(v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4));
+        }
+        for (int i = 0; i <= 4096; ++i) {
+            const double v = i / 4096.0;
+            to_srgb[i] = static_cast<float>(255.0 * (v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055));
+        }
+    }
+    [[nodiscard]] float srgb(float linear) const noexcept {
+        const float at = std::clamp(linear, 0.0f, 1.0f) * 4096.0f;
+        const int i = std::min(static_cast<int>(at), 4095);
+        return to_srgb[i] + (to_srgb[i + 1] - to_srgb[i]) * (at - static_cast<float>(i));
+    }
+};
+const SrgbCurve kSrgbCurve;
 
 }  // namespace
 
@@ -105,22 +130,152 @@ void detail::expand_record_level(std::uint8_t layout, const std::uint8_t* src, s
     }
 }
 
-struct TextureStore::Ops {
-    std::vector<Op> list;
-};
-
-bool TextureStore::samples_generated(const TextureSampler& mode, const TextureHandle& handle) {
-    // Only repeating textures read a generated chain: a clamped texture is a decal placed by a texture matrix (eyes,
-    // HUD digits) whose small detail blended lower levels would wash out.
-    if (!handle.generated_mips || min_filter_code(mode) != 4u || !mode.mag_linear || mode.wrap_s == TexWrap::Clamp ||
-        mode.wrap_t == TexWrap::Clamp || (handle.width < 64u && handle.height < 64u)) {
+bool detail::authored_levels(std::uint8_t layout, const std::uint8_t* texels, std::uint32_t width, std::uint32_t height,
+                             std::uint32_t levels) {
+    if (texels == nullptr || levels < 2u || width == 0u || height == 0u) {
         return false;
     }
-    return get_render_config().enhanced_mipmaps;
+    // The first level made smaller by a box filter in the ways tools make levels: colour in sRGB values or in linear
+    // light, each straight or premultiplied by alpha. The copies start at the second level's size, made from the first
+    // level's texels; each later level halves them in place (a box of boxes is the box of the first level), so
+    // `colour[way]` holds the copy of the level being compared.
+    enum Way : unsigned { kSrgb, kSrgbPremultiplied, kLinear, kLinearPremultiplied, kWays };
+    std::uint32_t w = std::max(1u, width >> 1u), h = std::max(1u, height >> 1u);
+    if (std::min(w, h) < 4u || width != w * 2u || height != h * 2u) {
+        return false;  // too few texels for a mean that holds, or no box of the first level
+    }
+    std::vector<RGBA8> expanded(static_cast<std::size_t>(width) * height);
+    detail::expand_record_level(layout, texels, width, height, expanded.data());
+    bool one_bit = true;  // alpha 0 or 255 only: a tool may cut the copy's alpha at half again
+    for (const RGBA8& t : expanded) {
+        one_bit = one_bit && (t.a == 0u || t.a == 255u);
+    }
+    std::size_t count = static_cast<std::size_t>(w) * h;
+    std::vector<float> colour[kWays];
+    for (std::vector<float>& c : colour) {
+        c.resize(count * 3u);
+    }
+    std::vector<float> alpha(count);
+    for (std::uint32_t y = 0; y < h; ++y) {
+        for (std::uint32_t x = 0; x < w; ++x) {
+            const std::size_t i = static_cast<std::size_t>(y) * w + x;
+            float a_sum = 0.0f;
+            float sums[kWays][3] = {};
+            for (std::uint32_t q = 0; q < 4u; ++q) {
+                const RGBA8 t = expanded[static_cast<std::size_t>(y * 2u + q / 2u) * width + x * 2u + q % 2u];
+                const float a = static_cast<float>(t.a) / 255.0f;
+                a_sum += a;
+                const std::uint8_t rgb[3] = {t.r, t.g, t.b};
+                for (unsigned k = 0; k < 3u; ++k) {
+                    const float value = static_cast<float>(rgb[k]);
+                    const float linear = kSrgbCurve.to_linear[rgb[k]];
+                    sums[kSrgb][k] += value;
+                    sums[kSrgbPremultiplied][k] += value * a;
+                    sums[kLinear][k] += linear;
+                    sums[kLinearPremultiplied][k] += linear * a;
+                }
+            }
+            alpha[i] = a_sum * 0.25f;
+            for (unsigned way = 0; way < kWays; ++way) {
+                for (unsigned k = 0; k < 3u; ++k) {
+                    colour[way][i * 3u + k] = sums[way][k] * 0.25f;
+                }
+            }
+        }
+    }
+
+    const std::uint8_t* level = texels + nebula_texture_level_bytes(width, height, 1u, layout);
+    for (std::uint32_t l = 1; l < levels; ++l) {
+        if (l > 1u) {
+            const std::uint32_t lw = std::max(1u, width >> l);
+            const std::uint32_t lh = std::max(1u, height >> l);
+            if (std::min(lw, lh) < 4u || w != lw * 2u || h != lh * 2u) {
+                break;
+            }
+            // Halve in place: texel i is written after every texel it reads, and every later read is past it.
+            for (std::uint32_t y = 0; y < lh; ++y) {
+                for (std::uint32_t x = 0; x < lw; ++x) {
+                    const std::size_t i = static_cast<std::size_t>(y) * lw + x;
+                    const std::size_t s = static_cast<std::size_t>(y) * 2u * w + x * 2u;
+                    alpha[i] = (alpha[s] + alpha[s + 1u] + alpha[s + w] + alpha[s + w + 1u]) * 0.25f;
+                    for (std::vector<float>& c : colour) {
+                        for (unsigned k = 0; k < 3u; ++k) {
+                            c[i * 3u + k] = (c[s * 3u + k] + c[(s + 1u) * 3u + k] + c[(s + w) * 3u + k] +
+                                             c[(s + w + 1u) * 3u + k]) * 0.25f;
+                        }
+                    }
+                }
+            }
+            w = lw;
+            h = lh;
+            count = static_cast<std::size_t>(w) * h;
+        }
+
+        // The level as drawn: its mean red, green and blue, each texel's weighted by its alpha (the colour under a
+        // clear texel shows nowhere), and its mean alpha, in 255ths.
+        detail::expand_record_level(layout, level, w, h, expanded.data());
+        double drawn[4] = {};
+        for (std::size_t i = 0; i < count; ++i) {
+            const RGBA8 t = expanded[i];
+            drawn[0] += static_cast<double>(t.r) * t.a;
+            drawn[1] += static_cast<double>(t.g) * t.a;
+            drawn[2] += static_cast<double>(t.b) * t.a;
+            drawn[3] += t.a;
+        }
+        for (unsigned c = 0; c < 3u; ++c) {
+            drawn[c] = drawn[3] > 0.0 ? drawn[c] / drawn[3] : 0.0;
+        }
+        drawn[3] /= static_cast<double>(count);
+
+        // The same for each copy (its alpha as made, or cut at half); the closest copy says how far the level is from
+        // a smaller copy of the first.
+        double closest = std::numeric_limits<double>::infinity();
+        for (unsigned way = 0; way < kWays; ++way) {
+            const bool premultiplied = way == kSrgbPremultiplied || way == kLinearPremultiplied;
+            const bool linear = way == kLinear || way == kLinearPremultiplied;
+            for (unsigned cut = 0; cut < (one_bit ? 2u : 1u); ++cut) {
+                double copy[4] = {};
+                for (std::size_t i = 0; i < count; ++i) {
+                    const float a = alpha[i];
+                    const double weight = cut != 0u ? (a >= 0.5f ? 255.0 : 0.0) : static_cast<double>(a) * 255.0;
+                    if (weight == 0.0) {
+                        continue;
+                    }
+                    for (unsigned k = 0; k < 3u; ++k) {
+                        float value = colour[way][i * 3u + k];
+                        if (premultiplied) {
+                            value /= a;
+                        }
+                        copy[k] += weight * (linear ? kSrgbCurve.srgb(value) : value);
+                    }
+                    copy[3] += weight;
+                }
+                for (unsigned k = 0; k < 3u; ++k) {
+                    copy[k] = copy[3] > 0.0 ? copy[k] / copy[3] : 0.0;
+                }
+                copy[3] /= static_cast<double>(count);
+                double apart = 0.0;
+                for (unsigned k = 0; k < 4u; ++k) {
+                    apart = std::max(apart, std::fabs(drawn[k] - copy[k]));
+                }
+                closest = std::min(closest, apart);
+            }
+        }
+        if (closest > kAuthoredLevelsChange) {
+            return true;
+        }
+        level += nebula_texture_level_bytes(w, h, 1u, layout);
+    }
+    return false;
 }
 
+struct TextureStore::Ops {
+    std::vector<Op> list;
+    std::uint64_t serial = 0u;  // the operations handed out up to and with these (queued_ops)
+};
+
 bool TextureStore::wants_generated_levels(const RenderConfig& render) noexcept {
-    return render.enhanced_mipmaps || render.ray_tracing_enabled;
+    return render.ray_tracing_enabled;
 }
 
 bool TextureStore::generated_levels_landed(const RenderConfig& render) const noexcept {
@@ -359,6 +514,8 @@ bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, st
     }
     const std::uint8_t* const texels = first + NEBULA_TEXTURE_HEADER;
     op.generated = (record->flags & NEBULA_TEXTURE_GENERATED_LEVELS) != 0u;
+    op.authored = !op.generated &&
+                  detail::authored_levels(record->layout, texels, record->width, record->height, record->levels);
     if (drop != 0u) {
         // The levels after the dropped ones, in the record's own order; the name stays with the whole texture.
         const std::uint8_t* kept = texels;
@@ -386,6 +543,7 @@ bool TextureStore::stage_image(Op& op, const void* bytes, std::uint32_t size, st
 }
 
 std::uint32_t TextureStore::register_image(const NebulaTextureImage& image) {
+    galaxy::bench::note_texture(image.size);
     return gate_->use([&] {
         Op op;
         op.kind = Op::Kind::Create;
@@ -408,6 +566,7 @@ void TextureStore::update_image(std::uint32_t id, const void* bytes, std::uint32
     if (id == 0u || is_target(id)) {
         return;
     }
+    galaxy::bench::note_texture(size);
     gate_->use([&] {
         Op op;
         op.kind = Op::Kind::Update;
@@ -513,7 +672,23 @@ std::shared_ptr<TextureStore::Ops> TextureStore::take_ops() {
     if (queued_->list.empty()) {
         return nullptr;
     }
+    taken_ops_ += queued_->list.size();
+    queued_->serial = taken_ops_;
     return std::exchange(queued_, std::make_shared<Ops>());
+}
+
+std::uint64_t TextureStore::queued_ops() {
+    const std::lock_guard guard(lock_);
+    return taken_ops_ + queued_->list.size();
+}
+
+// The replacements on their way for textures that wait for them; published before the operations that asked for them.
+void TextureStore::publish_replacements_coming() {
+    std::uint32_t coming = 0u;
+    for (const auto& waiting : pack_waiters_) {
+        if (packs_.coming(waiting.first)) ++coming;
+    }
+    replacements_coming_.store(coming, std::memory_order_release);
 }
 
 void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
@@ -527,17 +702,23 @@ void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
         movie_staging_.resize(frames_in_flight);
     }
     ++frame_;
-    // The copy queue is done with what this slot's last frame sent it before its staging and retired textures go free.
-    backend_.begin_frame(frame_slot);
-    // The renderer has waited for this slot's fence: what it retired and read is idle.
-    for (Retired& retired : retired_[frame_slot]) {
-        evicting_bytes_ -= std::min(evicting_bytes_, retired.evicted_bytes);
-        if (retired.view != ~0u) {
-            backend_.release_view(retired.view);
-            free_srv_indices_.push_back(retired.view);
-        }
+    {
+        // The copy queue is done with what this slot's last frame sent it before its staging and retired textures go free.
+        const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::UploadWait);
+        backend_.begin_frame(frame_slot);
     }
-    retired_[frame_slot].clear();
+    {
+        // The renderer has waited for this slot's fence: what it retired and read is idle.
+        const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::TextureFree);
+        for (Retired& retired : retired_[frame_slot]) {
+            evicting_bytes_ -= std::min(evicting_bytes_, retired.evicted_bytes);
+            if (retired.view != ~0u) {
+                backend_.release_view(retired.view);
+                free_srv_indices_.push_back(retired.view);
+            }
+        }
+        retired_[frame_slot].clear();
+    }
     frame_slot_ = frame_slot;
     for (ChunkRef& chunk : kept_[frame_slot]) {
         if (chunk.use_count() == 1 && chunk->size == kStagingChunkBytes) {
@@ -554,15 +735,15 @@ void TextureStore::begin_frame(unsigned frame_slot, unsigned frames_in_flight) {
         // store holds it; a holder elsewhere only lets go, and a new one needs lock_). The next staging makes a chunk again.
         const std::lock_guard guard(lock_);
         if (std::exchange(staging_requested_, false)) {
-            staging_idle_frames_ = 0u;
-        } else if (++staging_idle_frames_ >= kStagingIdleFrames) {
+            staging_quiet_since_ = idle_clock();
+        } else if (idle_since(staging_quiet_since_)) {
             if (!free_chunks_.empty()) {
                 free_chunks_.pop_back();
             } else if (arena_chunk_ != nullptr && arena_chunk_.use_count() == 1) {
                 arena_chunk_.reset();
                 arena_used_ = 0u;
             }
-            staging_idle_frames_ = kStagingIdleFrames - kStagingTrimFrames;
+            staging_quiet_since_ = idle_clock() - (kIdleSteps + 1u - kStagingTrimSteps);  // the next one kStagingTrimSteps on
         }
     }
     packs_.retire_uploads(std::move(pack_staging_[frame_slot]));
@@ -611,6 +792,10 @@ void TextureStore::apply_ops(Ops& ops, std::vector<std::uint32_t>& freed) {
         op.staged.chunk.reset();
     }
     ops.list.clear();
+    publish_replacements_coming();
+    if (ops.serial > applied_ops_.load(std::memory_order_relaxed)) {
+        applied_ops_.store(ops.serial, std::memory_order_release);
+    }
 }
 
 void TextureStore::apply_built_in(Op& op) {
@@ -625,9 +810,13 @@ void TextureStore::apply_built_in(Op& op) {
     if (op.staged.chunk != nullptr) {
         try {
             std::uint64_t bytes = 0u;
-            gpu::TextureRef texture = backend_.create_texture(op.staged.width, op.staged.height, op.staged.levels, bytes,
-                                                              TexelFormat::Rgba8, true);
+            gpu::TextureRef texture;
+            {
+                const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::TextureCreate);
+                texture = backend_.create_texture(op.staged.width, op.staged.height, op.staged.levels, bytes, TexelFormat::Rgba8, true);
+            }
             if (texture) {
+                const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::TextureUpload);
                 backend_.record_upload(gpu::raw(texture), false, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
                                        op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
                 keep(op.staged.chunk);
@@ -649,7 +838,10 @@ void TextureStore::apply_built_in(Op& op) {
 
 void TextureStore::make_own(Entry& entry, const Op& op, bool once) {
     std::uint64_t allocation = 0u;
-    entry.texture = backend_.create_texture(op.staged.width, op.staged.height, op.staged.levels, allocation, op.staged.format, once);
+    {
+        const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::TextureCreate);
+        entry.texture = backend_.create_texture(op.staged.width, op.staged.height, op.staged.levels, allocation, op.staged.format, once);
+    }
     entry.bytes = allocation;
     // A whole texture is what the budget measures a reduced one against.
     entry.dropped = op.drop;
@@ -659,8 +851,11 @@ void TextureStore::make_own(Entry& entry, const Op& op, bool once) {
         // The record's levels, generated ones too: the budget leaves top levels out of those.
         entry.full_levels = std::max(op.full_levels, op.staged.levels);
     }
-    backend_.record_upload(gpu::raw(entry.texture), false, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
-                           op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
+    {
+        const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::TextureUpload);
+        backend_.record_upload(gpu::raw(entry.texture), false, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
+                               op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
+    }
     keep(op.staged.chunk);
     TextureHandle& own = entry.own;
     own.resource = gpu::raw(entry.texture);
@@ -669,6 +864,7 @@ void TextureStore::make_own(Entry& entry, const Op& op, bool once) {
     own.height = static_cast<std::uint32_t>(op.staged.height);
     own.mip_levels = static_cast<std::uint8_t>(op.staged.levels);
     own.generated_mips = op.generated;
+    own.authored_levels = op.authored;
     backend_.write_view(own.srv_index, gpu::raw(entry.texture), op.staged.levels);
 }
 
@@ -705,8 +901,11 @@ void TextureStore::update_entry(Op& op) {
                       own.mip_levels == op.staged.levels && entry.name.format == op.name.format &&
                       !TextureBackend::direct_written(gpu::raw(entry.texture));
     if (same) {
-        backend_.record_upload(gpu::raw(entry.texture), true, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
-                               op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
+        {
+            const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::TextureUpload);
+            backend_.record_upload(gpu::raw(entry.texture), true, *op.staged.chunk, op.staged.offset, op.staged.width, op.staged.height,
+                                   op.staged.levels, op.staged.offsets.data(), op.staged.pitches.data());
+        }
         keep(op.staged.chunk);
         if (entry.name.hash == op.name.hash) {
             return;
@@ -860,6 +1059,7 @@ void TextureStore::show(Entry& entry, const TextureReplacement& replacement, std
             std::log2(static_cast<double>(replacement.width) / static_cast<double>(entry.own.width)));
     }
     entry.current.lod_arbitrary = replacement.arbitrary;
+    entry.current.authored_levels = false;  // the replacement's levels are its own (lod_arbitrary says how they pair)
     if (slot != TexturePacks::kNone) {
         entry.pack_slot = slot;
         packs_.add_user(slot);
@@ -1084,6 +1284,12 @@ void TextureStore::configure_texture_packs(const TexturePackSettings& settings) 
     if (!stager_set_) {
         // Before any load exists: the loader threads read it.
         packs_.set_stager([this](std::uint64_t size) { return backend_.create_upload_chunk(size); });
+        if constexpr (TextureBackend::kMakesAnywhere) {
+            packs_.set_maker([this](const TexturePackPixels& staged) {
+                const TextureBackend::Levels fill{&*staged.staging, 0u, staged.offsets.data(), staged.pitches.data()};
+                return backend_.make_texture(staged.width, staged.height, staged.level_count, TexelFormat::Rgba8, true, &fill);
+            });
+        }
         stager_set_ = true;
     }
     packs_.configure(settings);
@@ -1095,7 +1301,14 @@ void TextureStore::apply_texture_packs() {
         return;
     }
     const auto apply_start = std::chrono::steady_clock::now();
-    if (packs_.pump(pack_uploads_)) {
+    using Clock = std::chrono::steady_clock;
+    const auto ns_since = [](Clock::time_point from) {
+        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - from).count());
+    };
+    std::uint64_t create_ns = 0u, record_ns = 0u, swap_ns = 0u;
+    std::uint32_t largest = 0u;
+    const bool hurried = replacements_hurried_.load(std::memory_order_relaxed);
+    if (packs_.pump(pack_uploads_, hurried ? TexturePacks::kUploadBytesHurried : TexturePacks::kUploadBytesPerFrame)) {
         // New index, packs turned off, or dumping toggled: every texture is looked up again.
         pack_waiters_.clear();
         for (std::uint32_t id = 0; id < entries_.size(); ++id) {
@@ -1105,11 +1318,13 @@ void TextureStore::apply_texture_packs() {
         }
     }
     // At most ~3 ms of uploads a frame (at least one); the rest wait, so a pack's first textures never stall a
-    // frame (a 2048x2048 level chain is 22 MB to stage).
-    constexpr auto kApplyBudget = std::chrono::microseconds(3000);
+    // frame (a 2048x2048 level chain is 22 MB to stage). While a loaded scene waits for them behind its loading
+    // screen, most of a frame.
+    const auto apply_budget = std::chrono::microseconds(hurried ? 12000 : 3000);
+    const std::uint64_t pump_ns = ns_since(apply_start);
     std::size_t done = 0;
     for (; done < pack_uploads_.size(); ++done) {
-        if (done != 0u && std::chrono::steady_clock::now() - apply_start > kApplyBudget) {
+        if (done != 0u && std::chrono::steady_clock::now() - apply_start > apply_budget) {
             break;
         }
         auto& [slot, pixels] = pack_uploads_[done];
@@ -1119,13 +1334,31 @@ void TextureStore::apply_texture_packs() {
         TextureReplacement replacement{};
         try {
             if (pixels.staging && pixels.level_count != 0u) {
-                // Staged by the loader: create and record the copy; the buffer lives until this slot comes round.
+                // Staged by the loader, its texture made there too (or here when it could not be): record the copy; the
+                // buffer lives until this slot comes round.
                 std::uint64_t allocation_bytes = 0;
-                gpu::TextureRef texture = backend_.create_texture(pixels.width, pixels.height, pixels.level_count, allocation_bytes,
-                                                                  TexelFormat::Rgba8, true);
+                largest = std::max({largest, pixels.width, pixels.height});
+                auto step = Clock::now();
+                gpu::TextureRef texture;
+                bool filled = false;
+                if (pixels.made) {
+                    backend_.adopt_texture(*pixels.made);
+                    allocation_bytes = pixels.made->allocation_bytes;
+                    filled = pixels.made->filled;
+                    texture = std::move(pixels.made->texture);
+                    pixels.made.reset();
+                } else {
+                    texture = backend_.create_texture(pixels.width, pixels.height, pixels.level_count, allocation_bytes,
+                                                      TexelFormat::Rgba8, true);
+                }
+                create_ns += ns_since(step);
                 if (texture) {
-                    backend_.record_upload(gpu::raw(texture), false, *pixels.staging, 0u, pixels.width, pixels.height,
-                                           pixels.level_count, pixels.offsets.data(), pixels.pitches.data());
+                    step = Clock::now();
+                    if (!filled) {
+                        backend_.record_upload(gpu::raw(texture), false, *pixels.staging, 0u, pixels.width, pixels.height,
+                                               pixels.level_count, pixels.offsets.data(), pixels.pitches.data());
+                    }
+                    record_ns += ns_since(step);
                     pack_staging_[frame_slot_].push_back(std::move(*pixels.staging));
                     pixels.staging.reset();
                     replacement.texture = std::move(texture);
@@ -1177,6 +1410,7 @@ void TextureStore::apply_texture_packs() {
             std::cerr << "[texture-pack] upload failed: " << error.what() << '\n';
             replacement = {};
         }
+        const auto swap_start = Clock::now();
         pixels = {};
         packs_.make_resident(slot, std::move(replacement));
         const auto waiting = pack_waiters_.find(slot);
@@ -1195,13 +1429,24 @@ void TextureStore::apply_texture_packs() {
             ++revision_;
         }
         pack_waiters_.erase(waiting);
+        swap_ns += ns_since(swap_start);
     }
     pack_uploads_.erase(pack_uploads_.begin(), pack_uploads_.begin() + static_cast<std::ptrdiff_t>(done));
+    publish_replacements_coming();
     const auto apply_ns = static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - apply_start).count());
     pack_apply_ns_ += apply_ns;
     pack_apply_max_ns_ = std::max(pack_apply_max_ns_, apply_ns);
-    if (++pack_stats_frame_ % 600u == 0u && (packs_.enabled() || packs_.dumping())) {
+    if (!hurried && apply_ns > 4'000'000u && pack_slow_reported_ < 64u) {
+        ++pack_slow_reported_;
+        std::cerr << "[texture-pack] frame " << pack_stats_frame_ << ": " << static_cast<double>(apply_ns) / 1.0e6
+                  << " ms for " << done << " replacements (largest " << largest << "): find "
+                  << static_cast<double>(pump_ns) / 1.0e6 << ", create " << static_cast<double>(create_ns) / 1.0e6
+                  << ", copy " << static_cast<double>(record_ns) / 1.0e6 << ", swap "
+                  << static_cast<double>(swap_ns) / 1.0e6 << '\n';
+    }
+    ++pack_stats_frame_;
+    if ((packs_.enabled() || packs_.dumping()) && pack_stats_report_.due()) {
         const TexturePacks::Stats stats = packs_.stats();
         std::cerr << "[texture-pack] names=" << stats.names << " named=" << pack_named_
                   << " apply-ms=" << static_cast<double>(pack_apply_ns_) / 1.0e6

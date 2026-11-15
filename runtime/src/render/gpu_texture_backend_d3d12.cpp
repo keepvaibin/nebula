@@ -265,9 +265,37 @@ bool TextureBackend::direct_written(ID3D12Resource* texture) noexcept {
            properties.Type == D3D12_HEAP_TYPE_CUSTOM && properties.CPUPageProperty == D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
 }
 
+namespace {
+
+// A texture in CPU-visible memory (direct_written) written from staged levels by the CPU: no command and no state change.
+// Any thread, for a texture no frame reads yet.
+void write_levels_direct(ID3D12Resource* texture, const TextureBackend::UploadChunk& staging, std::uint64_t offset,
+                         std::uint32_t height, unsigned levels, const std::uint64_t* offsets, const std::uint32_t* pitches) {
+    const DXGI_FORMAT format = texture->GetDesc().Format;
+    const bool blocks = format == DXGI_FORMAT_BC1_UNORM;
+    for (unsigned l = 0; l < levels; ++l) {
+        const std::uint32_t lh = std::max<std::uint32_t>(1u, height >> l);
+        const std::uint32_t rows = blocks ? (lh + 3u) / 4u : lh;
+        d3d_check(texture->WriteToSubresource(l, nullptr, staging.cpu_base + offset + offsets[l], pitches[l],
+                                              pitches[l] * rows),
+                  "write texture level");
+    }
+}
+
+}  // namespace
+
 gpu::TextureRef TextureBackend::create_texture(
     std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, TexelFormat format,
     bool writable) {
+    MadeTexture made = make_texture(width, height, levels, format, writable);
+    adopt_texture(made);
+    allocation_bytes = made.allocation_bytes;
+    return std::move(made.texture);
+}
+
+// Any thread: the placed allocators lock their own state, and copy_queue_ and direct_ are fixed at initialize.
+TextureBackend::MadeTexture TextureBackend::make_texture(std::uint32_t width, std::uint32_t height, unsigned levels,
+                                                         TexelFormat format, bool writable, const Levels* fill) {
     D3D12_RESOURCE_DESC rd{};
     rd.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     rd.Width            = width;
@@ -280,28 +308,39 @@ gpu::TextureRef TextureBackend::create_texture(
                                                        : DXGI_FORMAT_R8G8B8A8_UNORM;
     rd.SampleDesc.Count = 1;
     rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    gpu::TextureRef resource;
+    MadeTexture made;
     if (copy_queue_ != nullptr) {
         // Born in the common state, where the copy queue writes it and the graphics queue picks it up (submit_uploads).
-        if (SUCCEEDED(texture_heap_.create(rd, gpu::Use::Common, nullptr, resource, allocation_bytes))) {
-            async_.insert_or_assign(resource.Get(), Async{});  // a stale entry of a freed texture at this address goes
-            return resource;
+        if (SUCCEEDED(texture_heap_.create(rd, gpu::Use::Common, nullptr, made.texture, made.allocation_bytes))) {
+            made.async = true;
+            return made;
         }
-        resource.Reset();
+        made.texture.Reset();
     }
     if (writable && direct_) {
         // Born in the shader-resource state, where every uploaded texture rests (a texture is promoted from the common state
         // only with simultaneous access); the levels are written from the CPU by record_upload. A heap that refuses it falls
         // back to the copy path below.
-        if (SUCCEEDED(direct_heap_.create(rd, gpu::Use::PixelRead, nullptr, resource, allocation_bytes))) {
-            return resource;
+        if (SUCCEEDED(direct_heap_.create(rd, gpu::Use::PixelRead, nullptr, made.texture, made.allocation_bytes))) {
+            if (fill != nullptr && fill->staging != nullptr) {
+                write_levels_direct(made.texture.Get(), *fill->staging, fill->offset, height, levels, fill->offsets,
+                                    fill->pitches);
+                made.filled = true;
+            }
+            return made;
         }
-        resource.Reset();
+        made.texture.Reset();
     }
     d3d_check(texture_heap_.create(
-        rd, gpu::Use::CopyDest, nullptr, resource, allocation_bytes),
+        rd, gpu::Use::CopyDest, nullptr, made.texture, made.allocation_bytes),
         "create default texture");
-    return resource;
+    return made;
+}
+
+void TextureBackend::adopt_texture(const MadeTexture& made) {
+    if (made.async) {
+        async_.insert_or_assign(made.texture.Get(), Async{});  // a stale entry of a freed texture at this address goes
+    }
 }
 
 bool TextureBackend::poolable(ID3D12Resource* texture, std::uint32_t& width, std::uint32_t& height,
@@ -324,15 +363,7 @@ void TextureBackend::record_upload(ID3D12Resource* texture, bool reused, const U
                                    const std::uint64_t* offsets, const std::uint32_t* pitches) {
     if (direct_ && direct_written(texture)) {
         // Written from the staged levels by the CPU, no command and no state change (a new texture, which no frame reads yet).
-        const DXGI_FORMAT format = texture->GetDesc().Format;
-        const bool blocks = format == DXGI_FORMAT_BC1_UNORM;
-        for (unsigned l = 0; l < levels; ++l) {
-            const std::uint32_t lh = std::max<std::uint32_t>(1u, height >> l);
-            const std::uint32_t rows = blocks ? (lh + 3u) / 4u : lh;
-            d3d_check(texture->WriteToSubresource(l, nullptr, staging.cpu_base + offset + offsets[l], pitches[l],
-                                                  pitches[l] * rows),
-                      "write texture level");
-        }
+        write_levels_direct(texture, staging, offset, height, levels, offsets, pitches);
         return;
     }
     if (copy_queue_ != nullptr) {

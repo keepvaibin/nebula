@@ -24,14 +24,17 @@ public:
     bool initialize(Format depth_format);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
+    // Each works in the top-left `width` x `height` of its targets (the scene's drawn part: dynamic resolution's
+    // rectangle, or all of them).
     // `picture` is the scene target's colour; every sample of the wide target (the pass `encoder`'s colour, of
     // `color_format` over `samples` samples a pixel) takes it.
-    void widen(Object encoder, Format color_format, unsigned samples, const Texture& picture);
+    void widen(Object encoder, Format color_format, unsigned samples, const Texture& picture, unsigned width, unsigned height);
     // `wide` is the resolved wide colour. Below zero `seconds` starts the eye open. `commands`: an
     // id<MTLCommandBuffer> with no encoder open.
-    void meter(Object commands, const Texture& wide, const Texture& depth, float seconds);
+    void meter(Object commands, const Texture& wide, const Texture& depth, unsigned width, unsigned height, float seconds);
     // `wide` is the wide colour: the multisampled target when `per_sample` or `resolve`, else the resolved one.
-    void draw(Object encoder, Format color_format, unsigned samples, const Texture& wide, bool per_sample, bool resolve = false);
+    void draw(Object encoder, Format color_format, unsigned samples, const Texture& wide, unsigned width, unsigned height,
+              bool per_sample, bool resolve = false);
 
 private:
     enum Kind : unsigned { kWiden, kCamera, kCameraSamples, kCameraResolve, kKinds };

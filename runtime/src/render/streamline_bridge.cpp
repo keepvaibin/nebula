@@ -412,7 +412,8 @@ using streamline_common::dlss_mode;
 
 class DlssUpscaler final : public TemporalUpscaler, public rt::Denoiser {
 public:
-    DlssUpscaler(unsigned quality, bool ray_reconstruction) : mode_(dlss_mode(quality)), rr_(ray_reconstruction) {}
+    DlssUpscaler(unsigned quality, bool ray_reconstruction, bool wide, unsigned smallest_width = 0u)
+        : mode_(dlss_mode(quality)), rr_(ray_reconstruction), wide_(wide), smallest_width_(smallest_width) {}
 
     ~DlssUpscaler() override {
         // The renderer waits for the GPU before it replaces an upscaler.
@@ -461,8 +462,8 @@ public:
             options_.mode = mode_;
             options_.outputWidth = in.output_width;
             options_.outputHeight = in.output_height;
-            // The scene target is gamma-encoded RGBA8 without an exposure value.
-            options_.colorBuffersHDR = sl::Boolean::eFalse;
+            // The scene target is display values without an exposure value; past white with HDR output.
+            options_.colorBuffersHDR = wide_ ? sl::Boolean::eTrue : sl::Boolean::eFalse;
             options_.useAutoExposure = sl::Boolean::eTrue;
             if (g_api.dlss_set_options(viewport_, options_) != sl::Result::eOk) {
                 options_.outputWidth = 0u;
@@ -500,6 +501,9 @@ public:
         return streamline_common::jitter_phases(render_width, output_width);
     }
 
+    // The mode's range (NGX evaluates no width under it).
+    unsigned smallest_render_width() const noexcept override { return smallest_width_; }
+
     void jitter_offset(unsigned index, unsigned phase_count, float& x, float& y) const override {
         streamline_common::jitter(index, phase_count, x, y);
     }
@@ -525,7 +529,7 @@ private:
             rr_options_.mode = mode_;
             rr_options_.outputWidth = in.output_width;
             rr_options_.outputHeight = in.output_height;
-            rr_options_.colorBuffersHDR = sl::Boolean::eFalse;  // gamma-encoded RGBA8
+            rr_options_.colorBuffersHDR = wide_ ? sl::Boolean::eTrue : sl::Boolean::eFalse;  // display values
             rr_options_.normalRoughnessMode = sl::DLSSDNormalRoughnessMode::ePacked;
             streamline_common::camera_matrices(guides.world_to_view, rr_options_.worldToCameraView, rr_options_.cameraViewToWorld);
             std::memcpy(rr_view_, guides.world_to_view, sizeof(rr_view_));
@@ -598,6 +602,8 @@ private:
     sl::DLSSOptions options_{};
     const char* reported_[16] = {};
     bool rr_ = false;
+    bool wide_ = false;  // the colour holds light past white (colorBuffersHDR)
+    unsigned smallest_width_ = 0u;
     rt::DenoiseGuides guides_{};
     sl::DLSSDOptions rr_options_{};
     float rr_view_[12] = {};
@@ -608,7 +614,7 @@ private:
 
 std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, unsigned render_height,
                                                        unsigned output_width, unsigned output_height,
-                                                       unsigned quality, bool ray_reconstruction) {
+                                                       unsigned quality, bool ray_reconstruction, bool wide) {
     if (!streamline::dlss_supported() || render_width == 0u || render_height == 0u ||
         output_width == 0u || output_height == 0u) {
         return nullptr;
@@ -633,12 +639,12 @@ std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, un
                       << output_height << " mode " << candidate << " of requested " << quality << " (range "
                       << settings.renderWidthMin << 'x' << settings.renderHeightMin << " .. "
                       << settings.renderWidthMax << 'x' << settings.renderHeightMax << ")\n";
-            return std::make_unique<DlssUpscaler>(candidate, ray_reconstruction);
+            return std::make_unique<DlssUpscaler>(candidate, ray_reconstruction, wide, settings.renderWidthMin);
         }
         std::cerr << "[dlss] " << render_width << 'x' << render_height << " -> " << output_width << 'x'
                   << output_height << ": outside every mode's range\n";
     }
-    return std::make_unique<DlssUpscaler>(mode, ray_reconstruction);
+    return std::make_unique<DlssUpscaler>(mode, ray_reconstruction, wide);
 }
 
 unsigned dlss_min_render_width(unsigned quality, unsigned output_width, unsigned output_height) noexcept {
@@ -687,7 +693,7 @@ Microsoft::WRL::ComPtr<IDXGIFactory4> swap_chain_factory(IDXGIFactory4* factory)
 void shutdown() noexcept {}
 }  // namespace streamline
 
-std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned, unsigned, unsigned, unsigned, unsigned, bool) {
+std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned, unsigned, unsigned, unsigned, unsigned, bool, bool) {
     return nullptr;
 }
 

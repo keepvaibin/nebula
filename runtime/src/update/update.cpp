@@ -33,7 +33,7 @@ constexpr std::size_t kMaxManifestBytes = 4096u;
 constexpr std::size_t kMaxSignatureBytes = 65536u;
 constexpr std::uint64_t kMaxPackageBytes = 2ull << 30;  // a release without a size in the listing
 constexpr std::size_t kNotesLimit = 1500u;
-// As the Windows launcher reads it (Updater.ReleasesUrl, BuildInfo.Repository).
+// As Nebula Setup reads it (installer/native/setup_engine.cpp, updater::FindNewer).
 constexpr const char* kReleasesUrl = "https://api.github.com/repos/keepvaibin/nebula/releases?per_page=30";
 
 // ---- JSON: the subset a release listing and update-check.json use ----
@@ -645,18 +645,13 @@ void join_quietly(std::thread& thread) {
 
 }  // namespace
 
-void begin(std::string_view installed_version) {
-    Service& s = service();
-    std::lock_guard lock(s.mutex);
-    if (s.check) return;
-    s.installed = std::string(installed_version);
-    s.asset = detail::platform_asset(is_beta(installed_version));
-    if (s.asset.empty()) return;
-    s.kept = read_kept(s);
-    const Kept& kept = *s.kept;
-    const std::int64_t now = now_seconds();
-    if (!kept.enabled) return;
-    if (kept.readable && kept.checked <= now && now - kept.checked < kCheckIntervalSeconds) return;
+namespace {
+
+// Starts a check (s.mutex held): the listing on one thread, the reachability probe on another. An earlier check's
+// threads are let go: each holds its own Check, and the service is never destroyed.
+void start_check(Service& s) {
+    if (s.worker.joinable()) s.worker.detach();
+    if (s.probe.joinable()) s.probe.detach();
     auto check = std::make_shared<Check>();
     s.check = check;
     detail::Transport* transport = &transport_of(s);
@@ -700,6 +695,23 @@ void begin(std::string_view installed_version) {
     });
 }
 
+}  // namespace
+
+void begin(std::string_view installed_version) {
+    Service& s = service();
+    std::lock_guard lock(s.mutex);
+    if (s.check) return;
+    s.installed = std::string(installed_version);
+    s.asset = detail::platform_asset(is_beta(installed_version));
+    if (s.asset.empty()) return;
+    s.kept = read_kept(s);
+    const Kept& kept = *s.kept;
+    const std::int64_t now = now_seconds();
+    if (!kept.enabled) return;
+    if (kept.readable && kept.checked <= now && now - kept.checked < kCheckIntervalSeconds) return;
+    start_check(s);
+}
+
 std::optional<Release> offer(int budget_ms) {
     Service& s = service();
     std::shared_ptr<Check> check;
@@ -737,6 +749,67 @@ void skip(std::string_view version) {
     s.kept = std::move(kept);
     lock.unlock();
     persist_kept(s);
+}
+
+bool check_enabled() {
+    Service& s = service();
+    std::lock_guard lock(s.mutex);
+    if (!s.kept) s.kept = read_kept(s);
+    return s.kept->enabled;
+}
+
+void set_check_enabled(bool on) {
+    Service& s = service();
+    {
+        std::lock_guard lock(s.mutex);
+        if (!s.kept) s.kept = read_kept(s);
+        if (s.kept->enabled == on) return;
+        s.kept->enabled = on;
+        if (!s.kept->readable) s.kept->checked = 0;  // no answer yet: the next start checks
+    }
+    persist_kept(s);
+}
+
+bool check_now(std::string_view installed_version) {
+    Service& s = service();
+    std::shared_ptr<Check> running;
+    {
+        std::lock_guard lock(s.mutex);
+        running = s.check;
+    }
+    if (running) {
+        std::lock_guard check_lock(running->mutex);
+        if (!running->done) return false;
+    }
+    std::lock_guard lock(s.mutex);
+    if (s.check != running) return false;  // another caller started one meanwhile
+    if (s.installed.empty()) {
+        s.installed = std::string(installed_version);
+        s.asset = detail::platform_asset(is_beta(installed_version));
+    }
+    if (s.asset.empty()) return false;
+    if (!s.kept) s.kept = read_kept(s);
+    start_check(s);
+    return true;
+}
+
+CheckState check_state() {
+    Service& s = service();
+    std::shared_ptr<Check> check;
+    bool readable = false;
+    {
+        std::lock_guard lock(s.mutex);
+        if (s.asset.empty()) return detail::platform_asset(false).empty() ? CheckState::Unavailable : CheckState::Idle;
+        check = s.check;
+        readable = s.kept && s.kept->readable;
+    }
+    if (poll()) return CheckState::Available;
+    if (check) {
+        std::lock_guard check_lock(check->mutex);
+        if (!check->done) return CheckState::Checking;
+        return check->failed ? CheckState::Failed : CheckState::UpToDate;
+    }
+    return readable ? CheckState::UpToDate : CheckState::Idle;
 }
 
 void finish() {

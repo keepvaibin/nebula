@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Nebula's update check and install on the hosts without a launcher app of their own (Linux, macOS), with the rules of
-// the Windows launcher's UpdateService (installer/src/Common/UpdateService.cs): the check starts as the process starts,
-// a start takes its answer within kFreshBudgetMs or else the last kept answer, offline ends the wait at once, within an
+// Nebula's update check and install on the desktop hosts (Windows, Linux, macOS): the check starts as the process
+// starts, a start takes its answer within kFreshBudgetMs or else the last kept answer, offline ends the wait at once, within an
 // hour of an answer no request is made, a skipped version is offered again only when a newer one comes, a beta install
-// takes betas only and a release releases only, and a package is installed only when its signed manifest (the Windows
-// setup's release key) names this release's version, newer than the running one, and the package's size and SHA-256.
+// takes betas only and a release releases only, and a package is installed only when its signed manifest (the release
+// key) names this release's version, newer than the running one, and the package's size and SHA-256.
 //
 // Threading: every function may be called from any thread. begin, poll, skip, can_install, install_progress and
 // cancel_install never block; offer blocks at most its budget; finish at most the check's timeout (15 s).
@@ -48,6 +47,20 @@ void begin(std::string_view installed_version);
 // Offers nothing up to and including `version` again.
 void skip(std::string_view version);
 
+// Whether a start checks for updates ("update_check" in update-check.json; on unless turned off). Turning it off
+// leaves a check that runs to its end.
+[[nodiscard]] bool check_enabled();
+void set_check_enabled(bool on);
+
+// Checks now, whatever the last answer's age (the settings' CHECK NOW). False where this platform has no package of
+// its own (Android, iOS) or a check runs already.
+bool check_now(std::string_view installed_version);
+
+enum class CheckState : unsigned { Unavailable, Idle, Checking, UpToDate, Available, Failed };
+// The check as the settings show it: Available when offer(0) has a release, Failed when this session's last check got
+// no listing, UpToDate after a check (this session's or the kept one) that found nothing newer.
+[[nodiscard]] CheckState check_state();
+
 // False where the system updates Nebula (a store, a distribution's package, Flatpak, a build that is not an AppImage).
 [[nodiscard]] bool can_install() noexcept;
 
@@ -67,6 +80,13 @@ void cancel_install();
 
 // Waits for a running check so its answer is kept for the next start; at once when none runs.
 void finish();
+
+#if defined(_WIN32)
+// Windows, where Nebula Setup installs updates: starts the install folder's Setup to download, check and install the
+// newest release (Update on the home screen's notice) and returns at once. False when this game is not an installed
+// copy with its Setup, or the Setup could not start.
+bool start_setup_update();
+#endif
 
 // The rules, shared with the platform files and the tests.
 [[nodiscard]] int compare_versions(std::string_view a, std::string_view b) noexcept;

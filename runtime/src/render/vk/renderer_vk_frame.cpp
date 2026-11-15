@@ -10,7 +10,7 @@
 #include <nebula_frame_list.h>
 
 #include "galaxy/content_viewport.h"
-#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/display_aspect.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/render_config.h"
@@ -20,6 +20,8 @@
 #endif
 #include "galaxy/platform_time.h"
 #include "galaxy/render/texture_store.h"
+#include "galaxy/render/idle_clock.h"
+#include "galaxy/launch_args.h"
 
 #include <span>
 #include <tuple>
@@ -65,8 +67,11 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     const VkDevice device = context.device();
     const std::uint32_t width = static_cast<std::uint32_t>(std::lround(static_cast<double>(set_width) * map.sx));
     const std::uint32_t height = static_cast<std::uint32_t>(std::lround(static_cast<double>(set_height) * map.sy));
+    // A texture target's colour is RGBA8; the scene's and the output set's RGBA16F with HDR output (float_scene_).
+    const bool wide = !target && float_scene_;
+    const VkFormat scene_format = wide ? VK_FORMAT_R16G16B16A16_SFLOAT : vk::kSceneColorFormat;
     gpu::TextureRef color = context.create_texture(
-        width, height, 1u, target ? vk::kTargetColorFormat : vk::kSceneColorFormat,
+        width, height, 1u, target ? vk::kTargetColorFormat : scene_format,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | (scene_set_storage_ ? VK_IMAGE_USAGE_STORAGE_BIT : 0u),
         true, "scene target color");
@@ -82,7 +87,7 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     gpu::TextureRef ms_depth;
     if (samples > 1u) {
         const auto count = static_cast<VkSampleCountFlagBits>(samples);
-        ms_color = context.create_texture(width, height, 1u, vk::kSceneColorFormat,
+        ms_color = context.create_texture(width, height, 1u, scene_format,
                                           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, true, "scene target color MSAA", count);
         ms_depth = context.create_texture(width, height, 1u, depth_format_,
                                           VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -110,10 +115,14 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     VkFramebuffer framebuffer = VK_NULL_HANDLE;
     if (samples > 1u) {
         const VkImageView multi[3] = {ms_color->target_view, ms_depth->target_view, color->target_view};
-        framebuffer = make_framebuffer(draw_layout_.pass_for(static_cast<unsigned>(std::countr_zero(samples)), false),
-                                       multi);
+        framebuffer = make_framebuffer(
+            draw_layout_.pass_for(static_cast<unsigned>(std::countr_zero(samples)) | (wide ? kSceneVariantHdr : 0u), false),
+            multi);
     } else {
-        framebuffer = make_framebuffer(target ? draw_layout_.target_pass : draw_layout_.scene_pass, single);
+        framebuffer = make_framebuffer(target ? draw_layout_.target_pass
+                                       : wide ? draw_layout_.pass_for(kSceneVariantHdr, false)
+                                              : draw_layout_.scene_pass,
+                                       single);
     }
     // The new targets enter their attachment layouts now, so every later submission finds them so.
     run_one_time([&](VkCommandBuffer commands) {
@@ -140,6 +149,8 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     set.samples = samples;
     set.depth_dirty = false;
     set.turned = false;
+    set.wide = wide;
+    set.wide_read = false;
     set.depth_serial = ++scene_depth_serial_;
     if (set.color_source == VK_NULL_HANDLE) {
         set.color_source = allocate_persistent_set(utility_set_layout_);
@@ -188,7 +199,8 @@ bool RendererVk::create_scene_targets(const FrameMap& map, unsigned samples) {
         destroy_scene_set(scene_);
     }
     scene_ = std::move(made);
-    scene_map_ = map;
+    // Dynamic resolution starts again from the whole of the new size (apply_dynamic_resolution).
+    scene_map_ = frame_extent_ = scene_extent_ = scene_rectangle_ = map;
     pending_depth_clear_ = 0u;
     if (scene_.samples > 1u) {
         std::cout << "[Renderer] scene target MSAA " << scene_.samples << "x\n";
@@ -285,7 +297,7 @@ bool RendererVk::video_memory(std::uint64_t& usage, std::uint64_t& budget) const
     return vk::Context::get().device_memory_budget(usage, budget);
 }
 
-// `[vram] breakdown`: every 600 frames with --diagnostics memory (RenderCore's table log). The allocator's blocks and used bytes are the device-local
+// `[vram] breakdown`: every 600 game frames with --diagnostics memory (RenderCore's table log). The allocator's blocks and used bytes are the device-local
 // heap's (images and buffers together); the images listed are each texture's allocation size. Textures of the store, the post
 // chain's, ambient occlusion's and bloom's targets and the rings are in `used`, not in `accounted`, so the rest is `unlisted`.
 // Upload rings in video memory (a CPU-mapped one) are counted in `rings local`.
@@ -366,13 +378,13 @@ bool RendererVk::scene_fits_memory(const FrameMap& map) const {
     }
     const double depth_bytes = depth_format_ == VK_FORMAT_D24_UNORM_S8_UINT ? 4.0 : 8.0;
     const auto bytes = [depth_bytes](const FrameMap& m) { return (4.0 + depth_bytes + 12.0) * m.width * m.height; };
-    const double needed = bytes(map) - bytes(scene_map_);
+    const double needed = bytes(map) - bytes(scene_extent_);
     return static_cast<double>(usage) + needed <= 0.9 * static_cast<double>(budget);
 }
 
 // A changed internal resolution, between frames: the GPU finishes with the old targets and every scaled copy.
 void RendererVk::apply_window_size() {
-    if (scene_.wide) {
+    if (wide_live_ || layer2d_live_) {
         return;
     }
     // An edge drag resizes every frame: settle first, then re-create once.
@@ -380,7 +392,7 @@ void RendererVk::apply_window_size() {
         return;
     }
     // The picture's exact size on the screen, square pixels.
-    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const auto aspect = galaxy::latched_display_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
@@ -395,15 +407,19 @@ void RendererVk::apply_window_size() {
         host_window::upscaler_render_fraction(config, wanted.width, wanted.height));
     wanted = FrameMap(render_width, render_height);
     const unsigned samples = wanted_msaa_samples();
+    // HDR output keeps the scene's light past white: the scene's sets in RGBA16F (float_scene_), the post chain's pictures
+    // with them.
+    const bool float_wanted = swapchain_.hdr && post_.ready();
+    const bool format_changes = float_wanted != float_scene_;
     // Not while the output scene target holds the scene target's place (its scale is the window's).
-    if ((wanted == scene_map_ && samples == scene_.samples) || !scene_.color || output_scene_active_) {
+    if ((wanted == scene_extent_ && samples == scene_.samples && !format_changes) || !scene_.color || output_scene_active_) {
         return;
     }
-    if (wanted.width * wanted.height > scene_map_.width * scene_map_.height && !scene_fits_memory(wanted)) {
+    if (wanted.width * wanted.height > scene_extent_.width * scene_extent_.height && !scene_fits_memory(wanted)) {
         if (galaxy::steady_ms() >= window_size_refused_ms_) {
             window_size_refused_ms_ = galaxy::steady_ms() + 10'000u;
             std::cerr << "[Renderer] " << wanted.width << "x" << wanted.height << " exceeds the video-memory budget; staying at "
-                      << scene_map_.width << "x" << scene_map_.height << '\n';
+                      << scene_extent_.width << "x" << scene_extent_.height << '\n';
         }
         return;
     }
@@ -414,9 +430,23 @@ void RendererVk::apply_window_size() {
         frame.retired_buffers.clear();
         destroy_retired_pools(frame);
     }
-    const FrameMap previous = scene_map_;
+    const FrameMap previous = scene_extent_;
+    if (format_changes) {
+        float_scene_ = float_wanted;
+        // The output set and the frame shown's pictures are made again in the new format when next asked for.
+        if (alt_scene_.color) {
+            destroy_scene_set(alt_scene_);
+            alt_scene_map_ = alt_scene_extent_ = FrameMap{};
+        }
+    }
     if (!create_scene_targets(wanted, samples)) {
+        float_scene_ = scene_.wide;
         return;
+    }
+    if (format_changes) {
+        post_.set_wide(float_scene_, draw_layout_.pass_for(float_scene_ ? kSceneVariantHdr : 0u, false),
+                       float_scene_ ? color_pass_wide_ : color_pass_);
+        std::cerr << "[hdr] scene " << (float_scene_ ? "float: light past white kept" : "10-bit") << '\n';
     }
     reset_draw_bindings();
     std::cout << "[Renderer] internal resolution " << previous.width << "x" << previous.height << " -> " << wanted.width
@@ -473,8 +503,9 @@ void RendererVk::begin_scene_pass_with(unsigned aux, const SceneClearValues* cle
     // Loading a pass, tone mapping and AO compositing do not modify depth.
     // Native depth-writing draws and explicit clears invalidate the resolved image.
     scene_.depth_dirty |= clear != nullptr && scene_.samples > 1u;
-    // The set's own size: the scene target, or a target pass's smaller target (E-07).
-    begin.renderArea = {{0, 0}, {scene_.color->width, scene_.color->height}};
+    // The set's drawn part: the scene target (dynamic resolution's rectangle of it), or a target pass's smaller target
+    // (E-07). Nothing is read past it.
+    begin.renderArea = {{0, 0}, scene_part()};
     VkClearValue values[3]{};  // an aux target clears to zero
     if (clear != nullptr) {
         std::memcpy(values[0].color.float32, clear->color.data(), sizeof(float) * 4u);
@@ -537,12 +568,13 @@ void RendererVk::reset_draw_bindings() noexcept {
 }
 
 void RendererVk::bind_scene() {
+    const VkExtent2D part = scene_part();
     const float x = 0.0f, y = 0.0f;
-    const float w = static_cast<float>(scene_.color->width);
-    const float h = static_cast<float>(scene_.color->height);
+    const float w = static_cast<float>(part.width);
+    const float h = static_cast<float>(part.height);
     bound_.viewport = VkViewport{x, y + h, w, -h, 0.0f, 1.0f};
     bound_.viewport_valid = true;
-    bound_.scissor = VkRect2D{{0, 0}, {scene_.color->width, scene_.color->height}};
+    bound_.scissor = VkRect2D{{0, 0}, part};
     bound_.scissor_valid = true;
     if (scene_pass_open_) {
         const VkCommandBuffer commands = commands_;
@@ -554,8 +586,10 @@ void RendererVk::bind_scene() {
 void RendererVk::clear_scene(std::uint32_t clear_rgba,
                            bool color_enable, bool alpha_enable, bool depth_enable, unsigned rect_x, unsigned rect_y,
                            unsigned rect_w, unsigned rect_h, std::uint8_t pixel_format) {
-    const std::int32_t scene_w = static_cast<std::int32_t>(scene_.color->width);
-    const std::int32_t scene_h = static_cast<std::int32_t>(scene_.color->height);
+    // The drawn part (the render area of the scene pass, which no clear passes).
+    const VkExtent2D part = scene_part();
+    const std::int32_t scene_w = static_cast<std::int32_t>(part.width);
+    const std::int32_t scene_h = static_cast<std::int32_t>(part.height);
     VkRect2D rect{{0, 0}, {static_cast<std::uint32_t>(scene_w), static_cast<std::uint32_t>(scene_h)}};
     if (rect_w != 0u && rect_h != 0u) {
         const ScaledSceneRect scaled = rect_pixels(
@@ -653,31 +687,34 @@ VkDescriptorSet RendererVk::allocate_frame_set(VkDescriptorSetLayout layout) {
     Frame& frame = *frame_;
     const VkDevice device = vk::Context::get().device();
     VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-    info.descriptorPool = frame.overflow_descriptors.empty() ? frame.descriptors : frame.overflow_descriptors.back();
+    info.descriptorPool = frame.overflow_used == 0u ? frame.descriptors : frame.overflow_descriptors[frame.overflow_used - 1u];
     info.descriptorSetCount = 1;
     info.pSetLayouts = &layout;
     VkDescriptorSet set = VK_NULL_HANDLE;
     VkResult result = vkAllocateDescriptorSets(device, &info, &set);
-    if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
-        // A frame with more distinct tables than the pool holds: another pool, freed with the slot. The first one of a frame
-        // has the size that satisfied the last such frame, each further one in the same frame twice the last, so a frame that
-        // needs it every time makes the same pool again instead of a larger one each frame.
-        const bool first_of_frame = frame.overflow_descriptors.empty();
-        frame.overflow_sets = frame.overflow_sets == 0u ? vk_detail::kFrameSets
-                              : first_of_frame           ? frame.overflow_sets
-                              : frame.overflow_sets <= vk_detail::kMaxOverflowSets / 2u ? frame.overflow_sets * 2u
-                                                                                        : vk_detail::kMaxOverflowSets;
-        const VkDescriptorPool pool = vk_detail::create_pool(device, frame.overflow_sets, vk_detail::frame_pool(!bindless_, frame.overflow_sets));
-        frame.overflow_descriptors.push_back(pool);
-        info.descriptorPool = pool;
+    while (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
+        // A frame with more distinct tables than the pool holds: the slot's next kept pool, or a new one (twice the last's
+        // sets) when it has taken them all; a new pool that cannot hold one set is a real failure (checked below).
+        const bool made = frame.overflow_used == frame.overflow_descriptors.size();
+        if (made) {
+            frame.overflow_sets = frame.overflow_sets == 0u ? vk_detail::kFrameSets
+                                  : frame.overflow_sets <= vk_detail::kMaxOverflowSets / 2u ? frame.overflow_sets * 2u
+                                                                                            : vk_detail::kMaxOverflowSets;
+            frame.overflow_descriptors.push_back(
+                vk_detail::create_pool(device, frame.overflow_sets, vk_detail::frame_pool(!bindless_, frame.overflow_sets)));
+        }
+        info.descriptorPool = frame.overflow_descriptors[frame.overflow_used++];
         result = vkAllocateDescriptorSets(device, &info, &set);
+        if (made) {
+            break;
+        }
     }
     vk::check(result, "vkAllocateDescriptorSets");
     return set;
 }
 
 FrameMap RendererVk::output_frame_for_window() const {
-    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const auto aspect = galaxy::latched_display_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
@@ -692,6 +729,7 @@ void RendererVk::swap_scene_sets() {
     end_scene_pass();
     std::swap(scene_, alt_scene_);
     std::swap(scene_map_, alt_scene_map_);
+    std::swap(frame_extent_, alt_scene_extent_);
     output_scene_active_ = !output_scene_active_;
     reset_draw_bindings();
 }
@@ -701,6 +739,7 @@ void RendererVk::swap_target_set() {
     end_scene_pass();
     std::swap(scene_, target_scene_);
     std::swap(scene_map_, target_scene_map_);
+    std::swap(frame_extent_, target_scene_extent_);
     target_pass_active_ = !target_pass_active_;
     reset_draw_bindings();
 }
@@ -744,10 +783,10 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::
         slot.width = width;
         slot.height = height;
     }
-    slot.used = frame_index_;
+    slot.used = idle_clock();
     target_key_ = key;
     std::swap(target_scene_, slot.set);
-    target_scene_map_ = slot.map;
+    target_scene_map_ = target_scene_extent_ = slot.map;
     swap_target_set();
     if (kept) {
         // Sampled since its last pass: drawn into again, after those reads.
@@ -779,9 +818,9 @@ void RendererVk::end_target_pass(std::uint8_t channels, TextureStore& textures) 
     TargetSlot& slot = target_slots_[target_key_];
     std::swap(slot.set, target_scene_);
     slot.map = target_scene_map_;
-    target_scene_map_ = FrameMap{};
+    target_scene_map_ = target_scene_extent_ = FrameMap{};
     (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, textures);
-    // Keys unused for kTargetIdleFrames frames give back their render resources (their pictures stay).
+    // Keys unused for kIdleSteps game steps give back their render resources (their pictures stay).
     sweep_target_slots();
     bind_scene();
 }
@@ -800,9 +839,8 @@ void RendererVk::sweep_target_slots() {
     if (target_slots_.empty()) {
         return;
     }
-    const std::uint64_t idle = target_idle_frames();
     for (auto it = target_slots_.begin(); it != target_slots_.end();) {
-        if (it->second.used + idle < frame_index_ && !(target_pass_active_ && it->first == target_key_)) {
+        if (idle_since(it->second.used) && !(target_pass_active_ && it->first == target_key_)) {
             retire_target_slot(it->second);
             it = target_slots_.erase(it);
         } else {
@@ -868,7 +906,7 @@ bool RendererVk::publish_picture(std::uint64_t key, std::uint32_t width, std::ui
 }
 
 bool RendererVk::publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures) {
-    const FrameExtent size = frame_pass_extent(scene_map_);
+    const FrameExtent size = frame_pass_extent(frame_extent_);
     return publish_picture(params.key, size.width, size.height, std::move(texture), 0u, textures);
 }
 
@@ -889,7 +927,8 @@ bool RendererVk::motion_pass_only() const {
 }
 
 void RendererVk::prepare_temporal_upscaler() {
-    const FrameMap render_map = output_scene_active_ ? alt_scene_map_ : scene_map_;
+    // The context's largest render size: the scene targets' (dynamic resolution's steps are within it).
+    const FrameMap render_map = scene_extent_;
     const FrameMap output_map = upscale_output_;
     if (!temporal_mode() || output_map.empty() || render_map.width > output_map.width) {
         if (temporal_) {
@@ -916,8 +955,9 @@ void RendererVk::prepare_temporal_upscaler() {
     const bool rr = false;
 #endif
     // A failed creation is not retried until its sizes or mode change.
+    const bool wide = float_scene_;
     if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ && oh == temporal_output_h_ &&
-        kind == temporal_kind_ && (kind < 3u || (quality == temporal_quality_ && rr == temporal_rr_))) {
+        kind == temporal_kind_ && wide == temporal_wide_ && (kind < 3u || (quality == temporal_quality_ && rr == temporal_rr_))) {
         if (temporal_pending_.valid() &&
             temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             temporal_ = temporal_pending_.get();
@@ -942,9 +982,10 @@ void RendererVk::prepare_temporal_upscaler() {
     temporal_kind_ = kind;
     temporal_quality_ = quality;
     temporal_rr_ = rr;
+    temporal_wide_ = wide;
 #if defined(_WIN32)
     if (kind == 3u) {
-        temporal_ = vk::streamline_vk::create_dlss_upscaler(rw, rh, ow, oh, quality, rr);
+        temporal_ = vk::streamline_vk::create_dlss_upscaler(rw, rh, ow, oh, quality, rr, wide);
         if (temporal_) {
             std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh << " -> " << ow << "x" << oh << "\n";
         }
@@ -953,7 +994,7 @@ void RendererVk::prepare_temporal_upscaler() {
 #endif
     if (kind == 5u) {
         // Two pipelines and three images: made here, as the frame begins.
-        temporal_ = vk::create_sgsr2_upscaler(rw, rh, ow, oh, vk::kSceneColorFormat);
+        temporal_ = vk::create_sgsr2_upscaler(rw, rh, ow, oh, wide ? VK_FORMAT_R16G16B16A16_SFLOAT : vk::kSceneColorFormat);
         if (temporal_) {
             std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh << " -> " << ow << "x" << oh << "\n";
         }
@@ -962,9 +1003,10 @@ void RendererVk::prepare_temporal_upscaler() {
     const vk::Context& context = vk::Context::get();
     // Until it is ready the scene renders at the render scale without the upscale.
     temporal_pending_ = std::async(std::launch::async, [instance = context.instance(), device = context.device(),
-                                                        physical = context.physical_device(), rw, rh, ow, oh, kind, quality] {
-        return kind == 4u ? vk::create_xess_upscaler(instance, physical, device, ow, oh, quality)
-                          : vk::create_fsr3_upscaler(device, physical, rw, rh, ow, oh);
+                                                        physical = context.physical_device(), rw, rh, ow, oh, kind, quality,
+                                                        wide] {
+        return kind == 4u ? vk::create_xess_upscaler(instance, physical, device, ow, oh, quality, wide)
+                          : vk::create_fsr3_upscaler(device, physical, rw, rh, ow, oh, wide);
     });
 }
 
@@ -976,8 +1018,9 @@ bool RendererVk::scene_temporal_begin(float& jitter_x, float& jitter_y) {
     const unsigned rw = scene_map_.width;
     const unsigned ow = temporal_output_w_;
     // The context is replaced only by begin_frame (prepare_temporal_upscaler).
-    if (!temporal_ || !temporal_mode() || output_scene_active_ || target_pass_active_ || rw != temporal_render_w_ ||
-        scene_map_.height != temporal_render_h_) {
+    if (!temporal_ || !temporal_mode() || output_scene_active_ || target_pass_active_ ||
+        frame_extent_.width != temporal_render_w_ || frame_extent_.height != temporal_render_h_ || rw > temporal_render_w_ ||
+        scene_map_.height > temporal_render_h_) {
         temporal_history_valid_ = false;
         return false;
     }
@@ -1007,20 +1050,19 @@ void RendererVk::destroy_motion_framebuffers() {
 }
 
 void RendererVk::trim_idle_effect_targets() {
-    constexpr std::uint64_t kIdleFrames = 600u;
     if (frame_generation_running()) {
-        fg_hudless_used_frame_ = frame_index_;
+        fg_hudless_used_step_ = idle_clock();
     }
-    if (frame_index_ > fg_hudless_used_frame_ + kIdleFrames) {
+    if (idle_since(fg_hudless_used_step_)) {
         retire(std::move(fg_hudless_scene_color_));
         retire(std::move(fg_hudless_display_));
         retire(std::move(fg_hudless_target_));
         fg_hudless_scene_ = fg_hudless_taken_ = fg_hudless_ready_ = false;
     }
-    if (hdr_capture_ && frame_index_ > hdr_capture_used_frame_ + kIdleFrames) {
+    if (hdr_capture_ && idle_since(hdr_capture_used_step_)) {
         retire(std::move(hdr_capture_));
     }
-    if (motion_.motion && !layer_window_ && frame_index_ > motion_used_frame_ + kIdleFrames) {
+    if (motion_.motion && !layer_window_ && idle_since(motion_used_step_)) {
         destroy_motion_framebuffers();
         retire(std::move(motion_.motion));
         retire(std::move(motion_.reactive));
@@ -1031,19 +1073,25 @@ void RendererVk::trim_idle_effect_targets() {
     }
     // The output set and the wide set are the live scene target while a swap holds them; between scenes they are idle
     // sets of their own.
-    if (alt_scene_.color && !output_scene_active_ && !scene_.wide && frame_index_ > output_scene_used_frame_ + kIdleFrames) {
+    if (alt_scene_.color && !output_scene_active_ && !wide_live_ && idle_since(output_scene_used_step_)) {
         destroy_scene_set(alt_scene_);
-        alt_scene_map_ = FrameMap{};
+        alt_scene_map_ = alt_scene_extent_ = FrameMap{};
     }
-    if (wide_scene_.color && !scene_.wide && !output_scene_active_ && !target_pass_active_ &&
-        frame_index_ > wide_scene_used_frame_ + kIdleFrames) {
+    if (wide_scene_.color && !wide_live_ && !output_scene_active_ && !target_pass_active_ &&
+        idle_since(wide_scene_used_step_)) {
         destroy_scene_set(wide_scene_);
+    }
+    if (layer2d_set_.color && !layer2d_live_ && !output_scene_active_ && !target_pass_active_ &&
+        idle_since(layer2d_used_step_)) {
+        destroy_scene_set(layer2d_set_);
+        retire(std::move(layer2d_base_));
     }
 }
 
 bool RendererVk::ensure_motion_targets() {
-    motion_used_frame_ = frame_index_;
-    if (motion_.motion && motion_.map == scene_map_) {
+    motion_used_frame_ = frame_index_;  // mod post: motion drawn this frame
+    motion_used_step_ = idle_clock();
+    if (motion_.motion && motion_.map == frame_extent_) {
         return true;
     }
     destroy_motion_framebuffers();
@@ -1121,7 +1169,7 @@ bool RendererVk::ensure_motion_targets() {
     motion_.reactive = std::move(reactive);
     motion_.layer_color = std::move(layer_color);
     motion_.layer_trans = std::move(layer_trans);
-    motion_.map = scene_map_;
+    motion_.map = frame_extent_;
     return true;
 }
 
@@ -1241,8 +1289,7 @@ void RendererVk::settle_depth_clear() {
     if (scene_pass_open_ && held_probe_slots_.empty() && scene_pass_aux_ == 0u) {
         pending_depth_clear_ = 0u;
         scene_.depth_dirty |= scene_.samples > 1u;
-        clear_depth_in_pass(pending_depth_values_.reversed_depth,
-                            VkRect2D{{0, 0}, {scene_.color->width, scene_.color->height}});
+        clear_depth_in_pass(pending_depth_values_.reversed_depth, VkRect2D{{0, 0}, scene_part()});
         return;
     }
     const bool open = scene_pass_open_;
@@ -1293,7 +1340,8 @@ void RendererVk::clear_depth_alone(float reversed_depth, unsigned mode) {
 bool RendererVk::begin_cleared_motion_scene(std::uint32_t clear_rgba) {
     // scene_temporal_begin's conditions, which the scene's begin tests next.
     if (scene_pass_open_ || target_pass_active_ || output_scene_active_ || !temporal_ || !temporal_mode() ||
-        scene_map_.width != temporal_render_w_ || scene_map_.height != temporal_render_h_ || scene_.samples != 1u ||
+        frame_extent_.width != temporal_render_w_ || frame_extent_.height != temporal_render_h_ ||
+        scene_map_.width > temporal_render_w_ || scene_map_.height > temporal_render_h_ || scene_.samples != 1u ||
         !ensure_motion_targets()) {
         return false;
     }
@@ -1329,8 +1377,8 @@ void RendererVk::clear_motion_targets(bool motion) {
 }
 
 bool RendererVk::ensure_output_set(const FrameMap& output, bool storage) {
-    output_scene_used_frame_ = frame_index_;
-    if (alt_scene_.color && alt_scene_map_ == output && (alt_scene_storage_ || !storage)) {
+    output_scene_used_step_ = idle_clock();
+    if (alt_scene_.color && alt_scene_map_ == output && (alt_scene_storage_ || !storage) && alt_scene_.wide == float_scene_) {
         return true;
     }
     if (alt_scene_.color) {
@@ -1340,10 +1388,10 @@ bool RendererVk::ensure_output_set(const FrameMap& output, bool storage) {
     const bool made = create_scene_set(alt_scene_, output);
     scene_set_storage_ = false;
     if (!made) {
-        alt_scene_map_ = FrameMap{};
+        alt_scene_map_ = alt_scene_extent_ = FrameMap{};
         return false;
     }
-    alt_scene_map_ = output;
+    alt_scene_map_ = alt_scene_extent_ = output;
     alt_scene_storage_ = storage;
     return true;
 }
@@ -1375,9 +1423,12 @@ bool RendererVk::record_temporal_upscale(const FrameMap& output) {
     end_scene_pass();
     settle_depth_clear();
     const GpuPassScope pass{*this, GpuPass::Upscale};
-    if (!temporal_ || !motion_.motion || !scene_.color || !alt_scene_.color || scene_map_.width != temporal_render_w_ ||
-        scene_map_.height != temporal_render_h_ || output.width != temporal_output_w_ || output.height != temporal_output_h_ ||
-        scene_.wide) {
+    // The scene's rectangle within the context's render size (dynamic resolution's step: the dispatch names the size it
+    // reads).
+    if (!temporal_ || !motion_.motion || !scene_.color || !alt_scene_.color || frame_extent_.width != temporal_render_w_ ||
+        frame_extent_.height != temporal_render_h_ || scene_map_.width > temporal_render_w_ ||
+        scene_map_.height > temporal_render_h_ || scene_map_.empty() || output.width != temporal_output_w_ ||
+        output.height != temporal_output_h_ || wide_live_) {
         temporal_history_valid_ = false;
         return false;
     }
@@ -1399,11 +1450,13 @@ bool RendererVk::record_temporal_upscale(const FrameMap& output) {
     if (recorded && swapchain_fsr_) {
         const unsigned width = swapchain_.image.width;
         const unsigned height = swapchain_.image.height;
-        bool ready = fsr_generation_.matches(in.render_width, in.render_height, width, height);
+        // Made for the upscaler context's render size, the largest a dynamic resolution step draws (each prepare names
+        // the step's own size): a step change makes nothing again.
+        bool ready = fsr_generation_.matches(temporal_render_w_, temporal_render_h_, width, height);
         if (!ready) {
             vkDeviceWaitIdle(vk::Context::get().device());
             fsr_generation_.destroy(swapchain_.handle);
-            ready = fsr_generation_.create(in.render_width, in.render_height, width, height, swapchain_.format);
+            ready = fsr_generation_.create(temporal_render_w_, temporal_render_h_, width, height, swapchain_.format);
         }
         if (ready) {
             (void)fsr_generation_.prepare(commands_, in);
@@ -1587,9 +1640,12 @@ bool RendererVk::begin_output_scene(bool resolve_msaa_only) {
     }
     const FrameMap output = temporal && !upscale_output_.empty() ? upscale_output_ : output_frame_for_window();
     // Nebula's screens with small text are drawn at the window's resolution whatever the HUD's (RendererD3D12::begin_output_scene).
-    const bool full = temporal || render_hud_at_output(get_render_config()) || sharp_2d_requested();
-    if (!full || output.empty() || output.width < scene_map_.width ||
-        (!temporal && output.width == scene_map_.width)) {
+    // Dynamic resolution's rectangle: the rest of the frame (post AA's result, the 2D layer, the display picture) at the
+    // output's size, whatever the step (the HUD never follows it).
+    const bool rectangle = scene_map_ != frame_extent_;
+    const bool full = temporal || rectangle || render_hud_at_output(get_render_config()) || sharp_2d_requested();
+    if (!full || output.empty() || (output.width < scene_map_.width && !rectangle) ||
+        (!temporal && !rectangle && output.width == scene_map_.width)) {
         return false;
     }
 
@@ -1606,8 +1662,11 @@ bool RendererVk::enter_output_scene(const FrameMap& output) {
     }
     const FramePassGeometry sampling = frame_pass_geometry(output.width, output.height, scene_map_);
     const bool display_filter = sampling.step_x == 1.0f && sampling.step_y == 1.0f;
+    // The drawn part (dynamic resolution's rectangle) bounds every sample.
+    const VkExtent2D part = scene_part();
     const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+        make_scene_conversion_constants(kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+                                        static_cast<float>(part.width), static_cast<float>(part.height));
     end_scene_pass();
     transition_scene_for_sampling(commands_, false);
     const VkDescriptorSet source = scene_color_source();
@@ -1636,6 +1695,7 @@ bool RendererVk::enter_output_scene(const FrameMap& output) {
 }
 
 void RendererVk::end_output_scene() {
+    end_layer_2d();
     if (!output_scene_active_) {
         return;
     }
@@ -1647,6 +1707,114 @@ void RendererVk::end_output_scene() {
     bind_scene();
 }
 
+VkPipeline RendererVk::layer2d_merge_pipeline(unsigned samples_log2) {
+    VkPipeline& pipeline = layer2d_merge_pipelines_[std::min(samples_log2, 3u)];
+    if (pipeline == VK_NULL_HANDLE) {
+        constexpr VkColorComponentFlags kRgba = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+                                                VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        pipeline = create_utility_pipeline(draw_layout_.pass_for(samples_log2 | kSceneVariantHdr, false), layer2d_layout_,
+                                           vk::UtilitySpirv::BlitVs, vk::UtilitySpirv::LayerMergePs, kRgba, false, false,
+                                           false, static_cast<VkSampleCountFlagBits>(1u << samples_log2));
+    }
+    return pipeline;
+}
+
+// The float scene's start of the 2D layer (RendererD3D12::begin_layer_2d): the layer's set opens with the scene drawn
+// into it (each sample) in its 10-bit format, and the same picture is kept single-sample in layer2d_base_.
+void RendererVk::begin_layer_2d() {
+    if (!float_scene_ || !scene_.wide || layer2d_live_ || layer2d_failed_ || wide_live_ || target_pass_active_ ||
+        !scene_.color || layer2d_layout_ == VK_NULL_HANDLE) {
+        return;
+    }
+    layer2d_used_step_ = idle_clock();
+    if (layer2d_merge_pipeline(scene_samples_log2()) == VK_NULL_HANDLE ||
+        scene_utility_pipeline(SceneUtility::Conversion) == VK_NULL_HANDLE) {
+        layer2d_failed_ = true;
+        std::cerr << "[hdr] 2D layer pipelines failed: the HUD is drawn in the float scene\n";
+        return;
+    }
+    end_scene_pass();
+    if (!ensure_wide_set(layer2d_set_, vk::kSceneColorFormat)) {
+        return;
+    }
+    vk::Context& context = vk::Context::get();
+    const unsigned width = scene_.color->width;
+    const unsigned height = scene_.color->height;
+    if (!layer2d_base_ || layer2d_base_->width != width || layer2d_base_->height != height) {
+        retire(std::move(layer2d_base_));
+        layer2d_base_ = context.create_texture(width, height, 1u, vk::kSceneColorFormat,
+                                               VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true,
+                                               "2D layer start");
+        if (!layer2d_base_) {
+            return;
+        }
+    }
+    const GpuPassScope pass{*this, GpuPass::FramePass};
+    // Every channel, one pixel to one, within the drawn part (the same for the start and its copy).
+    const VkExtent2D part = scene_part();
+    const SceneConversionShaderConstants constants = make_scene_conversion_constants(
+        0u, 0.0f, 0.0f, 1.0f, 1.0f, static_cast<float>(part.width), static_cast<float>(part.height));
+    record_conversion_blit(*layer2d_base_, width, height, 0u, 0.0f, 0.0f, 1.0f, 1.0f);
+    end_scene_pass();
+    transition_scene_for_sampling(commands_, false);
+    const VkDescriptorSet source = scene_color_source();
+    std::swap(scene_, layer2d_set_);
+    layer2d_live_ = true;
+    image_barrier(commands_, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+    scene_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    reset_draw_bindings();
+    bind_scene();
+    // The colour opens unloaded (the draw writes every pixel of the part); the depth loads.
+    begin_scene_pass_with(0u, nullptr, true, "begin_layer_2d");
+    const VkCommandBuffer commands = commands_;
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, scene_utility_pipeline(SceneUtility::Conversion));
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &source, 0, nullptr);
+    vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), &constants);
+    vkCmdDraw(commands, 3, 1, 0, 0);
+    reset_draw_bindings();
+    bind_scene();
+}
+
+// The pixels the 2D layer drew (those no longer as it started) into the float scene, which is live again.
+void RendererVk::end_layer_2d() {
+    if (!layer2d_live_) {
+        return;
+    }
+    const GpuPassScope pass{*this, GpuPass::FramePass};
+    end_scene_pass();  // a multisampled layer resolves at its pass's end
+    transition_scene_for_sampling(commands_, false);
+    scene_.color->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    const VkImageView drawn = scene_.color->view;
+    std::swap(scene_, layer2d_set_);
+    layer2d_live_ = false;
+    scene_.depth_dirty = layer2d_set_.depth_dirty;
+    transition_scene_to_attachment(commands_, false);  // the float scene was sampled by the layer's start
+    scene_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    const VkDescriptorSet set = allocate_frame_set(layer2d_set_layout_);
+    const VkDescriptorImageInfo images[2] = {{VK_NULL_HANDLE, drawn, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+                                             {VK_NULL_HANDLE, layer2d_base_->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}};
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = set;
+    write.dstBinding = 0;
+    write.descriptorCount = 2;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    write.pImageInfo = images;
+    vkUpdateDescriptorSets(vk::Context::get().device(), 1, &write, 0, nullptr);
+    reset_draw_bindings();
+    bind_scene();
+    begin_scene_pass_with(0u, nullptr, false, "end_layer_2d");
+    const VkCommandBuffer commands = commands_;
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, layer2d_merge_pipeline(scene_samples_log2()));
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, layer2d_layout_, 0, 1, &set, 0, nullptr);
+    vkCmdDraw(commands, 3, 1, 0, 0);
+    reset_draw_bindings();
+    bind_scene();
+}
+
 void RendererVk::record_scene_aa() {
     // A temporal upscaler antialiases the jittered scene itself (RendererD3D12::record_scene_aa).
     if (!post_.ready() || scene_temporal_ || !scene_.color || post_.settings().aa == PostProcessSettings::Aa::kOff) {
@@ -1655,7 +1823,7 @@ void RendererVk::record_scene_aa() {
     const GpuPassScope pass{*this, GpuPass::SceneAa};
 
     // The picture the display copy takes, against its size on screen, decides AUTO.
-    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const auto aspect = galaxy::latched_display_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
@@ -1666,7 +1834,7 @@ void RendererVk::record_scene_aa() {
     // A scene target whose image may change hands (take_scene's) trades it to the passes instead of copying it; the
     // image that takes its place is then written whole, so the pass opens without loading it.
     vk::PostProcessorVk::SceneTrade trade;
-    if (can_take_scene()) {
+    if (can_trade_scene()) {
         trade = [this](gpu::TextureRef spare) { return swap_scene_color(std::move(spare)); };
     }
     const AaRun ran = post_.prepare_scene_aa(
@@ -1896,8 +2064,11 @@ void RendererVk::record_scene_ao() {
                                                    GpuPass::AoDenoise, GpuPass::AoUpsample};
               gpu_pass(passes[static_cast<unsigned>(stage)]);
           }} : vk::AmbientOcclusionVk::StageMarker{};
-    const bool made = ao_.prepare(commands_, *scene_.depth, kDepthSampleLayout, scene_ao_view_, get_render_config().ambient_occlusion_ssao,
-                                  scene_ao_objects_, constant_ring_, allocate, mark);  // read in this frame alone; chunks take any count
+    const VkExtent2D part = scene_part();
+    const unsigned lowest = frame_extent_ == scene_extent_ ? dynamic_resolution_.lowest_sixteenths() : 16u;
+    const bool made = ao_.prepare(commands_, *scene_.depth, kDepthSampleLayout, part.width, part.height, lowest, scene_ao_view_,
+                                  get_render_config().ambient_occlusion_ssao, scene_ao_objects_, constant_ring_, allocate,
+                                  mark);  // read in this frame alone; chunks take any count
     gpu_pass(GpuPass::AoApply);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout,
                   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
@@ -1913,8 +2084,9 @@ void RendererVk::record_scene_ao() {
 
 // The wide colour targets for the live scene target's size and samples, over its depth (the depth resolve writes that
 // depth alone). False when the device cannot make them: the scene stays in the scene target.
-bool RendererVk::ensure_wide_set(SceneSet& set) {
-    if (set.color && set.depth_serial == scene_.depth_serial && set.samples == scene_.samples) {
+bool RendererVk::ensure_wide_set(SceneSet& set, VkFormat format) {
+    if (set.color && set.depth_serial == scene_.depth_serial && set.samples == scene_.samples && set.color->format == format &&
+        set.color->width == scene_.color->width && set.color->height == scene_.color->height) {
         return true;
     }
     vk::Context& context = vk::Context::get();
@@ -1928,13 +2100,14 @@ bool RendererVk::ensure_wide_set(SceneSet& set) {
     }
     retire(std::move(set.color));
     retire(std::move(set.ms_color));
+    const bool wide = format == VK_FORMAT_R16G16B16A16_SFLOAT;
     gpu::TextureRef color = context.create_texture(
-        width, height, 1u, VK_FORMAT_R16G16B16A16_SFLOAT,
+        width, height, 1u, format,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         true, "wide scene color");
     gpu::TextureRef ms_color;
     if (scene_.samples > 1u) {
-        ms_color = context.create_texture(width, height, 1u, VK_FORMAT_R16G16B16A16_SFLOAT,
+        ms_color = context.create_texture(width, height, 1u, format,
                                           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true,
                                           "wide scene color MSAA", static_cast<VkSampleCountFlagBits>(scene_.samples));
     }
@@ -1947,7 +2120,7 @@ bool RendererVk::ensure_wide_set(SceneSet& set) {
     const VkImageView multi[3] = {scene_.samples > 1u ? ms_color->target_view : VK_NULL_HANDLE,
                                   scene_.samples > 1u ? scene_.ms_depth->target_view : VK_NULL_HANDLE, color->target_view};
     VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-    info.renderPass = draw_layout_.pass_for(samples_log2 | kSceneVariantHdr, false);
+    info.renderPass = draw_layout_.pass_for(samples_log2 | (wide ? kSceneVariantHdr : 0u), false);
     info.attachmentCount = scene_.samples > 1u ? 3u : 2u;
     info.pAttachments = scene_.samples > 1u ? multi : single;
     info.width = width;
@@ -1970,7 +2143,7 @@ bool RendererVk::ensure_wide_set(SceneSet& set) {
     set.ms_depth_source = scene_.ms_depth_source;
     set.samples = scene_.samples;
     set.depth_serial = scene_.depth_serial;
-    set.wide = true;
+    set.wide = wide;
     set.wide_read = false;
     set.turned = false;
     if (set.color_source == VK_NULL_HANDLE) {
@@ -1981,11 +2154,13 @@ bool RendererVk::ensure_wide_set(SceneSet& set) {
 }
 
 bool RendererVk::begin_wide_scene(bool wanted, const SceneClearValues* initial_clear) {
-    if (!wanted || scene_.wide || !scene_camera_.ready() || !scene_.color || output_scene_active_ || target_pass_active_) {
+    end_layer_2d();  // a scene begins: the 2D layer before it goes back into the float scene
+    if (!wanted || wide_live_ || float_scene_ || !scene_camera_.ready() || !scene_.color || output_scene_active_ ||
+        target_pass_active_) {
         return false;
     }
     end_scene_pass();
-    wide_scene_used_frame_ = frame_index_;
+    wide_scene_used_step_ = idle_clock();
     if (!ensure_wide_set(wide_scene_)) {
         return false;
     }
@@ -2013,6 +2188,7 @@ void RendererVk::record_wide_begin(const SceneClearValues* initial_clear) {
         // A full clear immediately before the first scene draw has no background picture to copy. Clear
         // the HDR attachment and its shared depth together, and keep the tile pass open for geometry.
         std::swap(scene_, set);
+        wide_live_ = true;
         wide_base_sampled_ = false;
         begin_scene_pass(initial_clear);
         reset_draw_bindings();
@@ -2024,9 +2200,14 @@ void RendererVk::record_wide_begin(const SceneClearValues* initial_clear) {
                   VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     set.depth_dirty = scene_.depth_dirty;
     std::swap(scene_, set);
+    wide_live_ = true;
     begin_scene_pass_with(0u, nullptr, true);
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
-    scene_camera_.widen(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(), *picture, allocate);
+    // The drawn part (dynamic resolution's rectangle; the whole target without it): the wide set is made at the same
+    // size and the scene goes on in the same part of it.
+    const VkExtent2D part = scene_part();
+    scene_camera_.widen(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(), *picture, part.width,
+                        part.height, allocate);
     // Single-sample depth needs no resolve into the base framebuffer. Keep this pass open for the scene's
     // geometry instead of spilling and reloading its full HDR colour just to restore an unused base image.
     wide_base_sampled_ = scene_.samples == 1u;
@@ -2041,7 +2222,7 @@ void RendererVk::record_wide_begin(const SceneClearValues* initial_clear) {
 }
 
 void RendererVk::end_wide_scene(unsigned finish) {
-    if (!scene_.wide) {
+    if (!wide_live_) {
         return;
     }
     end_scene_pass();
@@ -2050,7 +2231,7 @@ void RendererVk::end_wide_scene(unsigned finish) {
 }
 
 void RendererVk::record_wide_end(unsigned finish) {
-    if (!scene_.wide) {
+    if (!wide_live_) {
         return;
     }
     const GpuPassScope pass{*this, GpuPass::Camera};
@@ -2079,8 +2260,10 @@ void RendererVk::record_wide_end(unsigned finish) {
     image_barrier(commands_, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, kDepthSampleLayout,
                   VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                   VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-    // After a load or a long pause the eye starts open.
-    scene_camera_.meter(commands_, *wide, *scene_.depth, kDepthSampleLayout, seconds > 1.0f ? -1.0f : seconds, finish, allocate);
+    // The drawn part of the wide set: what the camera meters and writes. After a load or a long pause the eye starts open.
+    const VkExtent2D part = scene_part();
+    scene_camera_.meter(commands_, *wide, *scene_.depth, kDepthSampleLayout, part.width, part.height,
+                        seconds > 1.0f ? -1.0f : seconds, finish, allocate);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                   VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
@@ -2094,6 +2277,7 @@ void RendererVk::record_wide_end(unsigned finish) {
         wide_base_sampled_ = false;
     }
     std::swap(scene_, set);
+    wide_live_ = false;
     set.wide_read = true;
     scene_.depth_dirty = depth_dirty;
     if (resolve_output) {
@@ -2104,7 +2288,8 @@ void RendererVk::record_wide_end(unsigned finish) {
     }
     begin_scene_pass_with(0u, nullptr, true);
     scene_camera_.draw(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(),
-                       resolve_output || per_sample ? *wide_ms : *wide, per_sample, allocate, resolve_output, finish);
+                       resolve_output || per_sample ? *wide_ms : *wide, part.width, part.height, per_sample, allocate,
+                       resolve_output, finish);
     reset_draw_bindings();
 }
 
@@ -2126,6 +2311,9 @@ void RendererVk::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b
     in.scale = static_cast<float>(scene_map_.height / kAuthoredLines);
     in.frame_width = std::min(scene_map_.width, scene_.color->width);
     in.frame_height = std::min(scene_map_.height, scene_.color->height);
+    in.extent_width = std::min(frame_extent_.width, scene_.color->width);
+    in.extent_height = std::min(frame_extent_.height, scene_.color->height);
+    in.lowest_sixteenths = frame_extent_ == scene_extent_ ? dynamic_resolution_.lowest_sixteenths() : 16u;
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_frame_set(layout); };
     end_scene_pass();
     if (kind == NEBULA_PASS_BLOOM_HOLD) {
@@ -2157,11 +2345,13 @@ void RendererVk::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b
             p.ring_x = p.ring_y = 1.0f;
         }
         p.strength = strength;
-        const bool whole = in.frame_width == scene_.color->width && in.frame_height == scene_.color->height;
+        // The composite covers all of the target that is read: the whole target, or dynamic resolution's rectangle
+        // (the scene pass's render area), outside which no pass reads.
+        const bool whole = in.whole_width() == scene_.color->width && in.whole_height() == scene_.color->height;
         const VkRenderPass scene_pass = draw_layout_.pass_for(scene_variant(), false);
         // The simple bloom's source is the frame: the scene and the source trade places instead of the scene being
-        // copied, where the composite then writes the whole target from it. Should the chain have nothing to draw, the
-        // frame is drawn back from its picture.
+        // copied, where the composite then writes all of the target that is read from it. Should the chain have nothing
+        // to draw, the frame is drawn back from its picture.
         gpu::TextureRef source;
         if (kind == NEBULA_PASS_BLOOM_SIMPLE && whole && scene_.samples <= 1u &&
             bloom_.prepare_draw_back(commands_, scene_pass, scene_samples_log2())) {
@@ -2485,9 +2675,10 @@ void RendererVk::free_target(std::uint32_t id, TextureStore& textures) {
 }
 
 gpu::TextureRef RendererVk::take_frame_picture(gpu::TextureRef fresh) {
-    if (scene_.wide) {
+    if (wide_live_) {
         end_wide_scene();
     }
+    end_layer_2d();
     end_scene_pass();
     return swap_scene_color(std::move(fresh));
 }
@@ -2632,9 +2823,11 @@ VkSampler RendererVk::sampler_for(const SamplerKey& key, const RenderConfig& cfg
     const float min_lod = key.min_lod, max_lod = key.max_lod;
     // The minified filter (texture_sampler.h min_filter_code): 4 linear, plus 1 the nearest level or 2 between levels.
     const bool min_linear = minf >= 4u;
-    // 3: linear without anisotropy (make_sampler_key's arbitrary levels).
-    const bool no_anisotropy = (minf & 3u) == 3u;
-    const unsigned mip_mode = no_anisotropy ? 2u : minf & 3u;
+    // 3: linear without anisotropy (make_sampler_key's arbitrary levels). Levels drawn by hand take neither anisotropy
+    // nor the settings' bias (kSamplerAuthoredLevels).
+    const bool authored = (key.filter & kSamplerAuthoredLevels) != 0u;
+    const bool no_anisotropy = (minf & 3u) == 3u || authored;
+    const unsigned mip_mode = (minf & 3u) == 3u ? 2u : minf & 3u;
     VkSamplerCreateInfo info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     info.magFilter = mag_linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
     info.minFilter = min_linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
@@ -2642,7 +2835,7 @@ VkSampler RendererVk::sampler_for(const SamplerKey& key, const RenderConfig& cfg
     info.addressModeV = wrap((key.filter >> 2u) & 3u);
     info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     const float max_bias = context.properties().limits.maxSamplerLodBias;
-    info.mipLodBias = std::clamp(lod_bias + cfg_bias, -max_bias, max_bias);
+    info.mipLodBias = std::clamp(lod_bias + (authored ? 0.0f : cfg_bias), -max_bias, max_bias);
     const bool use_anisotropic = anisotropy > 1u && mip_mode != 0u && min_linear && mag_linear &&
         !no_anisotropy && context.sampler_anisotropy();
     info.anisotropyEnable = use_anisotropic ? VK_TRUE : VK_FALSE;
@@ -2815,7 +3008,10 @@ VkDescriptorSet RendererVk::constants_set(const VkBuffer* buffers, gpu::Address 
 VkFramebuffer RendererVk::framebuffer_for(vk::Texture& texture) {
     if (texture.framebuffer == VK_NULL_HANDLE) {
         VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-        info.renderPass = texture.format == vk::kSceneColorFormat ? color_pass_ : rgba8_pass_;
+        info.renderPass = texture.format == vk::kSceneColorFormat         ? color_pass_
+                          : texture.format == VK_FORMAT_R16G16B16A16_SFLOAT ? color_pass_wide_
+                          : texture.format == depth_copy_format_           ? depth_copy_pass_
+                                                                           : rgba8_pass_;
         info.attachmentCount = 1;
         info.pAttachments = &texture.target_view;
         info.width = texture.width;
@@ -2868,8 +3064,10 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     end_scene_pass();
     const VkCommandBuffer commands = commands_;
     transition_scene_for_sampling(commands, false);
+    // The frame shown keeps the scene's light past white in an RGBA16F picture (float_scene_).
+    const bool wide = dest.format == VK_FORMAT_R16G16B16A16_SFLOAT;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = color_pass_;
+    begin.renderPass = wide ? color_pass_wide_ : color_pass_;
     begin.framebuffer = framebuffer_for(dest);
     begin.renderArea = {{0, 0}, {dest_w, dest_h}};
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
@@ -2881,13 +3079,16 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     // A display copy one scene target pixel to one display picture pixel without gamma: its filter alone (display_filter_shader_source).
     const bool display_filter = copy_format == kCopyLayoutDisplay &&
                                 step_x == 1.0f && step_y == 1.0f &&
-                                display_filter_pipeline_ != VK_NULL_HANDLE;
+                                (wide ? display_filter_pipeline_wide_ : display_filter_pipeline_) != VK_NULL_HANDLE;
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      display_filter ? display_filter_pipeline_ : conversion_pipeline_);
+                      display_filter ? (wide ? display_filter_pipeline_wide_ : display_filter_pipeline_)
+                                     : (wide ? conversion_pipeline_wide_ : conversion_pipeline_));
     const VkDescriptorSet source = scene_color_source();
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &source, 0, nullptr);
-    const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(copy_format, src_x, src_y, step_x, step_y);
+    // The source is the bound target: its drawn part (dynamic resolution's rectangle) bounds every sample.
+    const VkExtent2D part = scene_part();
+    const SceneConversionShaderConstants constants = make_scene_conversion_constants(
+        copy_format, src_x, src_y, step_x, step_y, static_cast<float>(part.width), static_cast<float>(part.height));
     vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), &constants);
     vkCmdDraw(commands, 3, 1, 0, 0);
     vkCmdEndRenderPass(commands);
@@ -2897,10 +3098,147 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     bind_scene();
 }
 
-bool RendererVk::can_take_scene() const noexcept {
+bool RendererVk::can_trade_scene() const noexcept {
     return !frame_generation_running() && scene_.color &&
            !output_scene_active_ && !target_pass_active_ &&
-           scene_.samples <= 1u && !scene_.wide;
+           scene_.samples <= 1u && !wide_live_ && !layer2d_live_;
+}
+
+// The game is given the picture whole: only where the frame is all of the scene target.
+bool RendererVk::can_take_scene() const noexcept {
+    return can_trade_scene() && scene_map_ == frame_extent_;
+}
+
+void RendererVk::apply_dynamic_resolution() {
+    // 2D-only pictures and anything drawn before the scene take the whole target; the main set is bound here, or held by
+    // the output scene's swap.
+    if (target_pass_active_ || wide_live_ || layer2d_live_) {
+        return;
+    }
+    if (output_scene_active_) {
+        if (alt_scene_extent_ == scene_extent_) {
+            alt_scene_map_ = alt_scene_extent_;
+        }
+    } else if (frame_extent_ == scene_extent_ && scene_map_ != frame_extent_) {
+        scene_map_ = frame_extent_;
+        reset_draw_bindings();
+        bind_scene();
+    }
+}
+
+unsigned RendererVk::dynamic_resolution_floor() const {
+    constexpr unsigned lowest = kResolutionSixteenths[kResolutionStepCount - 1u];
+    if (!temporal_ || !temporal_mode() || scene_extent_.width == 0u) {
+        return lowest;
+    }
+    const unsigned width = temporal_->smallest_render_width();
+    if (width == 0u) {
+        return lowest;
+    }
+    // The fewest sixteenths whose rectangle (rounded to the nearest pixel) is at least that wide.
+    const unsigned sixteenths = static_cast<unsigned>(
+        (static_cast<std::uint64_t>(width) * 16u + scene_extent_.width - 1u) / scene_extent_.width);
+    return std::clamp(sixteenths, lowest, 16u);
+}
+
+void RendererVk::begin_scene_rectangle() {
+    // The main scene target only, at the size the rectangle is taken from (a target pass, the output scene and the wide
+    // scene are each their own size).
+    if (output_scene_active_ || target_pass_active_ || wide_live_ || layer2d_live_ || frame_extent_ != scene_extent_) {
+        return;
+    }
+    if (rectangle_frame_ != frame_index_) {
+        // Once a scene picture: the governor takes the scene pictures' GPU time against the picture's budget.
+        rectangle_frame_ = frame_index_;
+        const RenderConfig cfg = get_render_config();
+        const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
+        const unsigned before = dynamic_resolution_.sixteenths();
+        dynamic_resolution_.set_walk(dynamic_resolution_offered() &&
+                                     ::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps));
+        scene_rectangle_ = dynamic_resolution_.update(cfg.dynamic_resolution && dynamic_resolution_offered(), scene_extent_,
+                                                      dynamic_resolution_floor(), native_scene_gpu_ema_ms_,
+                                                      resolution_budget_ms(rate, display_refresh_hz_));
+        if (::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps | ::galaxy::kDiagnosePresentStats) &&
+            dynamic_resolution_.sixteenths() != before) {
+            std::fprintf(stderr, "[dynres] frame %llu: %u/16, %ux%u of %ux%u (floor %u/16)\n",
+                         static_cast<unsigned long long>(frame_index_), dynamic_resolution_.sixteenths(),
+                         scene_rectangle_.width, scene_rectangle_.height, scene_extent_.width, scene_extent_.height,
+                         dynamic_resolution_.lowest_sixteenths());
+        }
+    }
+    if (!(scene_rectangle_.width <= frame_extent_.width && scene_rectangle_.height <= frame_extent_.height) ||
+        scene_rectangle_.empty() || scene_map_ == scene_rectangle_) {
+        return;
+    }
+    // An open pass keeps its render area (the whole target, which holds the rectangle); the next opens over the part.
+    scene_map_ = scene_rectangle_;
+    reset_draw_bindings();
+    bind_scene();
+}
+
+bool RendererVk::publish_scene_depth_copy(std::uint64_t key, TextureStore& textures) {
+    const GpuPassScope pass{*this, GpuPass::FramePass};
+    const FrameExtent extent = frame_pass_extent(frame_extent_);
+    if (extent.width == 0u || extent.height == 0u || depth_copy_pipeline_ == VK_NULL_HANDLE || !scene_.depth) {
+        return false;
+    }
+    // Its own key beside the colour captures' (channels in bits 48 and up, at most 4): freed with the texture's id.
+    const std::uint64_t dest_key = static_cast<std::uint64_t>(static_cast<std::uint32_t>(key)) | (0xFFull << 48u);
+    FramePassTarget& dest = frame_pass_targets_[dest_key];
+    if (!dest.texture || dest.width != extent.width || dest.height != extent.height) {
+        if (dest.texture) {
+            retire(std::move(dest.texture));
+        }
+        dest.texture = vk::Context::get().create_texture(extent.width, extent.height, 1u, depth_copy_format_,
+                                                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                         true, "scene depth picture");
+        if (!dest.texture) {
+            frame_pass_targets_.erase(dest_key);
+            return false;
+        }
+        dest.width = extent.width;
+        dest.height = extent.height;
+    }
+    end_scene_pass();
+    settle_depth_clear();
+    const VkCommandBuffer commands = commands_;
+    resolve_scene_depth(commands);
+    const VkImageAspectFlags aspects = depth_aspects(depth_format_);
+    image_barrier(commands, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                  VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    // The whole picture is written (the pass drops what it held and ends shader-readable).
+    VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    begin.renderPass = depth_copy_pass_;
+    begin.framebuffer = framebuffer_for(*dest.texture);
+    begin.renderArea = {{0, 0}, {extent.width, extent.height}};
+    vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+    const VkViewport viewport{0.0f, static_cast<float>(extent.height), static_cast<float>(extent.width),
+                              -static_cast<float>(extent.height), 0.0f, 1.0f};
+    const VkRect2D scissor{{0, 0}, {extent.width, extent.height}};
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &scissor);
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, depth_copy_pipeline_);
+    const VkDescriptorSet source = allocate_frame_set(utility_set_layout_);
+    write_conversion_input(source, scene_.depth->view);
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &source, 0, nullptr);
+    const VkExtent2D part = scene_part();
+    const FramePassGeometry sampling = frame_pass_geometry(extent.width, extent.height, scene_map_);
+    const SceneConversionShaderConstants constants =
+        make_scene_conversion_constants(0u, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+                                        static_cast<float>(part.width), static_cast<float>(part.height));
+    vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), &constants);
+    vkCmdDraw(commands, 3, 1, 0, 0);
+    vkCmdEndRenderPass(commands);
+    dest.texture->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_barrier(commands, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_NONE,
+                  VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+    reset_draw_bindings();
+    bind_scene();
+    return publish_picture(key, extent.width, extent.height, dest.texture, 0u, textures);
 }
 
 bool RendererVk::take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureStore& textures, gpu::TextureRef& released) {
@@ -2909,12 +3247,28 @@ bool RendererVk::take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureSto
         released = it->second.viewed;
     }
     gpu::TextureRef picture = swap_scene_color(std::move(fresh));
-    const FrameExtent size = frame_pass_extent(scene_map_);
+    const FrameExtent size = frame_pass_extent(frame_extent_);
     return publish_picture(key, size.width, size.height, std::move(picture), 0u, textures);
 }
 
 void RendererVk::open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key,
                                      TextureStore& textures) {
+    if (scene_map_ != frame_extent_) {
+        // Dynamic resolution's rectangle: the pass reads pictures of the whole frame at the extent's size, as at the
+        // whole render size (the game samples a picture whole).
+        if (color_key != 0u) {
+            FramePassRequest request{};
+            request.key = color_key;
+            request.channels = channels;
+            (void)draw_frame_pass(request, textures);
+        }
+        if (depth_key != 0u) {
+            (void)publish_scene_depth_copy(depth_key, textures);
+        }
+        frame_pass_color_key_ = 0u;  // nothing of the scene target's own is lent: close_frame_for_pass returns nothing
+        frame_pass_depth_key_ = 0u;
+        return;
+    }
     end_scene_pass();
     const VkCommandBuffer commands = commands_;
     const FrameExtent size = frame_pass_extent(scene_map_);
@@ -3058,9 +3412,14 @@ VkDescriptorSet RendererVk::scene_color_source() {
 }
 
 bool RendererVk::draw_frame_pass(const FramePassRequest& params, TextureStore& textures) {
+    if (params.channels == kCopyLayoutDisplay) {
+        end_layer_2d();  // the frame shown: the 2D layer's pixels in the float scene first
+    }
     const GpuPassScope pass{*this, GpuPass::FramePass};
     ++gpu_window_.copies;
-    const FrameExtent extent = frame_pass_extent(scene_map_);
+    // The picture is the bound target's allocated size whatever part of it the frame is drawn in (dynamic resolution's
+    // rectangle, resampled into it below): its texture is not made again at each step.
+    const FrameExtent extent = frame_pass_extent(frame_extent_);
     const unsigned w = extent.width;
     const unsigned h = extent.height;
     if (w == 0u || h == 0u) {
@@ -3096,12 +3455,16 @@ bool RendererVk::draw_frame_pass(const FramePassRequest& params, TextureStore& t
             return publish_frame_pass(params, std::move(picture), textures);
         }
     }
-    if (!dest.texture || dest.width != w || dest.height != h) {
+    // The frame shown keeps the scene's light past white with HDR output (float_scene_); a texture the game reads is
+    // levels, as its copies always were.
+    const VkFormat dest_format = params.channels == kCopyLayoutDisplay && float_scene_ ? VK_FORMAT_R16G16B16A16_SFLOAT
+                                                                                      : vk::kSceneColorFormat;
+    if (!dest.texture || dest.width != w || dest.height != h || dest.texture->format != dest_format) {
         if (dest.texture) {
             retire(std::move(dest.texture));
         }
         dest.texture = vk::Context::get().create_texture(
-            w, h, 1u, vk::kSceneColorFormat,
+            w, h, 1u, dest_format,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
             true, nullptr);
@@ -3122,6 +3485,60 @@ bool RendererVk::draw_frame_pass(const FramePassRequest& params, TextureStore& t
     const FramePassGeometry sampling = frame_pass_geometry(w, h, scene_map_);
     record_conversion_blit(texture, w, h, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     return publish_frame_pass(params, current.texture, textures);
+}
+
+bool RendererVk::draw_shown_frame_pass(const FramePassRequest& params, const DisplayTexture& shown, TextureStore& textures) {
+    if (!shown.texture || output_scene_active_ || target_pass_active_ || wide_live_ || layer2d_live_) {
+        return draw_frame_pass(params, textures);
+    }
+    vk::Texture& picture = *shown.texture;
+    constexpr VkImageUsageFlags kCopy = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    const auto fits = [&](const gpu::TextureRef& color) {
+        return color && color != shown.texture && color->width == picture.width && color->height == picture.height &&
+               color->format == picture.format && (color->usage & kCopy) == kCopy;
+    };
+    // An upscaler's frame is the scene's alone at the render size here: the picture is the output scene target's size.
+    const bool output = !fits(scene_.color);
+    if ((picture.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0u || picture.layout != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ||
+        (output && !fits(alt_scene_.color))) {
+        return draw_frame_pass(params, textures);
+    }
+    if (output) {
+        swap_scene_sets();
+    }
+    {
+        const GpuPassScope pass{*this, GpuPass::FramePass};
+        end_scene_pass();
+        vk::Texture& frame = *scene_.color;
+        const VkCommandBuffer commands = commands_;
+        // The picture stays the display's (shader-readable, as presentation reads it); the frame's target its attachment.
+        image_barrier(commands, picture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COPY_BIT,
+                      VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
+        image_barrier(commands, frame.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+        VkImageCopy region{};
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.extent = {picture.width, picture.height, 1};
+        vkCmdCopyImage(commands, picture.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, frame.image,
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        image_barrier(commands, picture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_NONE,
+                      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COPY_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT);
+        image_barrier(commands, frame.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+                          VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    }
+    const bool made = draw_frame_pass(params, textures);
+    if (output) {
+        swap_scene_sets();
+    }
+    return made;
 }
 
 // One dispatch (ScreenProbeCs): each point's pixel (screen_probe_pixel) into the slot's pixels, the scene depth sampled
@@ -3413,12 +3830,14 @@ bool RendererVk::debug_copy_selected_display_to_readback(const DisplayTexture& s
     }
     vk::Texture& texture = *source.texture;
     const bool ten_bit = texture.format == VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+    const bool wide = texture.format == VK_FORMAT_R16G16B16A16_SFLOAT;  // the float scene's (HDR output)
     // The picture's rows (a handed-over scene target is taller); the formats the display pictures have.
-    if ((!ten_bit && texture.format != VK_FORMAT_R8G8B8A8_UNORM) || texture.width < source.width || texture.height < source.height) {
+    if ((!ten_bit && !wide && texture.format != VK_FORMAT_R8G8B8A8_UNORM) || texture.width < source.width ||
+        texture.height < source.height) {
         return false;
     }
     vk::Context& context = vk::Context::get();
-    const std::uint64_t bytes = static_cast<std::uint64_t>(source.width) * source.height * 4u;
+    const std::uint64_t bytes = static_cast<std::uint64_t>(source.width) * source.height * (wide ? 8u : 4u);
     if (!display_capture_.buffer || display_capture_.buffer->size < bytes) {
         display_capture_.buffer = context.create_readback_buffer(bytes, "display picture capture");
         if (!display_capture_.buffer) {
@@ -3437,6 +3856,7 @@ bool RendererVk::debug_copy_selected_display_to_readback(const DisplayTexture& s
     display_capture_width_ = source.width;
     display_capture_height_ = source.height;
     display_capture_ten_bit_ = ten_bit;
+    display_capture_wide_ = wide;
     return true;
 }
 
@@ -3448,7 +3868,14 @@ void RendererVk::debug_log_display_readback() {
     const auto* pixels = reinterpret_cast<const std::uint8_t*>(display_capture_.buffer->mapped);
     const std::size_t count = static_cast<std::size_t>(display_capture_width_) * display_capture_height_;
     std::vector<std::uint8_t> rgba(count * 4u);
-    if (display_capture_ten_bit_) {
+    if (display_capture_wide_) {
+        // The halves as 10-bit words (the capture's range ends at 1, as the SDR view), then as RGBA8.
+        std::vector<std::uint8_t> words(count * 4u);
+        half4_to_ten_bit(pixels, words.data(), display_capture_width_, display_capture_height_, display_capture_width_ * 8u,
+                         display_capture_width_ * 4u);
+        ten_bit_to_rgba8(words.data(), rgba.data(), display_capture_width_, display_capture_height_, display_capture_width_ * 4u,
+                         display_capture_width_ * 4u);
+    } else if (display_capture_ten_bit_) {
         ten_bit_to_rgba8(pixels, rgba.data(), display_capture_width_, display_capture_height_, display_capture_width_ * 4u,
                          display_capture_width_ * 4u);
     } else {
@@ -3513,7 +3940,7 @@ RendererVk::TemporalInterpKey RendererVk::temporal_interp_key() const {
     TemporalInterpKey key{};
     key.upscaler = cfg.upscaler;
     key.quality = cfg.temporal_quality;
-    key.scene_map = output_scene_active_ ? alt_scene_map_ : scene_map_;
+    key.scene_map = scene_extent_;  // the render scene target's size (a dynamic resolution step is not a new key)
     key.output_map = upscale_output_;
     key.max_fps = presented_max_fps(cfg);
     key.vsync = cfg.vsync_interval;

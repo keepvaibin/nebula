@@ -3,6 +3,7 @@
 #include "galaxy/render/d3d11/ambient_occlusion_d3d11.h"
 
 #include "galaxy/render/ambient_occlusion_shape.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <algorithm>
 #include <bit>
@@ -26,7 +27,6 @@ constexpr DXGI_FORMAT kOcclusionFormat = DXGI_FORMAT_R16G16_FLOAT;
 // The denoised occlusion at one occlusion pixel per scene target pixel: the multiply reads its occlusion alone.
 constexpr DXGI_FORMAT kDenoisedFullFormat = DXGI_FORMAT_R16_FLOAT;
 constexpr DXGI_FORMAT kDistanceFormat = DXGI_FORMAT_R32_FLOAT;
-constexpr std::uint64_t kIdleFrames = 600u;
 
 }  // namespace
 
@@ -110,8 +110,7 @@ bool AmbientOcclusion::ensure(std::shared_ptr<Texture>& target, DXGI_FORMAT form
 }
 
 void AmbientOcclusion::trim_idle() {
-    ++clock_;
-    if (clock_ > used_ + kIdleFrames && (distance_ || raw_ || denoised_ || objects_.buffer || tiles_.buffer)) {
+    if (idle_since(used_) && (distance_ || raw_ || denoised_ || objects_.buffer || tiles_.buffer)) {
         distance_.reset();
         raw_.reset();
         denoised_.reset();
@@ -177,15 +176,22 @@ bool AmbientOcclusion::record(ID3D11DeviceContext1* context, const Inputs& in) {
         in.objects == nullptr) {
         return false;
     }
-    used_ = clock_;
+    used_ = idle_clock();
     const unsigned divisor = ao::occlusion_divisor(in.height);
     const unsigned width = (in.width + divisor - 1u) / divisor;
     const unsigned height = (in.height + divisor - 1u) / divisor;
+    // The targets at the field's largest size over every step the scene may take (dynamic resolution), so a step change
+    // makes none again; the passes work in this step's part (the constants' size). The denoised field is one channel
+    // where every step's field is the scene's own pixels, else two (a divisor-1 step's multiply reads the first alone).
+    const unsigned whole_width = in.extent_width != 0u ? in.extent_width : in.width;
+    const unsigned whole_height = in.extent_height != 0u ? in.extent_height : in.height;
+    const ao::Field field = ao::largest_field(whole_width, whole_height, in.lowest_sixteenths);
+    const DXGI_FORMAT denoised_format = ao::occlusion_divisor(whole_height) <= 1u ? kDenoisedFullFormat : kOcclusionFormat;
     Constants c{};
     if (!ao::make_constants(in.view, width, height, divisor, in.ssao, c) ||
-        !ensure(distance_, kDistanceFormat, width, height, "occlusion distance") ||
-        !ensure(raw_, kOcclusionFormat, width, height, "occlusion") ||
-        !ensure(denoised_, divisor <= 1u ? kDenoisedFullFormat : kOcclusionFormat, width, height, "occlusion denoised")) {
+        !ensure(distance_, kDistanceFormat, field.width, field.height, "occlusion distance") ||
+        !ensure(raw_, kOcclusionFormat, field.width, field.height, "occlusion") ||
+        !ensure(denoised_, denoised_format, field.width, field.height, "occlusion denoised")) {
         return false;
     }
     ao::bin_objects(*in.objects, c, object_values_, object_tiles_, object_scratch_);

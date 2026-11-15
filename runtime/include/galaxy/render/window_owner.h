@@ -30,6 +30,9 @@ struct WindowOwnerConfig {
     int width{};
     int height{};
     bool show{};
+    // Shown cloaked (DWMWA_CLOAK): the window has its place, the foreground and the focus, and DWM draws none of it until
+    // it is uncloaked (kUncloakMessage).
+    bool cloak{};
 };
 
 // Creates the window on its own thread and runs its message loop there (native modal loops included), independent of

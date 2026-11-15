@@ -52,6 +52,34 @@ namespace galaxy {
 #endif
 }
 
+// A cadence on the clock for work that must keep it whatever the picture rate (a report line, a poll of the display):
+// due() is true at most once an interval. Counting pictures instead runs such work 50 times as often at an unlimited
+// rate as at 60 a second. The first moment is at once when `at_start`, else one interval after the first call.
+class ClockInterval {
+public:
+    explicit constexpr ClockInterval(std::int64_t ms, bool at_start = false) noexcept : ms_(ms), at_start_(at_start) {}
+    [[nodiscard]] bool due() noexcept {
+        const std::int64_t now = qpc_now();
+        if (next_ == 0 && !at_start_) {
+            next_ = now + interval();
+            return false;
+        }
+        if (now < next_) {
+            return false;
+        }
+        next_ = now + interval();
+        return true;
+    }
+    // The next moment one interval from now (a moment taken for another reason).
+    void restart() noexcept { next_ = qpc_now() + interval(); }
+
+private:
+    [[nodiscard]] std::int64_t interval() const noexcept { return qpc_frequency() / 1000 * ms_; }
+    std::int64_t ms_;
+    bool at_start_;
+    std::int64_t next_ = 0;
+};
+
 // Microseconds since an arbitrary start, from the high-resolution clock.
 [[nodiscard]] inline std::uint64_t steady_us() noexcept {
     const std::int64_t ticks = qpc_now();

@@ -8,4 +8,7 @@ class LayoutManager;
 namespace LayoutAspect {
     // Before the layout's matrix pass: its anchors (resolved by name the first time) and this pass's canvas.
     void prepare(LayoutManager* pManager);
+    // The height of the canvas the layouts are drawn on (456 at 4:3 and 16:9, taller on a taller picture): the
+    // screen's height in layout units.
+    f32 getCanvasHeight();
 };  // namespace LayoutAspect

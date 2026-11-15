@@ -49,7 +49,10 @@ public:
     // the open scene pass `encoder` (an id<MTLRenderCommandEncoder> over `samples` samples a pixel), RGB only (the
     // alpha the game left there stays). With `trade` (a single-sample scene) a pass that runs reads the scene's own
     // image instead of a copy (scene_traded), and finish_scene_aa writes every pixel and channel of the image that took
-    // its place (the alpha the scene's): the scene pass may open without loading it.
+    // its place (the alpha the scene's): the scene pass may open without loading it. `width` x `height` is the scene
+    // target's size, `picture_width` x `picture_height` the part of it the picture is drawn in from its top left
+    // (dynamic resolution's rectangle; the whole target without it): the passes work in that part and read no
+    // further, their targets staying the target's size so a step change makes none again.
     using SceneTrade = std::function<std::shared_ptr<Texture>(std::shared_ptr<Texture> spare)>;
     AaRun prepare_scene_aa(Object commands, const Texture& color, unsigned width, unsigned height, unsigned picture_width,
                            unsigned picture_height, unsigned display_width, unsigned display_height,
@@ -86,7 +89,7 @@ private:
         std::shared_ptr<Texture> texture;
         unsigned width = 0;
         unsigned height = 0;
-        std::uint64_t used = 0;  // clock_ when a pass last asked for it
+        std::uint64_t used = 0;  // idle_clock() when a pass last asked for it
     };
     // A pipeline: the programs, what it draws into and how.
     struct PipelineKey {
@@ -115,7 +118,12 @@ private:
     bool ensure_target(Target& target, unsigned width, unsigned height, Format format);
     bool ensure_smaa_targets(unsigned width, unsigned height);
     void trim_idle_targets();
-    bool record_aa(Object commands, AaRun pass, Object source, unsigned width, unsigned height);
+    // SMAA's edges and weights over the picture's part (`part_width` x `part_height`) of a `width` x `height` input.
+    bool record_aa(Object commands, AaRun pass, Object source, unsigned width, unsigned height, unsigned part_width,
+                   unsigned part_height);
+    // The picture's part the last prepare_scene_aa worked in, which its finish draws.
+    unsigned part_width_ = 0u;
+    unsigned part_height_ = 0u;
     // How a draw uses the pass's stencil: not at all, marks it (reference 1), or draws where it is marked.
     enum class Stencil : std::uint8_t { None, Mark, Test, Count };
     void draw(Object encoder, Object pipeline, Stencil stencil, const Object* inputs, unsigned input_count,
@@ -142,7 +150,7 @@ private:
     Target scaled_;
     // The scene's image traded out (prepare_scene_aa with a trade): the passes' source, the next trade's spare.
     std::shared_ptr<Texture> traded_;
-    std::uint64_t traded_used_ = 0;  // clock_ at the last trade
+    std::uint64_t traded_used_ = 0;  // idle_clock() at the last trade
     bool scene_traded_ = false;  // this frame's passes read traded_
     // MetalFX's spatial scaler (settings upscaler kMetalFx) and the picture it writes; the sizes it could not be made
     // for are not tried again each frame.
@@ -152,8 +160,7 @@ private:
     // `source` enlarged by MetalFX into spatial_output_; false when the device or the sizes do not allow it.
     bool record_spatial(Object commands, const Texture& source, unsigned source_width, unsigned source_height,
                         unsigned target_width, unsigned target_height);
-    std::uint64_t clock_ = 0;      // scene AA calls so far
-    std::uint64_t smaa_used_ = 0;  // clock_ when SMAA's three targets were last asked for
+    std::uint64_t smaa_used_ = 0;  // idle_clock() when SMAA's three targets were last asked for
 };
 
 }  // namespace galaxy::render::mtl

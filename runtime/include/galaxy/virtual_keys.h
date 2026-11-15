@@ -5,6 +5,8 @@
 // winuser.h's values where Windows does not provide them. SDL hosts translate scancodes to these. Letters and digits
 // are their ASCII upper-case codes, as on Windows.
 
+#include "galaxy/windows_api.h"
+
 #if !defined(_WIN32)
 
 inline constexpr int VK_CANCEL = 0x03;

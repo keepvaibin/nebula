@@ -60,7 +60,7 @@ def main():
         mean = sum(ImageStat.Stat(difference).mean) / 3.0
         # Pixels with any channel past the tolerance.
         past = difference.point(lambda value: 255 if value > tolerance else 0).convert("L")
-        count = sum(1 for value in past.getdata() if value)
+        count = a.size[0] * a.size[1] - past.histogram()[0]
         share = 100.0 * count / (a.size[0] * a.size[1])
         print(f"present {number}: largest {largest}, mean {mean:.4f}, past {tolerance}: {count} pixels ({share:.3f}%)")
         if count:

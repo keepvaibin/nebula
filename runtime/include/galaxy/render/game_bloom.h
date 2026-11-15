@@ -64,9 +64,14 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};       // the scene target's render target (multisampled with MSAA)
         unsigned samples = 1;
         bool hdr = false;                        // the colour is the HDR scene scene target
-        unsigned frame_width = 0;                // the frame in scene target pixels
+        unsigned frame_width = 0;                // the frame in scene target pixels (the part of it drawn in)
         unsigned frame_height = 0;
+        unsigned extent_width = 0;               // the scene target's size (0: the frame's)
+        unsigned extent_height = 0;
+        unsigned lowest_sixteenths = 16u;        // the smallest dynamic resolution step the frame may take (16: none)
         float scale = 1.0f;                      // scene target pixels per game pixel
+        [[nodiscard]] unsigned whole_width() const noexcept { return extent_width != 0u ? extent_width : frame_width; }
+        [[nodiscard]] unsigned whole_height() const noexcept { return extent_height != 0u ? extent_height : frame_height; }
     };
     // BloomEffect::preDraw, and BloomEffectSimple::draw with the game's own chain: the scene before the bloom's work
     // over it.
@@ -101,7 +106,7 @@ public:
     // scene): the bloom over the frame. Leaves this pass's root signature, pipeline and render target bound.
     bool apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in, const Params& params,
                std::uint64_t frame_index, unsigned frames_in_flight);
-    // Once a frame: frees what the passes released, and hands back the images no pass has asked for in 600 frames (the
+    // Once a frame: frees what the passes released, and hands back the images no pass has asked for in kIdleSteps game steps (idle_clock.h) (the
     // bloom switched off or a scene without one), at the frame's fence; the next bloom makes them again.
     void trim_idle(std::uint64_t frame_index, unsigned frames_in_flight);
 
@@ -112,7 +117,7 @@ private:
         unsigned height = 0;
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         gpu::Use use = gpu::Use::CopyDest;
-        std::uint64_t used_frame = 0;   // the last frame a pass asked for it
+        std::uint64_t used_step = 0;  // idle_clock() when last asked for
     };
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -143,7 +148,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blur_;
     // 1, 2, 4, 8 samples; then HDR.
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> composite_{};
-    Target keep_;         // the scene (the scene target's format, the frame's size)
+    unsigned composite_failed_ = 0u;  // composite_ entries the device would not make (not tried again)
+    Target keep_;         // the scene (the scene target's format and size)
     Target source_;       // the simple bloom's scene, its source (as keep_)
     Target work_;         // level 1's resolution: the frame in boxes
     Target box_tmp_;      // the footprint's horizontal box

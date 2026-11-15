@@ -279,7 +279,7 @@ gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entr
             std::lock_guard guard(lock_);
             if (!quit_) {
                 pending_.fetch_add(1u, std::memory_order_relaxed);
-                jobs_.push_back(Job{static_cast<std::uint32_t>(id), entry, variant, aux, true});
+                jobs_.push_back(Job{static_cast<std::uint32_t>(id), std::make_shared<const PipelineEntry>(entry), variant, aux, true});
             }
         }
         wake_.notify_one();
@@ -325,17 +325,14 @@ bool added_prepass_draws(std::uint32_t state) noexcept {
            ((state >> 20u) & 3u) == 0u && ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
 }
 
-void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std::vector<unsigned>& variants, bool motion, bool layer,
+void Pipelines::prepare(const std::vector<Prepared>& entries, const std::vector<unsigned>& variants, bool motion, bool layer,
                         bool one_pass, bool traced) {
-    const auto add = [&](unsigned variant, unsigned aux) {
-        pending_.fetch_add(1u, std::memory_order_relaxed);
-        jobs_.push_back(Job{id, entry, variant, aux});
-    };
-    {
-        std::lock_guard guard(lock_);
-        if (quit_) {
-            return;
-        }
+    std::vector<Job> now;
+    std::vector<Job> later;
+    for (const Prepared& prepared : entries) {
+        const std::uint32_t id = prepared.id;
+        const PipelineEntry& entry = *prepared.entry;
+        const auto add = [&](unsigned variant, unsigned aux) { now.push_back(Job{id, prepared.entry, variant, aux}); };
         // The tracer's forms of a scene draw (no target, one sample): its prepass, and a lit program's traced forms under
         // the aux the scene pass gives an opaque draw.
         // An added state: its prepass and exchange forms, for the glass rows' shells among its draws.
@@ -389,7 +386,7 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
                         return;
                     }
                     if (left) {
-                        left_jobs_.push_back(Job{id, entry, variant, aux, false, true});
+                        later.push_back(Job{id, prepared.entry, variant, aux, false, true});
                     } else {
                         add(variant, aux);
                     }
@@ -409,6 +406,22 @@ void Pipelines::prepare(std::uint32_t id, const PipelineEntry& entry, const std:
             if (layer) {
                 add(variant, 3u);
             }
+        }
+    }
+    if (now.empty() && later.empty()) {
+        return;
+    }
+    {
+        std::lock_guard guard(lock_);
+        if (quit_) {
+            return;
+        }
+        pending_.fetch_add(static_cast<std::uint32_t>(now.size()), std::memory_order_relaxed);
+        for (Job& job : now) {
+            jobs_.push_back(std::move(job));
+        }
+        for (Job& job : later) {
+            left_jobs_.push_back(std::move(job));
         }
     }
     wake_.notify_all();
@@ -435,7 +448,7 @@ void Pipelines::worker() {
                 return;
             }
             std::deque<Job>& from = !jobs_.empty() ? jobs_ : left_jobs_;
-            job = from.front();
+            job = std::move(from.front());
             from.pop_front();
         }
         try {
@@ -445,30 +458,30 @@ void Pipelines::worker() {
             std::uint64_t form = 0u;
             if (target_form(job.variant, job.aux)) {
                 try {
-                    form = targets_open() ? form_key(job.entry, job.variant, job.aux) : 0u;
+                    form = targets_open() ? form_key(*job.entry, job.variant, job.aux) : 0u;
                 } catch (...) {
                 }
             }
             if (job.optimize) {
                 // The draw's pipeline was linked quickly: the optimised link takes its place for the draws after it (frames in
                 // flight keep the first, which lives until shutdown).
-                if (at != nullptr && !pair_refused(job.entry)) {
-                    if (gpu::Pipeline* better = build(job.entry, job.variant, job.aux); better != nullptr) {
+                if (at != nullptr && !pair_refused(*job.entry)) {
+                    if (gpu::Pipeline* better = build(*job.entry, job.variant, job.aux); better != nullptr) {
                         at->store(better, std::memory_order_release);
                         note_target_stored(form);
                     }
                 }
-            } else if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(job.entry)) {
+            } else if (at != nullptr && at->load(std::memory_order_acquire) == nullptr && !pair_refused(*job.entry)) {
                 if (!job.deferred && left_to_cache(form)) {
                     left_.fetch_add(1u, std::memory_order_relaxed);
                     defer(job);  // a load from the cache then, at this thread's priority, not the draw's
                 } else {
                     bool memory = false;
-                    if (gpu::Pipeline* built = build_noting(job.entry, job.variant, job.aux, memory); built != nullptr) {
+                    if (gpu::Pipeline* built = build_noting(*job.entry, job.variant, job.aux, memory); built != nullptr) {
                         note_target_stored(form);
                         publish(*at, built);
                     } else {
-                        failed(job.id, job.entry, job.variant, job.aux, memory, &job);
+                        failed(job.id, *job.entry, job.variant, job.aux, memory, &job);
                     }
                 }
             }
@@ -476,7 +489,7 @@ void Pipelines::worker() {
             // Out of memory in our own code around the build: as the driver's (pipeline_workers.h).
             try {
                 if (!job.optimize) {
-                    failed(job.id, job.entry, job.variant, job.aux, true, &job);
+                    failed(job.id, *job.entry, job.variant, job.aux, true, &job);
                 }
             } catch (...) {
             }
@@ -484,7 +497,7 @@ void Pipelines::worker() {
             // A build that throws otherwise is a refusal of that pipeline; an exception out of a worker would end the process.
             try {
                 if (!job.optimize) {
-                    refuse(job.id, job.entry, job.variant, job.aux);
+                    refuse(job.id, *job.entry, job.variant, job.aux);
                 }
             } catch (...) {
             }

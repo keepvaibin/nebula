@@ -81,6 +81,9 @@ public:
     void silenceSeForCutsceneSkip(bool silent);
     void fadeOutForQuit();
     void holdForSettingsMenu(bool hold, bool stayFaded);
+    // A reset or a new scene under the settings menu (the HDR calibration's reference stage plays there) puts the
+    // volumes back as they were before it: the menu's hold is taken again at once.
+    void keepSettingsHold();
     // LumaCore's world clock (services/time.md 7): the world's sound held (a mod holds the world, or its rate is beyond
     // what the sound follows) or given back.
     void holdForWorld(bool hold);

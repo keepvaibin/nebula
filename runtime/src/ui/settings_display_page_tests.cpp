@@ -17,7 +17,13 @@ public:
     unsigned refresh_hz = 144;
     bool hdr = false;
     bool hdr_active = false;
+    bool hdr_in_use = false;
+    bool display_on = true;  // the display in HDR mode (false: Windows HDR off, turned on by the game)
+    bool held = false;
+    bool refused = false;
+    bool vsync_fixed = false;
     mutable int last = -1;
+    mutable int calibrations = 0;
     galaxy::ui::DisplayPageState query(const galaxy::ui::RenderConfig& render) const override {
         galaxy::ui::DisplayPageState state;
         state.monitors = {{"first", "First"}, {"second", "Second"}};
@@ -26,10 +32,16 @@ public:
         state.fullscreen_only = phone;
         if (!empty_sizes) state.window_sizes = {{640, 480}, {1280, 720}, {1920, 1080}};
         state.frame_rates.refresh_hz = refresh_hz;
+        state.frame_rates.vsync_fixed = vsync_fixed;
         state.hdr_offered = hdr;
         state.hdr_active = hdr_active;
+        state.hdr_in_use = hdr_in_use;
+        state.hdr_display_on = hdr && display_on;
+        state.hdr_held_sdr = held;
+        state.hdr_refused = refused;
         return state;
     }
+    void calibrate_hdr(const galaxy::ui::RenderConfig&) const override { ++calibrations; }
     void changed(galaxy::ui::DisplayChange change, galaxy::ui::RenderConfig&) const override {
         last = static_cast<int>(change);
     }
@@ -69,20 +81,60 @@ int main() {
         rows = galaxy::ui::display_page(config, host);
         check(row(rows, "REFRESH RATE").value == "UNKNOWN", "a refresh rate the system did not report is said so");
         host.refresh_hz = 144;
+        // A display that always waits for its refresh: VSYNC is ON whatever was chosen, with no choice and the reason.
+        config.vsync_interval = 0u;
+        host.vsync_fixed = true;
+        rows = galaxy::ui::display_page(config, host);
+        check(row(rows, "VSYNC").value == "ON" && !row(rows, "VSYNC").change, "vsync fixed on such a display");
+        check(row(rows, "VSYNC").help == "THIS DISPLAY ALWAYS WAITS FOR ITS REFRESH", "vsync fixed reason");
+        host.vsync_fixed = false;
+        rows = galaxy::ui::display_page(config, host);
+        check(row(rows, "VSYNC").value == "OFF" && row(rows, "VSYNC").change, "vsync a choice elsewhere");
         // HDR rows: none on an SDR display; the HDR switch on an HDR one, the paper white once it is on, in steps of 10 nits.
         rows = galaxy::ui::display_page(config, host);
         check(std::none_of(rows.begin(), rows.end(), [](const auto& r) { return r.label == "HDR" || r.label == "PAPER WHITE"; }), "no HDR rows on an SDR display");
         host.hdr = true;
         rows = galaxy::ui::display_page(config, host);
         check(row(rows, "HDR").value == "OFF", "hdr row off");
+        check(row(rows, "HDR").help == "WIDE BRIGHTNESS RANGE ON AN HDR DISPLAY", "hdr row help");
+        host.display_on = false;
+        rows = galaxy::ui::display_page(config, host);
+        check(row(rows, "HDR").help == "TURNS ON WINDOWS HDR WHILE THE GAME RUNS", "Windows HDR off: the game turns it on");
+        host.display_on = true;
+        rows = galaxy::ui::display_page(config, host);
         check(std::none_of(rows.begin(), rows.end(), [](const auto& r) { return r.label == "PAPER WHITE"; }), "paper white waits for hdr");
         row(rows, "HDR").change(config, 1);
         check(config.hdr, "hdr action");
+        // On in the draft only: the calibration waits for Apply.
+        rows = galaxy::ui::display_page(config, host);
+        check(row(rows, "HDR").help.find("WAITING") == std::string::npos, "hdr not applied yet: no wait named");
+        check(row(rows, "HDR CALIBRATION").buttons.size() == 1u && row(rows, "HDR CALIBRATION").buttons[0] == "-CALIBRATE" &&
+                  !row(rows, "HDR CALIBRATION").press && row(rows, "HDR CALIBRATION").help == "APPLY HDR FIRST",
+              "calibration waits for hdr applied");
+        host.hdr_in_use = true;
         rows = galaxy::ui::display_page(config, host);
         check(row(rows, "HDR").help.find("WAITING") != std::string::npos, "hdr waits while the chain is not HDR");
+        check(!row(rows, "HDR CALIBRATION").press && row(rows, "HDR CALIBRATION").help.find("WAITING") != std::string::npos,
+              "calibration waits while the chain is not HDR");
+        check(row(rows, "HDR").help == "WAITING FOR THE DISPLAY TO SWITCH TO HDR", "the display's switch waited for");
+        host.held = true;
+        rows = galaxy::ui::display_page(config, host);
+        check(row(rows, "HDR").help == "WAITING: FRAME GENERATION KEEPS THE PICTURE SDR" &&
+                  row(rows, "HDR CALIBRATION").help == "WAITING: FRAME GENERATION KEEPS THE PICTURE SDR",
+              "frame generation named");
+        host.held = false;
+        host.refused = true;
+        rows = galaxy::ui::display_page(config, host);
+        check(row(rows, "HDR").help == "WINDOWS HDR IS OFF FOR THIS DISPLAY" && !row(rows, "HDR CALIBRATION").press,
+              "Windows keeping HDR off named");
+        host.refused = false;
         host.hdr_active = true;
         rows = galaxy::ui::display_page(config, host);
         check(row(rows, "HDR").help.find("WAITING") == std::string::npos, "hdr active");
+        check(row(rows, "HDR CALIBRATION").buttons[0] == "CALIBRATE" && row(rows, "HDR CALIBRATION").press,
+              "calibration offered on an HDR picture");
+        row(rows, "HDR CALIBRATION").press(config, 0u);
+        check(host.calibrations == 1, "calibrate opens the calibration");
         check(row(rows, "PAPER WHITE").value == "200 NITS", "paper white label");
         row(rows, "PAPER WHITE").change(config, 3);
         check(config.paper_white == 230u, "paper white steps by 10");

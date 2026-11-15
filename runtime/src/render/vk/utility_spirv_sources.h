@@ -25,6 +25,7 @@ namespace galaxy::render::vk {
 
 // The binding layouts of the renderer's own shaders.
 constexpr RegisterBinding kUtilityBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"s0", 0, 1}};
+constexpr RegisterBinding kLayerMergeBindings[] = {{"t0", 0, 0}, {"t1", 0, 1}};
 constexpr RegisterBinding kScreenProbeBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"u0", 0, 2}};
 
 // The display picture into the swap chain image (the present pass's blit), turned for a pre-rotated image: `transform` is the

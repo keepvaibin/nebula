@@ -13,6 +13,7 @@
 #import <IOKit/pwr_mgt/IOPMLib.h>
 #import <QuartzCore/CAMetalLayer.h>
 
+#include "galaxy/benchmark.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/game_paths.h"
@@ -79,6 +80,10 @@ id g_delegate = nil;
 std::vector<std::filesystem::path> g_opened_early;  // files opened before the window (the main thread's)
 std::atomic<void*> g_layer{nullptr};  // the view's CAMetalLayer, for the renderer's thread
 std::atomic<bool> g_background{false};
+// The system asked for memory (the memory pressure source's warning or critical level) since the host last took it.
+std::atomic<bool> g_low_memory{false};
+// The memory pressure source (start): kept for the process's life.
+dispatch_source_t g_memory_pressure = nil;
 std::atomic<bool> g_menu_context{false};
 std::atomic<bool> g_title_screen{false};
 std::atomic<bool> g_direct_touch{false};
@@ -698,7 +703,8 @@ void files_opened(NSArray<NSURL*>* urls) {
     [super viewDidChangeBackingProperties];
     self.layer.contentsScale = self.window != nil ? self.window.backingScaleFactor : 1.0;
 }
-// Files dropped on the window: mods to the importer, Mii files to the Mii import (native_settings_files_dropped).
+// Files dropped on the window: a save to the save import, mods to the importer, Mii files to the Mii import
+// (native_settings_files_dropped).
 - (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
     return NSDragOperationCopy;
 }
@@ -928,6 +934,19 @@ bool start() noexcept {
             open_gamepad(controller);
         }
     }
+    // The system's memory pressure, as Android's onTrimMemory: the host lets go of what comes back by itself
+    // (take_low_memory). The source's handler runs on a global queue and only sets the flag.
+    if (g_memory_pressure == nil) {
+        g_memory_pressure = dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0,
+                                                   DISPATCH_MEMORYPRESSURE_WARN | DISPATCH_MEMORYPRESSURE_CRITICAL,
+                                                   dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
+        if (g_memory_pressure != nil) {
+            dispatch_source_set_event_handler(g_memory_pressure, ^{
+                g_low_memory.store(true, std::memory_order_release);
+            });
+            dispatch_resume(g_memory_pressure);
+        }
+    }
     return true;
 }
 
@@ -1059,7 +1078,7 @@ void pump_events(int timeout_ms) noexcept {
             const galaxy::input::NativeSettingsPadStep step = galaxy::input::native_settings_pad_step(
                 g_menu_pad, buttons, sample.axes[0], sample.axes[1],
                 galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
-                    galaxy::ui::launcher_visible(),
+                    galaxy::ui::launcher_visible() || galaxy::bench::running(),
                 galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
                 galaxy::render::native_settings_post_key(step.keys[i]);
@@ -1123,6 +1142,10 @@ void set_direct_touch(bool direct) noexcept {
 
 bool in_background() noexcept {
     return g_background.load(std::memory_order_acquire);
+}
+
+bool take_low_memory() noexcept {
+    return g_low_memory.exchange(false, std::memory_order_acq_rel);
 }
 
 InputState input_state() noexcept {
@@ -1219,6 +1242,8 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         @autoreleasepool {
             make_window(window_width, window_height);
             if (!hidden) {
+                // In front and focused at once, transparent until its first picture (show_window).
+                [g_window setAlphaValue:0.0];
                 [g_window makeKeyAndOrderFront:nil];
                 [NSApp activateIgnoringOtherApps:YES];
             }
@@ -1235,7 +1260,7 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         return {};
     }
     owner.window = (__bridge void*)g_window;
-    return {(__bridge void*)g_window, !hidden};
+    return {(__bridge void*)g_window, false};
 }
 
 void close_game_window(WindowOwner& owner) noexcept {
@@ -1257,8 +1282,7 @@ void close_game_window(WindowOwner& owner) noexcept {
 void show_window(NativeWindow) noexcept {
     using namespace galaxy::sdl;
     on_main(^{
-        [g_window makeKeyAndOrderFront:nil];
-        [NSApp activateIgnoringOtherApps:YES];
+        [g_window setAlphaValue:1.0];
     });
 }
 
@@ -1351,7 +1375,11 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
             panel.allowsMultipleSelection = YES;
             panel.canChooseDirectories = kind == FilePick::ModFolders;
             panel.canChooseFiles = kind != FilePick::ModFolders;
-            panel.message = kind == FilePick::Miis ? @"Choose Mii files" : kind == FilePick::ModFolders ? @"Choose mod folders" : @"Choose mods or texture packs";
+            panel.allowsMultipleSelection = kind != FilePick::Saves;
+            panel.message = kind == FilePick::Miis         ? @"Choose Mii files"
+                            : kind == FilePick::ModFolders ? @"Choose mod folders"
+                            : kind == FilePick::Saves      ? @"Choose a save to import"
+                                                           : @"Choose mods or texture packs";
             g_panels.fetch_add(1, std::memory_order_relaxed);
             update_cursor();
             const auto finished = ^(NSModalResponse result) {
@@ -1365,6 +1393,39 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
                 }
                 g_panels.fetch_sub(1, std::memory_order_relaxed);
                 (*shared)(std::move(chosen));
+            };
+            if (g_window != nil) {
+                [panel beginSheetModalForWindow:g_window completionHandler:finished];
+            } else {
+                [panel beginWithCompletionHandler:finished];
+            }
+        }
+    });
+}
+
+// The system's save panel, answered on the main thread; the file is copied where the player chose.
+void save_copy(const std::filesystem::path& file, std::function<void(SaveCopy)> done) {
+    using namespace galaxy::sdl;
+    auto shared = std::make_shared<std::function<void(SaveCopy)>>(std::move(done));
+    const std::filesystem::path source = file;
+    const std::string name = galaxy::path_text(file.filename());
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            NSSavePanel* const panel = [NSSavePanel savePanel];
+            panel.nameFieldStringValue = @(name.c_str());
+            panel.message = @"Export saves";
+            g_panels.fetch_add(1, std::memory_order_relaxed);
+            update_cursor();
+            const auto finished = ^(NSModalResponse result) {
+                SaveCopy outcome = SaveCopy::Cancelled;
+                if (result == NSModalResponseOK && panel.URL.fileSystemRepresentation != nullptr) {
+                    std::error_code error;
+                    std::filesystem::copy_file(source, std::filesystem::path(panel.URL.fileSystemRepresentation),
+                                               std::filesystem::copy_options::overwrite_existing, error);
+                    outcome = error ? SaveCopy::Failed : SaveCopy::Saved;
+                }
+                g_panels.fetch_sub(1, std::memory_order_relaxed);
+                (*shared)(outcome);
             };
             if (g_window != nil) {
                 [panel beginSheetModalForWindow:g_window completionHandler:finished];
@@ -1400,10 +1461,6 @@ unsigned dlss_min_width(unsigned, unsigned, unsigned) noexcept {
     return 0u;
 }
 
-bool launcher_available() {
-    return false;
-}
-
 bool dlss_files_present() {
     return false;
 }
@@ -1437,8 +1494,28 @@ VendorLicense vendor_license(std::string&) {
     return VendorLicense::Failed;
 }
 
-bool restart_game(bool) {
-    return false;
+namespace {
+std::atomic<int> restart_request{0};  // restart_wanted: 0 none, else a Restart's value
+}  // namespace
+
+// The game ends as for Quit, and the host starts it again as it leaves (host_main finish_and_exit: an exec of this
+// executable), with the arguments of the start `kind` asks for.
+bool restart_game(Restart kind) {
+    restart_request.store(static_cast<int>(kind), std::memory_order_release);
+    quit_request.store(true, std::memory_order_release);
+    return true;
+}
+
+int restart_wanted() noexcept {
+    return restart_request.load(std::memory_order_acquire);
+}
+
+bool can_restart() noexcept {
+    return true;
+}
+
+void quit_game() noexcept {
+    quit_request.store(true, std::memory_order_release);
 }
 
 void* metal_layer(NativeWindow) {
@@ -1613,11 +1690,6 @@ unsigned window_width_dp() noexcept {
 
 bool keyboard_or_mouse_attached() noexcept {
     return true;
-}
-
-// A second player on this system: not yet.
-bool native_game_co_star(galaxy::input::PlayerInput*) noexcept {
-    return false;
 }
 
 JoyConStatus joycon_status() noexcept {

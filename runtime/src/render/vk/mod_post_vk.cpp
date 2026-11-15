@@ -262,12 +262,23 @@ void RendererVk::record_mod_post(const ModPostProgram& program, ModPostConstants
             }
         }
     }
+    // The scene's part of its targets (dynamic resolution's rectangle of the main set: bound, or held by the output
+    // scene's swap), as a share of their size.
+    const FrameMap& scene_part = output_scene_active_ ? alt_scene_map_ : scene_map_;
+    const FrameMap& scene_whole = output_scene_active_ ? alt_scene_extent_ : frame_extent_;
+    if (scene_whole.width != 0u && scene_whole.height != 0u) {
+        constants.scene_share[0] = static_cast<float>(scene_part.width) / static_cast<float>(scene_whole.width);
+        constants.scene_share[1] = static_cast<float>(scene_part.height) / static_cast<float>(scene_whole.height);
+    }
+    // The motion target, when this frame's scene wrote it (a temporal scene), in the scene's pixels: where the surface
+    // was minus where it is, so uv units are those pixels over the scene's drawn size.
     const vk::Texture* motion = nullptr;
     if ((program.reads & kModPostReadsMotion) != 0u && !target_pass_active_ && scene_motion_ && motion_.motion &&
-        motion_used_frame_ == frame_index_ && motion_.map.width != 0u && motion_.map.height != 0u) {
+        motion_used_frame_ == frame_index_ && motion_.map == scene_whole && scene_part.width != 0u &&
+        scene_part.height != 0u) {
         motion = motion_.motion.get();
-        constants.motion_scale[0] = 1.0f / static_cast<float>(motion_.map.width);
-        constants.motion_scale[1] = 1.0f / static_cast<float>(motion_.map.height);
+        constants.motion_scale[0] = 1.0f / static_cast<float>(scene_part.width);
+        constants.motion_scale[1] = 1.0f / static_cast<float>(scene_part.height);
     }
     if (depth != nullptr) {
         constants.flags |= kModPostHasDepth;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/diag_report.h"
+#include "galaxy/diag_endpoint.h"
 
 #include <openssl/hpke.h>
 #include <zlib.h>
@@ -8,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -43,31 +45,17 @@ std::string hex_of(const std::array<std::uint8_t, N>& b) {
     return diag::hex(b.data(), N);
 }
 
-// A result as benchmark.cpp writes it (schema 1), one scene and one probe run.
-constexpr std::string_view kBenchmark = R"({"schema":1,"app":{"version":"1.0.0","commit":null},"created_utc":"2026-11-13T20:00:00Z",
-"status":"complete","failure":"","backend":"d3d12","device":{"gpu":"Intel(R) UHD Graphics 600","vendor_id":32902,
-"device_id":12677,"driver_version":null,"api_level":null,"shared_memory":true,"gpu_budget_mb":2048,
-"cpu":"Intel(R) Celeron(R) N4000 CPU @ 1.10GHz","logical_cores":2,"ram_mb":4096,"os":"Windows 10.0.19045",
-"output":[1366,768],"refresh_hz":60.000},"mods_loaded":false,
-"settings":{"internal_height":0,"upscaler":0,"msaa_samples":1,"ambient_occlusion":0,"ambient_occlusion_ssao":0,
-"enhanced_lighting":0,"per_pixel_lighting":0,"aa":0,"smaa_quality":2,"bloom":100,"vsync_interval":1,"max_fps":60.000,
-"frame_generation":0,"ray_tracing_enabled":0,"display_mode":0},
-"measured_with":{"internal_height":0,"upscaler":0,"msaa_samples":1,"ambient_occlusion":0,"ambient_occlusion_ssao":0,
-"enhanced_lighting":0,"per_pixel_lighting":0,"aa":0,"smaa_quality":2,"bloom":100,"vsync_interval":0,"max_fps":60.000,
-"frame_generation":0,"ray_tracing_enabled":0,"display_mode":0},"limits":["draws and triangles: no back-end-neutral counter"],
-"scenes":[{"stage":"CosmosGardenGalaxy","scenario":1,"grand_stars":0,"load_ms":2301.500,"frames":540,"pixels":1049088.000,
-"settings_held":true,"interval_ms":{"p50":21.100,"p95":30.400,"p99":41.000,"worst":66.700,"over_16_7":300,"over_33_3":4},
-"gpu_ms":19.250,"gpu_pass_ms":{"scene":15.000,"bloom":2.250,"post":2.000},"cpu_ms":{"game":4.100,"render":6.200,
-"audio":0.400,"process":12.000},"draws":null,"triangles":null,"gpu_memory_peak_mb":900,"process_peak_mb":1200}],
-"probe":{"stage":"BattleShipGalaxy","runs":[{"case":"480 base","load_ms":null,"frames":300,"pixels":409920.000,
-"settings_held":true,"interval_ms":{"p50":12.000,"p95":14.000,"p99":15.000,"worst":20.000,"over_16_7":0,"over_33_3":0},
-"gpu_ms":9.000,"gpu_pass_ms":{"scene":8.000},"cpu_ms":{"game":3.000,"render":4.000,"audio":null,"process":9.000},
-"draws":null,"triangles":null,"gpu_memory_peak_mb":800,"process_peak_mb":1100}],
-"fit":{"valid":true,"fixed_ms":2.000,"ms_per_mpixel":17.000},"price_ms_per_mpixel":{"ambient occlusion":4.000,"msaa 4":null}},
-"thermal":null,"recommendation":{"budget_ms":13.333,"predicted_ms":12.900,"fits":true,"cpu_bound":false,"cpu_thread":null,
-"height_left_out":false,"settings":[{"key":"internal_height","current":0,"recommended":480}]},
-"summary":{"verdict":"fits","worst_stage":"CosmosGardenGalaxy","worst_gpu_ms":19.250,"worst_p95_ms":30.400}}
-)";
+// A result as benchmark.cpp writes it (schema 2, from a real run): tools/telemetry/testdata/benchmark.json, which the
+// telemetry tool's tests read too. Read by main before the tests run.
+std::string kBenchmark;
+
+std::string read_fixture() {
+    std::ifstream in(NEBULA_BENCHMARK_FIXTURE, std::ios::binary);
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
+    check(!text.empty(), "the benchmark fixture " NEBULA_BENCHMARK_FIXTURE " is readable");
+    return text;
+}
 
 std::string replaced(std::string_view text, std::string_view from, std::string_view to) {
     std::string out(text);
@@ -207,11 +195,31 @@ void schema() {
     check(diag::schema_error(kBenchmark).empty(), "the benchmark's own result passes");
     check(!diag::schema_error(replaced(kBenchmark, "\"mods_loaded\":false", "\"mods_loaded\":false,\"user\":\"x\"")).empty(),
           "an unknown field is refused");
-    check(!diag::schema_error(replaced(kBenchmark, "\"frames\":540", "\"frames\":540,\"path\":\"C:/x\"")).empty(),
+    check(!diag::schema_error(replaced(kBenchmark, "\"stage\":\"CosmosGardenGalaxy\"", "\"stage\":\"CosmosGardenGalaxy\",\"path\":\"C:/x\"")).empty(),
           "an unknown field deep inside is refused");
-    check(!diag::schema_error(replaced(kBenchmark, "\"schema\":1", "\"schema\":2")).empty(), "another schema version");
-    check(!diag::schema_error(replaced(kBenchmark, "\"logical_cores\":2", "\"logical_cores\":\"2\"")).empty(), "a wrong type");
-    check(!diag::schema_error(replaced(kBenchmark, "\"logical_cores\":2", "\"logical_cores\":2.5")).empty(), "a fraction");
+    // The render thread's time by part (benchmark.h RenderPart), on a slow frame and on a stage.
+    const std::string slow_parts = replaced(kBenchmark, "\"cause\":\"waiting\"}",
+                                            "\"cause\":\"waiting\",\"render_parts\":{\"texture create\":21.5,\"submit\":0.2}}");
+    check(diag::schema_error(slow_parts).empty(), "a slow frame's render parts pass");
+    check(!diag::schema_error(replaced(kBenchmark, "\"cause\":\"waiting\"}", "\"cause\":\"waiting\",\"render_parts\":{\"C:/x\":1}}"))
+               .empty(),
+          "a render part that is not one is refused");
+    check(!diag::schema_error(replaced(kBenchmark, "\"cause\":\"waiting\"}", "\"cause\":\"waiting\",\"render_parts\":{\"submit\":\"x\"}}"))
+               .empty(),
+          "a render part's time that is no number is refused");
+    check(diag::schema_error(replaced(kBenchmark, "\"read_mb\":0.0},\"gpu_memory_peak_mb\"",
+                                      "\"read_mb\":0.0},\"render_parts\":{\"present\":{\"average\":0.1,\"p99\":0.3,\"worst\":2.0}},"
+                                      "\"gpu_memory_peak_mb\""))
+              .empty(),
+          "a stage's render parts pass");
+    check(!diag::schema_error(replaced(kBenchmark, "\"read_mb\":0.0},\"gpu_memory_peak_mb\"",
+                                       "\"read_mb\":0.0},\"render_parts\":{\"present\":{\"average\":0.1,\"name\":\"x\"}},"
+                                       "\"gpu_memory_peak_mb\""))
+               .empty(),
+          "an unknown field in a stage's render part is refused");
+    check(!diag::schema_error(replaced(kBenchmark, "\"schema\":2", "\"schema\":1")).empty(), "another schema version");
+    check(!diag::schema_error(replaced(kBenchmark, "\"logical_cores\":12", "\"logical_cores\":\"12\"")).empty(), "a wrong type");
+    check(!diag::schema_error(replaced(kBenchmark, "\"logical_cores\":12", "\"logical_cores\":12.5")).empty(), "a fraction");
     check(!diag::schema_error(replaced(kBenchmark, "\"status\":\"complete\"", "\"status\":\"other\"")).empty(),
           "an unknown status");
     check(!diag::schema_error(replaced(kBenchmark, "\"failure\":\"\"", "\"failure\":\"" + std::string(97u, 'a') + "\"")).empty(),
@@ -232,9 +240,11 @@ void schema() {
 
 void stripping() {
     const std::vector<std::string> names = {"Alice Smith", "ALICE-PC"};
+    // release-check: allow (made-up user paths, which the report strips)
     check(diag::strip_log_line("[host:] pak C:\\Users\\Alice Smith\\Games\\game.pak loaded", names) ==
               "[host:] pak <path> loaded",
           "a Windows path with the user name in it");
+    // release-check: allow
     check(diag::strip_log_line("open /home/alice/.local/share/Nebula/logs/game.log", {}) == "open <path>",
           "a POSIX path");
     check(diag::strip_log_line("cache=\"D:/Nebula Data/cache\" ok", {}) == "cache=\"<path> <path>\" ok",
@@ -343,6 +353,7 @@ void posting() {
 
 int main() {
     try {
+        kBenchmark = read_fixture();
         hpke_vector();
         envelope_format();
         envelope();
@@ -358,13 +369,20 @@ int main() {
             check(diag::report_preview(file, false, preview).exit == diag::kOk &&
                       preview == diag::make_report(kBenchmark, {}, false),
                   "the preview is the report that would be sealed");
-            { std::ofstream(file, std::ios::binary) << replaced(kBenchmark, "\"schema\":1", "\"schema\":1,\"x\":1"); }
+            { std::ofstream(file, std::ios::binary) << replaced(kBenchmark, "\"schema\":2", "\"schema\":2,\"x\":1"); }
             check(diag::report_preview(file, false, preview).exit == diag::kInvalid && preview.empty(),
                   "a refused result has no preview");
             std::filesystem::remove(file);
         }
-        check(!diag::uploads_enabled(), "the sources name no endpoint: uploads are off");
-        check(diag::send_report_file("missing.json", false).exit == diag::kDisabled, "--send-report refuses without one");
+        // The sources name no endpoint; a developer's build names one in diag_endpoint_local.h (git ignores it).
+        if (std::string_view(diag::kEndpoint).empty()) {
+            check(!diag::uploads_enabled(), "the sources name no endpoint: uploads are off");
+            check(diag::send_report_file("missing.json", false).exit == diag::kDisabled,
+                  "--send-report refuses without one");
+        } else {
+            check(diag::uploads_enabled(), "a named https endpoint with a valid key turns uploads on");
+            check(diag::send_report_file("missing.json", false).exit != diag::kOk, "a missing file is not sent");
+        }
     } catch (const std::exception& failure) {
         std::cerr << "diag_report: " << failure.what() << '\n';
         return 1;

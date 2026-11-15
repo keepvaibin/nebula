@@ -55,9 +55,9 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
             [](RenderConfig& draft, int delta) {
                 const auto found = std::find(kInternalHeights.begin(), kInternalHeights.end(), normalized_internal_height(draft.internal_height));
                 draft.internal_height = kInternalHeights[settings_step(unsigned(found - kInternalHeights.begin()), unsigned(kInternalHeights.size()), delta)];
-            }, "3D PIXEL HEIGHT. WIDTH FOLLOWS ASPECT. MATCH DISPLAY FOLLOWS WINDOW SIZE AND FOLDING"});
+            }, "HEIGHT IN PIXELS THE GAME IS DRAWN AT. MATCH DISPLAY FOLLOWS THE SCREEN, ALSO WHEN THE WINDOW OR A FOLDING SCREEN CHANGES SIZE"});
     }
-    if (state.dynamic_resolution_offered && render.upscaler == 0u) {
+    if (state.dynamic_resolution_offered) {
         rows.push_back({"DYNAMIC RESOLUTION", render.dynamic_resolution ? "ON" : "OFF",
                         [](RenderConfig& draft, int) { draft.dynamic_resolution = !draft.dynamic_resolution; },
                         "LOWERS THE RESOLUTION WHEN THE GRAPHICS CARD FALLS BEHIND AND RAISES IT AGAIN WHEN IT HAS ROOM"});
@@ -245,15 +245,18 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     char now[48]{};
     std::snprintf(now, sizeof(now), "SHOWING %.1f FPS", measured);
     if (mode == Interpolation::kOff) {
-        const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+        const unsigned rate = frame_rate_target(render.max_fps);
         rows.push_back({"FRAME RATE LIMIT", std::to_string(rate <= kHalfStepRate ? kHalfStepRate : kStepRate) + " FPS",
                         [&host](RenderConfig& draft, int delta) {
                             draft.max_fps = static_cast<float>(delta < 0 ? kHalfStepRate : kStepRate);
                         },
                         now});
     } else {
-        const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
-        if (rate == 0u) {
+        const unsigned rate = frame_rate_target(render.max_fps);
+        // Unlimited where it is not offered (VSync on, or a display that always waits for its refresh) runs at the refresh.
+        if (rate == kUnlimitedTarget && state.frame_rates.unlimited) {
+            std::snprintf(text, sizeof(text), "UNLIMITED");
+        } else if (rate == 0u || rate == kUnlimitedTarget) {
             const unsigned refresh = state.frame_rates.refresh_hz;
             std::snprintf(text, sizeof(text), refresh != 0u ? "MATCH REFRESH (%u HZ)" : "MATCH REFRESH", refresh);
         } else {
@@ -263,12 +266,12 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         [&host](RenderConfig& draft, int delta) {
                             const auto targets = interpolation_targets(interpolation_of(draft), host.query(draft).frame_rates);
                             if (targets.empty()) return;
-                            const auto current = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
+                            const unsigned current = frame_rate_target(draft.max_fps);
                             std::size_t index = targets.size() - 1u;
                             for (std::size_t i = 0; i < targets.size(); ++i) {
                                 if (targets[i] == current) index = i;
                             }
-                            draft.max_fps = static_cast<float>(targets[settings_step(
+                            draft.max_fps = frame_rate_of_target(targets[settings_step(
                                 static_cast<unsigned>(index), static_cast<unsigned>(targets.size()), delta)]);
                         },
                         now});
@@ -293,9 +296,6 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         },
                         "SHARPER TEXTURES ON FLOORS AND WALLS AT AN ANGLE"});
     }
-    rows.push_back({"MIPMAPS", render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL",
-                    [&host](RenderConfig& draft, int) { draft.enhanced_mipmaps = !draft.enhanced_mipmaps; },
-                    "GENERATED ADDS SMOOTH DISTANT DETAIL WHERE THE GAME HAS NONE"});
     if (state.curved_surfaces_offered) {
         rows.push_back({"CURVED SURFACES", render.curved_surfaces ? "ON" : "OFF",
                         [&host](RenderConfig& draft, int) { draft.curved_surfaces = !draft.curved_surfaces; },
@@ -355,7 +355,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         draft.texture_packs = next != 0u;
                         draft.texture_pack_preload = next == 2u;
                     },
-                    "ON LOADS TEXTURES AS THEY APPEAR. PRELOAD LOADS THEM ALL AT ONCE"});
+                    "ON LOADS TEXTURES AS EACH STAGE LOADS. PRELOAD LOADS THEM ALL AT ONCE"});
     if (render.texture_packs) {
         const TexturePackSummary& packs = state.texture_packs;
         char value[32]{};

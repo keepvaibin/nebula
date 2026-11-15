@@ -31,16 +31,41 @@ public:
     // False when it can, or when a proxy stands between (only the request can tell then).
     virtual bool unreachable(const std::string& url) = 0;
     // POST `body` to an https `url` once (no redirect followed, the answer's body dropped), within `timeout_ms` in all:
-    // the diagnostics report's send (diag_report.h). The status, or a negative value without an answer.
+    // the diagnostics report's send (diag_report.h). The status, or a negative value without an answer and `problem`
+    // naming why (the platform's error code and no_answer_text).
     virtual int post(const std::string& url, std::string_view content_type, std::span<const std::uint8_t> body,
-                     int timeout_ms) {
+                     int timeout_ms, std::string& problem) {
         (void)url;
         (void)content_type;
         (void)body;
         (void)timeout_ms;
+        problem = "no HTTPS client in this build";
         return -1;
     }
 };
+
+// Why a request got no answer, as every platform's report says it.
+enum class NoAnswer { Other, TimedOut, NameNotFound, CannotConnect, ConnectionReset, NotSecure, NoNetwork };
+
+[[nodiscard]] inline const char* no_answer_text(NoAnswer why) noexcept {
+    switch (why) {
+    case NoAnswer::TimedOut: return "timed out";
+    case NoAnswer::NameNotFound: return "the server's name was not found";
+    case NoAnswer::CannotConnect: return "could not connect";
+    case NoAnswer::ConnectionReset: return "the connection was reset";
+    case NoAnswer::NotSecure: return "no secure connection could be made";
+    case NoAnswer::NoNetwork: return "no network connection";
+    case NoAnswer::Other: break;
+    }
+    return nullptr;
+}
+
+// "<kind> error <code>", and ": <why>" when it is known.
+[[nodiscard]] inline std::string no_answer_line(std::string_view kind, long long code, NoAnswer why) {
+    std::string line = std::string(kind) + " error " + std::to_string(code);
+    if (const char* text = no_answer_text(why)) line += std::string(": ") + text;
+    return line;
+}
 
 Transport& platform_transport();
 

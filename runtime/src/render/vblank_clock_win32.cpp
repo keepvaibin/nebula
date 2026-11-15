@@ -11,8 +11,10 @@
 #include <wrl/client.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstdlib>
 #include <mutex>
@@ -30,7 +32,54 @@ std::mutex g_mutex;
 std::condition_variable g_asked;
 std::int64_t g_last_asked = 0;  // nobody for two seconds: the thread sleeps until someone asks
 std::int64_t g_vblank = 0;  // the latest vblank (its smoothed wake time)
-std::int64_t g_period = 0;  // the interval between vblanks, smoothed; 0 while not known
+std::int64_t g_period = 0;  // the interval between vblanks; 0 while not known
+
+// The period from the wakes themselves: a least-squares line through the last kFitWakes (vblank number, wake time) pairs.
+// A wake's scheduling delay is noise around the line, which a fit over a second of vblanks averages to a ten-thousandth of
+// a period (a 240 Hz display reads 240.06, not 239.9 to 240.1 from one wake to the next); the phase follows the latest
+// wakes through its own filter. Under kFitLeast wakes the filter's period stands.
+constexpr std::size_t kFitWakes = 256u;
+constexpr std::size_t kFitLeast = 32u;
+struct FitWake {
+    std::int64_t number = 0;  // vblanks since the fit began
+    std::int64_t qpc = 0;
+};
+std::array<FitWake, kFitWakes> g_fit{};
+std::size_t g_fit_count = 0;
+std::size_t g_fit_next = 0;
+std::int64_t g_fit_number = 0;
+
+void fit_reset() noexcept {
+    g_fit_count = g_fit_next = 0;
+    g_fit_number = 0;
+}
+
+// The wake `periods` vblanks after the one before; the fitted period, or 0 while there are too few wakes.
+std::int64_t fit_add(std::int64_t periods, std::int64_t qpc) noexcept {
+    g_fit_number += periods;
+    g_fit[g_fit_next] = {g_fit_number, qpc};
+    g_fit_next = (g_fit_next + 1u) % kFitWakes;
+    g_fit_count = std::min(g_fit_count + 1u, kFitWakes);
+    if (g_fit_count < kFitLeast) {
+        return 0;
+    }
+    // Relative to the newest wake, in doubles: QPC values are too large to square.
+    const FitWake& base = g_fit[(g_fit_next + kFitWakes - 1u) % kFitWakes];
+    double sn = 0.0, st = 0.0;
+    for (std::size_t i = 0; i < g_fit_count; ++i) {
+        sn += static_cast<double>(g_fit[i].number - base.number);
+        st += static_cast<double>(g_fit[i].qpc - base.qpc);
+    }
+    const double n = static_cast<double>(g_fit_count);
+    const double mn = sn / n, mt = st / n;
+    double snn = 0.0, snt = 0.0;
+    for (std::size_t i = 0; i < g_fit_count; ++i) {
+        const double dn = static_cast<double>(g_fit[i].number - base.number) - mn;
+        snn += dn * dn;
+        snt += dn * (static_cast<double>(g_fit[i].qpc - base.qpc) - mt);
+    }
+    return snn > 0.0 ? static_cast<std::int64_t>(std::llround(snt / snn)) : 0;
+}
 std::atomic<HMONITOR> g_monitor{nullptr};
 std::once_flag g_started;
 
@@ -72,6 +121,7 @@ void vblank_thread() {
             const std::lock_guard<std::mutex> lock(g_mutex);
             g_vblank = 0;
             g_period = 0;
+            fit_reset();
         }
         if (!output || FAILED(output->WaitForVBlank())) {
             output.Reset();
@@ -88,11 +138,13 @@ void vblank_thread() {
         if (g_period == 0) {
             g_period = delta;
             g_vblank = now;
+            fit_reset();
+            fit_add(0, now);
             continue;
         }
         // Wakes come a scheduling delay after the vblank: the grid follows them through a filter, so one late
-        // wake moves it by an eighth of its lateness. A wake a whole period or more late (missed vblanks) keeps
-        // the period. A wake far off the grid is ignored; three in a row are a new refresh rate.
+        // wake moves it by an eighth of its lateness. A wake a whole period or more late (missed vblanks) counts
+        // them. A wake far off the grid is ignored; three in a row are a new refresh rate.
         const std::int64_t periods = std::max<std::int64_t>(1, (now - g_vblank + g_period / 2) / g_period);
         const std::int64_t error = now - (g_vblank + periods * g_period);
         if (std::llabs(error) > g_period / 4) {
@@ -100,12 +152,18 @@ void vblank_thread() {
                 off_grid = 0;
                 g_period = delta;
                 g_vblank = now;
+                fit_reset();
+                fit_add(0, now);
             }
             continue;
         }
         off_grid = 0;
         g_vblank += periods * g_period + error / 8;
-        g_period += error / (64 * periods);
+        if (const std::int64_t fitted = fit_add(periods, now); fitted > 0) {
+            g_period = fitted;
+        } else {
+            g_period += error / (64 * periods);
+        }
     }
 }
 

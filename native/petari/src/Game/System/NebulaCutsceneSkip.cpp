@@ -12,6 +12,7 @@
 #include "Game/Demo/DemoTimeKeeper.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystem.hpp"
@@ -249,6 +250,16 @@ namespace NebulaCutsceneSkip {
 
         switch (sState) {
         case State_Idle: {
+            // The HDR calibration's reference stage plays under the settings menu: its opening tour is skipped unasked
+            // (the menu covers the screen in black meanwhile).
+            if (NebulaSettingsMenu::isSceneLive() && isSkippableNow()) {
+                sState = State_FadeOut;
+                sFadeFrames = 0;
+                mute(true);
+                MR::closeSystemWipeFade();
+                report("skipping under the HDR calibration");
+                break;
+            }
             if (!MR::isHeldPause(PLAYER_1)) {
                 sNeedRelease = false;
             }

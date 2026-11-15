@@ -34,8 +34,12 @@ int main() {
  ListData duplicated{};duplicated.list=&lb;Pairing duplicate_pair;duplicate_pair.pair(duplicated,&da);
  if (duplicated.item_before[0] != 0u || duplicated.item_before[1] != NEBULA_NONE32) return 4;
  lb.items=&ib;lb.item_count=1;ib.textures=123;
+ ListData flipbook{};flipbook.list=&lb;Pairing flipbook_pair;flipbook_pair.pair(flipbook,&da);
+ if (flipbook.item_before[0] != 0u) return 5;  // a texture change (a flipbook's next picture) keeps the pair
+ ib.mesh=ia.mesh+16u;
  ListData switched{};switched.list=&lb;Pairing switched_pair;switched_pair.pair(switched,&da);
- if (switched.item_before[0] != NEBULA_NONE32) return 5;
+ if (switched.item_before[0] != NEBULA_NONE32) return 21;  // another mesh is another draw
+ ib.mesh=ia.mesh;
  NebulaFrameCamera old_cameras[2]={ca,ca};old_cameras[1].role=NEBULA_CAMERA_SHADOW;
  NebulaFrameCamera new_camera=old_cameras[1];la.cameras=old_cameras;la.camera_count=2;lb.cameras=&new_camera;lb.camera_count=1;
  la.block_count=lb.block_count=la.item_count=lb.item_count=0;

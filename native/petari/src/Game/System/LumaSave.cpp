@@ -10,6 +10,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
 #include "Game/System/SaveDataHandler.hpp"
+#include "Game/System/SaveFileSummary.hpp"
 #include "Game/System/SaveRequest.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -1121,31 +1122,16 @@ namespace luma {
             // the config or the last character's game data does not load (a broken file).
             bool readFile(int user, const u8* const ppParts[], const u32 pSizes[], LumaOfferFile* pOut) {
                 *pOut = {};
-                sOfferRead->resetAllData();
-                if (pSizes[SaveFileId::Kind_Config] == 0) {
-                    return true;  // never created
-                }
-                sOfferRead->loadFromConfigDataBinary({SaveFileId::Kind_Config, user}, ppParts[SaveFileId::Kind_Config],
-                                                     pSizes[SaveFileId::Kind_Config]);
-                if (sOfferRead->mIsConfigDataCorrupted) {
+                SaveFileSummary summary;
+                if (!readSaveFileSummary(sOfferRead, user, ppParts, pSizes, &summary)) {
                     return false;
                 }
-                if (!sOfferRead->isCreated()) {
-                    return true;
+                if (summary.mExists) {
+                    pOut->exists = 1;
+                    pOut->saved = unixSaved(summary.mSaved);
+                    pOut->luigi = summary.mLuigi ? 1u : 0u;
+                    pOut->stars = summary.mStars;
                 }
-                const bool luigi = !sOfferRead->isLastLoadedMario();
-                const SaveFileId::Kind kind = luigi ? SaveFileId::Kind_Luigi : SaveFileId::Kind_Mario;
-                if (pSizes[kind] == 0) {
-                    return false;
-                }
-                sOfferRead->loadFromGameDataBinary({kind, user}, ppParts[kind], pSizes[kind]);
-                if (sOfferRead->mIsGameDataCorrupted) {
-                    return false;
-                }
-                pOut->exists = 1;
-                pOut->saved = unixSaved(sOfferRead->getLastModified());
-                pOut->luigi = luigi ? 1u : 0u;
-                pOut->stars = static_cast< u32 >(sOfferRead->getPowerStarNum());
                 return true;
             }
 

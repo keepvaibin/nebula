@@ -43,6 +43,8 @@ namespace GameSequenceFunction {
     void reflectStageResultSequenceCoin();
     void resetStageResultSequenceParam();
     void startPreLoadSaveDataSequence();
+    // The save read again as the start reads it (SaveDataHandleSequence::startReload).
+    void startReloadSaveDataSequence();
     void startGameDataLoadSequence(int, bool);
     void startCreateUserFileSequence(int);
     void startDeleteUserFileSequence(int);

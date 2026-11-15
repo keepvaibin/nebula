@@ -20,14 +20,16 @@ Files go to the `diagnostics` folder in Nebula's data folder, named with the pro
 | `frame-tails` | A histogram of frame intervals every 2 seconds. |
 | `frame-times` | Each frame's time, and where a scripted press begins (`[latency]` lines). `tools/verify/gaps.py` reads them. |
 | `gpu-passes` | GPU time for each pass, and shader invocation counts (`gpu-pass-ms` and `gpu-stats` in the present statistics). |
+| `hdr-highlights` | With HDR output, screenshots and test captures show where the picture goes past the white level: the picture in grey, and each brighter pixel yellow up to 2 times the white level, orange up to 4, red up to 8, magenta above. |
 | `heaps` | Everything `memory` records, plus the process heaps by block size. |
 | `memory` | What the renderer holds every 600 frames: rings, texture tables and a `[vram] breakdown` line. |
 | `pipelines` | The pipelines the run created, written at exit to `pipelines-PROCESS-ID.bin`. `tools/dev/site_pipelines.py` reads it. |
 | `pointer-latency` | The time from the pointer selecting something to the picture that shows it. |
 | `present-stats` | Presented frames, new frames, and GPU and CPU times, each second. |
 | `programs-drawn` | Each pair of shader programs a draw asks for, once. A stage compiles only those. |
-| `profile` | The game thread, sampled each millisecond with its callers, until the run ends (10 minutes at most), in `game-profile-PROCESS-ID.txt`. `tools/perf/game_profile.py` names the functions from the game module's link map. |
+| `profile` | The game thread and the render thread, each sampled each millisecond with its callers, until the run ends (10 minutes at most), in `game-profile-PROCESS-ID.txt` and `render-profile-PROCESS-ID.txt`. Each sample carries the timeline's clock. `tools/perf/game_profile.py` names the game module's functions from its link map; `--ranges` keeps the samples inside given stretches of the timeline. |
 | `ring-stress` | A test: the upload rings are made again every 5 frames, so a test run proves that old rings outlive every frame that reads them. |
+| `resolution-steps` | A test: dynamic resolution is on and walks every step from the whole render size to the smallest the upscaler allows and back, 120 pictures each, whatever the GPU's time. Each change is logged. |
 | `rt-inputs` | The world's lights in each frame list, checked against their rules and counted every 300 lists (`[rt-inputs] lights` lines). |
 | `scene-loads` | The phases, presses and placed objects of each scene change. `tools/verify/loads.py` reads them. |
 | `telemetry` | Frame counts in shared memory each second, for `tools/telemetry`. |
@@ -41,7 +43,7 @@ A set turns on several recordings at once.
 | Set | Recordings |
 |---|---|
 | `0` | None |
-| `1` | `timeline`, `frame-tails`, `pointer-latency`, `present-stats` and `gpu-passes`. This is what the launcher's diagnostics option records. |
+| `1` | `timeline`, `frame-tails`, `pointer-latency`, `present-stats` and `gpu-passes`. This is what **Record** on the **SYSTEM** page of the settings records. |
 | `frames` | `timeline`, `frame-tails`, `pointer-latency`, `present-stats` and `frame-times` |
 | `gpu` | `gpu-passes` |
 | `loads` | `scene-loads` and `file-reads` |
@@ -72,6 +74,7 @@ Test tools set these variables to control a run. None of them is needed to play.
 | `GALAXY_PRESENT_SNAPSHOT_DIR` | The folder for saved frames, as PPM images. |
 | `GALAXY_PRESENT_SNAPSHOT_EVERY` | Saves every Nth presented frame. |
 | `GALAXY_PRESENT_SNAPSHOT_FIRST`, `GALAXY_PRESENT_SNAPSHOT_LAST` | The first and last frame to save. |
+| `GALAXY_PRESENT_SNAPSHOT_GAME_FRAMES=<first>-<last>` | Saves every picture shown of those game frames, interpolated ones included. |
 
 ### Scripted input
 

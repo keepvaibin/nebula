@@ -74,6 +74,12 @@ public:
     // then keeps its 8-bit swap chain, since record() with output.hdr writes nothing a different target format could take.
     [[nodiscard]] bool prepare_hdr();
 
+    // The pictures between passes and the passes that write them: kSceneHdrColorFormat while `wide` (HDR output, the
+    // scene's light past white kept to the last write), else kSceneColorFormat. Between frames with the GPU drained.
+    // False when the pipelines cannot be made: the chain stays as it was.
+    [[nodiscard]] bool set_wide(bool wide);
+    [[nodiscard]] bool wide() const noexcept { return color_format_ != DXGI_FORMAT_R10G10B10A2_UNORM; }
+
     // The scene target's image traded for `spare` (RendererD3D12::swap_scene_color): the scene's own image comes back,
     // shader-readable, and the scene target goes on in `spare` (or one made for it), RENDER_TARGET state, its old
     // contents dropped.
@@ -106,7 +112,7 @@ private:
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         gpu::Use use = gpu::Use::PixelRead;
-        std::uint64_t used_frame = 0;  // the last frame ensure_target was asked for it
+        std::uint64_t used_step = 0;  // idle_clock() when last asked for
     };
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -146,11 +152,12 @@ private:
               const Constants& constants);
     void note_aa_run(const PostProcessPlan& plan, AaRun ran);
     void release_retired(std::uint64_t frame_index) noexcept;
-    // Hands back the targets no pass has asked for in kTargetIdleFrames frames (SMAA's after a switch to FXAA or off, the
+    // Hands back the targets no pass has asked for in kIdleSteps game steps (idle_clock.h) (SMAA's after a switch to FXAA or off, the
     // scaling intermediate after a window size that needs none); the next pass that wants one makes it again.
     void trim_idle_targets(std::uint64_t frame_index, unsigned frames_in_flight);
 
     ID3D12Device* device_ = nullptr;
+    DXGI_FORMAT color_format_ = DXGI_FORMAT_R10G10B10A2_UNORM;  // the pictures between passes (kSceneColorFormat; set_wide)
     PostProcessSettings settings_{};
     bool ready_ = false;
     PostProcessStatus status_{};
@@ -192,7 +199,7 @@ private:
     Target scaled_;
     // The scene's last image traded out (record_scene_aa with a trade): the next trade's spare.
     Microsoft::WRL::ComPtr<ID3D12Resource> traded_;
-    std::uint64_t traded_frame_ = 0;
+    std::uint64_t traded_step_ = 0;  // idle_clock() at the last trade
     // SMAA's edge mask: the weight pass runs only where edge detection kept a
     // pixel. `rtv` holds its DSV.
     Target stencil_;

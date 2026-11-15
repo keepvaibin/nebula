@@ -3,7 +3,7 @@
 // or SSAO, denoise, then the multiply, which makes the full-size multiplier itself from the depth and the denoised
 // occlusion) from the same shaders, which fxc already compiles for shader model 5.0 with plain registers (ao_*.h: b0,
 // t0-t4, u0). record() unbinds the views it bound (outputs and inputs) and leaves its shaders, constants and viewport
-// bound. Nothing runs, and no texture is held after 600 frames, while the occlusion is off (the renderer calls nothing).
+// bound. Nothing runs, and no texture is held after kIdleSteps game steps (idle_clock.h), while the occlusion is off (the renderer calls nothing).
 #pragma once
 
 #include "galaxy/render/ambient_occlusion_objects.h"
@@ -30,8 +30,11 @@ public:
 
     struct Inputs {
         Texture* depth = nullptr;               // the scene target's single-sample depth (its view sampled)
-        unsigned width = 0;                     // its size in pixels
+        unsigned width = 0;                     // the part of it the scene is drawn in, in pixels
         unsigned height = 0;
+        unsigned extent_width = 0;              // its whole size (0: the part's)
+        unsigned extent_height = 0;
+        unsigned lowest_sixteenths = 16u;       // the smallest dynamic resolution step the scene may take (16: none)
         ID3D11RenderTargetView* color = nullptr;  // the scene target's colour (multisampled with MSAA)
         unsigned samples = 1;
         bool hdr = false;                       // the colour is the wide scene target
@@ -42,7 +45,7 @@ public:
     };
     // The occlusion, multiplied into `color`'s RGB. False when nothing was drawn.
     bool record(ID3D11DeviceContext1* context, const Inputs& in);
-    // Once a frame: the targets no record() asked for in 600 frames are handed back.
+    // Once a frame: the targets no record() asked for in kIdleSteps game steps are handed back.
     void trim_idle();
 
 private:
@@ -76,8 +79,7 @@ private:
     std::vector<float> object_values_;
     std::vector<std::uint32_t> object_tiles_;
     ao::ObjectBinScratch object_scratch_;
-    std::uint64_t clock_ = 0;  // trim_idle() calls
-    std::uint64_t used_ = 0;   // the clock at the last record()
+    std::uint64_t used_ = 0;   // idle_clock() at the last record()
 };
 
 }  // namespace galaxy::render::d3d11

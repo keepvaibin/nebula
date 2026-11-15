@@ -27,11 +27,13 @@
 
 namespace galaxy::crash_watch {
 
-// The watcher's command line: argv[1] is kSwitch, argv[2] the game's process id, argv[3] the shared objects' name.
+// The watcher's command line: argv[1] is kSwitch, argv[2] the game's process id, argv[3] the shared objects' name, and
+// argv[4], when given, the list of displays the game turned Windows HDR on for (render/os_hdr.h): the caller of run turns
+// them off once the game has ended.
 inline constexpr const char* kSwitch = "--crash-watch";
 
 // The watcher's whole run: waits for the game's request or its end, writes the dump asked for, ends when the game
-// does. A game that ended with a fault's status (0xC0000409 of a fast fail, which no handler in the process sees, or
+// does (returning 0; any other code: it could not watch). A game that ended with a fault's status (0xC0000409 of a fast fail, which no handler in the process sees, or
 // any other the game's handlers did not end it with) gets crash lines in the game's log from here. Returns the
 // process's exit code.
 int run(int argc, char** argv);
@@ -39,7 +41,8 @@ int run(int argc, char** argv);
 // The game's side, at its start: starts the watcher (dumps go to `folder`, made when the first is written; its lines
 // go to this process's standard output, timed from `log_zero` as the game's own). A watcher that cannot start leaves
 // write_dump answering kNoWatcher.
-void start(const std::filesystem::path& folder, std::chrono::steady_clock::time_point log_zero);
+void start(const std::filesystem::path& folder, std::chrono::steady_clock::time_point log_zero,
+           const std::filesystem::path& hdr_list = {});
 
 enum class Result { kNoWatcher, kWritten, kFailed };
 

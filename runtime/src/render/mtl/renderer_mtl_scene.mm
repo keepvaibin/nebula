@@ -3,9 +3,10 @@
 // pipelines. As vk/renderer_vk_frame.cpp's first half; where Vulkan changes an image's layout Metal needs nothing.
 #include "renderer_mtl_internal.h"
 
-#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/display_aspect.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/render/texture_store.h"
+#include "galaxy/render/idle_clock.h"
 #include "render/core/frame_core.h"
 
 #include <nebula_frame_list.h>
@@ -249,7 +250,8 @@ bool RendererMtl::create_scene_targets(const FrameMap& map, unsigned samples) {
         destroy_scene_set(scene_);
     }
     scene_ = std::move(made);
-    scene_map_ = map;
+    // Dynamic resolution starts again from the whole of the new size (apply_dynamic_resolution).
+    scene_map_ = frame_extent_ = scene_extent_ = scene_rectangle_ = map;
     pending_depth_clear_ = 0u;
     if (scene_.samples > 1u) {
         std::cout << "[Renderer] scene target MSAA " << scene_.samples << "x\n";
@@ -286,8 +288,9 @@ void RendererMtl::resolve_scene_depth() {
         UtilityKey key;
         key.fragment = mtl::UtilityShader::DepthResolvePs;
         key.depth = true;
-        const std::uint32_t width = set.depth->width;
-        const std::uint32_t height = set.depth->height;
+        // The drawn part (dynamic resolution's rectangle): nothing reads the depth past it.
+        const std::uint32_t width = std::min(scene_map_.width, set.depth->width);
+        const std::uint32_t height = std::min(scene_map_.height, set.depth->height);
         utility_draw((__bridge void*)pass, utility_pipeline(key), DepthUse::Write, width, height,
                      gpu::rect(0, 0, static_cast<std::int32_t>(width), static_cast<std::int32_t>(height)), nullptr, 0u,
                      set.ms_depth->texture);  // the shader loads each pixel's first sample
@@ -311,7 +314,7 @@ bool RendererMtl::scene_fits_memory(const FrameMap& map) const {
         return true;
     }
     const auto bytes = [](const FrameMap& m) { return (4.0 + 8.0 + 12.0) * m.width * m.height; };
-    const double needed = bytes(map) - bytes(scene_map_);
+    const double needed = bytes(map) - bytes(scene_extent_);
     return static_cast<double>(usage) + needed <= 0.9 * static_cast<double>(budget);
 }
 
@@ -336,14 +339,14 @@ void RendererMtl::apply_window_size() {
     wanted = FrameMap(render_width, render_height);
     const unsigned samples = wanted_msaa_samples();
     // Not while the output scene target holds the scene target's place (its scale is the window's).
-    if ((wanted == scene_map_ && samples == scene_.samples) || !scene_.color || output_scene_active_) {
+    if ((wanted == scene_extent_ && samples == scene_.samples) || !scene_.color || output_scene_active_) {
         return;
     }
-    if (wanted.width * wanted.height > scene_map_.width * scene_map_.height && !scene_fits_memory(wanted)) {
+    if (wanted.width * wanted.height > scene_extent_.width * scene_extent_.height && !scene_fits_memory(wanted)) {
         if (galaxy::steady_ms() >= window_size_refused_ms_) {
             window_size_refused_ms_ = galaxy::steady_ms() + 10'000u;
             std::cerr << "[Renderer] " << wanted.width << "x" << wanted.height << " exceeds the video-memory budget; staying at "
-                      << scene_map_.width << "x" << scene_map_.height << '\n';
+                      << scene_extent_.width << "x" << scene_extent_.height << '\n';
         }
         return;
     }
@@ -357,7 +360,7 @@ void RendererMtl::apply_window_size() {
         }
         frame.retired_objects.clear();
     }
-    const FrameMap previous = scene_map_;
+    const FrameMap previous = scene_extent_;
     if (!create_scene_targets(wanted, samples)) {
         return;
     }
@@ -571,23 +574,27 @@ void RendererMtl::reset_draw_bindings() noexcept {
 }
 
 void RendererMtl::bind_scene() {
-    const auto width = static_cast<float>(scene_.color->width);
-    const auto height = static_cast<float>(scene_.color->height);
+    // The drawn part: the scene target (dynamic resolution's rectangle of it), or a target pass's smaller target.
+    const FrameMap part = scene_part();
+    const auto width = static_cast<float>(part.width);
+    const auto height = static_cast<float>(part.height);
     bound_.viewport = gpu::ViewportRect{0.0f, 0.0f, width, height, 0.0f, 1.0f};
     bound_.viewport_valid = true;
-    bound_.scissor = gpu::rect(0, 0, static_cast<std::int32_t>(scene_.color->width), static_cast<std::int32_t>(scene_.color->height));
+    bound_.scissor = gpu::rect(0, 0, static_cast<std::int32_t>(part.width), static_cast<std::int32_t>(part.height));
     bound_.scissor_valid = true;
     if (scene_pass_open_) {
         [pass_of(pass_) setViewport:MTLViewport{0.0, 0.0, width, height, 0.0, 1.0}];
-        [pass_of(pass_) setScissorRect:MTLScissorRect{0u, 0u, scene_.color->width, scene_.color->height}];
+        [pass_of(pass_) setScissorRect:MTLScissorRect{0u, 0u, part.width, part.height}];
         encoder_.forget_rects();
     }
 }
 
 void RendererMtl::clear_scene(std::uint32_t clear_rgba, bool color_enable, bool alpha_enable, bool depth_enable,
                               unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h, std::uint8_t pixel_format) {
-    const auto scene_w = static_cast<std::int32_t>(scene_.color->width);
-    const auto scene_h = static_cast<std::int32_t>(scene_.color->height);
+    // The drawn part (dynamic resolution's rectangle; the whole target without it): nothing is read past it.
+    const FrameMap part = scene_part();
+    const auto scene_w = static_cast<std::int32_t>(part.width);
+    const auto scene_h = static_cast<std::int32_t>(part.height);
     gpu::Rect rect = gpu::rect(0, 0, scene_w, scene_h);
     if (rect_w != 0u && rect_h != 0u) {
         const ScaledSceneRect scaled = rect_pixels(
@@ -673,9 +680,9 @@ void RendererMtl::settle_depth_clear() {
     if (scene_pass_open_ && held_probe_slots_.empty() && scene_pass_aux_ == 0u) {
         pending_depth_clear_ = 0u;
         scene_.depth_dirty |= scene_.samples > 1u;
+        const FrameMap part = scene_part();
         clear_depth_in_pass(pending_depth_values_.reversed_depth,
-                            gpu::rect(0, 0, static_cast<std::int32_t>(scene_.color->width),
-                                      static_cast<std::int32_t>(scene_.color->height)));
+                            gpu::rect(0, 0, static_cast<std::int32_t>(part.width), static_cast<std::int32_t>(part.height)));
         return;
     }
     const bool open = scene_pass_open_;
@@ -692,7 +699,7 @@ void RendererMtl::settle_depth_clear() {
 }
 
 FrameMap RendererMtl::output_frame_for_window() const {
-    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const auto aspect = galaxy::latched_display_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
@@ -707,6 +714,7 @@ void RendererMtl::swap_scene_sets() {
     end_scene_pass();
     std::swap(scene_, alt_scene_);
     std::swap(scene_map_, alt_scene_map_);
+    std::swap(frame_extent_, alt_scene_extent_);
     output_scene_active_ = !output_scene_active_;
     reset_draw_bindings();
 }
@@ -716,6 +724,7 @@ void RendererMtl::swap_target_set() {
     end_scene_pass();
     std::swap(scene_, target_scene_);
     std::swap(scene_map_, target_scene_map_);
+    std::swap(frame_extent_, target_scene_extent_);
     target_pass_active_ = !target_pass_active_;
     reset_draw_bindings();
 }
@@ -742,10 +751,10 @@ bool RendererMtl::begin_target_pass(std::uint64_t key, std::uint32_t width, std:
         slot.width = width;
         slot.height = height;
     }
-    slot.used = frame_index_;
+    slot.used = idle_clock();
     target_key_ = key;
     std::swap(target_scene_, slot.set);
-    target_scene_map_ = slot.map;
+    target_scene_map_ = target_scene_extent_ = slot.map;
     swap_target_set();
     bind_scene();
     return true;
@@ -763,9 +772,9 @@ void RendererMtl::end_target_pass(std::uint8_t channels, TextureStore& textures)
     TargetSlot& slot = target_slots_[target_key_];
     std::swap(slot.set, target_scene_);
     slot.map = target_scene_map_;
-    target_scene_map_ = FrameMap{};
+    target_scene_map_ = target_scene_extent_ = FrameMap{};
     (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, textures);
-    // Keys unused for kTargetIdleFrames frames give back their render resources (their pictures stay).
+    // Keys unused for kIdleSteps game steps give back their render resources (their pictures stay).
     sweep_target_slots();
     bind_scene();
 }
@@ -778,9 +787,8 @@ void RendererMtl::sweep_target_slots() {
     if (target_slots_.empty()) {
         return;
     }
-    const std::uint64_t idle = target_idle_frames();
     for (auto it = target_slots_.begin(); it != target_slots_.end();) {
-        if (it->second.used + idle < frame_index_ && !(target_pass_active_ && it->first == target_key_)) {
+        if (idle_since(it->second.used) && !(target_pass_active_ && it->first == target_key_)) {
             retire_target_slot(it->second);
             it = target_slots_.erase(it);
         } else {
@@ -851,7 +859,7 @@ bool RendererMtl::publish_picture(std::uint64_t key, std::uint32_t width, std::u
 }
 
 bool RendererMtl::publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures) {
-    const FrameExtent size = frame_pass_extent(scene_map_);
+    const FrameExtent size = frame_pass_extent(frame_extent_);
     return publish_picture(params.key, size.width, size.height, std::move(texture), 0u, textures);
 }
 
@@ -906,13 +914,16 @@ void RendererMtl::record_conversion_blit(mtl::Texture& dest, unsigned dest_w, un
     end_scene_pass();
     // A display copy one scene target pixel to one picture pixel without gamma: its filter alone.
     const bool display_filter = copy_format == kCopyLayoutDisplay && step_x == 1.0f && step_y == 1.0f;
+    // The source is the bound target: its drawn part (dynamic resolution's rectangle) bounds every sample.
+    const FrameMap part = scene_part();
     UtilityKey key;
     key.fragment = display_filter ? mtl::UtilityShader::DisplayFilterPs : mtl::UtilityShader::SceneConversionPs;
     key.colors[0] = dest.format;
     key.color_count = 1u;
     key.write_mask = static_cast<std::uint8_t>(kWriteAll);
     const mtl::Object pipeline = utility_pipeline(key);
-    const SceneConversionShaderConstants constants = make_scene_conversion_constants(copy_format, src_x, src_y, step_x, step_y);
+    const SceneConversionShaderConstants constants = make_scene_conversion_constants(
+        copy_format, src_x, src_y, step_x, step_y, static_cast<float>(part.width), static_cast<float>(part.height));
     const mtl::Object pass = begin_color_pass(dest.texture, false, "scene copy");
     utility_draw(pass, pipeline, DepthUse::None, dest_w, dest_h,
                  gpu::rect(0, 0, static_cast<std::int32_t>(dest_w), static_cast<std::int32_t>(dest_h)), &constants,
@@ -922,9 +933,133 @@ void RendererMtl::record_conversion_blit(mtl::Texture& dest, unsigned dest_w, un
     bind_scene();
 }
 
-bool RendererMtl::can_take_scene() const noexcept {
+bool RendererMtl::can_trade_scene() const noexcept {
     return !frame_generation_running() && scene_.color && !output_scene_active_ && !target_pass_active_ &&
            scene_.samples <= 1u && !scene_.wide;
+}
+
+// The game is given the picture whole: only where the frame is all of the scene target.
+bool RendererMtl::can_take_scene() const noexcept {
+    return can_trade_scene() && scene_map_ == frame_extent_;
+}
+
+void RendererMtl::apply_dynamic_resolution() {
+    // 2D-only pictures and anything drawn before the scene take the whole target; the main set is bound here, or held by
+    // the output scene's swap.
+    if (target_pass_active_ || scene_.wide) {
+        return;
+    }
+    if (output_scene_active_) {
+        if (alt_scene_extent_ == scene_extent_) {
+            alt_scene_map_ = alt_scene_extent_;
+        }
+    } else if (frame_extent_ == scene_extent_ && scene_map_ != frame_extent_) {
+        scene_map_ = frame_extent_;
+        reset_draw_bindings();
+        bind_scene();
+    }
+}
+
+unsigned RendererMtl::dynamic_resolution_floor() const {
+    constexpr unsigned lowest = kResolutionSixteenths[kResolutionStepCount - 1u];
+    if (!temporal_ || !temporal_mode() || scene_extent_.width == 0u) {
+        return lowest;
+    }
+    const unsigned width = temporal_->smallest_render_width();
+    if (width == 0u) {
+        return lowest;
+    }
+    // The fewest sixteenths whose rectangle (rounded to the nearest pixel) is at least that wide.
+    const unsigned sixteenths = static_cast<unsigned>(
+        (static_cast<std::uint64_t>(width) * 16u + scene_extent_.width - 1u) / scene_extent_.width);
+    return std::clamp(sixteenths, lowest, 16u);
+}
+
+void RendererMtl::begin_scene_rectangle() {
+    // The main scene target only, at the size the rectangle is taken from (a target pass, the output scene and the wide
+    // scene are each their own size).
+    if (output_scene_active_ || target_pass_active_ || scene_.wide || frame_extent_ != scene_extent_) {
+        return;
+    }
+    if (rectangle_frame_ != frame_index_) {
+        // Once a scene picture: the governor takes the scene pictures' GPU time against the picture's budget.
+        rectangle_frame_ = frame_index_;
+        const RenderConfig cfg = get_render_config();
+        const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
+        const unsigned before = dynamic_resolution_.sixteenths();
+        dynamic_resolution_.set_walk(dynamic_resolution_offered() &&
+                                     ::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps));
+        scene_rectangle_ = dynamic_resolution_.update(cfg.dynamic_resolution && dynamic_resolution_offered(), scene_extent_,
+                                                      dynamic_resolution_floor(), native_scene_gpu_ema_ms_,
+                                                      resolution_budget_ms(rate, display_refresh_hz_));
+        if (::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps | ::galaxy::kDiagnosePresentStats) &&
+            dynamic_resolution_.sixteenths() != before) {
+            std::fprintf(stderr, "[dynres] frame %llu: %u/16, %ux%u of %ux%u (floor %u/16)\n",
+                         static_cast<unsigned long long>(frame_index_), dynamic_resolution_.sixteenths(),
+                         scene_rectangle_.width, scene_rectangle_.height, scene_extent_.width, scene_extent_.height,
+                         dynamic_resolution_.lowest_sixteenths());
+        }
+    }
+    if (!(scene_rectangle_.width <= frame_extent_.width && scene_rectangle_.height <= frame_extent_.height) ||
+        scene_rectangle_.empty() || scene_map_ == scene_rectangle_) {
+        return;
+    }
+    // From here the scene's viewport and scissor are the rectangle's (an open pass takes them now).
+    scene_map_ = scene_rectangle_;
+    reset_draw_bindings();
+    bind_scene();
+}
+
+bool RendererMtl::publish_scene_depth_copy(std::uint64_t key, TextureStore& textures) {
+    const GpuPassScope scope{*this, GpuPass::FramePass};
+    const FrameExtent extent = frame_pass_extent(frame_extent_);
+    if (extent.width == 0u || extent.height == 0u || !scene_.depth) {
+        return false;
+    }
+    UtilityKey copy_key;
+    copy_key.fragment = mtl::UtilityShader::DepthCopyPs;
+    copy_key.colors[0] = depth_copy_format_;
+    copy_key.color_count = 1u;
+    copy_key.write_mask = static_cast<std::uint8_t>(MTLColorWriteMaskRed);
+    const mtl::Object pipeline = utility_pipeline(copy_key);
+    if (pipeline == nullptr) {
+        return false;
+    }
+    // Its own key beside the colour captures' (channels in bits 48 and up, at most 4): freed with the texture's id.
+    const std::uint64_t dest_key = static_cast<std::uint64_t>(static_cast<std::uint32_t>(key)) | (0xFFull << 48u);
+    FramePassTarget& dest = frame_pass_targets_[dest_key];
+    if (!dest.texture || dest.width != extent.width || dest.height != extent.height) {
+        if (dest.texture) {
+            retire(std::move(dest.texture));
+        }
+        dest.texture = mtl::Context::get().create_texture(extent.width, extent.height, 1u, depth_copy_format_,
+                                                          mtl::kUseTarget | mtl::kUseSample, mtl::Storage::Private,
+                                                          "scene depth picture");
+        if (!dest.texture) {
+            frame_pass_targets_.erase(dest_key);
+            return false;
+        }
+        dest.width = extent.width;
+        dest.height = extent.height;
+    }
+    end_scene_pass();
+    settle_depth_clear();
+    end_scene_pass();
+    resolve_scene_depth();
+    // The whole picture is written (the pass drops what it held), each pixel the nearest depth of the drawn part.
+    const FrameMap part = scene_part();
+    const FramePassGeometry sampling = frame_pass_geometry(extent.width, extent.height, scene_map_);
+    const SceneConversionShaderConstants constants =
+        make_scene_conversion_constants(0u, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+                                        static_cast<float>(part.width), static_cast<float>(part.height));
+    const mtl::Object pass = begin_color_pass(dest.texture->texture, false, "scene depth picture");
+    utility_draw(pass, pipeline, DepthUse::None, extent.width, extent.height,
+                 gpu::rect(0, 0, static_cast<std::int32_t>(extent.width), static_cast<std::int32_t>(extent.height)), &constants,
+                 sizeof(constants), scene_.depth->texture);
+    end_own_pass(pass);
+    reset_draw_bindings();
+    bind_scene();
+    return publish_picture(key, extent.width, extent.height, dest.texture, 0u, textures);
 }
 
 bool RendererMtl::take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureStore& textures, gpu::TextureRef& released) {
@@ -933,14 +1068,30 @@ bool RendererMtl::take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureSt
         released = it->second.viewed;
     }
     gpu::TextureRef picture = swap_scene_color(std::move(fresh));
-    const FrameExtent size = frame_pass_extent(scene_map_);
+    const FrameExtent size = frame_pass_extent(frame_extent_);
     return publish_picture(key, size.width, size.height, std::move(picture), 0u, textures);
 }
 
 void RendererMtl::open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key,
                                       TextureStore& textures) {
+    if (scene_map_ != frame_extent_) {
+        // Dynamic resolution's rectangle: the pass reads pictures of the whole frame at the extent's size, as at the
+        // whole render size (the game samples a picture whole).
+        if (color_key != 0u) {
+            FramePassRequest request{};
+            request.key = color_key;
+            request.channels = channels;
+            (void)draw_frame_pass(request, textures);
+        }
+        if (depth_key != 0u) {
+            (void)publish_scene_depth_copy(depth_key, textures);
+        }
+        frame_pass_color_key_ = 0u;  // nothing of the scene target's own is lent: close_frame_for_pass returns nothing
+        frame_pass_depth_key_ = 0u;
+        return;
+    }
     end_scene_pass();
-    const FrameExtent size = frame_pass_extent(scene_map_);
+    const FrameExtent size = frame_pass_extent(frame_extent_);
     if (color_key != 0u) {
         (void)publish_picture(color_key, size.width, size.height, scene_.color, channels, textures);
     }
@@ -999,10 +1150,54 @@ gpu::TextureRef RendererMtl::take_frame_picture(gpu::TextureRef fresh) {
     return swap_scene_color(std::move(fresh));
 }
 
+bool RendererMtl::draw_shown_frame_pass(const FramePassRequest& params, const DisplayTexture& shown, TextureStore& textures) {
+    if (!shown.texture || output_scene_active_ || target_pass_active_ || scene_.wide) {
+        return draw_frame_pass(params, textures);
+    }
+    const mtl::Texture& picture = *shown.texture;
+    const auto fits = [&](const gpu::TextureRef& color) {
+        return color && color != shown.texture && color->width == picture.width && color->height == picture.height &&
+               color->format == picture.format && color->samples == 1u;
+    };
+    // An upscaler's frame is the scene's alone at the render size here: the picture is the output scene target's size.
+    const bool output = !fits(scene_.color);
+    if (output && !fits(alt_scene_.color)) {
+        return draw_frame_pass(params, textures);
+    }
+    if (output) {
+        swap_scene_sets();
+    }
+    {
+        const GpuPassScope scope{*this, GpuPass::FramePass};
+        end_scene_pass();
+        @autoreleasepool {
+            id<MTLBlitCommandEncoder> const blit = [commands_of(commands_) blitCommandEncoder];
+            blit.label = @"shown picture";
+            [blit copyFromTexture:texture_of(shown.texture)
+                      sourceSlice:0
+                      sourceLevel:0
+                     sourceOrigin:MTLOriginMake(0, 0, 0)
+                       sourceSize:MTLSizeMake(picture.width, picture.height, 1)
+                        toTexture:texture_of(scene_.color)
+                 destinationSlice:0
+                 destinationLevel:0
+                destinationOrigin:MTLOriginMake(0, 0, 0)];
+            [blit endEncoding];
+        }
+    }
+    const bool made = draw_frame_pass(params, textures);
+    if (output) {
+        swap_scene_sets();
+    }
+    return made;
+}
+
 bool RendererMtl::draw_frame_pass(const FramePassRequest& params, TextureStore& textures) {
     const GpuPassScope scope{*this, GpuPass::FramePass};
     ++gpu_window_.copies;
-    const FrameExtent extent = frame_pass_extent(scene_map_);
+    // The picture is the bound target's allocated size whatever part of it the frame is drawn in (dynamic resolution's
+    // rectangle, resampled into it below): its texture is not made again at each step.
+    const FrameExtent extent = frame_pass_extent(frame_extent_);
     const unsigned w = extent.width;
     const unsigned h = extent.height;
     if (w == 0u || h == 0u) {

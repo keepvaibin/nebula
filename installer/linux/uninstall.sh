@@ -18,9 +18,9 @@ if [ ! -f "$root/portable.txt" ]; then
 fi
 if [ "$all" = 1 ]; then
     rm -rf "$root/content" "$root/saves" "$root/settings" "$root/mods" "$root/data" "$root/portable.txt"
-    echo "Nebula is removed, with its saves, settings, mods and game."
+    echo "Nebula and its saves, settings, mods and game files were removed."
 else
-    echo "Nebula is removed. Your saves, settings, mods and the prepared game are kept in $root."
+    echo "Nebula was removed. Your saves, settings, mods and game files are still in $root."
 fi
 rm -f "$root/uninstall.sh"
 rmdir "$root" 2>/dev/null || true

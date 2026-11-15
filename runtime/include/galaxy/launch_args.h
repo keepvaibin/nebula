@@ -22,7 +22,7 @@ enum Diagnostic : unsigned {
     kDiagnoseMemory = 1u << 6u,          // memory: what the renderer holds, every 600 frames
     kDiagnoseHeaps = 1u << 7u,           // heaps: memory's lines and the process's heaps by block size
     kDiagnoseThreadCpu = 1u << 8u,       // thread-cpu: each thread's CPU time each second
-    kDiagnoseProfile = 1u << 9u,         // profile: the game thread sampled each millisecond (game-profile-<process>.txt)
+    kDiagnoseProfile = 1u << 9u,         // profile: the game and render threads sampled each millisecond (<thread>-profile-<process>.txt)
     kDiagnoseSceneLoads = 1u << 10u,     // scene-loads: each scene change's phases and placed objects
     kDiagnoseFileReads = 1u << 11u,      // file-reads: each read and map of the game's files, with its frame
     kDiagnosePipelines = 1u << 12u,      // pipelines: the pipelines the run created (pipelines-<process>.txt)
@@ -43,6 +43,11 @@ enum Diagnostic : unsigned {
     kDiagnoseRtAbsent = 1u << 27u,       // rt-absent: a test: the device is taken as one without ray tracing
     kDiagnoseRingStress = 1u << 28u,     // ring-stress: the upload rings made again every kRingStressFrames frames (a test
                                          // of their retirement: the old rings must outlive every frame that reads them)
+    kDiagnoseResolutionSteps = 1u << 29u,  // resolution-steps: dynamic resolution on, walking every step its floor allows,
+                                           // each held kResolutionStepsPictures scene pictures (a test of every pass at
+                                           // every step, on a GPU that never needs one)
+    kDiagnoseHdrHighlights = 1u << 30u,  // hdr-highlights: with HDR output, captures show the light past the paper white
+                                         // (HdrPattern::Highlights) in place of the SDR picture
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -82,6 +87,8 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"programs-drawn", kDiagnoseProgramsDrawn},
     {"rt-absent", kDiagnoseRtAbsent},
     {"ring-stress", kDiagnoseRingStress},
+    {"resolution-steps", kDiagnoseResolutionSteps},
+    {"hdr-highlights", kDiagnoseHdrHighlights},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},
@@ -134,9 +141,10 @@ struct LaunchArgs {
     unsigned started_again = 0u;        // --started-again: starts this run made again before this one
     // --start-again-of <id>-<time> (Windows): the process this start takes over from, by its id and creation time.
     std::string start_again_of;
-    // --renderer d3d12|d3d11 (0: not given): the Direct3D 12 host runs NebulaD11 for d3d11 without starting Direct3D
-    // 12, and for d3d12 never falls back to it (host_main.cpp hand_off_to_d3d11). The Direct3D 11 host never hands back.
-    unsigned renderer = 0u;  // 1 d3d12, 2 d3d11
+    // --renderer d3d12|d3d11|vulkan (0: not given, the settings' renderer, render_config.h next_start_renderer): the
+    // Direct3D 12 host runs NebulaD11 for d3d11 and NebulaVk for vulkan without starting Direct3D 12 (host_main.cpp
+    // hand_off_to). A renderer given here never falls back to another when no card runs it.
+    unsigned renderer = 0u;  // 1 d3d12, 2 d3d11, 3 vulkan (render::RendererKind)
     std::vector<std::filesystem::path> extensions;  // --extension, each time given: host extensions (host_extension.h)
     // --import, each time given: mod files or folders imported as a drop on the window imports them, the result page
     // after. "Open with" and the .luma association start the game with it; a game already running for the
@@ -144,7 +152,8 @@ struct LaunchArgs {
     std::vector<std::filesystem::path> imports;
     bool safe_start = false;  // --safe-start 1: every mod off for this start, the player's choices kept
     // --shipped-mods: the folder of the .luma files that come with the game (mod_import.h install_shipped_mods); empty:
-    // <program folder>/luma/mods. Android's app gives the folder it unpacks them to.
+    // luma/mods in the package's folder (platform_paths.h package_directory). Android's app gives the folder it unpacks
+    // them to.
     std::filesystem::path shipped_mods;
     // --mod-dev, each time given: a mod in dev mode (reload.md 4; `lumalink run` passes it): its reload requests
     // (<mods>/.reload/<id>.request) are taken while the game runs.
@@ -167,6 +176,9 @@ inline LaunchArgs g_launch_args;
 // ring-stress: how often the upload rings are made again (frames): often enough that a run of a test's length makes
 // them again hundreds of times, with frames in flight on both sides of each.
 inline constexpr unsigned kRingStressFrames = 5u;
+
+// resolution-steps: the scene pictures each step is held for (a snapshot every this many pictures lands in each).
+inline constexpr unsigned kResolutionStepsPictures = 120u;
 
 // A player's own start: shown, not timed, and with no host extension (a test driver's). Only it may choose settings for
 // the player (the first start's measured height).

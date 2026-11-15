@@ -5,6 +5,7 @@
 
 #include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/texture_store.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <nebula_frame_list.h>
 
@@ -33,7 +34,7 @@ void RendererMtl::record_scene_aa() {
     // A scene target whose image may change hands (take_scene's) trades it to the passes instead of copying it; the
     // image that takes its place is then written whole, so the pass opens without loading it.
     mtl::PostProcessor::SceneTrade trade;
-    if (can_take_scene()) {
+    if (can_trade_scene()) {
         trade = [this](gpu::TextureRef spare) { return swap_scene_color(std::move(spare)); };
     }
     const AaRun ran = post_.prepare_scene_aa(commands_, *scene_.color, width, height, scene_map_.width, scene_map_.height,
@@ -53,8 +54,11 @@ void RendererMtl::record_scene_ao() {
     end_scene_pass();
     settle_depth_clear();
     resolve_scene_depth();
-    const bool made = ao_.prepare(commands_, *scene_.depth, scene_ao_view_, get_render_config().ambient_occlusion_ssao,
-                                  scene_ao_objects_, constant_ring_);  // read in this frame alone; chunks take any count
+    const FrameMap part = scene_part();
+    const unsigned lowest = frame_extent_ == scene_extent_ ? dynamic_resolution_.lowest_sixteenths() : 16u;
+    const bool made = ao_.prepare(commands_, *scene_.depth, part.width, part.height, lowest, scene_ao_view_,
+                                  get_render_config().ambient_occlusion_ssao, scene_ao_objects_,
+                                  constant_ring_);  // read in this frame alone; chunks take any count
     gpu_pass(GpuPass::AoApply);
     begin_scene_pass();
     if (made) {
@@ -81,6 +85,9 @@ void RendererMtl::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t 
     in.scale = static_cast<float>(scene_map_.height / kAuthoredLines);
     in.frame_width = std::min(scene_map_.width, scene_.color->width);
     in.frame_height = std::min(scene_map_.height, scene_.color->height);
+    in.extent_width = std::min(frame_extent_.width, scene_.color->width);
+    in.extent_height = std::min(frame_extent_.height, scene_.color->height);
+    in.lowest_sixteenths = frame_extent_ == scene_extent_ ? dynamic_resolution_.lowest_sixteenths() : 16u;
     if (kind == NEBULA_PASS_BLOOM_HOLD) {
         if (scene_.samples <= 1u) {
             // The scene and the bloom's texture trade places instead of the scene being copied (the wide scene's too: a
@@ -110,10 +117,13 @@ void RendererMtl::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t 
             p.ring_x = p.ring_y = 1.0f;
         }
         p.strength = strength;
-        const bool whole = in.frame_width == scene_.color->width && in.frame_height == scene_.color->height;
+        // The composite covers all of the target that is read: the whole target, or dynamic resolution's rectangle
+        // (the scene pass's viewport), outside which no pass reads.
+        const bool whole = in.whole_width() == scene_.color->width && in.whole_height() == scene_.color->height;
         const mtl::Format color_format = scene_.wide ? draw_layout_.wide_color : draw_layout_.scene_color;
         // As RendererVk::game_bloom: the simple bloom's source is the frame, traded with the scene instead of copied where
-        // the composite writes the whole target from it; with nothing to draw, the frame is drawn back from its picture.
+        // the composite writes all of the target that is read from it; with nothing to draw, the frame is drawn back from
+        // its picture.
         gpu::TextureRef source;
         if (p.kind == mtl::GameBloom::Kind::Simple && whole && scene_.samples <= 1u &&
             bloom_.prepare_draw_back(color_format, scene_.samples)) {
@@ -174,7 +184,7 @@ bool RendererMtl::begin_wide_scene(bool wanted, const SceneClearValues* initial_
         return false;
     }
     end_scene_pass();
-    wide_scene_used_frame_ = frame_index_;
+    wide_scene_used_step_ = idle_clock();
     if (!ensure_wide_set(wide_scene_)) {
         return false;
     }
@@ -199,7 +209,10 @@ void RendererMtl::record_wide_begin(const SceneClearValues* initial_clear) {
     set.depth_dirty = scene_.depth_dirty;
     std::swap(scene_, set);
     begin_scene_pass_with(0u, nullptr, true);
-    scene_camera_.widen(pass_, draw_layout_.wide_color, scene_.samples, *picture);
+    // The drawn part (dynamic resolution's rectangle; the whole target without it): the wide set is made at the same
+    // size and the scene goes on in the same part of it.
+    const FrameMap part = scene_part();
+    scene_camera_.widen(pass_, draw_layout_.wide_color, scene_.samples, *picture, part.width, part.height);
     // The pass stays open for the scene's geometry.
     reset_draw_bindings();
 }
@@ -227,8 +240,9 @@ void RendererMtl::record_wide_end() {
     const float seconds = std::chrono::duration<float>(now - camera_metered_).count();
     camera_metered_ = now;
     resolve_scene_depth();
-    // After a load or a long pause the eye starts open.
-    scene_camera_.meter(commands_, *wide, *scene_.depth, seconds > 1.0f ? -1.0f : seconds);
+    // The drawn part of the wide set: what the camera meters and writes. After a load or a long pause the eye starts open.
+    const FrameMap part = scene_part();
+    scene_camera_.meter(commands_, *wide, *scene_.depth, part.width, part.height, seconds > 1.0f ? -1.0f : seconds);
     const bool depth_dirty = scene_.depth_dirty;
     const bool resolve_output = scene_.samples > 1u && output_frame_for_window() == scene_map_ &&
                                 ensure_output_set(scene_map_, false);
@@ -241,8 +255,8 @@ void RendererMtl::record_wide_end() {
         clear_scene(0u, false, false, true);
     }
     begin_scene_pass_with(0u, nullptr, true);
-    scene_camera_.draw(pass_, draw_layout_.scene_color, scene_.samples, resolve_output || per_sample ? *wide_ms : *wide, per_sample,
-                       resolve_output);
+    scene_camera_.draw(pass_, draw_layout_.scene_color, scene_.samples, resolve_output || per_sample ? *wide_ms : *wide,
+                       part.width, part.height, per_sample, resolve_output);
     reset_draw_bindings();
 }
 

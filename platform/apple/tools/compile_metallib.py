@@ -32,10 +32,11 @@ import struct
 import subprocess
 import sys
 
-MAGIC = b"NBPROG02"
-ROW_BYTES = 96
-STORED = 10        # program_table.h kProgramStored
-BOUND_OFFSET = 5   # program_table.h kProgramBoundOffset: a pixel program's bound-table forms follow its variants
+MAGIC = b"NBPROG03"
+STORED = 16        # program_table.h kProgramStored
+ROW_BYTES = 16 + 8 * STORED
+BOUND_OFFSET = 5   # program_table.h kProgramBoundOffset: a pixel program's bound-table forms, 5 to 9
+TRACED_OFFSET = 10 # program_table.h kProgramPrepass: the traced forms, 10 to 15, read arrays as the base forms do
 RECORD_MAGIC = b"NBMTLFN1"
 RECORD_BYTES = 40  # the magic, library u32 (0: 2.4, 1: 3.0), attributes u32 (a vertex program's inputs, a bit each), name[24]
 BATCH = 48
@@ -100,7 +101,8 @@ def main():
             if size == 0:
                 continue
             text = blob[offset:offset + size]
-            library = 1 if pixel and stored < BOUND_OFFSET else 0
+            bound = BOUND_OFFSET <= stored < TRACED_OFFSET
+            library = 1 if pixel and not bound else 0
             key = hashlib.sha1(text).digest()
             number = functions[library].get(key)
             if number is None:

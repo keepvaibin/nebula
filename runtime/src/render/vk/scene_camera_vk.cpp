@@ -209,23 +209,24 @@ void SceneCameraVk::full_screen(VkCommandBuffer commands, VkPipeline pipeline, V
 }
 
 void SceneCameraVk::widen(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& picture,
-                          const SetAllocator& allocate) {
+                          unsigned width, unsigned height, const SetAllocator& allocate) {
     const VkPipeline widen = pipeline(kWiden, pass, samples_log2);
     if (widen != VK_NULL_HANDLE) {
-        full_screen(commands, widen, set_of(allocate, picture), picture.width, picture.height);
+        full_screen(commands, widen, set_of(allocate, picture), std::min(width, picture.width),
+                    std::min(height, picture.height));
     }
 }
 
 void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, const Texture& depth, VkImageLayout depth_layout,
-                          float seconds, unsigned finish, const SetAllocator& allocate) {
+                          unsigned width, unsigned height, float seconds, unsigned finish, const SetAllocator& allocate) {
     // The last frame's reads finish before the meter writes (a read before a write needs the execution dependency alone).
     image_barrier(commands, exposure_->image, VK_IMAGE_ASPECT_COLOR_BIT,
                   exposure_ready_ ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                   VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, 1u);
     camera::Constants constants{};
-    constants.width = static_cast<float>(wide.width);
-    constants.height = static_cast<float>(wide.height);
+    constants.width = static_cast<float>(std::min(width, wide.width));
+    constants.height = static_cast<float>(std::min(height, wide.height));
     constants.seconds = exposure_ready_ ? seconds : -1.0f;
     constants.finish = static_cast<float>(finish);
     exposure_ready_ = true;
@@ -240,10 +241,12 @@ void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, const T
 }
 
 void SceneCameraVk::draw(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& wide,
-                         bool per_sample, const SetAllocator& allocate, bool resolve, unsigned finish) {
+                         unsigned width, unsigned height, bool per_sample, const SetAllocator& allocate, bool resolve,
+                         unsigned finish) {
     const VkPipeline camera = pipeline(resolve ? kCameraResolve : per_sample ? kCameraSamples : kCamera, pass, samples_log2);
     if (camera != VK_NULL_HANDLE) {
-        full_screen(commands, camera, set_of(allocate, wide), wide.width, wide.height, finish);
+        full_screen(commands, camera, set_of(allocate, wide), std::min(width, wide.width), std::min(height, wide.height),
+                    finish);
     }
 }
 

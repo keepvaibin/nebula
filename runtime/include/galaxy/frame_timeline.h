@@ -39,6 +39,14 @@ enum class Event : std::uint16_t {
     VBlank = 24,           // render: DWM composition timing. qpc=last vblank, a=refresh period (QPC ticks)
     DisplayPresented = 25, // render: display picture chosen for a present. a=slot, b=picture number
     GameFrame = 26,        // game: frame boundary marker. a=frame count
+    ListOpsBegin = 27,     // render: a new list's queued registry and texture work begins. a=list serial
+    ListOpsEnd = 28,
+    WalkBegin = 29,        // render: a list walked for a picture. a=list serial, b=1 for a picture between game steps
+    WalkEnd = 30,
+    StepWaitBegin = 31,    // game: the step clock's wait for the next step begins. a=the step's due time (QPC)
+    StepWaitEnd = 32,      // game: the wait returned
+    ContentTime = 33,      // render: a picture of an interpolation sequence. qpc=the moment it shows, a=its list's game
+                           // frame, b=t (0 the frame before, 1 this one) in millionths
 };
 
 struct Record {
@@ -101,7 +109,8 @@ inline void initialize() noexcept {
     if (!::galaxy::diagnosing(::galaxy::kDiagnoseTimeline)) {
         return;
     }
-    constexpr std::uint64_t capacity = 2'000'000u;  // events: 64 MB
+    // Events: 128 MB, about four minutes of an uncapped run at 2000 pictures a second (seven events a picture).
+    constexpr std::uint64_t capacity = 4'000'000u;
     void* memory = VirtualAlloc(nullptr, static_cast<SIZE_T>(capacity * sizeof(Record)),
                                 MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (memory == nullptr) return;

@@ -1,11 +1,14 @@
 """Where the game thread spends its time: a --diagnostics profile run's game-profile-<pid>.txt, named from the game module's
-link map (lld-link /MAP, e.g. cmake -DCMAKE_SHARED_LINKER_FLAGS="-Xlinker /MAP:<dir>/smg_game.map").
+link map (lld-link /MAP, e.g. cmake -DCMAKE_SHARED_LINKER_FLAGS="-Xlinker /MAP:<dir>/smg_game.map"); the map of the
+module the run loaded (smg_game.dll, or smg_game_plain.dll on a start with no mods).
 
-usage: python game_profile.py <game-profile.txt> <smg_game.map> [--from-ms N] [--to-ms N] [--top N]
+usage: python game_profile.py <game-profile.txt> <smg_game.map> [--from-ms N] [--to-ms N] [--ranges FILE] [--top N]
 
 Prints the functions taking the most samples by themselves (the innermost frame named in the game module) and with
 their callees (any frame), each as a share of the samples, and the samples outside the game module by module.
-Samples are a millisecond apart, so --from-ms/--to-ms pick a stretch of the run from the game thread's start.
+Samples are a millisecond apart, so --from-ms/--to-ms pick a stretch of the run from the game thread's start. Each
+sample carries its QPC (the --diagnostics timeline clock): --ranges names a file of "<from> <to>" QPC lines (decimal),
+e.g. the late game frames a timeline shows, and only samples inside them count.
 """
 import argparse
 import bisect
@@ -18,6 +21,7 @@ parser.add_argument('profile')
 parser.add_argument('map')
 parser.add_argument('--from-ms', type=int, default=0)
 parser.add_argument('--to-ms', type=int, default=1 << 30)
+parser.add_argument('--ranges')
 parser.add_argument('--top', type=int, default=30)
 args = parser.parse_args()
 
@@ -30,11 +34,17 @@ for line in open(args.profile, encoding='utf-8', errors='replace'):
     if parts[0] == 'module':
         modules.append((int(parts[1], 16), int(parts[2], 16), ' '.join(parts[3:])))
     elif parts[0] == 'sample':
-        samples.append([int(p, 16) for p in parts[1:]])
+        stamped = len(parts) > 1 and parts[1].startswith('t')
+        qpc = int(parts[1][1:], 16) if stamped else None
+        samples.append((qpc, [int(p, 16) for p in parts[2 if stamped else 1:]]))
 samples = samples[args.from_ms:args.to_ms]
-game = next((m for m in modules if m[2].lower() == 'smg_game.dll'), None)
+if args.ranges:
+    ranges = sorted(tuple(int(v) for v in line.split()[:2]) for line in open(args.ranges) if line.strip())
+    samples = [s for s in samples if s[0] is not None and any(a <= s[0] <= b for a, b in ranges)]
+samples = [frames for _, frames in samples]
+game = next((m for m in modules if m[2].lower() in ('smg_game.dll', 'smg_game_plain.dll')), None)
 if game is None:
-    raise SystemExit('the profile has no smg_game.dll')
+    raise SystemExit('the profile has no game module (smg_game.dll or smg_game_plain.dll)')
 
 preferred = 0x180000000
 symbols = []

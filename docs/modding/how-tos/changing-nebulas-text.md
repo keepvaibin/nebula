@@ -121,7 +121,7 @@ My Translation/
         NebulaText.txt
 ```
 
-Import the folder, or a ZIP file of it, from the **Mods** tab of the launcher or the **MODS** page of the settings menu.
+Import the folder, or a ZIP file of it, from the **MODS** page of the settings menu.
 
 A mod whose text covers languages other than the one being played can stand in for it: choose it with the mod's **Text** option on the **MODS** page. Nebula's text then follows the mod, and the mod's own `NebulaText.txt`, if it has one, comes with it.
 

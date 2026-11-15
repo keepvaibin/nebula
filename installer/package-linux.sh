@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
-# Packs a Linux build of Nebula for players: Nebula-<version>-linux-<arch>.tar.gz. Unpacked, its install.sh asks for
+# Packs a Linux build of Nebula for players: Nebula-Linux-<arch>.tar.gz (Nebula-Beta-Linux-<arch>.tar.gz for a beta). Unpacked, its install.sh asks for
 # the player's disc image and installs for the user (~/.local/share/Nebula, a menu entry, .luma files and nebula://
 # links opening in Nebula) or as a portable folder, in the layout LumaLink reads (current.json, versions/<version>,
 # content/game.pak). The game ships no test parts (tools/release_check.ps1); LumaLink's Setup has the test kit.
@@ -101,6 +101,11 @@ portable folder. ./install.sh --help lists the options. To remove Nebula later, 
 installed to.
 EOF
 
-tar -C "$work" -czf "$output/$name.tar.gz" "$name"
-if command -v sha256sum >/dev/null; then sum=$(sha256sum "$output/$name.tar.gz"); else sum=$(shasum -a 256 "$output/$name.tar.gz"); fi
-echo "$output/$name.tar.gz  $(wc -c < "$output/$name.tar.gz" | tr -d ' ') bytes  SHA-256 ${sum%% *}"
+# One name per channel and architecture, as the game's update check looks for it (update_install_linux.cpp).
+case $version in
+    *-beta*) archive=$output/Nebula-Beta-Linux-$arch.tar.gz ;;
+    *) archive=$output/Nebula-Linux-$arch.tar.gz ;;
+esac
+tar -C "$work" -czf "$archive" "$name"
+if command -v sha256sum >/dev/null; then sum=$(sha256sum "$archive"); else sum=$(shasum -a 256 "$archive"); fi
+echo "$archive  $(wc -c < "$archive" | tr -d ' ') bytes  SHA-256 ${sum%% *}"

@@ -5,6 +5,7 @@
 #include "galaxy/render/ambient_occlusion_shape.h"
 
 #include "galaxy/render/renderer_d3d12.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <cstring>
 #include <algorithm>
@@ -157,7 +158,7 @@ bool AmbientOcclusion::ensure_target(Target& target, DXGI_FORMAT format, unsigne
                                   [&](const Retired& r) { return frame_index > r.release_after_frame; }),
                    retired_.end());
     if (target.resource && target.width == width && target.height == height && target.format == format) {
-        target.used_frame = frame_index;
+        target.used_step = idle_clock();
         return true;
     }
     if (target.resource) {
@@ -185,15 +186,14 @@ bool AmbientOcclusion::ensure_target(Target& target, DXGI_FORMAT format, unsigne
     target.height = height;
     target.format = format;
     target.use = gpu::Use::ComputeRead;
-    target.used_frame = frame_index;
+    target.used_step = idle_clock();
     return true;
 }
 
 void AmbientOcclusion::trim_idle(std::uint64_t frame_index, unsigned frames_in_flight) {
-    constexpr std::uint64_t kIdleFrames = 600u;
     std::erase_if(retired_, [&](const Retired& r) { return frame_index > r.release_after_frame; });
     for (Target* target : {&distance_, &raw_, &denoised_}) {
-        if (target->resource && frame_index > target->used_frame + kIdleFrames) {
+        if (target->resource && idle_since(target->used_step)) {
             retired_.push_back({std::move(target->resource), frame_index + frames_in_flight});
             *target = {};
         }
@@ -219,12 +219,18 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     const unsigned divisor = ao::occlusion_divisor(in.height);
     const unsigned width = (in.width + divisor - 1u) / divisor;
     const unsigned height = (in.height + divisor - 1u) / divisor;
-    const DXGI_FORMAT denoised_format = divisor <= 1u ? kDenoisedFullFormat : kOcclusionFormat;
+    // The targets at the field's largest size over every step the scene may take (dynamic resolution), so a step change
+    // makes none again; the passes work in this step's part (the constants' size). The denoised field is one channel
+    // where every step's field is the scene's own pixels, else two (the step's divisor-1 apply reads the first alone).
+    const unsigned whole_width = in.extent_width != 0u ? in.extent_width : in.width;
+    const unsigned whole_height = in.extent_height != 0u ? in.extent_height : in.height;
+    const ao::Field field = ao::largest_field(whole_width, whole_height, in.lowest_sixteenths);
+    const DXGI_FORMAT denoised_format = ao::occlusion_divisor(whole_height) <= 1u ? kDenoisedFullFormat : kOcclusionFormat;
     Constants c{};
     if (apply == nullptr || in.objects == nullptr || in.ring == nullptr || !ao::make_constants(in.view, width, height, divisor, in.ssao, c) ||
-        !ensure_target(distance_, kDistanceFormat, width, height, frame_index, frames_in_flight) ||
-        !ensure_target(raw_, kOcclusionFormat, width, height, frame_index, frames_in_flight) ||
-        !ensure_target(denoised_, denoised_format, width, height, frame_index, frames_in_flight)) {
+        !ensure_target(distance_, kDistanceFormat, field.width, field.height, frame_index, frames_in_flight) ||
+        !ensure_target(raw_, kOcclusionFormat, field.width, field.height, frame_index, frames_in_flight) ||
+        !ensure_target(denoised_, denoised_format, field.width, field.height, frame_index, frames_in_flight)) {
         return false;
     }
 

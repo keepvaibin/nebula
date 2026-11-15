@@ -2,6 +2,8 @@
 // The Metal device (mtl_context.h).
 #include "galaxy/render/mtl/mtl_context.h"
 
+#include "galaxy/render/render_config.h"
+
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 #include <TargetConditionals.h>
@@ -197,11 +199,14 @@ bool Context::initialize(const std::string& chosen_gpu) {
         // The chosen one; else a discrete GPU before the integrated one (never one in an external enclosure unless
         // chosen: it goes when the cable does).
         NSArray<id<MTLDevice>>* const devices = MTLCopyAllDevices();
+        std::vector<GpuChoice> choices;  // for the System page's GRAPHICS CARD choice
         for (id<MTLDevice> candidate in devices) {
+            choices.push_back(GpuChoice{identity_of(candidate), candidate.name.UTF8String ?: ""});
             std::fprintf(stderr, "[metal] GPU: %s (%s%s%s)\n", candidate.name.UTF8String,
                          candidate.isLowPower ? "integrated" : "discrete", candidate.isRemovable ? ", external" : "",
                          candidate.isHeadless ? ", no display" : "");
         }
+        record_gpu_choices(std::move(choices));
         if (!chosen_gpu.empty()) {
             for (id<MTLDevice> candidate in devices) {
                 if (identity_of(candidate) == chosen_gpu || chosen_gpu == (candidate.name.UTF8String ?: "")) {

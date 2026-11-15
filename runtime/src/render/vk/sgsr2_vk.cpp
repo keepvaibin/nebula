@@ -38,8 +38,9 @@ struct Constants {
     float min_lerp;
     float reset;
     float pad;
+    float clip_rcp[2];
 };
-static_assert(sizeof(Constants) == 72u, "sgsr2.hlsl's constants");
+static_assert(sizeof(Constants) == 80u, "sgsr2.hlsl's constants");
 
 VkShaderModule module_of(VkDevice device, UtilitySpirv shader) {
     const std::span<const std::uint32_t> spirv = utility_spirv(shader);
@@ -119,9 +120,11 @@ public:
     }
 
     bool evaluate(const TemporalUpscaleInputs& in) override {
-        if (in.commands == VK_NULL_HANDLE || in.output.view == VK_NULL_HANDLE || in.render_width != render_width_ ||
-            in.render_height != render_height_ || in.output_width != output_width_ || in.output_height != output_height_ ||
-            in.output.format != output_format_) {
+        // Any render size up to the one it was made for (dynamic resolution's steps), at the scene images' origin.
+        if (in.commands == VK_NULL_HANDLE || in.output.view == VK_NULL_HANDLE || in.render_width == 0u ||
+            in.render_height == 0u || in.render_width > render_width_ || in.render_height > render_height_ ||
+            in.render_width > in.color.width || in.render_height > in.color.height || in.output_width != output_width_ ||
+            in.output_height != output_height_ || in.output.format != output_format_) {
             return false;
         }
         const VkCommandBuffer commands = in.commands;
@@ -179,11 +182,12 @@ public:
         VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
         begin.renderPass = convert_pass_;
         begin.framebuffer = convert_framebuffer_;
-        begin.renderArea = {{0, 0}, {render_width_, render_height_}};
+        // The depthclip's part this frame's region covers (the upscale reads no further).
+        begin.renderArea = {{0, 0}, {in.render_width, in.render_height}};
         begin.clearValueCount = 0u;
         begin.pClearValues = unused;
         vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
-        draw(commands, convert_pipeline_, convert_layout_, convert_set_, render_width_, render_height_, constants);
+        draw(commands, convert_pipeline_, convert_layout_, convert_set_, in.render_width, in.render_height, constants);
         vkCmdEndRenderPass(commands);
 
         begin.renderPass = upscale_pass_;
@@ -494,8 +498,9 @@ private:
 
     Constants constants_for(const TemporalUpscaleInputs& in, bool reset) {
         Constants c{};
-        const float rw = static_cast<float>(render_width_);
-        const float rh = static_cast<float>(render_height_);
+        // This frame's render size (a dynamic resolution step at most the one it was made for).
+        const float rw = static_cast<float>(in.render_width);
+        const float rh = static_cast<float>(in.render_height);
         const float ow = static_cast<float>(output_width_);
         const float oh = static_cast<float>(output_height_);
         c.render_size[0] = rw;
@@ -530,6 +535,8 @@ private:
         fov_y_ = in.fov_y;
         c.min_lerp = still_frames_ > 5u ? 0.3f : 0.0f;
         c.reset = reset ? 1.0f : 0.0f;
+        c.clip_rcp[0] = 1.0f / static_cast<float>(render_width_);
+        c.clip_rcp[1] = 1.0f / static_cast<float>(render_height_);
         return c;
     }
 

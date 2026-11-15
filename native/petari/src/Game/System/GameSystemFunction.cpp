@@ -86,6 +86,10 @@ namespace GameSystemFunction {
         return SingletonHolder< GameSystemRestartProcess >::get()->isActive();
     }
 
+    bool isResetScreenBlack() {
+        return SingletonHolder< GameSystemRestartProcess >::get()->isScreenBlack();
+    }
+
     void setResetOperationApplicationReset() {
         SingletonHolder< GameSystemRestartProcess >::get()->setResetOperationApplicationReset();
     }

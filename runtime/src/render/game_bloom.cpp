@@ -4,7 +4,9 @@
 #include "barriers_d3d12.h"
 
 #include "galaxy/render/game_bloom_shape.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/render/renderer_d3d12.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <algorithm>
 #include <bit>
@@ -92,6 +94,21 @@ bool GameBloom::initialize(ID3D12Device* device) {
             return false;
         }
     }
+    // The composite for every sample count the device supports in each scene colour format, now rather than at a scene's
+    // first bloom in play.
+    for (const bool hdr : {false, true}) {
+        for (unsigned samples = 1u; samples <= 8u; samples *= 2u) {
+            D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS levels{};
+            levels.Format = hdr ? kSceneHdrColorFormat : kSceneColorFormat;
+            levels.SampleCount = samples;
+            if (samples > 1u && (FAILED(device_->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &levels,
+                                                                     sizeof(levels))) ||
+                                 levels.NumQualityLevels == 0u)) {
+                continue;
+            }
+            (void)composite_pipeline(samples, hdr);  // one that fails is not tried again (composite_failed_)
+        }
+    }
     ready_ = true;
     return true;
 }
@@ -120,6 +137,9 @@ ID3D12PipelineState* GameBloom::composite_pipeline(unsigned samples, bool hdr) {
     if (composite_[index]) {
         return composite_[index].Get();
     }
+    if ((composite_failed_ & (1u << index)) != 0u) {
+        return nullptr;
+    }
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_signature_.Get();
     pd.VS = code(g_bloom_composite_vs, sizeof(g_bloom_composite_vs));
@@ -139,6 +159,7 @@ ID3D12PipelineState* GameBloom::composite_pipeline(unsigned samples, bool hdr) {
     pd.SampleDesc.Count = 1u << (index & 3u);
     if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&composite_[index])))) {
         std::cerr << "[bloom] composite pipeline failed for " << (1u << (index & 3u)) << " samples\n";
+        composite_failed_ |= 1u << index;
         return nullptr;
     }
     return composite_[index].Get();
@@ -147,7 +168,7 @@ ID3D12PipelineState* GameBloom::composite_pipeline(unsigned samples, bool hdr) {
 bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height, bool unordered,
                               std::uint64_t frame_index, unsigned frames_in_flight, const wchar_t* name) {
     if (target.resource && target.width == width && target.height == height && target.format == format) {
-        target.used_frame = frame_index;
+        target.used_step = idle_clock();
         return true;
     }
     if (target.resource) {
@@ -175,7 +196,7 @@ bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width
     target.height = height;
     target.format = format;
     target.use = use;
-    target.used_frame = frame_index;
+    target.used_step = idle_clock();
     return true;
 }
 
@@ -190,11 +211,11 @@ void GameBloom::transition(ID3D12GraphicsCommandList* list, Target& target, gpu:
 }
 
 // The frame's pixels of the scene target, in its own format, into `target` (the normal bloom's kept scene, the simple bloom's
-// source).
+// source), made at the scene target's size (the frame is the part of it drawn in).
 bool GameBloom::copy_frame(ID3D12GraphicsCommandList* list, const Inputs& in, Target& target, const wchar_t* name,
                            std::uint64_t frame_index, unsigned frames_in_flight) {
     const DXGI_FORMAT format = in.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
-    if (!ensure_target(target, format, in.frame_width, in.frame_height, false, frame_index, frames_in_flight, name)) {
+    if (!ensure_target(target, format, in.whole_width(), in.whole_height(), false, frame_index, frames_in_flight, name)) {
         return false;
     }
     // The scene and the copy change in one call each way.
@@ -231,7 +252,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> GameBloom::take_kept_image(ID3D12Graphics
     Microsoft::WRL::ComPtr<ID3D12Resource> image;
     if (keep_.resource) {
         const D3D12_RESOURCE_DESC desc = keep_.resource->GetDesc();
-        if (keep_.width == in.frame_width && keep_.height == in.frame_height &&
+        if (keep_.width == in.whole_width() && keep_.height == in.whole_height() &&
             (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0) {
             transition(list, keep_, gpu::Use::PixelRead);
             image = std::move(keep_.resource);
@@ -245,17 +266,17 @@ Microsoft::WRL::ComPtr<ID3D12Resource> GameBloom::take_kept_image(ID3D12Graphics
 
 void GameBloom::keep_picture(Microsoft::WRL::ComPtr<ID3D12Resource> picture, const Inputs& in) {
     keep_.resource = std::move(picture);
-    keep_.width = in.frame_width;
-    keep_.height = in.frame_height;
+    keep_.width = in.whole_width();
+    keep_.height = in.whole_height();
     keep_.format = in.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
     keep_.use = gpu::Use::PixelRead;
-    keep_.used_frame = frame_;
+    keep_.used_step = idle_clock();
     kept_ = true;
 }
 
 bool GameBloom::kept_by_trade(const Inputs& in) const {
-    if (!kept_ || !keep_.resource || in.scene_target == nullptr || keep_.width != in.frame_width ||
-        keep_.height != in.frame_height) {
+    if (!kept_ || !keep_.resource || in.scene_target == nullptr || keep_.width != in.whole_width() ||
+        keep_.height != in.whole_height()) {
         return false;
     }
     const D3D12_RESOURCE_DESC kept = keep_.resource->GetDesc();
@@ -290,7 +311,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> GameBloom::take_source_image(ID3D12Graphi
     Microsoft::WRL::ComPtr<ID3D12Resource> image;
     if (source_.resource) {
         const D3D12_RESOURCE_DESC desc = source_.resource->GetDesc();
-        if (source_.width == in.frame_width && source_.height == in.frame_height &&
+        if (source_.width == in.whole_width() && source_.height == in.whole_height() &&
             (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0) {
             transition(list, source_, gpu::Use::PixelRead);
             image = std::move(source_.resource);
@@ -304,19 +325,18 @@ Microsoft::WRL::ComPtr<ID3D12Resource> GameBloom::take_source_image(ID3D12Graphi
 
 void GameBloom::give_source(Microsoft::WRL::ComPtr<ID3D12Resource> picture, const Inputs& in) {
     source_.resource = std::move(picture);
-    source_.width = in.frame_width;
-    source_.height = in.frame_height;
+    source_.width = in.whole_width();
+    source_.height = in.whole_height();
     source_.format = in.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
     source_.use = gpu::Use::PixelRead;
-    source_.used_frame = frame_;
+    source_.used_step = idle_clock();
     source_given_ = true;
 }
 
 void GameBloom::trim_idle(std::uint64_t frame_index, unsigned frames_in_flight) {
-    constexpr std::uint64_t kIdleFrames = 600u;
     retire(frame_index);
     const auto trim = [&](Target& target) {
-        if (target.resource && frame_index > target.used_frame + kIdleFrames) {
+        if (target.resource && idle_since(target.used_step)) {
             retired_.push_back({std::move(target.resource), frame_index + frames_in_flight});
             target = {};
         }
@@ -359,25 +379,28 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         return true;
     }
     const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.scale);
+    // The images at the largest shape of every step the frame may take: a step change makes none again.
+    const bloom::Capacity cap = bloom::largest_shape(in.whole_width(), in.whole_height(), kAuthoredLines,
+                                                     in.lowest_sixteenths);
     const unsigned blurs1 = normal ? 2u : 1u;
     bool made = composite != nullptr &&
-                ensure_target(work_, kWorkFormat, s.w1, s.h1, true, frame_index, frames_in_flight, L"bloom work") &&
-                ensure_target(box_tmp_, kWorkFormat, s.w1, s.h1, true, frame_index, frames_in_flight,
+                ensure_target(work_, kWorkFormat, cap.w1, cap.h1, true, frame_index, frames_in_flight, L"bloom work") &&
+                ensure_target(box_tmp_, kWorkFormat, cap.w1, cap.h1, true, frame_index, frames_in_flight,
                               L"bloom box") &&
-                ensure_target(mask_, kWorkFormat, s.w1, s.h1, true, frame_index, frames_in_flight, L"bloom mask") &&
-                ensure_target(level1_, kWorkFormat, s.w1, s.h1, true, frame_index, frames_in_flight,
+                ensure_target(mask_, kWorkFormat, cap.w1, cap.h1, true, frame_index, frames_in_flight, L"bloom mask") &&
+                ensure_target(level1_, kWorkFormat, cap.w1, cap.h1, true, frame_index, frames_in_flight,
                               L"bloom level 1");
     for (unsigned i = 0; made && i < blurs1; ++i) {
-        made = ensure_target(blur_h_[i], kWorkFormat, s.w1, s.h1, true, frame_index, frames_in_flight,
+        made = ensure_target(blur_h_[i], kWorkFormat, cap.w1, cap.h1, true, frame_index, frames_in_flight,
                              L"bloom level 1 blur");
     }
     if (made && normal) {
-        made = ensure_target(level2_in_, kWorkFormat, s.w2, s.h2, true, frame_index, frames_in_flight,
+        made = ensure_target(level2_in_, kWorkFormat, cap.w2, cap.h2, true, frame_index, frames_in_flight,
                              L"bloom level 2 source") &&
-               ensure_target(level2_, kWorkFormat, s.w2, s.h2, true, frame_index, frames_in_flight,
+               ensure_target(level2_, kWorkFormat, cap.w2, cap.h2, true, frame_index, frames_in_flight,
                              L"bloom level 2");
         for (unsigned i = 0; made && i < 3u; ++i) {
-            made = ensure_target(blur2_h_[i], kWorkFormat, s.w2, s.h2, true, frame_index, frames_in_flight,
+            made = ensure_target(blur2_h_[i], kWorkFormat, cap.w2, cap.h2, true, frame_index, frames_in_flight,
                                  L"bloom level 2 blur");
         }
     }
@@ -537,10 +560,9 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
     c.params[0] = static_cast<float>(std::min(p.intensity, 255u)) / 255.0f;
     c.params[1] = std::max(p.strength, 0.0f);
     c.params[2] = normal ? 1.0f : 2.0f;
-    c.uv[0] = 1.0f / static_cast<float>(s.f * s.w1);
-    c.uv[1] = 1.0f / static_cast<float>(s.f * s.h1);
-    c.uv[2] = 1.0f / static_cast<float>(s.f * s.n * std::max(s.w2, 1u));
-    c.uv[3] = 1.0f / static_cast<float>(s.f * s.n * std::max(s.h2, 1u));
+    const bloom::CompositeUv uv = bloom::composite_uv(s, normal ? cap : bloom::Capacity{cap.w1, cap.h1, cap.w1, cap.h1});
+    std::copy(std::begin(uv.uv), std::end(uv.uv), c.uv);
+    std::copy(std::begin(uv.limit), std::end(uv.limit), c.sigma);
     draw_composite(list, ring, in, composite, normal ? keep_ : source_, level1_, normal ? level2_ : level1_, c);
     return true;
 }

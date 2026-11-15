@@ -1,4 +1,5 @@
 #include "galaxy/switch_controller.h"
+#include "galaxy/content_viewport.h"
 
 #include <algorithm>
 #include <cmath>
@@ -685,8 +686,10 @@ SwitchMotion::Output SwitchMotion::feed(const ImuSample& sample, float dt, std::
         const float sensitivity = std::clamp(
             std::isfinite(settings.gyro_sensitivity) ? settings.gyro_sensitivity : 1.0f, 0.1f, 10.0f);
         const float gain_x = 2.0f / (kDegreesPerPictureWidth * kPi / 180.0f) * sensitivity;
+        // The picture's width over its height: the pointer's units across and down are its two half extents.
         const float aspect = std::clamp(
-            std::isfinite(settings.picture_aspect) ? settings.picture_aspect : 16.0f / 9.0f, 1.0f, 4.0f);
+            std::isfinite(settings.picture_aspect) ? settings.picture_aspect : 16.0f / 9.0f,
+            static_cast<float>(galaxy::kNarrowestContentAspect), static_cast<float>(galaxy::kWidestContentAspect));
         // Yaw to the left (positive about up) moves the pointer left; pitch up
         // (positive about the right axis) moves it up.
         out.pointer_x = -yaw * dt * gain_x;

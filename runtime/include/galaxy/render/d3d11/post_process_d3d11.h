@@ -64,13 +64,13 @@ public:
     void apply_settings(const PostProcessSettings& settings);
 
 private:
-    // A work picture and the frame it was last drawn (idle ones go after kTargetIdleFrames).
+    // A work picture and idle_clock() when it was last drawn (idle ones go after kIdleSteps game steps).
     struct Target {
         std::shared_ptr<Texture> texture;
         std::uint64_t used = 0;
     };
-    bool ensure_target(Target& target, unsigned width, unsigned height, DXGI_FORMAT format, std::uint64_t frame);
-    void trim_idle_targets(std::uint64_t frame) noexcept;
+    bool ensure_target(Target& target, unsigned width, unsigned height, DXGI_FORMAT format);
+    void trim_idle_targets() noexcept;
     bool create_smaa_shaders(unsigned quality, Microsoft::WRL::ComPtr<ID3D11PixelShader>& edges,
                              Microsoft::WRL::ComPtr<ID3D11VertexShader>& weights_vs,
                              Microsoft::WRL::ComPtr<ID3D11PixelShader>& weights);
@@ -81,8 +81,11 @@ private:
               const PostConstants& constants);
     // The AA passes from `source` into `target`, the last one with `whole` (every channel, its alpha the source's) or
     // RGB only. SMAA needs edges_, weights_ and stencil_ at `width` x `height`.
+    // Over the picture's part (`part_width` x `part_height` from the top left) of a `width` x `height` input: no pass
+    // reads past it (post_process.hlsl PicturePart).
     void run_aa(ID3D11DeviceContext1* context, AaRun pass, ID3D11ShaderResourceView* source,
-                ID3D11RenderTargetView* target, unsigned width, unsigned height, bool whole);
+                ID3D11RenderTargetView* target, unsigned width, unsigned height, unsigned part_width, unsigned part_height,
+                bool whole);
     void note_aa_run(const PostProcessPlan& plan, AaRun ran);
     void self_test(ID3D11DeviceContext1* context);
 
@@ -124,7 +127,7 @@ private:
     Target scaled_;       // the window-sized picture RCAS reads after a separate enlargement
     // The scene's image traded out (record_scene_aa with a trade): the passes' source, the next trade's spare.
     std::shared_ptr<Texture> traded_;
-    std::uint64_t traded_frame_ = 0;
+    std::uint64_t traded_step_ = 0;  // idle_clock() at the last trade
 };
 
 }  // namespace galaxy::render::d3d11

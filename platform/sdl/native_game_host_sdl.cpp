@@ -7,6 +7,7 @@
 #include "sdl_host.h"
 
 #include "galaxy/content_viewport.h"
+#include "galaxy/input/co_star.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/input/live_controls_engine.h"
 #include "galaxy/input_bindings.h"
@@ -127,6 +128,12 @@ TouchTargets g_touch_targets_coming;
 TouchTargets g_touch_targets;
 std::uint64_t g_touch_targets_ms = 0;
 std::mutex g_touch_targets_mutex;
+// The game's corner buttons' lowest edge (0..4095 down the picture; kNoCornerButtons: none), as the targets: filled
+// during the game's frame, handed over by the next input, gone when the game stops saying.
+constexpr std::uint32_t kNoCornerButtons = ~0u;
+std::uint32_t g_corner_foot_coming = kNoCornerButtons;
+std::uint32_t g_corner_foot = kNoCornerButtons;
+std::uint64_t g_corner_foot_ms = 0;
 std::atomic<unsigned> g_touch_pointer_state{0u};
 
 bool project_window_point(const sdl::InputState& state, float x, float y, float& out_x, float& out_y) {
@@ -196,6 +203,28 @@ bool touch_target_at(float x, float y) noexcept {
     return touch_target_under(sdl::input_state(), x, y, target);
 }
 
+void note_corner_buttons(std::uint32_t foot) noexcept {
+    std::lock_guard<std::mutex> lock(g_touch_targets_mutex);
+    const std::uint32_t value = foot > 4095u ? 4095u : foot;
+    if (g_corner_foot_coming == kNoCornerButtons || value > g_corner_foot_coming) {
+        g_corner_foot_coming = value;
+    }
+}
+
+float corner_buttons_foot() noexcept {
+    std::uint32_t foot = kNoCornerButtons;
+    {
+        std::lock_guard<std::mutex> lock(g_touch_targets_mutex);
+        foot = g_corner_foot;
+    }
+    const auto content = galaxy::g_presentation_content.read();
+    if (foot == kNoCornerButtons || !content || content->viewport.height <= 0) {
+        return -1.0f;
+    }
+    return static_cast<float>(content->viewport.top) +
+           static_cast<float>(foot) / 4095.0f * static_cast<float>(content->viewport.height);
+}
+
 in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer_mode, std::uint8_t tilt_section) {
     // A menu that takes the screen takes the keys and pads on the window thread. The game draws it under its own
     // pointer, so the finger and the mouse still reach the game, as the mouse does on Windows.
@@ -220,6 +249,13 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
             g_touch_targets_ms = now_ms;
         } else if (now_ms - g_touch_targets_ms > kTouchTargetHoldMs) {
             g_touch_targets.count = 0u;
+        }
+        if (g_corner_foot_coming != kNoCornerButtons) {
+            g_corner_foot = g_corner_foot_coming;
+            g_corner_foot_coming = kNoCornerButtons;
+            g_corner_foot_ms = now_ms;
+        } else if (now_ms - g_corner_foot_ms > kTouchTargetHoldMs) {
+            g_corner_foot = kNoCornerButtons;
         }
     }
     static std::array<std::uint64_t, 32> s_touch_press_end{};
@@ -441,6 +477,14 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         live.shake_remote = shaking && tuning.motion_shake == in::MotionShake::Remote;
         live.shake_nunchuk = shaking && tuning.motion_shake == in::MotionShake::Nunchuk;
     }
+
+    // Player 2 (co-star mode): the controller attached last, the one with the highest id (SDL's and the Apple host's
+    // ids grow with every controller attached).
+    std::size_t newest = pad_count;
+    for (std::size_t i = 0; i < pad_count; ++i) {
+        if (newest == pad_count || state.pad_ids[pads[i].device_slot] > state.pad_ids[pads[newest].device_slot]) newest = i;
+    }
+    controls::update_co_star(std::span<controls::LivePad>(pads.data(), pad_count), newest, config);
 
     controls::LiveControlsFrame controls_frame{config};
     controls_frame.pads = std::span<const controls::LivePad>(pads.data(), pad_count);

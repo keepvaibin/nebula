@@ -18,6 +18,8 @@ public:
     void update();
     void draw() const;
     void startPreLoad();
+    // The save read again as the start reads it, every file in memory blank first (a file it has none of stays blank).
+    void startReload();
     void startCreateUserFile(int);
     void startDeleteUserFile(int);
     void startSave(bool, bool);

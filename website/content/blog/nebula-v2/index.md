@@ -108,7 +108,7 @@ Setup is a lot simpler. It no longer compiles anything, so it just reads your di
 - **Ray Tracing:** a completely overhauled and rewritten lighting engine to work for real-time lighting and reflections.
 - **Anti-aliasing:** MSAA, SMAA, FXAA and DLAA.
 - **Ambient occlusion** (SSAO or GTAO), **HDR** output, and a lighting setting with the original per-vertex lighting, per-pixel, or enhanced.
-- **Bloom** from 0 to 200%, generated mipmaps, anisotropic filtering, and curved surfaces that round out the outlines of curved models.
+- **Bloom** from 0 to 200%, anisotropic filtering, and curved surfaces that round out the outlines of curved models.
 - **Dynamic resolution** and a **Performance preset** for weaker hardware. The first time you start, Nebula picks a resolution your GPU can handle.
 - **Texture packs** in Dolphin's format and **replacement movies** (MP4, MKV or WebM).
 

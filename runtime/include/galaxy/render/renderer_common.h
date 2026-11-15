@@ -22,6 +22,10 @@
 #include <unordered_map>
 #include <vector>
 
+#if defined(_WIN32)
+struct IDXGIAdapter;  // dxgi.h
+#endif
+
 namespace galaxy::render {
 
 using ScreenProbe = ::NebulaScreenProbe;
@@ -111,18 +115,25 @@ struct SceneClearValues {
     std::uint32_t rgba,
     std::uint8_t frame_format) noexcept;
 
-// The capture shader's constants (b0, five 32-bit values): the rectangle's origin in frame pixels, frame pixels per
-// picture pixel, and the picture's channels (NebulaTargetChannels; kCopyLayoutDisplay the frame shown).
+// The capture shader's constants (b0, seven 32-bit values): the rectangle's origin in frame pixels, frame pixels per
+// picture pixel, the picture's channels (NebulaTargetChannels; kCopyLayoutDisplay the frame shown), and the part of the
+// source that holds the picture, in its pixels from the top left (dynamic resolution draws the scene in a part of its
+// targets): no sample reaches past it. Two scalars, not a vector, so every shading language lays them out alike.
 struct SceneConversionShaderConstants {
     float src_xform[4]{};
     std::uint32_t channels = 0;
+    float src_limit_x = 0.0f;  // 0: the whole texture
+    float src_limit_y = 0.0f;
 };
-static_assert(sizeof(SceneConversionShaderConstants) == 5u * sizeof(std::uint32_t));
-inline constexpr unsigned kSceneConversionConstantCount = 5u;
+static_assert(sizeof(SceneConversionShaderConstants) == 7u * sizeof(std::uint32_t));
+inline constexpr unsigned kSceneConversionConstantCount = 7u;
 
 [[nodiscard]] std::string_view scene_conversion_shader_source() noexcept;
 // The frame shown, one frame pixel to one picture pixel (scene_conversion_shader_source's arithmetic for it).
 [[nodiscard]] std::string_view display_filter_shader_source() noexcept;
+// HDR output's 2D layer written back into the float scene: t0 the layer as drawn, t1 the layer as it started; a pixel the
+// layer left as it started is discarded (the float scene keeps its light past white there), any other takes the layer's.
+[[nodiscard]] std::string_view layer_merge_shader_source() noexcept;
 
 // Screen probes (one compute dispatch a probe pass): t0 the scene's depth, t1 each point's frame pixel, u0 each point's
 // depth as the game reads it (0 near, 1 far); b0 the count. 64 points a group.
@@ -139,13 +150,18 @@ struct ScreenProbePixel {
 // fullscreen-triangle blit, the scene target colour-channel clear, the depth carry after a resolution change, and the
 // overlay's textured and solid quads (root constants / push constants b0).
 [[nodiscard]] std::string_view depth_resolve_pixel_shader_source() noexcept;
+// The scene's depth as a picture (dynamic resolution's rectangle at the extent's size): R32F, point sampled, with the
+// capture shader's constants (SceneConversionShaderConstants).
+[[nodiscard]] std::string_view depth_copy_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view blit_vertex_shader_source() noexcept;
 [[nodiscard]] std::string_view blit_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view clear_pixel_shader_source() noexcept;
 // Depth clear as a draw (Vulkan drivers whose vkCmdClearAttachments races with draws): writes clear_value.x.
 [[nodiscard]] std::string_view clear_depth_pixel_shader_source() noexcept;
+// `limit_x` x `limit_y`: the source's pixels that hold the picture (0: all of them).
 [[nodiscard]] SceneConversionShaderConstants make_scene_conversion_constants(std::uint8_t channels, float src_x, float src_y,
-                                                                             float step_x, float step_y) noexcept;
+                                                                             float step_x, float step_y, float limit_x = 0.0f,
+                                                                             float limit_y = 0.0f) noexcept;
 
 // Variable refresh. A display whose refreshes follow the presents (G-SYNC, FreeSync, Adaptive-Sync) shows itself in the vblank grid:
 // IDXGIOutput::WaitForVBlank returns at each refresh, so the interval between wakes is the frame time, well over the mode's own
@@ -184,6 +200,11 @@ private:
     // Sleeps until a target `remaining_ms` away.
     void sleep_before(double remaining_ms);
 };
+
+#if defined(_WIN32)
+// The adapter's user-mode driver version as Windows shows it ("32.0.15.6094"); empty when it does not say.
+[[nodiscard]] std::string dxgi_driver_version(::IDXGIAdapter* adapter);
+#endif
 
 // A test capture's pixels (RGB rows, top first) as a binary PPM at `path`, written off the render thread (the Vulkan
 // and Metal renderers; Direct3D 12 keeps its own writers). wait_picture_files returns once every one asked is written:

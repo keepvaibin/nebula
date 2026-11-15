@@ -33,7 +33,7 @@ cbuffer NebulaPostBlock : register(b0) {
     float nebula_post_reserved0;
     float4 nebula_post_depth_terms;
     float2 nebula_post_motion_scale;
-    float2 nebula_post_reserved1;
+    float2 nebula_post_scene_share;
     float4 post_params[4];
 };
 #if defined(NEBULA_POST_SPIRV)
@@ -49,9 +49,18 @@ Texture2D<float2> nebula_post_motion_in : register(t2);
 SamplerState nebula_post_linear : register(s0);
 SamplerState nebula_post_point : register(s1);
 #endif
-// The frame so far (display-encoded, 0 to 1), with the stage's posts before this one applied.
+// The frame so far (display-encoded, 0 to 1), with the stage's posts before this one applied. Its picture may be larger
+// than the frame (the frame is its first nebula_post_size pixels): every read stays in the frame.
 float4 scene(float2 uv) {
-    return nebula_post_frame_in.SampleLevel(nebula_post_linear, uv, 0.0);
+    float2 dims;
+    nebula_post_frame_in.GetDimensions(dims.x, dims.y);
+    return nebula_post_frame_in.SampleLevel(nebula_post_linear, min(uv * nebula_post_size, nebula_post_size - 0.5) / dims,
+                                            0.0);
+}
+// A frame uv in the scene's part of a depth or motion target of `dims` texels, held inside it.
+float2 nebula_post_scene_uv(float2 uv, float2 dims) {
+    const float2 share = nebula_post_scene_share.x > 0.0 ? nebula_post_scene_share : float2(1.0, 1.0);
+    return min(uv * share, share - 0.5 / dims);
 }
 float4 scene_texel(int2 pixel) {
     const int2 last = int2(nebula_post_size) - int2(1, 1);
@@ -63,7 +72,9 @@ float depth(float2 uv) {
     if ((nebula_post_flags & 1u) == 0u) {
         return far_distance;
     }
-    const float d = nebula_post_depth_in.SampleLevel(nebula_post_point, uv, 0.0);
+    float2 dims;
+    nebula_post_depth_in.GetDimensions(dims.x, dims.y);
+    const float d = nebula_post_depth_in.SampleLevel(nebula_post_point, nebula_post_scene_uv(uv, dims), 0.0);
     const float below = d * nebula_post_depth_terms.y + nebula_post_depth_terms.z;
     return below > 0.0 ? min(nebula_post_depth_terms.x / below, far_distance) : far_distance;
 }
@@ -72,7 +83,10 @@ float2 motion(float2 uv) {
     if ((nebula_post_flags & 2u) == 0u) {
         return float2(0.0, 0.0);
     }
-    return nebula_post_motion_in.SampleLevel(nebula_post_point, uv, 0.0) * nebula_post_motion_scale;
+    float2 dims;
+    nebula_post_motion_in.GetDimensions(dims.x, dims.y);
+    return nebula_post_motion_in.SampleLevel(nebula_post_point, nebula_post_scene_uv(uv, dims), 0.0) *
+           nebula_post_motion_scale;
 }
 #line 1
 )";

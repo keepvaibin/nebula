@@ -5,11 +5,12 @@
 
 #include "galaxy/benchmark.h"
 #include "galaxy/content_viewport.h"
-#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/display_aspect.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/texture_store.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <TargetConditionals.h>
 
@@ -48,6 +49,7 @@ void RendererMtl::lose_device() {
 
 bool RendererMtl::initialize(int window_width, int window_height, const FrameMap& frame) {
     scene_map_ = frame;
+    frame_extent_ = scene_extent_ = scene_rectangle_ = frame;
     frame_slot_ = 0;
     frame_index_ = 0;
     if (window_ != nullptr) {
@@ -70,6 +72,15 @@ bool RendererMtl::initialize(int window_width, int window_height, const FrameMap
         if (!create_scene_targets(scene_map_, wanted_msaa_samples())) {
             shutdown();
             return false;
+        }
+        // The scene in a part of its targets, every pass reading that part (dynamic_resolution.h).
+        set_dynamic_resolution_offered(true);
+        // The scene's depth as a picture (publish_scene_depth_copy): R32 float where the device filters it.
+        depth_copy_format_ = mtl::Format::R16f;
+        if (@available(macOS 11.0, iOS 14.0, *)) {
+            if ([(__bridge id<MTLDevice>)mtl::Context::get().device() supports32BitFloatFiltering]) {
+                depth_copy_format_ = mtl::Format::R32f;
+            }
         }
         for (Frame& made : frames_) {
             made.gpu_time = std::make_shared<std::array<std::atomic<double>, 2>>();
@@ -286,6 +297,9 @@ bool RendererMtl::configure_layer() {
         layer.drawableSize = CGSizeMake(width, height);
 #if TARGET_OS_OSX
         layer.displaySyncEnabled = vsync ? YES : NO;
+#else
+        // iOS presents each drawable at a refresh (no displaySyncEnabled): VSync is always on.
+        set_present_waits_for_refresh(true);
 #endif
         // Three drawables, Metal's default. With two (the one on the screen and the one being drawn) nothing can
         // wait in line, but a frame whose drawable is still up waits for it: measured in a window, one slow frame
@@ -445,46 +459,25 @@ void RendererMtl::shutdown() {
 }
 
 void RendererMtl::grow_rings() {
-    // A ring whose frames took over half their budget (or spilled) grows; one whose last 600 frames stayed under a
-    // quarter of it gives half of its memory back.
-    if (ring_growth_failed_ ||
-        (!vertex_ring_.wants_growth() && !index_ring_.wants_growth() && !constant_ring_.wants_growth() &&
-         !matrix_ring_.wants_growth() && !vertex_ring_.wants_shrink() && !index_ring_.wants_shrink() &&
-         !constant_ring_.wants_shrink() && !matrix_ring_.wants_shrink())) {
+    // A ring whose frames took over half their budget (or spilled) grows; one whose last 30 seconds (and 600 frames)
+    // stayed under a quarter of it gives half of its memory back on a frame without the scene (UploadRing::kQuietNs).
+    // Only that ring is made again.
+    const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kRingSegments, true},
+                                    {&index_ring_, "index", kFramesInFlight, true},
+                                    {&constant_ring_, "constant", kFramesInFlight, true},
+                                    {&matrix_ring_, "matrix", kRingSegments, false}};
+    if (ring_growth_failed_ || std::none_of(std::begin(rings), std::end(rings),
+                                            [](const UploadRingSlot& s) { return s.ring->wants_new_size(); })) {
         return;
     }
     // No wait for the GPU: a ring is made again as a new buffer. The old buffer and its chunks are released here,
     // which hands them to the context to release once the work committed so far has completed.
-    gpu::Device* const device = this->device();
     std::vector<gpu::BufferRef> old;
-    const auto place = [&](UploadRing& ring, const char* name, unsigned segments, bool chunks) {
-        const std::size_t had = ring.capacity();
-        std::size_t capacity = ring.grown_capacity(segments);
-        if (capacity == 0u) {
-            ring_growth_failed_ = true;
-            capacity = had;
-        } else if (ring.wants_shrink()) {
-            capacity = ring.shrunk_capacity(segments);
-        }
-        if (capacity != had) {
-            std::cerr << "[gpu-rings] " << (capacity > had ? "grow " : "shrink ") << name << " frame-high-water-kb="
-                      << (ring.high_water() >> 10u) << " mb=" << (had >> 20u) << "->" << (capacity >> 20u) << '\n';
-        }
-        ring.release_into(old);
-        if (ring.initialize(device, name, UploadRing::budget(capacity, segments), segments, capacity, chunks)) {
-            return true;
-        }
-        ring_growth_failed_ = true;
-        std::cerr << "[gpu-rings] grow " << name << " failed\n";
-        return ring.initialize(device, name, UploadRing::budget(had, segments), segments, had, chunks);
-    };
-    if (!place(vertex_ring_, "vertex", kRingSegments, true) || !place(index_ring_, "index", kFramesInFlight, true) ||
-        !place(constant_ring_, "constant", kFramesInFlight, true) || !place(matrix_ring_, "matrix", kRingSegments, false)) {
-        throw std::runtime_error("upload ring resize failed");
+    if (remake_upload_rings(device(), rings, false, ring_growth_failed_, old)) {
+        history_segment_ = 0u;
+        history_segment_fence_.fill(0u);
+        history_used_ = true;
     }
-    history_segment_ = 0u;
-    history_segment_fence_.fill(0u);
-    history_used_ = true;
 }
 
 void RendererMtl::trace_rings() const {
@@ -571,6 +564,7 @@ void RendererMtl::begin_frame() {
     apply_window_size();
     grow_rings();
     prepare_temporal_upscaler();
+    apply_dynamic_resolution();
     if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
         // The settings changed: decided again.
         temporal_interp_suspended_ = false;
@@ -601,8 +595,10 @@ void RendererMtl::begin_frame() {
             }
             if (frame.pass_timed) {
                 // The slot's last frame by pass; the page's running average of each over the frames that ran it.
+                std::array<double, std::size(kPassTimeNames)> frame_ms{};
                 for (std::size_t pass = 0u; pass < frame.pass_time->size(); ++pass) {
                     const double ms = (*frame.pass_time)[pass].exchange(0.0, std::memory_order_acq_rel) * 1000.0;
+                    if (pass < frame_ms.size()) frame_ms[pass] = ms;
                     pass_window_ms_[pass] += ms;
                     if (ms > 0.0 && pass < pass_ema_ms_.size()) {
                         const float before = pass_ema_ms_[pass].load(std::memory_order_relaxed);
@@ -611,6 +607,8 @@ void RendererMtl::begin_frame() {
                                                  std::memory_order_relaxed);
                     }
                 }
+                galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(),
+                                              std::min(frame_ms.size(), frame.pass_time->size()));
                 ++pass_window_frames_;
             }
             stats_.gpu_ms += gpu_ms;
@@ -642,7 +640,9 @@ void RendererMtl::begin_frame() {
     pass_visibility_.reset();
     pass_visibility_used_ = 0u;
     trim_idle_effect_targets();
-    if (frame_index_ % 120u == 0u) {
+    // Once a second of the game (target slots age on idle_clock).
+    if (idle_clock() - target_swept_step_ >= kTargetSweepSteps) {
+        target_swept_step_ = idle_clock();
         sweep_target_slots();
     }
     reset_sampler_frame();
@@ -726,13 +726,10 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
             (*times)[1].store(done.GPUEndTime, std::memory_order_release);
         }];
         if (presenting) {
-            // On a variable refresh display the pacer holds presents under the cap whatever the VSync setting; a
-            // frame under the cap goes out as soon as it is ready.
+            // On a variable refresh display with VSync on the pacer holds presents under the refresh
+            // (paced_present_rate); a frame under the cap goes out as soon as it is ready.
             const RenderConfig cfg = get_render_config();
-            const float variable_rate = variable_refresh_ ? static_cast<float>(display_refresh_hz_) : 0.0f;
-            const float paced_fps = variable_refresh_
-                ? (presented_max_fps(cfg) > 0.0f ? std::min(presented_max_fps(cfg), variable_rate) : variable_rate)
-                : presented_max_fps(cfg);
+            const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
             pace_wait_ms = present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
             present_start = galaxy::qpc_now();
             if (trace_present_stats_enabled()) {
@@ -835,20 +832,22 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
         }
     }
     ++frame_index_;
-    if (frame_index_ % 600u == 0u) {
+    // Every ten seconds on the clock.
+    ++gpu_window_.recorded;
+    if (gpu_report_.due()) {
         if (gpu_window_.frames != 0u) {
             const double frames = static_cast<double>(gpu_window_.frames);
             std::fprintf(stderr,
                          "[metal-gpu] frame %.2f ms average, %.2f ms longest; %.1f scene target passes and %.1f scene target "
                          "copies a frame; scene target %ux%u, layer %ux%u\n",
-                         gpu_window_.ms / frames, gpu_window_.max_ms, static_cast<double>(gpu_window_.passes) / 600.0,
-                         static_cast<double>(gpu_window_.copies) / 600.0, scene_map_.width, scene_map_.height, layer_.width,
+                         gpu_window_.ms / frames, gpu_window_.max_ms, static_cast<double>(gpu_window_.passes) / gpu_window_.recorded,
+                         static_cast<double>(gpu_window_.copies) / gpu_window_.recorded, scene_extent_.width, scene_extent_.height, layer_.width,
                          layer_.height);
             std::fprintf(stderr, "[metal-gpu] scene target opened a frame (closed by > opened by):");
             for (const GpuWindow::Open& open : gpu_window_.opens) {
                 if (open.count != 0u) {
                     std::fprintf(stderr, " %s > %s%s %.2f;", open.closed, open.opened, open.cleared ? " (clear)" : "",
-                                 static_cast<double>(open.count) / 600.0);
+                                 static_cast<double>(open.count) / gpu_window_.recorded);
                 }
             }
             std::fprintf(stderr, "\n");
@@ -1046,7 +1045,8 @@ void RendererMtl::follow_window_and_resize() {
         }
         (void)configure_layer();
     }
-    if (display_refresh_checks_++ % 120u == 0u) {
+    // Twice a second on the clock, whatever the present rate.
+    if (display_refresh_.due()) {
         refresh_display_rate();
     }
 }
@@ -1153,7 +1153,7 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
         // A test snapshot also keeps the picture itself, before the post chain scales it.
         static_cast<void>(debug_copy_selected_display_to_readback(*source));
     }
-    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const auto aspect = galaxy::latched_display_aspect();
     const auto content_aspect = galaxy::presentation_content_aspect(
         aspect ? aspect->content_aspect : galaxy::kDesignContentAspect, source->prerecorded_movie);
     const int bb_w = static_cast<int>(layer_.width);
@@ -1200,7 +1200,7 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
     if (capture_backbuffer && !backbuffer_capture_path_.empty() && backbuffer_capture_pending_path_.empty()) {
         const std::uint32_t width = layer_.width;
         const std::uint32_t height = layer_.height;
-        capture_used_frame_ = frame_index_;
+        capture_used_step_ = idle_clock();
         if (!capture_target_ || capture_target_->width != width || capture_target_->height != height) {
             if (capture_target_) {
                 retire(std::move(capture_target_));

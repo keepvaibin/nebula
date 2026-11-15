@@ -14,9 +14,11 @@
 #pragma once
 
 #include "galaxy/content_viewport.h"
+#include "galaxy/platform_time.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/present_slots.h"
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/rt/rt_backend.h"
@@ -38,6 +40,8 @@
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/mod_post.h"
+#include "galaxy/render/idle_clock.h"
+#include "galaxy/render/dynamic_resolution.h"
 #include <nebula_frame_list.h>
 
 #include <array>
@@ -331,12 +335,20 @@ public:
     // The frame so far becomes picture `key`; the frame goes on in `fresh`, which starts empty. `released` is the
     // picture `key` had.
     [[nodiscard]] bool can_take_scene() const noexcept;
+    // The scene target's colour image may trade places with another of its size, for a pass that then writes all of it
+    // that is read (the frame, or dynamic resolution's rectangle): can_take_scene less the game's whole-frame need.
+    [[nodiscard]] bool can_trade_scene() const noexcept;
     bool take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureStore& textures, gpu::TextureRef& released);
     // The frame, and its depth, as pictures for the next target pass (a key of 0: not wanted); end_target_pass gives
     // them back, or close_frame_for_pass when the pass could not begin.
     void open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key, TextureStore& textures);
     void close_frame_for_pass(TextureStore& textures);
     [[nodiscard]] bool draw_frame_pass(const FramePassRequest& params, TextureStore& textures);
+    // A frame copy made before the list writes the frame: the frame is still the picture shown last (`shown`), as a
+    // console's frame buffer still holds it, never what the display copy left in the frame's target. Copied into the
+    // frame's target, or the output scene target's when it is the picture's size, for this copy; a picture that fits
+    // neither (a size or format changed since it was shown) leaves the frame as it is (draw_frame_pass).
+    [[nodiscard]] bool draw_shown_frame_pass(const FramePassRequest& params, const DisplayTexture& shown, TextureStore& textures);
     // `black`: the frame is presented black (the pass clears; the display picture is not drawn).
     bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
 
@@ -355,6 +367,10 @@ public:
     [[nodiscard]] bool target_picture(std::uint64_t key, TextureHandle& out) const;
     [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_scene();
+    // HDR output's 2D layer (RendererD3D12::begin_layer_2d): the HUD and menus in the scene's 10-bit format over the float
+    // scene, the pixels they drew written back into it at the end.
+    void begin_layer_2d();
+    void end_layer_2d();
     [[nodiscard]] bool output_scene_active() const noexcept { return output_scene_active_; }
     // Temporal upscaling (RendererD3D12's).
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
@@ -407,6 +423,14 @@ public:
 
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
+    // The bound scene target's allocated size: the render size while dynamic resolution draws the scene in a part of it
+    // (frame_map, the step's rectangle), else frame_map itself. Pictures for the game and target passes take this size.
+    [[nodiscard]] const FrameMap& frame_extent() const noexcept { return frame_extent_; }
+    // The 3D scene's pass opens (its clear, or walk_scene_begin): dynamic resolution decides this picture's rectangle
+    // (once a frame) and the main scene target is drawn in it from here to the end of the frame.
+    void begin_scene_rectangle();
+    // The rectangle the last scene was drawn in (the render size while dynamic resolution is off).
+    [[nodiscard]] const FrameMap& scene_rectangle() const noexcept { return scene_rectangle_; }
     // log2 of the scene target's samples per pixel (MSAA; the output scene target has one): the pipelines' sample count.
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
         return static_cast<std::uint8_t>(std::countr_zero(scene_.samples));
@@ -421,6 +445,13 @@ public:
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     // The display's vblanks (host_window::vblank_grid): the latest and the interval, on galaxy::qpc_now()'s clock.
     [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept;
+    // The moment the next present shows, on galaxy::qpc_now()'s clock (RenderCore's interpolation slot, a vblank); 0
+    // when it has none. With presentation times (VK_GOOGLE_display_timing) the picture is shown at that moment and a
+    // pipeline depth (PresentTiming).
+    void set_present_moment(std::int64_t qpc) noexcept { present_moment_ = qpc; }
+    // True once when the presentation times lower the depth by one picture fewer: the next slot is skipped
+    // (PresentSlots::take_skip).
+    [[nodiscard]] bool take_present_skip() noexcept { return present_timing_.slots.take_skip(); }
     [[nodiscard]] UploadRing& vertex_ring() noexcept { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() noexcept { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }
@@ -460,8 +491,13 @@ private:
         VkCommandBuffer uploads = VK_NULL_HANDLE;
         VkCommandBuffer upscale = VK_NULL_HANDLE;  // a generated frame's temporal upscale
         VkDescriptorPool descriptors = VK_NULL_HANDLE;
-        std::vector<VkDescriptorPool> overflow_descriptors;  // when a frame outgrows its pool
-        std::uint32_t overflow_sets = 0;  // sets of the last overflow pool made: a frame's first overflow pool has this many, each further one in the frame twice the last
+        // When a frame outgrows `descriptors`: the slot's further pools, kept and reset with it; a frame takes them in order
+        // and makes one (twice the last's sets) only when every one is full.
+        std::vector<VkDescriptorPool> overflow_descriptors;
+        std::uint32_t overflow_sets = 0;  // sets of the last overflow pool made
+        std::size_t overflow_used = 0;    // pools of overflow_descriptors this frame has taken
+        std::size_t overflow_peak = 0;    // the most taken by a frame since overflow_peak_step
+        std::uint64_t overflow_peak_step = 0;  // idle_clock() when pools past the peak were last trimmed
         VkSemaphore acquired = VK_NULL_HANDLE;
         std::uint64_t fence = 0;  // the submission that used this slot last
         std::vector<gpu::TextureRef> retired;  // kept until the slot's fence passes
@@ -574,13 +610,14 @@ private:
     bool fg_hudless_scene_ = false;       // this frame's scene was taken
     bool fg_hudless_taken_ = false;       // a picture's HUD-less copy is waiting
     std::uint32_t fg_hudless_slot_ = 0u;  // the picture it went with
-    std::uint64_t fg_hudless_used_frame_ = 0u;  // the last frame frame generation ran
-    std::uint64_t hdr_capture_used_frame_ = 0u;  // the last frame a capture drew the SDR picture
+    std::uint64_t fg_hudless_used_step_ = 0u;  // idle_clock() when frame generation ran
+    std::uint64_t hdr_capture_used_step_ = 0u;  // idle_clock() when a capture drew the SDR picture
     std::uint64_t motion_used_frame_ = 0u;      // the last frame a scene asked for the motion, reactive and layer targets
-    std::uint64_t output_scene_used_frame_ = 0u;  // the last frame an output scene set was asked for (alt_scene_)
-    std::uint64_t wide_scene_used_frame_ = 0u;    // the last frame a scene asked for the wide colour set (wide_scene_)
+    std::uint64_t motion_used_step_ = 0u;        // idle_clock() at that frame (the idle trim's stamp)
+    std::uint64_t output_scene_used_step_ = 0u;  // idle_clock() when an output scene set was asked for (alt_scene_)
+    std::uint64_t wide_scene_used_step_ = 0u;    // idle_clock() when a scene asked for the wide colour set (wide_scene_)
     // Once a frame, after the slot's retired images are freed: hands the frame generation and temporal targets back after
-    // 600 frames unused, behind the fence of the slot's frame.
+    // kIdleSteps game steps unused (idle_clock.h), behind the fence of the slot's frame.
     void trim_idle_effect_targets();
     bool streamline_frame_open_ = false;
     // FSR 3 frame generation: its pacing swap chain while it is chosen, and the swap chain calls in use.
@@ -594,7 +631,7 @@ private:
     void present_fg_hudless(const DisplayTexture& source, const galaxy::ContentViewport& content);
     [[nodiscard]] bool wants_vsync() const;
     // HDR10 output (E-17): the swap chain is made with a 10-bit ST 2084 format while the settings ask for HDR, the display is in
-    // HDR mode, the post chain can write the last pass for it (never on a pre-rotated surface or under frame generation); the
+    // HDR mode, the post chain can write the last pass for it (pre-rotated or not; never under frame generation); the
     // last write then encodes with hdr_output_'s levels. read_display_hdr publishes what the display offers (the settings page
     // shows its HDR rows from it) at the first frame, after a move to another monitor and when the post chain becomes ready.
     [[nodiscard]] bool wants_hdr() const;
@@ -610,6 +647,10 @@ private:
     gpu::TextureRef hdr_capture_;
 #if defined(_WIN32)
     OutputHdr hdr_reading_{};
+    // The game's last wish for Windows HDR on the window's display (os_hdr.h).
+    bool os_hdr_asked_ = false;
+    bool os_hdr_wanted_ = false;
+    HMONITOR os_hdr_monitor_ = nullptr;
 #endif
     void retire(gpu::TextureRef texture);
     [[nodiscard]] VkDescriptorSet allocate_persistent_set(VkDescriptorSetLayout layout);
@@ -688,6 +729,7 @@ private:
     VkPipelineLayout utility_layout_ = VK_NULL_HANDLE;      // utility set + 64 bytes of push constants
     VkRenderPass color_pass_ = VK_NULL_HANDLE;    // one target at the scene's format, ends shader-readable
     VkRenderPass rgba8_pass_ = VK_NULL_HANDLE;    // the same at RGBA8: a window-format picture
+    VkRenderPass color_pass_wide_ = VK_NULL_HANDLE;  // the same at RGBA16F: the frame shown with float_scene_
     VkRenderPass present_pass_ = VK_NULL_HANDLE;  // the swapchain image, cleared, ends presentable
     VkSampler linear_clamp_ = VK_NULL_HANDLE;
     VkDescriptorPool persistent_pool_ = VK_NULL_HANDLE;
@@ -695,7 +737,30 @@ private:
     std::uint32_t persistent_overflow_sets_ = 0;  // sets of the last overflow pool made (the next has twice as many)
 
     // The scene target.
-    FrameMap scene_map_{};  // the bound scene target's map (E-08)
+    FrameMap scene_map_{};  // the bound scene target's map (E-08): the part of it drawn in
+    FrameMap frame_extent_{};  // the bound scene target's allocated size (frame_extent)
+    FrameMap scene_extent_{};  // the size the main scene targets are made at (the render size)
+    // Dynamic resolution (dynamic_resolution.h): its rectangle is the main scene's scene_map_ from begin_scene_rectangle
+    // to the frame's end.
+    DynamicResolution dynamic_resolution_;
+    FrameMap scene_rectangle_{};
+    std::uint64_t rectangle_frame_ = ~std::uint64_t{0};  // the frame whose rectangle was decided last
+    // begin_frame: the frame starts with the main scene target whole.
+    void apply_dynamic_resolution();
+    // The smallest share of the render size (sixteenths) the running temporal upscaler takes; 8 without one.
+    [[nodiscard]] unsigned dynamic_resolution_floor() const;
+    // The bound target's drawn part, within its images (the viewport, scissor and render area of its passes).
+    [[nodiscard]] VkExtent2D scene_part() const noexcept {
+        return {std::min(scene_map_.width, scene_.color->width), std::min(scene_map_.height, scene_.color->height)};
+    }
+    // A depth picture for the game at the extent's size holding the whole frame (dynamic resolution's rectangle
+    // resampled, point sampled), for a frame pass over the frame; its colour is draw_frame_pass's.
+    bool publish_scene_depth_copy(std::uint64_t key, TextureStore& textures);
+    VkRenderPass depth_copy_pass_ = VK_NULL_HANDLE;  // one depth_copy_format_ target, ends shader-readable
+    VkPipeline depth_copy_pipeline_ = VK_NULL_HANDLE;
+    // R32 float where the device filters it linearly (a material may sample the picture so), else 16-bit float (linear
+    // filtering required of every device).
+    VkFormat depth_copy_format_ = VK_FORMAT_R32_SFLOAT;
     VkFormat depth_format_ = VK_FORMAT_UNDEFINED;
     // A scene target: its targets, their framebuffer and the conversion input reading its colour.
     struct SceneSet {
@@ -719,8 +784,16 @@ private:
     SceneSet scene_;
     // The wide scene's colour targets (begin_wide_scene).
     SceneSet wide_scene_;
+    // The wide set is the live scene target (begin_wide_scene to end_wide_scene; scene_.wide is the live set's format).
+    bool wide_live_ = false;
+    // HDR output: the scene target, the output set and the frame shown are RGBA16F (SceneSet::wide), and the post chain's
+    // pictures too (PostProcessorVk::set_wide), so the scene's light past white reaches the last write, which fits it
+    // into the display's range once. apply_window_size makes the sets again when it changes. The wide set and its camera
+    // are not used then: the scene is already wide, and HDR wants no shoulder before the last write.
+    bool float_scene_ = false;
     bool wide_base_sampled_ = false;
-    bool ensure_wide_set(SceneSet& set);
+    // A set over the live scene target's depth at its size and samples, in `format` (the wide set's, or the 2D layer's).
+    bool ensure_wide_set(SceneSet& set, VkFormat format = VK_FORMAT_R16G16B16A16_SFLOAT);
     void record_wide_begin(const SceneClearValues* initial_clear);
     void record_wide_end(unsigned finish = 0u);
     vk::SceneCameraVk scene_camera_;
@@ -732,8 +805,9 @@ private:
     // The output scene target (begin_output_scene) and its size; they trade places with scene_ and scene_target_scale_ while it is active.
     SceneSet alt_scene_;
     FrameMap alt_scene_map_{};
+    FrameMap alt_scene_extent_{};  // its allocated size (alt_scene_map_: the part drawn), traded with frame_extent_
     // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes
-    // ( its colour shared with its picture), dropped after kTargetIdleFrames frames unused. A picture is sampled
+    // ( its colour shared with its picture), dropped after kIdleSteps game steps (idle_clock.h) unused. A picture is sampled
     // through its own view slot (TextureStore::allocate_view) reading the pass's channels.
     struct TargetSlot {
         SceneSet set;
@@ -757,22 +831,19 @@ private:
     bool publish_picture(std::uint64_t key, std::uint32_t width, std::uint32_t height, gpu::TextureRef texture,
                          std::uint8_t channels, TextureStore& textures);
     bool publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures);
-    static constexpr std::uint64_t kTargetIdleFrames = 600u;  // frames at the game's 60 a second
-    // The same idle time at the rate frames are being presented (a 240 Hz picture counts four frames per game frame).
-    [[nodiscard]] std::uint64_t target_idle_frames() const noexcept {
-        const double rate = measured_present_hz_.load(std::memory_order_relaxed);
-        return kTargetIdleFrames * std::max<std::uint64_t>(1u, static_cast<std::uint64_t>(rate / kGameStepRate + 0.5));
-    }
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
+    static constexpr std::uint64_t kTargetSweepSteps = 60u;  // begin_frame's sweep: once a second of the game
+    std::uint64_t target_swept_step_ = 0u;                    // idle_clock() at the last sweep
     std::vector<VkDescriptorSet> target_free_sources_;  // dropped slots' colour inputs, free to reuse
     // A slot's targets go to the open frame's retired list; its colour input waits for the fence (retired_target_sources_).
     void retire_target_slot(TargetSlot& slot);
-    // Slots no pass has used for target_idle_frames() give their targets back; also from begin_frame, so that a scene without
+    // Slots no pass has used for kIdleSteps game steps give their targets back; also from begin_frame, so that a scene without
     // target passes does not keep the last scene's.
     void sweep_target_slots();
     std::uint64_t target_key_ = 0;
     SceneSet target_scene_;
     FrameMap target_scene_map_{};
+    FrameMap target_scene_extent_{};  // traded with frame_extent_ as target_scene_map_ with scene_map_
     bool target_pass_active_ = false;
     bool output_scene_active_ = false;
     // The scene target's colour, which the output scene's first draw sampled, waits in the sampling layout until
@@ -843,6 +914,7 @@ private:
     unsigned temporal_frame_ = 0u;
     unsigned temporal_kind_ = 0u;
     bool temporal_rr_ = false;  // DLSS made as Ray Reconstruction (the tracer running)
+    bool temporal_wide_ = false;  // made for the float scene (HDR output): colour past white
     unsigned temporal_quality_ = 0u;
     bool temporal_history_valid_ = false;
     bool scene_temporal_ = false;
@@ -892,9 +964,24 @@ private:
     // Pipelines the renderer owns.
     VkPipeline conversion_pipeline_ = VK_NULL_HANDLE;
     VkPipeline display_filter_pipeline_ = VK_NULL_HANDLE;   // 1:1 display copies without gamma
+    // The same into an RGBA16F picture (color_pass_wide_: the frame shown with float_scene_).
+    VkPipeline conversion_pipeline_wide_ = VK_NULL_HANDLE;
+    VkPipeline display_filter_pipeline_wide_ = VK_NULL_HANDLE;
     // Screen probes (ScreenProbeCs): set {t0 the scene's depth, t1 the pixels, u0 the values}, the count pushed.
     VkDescriptorSetLayout probe_set_layout_ = VK_NULL_HANDLE;
     VkPipelineLayout probe_layout_ = VK_NULL_HANDLE;
+    // HDR output's 2D layer (begin_layer_2d): its set while the float set is live and the float set while it is, the
+    // layer as it started (layer2d_base_, single-sample: what the merge compares with), and the merge's layout (t0 the
+    // layer as drawn, t1 its start) and pipelines into the float scene pass, by log2 samples.
+    SceneSet layer2d_set_;
+    gpu::TextureRef layer2d_base_;
+    VkDescriptorSetLayout layer2d_set_layout_ = VK_NULL_HANDLE;
+    VkPipelineLayout layer2d_layout_ = VK_NULL_HANDLE;
+    std::array<VkPipeline, 4> layer2d_merge_pipelines_{};
+    bool layer2d_live_ = false;
+    bool layer2d_failed_ = false;  // the merge could not be made: the 2D layer is drawn in the float scene
+    std::uint64_t layer2d_used_step_ = 0u;  // idle_clock() when a frame last drew a 2D layer
+    [[nodiscard]] VkPipeline layer2d_merge_pipeline(unsigned samples_log2);
     VkPipeline probe_pipeline_ = VK_NULL_HANDLE;
     // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
     // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise), and the output scene's
@@ -1017,19 +1104,23 @@ private:
     unsigned display_capture_width_ = 0;
     unsigned display_capture_height_ = 0;
     bool display_capture_ten_bit_ = false;
+    bool display_capture_wide_ = false;  // an RGBA16F picture (the float scene's), read as 10-bit words
     std::atomic<double> measured_present_hz_{0.0};
     double display_refresh_hz_ = 0.0;
     // The display varies its refresh with the presents (next_variable_refresh): display_refresh_hz_ is then the cap that keeps
     // it in its range, and presents are spaced at the cap.
     bool variable_refresh_ = false;
-    std::uint64_t display_refresh_checks_ = 0;
+    // The display's rate is read again twice a second on the clock, whatever the present rate (an unlimited one presents
+    // thousands a second).
+    galaxy::ClockInterval display_refresh_{500, true};
     std::int64_t measured_present_window_qpc_ = 0;
     std::int64_t swap_present_qpc_ = 0;   // every present's (last_present_qpc)
     // VK_KHR_present_id / present_wait: the id of each present on a FIFO swap chain (rising for the renderer's life), and the
-    // last one that went in on this swap chain (0: none yet, nothing to wait for); present_swapchain_image waits for it to show
-    // before queueing the next frame, 100 ms at most.
+    // last one and the one before it that went in on this swap chain (0: none, nothing to wait for); present_swapchain_image
+    // waits for one of them to show before queueing the next frame, 100 ms at most.
     std::uint64_t present_id_counter_ = 0;
     std::uint64_t last_present_id_ = 0;
+    std::uint64_t present_id_before_last_ = 0;
     unsigned present_wait_timeouts_ = 0u;
     std::uint64_t measured_present_count_ = 0;
 
@@ -1072,26 +1163,19 @@ private:
     std::uint64_t frame_pass_depth_key_ = 0u;
     std::uint64_t window_size_refused_ms_ = 0;
     PresentPacer present_pacer_;
-    // VK_GOOGLE_display_timing (Android), as Swappy paces: each frame gets the present slot after the previous
-    // frame's on the display's vsync grid (host_window::present_grid), two frame periods after the latest frame start at
-    // first (one of pipelining) and later only when the frame itself is late, and asks for half a vsync before it,
-    // so the compositor shows it at that vsync for exactly one frame period. The past presentation times report
-    // how many were ([present-timing], every 600 frames).
+    // VK_GOOGLE_display_timing (Android), as Swappy paces: each present asks for its slot (PresentSlots: the vsync
+    // a pipeline depth after its moment or frame start) half a vsync early, so the compositor shows it at that vsync.
+    // The past presentation times set the depth and report how the presents went ([present-timing], every ten seconds).
+    std::int64_t present_moment_ = 0;
     struct PresentTiming {
         std::uint32_t next_id = 0;
-        std::int64_t last_slot = 0;
         std::int64_t vsync_ns = 0;  // the display's vsync interval (Choreographer)
         std::array<std::uint32_t, 64> requested_id{};
         std::array<std::int64_t, 64> requested_period{};
         std::array<std::int64_t, 64> requested{};  // each presentID's slot, by presentID % 64
         std::array<std::int64_t, 64> called{};     // when each was presented (CLOCK_MONOTONIC)
-        // How long after its present a frame can first be shown: the GPU's work and the compositor's latch, as this
-        // device takes them. Learned from frames that missed their slot (their earliestPresentTime is when they could
-        // first be shown; a frame shown on time reports the slot it waited for), up a vsync at most per late frame and
-        // easing down a quarter vsync every 240 frames on time. A slot is asked for no sooner than this after the present.
-        std::int64_t lead_ns = 0;
-        std::int64_t lead_max = 0;  // the highest a late frame needed in the reporting window
-        unsigned on_time_run = 0;
+        PresentSlots slots;
+        galaxy::ClockInterval report{10'000};  // [present-timing] every ten seconds
         std::int64_t refresh_ns = 0;
         std::int64_t last_actual = 0;
         unsigned frames = 0;
@@ -1107,12 +1191,14 @@ private:
     };
     PresentTiming present_timing_;
     void report_present_timing();
-    // Every 600 frames ([vk-gpu]): the GPU's frame time (timestamps), and how often the scene target pass reopened (each
+    // Every ten seconds ([vk-gpu]): the GPU's frame time (timestamps), and how often the scene target pass reopened (each
     // reopening loads and stores the whole scene target on a tiled GPU) and the scene target was copied.
+    galaxy::ClockInterval cpu_report_{10'000};  // the report every ten seconds
     struct GpuWindow {
         double ms = 0.0;
         double max_ms = 0.0;
-        unsigned frames = 0;
+        unsigned frames = 0;     // pictures with GPU times read
+        unsigned recorded = 0;   // pictures recorded since the last report
         std::uint64_t passes = 0;
         std::uint64_t copies = 0;
         // Each scene target pass by what closed the one before it and what opened it: on a tiled GPU every opening

@@ -17,11 +17,13 @@
 #endif
 #endif
 #include "galaxy/benchmark.h"
+#include "galaxy/profiled_threads.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/crash_report.h"
 #include "galaxy/host_extension.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/platform_paths.h"
+#include "galaxy/precise_wait.h"
 #include "galaxy/perf_hint.h"
 
 #include "galaxy/render/present_clock.h"
@@ -35,11 +37,12 @@
 #include "galaxy/render/mtl/mtl_context.h"
 #endif
 
-#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/display_aspect.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/frame_timeline.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <algorithm>
 #include <array>
@@ -68,33 +71,35 @@
 
 namespace galaxy::render {
 
-SamplerKey make_sampler_key(const TextureSampler& mode, bool generated_mips, std::uint32_t mip_levels,
-                            float lod_shift, bool arbitrary, float mip_lines_log2, float scene_bias) noexcept {
+SamplerKey make_sampler_key(const TextureSampler& mode, std::uint32_t mip_levels, float lod_shift, bool arbitrary,
+                            float mip_lines_log2, float scene_bias, bool authored) noexcept {
     std::uint32_t min_filter = min_filter_code(mode);
     float min_lod = mode.min_lod, max_lod = mode.max_lod;
     const bool source_mips = (min_filter & 3u) != 0u;
-    bool full_chain = false;
-    if (generated_mips && mip_levels > 1u && min_filter == 4u && mode.mag_linear) {
-        min_filter = 6u;
-        max_lod = static_cast<float>(mip_levels - 1u);
-        full_chain = true;
-    }
-    float bias = mode.lod_bias + (source_mips || full_chain ? scene_bias : 0.0f);
-    if (arbitrary && source_mips) {
+    // Levels drawn by hand show the level the game showed: the frame's lines over the authored lines undo the finer
+    // levels a taller frame picks, and the scene's bias (an upscaler's) is for detail these levels do not hold.
+    const bool by_hand = source_mips && (arbitrary || authored);
+    float bias = mode.lod_bias + (source_mips && !by_hand ? scene_bias : 0.0f);
+    std::uint32_t authored_bit = 0u;
+    if (by_hand) {
         bias += mip_lines_log2 - lod_shift;
-        max_lod = static_cast<float>(mip_levels != 0u ? mip_levels - 1u : 0u);
-        min_filter = (min_filter & 4u) | 3u;
+        authored_bit = kSamplerAuthoredLevels;
+        if (arbitrary) {
+            // A replacement's levels go on past the game's range, filtered between levels.
+            max_lod = static_cast<float>(mip_levels != 0u ? mip_levels - 1u : 0u);
+            min_filter = (min_filter & 4u) | 3u;
+        }
     } else if (lod_shift != 0.0f) {
         if (source_mips) {
             min_lod = min_lod == 0.0f ? 0.0f : min_lod + lod_shift;
             max_lod += lod_shift;
-        } else if (!full_chain) {
+        } else {
             min_filter = min_filter >= 4u ? 6u : 1u;
             min_lod = 0.0f; max_lod = lod_shift;
         }
     }
     const std::uint32_t filter = static_cast<std::uint32_t>(mode.wrap_s)
-        | static_cast<std::uint32_t>(mode.wrap_t) << 2u | (mode.mag_linear ? 1u << 4u : 0u) | min_filter << 5u;
+        | static_cast<std::uint32_t>(mode.wrap_t) << 2u | (mode.mag_linear ? 1u << 4u : 0u) | min_filter << 5u | authored_bit;
     return {filter, min_lod, max_lod, bias};
 }
 
@@ -127,6 +132,11 @@ std::string present_snapshot_path(std::uint32_t kind) {
     static constexpr const char* kKinds[] = {"game", "repeat", "generated"};
     std::cerr << "[snapshot] " << path << " qpc=" << galaxy::qpc_now() << " kind=" << kKinds[kind % 3u] << '\n';
     return path;
+}
+
+// A generated-frame cap as the statistics print it.
+std::string generated_cap_text(unsigned cap) {
+    return cap == kUnboundedGeneratedFrames ? std::string("unlimited") : std::to_string(cap);
 }
 
 // The vblanks per present slot for a rate on a display of `refresh` hertz: a whole number, the rate kept above 60.
@@ -174,7 +184,7 @@ bool RenderCore::initialize(int w, int h) {
 
     boot_step("begins");
     // The scene at the window's picture: its exact size, square pixels.
-    const auto start_aspect = galaxy::experimental_effective_host_aspect();
+    const auto start_aspect = galaxy::latched_display_aspect();
     const galaxy::ContentViewport start_content =
         galaxy::fit_content_viewport(w, h, start_aspect ? start_aspect->content_aspect : galaxy::kDesignContentAspect);
     const FrameMap start_frame = start_content.width > 0 && start_content.height > 0
@@ -369,11 +379,10 @@ void RenderCore::reset_monotonic_cadence(
     accumulator.published_last_sample_ns.store(0, std::memory_order_relaxed);
 }
 
-// --diagnostics memory: every 600 presented frames, what the renderer holds, in MB.
+// --diagnostics memory: every ten seconds, what the renderer holds, in MB.
 void RenderCore::trace_memory() {
-    const bool enabled = ::galaxy::diagnosing(::galaxy::kDiagnoseMemory);
-    static std::uint64_t frames = 0u;
-    if (!enabled || ++frames % 600u != 0u) {
+    static galaxy::ClockInterval report{10'000};
+    if (!::galaxy::diagnosing(::galaxy::kDiagnoseMemory) || !report.due()) {
         return;
     }
     const auto mb = [](std::uint64_t bytes) { return static_cast<double>(bytes) / (1024.0 * 1024.0); };
@@ -564,6 +573,7 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
     chunk.pointer_response=producer_pointer_response_;
     chunk.list = std::exchange(producer_list_, nullptr);
     if (chunk.list != nullptr) {
+        galaxy::bench::note_frame_list(chunk.list->item_count);
         const auto hold = device_gate_.hold();
         chunk.device_epoch = device_gate_.epoch();
         // Registries first: a table taken here names textures whose work is taken too.
@@ -574,6 +584,8 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
     chunk.movie_frame=producer_movie_frame_;
     chunk.present_swap_chain = present_swap_chain;
     chunk.black = black;
+    chunk.present_asked_qpc = present_swap_chain ? galaxy::qpc_now() : 0;
+    chunk.step_moment_qpc = present_swap_chain ? step_moment_for(chunk.present_asked_qpc) : 0;
     const RenderTimingConfig& timing = get_frame_timing_config();
 
     const std::size_t queue_depth_limit = timing.render_queue_depth;
@@ -752,7 +764,10 @@ void RenderCore::start_interp_sequence() {
     }
     ++interp_sequence_serial_;
     ++interp_started_;
-    note_game_frame_cadence(now);
+    // The frame's arrival: when the game asked for its present (the arrival clock below says why).
+    const std::int64_t asked = std::exchange(interp_present_asked_qpc_, 0);
+    const std::int64_t seen = asked != 0 && asked <= now ? asked : now;
+    note_game_frame_cadence(seen);
     interp_sequence_.active = true;
     interp_sequence_.flush_requested = false;
     interp_sequence_.entry = interp_waiting_entry_;
@@ -771,25 +786,55 @@ void RenderCore::start_interp_sequence() {
     // t -> 1), where a lead would show the frame up to one slot early and
     // step the content unevenly around it. A clock left behind by a pause
     // restarts.
+    // An unlimited rate (render_config.h kUnlimitedFrameRate) has no slot clock: each picture is drawn as soon as
+    // the one before is and shows the moment it is drawn for (advance_interp_sequence).
+    interp_slot_unbounded_ = !on_vblanks && !std::isfinite(rate);
     interp_slot_period_qpc_ = on_vblanks ? vblanks_per_slot * vblank_period
-                                         : static_cast<std::int64_t>(static_cast<double>(frequency) / rate);
-    const bool locked = !on_vblanks && std::abs(rate / kGameStepRate - std::round(rate / kGameStepRate)) < 0.02;
-    // The arrival clock: the render thread sees a frame's present when it
-    // reaches the queue (a chunk in progress delays it by milliseconds), so
-    // arrivals are the game's frame cadence, smoothed: the prediction one or
-    // more frame periods on, pulled 1/8 toward the measured arrival, with the
-    // period tracking the game's rate. A miss by a third of a period or more
-    // (pause, hitch) restarts it at the measured time.
+        : interp_slot_unbounded_ ? 0
+                                 : std::max<std::int64_t>(1, static_cast<std::int64_t>(static_cast<double>(frequency) / rate));
+    const bool locked = !on_vblanks && !interp_slot_unbounded_ &&
+                        std::abs(rate / kGameStepRate - std::round(rate / kGameStepRate)) < 0.02;
+    // The arrival clock: a frame arrives when the game asks for its present (present_asked_qpc, stamped on the game's
+    // thread as it queues it), never when this thread takes it: a take waits for the picture in progress, and at
+    // Unlimited for the sequence before to reach t = 1, so take times would only ever look late and the smoothed
+    // period would climb to its clamp, the takes then holding the game back. Arrivals are the game's frame cadence,
+    // smoothed: the prediction one or more frame periods on, pulled 1/8 toward the measured arrival, with the period
+    // tracking the game's rate. A miss by a third of a period or more (pause, hitch) restarts it at the measured time.
     if (interp_frame_period_qpc_ == 0) {
         interp_frame_period_qpc_ = frequency / kGameStepsPerSecond;
     }
-    std::int64_t arrival = now;
-    if (interp_arrival_qpc_ != 0 && now > interp_arrival_qpc_) {
+    std::int64_t arrival = seen;
+    const std::int64_t moment = std::exchange(interp_step_moment_qpc_, 0);
+    if (moment > 0 && moment <= seen && seen - moment < interp_frame_period_qpc_) {
+        // A step clock's moment: the frame's own time, exact. Its pictures are shown a delay after it, the same for
+        // every frame, so the content's time runs on the wall clock's (t linear in the present's moment across frames,
+        // as the steps are). The delay covers the frames' usual lateness to this thread (the game's update and the
+        // list's making after the moment): the lateness's 97th percentile, tracked by a streaming estimate (up 0.97 of
+        // 0.1 ms after a later frame, down 0.03 of it after an earlier one), with a 0.2 ms guard. It moves by at most 2 %
+        // of a period a frame up and 1 % down, so the content's speed changes by that and no more. A rarer late frame
+        // holds its sequence at t = 1 until it comes and then shows its own moment: the content keeps to the wall clock
+        // across it, as a display holds a late frame and goes on, and adds no lasting delay.
+        const std::int64_t late = seen - moment;
+        const std::int64_t period = frequency / kGameStepsPerSecond;
+        const std::int64_t quantile_step = frequency / 10000;
+        interp_late_quantile_qpc_ = std::clamp<std::int64_t>(
+            interp_late_quantile_qpc_ + (late > interp_late_quantile_qpc_ ? quantile_step * 97 / 100 : -(quantile_step * 3 / 100)),
+            0, period / 2);
+        const std::int64_t wanted = std::min(interp_late_quantile_qpc_ + frequency / 5000, period / 2);
+        if (interp_delay_qpc_ < wanted) {
+            interp_delay_qpc_ = std::min(wanted, interp_delay_qpc_ + period / 50);
+        } else if (interp_delay_qpc_ > wanted) {
+            interp_delay_qpc_ = std::max(wanted, interp_delay_qpc_ - period / 100);
+        }
+        interp_delay_ms_max_ = std::max(interp_delay_ms_max_, static_cast<double>(interp_delay_qpc_) * 1000.0 /
+                                                                  static_cast<double>(frequency));
+        arrival = moment + interp_delay_qpc_;
+    } else if (interp_arrival_qpc_ != 0 && seen > interp_arrival_qpc_) {
         const std::int64_t periods = std::max<std::int64_t>(1,
-            (now - interp_arrival_qpc_ + interp_frame_period_qpc_ / 2) /
+            (seen - interp_arrival_qpc_ + interp_frame_period_qpc_ / 2) /
                 interp_frame_period_qpc_);
         const std::int64_t predicted = interp_arrival_qpc_ + periods * interp_frame_period_qpc_;
-        const std::int64_t error = now - predicted;
+        const std::int64_t error = seen - predicted;
         if (periods <= 4 && std::abs(error) < interp_frame_period_qpc_ / 3) {
             arrival = predicted + error / 8;
             interp_frame_period_qpc_ = std::clamp<std::int64_t>(
@@ -807,6 +852,8 @@ void RenderCore::start_interp_sequence() {
             ? interp_slot_due_qpc_ : now;
         interp_slot_due_qpc_ = vblank + std::llround(static_cast<double>(due - vblank) /
                                                      static_cast<double>(vblank_period)) * vblank_period;
+    } else if (interp_slot_unbounded_) {
+        interp_slot_due_qpc_ = now;
     } else if (locked || interp_slot_due_qpc_ == 0 ||
         now - interp_slot_due_qpc_ > interp_slot_period_qpc_ ||
         interp_slot_due_qpc_ - now > interp_slot_period_qpc_) {
@@ -833,6 +880,16 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
         return configured;
     }
     const unsigned allowed = std::min(configured, interp_cadence_cap_);
+    // A benchmark shows as many generated frames as the GPU makes (render_config.h apply_benchmark_presenting): no
+    // budget.
+    if (galaxy::bench::running()) {
+        if (allowed >= configured) {
+            return configured;
+        }
+        ++interp_gpu_capped_;
+        rate = kGameStepRate * static_cast<double>(allowed + 1u);
+        return allowed;
+    }
     const std::uint64_t serial = interp_sequence_serial_;
     if (serial - interp_gpu_checked_ >= 30u && galaxy::qpc_now() >= interp_gpu_warm_until_qpc_) {
         interp_gpu_checked_ = serial;
@@ -846,7 +903,7 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
             if (upscaled && fit < 1.0) {
                 renderer_.suspend_temporal_interpolation(generated_ms);
             }
-            const unsigned fits = fit < 1.0 ? 0u : static_cast<unsigned>(std::min(fit, 7.0));
+            const unsigned fits = fit < 1.0 ? 0u : static_cast<unsigned>(std::min(fit, static_cast<double>(configured)));
             if (fits < interp_gpu_cap_) {
                 interp_gpu_cap_ = fits;
                 interp_gpu_cap_serial_ = serial;
@@ -886,12 +943,12 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
 void RenderCore::restart_interp_governors() {
     const std::int64_t now = galaxy::qpc_now();
     const std::int64_t frequency = galaxy::qpc_frequency();
-    interp_gpu_cap_ = 7u;
+    interp_gpu_cap_ = kUnboundedGeneratedFrames;
     interp_gpu_cap_serial_ = interp_sequence_serial_;
     interp_gpu_checked_ = interp_sequence_serial_;
     interp_gpu_warm_until_qpc_ = now + frequency;  // one second of generated-frame times left out
     renderer_.reset_generated_gpu_ema();
-    interp_cadence_cap_ = 7u;
+    interp_cadence_cap_ = kUnboundedGeneratedFrames;
     interp_cadence_interval_s_ = 2u;
     interp_cadence_try_qpc_ = 0;
     interp_cadence_change_qpc_ = now;
@@ -919,6 +976,7 @@ void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
         interp_cadence_misses_ = 0u;
         interp_cadence_own_ = 0u;
         interp_cadence_wait_qpc_ = 0u;
+        interp_cadence_presented_seen_ = interp_presented_total_;
     };
     if (interp_cadence_last_qpc_ == 0 || now_qpc - interp_cadence_last_qpc_ > 4 * frequency) {
         // First frame, or a pause (menu, load): a new window.
@@ -942,7 +1000,13 @@ void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
     const std::uint32_t own = missed_in(interval - std::min(waited, generated_time));
     interp_cadence_misses_ += missed - own;
     interp_cadence_own_ += own;
-    const unsigned running = std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_});
+    unsigned running = std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_});
+    if (running == kUnboundedGeneratedFrames) {
+        // No bound (an unlimited rate): the generated frames a game frame showed in this window are the count running.
+        const std::uint64_t shown = (interp_presented_total_ - interp_cadence_presented_seen_) /
+                                    std::max<std::uint64_t>(interp_cadence_frames_, 1u);
+        running = static_cast<unsigned>(std::min<std::uint64_t>(shown, kUnboundedGeneratedFrames - 1u));
+    }
     const bool trying = interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ < 4 * frequency;
     const auto drop = [&](unsigned cap, const char* why) {
         if (trace) {
@@ -1071,8 +1135,12 @@ unsigned RenderCore::interp_step_down(unsigned generated) const {
     return 0u;
 }
 
-// The fewest generated frames above `generated` that present at a higher rate: all of them when none.
+// The fewest generated frames above `generated` that present at a higher rate: all of them when none. With no bound (an
+// unlimited rate) all of them: as many as the device makes (the GPU budget still bounds play, interp_gpu_governor).
 unsigned RenderCore::interp_step_up(unsigned generated) const {
+    if (interp_frames_ == kUnboundedGeneratedFrames) {
+        return interp_frames_;
+    }
     const double rate = interp_rate_with(std::min(generated, interp_frames_));
     for (unsigned k = generated + 1u; k < interp_frames_; ++k) {
         if (interp_rate_with(k) > rate + 0.5) {
@@ -1091,9 +1159,11 @@ void RenderCore::supersede_interp_sequence() {
     }
     interp_sequence_.active = false;
     ++interp_superseded_;
-    // What it writes, later frames read: its own time is walked, unseen.
-    walk_frame(*interp_sequence_.entry, core::WalkTime{}, false);
-    interp_shown_list_ = nullptr;
+    // What it writes, later frames read: its own time is walked, unseen. The temporal history goes on through it: its
+    // motion from the picture shown last, and the next sequence's (whose frame before is this one) from it.
+    ListEntry& entry = *interp_sequence_.entry;
+    walk_frame(entry, interp_walk_time(entry, 1.0f, false), false);
+    note_interp_walked(entry, 1.0f);
 }
 
 // t of the next slot in the playing sequence (see advance_interp_sequence).
@@ -1106,7 +1176,7 @@ double RenderCore::interp_slot_t() const {
 bool RenderCore::overlay_idle_presents() const noexcept {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     return (native_settings_overlay_visible() || home_menu_visible()) && !interp_sequence_.active &&
-           interp_slot_period_qpc_ > 0 && interp_slot_period_qpc_ * 61 < frequency;
+           (interp_slot_unbounded_ || (interp_slot_period_qpc_ > 0 && interp_slot_period_qpc_ * 61 < frequency));
 }
 
 std::int64_t RenderCore::interp_remaining_us() const {
@@ -1115,29 +1185,10 @@ std::int64_t RenderCore::interp_remaining_us() const {
     return (interp_slot_due_qpc_ - now) * 1'000'000 / frequency;
 }
 
-#if defined(_WIN32) && !defined(CREATE_WAITABLE_TIMER_HIGH_RESOLUTION)
-#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
-#endif
-
-// Render thread: a short wait to a present slot, finer than the scheduler tick.
-void RenderCore::interp_sleep_us(std::int64_t us) {
-#if defined(_WIN32)
-    struct Timer {
-        HANDLE handle = CreateWaitableTimerExW(
-            nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-        ~Timer() {
-            if (handle != nullptr) CloseHandle(handle);
-        }
-    };
-    static thread_local Timer timer;
-    LARGE_INTEGER due{};
-    due.QuadPart = -us * 10;  // relative, 100 ns units
-    if (timer.handle != nullptr && SetWaitableTimer(timer.handle, &due, 0, nullptr, nullptr, FALSE)) {
-        (void)WaitForSingleObject(timer.handle, 4u);
-        return;
-    }
-#endif
-    std::this_thread::sleep_for(std::chrono::microseconds(us));
+// Render thread: the last part of the wait to a present slot (at most about 2 ms, after the coarse wait), ended on the
+// slot's moment: a timer woken late would present the picture late for the moment it shows.
+void RenderCore::interp_wait_until(std::int64_t due_qpc) {
+    galaxy::PreciseWait::for_this_thread().until(due_qpc);
 }
 
 void RenderCore::advance_interp_sequence(bool flush) {
@@ -1151,11 +1202,14 @@ void RenderCore::advance_interp_sequence(bool flush) {
         if (!flush && now < interp_slot_due_qpc_) {
             return;
         }
-        const std::int64_t slot = interp_slot_due_qpc_;
+        // With no slot clock (an unlimited rate) the picture shows the moment it is drawn for.
+        const std::int64_t slot = interp_slot_unbounded_ ? now : interp_slot_due_qpc_;
         // A free-running slot due just before the arrival shows t = 0.
         const double t = std::max(0.0, static_cast<double>(slot - sequence.frame_qpc) * kGameStepRate /
                                            static_cast<double>(frequency) + sequence.lead);
-        if (!flush) {
+        if (!flush && interp_slot_unbounded_) {
+            interp_slot_due_qpc_ = now;
+        } else if (!flush) {
             interp_slot_due_qpc_ = slot + interp_slot_period_qpc_;
             // A stall skips the slots it missed instead of bunching them.
             if (now >= interp_slot_due_qpc_) {
@@ -1164,15 +1218,30 @@ void RenderCore::advance_interp_sequence(bool flush) {
                 interp_slot_due_qpc_ += missed * interp_slot_period_qpc_;
             }
         }
-        if (!flush && t < 1.0 - 1e-3 && sequence.next < 7u && sequence.generated != 0u) {
+        // Generated pictures until t reaches 1 (the frame itself) or the next game frame replaces the sequence: no
+        // count bounds them.
+        const auto content_moment = [&](double shown) {
+            if (sequence.entry != nullptr && sequence.entry->data.list != nullptr) {
+                galaxy::timeline::record_at(galaxy::timeline::Event::ContentTime, static_cast<std::uint64_t>(slot),
+                                            sequence.entry->data.list->game_frame,
+                                            static_cast<std::uint64_t>(std::llround(std::min(shown, 1.0) * 1e6)));
+            }
+        };
+        if (!flush && t < 1.0 - 1e-3 && sequence.generated != 0u) {
+            content_moment(t);
             const auto start = std::chrono::steady_clock::now();
             const std::int64_t generated_start = galaxy::qpc_now();
+            // The picture shows the slot's moment (a vblank where they are timed): presentation times show it there.
+            renderer_.set_present_moment(slot);
             const bool presented = render_generated_frame(static_cast<float>(t));
+            renderer_.set_present_moment(0);
+            skip_slot_for_depth();
             interp_generated_qpc_ += static_cast<std::uint64_t>(galaxy::qpc_now() - generated_start);
             interp_cpu_ms_ += std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - start).count();
             if (presented) {
                 ++interp_presented_;
+                ++interp_presented_total_;
                 note_present_vblank(slot);
             } else {
                 ++interp_failed_;
@@ -1183,13 +1252,25 @@ void RenderCore::advance_interp_sequence(bool flush) {
             return;
         }
         sequence.active = false;
+        if (!flush) content_moment(1.0);
         interp_presenting_real_ = true;
+        renderer_.set_present_moment(flush ? 0 : slot);
         render_generated_frame(1.0f);
+        renderer_.set_present_moment(0);
         note_present_vblank(slot);
         interp_presenting_real_ = false;
         ++interp_sequences_;
         report_interp_stats();
         return;
+    }
+}
+
+// The presentation times lower their depth by one picture fewer (PresentSlots::take_skip): the next slot is skipped,
+// so the picture after this one shows a vsync after it and a vsync sooner after its moment. Only within a sequence:
+// the next sequence starts its slots at the vblank nearest its frame (start_interp_sequence).
+void RenderCore::skip_slot_for_depth() {
+    if (renderer_.take_present_skip() && interp_slot_period_qpc_ > 0) {
+        interp_slot_due_qpc_ += interp_slot_period_qpc_;
     }
 }
 
@@ -1271,10 +1352,12 @@ void RenderCore::report_interp_stats() {
             << pairing_.teleports << '/' << pairing_.flips
             << " wall-ms-per-generated=" << (interp_presented_ != 0u ? interp_cpu_ms_ / presented : 0.0)
             << " gpu-ms-per-generated=" << (gpu_samples != 0u ? gpu_ms / static_cast<double>(gpu_samples) : 0.0)
-            << " gpu-generated-cap=" << interp_gpu_cap_
-            << " cadence-generated-cap=" << interp_cadence_cap_
+            << " gpu-generated-cap=" << generated_cap_text(interp_gpu_cap_)
+            << " cadence-generated-cap=" << generated_cap_text(interp_cadence_cap_)
             << " cadence-drops=" << std::exchange(interp_cadence_drops_, 0u)
             << " game-fps=" << interp_cadence_fps_
+            << " step-delay-ms(now/max)=" << static_cast<double>(interp_delay_qpc_) * 1000.0 / static_cast<double>(frequency)
+            << '/' << std::exchange(interp_delay_ms_max_, 0.0)
             << " capped-sequences=" << std::exchange(interp_gpu_capped_, 0u)
             << " generated-gpu-ema-ms=" << renderer_.generated_gpu_ema_ms()
             << " scene-gpu-ema-ms=" << renderer_.interpolation_gpu_cost_ms()
@@ -1288,6 +1371,19 @@ void RenderCore::report_interp_stats() {
             << renderer_.constant_ring().take_peak_bytes_per_frame() / 1024u << '/'
             << renderer_.matrix_ring().take_peak_bytes_per_frame() / 1024u
             << " measured-presents-hz=" << renderer_.measured_present_hz() << '\n';
+    if (coverage_lists_ != 0u) {
+        message << "[interp-coverage] lists=" << coverage_lists_ << " category:items/new/missed/ring-at-b/discrete";
+        for (std::size_t c = 0; c < coverage_.size(); ++c) {
+            const CoverageCount& count = coverage_[c];
+            if (count.new_items + count.ring_at_b + count.discrete == 0u) {
+                continue;
+            }
+            message << ' ' << (c >= NEBULA_CATEGORY_DRAW ? "draw" : "") << (c >= NEBULA_CATEGORY_DRAW ? c - NEBULA_CATEGORY_DRAW : c)
+                    << ':' << count.items << '/' << count.new_items << '/' << count.missed << '/' << count.ring_at_b << '/'
+                    << count.discrete;
+        }
+        message << '\n';
+    }
     std::cerr << message.str();
     interp_presented_ = 0u;
     interp_dropped_ = 0u;
@@ -1309,32 +1405,39 @@ void RenderCore::report_interp_stats() {
 }
 
 bool RenderCore::render_generated_frame(float t) {
-    InterpSequence& sequence = interp_sequence_;
-    ListEntry& entry = *sequence.entry;
+    ListEntry& entry = *interp_sequence_.entry;
+    walk_frame(entry, interp_walk_time(entry, t, true), true);
+    note_interp_walked(entry, t);
+    return true;
+}
+
+core::WalkTime RenderCore::interp_walk_time(const ListEntry& entry, float t, bool count) {
     core::WalkTime time;
     time.t = t;
     time.t_prev = t;
     time.generated = t < 1.0f;
-    // The frame shown before, on this pair's clock: motion to it is what the upscaler and the motion targets see. Anything
-    // else (a frame presented alone, a cut, skipped lists) starts the upscaler's history again.
+    // The picture walked before, on this pair's clock: motion to it is what the upscaler and the motion targets see.
+    // Anything else (a frame presented alone, a cut, skipped lists) starts the upscaler's history again.
     const bool cut = (entry.data.list->flags & NEBULA_FRAME_CAMERA_CUT) != 0u;
-    const bool shown_before = interp_shown_list_ != nullptr && interp_shown_list_ == entry.before && !cut;
-    if (interp_shown_serial_ == interp_sequence_serial_ && interp_shown_t_ < t) {
+    const bool walked_before = interp_shown_list_ != nullptr && interp_shown_list_ == entry.before && !cut;
+    if (interp_shown_list_ == &entry && interp_shown_serial_ == interp_sequence_serial_ && interp_shown_t_ < t) {
         time.t_prev = interp_shown_t_;
-    } else if (interp_shown_t_ >= 1.0f && shown_before) {
+    } else if (interp_shown_t_ >= 1.0f && walked_before) {
         time.t_prev = 0.0f;
-    } else if (shown_before && interp_shown_serial_ + 1u == interp_sequence_serial_) {
+    } else if (walked_before && interp_shown_serial_ + 1u == interp_sequence_serial_) {
         time.t_prev = interp_shown_t_ - 1.0f;
-        ++interp_history_carried_;
+        interp_history_carried_ += count ? 1u : 0u;
     } else {
         time.reset = true;
-        ++interp_history_resets_;
+        interp_history_resets_ += count ? 1u : 0u;
     }
-    walk_frame(entry, time, true);
+    return time;
+}
+
+void RenderCore::note_interp_walked(const ListEntry& entry, float t) noexcept {
     interp_shown_serial_ = interp_sequence_serial_;
     interp_shown_t_ = t;
     interp_shown_list_ = &entry;
-    return true;
 }
 
 bool RenderCore::skip_for_present_rate() {
@@ -1373,16 +1476,21 @@ void RenderCore::present_cached_display(
         if (stop_render_thread_) {
             return;
         }
+        const std::int64_t asked = galaxy::qpc_now();
         if (!frame_queue_.empty()) {
             FrameChunk& back = frame_queue_.back();
             if (back.present_only) {
                 back.black = black;
+                back.present_asked_qpc = asked;
+                back.step_moment_qpc = step_moment_for(asked);
                 queue_cv_.notify_one();
                 return;
             }
             if (!back.present_only && !back.present_swap_chain) {
                 back.present_swap_chain = true;
                 back.black = black;
+                back.present_asked_qpc = asked;
+                back.step_moment_qpc = step_moment_for(asked);
                 queue_cv_.notify_one();
                 return;
             }
@@ -1391,6 +1499,8 @@ void RenderCore::present_cached_display(
         chunk.present_only = true;
         chunk.present_swap_chain = true;
         chunk.black = black;
+        chunk.present_asked_qpc = asked;
+        chunk.step_moment_qpc = step_moment_for(asked);
         frame_queue_.push_back(std::move(chunk));
     }
     queue_cv_.notify_one();
@@ -1400,6 +1510,7 @@ void RenderCore::present_cached_display(
 // frames are drained before a stop so the last presents land.
 void RenderCore::render_thread_main() {
     galaxy::host::name_current_thread(L"Nebula Render");
+    galaxy::profiled_threads::add_current("render");
     galaxy::host::perf_hint_add_current_thread();
 #if defined(_WIN32)
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
@@ -1638,9 +1749,9 @@ void RenderCore::render_loop() {
             const bool poll_probes = !probe_flights_.empty();
             // Draining for a stop, out of sight or behind another window: queued frames present without generated frames.
             interp_stopping_ = stop_render_thread_ || hidden || background;
-            // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D scene;
-            // interpolation waits while the settings are open): the latest frame again at each display slot, so the
-            // overlay keeps the rate play had instead of the game's 60 Hz frame rate.
+            // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D
+            // scene): the latest frame again at each display slot, so the overlay keeps the rate play had instead of the
+            // game's 60 Hz frame rate.
             overlay_idle = !hidden && !background && !stop_render_thread_ && overlay_idle_presents();
             if (!overlay_idle) {
                 overlay_idle_due_qpc_ = 0;
@@ -1657,8 +1768,9 @@ void RenderCore::render_loop() {
                         return stop_render_thread_ || !frame_queue_.empty() || pictures_finish_asked_.load(std::memory_order_relaxed);
                     });
                 } else if (remaining_us > 0) {
+                    const std::int64_t due = interp_slot_due_qpc_;
                     lock.unlock();
-                    interp_sleep_us(remaining_us);
+                    interp_wait_until(due);
                     lock.lock();
                 }
             } else if (overlay_idle && frame_queue_.empty()) {
@@ -1669,8 +1781,9 @@ void RenderCore::render_loop() {
                         return stop_render_thread_ || !frame_queue_.empty() || pictures_finish_asked_.load(std::memory_order_relaxed);
                     });
                 } else if (remaining_us > 0) {
+                    const std::int64_t due = overlay_idle_due_qpc_;
                     lock.unlock();
-                    interp_sleep_us(remaining_us);
+                    interp_wait_until(due);
                     lock.lock();
                 }
             } else if (idle_present || poll_probes) {
@@ -1733,6 +1846,8 @@ void RenderCore::render_loop() {
                     frame_queue_.pop_front();
                     chunk.present_swap_chain = present.present_swap_chain;
                     chunk.black = present.black;
+                    chunk.present_asked_qpc = present.present_asked_qpc;
+                    chunk.step_moment_qpc = present.step_moment_qpc;
                 }
                 if (chunk.present_only) {
                     ++present_chunks_in_flight_;
@@ -1759,6 +1874,8 @@ void RenderCore::render_loop() {
                     } else if (interp_list_waiting_) {
                         supersede_interp_sequence();
                         interp_list_waiting_ = false;
+                        interp_present_asked_qpc_ = chunk.present_asked_qpc;
+                        interp_step_moment_qpc_ = chunk.step_moment_qpc;
                         start_interp_sequence();
                         advance_interp_sequence(false);
                     } else if (!interp_sequence_.active) {
@@ -1779,7 +1896,12 @@ void RenderCore::render_loop() {
                 // A due slot presents again the picture last presented (never a newer one between the game's own
                 // presents) unless a present of the game's own landed in it.
                 const std::int64_t now = galaxy::qpc_now();
-                if (now >= overlay_idle_due_qpc_) {
+                if (interp_slot_unbounded_) {
+                    // No slot clock (an unlimited rate): again as soon as the last present is done.
+                    present_cached_display_on_thread(false, false, false,
+                                                     last_presented_slot_.load(std::memory_order_relaxed));
+                    overlay_idle_due_qpc_ = now;
+                } else if (now >= overlay_idle_due_qpc_) {
                     if (renderer_.last_present_qpc() < overlay_idle_due_qpc_ - interp_slot_period_qpc_) {
                         present_cached_display_on_thread(false, false, false,
                                                      last_presented_slot_.load(std::memory_order_relaxed));
@@ -2065,15 +2187,17 @@ void RenderCore::enforce_video_memory() {
         budget = asked;
     }
     texture_store_.enforce_budget(usage, budget);
-    if (frame_index_ >= vram_log_at_) {
-        vram_log_at_ = frame_index_ + 60u;
+    // Looked at once a second and reported once an hour (game frames), or when the budget or what it left out changes.
+    const std::uint64_t game_frame = list_serial_;
+    if (game_frame >= vram_log_at_) {
+        vram_log_at_ = game_frame + 60u;
         const TextureStore::BudgetStats stats = texture_store_.budget_stats();
         const std::uint64_t budget_mb = budget >> 20u;
         const std::uint64_t left_out_mb = stats.reduced_bytes >> 20u;
-        if (budget_mb != vram_logged_budget_mb_ || left_out_mb != vram_logged_left_out_mb_ || frame_index_ >= vram_report_at_) {
+        if (budget_mb != vram_logged_budget_mb_ || left_out_mb != vram_logged_left_out_mb_ || game_frame >= vram_report_at_) {
             vram_logged_budget_mb_ = budget_mb;
             vram_logged_left_out_mb_ = left_out_mb;
-            vram_report_at_ = frame_index_ + 216000u;
+            vram_report_at_ = game_frame + 216000u;
             std::fprintf(stderr, "[vram] budget %llu MB used %llu MB evicted %llu MB (%u textures reduced of %u)\n",
                          static_cast<unsigned long long>(budget_mb), static_cast<unsigned long long>(usage >> 20u),
                          static_cast<unsigned long long>(left_out_mb), stats.reduced, stats.resident);
@@ -2147,6 +2271,11 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         constant_bytes += 1024u + std::size_t{list.item_count} * 256u;  // the tracer's passes' constants (a skinned draw's)
     }
     renderer_.constant_ring().require_frame_bytes(constant_bytes);
+    // A ring gives memory back only on a frame without the 3D scene (a load's, a fade's): making it again there shows nothing.
+    const bool shrink_moment = (list.flags & NEBULA_FRAME_HAS_SCENE) == 0u;
+    for (UploadRing* ring : {&renderer_.matrix_ring(), &renderer_.vertex_ring(), &renderer_.index_ring(), &renderer_.constant_ring()}) {
+        ring->set_shrink_moment(shrink_moment);
+    }
     renderer_.begin_frame();
     picture_made_in_chunk_ = false;
     // Whether the renderer's bloom is built (NEBULA_OPTION_BLOOM): without it, no bloom.
@@ -2214,7 +2343,9 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     // What the services queued before this list: its ids exist when it walks, and the lists before it have walked.
     if (entry.ops_waiting) {
         entry.ops_waiting = false;
+        galaxy::timeline::record(galaxy::timeline::Event::ListOpsBegin, entry.data.serial, 0u);
         g_drawn_game_frame = entry.data.list->game_frame;
+        advance_idle_clock(entry.data.serial);
         if (rt_backend_.started()) {
             for (const auto& [id, mesh] : entry.registry_ops.meshes) {
                 rt_want(id, mesh);
@@ -2251,13 +2382,12 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             }
         }
         // Tables no walk has named for a long while give up what was built for them (core::Registries::retire_idle_tables).
-        if (frame_index_ >= table_sweep_at_) {
-            // The idle time and the sweep interval are counted in frames at 60 a second; each game frame shown in 1 + interp_frames_
-            // of them makes the same time that many frames more.
-            const std::uint64_t per_game_frame = 1u + interp_frames_;
-            table_sweep_at_ = frame_index_ + core::Registries::kTableSweepFrames * per_game_frame;
+        // The idle time and the sweep interval are game frames (this list's serial), whatever the rate shows them at.
+        const std::uint64_t game_frame = entry.data.serial;
+        if (game_frame >= table_sweep_at_) {
+            table_sweep_at_ = game_frame + core::Registries::kTableSweepFrames;
             retired_tables_.clear();
-            registries_.retire_idle_tables(frame_index_, retired_tables_, core::Registries::kTableIdleFrames * per_game_frame);
+            registries_.retire_idle_tables(game_frame, retired_tables_, core::Registries::kTableIdleFrames);
 #if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
             if (!renderer_.bindless()) {
                 for (const gpu::Table table : retired_tables_) {
@@ -2266,9 +2396,9 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             }
 #endif
         }
-        // --diagnostics memory: every 600 frames, the texture tables and where the video memory is.
-        if (frame_index_ >= table_log_at_ && ::galaxy::diagnosing(::galaxy::kDiagnoseMemory)) {
-            table_log_at_ = frame_index_ + 600u;
+        // --diagnostics memory: every 600 game frames, the texture tables and where the video memory is.
+        if (game_frame >= table_log_at_ && ::galaxy::diagnosing(::galaxy::kDiagnoseMemory)) {
+            table_log_at_ = game_frame + 600u;
             const core::Registries::TableCounts tables = registries_.table_counts();
             std::fprintf(stderr, "[render] texture tables: %u live, %u retired (%llu released since the start)\n", tables.live,
                          tables.retired, static_cast<unsigned long long>(tables.retirements));
@@ -2315,6 +2445,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             renderer_.log_video_memory(outside);
 #endif
         }
+        galaxy::timeline::record(galaxy::timeline::Event::ListOpsEnd, entry.data.serial, 0u);
     }
     registries_.reclaim(renderer_.completed_fence_value());
     if (rt_backend_.started()) {
@@ -2324,7 +2455,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     texture_store_.apply_texture_packs();
     // The movie frame this walk draws, as the movie quad's planes.
     if (render_movie_frame_.frame != MovieFrameMark::kNone || texture_store_.movie_override_active()) {
-        if (++movie_stats_tick_ % 240u == 0u) {
+        if (movie_stats_report_.due()) {
             const MoviePlayback::Stats stats = movie_playback_.stats();
             if (stats.decoded != 0u) {
                 std::fprintf(stderr, "[movie] decoded=%llu shown=%llu late=%llu seeks=%llu convert-ms=%.2f/frame\n",
@@ -2366,17 +2497,16 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
             std::vector<unsigned> variants{samples, 8u};
             if (samples != 0u) variants.push_back(0u);
             if (wide) variants.push_back(samples | kSceneVariantHdr);
-            std::vector<std::uint32_t> order;
+            std::vector<core::Pipelines::Prepared> entries;
+            entries.reserve(count - pipelines_queued_.load(std::memory_order_relaxed));
             for (std::uint32_t id = pipelines_queued_.load(std::memory_order_relaxed); id < count; ++id) {
-                order.push_back(id);
-            }
-            for (const std::uint32_t id : order) {
                 const core::PipelineEntry& pipeline = registries_.pipeline(id);
                 if (pipeline.lit_form && !pixel_lit_) {
                     continue;
                 }
-                pipelines_.prepare(id, pipeline, variants, motion, layer, one_pass, rt_backend_.started());
+                entries.push_back({id, std::make_shared<const core::PipelineEntry>(pipeline)});
             }
+            pipelines_.prepare(entries, variants, motion, layer, one_pass, rt_backend_.started());
             pipelines_queued_.store(count, std::memory_order_relaxed);
         }
     }
@@ -2389,7 +2519,9 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     render_movie_content_ = entry.prerecorded_movie;
     render_movie_frame_ = entry.movie_frame;
     begin_walk_frame(entry);
+    galaxy::timeline::record(galaxy::timeline::Event::WalkBegin, entry.data.serial, time.generated ? 1u : 0u);
     walk_list(entry.data, entry.before != nullptr ? &entry.before->data : nullptr, time);
+    galaxy::timeline::record(galaxy::timeline::Event::WalkEnd, entry.data.serial, 0u);
     const bool real = time.t >= 1.0f;
     const DisplayTexture* selected = present ? display_pictures_.latest() : nullptr;
     const std::string snapshot_path = selected != nullptr ? present_snapshot_path(real ? NEBULA_EXT_PICTURE_GAME : NEBULA_EXT_PICTURE_GENERATED) : std::string{};
@@ -2415,6 +2547,10 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     if (selected != nullptr && real) {
         note_picture_shown(*selected);
         last_presented_slot_.store(selected->slot, std::memory_order_relaxed);
+    } else if (selected != nullptr) {
+        // A picture drawn between the game's frames is a frame shown too: the benchmark measures every one.
+        galaxy::bench::note_new_picture(static_cast<std::uint64_t>(std::max<std::int64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(), 0)));
     }
     // Nonblocking: a later frame writes a finished present snapshot.
     renderer_.debug_log_backbuffer_readback();
@@ -2431,8 +2567,9 @@ void RenderCore::flush_waiting_list() {
     }
     interp_list_waiting_ = false;
     supersede_interp_sequence();
-    walk_frame(*interp_waiting_entry_, core::WalkTime{}, false);
-    interp_shown_list_ = nullptr;
+    ListEntry& entry = *interp_waiting_entry_;
+    walk_frame(entry, interp_walk_time(entry, 1.0f, false), false);
+    note_interp_walked(entry, 1.0f);
 }
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
@@ -2452,6 +2589,11 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         if (frames != interp_frames_) {
             interp_frames_ = frames;
             restart_interp_governors();
+            if (frames == 0u) {
+                // No slot clock left for the overlay's idle presents (overlay_idle_presents): the game's own rate.
+                interp_slot_period_qpc_ = 0;
+                interp_slot_unbounded_ = false;
+            }
         }
         if (!interp_on_) {
             interp_shown_list_ = nullptr;
@@ -2466,7 +2608,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             shows = list.passes[p - 1u].kind == NEBULA_PASS_SHOW;
         }
     }
-    if (interp_on_ && shows && !interp_stopping_ && !native_settings_overlay_visible()) {
+    if (interp_on_ && shows && !interp_stopping_) {
         // It walks on the display's clock, after the frames between it and the list before.
         flush_waiting_list();
         interp_list_waiting_ = true;
@@ -2477,6 +2619,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 present_black_picture(false);
             } else {
                 interp_start_pending_ = true;
+                interp_present_asked_qpc_ = chunk.present_asked_qpc;
+                interp_step_moment_qpc_ = chunk.step_moment_qpc;
             }
         }
         return;
@@ -2491,7 +2635,9 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     render_movie_frame_ = entry.movie_frame;
     begin_walk_frame(entry);
     const std::int64_t walk_began = calibration_.stage != 0u ? galaxy::qpc_now() : 0;
+    galaxy::timeline::record(galaxy::timeline::Event::WalkBegin, entry.data.serial, 0u);
     walk_list(entry.data, entry.before != nullptr ? &entry.before->data : nullptr, core::WalkTime{});
+    galaxy::timeline::record(galaxy::timeline::Event::WalkEnd, entry.data.serial, 0u);
     if (calibration_.stage != 0u) [[unlikely]] {
         calibrate_first_start((list.flags & NEBULA_FRAME_HAS_SCENE) != 0u,
                               static_cast<double>(galaxy::qpc_now() - walk_began) * 1000.0 / static_cast<double>(galaxy::qpc_frequency()));

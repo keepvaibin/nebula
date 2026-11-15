@@ -46,7 +46,7 @@ An entry that happened more than once shows its count, such as "×12". The log k
 
 Every entry is also written in English to the game's log, with everything else the game reports. Your mod's `log` lines go there too, as `[mod MOD-ID] TEXT`.
 
-On Windows, a start from the launcher writes the log to `logs\latest.log` in Nebula's settings folder. The previous start's log is `logs\previous.log`. A start from a terminal prints the log there instead.
+On Windows, Nebula started from the Start menu writes the log to `logs\latest.log` in Nebula's settings folder. The previous start's log is `logs\previous.log`. Nebula started from a terminal prints the log there instead.
 
 In a test run, the game's log is `run.log` in the run's folder. For more information, see [Testing a mod](testing-a-mod.md).
 

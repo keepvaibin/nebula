@@ -241,7 +241,7 @@ def read_test(folder, types=None):
     t = load_json(folder / "test.json")
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
-                       "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh"})
+                       "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh", "window"})
     for key in ("harness", "name", "about", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -340,6 +340,14 @@ def read_test(folder, types=None):
         if language not in LANGUAGES:
             raise HarnessError("language %s is not one of %s" % (language, ", ".join(LANGUAGES)))
     seed = whole(t, "seed", "", 0) if "seed" in t else 0
+    # The window's size in pixels (the picture's shape: 48:9 is [1920, 360]).
+    window = [1280, 720]
+    if "window" in t:
+        value = t["window"]
+        if (not isinstance(value, list) or len(value) != 2 or
+                not all(isinstance(v, int) and not isinstance(v, bool) and 64 <= v <= 16384 for v in value)):
+            raise HarnessError("window must be [width, height], whole numbers from 64 to 16384")
+        window = value
     renderers = ["d3d12"]
     if "renderers" in t:
         if not isinstance(t["renderers"], list) or not t["renderers"]:
@@ -387,7 +395,7 @@ def read_test(folder, types=None):
     if ends == "crash" and not any(c["kind"] == "log" and c["pattern"].startswith("crash: ") for c in expect):
         raise HarnessError("a test that ends in a crash expects its crash line: a log expectation starting \"crash: \"")
     return {"folder": folder, "raw": t, "name": t["name"], "proves": proves, "bare": bare, "mods": mods,
-            "language": language, "seed": seed, "renderers": renderers, "limit": limit,
+            "language": language, "seed": seed, "renderers": renderers, "limit": limit, "window": window,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
             "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
             "starts": starts, "fresh": fresh, "not_here": not_here}
@@ -1350,7 +1358,7 @@ def place_mods(test, settings, previous, frozen, ports=None):
 
 def write_run_settings(test, settings):
     """The run's settings file: the window's size and the test's language (tools/verify/settings_args.py)."""
-    assignments = ["GALAXY_WINDOW_WIDTH=1280", "GALAXY_WINDOW_HEIGHT=720"]
+    assignments = ["GALAXY_WINDOW_WIDTH=%d" % test["window"][0], "GALAXY_WINDOW_HEIGHT=%d" % test["window"][1]]
     if test["language"] is not None:
         assignments.append("GALAXY_LANGUAGE=%s" % LANGUAGES[test["language"]])
     if GPU is not None:

@@ -10,10 +10,13 @@
 // BlurCS: axis 0, up to three Gaussians (widths c_sigma.xyz in texels) of t0 into u0..u2; axis 1, the Gaussians of
 // t0..t2 summed, times c_params.x, clamped to 1 when c_params.y is 1, into u0.
 // CompositeVS/CompositePS: the kept scene plus the bloom (bilinear from its levels) over the game's frame.
+//
+// The images may be larger than the part a pass works in (dynamic resolution makes them once for every step): c_size is
+// that part, UVs are of the image's own size, and no sample leaves the part (its edge is the clamp's edge).
 
 cbuffer BloomConstants : register(b0) {
     uint4 c_size;     // the output's texels (x, y); Down: the box (z); Box, Blur: the Gaussians (z), the axis (w)
-    float4 c_sigma;   // Blur: the Gaussians' widths along the axis (texels)
+    float4 c_sigma;   // Blur: the Gaussians' widths along the axis (texels); Composite: the levels' last texel centres (UV)
     float4 c_params;  // per pass (above); Composite: intensity, strength, kind (0 scene, 1 normal, 2 simple)
     float4 c_uv;      // Down: the source region (texels: x, y); Composite: frame pixel to level-1 UV (x, y), level-2 (z, w)
 };
@@ -137,7 +140,9 @@ void BoxCS(uint3 id : SV_DispatchThreadID) {
 // The weights are w(i) = exp(k i^2). Each is the one before times exp(k (2 i + 1)), and that factor is the one before
 // it times exp(2 k): two exponentials for the whole kernel and two products a texel, where an exponential a texel was
 // most of the chain's work (at 3360 by 2100 its kernels take 55 million taps a frame).
-float3 gaussian(Texture2D<float4> source, float2 uv, float2 step, float sigma) {
+// Every tap is held between `lo` and `hi` (UV of the part's first and last texel centres): a pair of texels across the
+// part's edge reads its edge texel, as the clamp sampler does at the image's own edge.
+float3 gaussian(Texture2D<float4> source, float2 uv, float2 step, float sigma, float2 lo, float2 hi) {
     const int radius = int(ceil(3.0f * sigma));
     const float k = -0.5f / max(sigma * sigma, 1e-4f);
     const float grow = exp(2.0f * k);
@@ -151,8 +156,8 @@ float3 gaussian(Texture2D<float4> source, float2 uv, float2 step, float sigma) {
         const float w1 = i + 1 <= radius ? next : 0.0f;
         const float w = w0 + w1;
         const float offset = float(i) + w1 / w;
-        sum += (source.SampleLevel(s_linear, uv + step * offset, 0.0f).rgb +
-                source.SampleLevel(s_linear, uv - step * offset, 0.0f).rgb) * w;
+        sum += (source.SampleLevel(s_linear, clamp(uv + step * offset, lo, hi), 0.0f).rgb +
+                source.SampleLevel(s_linear, clamp(uv - step * offset, lo, hi), 0.0f).rgb) * w;
         weights += 2.0f * w;
         ratio *= grow;
         weight = next * ratio;  // w(i + 2)
@@ -166,27 +171,32 @@ void BlurCS(uint3 id : SV_DispatchThreadID) {
     if (any(id.xy >= c_size.xy)) {
         return;
     }
-    const float2 texel = 1.0f / float2(c_size.xy);
+    // The level's images are one size (t0..t2 and u0..u2); the part worked in is c_size.
+    uint width, height;
+    t_source.GetDimensions(width, height);
+    const float2 texel = 1.0f / float2(width, height);
     const float2 uv = (float2(id.xy) + 0.5f) * texel;
+    const float2 lo = 0.5f * texel;
+    const float2 hi = (float2(c_size.xy) - 0.5f) * texel;
     const uint count = c_size.z;
     if (c_size.w == 0u) {
         const float2 step = float2(texel.x, 0.0f);
-        u_first[id.xy] = float4(gaussian(t_source, uv, step, c_sigma.x), 1.0f);
+        u_first[id.xy] = float4(gaussian(t_source, uv, step, c_sigma.x, lo, hi), 1.0f);
         if (count > 1u) {
-            u_second[id.xy] = float4(gaussian(t_source, uv, step, c_sigma.y), 1.0f);
+            u_second[id.xy] = float4(gaussian(t_source, uv, step, c_sigma.y, lo, hi), 1.0f);
         }
         if (count > 2u) {
-            u_third[id.xy] = float4(gaussian(t_source, uv, step, c_sigma.z), 1.0f);
+            u_third[id.xy] = float4(gaussian(t_source, uv, step, c_sigma.z, lo, hi), 1.0f);
         }
         return;
     }
     const float2 step = float2(0.0f, texel.y);
-    float3 sum = gaussian(t_source, uv, step, c_sigma.x);
+    float3 sum = gaussian(t_source, uv, step, c_sigma.x, lo, hi);
     if (count > 1u) {
-        sum += gaussian(t_second, uv, step, c_sigma.y);
+        sum += gaussian(t_second, uv, step, c_sigma.y, lo, hi);
     }
     if (count > 2u) {
-        sum += gaussian(t_third, uv, step, c_sigma.z);
+        sum += gaussian(t_third, uv, step, c_sigma.z, lo, hi);
     }
     sum *= c_params.x;
     u_first[id.xy] = float4(c_params.y != 0.0f ? saturate(sum) : sum, 1.0f);
@@ -204,11 +214,12 @@ float4 CompositePS(float4 position : SV_Position) : SV_Target0 {
     const float3 scene = kept.rgb;
     float3 bloom = 0.0f;
     if (c_params.z == 1.0f) {
-        const float3 first = t_second.SampleLevel(s_linear, position.xy * c_uv.xy, 0.0f).rgb;
-        const float3 second = t_third.SampleLevel(s_linear, position.xy * c_uv.zw, 0.0f).rgb;
+        const float3 first = t_second.SampleLevel(s_linear, min(position.xy * c_uv.xy, c_sigma.xy), 0.0f).rgb;
+        const float3 second = t_third.SampleLevel(s_linear, min(position.xy * c_uv.zw, c_sigma.zw), 0.0f).rgb;
         bloom = saturate(c_params.x * (first + second)) * c_params.y;
     } else if (c_params.z == 2.0f) {
-        bloom = t_second.SampleLevel(s_linear, position.xy * c_uv.xy, 0.0f).rgb * (c_params.x * c_params.y);
+        bloom = t_second.SampleLevel(s_linear, min(position.xy * c_uv.xy, c_sigma.xy), 0.0f).rgb *
+                (c_params.x * c_params.y);
     }
     return float4(scene + bloom, kept.a);
 }

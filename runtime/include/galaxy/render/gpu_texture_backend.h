@@ -49,6 +49,28 @@ public:
     [[nodiscard]] gpu::TextureRef create_texture(
         std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes,
         TexelFormat format = TexelFormat::Rgba8, bool writable = false);
+    // create_texture in two steps, for a texture made away from the render thread (the texture packs' loaders): making one
+    // can take tens of milliseconds (new GPU memory). make_texture runs on any thread; adopt_texture takes the texture in on
+    // the render thread before anything records it. With `fill`, a texture made in CPU-visible memory is written there and
+    // then (`filled`: record_upload is not called for it).
+    // The staged levels make_texture may write (as record_upload takes them).
+    struct Levels {
+        const UploadChunk* staging = nullptr;
+        std::uint64_t offset = 0u;
+        const std::uint64_t* offsets = nullptr;
+        const std::uint32_t* pitches = nullptr;
+    };
+    struct MadeTexture {
+        gpu::TextureRef texture;
+        std::uint64_t allocation_bytes = 0u;
+        bool async = false;   // made for the copy queue
+        bool filled = false;  // its levels are written
+    };
+    static constexpr bool kMakesAnywhere = true;
+    [[nodiscard]] MadeTexture make_texture(std::uint32_t width, std::uint32_t height, unsigned levels,
+                                           TexelFormat format = TexelFormat::Rgba8, bool writable = false,
+                                           const Levels* fill = nullptr);
+    void adopt_texture(const MadeTexture& made);
     // True on an adapter with one memory shared by the CPU and the GPU and cache coherence between them
     // (D3D12_FEATURE_DATA_ARCHITECTURE UMA and CacheCoherentUMA): textures are written from the CPU (WriteToSubresource) into
     // custom write-back heap memory, and staging chunks are write-back memory the CPU also reads.

@@ -9,11 +9,12 @@
 #include "galaxy/render/d3d11/renderer_d3d11.h"
 
 #include "galaxy/content_viewport.h"
-#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/display_aspect.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render_api.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <nebula_frame_list.h>
 
@@ -153,7 +154,8 @@ bool RendererD3D11::create_scene_targets(const FrameMap& map, unsigned samples) 
         destroy_scene_set(scene_);
     }
     scene_ = std::move(made);
-    scene_map_ = map;
+    // Dynamic resolution starts again from the whole of the new size (apply_dynamic_resolution).
+    scene_map_ = frame_extent_ = scene_extent_ = scene_rectangle_ = map;
     if (scene_.samples > 1u) {
         std::cout << "[Renderer] scene target MSAA " << scene_.samples << "x\n";
     }
@@ -194,7 +196,7 @@ void RendererD3D11::resolve_scene_depth() {
 }
 
 FrameMap RendererD3D11::output_frame_for_window() const {
-    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const auto aspect = galaxy::latched_display_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
@@ -223,19 +225,19 @@ void RendererD3D11::apply_window_size() {
                         host_window::upscaler_render_fraction(config, output.width, output.height));
     const FrameMap wanted(render_width, render_height);
     const unsigned samples = wanted_msaa_samples();
-    if (wanted == scene_map_ && samples == scene_.samples) {
+    if (wanted == scene_extent_ && samples == scene_.samples) {
         return;
     }
     // The scale's memory (colour 4 bytes a pixel, depth 8, the display pictures 12) must fit 90% of the budget.
-    if (wanted.width * wanted.height > scene_map_.width * scene_map_.height) {
+    if (wanted.width * wanted.height > scene_extent_.width * scene_extent_.height) {
         std::uint64_t usage = 0u;
         std::uint64_t budget = 0u;
         const double needed = 24.0 * (static_cast<double>(wanted.width) * wanted.height -
-                                      static_cast<double>(scene_map_.width) * scene_map_.height);
+                                      static_cast<double>(scene_extent_.width) * scene_extent_.height);
         if (video_memory(usage, budget) && budget != 0u && static_cast<double>(usage) + needed > 0.9 * static_cast<double>(budget)) {
-            if (frame_index_ % 600u == 0u) {
+            if (budget_warning_.due()) {
                 std::cerr << "[Renderer] " << wanted.width << "x" << wanted.height << " exceeds the video-memory budget; staying at "
-                          << scene_map_.width << "x" << scene_map_.height << '\n';
+                          << scene_extent_.width << "x" << scene_extent_.height << '\n';
             }
             return;
         }
@@ -246,7 +248,7 @@ void RendererD3D11::apply_window_size() {
         frame.retired.clear();
         frame.retired_buffers.clear();
     }
-    const FrameMap previous = scene_map_;
+    const FrameMap previous = scene_extent_;
     if (!create_scene_targets(wanted, samples)) {
         return;
     }
@@ -274,8 +276,9 @@ void RendererD3D11::bind_pass_targets() {
         }
     }
     ctx->OMSetRenderTargets(1u, &rtv, dsv);
-    const unsigned width = scene_.color ? scene_.color->width : 1u;
-    const unsigned height = scene_.color ? scene_.color->height : 1u;
+    const FrameMap part = scene_part();
+    const unsigned width = scene_.color ? part.width : 1u;
+    const unsigned height = scene_.color ? part.height : 1u;
     const D3D11_VIEWPORT viewport =
         bound_.viewport_valid ? D3D11_VIEWPORT{bound_.viewport.x, bound_.viewport.y, bound_.viewport.width, bound_.viewport.height,
                                                bound_.viewport.min_depth, bound_.viewport.max_depth}
@@ -311,11 +314,13 @@ void RendererD3D11::bind_scene() {
     if (!scene_.color) {
         return;
     }
-    const auto width = static_cast<float>(scene_.color->width);
-    const auto height = static_cast<float>(scene_.color->height);
+    // The drawn part (dynamic resolution's rectangle; the whole target without it).
+    const FrameMap part = scene_part();
+    const auto width = static_cast<float>(part.width);
+    const auto height = static_cast<float>(part.height);
     bound_.viewport = gpu::ViewportRect{0.0f, 0.0f, width, height, 0.0f, 1.0f};
     bound_.viewport_valid = true;
-    bound_.scissor = whole_rect(scene_.color->width, scene_.color->height);
+    bound_.scissor = whole_rect(part.width, part.height);
     bound_.scissor_valid = true;
     if (scene_pass_open_) {
         // The draws recorded so far run with the rectangles they were recorded with; the next ones with these.
@@ -332,8 +337,10 @@ void RendererD3D11::clear_scene(std::uint32_t clear_rgba, bool color_enable, boo
     if (!scene_.color) {
         return;
     }
-    const auto scene_w = static_cast<std::int32_t>(scene_.color->width);
-    const auto scene_h = static_cast<std::int32_t>(scene_.color->height);
+    // The drawn part: a clear of all of it may clear the whole target (nothing past the part is read).
+    const FrameMap part = scene_part();
+    const auto scene_w = static_cast<std::int32_t>(part.width);
+    const auto scene_h = static_cast<std::int32_t>(part.height);
     gpu::Rect rect = gpu::rect(0, 0, scene_w, scene_h);
     if (rect_w != 0u && rect_h != 0u) {
         const ScaledSceneRect scaled = rect_pixels(
@@ -401,6 +408,7 @@ void RendererD3D11::swap_scene_sets() {
     end_scene_pass();
     std::swap(scene_, alt_scene_);
     std::swap(scene_map_, alt_scene_map_);
+    std::swap(frame_extent_, alt_scene_extent_);
     output_scene_active_ = !output_scene_active_;
     reset_draw_bindings();
 }
@@ -410,12 +418,13 @@ void RendererD3D11::swap_target_set() {
     end_scene_pass();
     std::swap(scene_, target_scene_);
     std::swap(scene_map_, target_scene_map_);
+    std::swap(frame_extent_, target_scene_extent_);
     target_pass_active_ = !target_pass_active_;
     reset_draw_bindings();
 }
 
 bool RendererD3D11::ensure_output_set(const FrameMap& output) {
-    output_scene_used_frame_ = frame_index_;
+    output_scene_used_step_ = idle_clock();
     if (alt_scene_.color && alt_scene_map_ == output) {
         return true;
     }
@@ -423,10 +432,10 @@ bool RendererD3D11::ensure_output_set(const FrameMap& output) {
         destroy_scene_set(alt_scene_);
     }
     if (!create_scene_set(alt_scene_, output)) {
-        alt_scene_map_ = FrameMap{};
+        alt_scene_map_ = alt_scene_extent_ = FrameMap{};
         return false;
     }
-    alt_scene_map_ = output;
+    alt_scene_map_ = alt_scene_extent_ = output;
     return true;
 }
 
@@ -443,8 +452,13 @@ bool RendererD3D11::begin_output_scene(bool resolve_msaa_only) {
         }
     } else {
         const RenderConfig cfg = get_render_config();
-        const bool full = cfg.hud_output_resolution || render_internal_height(cfg) != 0u || sharp_2d_requested();
-        if (!full || output.empty() || output.width < scene_map_.width || output == scene_map_) {
+        // Dynamic resolution's rectangle: the rest of the frame (post AA's result, the 2D layer, the display picture)
+        // at the output's size, whatever the step (the HUD never follows it).
+        const bool rectangle = scene_map_ != frame_extent_;
+        const bool full =
+            rectangle || cfg.hud_output_resolution || render_internal_height(cfg) != 0u || sharp_2d_requested();
+        if (!full || output.empty() || (output.width < scene_map_.width && !rectangle) ||
+            (output == scene_map_ && !rectangle)) {
             return false;
         }
     }
@@ -489,10 +503,10 @@ bool RendererD3D11::begin_target_pass(std::uint64_t key, std::uint32_t width, st
         slot.width = width;
         slot.height = height;
     }
-    slot.used = frame_index_;
+    slot.used = idle_clock();
     target_key_ = key;
     std::swap(target_scene_, slot.set);
-    target_scene_map_ = slot.map;
+    target_scene_map_ = target_scene_extent_ = slot.map;
     swap_target_set();
     bind_scene();
     return true;
@@ -510,7 +524,7 @@ void RendererD3D11::end_target_pass(std::uint8_t channels, TextureStore& texture
     TargetSlot& slot = target_slots_[target_key_];
     std::swap(slot.set, target_scene_);
     slot.map = target_scene_map_;
-    target_scene_map_ = FrameMap{};
+    target_scene_map_ = target_scene_extent_ = FrameMap{};
     (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, textures);
     sweep_target_slots();
     bind_scene();
@@ -520,14 +534,13 @@ void RendererD3D11::retire_target_slot(TargetSlot& slot) {
     destroy_scene_set(slot.set);
 }
 
-// Keys unused for kTargetIdleFrames frames give back their targets (their pictures stay).
+// Keys unused for kIdleSteps game steps give back their targets (their pictures stay).
 void RendererD3D11::sweep_target_slots() {
     if (target_slots_.empty()) {
         return;
     }
-    const std::uint64_t idle = target_idle_frames();
     for (auto it = target_slots_.begin(); it != target_slots_.end();) {
-        if (it->second.used + idle < frame_index_ && !(target_pass_active_ && it->first == target_key_)) {
+        if (idle_since(it->second.used) && !(target_pass_active_ && it->first == target_key_)) {
             retire_target_slot(it->second);
             it = target_slots_.erase(it);
         } else {
@@ -641,7 +654,10 @@ void RendererD3D11::conversion_draw(ID3D11ShaderResourceView* source, d3d11::Tex
     end_scene_pass();
     // A display copy one pixel to one picture pixel without gamma: its filter alone.
     const bool display_filter = copy_format == kCopyLayoutDisplay && step_x == 1.0f && step_y == 1.0f;
-    const SceneConversionShaderConstants constants = make_scene_conversion_constants(copy_format, src_x, src_y, step_x, step_y);
+    // The source is the bound target: its drawn part (dynamic resolution's rectangle) bounds every sample.
+    const FrameMap part = scene_part();
+    const SceneConversionShaderConstants constants = make_scene_conversion_constants(
+        copy_format, src_x, src_y, step_x, step_y, static_cast<float>(part.width), static_cast<float>(part.height));
     ID3D11DeviceContext1* const ctx = context();
     ID3D11RenderTargetView* const target = dest.target.Get();
     ctx->OMSetRenderTargets(1u, &target, nullptr);
@@ -658,8 +674,100 @@ void RendererD3D11::record_conversion_blit(d3d11::Texture& dest, unsigned dest_w
     conversion_draw(scene_.color->view.Get(), dest, dest_w, dest_h, copy_format, src_x, src_y, step_x, step_y);
 }
 
+// The game is given the picture whole: only where the frame is all of the scene target.
 bool RendererD3D11::can_take_scene() const noexcept {
-    return scene_.color && !output_scene_active_ && !target_pass_active_ && scene_.samples <= 1u && !scene_.wide;
+    return scene_.color && !output_scene_active_ && !target_pass_active_ && scene_.samples <= 1u && !scene_.wide &&
+           scene_map_ == frame_extent_;
+}
+
+void RendererD3D11::apply_dynamic_resolution() {
+    // 2D-only pictures and anything drawn before the scene take the whole target; the main set is bound here, or held by
+    // the output scene's swap.
+    if (target_pass_active_ || scene_.wide) {
+        return;
+    }
+    if (output_scene_active_) {
+        if (alt_scene_extent_ == scene_extent_) {
+            alt_scene_map_ = alt_scene_extent_;
+        }
+    } else if (frame_extent_ == scene_extent_ && scene_map_ != frame_extent_) {
+        scene_map_ = frame_extent_;
+        reset_draw_bindings();
+        bind_scene();
+    }
+}
+
+void RendererD3D11::begin_scene_rectangle() {
+    // The main scene target only, at the size the rectangle is taken from (a target pass, the output scene and the wide
+    // scene are each their own size).
+    if (output_scene_active_ || target_pass_active_ || scene_.wide || frame_extent_ != scene_extent_) {
+        return;
+    }
+    if (rectangle_frame_ != frame_index_) {
+        // Once a scene picture: the governor takes the scene pictures' GPU time against the picture's budget. No
+        // temporal upscaler here: every step is open.
+        rectangle_frame_ = frame_index_;
+        const RenderConfig cfg = get_render_config();
+        const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
+        const unsigned before = dynamic_resolution_.sixteenths();
+        dynamic_resolution_.set_walk(dynamic_resolution_offered() &&
+                                     ::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps));
+        scene_rectangle_ = dynamic_resolution_.update(cfg.dynamic_resolution && dynamic_resolution_offered(), scene_extent_,
+                                                      kResolutionSixteenths[kResolutionStepCount - 1u],
+                                                      native_scene_gpu_ema_ms_, resolution_budget_ms(rate, display_refresh_hz_));
+        if (::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps | ::galaxy::kDiagnosePresentStats) &&
+            dynamic_resolution_.sixteenths() != before) {
+            std::fprintf(stderr, "[dynres] frame %llu: %u/16, %ux%u of %ux%u (floor %u/16)\n",
+                         static_cast<unsigned long long>(frame_index_), dynamic_resolution_.sixteenths(),
+                         scene_rectangle_.width, scene_rectangle_.height, scene_extent_.width, scene_extent_.height,
+                         dynamic_resolution_.lowest_sixteenths());
+        }
+    }
+    if (!(scene_rectangle_.width <= frame_extent_.width && scene_rectangle_.height <= frame_extent_.height) ||
+        scene_rectangle_.empty() || scene_map_ == scene_rectangle_) {
+        return;
+    }
+    scene_map_ = scene_rectangle_;
+    reset_draw_bindings();
+    bind_scene();
+}
+
+bool RendererD3D11::publish_scene_depth_copy(std::uint64_t key, TextureStore& textures) {
+    const GpuPassScope scope{*this, GpuPass::FramePass};
+    const FrameExtent extent = frame_pass_extent(frame_extent_);
+    if (extent.width == 0u || extent.height == 0u || !scene_.depth || !scene_.depth->view) {
+        return false;
+    }
+    // Its own key beside the colour captures' (channels in bits 48 and up, at most 4): freed with the texture's id.
+    const std::uint64_t dest_key = static_cast<std::uint64_t>(static_cast<std::uint32_t>(key)) | (0xFFull << 48u);
+    FramePassTarget& dest = frame_pass_targets_[dest_key];
+    if (!dest.texture || dest.width != extent.width || dest.height != extent.height) {
+        retire(std::move(dest.texture));
+        dest.texture = d3d11::Context::get().create_texture(extent.width, extent.height, 1u, depth_copy_format_,
+                                                            kTargetBinds, "scene depth picture");
+        if (!dest.texture) {
+            frame_pass_targets_.erase(dest_key);
+            return false;
+        }
+        dest.width = extent.width;
+        dest.height = extent.height;
+    }
+    end_scene_pass();
+    resolve_scene_depth();
+    const FrameMap part = scene_part();
+    const FramePassGeometry sampling = frame_pass_geometry(extent.width, extent.height, scene_map_);
+    const SceneConversionShaderConstants constants =
+        make_scene_conversion_constants(0u, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+                                        static_cast<float>(part.width), static_cast<float>(part.height));
+    ID3D11DeviceContext1* const ctx = context();
+    ID3D11RenderTargetView* const target = dest.texture->target.Get();
+    ctx->OMSetRenderTargets(1u, &target, nullptr);
+    utility_draw(Utility::DepthCopy, scene_.depth->view.Get(), &constants, sizeof(constants),
+                 whole_viewport(extent.width, extent.height), whole_rect(extent.width, extent.height),
+                 D3D11_COLOR_WRITE_ENABLE_RED);
+    ctx->OMSetRenderTargets(0u, nullptr, nullptr);
+    bind_scene();
+    return publish_picture(key, extent.width, extent.height, dest.texture, 0u, textures);
 }
 
 bool RendererD3D11::take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureStore& textures, gpu::TextureRef& released) {
@@ -668,12 +776,28 @@ bool RendererD3D11::take_scene(std::uint64_t key, gpu::TextureRef fresh, Texture
         released = it->second.viewed;
     }
     gpu::TextureRef picture = swap_scene_color(std::move(fresh));
-    const FrameExtent size = frame_pass_extent(scene_map_);
+    const FrameExtent size = frame_pass_extent(frame_extent_);
     return publish_picture(key, size.width, size.height, std::move(picture), 0u, textures);
 }
 
 void RendererD3D11::open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key,
                                         TextureStore& textures) {
+    if (scene_map_ != frame_extent_) {
+        // Dynamic resolution's rectangle: the pass reads pictures of the whole frame at the extent's size, as at the
+        // whole render size (the game samples a picture whole).
+        if (color_key != 0u) {
+            FramePassRequest request{};
+            request.key = color_key;
+            request.channels = channels;
+            (void)draw_frame_pass(request, textures);
+        }
+        if (depth_key != 0u) {
+            (void)publish_scene_depth_copy(depth_key, textures);
+        }
+        frame_pass_color_key_ = 0u;  // nothing of the scene target's own is lent: close_frame_for_pass returns nothing
+        frame_pass_depth_key_ = 0u;
+        return;
+    }
     end_scene_pass();
     const FrameExtent size = frame_pass_extent(scene_map_);
     if (color_key != 0u) {
@@ -738,7 +862,9 @@ gpu::TextureRef RendererD3D11::take_frame_picture(gpu::TextureRef fresh) {
 
 bool RendererD3D11::draw_frame_pass(const FramePassRequest& params, TextureStore& textures) {
     const GpuPassScope scope{*this, GpuPass::FramePass};
-    const FrameExtent extent = frame_pass_extent(scene_map_);
+    // The picture is the bound target's allocated size whatever part of it the frame is drawn in (dynamic resolution's
+    // rectangle, resampled into it below): its texture is not made again at each step.
+    const FrameExtent extent = frame_pass_extent(frame_extent_);
     const unsigned w = extent.width;
     const unsigned h = extent.height;
     if (w == 0u || h == 0u || !scene_.color) {
@@ -764,6 +890,35 @@ bool RendererD3D11::draw_frame_pass(const FramePassRequest& params, TextureStore
     const FramePassGeometry sampling = frame_pass_geometry(w, h, scene_map_);
     record_conversion_blit(*dest.texture, w, h, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     return publish_picture(params.key, w, h, dest.texture, 0u, textures);
+}
+
+bool RendererD3D11::draw_shown_frame_pass(const FramePassRequest& params, const DisplayTexture& shown, TextureStore& textures) {
+    if (!shown.texture || output_scene_active_ || target_pass_active_ || scene_.wide || scene_.color_dirty) {
+        return draw_frame_pass(params, textures);
+    }
+    const d3d11::Texture& picture = *shown.texture;
+    const auto fits = [&](const gpu::TextureRef& color) {
+        return color && color != shown.texture && color->width == picture.width && color->height == picture.height &&
+               color->format == picture.format;
+    };
+    // An upscaler's frame is the scene's alone at the render size here: the picture is the output scene target's size.
+    const bool output = !fits(scene_.color);
+    if (output && (alt_scene_.samples > 1u || !fits(alt_scene_.color))) {
+        return draw_frame_pass(params, textures);
+    }
+    if (output) {
+        swap_scene_sets();
+    }
+    {
+        const GpuPassScope scope{*this, GpuPass::FramePass};
+        end_scene_pass();
+        context()->CopyResource(scene_.color->texture.Get(), picture.texture.Get());
+    }
+    const bool made = draw_frame_pass(params, textures);
+    if (output) {
+        swap_scene_sets();
+    }
+    return made;
 }
 
 // ---- the renderer's parts ----
@@ -796,8 +951,12 @@ void RendererD3D11::record_scene_ao() {
     resolve_scene_depth();
     d3d11::AmbientOcclusion::Inputs in{};
     in.depth = scene_.depth.get();
-    in.width = scene_.depth->width;
-    in.height = scene_.depth->height;
+    const FrameMap part = scene_part();
+    in.width = std::min(part.width, scene_.depth->width);
+    in.height = std::min(part.height, scene_.depth->height);
+    in.extent_width = scene_.depth->width;
+    in.extent_height = scene_.depth->height;
+    in.lowest_sixteenths = frame_extent_ == scene_extent_ ? dynamic_resolution_.lowest_sixteenths() : 16u;
     in.color = scene_.rtv();
     in.samples = scene_.samples;
     in.hdr = scene_.wide;
@@ -833,6 +992,9 @@ void RendererD3D11::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_
     in.scale = static_cast<float>(scene_map_.height / kAuthoredLines);
     in.frame_width = std::min(scene_map_.width, scene_.color->width);
     in.frame_height = std::min(scene_map_.height, scene_.color->height);
+    in.extent_width = std::min(frame_extent_.width, scene_.color->width);
+    in.extent_height = std::min(frame_extent_.height, scene_.color->height);
+    in.lowest_sixteenths = frame_extent_ == scene_extent_ ? dynamic_resolution_.lowest_sixteenths() : 16u;
     if (kind == NEBULA_PASS_BLOOM_HOLD) {
         if (scene_.samples <= 1u) {
             // The scene and the bloom's image trade places instead of the scene being copied. The game draws the bloom's
@@ -871,9 +1033,10 @@ void RendererD3D11::game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_
         return;
     }
     // The simple bloom's source is the frame: the scene and the source trade places instead of the scene being copied,
-    // where the composite then writes the whole target from it.
-    if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_.samples <= 1u && in.frame_width == scene_.color->width &&
-        in.frame_height == scene_.color->height && bloom_.can_take_source(in)) {
+    // where the composite then writes all of the target that is read from it (the whole target, or dynamic
+    // resolution's rectangle, outside which no pass reads).
+    if (kind == NEBULA_PASS_BLOOM_SIMPLE && scene_.samples <= 1u && in.whole_width() == scene_.color->width &&
+        in.whole_height() == scene_.color->height && bloom_.can_take_source(in)) {
         bloom_.give_source(swap_scene_color(bloom_.take_source_image(ctx, in)), in);
         in.scene_target = scene_.color.get();
         in.rtv = scene_.rtv();
@@ -891,7 +1054,7 @@ bool RendererD3D11::begin_wide_scene(bool wanted, const SceneClearValues* initia
         return false;
     }
     end_scene_pass();
-    wide_scene_used_frame_ = frame_index_;
+    wide_scene_used_step_ = idle_clock();
     SceneSet& set = wide_scene_;
     const std::uint32_t width = scene_.color->width;
     const std::uint32_t height = scene_.color->height;
@@ -935,8 +1098,11 @@ bool RendererD3D11::begin_wide_scene(bool wanted, const SceneClearValues* initia
     d3d11::SceneCamera::WidenInputs in{};
     in.picture = scene_.color.get();
     in.rtv = set.rtv();
-    in.width = width;
-    in.height = height;
+    // The drawn part (dynamic resolution's rectangle; the whole target without it): the wide set is the same size and
+    // the scene goes on in the same part of it.
+    const FrameMap part = scene_part();
+    in.width = part.width;
+    in.height = part.height;
     in.samples = scene_.samples;
     (void)scene_camera_.widen(context(), in);
     set.color_dirty = scene_.samples > 1u;
@@ -976,8 +1142,10 @@ void RendererD3D11::end_wide_scene(unsigned) {
     in.wide_ms = set.samples > 1u ? set.ms_color.get() : nullptr;
     in.depth = set.depth.get();
     in.rtv = scene_.rtv();
-    in.width = set.color->width;
-    in.height = set.color->height;
+    // The drawn part of the wide set (scene_map_ is the rectangle, or the output scene's size that equals it when the
+    // camera resolves into it): what the camera meters and writes.
+    in.width = std::min(scene_map_.width, set.color->width);
+    in.height = std::min(scene_map_.height, set.color->height);
     in.samples = set.samples;
     in.resolve = resolve_output;
     // After a load or a long pause the eye starts open.

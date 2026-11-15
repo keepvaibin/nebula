@@ -748,13 +748,34 @@ void MarioAnimator::setHoming() {
             angleH = -angleH;
         }
 
+        // The look turns the head on from where its animation holds it, and the waiting animations turn the head on their
+        // own: together they would pass the neck's reach (a look-around toward the target and the look added to it). The
+        // two stay within the look's limit from the head's rest, and the look never turns the head away from its target.
+        XanimeCore* core = mXanimePlayer->getCore();
+        u32 headIdx = MR::getJointIndex(mActor, "Head");
+        {
+            const TransformInfo& rRest = mActor->getModelData()->getJointAt(headIdx)->getTransformInfo();
+            Quaternion rest;
+            eulerRadiansToQuat(rRest.mRotation.x, rRest.mRotation.y, rRest.mRotation.z, &rest);
+            const Quaternion& rAnim = core->mJointList[headIdx].mLast.mRotation;
+            // conj(rest) * anim: the animation's turn from the rest pose; its twist about the look's axis (the head's Y).
+            f32 twistW = rest.w * rAnim.w + rest.x * rAnim.x + rest.y * rAnim.y + rest.z * rAnim.z;
+            f32 twistY = rest.w * rAnim.y - rAnim.w * rest.y + rest.x * rAnim.z - rest.z * rAnim.x;
+            if (twistW < 0.0f) {
+                twistW = -twistW;
+                twistY = -twistY;
+            }
+            const f32 animTurn = 2.0f * Angle::atan2Radian(twistY, twistW);
+            const f32 reach = table->mLookMaxAngleH;
+            const f32 turn = MR::clamp(animTurn + angleH, -reach, reach) - animTurn;
+            angleH = angleH >= 0.0f ? MR::clamp(turn, 0.0f, angleH) : MR::clamp(turn, angleH, 0.0f);
+        }
+
         Mtx rotMtx;
         MR::orderRotateMtx(5, Vec3f(0.0f, angleH, -vAngle), rotMtx);
 
         MR::blendMtx(mHomingMtx.toMtxPtr(), rotMtx, 0.1f, mHomingMtx.toMtxPtr());
 
-        XanimeCore* core = mXanimePlayer->getCore();
-        u32 headIdx = MR::getJointIndex(mActor, "Head");
         XjointTransform* jt = core->getJointTransform(headIdx);
         jt->mBaseMtx = mHomingMtx.toMtxPtr();
     } else {

@@ -155,8 +155,9 @@ struct TextureTable {
     bool has_target = false;
     std::uint64_t walk_stamp = 0u;
     std::uint64_t pictures_moved = 0u;  // RenderCore::pictures_moved_ when its target's pictures were named
-    // The last frame (RenderCore::frame_index_) a walk named the table; a table idle for kTableIdleFrames gives up what was built
-    // for it (retire_idle_tables) and is `retired` until a walk names it again.
+    // The last game frame (the walked list's serial) a walk named the table; a table idle for kTableIdleFrames gives up what
+    // was built for it (retire_idle_tables) and is `retired` until a walk names it again. Game frames, not pictures: the
+    // pictures a game frame is shown in vary with the rate (without bound at Unlimited).
     std::uint64_t last_frame = 0u;
     bool retired = false;
     std::uint64_t touched_walk = 0u;  // the walk (RenderCore::walk_.serial) that last named its textures to the store (bound tables)
@@ -232,6 +233,7 @@ struct ListData {
     std::vector<std::uint32_t> light_set_before;
     std::vector<std::uint32_t> item_before;
     bool motion_ready = false;
+    bool coverage_counted = false;  // --diagnostics present-stats: its items counted in RenderCore::coverage_
     // The list's screen probes are asked once, on its first real walk: a frame between lists (`between`) draws the scene at
     // t < 1, not the camera the game's points were made with.
     bool probes_done = false;
@@ -317,8 +319,7 @@ public:
     // given in its materials (checked against its own stamps), so an id given to another list would draw the wrong textures.
     static constexpr std::uint64_t kTableIdleFrames = 600u;
     static constexpr std::uint64_t kTableSweepFrames = 60u;
-    // `idle_frames`: the idle time in frames as the renderer counts them (kTableIdleFrames at 60 a second, more when each game
-    // frame is shown in several).
+    // `frame`: the newest list's serial; tables idle for more than `idle_frames` game frames go.
     void retire_idle_tables(std::uint64_t frame, std::vector<gpu::Table>& retired, std::uint64_t idle_frames = kTableIdleFrames);
     struct TableCounts {
         std::uint32_t live = 0u;     // named within kTableIdleFrames
@@ -447,6 +448,16 @@ private:
     std::atomic<std::uint32_t> registered_pipelines_{0u};  // all_pipelines_'s size, read without the lock
     std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> pipeline_by_hash_;
     std::unordered_map<std::uint64_t, std::vector<TableKey>> table_by_hash_;
+    // Each texture's tables (by their table_by_hash_ bucket and id), for forget_textures. A list may keep the ids of
+    // tables already dropped through another of their textures; such a ref finds no key and is skipped, and a list is
+    // compacted when it doubles (index_table).
+    struct TableRef {
+        std::uint64_t hash = 0u;
+        std::uint32_t id = 0u;
+    };
+    std::unordered_map<std::uint32_t, std::vector<TableRef>> tables_by_texture_;
+    void index_table(const TableKey& key, std::uint64_t hash);  // under lock_
+    [[nodiscard]] bool table_listed(const TableRef& ref) const;  // under lock_
     std::unordered_map<std::uint64_t, std::vector<SlotRecord>> slot_by_hash_;
 
     gpu::UploadMemory slot_page_;

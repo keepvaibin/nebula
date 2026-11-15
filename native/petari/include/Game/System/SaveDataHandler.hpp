@@ -16,6 +16,8 @@ public:
     // What the read found: taken into memory, or not usable.
     bool acceptLoaded();
     void initializeUserFileMemory(int, const UserFile*);
+    // Every user file in memory as `pUserFile` (a blank one: as the start holds them before the save is read).
+    void initializeAllUserFileMemory(const UserFile* pUserFile);
     void copyUserFileMemory(int, int);
     const u8* getFile(SaveFileId, u32* pSize) const;
     void storeUserFile(const UserFile*);
@@ -49,6 +51,19 @@ public:
     // the next save writes it.
     void replaceUserFile(int user, const u8* const ppParts[], const u32 pSizes[]);
 
+    // The settings' per-file import (nebula_save_import.h). Each call on the game thread, with no request with the host.
+    // `pBytes` (a Nebula.sav, or a GameData.bin of any version) read as the start reads a save, an old order's files
+    // made again in host order, and written in Nebula.sav's form into *ppSave (new[]; the caller deletes it). False:
+    // neither form, damaged, or no memory.
+    bool convertSave(u8* pBytes, u32 length, u8** ppSave, u32* pLength);
+    // The save in memory in Nebula.sav's form, as the next save writes it (new[]; the caller deletes it). False: no
+    // memory.
+    bool makeSave(u8** ppSave, u32* pLength);
+    // A Nebula.sav these make: each file (cFileNum, by user then kind) pointing into it, empty when it has no row for
+    // one. False: not one.
+    static bool splitSave(const u8* pSave, u32 length, const u8* ppParts[], u32 pSizes[]);
+    static const u32 cFileNum = 18;  // 6 users, 3 kinds
+
 private:
     // Indexed by user, then kind.
     struct File {
@@ -57,11 +72,17 @@ private:
         u32 mRoom;
     };
 
-    bool readNative();
-    bool readOld();
+    // A read file into `pFiles` (cFileNum of them): Nebula.sav's form, or an old save's; `pName` names it in the log.
+    bool readNative(const u8* pBytes, u32 length, const char* pName, File* pFiles);
+    bool readOld(u8* pBytes, u32 length, const char* pName, File* pFiles);
     // Null for a user past the last.
     File* findFile(SaveFileId) const;
     void setFile(SaveFileId, const u8*, u32);
+    // setFile into `pFiles`: the save in memory (mFiles, its mods' values counted), or another set.
+    void putFile(File* pFiles, SaveFileId, const u8*, u32);
+    // Nebula.sav of `pFiles`: its size, then the file made into `pOut` (that size).
+    static u32 saveSize(const File* pFiles);
+    static void makeSaveInto(const File* pFiles, u8* pOut, u32 total);
     // mMake made big enough for pUserFile's game data: the fixed part's room and its mods' values (services/save.md).
     void fitMake(const UserFile* pUserFile);
     // A request still with the host finished first: mBuffer is the host's until then (a sequence that takes over from

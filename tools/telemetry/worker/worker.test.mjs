@@ -136,6 +136,15 @@ test("the daily cap counts stored reports over every address", async () => {
   assert.equal(env.stored.size, 2);
 });
 
+test("each address stores 3 reports a UTC day, whatever the minute limiter allows", async () => {
+  const env = environment({ limit: 100 });
+  const statuses = [];
+  for (let i = 0; i < 5; i++) statuses.push((await worker.fetch(post(envelope()), env)).status);
+  assert.deepEqual(statuses, [204, 204, 204, 429, 429]);
+  assert.equal(env.stored.size, 3);
+  assert.equal((await worker.fetch(post(envelope(), { address: "198.51.100.1" }), env)).status, 204);
+});
+
 test("junk does not count against the daily cap", async () => {
   const env = environment({ limit: 100, cap: "1" });
   assert.equal((await worker.fetch(post(envelope(10)), env)).status, 400);

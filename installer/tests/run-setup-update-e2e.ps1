@@ -1,4 +1,4 @@
-# A built Setup (-Setup, its version -New) on a copy of an installed Nebula (-Source, with its packed game): an update
+# A built native Setup (-Setup, its version -New) on a copy of an installed Nebula (-Source, with its packed game): an update
 # interrupted half way, the update, rollback, forward again, rollback refused while Nebula runs, and the installed
 # version started to its title. Its own folders (-Work) and data root: the player's install, saves and settings stay.
 #   run-setup-update-e2e.ps1 -Setup <Nebula-Setup-X.exe> -New <X> -Source <install root> -Work <folder>
@@ -83,11 +83,11 @@ $result = Run-Setup @('--apply-update')
 $c = Current
 Check ($result -eq 0 -and $c.version -eq $New -and $c.previous -eq $old) "forward again: current $($c.version), previous $($c.previous)"
 
-# 4. With Nebula running from the install, rollback refuses and changes nothing.
-$fake = Join-Path $root "versions\$New\NebulaSettings.exe.fake"
-$runner = Join-Path $root "versions\$New\NebulaSettings.exe"
-$hadSettings = Test-Path -LiteralPath $runner
-if ($hadSettings) { Move-Item -LiteralPath $runner $fake }
+# 4. With Nebula running from the install (a stand-in named NebulaD11.exe), rollback refuses and changes nothing.
+$fake = Join-Path $root "versions\$New\NebulaD11.exe.fake"
+$runner = Join-Path $root "versions\$New\NebulaD11.exe"
+$hadExe = Test-Path -LiteralPath $runner
+if ($hadExe) { Move-Item -LiteralPath $runner $fake }
 Copy-Item (Join-Path $env:WINDIR 'System32\cmd.exe') $runner
 $held = Start-Process -FilePath $runner -ArgumentList '/c ping -n 8 127.0.0.1 > nul' -PassThru -WindowStyle Hidden
 Start-Sleep -Milliseconds 400
@@ -95,7 +95,7 @@ $result = Run-Setup @('--rollback')
 Check ($result -ne 0 -and (Current).version -eq $New) "with Nebula running, rollback refuses (exit $result) and $New stays"
 Stop-Process -Id $held.Id -Force; $held.WaitForExit()
 Remove-Item -LiteralPath $runner -Force
-if ($hadSettings) { Move-Item -LiteralPath $fake $runner }
+if ($hadExe) { Move-Item -LiteralPath $fake $runner }
 
 # 5. The installed version starts and reaches the title, hidden and silent (its sound to a file), with the test's own
 # settings and app data.

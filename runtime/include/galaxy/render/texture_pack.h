@@ -73,6 +73,8 @@ struct TexturePackPixels {
     std::vector<std::uint64_t> offsets;
     std::vector<std::uint32_t> pitches;
     std::uint32_t level_count = 0;
+    // Made by the loader thread with the staging (TexturePacks::set_maker): the texture its levels are copied into.
+    std::optional<TextureBackend::MadeTexture> made;
 };
 // The upload layout of RGBA8 levels: each level at a placement-aligned offset, rows at pitch-aligned strides.
 // Returns the total size.
@@ -121,6 +123,11 @@ public:
     // Upload buffers for the loaders (any thread): finished loads arrive staged, so the render thread only records
     // their copies. Without one (tests), loads arrive as levels the caller stages.
     void set_stager(std::function<TextureBackend::UploadChunk(std::uint64_t)> stager) { stager_ = std::move(stager); }
+    // The textures for the loaders (any thread): a staged load also arrives with the texture it is copied into (written
+    // already where the renderer writes textures from the CPU), so the render thread never waits for new GPU memory or a
+    // CPU copy. Set with the stager, before any load.
+    using Maker = std::function<TextureBackend::MadeTexture(const TexturePackPixels& staged)>;
+    void set_maker(Maker maker) { maker_ = std::move(maker); }
     void shutdown() noexcept;
 
     [[nodiscard]] bool enabled() const noexcept { return settings_.enabled && index_ != nullptr; }
@@ -141,9 +148,15 @@ public:
     // Once per frame: publishes a finished index (returns true: every cached texture must be looked up again) and,
     // when `uploads` is empty, hands out finished loads to upload (slot and pixels, up to a byte budget). The cache
     // uploads them over the next frames (uploading()) and calls make_resident for each.
-    bool pump(std::vector<std::pair<std::uint32_t, TexturePackPixels>>& uploads);
+    // `bytes_most`: the most handed out a frame (at least one load).
+    static constexpr std::uint64_t kUploadBytesPerFrame = 48ull << 20;
+    static constexpr std::uint64_t kUploadBytesHurried = 256ull << 20;
+    bool pump(std::vector<std::pair<std::uint32_t, TexturePackPixels>>& uploads,
+              std::uint64_t bytes_most = kUploadBytesPerFrame);
     // A slot pump handed out and not yet made resident (false for one of an index replaced since).
     [[nodiscard]] bool uploading(std::uint32_t slot) const noexcept;
+    // A slot loading, loaded or uploading: its replacement is on its way.
+    [[nodiscard]] bool coming(std::uint32_t slot) const noexcept;
     // The uploaded replacement of a slot pump handed out.
     void make_resident(std::uint32_t slot, TextureReplacement&& replacement);
 
@@ -240,6 +253,7 @@ private:
 
     TexturePackSettings settings_;
     std::function<TextureBackend::UploadChunk(std::uint64_t)> stager_;
+    Maker maker_;
     std::shared_ptr<const Index> index_;
     std::vector<Slot> slots_;
     std::deque<std::uint32_t> ready_queue_;

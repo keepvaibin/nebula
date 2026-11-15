@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <iterator>
 #include <utility>
 
@@ -83,7 +84,7 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
         rows.push_back({"REFRESH RATE", text, nullptr, state.fullscreen_only ? "FOLLOWS THE PHONE DISPLAY" : "SET IN THE SYSTEM DISPLAY SETTINGS"});
     }
     {
-        static constexpr const char* kAspects[] = {"AUTO", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9"};
+        static constexpr const char* kAspects[] = {"AUTO", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9", "48:9"};
         static_assert(std::size(kAspects) == kAspectModeCount);
         rows.push_back({"ASPECT RATIO", kAspects[std::min(render.aspect_mode, kAspectModeCount - 1u)],
                         [&host](RenderConfig& draft, int delta) {
@@ -92,19 +93,29 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
                         },
                         "AUTO MATCHES THE WINDOW. WIDER SHOWS MORE OF THE WORLD"});
     }
-    rows.push_back({"VSYNC", render.vsync_interval == 0u ? "OFF" : "ON",
-                    [&host](RenderConfig& draft, int) {
-                        draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
-                        normalize_interpolation(draft, host.query(draft).frame_rates);
-                    },
-                    "WAITS FOR THE DISPLAY: NO TEARING, A LITTLE MORE LATENCY"});
-    // Only while the display reports HDR mode: the picture is sent as HDR10, white at the paper white, highlights up to the
-    // display's peak.
+    if (state.frame_rates.vsync_fixed) {
+        rows.push_back({"VSYNC", "ON", nullptr, "THIS DISPLAY ALWAYS WAITS FOR ITS REFRESH"});
+    } else {
+        rows.push_back({"VSYNC", render.vsync_interval == 0u ? "OFF" : "ON",
+                        [&host](RenderConfig& draft, int) {
+                            draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
+                            normalize_interpolation(draft, host.query(draft).frame_rates);
+                        },
+                        "WAITS FOR THE DISPLAY: NO TEARING, A LITTLE MORE LATENCY"});
+    }
+    // Only on a display that takes HDR: the picture is sent as HDR10, white at the paper white, highlights up to the
+    // display's peak. Windows HDR off for it: the game turns it on while HDR is on, and off again (render/os_hdr.h).
     if (state.hdr_offered) {
+        // HDR applied and the picture not HDR yet: why.
+        const char* waiting = state.hdr_held_sdr  ? "WAITING: FRAME GENERATION KEEPS THE PICTURE SDR"
+                              : state.hdr_refused ? "WINDOWS HDR IS OFF FOR THIS DISPLAY"
+                                                  : "WAITING FOR THE DISPLAY TO SWITCH TO HDR";
+        const bool waits = state.hdr_in_use && !state.hdr_active;
         rows.push_back({"HDR", render.hdr ? "ON" : "OFF",
                         [](RenderConfig& draft, int) { draft.hdr = !draft.hdr; },
-                        render.hdr && !state.hdr_active ? "WAITING: FRAME GENERATION KEEPS THE PICTURE SDR"
-                                                        : "WIDE BRIGHTNESS RANGE ON AN HDR DISPLAY"});
+                        render.hdr && waits         ? waiting
+                        : !state.hdr_display_on ? "TURNS ON WINDOWS HDR WHILE THE GAME RUNS"
+                                                : "WIDE BRIGHTNESS RANGE ON AN HDR DISPLAY"});
         if (render.hdr) {
             std::snprintf(text, sizeof(text), "%u NITS", std::clamp(render.paper_white, 80u, 500u));
             rows.push_back({"PAPER WHITE", text,
@@ -112,6 +123,17 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
                                 draft.paper_white = static_cast<unsigned>(std::clamp(static_cast<int>(draft.paper_white) + delta * 10, 80, 500));
                             },
                             "BRIGHTNESS OF THE PICTURE'S WHITE. RAISE IT IN A BRIGHT ROOM"});
+            // The display's own peak and black found on test patterns, and the paper white over the game: only on an
+            // HDR picture (HDR applied, and not held SDR by frame generation).
+            const bool ready = state.hdr_in_use && state.hdr_active;
+            std::function<void(RenderConfig&, unsigned)> calibrate;
+            if (ready) {
+                calibrate = [&host](RenderConfig& draft, unsigned) { host.calibrate_hdr(draft); };
+            }
+            rows.push_back(button_row("HDR CALIBRATION", {ready ? "CALIBRATE" : "-CALIBRATE"}, std::move(calibrate),
+                                      ready                ? "MATCHES THE PICTURE TO THIS DISPLAY'S BRIGHTEST AND DARKEST LEVELS"
+                                      : !state.hdr_in_use ? "APPLY HDR FIRST"
+                                                           : waiting));
         }
     }
     rows.push_back({"INTERFACE", {}, nullptr, {}, true});

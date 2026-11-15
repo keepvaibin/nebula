@@ -15,11 +15,13 @@
 #pragma once
 
 #include "galaxy/content_viewport.h"
+#include "galaxy/platform_time.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/d3d11/d3d11_context.h"
 #include "galaxy/render/d3d11/fx_d3d11.h"
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/dynamic_resolution.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/gpu_upload_ring.h"
@@ -33,6 +35,7 @@
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
+#include "galaxy/render/idle_clock.h"
 #include "render/core/draw_record.h"
 #include "render/core/gpu_encoder.h"
 
@@ -87,9 +90,10 @@ public:
     // The game's bloom (d3d11::GameBloom): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
-    // No frame generation or temporal upscaler on Direct3D 11: the interpolation and upscaling calls say there is none.
-    void reset_generated_gpu_ema() noexcept {}
-    [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return 0.0; }
+    // Interpolation re-walks the newest list for each picture between game steps (RenderCore); no frame generation or
+    // temporal upscaler on Direct3D 11, so a generated picture costs what a scene picture costs.
+    void reset_generated_gpu_ema() noexcept { generated_gpu_ema_ms_ = 0.0; }
+    [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return generated_gpu_ema_ms_; }
     [[nodiscard]] double interpolation_gpu_cost_ms() const noexcept { return native_scene_gpu_ema_ms_; }
     void suspend_temporal_interpolation(double) {}
     [[nodiscard]] bool temporal_interpolation() const noexcept { return false; }
@@ -217,6 +221,11 @@ public:
     void open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key, TextureStore& textures);
     void close_frame_for_pass(TextureStore& textures);
     [[nodiscard]] bool draw_frame_pass(const FramePassRequest& params, TextureStore& textures);
+    // A frame copy made before the list writes the frame: the frame is still the picture shown last (`shown`), as a
+    // console's frame buffer still holds it, never what the display copy left in the frame's target. Copied into the
+    // frame's target, or the output scene target's when it is the picture's size, for this copy; a picture that fits
+    // neither (a size or format changed since it was shown) leaves the frame as it is (draw_frame_pass).
+    [[nodiscard]] bool draw_shown_frame_pass(const FramePassRequest& params, const DisplayTexture& shown, TextureStore& textures);
     // `black`: the frame is presented black (the pass clears; the display picture is not drawn).
     bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
     // draw.post (mod_post.h, mod_post_d3d11.cpp): `program` full screen over `picture` (the frame so far, from
@@ -233,6 +242,8 @@ public:
     [[nodiscard]] bool target_picture(std::uint64_t key, TextureHandle& out) const;
     [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_scene();
+    // HDR output's 2D layer (RendererD3D12::begin_layer_2d): Direct3D 11 draws no float scene.
+    void begin_layer_2d() noexcept {}
     [[nodiscard]] bool output_scene_active() const noexcept { return output_scene_active_; }
     // Temporal upscaling: none on Direct3D 11.
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y) {
@@ -244,11 +255,12 @@ public:
     [[nodiscard]] bool defer_scene_depth_clear(std::uint32_t) { return false; }
     void reset_temporal_history() noexcept {}
     void set_present_game_frame(bool game_frame) noexcept { present_game_frame_ = game_frame; }
-    // A present rate above 60.
-    [[nodiscard]] bool interpolation_mode() const { return false; }
+    // A present rate above 60: pictures between game steps.
+    [[nodiscard]] bool interpolation_mode() const;
+    // The generated pictures' GPU time since the last call (--diagnostics present-stats).
     void take_generated_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
-        total_ms = 0.0;
-        samples = 0u;
+        total_ms = std::exchange(generated_gpu_ms_, 0.0);
+        samples = std::exchange(generated_gpu_samples_, 0u);
     }
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept {
         scene_lens_[0] = near_plane;
@@ -277,6 +289,14 @@ public:
 
     [[nodiscard]] gpu::Device* device() const noexcept { return d3d11::Context::get().device(); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
+    // The bound scene target's allocated size: the render size while dynamic resolution draws the scene in a part of it
+    // (frame_map, the step's rectangle), else frame_map itself. Pictures for the game and target passes take this size.
+    [[nodiscard]] const FrameMap& frame_extent() const noexcept { return frame_extent_; }
+    // The 3D scene's pass opens (its clear, or walk_scene_begin): dynamic resolution decides this picture's rectangle
+    // (once a frame) and the main scene target is drawn in it from here to the end of the frame.
+    void begin_scene_rectangle();
+    // The rectangle the last scene was drawn in (the render size while dynamic resolution is off).
+    [[nodiscard]] const FrameMap& scene_rectangle() const noexcept { return scene_rectangle_; }
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
         return static_cast<std::uint8_t>(std::countr_zero(scene_.samples));
     }
@@ -288,6 +308,10 @@ public:
     [[nodiscard]] void* pipeline_backend() noexcept { return this; }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept;
+    // The moment the next present shows (RenderCore's interpolation slots): this API has no presentation times, so
+    // the presents pace themselves (PresentPacer, the swap chain's vblanks).
+    void set_present_moment(std::int64_t) noexcept {}
+    [[nodiscard]] bool take_present_skip() noexcept { return false; }
     [[nodiscard]] UploadRing& vertex_ring() noexcept { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() noexcept { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }
@@ -330,6 +354,7 @@ private:
         unsigned pass_mark_count = 0;
         bool timed = false;
         bool scene_drawn = false;
+        bool generated = false;  // a picture between game steps (end_frame's `generated`)
     };
     struct FramePassTarget {
         gpu::TextureRef texture;
@@ -376,7 +401,7 @@ private:
         gpu::TextureRef sampled;
     };
     // The renderer's own full-screen draws (utility_shader_table.inc compiled for shader model 5.0, and the depth clear).
-    enum class Utility : std::uint8_t { Blit, Clear, ClearDepth, DepthResolve, Convert, DisplayFilter, Count };
+    enum class Utility : std::uint8_t { Blit, Clear, ClearDepth, DepthResolve, Convert, DisplayFilter, DepthCopy, Count };
     // How one of them treats depth and stencil.
     enum class DepthUse : std::uint8_t { None, Clear, Resolve, Count };
     class GpuPassScope {
@@ -421,7 +446,6 @@ private:
     [[nodiscard]] bool ensure_output_set(const FrameMap& output);
     // The open scene pass's targets, viewport and scissor bound again (after one of the renderer's own draws or a part).
     void bind_pass_targets();
-    [[nodiscard]] std::uint64_t target_idle_frames() const noexcept { return kTargetIdleFrames; }
 
     // Frame recording.
     void begin_scene_pass(const char* caller = __builtin_FUNCTION());
@@ -494,19 +518,42 @@ private:
     std::array<d3d11::ComPtr<ID3D11DepthStencilState>, static_cast<std::size_t>(DepthUse::Count)> depth_uses_{};
 
     // The scene target.
-    FrameMap scene_map_{};
+    FrameMap scene_map_{};     // the bound scene target's map: the part of it drawn in
+    FrameMap frame_extent_{};  // the bound scene target's allocated size (frame_extent)
+    FrameMap scene_extent_{};  // the size the main scene targets are made at (the render size)
+    // Dynamic resolution (dynamic_resolution.h): its rectangle is the main scene's scene_map_ from begin_scene_rectangle
+    // to the frame's end.
+    DynamicResolution dynamic_resolution_;
+    FrameMap scene_rectangle_{};
+    std::uint64_t rectangle_frame_ = ~std::uint64_t{0};  // the frame whose rectangle was decided last
+    // begin_frame: the frame starts with the main scene target whole.
+    void apply_dynamic_resolution();
+    // The bound target's drawn part, within its textures (the viewport and scissor of its draws).
+    [[nodiscard]] FrameMap scene_part() const noexcept {
+        return scene_.color ? FrameMap(std::min(scene_map_.width, scene_.color->width),
+                                       std::min(scene_map_.height, scene_.color->height))
+                            : scene_map_;
+    }
+    // A depth picture for the game at the extent's size holding the whole frame (dynamic resolution's rectangle
+    // resampled, point sampled), for a frame pass over the frame; its colour is draw_frame_pass's.
+    bool publish_scene_depth_copy(std::uint64_t key, TextureStore& textures);
+    // R32 float where the device filters it (a material may sample the picture so), else 16-bit float.
+    DXGI_FORMAT depth_copy_format_ = DXGI_FORMAT_R32_FLOAT;
     SceneSet scene_;
     SceneSet wide_scene_;
     SceneSet alt_scene_;
     FrameMap alt_scene_map_{};
+    FrameMap alt_scene_extent_{};  // its allocated size (alt_scene_map_: the part drawn), traded with frame_extent_
     std::unordered_map<std::uint64_t, Picture> pictures_;
-    static constexpr std::uint64_t kTargetIdleFrames = 600u;  // frames at the game's 60 a second
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
+    static constexpr std::uint64_t kTargetSweepSteps = 60u;  // begin_frame's sweep: once a second of the game
+    std::uint64_t target_swept_step_ = 0u;                    // idle_clock() at the last sweep
     void retire_target_slot(TargetSlot& slot);
     void sweep_target_slots();
     std::uint64_t target_key_ = 0;
     SceneSet target_scene_;
     FrameMap target_scene_map_{};
+    FrameMap target_scene_extent_{};  // traded with frame_extent_ as target_scene_map_ with scene_map_
     bool target_pass_active_ = false;
     bool output_scene_active_ = false;
     bool scene_pass_open_ = false;
@@ -516,8 +563,8 @@ private:
     float scene_lens_[3]{1.0f, 100000.0f, 1.0f};
     bool present_black_ = false;
     bool present_game_frame_ = false;
-    std::uint64_t wide_scene_used_frame_ = 0u;
-    std::uint64_t output_scene_used_frame_ = 0u;
+    std::uint64_t wide_scene_used_step_ = 0u;
+    std::uint64_t output_scene_used_step_ = 0u;
     std::int64_t camera_metered_qpc_ = 0;
 
     // The renderer's parts (fx_d3d11.h).
@@ -601,7 +648,10 @@ private:
     std::atomic<double> measured_present_hz_{0.0};
     double display_refresh_hz_ = 0.0;
     bool variable_refresh_ = false;
-    unsigned display_refresh_checks_ = 0u;
+    // The display's rate is read again twice a second on the clock, whatever the present rate (an unlimited one presents
+    // thousands a second).
+    galaxy::ClockInterval display_refresh_{500, true};
+    galaxy::ClockInterval budget_warning_{10'000, true};  // a scale over the video-memory budget: one line in ten seconds
     unsigned latency_timeouts_ = 0u;
     std::int64_t swap_present_qpc_ = 0;
     std::int64_t measured_present_window_qpc_ = 0;
@@ -615,6 +665,9 @@ private:
     } stats_;
     PresentPacer present_pacer_;
     double native_scene_gpu_ema_ms_ = 0.0;
+    double generated_gpu_ms_ = 0.0;  // the generated pictures' GPU time, taken by take_generated_gpu_ms
+    std::uint64_t generated_gpu_samples_ = 0u;
+    double generated_gpu_ema_ms_ = 0.0;
     bool scene_drawn_ = false;
     GpuPass current_pass_ = GpuPass::Scene;
     std::atomic<bool> gpu_timing_wanted_{false};

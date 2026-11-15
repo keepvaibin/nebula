@@ -105,8 +105,24 @@ public:
         render_height_ = render_height;
         output_width_ = output_width;
         output_height_ = output_height;
+        // Dynamic resolution: the scene may be drawn in a smaller part of the input textures each frame (the scaler's
+        // inputContentWidth and inputContentHeight), at scale factors (output over input content) between the one at the
+        // whole render size and the device's largest. The device's range is known from macOS 14 and iOS 17; before
+        // that, or where the whole render size is outside it, the scaler takes the whole render size alone.
+        float whole_scale = 0.0f, largest_scale = 0.0f;
+        if (@available(macOS 14.0, iOS 17.0, *)) {
+            const float device_min = [MTLFXTemporalScalerDescriptor supportedInputContentMinScaleForDevice:device()];
+            const float device_max = [MTLFXTemporalScalerDescriptor supportedInputContentMaxScaleForDevice:device()];
+            whole_scale = std::min(static_cast<float>(output_width) / static_cast<float>(std::max(render_width, 1u)),
+                                   static_cast<float>(output_height) / static_cast<float>(std::max(render_height, 1u)));
+            if (whole_scale >= device_min && whole_scale <= device_max && device_max > 0.0f) {
+                largest_scale = device_max;
+            }
+        }
         @autoreleasepool {
             // The scene's own depth (with its stencil) first; a scaler that refuses it gets a copy of the depth alone.
+            // With dynamic content first, then without, should the scaler refuse it.
+            for (const bool dynamic : {largest_scale > 0.0f, false}) {
             for (const bool direct_depth : {true, false}) {
                 MTLFXTemporalScalerDescriptor* const descriptor = [MTLFXTemporalScalerDescriptor new];
                 descriptor.inputWidth = render_width;
@@ -119,12 +135,21 @@ public:
                 descriptor.outputTextureFormat = static_cast<MTLPixelFormat>(output_format);
                 // The scene is display values: nothing to expose.
                 descriptor.autoExposureEnabled = NO;
-                descriptor.inputContentPropertiesEnabled = NO;
+                descriptor.inputContentPropertiesEnabled = dynamic ? YES : NO;
+                if (dynamic) {
+                    descriptor.inputContentMinScale = whole_scale;
+                    descriptor.inputContentMaxScale = largest_scale;
+                }
                 scaler_ = [descriptor newTemporalScalerWithDevice:device()];
                 if (scaler_ != nil) {
                     direct_depth_ = direct_depth;
+                    dynamic_ = dynamic;
                     break;
                 }
+            }
+            if (scaler_ != nil) {
+                break;
+            }
             }
             if (scaler_ == nil) {
                 return false;
@@ -133,13 +158,30 @@ public:
                 return false;
             }
         }
+        // The narrowest content at the largest factor (each axis: a step takes the same share of both): wide enough
+        // that output over content stays within it.
+        smallest_width_ = render_width_;
+        if (dynamic_) {
+            const double by_width = static_cast<double>(output_width_) / largest_scale;
+            const double by_height = static_cast<double>(output_height_) / largest_scale * render_width_ / render_height_;
+            unsigned width = static_cast<unsigned>(std::ceil(std::max(by_width, by_height)));
+            while (width < render_width_ && static_cast<double>(output_width_) / width > largest_scale) {
+                ++width;
+            }
+            smallest_width_ = std::clamp(width, 1u, render_width_);
+        }
         return true;
     }
 
+    unsigned smallest_render_width() const noexcept override { return smallest_width_; }
+
     bool evaluate(const TemporalUpscaleInputs& in) override {
+        // The scene's part of the inputs: the whole render size, or with dynamic content any part of it.
+        const bool part_ok = dynamic_ ? in.render_width != 0u && in.render_height != 0u && in.render_width <= render_width_ &&
+                                            in.render_height <= render_height_
+                                      : in.render_width == render_width_ && in.render_height == render_height_;
         if (in.commands == nullptr || in.color == nullptr || in.depth == nullptr || in.motion == nullptr || in.output == nullptr ||
-            in.render_width != render_width_ || in.render_height != render_height_ || in.output_width != output_width_ ||
-            in.output_height != output_height_) {
+            !part_ok || in.output_width != output_width_ || in.output_height != output_height_) {
             return false;
         }
         id<MTLCommandBuffer> const commands = (__bridge id<MTLCommandBuffer>)in.commands;
@@ -163,8 +205,8 @@ public:
             scaler_.depthTexture = depth;
             scaler_.motionTexture = metal(*in.motion);
             scaler_.outputTexture = metal(*in.output);
-            scaler_.inputContentWidth = render_width_;
-            scaler_.inputContentHeight = render_height_;
+            scaler_.inputContentWidth = in.render_width;
+            scaler_.inputContentHeight = in.render_height;
             scaler_.jitterOffsetX = in.jitter_x;
             scaler_.jitterOffsetY = in.jitter_y;
             scaler_.motionVectorScaleX = 1.0f;
@@ -218,6 +260,8 @@ private:
 
     id<MTLFXTemporalScaler> scaler_ = nil;
     bool direct_depth_ = true;
+    bool dynamic_ = false;            // inputContentPropertiesEnabled: each frame's content may be a part of the inputs
+    unsigned smallest_width_ = 0u;    // the narrowest content the scaler takes (dynamic resolution's floor)
     std::shared_ptr<Texture> depth_copy_;
     id<MTLRenderPipelineState> depth_pipeline_ = nil;
     id<MTLDepthStencilState> depth_write_ = nil;

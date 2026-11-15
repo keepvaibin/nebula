@@ -6,13 +6,13 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cstring>
 #include <fstream>
 #include <map>
 #include <memory>
 #include <iterator>
 #include <stdexcept>
-#include <unordered_set>
 #include <utility>
 
 namespace galaxy::render::core {
@@ -843,6 +843,7 @@ std::uint32_t Registries::texture_table(const NebulaFrameTexture* list, std::uin
             key.id = id;
             key.count = count;
             key.list.assign(list, list + count);
+            index_table(key, hash);
             TextureTable& table = incoming_.tables.emplace_back();
             table.count = count;
             table.list = key.list;
@@ -937,25 +938,58 @@ void Registries::reclaim(std::uint64_t completed_fence) {
     });
 }
 
+void Registries::index_table(const TableKey& key, std::uint64_t hash) {
+    for (std::uint32_t i = 0; i < key.count; ++i) {
+        const std::uint32_t texture = key.list[i].texture;
+        if (std::any_of(key.list.begin(), key.list.begin() + i,
+                        [&](const NebulaFrameTexture& earlier) { return earlier.texture == texture; })) {
+            continue;  // named twice in the list: indexed once
+        }
+        std::vector<TableRef>& refs = tables_by_texture_[texture];
+        // A list that has doubled sheds the tables dropped through another texture (amortized: each ref is looked at
+        // once per doubling).
+        if (refs.size() >= 16u && std::has_single_bit(refs.size())) {
+            std::erase_if(refs, [&](const TableRef& ref) { return !table_listed(ref); });
+        }
+        refs.push_back({hash, key.id});
+    }
+}
+
+bool Registries::table_listed(const TableRef& ref) const {
+    const auto bucket = table_by_hash_.find(ref.hash);
+    return bucket != table_by_hash_.end() &&
+           std::any_of(bucket->second.begin(), bucket->second.end(), [&](const TableKey& key) { return key.id == ref.id; });
+}
+
 void Registries::forget_textures(std::span<const std::uint32_t> freed, std::vector<gpu::Table>& retired) {
     if (freed.empty()) {
         return;
     }
-    const std::unordered_set<std::uint32_t> gone(freed.begin(), freed.end());
     std::vector<std::uint32_t> dropped;
     {
         const std::lock_guard guard(lock_);
-        for (auto it = table_by_hash_.begin(); it != table_by_hash_.end();) {
-            std::erase_if(it->second, [&](const TableKey& key) {
-                for (std::uint32_t i = 0; i < key.count; ++i) {
-                    if (gone.contains(key.list[i].texture)) {
-                        dropped.push_back(key.id);
-                        return true;
-                    }
+        for (const std::uint32_t texture : freed) {
+            const auto refs = tables_by_texture_.find(texture);
+            if (refs == tables_by_texture_.end()) {
+                continue;
+            }
+            for (const TableRef& ref : refs->second) {
+                const auto bucket = table_by_hash_.find(ref.hash);
+                if (bucket == table_by_hash_.end()) {
+                    continue;
                 }
-                return false;
-            });
-            it = it->second.empty() ? table_by_hash_.erase(it) : std::next(it);
+                const auto key = std::find_if(bucket->second.begin(), bucket->second.end(),
+                                              [&](const TableKey& k) { return k.id == ref.id; });
+                if (key == bucket->second.end()) {
+                    continue;  // dropped already, through another of its textures
+                }
+                dropped.push_back(key->id);
+                bucket->second.erase(key);
+                if (bucket->second.empty()) {
+                    table_by_hash_.erase(bucket);
+                }
+            }
+            tables_by_texture_.erase(refs);
         }
         if (!dropped.empty()) {
             tables_dropped_.fetch_add(1u, std::memory_order_release);

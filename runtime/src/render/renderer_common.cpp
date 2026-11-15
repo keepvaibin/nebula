@@ -6,6 +6,7 @@
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
+#include <dxgi.h>
 #else
 #include <sched.h>
 #include <time.h>
@@ -29,6 +30,8 @@ static constexpr char kConvPs[] = R"HLSL(
 cbuffer C : register(b0) {
     float4 src_xform;  // the rectangle's origin in frame pixels, then frame pixels per picture pixel
     uint channels;     // NebulaTargetChannels; 4 the frame shown (not named `layout`: glslang's HLSL reserves it)
+    float src_limit_x; // the source's pixels holding the picture (0: all of them)
+    float src_limit_y;
 };
 Texture2D srctex : register(t0);
 SamplerState s_lin : register(s0);
@@ -36,7 +39,27 @@ struct V { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 float4 main(V v) : SV_Target {
     float2 dims;
     srctex.GetDimensions(dims.x, dims.y);
-    float4 c = saturate(srctex.SampleLevel(s_lin, (src_xform.xy + v.pos.xy * src_xform.zw) / dims, 0));
+    // Each sample's footprint inside the picture's part of the source: the clamp sampler's own edge when that is all of it.
+    const float2 limit = src_limit_x > 0.0 ? float2(src_limit_x, src_limit_y) : dims;
+    const float2 centre = src_xform.xy + v.pos.xy * src_xform.zw;
+    // A picture smaller than its source (more than one source pixel a picture pixel): four bilinear taps a quarter of the
+    // footprint from its centre, so every source pixel under it counts (an exact box at 2 and 4 to 1), not one sample's
+    // four (which aliases). One tap at or above the source's own size.
+    const float2 step = abs(src_xform.zw);
+    const float2 spread = float2(step.x > 1.0 ? step.x * 0.25 : 0.0, step.y > 1.0 ? step.y * 0.25 : 0.0);
+    float4 c;
+    if (spread.x > 0.0 || spread.y > 0.0) {
+        c = srctex.SampleLevel(s_lin, clamp(centre + float2(-spread.x, -spread.y), 0.5, limit - 0.5) / dims, 0);
+        c += srctex.SampleLevel(s_lin, clamp(centre + float2(spread.x, -spread.y), 0.5, limit - 0.5) / dims, 0);
+        c += srctex.SampleLevel(s_lin, clamp(centre + float2(-spread.x, spread.y), 0.5, limit - 0.5) / dims, 0);
+        c += srctex.SampleLevel(s_lin, clamp(centre + float2(spread.x, spread.y), 0.5, limit - 0.5) / dims, 0);
+        c *= 0.25;
+    } else {
+        c = srctex.SampleLevel(s_lin, clamp(centre, 0.5, limit - 0.5) / dims, 0);
+    }
+    // A texture's channels are levels; the frame shown keeps light past white for a float picture (HDR output; an 8- or
+    // 10-bit one clamps it as it writes).
+    c = channels == 4u ? max(c, 0.0) : saturate(c);
     if (channels == 1u) {          // alpha in every channel
         c = c.aaaa;
     } else if (channels == 2u) {   // red in every channel
@@ -48,15 +71,32 @@ float4 main(V v) : SV_Target {
 }
 )HLSL";
 
-// The frame shown, one frame pixel to one picture pixel, opaque.
+// The frame shown, one frame pixel to one picture pixel, opaque; light past white kept for a float picture.
 static constexpr char kDisplayFilterPs[] = R"HLSL(
 cbuffer C : register(b0) {
     float4 src_xform;
     uint channels;
+    float src_limit_x;
+    float src_limit_y;
 };
 Texture2D srctex : register(t0);
 float4 main(float4 pos : SV_Position) : SV_Target {
-    return float4(saturate(srctex.Load(int3(int2(src_xform.xy) + int2(pos.xy), 0)).rgb), 1.0);
+    return float4(max(srctex.Load(int3(int2(src_xform.xy) + int2(pos.xy), 0)).rgb, 0.0), 1.0);
+}
+)HLSL";
+
+// HDR output's 2D layer back into the float scene (layer_merge_shader_source): the pixels the HUD and menus drew, exactly
+// (the layer started as the scene in its own format, so an untouched pixel is bit for bit the start).
+static constexpr char kLayerMergePs[] = R"HLSL(
+Texture2D drawn : register(t0);
+Texture2D start : register(t1);
+float4 main(float4 pos : SV_Position) : SV_Target {
+    const int3 p = int3(int2(pos.xy), 0);
+    const float4 c = drawn.Load(p);
+    if (all(c == start.Load(p))) {
+        discard;
+    }
+    return c;
 }
 )HLSL";
 
@@ -108,11 +148,33 @@ float main(float4 pos : SV_Position) : SV_Depth {
     return depth_samples.Load(int2(pos.xy), 0);
 }
 )HLSL";
+// The scene's depth as a picture (SceneConversionShaderConstants): the nearest source pixel to each picture pixel's centre,
+// inside the part of the source that holds the picture. Depth is never blended (a mean of two surfaces is neither).
+constexpr char kDepthCopyPs[] = R"HLSL(
+cbuffer C : register(b0) {
+    float4 src_xform;
+    uint channels;
+    float src_limit_x;
+    float src_limit_y;
+};
+Texture2D<float> depth : register(t0);
+float main(float4 pos : SV_Position) : SV_Target {
+    float2 dims;
+    depth.GetDimensions(dims.x, dims.y);
+    const float2 limit = src_limit_x > 0.0 ? float2(src_limit_x, src_limit_y) : dims;
+    const float2 at = clamp(floor(src_xform.xy + pos.xy * src_xform.zw), 0.0, limit - 1.0);
+    return depth.Load(int3(int2(at), 0));
+}
+)HLSL";
 
 }  // namespace
 
 std::string_view depth_resolve_pixel_shader_source() noexcept {
     return {kDepthResolvePs, sizeof(kDepthResolvePs) - 1u};
+}
+
+std::string_view depth_copy_pixel_shader_source() noexcept {
+    return {kDepthCopyPs, sizeof(kDepthCopyPs) - 1u};
 }
 
 
@@ -140,13 +202,18 @@ std::string_view display_filter_shader_source() noexcept {
     return std::string_view{kDisplayFilterPs, sizeof(kDisplayFilterPs) - 1u};
 }
 
+std::string_view layer_merge_shader_source() noexcept {
+    return std::string_view{kLayerMergePs, sizeof(kLayerMergePs) - 1u};
+}
+
 std::string_view screen_probe_shader_source() noexcept {
     return std::string_view{kScreenProbeCs, sizeof(kScreenProbeCs) - 1u};
 }
 
 SceneConversionShaderConstants make_scene_conversion_constants(std::uint8_t channels, float src_x, float src_y,
-                                                               float step_x, float step_y) noexcept {
-    return SceneConversionShaderConstants{{src_x, src_y, step_x, step_y}, channels};
+                                                               float step_x, float step_y, float limit_x,
+                                                               float limit_y) noexcept {
+    return SceneConversionShaderConstants{{src_x, src_y, step_x, step_y}, channels, limit_x, limit_y};
 }
 
 ScreenProbePixel screen_probe_pixel(const ScreenProbe& probe, const FrameMap& map) noexcept {
@@ -205,7 +272,7 @@ std::size_t SamplerTableKeyHasher::operator()(const SamplerTableKey& key) const 
 }
 
 std::uint32_t sampler_config_key(const RenderConfig& cfg) noexcept {
-    return (cfg.enhanced_mipmaps ? 1u << 16u : 0u) | ((std::clamp(cfg.anisotropic_filtering, 1u, 16u) & 0x1fu) << 8u) |
+    return ((std::clamp(cfg.anisotropic_filtering, 1u, 16u) & 0x1fu) << 8u) |
         (std::clamp(cfg.texture_lod_bias, 0u, 8u) & 0xfu);
 }
 
@@ -286,6 +353,7 @@ double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
     // duplicated presents.
     if (vsync_interval != 0u ||
         max_fps <= 0.0f ||
+        !std::isfinite(max_fps) ||  // unlimited (render_config.h kUnlimitedFrameRate): no wait
         frequency_ <= 0) {
         last_qpc_ = 0;
         return 0.0;
@@ -337,6 +405,19 @@ std::condition_variable g_picture_files_done;
 std::size_t g_picture_files_open = 0u;
 
 }  // namespace
+
+#if defined(_WIN32)
+std::string dxgi_driver_version(IDXGIAdapter* adapter) {
+    LARGE_INTEGER umd{};
+    if (adapter == nullptr || FAILED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umd))) {
+        return {};
+    }
+    const auto high = static_cast<unsigned long>(umd.HighPart);
+    const auto low = static_cast<unsigned long>(umd.LowPart);
+    return std::to_string(high >> 16u) + "." + std::to_string(high & 0xffffu) + "." + std::to_string(low >> 16u) + "." +
+           std::to_string(low & 0xffffu);
+}
+#endif
 
 void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned width, unsigned height) {
     {

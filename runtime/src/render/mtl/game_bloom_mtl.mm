@@ -5,7 +5,9 @@
 #include "galaxy/render/mtl/game_bloom_mtl.h"
 
 #include "galaxy/render/game_bloom_shape.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/render/mtl/utility_msl.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -188,8 +190,10 @@ bool GameBloom::ensure(std::shared_ptr<Texture>& target, unsigned width, unsigne
     return target != nullptr;
 }
 
+// The frame's pixels of the scene target into `target`, made at the scene target's size (the frame is the part of it
+// drawn in): a kept or source image trades places with the scene target's own (take_kept_image, take_source_image).
 bool GameBloom::copy_frame(Object commands, const Inputs& in, std::shared_ptr<Texture>& target, const char* name) {
-    if (!ensure(target, in.frame_width, in.frame_height, in.color->format, false, name)) {
+    if (!ensure(target, in.whole_width(), in.whole_height(), in.color->format, false, name)) {
         return false;
     }
     @autoreleasepool {
@@ -215,7 +219,7 @@ std::shared_ptr<Texture> GameBloom::take_kept_image() {
 
 void GameBloom::keep_picture(std::shared_ptr<Texture> picture) {
     keep_ = std::move(picture);
-    keep_used_ = clock_;
+    keep_used_ = idle_clock();
     kept_ = true;
 }
 
@@ -225,14 +229,12 @@ std::shared_ptr<Texture> GameBloom::take_source_image() {
 
 void GameBloom::give_source(std::shared_ptr<Texture> picture) {
     source_ = std::move(picture);
-    simple_used_ = clock_;
+    simple_used_ = idle_clock();
     source_given_ = true;
 }
 
 void GameBloom::trim_idle() {
-    constexpr std::uint64_t kIdleFrames = 600u;
-    ++clock_;
-    const auto idle = [&](std::uint64_t used) { return clock_ > used + kIdleFrames; };
+    const auto idle = [&](std::uint64_t used) { return idle_since(used); };
     if (idle(keep_used_)) keep_.reset();
     if (idle(work_used_)) {
         for (std::shared_ptr<Texture>* t : {&work_, &box_tmp_, &mask_, &level1_, &blur_h_[0]}) t->reset();
@@ -249,7 +251,7 @@ void GameBloom::trim_idle() {
 bool GameBloom::keep(Object commands, const Inputs& in) {
     kept_ = ready_ && in.color != nullptr && in.frame_width != 0u && in.frame_height != 0u &&
             copy_frame(commands, in, keep_, "bloom kept scene");
-    keep_used_ = clock_;
+    keep_used_ = idle_clock();
     return kept_;
 }
 
@@ -275,10 +277,10 @@ bool GameBloom::prepare(Object commands, const Inputs& in, const Params& p) {
     if (!ready_ || in.color == nullptr || in.frame_width == 0u || in.frame_height == 0u || ((normal || restore) && !kept)) {
         return false;
     }
-    keep_used_ = clock_;
+    keep_used_ = idle_clock();
     if (!restore) {
-        work_used_ = clock_;
-        (normal ? normal_used_ : simple_used_) = clock_;
+        work_used_ = idle_clock();
+        (normal ? normal_used_ : simple_used_) = idle_clock();
     }
     composite_width_ = in.frame_width;
     composite_height_ = in.frame_height;
@@ -301,21 +303,24 @@ bool GameBloom::prepare(Object commands, const Inputs& in, const Params& p) {
         return true;
     }
     const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.scale);
+    // The images at the largest shape of every step the frame may take: a step change makes none again.
+    const bloom::Capacity cap = bloom::largest_shape(in.whole_width(), in.whole_height(), kAuthoredLines,
+                                                     in.lowest_sixteenths);
     const unsigned blurs1 = normal ? 2u : 1u;
     bool made = ensure(dummy_, 1u, 1u, kWorkFormat, true, "bloom unused slot") &&
                 ensure(dummy_out_, 1u, 1u, kWorkFormat, true, "bloom unused slot") &&
-                ensure(work_, s.w1, s.h1, kWorkFormat, true, "bloom work") &&
-                ensure(box_tmp_, s.w1, s.h1, kWorkFormat, true, "bloom box") &&
-                ensure(mask_, s.w1, s.h1, kWorkFormat, true, "bloom mask") &&
-                ensure(level1_, s.w1, s.h1, kWorkFormat, true, "bloom level 1");
+                ensure(work_, cap.w1, cap.h1, kWorkFormat, true, "bloom work") &&
+                ensure(box_tmp_, cap.w1, cap.h1, kWorkFormat, true, "bloom box") &&
+                ensure(mask_, cap.w1, cap.h1, kWorkFormat, true, "bloom mask") &&
+                ensure(level1_, cap.w1, cap.h1, kWorkFormat, true, "bloom level 1");
     for (unsigned i = 0; made && i < blurs1; ++i) {
-        made = ensure(blur_h_[i], s.w1, s.h1, kWorkFormat, true, "bloom level 1 blur");
+        made = ensure(blur_h_[i], cap.w1, cap.h1, kWorkFormat, true, "bloom level 1 blur");
     }
     if (made && normal) {
-        made = ensure(level2_in_, s.w2, s.h2, kWorkFormat, true, "bloom level 2 source") &&
-               ensure(level2_, s.w2, s.h2, kWorkFormat, true, "bloom level 2");
+        made = ensure(level2_in_, cap.w2, cap.h2, kWorkFormat, true, "bloom level 2 source") &&
+               ensure(level2_, cap.w2, cap.h2, kWorkFormat, true, "bloom level 2");
         for (unsigned i = 0; made && i < 3u; ++i) {
-            made = ensure(blur2_h_[i], s.w2, s.h2, kWorkFormat, true, "bloom level 2 blur");
+            made = ensure(blur2_h_[i], cap.w2, cap.h2, kWorkFormat, true, "bloom level 2 blur");
         }
     }
     if (!made || (!normal && !given && !copy_frame(commands, in, source_, "bloom source"))) {
@@ -405,10 +410,10 @@ bool GameBloom::prepare(Object commands, const Inputs& in, const Params& p) {
     c.params[0] = static_cast<float>(std::min(p.intensity, 255u)) / 255.0f;
     c.params[1] = std::max(p.strength, 0.0f);
     c.params[2] = normal ? 1.0f : 2.0f;
-    c.uv[0] = 1.0f / static_cast<float>(s.f * s.w1);
-    c.uv[1] = 1.0f / static_cast<float>(s.f * s.h1);
-    c.uv[2] = 1.0f / static_cast<float>(s.f * s.n * std::max(s.w2, 1u));
-    c.uv[3] = 1.0f / static_cast<float>(s.f * s.n * std::max(s.h2, 1u));
+    // The simple bloom's second level is level 1 again.
+    const bloom::CompositeUv uv = bloom::composite_uv(s, normal ? cap : bloom::Capacity{cap.w1, cap.h1, cap.w1, cap.h1});
+    std::copy(std::begin(uv.uv), std::end(uv.uv), c.uv);
+    std::copy(std::begin(uv.limit), std::end(uv.limit), c.sigma);
     composite_inputs_[0] = normal ? keep_.get() : source_.get();
     composite_inputs_[1] = level1_.get();
     composite_inputs_[2] = normal ? level2_.get() : level1_.get();

@@ -2,6 +2,7 @@
 #include "galaxy/render/post_process.h"
 #include "barriers_d3d12.h"
 #include "galaxy/render/renderer_d3d12.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <algorithm>
 #include <bit>
@@ -56,8 +57,9 @@ constexpr ShaderBytes bytes(const BYTE (&code)[N]) noexcept {
     return {code, N};
 }
 
-// Pictures between passes, as the scene; the window.
+// The self-test's pictures (the pictures between passes take the scene's format, color_format_); the window.
 constexpr DXGI_FORMAT kColorFormat = kSceneColorFormat;
+static_assert(kSceneColorFormat == DXGI_FORMAT_R10G10B10A2_UNORM, "PostProcessor::color_format_ starts as the scene's format");
 constexpr DXGI_FORMAT kWindowFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 // The HDR10 swap chain's buffers.
 constexpr DXGI_FORMAT kHdrWindowFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
@@ -225,12 +227,12 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     // reported when it cannot be built.
     const D3D12_SHADER_BYTECODE easu = code(easu_shader(device_));
     const bool scaling =
-        create_pipeline(code(bytes(g_post_fullscreen_vs)), easu, kColorFormat, 0, easu_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), easu, color_format_, 0, easu_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), easu, kWindowFormat, 0, easu_window_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_ps)), kWindowFormat, 0, rcas_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_scaled_ps)), kWindowFormat, 0,
                         rcas_scaled_) &&
-        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_ps)), kColorFormat, 0, resample_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_ps)), color_format_, 0, resample_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_ps)), kWindowFormat, 0, resample_window_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_copy_ps)), kWindowFormat, 0, copy_window_);
     if (!scaling) {
@@ -242,12 +244,12 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
                            D3D12_COLOR_WRITE_ENABLE_BLUE;
     const bool smaa_pipelines =
         create_smaa_pipelines(settings_.smaa_quality, smaa_edges_, smaa_weights_) &&
-        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), kColorFormat, 0, smaa_blend_) &&
-        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_keep_ps)), kColorFormat, 0,
+        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), color_format_, 0, smaa_blend_) &&
+        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_keep_ps)), color_format_, 0,
                         smaa_blend_rgb_, kRgb);
     const bool fxaa_pipeline =
-        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat, 0, fxaa_) &&
-        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat, 0, fxaa_rgb_,
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), color_format_, 0, fxaa_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), color_format_, 0, fxaa_rgb_,
                         kRgb);
 
     D3D12_DESCRIPTOR_HEAP_DESC hd{};
@@ -324,6 +326,42 @@ bool PostProcessor::prepare_hdr() {
     return made;
 }
 
+bool PostProcessor::set_wide(bool wide) {
+    const DXGI_FORMAT format = wide ? kSceneHdrColorFormat : kSceneColorFormat;
+    if (!ready_ || format == color_format_) {
+        return ready_;
+    }
+    // Made aside and taken together: a failure leaves the chain whole in its old format.
+    constexpr UINT8 kRgb = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE;
+    ComPtr<ID3D12PipelineState> easu, resample, smaa_blend, smaa_blend_rgb, fxaa, fxaa_rgb;
+    const bool made =
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(easu_shader(device_)), format, 0, easu) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_ps)), format, 0, resample) &&
+        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), format, 0, smaa_blend) &&
+        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_keep_ps)), format, 0,
+                        smaa_blend_rgb, kRgb) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), format, 0, fxaa) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), format, 0, fxaa_rgb, kRgb);
+    if (!made) {
+        std::cerr << "[hdr] the passes for the wide pictures could not be made\n";
+        return false;
+    }
+    easu_ = std::move(easu);
+    resample_ = std::move(resample);
+    smaa_blend_ = std::move(smaa_blend);
+    smaa_blend_rgb_ = std::move(smaa_blend_rgb);
+    fxaa_ = std::move(fxaa);
+    fxaa_rgb_ = std::move(fxaa_rgb);
+    // The multisampled scene passes are made again at their first use; the pictures between passes when next asked
+    // for (ensure_target makes a target of another format again).
+    for (auto& pass : scene_pass_ms_) {
+        for (auto& pipeline : pass) pipeline.Reset();
+    }
+    traded_.Reset();
+    color_format_ = format;
+    return true;
+}
+
 void PostProcessor::shutdown() noexcept {
     easu_window_.Reset();
     resample_window_.Reset();
@@ -363,6 +401,7 @@ void PostProcessor::shutdown() noexcept {
     stencil_ = {};
     retired_.clear();
     device_ = nullptr;
+    color_format_ = kSceneColorFormat;
 }
 
 void PostProcessor::release_retired(std::uint64_t frame_index) noexcept {
@@ -378,7 +417,7 @@ bool PostProcessor::ensure_target(Target& target, unsigned width, unsigned heigh
                                   std::uint64_t frame_index, unsigned frames_in_flight) {
     if (target.resource && target.width == width && target.height == height &&
         target.format == format) {
-        target.used_frame = frame_index;
+        target.used_step = idle_clock();
         return true;
     }
     if (target.resource) {
@@ -419,19 +458,18 @@ bool PostProcessor::ensure_target(Target& target, unsigned width, unsigned heigh
         target.rtv.ptr += static_cast<SIZE_T>(rtv_slot) * rtv_increment_;
         device_->CreateRenderTargetView(target.resource.Get(), nullptr, target.rtv);
     }
-    target.used_frame = frame_index;
+    target.used_step = idle_clock();
     return true;
 }
 
 void PostProcessor::trim_idle_targets(std::uint64_t frame_index, unsigned frames_in_flight) {
-    constexpr std::uint64_t kTargetIdleFrames = 600u;
     for (Target* target : {&edges_, &weights_, &antialiased_, &scaled_, &stencil_}) {
-        if (target->resource && frame_index > target->used_frame + kTargetIdleFrames) {
+        if (target->resource && idle_since(target->used_step)) {
             retired_.push_back({std::move(target->resource), frame_index + frames_in_flight});
             *target = {};
         }
     }
-    if (traded_ && frame_index > traded_frame_ + kTargetIdleFrames) {
+    if (traded_ && idle_since(traded_step_)) {
         retired_.push_back({std::move(traded_), frame_index + frames_in_flight});
     }
 }
@@ -551,7 +589,7 @@ bool PostProcessor::record_aa(ID3D12GraphicsCommandList* list, DescriptorRing& s
                               unsigned width, unsigned height,
                               std::uint64_t frame_index, unsigned frames_in_flight) {
     if (pass == AaRun::kNone ||
-        !ensure_target(antialiased_, width, height, kColorFormat, 2u, frame_index, frames_in_flight)) {
+        !ensure_target(antialiased_, width, height, color_format_, 2u, frame_index, frames_in_flight)) {
         return false;
     }
     if (pass == AaRun::kSmaa &&
@@ -634,10 +672,14 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
         pass = status_.fxaa_ok ? AaRun::kFxaa : AaRun::kNone;
     }
     // The passes read the scene's own image, traded out, and write every pixel and channel of the image that took its
-    // place; or they read a copy of the scene and write its colour back into the scene target.
+    // place (of the picture's part: no pass reads past it); or they read a copy of the scene and write its colour back
+    // into the scene target. The targets are the scene target's whole size, the passes work in the picture's part
+    // (dynamic resolution's rectangle), so a step change makes none again.
     const bool traded = static_cast<bool>(trade);
+    const unsigned part_width = std::min(picture_width != 0u ? picture_width : width, width);
+    const unsigned part_height = std::min(picture_height != 0u ? picture_height : height, height);
     if (pass != AaRun::kNone && !traded &&
-        !ensure_target(antialiased_, width, height, kColorFormat, 2u, frame_index, frames_in_flight)) {
+        !ensure_target(antialiased_, width, height, color_format_, 2u, frame_index, frames_in_flight)) {
         pass = AaRun::kNone;
     }
     // The last pass's pipeline (over MSAA made at first use): without one the scene is left as it is.
@@ -653,14 +695,24 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     }
     if (traded) {
         traded_ = trade(std::move(traded_));
-        traded_frame_ = frame_index;
+        traded_step_ = idle_clock();
     } else {
         // The scene and the copy change in one call each way.
         BarriersD3D12 to_copy{list};
         to_copy.texture(color, gpu::Use::ColorWrite, gpu::Use::CopySource);
         to_copy.texture(antialiased_.resource.Get(), antialiased_.use, gpu::Use::CopyDest);
         to_copy.issue();
-        list->CopyResource(antialiased_.resource.Get(), color);
+        if (part_width == width && part_height == height) {
+            list->CopyResource(antialiased_.resource.Get(), color);
+        } else {
+            D3D12_TEXTURE_COPY_LOCATION to{};
+            to.pResource = antialiased_.resource.Get();
+            to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            D3D12_TEXTURE_COPY_LOCATION from = to;
+            from.pResource = color;
+            const D3D12_BOX part{0u, 0u, 0u, part_width, part_height, 1u};
+            list->CopyTextureRegion(&to, 0u, 0u, 0u, &from, &part);
+        }
         BarriersD3D12 back{list};
         back.texture(color, gpu::Use::CopySource, gpu::Use::ColorWrite);
         back.texture(antialiased_.resource.Get(), gpu::Use::CopyDest, gpu::Use::PixelRead);
@@ -672,9 +724,10 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     const D3D12_VIEWPORT viewport{
-        0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+        0.0f, 0.0f, static_cast<float>(part_width), static_cast<float>(part_height), 0.0f, 1.0f};
     Constants c{};
     set_post_input_size(c, width, height);
+    set_post_input_part(c, part_width, part_height);
     if (pass == AaRun::kFxaa) {
         list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
         draw(list, srv_ring, last_pass, {source}, viewport, c);
@@ -712,8 +765,8 @@ ID3D12PipelineState* PostProcessor::scene_pass_pipeline(bool smaa, unsigned samp
         constexpr UINT8 kRgb = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
                                D3D12_COLOR_WRITE_ENABLE_BLUE;
         const bool made = smaa ? create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_keep_ps)),
-                                                 kColorFormat, 0, out, kRgb, samples)
-                               : create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat,
+                                                 color_format_, 0, out, kRgb, samples)
+                               : create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), color_format_,
                                                  0, out, kRgb, samples);
         if (!made) {
             return nullptr;
@@ -933,7 +986,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         list->OMSetRenderTargets(1, &target_rtv, FALSE, nullptr);
         s.origin[0] = static_cast<std::int32_t>(viewport.TopLeftX);
         s.origin[1] = static_cast<std::int32_t>(viewport.TopLeftY);
-        set_post_output(s, last_write);
+        set_post_output(s, last_write, static_cast<unsigned>(viewport.Width), static_cast<unsigned>(viewport.Height));
         draw(list, srv_ring, rcas_scaled_last, {image}, viewport, s);
         return;
     }
@@ -941,7 +994,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     // Window-sized intermediate for a scaling step that RCAS then reads.
     const bool needs_scaled = (plan.easu || plan.resample) && plan.rcas;
     if (needs_scaled &&
-        !ensure_target(scaled_, target_width, target_height, kColorFormat, 3u,
+        !ensure_target(scaled_, target_width, target_height, color_format_, 3u,
                        frame_index, frames_in_flight)) {
         plan.rcas = false;
         plan.resample = !plan.easu;
@@ -955,7 +1008,8 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
             out_viewport = viewport;
             constants.origin[0] = static_cast<std::int32_t>(viewport.TopLeftX);
             constants.origin[1] = static_cast<std::int32_t>(viewport.TopLeftY);
-            set_post_output(constants, last_write);
+            set_post_output(constants, last_write, static_cast<unsigned>(viewport.Width),
+                            static_cast<unsigned>(viewport.Height));
         } else {
             transition(list, scaled_, gpu::Use::ColorWrite);
             list->OMSetRenderTargets(1, &scaled_.rtv, FALSE, nullptr);

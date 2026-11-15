@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/benchmark_recommend.h"
+#include "galaxy/benchmark_stats.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/strict_json.h"
 
 #include <algorithm>
 #include <cmath>
-#include <charconv>
 #include <string>
 
 namespace galaxy::bench {
@@ -128,30 +129,27 @@ Recommendation recommend(const Measured& m) noexcept {
 }
 
 bool parse_recommendation(std::string_view text, render::RenderConfig& config) {
-    // write_result's own form: {"schema":1,... "status":"complete" ... "recommendation":{... "settings":[{"key":"k",
-    // "current":n,"recommended":m},...]} ...}.
-    constexpr std::string_view kKey = "{\"key\":\"";
-    constexpr std::string_view kRecommended = "\"recommended\":";
-    if (!text.starts_with("{\"schema\":1,") || text.find("\"status\":\"complete\"") == std::string_view::npos) {
+    json::Value root;
+    if (!json::parse(text, root) || root.type != json::Value::Object) return false;
+    const json::Value* schema = root.find("schema");
+    const json::Value* status = root.find("status");
+    if (schema == nullptr || schema->number_or(0.0) != static_cast<double>(kResultSchema) || status == nullptr ||
+        status->type != json::Value::String || status->text != "complete") {
         return false;
     }
-    const std::size_t at = text.find("\"recommendation\":{");
-    if (at == std::string_view::npos) return false;
-    std::size_t p = text.find("\"settings\":[", at);
-    const std::size_t end = p == std::string_view::npos ? p : text.find(']', p);
-    if (end == std::string_view::npos) return false;
+    const json::Value* rec = root.find("recommendation");
+    const json::Value* rows = rec != nullptr ? rec->find("settings") : nullptr;
+    if (rows == nullptr || rows->type != json::Value::Array || rows->items.empty()) return false;
     render::RenderConfig c = config;
-    unsigned rows = 0u;
-    while ((p = text.find(kKey, p)) != std::string_view::npos && p < end) {
-        p += kKey.size();
-        const std::size_t key_end = text.find('"', p);
-        const std::size_t value_at = text.find(kRecommended, p);
-        if (key_end == std::string_view::npos || value_at == std::string_view::npos || value_at > end) return false;
-        const std::string_view key = text.substr(p, key_end - p);
-        const char* const first = text.data() + value_at + kRecommended.size();
-        unsigned value = 0u;
-        const auto [last, error] = std::from_chars(first, text.data() + end, value);
-        if (error != std::errc{} || last == first) return false;
+    for (const json::Value& row : rows->items) {
+        const json::Value* key_value = row.find("key");
+        const json::Value* recommended = row.find("recommended");
+        if (key_value == nullptr || key_value->type != json::Value::String || recommended == nullptr ||
+            !recommended->integer || recommended->number < 0.0 || recommended->number > 65535.0) {
+            return false;
+        }
+        const std::string& key = key_value->text;
+        const unsigned value = static_cast<unsigned>(recommended->number);
         if (key == "internal_height") {
             if (std::find(render::kInternalHeights.begin(), render::kInternalHeights.end(), value) ==
                 render::kInternalHeights.end()) return false;
@@ -172,10 +170,7 @@ bool parse_recommendation(std::string_view text, render::RenderConfig& config) {
         } else {
             return false;  // not a key or a value write_result writes
         }
-        ++rows;
-        p = value_at;
     }
-    if (rows == 0u) return false;
     config = c;
     return true;
 }

@@ -43,6 +43,9 @@ final class TouchControlsView extends View {
         /** A finger at x, y (pixels) lands on something the pointer grabs: it points, whatever side of the screen it is on. */
         boolean touchTarget(float x, float y);
 
+        /** How far down (pixels) the game's own buttons in the screen's top corners reach; negative while there are none. */
+        float cornerButtonsFoot();
+
         /** The player pressed OK. */
         void arrangingDone();
 
@@ -112,6 +115,7 @@ final class TouchControlsView extends View {
     private float stickBaseX, stickBaseY, stickKnobX, stickKnobY;
     private int stickPointer = -1;
     private boolean pointerScreen = false;
+    private float cornerFoot = -1.0f;  // the game's corner buttons' lowest edge (pixels; negative: none)
     private float homeX;
     private float homeY;
     private float stickZoneRight, stickZoneTop;
@@ -167,14 +171,24 @@ final class TouchControlsView extends View {
         invalidate();
     }
 
-    /** Shown or hidden (hidden: every finger is the pointer). Hiding releases whatever was held. */
-    /** The game went to or from a pointer screen (GameActivity.menuContextChanged). */
+    /**
+     * The game went to or from a pointer screen or the title, or its corner buttons came, went or moved
+     * (GameActivity.menuContextChanged): on a pointer screen a touch points or taps, and only HOME shows, in its corner
+     * under the game's own buttons there.
+     */
     void syncMenuContext() {
-        final boolean menu = listener.menuContext();
+        final boolean menu = listener.menuContext() || listener.titleScreen();
+        final float foot = menu ? listener.cornerButtonsFoot() : -1.0f;
         if (menu == pointerScreen) {
+            if (foot != cornerFoot) {
+                cornerFoot = foot;
+                placeHome();
+                invalidate();
+            }
             return;
         }
         pointerScreen = menu;
+        cornerFoot = foot;
         placeHome();
         for (int i = 0; i < MAX_POINTERS; ++i) {
             if (targets[i] != TARGET_POINTER) {
@@ -195,16 +209,23 @@ final class TouchControlsView extends View {
         home.x = corner ? buttons.get(TWO_BUTTON).x : homeX;
         home.y = corner ? buttons.get(TWO_BUTTON).y : homeY;
         if (corner && getWidth() > 0 && getHeight() > 0) {
-            // The file card (FileInfo: 286 canvas units either side, its foot 110 under the canvas's top) spans a screen
-            // narrower than 16:9 at the top: HOME goes under its foot.
+            // 8 canvas units clear of the game's own buttons.
             final float aspect = (float) getWidth() / getHeight();
             final float unit = aspect < 4.0f / 3.0f ? getWidth() / 608.0f : getHeight() / 456.0f;
+            final float gap = 8.0f * unit;
+            // The file card (FileInfo: 286 canvas units either side, its foot 110 under the canvas's top) spans a screen
+            // narrower than 16:9 at the top: HOME goes under its foot.
             if (home.x - home.radius < getWidth() / 2.0f + 286.0f * unit) {
-                home.y = Math.max(home.y, 118.0f * unit + home.radius);
+                home.y = Math.max(home.y, 110.0f * unit + gap + home.radius);
+            }
+            // The save select's Quit and Settings hold the top corners: HOME goes under them.
+            if (cornerFoot >= 0.0f) {
+                home.y = Math.max(home.y, cornerFoot + gap + home.radius);
             }
         }
     }
 
+    /** Shown or hidden (hidden: every finger is the pointer). Hiding releases whatever was held. */
     void setControlsShown(boolean value) {
         if (shown == value) {
             return;

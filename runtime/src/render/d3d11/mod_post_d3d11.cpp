@@ -68,8 +68,10 @@ void RendererD3D11::record_mod_post(const ModPostProgram& program, ModPostConsta
     }
     const GpuPassScope pass{*this, GpuPass::FramePass};
     end_scene_pass();
-    const unsigned width = scene_.color->width;
-    const unsigned height = scene_.color->height;
+    // The frame: the bound target's drawn part (dynamic resolution's rectangle; the whole target without it).
+    const FrameMap part = scene_part();
+    const unsigned width = part.width;
+    const unsigned height = part.height;
     constants.size[0] = static_cast<float>(width);
     constants.size[1] = static_cast<float>(height);
     constants.inv_size[0] = 1.0f / static_cast<float>(width);
@@ -96,6 +98,14 @@ void RendererD3D11::record_mod_post(const ModPostProgram& program, ModPostConsta
                 depth = alt_scene_.depth->view.Get();
             }
         }
+    }
+    // The scene's part of its depth (dynamic resolution's rectangle of the main set: bound, or held by the output
+    // scene's swap), as a share of its size.
+    const FrameMap& scene_in = output_scene_active_ ? alt_scene_map_ : scene_map_;
+    const FrameMap& scene_whole = output_scene_active_ ? alt_scene_extent_ : frame_extent_;
+    if (scene_whole.width != 0u && scene_whole.height != 0u) {
+        constants.scene_share[0] = static_cast<float>(scene_in.width) / static_cast<float>(scene_whole.width);
+        constants.scene_share[1] = static_cast<float>(scene_in.height) / static_cast<float>(scene_whole.height);
     }
     if (depth != nullptr) {
         constants.flags |= kModPostHasDepth;

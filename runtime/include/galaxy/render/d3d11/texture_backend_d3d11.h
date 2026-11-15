@@ -66,6 +66,26 @@ public:
     [[nodiscard]] gpu::TextureRef create_texture(std::uint32_t width, std::uint32_t height, unsigned levels,
                                                  std::uint64_t& allocation_bytes, TexelFormat format = TexelFormat::Rgba8,
                                                  bool writable = false);
+    // create_texture in two steps (gpu_texture_backend.h): make_texture on any thread (the device is free-threaded),
+    // adopt_texture on the render thread. With `fill`, an RGBA8 or BC1 texture is made with its levels as its initial data
+    // (`filled`: record_upload is not called for it).
+    // The staged levels make_texture may write (as record_upload takes them).
+    struct Levels {
+        const UploadChunk* staging = nullptr;
+        std::uint64_t offset = 0u;
+        const std::uint64_t* offsets = nullptr;
+        const std::uint32_t* pitches = nullptr;
+    };
+    struct MadeTexture {
+        gpu::TextureRef texture;
+        std::uint64_t allocation_bytes = 0u;
+        bool filled = false;  // its levels are written
+    };
+    static constexpr bool kMakesAnywhere = true;
+    [[nodiscard]] MadeTexture make_texture(std::uint32_t width, std::uint32_t height, unsigned levels,
+                                           TexelFormat format = TexelFormat::Rgba8, bool writable = false,
+                                           const Levels* fill = nullptr) const;
+    void adopt_texture(const MadeTexture& made) noexcept;
     [[nodiscard]] static bool direct_written(const d3d11::Texture*) noexcept { return false; }
     // Feature level 11_0 samples BC1 always, so the store's other BLOCK4 forms are never taken here.
     [[nodiscard]] static bool supports_bc1() noexcept { return true; }

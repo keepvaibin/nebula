@@ -4,7 +4,9 @@
 #include "galaxy/render/d3d11/renderer_d3d11.h"
 
 #include "galaxy/content_viewport.h"
-#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/display_aspect.h"
+#include "galaxy/benchmark.h"
+#include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/render/host_window_win32.h"
@@ -55,6 +57,7 @@ void RendererD3D11::lose_device() {
 
 bool RendererD3D11::initialize(int window_width, int window_height, const FrameMap& frame) {
     scene_map_ = frame;
+    frame_extent_ = scene_extent_ = scene_rectangle_ = frame;
     frame_slot_ = 0;
     frame_index_ = 0;
     if (window_ != nullptr) {
@@ -77,6 +80,15 @@ bool RendererD3D11::initialize(int window_width, int window_height, const FrameM
             shutdown();
             return false;
         }
+        // The scene in a part of its targets, every pass reading that part (dynamic_resolution.h).
+        set_dynamic_resolution_offered(true);
+        // The scene's depth as a picture (publish_scene_depth_copy): a format the device draws into and filters.
+        UINT r32 = 0u;
+        constexpr UINT kDepthCopyNeeds = D3D11_FORMAT_SUPPORT_RENDER_TARGET | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE;
+        depth_copy_format_ = SUCCEEDED(d3d11::Context::get().device()->CheckFormatSupport(DXGI_FORMAT_R32_FLOAT, &r32)) &&
+                                     (r32 & kDepthCopyNeeds) == kDepthCopyNeeds
+                                 ? DXGI_FORMAT_R32_FLOAT
+                                 : DXGI_FORMAT_R16_FLOAT;
         // The rings are upload memory with addresses in the renderer's own space; their sizes follow the other renderers'.
         // No ring keeps a frame before the last one readable: nothing on Direct3D 11 reads last frame's vertices (motion).
         gpu::Device* const device = this->device();
@@ -180,6 +192,7 @@ bool RendererD3D11::create_states() {
         {Utility::DepthResolve, g_utility_DepthResolvePs, sizeof(g_utility_DepthResolvePs)},
         {Utility::Convert, g_utility_SceneConversionPs, sizeof(g_utility_SceneConversionPs)},
         {Utility::DisplayFilter, g_utility_DisplayFilterPs, sizeof(g_utility_DisplayFilterPs)},
+        {Utility::DepthCopy, g_utility_DepthCopyPs, sizeof(g_utility_DepthCopyPs)},
     };
     for (const auto& shader : pixel) {
         check(device->CreatePixelShader(shader.bytes, shader.size, nullptr, &utility_ps_[static_cast<std::size_t>(shader.which)]),
@@ -225,7 +238,11 @@ void RendererD3D11::report_adapter() {
     const std::string& name = context.device_name();
     const unsigned vendor = context.caps().vendor;
     host_window::rtx_adapter.store(false, std::memory_order_relaxed);
-    record_render_adapter(name.c_str(), vendor, 0u, 0u, false);
+    DXGI_ADAPTER_DESC1 desc{};
+    IDXGIAdapter1* const adapter = context.adapter();
+    const bool described = adapter != nullptr && SUCCEEDED(adapter->GetDesc1(&desc));
+    record_render_adapter(name.c_str(), vendor, described ? desc.DeviceId : 0u, described ? desc.SubSysId : 0u, false);
+    record_render_driver(dxgi_driver_version(adapter));
     RenderFeatureCaps caps{};
     caps.adapter_vendor_id = vendor;
     std::snprintf(caps.adapter_description.data(), caps.adapter_description.size(), "%s", name.c_str());
@@ -409,42 +426,21 @@ void RendererD3D11::shutdown() {
 }
 
 void RendererD3D11::grow_rings() {
-    // A ring whose frames took over half their budget (or spilled) grows; one whose last 600 frames stayed under a
-    // quarter of it gives half of its memory back (renderer_mtl.mm grow_rings).
-    if (ring_growth_failed_ ||
-        (!vertex_ring_.wants_growth() && !index_ring_.wants_growth() && !constant_ring_.wants_growth() &&
-         !matrix_ring_.wants_growth() && !vertex_ring_.wants_shrink() && !index_ring_.wants_shrink() &&
-         !constant_ring_.wants_shrink() && !matrix_ring_.wants_shrink())) {
+    // A ring whose frames took over half their budget (or spilled) grows; one whose last 30 seconds (and 600 frames)
+    // stayed under a quarter of it gives half of its memory back on a frame without the scene (UploadRing::kQuietNs).
+    // Only that ring is made again.
+    const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kFramesInFlight, true},
+                                    {&index_ring_, "index", kFramesInFlight, true},
+                                    {&constant_ring_, "constant", kFramesInFlight, true},
+                                    {&matrix_ring_, "matrix", kFramesInFlight, false}};
+    if (ring_growth_failed_ || std::none_of(std::begin(rings), std::end(rings),
+                                            [](const UploadRingSlot& s) { return s.ring->wants_new_size(); })) {
         return;
     }
+    const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::RingResize);
     // A ring is made again as new upload memory; the old memory goes with the frames that may still read it.
-    gpu::Device* const device = this->device();
     std::vector<gpu::BufferRef> old;
-    const auto place = [&](UploadRing& ring, const char* name, bool chunks) {
-        const std::size_t had = ring.capacity();
-        std::size_t capacity = ring.grown_capacity(kFramesInFlight);
-        if (capacity == 0u) {
-            ring_growth_failed_ = true;
-            capacity = had;
-        } else if (ring.wants_shrink()) {
-            capacity = ring.shrunk_capacity(kFramesInFlight);
-        }
-        if (capacity != had) {
-            std::cerr << "[gpu-rings] " << (capacity > had ? "grow " : "shrink ") << name << " frame-high-water-kb="
-                      << (ring.high_water() >> 10u) << " mb=" << (had >> 20u) << "->" << (capacity >> 20u) << '\n';
-        }
-        ring.release_into(old);
-        if (ring.initialize(device, name, UploadRing::budget(capacity, kFramesInFlight), kFramesInFlight, capacity, chunks)) {
-            return true;
-        }
-        ring_growth_failed_ = true;
-        std::cerr << "[gpu-rings] grow " << name << " failed\n";
-        return ring.initialize(device, name, UploadRing::budget(had, kFramesInFlight), kFramesInFlight, had, chunks);
-    };
-    if (!place(vertex_ring_, "vertex", true) || !place(index_ring_, "index", true) || !place(constant_ring_, "constant", true) ||
-        !place(matrix_ring_, "matrix", false)) {
-        throw std::runtime_error("upload ring resize failed");
-    }
+    remake_upload_rings(device(), rings, false, ring_growth_failed_, old);
     for (gpu::BufferRef& buffer : old) {
         frame_->retired_buffers.push_back(std::move(buffer));
     }
@@ -483,6 +479,7 @@ std::uint64_t RendererD3D11::completed_fence_value() const {
 }
 
 void RendererD3D11::wait_for_fence_value(std::uint64_t fence_value) {
+    const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::FrameWait);
     if (fence_value == 0u) {
         throw std::runtime_error("invalid frame-specific GPU fence wait");
     }
@@ -526,6 +523,7 @@ void RendererD3D11::begin_frame() {
     host_window::poll_render_config_file();
     follow_window_and_resize();
     apply_window_size();
+    apply_dynamic_resolution();
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
     Frame& frame = frames_[frame_slot_];
     frame_ = &frame;
@@ -549,6 +547,12 @@ void RendererD3D11::begin_frame() {
                     native_scene_gpu_ema_ms_ = native_scene_gpu_ema_ms_ == 0.0 ? gpu_ms
                                                : native_scene_gpu_ema_ms_ + (gpu_ms - native_scene_gpu_ema_ms_) * 0.1;
                 }
+                if (frame.generated) {
+                    generated_gpu_ms_ += gpu_ms;
+                    ++generated_gpu_samples_;
+                    generated_gpu_ema_ms_ = generated_gpu_ema_ms_ == 0.0 ? gpu_ms
+                                            : generated_gpu_ema_ms_ + (gpu_ms - generated_gpu_ema_ms_) * 0.1;
+                }
                 const float before = frame_gpu_ema_ms_.load(std::memory_order_relaxed);
                 frame_gpu_ema_ms_.store(before == 0.0f ? static_cast<float>(gpu_ms)
                                                        : before + (static_cast<float>(gpu_ms) - before) * 0.1f,
@@ -563,7 +567,9 @@ void RendererD3D11::begin_frame() {
     frame.retired.clear();
     frame.retired_buffers.clear();
     frame.tables_used = 0u;
-    if (frame_index_ % 120u == 0u) {
+    // Once a second of the game (target slots age on idle_clock).
+    if (idle_clock() - target_swept_step_ >= kTargetSweepSteps) {
+        target_swept_step_ = idle_clock();
         sweep_target_slots();
     }
     reset_sampler_frame();
@@ -631,8 +637,14 @@ unsigned RendererD3D11::present_sync_interval(unsigned configured, float max_fps
     return 1u;
 }
 
+bool RendererD3D11::interpolation_mode() const {
+    const RenderConfig cfg = get_render_config();
+    return interpolated_frames_per_game_frame(present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval,
+                                                                 display_refresh_hz_)) != 0u;
+}
+
 std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallback on_submitted, void* submission_context,
-                                       bool) {
+                                       bool generated) {
     Frame& frame = frames_[frame_slot_];
     end_scene_pass();
     if (mirrored_store_ != nullptr) {
@@ -650,18 +662,31 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
         const RenderConfig cfg = get_render_config();
         const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
         const UINT flags = vsync == 0u && tearing_ ? DXGI_PRESENT_ALLOW_TEARING : 0u;
-        const float variable_rate = variable_refresh_ ? static_cast<float>(display_refresh_hz_) : 0.0f;
-        const float paced_fps = variable_refresh_
-                                    ? (presented_max_fps(cfg) > 0.0f ? std::min(presented_max_fps(cfg), variable_rate) : variable_rate)
-                                    : presented_max_fps(cfg);
-        pace_wait_ms = present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
+        // Interpolation presents on the render core's slot clock; otherwise the pacer holds presents to the cap.
+        const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
+        pace_wait_ms = interpolation_mode() ? 0.0 : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
         // The display's own signal that a frame may be queued, awaited asleep and bounded (renderer_d3d12.cpp).
-        if (frame_latency_waitable_ != nullptr && vsync != 0u &&
-            WaitForSingleObjectEx(frame_latency_waitable_, 100u, TRUE) == WAIT_TIMEOUT && ++latency_timeouts_ <= 4u) {
-            std::cerr << "[present] the frame latency object did not signal within 100 ms\n";
+        if (frame_latency_waitable_ != nullptr && vsync != 0u) {
+            const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Acquire);
+            if (WaitForSingleObjectEx(frame_latency_waitable_, 100u, TRUE) == WAIT_TIMEOUT && ++latency_timeouts_ <= 4u) {
+                std::cerr << "[present] the frame latency object did not signal within 100 ms\n";
+            }
         }
         const std::int64_t start = galaxy::qpc_now();
-        const HRESULT hr = swap_chain_->Present(vsync, flags);
+        // --diagnostics timeline: the present's call, as Direct3D 12 records it (a = the present's ordinal, b = its interval).
+        static std::uint64_t timeline_present_ordinal = 0u;
+        const bool timeline_present = galaxy::timeline::enabled();
+        if (timeline_present) {
+            galaxy::timeline::record(galaxy::timeline::Event::PresentBegin, ++timeline_present_ordinal, vsync);
+        }
+        HRESULT hr = S_OK;
+        {
+            const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Present);
+            hr = swap_chain_->Present(vsync, flags);
+        }
+        if (timeline_present) {
+            galaxy::timeline::record(galaxy::timeline::Event::PresentEnd, timeline_present_ordinal);
+        }
         const std::int64_t end = galaxy::qpc_now();
         present_ms = static_cast<double>(end - start) * 1000.0 / static_cast<double>(galaxy::qpc_frequency());
         occluded_ = hr == DXGI_STATUS_OCCLUDED;
@@ -676,6 +701,7 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
     (void)d3d11::Context::get().report_messages();
     frame.fence = fence;
     frame.scene_drawn = scene_drawn_;
+    frame.generated = generated;
     last_submitted_ = fence;
     for (ProbeSlot& probes : probe_slots_) {
         if (probes.fence == kProbesInFrame) {
@@ -819,6 +845,7 @@ void RendererD3D11::read_pass_times(Frame& frame, UINT64 frequency, UINT64 frame
             pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f, std::memory_order_relaxed);
         }
     }
+    galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(), std::min(std::size(kPassTimeNames), frame_ms.size()));
 }
 
 std::size_t RendererD3D11::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
@@ -900,7 +927,7 @@ void RendererD3D11::follow_window_and_resize() {
         (void)resize_swap_chain(host_window::backbuffer_width, host_window::backbuffer_height);
     }
     swap_vsync_ = wants_vsync();
-    if (host_window::monitor_changed.exchange(false, std::memory_order_acq_rel) || display_refresh_checks_++ % 120u == 0u) {
+    if (host_window::monitor_changed.exchange(false, std::memory_order_acq_rel) || display_refresh_.due()) {
         refresh_display_rate();
     }
 }
@@ -1149,8 +1176,9 @@ ID3D11SamplerState* RendererD3D11::sampler_for(const SamplerKey& key, const Rend
     const bool mag_linear = (key.filter & 16u) != 0u;
     const std::uint32_t minf = (key.filter >> 5u) & 7u;
     const bool min_linear = minf >= 4u;
-    const bool no_anisotropy = (minf & 3u) == 3u;
-    const unsigned mip_mode = no_anisotropy ? 2u : minf & 3u;
+    const bool authored = (key.filter & kSamplerAuthoredLevels) != 0u;
+    const bool no_anisotropy = (minf & 3u) == 3u || authored;
+    const unsigned mip_mode = (minf & 3u) == 3u ? 2u : minf & 3u;
     const bool use_anisotropic = anisotropy > 1u && mip_mode != 0u && min_linear && mag_linear && !no_anisotropy;
     D3D11_SAMPLER_DESC desc{};
     desc.Filter = use_anisotropic ? D3D11_FILTER_ANISOTROPIC
@@ -1161,7 +1189,7 @@ ID3D11SamplerState* RendererD3D11::sampler_for(const SamplerKey& key, const Rend
     desc.AddressU = wrap(key.filter & 3u);
     desc.AddressV = wrap((key.filter >> 2u) & 3u);
     desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-    desc.MipLODBias = std::clamp(key.lod_bias + cfg_bias, D3D11_MIP_LOD_BIAS_MIN, D3D11_MIP_LOD_BIAS_MAX);
+    desc.MipLODBias = std::clamp(key.lod_bias + (authored ? 0.0f : cfg_bias), D3D11_MIP_LOD_BIAS_MIN, D3D11_MIP_LOD_BIAS_MAX);
     desc.MaxAnisotropy = use_anisotropic ? anisotropy : 1u;
     desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
     if (mip_mode != 0u) {
@@ -1318,7 +1346,7 @@ bool RendererD3D11::present(const DisplayTexture* source, bool capture_backbuffe
         surface_lock_ = {};
         return false;  // followed at the next frame boundary
     }
-    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const auto aspect = galaxy::latched_display_aspect();
     const auto content_aspect =
         galaxy::presentation_content_aspect(aspect ? aspect->content_aspect : galaxy::kDesignContentAspect, source->prerecorded_movie);
     const int bb_w = static_cast<int>(swap_width_);

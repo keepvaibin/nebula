@@ -1170,8 +1170,8 @@ namespace {
         }
     }
 
-    // A legend in the face (its middle (x, y), `halfWidth` x `halfHeight`): as large as its lines fit, a single letter
-    // no larger than a key's own, a tag to the left of the rest.
+    // A legend in the face (its middle (x, y), `halfWidth` x `halfHeight`): as large as its lines fit with a margin all
+    // round, a single letter no larger than a key's own, a tag to the left of the rest.
     void drawLegend(Canvas& rCanvas, const KeyLegend& rLegend, f32 x, f32 y, f32 halfWidth, f32 halfHeight, const Rgba& rInk) {
         if (rLegend.mLineCount == 0) {
             return;
@@ -1199,9 +1199,9 @@ namespace {
             lineExtent(tag, &tagWidth, &tagTop, &tagFoot);
         }
         const f32 room = tag.mCodes.size() != 0 ? (tagWidth * tag.mScale + 0.55f) : 0.0f;
-        const f32 single = rLegend.mLineCount == 1 && rLegend.mLine[0].mCodes.size() == 1 ? 0.62f : 0.72f;
+        const f32 single = rLegend.mLineCount == 1 && rLegend.mLine[0].mCodes.size() == 1 ? 0.56f : 0.6f;
         f32 capital = halfHeight * 2.0f * single / height;
-        const f32 byWidth = halfWidth * 2.0f * 0.84f / (widest + room);
+        const f32 byWidth = halfWidth * 2.0f * 0.82f / (widest + room);
         capital = byWidth < capital ? byWidth : capital;
         const f32 shift = room * capital * 0.5f;
         f32 top = y - height * capital * 0.5f;
@@ -1230,7 +1230,7 @@ namespace {
         const Shape body = {x, y, halfWidth, halfHeight, smaller * 0.45f};
         drawShape(rCanvas, body, rgba(cRing), ring, rgba(cKeySideTop), rgba(cKeySideBottom));
         const f32 inset = unit * 0.04f;
-        const f32 front = pressed ? inset : unit * 0.11f;  // the side showing beneath the face
+        const f32 front = pressed ? inset : unit * 0.07f;  // the side showing beneath the face
         const Shape face = {x, y - (front - inset) * 0.5f, halfWidth - ring - inset, halfHeight - ring - (inset + front) * 0.5f,
                             smaller * 0.36f};
         const Rgba top = rgba(cWhiteTop);

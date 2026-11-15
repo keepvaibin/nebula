@@ -248,6 +248,7 @@ mod tests {
             ("layers/base/files/@x", Some("Name.LeadingAt")),
             ("layers/@base/files/a", Some("Name.LeadingAt")),
             ("layers/base/patches/@other.mod/a.bcsv.json", None),
+            // release-check: allow (a file name with an @, not an e-mail address)
             ("layers/base/assets/a@b.png", None),
             ("layers/base/files/com1", Some("Name.Reserved")),
             ("layers/base/files/COM¹", Some("Name.Reserved")),

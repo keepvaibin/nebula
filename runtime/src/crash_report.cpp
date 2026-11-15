@@ -176,7 +176,7 @@ Report classify(const Facts& facts) noexcept {
     // A mod's code: the fault in its plugin, or in the game's code a call of its plugin reached.
     if (facts.kind == Facts::Kind::Fault && !facts.plugin_mod.empty()) {
         set(r, "NEB-M03", "A mod's code crashed the game",
-            "Turn this mod off in Settings > Mods or the launcher, and send its author the report file.");
+            "Turn this mod off in Settings > MODS, and send its author the report file.");
         put(r.detail, sizeof(r.detail),
             facts.in_plugin ? "The game crashed in the code of the mod %.*s." : "The game crashed in a call the code of the mod %.*s made.",
             static_cast<int>(facts.plugin_mod.size()), facts.plugin_mod.data());
@@ -193,7 +193,7 @@ Report classify(const Facts& facts) noexcept {
         if (fatal && !text.empty()) put(said, sizeof(said), " The game reported: %.*s", text_len, text.data());
         if (!facts.last_mod_read.empty() && facts.last_mod_seconds >= 0.0 && facts.last_mod_seconds <= kRecentModRead) {
             set(r, "NEB-M02", "A mod's file crashed the game",
-                "Turn this mod off in Settings > Mods or the launcher, or check that it is made for this game's "
+                "Turn this mod off in Settings > MODS, or check that it is made for this game's "
                 "region and version.");
             put(r.detail, sizeof(r.detail), "The game %s %.0f s after it read a file from a mod (%.*s).%s", what,
                 facts.last_mod_seconds, static_cast<int>(facts.last_mod_read.size()), facts.last_mod_read.data(), said);
@@ -201,7 +201,7 @@ Report classify(const Facts& facts) noexcept {
         }
         if (facts.mods_change_game) {
             set(r, "NEB-M01", "The game crashed with mods that change it",
-                "Turn off the mods in Settings > Mods or the launcher. If that fixes it, turn them back on one at a "
+                "Turn off the mods in Settings > MODS. If that fixes it, turn them back on one at a "
                 "time to find which one.");
             put(r.detail, sizeof(r.detail), "The game %s while mods changed its files or code.%s", what, said);
             return r;
@@ -234,19 +234,19 @@ Report classify(const Facts& facts) noexcept {
                 "Install Nebula again, or update it, so that all of its files come from one version.");
         } else if (text.starts_with("cannot open") || text.starts_with("cannot map")) {
             set(r, "NEB-S01", "The game content was not found",
-                "Run Nebula Setup again, or choose the game content in Nebula settings > Advanced.");
+                "Open Nebula Setup and choose Repair.");
         } else if (has(text, "too short for a game partition") || has(text, "points past the partition") ||
                    has(text, "runs past the partition")) {
             set(r, "NEB-S02", "The game content is damaged", "Run Nebula Setup again to rebuild it from your disc image.");
         } else if (text.starts_with("the renderer did not start")) {
             set(r, "NEB-S04", "The graphics card could not start the game",
-                "Update the graphics driver. On a computer with two graphics cards, choose the other one in Nebula "
-                "settings > Display.");
+                "Update the graphics driver. On a computer with two graphics cards, choose the other one in "
+                "Settings > SYSTEM > GRAPHICS CARD.");
         } else if (text.starts_with("the settings did not load")) {
             set(r, "NEB-S05", "Nebula's settings could not be read",
                 "Rename config.ini in Nebula's settings folder to start with the default settings.");
         } else if (text.starts_with("usage:") || text.starts_with("unknown option")) {
-            set(r, "NEB-S06", "Nebula was started the wrong way", "Start Nebula from its launcher or shortcut.");
+            set(r, "NEB-S06", "Nebula was started the wrong way", "Start Nebula from its shortcut or app menu entry.");
         } else {
             set(r, "NEB-N04", "Nebula stopped on an internal error", kReportIt);
         }

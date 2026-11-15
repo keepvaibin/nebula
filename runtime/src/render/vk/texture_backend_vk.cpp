@@ -210,7 +210,10 @@ void TextureBackend::release_view(std::uint32_t index) {
 
 TextureBackend::UploadChunk TextureBackend::create_upload_chunk(std::uint64_t size) {
     UploadChunk chunk{};
-    chunk.resource = vk::Context::get().create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, "texture upload arena");
+    // Host image copies read the staged texels on the CPU (vkCopyMemoryToImageEXT): from cached memory, as
+    // write-combined memory is read uncached. The copy queue's copies read either at the bus's speed.
+    chunk.resource = vk::Context::get().create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, "texture upload arena",
+                                                      host_formats_ != 0u ? vk::BufferPlace::HostRead : vk::BufferPlace::Host);
     if (!chunk.resource) {
         throw std::runtime_error("[TextureStore] create texture upload arena failed");
     }
@@ -240,9 +243,58 @@ bool TextureBackend::supports_rgb565() {
     return (properties.optimalTilingFeatures & kNeeded) == kNeeded;
 }
 
+namespace {
+
+// An image made for host copies (direct_written) written from staged levels by the host: the layout change and the
+// levels, nothing recorded. Any thread, for a new image no frame reads yet.
+void copy_levels_from_host(vk::Texture& texture, const TextureBackend::UploadChunk& staging, std::uint64_t offset,
+                           std::uint32_t width, std::uint32_t height, unsigned levels, const std::uint64_t* offsets,
+                           const std::uint32_t* pitches) {
+    const VkDevice device = vk::Context::get().device();
+    VkHostImageLayoutTransitionInfoEXT transition{VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO_EXT};
+    transition.image = texture.image;
+    transition.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    transition.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    transition.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, texture.levels, 0, 1};
+    vk::check(vkTransitionImageLayoutEXT(device, 1, &transition), "host image layout transition");
+    std::vector<VkMemoryToImageCopyEXT> regions(levels);
+    for (unsigned l = 0; l < levels; ++l) {
+        VkMemoryToImageCopyEXT& region = regions[l];
+        region = {VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY_EXT};
+        region.pHostPointer = staging.cpu_base + offset + offsets[l];
+        // In texels, as the copy path's bufferRowLength.
+        region.memoryRowLength = texture.format == VK_FORMAT_R8_UNORM ? pitches[l]
+                                 : texture.format == VK_FORMAT_R8G8_UNORM || texture.format == VK_FORMAT_R5G6B5_UNORM_PACK16
+                                     ? pitches[l] / 2u
+                                 : texture.format == VK_FORMAT_BC1_RGBA_UNORM_BLOCK ? pitches[l] / 2u
+                                                                                   : pitches[l] / 4u;
+        region.memoryImageHeight = 0;
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, l, 0, 1};
+        region.imageExtent = {std::max<std::uint32_t>(1u, width >> l), std::max<std::uint32_t>(1u, height >> l), 1};
+    }
+    VkCopyMemoryToImageInfoEXT copy{VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO_EXT};
+    copy.dstImage = texture.image;
+    copy.dstImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    copy.regionCount = levels;
+    copy.pRegions = regions.data();
+    vk::check(vkCopyMemoryToImageEXT(device, &copy), "host image copy");
+    texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+}
+
+}  // namespace
+
 gpu::TextureRef TextureBackend::create_texture(
     std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, TexelFormat format,
     bool writable) {
+    MadeTexture made = make_texture(width, height, levels, format, writable);
+    adopt_texture(made);
+    allocation_bytes = made.allocation_bytes;
+    return std::move(made.texture);
+}
+
+// Any thread: host_formats_ is fixed at initialize.
+TextureBackend::MadeTexture TextureBackend::make_texture(std::uint32_t width, std::uint32_t height, unsigned levels,
+                                                         TexelFormat format, bool writable, const Levels* fill) const {
     const VkFormat vk_format = vulkan_format_of(format);
     const bool host = writable && (host_formats_ & (1u << static_cast<unsigned>(format))) != 0u;
     auto texture = vk::Context::get().create_texture(
@@ -269,11 +321,21 @@ gpu::TextureRef TextureBackend::create_texture(
         vkDestroyImageView(device, texture->view, nullptr);
         texture->view = view;
     }
-    allocation_bytes = texture->allocation_bytes;
-    if (!async_slots_.empty() && !host) {
-        async_.insert_or_assign(texture.get(), Async{});  // a stale entry of a freed image at this address goes
+    MadeTexture made;
+    if (fill != nullptr && fill->staging != nullptr && direct_written(texture.get())) {
+        copy_levels_from_host(*texture, *fill->staging, fill->offset, width, height, levels, fill->offsets, fill->pitches);
+        made.filled = true;
     }
-    return texture;
+    made.allocation_bytes = texture->allocation_bytes;
+    made.texture = std::move(texture);
+    return made;
+}
+
+void TextureBackend::adopt_texture(const MadeTexture& made) {
+    // An image made for host copies is written with no command; the others go through the transfer queue when it is used.
+    if (made.texture && !async_slots_.empty() && !direct_written(made.texture.get())) {
+        async_.insert_or_assign(made.texture.get(), Async{});  // a stale entry of a freed image at this address goes
+    }
 }
 
 bool TextureBackend::poolable(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height,
@@ -297,35 +359,7 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
     if (direct_written(texture)) {
         // Host copies: the layout change and the levels are done by the host, in the staged rows; nothing is recorded. A new
         // image no frame reads yet.
-        const VkDevice device = vk::Context::get().device();
-        VkHostImageLayoutTransitionInfoEXT transition{VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO_EXT};
-        transition.image = texture->image;
-        transition.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        transition.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        transition.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, texture->levels, 0, 1};
-        vk::check(vkTransitionImageLayoutEXT(device, 1, &transition), "host image layout transition");
-        std::vector<VkMemoryToImageCopyEXT> regions(levels);
-        for (unsigned l = 0; l < levels; ++l) {
-            VkMemoryToImageCopyEXT& region = regions[l];
-            region = {VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY_EXT};
-            region.pHostPointer = staging.cpu_base + offset + offsets[l];
-            // In texels, as the copy path's bufferRowLength.
-            region.memoryRowLength = texture->format == VK_FORMAT_R8_UNORM          ? pitches[l]
-                                     : texture->format == VK_FORMAT_R8G8_UNORM || texture->format == VK_FORMAT_R5G6B5_UNORM_PACK16
-                                         ? pitches[l] / 2u
-                                     : texture->format == VK_FORMAT_BC1_RGBA_UNORM_BLOCK ? pitches[l] / 2u
-                                                                                    : pitches[l] / 4u;
-            region.memoryImageHeight = 0;
-            region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, l, 0, 1};
-            region.imageExtent = {std::max<std::uint32_t>(1u, width >> l), std::max<std::uint32_t>(1u, height >> l), 1};
-        }
-        VkCopyMemoryToImageInfoEXT copy{VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO_EXT};
-        copy.dstImage = texture->image;
-        copy.dstImageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        copy.regionCount = levels;
-        copy.pRegions = regions.data();
-        vk::check(vkCopyMemoryToImageEXT(device, &copy), "host image copy");
-        texture->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        copy_levels_from_host(*texture, staging, offset, width, height, levels, offsets, pitches);
         return;
     }
     if (!async_slots_.empty()) {

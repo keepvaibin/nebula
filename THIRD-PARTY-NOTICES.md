@@ -131,6 +131,13 @@ accepts the NVIDIA RTX SDKs license.
 <https://github.com/nothings/stb> (texture packs' PNG loading and texture dumps). Copyright (c) 2017 Sean Barrett,
 used under the MIT alternative: `third_party/stb/LICENSE`.
 
+## miniz 3.0.2 (MIT)
+
+`third_party/miniz/` holds the unmodified `miniz.c` and `miniz.h` of the miniz 3.0.2 release from
+<https://github.com/richgel999/miniz>, which the Windows Setup reads and writes zip files with. Copyright 2013-2014 RAD
+Game Tools and Valve Software, Copyright 2010-2014 Rich Geldreich and Tenacious Software LLC. License:
+`third_party/miniz/LICENSE`.
+
 ## bcdec (MIT or Unlicense)
 
 `third_party/bcdec/bcdec.h` (v0.98) from <https://github.com/iOrange/bcdec> decodes texture packs' BC1-BC5 and BC7

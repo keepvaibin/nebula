@@ -132,6 +132,10 @@ void reset_touch_controls_places() noexcept;
 void note_touch_target(std::uint32_t circle) noexcept;
 // A finger landing at x, y (window pixels) lands on something the pointer grabs.
 [[nodiscard]] bool touch_target_at(float x, float y) noexcept;
+// NEBULA_CONTEXT_CORNER_BUTTONS: the game's own buttons in the screen's top corners reach `foot` (0..4095) down the
+// picture this frame. corner_buttons_foot: their lowest edge in window pixels, -1 while there are none.
+void note_corner_buttons(std::uint32_t foot) noexcept;
+[[nodiscard]] float corner_buttons_foot() noexcept;
 // The chosen input mode has nothing to play with (input_missing): the game shows its message, and Enter opens the
 // settings menu as F1 does.
 void set_input_missing_shown(bool shown) noexcept;

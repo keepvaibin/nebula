@@ -97,10 +97,18 @@ std::size_t read_hid_pads(std::vector<HidPadState>& out, bool consume_gyro) noex
 // Steady-clock microseconds, the time base of shake_until_us.
 [[nodiscard]] std::uint64_t controller_hid_now_us() noexcept;
 
-// The HID controllers attached now, by model name (settings UI). With the
-// worker running these are its devices and slots; without it the devices are
-// enumerated synchronously and numbered in order.
+// The HID controllers attached now, by model name (settings UI, button icons). With the worker running these are its
+// devices and slots; without it, the presence thread's list (made at its start and at each device change), numbered in
+// order. Never enumerates or opens a device on the caller's thread.
 std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept;
+
+// XInput user slots with a controller (bit per slot), as the presence thread last found them: it asks every slot every
+// kXInputProbeMs (a call on an empty slot is slow; Microsoft's guidance is to ask empty slots every few seconds, never on
+// a frame's path). The first call starts it. A reader that finds a slot gone says so (xinput_slot_lost) and stops
+// reading it until the thread sees it again.
+inline constexpr unsigned kXInputProbeMs = 2000u;
+[[nodiscard]] std::uint32_t xinput_present_mask() noexcept;
+void xinput_slot_lost(std::uint32_t slot) noexcept;
 
 // Joy-Con halves: those connected, whether a left half's L or a right half's R is held, and the pairs (each pair is
 // one controller; a half without its partner is none). `paired` grows with every pair made. While the Pair Joy-Con

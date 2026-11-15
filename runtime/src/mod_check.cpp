@@ -142,8 +142,8 @@ bool read_description(const std::filesystem::path& folder, Description& out, std
 const Description& description() {
     static const Description found = [] {
         Description d;
-        const std::filesystem::path program = galaxy::program_directory();
-        const std::filesystem::path folder = program.empty() ? std::filesystem::path{} : program / "luma";
+        const std::filesystem::path package = galaxy::package_directory();
+        const std::filesystem::path folder = package.empty() ? std::filesystem::path{} : package / "luma";
         std::error_code error;
         std::string why;
         if (folder.empty() || !std::filesystem::is_directory(folder, error)) {

@@ -57,6 +57,9 @@ public:
     // Sub-pixel offset (render pixels, -0.5..0.5) for frame `index`.
     virtual void jitter_offset(unsigned index, unsigned phase_count, float& x, float& y) const = 0;
     [[nodiscard]] virtual const char* name() const noexcept = 0;
+    // The narrowest render width it evaluates for the output it was made for (dynamic resolution's floor); 0: any width
+    // down to the renderer's own lowest step.
+    [[nodiscard]] virtual unsigned smallest_render_width() const noexcept { return 0u; }
     // The tracer's outside denoiser, when this upscaler is one (rt_denoiser.h): null for the others.
     [[nodiscard]] virtual rt::Denoiser* denoiser() noexcept { return nullptr; }
 };
@@ -66,8 +69,10 @@ void temporal_barriers(const TemporalUpscaleInputs& in, bool back);
 
 // Intel XeSS Super Resolution (the library from xess_library.h); quality: the temporal_quality row. Null without the library
 // or when the device lacks what it asked for (Context::create).
+// `wide` (every upscaler here): the scene holds light past white (HDR output's float scene), taken as high dynamic range.
 [[nodiscard]] std::unique_ptr<TemporalUpscaler> create_xess_upscaler(VkInstance instance, VkPhysicalDevice physical, VkDevice device,
-                                                                     unsigned output_width, unsigned output_height, unsigned quality);
+                                                                     unsigned output_width, unsigned output_height, unsigned quality,
+                                                                     bool wide = false);
 
 // Snapdragon Game Super Resolution 2 (sgsr2_vk.cpp): two fragment passes on any Vulkan device. `output_format`: the
 // output image's, which the history shares. Null when a pipeline or image cannot be made.
@@ -80,6 +85,7 @@ void temporal_barriers(const TemporalUpscaleInputs& in, bool back);
 // Null without it or when the context cannot be made. Sized for exactly these sizes.
 [[nodiscard]] std::unique_ptr<TemporalUpscaler> create_fsr3_upscaler(VkDevice device, VkPhysicalDevice physical,
                                                                      unsigned render_width, unsigned render_height,
-                                                                     unsigned output_width, unsigned output_height);
+                                                                     unsigned output_width, unsigned output_height,
+                                                                     bool wide = false);
 
 }  // namespace galaxy::render::vk

@@ -43,11 +43,11 @@ enum class UpdateFailure { Download, Rejected, NoRoom, Declined, Refused, Blocke
 class UpdateException(val failure: UpdateFailure, message: String) : IOException(message)
 
 /**
- * Nebula's updates for an APK installed from its releases, by the Windows launcher's rules (UpdateService.cs,
- * Updater.cs): the check starts as the launcher opens and never holds it up; no request within an hour of an answer,
+ * Nebula's updates for an APK installed from its releases, by the game's own update rules (runtime/src/update,
+ * update.cpp): the check starts as the app opens and never holds it up; no request within an hour of an answer,
  * an answer dated after now checked again; a failed check keeps the last answer and its time; a beta takes betas only;
  * Skip this version. The prompt shows the release's notes; Update downloads the APK (resumed when cut off), checks
- * its release-key signature (the Windows setups' key, installer/release-public-key.xml) and that it is this app at
+ * its release-key signature (the release key, installer/release-public-key.xml) and that it is this app at
  * the release's version, and hands it to Android's installer, which asks the player and itself refuses another
  * signing key or a lower version. An install from a store updates through the store: no check.
  */

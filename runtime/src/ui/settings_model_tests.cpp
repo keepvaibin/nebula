@@ -38,6 +38,23 @@ int main() {
         config.max_fps = 20;
         normalize_interpolation(config, high);
         check(config.max_fps == 30, "base frame rate snaps to 30");
+        FrameRateCaps fast{540};
+        check(interpolation_targets(Interpolation::kNative, fast) ==
+                  std::vector<unsigned>{75, 90, 100, 120, 144, 165, 200, 240, 280, 300, 360, 480, 500, 0},
+              "540 Hz target choices");
+        FrameRateCaps no_vsync{144};
+        no_vsync.unlimited = true;
+        check(interpolation_targets(Interpolation::kNative, no_vsync) ==
+                  std::vector<unsigned>{75, 90, 100, 120, 0, kUnlimitedTarget},
+              "without VSync, Unlimited after the display's rate");
+        config.max_fps = galaxy::render::kUnlimitedFrameRate;
+        check(interpolation_of(config) == Interpolation::kNative && frame_rate_target(config.max_fps) == kUnlimitedTarget &&
+                  galaxy::render::unlimited_frame_rate(frame_rate_of_target(kUnlimitedTarget)),
+              "Unlimited is native interpolation");
+        normalize_interpolation(config, no_vsync);
+        check(galaxy::render::unlimited_frame_rate(config.max_fps), "Unlimited kept without VSync");
+        normalize_interpolation(config, high);
+        check(config.max_fps == 0, "with VSync, Unlimited becomes the display's rate");
         FrameRateCaps fixed{240, true, true, false, 2};
         check(interpolation_targets(Interpolation::kFrameGeneration, fixed) == std::vector<unsigned>{120, 180, 0}, "fixed generation whole multiples");
         check(native_settings_first_row(0, 9, 12) == 1, "scroll selected row into view");

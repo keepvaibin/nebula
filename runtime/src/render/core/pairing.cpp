@@ -210,9 +210,10 @@ void Pairing::pair(ListData& now, const ListData* before) {
             const std::uint32_t pair = entry.head;
             entry.head = next_item_[pair];  // a previous draw can be consumed only once
             const NebulaFrameItem& other = last.items[pair];
-            if (item.pipeline != other.pipeline || item.mesh != other.mesh || item.textures != other.textures ||
-                item.matrix != other.matrix || item.flags != other.flags || item.source_hash != other.source_hash ||
-                now.block_before[item.block] != other.block) {
+            // The textures may differ: they are discrete (a flipbook's next picture, an effect's texture pattern), shown as
+            // this frame's between frames while the item's place, colours and vertices move.
+            if (item.pipeline != other.pipeline || item.mesh != other.mesh || item.matrix != other.matrix ||
+                item.flags != other.flags || item.source_hash != other.source_hash || now.block_before[item.block] != other.block) {
                 continue;
             }
             if (((item.flags | other.flags) & NEBULA_ITEM_DISCRETE_VERTICES) != 0u) {

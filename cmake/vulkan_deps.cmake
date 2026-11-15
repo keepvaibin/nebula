@@ -11,9 +11,7 @@ macro(nebula_fetch_sources name url sha256)
     FetchContent_MakeAvailable(${name})
 endmacro()
 
-nebula_fetch_sources(vulkan_headers
-    https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/vulkan-sdk-1.4.350.1.tar.gz
-    6d1bb65e49520344cc0a48af3dc02e993781efff14c7ebdcb8ae9fa23ddf7e83)
+include("${CMAKE_CURRENT_LIST_DIR}/vulkan_headers.cmake")
 nebula_fetch_sources(volk
     https://github.com/zeux/volk/archive/refs/tags/vulkan-sdk-1.4.350.1.tar.gz
     078a9411298e4e0f60f5f5398c890783427c25a414619294ca8e69587bbd5eae)

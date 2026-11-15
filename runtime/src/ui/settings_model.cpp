@@ -57,6 +57,16 @@ bool display_settings_differ(const RenderConfig& a, const RenderConfig& b) {
          (a.window_width != b.window_width || a.window_height != b.window_height));
 }
 
+unsigned frame_rate_target(float max_fps) {
+    if (render::unlimited_frame_rate(max_fps)) return kUnlimitedTarget;
+    if (!(max_fps > 0.0f)) return 0u;
+    return static_cast<unsigned>(std::min<long long>(std::llround(max_fps), static_cast<long long>(kUnlimitedTarget) - 1));
+}
+
+float frame_rate_of_target(unsigned target) {
+    return target == kUnlimitedTarget ? render::kUnlimitedFrameRate : static_cast<float>(target);
+}
+
 Interpolation interpolation_of(const RenderConfig& render) {
     if (render.frame_generation == 2u) {
         return Interpolation::kFsrGeneration;
@@ -64,14 +74,13 @@ Interpolation interpolation_of(const RenderConfig& render) {
     if (render.frame_generation != 0u) {
         return Interpolation::kFrameGeneration;
     }
-    const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+    const unsigned rate = frame_rate_target(render.max_fps);
     return rate != 0u && rate <= kStepRate + 1u ? Interpolation::kOff : Interpolation::kNative;
 }
 
 // The targets a mode offers, lowest first (0: the display's refresh rate): the standard rates
-// below the display's, then its own. With a temporal upscaler native interpolation runs at
-// multiples of the step rate, as does frame generation without dynamic multi frame generation (and at most
-// the multiplier the GPU runs).
+// below the display's, then its own, then Unlimited for native interpolation without VSync. Frame generation without
+// dynamic multi frame generation runs at multiples of the step rate (and at most the multiplier the GPU runs).
 std::vector<unsigned> interpolation_targets(Interpolation mode, const FrameRateCaps& caps) {
     std::vector<unsigned> targets;
     if (mode == Interpolation::kOff) {
@@ -87,8 +96,9 @@ std::vector<unsigned> interpolation_targets(Interpolation mode, const FrameRateC
     // NVIDIA's fixed frame generation makes whole multiples of the game's step rate.
     const bool sixties = generated && caps.generated_supported && !caps.generated_dynamic;
     const unsigned most = generated && caps.generated_supported
-        ? kStepRate * (caps.generated_max + 1u) : 480u;
-    for (const unsigned rate : {75u, 90u, 100u, 120u, 144u, 165u, 180u, 200u, 240u, 280u, 300u, 360u, 480u}) {
+        ? kStepRate * (caps.generated_max + 1u) : kUnlimitedTarget;
+    for (const unsigned rate : {75u, 90u, 100u, 120u, 144u, 165u, 180u, 200u, 240u, 280u, 300u, 360u, 480u, 500u, 540u,
+                                600u, 720u, 1000u}) {
         if (refresh != 0u && rate + 1u >= refresh) {
             break;
         }
@@ -103,6 +113,9 @@ std::vector<unsigned> interpolation_targets(Interpolation mode, const FrameRateC
                                                           refresh % kStepRate >= kStepRate - 1u));
     if (own) {
         targets.push_back(0u);
+    }
+    if (caps.unlimited && mode == Interpolation::kNative) {
+        targets.push_back(kUnlimitedTarget);
     }
     return targets;
 }
@@ -126,7 +139,7 @@ std::vector<Interpolation> interpolation_modes(const FrameRateCaps& caps) {
 // display's rate counting as its refresh), else the lowest offered; a mode with none turns off.
 void normalize_interpolation(RenderConfig& render, const FrameRateCaps& caps) {
     const Interpolation mode = interpolation_of(render);
-    const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+    const unsigned rate = frame_rate_target(render.max_fps);
     if (mode == Interpolation::kOff) {
         render.max_fps = static_cast<float>(rate != 0u && rate <= kHalfStepRate ? kHalfStepRate : kStepRate);
         return;
@@ -141,7 +154,7 @@ void normalize_interpolation(RenderConfig& render, const FrameRateCaps& caps) {
         return;
     }
     // An unknown display rate (0) bounds nothing.
-    constexpr unsigned kUnboundedHz = 1000u;
+    constexpr unsigned kUnboundedHz = kUnlimitedTarget;
     const unsigned refresh = caps.refresh_hz;
     const unsigned wanted = rate == 0u ? (refresh != 0u ? refresh : kUnboundedHz) : rate;
     unsigned chosen = targets.front();
@@ -151,7 +164,7 @@ void normalize_interpolation(RenderConfig& render, const FrameRateCaps& caps) {
             chosen = target;
         }
     }
-    render.max_fps = static_cast<float>(chosen);
+    render.max_fps = frame_rate_of_target(chosen);
 }
 
 std::string percent_text(float value) {

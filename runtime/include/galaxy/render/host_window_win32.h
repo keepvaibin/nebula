@@ -31,6 +31,8 @@ inline constexpr UINT kResizeClientMessage = WM_USER + 0x45;
 // A second start of the game asks the running one to come forward (show_existing_instance): the window restores itself if it is
 // minimised and takes the foreground.
 inline constexpr UINT kShowInstanceMessage = WM_USER + 0x46;
+// The first picture is presented (show_window): the window, shown cloaked from its start, is drawn from now.
+inline constexpr UINT kUncloakMessage = WM_USER + 0x47;
 struct WindowPlacement {
     DWORD style = 0;
     RECT rect{};

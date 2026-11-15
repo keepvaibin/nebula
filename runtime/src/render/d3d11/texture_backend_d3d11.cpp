@@ -61,18 +61,44 @@ void TextureBackend::release_upload_chunk(UploadChunk& chunk) noexcept {
 }
 
 gpu::TextureRef TextureBackend::create_texture(std::uint32_t width, std::uint32_t height, unsigned levels,
-                                               std::uint64_t& allocation_bytes, TexelFormat format, bool) {
+                                               std::uint64_t& allocation_bytes, TexelFormat format, bool writable) {
+    MadeTexture made = make_texture(width, height, levels, format, writable);
+    adopt_texture(made);
+    allocation_bytes = made.allocation_bytes;
+    return std::move(made.texture);
+}
+
+TextureBackend::MadeTexture TextureBackend::make_texture(std::uint32_t width, std::uint32_t height, unsigned levels,
+                                                         TexelFormat format, bool, const Levels* fill) const {
     const DXGI_FORMAT dxgi = format == TexelFormat::Bc1 ? DXGI_FORMAT_BC1_UNORM : DXGI_FORMAT_R8G8B8A8_UNORM;
-    std::shared_ptr<d3d11::Texture> texture =
-        d3d11::Context::get().create_texture(width, height, levels, dxgi, D3D11_BIND_SHADER_RESOURCE, "store texture");
+    MadeTexture made;
+    // R8 and Rg8 are widened to four channels as record_upload writes them, so those are not made with their levels.
+    const bool fills = fill != nullptr && fill->staging != nullptr && fill->staging->cpu_base != nullptr && levels != 0u &&
+                       format != TexelFormat::R8 && format != TexelFormat::Rg8;
+    std::vector<D3D11_SUBRESOURCE_DATA> initial;
+    if (fills) {
+        initial.resize(levels);
+        for (unsigned l = 0; l < levels; ++l) {
+            initial[l].pSysMem = fill->staging->cpu_base + fill->offset + fill->offsets[l];
+            initial[l].SysMemPitch = fill->pitches[l];
+        }
+    }
+    std::shared_ptr<d3d11::Texture> texture = d3d11::Context::get().create_texture(
+        width, height, levels, dxgi, D3D11_BIND_SHADER_RESOURCE, "store texture", 1u, fills ? initial.data() : nullptr);
     if (texture == nullptr) {
-        allocation_bytes = 0u;
-        return {};
+        return made;
     }
     texture->widened = format == TexelFormat::R8 ? 1u : format == TexelFormat::Rg8 ? 2u : 0u;
-    allocation_bytes = texture->allocation_bytes;
-    stats_.placed += 1u;
-    return texture;
+    made.allocation_bytes = texture->allocation_bytes;
+    made.texture = std::move(texture);
+    made.filled = fills;
+    return made;
+}
+
+void TextureBackend::adopt_texture(const MadeTexture& made) noexcept {
+    if (made.texture != nullptr) {
+        stats_.placed += 1u;
+    }
 }
 
 bool TextureBackend::poolable(d3d11::Texture* texture, std::uint32_t& width, std::uint32_t& height, std::uint32_t& levels) {

@@ -35,14 +35,15 @@ set(luma_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/instrument.py")
 # instrument.py runs gen_types.py's unit pass: a copy is out of date when either changes.
 set(luma_types_tool "${CMAKE_CURRENT_SOURCE_DIR}/../tools/lumacore/gen_types.py")
 # The row generator parses with libclang on the build machine. A compiler of the build machine has it beside itself
-# (LLVM's packages); a cross compiler may not (Android's NDK ships none), so a cross build finds the build machine's.
+# (LLVM's packages); a cross compiler may not (Android's NDK ships none), so a cross build finds the build machine's:
+# the LLVM that LLVM_ROOT names first, then the installed one.
 set(NEBULA_LIBCLANG "" CACHE FILEPATH "The build machine's libclang for the row generator (default: beside the compiler)")
 set(luma_libclang)
 if(NEBULA_LUMA_HOOKS AND NOT NEBULA_LIBCLANG AND CMAKE_CROSSCOMPILING)
     file(GLOB luma_libclang_hints LIST_DIRECTORIES true "/usr/lib/llvm-*/lib")
     file(TO_CMAKE_PATH "$ENV{ProgramFiles}" luma_program_files)
     find_file(luma_libclang_found NAMES libclang.dll libclang.so libclang.so.1 libclang.dylib
-              HINTS "${luma_program_files}/LLVM/bin" "$ENV{LLVM_ROOT}/bin" "$ENV{LLVM_ROOT}/lib" ${luma_libclang_hints}
+              HINTS "$ENV{LLVM_ROOT}/bin" "$ENV{LLVM_ROOT}/lib" "${luma_program_files}/LLVM/bin" ${luma_libclang_hints}
                     /opt/homebrew/opt/llvm/lib /usr/local/opt/llvm/lib /usr/lib /usr/lib64
               NO_CMAKE_FIND_ROOT_PATH NO_DEFAULT_PATH)
     if(NOT luma_libclang_found)

@@ -37,6 +37,10 @@ function(nebula_archive_dep name source)
                 "-DCMAKE_BUILD_TYPE=Release"
                 "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}"
                 "-DCMAKE_INSTALL_PREFIX=${NEBULA_ARCHIVE_PREFIX}"
+                # lib/ on every system (GNUInstallDirs picks lib64 on some), the folder the paths below name.
+                # libarchive's pkg-config file also installs to ${CMAKE_INSTALL_LIBDIR}/pkgconfig before libarchive
+                # sets a default for it: unset, that is /pkgconfig, the drive's root.
+                "-DCMAKE_INSTALL_LIBDIR=lib"
                 "-DCMAKE_PREFIX_PATH=${NEBULA_ARCHIVE_PREFIX}"
                 "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
                 "-DBUILD_SHARED_LIBS=OFF"

@@ -30,6 +30,18 @@ exe=${NEBULA_EXE:-Nebula.exe}
 mkdir -p "$out/bin" "$(cygpath -u "$NEBULA_APPDATA")" "$(cygpath -u "$NEBULA_SETTINGS")"
 cp "$NEBULA_BIN/$exe" "$NEBULA_BIN"/smg_game.dll "$out/bin/"
 cp "$NEBULA_BIN"/*.pdb "$out/bin/" 2>/dev/null || true
+# What a start with mods needs beside the game (mod_start_check.cpp): the importer and the shader compilers. Without
+# them every mod is off, the test plugin among them.
+for part in nebula-import.exe nebula_import.dll; do
+    if [ -f "$NEBULA_BIN/$part" ]; then
+        cp "$NEBULA_BIN/$part" "$out/bin/"
+    fi
+done
+for folder in dxc glslang; do
+    if [ -d "$NEBULA_BIN/$folder" ]; then
+        cp -r "$NEBULA_BIN/$folder" "$out/bin/"
+    fi
+done
 if [ -d "$NEBULA_BIN/tables" ]; then
     cp "$NEBULA_BIN"/tables/*.tsv "$out/bin/"
 fi
@@ -74,4 +86,5 @@ env GALAXY_RENDER_CONFIG_PATH="$settings\\config.ini" \
     > "$out/run.log" 2>&1 || echo "exit $?" >> "$out/run.log"
 if ! ls "$out"/*.dmp >/dev/null 2>&1; then
     rm -f "$out"/bin/*.exe "$out"/bin/*.dll "$out"/bin/*.pdb
+    rm -rf "$out"/bin/dxc "$out"/bin/glslang
 fi

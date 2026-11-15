@@ -199,18 +199,101 @@ void test_pack_pictures() {
 void test_sampler_shift() {
     TextureSampler mode{};
     mode.mag_linear = mode.min_linear = true;
-    auto key = make_sampler_key(mode, false, 9u, 2.0f);
+    auto key = make_sampler_key(mode, 9u, 2.0f);
     expect(key.max_lod == 2.0f && key.min_lod == 0.0f && ((key.filter >> 5u) & 7u) == 6u,
            "mip-less texture replacement samples down to its source size");
     mode.mip = 2; mode.min_lod = 0.5f; mode.max_lod = 3.0f;
-    key = make_sampler_key(mode, false, 9u, 2.0f);
+    key = make_sampler_key(mode, 9u, 2.0f);
     expect(key.min_lod == 2.5f && key.max_lod == 5.0f, "authored LOD range follows the replacement scale");
     mode.min_lod = 0.0f;
-    key = make_sampler_key(mode, false, 9u, 2.0f);
+    key = make_sampler_key(mode, 9u, 2.0f);
     expect(key.min_lod == 0.0f, "close-up replacement base level remains visible");
-    key = make_sampler_key(mode, false, 11u, 3.0f, true, 2.0f);
+    key = make_sampler_key(mode, 11u, 3.0f, true, 2.0f);
     expect(key.lod_bias == -1.0f && key.max_lod == 10.0f && ((key.filter >> 5u) & 7u) == 7u,
            "arbitrary replacement levels pair by authored index across the full chain");
+    key = make_sampler_key(mode, 11u, 3.0f, true, 2.0f, -1.5f);
+    expect(key.lod_bias == -1.0f && (key.filter & kSamplerAuthoredLevels) != 0u,
+           "arbitrary replacement levels leave out the scene's bias and are marked drawn by hand");
+}
+
+// Levels drawn by hand: found by their mean colour and coverage, and sampled as the game sampled them.
+void test_authored_levels() {
+    // A 16x16 RGBA8 chain of three levels (16, 8, 4) from a fill per level.
+    const auto chain = [](const std::vector<RGBA8>& fills) {
+        std::vector<std::uint8_t> texels;
+        for (std::uint32_t l = 0; l < fills.size(); ++l) {
+            const std::uint32_t side = 16u >> l;
+            for (std::uint32_t i = 0; i < side * side; ++i) {
+                // A checker in the first level whose smaller copies are its mean.
+                RGBA8 c = fills[l];
+                if (l == 0u && ((i % side) + i / side) % 2u == 1u) {
+                    c = RGBA8{static_cast<std::uint8_t>(c.r + 20u), static_cast<std::uint8_t>(c.g + 20u),
+                              static_cast<std::uint8_t>(c.b + 20u), c.a};
+                } else if (l == 0u) {
+                    c = RGBA8{static_cast<std::uint8_t>(c.r - 20u), static_cast<std::uint8_t>(c.g - 20u),
+                              static_cast<std::uint8_t>(c.b - 20u), c.a};
+                }
+                texels.insert(texels.end(), {c.r, c.g, c.b, c.a});
+            }
+        }
+        return texels;
+    };
+    const RGBA8 sand{200, 180, 120, 255};
+    auto texels = chain({sand, sand, sand});
+    expect(!detail::authored_levels(NEBULA_TEXTURE_RGBA8, texels.data(), 16u, 16u, 3u),
+           "smaller copies of the first level are not drawn by hand");
+    texels = chain({sand, sand, RGBA8{60, 140, 200, 255}});
+    expect(detail::authored_levels(NEBULA_TEXTURE_RGBA8, texels.data(), 16u, 16u, 3u),
+           "a level tinted for the distance is drawn by hand");
+    texels = chain({sand, RGBA8{200, 180, 120, 120}, RGBA8{200, 180, 120, 40}});
+    expect(detail::authored_levels(NEBULA_TEXTURE_RGBA8, texels.data(), 16u, 16u, 3u),
+           "levels fading out for the distance are drawn by hand");
+    // An 8x8 first level of 2x2 tiles from `tile` and a 4x4 second level of `second`.
+    const auto tiles = [](const RGBA8 (&tile)[4], RGBA8 second) {
+        std::vector<std::uint8_t> out;
+        for (std::uint32_t i = 0; i < 64u; ++i) {
+            const RGBA8 c = tile[(i / 8u % 2u) * 2u + i % 2u];
+            out.insert(out.end(), {c.r, c.g, c.b, c.a});
+        }
+        for (std::uint32_t i = 0; i < 16u; ++i) {
+            out.insert(out.end(), {second.r, second.g, second.b, second.a});
+        }
+        return out;
+    };
+    const RGBA8 black{0, 0, 0, 255}, white{255, 255, 255, 255}, red{255, 0, 0, 255}, clear{255, 255, 255, 0};
+    texels = tiles({black, white, white, black}, RGBA8{188, 188, 188, 255});
+    expect(!detail::authored_levels(NEBULA_TEXTURE_RGBA8, texels.data(), 8u, 8u, 2u),
+           "a copy made in linear light (half black, half white: 188) is not drawn by hand");
+    texels = tiles({black, white, white, black}, RGBA8{40, 40, 40, 255});
+    expect(detail::authored_levels(NEBULA_TEXTURE_RGBA8, texels.data(), 8u, 8u, 2u),
+           "a level darker than any copy is drawn by hand");
+    texels = tiles({red, clear, clear, red}, red);
+    expect(!detail::authored_levels(NEBULA_TEXTURE_RGBA8, texels.data(), 8u, 8u, 2u),
+           "a premultiplied copy whose one-bit alpha is cut at half again is not drawn by hand");
+    texels = chain({sand, sand, RGBA8{0, 0, 0, 0}});
+    expect(detail::authored_levels(NEBULA_TEXTURE_RGBA8, texels.data(), 16u, 16u, 2u) == false,
+           "a level past the record's count is not read");
+    // L8 whose second level is darker (its alpha too).
+    std::vector<std::uint8_t> l8(16u * 16u + 8u * 8u, 200u);
+    std::fill(l8.begin() + 16 * 16, l8.end(), 120u);
+    expect(detail::authored_levels(NEBULA_TEXTURE_L8, l8.data(), 16u, 16u, 2u), "an L8 level drawn darker is found");
+    expect(!detail::authored_levels(NEBULA_TEXTURE_L8, l8.data(), 16u, 16u, 1u), "one level is never drawn by hand");
+
+    TextureSampler mode{};
+    mode.mag_linear = mode.min_linear = true;
+    mode.mip = 1;
+    mode.max_lod = 4.0f;
+    mode.lod_bias = 0.25f;
+    const SamplerKey key = make_sampler_key(mode, 5u, 0.0f, false, 1.5f, -1.0f, true);
+    expect(key.lod_bias == 1.75f && key.max_lod == 4.0f && ((key.filter >> 5u) & 7u) == 5u &&
+               (key.filter & kSamplerAuthoredLevels) != 0u,
+           "the game's levels drawn by hand keep its range and level filter at the authored lines, without the scene's bias");
+    const SamplerKey plain = make_sampler_key(mode, 5u, 0.0f, false, 1.5f, -1.0f, false);
+    expect(plain.lod_bias == -0.75f && (plain.filter & kSamplerAuthoredLevels) == 0u,
+           "smaller copies take the scene's bias and no authored lines");
+    mode.mip = 0;
+    expect((make_sampler_key(mode, 5u, 0.0f, false, 1.5f, -1.0f, true).filter & kSamplerAuthoredLevels) == 0u,
+           "a sampler reading the first level only has no levels to choose");
 }
 
 struct Gpu {
@@ -610,6 +693,7 @@ int main() {
     test_png(root);
     test_pack_pictures();
     test_sampler_shift();
+    test_authored_levels();
     test_block4_astc();
     test_priority(root);
     Gpu gpu;

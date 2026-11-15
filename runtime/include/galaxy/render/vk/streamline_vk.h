@@ -54,7 +54,7 @@ void shutdown() noexcept;
 // denoiser too (rt_denoiser.h), in the same modes.
 [[nodiscard]] std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, unsigned render_height, unsigned output_width,
                                                                      unsigned output_height, unsigned quality,
-                                                                     bool ray_reconstruction = false);
+                                                                     bool ray_reconstruction = false, bool wide = false);
 
 // The presented frame, as RendererD3D12 does around its Present.
 // At the first begin_frame after a present: whether frame generation runs this frame (with DLSS, on a GPU that runs it, while chosen,

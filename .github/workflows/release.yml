@@ -1,0 +1,545 @@
+name: Release
+
+# Pushing a tag v<version> (or running this workflow with one) makes the draft release "Nebula <version>" and builds
+# every package into it: the Windows Setup (installer/build-native-setup.ps1), the Linux package
+# (platform/linux/build_linux.sh, installer/package-linux.sh), the Mac app (platform/apple/build_macos.sh) and the
+# Android app (platform/android/build_apk.ps1). Nothing built here is signed: the keys stay on the release PC, where
+# installer/sign-release.ps1 signs the Android app and adds the signatures the updates check. The release is
+# published from there, by hand.
+# Run by hand with "dry run", it builds every package from the chosen branch and keeps them as the run's artifacts:
+# no tag, no release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag (v2.1.0); not needed for a dry run
+        required: false
+      dry_run:
+        description: Build the packages only (no release)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  LLVM_VERSION: '22.1.6'
+  DXC_RELEASE: v1.9.2609
+  DXC_ARCHIVE: dxc_2026_09_29.zip
+  ANDROID_NDK: '28.2.13676358'
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-24.04
+    outputs:
+      publish: ${{ steps.what.outputs.publish }}
+      tag: ${{ steps.what.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      prefix: ${{ steps.version.outputs.prefix }}
+      ref: ${{ steps.what.outputs.ref }}
+    steps:
+      - name: What this run builds
+        id: what
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          # A release: a pushed tag, or a run by hand with a tag and without "dry run". Anything else builds only.
+          tag=
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag=$GITHUB_REF_NAME
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$DRY_RUN" != true ]; then
+            tag=$INPUT_TAG
+            [ -n "$tag" ] || { echo "a release needs its tag (or choose dry run)"; exit 1; }
+          fi
+          if [ -n "$tag" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "ref=$tag" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.what.outputs.ref }}
+      - name: Version and notes
+        id: version
+        shell: bash
+        env:
+          TAG: ${{ steps.what.outputs.tag }}
+        run: |
+          project=$(sed -n 's/^project(Nebula VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          version=${TAG#v}
+          [ -n "$TAG" ] || version=$project
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$' ||
+            { echo "$TAG: a release tag is v<major>.<minor>.<patch> or v<major>.<minor>.<patch>-beta.<n>"; exit 1; }
+          [ "${version%%-*}" = "$project" ] || { echo "$TAG is not the version in CMakeLists.txt ($project)"; exit 1; }
+          case $version in *-beta.*) prefix=Nebula-Beta ;; *) prefix=Nebula ;; esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          # Each release's notes are written beforehand in .github/release-notes/<version>.md: no notes, no release.
+          if [ -n "$TAG" ]; then
+            [ -s ".github/release-notes/$version.md" ] ||
+              { echo ".github/release-notes/$version.md is missing: write the release notes before tagging"; exit 1; }
+          fi
+          echo "Building $prefix $version from $(git rev-parse HEAD)${TAG:+ for $TAG}"
+      - name: The draft release
+        if: steps.what.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.what.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 && exit 0
+          prerelease=
+          case $VERSION in *-*) prerelease=--prerelease ;; esac
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --title "Nebula $VERSION" \
+            $prerelease --notes-file ".github/release-notes/$VERSION.md"
+
+  windows-hosts:
+    name: Windows programs (${{ matrix.level }})
+    needs: release
+    runs-on: windows-2022
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - level: avx2
+            baseline: 'OFF'
+          - level: x86-64-v2
+            baseline: 'ON'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.ref }}
+      - name: Diagnostics address
+        shell: bash
+        env:
+          NEBULA_DIAG_ENDPOINT: ${{ vars.NEBULA_DIAG_ENDPOINT }}
+          NEBULA_DIAG_PUBLIC_KEY: ${{ vars.NEBULA_DIAG_PUBLIC_KEY }}
+        run: bash tools/diag_endpoint_local.sh
+      - name: Build Nebula, NebulaVk and NebulaD11
+        shell: pwsh
+        run: |
+          . .\tools\enter_msvc_environment.ps1 | Out-Null
+          $build = Join-Path $env:RUNNER_TEMP 'host'
+          cmake -S . -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=ON -DNEBULA_D3D11=ON `
+            "-DNEBULA_HOST_BASELINE=${{ matrix.baseline }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build $build --target Nebula NebulaVk NebulaD11 nebula_glslang
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # What the Setup and the Android build take: the programs, the Agility SDK's runtime, glslang's compiler and
+          # the shader tools.
+          $out = Join-Path $env:RUNNER_TEMP 'out'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Get-ChildItem -LiteralPath $build -Filter 'Nebula*.exe' | Copy-Item -Destination $out
+          Copy-Item -Recurse -LiteralPath (Join-Path $build 'D3D12') -Destination (Join-Path $out 'D3D12')
+          New-Item -ItemType Directory -Force (Join-Path $out 'glslang'), (Join-Path $out 'host-tools') | Out-Null
+          Copy-Item (Join-Path $build 'glslang-tool\glslang.exe'), (Join-Path $build 'glslang-tool\LICENSE.txt') (Join-Path $out 'glslang')
+          Copy-Item (Join-Path $build 'galaxy_native_spirv.exe'), (Join-Path $build 'galaxy_utility_spirv.exe') (Join-Path $out 'host-tools')
+          Get-ChildItem -Recurse -File $out | ForEach-Object { '{0,12:N0}  {1}' -f $_.Length, $_.FullName.Substring($out.Length + 1) }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-hosts-${{ matrix.level }}
+          path: ${{ runner.temp }}/out
+          if-no-files-found: error
+
+  windows-game:
+    name: Windows game module
+    needs: release
+    runs-on: windows-2022
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.ref }}
+      - name: LLVM
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o llvm.tar.xz \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/clang+llvm-$LLVM_VERSION-x86_64-pc-windows-msvc.tar.xz"
+          mkdir llvm
+          tar -xJf llvm.tar.xz -C llvm --strip-components=1
+          rm llvm.tar.xz
+          llvm/bin/clang --version
+      - name: Build the game module
+        shell: pwsh
+        run: |
+          $build = Join-Path $env:RUNNER_TEMP 'game'
+          $llvm = Join-Path $env:RUNNER_TEMP 'llvm\bin'
+          # The players' build: ThinLTO with the profile in native/pgo. Both modules, the self-description and the
+          # services list, for both CPU levels.
+          foreach ($target in 'smg_game', 'smg_game_plain', 'luma_self_description', 'luma_services_file') {
+            & .\native\build.ps1 -Petari native\petari -Build $build -Pgo -Llvm $llvm -Target $target
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $out = Join-Path $env:RUNNER_TEMP 'out'
+          $names = Join-Path $out 'names'
+          New-Item -ItemType Directory -Force (Join-Path $out 'bin\x86-64-v2'), (Join-Path $names 'luma_types') | Out-Null
+          Copy-Item (Join-Path $build 'smg_game.dll'), (Join-Path $build 'smg_game_plain.dll') (Join-Path $out 'bin')
+          Copy-Item (Join-Path $build 'x86-64-v2\smg_game.dll'), (Join-Path $build 'x86-64-v2\smg_game_plain.dll') (Join-Path $out 'bin\x86-64-v2')
+          # The game build folder's self-description, as build-native-setup.ps1 -Names and LumaLink's --names read it.
+          Copy-Item -Recurse -LiteralPath (Join-Path $build 'luma') -Destination (Join-Path $names 'luma')
+          foreach ($file in 'luma_types.json', 'luma_functions.json', 'luma_numbers.json', 'luma_services.json') {
+            Copy-Item (Join-Path $build "luma_types\$file") (Join-Path $names 'luma_types')
+          }
+          Copy-Item (Join-Path $build 'smg_game.luma-placement.json'), (Join-Path $build 'smg_game.luma-self.json') $names
+          # names/ holds some 15,000 small files: as one tar, the artifact downloads as one file (download-artifact
+          # unpacks while it downloads, and that many files stall it on Windows until it gives up).
+          Push-Location $out
+          tar -cf names.tar names
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+          Remove-Item -Recurse -Force $names
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-game
+          path: ${{ runner.temp }}/out
+          if-no-files-found: error
+
+  lumakit:
+    name: LumaKit check
+    needs: [release, windows-game]
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.ref }}
+      - name: LumaLink at the version installer/lumakit names
+        shell: bash
+        run: |
+          # Byte for byte (no CRLF on Windows): the kit's sources are packed as they are, and the check compares them.
+          git clone -c core.autocrlf=false --filter=blob:none https://github.com/keepvaibin/lumalink.git "$RUNNER_TEMP/lumalink"
+          git -C "$RUNNER_TEMP/lumalink" checkout "$(tr -d '\r\n' < installer/lumakit/lumalink-version.txt)"
+          # LumaLink builds with the Nebula commit it names (its crates use Nebula's importer).
+          git clone -c core.autocrlf=false --filter=blob:none https://github.com/keepvaibin/nebula.git "$RUNNER_TEMP/lumalink/nebula"
+          git -C "$RUNNER_TEMP/lumalink/nebula" checkout "$(tr -d '\r\n' < "$RUNNER_TEMP/lumalink/nebula.commit")"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build LumaLink
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/lumalink"
+          cargo build --release --locked -p lumalink
+      - name: LLVM
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o llvm.tar.xz \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/clang+llvm-$LLVM_VERSION-x86_64-pc-windows-msvc.tar.xz"
+          mkdir llvm
+          tar -xJf llvm.tar.xz -C llvm --strip-components=1
+          rm llvm.tar.xz
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-game
+          path: ${{ runner.temp }}/game
+      - name: installer/lumakit/lumakit.luma is LumaLink's LumaKit, as built for this game
+        shell: bash
+        run: |
+          (cd "$RUNNER_TEMP/game" && tar -xf names.tar && rm names.tar)
+          # The self-description as an installed game has it (luma/): the function rows and the files beside them.
+          self="$RUNNER_TEMP/self"
+          mkdir -p "$self"
+          cp -R "$RUNNER_TEMP/game/names/luma/." "$self/"
+          cp "$RUNNER_TEMP"/game/names/luma_types/*.json "$RUNNER_TEMP"/game/names/*.json "$self/"
+          LUMALINK_CLANG="$RUNNER_TEMP/llvm/bin/clang.exe" python tools/build_lumakit.py \
+            --lumalink "$RUNNER_TEMP/lumalink/target/release/lumalink.exe" --kit "$RUNNER_TEMP/lumalink/lumakit" \
+            --names "$self" --verify installer/lumakit/lumakit.luma
+
+  windows-setup:
+    name: Windows Setup
+    needs: [release, windows-hosts, windows-game, lumakit]
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-hosts-avx2
+          path: ${{ runner.temp }}/avx2
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-hosts-x86-64-v2
+          path: ${{ runner.temp }}/v2
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-game
+          path: ${{ runner.temp }}/game
+      - name: DirectX Shader Compiler
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o dxc.zip \
+            "https://github.com/microsoft/DirectXShaderCompiler/releases/download/$DXC_RELEASE/$DXC_ARCHIVE"
+          # The archive's paths use backslashes, which unzip warns about (exit 1); .NET's reader takes them as folders.
+          pwsh -NoProfile -Command 'Expand-Archive -LiteralPath dxc.zip -DestinationPath dxc'
+      - name: Build the Setup
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          $temp = $env:RUNNER_TEMP
+          Push-Location (Join-Path $temp 'game')
+          tar -xf names.tar
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+          $bin = Join-Path $temp 'bin'
+          New-Item -ItemType Directory -Force $bin | Out-Null
+          # The AVX2 programs with D3D12\ and glslang\, the x86-64-v2 programs beside them, the game modules.
+          Copy-Item -Recurse -Path (Join-Path $temp 'avx2\*') -Destination $bin -Exclude 'host-tools'
+          Copy-Item (Join-Path $temp 'v2\*-x86-64-v2.exe') $bin
+          Copy-Item -Recurse -Path (Join-Path $temp 'game\bin\*') -Destination $bin -Force
+          $shipped = Join-Path $temp 'shipped'
+          New-Item -ItemType Directory -Force $shipped | Out-Null
+          Copy-Item installer\lumakit\lumakit.luma $shipped
+          .\installer\build-native-setup.ps1 -Version $env:VERSION -Bin $bin -Names (Join-Path $temp 'game\names') `
+            -Dxc (Join-Path $temp 'dxc') -ShippedMods $shipped -OutputDirectory (Join-Path $temp 'dist') -SigningKey ''
+      - name: Keep it (dry run)
+        if: needs.release.outputs.publish != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-setup
+          path: ${{ runner.temp }}/dist/*Setup.exe
+          if-no-files-found: error
+      - name: Add it to the release
+        if: needs.release.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: gh release upload "$TAG" "$RUNNER_TEMP"/dist/*Setup.exe --repo "$GITHUB_REPOSITORY" --clobber
+
+  linux:
+    name: Linux package
+    needs: [release, lumakit]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.ref }}
+      - name: Diagnostics address
+        shell: bash
+        env:
+          NEBULA_DIAG_ENDPOINT: ${{ vars.NEBULA_DIAG_ENDPOINT }}
+          NEBULA_DIAG_PUBLIC_KEY: ${{ vars.NEBULA_DIAG_PUBLIC_KEY }}
+        run: bash tools/diag_endpoint_local.sh
+      - name: Build tools and SDL's system libraries
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ninja-build pkg-config \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxfixes-dev libxtst-dev \
+            libxkbcommon-dev libwayland-dev wayland-protocols libegl-dev libdecor-0-dev \
+            libasound2-dev libpulse-dev libdbus-1-dev libudev-dev libdrm-dev libgbm-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - name: LLVM
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o llvm.tar.xz \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/LLVM-$LLVM_VERSION-Linux-X64.tar.xz"
+          mkdir llvm
+          tar -xJf llvm.tar.xz -C llvm --strip-components=1
+          rm llvm.tar.xz
+          llvm/bin/clang --version
+      - name: Dependencies
+        run: sh tools/fetch_build_deps.sh "$RUNNER_TEMP/deps"
+      - name: Build Nebula
+        run: sh platform/linux/build_linux.sh -d "$RUNNER_TEMP/deps" -l "$RUNNER_TEMP/llvm" -w "$RUNNER_TEMP/work"
+      - name: Pack it
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/shipped"
+          cp installer/lumakit/lumakit.luma "$RUNNER_TEMP/shipped/"
+          sh installer/package-linux.sh --bin "$RUNNER_TEMP/work/bin" --version "$VERSION" \
+            --shipped "$RUNNER_TEMP/shipped" --output "$RUNNER_TEMP/dist"
+          for package in "$RUNNER_TEMP"/dist/*.tar.gz; do
+            python3 tools/release_manifest.py "$package" "$VERSION"
+          done
+      - name: Keep it (dry run)
+        if: needs.release.outputs.publish != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: linux-x64
+          path: ${{ runner.temp }}/dist/*
+          if-no-files-found: error
+      - name: Add it to the release
+        if: needs.release.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: gh release upload "$TAG" "$RUNNER_TEMP"/dist/* --repo "$GITHUB_REPOSITORY" --clobber
+
+  macos:
+    name: Mac app
+    needs: [release, lumakit]
+    runs-on: macos-15
+    timeout-minutes: 300
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.ref }}
+      - name: Diagnostics address
+        shell: bash
+        env:
+          NEBULA_DIAG_ENDPOINT: ${{ vars.NEBULA_DIAG_ENDPOINT }}
+          NEBULA_DIAG_PUBLIC_KEY: ${{ vars.NEBULA_DIAG_PUBLIC_KEY }}
+        run: bash tools/diag_endpoint_local.sh
+      - name: Build tools
+        run: |
+          echo "TOOLS=$HOME/nebula-tools" >> "$GITHUB_ENV"
+          echo "WORK=$HOME/nebula-work" >> "$GITHUB_ENV"
+          brew install llvm ninja
+          llvm="$(brew --prefix llvm)"
+          echo "LLVM_ROOT=$llvm" >> "$GITHUB_ENV"
+          echo "BREW_LLVM_VERSION=$("$llvm/bin/llvm-config" --version)" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/nebula-tools/toolchain"
+          ln -sfn "$llvm" "$HOME/nebula-tools/toolchain/llvm"
+          rustup target add aarch64-apple-darwin
+      - name: Restore libc++
+        id: libcxx-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/nebula-tools/toolchain/libcxx
+          key: libcxx-macos-arm64-${{ env.BREW_LLVM_VERSION }}-${{ hashFiles('platform/apple/build_libcxx.sh') }}
+      - name: Build libc++
+        if: steps.libcxx-cache.outputs.cache-hit != 'true'
+        run: |
+          src="$RUNNER_TEMP/llvm-src"
+          mkdir -p "$src"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/llvm-project.tar.xz" \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$BREW_LLVM_VERSION/llvm-project-$BREW_LLVM_VERSION.src.tar.xz"
+          tar -xJf "$RUNNER_TEMP/llvm-project.tar.xz" -C "$src" --strip-components 1
+          sh platform/apple/build_libcxx.sh "$src" "$TOOLS/toolchain/llvm" "$TOOLS/toolchain/libcxx" macos arm64
+          rm -rf "$TOOLS/toolchain/libcxx/build-macos-arm64"
+      - name: Save libc++
+        if: steps.libcxx-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/nebula-tools/toolchain/libcxx
+          key: ${{ steps.libcxx-cache.outputs.cache-primary-key }}
+      - name: Dependencies
+        run: sh tools/fetch_build_deps.sh "$TOOLS/deps" apple
+      - name: Build Nebula.app
+        run: |
+          mkdir -p "$RUNNER_TEMP/shipped"
+          cp installer/lumakit/lumakit.luma "$RUNNER_TEMP/shipped/"
+          sh platform/apple/build_macos.sh -t "$TOOLS" -w "$WORK" -a arm64 -m "$RUNNER_TEMP/shipped"
+      - name: Name it and write its manifest
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          PREFIX: ${{ needs.release.outputs.prefix }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/dist"
+          # The name the Mac app's update looks for (update_install_macos.mm): Nebula-Beta-macOS.zip for a beta.
+          cp "$WORK/Nebula-macOS.zip" "$RUNNER_TEMP/dist/$PREFIX-macOS.zip"
+          python3 tools/release_manifest.py "$RUNNER_TEMP/dist/$PREFIX-macOS.zip" "$VERSION"
+      - name: Keep it (dry run)
+        if: needs.release.outputs.publish != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-arm64
+          path: ${{ runner.temp }}/dist/*
+          if-no-files-found: error
+      - name: Add it to the release
+        if: needs.release.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: gh release upload "$TAG" "$RUNNER_TEMP"/dist/* --repo "$GITHUB_REPOSITORY" --clobber
+
+  android:
+    name: Android app
+    needs: [release, windows-hosts, lumakit]
+    runs-on: windows-2022
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.ref }}
+      - name: Diagnostics address
+        shell: bash
+        env:
+          NEBULA_DIAG_ENDPOINT: ${{ vars.NEBULA_DIAG_ENDPOINT }}
+          NEBULA_DIAG_PUBLIC_KEY: ${{ vars.NEBULA_DIAG_PUBLIC_KEY }}
+        run: bash tools/diag_endpoint_local.sh
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+      - name: Android NDK
+        shell: pwsh
+        run: |
+          'y' | & "$env:ANDROID_HOME\cmdline-tools\latest\bin\sdkmanager.bat" --install "ndk;$env:ANDROID_NDK" | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem "$env:ANDROID_HOME\ndk" | ForEach-Object Name
+      - name: LLVM (the row generator's libclang)
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o llvm.tar.xz \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/clang+llvm-$LLVM_VERSION-x86_64-pc-windows-msvc.tar.xz"
+          mkdir llvm
+          tar -xJf llvm.tar.xz -C llvm --strip-components=1
+          rm llvm.tar.xz
+          echo "LLVM_ROOT=$(cygpath -m "$RUNNER_TEMP/llvm")" >> "$GITHUB_ENV"
+      - name: Dependencies
+        shell: bash
+        run: sh tools/fetch_build_deps.sh "$RUNNER_TEMP/deps" android
+      - uses: actions/download-artifact@v8
+        with:
+          name: windows-hosts-avx2
+          path: ${{ runner.temp }}/avx2
+      - name: Build the app
+        shell: pwsh
+        run: |
+          $temp = $env:RUNNER_TEMP
+          $shipped = Join-Path $temp 'shipped'
+          New-Item -ItemType Directory -Force $shipped | Out-Null
+          Copy-Item installer\lumakit\lumakit.luma $shipped
+          .\platform\android\build_apk.ps1 -Deps (Join-Path $temp 'deps') -Work (Join-Path $temp 'apk') `
+            -HostTools (Join-Path $temp 'avx2\host-tools') -ShippedMods $shipped -Unsigned -ReleaseKey ''
+      - name: Name it
+        shell: bash
+        env:
+          PREFIX: ${{ needs.release.outputs.prefix }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/dist"
+          # Signed on the release PC (installer/sign-release.ps1), which uploads it as <prefix>-Android.apk.
+          cp "$RUNNER_TEMP/apk/Nebula-unsigned.apk" "$RUNNER_TEMP/dist/$PREFIX-Android-unsigned.apk"
+      - name: Keep it (dry run)
+        if: needs.release.outputs.publish != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: android
+          path: ${{ runner.temp }}/dist/*
+          if-no-files-found: error
+      - name: Add it to the release
+        if: needs.release.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: gh release upload "$TAG" "$RUNNER_TEMP"/dist/* --repo "$GITHUB_REPOSITORY" --clobber

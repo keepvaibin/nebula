@@ -6,8 +6,8 @@
 // module or the pak are touched. A build whose diag_endpoint.h is empty refuses --send-report (exit 2) and the apps
 // hide the choice.
 //
-// The report: {"report":1,"benchmark":<the --benchmark 1 result, schema 1>,"log":[<lines>]}. "log" only when the
-// player ticks "Include the last game log": the last 200 lines (32 KiB at most) of the last run's log, each stripped
+// The report: {"report":1,"benchmark":<the --benchmark 1 result, schema 1>,"log":[<lines>]}. "log" only with
+// --with-log 1 (the game's own send has none): the last 200 lines (32 KiB at most) of the last run's log, each stripped
 // (strip_log_line). Never in a report: saves, Miis, settings files, mods, paths, user or computer names, serials.
 //
 // The envelope, version 1 (at most 256 KiB; an opened report at most 1 MiB, refused when larger):
@@ -83,6 +83,7 @@ enum Exit : int {
 struct SendResult {
     int exit = kUsage;
     std::string line;  // the one result line, without the "[diag] " prefix
+    long status = 0;   // the server's HTTP status, when it answered
 };
 // Exactly the text --send-report would seal (the "Show the full report" view); exit kInvalid when refused.
 SendResult report_preview(const std::filesystem::path& file, bool with_log, std::string& report);
@@ -95,5 +96,7 @@ SendResult post_envelope(std::string_view url, const Bytes& body, bool allow_loo
 
 // The host modes; -1 when argv[1] names none of them.
 int run_command_line(int argc, char** argv);
+// Whether `mode` (main's first argument) is one of those modes.
+[[nodiscard]] bool is_command_mode(std::string_view mode) noexcept;
 
 }  // namespace galaxy::diag

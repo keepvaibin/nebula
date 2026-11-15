@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/wiimote_motion_pointer.h"
 
+#include "galaxy/display_aspect.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -8,8 +10,6 @@ namespace galaxy::input::wiimote {
 
 namespace {
 
-// The picture's aspect the pointer's height is measured in (content_viewport.h kDesignContentAspect).
-constexpr float kAspect = 16.0f / 9.0f;
 // A MotionPlus sample comes every 10 ms alone, every 20 ms with a Nunchuk sharing the reports.
 constexpr float kFirstSampleSeconds = 0.01f;
 constexpr float kLongestSampleSeconds = 0.05f;
@@ -36,7 +36,7 @@ void MotionPointer::apply(PlayerInput& input, const MotionRates& rates, std::uin
         switch_hid::MotionSettings settings{};
         settings.shake = false;  // the remote's swings are wiimote::Motion's
         settings.gyro_pointer = true;
-        settings.picture_aspect = kAspect;
+        settings.picture_aspect = static_cast<float>(galaxy::latched_content_aspect());
         const switch_hid::SwitchMotion::Output out = motion_.feed(sample, dt, now_us, settings);
         x_ = std::clamp(x_ + out.pointer_x, -kGyroPointerLimit, kGyroPointerLimit);
         y_ = std::clamp(y_ + out.pointer_y, -kGyroPointerLimit, kGyroPointerLimit);

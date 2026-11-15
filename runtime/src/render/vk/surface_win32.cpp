@@ -12,6 +12,11 @@ std::vector<const char*> vulkan_instance_extensions() {
 }
 
 VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
+    // vkCreateWin32SurfaceKHR accepts a destroyed window's handle; its swap chain then fails as a lost surface, which
+    // would make the surface again every frame until the process ends (a restart closes the window before that).
+    if (window == nullptr || !IsWindow(window)) {
+        return VK_NULL_HANDLE;
+    }
     VkWin32SurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
     info.hinstance = GetModuleHandleW(nullptr);
     info.hwnd = window;

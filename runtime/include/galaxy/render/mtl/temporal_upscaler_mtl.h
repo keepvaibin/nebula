@@ -20,7 +20,7 @@ struct TemporalUpscaleInputs {
     const Texture* motion = nullptr;    // RG16F, render pixels, current -> previous
     const Texture* reactive = nullptr;  // R8, blended draws' alpha
     const Texture* output = nullptr;    // the scene's format, written by the scaler
-    unsigned render_width = 0u;
+    unsigned render_width = 0u;  // the scene's part of the textures (dynamic resolution's rectangle), at most the made size
     unsigned render_height = 0u;
     unsigned output_width = 0u;
     unsigned output_height = 0u;
@@ -47,6 +47,9 @@ public:
     [[nodiscard]] virtual const char* name() const noexcept = 0;
     // The output is written by a compute or MetalFX pass (the output texture needs kUseWrite), not drawn.
     [[nodiscard]] virtual bool writes_output() const noexcept = 0;
+    // The narrowest scene (render pixels) an evaluate takes within the render size it was made for, for dynamic
+    // resolution's steps; 0: any.
+    [[nodiscard]] virtual unsigned smallest_render_width() const noexcept { return 0u; }
 };
 
 // Snapdragon Game Super Resolution 2 (sgsr2_mtl.mm). Null when a pipeline or texture cannot be made.

@@ -36,7 +36,7 @@ public:
 
     bool create(ID3D12Device* device,
                 unsigned max_render_width, unsigned max_render_height,
-                unsigned max_output_width, unsigned max_output_height) {
+                unsigned max_output_width, unsigned max_output_height, bool wide) {
         // The upscaler's context plus one for the resources it shares with
         // the application (dilated depth and motion, previous nearest depth).
         constexpr std::size_t kContexts = FFX_FSR3UPSCALER_CONTEXT_COUNT + 1u;
@@ -46,9 +46,10 @@ public:
             return false;
         }
         FfxFsr3UpscalerContextDescription description{};
-        // The scene target is reversed-Z gamma RGBA8 without an exposure source.
+        // The scene target is reversed-Z display values without an exposure source; past white with HDR output.
         description.flags = FFX_FSR3UPSCALER_ENABLE_DEPTH_INVERTED |
-                            FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE;
+                            FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE |
+                            (wide ? FFX_FSR3UPSCALER_ENABLE_HIGH_DYNAMIC_RANGE : 0u);
         description.maxRenderSize = {max_render_width, max_render_height};
         description.maxUpscaleSize = {max_output_width, max_output_height};
         description.backendInterface = backend_;
@@ -166,7 +167,7 @@ private:
 std::unique_ptr<TemporalUpscaler> create_fsr3_upscaler(
     ID3D12Device* device,
     unsigned max_render_width, unsigned max_render_height,
-    unsigned max_output_width, unsigned max_output_height) {
+    unsigned max_output_width, unsigned max_output_height, bool wide) {
     if (device == nullptr) {
         return nullptr;
     }
@@ -178,7 +179,7 @@ std::unique_ptr<TemporalUpscaler> create_fsr3_upscaler(
     }
     auto upscaler = std::make_unique<Fsr3Upscaler>();
     if (!upscaler->create(device, max_render_width, max_render_height,
-                          max_output_width, max_output_height)) {
+                          max_output_width, max_output_height, wide)) {
         return nullptr;
     }
     return upscaler;
@@ -189,7 +190,7 @@ bool fsr3_available() noexcept { return true; }
 #else
 
 std::unique_ptr<TemporalUpscaler> create_fsr3_upscaler(
-    ID3D12Device*, unsigned, unsigned, unsigned, unsigned) {
+    ID3D12Device*, unsigned, unsigned, unsigned, unsigned, bool) {
     return nullptr;
 }
 

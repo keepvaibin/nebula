@@ -11,7 +11,7 @@
 
 The table: UTF-8, tab-separated, one row per string id, one column per language folder (the header names them). An
 empty cell uses the language's fallback (NebulaText.cpp). In a cell, \\n is a line break and \\\\ a backslash. "L." rows
-are the launcher's and Setup's (installer/src/Common/NebulaText.cs, which finds any row by its English cell): the game's
+are Setup's (installer/native/text.cpp, which finds any row by its English cell): the game's
 table leaves them out. "C." rows are the crash dialog's, written to runtime/src/crash_text_table.inc for the host.
 "Validator." rows are the mod validator's (crates/luma-validate, which reads this file at build and checks their named
 places): the game's table leaves them out too, so a game with no mod carries none of them. The font check keeps them,
@@ -30,16 +30,20 @@ CRASH_OUTPUT = os.path.join(ROOT, 'runtime', 'src', 'crash_text_table.inc')
 HOST_TEXT = ['runtime/src/ui/settings_*_page.cpp', 'runtime/src/ui/settings_model.cpp', 'runtime/src/render/host_window_win32.cpp',
              'runtime/src/ui/native_settings.cpp', 'runtime/src/mod_import.cpp', 'runtime/src/mods.cpp', 'runtime/src/luma.cpp',
              'runtime/src/mod_plugins.cpp']
-INSTALLER_TEXT = 'installer/src/**/*.cs'
+INSTALLER_TEXT = 'installer/native/*.cpp'
 # Capitals the menu does not show as text: pad names, a disc id, the home overlay and the DLSS footer the game replaces.
 HOST_NOT_SHOWN = {'SSAO', 'GTAO', 'SB4', 'SB5', '(BLUETOOTH)', '(BT)', '-OPTIONS', 'AIS', 'OL', 'LB/RB', 'RMGE01', 'S ARE', 'SHARE+OPTIONS',
                   'VIEW+MENU OR MINUS+PLUS', 'DLSS READY', 'DLSS WAS NOT INSTALLED', 'DOWNLOAD NVIDIA DLSS (',
                   'INSTALLING NVIDIA DLSS...', 'RESTART NOW? ENTER/Y YES  ESC/B LATER', 'HOME MENU', 'NO', 'YES',
                   'RESET?', 'RETURN TO GAME',
+                  # an answer shown unavailable ('-' marks it; the APPLY row is its text)
+                  '-APPLY',
                   # pieces joined at run time whose whole texts have rows: "INPUT: AUTO (<device>)", "THE GAME RUNS AT 60. INTERPOLATION ..."
                   'INPUT: AUTO (', '. INTERPOLATION ADDS FRAMES BETWEEN',
                   # the mods: unavailable buttons, hex digits, the game's id, the head of "ON (1 OF 2)"
-                  '-ABOUT', '-DETAILS', '-PICK', '0123456789ABCDEF', 'RMG', 'ON ('}
+                  '-ABOUT', '-DETAILS', '-PICK', '0123456789ABCDEF', 'RMG', 'ON (',
+                  # HDR CALIBRATION's button while the picture is not HDR (the CALIBRATE row is its text)
+                  '-CALIBRATE'}
 
 
 def unescape(cell):
@@ -223,7 +227,7 @@ def coverage():
         missing.update('host: ' + piece for piece in host_missing(text, ids))
     for path in glob.glob(os.path.join(ROOT, INSTALLER_TEXT), recursive=True):
         with open(path, encoding='utf-8-sig') as f:
-            for match in re.finditer(r'NebulaText\.Of\("((?:[^"\\]|\\.)*)"', f.read()):
+            for match in re.finditer(r'\bOf\(L"((?:[^"\\]|\\.)*)"', f.read()):
                 if match.group(1) not in english:
                     missing.add('installer: ' + match.group(1))
     for cells in rows:

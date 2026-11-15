@@ -1,0 +1,7 @@
+# Texts tools/release_check.ps1 always lets through: third-party projects' own addresses, compiled into their code.
+# One literal text per line; a line starting with # is a comment. A machine's own extra texts go in a file given with
+# -Allow.
+
+# BoringSSL's assembly (third_party/boringssl.cmake; the x86-64 and ARM64 builds) names the CRYPTOGAMS author in each
+# module.
+appro@openssl.org

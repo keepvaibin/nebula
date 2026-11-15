@@ -27,6 +27,10 @@ void render_frame(bool present_swap_chain, bool black) {
     backend().render_frame(present_swap_chain, black);
 }
 
+void set_step_moment(std::int64_t qpc) noexcept {
+    backend().set_step_moment(qpc);
+}
+
 void wait_for_render_idle() {
     backend().wait_for_render_idle();
 }

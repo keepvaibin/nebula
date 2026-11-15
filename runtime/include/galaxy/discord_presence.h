@@ -4,7 +4,8 @@
 #include <string>
 #include <string_view>
 
-// Discord Rich Presence over the Discord desktop app's local IPC (the named pipe discord-ipc-N): what the player is
+// Discord Rich Presence over the Discord desktop app's local IPC (discord-ipc-N: a named pipe on Windows, a Unix
+// socket on macOS and Linux): what the player is
 // doing, in the game's own words (its galaxy and star names, in the played language). A worker thread does all of it;
 // while Discord is not running it retries every 15 s and the game never waits on it.
 namespace galaxy::discord {
@@ -14,6 +15,9 @@ struct Activity {
     std::string state;    // second line: the star, or the Power Star count
 };
 
+// Whether this system has the Discord desktop app's IPC (Windows, macOS, Linux; not Android or iOS): the GENERAL page
+// offers DISCORD STATUS only then.
+[[nodiscard]] bool supported() noexcept;
 // Once, at start. An empty client id (no Discord application) keeps presence off.
 void start(std::string client_id);
 // The GENERAL page's DISCORD STATUS, read by the worker each second (off clears the status and closes the pipe).

@@ -2,6 +2,7 @@
 #include "galaxy/launch_args.h"
 #include "galaxy/input/rumble_route.h"
 #include "galaxy/content_viewport.h"
+#include "galaxy/display_aspect.h"
 #include "galaxy/generic_hid.h"
 #include "galaxy/playstation_controller.h"
 #include "galaxy/simple_pads.h"
@@ -2072,7 +2073,7 @@ private:
         motion.shake_sensitivity = tuning.shake_sensitivity;
         motion.gyro_pointer = tuning.gyro_pointer && pointing;
         motion.gyro_sensitivity = tuning.gyro_sensitivity;
-        motion.picture_aspect = static_cast<float>(galaxy::kDesignContentAspect);
+        motion.picture_aspect = static_cast<float>(galaxy::latched_content_aspect());
         for (std::size_t i = 0; i < moved.imu_count; ++i) {
             // Switch Pro: three samples 5 ms apart; the others one per report,
             // timed by the controller's clock where it has one.
@@ -2606,6 +2607,103 @@ void stop_all_rumble() noexcept {
     if (event != nullptr) CloseHandle(event);
 }
 
+namespace {
+
+// Which controllers are attached, found on a thread of its own: XInput's slots every kXInputProbeMs, and the HID list at
+// the start and at each HID device change while the worker is not running (the worker keeps its own). Never destroyed:
+// the thread may be waiting when the process exits.
+struct Presence {
+    std::once_flag start;
+    std::atomic<bool> running{false};
+    std::atomic<std::uint32_t> xinput{0u};
+    SRWLOCK lock = SRWLOCK_INIT;
+    std::vector<input::ControllerInfo> hid;  // under `lock`
+    UniqueHandle changed;
+    HCMNOTIFICATION notification = nullptr;
+};
+
+Presence& presence() {
+    static Presence* instance = new Presence;
+    return *instance;
+}
+
+void probe_xinput(Presence& p) noexcept {
+    for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
+        XINPUT_STATE state{};
+        const std::uint32_t bit = 1u << slot;
+        if (XInputGetState(slot, &state) == ERROR_SUCCESS) {
+            p.xinput.fetch_or(bit, std::memory_order_acq_rel);
+        } else {
+            p.xinput.fetch_and(~bit, std::memory_order_acq_rel);
+        }
+    }
+}
+
+void list_hid(Presence& p) {
+    std::vector<input::ControllerInfo> found;
+    for (const HidCandidate& candidate : enumerate_hid_pads()) {
+        input::ControllerInfo& info = found.emplace_back();
+        info.scheme = candidate.info.scheme;
+        info.slot = static_cast<std::uint32_t>(found.size() - 1u);
+        info.link = link_of(candidate);
+        info.model = candidate.info.name;
+        info.icons = icon_model(candidate.info.scheme, candidate.info.simple,
+                                candidate.vendor == sw::kNintendoVendorId && candidate.product == sw::kGameCubeProductId,
+                                candidate.info.ps_model);
+    }
+    AcquireSRWLockExclusive(&p.lock);
+    p.hid.swap(found);
+    ReleaseSRWLockExclusive(&p.lock);
+}
+
+void ensure_presence_started() noexcept {
+    Presence& p = presence();
+    std::call_once(p.start, [&p] {
+        try {
+            p.changed.reset(CreateEventW(nullptr, FALSE, TRUE, nullptr));  // set: the first wake lists at once
+            if (!p.changed) return;
+            CM_NOTIFY_FILTER filter{};
+            filter.cbSize = sizeof(filter);
+            filter.FilterType = CM_NOTIFY_FILTER_TYPE_DEVICEINTERFACE;
+            HidD_GetHidGuid(&filter.u.DeviceInterface.ClassGuid);
+            if (CM_Register_Notification(&filter, p.changed.get(), on_device_change, &p.notification) != CR_SUCCESS) {
+                p.notification = nullptr;
+            }
+            std::thread([&p] {
+                SetThreadDescription(GetCurrentThread(), L"nebula-controller-presence");
+                SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+                for (;;) {
+                    probe_xinput(p);
+                    const DWORD woke = WaitForSingleObject(p.changed.get(), kXInputProbeMs);
+                    if (woke == WAIT_OBJECT_0 && !hub().started.load(std::memory_order_acquire)) {
+                        try {
+                            list_hid(p);
+                        } catch (...) {
+                        }
+                    } else if (woke != WAIT_OBJECT_0 && woke != WAIT_TIMEOUT) {
+                        return;  // WAIT_FAILED: leave rather than spin
+                    }
+                }
+            }).detach();
+            p.running.store(true, std::memory_order_release);
+        } catch (...) {
+        }
+    });
+}
+
+}  // namespace
+
+std::uint32_t xinput_present_mask() noexcept {
+    ensure_presence_started();
+    const Presence& p = presence();
+    // Without the thread every slot is read (slow on empty ones, but no controller goes unseen).
+    return p.running.load(std::memory_order_acquire) ? p.xinput.load(std::memory_order_acquire) : (1u << XUSER_MAX_COUNT) - 1u;
+}
+
+void xinput_slot_lost(std::uint32_t slot) noexcept {
+    if (slot < XUSER_MAX_COUNT) presence().xinput.fetch_and(~(1u << slot), std::memory_order_acq_rel);
+}
+
 std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept {
     std::size_t count = 0;
     Hub& h = hub();
@@ -2617,22 +2715,14 @@ std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept {
         ReleaseSRWLockShared(&h.lock);
         return count;
     }
-    try {
-        for (const HidCandidate& candidate : enumerate_hid_pads()) {
-            if (count >= out.size()) break;
-            input::ControllerInfo& info = out[count];
-            info = {};
-            info.scheme = candidate.info.scheme;
-            info.slot = static_cast<std::uint32_t>(count);
-            info.link = link_of(candidate);
-            info.model = candidate.info.name;
-            info.icons = icon_model(candidate.info.scheme, candidate.info.simple,
-                                    candidate.vendor == sw::kNintendoVendorId && candidate.product == sw::kGameCubeProductId,
-                                    candidate.info.ps_model);
-            ++count;
-        }
-    } catch (...) {
+    ensure_presence_started();
+    Presence& p = presence();
+    AcquireSRWLockShared(&p.lock);
+    for (const input::ControllerInfo& info : p.hid) {
+        if (count >= out.size()) break;
+        out[count++] = info;
     }
+    ReleaseSRWLockShared(&p.lock);
     return count;
 }
 

@@ -6,6 +6,7 @@
 
 #include "galaxy/render/ambient_occlusion_shape.h"
 #include "galaxy/render/mtl/utility_msl.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -169,9 +170,7 @@ bool AmbientOcclusion::ensure(std::shared_ptr<Texture>& target, unsigned width, 
 }
 
 void AmbientOcclusion::trim_idle() {
-    constexpr std::uint64_t kIdleFrames = 600u;
-    ++clock_;
-    if (clock_ > used_ + kIdleFrames && (distance_ || raw_ || denoised_ || scale_)) {
+    if (idle_since(used_) && (distance_ || raw_ || denoised_ || scale_)) {
         distance_.reset();
         raw_.reset();
         denoised_.reset();
@@ -193,26 +192,36 @@ void AmbientOcclusion::dispatch(Object compute_encoder, Pass pass, const Texture
     [compute dispatchThreadgroups:MTLSizeMake((width + 7u) / 8u, (height + 7u) / 8u, 1) threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
 }
 
-bool AmbientOcclusion::prepare(Object commands, const Texture& depth, const RtView& view, bool ssao,
+bool AmbientOcclusion::prepare(Object commands, const Texture& depth, unsigned part_width, unsigned part_height,
+                               unsigned lowest_sixteenths, const RtView& view, bool ssao,
                                std::span<const ao::ObjectOccluder> objects, UploadRing& ring, const StageMarker& mark) {
     if (!ready_) {
         return false;
     }
-    used_ = clock_;
-    const unsigned divisor = ao::occlusion_divisor(depth.height);
-    const unsigned width = (depth.width + divisor - 1u) / divisor;
-    const unsigned height = (depth.height + divisor - 1u) / divisor;
+    used_ = idle_clock();
+    const unsigned scene_width = std::min(part_width != 0u ? part_width : depth.width, depth.width);
+    const unsigned scene_height = std::min(part_height != 0u ? part_height : depth.height, depth.height);
+    const unsigned divisor = ao::occlusion_divisor(scene_height);
+    const unsigned width = (scene_width + divisor - 1u) / divisor;
+    const unsigned height = (scene_height + divisor - 1u) / divisor;
     fused_ = divisor <= 1u;
-    target_width_ = depth.width;
-    target_height_ = depth.height;
-    if (fused_) {
+    target_width_ = scene_width;
+    target_height_ = scene_height;
+    // The targets at the field's largest size over every step the scene may take, so a step change makes none again.
+    // Where every step's field is the scene's own pixels (the whole depth at one occlusion pixel per scene pixel) the
+    // denoised field is one channel and no multiplier is made; else two channels (a divisor-1 step's multiply reads the
+    // first alone) and the multiplier at the depth's size, kept through divisor-1 steps.
+    const bool whole_fused = ao::occlusion_divisor(depth.height) <= 1u;
+    const ao::Field field = ao::largest_field(depth.width, depth.height, lowest_sixteenths);
+    if (whole_fused) {
         scale_.reset();  // a command buffer that names it keeps it
     }
     if (!ao::make_constants(view, width, height, divisor, ssao, constants_) ||
-        !ensure(distance_, width, height, kDistanceFormat, "occlusion distance") ||
-        !ensure(raw_, width, height, kOcclusionFormat, "occlusion") ||
-        !ensure(denoised_, width, height, fused_ ? kDenoisedFullFormat : kOcclusionFormat, "occlusion denoised") ||
-        (!fused_ && !ensure(scale_, depth.width, depth.height, kScaleFormat, "occlusion scale"))) {
+        !ensure(distance_, field.width, field.height, kDistanceFormat, "occlusion distance") ||
+        !ensure(raw_, field.width, field.height, kOcclusionFormat, "occlusion") ||
+        !ensure(denoised_, field.width, field.height, whole_fused ? kDenoisedFullFormat : kOcclusionFormat,
+                "occlusion denoised") ||
+        (!whole_fused && !ensure(scale_, depth.width, depth.height, kScaleFormat, "occlusion scale"))) {
         return false;
     }
     ao::bin_objects(objects, constants_, object_values_, object_tiles_, object_scratch_);
@@ -240,7 +249,8 @@ bool AmbientOcclusion::prepare(Object commands, const Texture& depth, const RtVi
         dispatch(encoder, kDenoise, depth, *raw_, *distance_, *denoised_, width, height);
         if (!fused_) {
             if (mark) mark(Stage::Upsample);
-            dispatch(encoder, kUpsample, depth, *denoised_, *distance_, *scale_, depth.width, depth.height);
+            // The scene's part of the multiplier (the multiply reads no further).
+            dispatch(encoder, kUpsample, depth, *denoised_, *distance_, *scale_, scene_width, scene_height);
         }
         [compute endEncoding];
     }

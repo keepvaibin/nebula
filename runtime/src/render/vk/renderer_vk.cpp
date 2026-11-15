@@ -3,6 +3,8 @@
 // copies and screen probes are renderer_vk_frame.cpp.
 
 #include "renderer_vk_internal.h"
+#include "galaxy/benchmark.h"
+#include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #if defined(_WIN32)
@@ -12,10 +14,11 @@
 #include "galaxy/platform_time.h"
 
 #include "galaxy/content_viewport.h"
-#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/display_aspect.h"
 #include "galaxy/render/host_window.h"
 #if defined(_WIN32)
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/os_hdr.h"
 #include "galaxy/render/host_window_win32.h"
 #endif
 #include "galaxy/render/program_table.h"
@@ -23,6 +26,7 @@
 #include "galaxy/render/rt_caps.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/game_paths.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <vk_mem_alloc.h>
 
@@ -130,6 +134,7 @@ VkSampler create_sampler(VkDevice device, VkFilter filter, VkSamplerMipmapMode m
 
 bool RendererVk::initialize(int window_width, int window_height, const FrameMap& frame) {
     scene_map_ = frame;
+    frame_extent_ = scene_extent_ = scene_rectangle_ = frame;
     frame_slot_ = 0;
     frame_index_ = 0;
     if (window_ != nullptr) {
@@ -219,8 +224,22 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         encoder_.configure(encoding);
         encoding_layout_ = encoding;
         reset_sampler_frame();
-        // The game's bloom, compiled on a worker; the game draws its own chains until it is ready.
-        bloom_.initialize();
+        // The game's bloom, built at the first frame with a composite for every scene target pass (8-bit and wide colour at
+        // each sample count, and the texture targets' pass); the game draws its own chains until it is ready.
+        {
+            std::vector<vk::GameBloomVk::ScenePass> scene_passes;
+            for (unsigned samples_log2 = 0u; samples_log2 < 4u; ++samples_log2) {
+                for (const unsigned wide : {0u, unsigned{kSceneVariantHdr}}) {
+                    if (const VkRenderPass pass = draw_layout_.pass_for(samples_log2 | wide, false); pass != VK_NULL_HANDLE) {
+                        scene_passes.push_back({pass, samples_log2});
+                    }
+                }
+            }
+            if (draw_layout_.target_pass != VK_NULL_HANDLE) {
+                scene_passes.push_back({draw_layout_.target_pass, 0u});
+            }
+            bloom_.initialize(std::move(scene_passes));
+        }
         // draw.post's programs compile with the linked HLSL front end (vk/mod_shader_compile_vk.cpp).
         set_mod_post_compiler(&compile_mod_post_stage, true);
         // Presentation post-processing, compiled on a worker; the plain blit presents until it is ready.
@@ -257,6 +276,12 @@ void RendererVk::report_adapter() {
     const bool rtx = properties.vendorID == 0x10DEu && std::strstr(properties.deviceName, "RTX") != nullptr;
     host_window::rtx_adapter.store(rtx, std::memory_order_relaxed);
     record_render_adapter(properties.deviceName, properties.vendorID, properties.deviceID, context.subsys_id(), false);
+    {
+        // The version number decoded by the driver's own scheme. driverInfo is free text: Qualcomm's is several lines of
+        // build ids and dates, longer than a report's driver field.
+        const vk::DriverVersion& v = context.identity().driver_version;
+        record_render_driver(std::to_string(v.major) + "." + std::to_string(v.minor) + "." + std::to_string(v.patch));
+    }
     RenderFeatureCaps caps{};
     caps.adapter_vendor_id = properties.vendorID;
     caps.adapter_device_id = properties.deviceID;
@@ -508,6 +533,21 @@ bool RendererVk::create_layouts() {
         layout.pushConstantRangeCount = 1;
         layout.pPushConstantRanges = &count;
         vk::check(vkCreatePipelineLayout(device, &layout, nullptr, &probe_layout_), "probe pipeline layout");
+    }
+    {
+        // The 2D layer's merge (layer_merge_shader_source): the layer as drawn and as it started, read with Load.
+        const VkDescriptorSetLayoutBinding bindings[] = {
+            {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+            {1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+        };
+        VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        info.bindingCount = 2;
+        info.pBindings = bindings;
+        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &layer2d_set_layout_), "2D layer set layout");
+        VkPipelineLayoutCreateInfo layout{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        layout.setLayoutCount = 1;
+        layout.pSetLayouts = &layer2d_set_layout_;
+        vk::check(vkCreatePipelineLayout(device, &layout, nullptr, &layer2d_layout_), "2D layer pipeline layout");
     }
     const VkPushConstantRange push{kPushStages, 0, kPushConstantBytes};
     {
@@ -848,11 +888,24 @@ bool RendererVk::create_layouts() {
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &color_pass_), "copy render pass");
+        attachment.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+        vk::check(vkCreateRenderPass(device, &info, nullptr, &color_pass_wide_), "wide copy render pass");
         attachment.format = VK_FORMAT_R8G8B8A8_UNORM;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &rgba8_pass_), "RGBA8 render pass");
+        // The scene's depth as a picture (publish_scene_depth_copy).
+        VkFormatProperties r32{};
+        vkGetPhysicalDeviceFormatProperties(context.physical_device(), VK_FORMAT_R32_SFLOAT, &r32);
+        constexpr VkFormatFeatureFlags kDepthCopyNeeds = VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
+            VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+        depth_copy_format_ = (r32.optimalTilingFeatures & kDepthCopyNeeds) == kDepthCopyNeeds ? VK_FORMAT_R32_SFLOAT
+                                                                                              : VK_FORMAT_R16_SFLOAT;
+        attachment.format = depth_copy_format_;
+        vk::check(vkCreateRenderPass(device, &info, nullptr, &depth_copy_pass_), "depth copy render pass");
     }
     draw_layout_.depth_format = depth_format_;
     set_curved_surfaces_offered(true);
+    // The scene in a part of its targets, every pass reading that part (dynamic_resolution.h).
+    set_dynamic_resolution_offered(true);
     host_window::rtx_adapter.store(vk::Context::get().properties().vendorID == 0x10DEu &&
                                        std::strstr(vk::Context::get().properties().deviceName, "RTX") != nullptr,
                                    std::memory_order_relaxed);
@@ -921,15 +974,12 @@ bool RendererVk::create_swapchain() {
             }
         }
     }
-    // HDR10 where it is asked for and the surface lists it; a surface turned from its natural orientation stays on the 8-bit
-    // write (its blit, drawn while the post chain is not ready, knows only that one).
+    // HDR10 where it is asked for and the surface lists it, turned from its natural orientation or not (a phone or tablet
+    // held across): the post chain's last pass writes a pre-rotated image from the picture's turned-back pixels, the
+    // calibration's patterns included, and the plain blit is made again for the HDR10 pass with it.
     const bool hdr_asked = wants_hdr();
-    const bool surface_turned = (caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR ||
-                                 caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR ||
-                                 caps.currentTransform == VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) &&
-                                (caps.supportedTransforms & caps.currentTransform) != 0u;
     bool hdr_made = false;
-    if (hdr_asked && !surface_turned) {
+    if (hdr_asked) {
         if (const std::optional<VkSurfaceFormatKHR> hdr_format = hdr10_format_of(formats)) {
             format = *hdr_format;
             hdr_made = true;
@@ -943,7 +993,9 @@ bool RendererVk::create_swapchain() {
         return std::find(modes.begin(), modes.end(), mode) != modes.end();
     };
     // VSYNC on: FIFO, which a late frame may leave as FIFO_RELAXED (below). Off: mailbox (the newest frame replaces a waiting
-    // one, no tearing), else immediate (tearing, as D3D12's ALLOW_TEARING), else FIFO, the one mode every surface has.
+    // one, no tearing), else immediate (tearing, as D3D12's ALLOW_TEARING). A surface with neither presents only at its
+    // refresh: VSync is on there whatever was chosen (set before wants_vsync reads the settings).
+    set_present_waits_for_refresh(!supported(VK_PRESENT_MODE_MAILBOX_KHR) && !supported(VK_PRESENT_MODE_IMMEDIATE_KHR));
     const bool vsync = wants_vsync();
     VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
     if (!vsync) {
@@ -952,11 +1004,10 @@ bool RendererVk::create_swapchain() {
     }
 
     // The image count, one rule on every platform from the surface's own limits: MAILBOX and IMMEDIATE take 3 (clamped to the
-    // surface's minimum and maximum); FIFO takes the minimum plus one, or just the minimum where the device has
-    // VK_KHR_present_wait (the wait bounds the queue instead of a spare image). The pacing (present_pacer_, the present
-    // times) reads timestamps, not this count.
-    const bool present_wait = context.device_extension_enabled("VK_KHR_present_wait");
-    std::uint32_t images = mode == VK_PRESENT_MODE_FIFO_KHR ? caps.minImageCount + (present_wait ? 0u : 1u) : 3u;
+    // surface's minimum and maximum); FIFO the minimum plus one, so a picture can wait behind the one showing without the
+    // next acquire waiting for an image the display has not released (Direct3D's three buffers). The queue's depth is the
+    // pacing's (present_pacer_, the slot clock, the present wait), not this count.
+    std::uint32_t images = mode == VK_PRESENT_MODE_FIFO_KHR ? caps.minImageCount + 1u : 3u;
     images = std::max(images, caps.minImageCount);
     if (caps.maxImageCount != 0u) {
         images = std::min(images, caps.maxImageCount);
@@ -1083,6 +1134,7 @@ bool RendererVk::create_swapchain() {
     swapchain_.hdr_asked = hdr_asked;
     swapchain_.hdr = hdr_made;
     last_present_id_ = 0u;  // present ids belong to a swap chain: nothing to wait for on the new one
+    present_id_before_last_ = 0u;
     swapchain_calls_.get_images(device, handle, &count, nullptr);
     swapchain_.images.resize(count);
     swapchain_calls_.get_images(device, handle, &count, swapchain_.images.data());
@@ -1107,7 +1159,7 @@ bool RendererVk::create_swapchain() {
         const bool waits = context.present_wait() && mode == VK_PRESENT_MODE_FIFO_KHR && !amd;
         std::fprintf(stderr, "[vk] swap chain: %u images, %s (offered:%s); late frames %s; frame latency by %s\n", count, name,
                      offered.c_str(), relaxed ? "present as FIFO_RELAXED" : "wait for the next refresh",
-                     waits ? "present wait (the previous frame must show before the next is queued, 100 ms at most)" : "the frame fences");
+                     waits ? "present wait (the last frame must show before the next is queued, on the interpolation's slot clock the one before it; 100 ms at most)" : "the frame fences");
     }
 
     const bool present_pass_replaced = present_pass_ != VK_NULL_HANDLE;
@@ -1195,7 +1247,7 @@ bool RendererVk::create_swapchain() {
     } else {
         hdr_output_ = PostOutput{};
         if (hdr_asked) {
-            std::fprintf(stderr, "[hdr] %s: SDR\n", surface_turned ? "the surface is turned from its natural orientation" : "the surface lists no HDR10 format");
+            std::fprintf(stderr, "[hdr] the surface lists no HDR10 format: SDR\n");
         }
     }
     {
@@ -1247,6 +1299,11 @@ void RendererVk::read_display_hdr() {
                          output.colour_space, output.bits, output.peak_nits, output.full_frame_nits);
         }
     }
+    // Whether the display takes HDR with Windows HDR off, and a display turned off outside the game (os_hdr.h).
+    const os_hdr::Display os = os_hdr::read(output.monitor);
+    os_hdr::display_changed();
+    hdr.switchable = output.known && !output.hdr && os.supported && !os.blocked && context.swapchain_colorspace() && post_.ready() &&
+                     post_.present_ready();
     if (output.known) {
         display_is_hdr = output.hdr;
         hdr.peak_nits = output.hdr ? output.peak_nits : 0u;
@@ -1256,6 +1313,7 @@ void RendererVk::read_display_hdr() {
 #endif
     hdr.available = offered && display_is_hdr && post_.ready() && post_.present_ready();
     hdr.active = swapchain_.hdr;
+    hdr.held_sdr = get_display_hdr().held_sdr;
     set_display_hdr(hdr);
 }
 
@@ -1264,7 +1322,7 @@ void RendererVk::apply_hdr_metadata(const PostOutput& levels) {
     if (!context.hdr_metadata() || swapchain_.handle == VK_NULL_HANDLE) {
         return;
     }
-    const HdrMetadata m = hdr10_metadata(get_display_hdr(), levels.paper_white_nits);
+    const HdrMetadata m = hdr10_metadata(get_display_hdr(), levels);
     VkHdrMetadataEXT meta{VK_STRUCTURE_TYPE_HDR_METADATA_EXT};
     meta.displayPrimaryRed = {m.red[0], m.red[1]};
     meta.displayPrimaryGreen = {m.green[0], m.green[1]};
@@ -1473,6 +1531,13 @@ bool RendererVk::create_utility_pipelines() {
                                                    vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
     display_filter_pipeline_ = create_utility_pipeline(color_pass_, utility_layout_, vk::UtilitySpirv::BlitVs,
                                                        vk::UtilitySpirv::DisplayFilterPs, kAll, false, false, false);
+    conversion_pipeline_wide_ = create_utility_pipeline(color_pass_wide_, utility_layout_, vk::UtilitySpirv::BlitVs,
+                                                        vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
+    display_filter_pipeline_wide_ = create_utility_pipeline(color_pass_wide_, utility_layout_, vk::UtilitySpirv::BlitVs,
+                                                            vk::UtilitySpirv::DisplayFilterPs, kAll, false, false, false);
+    depth_copy_pipeline_ = create_utility_pipeline(depth_copy_pass_, utility_layout_, vk::UtilitySpirv::BlitVs,
+                                                   vk::UtilitySpirv::DepthCopyPs, VK_COLOR_COMPONENT_R_BIT, false, false,
+                                                   false);
     {
         const VkDevice device = vk::Context::get().device();
         const VkShaderModule module = utility_module(vk::UtilitySpirv::ScreenProbeCs);
@@ -1637,7 +1702,13 @@ void RendererVk::shutdown() {
         motion_ = MotionTargets{};
         ao_.shutdown();
         scene_camera_.shutdown();
-        for (SceneSet* set : {&scene_, &wide_scene_, &alt_scene_, &target_scene_}) destroy_scene_set(*set);
+        for (SceneSet* set : {&scene_, &wide_scene_, &alt_scene_, &target_scene_, &layer2d_set_}) destroy_scene_set(*set);
+        retire(std::move(layer2d_base_));
+        for (VkPipeline& pipeline : layer2d_merge_pipelines_) {
+            if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
+            pipeline = VK_NULL_HANDLE;
+        }
+        layer2d_live_ = layer2d_failed_ = false;
         for (auto& [key, slot] : target_slots_) destroy_scene_set(slot.set);
         target_slots_.clear();
         for (auto& [key, picture] : pictures_) {
@@ -1645,7 +1716,8 @@ void RendererVk::shutdown() {
         }
         pictures_.clear();
         for (VkPipeline* pipeline : {&conversion_pipeline_, &probe_pipeline_, &display_filter_pipeline_,
-             &depth_resolve_pipeline_, &blit_pipeline_}) {
+                                     &conversion_pipeline_wide_, &display_filter_pipeline_wide_,
+             &depth_resolve_pipeline_, &blit_pipeline_, &depth_copy_pipeline_}) {
             if (*pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, *pipeline, nullptr);
             *pipeline = VK_NULL_HANDLE;
         }
@@ -1742,7 +1814,8 @@ void RendererVk::shutdown() {
         profile_frame_ = pass_recording_ = false;
         destroy_swapchain();
         for (VkRenderPass pass :
-             {present_pass_, color_pass_, rgba8_pass_, draw_layout_.scene_pass, draw_layout_.scene_pass_clear,
+             {present_pass_, color_pass_, color_pass_wide_, rgba8_pass_, depth_copy_pass_, draw_layout_.scene_pass,
+              draw_layout_.scene_pass_clear,
               draw_layout_.target_pass, draw_layout_.target_pass_clear}) {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
         }
@@ -1778,18 +1851,19 @@ void RendererVk::shutdown() {
                 pass = VK_NULL_HANDLE;
             }
         }
-        present_pass_ = color_pass_ = rgba8_pass_ = draw_layout_.target_pass = draw_layout_.target_pass_clear =
+        present_pass_ = color_pass_ = color_pass_wide_ = rgba8_pass_ = depth_copy_pass_ = draw_layout_.target_pass =
+            draw_layout_.target_pass_clear =
             draw_layout_.scene_pass = draw_layout_.scene_pass_clear = VK_NULL_HANDLE;
-        for (VkPipelineLayout layout : {draw_layout_.layout, utility_layout_, probe_layout_}) {
+        for (VkPipelineLayout layout : {draw_layout_.layout, utility_layout_, probe_layout_, layer2d_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
         }
-        draw_layout_.layout = utility_layout_ = probe_layout_ = VK_NULL_HANDLE;
+        draw_layout_.layout = utility_layout_ = probe_layout_ = layer2d_layout_ = VK_NULL_HANDLE;
         for (VkDescriptorSetLayout layout : {draw_layout_.sets[0], draw_layout_.sets[1], draw_layout_.sets[2],
-                                             utility_set_layout_, probe_set_layout_}) {
+                                             utility_set_layout_, probe_set_layout_, layer2d_set_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, layout, nullptr);
         }
         draw_layout_.sets.fill(VK_NULL_HANDLE);
-        utility_set_layout_ = probe_set_layout_ = VK_NULL_HANDLE;
+        utility_set_layout_ = probe_set_layout_ = layer2d_set_layout_ = VK_NULL_HANDLE;
         if (linear_clamp_ != VK_NULL_HANDLE) vkDestroySampler(device, linear_clamp_, nullptr);
         linear_clamp_ = VK_NULL_HANDLE;
         context.collect();
@@ -1808,50 +1882,28 @@ void RendererVk::shutdown() {
 }
 
 void RendererVk::grow_rings() {
-    // A ring whose frames took over half their budget (or spilled) grows; one whose last 600 frames stayed under a quarter of it
-    // gives half of its memory back.
-    // --diagnostics ring-stress: made again (at the size each wants) every kRingStressFrames frames.
+    // A ring whose frames took over half their budget (or spilled) grows; one whose last 30 seconds (and 600 frames) stayed
+    // under a quarter of it gives half of its memory back on a frame without the scene (UploadRing::kQuietNs). Only that
+    // ring is made again. --diagnostics ring-stress: all made again (at the size each wants) every kRingStressFrames frames.
     const bool ring_stress =
         ::galaxy::diagnosing(::galaxy::kDiagnoseRingStress) && frame_index_ % ::galaxy::kRingStressFrames == 0u;
-    if (ring_growth_failed_ ||
-        (!ring_stress && !vertex_ring_.wants_growth() && !index_ring_.wants_growth() && !constant_ring_.wants_growth() &&
-         !matrix_ring_.wants_growth() && !vertex_ring_.wants_shrink() && !index_ring_.wants_shrink() &&
-         !constant_ring_.wants_shrink() && !matrix_ring_.wants_shrink())) {
+    const UploadRingSlot rings[] = {{&vertex_ring_, "vertex", kRingSegments, true},
+                                    {&index_ring_, "index", kFramesInFlight, true},
+                                    {&constant_ring_, "constant", kFramesInFlight, true},
+                                    {&matrix_ring_, "matrix", kRingSegments, false}};
+    if (!ring_stress && (ring_growth_failed_ || std::none_of(std::begin(rings), std::end(rings),
+                                                             [](const UploadRingSlot& s) { return s.ring->wants_new_size(); }))) {
         return;
     }
-    // No wait for the GPU: a ring is made again as a new buffer (the same size when only its segments change). The old buffer and its
-    // chunks are released here, which hands them to the context to destroy once the work submitted so far has completed.
-    const VkDevice device = vk::Context::get().device();
+    const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::RingResize);
+    // No wait for the GPU: a ring is made again as a new buffer. The old buffer and its chunks are released here, which
+    // hands them to the context to destroy once the work submitted so far has completed.
     std::vector<gpu::BufferRef> old;
-    const auto place = [&](UploadRing& ring, const char* name, unsigned segments, bool chunks) {
-        const std::size_t had = ring.capacity();
-        std::size_t capacity = ring.grown_capacity(segments);
-        if (capacity == 0u) {
-            ring_growth_failed_ = true;
-            capacity = had;
-        } else if (ring.wants_shrink()) {
-            capacity = ring.shrunk_capacity(segments);
-        }
-        if (capacity != had) {
-            std::cerr << "[gpu-rings] " << (capacity > had ? "grow " : "shrink ") << name
-                      << " frame-high-water-kb=" << (ring.high_water() >> 10u) << " mb=" << (had >> 20u) << "->"
-                      << (capacity >> 20u) << '\n';
-        }
-        ring.release_into(old);
-        if (ring.initialize(device, name, UploadRing::budget(capacity, segments), segments, capacity, chunks)) {
-            return true;
-        }
-        ring_growth_failed_ = true;
-        std::cerr << "[gpu-rings] grow " << name << " failed\n";
-        return ring.initialize(device, name, UploadRing::budget(had, segments), segments, had, chunks);
-    };
-    if (!place(vertex_ring_, "vertex", kRingSegments, true) || !place(index_ring_, "index", kFramesInFlight, true) ||
-        !place(constant_ring_, "constant", kFramesInFlight, true) || !place(matrix_ring_, "matrix", kRingSegments, false)) {
-        throw std::runtime_error("upload ring resize failed");
+    if (remake_upload_rings(vk::Context::get().device(), rings, ring_stress, ring_growth_failed_, old)) {
+        history_segment_ = 0u;
+        history_segment_fence_.fill(0u);
+        history_used_ = true;
     }
-    history_segment_ = 0u;
-    history_segment_fence_.fill(0u);
-    history_used_ = true;
 }
 
 void RendererVk::trace_rings() const {
@@ -1886,6 +1938,7 @@ std::uint64_t RendererVk::completed_fence_value() const {
 }
 
 void RendererVk::wait_for_fence_value(std::uint64_t fence_value) {
+    const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::FrameWait);
     if (fence_value == 0u) {
         throw std::runtime_error("invalid frame-specific GPU fence wait");
     }
@@ -1904,6 +1957,7 @@ void RendererVk::begin_frame() {
     apply_window_size();
     grow_rings();
     prepare_temporal_upscaler();
+    apply_dynamic_resolution();
     // draw.post: a program reading motion registers only while a temporal upscaler makes it.
     set_mod_post_motion(temporal_ != nullptr && temporal_mode());
     if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
@@ -1948,12 +2002,17 @@ void RendererVk::begin_frame() {
     }
     read_gpu_passes();
     prepare_gpu_pass_queries();
-    context.collect();
-    frame.retired.clear();
-    frame.retired_buffers.clear();
-    destroy_retired_pools(frame);
+    {
+        const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::ResourceFree);
+        context.collect();
+        frame.retired.clear();
+        frame.retired_buffers.clear();
+        destroy_retired_pools(frame);
+    }
     trim_idle_effect_targets();
-    if (frame_index_ % 120u == 0u) {
+    // Once a second of the game (target slots age on idle_clock).
+    if (idle_clock() - target_swept_step_ >= kTargetSweepSteps) {
+        target_swept_step_ = idle_clock();
         sweep_target_slots();
     }
     reset_sampler_frame();
@@ -1963,10 +2022,29 @@ void RendererVk::begin_frame() {
     }
     record_used_[frame_slot_] = 0u;
     vk::check(vkResetDescriptorPool(device, frame.descriptors, 0), "vkResetDescriptorPool");
-    for (VkDescriptorPool pool : frame.overflow_descriptors) {
-        vkDestroyDescriptorPool(device, pool, nullptr);
+    // The overflow pools the slot's last frame took are reset and kept for the next; those no frame of the slot has taken
+    // for kIdleSteps game steps are destroyed (the newest first: they are the largest).
+    for (std::size_t i = 0; i < frame.overflow_used; ++i) {
+        vk::check(vkResetDescriptorPool(device, frame.overflow_descriptors[i], 0), "vkResetDescriptorPool (overflow)");
     }
-    frame.overflow_descriptors.clear();
+    frame.overflow_peak = std::max(frame.overflow_peak, frame.overflow_used);
+    if (idle_since(frame.overflow_peak_step)) {
+        if (frame.overflow_descriptors.size() > frame.overflow_peak) {
+            while (frame.overflow_descriptors.size() > frame.overflow_peak) {
+                vkDestroyDescriptorPool(device, frame.overflow_descriptors.back(), nullptr);
+                frame.overflow_descriptors.pop_back();
+            }
+            // The next pool made doubles the last one kept (kFrameSets, twice that, ... up to kMaxOverflowSets).
+            frame.overflow_sets = 0u;
+            for (std::size_t i = 0; i < frame.overflow_descriptors.size(); ++i) {
+                frame.overflow_sets = frame.overflow_sets == 0u ? vk_detail::kFrameSets
+                                      : std::min(frame.overflow_sets * 2u, vk_detail::kMaxOverflowSets);
+            }
+        }
+        frame.overflow_peak = 0u;
+        frame.overflow_peak_step = idle_clock();
+    }
+    frame.overflow_used = 0u;
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vk::check(vkBeginCommandBuffer(frame.uploads, &begin), "vkBeginCommandBuffer");
@@ -2075,8 +2153,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     surface_lock_ = {};  // an image acquired but not presented
     swap_image_ = UINT32_MAX;
     ++frame_index_;
-    // Every 600 frames (Linux, Android): the render thread's CPU time and how much of it the driver's calls took.
-    if (frame_index_ % 600u == 0u) {
+    // Every ten seconds (Linux, Android): the render thread's CPU time and how much of it the driver's calls took.
+    ++gpu_window_.recorded;
+    if (cpu_report_.due()) {
         static std::int64_t last_cpu = 0;
         static auto last_time = std::chrono::steady_clock::now();
         const std::int64_t cpu = vk::thread_cpu_ns();
@@ -2096,14 +2175,14 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
             const double frames = static_cast<double>(gpu_window_.frames);
             std::fprintf(stderr, "[vk-gpu] frame %.2f ms average, %.2f ms longest; %.1f scene target passes and %.1f scene target copies a "
                          "frame; scene target %ux%u, swap chain %ux%u\n", gpu_window_.ms / frames, gpu_window_.max_ms,
-                         static_cast<double>(gpu_window_.passes) / 600.0,
-                         static_cast<double>(gpu_window_.copies) / 600.0, scene_map_.width,
-                         scene_map_.height, swapchain_.image.width, swapchain_.image.height);
+                         static_cast<double>(gpu_window_.passes) / gpu_window_.recorded,
+                         static_cast<double>(gpu_window_.copies) / gpu_window_.recorded, scene_extent_.width,
+                         scene_extent_.height, swapchain_.image.width, swapchain_.image.height);
             std::fprintf(stderr, "[vk-gpu] scene target opened a frame (closed by > opened by):");
             for (const GpuWindow::Open& open : gpu_window_.opens) {
                 if (open.count != 0u) {
                     std::fprintf(stderr, " %s > %s%s %.2f;", open.closed, open.opened, open.cleared ? " (clear)" : "",
-                                 static_cast<double>(open.count) / 600.0);
+                                 static_cast<double>(open.count) / gpu_window_.recorded);
                 }
             }
             std::fprintf(stderr, "\n");
@@ -2129,11 +2208,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
 void RendererVk::present_swapchain_image() {
     vk::Context& context = vk::Context::get();
     const RenderConfig cfg = get_render_config();
-    // On a variable refresh display the pacer holds presents under the cap whatever the VSync setting (display_refresh_hz_ is the
-    // cap there); a frame under the cap goes out as soon as it is ready.
-    const float variable_rate = variable_refresh_ ? static_cast<float>(display_refresh_hz_) : 0.0f;
-    const float paced_fps = variable_refresh_ ? (presented_max_fps(cfg) > 0.0f ? std::min(presented_max_fps(cfg), variable_rate) : variable_rate)
-                                               : presented_max_fps(cfg);
+    // On a variable refresh display with VSync on the pacer holds presents under the refresh (paced_present_rate); a frame
+    // under the cap goes out as soon as it is ready.
+    const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
     const double pace_wait_ms = present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
     const std::int64_t present_start = galaxy::qpc_now();
     {
@@ -2142,11 +2219,14 @@ void RendererVk::present_swapchain_image() {
         unsigned generated = 0u;
         if (frame_generation_running() && frame_generation_allowed()) {
             const double rate = present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_);
-            generated = static_cast<unsigned>(std::clamp<long>(static_cast<long>(rate / kGameStepRate + 1e-3) - 1, 1,
-                                                               static_cast<long>(host_window::upscaler_caps().frame_generation_max)));
+            // An unlimited rate takes every frame the library makes.
+            const long most = static_cast<long>(host_window::upscaler_caps().frame_generation_max);
+            const double multiple = std::isfinite(rate) ? std::min(rate / kGameStepRate + 1e-3, static_cast<double>(most) + 1.0)
+                                                        : static_cast<double>(most) + 1.0;
+            generated = static_cast<unsigned>(std::clamp<long>(static_cast<long>(multiple) - 1, 1, most));
         }
         vk::streamline_vk::set_generation(generated, host_window::upscaler_caps().frame_generation_dynamic,
-                                          cfg.max_fps > 0.0f ? cfg.max_fps : 0.0f);
+                                          cfg.max_fps > 0.0f && std::isfinite(cfg.max_fps) ? cfg.max_fps : 0.0f);
     }
     VkPresentInfoKHR info{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     info.waitSemaphoreCount = 1;
@@ -2154,13 +2234,18 @@ void RendererVk::present_swapchain_image() {
     info.swapchainCount = 1;
     info.pSwapchains = &swapchain_.handle;
     info.pImageIndices = &swap_image_;
-    // The same latency rule as Direct3D 12's waitable object: with VSync, the frame before the last one queued is on the screen
-    // before this one is queued, so one frame waits at most; 100 ms bounds a display that stopped. Where the device has no
-    // present wait, or under frame generation (whose presents are the library's), the frame fences bound the queue.
+    // The same latency rule as Direct3D 12's waitable object: with VSync, the last frame queued is on the screen before this
+    // one is queued; 100 ms bounds a display that stopped. A picture on the interpolation's slot clock (a present moment:
+    // one slot a vblank, or every n-th) is paced by the clock already: it waits only for the present before the last, one
+    // picture queued behind the one showing at most. Waiting for the last one too would tie it to when the driver reports
+    // that one shown, a refresh late now and then on some drivers: the presents would switch between landing in their
+    // slot's refresh and the one after, each switch showing a refresh twice. Where the device has no present wait, or under
+    // frame generation (whose presents are the library's), the frame fences bound the queue.
     const bool ids = context.present_wait() && swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR && !swapchain_fsr_ &&
                      !frame_generation_running();
-    if (ids && last_present_id_ != 0u) {
-        const VkResult waited = vkWaitForPresentKHR(context.device(), swapchain_.handle, last_present_id_, 100'000'000ull);
+    const std::uint64_t wait_id = present_moment_ != 0 ? present_id_before_last_ : last_present_id_;
+    if (ids && wait_id != 0u) {
+        const VkResult waited = vkWaitForPresentKHR(context.device(), swapchain_.handle, wait_id, 100'000'000ull);
         if (waited == VK_TIMEOUT && ++present_wait_timeouts_ <= 4u) {
             std::fprintf(stderr, "[present] the previous frame was not shown within 100 ms\n");
         }
@@ -2192,30 +2277,34 @@ void RendererVk::present_swapchain_image() {
     VkPresentTimeGOOGLE present_time{};
     VkPresentTimesInfoGOOGLE present_times{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE};
     std::int64_t frame_start = 0, period = 0, vsync = 0, now = 0;
-    if (context.display_timing() && host_window::present_grid(frame_start, period, vsync, now)) {
+    // The picture's moment (set_present_moment), for this present only.
+    const std::int64_t moment = present_moment_;
+    present_moment_ = 0;
+    // Presents step by one present period: the game's frame period times 60 / the present rate (90 Hz: 1.5 presents
+    // per game frame). Pictures less than a vsync apart (an unlimited rate, render_config.h kUnlimitedFrameRate)
+    // have no slot: each is shown at the next vsync, the newest in place of one still queued.
+    const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
+    const std::int64_t step = std::max<std::int64_t>(1, std::llround(1e9 / rate));
+    // An interpolated picture is timed by its moment on the display's vsync grid, at any refresh rate; the game's own
+    // frames by the game's frame slots, which follow the vsyncs where the refresh rate is a multiple of 60.
+    // qpc_now() is CLOCK_MONOTONIC nanoseconds off Windows: the presentation times' clock.
+    std::int64_t grid = 0;
+    const bool by_moment = context.display_timing() && moment != 0 && vblank_grid(grid, vsync);
+    const bool by_frames = !by_moment && context.display_timing() && host_window::present_grid(frame_start, period, vsync, now);
+    if ((by_moment || by_frames) && step >= vsync - vsync / 16) {
         PresentTiming& timing = present_timing_;
-        // Interpolating, slots step by one presented frame: the game's frame period times 60 / the present rate
-        // (90 Hz: 1.5 presents per game frame).
-        const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
-        const std::int64_t step = std::max<std::int64_t>(1, std::llround(1e9 / rate));
-        // The slot after the previous frame's, on the grid of the latest frame start; two frame periods after that start
-        // when it is out of reach (the first frame, after a stall) or the frames ran ahead of it.
-        std::int64_t slot = timing.last_slot + step;
-        const std::int64_t first = frame_start + 2 * period;
-        if (timing.last_slot == 0 || slot > first + period || slot < frame_start + step) {
-            slot = first;
-        } else {
-            slot = frame_start + (slot - frame_start + step / 2) / step * step;
+        if (by_moment) {
+            now = galaxy::qpc_now();
         }
-        // A frame too late for its slot takes a later one: a slot is in reach once the frame can be shown by then, at
-        // least a vsync on (the compositor latches about one ahead) and as long as this device's frames have lately
-        // taken from their present to their first possible showing (lead_ns). A 120 Hz panel's vsync is shorter than
-        // the GPU's work and the compositor's latch together: asking a vsync ahead there, frames miss their slots.
-        const std::int64_t reach = std::max(vsync, timing.lead_ns);
-        while (slot - reach < now) {
-            slot += step;
-        }
-        timing.last_slot = slot;
+        PresentClock clock;
+        clock.by_moment = by_moment;
+        clock.moment = moment;
+        clock.grid = grid;
+        clock.vsync = vsync;
+        clock.frame_start = frame_start;
+        clock.period = period;
+        clock.step = step;
+        const std::int64_t slot = timing.slots.place(clock);
         timing.vsync_ns = vsync;
         present_time.presentID = ++timing.next_id;
         present_time.desiredPresentTime = static_cast<std::uint64_t>(slot - vsync / 2);
@@ -2229,7 +2318,7 @@ void RendererVk::present_swapchain_image() {
         present_times.pNext = info.pNext;
         info.pNext = &present_times;
     } else {
-        present_timing_.last_slot = 0;
+        present_timing_.slots.reset();
     }
     const std::int64_t present_cpu = vk::thread_cpu_ns();
     if (swapchain_fsr_) {
@@ -2247,9 +2336,24 @@ void RendererVk::present_swapchain_image() {
         fg_hudless_ready_ = false;
     }
     vk::streamline_vk::mark_present_start();
-    const VkResult result = swapchain_calls_.present(context.queue(), &info);
+    // --diagnostics timeline: the present's call, as Direct3D 12 records it (a = the present's ordinal).
+    static std::uint64_t timeline_present_ordinal = 0u;
+    const bool timeline_present = galaxy::timeline::enabled();
+    if (timeline_present) {
+        galaxy::timeline::record(galaxy::timeline::Event::PresentBegin, ++timeline_present_ordinal, 0u);
+    }
+    VkResult result = VK_SUCCESS;
+    {
+        const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Present);
+        result = swapchain_calls_.present(context.queue(), &info);
+    }
+    if (timeline_present) {
+        galaxy::timeline::record(galaxy::timeline::Event::PresentEnd, timeline_present_ordinal);
+    }
     vk::streamline_vk::mark_present_end();
-    last_present_id_ = ids && (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) ? this_present_id : 0u;
+    const bool queued = ids && (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR);
+    present_id_before_last_ = queued ? last_present_id_ : 0u;
+    last_present_id_ = queued ? this_present_id : 0u;
     streamline_frame_open_ = false;
     vk::note_driver_cpu(vk::DriverCall::Present, vk::thread_cpu_ns() - present_cpu);
     surface_lock_ = {};
@@ -2305,7 +2409,7 @@ void RendererVk::present_swapchain_image() {
 }
 
 // The past presentation times (VK_GOOGLE_display_timing): whether each frame was shown by the slot it asked for, and
-// one frame period after the frame before it. Every 600 frames to the log.
+// one frame period after the frame before it. Every ten seconds to the log.
 void RendererVk::report_present_timing() {
     const VkDevice device = vk::Context::get().device();
     if (swapchain_.handle == VK_NULL_HANDLE) {
@@ -2332,19 +2436,8 @@ void RendererVk::report_present_timing() {
         const auto expected = identified ? timing.requested_period[at] : kGameStepNs;
         timing.margin_sum += static_cast<std::int64_t>(past[i].presentMargin);
         if (identified && timing.called[at] != 0) {
-            const std::int64_t vsync = timing.vsync_ns != 0 ? timing.vsync_ns : kGameStepNs;
-            const auto earliest = static_cast<std::int64_t>(past[i].earliestPresentTime);
-            if (actual > requested + half_vsync && earliest > requested + half_vsync) {
-                // At most four vsyncs, and a vsync more per late frame: a stall (the app put away, a GPU hitch) is not
-                // the device's pace.
-                const std::int64_t needed = std::clamp<std::int64_t>(earliest - timing.called[at], 0, 4 * vsync);
-                timing.lead_ns = std::max(timing.lead_ns, std::min(needed, std::max(timing.lead_ns, vsync) + vsync));
-                timing.lead_max = std::max(timing.lead_max, needed);
-                timing.on_time_run = 0;
-            } else if (actual <= requested + half_vsync && ++timing.on_time_run >= 240u) {
-                timing.on_time_run = 0;
-                timing.lead_ns = std::max<std::int64_t>(0, timing.lead_ns - vsync / 4);
-            }
+            timing.slots.observe(requested, static_cast<std::int64_t>(past[i].earliestPresentTime), actual,
+                                 static_cast<std::int64_t>(past[i].presentMargin), expected, half_vsync);
         }
         if (requested == 0) {
             ++timing.unrequested;
@@ -2365,18 +2458,18 @@ void RendererVk::report_present_timing() {
             } else ++timing.duplicates;
         }
         timing.last_actual = actual;
-        if (++timing.frames == 600u) {
+        ++timing.frames;
+        if (timing.report.due()) {
             std::fprintf(stderr, "[present-timing] %u frames: %u shown at their requested slot, %u late, %u without one "
                          "(unmatched); %u at the target interval; actual-hz %.2f, interval-max %.2f ms, duplicate-times %u; "
                          "late(available/delayed)=%u/%u margin %.2f ms (driver refresh %.2f, display %.2f ms); "
-                         "present lead %.2f ms (a late frame's need, highest %.2f)\n",
+                         "pipeline %.2f ms (a late frame missed its slot by %.2f at most)\n",
                          timing.frames, timing.on_slot, timing.late, timing.unrequested, timing.even,
                          timing.interval_sum > 0 ? 1e9 * timing.intervals / double(timing.interval_sum) : 0.0,
                          double(timing.interval_max) / 1e6, timing.duplicates, timing.available_late, timing.delayed_late,
                          double(timing.margin_sum) / 1e6 / timing.frames,
-                         double(timing.refresh_ns) / 1e6, double(timing.vsync_ns) / 1e6, double(timing.lead_ns) / 1e6,
-                         double(timing.lead_max) / 1e6);
-            timing.lead_max = 0;
+                         double(timing.refresh_ns) / 1e6, double(timing.vsync_ns) / 1e6,
+                         double(timing.slots.depth_used()) / 1e6, double(timing.slots.take_late_max()) / 1e6);
             timing.frames = timing.on_slot = timing.late = timing.unrequested = timing.even = 0u;
             timing.duplicates = timing.available_late = timing.delayed_late = timing.intervals = 0u;
             timing.interval_sum = timing.interval_max = timing.margin_sum = 0;
@@ -2568,6 +2661,7 @@ void RendererVk::read_gpu_passes() {
                 pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f, std::memory_order_relaxed);
             }
         }
+        galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(), std::min(std::size(kPassTimeNames), frame_ms.size()));
     }
     pass_mark_count_[frame_slot_] = 0u;
     std::array<std::uint64_t, 4> counts{};
@@ -2740,15 +2834,41 @@ void RendererVk::follow_window_and_resize() {
     if (!hdr_read_ || monitor_moved || post_.ready() != hdr_post_ready_) {
         read_display_hdr();
     }
+    {
+        const RenderConfig cfg = get_render_config();
+        DisplayHdr display = get_display_hdr();
+        const bool held = cfg.hdr && (fsr_generation_wanted() || frame_generation_running());
+        if (held != display.held_sdr) {
+            display.held_sdr = held;
+            set_display_hdr(display);
+        }
+#if defined(_WIN32)
+        // Windows HDR follows the game's wish for the window's display: on while the picture can be HDR (os_hdr.h). A
+        // hidden start (a test's) never switches the display.
+        const bool wanted = cfg.hdr && !held && post_.ready() && post_.present_ready() && (display.available || display.switchable) &&
+                            !host_window::hidden_window_mode_enabled();
+        if (!os_hdr_asked_ || wanted != os_hdr_wanted_ || hdr_reading_.monitor != os_hdr_monitor_) {
+            os_hdr_asked_ = true;
+            os_hdr_wanted_ = wanted;
+            os_hdr_monitor_ = hdr_reading_.monitor;
+            os_hdr::want(os_hdr_monitor_, wanted);
+        }
+#endif
+    }
     if (wants_hdr() != swapchain_.hdr_asked) {
         swapchain_dirty_ = true;
     } else if (swapchain_.hdr) {
-        // The paper white or the display's peak changed: the last write's constants and the metadata, not the swap chain.
+        // A level changed (the paper white, the peak, the black, the calibration's pattern): the last write's constants and
+        // the metadata, not the swap chain.
         const PostOutput levels = post_output_for(get_render_config(), get_display_hdr());
-        if (levels.paper_white_nits != hdr_output_.paper_white_nits || levels.peak_nits != hdr_output_.peak_nits) {
+        if (levels != hdr_output_) {
             hdr_output_ = levels;
             apply_hdr_metadata(levels);
-            std::fprintf(stderr, "[hdr] on peak %u nits paper %u\n", levels.peak_nits, levels.paper_white_nits);
+            // The calibration's levels change with each step of its slider: logged as it ends.
+            if (levels.pattern == HdrPattern::None && !hdr_calibration().active) {
+                std::fprintf(stderr, "[hdr] on peak %u nits paper %u black %.4f\n", levels.peak_nits,
+                             levels.paper_white_nits, static_cast<double>(hdr_black_nits(levels.black)));
+            }
         }
     }
     if (swapchain_dirty_) {
@@ -2762,7 +2882,7 @@ void RendererVk::follow_window_and_resize() {
         vkDeviceWaitIdle(vk::Context::get().device());
         create_swapchain();
     }
-    if (monitor_moved || display_refresh_checks_++ % 120u == 0u) {
+    if (monitor_moved || display_refresh_.due()) {
         refresh_display_rate();
     }
 }
@@ -2781,7 +2901,7 @@ bool RendererVk::capture_sdr_picture(VkCommandBuffer commands, const vk::Texture
             return false;
         }
     }
-    hdr_capture_used_frame_ = frame_index_;
+    hdr_capture_used_step_ = idle_clock();
     if (!hdr_capture_ || hdr_capture_->width != width || hdr_capture_->height != height) {
         if (hdr_capture_) {
             retire(std::move(hdr_capture_));  // an earlier capture's commands may still read it
@@ -2821,8 +2941,13 @@ bool RendererVk::capture_sdr_picture(VkCommandBuffer commands, const vk::Texture
     const VkClearRect rect{{{0, 0}, {width, height}}, 0, 1};
     vkCmdClearAttachments(commands, 1, &attachment, 1, &rect);
     if (!present_black_) {
-        const VkRect2D area{{content.left, content.top}, {static_cast<std::uint32_t>(content.width), static_cast<std::uint32_t>(content.height)}};
-        post_.finish_present(commands, step, area, allocate);
+        // Turned as the swap chain image is (pre-rotated, of the image's size): the 8-bit copy the SDR capture would read.
+        const VkRect2D area = turned_rect(swapchain_.transform, static_cast<int>(swapchain_.extent.width),
+                                          static_cast<int>(swapchain_.extent.height), content.left, content.top, content.width,
+                                          content.height);
+        post_.finish_present(commands, step, area, allocate,
+                             capture_output(hdr_output_, ::galaxy::diagnosing(::galaxy::kDiagnoseHdrHighlights)),
+                             quarter_turns(swapchain_.transform));
     }
     vkCmdEndRenderPass(commands);
     image_barrier(commands, hdr_capture_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -2843,6 +2968,7 @@ bool RendererVk::capture_sdr_picture(VkCommandBuffer commands, const vk::Texture
 }
 
 bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, bool black) {
+    end_layer_2d();  // a frame that took no picture after its 2D layer
     const GpuPassScope pass{*this, GpuPass::Present};
     present_black_ = black;
     if (source == nullptr || !source->texture) {
@@ -2862,8 +2988,12 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     // A second at most: an image the presentation engine never returns (a surface going away) skips the frame.
     constexpr std::uint64_t kAcquireTimeoutNs = 1'000'000'000ull;
     const std::int64_t acquire_cpu = vk::thread_cpu_ns();
-    VkResult result = swapchain_calls_.acquire(context.device(), swapchain_.handle, kAcquireTimeoutNs, frame.acquired,
-                                            VK_NULL_HANDLE, &image);
+    VkResult result = VK_SUCCESS;
+    {
+        const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Acquire);
+        result = swapchain_calls_.acquire(context.device(), swapchain_.handle, kAcquireTimeoutNs, frame.acquired, VK_NULL_HANDLE,
+                                          &image);
+    }
     vk::note_driver_cpu(vk::DriverCall::Acquire, vk::thread_cpu_ns() - acquire_cpu);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_ERROR_SURFACE_LOST_KHR || result == VK_TIMEOUT ||
         result == VK_NOT_READY) {
@@ -2897,7 +3027,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
         static_cast<void>(debug_copy_selected_display_to_readback(*source));
     }
 
-    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const auto aspect = galaxy::latched_display_aspect();
     const auto content_aspect = galaxy::presentation_content_aspect(
         aspect ? aspect->content_aspect : galaxy::kDesignContentAspect, source->prerecorded_movie);
     const int bb_w = static_cast<int>(swapchain_.extent.width);

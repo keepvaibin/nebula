@@ -7,10 +7,18 @@
 namespace NebulaLauncher {
     // The title's hold, its first frame: the host opens the home screen when launcher mode is on.
     void open();
+    // The title's press: the update the start's check found, its notice alone over the title (once a session). True when
+    // it shows; update() then runs each frame until isHolding() ends (Later) or the game leaves (Update).
+    bool openNotice();
     // Each frame of the hold: the sounds of what changed, and the choice (Quit leaves the game as the HOME Menu's does).
     void update();
     // The title waits: the home screen shows, or the game is leaving from it.
     bool isHolding();
     // The notice's texts (0 the update's version, 1 its notes) into `pText`, at most `capacity` units with the end; the length.
     s32 readText(u32 which, char16_t* pText, s32 capacity);
+    // Each frame no reset runs, past the boot: true once when the host asks the game back to its title (the benchmark in
+    // the running game; GameSystemRestartProcess).
+    bool takeReset();
+    // That reset's saves are read.
+    void resetDone();
 };  // namespace NebulaLauncher

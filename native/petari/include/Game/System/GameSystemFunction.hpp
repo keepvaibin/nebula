@@ -12,6 +12,8 @@ namespace GameSystemFunction {
     // True for the one frame the scene goes on after the HOME Menu, a warning, the skip's question or the settings menu held it.
     bool isSceneResumed();
     bool isResetProcessing();
+    // A reset's fade (or the black after a diagnostics run's reset) covers the screen fully.
+    bool isResetScreenBlack();
     void setResetOperationApplicationReset();
     void setResetOperationQuit();
     void requestResetGameSystem(bool);

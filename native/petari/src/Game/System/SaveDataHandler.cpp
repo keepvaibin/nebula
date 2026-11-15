@@ -108,6 +108,10 @@ SaveDataHandler::SaveDataHandler(const UserFile* pUserFile)
         mFiles[i].mRoom = 0;
     }
 
+    initializeAllUserFileMemory(pUserFile);
+}
+
+void SaveDataHandler::initializeAllUserFileMemory(const UserFile* pUserFile) {
     for (u32 user = 0; user < cUserFiles; user++) {
         initializeUserFileMemory(user + 1, pUserFile);
     }
@@ -138,28 +142,29 @@ bool SaveDataHandler::requestLoadSaveData(int index) {
 }
 
 bool SaveDataHandler::acceptLoaded() {
-    return readNative() || readOld();
+    const char* const pName = cReadNames[mReadIndex];
+    return readNative(mBuffer, mReadLength, pName, mFiles) || readOld(mBuffer, mReadLength, pName, mFiles);
 }
 
-bool SaveDataHandler::readNative() {
-    if (mReadLength < cHeaderSize || readU32(mBuffer) != cMagic) {
+bool SaveDataHandler::readNative(const u8* pBytes, u32 length, const char* pName, File* pFiles) {
+    if (length < cHeaderSize || readU32(pBytes) != cMagic) {
         return false;
     }
 
-    const u32 version = readU32(mBuffer + 4);
-    const u32 count = readU32(mBuffer + 12);
-    if (version != cVersion || count > (mReadLength - cHeaderSize) / cRowSize ||
-        readU32(mBuffer + 8) != crc32(mBuffer + cHeaderSize, mReadLength - cHeaderSize)) {
-        nebula_log("save: %s is damaged\n", cReadNames[mReadIndex]);
+    const u32 version = readU32(pBytes + 4);
+    const u32 count = readU32(pBytes + 12);
+    if (version != cVersion || count > (length - cHeaderSize) / cRowSize ||
+        readU32(pBytes + 8) != crc32(pBytes + cHeaderSize, length - cHeaderSize)) {
+        nebula_log("save: %s is damaged\n", pName);
         return false;
     }
 
     const u32 rows = cHeaderSize + count * cRowSize;
     u32 place = rows;
     for (u32 i = 0; i < count; i++) {
-        const u32 size = readU32(mBuffer + cHeaderSize + i * cRowSize + cRowNameSize);
-        if (size > mReadLength - place) {
-            nebula_log("save: %s is damaged\n", cReadNames[mReadIndex]);
+        const u32 size = readU32(pBytes + cHeaderSize + i * cRowSize + cRowNameSize);
+        if (size > length - place) {
+            nebula_log("save: %s is damaged\n", pName);
             return false;
         }
         place += size;
@@ -167,35 +172,35 @@ bool SaveDataHandler::readNative() {
 
     place = rows;
     for (u32 i = 0; i < count; i++) {
-        const u8* const pRow = mBuffer + cHeaderSize + i * cRowSize;
+        const u8* const pRow = pBytes + cHeaderSize + i * cRowSize;
         char name[cRowNameSize + 1];  // a row's name in Nebula.sav is cRowNameSize bytes; the terminator is ours
         memcpy(name, pRow, cRowNameSize);
         name[cRowNameSize] = '\0';
         const u32 size = readU32(pRow + cRowNameSize);
         SaveFileId file;
         if (parseFileName(name, &file)) {
-            setFile(file, mBuffer + place, size);
+            putFile(pFiles, file, pBytes + place, size);
         }
         place += size;
     }
 
-    nebula_log("save: read %s\n", cReadNames[mReadIndex]);
+    nebula_log("save: read %s\n", pName);
     return true;
 }
 
 // A save of the old versions, once: the new file is written from what this keeps, the old file stays as it was.
-bool SaveDataHandler::readOld() {
+bool SaveDataHandler::readOld(u8* pBytes, u32 length, const char* pName, File* pFiles) {
     NebulaSaveFormat::Header header;
-    const NebulaSaveFormat::Error error = NebulaSaveFormat::validate(mBuffer, mReadLength, header);
+    const NebulaSaveFormat::Error error = NebulaSaveFormat::validate(pBytes, length, header);
     if (error != NebulaSaveFormat::Error::None) {
-        nebula_log("save: %s: %s\n", cReadNames[mReadIndex], NebulaSaveFormat::message(error));
+        nebula_log("save: %s: %s\n", pName, NebulaSaveFormat::message(error));
         return false;
     }
 
     const bool oldOrder = header.format == NebulaSaveFormat::Format::Wii2;
     UserFile* pUserFile = oldOrder ? new UserFile() : nullptr;
     gOldSaveOrder = oldOrder;
-    SaveDataFileAccessor file(mBuffer);
+    SaveDataFileAccessor file(pBytes);
     const u32 num = file.getUserFileInfoNum();
     for (u32 i = 0; i < num; i++) {
         const char* const pName = file.getFileName(i);
@@ -207,7 +212,7 @@ bool SaveDataHandler::readOld() {
         }
 
         if (!oldOrder) {
-            setFile(id, info.mData, info.mDataSize);
+            putFile(pFiles, id, info.mData, info.mDataSize);
             continue;
         }
 
@@ -230,16 +235,16 @@ bool SaveDataHandler::readOld() {
         }
 
         if (size != 0) {
-            setFile(id, mMake, size);
+            putFile(pFiles, id, mMake, size);
         } else {
-            setFile(id, info.mData, info.mDataSize);
+            putFile(pFiles, id, info.mData, info.mDataSize);
         }
         gOldSaveOrder = true;
     }
 
     gOldSaveOrder = false;
     delete pUserFile;
-    nebula_log("save: read %s, an old save\n", cReadNames[mReadIndex]);
+    nebula_log("save: read %s, an old save\n", pName);
     return true;
 }
 
@@ -252,21 +257,29 @@ SaveDataHandler::File* SaveDataHandler::findFile(SaveFileId file) const {
 }
 
 void SaveDataHandler::setFile(SaveFileId file, const u8* pData, u32 size) {
-    File* const pFile = findFile(file);
-    if (pFile == nullptr) {
+    putFile(mFiles, file, pData, size);
+}
+
+void SaveDataHandler::putFile(File* pFiles, SaveFileId file, const u8* pData, u32 size) {
+    if (file.mUser < 1 || static_cast< u32 >(file.mUser) > cUserFiles || file.mKind >= cKindNum) {
         return;
     }
+    File* const pFile = &pFiles[(file.mUser - 1) * cKindNum + file.mKind];
+    const bool memory = pFiles == mFiles;
 
     if (size > pFile->mRoom) {
         delete[] pFile->mData;
-        pFile->mData = new (Arenas::permanent(), 0) u8[size];
+        // The save in memory lives as long as the game; an imported save's files only while it is read.
+        pFile->mData = memory ? new (Arenas::permanent(), 0) u8[size] : new u8[size];
         pFile->mRoom = size;
     }
 
-    memcpy(pFile->mData, pData, size);
+    if (size != 0) {
+        memcpy(pFile->mData, pData, size);
+    }
     pFile->mSize = size;
     // The REMOVED MODS line's count of mods' values in memory (services/save.md 5).
-    if (file.mKind != SaveFileId::Kind_Config) {
+    if (memory && file.mKind != SaveFileId::Kind_Config) {
         luma::save::fileStored(static_cast< u32 >(file.mUser - 1) * 2 + file.mKind, pFile->mData, pFile->mSize);
     }
 }
@@ -482,40 +495,129 @@ void SaveDataHandler::fitMake(const UserFile* pUserFile) {
     mMakeRoom = room;
 }
 
+static_assert(SaveDataHandler::cFileNum == cUserFiles * cKindNum, "a Nebula.sav row for each user's each kind");
+
+u32 SaveDataHandler::saveSize(const File* pFiles) {
+    u32 total = cHeaderSize + cFileNum * cRowSize;
+    for (u32 i = 0; i < cFileNum; i++) {
+        total += pFiles[i].mSize;
+    }
+    return total;
+}
+
+void SaveDataHandler::makeSaveInto(const File* pFiles, u8* pOut, u32 total) {
+    writeU32(pOut, cMagic);
+    writeU32(pOut + 4, cVersion);
+    writeU32(pOut + 12, cFileNum);
+    u32 place = cHeaderSize + cFileNum * cRowSize;
+    for (u32 i = 0; i < cFileNum; i++) {
+        u8* const pRow = pOut + cHeaderSize + i * cRowSize;
+        char name[cRowNameSize];  // the file's fixed-width row name (makeFileName fits it)
+        makeFileName(name, {static_cast< SaveFileId::Kind >(i % cKindNum), static_cast< s32 >(i / cKindNum + 1)});
+        memset(pRow, 0, cRowNameSize);
+        memcpy(pRow, name, strlen(name));
+        writeU32(pRow + cRowNameSize, pFiles[i].mSize);
+        if (pFiles[i].mSize != 0) {
+            memcpy(pOut + place, pFiles[i].mData, pFiles[i].mSize);
+        }
+        place += pFiles[i].mSize;
+    }
+    writeU32(pOut + 8, crc32(pOut + cHeaderSize, total - cHeaderSize));
+}
+
 void SaveDataHandler::requestSaveSaveData() {
     waitRequest();
     luma::save::applyForgets(this, nullptr);
-    const u32 count = cUserFiles * cKindNum;
-    u32 total = cHeaderSize + count * cRowSize;
-    for (u32 i = 0; i < count; i++) {
-        total += mFiles[i].mSize;
-    }
-
+    const u32 total = saveSize(mFiles);
     if (total > mBufferRoom) {
         delete[] mBuffer;
         mBufferRoom = total;
         mBuffer = new (Arenas::permanent(), 0) u8[mBufferRoom];
     }
-
-    writeU32(mBuffer, cMagic);
-    writeU32(mBuffer + 4, cVersion);
-    writeU32(mBuffer + 12, count);
-    u32 place = cHeaderSize + count * cRowSize;
-    for (u32 i = 0; i < count; i++) {
-        u8* const pRow = mBuffer + cHeaderSize + i * cRowSize;
-        char name[cRowNameSize];  // the file's fixed-width row name (makeFileName fits it)
-        makeFileName(name, {static_cast< SaveFileId::Kind >(i % cKindNum), static_cast< s32 >(i / cKindNum + 1)});
-        memset(pRow, 0, cRowNameSize);
-        memcpy(pRow, name, strlen(name));
-        writeU32(pRow + cRowNameSize, mFiles[i].mSize);
-        memcpy(mBuffer + place, mFiles[i].mData, mFiles[i].mSize);
-        place += mFiles[i].mSize;
-    }
-    writeU32(mBuffer + 8, crc32(mBuffer + cHeaderSize, total - cHeaderSize));
+    makeSaveInto(mFiles, mBuffer, total);
 
     mReadLength = 0;
     mSaveRequest->setWriteSeq(cSaveFileName, mBuffer, total);
     mSaveRequest->start();
+}
+
+bool SaveDataHandler::convertSave(u8* pBytes, u32 length, u8** ppSave, u32* pLength) {
+    *ppSave = nullptr;
+    *pLength = 0;
+    File* const pFiles = new File[cFileNum];
+    if (pFiles == nullptr) {
+        return false;
+    }
+    for (u32 i = 0; i < cFileNum; i++) {
+        pFiles[i] = {nullptr, 0, 0};
+    }
+    // As the start reads it; a GameData.bin of the old order is made again by mMake's room for its files.
+    const char cName[] = "the imported save";
+    bool read = readNative(pBytes, length, cName, pFiles) || readOld(pBytes, length, cName, pFiles);
+    if (read) {
+        const u32 total = saveSize(pFiles);
+        u8* const pSave = new u8[total];
+        if (pSave != nullptr) {
+            makeSaveInto(pFiles, pSave, total);
+            *ppSave = pSave;
+            *pLength = total;
+        } else {
+            read = false;
+        }
+    }
+    for (u32 i = 0; i < cFileNum; i++) {
+        delete[] pFiles[i].mData;
+    }
+    delete[] pFiles;
+    return read;
+}
+
+bool SaveDataHandler::makeSave(u8** ppSave, u32* pLength) {
+    *ppSave = nullptr;
+    *pLength = 0;
+    luma::save::applyForgets(this, nullptr);  // as requestSaveSaveData writes them
+    const u32 total = saveSize(mFiles);
+    u8* const pSave = new u8[total];
+    if (pSave == nullptr) {
+        return false;
+    }
+    makeSaveInto(mFiles, pSave, total);
+    *ppSave = pSave;
+    *pLength = total;
+    return true;
+}
+
+bool SaveDataHandler::splitSave(const u8* pSave, u32 length, const u8* ppParts[], u32 pSizes[]) {
+    for (u32 i = 0; i < cFileNum; i++) {
+        ppParts[i] = pSave;
+        pSizes[i] = 0;
+    }
+    if (pSave == nullptr || length < cHeaderSize || readU32(pSave) != cMagic || readU32(pSave + 4) != cVersion) {
+        return false;
+    }
+    const u32 count = readU32(pSave + 12);
+    if (count > (length - cHeaderSize) / cRowSize || readU32(pSave + 8) != crc32(pSave + cHeaderSize, length - cHeaderSize)) {
+        return false;
+    }
+    u32 place = cHeaderSize + count * cRowSize;
+    for (u32 i = 0; i < count; i++) {
+        const u8* const pRow = pSave + cHeaderSize + i * cRowSize;
+        const u32 size = readU32(pRow + cRowNameSize);
+        if (size > length - place) {
+            return false;
+        }
+        char name[cRowNameSize + 1];
+        memcpy(name, pRow, cRowNameSize);
+        name[cRowNameSize] = '\0';
+        SaveFileId file;
+        if (parseFileName(name, &file)) {
+            const u32 index = static_cast< u32 >(file.mUser - 1) * cKindNum + file.mKind;
+            ppParts[index] = pSave + place;
+            pSizes[index] = size;
+        }
+        place += size;
+    }
+    return true;
 }
 
 bool SaveDataHandler::isDone() {

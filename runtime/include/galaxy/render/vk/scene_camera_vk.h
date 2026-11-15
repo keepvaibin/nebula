@@ -24,16 +24,18 @@ public:
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 
+    // Each works in the top-left `width` x `height` of its targets (the scene's drawn part: dynamic resolution's
+    // rectangle, or all of them).
     // `picture` is the scene target's colour, sampled; every sample of the wide target takes it.
-    void widen(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& picture,
-               const SetAllocator& allocate);
+    void widen(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& picture, unsigned width,
+               unsigned height, const SetAllocator& allocate);
     // `wide` is the resolved wide colour, sampled. Below zero `seconds` starts the eye open. `finish`: the traced
     // relight's (scene_camera.hlsl g_finish), in the meter and the camera alike.
-    void meter(VkCommandBuffer commands, const Texture& wide, const Texture& depth, VkImageLayout depth_layout, float seconds,
-               unsigned finish, const SetAllocator& allocate);
+    void meter(VkCommandBuffer commands, const Texture& wide, const Texture& depth, VkImageLayout depth_layout,
+               unsigned width, unsigned height, float seconds, unsigned finish, const SetAllocator& allocate);
     // `wide` is the wide colour, sampled: the multisampled target when `per_sample`, else the resolved one.
-    void draw(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& wide, bool per_sample,
-              const SetAllocator& allocate, bool resolve = false, unsigned finish = 0u);
+    void draw(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& wide, unsigned width,
+              unsigned height, bool per_sample, const SetAllocator& allocate, bool resolve = false, unsigned finish = 0u);
 
 private:
     enum Kind : unsigned { kWiden, kCamera, kCameraSamples, kCameraResolve, kKinds };

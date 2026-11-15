@@ -3,6 +3,8 @@
 #include "galaxy/render/d3d11/game_bloom_d3d11.h"
 
 #include "galaxy/render/game_bloom_shape.h"
+#include "galaxy/render/frame_pass.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <algorithm>
 #include <cstring>
@@ -25,7 +27,6 @@ constexpr DXGI_FORMAT kWorkFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 constexpr std::uint32_t kWorkBind = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 // A kept scene or source: sampled, and the scene target's next texture after a trade.
 constexpr std::uint32_t kPictureBind = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-constexpr std::uint64_t kIdleFrames = 600u;
 
 ID3D11ShaderResourceView* srv_of(const Texture* texture) noexcept {
     return texture != nullptr ? texture->view.Get() : nullptr;
@@ -37,8 +38,8 @@ ID3D11UnorderedAccessView* uav_of(const Texture* texture) noexcept {
 
 // A texture the scene target can continue on: its size and format, drawn into and sampled, one sample.
 bool fits_scene(const Texture* texture, const GameBloom::Inputs& in) noexcept {
-    return texture != nullptr && in.scene_target != nullptr && texture->width == in.frame_width &&
-           texture->height == in.frame_height && texture->format == in.scene_target->format &&
+    return texture != nullptr && in.scene_target != nullptr && texture->width == in.whole_width() &&
+           texture->height == in.whole_height() && texture->format == in.scene_target->format &&
            texture->samples == 1u && texture->target && texture->view;
 }
 
@@ -108,7 +109,7 @@ void GameBloom::shutdown() noexcept {
 
 bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height, std::uint32_t bind,
                               const char* name) {
-    target.used = clock_;
+    target.used = idle_clock();
     if (target.texture && target.texture->width == width && target.texture->height == height &&
         target.texture->format == format) {
         return true;
@@ -118,9 +119,10 @@ bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width
 }
 
 // The frame's pixels of the scene target, in its own format, into `target` (the normal bloom's kept scene, the simple
-// bloom's source).
+// bloom's source), made at the scene target's size (the frame is the part of it drawn in): a kept or source image
+// trades places with the scene target's own.
 bool GameBloom::copy_frame(ID3D11DeviceContext1* context, const Inputs& in, Target& target, const char* name) {
-    if (!ensure_target(target, in.scene_target->format, in.frame_width, in.frame_height, kPictureBind, name)) {
+    if (!ensure_target(target, in.scene_target->format, in.whole_width(), in.whole_height(), kPictureBind, name)) {
         return false;
     }
     const D3D11_BOX frame{0u, 0u, 0u, in.frame_width, in.frame_height, 1u};
@@ -146,7 +148,7 @@ std::shared_ptr<Texture> GameBloom::take_kept_image(ID3D11DeviceContext1* contex
 void GameBloom::keep_picture(std::shared_ptr<Texture> picture, const Inputs& in) {
     static_cast<void>(in);
     keep_.texture = std::move(picture);
-    keep_.used = clock_;
+    keep_.used = idle_clock();
     kept_ = keep_.texture != nullptr;
 }
 
@@ -179,14 +181,13 @@ std::shared_ptr<Texture> GameBloom::take_source_image(ID3D11DeviceContext1* cont
 void GameBloom::give_source(std::shared_ptr<Texture> picture, const Inputs& in) {
     static_cast<void>(in);
     source_.texture = std::move(picture);
-    source_.used = clock_;
+    source_.used = idle_clock();
     source_given_ = source_.texture != nullptr;
 }
 
 void GameBloom::trim_idle() {
-    ++clock_;
     const auto trim = [&](Target& target) {
-        if (target.texture && clock_ > target.used + kIdleFrames) {
+        if (target.texture && idle_since(target.used)) {
             target = {};
         }
     };
@@ -247,19 +248,22 @@ bool GameBloom::apply(ID3D11DeviceContext1* context, const Inputs& in, const Par
         return true;
     }
     const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.scale);
+    // The images at the largest shape of every step the frame may take: a step change makes none again.
+    const bloom::Capacity cap = bloom::largest_shape(in.whole_width(), in.whole_height(), kAuthoredLines,
+                                                     in.lowest_sixteenths);
     const unsigned blurs1 = normal ? 2u : 1u;
-    bool made = ensure_target(work_, kWorkFormat, s.w1, s.h1, kWorkBind, "bloom work") &&
-                ensure_target(box_tmp_, kWorkFormat, s.w1, s.h1, kWorkBind, "bloom box") &&
-                ensure_target(mask_, kWorkFormat, s.w1, s.h1, kWorkBind, "bloom mask") &&
-                ensure_target(level1_, kWorkFormat, s.w1, s.h1, kWorkBind, "bloom level 1");
+    bool made = ensure_target(work_, kWorkFormat, cap.w1, cap.h1, kWorkBind, "bloom work") &&
+                ensure_target(box_tmp_, kWorkFormat, cap.w1, cap.h1, kWorkBind, "bloom box") &&
+                ensure_target(mask_, kWorkFormat, cap.w1, cap.h1, kWorkBind, "bloom mask") &&
+                ensure_target(level1_, kWorkFormat, cap.w1, cap.h1, kWorkBind, "bloom level 1");
     for (unsigned i = 0; made && i < blurs1; ++i) {
-        made = ensure_target(blur_h_[i], kWorkFormat, s.w1, s.h1, kWorkBind, "bloom level 1 blur");
+        made = ensure_target(blur_h_[i], kWorkFormat, cap.w1, cap.h1, kWorkBind, "bloom level 1 blur");
     }
     if (made && normal) {
-        made = ensure_target(level2_in_, kWorkFormat, s.w2, s.h2, kWorkBind, "bloom level 2 source") &&
-               ensure_target(level2_, kWorkFormat, s.w2, s.h2, kWorkBind, "bloom level 2");
+        made = ensure_target(level2_in_, kWorkFormat, cap.w2, cap.h2, kWorkBind, "bloom level 2 source") &&
+               ensure_target(level2_, kWorkFormat, cap.w2, cap.h2, kWorkBind, "bloom level 2");
         for (unsigned i = 0; made && i < 3u; ++i) {
-            made = ensure_target(blur2_h_[i], kWorkFormat, s.w2, s.h2, kWorkBind, "bloom level 2 blur");
+            made = ensure_target(blur2_h_[i], kWorkFormat, cap.w2, cap.h2, kWorkBind, "bloom level 2 blur");
         }
     }
     if (!made || (!normal && !given && !copy_frame(context, in, source_, "bloom source"))) {
@@ -368,10 +372,10 @@ bool GameBloom::apply(ID3D11DeviceContext1* context, const Inputs& in, const Par
     c.params[0] = static_cast<float>(std::min(p.intensity, 255u)) / 255.0f;
     c.params[1] = std::max(p.strength, 0.0f);
     c.params[2] = normal ? 1.0f : 2.0f;
-    c.uv[0] = 1.0f / static_cast<float>(s.f * s.w1);
-    c.uv[1] = 1.0f / static_cast<float>(s.f * s.h1);
-    c.uv[2] = 1.0f / static_cast<float>(s.f * s.n * std::max(s.w2, 1u));
-    c.uv[3] = 1.0f / static_cast<float>(s.f * s.n * std::max(s.h2, 1u));
+    // The simple bloom's second level is level 1 again.
+    const bloom::CompositeUv uv = bloom::composite_uv(s, normal ? cap : bloom::Capacity{cap.w1, cap.h1, cap.w1, cap.h1});
+    std::copy(std::begin(uv.uv), std::end(uv.uv), c.uv);
+    std::copy(std::begin(uv.limit), std::end(uv.limit), c.sigma);
     draw_composite(context, in, normal ? *keep_.texture : *source_.texture, *level1,
                    normal ? *level2_.texture : *level1, c);
     return true;

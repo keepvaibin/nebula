@@ -229,4 +229,8 @@ namespace LayoutAspect {
             pManager->mLayout->SetCanvas(getCanvas());
         }
     }
+
+    f32 getCanvasHeight() {
+        return getCanvas().mHeight;
+    }
 };  // namespace LayoutAspect

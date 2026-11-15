@@ -99,113 +99,171 @@ def open_folder(folder, out, opener):
     return counts
 
 
+SCHEMA = 2  # benchmark_stats.h kResultSchema: reports of another schema are counted and left out
+
+
 def load_reports(folder):
-    reports = []
+    """The opened reports in `folder` whose benchmark result has this tool's schema, as [(id, result)], and how many
+    were left out for another schema."""
+    reports, other = [], 0
     for name in sorted(os.listdir(folder)):
         if not name.endswith(".json"):
             continue
         try:
             with open(os.path.join(folder, name), encoding="ascii") as handle:
-                report = json.load(handle)
-            reports.append((name[:-5], report["benchmark"]))
+                bench = json.load(handle)["benchmark"]
         except (OSError, ValueError, KeyError, TypeError):
             continue
-    return reports
+        if not isinstance(bench, dict) or bench.get("schema") != SCHEMA:
+            other += 1
+            continue
+        reports.append((name[:-5], bench))
+    return reports, other
+
+
+def known(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def average(spread):
+    """A per-frame cost's average: {average, p99, worst}, or None for null."""
+    return spread.get("average") if isinstance(spread, dict) and known(spread.get("average")) else None
+
+
+STUTTER_MS = 25.0  # benchmark_stats.h kStutterMs
 
 
 def scene_rows(report_id, bench):
-    """One row per measured scene: the facts the summary and the CSV are made of."""
-    device, settings = bench.get("device") or {}, bench.get("measured_with") or {}
+    """One row per measured scene of each part (the player's settings, the standard settings): the facts the summary
+    and the CSV are made of."""
+    device = bench.get("device") or {}
     rows = []
-    for scene in bench.get("scenes") or []:
-        interval = scene.get("interval_ms") or {}
-        passes = {k: v for k, v in (scene.get("gpu_pass_ms") or {}).items() if isinstance(v, (int, float))}
-        top_pass = max(passes, key=passes.get) if passes else ""
-        cpu = {k: v for k, v in (scene.get("cpu_ms") or {}).items() if k != "process" and isinstance(v, (int, float))}
-        top_thread = max(cpu, key=cpu.get) if cpu else ""
-        rows.append({
-            "report": report_id,
-            "gpu": device.get("gpu", ""),
-            "vendor_id": device.get("vendor_id"),
-            "device_id": device.get("device_id"),
-            "gpu_class": gpu_class(device),
-            "backend": bench.get("backend", ""),
-            "cpu": device.get("cpu", ""),
-            "logical_cores": device.get("logical_cores"),
-            "ram_mb": device.get("ram_mb"),
-            "os": device.get("os", ""),
-            "output": "x".join(str(v) for v in device.get("output") or []),
-            "internal_height": settings.get("internal_height"),
-            "stage": scene.get("stage", ""),
-            "mpixels": round((scene.get("pixels") or 0) / 1e6, 3),
-            "p50_ms": interval.get("p50"),
-            "p95_ms": interval.get("p95"),
-            "p99_ms": interval.get("p99"),
-            "gpu_ms": scene.get("gpu_ms"),
-            "top_pass": top_pass,
-            "top_pass_ms": passes.get(top_pass),
-            "game_ms": cpu.get("game"),
-            "render_ms": cpu.get("render"),
-            "audio_ms": cpu.get("audio"),
-            "top_thread": top_thread,
-            "verdict": (bench.get("summary") or {}).get("verdict", ""),
-        })
+    for run in bench.get("runs") or []:
+        settings = run.get("measured_with") or {}
+        for scene in run.get("scenes") or []:
+            frame_ms = scene.get("frame_ms") or {}
+            passes = {name: cost for name, cost in (scene.get("gpu_passes") or {}).items() if isinstance(cost, dict)}
+            top_pass = max(passes, key=lambda name: number(passes[name].get("average"))) if passes else ""
+            cpu = scene.get("cpu_ms") or {}
+            causes, slow_parts = defaultdict(int), defaultdict(int)
+            for frame in scene.get("slowest_frames") or []:
+                if number(frame.get("ms")) > STUTTER_MS:
+                    causes[frame.get("cause", "")] += 1
+                # The render thread's largest part in each of the slowest frames (the ones that make the 1% low).
+                timed = {name: ms for name, ms in (frame.get("render_parts") or {}).items() if known(ms)}
+                if timed:
+                    slow_parts[max(timed, key=timed.get)] += 1
+            rows.append({
+                "report": report_id,
+                "part": run.get("part", ""),
+                "gpu": device.get("gpu", ""),
+                "vendor_id": device.get("vendor_id"),
+                "device_id": device.get("device_id"),
+                "driver": device.get("driver_version") or "",
+                "gpu_class": gpu_class(device),
+                "backend": bench.get("backend", ""),
+                "cpu": device.get("cpu", ""),
+                "logical_cores": device.get("logical_cores"),
+                "ram_mb": device.get("ram_mb"),
+                "os": device.get("os", ""),
+                "output": "x".join(str(v) for v in device.get("output") or []),
+                "internal_height": settings.get("internal_height"),
+                "stage": scene.get("stage", ""),
+                "mpixels": round(number(scene.get("pixels")) / 1e6, 3),
+                "average_fps": scene.get("average_fps"),
+                "low_10_fps": scene.get("low_10_fps"),
+                "low_1_fps": scene.get("low_1_fps"),
+                "p95_ms": frame_ms.get("p95"),
+                "p99_ms": frame_ms.get("p99"),
+                "stutters": scene.get("stutters"),
+                "limiter": scene.get("limiter", ""),
+                "gpu_ms": average(scene.get("gpu_ms")),
+                "top_pass": top_pass,
+                "top_pass_ms": (passes.get(top_pass) or {}).get("average"),
+                "top_pass_share": (passes.get(top_pass) or {}).get("share"),
+                "game_ms": average(cpu.get("game")),
+                "render_ms": average(cpu.get("render")),
+                "audio_ms": cpu.get("audio") if known(cpu.get("audio")) else None,
+                "stutter_causes": ";".join(f"{name}={count}" for name, count in sorted(causes.items())),
+                "slow_frame_parts": ";".join(f"{name}={count}" for name, count in sorted(slow_parts.items())),
+                "verdict": (bench.get("summary") or {}).get("verdict", ""),
+                "passes": {name: cost.get("share") for name, cost in passes.items() if known(cost.get("share"))},
+            })
     return rows
 
 
 def number(value):
-    return value if isinstance(value, (int, float)) else 0.0
+    return value if known(value) else 0.0
 
 
 def summarise(reports, top=20):
-    """Text of the summary: per GPU class and back end the costliest pass and thread, at what size, in which scene;
-    then the slowest devices first."""
+    """Text of the summary, and the CSV's rows. Devices are compared on the standard part, where every device ran the
+    same settings: per GPU class and back end, the median 1% low, what limits the frame and the worst scene; then the
+    top costs (GPU passes by their share of the GPU's frame, and what the stutters came with); then the slowest devices
+    first."""
     rows = [row for report_id, bench in reports for row in scene_rows(report_id, bench)]
-    lines = [f"{len(reports)} reports, {len(rows)} scenes"]
+    standard = [row for row in rows if row["part"] == "standard"]
+    lines = [f"{len(reports)} reports, {len(rows)} scenes ({len(standard)} at the standard settings)"]
     groups = defaultdict(list)
-    for row in rows:
+    for row in standard:
         groups[(row["gpu_class"], row["backend"])].append(row)
 
-    def group_cost(item):
-        return statistics.median(number(r["p95_ms"]) for r in item[1])
+    def group_low(item):
+        return statistics.median(number(r["low_1_fps"]) for r in item[1])
 
     lines.append("")
-    lines.append("By GPU class and back end (slowest median p95 first):")
-    for (klass, backend), members in sorted(groups.items(), key=group_cost, reverse=True):
-        pass_ms, thread_ms = defaultdict(list), defaultdict(list)
+    lines.append("By GPU class and back end, standard settings (lowest median 1% low first):")
+    for (klass, backend), members in sorted(groups.items(), key=group_low):
+        limiters = defaultdict(int)
         for r in members:
-            if r["top_pass"]:
-                pass_ms[r["top_pass"]].append(number(r["top_pass_ms"]))
-            for thread in ("game", "render", "audio"):
-                if isinstance(r[f"{thread}_ms"], (int, float)):
-                    thread_ms[thread].append(r[f"{thread}_ms"])
-        worst = max(members, key=lambda r: number(r["p95_ms"]))
-        top_pass = max(pass_ms, key=lambda k: statistics.mean(pass_ms[k])) if pass_ms else "-"
-        top_thread = max(thread_ms, key=lambda k: statistics.mean(thread_ms[k])) if thread_ms else "-"
+            limiters[r["limiter"] or "-"] += 1
+        limiter = max(limiters, key=limiters.get)
+        worst = min(members, key=lambda r: number(r["low_1_fps"]))
         devices = len({r["report"] for r in members})
         lines.append(
-            f"  {klass} / {backend}: {devices} devices, median p95 {group_cost(((klass, backend), members)):.1f} ms; "
-            f"costliest pass {top_pass}"
-            + (f" ({statistics.mean(pass_ms[top_pass]):.2f} ms)" if pass_ms else "")
-            + f"; costliest thread {top_thread}"
-            + (f" ({statistics.mean(thread_ms[top_thread]):.2f} ms)" if thread_ms else "")
-            + f"; worst scene {worst['stage']} at {worst['mpixels']} Mpx (height {worst['internal_height']}),"
-            f" p95 {number(worst['p95_ms']):.1f} ms"
+            f"  {klass} / {backend}: {devices} devices, median 1% low {group_low(((klass, backend), members)):.1f} FPS,"
+            f" median average {statistics.median(number(r['average_fps']) for r in members):.1f} FPS;"
+            f" limited by {limiter} in {limiters[limiter]} of {len(members)} scenes;"
+            f" worst scene {worst['stage']}, 1% low {number(worst['low_1_fps']):.1f} FPS"
         )
 
     lines.append("")
-    lines.append(f"Slowest devices (worst scene p95), top {top}:")
-    worst_by_report = {}
+    lines.append("Top costs, both parts (GPU passes by mean share of the GPU's frame; stutters by what came with them; the"
+                 " slowest frames by the render thread's largest part):")
+    by_group = defaultdict(list)
     for row in rows:
-        if row["report"] not in worst_by_report or number(row["p95_ms"]) > number(worst_by_report[row["report"]]["p95_ms"]):
+        by_group[(row["gpu_class"], row["backend"])].append(row)
+    for (klass, backend), members in sorted(by_group.items()):
+        shares, causes, parts = defaultdict(list), defaultdict(int), defaultdict(int)
+        for r in members:
+            for name, share in r["passes"].items():
+                shares[name].append(share)
+            for item in filter(None, r["stutter_causes"].split(";")):
+                name, _, count = item.rpartition("=")
+                causes[name] += int(count)
+            for item in filter(None, r["slow_frame_parts"].split(";")):
+                name, _, count = item.rpartition("=")
+                parts[name] += int(count)
+        ranked = sorted(shares, key=lambda name: statistics.mean(shares[name]), reverse=True)[:5]
+        passes = ", ".join(f"{name} {100 * statistics.mean(shares[name]):.0f}%" for name in ranked) or "-"
+        stutters = ", ".join(f"{name} {count}" for name, count in sorted(causes.items(), key=lambda i: -i[1])) or "none"
+        slow = ", ".join(f"{name} {count}" for name, count in sorted(parts.items(), key=lambda i: -i[1])) or "not timed"
+        lines.append(f"  {klass} / {backend}: passes {passes}; stutters {stutters}; slowest frames {slow}")
+
+    lines.append("")
+    lines.append(f"Slowest devices (lowest 1% low at the standard settings), top {top}:")
+    worst_by_report = {}
+    for row in standard:
+        if row["report"] not in worst_by_report or number(row["low_1_fps"]) < number(worst_by_report[row["report"]]["low_1_fps"]):
             worst_by_report[row["report"]] = row
-    for row in sorted(worst_by_report.values(), key=lambda r: number(r["p95_ms"]), reverse=True)[:top]:
+    for row in sorted(worst_by_report.values(), key=lambda r: number(r["low_1_fps"]))[:top]:
         lines.append(
-            f"  {number(row['p95_ms']):6.1f} ms  {row['gpu']} ({row['backend']}), {row['cpu']}, {row['logical_cores']} threads,"
-            f" {row['ram_mb']} MB, {row['output']}: {row['stage']} at {row['mpixels']} Mpx, GPU {number(row['gpu_ms']):.1f} ms"
-            f" (top pass {row['top_pass'] or '-'}), top thread {row['top_thread'] or '-'}"
+            f"  {number(row['low_1_fps']):7.1f} FPS  {row['gpu']} ({row['backend']}), {row['cpu']},"
+            f" {row['logical_cores']} threads, {row['ram_mb']} MB, {row['output']}: {row['stage']},"
+            f" average {number(row['average_fps']):.1f} FPS, GPU {number(row['gpu_ms']):.2f} ms"
+            f" (top pass {row['top_pass'] or '-'}), limited by {row['limiter'] or '-'}"
         )
-    return "\n".join(lines), rows
+    return "\n".join(lines), [{key: value for key, value in row.items() if key != "passes"} for row in rows]
 
 
 # A report's strings are anyone's (anyone can seal to the public key): in a CSV cell they stay text. Control characters
@@ -255,8 +313,11 @@ def main(argv=None):
         counts = open_folder(a.folder, out, exe_opener(a.exe, a.key))
         print(f"opened {counts['opened']}, junk {counts['junk']}, duplicates {counts['duplicate']} -> {out}")
         return 0
-    text, rows = summarise(load_reports(a.folder), a.top)
+    reports, other = load_reports(a.folder)
+    text, rows = summarise(reports, a.top)
     print(text)
+    if other:
+        print(f"{other} reports of another schema left out")
     if a.csv:
         write_csv(rows, a.csv)
         print(f"CSV: {a.csv} ({len(rows)} rows)")

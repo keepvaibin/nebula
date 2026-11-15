@@ -2,8 +2,10 @@
 
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
+#include "Game/Screen/LayoutAspect.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Screen/NebulaUi.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -13,6 +15,7 @@
 #include <cstring>
 #include <Game/Ui/Pane.hpp>
 #include <Game/Ui/TextBox.hpp>
+#include <nebula_game_api.h>
 #include "Game/System/LumaCore.hpp"
 
 namespace {
@@ -57,7 +60,7 @@ namespace {
 };  // namespace
 
 NebulaFileSelectButton::NebulaFileSelectButton(const char* pName, Role role)
-    : LayoutActor(pName, true), mButton(nullptr), mRole(role), mShownFrames(0), mIsDecided(false) {
+    : LayoutActor(pName, true), mButton(nullptr), mRole(role), mShownFrames(0), mIsDecided(false), mFoot(0.0f) {
     lumacore::setClass(this, lumacore::kClassId< NebulaFileSelectButton >);
 }
 
@@ -156,6 +159,7 @@ void NebulaFileSelectButton::layOut() {
     pStart->mScale.x = scale;
     pStart->mScale.y = scale;
     pStart->mTranslate.y = pRoot->mSize.height * 0.5f - inset - height * 0.5f * scale;
+    mFoot = inset + height * scale;
     if (mRole == Role_Settings) {
         pStart->mTranslate.x = startX;
         pButton->mTranslate.x = (pRoot->mSize.width * 0.5f - inset - startX) / scale;
@@ -165,7 +169,15 @@ void NebulaFileSelectButton::layOut() {
     }
 }
 
+// While it shows, on a touch screen: how far down the screen it reaches (NEBULA_CONTEXT_CORNER_BUTTONS), so the phone's
+// HOME stays clear of it.
 void NebulaFileSelectButton::control() {
+    if (!mButton->isHidden() && mFoot > 0.0f && NebulaHost::option(NEBULA_OPTION_TOUCH_POINTER) != 0) {
+        const f32 canvas = LayoutAspect::getCanvasHeight();
+        const f32 down = canvas > 0.0f ? mFoot / canvas : 0.0f;
+        const u32 foot = down >= 1.0f ? 4095u : static_cast< u32 >(down * 4095.0f + 0.5f);
+        NebulaHost::gameContext(NEBULA_CONTEXT_CORNER_BUTTONS, static_cast< s32 >(foot));
+    }
     if (mButton->isPointingTrigger()) {
         MR::startSystemSE("SE_SY_BUTTON_CURSOR_ON");
     }

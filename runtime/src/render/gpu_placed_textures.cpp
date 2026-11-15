@@ -58,23 +58,34 @@ struct PlacedTextureAllocator::State {
     std::uint64_t placed = 0;
     std::uint64_t committed = 0;
 
-    // A new heap for a range of `need` bytes (at most heap_bytes / 2): twice the largest heap held (an eighth of
-    // heap_bytes when none is), at least twice `need`, at most heap_bytes.
-    bool add_heap(std::uint64_t need) {
-        if (!device) return false;
+    // The size of a new heap for a range of `need` bytes (at most heap_bytes / 2): twice the largest heap held (an eighth
+    // of heap_bytes when none is), at least twice `need`, at most heap_bytes. Under the mutex.
+    [[nodiscard]] std::uint64_t new_heap_bytes(std::uint64_t need) const noexcept {
         std::uint64_t size = std::max<std::uint64_t>(heap_bytes / 8u, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
         for (const Heap& held : heaps) {
             if (held.heap) size = std::max(size, held.bytes * 2u);
         }
         while (size < need * 2u) size *= 2u;
-        size = std::min(size, heap_bytes);
+        return std::min(size, heap_bytes);
+    }
+
+    // A heap of `size` bytes, made without the mutex: making one takes milliseconds (new memory), and another thread's
+    // textures need not wait for it. `flags` and `properties` never change after construction.
+    [[nodiscard]] ComPtr<ID3D12Heap> make_heap(ID3D12Device* on, std::uint64_t size) const {
         D3D12_HEAP_DESC desc{};
         desc.SizeInBytes = size;
         desc.Properties = properties;
         desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
         desc.Flags = flags;
+        ComPtr<ID3D12Heap> made;
+        if (on == nullptr || size == 0u || FAILED(on->CreateHeap(&desc, IID_PPV_ARGS(&made)))) return nullptr;
+        return made;
+    }
+
+    // Takes in a heap make_heap made. Under the mutex.
+    void add_heap(ComPtr<ID3D12Heap> made, std::uint64_t size) {
         Heap heap;
-        if (FAILED(device->CreateHeap(&desc, IID_PPV_ARGS(&heap.heap)))) return false;
+        heap.heap = std::move(made);
         heap.free.emplace(0u, size);
         heap.free_bytes = size;
         heap.bytes = size;
@@ -82,11 +93,10 @@ struct PlacedTextureAllocator::State {
         for (Heap& slot : heaps) {
             if (!slot.heap) {
                 slot = std::move(heap);
-                return true;
+                return;
             }
         }
         heaps.push_back(std::move(heap));
-        return true;
     }
 
     // The heaps holding memory now.
@@ -216,7 +226,10 @@ PlacedTextureAllocator::~PlacedTextureAllocator() { shutdown(); }
 void PlacedTextureAllocator::initialize(ID3D12Device* device) {
     std::lock_guard lock(state_->mutex);
     state_->device = device;
-    if (state_->heaps.empty()) (void)state_->add_heap(0u);
+    if (state_->heaps.empty()) {
+        const std::uint64_t size = state_->new_heap_bytes(0u);
+        if (ComPtr<ID3D12Heap> made = state_->make_heap(device, size)) state_->add_heap(std::move(made), size);
+    }
 }
 
 void PlacedTextureAllocator::shutdown() noexcept {
@@ -261,12 +274,23 @@ HRESULT PlacedTextureAllocator::create(const D3D12_RESOURCE_DESC& desc,
         std::size_t heap_index = 0u;
         std::uint64_t offset = 0u;
         ComPtr<ID3D12Heap> heap;
+        std::uint64_t new_bytes = 0u;
         {
             std::lock_guard lock(state_->mutex);
-            if (state_->allocate(info.SizeInBytes, info.Alignment, heap_index, offset) ||
-                (state_->add_heap(info.SizeInBytes) &&
-                 state_->allocate(info.SizeInBytes, info.Alignment, heap_index, offset))) {
+            if (state_->allocate(info.SizeInBytes, info.Alignment, heap_index, offset)) {
                 heap = state_->heaps[heap_index].heap;
+            } else {
+                new_bytes = state_->new_heap_bytes(info.SizeInBytes);
+            }
+        }
+        if (!heap) {
+            // Two threads short of room may each add one; both heaps are used.
+            if (ComPtr<ID3D12Heap> made = state_->make_heap(device.Get(), new_bytes)) {
+                std::lock_guard lock(state_->mutex);
+                state_->add_heap(std::move(made), new_bytes);
+                if (state_->allocate(info.SizeInBytes, info.Alignment, heap_index, offset)) {
+                    heap = state_->heaps[heap_index].heap;
+                }
             }
         }
         if (heap) {

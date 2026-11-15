@@ -39,8 +39,9 @@ struct Constants {
     float min_lerp;
     float reset;
     float pad;
+    float clip_rcp[2];
 };
-static_assert(sizeof(Constants) == 72u, "sgsr2.hlsl's constants");
+static_assert(sizeof(Constants) == 80u, "sgsr2.hlsl's constants");
 
 [[nodiscard]] id<MTLDevice> device() noexcept {
     return (__bridge id<MTLDevice>)Context::get().device();
@@ -114,9 +115,11 @@ public:
     }
 
     bool evaluate(const TemporalUpscaleInputs& in) override {
+        // Any render size up to the one it was made for (dynamic resolution's steps), at the scene images' origin.
         if (in.commands == nullptr || in.output == nullptr || in.color == nullptr || in.depth == nullptr || in.motion == nullptr ||
-            in.render_width != render_width_ || in.render_height != render_height_ || in.output_width != output_width_ ||
-            in.output_height != output_height_ || in.output->format != output_format_) {
+            in.render_width == 0u || in.render_height == 0u || in.render_width > render_width_ ||
+            in.render_height > render_height_ || in.render_width > in.color->width || in.render_height > in.color->height ||
+            in.output_width != output_width_ || in.output_height != output_height_ || in.output->format != output_format_) {
             return false;
         }
         id<MTLCommandBuffer> const commands = (__bridge id<MTLCommandBuffer>)in.commands;
@@ -136,7 +139,7 @@ public:
                 [[commands renderCommandEncoderWithDescriptor:clear] endEncoding];
                 history_ready_ = true;
             }
-            // The depth clip: written whole, read by the upscale.
+            // The depth clip: this frame's region of it written, the upscale reading no further.
             MTLRenderPassDescriptor* const first = [MTLRenderPassDescriptor renderPassDescriptor];
             first.colorAttachments[0].texture = metal(*depthclip_);
             first.colorAttachments[0].loadAction = MTLLoadActionDontCare;
@@ -145,7 +148,7 @@ public:
             convert.label = @"SGSR 2 convert";
             [convert setFragmentTexture:metal(*in.depth) atIndex:0];
             [convert setFragmentSamplerState:point_ atIndex:kSampler];
-            draw(convert, convert_pipeline_, render_width_, render_height_, constants);
+            draw(convert, convert_pipeline_, in.render_width, in.render_height, constants);
             [convert endEncoding];
             // The output and the next history, both written whole.
             MTLRenderPassDescriptor* const second = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -182,8 +185,9 @@ public:
 private:
     Constants constants_for(const TemporalUpscaleInputs& in, bool reset) {
         Constants c{};
-        const float rw = static_cast<float>(render_width_);
-        const float rh = static_cast<float>(render_height_);
+        // This frame's render size (a dynamic resolution step at most the one it was made for).
+        const float rw = static_cast<float>(in.render_width);
+        const float rh = static_cast<float>(in.render_height);
         const float ow = static_cast<float>(output_width_);
         const float oh = static_cast<float>(output_height_);
         c.render_size[0] = rw;
@@ -218,6 +222,8 @@ private:
         fov_y_ = in.fov_y;
         c.min_lerp = still_frames_ > 5u ? 0.3f : 0.0f;
         c.reset = reset ? 1.0f : 0.0f;
+        c.clip_rcp[0] = 1.0f / static_cast<float>(render_width_);
+        c.clip_rcp[1] = 1.0f / static_cast<float>(render_height_);
         return c;
     }
 

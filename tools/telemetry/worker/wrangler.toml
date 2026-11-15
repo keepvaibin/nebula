@@ -8,14 +8,15 @@ workers_dev = true
 binding = "REPORTS"
 bucket_name = "nebula-diag-reports"
 
-# Per address: 3 reports a minute (counted by Cloudflare per location, in memory for the 60 s period, keyed by
-# HMAC-SHA256(ADDRESS_SALT, address); the salt is a secret: README.md).
+# Flood guard per address: 3 requests a minute (counted by Cloudflare per location, in memory for the 60 s period,
+# keyed by HMAC-SHA256(ADDRESS_SALT, address); the salt is a secret: README.md).
 [[ratelimits]]
 name = "PER_ADDRESS"
 namespace_id = "1001"
 simple = { limit = 3, period = 60 }
 
-# All addresses: DAILY_CAP stored reports a UTC day (one SQLite-backed Durable Object per day; free plan).
+# All addresses: DAILY_CAP stored reports a UTC day, and PER_ADDRESS_DAY per address (one SQLite-backed Durable Object
+# per day; free plan).
 [[durable_objects.bindings]]
 name = "DAILY"
 class_name = "DailyCap"
@@ -26,6 +27,8 @@ new_sqlite_classes = ["DailyCap"]
 
 [vars]
 DAILY_CAP = "1000"
+# Stored reports per address per UTC day (counted in the day's Durable Object under the salted key).
+PER_ADDRESS_DAY = "3"
 
 # No request logs: nothing about a sender is kept.
 [observability]

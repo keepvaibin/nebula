@@ -163,10 +163,11 @@ public:
     bool wait(std::uint64_t value);
 
     // A texture of `levels` levels with the views `bind` asks for (D3D11_BIND_*); `samples` above one: a multisampled
-    // target. Null when the device refuses it.
+    // target. `initial`: its levels' contents, one entry a level. Null when the device refuses it.
     [[nodiscard]] std::shared_ptr<Texture> create_texture(std::uint32_t width, std::uint32_t height, std::uint32_t levels,
                                                           DXGI_FORMAT format, std::uint32_t bind, const char* name,
-                                                          std::uint32_t samples = 1u);
+                                                          std::uint32_t samples = 1u,
+                                                          const D3D11_SUBRESOURCE_DATA* initial = nullptr);
     // Upload memory of `size` bytes (zeroed), with its address range. Null when the memory cannot be had.
     [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, const char* name);
     // Every upload buffer's bytes written since the last call reach the GPU (render thread, before draws that read them).

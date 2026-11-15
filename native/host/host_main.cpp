@@ -17,6 +17,7 @@
 #include <dwmapi.h>
 #endif
 #include "galaxy/frame_phase.h"
+#include "galaxy/profiled_threads.h"
 #include "galaxy/render/present_clock.h"
 #include <nebula_cooked_texture.h>
 #include <nebula_game_api.h>
@@ -40,6 +41,7 @@
 #if (defined(NEBULA_HOST_RENDERER) && defined(_WIN32)) || (defined(NEBULA_HOST_SDL) && !defined(__ANDROID__) && !defined(NEBULA_HOST_APPLE))
 #include "galaxy/hidden_start.h"
 #endif
+#include "galaxy/desktop_window.h"
 #include "galaxy/discord_presence.h"
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
@@ -49,6 +51,7 @@
 #include <luma_input.h>
 #include <luma_refs.h>
 #include "galaxy/render/host_window.h"
+#include "galaxy/render/os_hdr.h"
 #include "galaxy/mod_log.h"
 #include "galaxy/mod_screens.h"
 #include "galaxy/mod_start_check.h"
@@ -58,8 +61,12 @@
 #include "galaxy/render/program_table.h"
 #include "galaxy/pointer_control.h"
 #if defined(NEBULA_HOST_RENDERER)
-#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/display_aspect.h"
 #include "galaxy/benchmark.h"
+#include "galaxy/calibration_scene.h"
+#include "galaxy/ui/benchmark_menu.h"
+#include "galaxy/ui/hdr_calibration.h"
+#include "galaxy/ui/settings_benchmark_page.h"
 #if defined(NEBULA_DIAG_REPORTS)
 #include "galaxy/diag_report.h"
 #endif
@@ -74,6 +81,7 @@
 #include "galaxy/loss_report.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/render/host_window_win32.h"
+#include "galaxy/render/renderer_check.h"
 #endif
 #include "galaxy/perf_hint.h"
 #include "galaxy/power_policy.h"
@@ -81,6 +89,7 @@
 #include "galaxy/windows_power.h"
 #endif
 #include "galaxy/platform_time.h"
+#include "galaxy/precise_wait.h"
 #include "galaxy/input/controls_engine.h"
 #include "galaxy/input/wiimote_motion.h"
 #include "galaxy/achievements.h"
@@ -104,6 +113,7 @@
 #include "galaxy/update.h"
 #endif
 #endif
+#include "galaxy/save_transfer.h"
 #include <nebula_frame_list.h>
 #include "galaxy/render/rt_materials.h"
 #include "galaxy/render/rt_caps.h"
@@ -481,20 +491,32 @@ void* find_symbol(void* module, const char* name) {
 }
 
 #if defined(_WIN32)
-// --diagnostics profile: the game thread (every game thread runs on it) sampled each millisecond from its start to the
-// run's end (at most 10 minutes), with its callers, into the diagnostics folder's game-profile-<pid>.txt at exit: the
-// modules loaded ("module <base> <size> <name>"), then a line a sample (return addresses, the innermost first).
-// tools/perf/game_profile.py names them from the game module's link map.
+// --diagnostics profile: the game thread (every game thread runs on it) and the threads that add themselves
+// (galaxy/profiled_threads.h: the render thread) sampled each millisecond from their start to the run's end (at most 10
+// minutes), with their callers, each into the diagnostics folder's <name>-profile-<pid>.txt at exit (the game's
+// game-profile-<pid>.txt): the modules loaded ("module <base> <size> <name>"), then a line a sample ("sample t<QPC>" and
+// the return addresses, the innermost first; the QPC is the timeline's clock, so a stretch of the timeline picks its
+// samples). tools/perf/game_profile.py names the game module's frames from its link map.
 namespace game_profile {
 
 constexpr int kDepth = 24;
 using Frames = std::array<DWORD64, kDepth>;
 
-// The suspended thread's stack from `context`, without allocating (the thread may hold the heap's lock).
-int walk(CONTEXT context, Frames& frames) noexcept {
+// The top of a sampled thread's stack, copied while it is suspended (StackCopy::take) and walked after it resumes.
+constexpr std::size_t kStackCopyBytes = 64u * 1024u;
+struct StackCopy {
+    alignas(16) std::array<std::byte, kStackCopyBytes> bytes;
+    std::size_t size = 0u;
+};
+
+// A sample's stack from `context`, whose stack pointer (and every value that pointed into the copied range) points
+// into `copy`: the walk stops where the copy ends.
+int walk(CONTEXT context, const StackCopy& copy, Frames& frames) noexcept {
     int depth = 0;
+    const auto low = reinterpret_cast<DWORD64>(copy.bytes.data());
+    const DWORD64 high = low + copy.size;
     __try {
-        while (depth < kDepth && context.Rip != 0) {
+        while (depth < kDepth && context.Rip != 0 && context.Rsp >= low && context.Rsp + 8u <= high) {
             frames[depth++] = context.Rip;
             DWORD64 image = 0;
             PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context.Rip, &image, nullptr);
@@ -513,29 +535,76 @@ int walk(CONTEXT context, Frames& frames) noexcept {
     return depth;
 }
 
-constexpr std::size_t kMostSamples = 600'000u;  // 10 minutes, 115 MB
+constexpr std::size_t kMostSamples = 600'000u;  // a thread's: 10 minutes, 115 MB
 std::thread g_sampler;
 std::atomic<bool> g_stop{false};
 
-void run(HANDLE thread) {
-    std::vector<std::pair<int, Frames>> samples;
-    samples.reserve(60'000u);
-    auto next = Clock::now();
-    // Samples are added after the thread resumes: a vector's growth never waits on a heap lock the thread holds.
-    while (!g_stop.load(std::memory_order_relaxed) && samples.size() < kMostSamples) {
-        if (SuspendThread(thread) != static_cast<DWORD>(-1)) {
-            CONTEXT context{};
-            context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-            Frames frames{};
-            const int depth = GetThreadContext(thread, &context) ? walk(context, frames) : 0;
-            ResumeThread(thread);
-            if (depth > 0) samples.emplace_back(depth, frames);
+struct Sample {
+    std::int64_t qpc;
+    int depth;
+    Frames frames;
+};
+
+struct Target {
+    HANDLE thread = nullptr;
+    const char* name = "";
+    std::vector<Sample> samples;
+};
+
+// One sample of `target`. The thread is suspended only while its registers and the top of its stack are copied: nothing
+// that takes a lock runs then. The walk (RtlLookupFunctionEntry takes the loader's function-table lock, which a thread
+// suspended while a library loads holds; an allocation takes the heap's) runs on the copy once it has resumed, its
+// pointers into the stack moved into the copy.
+void take(Target& target, StackCopy& copy) noexcept {
+    if (target.samples.size() >= kMostSamples || SuspendThread(target.thread) == static_cast<DWORD>(-1)) return;
+    CONTEXT context{};
+    context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+    const std::int64_t qpc = galaxy::qpc_now();
+    copy.size = 0u;
+    DWORD64 from = 0;
+    if (GetThreadContext(target.thread, &context)) {
+        // The stack's committed pages from the stack pointer up (one region: NtQueryVirtualMemory, no user-mode lock).
+        MEMORY_BASIC_INFORMATION region{};
+        from = context.Rsp;
+        if (VirtualQuery(reinterpret_cast<const void*>(from), &region, sizeof(region)) == sizeof(region) &&
+            region.State == MEM_COMMIT) {
+            const DWORD64 end = reinterpret_cast<DWORD64>(region.BaseAddress) + region.RegionSize;
+            copy.size = static_cast<std::size_t>(std::min<DWORD64>(kStackCopyBytes, end - from));
+            std::memcpy(copy.bytes.data(), reinterpret_cast<const void*>(from), copy.size);
         }
-        next += std::chrono::milliseconds(1);
-        sleep_until_precise(next);
     }
+    ResumeThread(target.thread);
+    if (copy.size < 8u) return;
+    const auto base = reinterpret_cast<DWORD64>(copy.bytes.data());
+    const auto moved = [&](DWORD64 value) { return value >= from && value < from + copy.size ? value - from + base : value; };
+    for (std::size_t at = 0; at + 8u <= copy.size; at += 8u) {
+        DWORD64 value = 0;
+        std::memcpy(&value, copy.bytes.data() + at, 8u);
+        value = moved(value);
+        std::memcpy(copy.bytes.data() + at, &value, 8u);
+    }
+    for (DWORD64* reg : {&context.Rsp, &context.Rbp, &context.Rbx, &context.Rsi, &context.Rdi, &context.R12, &context.R13,
+                         &context.R14, &context.R15}) {
+        *reg = moved(*reg);
+    }
+    Frames frames{};
+    const int depth = walk(context, copy, frames);
+    if (depth > 0) {
+        try {
+            target.samples.push_back({qpc, depth, frames});
+        } catch (...) {
+        }
+    }
+}
+
+HANDLE open_sampled(DWORD thread_id) noexcept {
+    return OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, thread_id);
+}
+
+void write(const Target& target) {
     const fs::path folder = galaxy::nebula_diagnostics_directory();
-    const fs::path name = folder / ("game-profile-" + std::to_string(galaxy::current_process_id()) + ".txt");
+    const fs::path name =
+        folder / (std::string(target.name) + "-profile-" + std::to_string(galaxy::current_process_id()) + ".txt");
     std::FILE* file = folder.empty() ? nullptr : _wfopen(name.c_str(), L"wb");
     if (file == nullptr) return;
     std::array<HMODULE, 512> modules{};
@@ -551,19 +620,52 @@ void run(HANDLE thread) {
             }
         }
     }
-    for (const auto& [depth, frames] : samples) {
-        std::fputs("sample", file);
+    for (const auto& [qpc, depth, frames] : target.samples) {
+        std::fprintf(file, "sample t%llx", static_cast<unsigned long long>(qpc));
         for (int i = 0; i < depth; ++i) std::fprintf(file, " %llx", static_cast<unsigned long long>(frames[i]));
         std::fputc('\n', file);
     }
     std::fclose(file);
-    char text[96];
-    std::snprintf(text, sizeof(text), "%zu samples in game-profile-%lu.txt", samples.size(), galaxy::current_process_id());
+    char text[128];
+    std::snprintf(text, sizeof(text), "%zu samples in %s-profile-%lu.txt", target.samples.size(), target.name,
+                  galaxy::current_process_id());
     log_line("profile:", text);
 }
 
+// The game thread from the start; each thread that adds itself (profiled_threads::add_current) from the millisecond after.
+void run(HANDLE game) {
+    const auto copy = std::make_unique<StackCopy>();
+    std::vector<Target> targets;
+    targets.reserve(1u + galaxy::profiled_threads::kMost);
+    targets.push_back({game, "game", {}});
+    targets.back().samples.reserve(60'000u);
+    std::size_t seen = 0u;
+    auto next = Clock::now();
+    while (!g_stop.load(std::memory_order_relaxed)) {
+        const std::size_t claimed =
+            std::min(galaxy::profiled_threads::g_claimed.load(std::memory_order_relaxed), galaxy::profiled_threads::kMost);
+        while (seen < claimed) {
+            const galaxy::profiled_threads::Entry& entry = galaxy::profiled_threads::g_entries[seen];
+            const DWORD id = entry.id.load(std::memory_order_acquire);
+            if (id == 0u) break;  // claimed, not yet complete: the next round
+            ++seen;
+            if (const HANDLE thread = open_sampled(id); thread != nullptr) {
+                targets.push_back({thread, entry.name, {}});
+                targets.back().samples.reserve(60'000u);
+            }
+        }
+        for (Target& target : targets) take(target, *copy);
+        next += std::chrono::milliseconds(1);
+        sleep_until_precise(next);
+    }
+    for (Target& target : targets) {
+        write(target);
+        if (target.thread != game) CloseHandle(target.thread);
+    }
+}
+
 void start(DWORD thread_id) {
-    const HANDLE sampled = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, thread_id);
+    const HANDLE sampled = open_sampled(thread_id);
     if (sampled == nullptr) {
         return;
     }
@@ -598,7 +700,7 @@ std::vector<galaxy::modlog::StartPackage> gStartPackages;
 
 // The two folders the host reads from (the package layout):
 // - the program's folder (program_directory(), executable_path()): one for both CPU levels, since Nebula.exe and
-//   Nebula-x86-64-v2.exe lie side by side. Tables, dxc\, nebula-import.exe, the launcher, the restart's and the
+//   Nebula-x86-64-v2.exe lie side by side. Tables, dxc\, nebula-import.exe, the restart's and the
 //   crash report's program come from there.
 // - module_folder(): the folder of the game module actually loaded (the program's folder, x86-64-v2\ on a CPU without
 //   x86-64-v3, or --module's folder). Everything that belongs to one build of the module is read from here, never from
@@ -815,6 +917,47 @@ bool gSuspended = false;  // guarded by gSuspendLock
 // (the game is held then and takes it at its first frame after the return).
 std::atomic<bool> gPauseRequest{false};
 
+#if defined(NEBULA_HOST_RENDERER)
+// ON LOSING FOCUS (runtime settings focus_loss) for a desktop window, called from the main loop with whether the window is
+// not in front (`away`, minimised included) and whether it is minimised now. PAUSE has the game open its pause menu (the
+// pause button's path, so its timers stop), MUTE silences the sound (the mixer reads background_muted) and the game goes
+// on; KEEP RUNNING does nothing. Minimising holds the game whatever is chosen.
+void follow_focus_loss(bool away, bool minimised_now) {
+    static bool was_away = false;
+    static bool away_minimised = false;
+    static std::chrono::steady_clock::time_point lapse{};
+    const galaxy::FocusLoss focus = galaxy::get_runtime_settings().focus_loss;
+    if (away && !was_away && focus == galaxy::FocusLoss::Pause) {
+        gPauseRequest.store(true, std::memory_order_release);
+    }
+    if (away) {
+        away_minimised = away_minimised || minimised_now;
+    }
+    if (!away && was_away) {
+        if (!away_minimised) {
+            gPauseRequest.store(false, std::memory_order_release);
+        } else {
+            // Held while minimised: the game takes the request at its first frame back; a game that cannot pause then
+            // (a cutscene) lets it lapse rather than pause long after the player returned.
+            lapse = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+        }
+        away_minimised = false;
+    }
+    if (focus != galaxy::FocusLoss::Pause && !away_minimised) {
+        gPauseRequest.store(false, std::memory_order_release);
+    }
+    if (!away && lapse != std::chrono::steady_clock::time_point{} && std::chrono::steady_clock::now() >= lapse) {
+        gPauseRequest.store(false, std::memory_order_release);
+        lapse = std::chrono::steady_clock::time_point{};
+    }
+    if (away != was_away) {
+        log_line("host:", away ? "window not in front" : "window in front");
+    }
+    was_away = away;
+    galaxy::set_background_muted(away && focus == galaxy::FocusLoss::Mute);
+}
+#endif
+
 // When the player last gave the game an input (a button, a stick pushed, the pointer moved) and when the game last played a
 // movie's sound, in steady-clock milliseconds (power_policy.h): the host's main loop tells the OS whether anyone is playing.
 // 0 until the first; the start counts as an input.
@@ -968,13 +1111,26 @@ void svc_frame_wait(void*) {
     static int64_t work_max = 0;
 #endif
     for (;;) {
+        // The step's moment on the runtime's clock: the display's vsync it waited for, else the host clock's due time,
+        // reached by a precise wait (precise_wait.h: a timer woken late would start the step late).
+        std::int64_t due_qpc = 0;
 #if defined(NEBULA_HOST_SDL)
         const bool vsync = galaxy::sdl::wait_display_frame(period.count(), vsync_ns);
-        if (!vsync) {
-            sleep_until_precise(next);
+        if (vsync) {
+            due_qpc = vsync_ns;
+        } else {
+            due_qpc = galaxy::qpc_of(next);
+            galaxy::PreciseWait::for_this_thread().until(due_qpc);
         }
 #else
-        sleep_until_precise(next);
+        due_qpc = galaxy::qpc_of(next);
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
+        galaxy::timeline::record(galaxy::timeline::Event::StepWaitBegin, static_cast<std::uint64_t>(due_qpc), 0u);
+#endif
+        galaxy::PreciseWait::for_this_thread().until(due_qpc);
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
+        galaxy::timeline::record(galaxy::timeline::Event::StepWaitEnd, 0u, 0u);
+#endif
 #endif
         if (wait_while_suspended()) {
             next = Clock::now() + period;
@@ -1011,6 +1167,11 @@ void svc_frame_wait(void*) {
             frames = on_vsync = 0u;
             work_sum = work_max = 0;
         }
+#endif
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::render::set_step_moment(due_qpc);
+#else
+        (void)due_qpc;
 #endif
         return;
     }
@@ -1659,7 +1820,11 @@ int show_crash_report_dialog() {
 void install_crash_reporter() {
     gCrashRequest = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     gCrashDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::crash_watch::start(crash_folder(), kStart, galaxy::render::os_hdr::list_path());
+#else
     galaxy::crash_watch::start(crash_folder(), kStart);
+#endif
     std::thread(crash_writer).detach();
     AddVectoredExceptionHandler(0, crash_handler);  // last: the module's own handlers (division, stack guards) first
     SetUnhandledExceptionFilter(unhandled_filter);  // whatever no frame handled, C++ exceptions included
@@ -1717,12 +1882,36 @@ std::vector<std::string> gRestartExtra;
 #endif
 #endif
 
-#if defined(NEBULA_HOST_START_AGAIN) && defined(NEBULA_DIAG_REPORTS)
-// The home screen's upload question (diag_report.h): the result it asks about.
-fs::path gUploadFile;
+#if defined(NEBULA_HOST_RENDERER) && defined(NEBULA_DIAG_REPORTS)
+// The settings menu's Send to developer (ui/benchmark_menu.h): the result's report, sealed and sent once, on a thread of
+// its own; the menu shows how it ended.
+void send_benchmark_report(const fs::path& result) {
+    std::thread([result] {
+        const galaxy::diag::SendResult sent = galaxy::diag::send_report_file(result, false);
+        log_line("diag:", sent.line.c_str());
+        using galaxy::ui::benchmark_menu::SendOutcome;
+        SendOutcome outcome = SendOutcome::NotMade;
+        if (sent.exit == galaxy::diag::kOk || sent.exit == galaxy::diag::kAlreadySent) {
+            outcome = SendOutcome::Sent;
+        } else if (sent.exit == galaxy::diag::kNetwork) {
+            outcome = SendOutcome::NoConnection;
+        } else if (sent.exit == galaxy::diag::kRefused) {
+            outcome = sent.status == 429 ? SendOutcome::TooMany
+                      : sent.status == 503 ? SendOutcome::ServerBusy
+                                           : SendOutcome::Refused;
+        }
+        galaxy::ui::benchmark_menu::report_sent(outcome, sent.line);
+    }).detach();
+}
 
-// A file in the desktop's own viewer (open / xdg-open), in a process of its own that this one does not wait for.
+#if defined(_WIN32) || defined(NEBULA_HOST_START_AGAIN)
+#define NEBULA_HOST_SHOW_REPORT 1
+// A file in the desktop's own viewer (the file kind's app, open, xdg-open), in a process of its own that this one does
+// not wait for.
 void show_file(const fs::path& file) {
+#if defined(_WIN32)
+    ShellExecuteW(nullptr, L"open", file.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#else
 #if defined(__APPLE__)
     const char* const tool = "/usr/bin/open";
 #else
@@ -1740,44 +1929,22 @@ void show_file(const fs::path& file) {
         _exit(0);
     }
     if (child > 0) (void)waitpid(child, nullptr, 0);
+#endif
 }
 
-// The question's answers (the window's thread): 0 the full report, exactly what a send seals; 1 the send, once.
-void upload_answer(int what) {
-    if (what == 0) {
-        std::string report;
-        const galaxy::diag::SendResult preview = galaxy::diag::report_preview(gUploadFile, false, report);
-        fs::path shown = gUploadFile;
-        shown += ".report.json";
-        if (preview.exit == galaxy::diag::kOk && galaxy::io::write_file_atomically(shown, report)) {
-            show_file(shown);
-        } else {
-            log_line("diag:", preview.line.c_str());
-        }
-        return;
+// The send question's What is sent: exactly what a send seals, written beside the result and opened in the viewer.
+void show_benchmark_report(const fs::path& result) {
+    std::string report;
+    const galaxy::diag::SendResult preview = galaxy::diag::report_preview(result, false, report);
+    fs::path shown = result;
+    shown += ".report.json";
+    if (preview.exit == galaxy::diag::kOk && galaxy::io::write_file_atomically(shown, report)) {
+        show_file(shown);
+    } else {
+        log_line("diag:", preview.line.c_str());
     }
-    std::thread([] {
-        const galaxy::diag::SendResult sent = galaxy::diag::send_report_file(gUploadFile, false);
-        log_line("diag:", sent.line.c_str());
-        galaxy::ui::launcher_upload_finished(sent.exit == galaxy::diag::kOk || sent.exit == galaxy::diag::kAlreadySent);
-    }).detach();
 }
-
-// Whether the home screen may ask: the build has an endpoint, the run completed or failed (not closed by the player),
-// and the result was not sent.
-bool upload_offered(const fs::path& result) {
-    if (!galaxy::diag::uploads_enabled()) return false;
-    std::error_code error;
-    fs::path sent = result;
-    sent += ".sent";
-    if (fs::exists(sent, error)) return false;
-    std::ifstream in(result, std::ios::binary);
-    std::string head(4096, '\0');
-    in.read(head.data(), static_cast<std::streamsize>(head.size()));
-    head.resize(static_cast<std::size_t>(in.gcount()));
-    return head.starts_with("{\"schema\":1,") &&
-           (head.find("\"status\":\"complete\"") != std::string::npos || head.find("\"status\":\"failed\"") != std::string::npos);
-}
+#endif
 #endif
 
 // An argument a restart adds (each a word of its own).
@@ -1805,6 +1972,9 @@ void submit_frame_unchecked(bool present, bool black) {
 }
 
 [[noreturn]] void finish_and_exit(bool restart);
+// The start a restart asks for (host_window.h Restart): Android's activity reads it (start_again); the other hosts add
+// its arguments (add_restart_argument) before finish_and_exit.
+int gRestartKind = 1;
 
 // The card has no memory free at the start: another program holds it for a moment. A new process tries again
 // (--gpu-start-retry counts the tries), up to five times, two seconds apart; after that it is a fault to report.
@@ -1897,10 +2067,35 @@ std::string message_utf8(const uint16_t* text) {
     return out;
 }
 
+#if defined(NEBULA_HOST_RENDERER)
+std::atomic<bool> gInPlay{false};  // a file is in play on a stage (svc_presence)
+std::atomic<bool> gTitleShown{false};  // the title has shown since the start (svc_presence)
+// The result of a run in the game that ended (start_benchmark_here), opened over the title when it shows.
+std::mutex gResultsMutex;
+std::filesystem::path gResultsPending;
+std::atomic<bool> gResultsWaiting{false};
+std::atomic<uint32_t> gResultsFrame{0u};  // the game frame they open at (svc_frame_begun); 0 none
+constexpr uint32_t kResultsAfterTitleFrames = 30u;
+#endif
+
 // What the player is doing, for Discord: the galaxy (or the file select) and the star, else the Power Stars.
 void svc_presence(void*, const uint16_t* galaxy, const uint16_t* star, int32_t power_stars) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (power_stars >= 0) galaxy::bench::scene_started();  // GameScene::start (the file select reports -1)
+    if (power_stars >= 0) {  // GameScene::start (the file select reports -1)
+        galaxy::bench::scene_started();
+        galaxy::calibration_scene::scene_started();
+    }
+    // The HDR calibration's reference stage is not the player's: neither play nor what Discord shows.
+    if (galaxy::calibration_scene::live()) return;
+    // A file is in play on a stage (the title's stage has no galaxy name): the benchmark's question says what it loses.
+    const bool title = power_stars >= 0 && (galaxy == nullptr || galaxy[0] == 0);
+    gInPlay.store(power_stars >= 0 && !title, std::memory_order_relaxed);
+    if (title) gTitleShown.store(true, std::memory_order_relaxed);
+    // The title after a run in the game: its results open over it once it shows (svc_frame_begun).
+    if (title && gResultsWaiting.exchange(false, std::memory_order_acq_rel)) {
+        gResultsFrame.store(std::max(gGameFrames.load(std::memory_order_relaxed) + kResultsAfterTitleFrames, 1u),
+                            std::memory_order_release);
+    }
 #endif
     galaxy::discord::Activity activity;
     if (power_stars < 0) {
@@ -1936,7 +2131,8 @@ int svc_achievement(void*, const char* id, uint16_t* name, uint32_t capacity) {
     (void)id, (void)name, (void)capacity;
     return 0;
 #else
-    if (galaxy::bench::running()) return 0;  // a benchmark unlocks nothing
+    // A benchmark and the HDR calibration's reference stage unlock nothing.
+    if (galaxy::bench::running() || galaxy::calibration_scene::live()) return 0;
     const galaxy::achievements::Info* info = id != nullptr ? galaxy::achievements::find(id) : nullptr;
     if (info == nullptr || !galaxy::achievements::unlock(id)) return 0;
     uint32_t i = 0;
@@ -1997,7 +2193,8 @@ int32_t svc_mod_achievement_unlocked(void*) {
 // The all-time counters the achievement board shows (stats.ini). The headless host keeps none.
 void svc_stat_add(void*, const char* name, uint64_t delta) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (name != nullptr && !galaxy::bench::running()) galaxy::stats::add(name, delta);  // a benchmark counts nothing
+    // A benchmark and the HDR calibration's reference stage count nothing.
+    if (name != nullptr && !galaxy::bench::running() && !galaxy::calibration_scene::live()) galaxy::stats::add(name, delta);
 #else
     (void)name, (void)delta;
 #endif
@@ -2042,6 +2239,8 @@ struct SettingsContent {
     std::string long_text;
     // Held here while the view points at its pixels; the same pointer is the same picture.
     std::shared_ptr<const galaxy::render::NativeSettingsPicture> picture;
+    galaxy::render::NativeSettingsGraph graph;
+    uint32_t scene_live = 0;
     bool operator==(const SettingsContent&) const = default;
 };
 
@@ -2067,6 +2266,31 @@ static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Prepar
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModAbout) == NEBULA_SETTINGS_STATUS_MOD_ABOUT &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModRemoveAsk) == NEBULA_SETTINGS_STATUS_MOD_REMOVE_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModForgetAsk) == NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::BenchmarkAsk) == NEBULA_SETTINGS_STATUS_BENCHMARK_ASK &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::BenchmarkResults) ==
+                  NEBULA_SETTINGS_STATUS_BENCHMARK_RESULTS &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::BenchmarkSendAsk) ==
+                  NEBULA_SETTINGS_STATUS_BENCHMARK_SEND_ASK &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::RendererRestart) ==
+                  NEBULA_SETTINGS_STATUS_RENDERER_RESTART &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::BenchmarkSending) ==
+                  NEBULA_SETTINGS_STATUS_BENCHMARK_SENDING &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::BenchmarkSent) ==
+                  NEBULA_SETTINGS_STATUS_BENCHMARK_SENT &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::BenchmarkSendFailed) ==
+                  NEBULA_SETTINGS_STATUS_BENCHMARK_SEND_FAILED &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::HdrCalibration) ==
+                  NEBULA_SETTINGS_STATUS_HDR_CALIBRATION &&
+              static_cast<unsigned>(galaxy::ui::hdr_calibration::Step::Peak) == NEBULA_HDR_STEP_PEAK &&
+              static_cast<unsigned>(galaxy::ui::hdr_calibration::Step::Black) == NEBULA_HDR_STEP_BLACK &&
+              static_cast<unsigned>(galaxy::ui::hdr_calibration::Step::PaperWhite) == NEBULA_HDR_STEP_PAPER_WHITE &&
+              galaxy::ui::hdr_calibration::kStepMask == NEBULA_HDR_STEP_MASK &&
+              galaxy::ui::hdr_calibration::kPlaceShift == NEBULA_HDR_PLACE_SHIFT &&
+              galaxy::ui::hdr_calibration::kLastShift == NEBULA_HDR_LAST_SHIFT &&
+              galaxy::ui::hdr_calibration::kFieldMask == NEBULA_HDR_FIELD_MASK &&
+              galaxy::ui::hdr_calibration::kSceneWaitBit == NEBULA_HDR_SCENE_WAIT &&
+              galaxy::render::kHdrBoxSide == NEBULA_HDR_BOX_SIDE &&
+              galaxy::render::kHdrBoxCentreY == NEBULA_HDR_BOX_CENTRE_Y &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Leave) == NEBULA_SETTINGS_STATUS_LEAVE &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModsRestartAsk) == NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY &&
@@ -2137,6 +2361,8 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     next.status_text = source.status_text;
     next.long_text = source.long_text;
     next.picture = source.picture;
+    next.graph = source.picture != nullptr ? source.graph : galaxy::render::NativeSettingsGraph{};
+    next.scene_live = galaxy::calibration_scene::live() ? 1u : 0u;
 
     SettingsViewStorage& held = g_settings_view;
     if (!held.built || !(next == held.content)) {
@@ -2170,11 +2396,61 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     view->status_number = content.status_number;
     view->status_text = content.status_text.c_str();
     view->long_text = content.long_text.c_str();
+    view->scene_live = content.scene_live;
     if (content.picture != nullptr && !content.picture->rgba.empty()) {
         view->picture = content.picture->rgba.data();
         view->picture_width = content.picture->width;
         view->picture_height = content.picture->height;
+        const galaxy::render::NativeSettingsGraph& graph = content.graph;
+        if (graph.right > graph.left && graph.bottom > graph.top && graph.right <= content.picture->width &&
+            graph.bottom <= content.picture->height && graph.top_fps > 0.0f) {
+            view->graph_left = graph.left;
+            view->graph_top = graph.top;
+            view->graph_right = graph.right;
+            view->graph_bottom = graph.bottom;
+            static_assert(galaxy::ui::kBenchmarkResultsSendable == NEBULA_BENCHMARK_RESULTS_SENDABLE &&
+                          galaxy::ui::kBenchmarkResultsSent == NEBULA_BENCHMARK_RESULTS_SENT &&
+                          galaxy::ui::kBenchmarkFromResults == NEBULA_BENCHMARK_FROM_RESULTS);
+            using galaxy::ui::benchmark_menu::SendOutcome;
+            static_assert(static_cast<int>(SendOutcome::NoConnection) == NEBULA_BENCHMARK_SEND_NO_CONNECTION &&
+                          static_cast<int>(SendOutcome::TooMany) == NEBULA_BENCHMARK_SEND_TOO_MANY &&
+                          static_cast<int>(SendOutcome::ServerBusy) == NEBULA_BENCHMARK_SEND_SERVER_BUSY &&
+                          static_cast<int>(SendOutcome::Refused) == NEBULA_BENCHMARK_SEND_REFUSED &&
+                          static_cast<int>(SendOutcome::NotMade) == NEBULA_BENCHMARK_SEND_NOT_MADE);
+            view->graph_top_fps = graph.top_fps;
+            view->graph_step_fps = graph.step_fps;
+            view->graph_stage_count = static_cast<uint32_t>(graph.stage_starts.size());
+            view->graph_stage_starts = graph.stage_starts.empty() ? nullptr : graph.stage_starts.data();
+        }
     }
+#endif
+}
+
+// The benchmark's run as the game's run panel shows it (benchmark.h live_state).
+int32_t svc_benchmark_state(void*, NebulaBenchmarkState* state) {
+#if defined(NEBULA_HOST_RENDERER)
+    static_assert(static_cast<uint32_t>(galaxy::bench::Part::Yours) == NEBULA_BENCHMARK_PART_YOURS &&
+                      static_cast<uint32_t>(galaxy::bench::Part::Standard) == NEBULA_BENCHMARK_PART_STANDARD &&
+                      static_cast<uint32_t>(galaxy::bench::Part::Probe) == NEBULA_BENCHMARK_PART_PROBE &&
+                      static_cast<uint32_t>(galaxy::bench::Part::Again) == NEBULA_BENCHMARK_PART_AGAIN,
+                  "the benchmark's parts are numbered alike");
+    galaxy::bench::LiveState live;
+    if (state == nullptr || !galaxy::bench::live_state(live)) return 0;
+    std::memset(state, 0, sizeof(*state));
+    state->step = live.step;
+    state->steps = live.steps;
+    state->part = static_cast<uint32_t>(live.part);
+    state->showing = live.showing ? 1u : 0u;
+    state->fps_tenths = live.fps_tenths;
+    state->progress = live.progress;
+    state->stopping = live.stopping ? 1u : 0u;
+    state->input = galaxy::render::native_settings_hint_input();
+    state->cover = std::min(live.cover, 255u);
+    std::snprintf(state->stage, sizeof(state->stage), "%s", live.stage.c_str());
+    return 1;
+#else
+    (void)state;
+    return 0;
 #endif
 }
 
@@ -2568,6 +2844,15 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
         galaxy::host::note_touch_target(static_cast<std::uint32_t>(value));
 #endif
+    } else if (what == NEBULA_CONTEXT_CORNER_BUTTONS) {
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::host::note_corner_buttons(static_cast<std::uint32_t>(value));
+#endif
+    } else if (what == NEBULA_CONTEXT_SCENE_PLAY) {
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::calibration_scene::note_play(value != 0);
+        galaxy::bench::note_play(value != 0);
+#endif
     }
 }
 
@@ -2732,6 +3017,9 @@ void svc_asset_unmap(void*, void* data, uint64_t size) {
 int32_t svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size, void* dst) {
     test_drive_delay();
     gFileReads.fetch_add(1, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::bench::note_read(size);  // a benchmark's read count (benchmark.h); only the renderer hosts run one
+#endif
     // --diagnostics file-reads: each read with the frame it came on: two runs of deterministic mode compare by it.
     const bool trace_reads = ::galaxy::diagnosing(::galaxy::kDiagnoseFileReads);
     const bool provided = galaxy::luma_assets::is_provided(file);
@@ -2757,6 +3045,18 @@ const char* svc_game_id(void*) {
 
 void svc_frame_begun(void*, int black, uint32_t frame) {
     gGameFrames.store(frame, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
+    if (const uint32_t at = gResultsFrame.load(std::memory_order_acquire); at != 0u && frame >= at) {
+        gResultsFrame.store(0u, std::memory_order_relaxed);
+        std::filesystem::path result;
+        {
+            const std::lock_guard<std::mutex> lock(gResultsMutex);
+            result.swap(gResultsPending);
+        }
+        log_line("host:", "the benchmark's results open");
+        galaxy::render::host_window::open_native_settings_results(result);
+    }
+#endif
 #if defined(NEBULA_HOST_RENDERER)
     // --diagnostics frame-times: each frame's time, where a scripted press begins (press-to-present measurements).
     if (::galaxy::diagnosing(::galaxy::kDiagnoseFrameTimes)) std::fprintf(stderr, "[latency] frame=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
@@ -2797,11 +3097,11 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
     {
         const auto client = galaxy::render::aspect_latch_extent();
         if (client.width > 1 && client.height > 1 &&
-            galaxy::experimental_dynamic_aspect_change_pending(client.width, client.height)) {
+            galaxy::display_aspect_change_pending(client.width, client.height)) {
             galaxy::render::wait_for_render_idle();
             const auto settled = galaxy::render::aspect_latch_extent();
             if (settled.width > 1 && settled.height > 1) {
-                galaxy::experimental_latch_dynamic_aspect(settled.width, settled.height);
+                galaxy::latch_display_aspect(settled.width, settled.height);
             }
         }
     }
@@ -2812,9 +3112,11 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
 
 // The shape the game draws for (display_native.c turns it into the game's screen width and camera aspect): the
 // latched output shape; headless, 16:9.
+static_assert(galaxy::kNarrowestContentAspect == NEBULA_DISPLAY_NARROWEST_ASPECT &&
+              galaxy::kWidestContentAspect == NEBULA_DISPLAY_WIDEST_ASPECT, "host and game clamp to one range");
 uint32_t svc_display_extent(void*) {
 #if defined(NEBULA_HOST_RENDERER)
-    return static_cast<uint32_t>(galaxy::g_experimental_dynamic_aspect_word.load(std::memory_order_acquire));
+    return static_cast<uint32_t>(galaxy::g_display_aspect_word.load(std::memory_order_acquire));
 #else
     return 0;
 #endif
@@ -2826,6 +3128,52 @@ std::atomic<uint32_t> gModsPreparing{0u};
 bool gPipelinesPrepared = false;
 #endif
 fs::path gModsProgressFile;
+
+#if defined(NEBULA_HOST_RENDERER)
+// NEBULA_OPTION_SCENE_TEXTURES: a loaded scene waits for the texture packs' replacements of the textures it made. They are
+// the texture operations queued when it first asks; it waits until the render thread has applied them and none of their
+// replacements is loading or uploading, at most kSceneTexturesMostMs. Not with texture packs off, nor in deterministic
+// mode (the frames waited would be the machine's).
+struct SceneTexturesWait {
+    bool waiting = false;
+    uint64_t ops = 0u;
+    std::chrono::steady_clock::time_point since{};
+};
+SceneTexturesWait gSceneTexturesWait;
+constexpr int64_t kSceneTexturesMostMs = 20000;
+
+bool scene_textures_wait() {
+    galaxy::render::TextureStore& store = galaxy::render::textures();
+    SceneTexturesWait& wait = gSceneTexturesWait;
+    if (deterministic_mode() || !galaxy::render::get_render_config().texture_packs) {
+        store.set_replacements_hurried(false);
+        wait.waiting = false;
+        return false;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (!wait.waiting) {
+        wait.waiting = true;
+        wait.ops = store.queued_ops();
+        wait.since = now;
+    }
+    const int64_t waited = std::chrono::duration_cast<std::chrono::milliseconds>(now - wait.since).count();
+    const bool ready = store.applied_ops() >= wait.ops && store.replacements_coming() == 0u;
+    if (!ready && waited < kSceneTexturesMostMs) {
+        store.set_replacements_hurried(true);
+        return true;
+    }
+    store.set_replacements_hurried(false);
+    wait.waiting = false;
+    if (!ready) {
+        const std::string text = "the scene starts with replacements still loading (" + std::to_string(waited) + " ms)";
+        log_line("texture-pack:", text.c_str());
+    } else if (waited >= 100) {
+        const std::string text = "the scene waited " + std::to_string(waited) + " ms for its replacements";
+        log_line("texture-pack:", text.c_str());
+    }
+    return false;
+}
+#endif
 
 uint32_t svc_option(void*, uint32_t what) {
     switch (what) {
@@ -2960,6 +3308,12 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 0u;
 #endif
+    case NEBULA_OPTION_SCENE_TEXTURES:
+#if defined(NEBULA_HOST_RENDERER)
+        return scene_textures_wait() ? 1u : 0u;
+#else
+        return 0u;
+#endif
     default:
         return 0;
     }
@@ -3031,6 +3385,12 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
     if (galaxy::bench::running()) {  // a benchmark's blank save, in memory: the player's files are not opened
         *request->status = galaxy::bench::save_request(static_cast<int>(request->op), request->name != nullptr ? request->name : "",
                                                        request->buffer, request->size, request->length);
+        return;
+    }
+    if (galaxy::calibration_scene::saves_in_memory()) {  // the HDR calibration's reference stage: as a benchmark's
+        *request->status = galaxy::calibration_scene::save_request(
+            static_cast<int>(request->op), request->name != nullptr ? request->name : "", request->buffer, request->size,
+            request->length);
         return;
     }
 #endif
@@ -3295,7 +3655,9 @@ uint32_t svc_input_players(void*) {
 
 uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, NebulaInputSample* sample) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (galaxy::bench::running()) {  // a benchmark plays nothing: player 1's remote connected and at rest
+    // A benchmark, and the HDR calibration's reference stage under the menu, play nothing: player 1's remote connected
+    // and at rest.
+    if (galaxy::bench::running() || galaxy::calibration_scene::live()) {
         if (device != nullptr) {
             *device = {};
             device->connected = player == kHostPlayerMain ? 1 : 0;
@@ -3303,6 +3665,12 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
             device->battery = device->connected != 0 ? 4 : 0;
         }
         if (player != kHostPlayerMain || sample == nullptr) return 0;
+        // The controls are still read, for what reaches the host through them (a controller's B stops the run), and
+        // the game is given none of it.
+        if (gControlsInput.load(std::memory_order_acquire)) {
+            const std::lock_guard<std::mutex> lock(gInputSampleLock);
+            (void)controls_input();
+        }
         *sample = rest_input_sample();
         gInputRead.store(true, std::memory_order_release);
         gInputRead.notify_one();
@@ -3618,8 +3986,33 @@ void svc_audio_control(void*, uint32_t what, uint32_t value) {
 #endif
 }
 
+#if defined(NEBULA_HOST_RENDERER)
+// The benchmark in the running game (bench::Options::here), from the settings menu's Run benchmark or the home screen's
+// Benchmark: the game goes back to its title for it (NEBULA_HOME_MENU_RESET) and again at its end, then the settings
+// menu opens on its result.
+std::filesystem::path gPakFolder;
+bool start_benchmark_here() {
+    galaxy::bench::Options options;
+    options.pak_folder = gPakFolder;
+    options.here = true;
+    options.mods_loaded = !galaxy::mods::session_mods().active.empty();
+    options.ended = [](const std::filesystem::path& result) {
+        log_line("host:", "the benchmark ended: its results open at the title");
+        {
+            const std::lock_guard<std::mutex> lock(gResultsMutex);
+            gResultsPending = result;
+        }
+        gResultsWaiting.store(true, std::memory_order_release);
+    };
+    if (!galaxy::bench::start(options)) return false;
+    log_line("host:", "the benchmark runs in the game");
+    return true;
+}
+#endif
+
 #if defined(NEBULA_UPDATE_CHECK)
 bool gUpdateOffered = false;  // the game thread's (svc_home_menu)
+bool gUpdateNoticed = false;  // the title's notice was shown this session
 #endif
 
 int svc_home_menu(void*, uint32_t what, uint32_t value) {
@@ -3632,26 +4025,62 @@ int svc_home_menu(void*, uint32_t what, uint32_t value) {
 #if defined(NEBULA_UPDATE_CHECK)
         if (opened) {
             if (const std::optional<galaxy::update::Release> release = galaxy::update::offer(galaxy::update::kFreshBudgetMs)) {
-                galaxy::ui::launcher_offer_update(release->version, release->notes);
+                galaxy::ui::launcher_offer_update(release->version, release->notes, galaxy::update::can_install());
                 gUpdateOffered = true;
             }
         }
 #endif
         return opened ? 1 : 0;
     }
+    case NEBULA_HOME_MENU_LAUNCHER_NOTICE: {
+#if defined(NEBULA_UPDATE_CHECK)
+        // The check started with the game (Check for updates at start): its answer, once a session, never waited for.
+        if (gUpdateNoticed || galaxy::bench::running()) return 0;
+        const std::optional<galaxy::update::Release> release = galaxy::update::poll();
+        if (!release) return 0;
+        gUpdateNoticed = true;
+        galaxy::ui::launcher_offer_update(release->version, release->notes, galaxy::update::can_install());
+        gUpdateOffered = true;
+        return galaxy::ui::launcher_open_notice() ? 1 : 0;
+#else
+        return 0;
+#endif
+    }
     case NEBULA_HOME_MENU_LAUNCHER_POLL:
 #if defined(NEBULA_UPDATE_CHECK)
         // An answer that came after the screen opened (never waits).
         if (!gUpdateOffered && galaxy::ui::launcher_visible()) {
             if (const std::optional<galaxy::update::Release> release = galaxy::update::poll()) {
-                galaxy::ui::launcher_offer_update(release->version, release->notes);
+                galaxy::ui::launcher_offer_update(release->version, release->notes, galaxy::update::can_install());
                 gUpdateOffered = true;
             }
         }
+#if !defined(_WIN32)
+        // The notice's Update on Linux and macOS: the update downloads and installs behind the game, which goes on as
+        // for Play; the System page shows its progress and restarts into it. (On Windows Nebula Setup installs it once
+        // the game has left: svc_app_exit.)
+        if (galaxy::ui::launcher_poll() == galaxy::ui::LauncherModel::kChoiceUpdate) {
+            if (const std::optional<galaxy::update::Release> release = galaxy::update::poll()) {
+                if (!galaxy::update::start_install(*release)) log_line("host:", "the update could not start");
+            }
+            return galaxy::ui::LauncherModel::kChoicePlay;
+        }
 #endif
+#endif
+        // The home screen's Benchmark: the game goes on as for Play and the run takes it back to its title.
+        if (galaxy::ui::launcher_poll() == galaxy::ui::LauncherModel::kChoiceBenchmark) {
+            if (!start_benchmark_here()) log_line("host:", "the benchmark could not start");
+            return galaxy::ui::LauncherModel::kChoicePlay;
+        }
         return galaxy::ui::launcher_poll();
     case NEBULA_HOME_MENU_LAUNCHER_TEXT:
         return static_cast<int>(galaxy::ui::launcher_text(value >> 16, value & 0xFFFFu));
+    case NEBULA_HOME_MENU_RESET:
+        return galaxy::bench::take_reset() || galaxy::calibration_scene::take_reset() ? 1 : 0;
+    case NEBULA_HOME_MENU_RESET_DONE:
+        galaxy::bench::reset_done();
+        galaxy::calibration_scene::reset_done();
+        return 0;
     default:
         break;
     }
@@ -3807,6 +4236,7 @@ void attach_extensions() {
 int svc_galaxy_travel(void*, char* stage, uint32_t capacity, int32_t* star) {
 #if defined(NEBULA_HOST_RENDERER)
     if (galaxy::bench::running()) return galaxy::bench::scene_frame(gSceneStage, stage, capacity, star);
+    if (galaxy::calibration_scene::live()) return galaxy::calibration_scene::scene_frame(gSceneStage, stage, capacity, star);
     std::size_t index = 0u;
     std::uint32_t chosen = 0u;
     if (galaxy::render::take_galaxy_travel(index, chosen)) {
@@ -3859,18 +4289,6 @@ bool one_game_at_a_time() {
     return true;
 }
 
-// The launcher's sign that the game runs (Launcher.RuntimeLeaseHeld): a named mutex for the release, held by the main
-// thread until the process ends.
-HANDLE gRuntimeLease = nullptr;
-
-void hold_runtime_lease() {
-    std::wstring name = L"Local\\Nebula.";
-    for (const char* c = gPak.id; *c != '\0'; ++c) {
-        name += static_cast<wchar_t>(*c);
-    }
-    name += L".NativeRuntime";
-    gRuntimeLease = CreateMutexW(nullptr, TRUE, name.c_str());
-}
 #endif
 
 // Whether finish_and_exit(true) starts the game again on this host (Windows: a new process; Android: the activity's
@@ -4062,65 +4480,99 @@ void wait_for_hand_over() {
 // A start-again's hand-over, set up before the new process starts (finish_and_exit).
 HANDLE gHandOver = nullptr;
 std::wstring gHandOverCooked;
-// The program a start-again runs in this one's place: empty, this program (finish_and_exit); the Direct3D 11
-// program where no adapter runs Direct3D 12 (start_again_on_d3d11).
+// The program a start-again runs in this one's place: empty, this program (finish_and_exit); another renderer's
+// program (start_again_on, renderer_restart_program).
 std::wstring gStartAgainProgram;
 #endif
 
-#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_D3D12)
-// The Direct3D 11 host of this program's CPU level beside it (NebulaD11.exe, or NebulaD11-x86-64-v2.exe beside
-// the SSE4.2 host); empty, said in the log with `why`, when it is not there.
-std::wstring d3d11_program(const char* why) {
-    const std::wstring self = ::galaxy::windows::executable_path();
-    const std::size_t slash = self.find_last_of(L"\\/");
-    if (slash == std::wstring::npos) {
-        return {};
+#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_RENDERER)
+const char* renderer_title(galaxy::render::RendererKind kind) {
+    switch (kind) {
+    case galaxy::render::RendererKind::kD3D12: return "Direct3D 12";
+    case galaxy::render::RendererKind::kD3D11: return "Direct3D 11";
+    case galaxy::render::RendererKind::kVulkan: return "Vulkan";
+    default: return "the automatic renderer";
     }
-    constexpr std::wstring_view kBaseline = L"-x86-64-v2.exe";
-    const bool baseline = self.size() > kBaseline.size() &&
-                          _wcsicmp(self.c_str() + self.size() - kBaseline.size(), kBaseline.data()) == 0;
-    std::wstring path = self.substr(0, slash + 1u) + L"NebulaD11" + (baseline ? L"-x86-64-v2.exe" : L".exe");
-    if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        log_line("host: Direct3D 11 is wanted and its program is not beside the game:", why);
-        return {};
+}
+
+// The program of `kind` of this program's CPU level beside it (renderer_check.h renderer_program); empty, said in the
+// log with `why`, when it is not there.
+std::wstring program_of(galaxy::render::RendererKind kind, const char* why) {
+    std::wstring path = galaxy::render::renderer_program(kind).wstring();
+    if (path.empty()) {
+        log_line((std::string("host: ") + renderer_title(kind) + " is wanted and its program is not beside the game:").c_str(), why);
     }
     return path;
 }
 
-// Asked for Direct3D 11 (--renderer d3d11): its program runs in this one's place before this one takes anything, the
-// one-game lock, the log file, the safe start, the game module's choice, the mods folder and the window all its own
-// (nebula_run_sibling: same command line, startup information, handles, environment and folder, in a job, waited for);
-// this process ends with its exit code, so a caller sees one lifetime and one code. The Direct3D 11 host has no
-// hand-off, so the chain ends there. Returns when that program is not there or did not start.
-void hand_off_to_d3d11(const char* why) {
-    const std::wstring path = d3d11_program(why);
+// No card runs this program's renderer (render::found_no_device), known only once the start has chosen the game
+// module and read the mods: the program of the next renderer down kRendererPreference that a card runs (the renderer
+// check, else Direct3D 11) takes over as a start-again does (finish_and_exit), the new process waiting for this one's
+// hand-over before it touches the mods folder. A renderer the settings chose that no card runs is forgotten, so the
+// next start takes the automatic choice. Returns when there is no renderer to fall back to or its program is not here.
+void start_again_on_another_renderer(const char* why) {
+    using galaxy::render::RendererKind;
+    const RendererKind failed = galaxy::render::running_renderer();
+    const std::vector<galaxy::render::CardRenderers> cards = galaxy::render::check_renderers_now(15000u);
+    galaxy::render::CardRenderers assumed;  // the check did not answer: Direct3D 11, as before the check
+    assumed.set(RendererKind::kD3D11, galaxy::render::RendererRefusal::kNone);
+    const RendererKind next =
+        galaxy::render::fallback_renderer(failed, cards.empty() ? assumed : galaxy::render::renderers_for(cards, {}));
+    if (next == RendererKind::kAuto) {
+        return;
+    }
+    std::wstring path = program_of(next, why);
     if (path.empty()) {
         return;
     }
-    log_line("host: Direct3D 11 takes the start:", why);
+    if (galaxy::render::next_start_renderer() == failed) {
+        (void)galaxy::render::choose_next_start_renderer(RendererKind::kAuto);
+    }
+    log_line((std::string("host: ") + renderer_title(next) + " takes the start:").c_str(), why);
+    gStartAgainProgram = std::move(path);
+    finish_and_exit(true);
+}
+
+// The program a restart runs: where the player chose another renderer in this session (the settings' next-start
+// renderer is not the one this start read), that renderer's program, or for the automatic choice the Direct3D 12
+// program that makes it; else this program (empty).
+std::wstring renderer_restart_program() {
+    using galaxy::render::RendererKind;
+    const RendererKind next = galaxy::render::next_start_renderer();
+    if (::galaxy::launch_args().renderer != 0u ||
+        static_cast<unsigned>(next) == galaxy::render::get_render_config().renderer) {
+        return {};
+    }
+    const RendererKind program = next == RendererKind::kAuto ? RendererKind::kD3D12 : next;
+    if (program == galaxy::render::running_renderer() && next != RendererKind::kAuto) {
+        return {};
+    }
+    return program_of(program, "a restart with the renderer the settings chose");
+}
+#endif
+
+#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_D3D12)
+// The renderer the start was asked for (--renderer) or the settings chose, when it is not Direct3D 12: its program runs
+// in this one's place before this one takes anything, the one-game lock, the log file, the safe start, the game
+// module's choice, the mods folder and the window all its own (nebula_run_sibling: same command line, startup
+// information, handles, environment and folder, in a job, waited for); this process ends with its exit code, so a
+// caller sees one lifetime and one code. The other renderers' hosts have no hand-off, so the chain ends there. Returns
+// when that program is not there or did not start.
+void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
+    const std::wstring path = program_of(kind, why);
+    if (path.empty()) {
+        return;
+    }
+    log_line((std::string("host: ") + renderer_title(kind) + " takes the start:").c_str(), why);
     std::fflush(stdout);
     std::fflush(stderr);
     unsigned long code = 1u;
     if (!nebula_run_sibling(path.c_str(), &code)) {
-        log_line("host: the Direct3D 11 program did not start:", why);
+        log_line((std::string("host: the ") + renderer_title(kind) + " program did not start:").c_str(), why);
         return;
     }
     std::fflush(stdout);
     TerminateProcess(GetCurrentProcess(), static_cast<UINT>(code));
-}
-
-// No adapter runs the Direct3D 12 renderer (its probe passed over every one: "No hardware D3D12 adapter ..."), known
-// only once the start has chosen the game module and read the mods: the Direct3D 11 program takes over as a start-again
-// does (finish_and_exit), the new process waiting for this one's hand-over before it touches the mods folder. Returns
-// when that program is not there.
-void start_again_on_d3d11(const char* why) {
-    std::wstring path = d3d11_program(why);
-    if (path.empty()) {
-        return;
-    }
-    log_line("host: Direct3D 11 takes the start:", why);
-    gStartAgainProgram = std::move(path);
-    finish_and_exit(true);
 }
 #endif
 
@@ -4169,6 +4621,10 @@ void start_again_on_d3d11(const char* why) {
 #if defined(NEBULA_UPDATE_CHECK)
     galaxy::update::finish();  // a check still running: its answer kept for the next start (at most its timeout)
 #endif
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
+    // Windows HDR the game turned on goes off again; a restart hands it to the next process (render/os_hdr.h).
+    galaxy::render::os_hdr::finish(restart);
+#endif
     std::fflush(stdout);
 #if defined(_WIN32)
     if (restart) {
@@ -4176,8 +4632,10 @@ void start_again_on_d3d11(const char* why) {
         if (gOneGame != nullptr) {
             CloseHandle(gOneGame);  // the new process takes it
         }
-        if (gRuntimeLease != nullptr) {
-            CloseHandle(gRuntimeLease);
+#endif
+#if defined(_M_X64) && defined(NEBULA_HOST_RENDERER)
+        if (gStartAgainProgram.empty()) {
+            gStartAgainProgram = renderer_restart_program();
         }
 #endif
         const std::wstring path = gStartAgainProgram.empty() ? ::galaxy::windows::executable_path() : gStartAgainProgram;
@@ -4219,6 +4677,9 @@ void start_again_on_d3d11(const char* why) {
             PROCESS_INFORMATION process{};
             std::wstring command = GetCommandLineW();
             command += gRestartArguments;
+#if defined(NEBULA_HOST_RENDERER)
+            if (galaxy::render::native_settings_launch_imports_taken()) command += L" --imports-taken 1";
+#endif
             // The new process waits for this one's hand-over before it touches the mods folder (wait_for_hand_over):
             // this one's id and creation time (--start-again-of, a later value wins), and the event named for them.
             if (const unsigned long long when = creation_of(GetCurrentProcess()); when != 0u) {
@@ -4248,8 +4709,9 @@ void start_again_on_d3d11(const char* why) {
         }
     }
 #elif defined(__ANDROID__) && defined(NEBULA_HOST_RENDERER)
-    if (restart && galaxy::render::host_window::restart_game(false)) {
+    if (restart) {
         // The activity ends this process once the new one is on its way.
+        galaxy::render::host_window::start_again(static_cast<galaxy::render::host_window::Restart>(gRestartKind));
         std::this_thread::sleep_for(std::chrono::seconds(5));
     }
 #elif !(defined(__APPLE__) && TARGET_OS_IPHONE)
@@ -4276,6 +4738,14 @@ void start_again_on_d3d11(const char* why) {
         for (char** argument = gArgv; *argument != nullptr; ++argument) arguments.push_back(*argument);
 #if defined(NEBULA_HOST_START_AGAIN)
         for (std::string& added : gRestartExtra) arguments.push_back(added.data());
+#endif
+#if defined(NEBULA_HOST_RENDERER)
+        static char imports_taken_key[] = "--imports-taken";
+        static char imports_taken_value[] = "1";
+        if (galaxy::render::native_settings_launch_imports_taken()) {
+            arguments.push_back(imports_taken_key);
+            arguments.push_back(imports_taken_value);
+        }
 #endif
         arguments.push_back(nullptr);
         std::error_code error;
@@ -4310,11 +4780,12 @@ void start_again_on_d3d11(const char* why) {
 
 void svc_app_exit(void*) {
 #if defined(NEBULA_HOST_RENDERER)
-    // The home screen's Benchmark: the game left as for Quit; a new start runs it (benchmark.h) and comes back.
-    if (galaxy::ui::launcher_poll() == galaxy::ui::LauncherModel::kChoiceBenchmark) {
-        for (const char* argument : {"--benchmark", "1", "--benchmark-return", "1"}) add_restart_argument(argument);
-        finish_and_exit(true);
+#if defined(NEBULA_UPDATE_CHECK) && defined(_WIN32)
+    // The notice's Update: Nebula Setup installs it once the game has left.
+    if (galaxy::ui::launcher_poll() == galaxy::ui::LauncherModel::kChoiceUpdate && !galaxy::update::start_setup_update()) {
+        log_line("host:", "Nebula Setup could not start to install the update");
     }
+#endif
 #endif
     finish_and_exit(false);
 }
@@ -4531,7 +5002,7 @@ void svc_app_restart(void*) {
 }
 
 
-// The launcher's mod tools (run_mods_tool): the first argument names one.
+// The mod tools (run_mods_tool): the first argument names one.
 bool is_mods_tool(std::string_view first) {
     return first == "--import-mod" || first == "--list-mods" || first == "--remove-mod";
 }
@@ -4809,7 +5280,7 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
             return false;
         }
 #else
-        // The importer's library, as the launcher loads it.
+        // The importer's library.
         using CookOverlay = int (*)(const char*, const char*);
         void* const library = dlopen("libnebula_import.so", RTLD_NOW | RTLD_LOCAL);
         const auto cook = library != nullptr ? reinterpret_cast<CookOverlay>(dlsym(library, "nebula_cook_overlay")) : nullptr;
@@ -4938,7 +5409,7 @@ bool read_game_id(const fs::path& path, std::string& id) {
     return true;
 }
 
-// The launcher's mod tools: Nebula --import-mod <folder or archive>..., --remove-mod <id> or --list-mods
+// The mod tools: Nebula --import-mod <folder or archive>..., --remove-mod <id> or --list-mods
 // [--game <id>] [--pak <game.pak>] [--data, --settings or --crash-dumps <folder>], on the mods folder beside the
 // settings (as the game uses it; the folder options read_launch_args took). One JSON line on stdout; exit code 0 when
 // everything succeeded.
@@ -4995,7 +5466,7 @@ int run_mods_tool() {
     if (list) {
         // A library that comes with the game (LumaKit) is part of it: left out, as the game's Mods page leaves it out.
         fs::path shipped = ::galaxy::launch_args().shipped_mods;
-        if (shipped.empty() && !galaxy::program_directory().empty()) shipped = galaxy::program_directory() / "luma" / "mods";
+        if (shipped.empty() && !galaxy::package_directory().empty()) shipped = galaxy::package_directory() / "luma" / "mods";
         galaxy::mods::note_shipped_mods(shipped, settings_folder / "mods");
         std::string out = "{\"ok\":true,\"folder\":" + json_text(utf8_of(settings_folder / "mods")) + ",\"mods\":[";
         bool first = true;
@@ -5082,6 +5553,7 @@ namespace {
 // from the UTF-16 command line on Windows: argv is in the system's code page, which cannot hold every folder name.
 void read_launch_args(int argc, char** argv) {
     galaxy::LaunchArgs& args = galaxy::g_launch_args;
+    bool imports_taken = false;  // --imports-taken 1
 #if defined(_WIN32)
     int wide_count = 0;
     LPWSTR* const wide = CommandLineToArgvW(GetCommandLineW(), &wide_count);
@@ -5133,13 +5605,15 @@ void read_launch_args(int argc, char** argv) {
             args.started_hidden = argv[i + 1][0] == '1';  // Windows reads its start's window instead, below
         } else if (key == "--renderer") {
             const std::string_view api = argv[i + 1];
-            args.renderer = api == "d3d12" ? 1u : api == "d3d11" ? 2u : 0u;
+            args.renderer = api == "d3d12" ? 1u : api == "d3d11" ? 2u : api == "vulkan" ? 3u : 0u;
         } else if (key == "--timeline") {
             args.timeline = path_at(i + 1);
         } else if (key == "--extension") {
             args.extensions.push_back(path_at(i + 1));
         } else if (key == "--import") {
             args.imports.push_back(path_at(i + 1));
+        } else if (key == "--imports-taken") {
+            imports_taken = argv[i + 1][0] == '1';
         } else if (key == "--safe-start") {
             args.safe_start = argv[i + 1][0] == '1';
         } else if (key == "--shipped-mods") {
@@ -5165,6 +5639,8 @@ void read_launch_args(int argc, char** argv) {
             args.diagnostics |= what;
         }
     }
+    // A restart of a start whose window took its --import files (they were imported then).
+    if (imports_taken) args.imports.clear();
 #if defined(_WIN32)
     if (wide != nullptr) {
         LocalFree(wide);
@@ -5178,6 +5654,25 @@ void read_launch_args(int argc, char** argv) {
 
 }  // namespace
 
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+// The Windows hosts are window programs (CMakeLists.txt nebula_host_cpu_entry): a start from Explorer, a shortcut or
+// the starter has no console, and the log goes to logs/latest.log. Output a caller captures (a pipe, a file) stays as
+// given. Otherwise --console-log 1 and the report modes write to the console of the terminal that started them; with
+// `own` and no such terminal, to a console of their own.
+void use_console(bool own) {
+    const DWORD output = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
+    if (output == FILE_TYPE_PIPE || output == FILE_TYPE_DISK || output == FILE_TYPE_CHAR) return;
+    if (!AttachConsole(ATTACH_PARENT_PROCESS) && !(own && AllocConsole())) return;
+    FILE* stream = nullptr;
+    if (_wfreopen_s(&stream, L"CONOUT$", L"w", stdout) == 0) {
+        SetStdHandle(STD_OUTPUT_HANDLE, reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(stdout))));
+    }
+    if (_wfreopen_s(&stream, L"CONOUT$", L"w", stderr) == 0) {
+        SetStdHandle(STD_ERROR_HANDLE, reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(stderr))));
+    }
+}
+#endif
+
 int main(int argc, char** argv) {
 #if !defined(_WIN32)
     gArgv = argv;
@@ -5186,7 +5681,24 @@ int main(int argc, char** argv) {
 #if defined(_WIN32)
     // The crash watcher's own run (crash_watch.h): before anything of the game's.
     if (argc >= 4 && std::strcmp(argv[1], galaxy::crash_watch::kSwitch) == 0) {
-        return galaxy::crash_watch::run(argc, argv);
+        const int code = galaxy::crash_watch::run(argc, argv);
+#if defined(NEBULA_HOST_RENDERER)
+        // The game has ended (0): the Windows HDR it turned on and did not turn off goes off (render/os_hdr.h). The list's
+        // path is argv[4], read wide.
+        int count = 0;
+        LPWSTR* wide = code == 0 ? CommandLineToArgvW(GetCommandLineW(), &count) : nullptr;
+        if (wide != nullptr) {
+            if (count >= 5) galaxy::render::os_hdr::restore_listed(wide[4], std::wcstoul(wide[2], nullptr, 10));
+            LocalFree(wide);
+        }
+#endif
+        return code;
+    }
+#endif
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
+    // The renderer check's own run (renderer_check.h): which renderers each card runs, written out, nothing else.
+    if (argc == 2 && std::strcmp(argv[1], galaxy::render::kRendererCheckSwitch) == 0) {
+        return galaxy::render::run_renderer_check();
     }
 #endif
 #if defined(NEBULA_HOST_APPLE)
@@ -5201,6 +5713,16 @@ int main(int argc, char** argv) {
 #endif
     read_launch_args(argc, argv);
     galaxy::mods::set_dev_mods(::galaxy::launch_args().mod_dev);
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+#if defined(NEBULA_DIAG_REPORTS)
+    const bool report_mode = argc >= 2 && galaxy::diag::is_command_mode(argv[1]);
+#else
+    const bool report_mode = false;
+#endif
+    if (::galaxy::launch_args().console_log || report_mode) {
+        use_console(::galaxy::launch_args().console_log);
+    }
+#endif
 #if defined(NEBULA_DIAG_REPORTS)
     // The diagnostics report modes (--send-report and the rest): files and one HTTPS POST, nothing else, then exit.
     if (const int code = galaxy::diag::run_command_line(argc, argv); code >= 0) {
@@ -5234,15 +5756,23 @@ int main(int argc, char** argv) {
     if (argc >= 3 && std::strcmp(argv[1], "--crash-report") == 0) {
         return show_crash_report_dialog();
     }
-    // Asked for Direct3D 11: its program runs in this one's place before this one takes anything (hand_off_to_d3d11).
+    // Asked for another renderer (--renderer, else the settings' choice): its program runs in this one's place before
+    // this one takes anything (hand_off_to).
 #if defined(_M_X64) && defined(NEBULA_HOST_D3D12)
-    if (::galaxy::launch_args().renderer == 2u) {
-        hand_off_to_d3d11("--renderer d3d11");
+    {
+        using galaxy::render::RendererKind;
+        const unsigned given = ::galaxy::launch_args().renderer;
+        const RendererKind wanted = given != 0u ? static_cast<RendererKind>(given) : galaxy::render::renderer_in_settings_file();
+        if (wanted == RendererKind::kD3D11 || wanted == RendererKind::kVulkan) {
+            hand_off_to(wanted, given != 0u ? "--renderer" : "the settings' renderer");
+        }
     }
 #endif
     if (one_game_at_a_time()) {
         return 0;
     }
+    // Displays a restart handed over with Windows HDR on, or that an end the watcher missed left on (render/os_hdr.h).
+    galaxy::render::os_hdr::adopt();
 #endif
 #if defined(NEBULA_HOST_SDL)
     if (!galaxy::sdl::start()) {
@@ -5250,7 +5780,7 @@ int main(int argc, char** argv) {
     }
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
-    // A player's start has nowhere to print (a launcher with no terminal, or none): the log goes to logs/latest.log beside the
+    // A player's start has nowhere to print (a shortcut with no terminal): the log goes to logs/latest.log beside the
     // settings, the last start's to previous.log. A test or a shell capturing the output to a pipe or a file keeps it.
     {
         const DWORD output = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
@@ -5261,7 +5791,10 @@ int main(int argc, char** argv) {
                 fs::rename(settings / "logs" / "latest.log", settings / "logs" / "previous.log", error);
                 FILE* log = nullptr;
                 if (_wfreopen_s(&log, (settings / "logs" / "latest.log").c_str(), L"w", stdout) == 0) {
-                    _dup2(_fileno(stdout), _fileno(stderr));
+                    // A window program's error stream has no file to point elsewhere until it is given one.
+                    FILE* error = nullptr;
+                    if (_fileno(stderr) < 0) (void)_wfreopen_s(&error, L"NUL", L"w", stderr);
+                    if (_fileno(stderr) >= 0) _dup2(_fileno(stdout), _fileno(stderr));
                 }
             }
         }
@@ -5361,9 +5894,8 @@ int main(int argc, char** argv) {
     boot_mark("main");
     double seconds = 0;
     [[maybe_unused]] bool benchmark = false;  // --benchmark 1: benchmark.h's run, then exit
-    [[maybe_unused]] bool benchmark_return = false;  // --benchmark-return 1: then the home screen again
-    fs::path benchmark_out, benchmark_result;
-    [[maybe_unused]] int home = -1;  // --home: the launcher's home screen at the title's hold; -1 the platform's default
+    fs::path benchmark_out;
+    [[maybe_unused]] int home = 0;  // --home 1: the home screen at the title's hold
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i];
         if (key == "--pak") {
@@ -5374,7 +5906,7 @@ int main(int argc, char** argv) {
             module = arg_path(i + 1);
         } else if (key == "--diagnostics" || key == "--timeline" || key == "--data" || key == "--settings" ||
                    key == "--crash-dumps" || key == "--gpu-validation" || key == "--console-log" ||
-                   key == "--gpu-start-retry" || key == "--extension" || key == "--import" ||
+                   key == "--gpu-start-retry" || key == "--extension" || key == "--import" || key == "--imports-taken" ||
                    key == "--safe-start" || key == "--shipped-mods" || key == "--mod-dev" || key == "--renderer" || key == "--started-again" ||
                    key == "--start-again-of" || key == "--hidden" || key == "--gpu-driver" || key == "--gpu-driver-library" ||
                    key == "--gpu-driver-hooks") {
@@ -5387,10 +5919,6 @@ int main(int argc, char** argv) {
             benchmark = std::atoi(argv[i + 1]) != 0;
         } else if (key == "--benchmark-out") {
             benchmark_out = arg_path(i + 1);
-        } else if (key == "--benchmark-return") {
-            benchmark_return = std::atoi(argv[i + 1]) != 0;
-        } else if (key == "--benchmark-result") {
-            benchmark_result = arg_path(i + 1);
         } else {
             die("unknown option %s", key.c_str());
         }
@@ -5401,8 +5929,12 @@ int main(int argc, char** argv) {
         saves.clear();
         home = 0;
         seconds = 0;
-        galaxy::bench::start({pak.parent_path(), benchmark_out, benchmark_return});
+        galaxy::bench::Options options;
+        options.pak_folder = pak.parent_path();
+        options.out_file = benchmark_out;
+        (void)galaxy::bench::start(options);
     }
+    gPakFolder = pak.parent_path();
 #endif
     if (pak.empty() || (saves.empty() && !benchmark)) {
         die("usage: nebula_native_host --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/using-nebula/command-line-arguments.md)");
@@ -5441,7 +5973,7 @@ int main(int argc, char** argv) {
             // The mods that come with the game (LumaKit), installed or brought up to date before anything reads the
             // mods. A library among them loads only while a mod that is on needs it.
             fs::path shipped = ::galaxy::launch_args().shipped_mods;
-            if (shipped.empty() && !galaxy::program_directory().empty()) shipped = galaxy::program_directory() / "luma" / "mods";
+            if (shipped.empty() && !galaxy::package_directory().empty()) shipped = galaxy::package_directory() / "luma" / "mods";
             for (const galaxy::mods::ShippedMod& mod : galaxy::mods::install_shipped_mods(shipped, mods_folder)) {
                 const std::string said = mod.ok ? mod.id + " " + mod.version + " installed from " + mod.file
                                                 : mod.file + " was not installed: " + mod.message;
@@ -5465,9 +5997,6 @@ int main(int argc, char** argv) {
     boot_mark("game module loaded");
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::render::set_texture_pack_game_id(gPak.id);  // packs' and dumps' game folders: the disc's release
-#if defined(_WIN32)
-    hold_runtime_lease();
-#endif
     if (!galaxy::bench::running()) {  // a benchmark's game has no Miis: their library is in the save folder
         // Mii import: the files in the import folder (next to the settings: any Mii files, mii_formats.h)
         // join the library before the game reads it; the settings import more while it runs.
@@ -5505,6 +6034,12 @@ int main(int argc, char** argv) {
         gOldSaveDataPath = save_folders.earlier;
         gSaveDataPath = save_folders.current;
         if (!gSaveRoot.empty()) fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
+        if (!gSaveRoot.empty()) {
+            galaxy::save_transfer::set_game_saves(gSaveRoot, std::string_view(gPak.id, 4));  // SAVES rows
+            // The import file by file: the game module reads the picked save (nebula_save_import.h).
+            galaxy::save_transfer::set_game_reader(
+                reinterpret_cast<NebulaSaveImportRead>(find_symbol(gModule.module, "nebula_save_import_read")));
+        }
         galaxy::luma_mods::set_save_half({kept_save_ids, kept_save_bytes, forget_save});
         if (!settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);
@@ -5625,6 +6160,7 @@ int main(int argc, char** argv) {
     services.stat_add = svc_stat_add;
     services.stat_get = svc_stat_get;
     services.settings_view = svc_settings_view;
+    services.benchmark_state = svc_benchmark_state;
     services.settings_input = svc_settings_input;
     services.sharp_2d = svc_sharp_2d;
     services.button_icons = svc_button_icons;
@@ -5715,9 +6251,10 @@ int main(int argc, char** argv) {
         if (retry_start_for_gpu_memory(reason)) {
             finish_and_exit(true);
         }
-#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_D3D12)
-        if (::galaxy::launch_args().renderer != 1u && reason.rfind("No hardware D3D12 adapter", 0) == 0u) {
-            start_again_on_d3d11(reason.c_str());
+#if defined(_WIN32) && defined(_M_X64)
+        // A renderer given with --renderer never falls back.
+        if (::galaxy::launch_args().renderer == 0u && galaxy::render::found_no_device()) {
+            start_again_on_another_renderer(reason.c_str());
         }
 #endif
         die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
@@ -5749,42 +6286,42 @@ int main(int argc, char** argv) {
     galaxy::host::install_native_keyboard_capture_provider([]() noexcept { return galaxy::render::native_window_input_captured(); });
     galaxy::host::install_native_settings_pad_hooks(
         []() noexcept {
+            // A benchmark's panel takes the pad as a menu does: B stops the run (native_settings.cpp).
             return galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
-                galaxy::ui::launcher_visible();
+                galaxy::ui::launcher_visible() || galaxy::bench::running();
         },
         [](std::uintptr_t key) noexcept { galaxy::render::native_settings_post_key(key); });
-#if defined(__APPLE__) || (defined(__linux__) && !defined(__ANDROID__))
-    constexpr bool kHomeByDefault = true;  // no launcher app: the home screen is where a start begins
-#else
-    constexpr bool kHomeByDefault = false;  // the Windows and Android launcher apps are the home screen there
-#endif
-    // Tests (a hidden start, a timed run) start straight into the game unless they ask for it.
-#if defined(_WIN32) || defined(NEBULA_HOST_START_AGAIN)
-    galaxy::ui::launcher_offer_benchmark(true);
-#else
-    galaxy::ui::launcher_offer_benchmark(false);  // no start again here (iOS, Android): no Benchmark row
-#endif
-    if (!benchmark && !benchmark_result.empty()) {
-        // The benchmark the home screen started: its recommendation as the settings menu's draft when it opens.
-        galaxy::render::RenderConfig draft = galaxy::render::get_render_config_chosen();
-        if (galaxy::bench::read_recommendation(benchmark_result, draft)) {
-            galaxy::ui::launcher_show_draft(draft);
-        } else {
-            galaxy::ui::launcher_offer_message();  // it did not finish, or measured nothing usable
-        }
-#if defined(NEBULA_HOST_START_AGAIN) && defined(NEBULA_DIAG_REPORTS)
-        if (upload_offered(benchmark_result)) {
-            gUploadFile = benchmark_result;
-            galaxy::ui::launcher_offer_upload(upload_answer);
-        }
-#endif
+    // A start goes straight into the game; --home 1 shows the home screen first. Its Benchmark and the settings menu's
+    // Run benchmark run in the game.
+    galaxy::ui::launcher_offer_benchmark(!benchmark);
+    if (!benchmark) {
+        galaxy::ui::benchmark_menu::set_runner(
+            {start_benchmark_here, []() { return gInPlay.load(std::memory_order_relaxed); }});
+        // The HDR calibration's reference stage, from the title or the save select: nothing of the player's is in play
+        // there, and the game's reset works once the title has shown (not at the boot, nor under the home screen).
+        galaxy::calibration_scene::set_gate([]() {
+            return gTitleShown.load(std::memory_order_relaxed) && !gInPlay.load(std::memory_order_relaxed) &&
+                   !galaxy::bench::running() && !galaxy::ui::launcher_visible();
+        });
     }
-    const bool home_screen =
-        home >= 0 ? home == 1 : kHomeByDefault && !::galaxy::launch_args().started_hidden && seconds <= 0;
+#if defined(NEBULA_DIAG_REPORTS)
+    // Send to developer, where the build has the developer's endpoint; What is sent where the system has a viewer.
+    if (galaxy::diag::uploads_enabled()) {
+        galaxy::ui::benchmark_menu::Reports reports;
+        reports.send = send_benchmark_report;
+#if defined(NEBULA_HOST_SHOW_REPORT)
+        reports.show = show_benchmark_report;
+#endif
+        galaxy::ui::benchmark_menu::set_reports(reports);
+    }
+#endif
+    const bool home_screen = home == 1;
     galaxy::ui::launcher_enable(home_screen);
 #if defined(NEBULA_UPDATE_CHECK)
-    // The home screen's update notice (update.h): the check runs while the game boots, its answer when the screen opens.
-    if (home_screen && !benchmark) galaxy::update::begin(NEBULA_VERSION);
+    // The update check (update.h; off with Check for updates at start) runs while the game boots: its answer shows on the
+    // home screen, else over the title when the player presses a button there (NEBULA_HOME_MENU_LAUNCHER_NOTICE). A
+    // benchmark, a hidden start and a timed run check nothing.
+    if (!benchmark && !::galaxy::launch_args().started_hidden && seconds <= 0) galaxy::update::begin(NEBULA_VERSION);
 #endif
 #endif
     if (gModule.attach(&services) != NEBULA_GAME_API_VERSION) {
@@ -5866,8 +6403,15 @@ int main(int argc, char** argv) {
             gAudio->set_paused(away);
             log_line("host:", away ? "suspended (out of sight)" : "resumed");
         }
-        // Android's onTrimMemory: what comes back by itself goes. The store's view pages return from the file cache on
-        // the next read; the C heap's free pages are new pages when used again.
+        if constexpr (galaxy::kDesktopWindow) {
+            // A desktop window not in front: the player's ON LOSING FOCUS (follow_focus_loss). Minimised is in_background,
+            // which holds the game above.
+            const bool minimised = galaxy::sdl::in_background();
+            follow_focus_loss(minimised || !galaxy::sdl::input_state().window_focused, minimised);
+        }
+        // The system asked for memory (Android's onTrimMemory, macOS's memory pressure): what comes back by itself goes.
+        // The store's view pages return from the file cache on the next read; the C heap's free pages are new pages when
+        // used again.
         if (galaxy::sdl::take_low_memory()) {
             gPak.store.release_pages();
 #if defined(__ANDROID__)
@@ -5886,44 +6430,11 @@ int main(int argc, char** argv) {
         // own. The game's clock starts again from the return (svc_frame_wait: no step is owed), and the device is kept, so
         // showing the window again rebuilds nothing. A covered window is not this: the game and its sound go on, and the
         // renderer alone stops presenting (RenderCore, which looks at the window itself every 100 ms).
-        // A window that is not in front, by the player's choice (ON LOSING FOCUS): PAUSE has the game open its pause menu (the
-        // pause button's path, so its timers stop), MUTE silences the sound (the mixer reads background_muted) and the game
-        // goes on; KEEP RUNNING does nothing. Minimising holds the game whatever is chosen.
+        // A window that is not in front: the player's ON LOSING FOCUS (follow_focus_loss).
         {
-            static bool was_away = false;
-            static bool away_minimised = false;
-            static Clock::time_point lapse{};
-            const galaxy::FocusLoss focus = galaxy::get_runtime_settings().focus_loss;
             const bool minimised_now = galaxy::render::host_window::is_minimized();
             const bool away = galaxy::render::host_window::is_background() || minimised_now;
-            if (away && !was_away && focus == galaxy::FocusLoss::Pause) {
-                gPauseRequest.store(true, std::memory_order_release);
-            }
-            if (away) {
-                away_minimised = away_minimised || minimised_now;
-            }
-            if (!away && was_away) {
-                if (!away_minimised) {
-                    gPauseRequest.store(false, std::memory_order_release);
-                } else {
-                    // Held while minimised: the game takes the request at its first frame back; a game that cannot pause then
-                    // (a cutscene) lets it lapse rather than pause long after the player returned.
-                    lapse = Clock::now() + std::chrono::seconds(3);
-                }
-                away_minimised = false;
-            }
-            if (focus != galaxy::FocusLoss::Pause && !away_minimised) {
-                gPauseRequest.store(false, std::memory_order_release);
-            }
-            if (!away && lapse != Clock::time_point{} && Clock::now() >= lapse) {
-                gPauseRequest.store(false, std::memory_order_release);
-                lapse = Clock::time_point{};
-            }
-            if (away != was_away) {
-                log_line("host:", away ? "window not in front" : "window in front");
-            }
-            was_away = away;
-            galaxy::set_background_muted(away && focus == galaxy::FocusLoss::Mute);
+            follow_focus_loss(away, minimised_now);
             // Behind another window (not minimised, which holds the game): the renderer shows the game's own frames only.
             galaxy::render::set_window_background(away && !minimised_now);
             apply_power_wish(away, minimised_now);
@@ -6017,14 +6528,23 @@ int main(int argc, char** argv) {
     galaxy::timeline::dump();
 #endif
 #if defined(NEBULA_HOST_RENDERER)
-    if (galaxy::bench::returns_home()) {
-        // A benchmark the home screen started, finished or failed: the home screen again, with its result.
-        for (const char* argument : {"--benchmark", "0", "--benchmark-return", "0", "--home", "1", "--benchmark-result"}) {
-            add_restart_argument(argument);
+    // The settings menu's restart (host_window::restart_game): the window closed for it; the game starts again, as a
+    // diagnostics run when it asked for one.
+    if (const int wanted = galaxy::render::host_window::restart_wanted(); wanted != 0) {
+        using galaxy::render::host_window::Restart;
+        gRestartKind = wanted;
+        if (wanted == static_cast<int>(Restart::Diagnostics)) {
+            add_restart_argument("--diagnostics");
+            add_restart_argument("1");
         }
-        add_restart_argument(galaxy::bench::result_file());
         finish_and_exit(true);
     }
+#if defined(NEBULA_UPDATE_CHECK) && defined(_WIN32)
+    // The notice's Update: Nebula Setup installs it once the game has left.
+    if (galaxy::ui::launcher_poll() == galaxy::ui::LauncherModel::kChoiceUpdate && !galaxy::update::start_setup_update()) {
+        log_line("host:", "Nebula Setup could not start to install the update");
+    }
+#endif
 #endif
     finish_and_exit(false);
 }

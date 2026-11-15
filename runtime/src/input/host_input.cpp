@@ -8,6 +8,7 @@
 #include "galaxy/wiimote_hid.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
+#include "galaxy/input/co_star.h"
 #include "galaxy/input/controls_engine.h"
 #include "galaxy/input/live_controls_engine.h"
 #include "galaxy/input/key_positions.h"
@@ -17,7 +18,7 @@
 #include "galaxy/pointer_control.h"
 #include "galaxy/rumble.h"
 #include "galaxy/tilt.h"
-#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/display_aspect.h"
 #include "galaxy/render_api.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/scope_exit.h"
@@ -77,9 +78,6 @@ static std::atomic<bool> g_pointer_button_injected{false};
 // (slot << 8) | (1 + scheme) while armed. The result is (1 << 16) | kind << 8 | code.
 static std::atomic<std::uint64_t> g_binding_capture_armed{0u};
 static std::atomic<std::uint32_t> g_binding_capture_result{0u};
-// XInput pads (bit per user index) seen by the input path, and when it last looked.
-static std::atomic<std::uint32_t> g_xinput_mask{0u};
-static std::atomic<std::uint64_t> g_xinput_looked_ms{0u};
 static std::atomic<HKL> g_keyboard_layout{nullptr};
 // The device that last gave input, for the CONTROLS page: (scheme << 32) | slot.
 constexpr std::uint64_t kLastInputNone = ~std::uint64_t{0};
@@ -183,18 +181,9 @@ bool input_missing_shown() noexcept {
 // What the arrays that receive this list hold (input::kMaxControllers) covers every source.
 static_assert(input::kMaxControllers >= XUSER_MAX_COUNT + kMaxHidPads);
 
+// Published by the presence thread (xinput_present_mask, hid_controllers): no device is asked on the caller's thread.
 std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept {
-    std::uint32_t xinput = g_xinput_mask.load(std::memory_order_acquire);
-    const std::uint64_t now = GetTickCount64();
-    if (now - g_xinput_looked_ms.load(std::memory_order_relaxed) > 1000u) {
-        xinput = 0u;
-        for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
-            XINPUT_STATE state{};
-            if (XInputGetState(slot, &state) == ERROR_SUCCESS) xinput |= 1u << slot;
-        }
-        g_xinput_mask.store(xinput, std::memory_order_release);
-        g_xinput_looked_ms.store(now, std::memory_order_relaxed);
-    }
+    const std::uint32_t xinput = xinput_present_mask();
     std::size_t count = 0;
     for (DWORD slot = 0; slot < XUSER_MAX_COUNT && count < out.size(); ++slot) {
         if ((xinput & (1u << slot)) == 0u) continue;
@@ -226,26 +215,23 @@ input::ButtonIconStyle button_icons_auto_style() noexcept {
     return g_auto_icon_style.load(std::memory_order_relaxed);
 }
 
-namespace {
-bool current_process_runtime_window(HWND& window);
-}  // namespace
-
 const input::KeyPositionMap& keyboard_position_map(HKL layout) {
     return key_positions_for_win32_layout(reinterpret_cast<std::uintptr_t>(layout));
 }
 
 // What the layout keys (input::key_icon_layout_key) print on the keyboard the game's window reads: each one's
 // character alone (a dead key's too: a German keyboard's ^ and its acute accent), as a capital; 0 where it prints none.
-// Looked up at most once a second.
+// The layout is the one the input path saw on the focused window (g_keyboard_layout), else this thread's; the labels
+// are looked up again only when it changes. The game thread's only.
 std::array<std::uint16_t, input::kKeyIconLayoutCount> keyboard_layout_labels() noexcept {
     static std::array<std::uint16_t, input::kKeyIconLayoutCount> s_labels{};
-    static std::uint64_t s_checked_ms = 0u;
-    const std::uint64_t now_ms = GetTickCount64();
-    if (s_checked_ms != 0u && now_ms - s_checked_ms < 1000u) return s_labels;
-    s_checked_ms = now_ms;
-    HWND window = nullptr;
-    const HKL layout =
-        GetKeyboardLayout(current_process_runtime_window(window) ? GetWindowThreadProcessId(window, nullptr) : 0u);
+    static HKL s_layout = nullptr;
+    static bool s_looked = false;
+    HKL layout = g_keyboard_layout.load(std::memory_order_acquire);
+    if (layout == nullptr) layout = GetKeyboardLayout(0u);
+    if (s_looked && layout == s_layout) return s_labels;
+    s_looked = true;
+    s_layout = layout;
     for (std::size_t i = 0; i < s_labels.size(); ++i) {
         // The top bit marks a dead key; the character is in the low word.
         wchar_t character[2] = {static_cast<wchar_t>(
@@ -261,8 +247,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     using input::ButtonIconStyle;
     using input::ControlScheme;
     // The game's thread asks each frame.
-    // The pads attached: read once a second and when the last input's device changes (the roster asks XInput's empty
-    // slots, which is slow).
+    // The pads attached: once a second and when the last input's device changes (the presence thread's lists).
     static std::array<ControlScheme, input::kMaxControllers> s_attached{};
     static std::array<std::uint32_t, input::kMaxControllers> s_attached_slot{};
     static std::array<input::ButtonIconModel, input::kMaxControllers> s_attached_icons{};
@@ -609,24 +594,23 @@ bool route_native_settings_pad(std::uint16_t& buttons, float stick_x, float stic
     return step.game_neutral;
 }
 
-// Every connected XInput pad. Sticks are normalised with `left_deadzone` on the left stick and
-// none on the right; the pointer applies a radial dead zone.
+// Every connected XInput pad: the slots the presence thread found (xinput_present_mask), so no empty slot is asked
+// here; a slot that stops answering is handed back to it. Sticks are normalised with `left_deadzone` on the left stick
+// and none on the right; the pointer applies a radial dead zone.
 std::size_t poll_native_xinput_pads(
     std::int16_t left_deadzone,
     std::array<NativeHidControllerState, XUSER_MAX_COUNT>& out) {
-    static ULONGLONG s_slot_retry_at[XUSER_MAX_COUNT]{};
-    const ULONGLONG now_ms = GetTickCount64();
+    const std::uint32_t present = xinput_present_mask();
     std::size_t count = 0;
     for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
-        if (now_ms < s_slot_retry_at[slot]) {
+        if ((present & (1u << slot)) == 0u) {
             continue;
         }
         XINPUT_STATE state{};
         if (XInputGetState(slot, &state) != ERROR_SUCCESS) {
-            s_slot_retry_at[slot] = now_ms + 2000u;
+            xinput_slot_lost(slot);
             continue;
         }
-        s_slot_retry_at[slot] = 0u;
         NativeHidControllerState& controller = out[count++];
         controller = {};
         controller.connected = true;
@@ -1030,60 +1014,6 @@ private:
 
 // The live controls as the player's input: the bindings of every connected controller and of the keyboard and mouse,
 // the pointer from whichever source moved last, tilt, shake and the scripted test input.
-// Co-star mode: player 2 is the last controller attached when two or more are; player 1 no longer hears it. It points with whichever stick its
-// bindings aim the pointer with, moving the pointer at the pointer speed.
-std::mutex g_co_star_lock;
-bool g_co_star_on = false;
-galaxy::input::PlayerInput g_co_star_input{};
-
-double dt_seconds_since_co_star() noexcept {
-    static auto last = std::chrono::steady_clock::now();
-    const auto now = std::chrono::steady_clock::now();
-    const double seconds = std::chrono::duration<double>(now - last).count();
-    last = now;
-    return std::min(seconds, 0.1);
-}
-
-void update_co_star(std::span<LivePad> pads, const galaxy::input::ControlsConfig& config, float seconds) {
-    namespace in = galaxy::input;
-    using in::GameInput;
-    in::PlayerInput player{};
-    bool on = false;
-    if (galaxy::get_runtime_settings().co_star) {
-        std::size_t connected = 0u;
-        LivePad* last = nullptr;
-        for (LivePad& pad : pads) {
-            if (pad.sample.connected) {
-                ++connected;
-                last = &pad;
-            }
-        }
-        if (connected >= 2u) {
-            static float s_x = 0.0f, s_y = 0.0f;
-            const in::LogicalInput logic = in::evaluate_pad_bindings(config.table(last->sample.scheme), last->sample, 0.5f);
-            const auto held = [&logic](GameInput target) { return logic.held(target); };
-            s_x = std::clamp(s_x + logic.pointer_x * seconds * 1.5f, -1.0f, 1.0f);
-            s_y = std::clamp(s_y - logic.pointer_y * seconds * 1.5f, -1.0f, 1.0f);
-            in::set_pointer(player, s_x, s_y, true);
-            player.buttons.a = held(GameInput::A);
-            player.buttons.b = held(GameInput::B);
-            player.buttons.one = held(GameInput::One);
-            player.buttons.two = held(GameInput::Two);
-            player.buttons.plus = held(GameInput::Plus);
-            player.buttons.minus = held(GameInput::Minus);
-            player.buttons.up = held(GameInput::DpadUp);
-            player.buttons.down = held(GameInput::DpadDown);
-            player.buttons.left = held(GameInput::DpadLeft);
-            player.buttons.right = held(GameInput::DpadRight);
-            *last = {};
-            on = true;
-        }
-    }
-    const std::lock_guard<std::mutex> lock(g_co_star_lock);
-    g_co_star_on = on;
-    g_co_star_input = player;
-}
-
 galaxy::input::PlayerInput build_live_input(
     std::uint64_t current_frame,
     const galaxy::RuntimeInputModeState& input_mode_state,
@@ -1137,12 +1067,6 @@ galaxy::input::PlayerInput build_live_input(
     const std::size_t xinput_count = poll_controller
         ? poll_native_xinput_pads(deadzone_counts(xbox_tuning.stick_deadzone), xinput_pads)
         : 0u;
-    if (poll_controller) {
-        std::uint32_t xinput_mask = 0u;
-        for (std::size_t i = 0; i < xinput_count; ++i) xinput_mask |= 1u << xinput_pads[i].slot;
-        g_xinput_mask.store(xinput_mask, std::memory_order_release);
-        g_xinput_looked_ms.store(GetTickCount64(), std::memory_order_relaxed);
-    }
     const float xinput_pointer_deadzone_fraction =
         static_cast<float>(deadzone_counts(xbox_tuning.pointer_deadzone)) / 32767.0f;
     static std::vector<LivePad> pads;  // the game thread's, reused each frame
@@ -1161,7 +1085,13 @@ galaxy::input::PlayerInput build_live_input(
         pads.insert(pads.end(), hid_pads.begin(), hid_pads.end());
     }
     const std::span<LivePad> live_pads(pads.data(), pads.size());
-    update_co_star(live_pads, controls.config, static_cast<float>(dt_seconds_since_co_star()));
+    // Player 2 (co-star mode): the controller attached last, the last connected one in this host's list (XInput's
+    // users, then the controllers read over HID, each in the order it came).
+    std::size_t newest = live_pads.size();
+    for (std::size_t i = 0; i < live_pads.size(); ++i) {
+        if (live_pads[i].sample.connected) newest = i;
+    }
+    update_co_star(live_pads, newest, controls.config);
     // Before the overlay takes the pads: the controller the player is using, for the CONTROLS page.
     for (const LivePad& pad : live_pads) {
         if (!pad.sample.connected) continue;
@@ -1230,15 +1160,6 @@ galaxy::input::PlayerInput build_live_input(
 }
 
 }  // namespace
-
-bool native_game_co_star(galaxy::input::PlayerInput* input) noexcept {
-    const std::lock_guard<std::mutex> lock(g_co_star_lock);
-    if (!g_co_star_on) {
-        return false;
-    }
-    *input = g_co_star_input;
-    return true;
-}
 
 galaxy::input::PlayerInput native_game_input(
     std::uint64_t current_frame,

@@ -2522,7 +2522,7 @@ void RenderCore::rt_light() {
                         rt_volume_slot_ = renderer_.rt_publish_light(volume, texture_store_, 4u);
                         TextureSampler linear;
                         linear.mag_linear = linear.min_linear = true;
-                        rt_volume_sampler_ = renderer_.sampler_slot(make_sampler_key(linear, false, 1u));
+                        rt_volume_sampler_ = renderer_.sampler_slot(make_sampler_key(linear, 1u));
                     } else {
                         rt_volume_drawn_ = false;
                     }

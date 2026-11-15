@@ -18,7 +18,8 @@ namespace {
     NebulaDisplay sDisplay = cDesignDisplay;
     u32 sDisplayExtent;
 
-    // Every shape is held to 9:21 .. 32:9 (the presentation fits the rest). The screen width runs in even units from
+    // Every shape is held to NEBULA_DISPLAY_NARROWEST_ASPECT .. NEBULA_DISPLAY_WIDEST_ASPECT (the presentation fits
+    // the rest). The screen width runs in even units from
     // NebulaFrameClock::cWideScreenWidth at 16:9 (NebulaFrameClock::cLayoutWidth is its own 4:3 mode); below 4:3 it stays 4:3's 624 and the picture grows taller
     // (Vert+: CameraContext::getRenderFovy, the layouts' vertical_fit).
     void refreshDisplay() {
@@ -36,11 +37,8 @@ namespace {
             return;
         }
 
-        const f64 aspect = fmin(fmax(static_cast< f64 >(w) / h, 9.0 / 21.0), 32.0 / 9.0);
+        const f64 aspect = fmin(fmax(static_cast< f64 >(w) / h, NEBULA_DISPLAY_NARROWEST_ASPECT), NEBULA_DISPLAY_WIDEST_ASPECT);
         const long width = lround(NebulaFrameClock::cWideScreenWidth * (fmax(aspect, 4.0 / 3.0) / cDesignAspect) * 0.5) * 2;
-        if (width <= static_cast< long >(NebulaFrameClock::cLayoutWidth) || width > NebulaFrameClock::cWideScreenWidth * 2) {
-            return;
-        }
 
         sDisplay.wide = 1;
         sDisplay.content_aspect = static_cast< f32 >(aspect);

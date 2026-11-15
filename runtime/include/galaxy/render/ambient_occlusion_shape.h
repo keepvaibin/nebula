@@ -4,6 +4,7 @@
 // What both renderers' ambient occlusion share: the shaders' constants from the scene's view, and the occlusion
 // pixel's size. ambient_occlusion.hlsl has the method.
 
+#include "galaxy/render/resolution_governor.h"
 #include "galaxy/render/rt_types.h"
 
 #include <algorithm>
@@ -37,6 +38,26 @@ static_assert(sizeof(Constants) == 80u);
 [[nodiscard]] inline unsigned occlusion_divisor(unsigned scene_height) noexcept {
     // Ceiling division keeps the working field at or below its 720-line budget at *every* resolution.
     return std::max(scene_height / kFullLines + (scene_height % kFullLines != 0u ? 1u : 0u), 1u);
+}
+
+// The occlusion field's largest size over the dynamic resolution steps of an `extent_width` x `extent_height` scene down
+// to `lowest_sixteenths` (16: the scene's size alone): its targets are made at it once, and each step works in its part.
+struct Field {
+    unsigned width = 0;
+    unsigned height = 0;
+};
+[[nodiscard]] inline Field largest_field(unsigned extent_width, unsigned extent_height, unsigned lowest_sixteenths) noexcept {
+    Field field;
+    for (const unsigned sixteenths : kResolutionSixteenths) {
+        if (sixteenths < lowest_sixteenths && sixteenths != 16u) {
+            break;
+        }
+        const auto [width, height] = resolution_rectangle(extent_width, extent_height, sixteenths);
+        const unsigned divisor = occlusion_divisor(height);
+        field.width = std::max(field.width, (width + divisor - 1u) / divisor);
+        field.height = std::max(field.height, (height + divisor - 1u) / divisor);
+    }
+    return field;
 }
 
 // The shaders' constants: false for a view with no picture.

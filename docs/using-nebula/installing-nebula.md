@@ -18,7 +18,7 @@ Nebula plays Super Mario Galaxy from your own disc image. The installer reads th
 1. Select your game and click **Install**.
 1. Start **Nebula** from the Start menu.
 
-Nebula Setup also updates, repairs and uninstalls Nebula. Updates are signed, and Setup checks the signature before it installs one. Each update keeps the version before it. To go back to it, open Nebula Setup and click **Restore the previous version**.
+Nebula Setup also updates, repairs and uninstalls Nebula. Each update keeps the version before it. To go back to it, open Nebula Setup and choose **Restore Nebula VERSION**.
 
 ### Windows on ARM
 
@@ -26,7 +26,7 @@ Nebula runs on Windows on ARM through Windows' x64 emulation. Install it with `N
 
 ## Installing Nebula on Linux
 
-Nebula for Linux comes as a package named `Nebula-<version>-linux-<arch>.tar.gz`.
+Nebula for Linux comes as a package named `Nebula-Linux-<arch>.tar.gz`.
 
 1. Unpack the package and open a terminal in its folder.
 1. Run the installer.
@@ -35,7 +35,7 @@ Nebula for Linux comes as a package named `Nebula-<version>-linux-<arch>.tar.gz`
    ./install.sh
    ```
 
-1. When the installer asks, choose your Super Mario Galaxy disc image, such as an `.iso`, `.rvz` or `.wbfs` file. The installer opens a file chooser when your desktop has one, and asks in the terminal otherwise.
+1. When the installer asks, choose your Super Mario Galaxy disc image, such as an `.iso`, `.rvz` or `.wbfs` file. The installer opens a file chooser when your desktop has one, and asks in the terminal otherwise. To use an extracted game folder, give it with `--disc`.
 
 By default, the installer installs Nebula for your user in `~/.local/share/Nebula`, adds a menu entry, and makes `.luma` files open in Nebula.
 
@@ -45,9 +45,9 @@ To list the options, run `./install.sh --help`.
 
 | Option | Effect |
 |---|---|
-| `--disc IMAGE` | Uses this disc image. Without it, the installer asks. An update of an install that already has the game does not need it. |
-| `--portable FOLDER` | Installs everything in this one folder, with saves and settings in its data folder. Nothing else on the computer changes. |
-| `--yes` | Asks nothing. Installs for your user unless `--portable` is given. |
+| `--disc IMAGE` | Uses this disc image or extracted game folder. Without it, the installer asks. An update of an install that already has the game does not need it. |
+| `--portable FOLDER` | Installs Nebula in this folder. Saves and settings are kept in the folder. |
+| `--yes` | Does not ask questions. Installs for your user unless `--portable` is given. |
 
 ### Uninstalling Nebula on Linux
 
@@ -57,7 +57,18 @@ Run `uninstall.sh` in the installed folder.
 ./uninstall.sh
 ```
 
-Your saves, settings, mods and the prepared game stay. To remove them too, run `./uninstall.sh --all`.
+Your saves, settings, mods and game files stay. To remove them too, run `./uninstall.sh --all`.
+
+## Updating Nebula
+
+Nebula checks GitHub for a new version when it starts. To check now, open the settings and go to **SYSTEM** > **UPDATES** > **Check for updates**. To turn off the check at start, set **Check at start** to **OFF**.
+
+Updates are signed, and Nebula checks the signature before it installs one.
+
+* **Windows:** select **Update** on the **UPDATES** page. Nebula closes, and Nebula Setup installs the new version.
+* **macOS:** select **Update**, then **Restart**.
+* **Linux:** download the new package and run `./install.sh` again.
+* **Android:** install the new app over the old one.
 
 ## Further reading
 

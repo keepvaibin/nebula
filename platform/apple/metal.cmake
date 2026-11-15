@@ -13,6 +13,7 @@ if(nebula_apple_builds_tools)
         "${nebula_apple_utility_spirv_dir}/utility_spirv_data.h")
     target_include_directories(nebula_apple_utility_msl PRIVATE "${nebula_apple_utility_spirv_dir}")
     target_link_libraries(nebula_apple_utility_msl PRIVATE nebula_msl)
+    add_dependencies(nebula_apple_utility_msl galaxy_utility_spirv_header)  # made in platform/sdl
     set_target_properties(nebula_apple_utility_msl PROPERTIES
         OUTPUT_NAME utility_msl RUNTIME_OUTPUT_DIRECTORY "${NEBULA_HOST_TOOLS}")
     set(nebula_apple_utility_msl_tool "$<TARGET_FILE:nebula_apple_utility_msl>")
@@ -59,6 +60,17 @@ target_include_directories(galaxy_render_mtl PUBLIC "${nebula_root}/runtime/src"
 target_include_directories(galaxy_render_mtl PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include"
     "${nebula_apple_utility_msl_dir}")
 target_link_libraries(galaxy_render_mtl PRIVATE nebula_msl)
+# As platform/sdl gives galaxy_render_vk: TLS and gzip for the net services (luma_net.cpp), the save import's AES,
+# hashes and inflate (save_transfer.cpp), and the game's GameData.bin check (a source property is its folder's, so
+# platform/sdl's does not reach this folder's target).
+target_link_libraries(galaxy_render_mtl PRIVATE nebula_bssl_ssl nebula_zinflate)
+set_property(SOURCE "${nebula_root}/runtime/src/save_transfer.cpp" APPEND PROPERTY INCLUDE_DIRECTORIES
+    "${nebula_root}/native/petari/include")
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # The settings' UPDATES rows (native_settings.cpp), as galaxy_render_vk has them on macOS: the service is
+    # nebula_native's (CMakeLists.txt); iOS updates through its store.
+    target_compile_definitions(galaxy_render_mtl PRIVATE NEBULA_UPDATE_CHECK=1)
+endif()
 target_link_libraries(galaxy_render_mtl PUBLIC "-framework Metal" "-framework QuartzCore" "-framework Foundation"
     "-framework CoreGraphics" "-framework IOSurface")
 # MetalFX is asked for at run time (macOS 13, iOS 16): the program starts without it.

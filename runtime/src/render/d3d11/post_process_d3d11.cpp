@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // PostProcessor: the Direct3D 11 presentation chain (post_process_d3d11.h), pass for pass the D3D12 one (post_process.cpp).
 #include "galaxy/render/d3d11/post_process_d3d11.h"
+#include "galaxy/render/idle_clock.h"
 
 #include <algorithm>
 #include <array>
@@ -60,7 +61,6 @@ constexpr DXGI_FORMAT kWeightsFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 constexpr DXGI_FORMAT kEdgesFormat = DXGI_FORMAT_R8G8_UNORM;
 // SMAA's edge marks: its stencil alone is used, never its depth, so the smallest format with a stencil.
 constexpr DXGI_FORMAT kStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-constexpr std::uint64_t kTargetIdleFrames = 600u;
 
 bool make(ID3D11Device1* device, ShaderBytes code, ComPtr<ID3D11VertexShader>& out) {
     return SUCCEEDED(device->CreateVertexShader(code.data, code.size, nullptr, &out));
@@ -82,11 +82,6 @@ ShaderBytes easu_shader(ID3D11Device1* device) noexcept {
 template <std::size_t N>
 void set_reason(std::array<char, N>& out, const char* text) noexcept {
     std::snprintf(out.data(), out.size(), "%s", text);
-}
-
-// The frame being recorded: the frame fence's next value (one signal a frame).
-std::uint64_t current_frame() noexcept {
-    return Context::get().submitted_value() + 1u;
 }
 
 D3D11_VIEWPORT whole_viewport(unsigned width, unsigned height) noexcept {
@@ -291,11 +286,10 @@ void PostProcessor::shutdown() noexcept {
     device_ = nullptr;
 }
 
-bool PostProcessor::ensure_target(Target& target, unsigned width, unsigned height, DXGI_FORMAT format,
-                                  std::uint64_t frame) {
+bool PostProcessor::ensure_target(Target& target, unsigned width, unsigned height, DXGI_FORMAT format) {
     if (target.texture && target.texture->width == width && target.texture->height == height &&
         target.texture->format == format) {
-        target.used = frame;
+        target.used = idle_clock();
         return true;
     }
     // The old picture goes with its last reference: Direct3D 11 keeps it while a frame in flight reads it.
@@ -307,17 +301,17 @@ bool PostProcessor::ensure_target(Target& target, unsigned width, unsigned heigh
         target = {};
         return false;
     }
-    target.used = frame;
+    target.used = idle_clock();
     return true;
 }
 
-void PostProcessor::trim_idle_targets(std::uint64_t frame) noexcept {
+void PostProcessor::trim_idle_targets() noexcept {
     for (Target* target : {&edges_, &weights_, &stencil_, &antialiased_, &scaled_}) {
-        if (target->texture && frame > target->used + kTargetIdleFrames) {
+        if (target->texture && idle_since(target->used)) {
             *target = {};
         }
     }
-    if (traded_ && frame > traded_frame_ + kTargetIdleFrames) {
+    if (traded_ && idle_since(traded_step_)) {
         traded_.reset();
     }
 }
@@ -355,11 +349,15 @@ void PostProcessor::draw(ID3D11DeviceContext1* context, ID3D11VertexShader* vs, 
 }
 
 void PostProcessor::run_aa(ID3D11DeviceContext1* context, AaRun pass, ID3D11ShaderResourceView* source,
-                           ID3D11RenderTargetView* target, unsigned width, unsigned height, bool whole) {
+                           ID3D11RenderTargetView* target, unsigned width, unsigned height, unsigned part_width,
+                           unsigned part_height, bool whole) {
     bind_passes(context);
-    const D3D11_VIEWPORT viewport = whole_viewport(width, height);
+    // The edges and weights are cleared whole and drawn in the picture's part: past it they are zero, so the searches
+    // end at its edge.
+    const D3D11_VIEWPORT viewport = whole_viewport(part_width, part_height);
     PostConstants c{};
     set_post_input_size(c, width, height);
+    set_post_input_part(c, part_width, part_height);
     if (pass == AaRun::kFxaa) {
         context->OMSetRenderTargets(1, &target, nullptr);
         context->OMSetBlendState(whole ? nullptr : rgb_.Get(), nullptr, 0xFFFFFFFFu);
@@ -412,44 +410,46 @@ AaRun PostProcessor::record_scene_aa(ID3D11DeviceContext1* context, const Textur
     if (!ready_ || target == nullptr || width == 0u || height == 0u) {
         return AaRun::kNone;
     }
-    const std::uint64_t frame = current_frame();
-    trim_idle_targets(frame);
+    trim_idle_targets();
     const PostProcessPlan plan = plan_post_process(picture_width, picture_height, display_width, display_height,
                                                    settings_, status_.smaa_ok, status_.fxaa_ok);
     AaRun pass = plan.smaa ? AaRun::kSmaa : plan.fxaa ? AaRun::kFxaa : AaRun::kNone;
     // SMAA's targets before the scene's image may change hands: once traded, a pass must run.
     if (pass == AaRun::kSmaa &&
-        !(ensure_target(edges_, width, height, kEdgesFormat, frame) &&
-          ensure_target(weights_, width, height, kWeightsFormat, frame) &&
-          ensure_target(stencil_, width, height, kStencilFormat, frame))) {
+        !(ensure_target(edges_, width, height, kEdgesFormat) &&
+          ensure_target(weights_, width, height, kWeightsFormat) &&
+          ensure_target(stencil_, width, height, kStencilFormat))) {
         pass = status_.fxaa_ok ? AaRun::kFxaa : AaRun::kNone;
     }
     // The passes read the scene's own image, traded out, and write every pixel and channel of the image that took its
     // place; or they read a copy of the scene and write its colour back into the scene target.
     const bool traded = static_cast<bool>(trade);
-    if (pass != AaRun::kNone && !traded && !ensure_target(antialiased_, width, height, color.format, frame)) {
+    if (pass != AaRun::kNone && !traded && !ensure_target(antialiased_, width, height, color.format)) {
         pass = AaRun::kNone;
     }
     note_aa_run(plan, pass);
     if (pass == AaRun::kNone) {
         return pass;
     }
+    // The part of the target the picture is drawn in (dynamic resolution's rectangle; the whole target without it).
+    const unsigned part_width = std::min(picture_width != 0u ? picture_width : width, width);
+    const unsigned part_height = std::min(picture_height != 0u ? picture_height : height, height);
     ID3D11ShaderResourceView* source = nullptr;
     ID3D11RenderTargetView* out = target;
     if (traded) {
         Traded swapped = trade(std::move(traded_));
         traded_ = std::move(swapped.image);
-        traded_frame_ = frame;
+        traded_step_ = idle_clock();
         source = traded_->view.Get();
         out = swapped.target;
         // Every pixel and channel is written next: a tiled GPU neither loads nor keeps the old contents.
         context->DiscardView(out);
     } else {
-        const D3D11_BOX box{0u, 0u, 0u, width, height, 1u};
+        const D3D11_BOX box{0u, 0u, 0u, part_width, part_height, 1u};  // the picture's part (no pass reads further)
         context->CopySubresourceRegion(antialiased_.texture->texture.Get(), 0, 0, 0, 0, color.texture.Get(), 0, &box);
         source = antialiased_.texture->view.Get();
     }
-    run_aa(context, pass, source, out, width, height, traded);
+    run_aa(context, pass, source, out, width, height, part_width, part_height, traded);
     return pass;
 }
 
@@ -504,8 +504,8 @@ void PostProcessor::self_test(ID3D11DeviceContext1* context) {
         return;
     }
     if (status_.smaa_ok &&
-        !(ensure_target(edges_, kSize, kSize, kEdgesFormat, 0u) && ensure_target(weights_, kSize, kSize, kWeightsFormat, 0u) &&
-          ensure_target(stencil_, kSize, kSize, kStencilFormat, 0u))) {
+        !(ensure_target(edges_, kSize, kSize, kEdgesFormat) && ensure_target(weights_, kSize, kSize, kWeightsFormat) &&
+          ensure_target(stencil_, kSize, kSize, kStencilFormat))) {
         fail(AaRun::kSmaa, "NO MEMORY");
     }
 
@@ -514,7 +514,7 @@ void PostProcessor::self_test(ID3D11DeviceContext1* context) {
         if (!(pass == AaRun::kSmaa ? status_.smaa_ok : status_.fxaa_ok)) {
             continue;
         }
-        run_aa(context, pass, source_view.Get(), result_target.Get(), kSize, kSize, true);
+        run_aa(context, pass, source_view.Get(), result_target.Get(), kSize, kSize, kSize, kSize, true);
         context->CopyResource(readback.Get(), result.Get());
         // Map waits for the GPU; a lost device fails it.
         D3D11_MAPPED_SUBRESOURCE mapped{};
@@ -543,8 +543,7 @@ void PostProcessor::record(ID3D11DeviceContext1* context, const Texture& source,
     if (!ready_ || target == nullptr) {
         return;
     }
-    const std::uint64_t frame = current_frame();
-    trim_idle_targets(frame);
+    trim_idle_targets();
     const unsigned target_width = static_cast<unsigned>(viewport.Width);
     const unsigned target_height = static_cast<unsigned>(viewport.Height);
     // The scene was antialiased before the 2D layer (record_scene_aa).
@@ -570,7 +569,7 @@ void PostProcessor::record(ID3D11DeviceContext1* context, const Texture& source,
         s.params[3] = static_cast<float>(target_height);
         s.origin[0] = static_cast<std::int32_t>(viewport.TopLeftX);
         s.origin[1] = static_cast<std::int32_t>(viewport.TopLeftY);
-        set_post_output(s, output);
+        set_post_output(s, output, static_cast<unsigned>(viewport.Width), static_cast<unsigned>(viewport.Height));
         context->OMSetRenderTargets(1, &target, nullptr);
         draw(context, fullscreen_vs_.Get(), rcas_scaled_.Get(), {image}, viewport, s);
         unbind(context);
@@ -579,7 +578,7 @@ void PostProcessor::record(ID3D11DeviceContext1* context, const Texture& source,
 
     // Window-sized intermediate for a scaling step that RCAS then reads.
     const bool needs_scaled = (plan.easu || plan.resample) && plan.rcas;
-    if (needs_scaled && !ensure_target(scaled_, target_width, target_height, source.format, frame)) {
+    if (needs_scaled && !ensure_target(scaled_, target_width, target_height, source.format)) {
         plan.rcas = false;
         plan.resample = !plan.easu;
         plan.resample_to_target = plan.resample;
@@ -591,7 +590,7 @@ void PostProcessor::record(ID3D11DeviceContext1* context, const Texture& source,
             out_viewport = viewport;
             constants.origin[0] = static_cast<std::int32_t>(viewport.TopLeftX);
             constants.origin[1] = static_cast<std::int32_t>(viewport.TopLeftY);
-            set_post_output(constants, output);
+            set_post_output(constants, output, static_cast<unsigned>(viewport.Width), static_cast<unsigned>(viewport.Height));
         } else {
             ID3D11RenderTargetView* const scaled = scaled_.texture->target.Get();
             // Written whole next: a tiled GPU neither loads nor keeps the old contents.

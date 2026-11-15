@@ -2,7 +2,8 @@
 // The update's install step on Linux: an AppImage replaced in place. $APPIMAGE names the running file (the AppImage
 // runtime sets it); the verified package is copied beside it, made executable and flushed, the running file kept as
 // "<name>.previous" (a hard link, so the replacement below stays one atomic rename), then renamed over it. Without
-// $APPIMAGE (a distribution's package, Flatpak, a build tree) the system updates Nebula and nothing is offered.
+// $APPIMAGE (install.sh's package, a distribution's package, a build tree) a newer package is only named: the player
+// installs it as they installed this one.
 #include "update_internal.h"
 
 #include <cstdio>
@@ -42,7 +43,10 @@ std::string platform_asset(bool beta) {
 #else
     const std::string arch = arch_name();
     if (arch.empty()) return {};
-    return std::string(beta ? "Nebula-Beta-Linux-" : "Nebula-Linux-") + arch + ".AppImage";
+    if (!running_appimage().empty()) return std::string(beta ? "Nebula-Beta-Linux-" : "Nebula-Linux-") + arch + ".AppImage";
+    // The package install.sh installed from (installer/package-linux.sh): the check offers its newer version, and the
+    // player installs it as they installed this one (platform_can_install is false outside an AppImage).
+    return std::string(beta ? "Nebula-Beta-Linux-" : "Nebula-Linux-") + (arch == "x86_64" ? "x64" : "arm64") + ".tar.gz";
 #endif
 }
 

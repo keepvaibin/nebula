@@ -52,9 +52,14 @@ public:
         ID3D11RenderTargetView* rtv = nullptr;  // the scene target's render target (multisampled with MSAA)
         unsigned samples = 1;
         bool hdr = false;                       // the colour is the wide scene target (kSceneVariantHdr)
-        unsigned frame_width = 0;               // the frame in scene target pixels
+        unsigned frame_width = 0;               // the frame in scene target pixels (the part of it drawn in)
         unsigned frame_height = 0;
+        unsigned extent_width = 0;              // the scene target's size (0: the frame's)
+        unsigned extent_height = 0;
+        unsigned lowest_sixteenths = 16u;       // the smallest dynamic resolution step the frame may take (16: none)
         float scale = 1.0f;                     // scene target pixels per game pixel
+        [[nodiscard]] unsigned whole_width() const noexcept { return extent_width != 0u ? extent_width : frame_width; }
+        [[nodiscard]] unsigned whole_height() const noexcept { return extent_height != 0u ? extent_height : frame_height; }
     };
     // BloomEffect::preDraw, and BloomEffectSimple::draw with the game's own chain: the scene before the bloom's work over
     // it (a copy).
@@ -84,7 +89,7 @@ public:
     // scene): the bloom over the frame. A bloom whose parameters add nothing makes no level: the normal one draws its kept
     // scene back, the simple one draws nothing (false) unless its source was given or the target is multisampled.
     bool apply(ID3D11DeviceContext1* context, const Inputs& in, const Params& params);
-    // Once a frame: the textures no pass has asked for in 600 frames (the bloom switched off or a scene without one) are
+    // Once a frame: the textures no pass has asked for in kIdleSteps game steps (idle_clock.h) (the bloom switched off or a scene without one) are
     // dropped (Direct3D 11 keeps them alive while the GPU still reads them); the next bloom makes them again.
     void trim_idle();
 
@@ -107,7 +112,6 @@ private:
     bool ready_ = false;
     bool kept_ = false;          // keep() or keep_picture() ran since the last normal apply
     bool source_given_ = false;  // give_source ran since the last apply
-    std::uint64_t clock_ = 0;    // trim_idle() calls
     ComPtr<ID3D11ComputeShader> down_;
     ComPtr<ID3D11ComputeShader> box_;
     ComPtr<ID3D11ComputeShader> blur_;

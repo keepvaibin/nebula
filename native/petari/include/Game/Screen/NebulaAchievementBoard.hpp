@@ -9,7 +9,7 @@ struct NebulaBoardParts;
 // board of tabs over it (all, story, challenges, extras, stats). Each achievement has a card with its icon, its name,
 // what earns it, and the day it was unlocked or the file's progress toward it; the stats tab has the save file's
 // numbers and Nebula's all-time counts (jumps, lives lost, time played...). Built from the game's own windows, font and
-// icons (NebulaPaneKit) and laid out for the screen's shape every frame, 1:1 to 32:9. The pointer, the D-pad and the
+// icons (NebulaPaneKit) and laid out for the screen's shape every frame, 1:1 to 96:9. The pointer, the D-pad and the
 // stick all work: - and + change tabs, B or Back closes it. GameScene runs and draws it in its own state,
 // the world held.
 class NebulaAchievementBoard : public LayoutActor {

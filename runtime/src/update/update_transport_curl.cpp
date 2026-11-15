@@ -98,6 +98,39 @@ int on_progress(void* user, long long, long long, long long, long long) {
 }
 
 // One GET with Nebula's options; the HTTP status, or -1 without an answer.
+// libcurl's CURLcode values (curl.h) as no_answer_text names them.
+NoAnswer curl_no_answer(int code) {
+    switch (code) {
+    case 6:  // CURLE_COULDNT_RESOLVE_HOST
+        return NoAnswer::NameNotFound;
+    case 7:  // CURLE_COULDNT_CONNECT
+        return NoAnswer::CannotConnect;
+    case 28:  // CURLE_OPERATION_TIMEDOUT
+        return NoAnswer::TimedOut;
+    case 52:  // CURLE_GOT_NOTHING
+    case 55:  // CURLE_SEND_ERROR
+    case 56:  // CURLE_RECV_ERROR
+        return NoAnswer::ConnectionReset;
+    case 35:  // CURLE_SSL_CONNECT_ERROR
+    case 53:  // CURLE_SSL_ENGINE_NOTFOUND
+    case 54:  // CURLE_SSL_ENGINE_SETFAILED
+    case 58:  // CURLE_SSL_CERTPROBLEM
+    case 59:  // CURLE_SSL_CIPHER
+    case 60:  // CURLE_PEER_FAILED_VERIFICATION
+    case 64:  // CURLE_USE_SSL_FAILED
+    case 66:  // CURLE_SSL_ENGINE_INITFAILED
+    case 77:  // CURLE_SSL_CACERT_BADFILE
+    case 80:  // CURLE_SSL_SHUTDOWN_FAILED
+    case 82:  // CURLE_SSL_CRL_BADFILE
+    case 83:  // CURLE_SSL_ISSUER_ERROR
+    case 90:  // CURLE_SSL_PINNEDPUBKEYNOTMATCH
+    case 91:  // CURLE_SSL_INVALIDCERTSTATUS
+        return NoAnswer::NotSecure;
+    default:
+        return NoAnswer::Other;
+    }
+}
+
 int perform(const std::string& url, Sink& sink, long long resume_from, int timeout_ms) {
     const Curl& c = curl();
     if (!c.loaded) return -1;
@@ -189,11 +222,17 @@ public:
     bool unreachable(const std::string& url) override { return !proxied() && posix_unreachable(url, 1000); }
 
     int post(const std::string& url, std::string_view content_type, std::span<const std::uint8_t> body,
-             int timeout_ms) override {
+             int timeout_ms, std::string& problem) override {
         const Curl& c = curl();
-        if (!c.loaded) return -1;
+        if (!c.loaded) {
+            problem = "no HTTPS client (libcurl was not found)";
+            return -1;
+        }
         CurlHandle* handle = c.init();
-        if (handle == nullptr) return -1;
+        if (handle == nullptr) {
+            problem = "libcurl could not start a request";
+            return -1;
+        }
         const std::string type = "Content-Type: " + std::string(content_type);
         CurlList* headers = c.slist_append(nullptr, type.c_str());
         Sink sink;  // the answer's body is counted, never kept
@@ -215,7 +254,11 @@ public:
         c.getinfo(handle, kInfoResponseCode, &status);
         c.cleanup(handle);
         c.slist_free(headers);
-        return result != 0 && status == 0 ? -1 : static_cast<int>(status);
+        if (result != 0 && status == 0) {
+            problem = no_answer_line("curl", result, curl_no_answer(result));
+            return -1;
+        }
+        return static_cast<int>(status);
     }
 };
 

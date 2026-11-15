@@ -35,6 +35,13 @@ void set_post_input_size(PostConstants& constants, unsigned width, unsigned heig
     constants.rt_metrics[3] = static_cast<float>(height);
 }
 
+void set_post_input_part(PostConstants& constants, unsigned width, unsigned height) noexcept {
+    const bool whole = width == 0u || height == 0u ||
+                       (static_cast<float>(width) >= constants.rt_metrics[2] && static_cast<float>(height) >= constants.rt_metrics[3]);
+    constants.params[0] = whole ? 0.0f : static_cast<float>(width);
+    constants.params[1] = whole ? 0.0f : static_cast<float>(height);
+}
+
 void rgba8_to_ten_bit(const std::uint8_t* rgba, std::uint8_t* words, unsigned width, unsigned height,
                       unsigned pitch) noexcept {
     for (unsigned y = 0u; y < height; ++y) {
@@ -230,6 +237,7 @@ std::mutex g_status_mutex;
 PostProcessStatus g_status{};
 std::mutex g_hdr_mutex;
 DisplayHdr g_hdr{};
+HdrCalibration g_calibration{};
 
 }  // namespace
 
@@ -243,6 +251,17 @@ void set_display_hdr(const DisplayHdr& display) {
     g_hdr = display;
 }
 
+void set_hdr_calibration(const HdrCalibration& calibration) noexcept {
+    const std::lock_guard<std::mutex> lock(g_hdr_mutex);
+    g_calibration = calibration;
+}
+
+HdrCalibration hdr_calibration() noexcept {
+    const std::lock_guard<std::mutex> lock(g_hdr_mutex);
+    return g_calibration;
+}
+
+
 unsigned clamp_paper_white(unsigned nits) noexcept {
     return std::clamp(nits, kPaperWhiteMin, kPaperWhiteMax);
 }
@@ -252,23 +271,45 @@ bool hdr_output_wanted(const RenderConfig& cfg, const DisplayHdr& display) noexc
 }
 
 PostOutput post_output_for(const RenderConfig& cfg, const DisplayHdr& display) noexcept {
+    const HdrCalibration calibration = hdr_calibration();
     PostOutput output;
     output.hdr = true;
-    output.paper_white_nits = clamp_paper_white(cfg.paper_white);
+    output.paper_white_nits = clamp_paper_white(calibration.active ? calibration.paper_white_nits : cfg.paper_white);
     const unsigned reported = display.peak_nits != 0u ? display.peak_nits : 1000u;
-    output.peak_nits = std::clamp(reported, std::max(output.paper_white_nits, 100u), 10000u);
+    const unsigned peak = calibration.active ? calibration.peak_nits : cfg.hdr_peak != 0u ? cfg.hdr_peak : reported;
+    output.peak_nits = std::clamp(peak, std::max(output.paper_white_nits, kHdrPeakMin), kHdrPeakMax);
+    output.black = std::min(calibration.active ? calibration.black : cfg.hdr_black, kHdrBlackSteps);
+    output.pattern = calibration.active ? calibration.pattern : HdrPattern::None;
     return output;
 }
 
-std::int32_t post_output_word(const PostOutput& output) noexcept {
-    const unsigned paper = std::min(output.paper_white_nits, 1023u);
-    const unsigned peak = std::min(output.peak_nits, 10000u);
-    return static_cast<std::int32_t>(paper | (peak << 10u));
+PostOutput capture_output(const PostOutput& shown, bool highlights) noexcept {
+    PostOutput capture;
+    if (shown.hdr && shown.pattern != HdrPattern::None) {
+        capture.peak_nits = shown.peak_nits;
+        capture.black = shown.black;
+        capture.pattern = shown.pattern;
+    } else if (shown.hdr && highlights) {
+        capture.pattern = HdrPattern::Highlights;
+    }
+    return capture;
 }
 
-void set_post_output(PostConstants& constants, const PostOutput& output) noexcept {
+std::int32_t post_output_word(const PostOutput& output) noexcept {
+    static_assert(kPaperWhiteMax < 512u && kHdrPeakMax < 16384u && kHdrBlackSteps < 128u);
+    const std::uint32_t paper = std::min(output.paper_white_nits, kPaperWhiteMax);
+    const std::uint32_t peak = std::min(output.peak_nits, kHdrPeakMax);
+    const std::uint32_t black = std::min(output.black, kHdrBlackSteps);
+    const std::uint32_t pattern = static_cast<std::uint32_t>(output.pattern) & 3u;
+    return std::bit_cast<std::int32_t>(paper | (peak << 9u) | (black << 23u) | (pattern << 30u));
+}
+
+void set_post_output(PostConstants& constants, const PostOutput& output, unsigned picture_width,
+                     unsigned picture_height) noexcept {
     constants.origin[2] = output.hdr ? 2 : 1;
-    constants.origin[3] = output.hdr ? post_output_word(output) : 0;
+    constants.origin[3] = output.hdr || output.pattern != HdrPattern::None ? post_output_word(output) : 0;
+    constants.turn[1] = static_cast<std::int32_t>(picture_width);
+    constants.turn[2] = static_cast<std::int32_t>(picture_height);
 }
 
 float pq_encode(float nits) noexcept {
@@ -281,7 +322,8 @@ float pq_decode(float code) noexcept {
     return 10000.0f * std::pow(std::max(p - 0.8359375f, 0.0f) / (18.8515625f - 18.6875f * p), 1.0f / 0.1593017578125f);
 }
 
-void hdr10_encode(const float picture[3], unsigned paper_white_nits, unsigned peak_nits, float code[3]) noexcept {
+void hdr10_encode(const float picture[3], unsigned paper_white_nits, unsigned peak_nits, float code[3],
+                  float black_nits) noexcept {
     // Gamma 2.2 decoded (the picture is graded for a 2.2 display), then BT.709 to BT.2020, then nits.
     const float r = std::pow(std::max(picture[0], 0.0f), 2.2f);
     const float g = std::pow(std::max(picture[1], 0.0f), 2.2f);
@@ -290,22 +332,37 @@ void hdr10_encode(const float picture[3], unsigned paper_white_nits, unsigned pe
     float nits[3] = {(0.627404f * r + 0.329283f * g + 0.043313f * b) * paper,
                      (0.069097f * r + 0.919540f * g + 0.011362f * b) * paper,
                      (0.016391f * r + 0.088013f * g + 0.895595f * b) * paper};
-    // BT.2390 on the brightest channel, the other two scaled with it (the hue stays), black level 0.
+    // BT.2390 on the brightest channel, the other two scaled with it (the hue stays): the roll-off to the display's peak,
+    // then the black level lift to its darkest visible level (true black goes there too, grey).
     const float display_peak = static_cast<float>(peak_nits);
     const float source_peak = std::min(paper * kHdrHeadroom, 10000.0f);
     const float brightest = std::max(nits[0], std::max(nits[1], nits[2]));
-    if (brightest > 0.0f) {
+    if (brightest <= 0.0f) {
+        for (float& value : nits) {
+            value = black_nits;
+        }
+    } else {
         float shown = brightest;
-        if (display_peak < source_peak) {
+        const bool roll = display_peak < source_peak;
+        if (roll || black_nits > 0.0f) {
             const float source_code = pq_encode(source_peak);
-            float e = std::min(pq_encode(brightest) / source_code, 1.0f);
-            const float max_lum = pq_encode(display_peak) / source_code;
-            const float knee = std::max(1.5f * max_lum - 0.5f, 0.0f);
-            if (e > knee) {
-                const float t = (e - knee) / (1.0f - knee);
-                const float t2 = t * t;
-                const float t3 = t2 * t;
-                e = (2.0f * t3 - 3.0f * t2 + 1.0f) * knee + (t3 - 2.0f * t2 + t) * (1.0f - knee) + (-2.0f * t3 + 3.0f * t2) * max_lum;
+            float e = pq_encode(brightest) / source_code;
+            if (roll) {
+                e = std::min(e, 1.0f);
+                const float max_lum = pq_encode(display_peak) / source_code;
+                const float knee = std::max(1.5f * max_lum - 0.5f, 0.0f);
+                if (e > knee) {
+                    const float t = (e - knee) / (1.0f - knee);
+                    const float t2 = t * t;
+                    const float t3 = t2 * t;
+                    e = (2.0f * t3 - 3.0f * t2 + 1.0f) * knee + (t3 - 2.0f * t2 + t) * (1.0f - knee) +
+                        (-2.0f * t3 + 3.0f * t2) * max_lum;
+                }
+            }
+            if (black_nits > 0.0f) {
+                const float min_lum = pq_encode(black_nits) / source_code;
+                const float rest = std::max(1.0f - e, 0.0f);
+                e += min_lum * rest * rest * rest * rest;
             }
             shown = pq_decode(e * source_code);
         }
@@ -319,7 +376,50 @@ void hdr10_encode(const float picture[3], unsigned paper_white_nits, unsigned pe
     }
 }
 
-HdrMetadata hdr10_metadata(const DisplayHdr& display, unsigned paper_white_nits) noexcept {
+float hdr_pattern_code(const PostOutput& output, int x, int y, int width, int height) noexcept {
+    if (output.pattern == HdrPattern::None || width <= 0 || height <= 0) {
+        return -1.0f;
+    }
+    const HdrBox box = hdr_box(width, height);
+    const int side = box.side;
+    const int bx = x - box.left;
+    const int by = y - box.top;
+    if (side <= 0 || bx < 0 || by < 0 || bx >= side || by >= side) {
+        return -1.0f;
+    }
+    // The star, tested at the pixel's centre.
+    const float radius = kHdrStarRadius * static_cast<float>(side);
+    const float half = static_cast<float>(side) * 0.5f;
+    const bool star = hdr_star((static_cast<float>(bx) + 0.5f - half) / radius,
+                               (half + kHdrStarDrop * radius - static_cast<float>(by) - 0.5f) / radius);
+    if (output.pattern == HdrPattern::Peak) {
+        return star ? pq_encode(static_cast<float>(output.peak_nits)) : 1.0f;
+    }
+    return star ? pq_encode(hdr_black_nits(output.black)) : 0.0f;
+}
+
+bool hdr_star(float x, float y) noexcept {
+    constexpr float kPi = 3.14159265f;
+    constexpr float kSector = kPi * 0.4f;      // 72 degrees, point to point
+    constexpr float kInner = 0.381966f;        // the corners between the points: sin 18 / sin 126 of the radius
+    const float distance = std::sqrt(x * x + y * y);
+    if (distance > 1.0f) {
+        return false;
+    }
+    // The angle from straight up, folded to between a point (0) and the corner beside it (half a sector).
+    float angle = std::fmod(std::atan2(x, y) + kPi * 2.0f, kSector);
+    if (angle > kSector * 0.5f) {
+        angle = kSector - angle;
+    }
+    // Inside: on the middle's side of the edge from the point (1, 0) to the corner.
+    const float edge_x = kInner * std::cos(kSector * 0.5f) - 1.0f;
+    const float edge_y = kInner * std::sin(kSector * 0.5f);
+    const float at_x = distance * std::cos(angle) - 1.0f;
+    const float at_y = distance * std::sin(angle);
+    return edge_x * at_y - edge_y * at_x >= 0.0f;
+}
+
+HdrMetadata hdr10_metadata(const DisplayHdr& display, const PostOutput& levels) noexcept {
     HdrMetadata metadata{};
     metadata.red[0] = 0.708f;
     metadata.red[1] = 0.292f;
@@ -329,14 +429,14 @@ HdrMetadata hdr10_metadata(const DisplayHdr& display, unsigned paper_white_nits)
     metadata.blue[1] = 0.046f;
     metadata.white[0] = 0.3127f;
     metadata.white[1] = 0.3290f;
-    RenderConfig reported{};
-    reported.paper_white = paper_white_nits;
-    const PostOutput levels = post_output_for(reported, display);
-    metadata.max_luminance = static_cast<float>(levels.peak_nits);
-    metadata.min_luminance = static_cast<float>(display.min_nits_10000) / 10000.0f;
-    metadata.max_content_light = static_cast<float>(levels.peak_nits);
+    const unsigned peak = levels.pattern != HdrPattern::None ? kHdrPeakMax : levels.peak_nits;
+    metadata.max_luminance = static_cast<float>(peak);
+    metadata.min_luminance = levels.pattern != HdrPattern::None ? 0.0f
+                             : levels.black != 0u               ? hdr_black_nits(levels.black)
+                                                                : static_cast<float>(display.min_nits_10000) / 10000.0f;
+    metadata.max_content_light = static_cast<float>(peak);
     metadata.max_frame_average_light = static_cast<float>(
-        display.full_frame_nits != 0u ? std::min(display.full_frame_nits, levels.peak_nits) : levels.peak_nits / 2u);
+        display.full_frame_nits != 0u ? std::min(display.full_frame_nits, peak) : peak / 2u);
     return metadata;
 }
 

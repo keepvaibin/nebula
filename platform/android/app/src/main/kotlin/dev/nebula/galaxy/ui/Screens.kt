@@ -55,7 +55,6 @@ import androidx.compose.material.icons.rounded.Face
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Tune
@@ -88,7 +87,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.nebula.galaxy.BenchmarkState
 import dev.nebula.galaxy.BuildConfig
 import dev.nebula.galaxy.DisplayRate
 import dev.nebula.galaxy.GpuDriver
@@ -130,8 +128,10 @@ fun NebulaApp(model: LauncherModel, onShareLog: () -> Unit) {
     }
     val saves = SaveActions(
         export = {
-            val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date())
-            exportTo.launch(context.getString(R.string.SavesFileName, date) + ".zip")
+            model.startExport {
+                val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date())
+                exportTo.launch(context.getString(R.string.SavesFileName, date) + ".zip")
+            }
         },
         import = { importFrom.launch(arrayOf("*/*")) },
         miis = { miisFrom.launch(arrayOf("*/*")) },
@@ -627,113 +627,6 @@ private fun controllerNames(): List<String> = InputDevice.getDeviceIds().toList(
     if (pad && !device.isVirtual) device.name else null
 }.distinct()
 
-/**
- * Settings, Performance: the last benchmark's verdict (or that the run did not finish), every setting it recommends,
- * current then recommended, and Apply (Benchmark.apply, config.ini) while config.ini still holds what it ran with and
- * something differs; a result that no longer holds says so in place of Apply.
- */
-@Composable
-private fun BenchmarkRows(model: LauncherModel) {
-    val result = model.benchmark
-    val verdict = when {
-        model.benchmarkUnfinished -> stringResource(R.string.nebula_benchmark_unfinished)
-        result == null -> return
-        !result.complete -> stringResource(R.string.nebula_benchmark_unfinished) + if (result.failure.isNotEmpty()) " " + result.failure else ""
-        result.cpuBound || result.verdict == "cpu_bound" -> stringResource(R.string.nebula_benchmark_cpu)
-        result.fits || result.verdict == "fits" -> stringResource(R.string.nebula_benchmark_fits)
-        else -> stringResource(R.string.nebula_benchmark_below)
-    }
-    Text(verdict, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-    val rows = if (result != null && result.complete) result.settings else emptyList()
-    if (rows.isEmpty()) return
-    Text(
-        stringResource(R.string.nebula_benchmark_recommended),
-        style = MaterialTheme.typography.titleSmall,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp),
-    )
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
-        Spacer(Modifier.weight(1f))
-        Text(stringResource(R.string.nebula_benchmark_current), Modifier.width(112.dp), style = MaterialTheme.typography.labelMedium)
-        Text(stringResource(R.string.nebula_benchmark_recommended_value), Modifier.width(112.dp), style = MaterialTheme.typography.labelMedium)
-    }
-    for (change in rows) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(benchmarkLabel(change.key), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-            Text(
-                benchmarkValue(change.key, change.current),
-                Modifier.width(112.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(benchmarkValue(change.key, change.recommended), Modifier.width(112.dp), style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-        TextButton(
-            onClick = { model.applyBenchmark() },
-            enabled = model.benchmarkState == BenchmarkState.Current && result!!.changes.isNotEmpty(),
-        ) { Text(stringResource(R.string.nebula_apply)) }
-    }
-    val note = when {
-        model.benchmarkState == BenchmarkState.Stale -> stringResource(R.string.nebula_benchmark_stale)
-        model.benchmarkState == BenchmarkState.Applied || result!!.changes.isEmpty() -> stringResource(R.string.nebula_benchmark_in_use)
-        else -> null
-    }
-    if (note != null) {
-        Text(
-            note,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
-        )
-    }
-    if (model.benchmarkApplyFailed) {
-        Text(
-            stringResource(R.string.nebula_settings_not_saved, "config.ini"),
-            color = Night.Error,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
-        )
-    }
-}
-
-@Composable
-private fun benchmarkLabel(key: String): String = when (key) {
-    "internal_height" -> stringResource(R.string.nebula_setting_internal_resolution)
-    "msaa_samples" -> "MSAA"
-    "ambient_occlusion" -> stringResource(R.string.nebula_setting_ambient_occlusion)
-    "enhanced_lighting" -> stringResource(R.string.nebula_setting_lighting)
-    "aa" -> stringResource(R.string.nebula_setting_aa)
-    "smaa_quality" -> stringResource(R.string.nebula_setting_aa_quality)
-    "bloom" -> stringResource(R.string.nebula_setting_bloom)
-    else -> key
-}
-
-// A config.ini value as the game's menu names it (the contract: internal_height 0 matches the display, aa 1 is SMAA).
-@Composable
-private fun benchmarkValue(key: String, value: Int): String = when (key) {
-    "internal_height" -> if (value == 0) stringResource(R.string.nebula_match_display) else "${value}p"
-    "msaa_samples" -> if (value <= 1) stringResource(R.string.nebula_off) else "${value}x"
-    "ambient_occlusion" -> stringResource(if (value != 0) R.string.nebula_on else R.string.nebula_off)
-    "enhanced_lighting" -> stringResource(if (value != 0) R.string.nebula_lighting_enhanced else R.string.nebula_lighting_per_pixel)
-    "aa" -> when (value) {
-        0 -> stringResource(R.string.nebula_off)
-        1 -> "SMAA"
-        2 -> stringResource(R.string.nebula_aa_auto)
-        3 -> "FXAA"
-        else -> value.toString()
-    }
-    "smaa_quality" -> when (value) {
-        0 -> stringResource(R.string.nebula_quality_low)
-        1 -> stringResource(R.string.nebula_quality_medium)
-        2 -> stringResource(R.string.nebula_quality_high)
-        3 -> stringResource(R.string.nebula_quality_ultra)
-        else -> value.toString()
-    }
-    "bloom" -> "$value%"
-    else -> value.toString()
-}
-
 /** The file pickers: saves exported to a new .zip or imported from a file, Miis from any number of files. */
 private class SaveActions(val export: () -> Unit, val import: () -> Unit, val miis: () -> Unit)
 
@@ -783,7 +676,11 @@ private fun SettingsScreen(
                         Icons.Rounded.Download,
                         stringResource(R.string.ImportSaves),
                         stringResource(R.string.ImportSavesHint),
-                    ) { if (!model.saveBusy) confirmImport = true }
+                    ) {
+                        if (!model.saveBusy) {
+                            if (model.saveBytes > 0) confirmImport = true else saves.import()
+                        }
+                    }
                 }
 
                 SectionTitle(stringResource(R.string.Miis))
@@ -854,19 +751,6 @@ private fun SettingsScreen(
                             stringResource(R.string.ImportDriver),
                             stringResource(if (model.driverBusy) R.string.Working else R.string.ImportDriverHint),
                         ) { if (!model.driverBusy) onChooseDriver() }
-                    }
-                }
-
-                if (model.install != null) {
-                    SectionTitle(stringResource(R.string.nebula_performance))
-                    GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
-                        val activity = LocalContext.current
-                        NavigationRow(
-                            Icons.Rounded.Speed,
-                            stringResource(R.string.nebula_benchmark),
-                            stringResource(R.string.nebula_benchmark_about),
-                        ) { model.startBenchmark(activity) }
-                        BenchmarkRows(model)
                     }
                 }
 

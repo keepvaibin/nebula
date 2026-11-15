@@ -95,8 +95,8 @@ def centre_black_share(path):
     image = Image.open(path).convert('RGB')
     w, h = image.size
     box = image.crop((w * 3 // 10, h // 10, w * 7 // 10, h * 6 // 10)).resize((64, 64))
-    pixels = list(box.getdata())
-    return sum(1 for p in pixels if max(p) < 8) / len(pixels)
+    data = box.tobytes()
+    return sum(1 for i in range(0, len(data), 3) if max(data[i:i + 3]) < 8) / (len(data) // 3)
 
 
 def main():

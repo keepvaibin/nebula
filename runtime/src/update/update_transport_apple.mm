@@ -23,6 +23,7 @@ using galaxy::update::detail::Transport;
 @property(nonatomic) BOOL restarted;   // a 200 answer to a range request: the file starts again
 @property(nonatomic) BOOL noRedirect;  // a POST follows no redirect
 @property(nonatomic) NSInteger status;
+@property(nonatomic) NSInteger errorCode;  // NSURLErrorDomain's, when the task ended with one
 @property(nonatomic) const std::atomic_bool* cancel;
 @property(nonatomic) const std::function<void(std::uint64_t)>* progress;
 @property(nonatomic, strong) dispatch_semaphore_t done;
@@ -94,7 +95,10 @@ using galaxy::update::detail::Transport;
 - (void)URLSession:(NSURLSession*)session task:(NSURLSessionTask*)task didCompleteWithError:(NSError*)error {
     (void)session;
     (void)task;
-    if (error != nil) self.failed = YES;
+    if (error != nil) {
+        self.failed = YES;
+        if ([error.domain isEqualToString:NSURLErrorDomain]) self.errorCode = error.code;
+    }
     dispatch_semaphore_signal(self.done);
 }
 @end
@@ -133,6 +137,36 @@ int run(NSString* address, NebulaUpdateReceiver* receiver, std::uint64_t resume_
         if (receiver.status == 0) return -1;
         if (receiver.failed && receiver.status >= 200 && receiver.status < 300) return -1;  // cut off mid-body
         return static_cast<int>(receiver.status);
+    }
+}
+
+// NSURLErrorDomain's codes (NSURLError.h) as no_answer_text names them.
+NoAnswer apple_no_answer(NSInteger code) {
+    switch (code) {
+    case NSURLErrorTimedOut:
+        return NoAnswer::TimedOut;
+    case NSURLErrorCannotFindHost:
+    case NSURLErrorDNSLookupFailed:
+        return NoAnswer::NameNotFound;
+    case NSURLErrorCannotConnectToHost:
+        return NoAnswer::CannotConnect;
+    case NSURLErrorNetworkConnectionLost:
+        return NoAnswer::ConnectionReset;
+    case NSURLErrorNotConnectedToInternet:
+    case NSURLErrorInternationalRoamingOff:
+    case NSURLErrorDataNotAllowed:
+        return NoAnswer::NoNetwork;
+    case NSURLErrorSecureConnectionFailed:
+    case NSURLErrorServerCertificateHasBadDate:
+    case NSURLErrorServerCertificateUntrusted:
+    case NSURLErrorServerCertificateHasUnknownRoot:
+    case NSURLErrorServerCertificateNotYetValid:
+    case NSURLErrorClientCertificateRejected:
+    case NSURLErrorClientCertificateRequired:
+    case NSURLErrorAppTransportSecurityRequiresSecureConnection:
+        return NoAnswer::NotSecure;
+    default:
+        return NoAnswer::Other;
     }
 }
 
@@ -196,12 +230,17 @@ public:
     bool unreachable(const std::string& url) override { return !proxied() && posix_unreachable(url, 1000); }
 
     int post(const std::string& url, std::string_view content_type, std::span<const std::uint8_t> body,
-             int timeout_ms) override {
+             int timeout_ms, std::string& problem) override {
         NebulaUpdateReceiver* receiver = [[NebulaUpdateReceiver alloc] init];
         receiver.limit = 64u * 1024u;  // the answer's body is counted, never kept
         const std::string type(content_type);
-        return run([NSString stringWithUTF8String:url.c_str()], receiver, 0, timeout_ms, false, &body,
-                   [NSString stringWithUTF8String:type.c_str()]);
+        const int status = run([NSString stringWithUTF8String:url.c_str()], receiver, 0, timeout_ms, false, &body,
+                               [NSString stringWithUTF8String:type.c_str()]);
+        if (status <= 0) {
+            problem = receiver.errorCode != 0 ? no_answer_line("NSURLError", receiver.errorCode, apple_no_answer(receiver.errorCode))
+                                              : "no answer";
+        }
+        return status;
     }
 };
 

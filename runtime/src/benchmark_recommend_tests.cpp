@@ -116,7 +116,7 @@ int main() {
         }
         {
             // The result reader takes what write_result writes, and nothing else.
-            const std::string head = "{\"schema\":1,\"app\":{\"version\":\"2.0.0\",\"commit\":null},\"status\":\"complete\",";
+            const std::string head = "{\"schema\":2,\"app\":{\"version\":\"2.0.0\",\"commit\":null},\"status\":\"complete\",";
             const std::string rec =
                 "\"recommendation\":{\"budget_ms\":13.333,\"predicted_ms\":11.000,\"fits\":true,\"cpu_bound\":false,"
                 "\"cpu_thread\":null,\"height_left_out\":false,\"settings\":[{\"key\":\"internal_height\",\"current\":0,"
@@ -141,8 +141,16 @@ int main() {
             check(!bench::parse_recommendation(odd, d) && d.internal_height == before.internal_height,
                   "a height that is not a value refuses the whole result");
             std::string other = head + rec;
-            other.replace(other.find("\"schema\":1"), 10, "\"schema\":2");
+            other.replace(other.find("\"schema\":2"), 10, "\"schema\":1");
             check(!bench::parse_recommendation(other, d), "another schema is not read");
+            const std::string whole = head + rec;
+            check(!bench::parse_recommendation(whole.substr(0, whole.size() - 1u), d), "a cut file is not read");
+            std::string twice = head + rec;
+            twice.replace(twice.find("\"summary\":{}"), 12, "\"status\":\"complete\"");
+            check(!bench::parse_recommendation(twice, d), "a repeated key refuses the whole result");
+            std::string fraction = head + rec;
+            fraction.replace(fraction.find("\"recommended\":720"), 17, "\"recommended\":720.5");
+            check(!bench::parse_recommendation(fraction, d), "a fractional value refuses the whole result");
             std::string upscaled = head + rec;
             const std::string height_row = "{\"key\":\"internal_height\",\"current\":0,\"recommended\":720},";
             upscaled.erase(upscaled.find(height_row), height_row.size());

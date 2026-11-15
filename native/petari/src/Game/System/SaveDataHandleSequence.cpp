@@ -90,6 +90,16 @@ void SaveDataHandleSequence::startPreLoad() {
     setNerve(GET_NERVE_ANON(SaveDataHandleSequencePreLoad));
 }
 
+void SaveDataHandleSequence::startReload() {
+    mCurrentUserFile->resetAllData();
+    mCurrentUserFile->mIsPlayerMario = true;
+    mSaveDataHandler->initializeAllUserFileMemory(mCurrentUserFile);
+    mSaveCopyLoading = 0;
+    mSaveDamaged = false;
+    mPreLoadState = 0;
+    startPreLoad();
+}
+
 void SaveDataHandleSequence::startCreateUserFile(int index) {
     restoreUserFile(mCurrentUserFile, index, true);
     mCurrentUserFile->resetAllData();

@@ -20,13 +20,16 @@ cbuffer PostConstants : register(b0) {
     uint4 g_con1;
     uint4 g_con2;
     uint4 g_con3;
-    // Resample: xy source size, zw target size in pixels.
+    // Resample: xy source size, zw target size in pixels. The AA passes: xy the part of the input that holds the picture,
+    // from its top left, in pixels (dynamic resolution draws the scene in a part of its targets); 0 the whole input.
     float4 g_params;
     // xy: viewport origin in render-target pixels. z: 0 an intermediate picture, 1 the last write into an 8-bit window
-    // (dithered), 2 the last write as HDR10 (FinalWriteHdr). w: with z = 2, the paper white (bits 0-9) and the display's
-    // peak (bits 10-23), both in nits (post_process_settings.h post_output_word).
+    // (dithered), 2 the last write as HDR10 (FinalWriteHdr). w: with z = 2, the paper white (bits 0-8) and the display's
+    // peak (bits 9-22) in nits, its black level's step (bits 23-29) and the HDR calibration's pattern (bits 30-31)
+    // (post_process_settings.h post_output_word).
     int4 g_origin;
-    // x: the target turned by 0-3 quarter turns clockwise; yz: the picture's width and height (PostConstants.turn).
+    // x: the target turned by 0-3 quarter turns clockwise; yz: the picture's width and height (PostConstants.turn; every
+    // last write's).
     int4 g_turn;
 };
 
@@ -87,42 +90,95 @@ float PqDecode(float code) {
     const float p = pow(saturate(code), 1.0 / 78.84375);
     return 10000.0 * pow(max(p - 0.8359375, 0.0) / (18.8515625 - 18.6875 * p), 1.0 / 0.1593017578125);
 }
-// The picture's range, in times the paper white, that the roll-off keeps (kHdrHeadroom).
-static const float kHdrHeadroom = 4.0;
-// BT.2390 EETF on the brightest channel (the others follow it, so the hue stays), black level 0: a display whose peak is
-// under the source range gets the highlights above the knee rolled into it, one with the range gets them untouched.
-float3 HdrRolloff(float3 nits, float paper, float display_peak) {
+// The picture's range, in times the paper white, that the roll-off fits into the display's (kHdrHeadroom).
+static const float kHdrHeadroom = 8.0;
+// BT.2390 EETF on the brightest channel (the others follow it, so the hue stays): a display whose peak is under the source
+// range gets the highlights above the knee rolled into it, one with the range gets them untouched; then the black level
+// lift to the display's darkest visible level (true black goes there too, grey). hdr10_encode is the same on the CPU.
+float3 HdrRolloff(float3 nits, float paper, float display_peak, float display_black) {
     const float source_peak = min(paper * kHdrHeadroom, 10000.0);
     const float brightest = max(nits.r, max(nits.g, nits.b));
     if (brightest <= 0.0) {
-        return nits;
+        return float3(display_black, display_black, display_black);
     }
     float shown = brightest;
-    if (display_peak < source_peak) {
+    const bool roll = display_peak < source_peak;
+    if (roll || display_black > 0.0) {
         const float source_code = PqEncode(source_peak);
-        float e = min(PqEncode(brightest) / source_code, 1.0);
-        const float max_lum = PqEncode(display_peak) / source_code;
-        const float knee = max(1.5 * max_lum - 0.5, 0.0);
-        if (e > knee) {
-            const float t = (e - knee) / (1.0 - knee);
-            const float t2 = t * t;
-            const float t3 = t2 * t;
-            e = (2.0 * t3 - 3.0 * t2 + 1.0) * knee + (t3 - 2.0 * t2 + t) * (1.0 - knee) + (-2.0 * t3 + 3.0 * t2) * max_lum;
+        float e = PqEncode(brightest) / source_code;
+        if (roll) {
+            e = min(e, 1.0);
+            const float max_lum = PqEncode(display_peak) / source_code;
+            const float knee = max(1.5 * max_lum - 0.5, 0.0);
+            if (e > knee) {
+                const float t = (e - knee) / (1.0 - knee);
+                const float t2 = t * t;
+                const float t3 = t2 * t;
+                e = (2.0 * t3 - 3.0 * t2 + 1.0) * knee + (t3 - 2.0 * t2 + t) * (1.0 - knee) + (-2.0 * t3 + 3.0 * t2) * max_lum;
+            }
+        }
+        if (display_black > 0.0) {
+            const float rest = max(1.0 - e, 0.0);
+            e += PqEncode(display_black) / source_code * (rest * rest * rest * rest);
         }
         shown = PqDecode(e * source_code);
     }
     return nits * (min(shown, display_peak) / brightest);
 }
+// hdr_star: whether `q` is inside a regular five-pointed star whose points reach 1 from its middle, one straight up.
+bool HdrStar(float2 q) {
+    const float pi = 3.14159265;
+    const float sector = pi * 0.4;
+    const float inner = 0.381966;
+    const float distance = length(q);
+    if (distance > 1.0) {
+        return false;
+    }
+    float angle = fmod(atan2(q.x, q.y) + pi * 2.0, sector);
+    if (angle > sector * 0.5) {
+        angle = sector - angle;
+    }
+    const float2 edge = float2(inner * cos(sector * 0.5) - 1.0, inner * sin(sector * 0.5));
+    const float2 at = float2(distance * cos(angle) - 1.0, distance * sin(angle));
+    return edge.x * at.y - edge.y * at.x >= 0.0;
+}
+// The HDR calibration's test box (post_process_settings.h kHdrBoxSide, kHdrBoxCentreY, kHdrStarRadius, kHdrStarDrop;
+// hdr_box and hdr_pattern_code are the same on the CPU): the star's or the surround's code value at the picture's pixel
+// `p`, negative outside the box.
+float HdrPatternCode(uint pattern, int2 p, float display_peak, float display_black) {
+    const int2 size = g_turn.yz;
+    const int side = int(0.34 * float(min(size.x, size.y)) + 0.5);
+    const int2 box = p - int2((size.x - side) / 2, int(0.30 * float(size.y) + 0.5) - side / 2);
+    if (pattern == 0u || pattern == 3u || side <= 0 || any(box < 0) || any(box >= side)) {
+        return -1.0;
+    }
+    const float radius = 0.40 * float(side);
+    const float half_side = float(side) * 0.5;
+    const bool lit = HdrStar(float2(float(box.x) + 0.5 - half_side, half_side + 0.0954915 * radius - float(box.y) - 0.5) / radius);
+    if (pattern == 1u) {
+        return lit ? PqEncode(display_peak) : 1.0;
+    }
+    return lit ? PqEncode(display_black) : 0.0;
+}
 // The last write as HDR10: the code values PQ stores, a triangular noise of a level either way at 10 bits.
 float3 FinalWriteHdr(float3 color, int2 p) {
     const uint word = uint(g_origin.w);
-    const float paper = float(word & 1023u);
-    const float display_peak = float((word >> 10u) & 16383u);
+    const float paper = float(word & 511u);
+    const float display_peak = float((word >> 9u) & 16383u);
+    // hdr_black_nits: 2 * (step / 127)^2.
+    const float black_share = float((word >> 23u) & 127u) / 127.0;
+    const float display_black = 2.0 * black_share * black_share;
+    // The calibration's pattern: exact levels, no noise (a level either way would show the pattern below its own).
+    const float pattern = HdrPatternCode(word >> 30u, p, display_peak, display_black);
+    if (pattern >= 0.0) {
+        const float level = round(pattern * 1023.0) / 1023.0;
+        return float3(level, level, level);
+    }
     const float3 linear709 = pow(max(color, 0.0), 2.2);
     const float3 linear2020 = float3(dot(linear709, float3(0.627404, 0.329283, 0.043313)),
                                      dot(linear709, float3(0.069097, 0.919540, 0.011362)),
                                      dot(linear709, float3(0.016391, 0.088013, 0.895595)));
-    const float3 nits = HdrRolloff(linear2020 * paper, paper, display_peak);
+    const float3 nits = HdrRolloff(linear2020 * paper, paper, display_peak, display_black);
     if (max(nits.r, max(nits.g, nits.b)) <= 0.0) {
         return float3(0.0, 0.0, 0.0);
     }
@@ -137,6 +193,29 @@ float3 FinalWrite(float3 color, int2 p) {
     if (g_origin.z == 2) {
         return FinalWriteHdr(color, p);
     }
+    if (g_origin.w != 0 && (uint(g_origin.w) >> 30u) == 3u) {
+        // A capture's view of the light past white (HdrPattern::Highlights): the picture in grey at half its light, and
+        // each pixel past the paper white coloured by its brightest channel in linear light: yellow up to 2 times the
+        // paper white, orange up to 4, red up to 8 (kHdrHeadroom), magenta above.
+        const float over = pow(max(max(color.r, max(color.g, color.b)), 0.0), 2.2);
+        const float grey = 0.5 * saturate(dot(color, float3(0.2126, 0.7152, 0.0722)));
+        float3 shown = float3(grey, grey, grey);
+        if (over > 1.0) {
+            shown = over <= 2.0 ? float3(1.0, 1.0, 0.0) : over <= 4.0 ? float3(1.0, 0.5, 0.0) : over <= 8.0 ? float3(1.0, 0.0, 0.0)
+                                                                                              : float3(1.0, 0.0, 1.0);
+        }
+        return shown;
+    }
+    if (g_origin.w != 0) {
+        // A capture of the HDR calibration (capture_output): its test box as the HDR10 signal's levels, in grey.
+        const uint word = uint(g_origin.w);
+        const float black_share = float((word >> 23u) & 127u) / 127.0;
+        const float pattern = HdrPatternCode(word >> 30u, p, float((word >> 9u) & 16383u), 2.0 * black_share * black_share);
+        if (pattern >= 0.0) {
+            const float grey = round(pattern * 255.0) / 255.0;
+            return float3(grey, grey, grey);
+        }
+    }
     const float3 level = color * 255.0;
     const float3 between = step(0.02, abs(level - round(level)));
     // A real branch, not a select: a group of pixels all on levels (black, flat 8-bit colours) skips the two hashes.
@@ -147,16 +226,33 @@ float3 FinalWrite(float3 color, int2 p) {
     return written;
 }
 
+// The AA passes' picture: its size in input pixels, the input UV a viewport UV of 1 reaches (1 for the whole input), and
+// a UV held inside it (its last pixel centre; below, the input's own edge holds it).
+float2 PicturePart() { return g_params.x > 0.0 ? g_params.xy : g_rt_metrics.zw; }
+float2 PictureScale() { return g_params.x > 0.0 ? g_params.xy * g_rt_metrics.xy : float2(1.0, 1.0); }
+float2 InPicture(float2 uv) { return min(uv, (PicturePart() - 0.5) * g_rt_metrics.xy); }
+
 #if defined(PASS_SMAA_EDGES) || defined(PASS_SMAA_WEIGHTS) || defined(PASS_SMAA_BLEND) || defined(PASS_SMAA_BLEND_KEEP)
 #define SMAA_CUSTOM_SL 1
 #define SMAA_RT_METRICS g_rt_metrics
 #define SMAATexture2D(tex) Texture2D tex
 #define SMAATexturePass2D(tex) tex
+// The colour is read by point in the edge pass and at level zero in the blend pass: those reads stay in the picture.
+// The edges and weights past it are zero (their targets are cleared whole and written in the picture alone), so the
+// searches end at its edge and nothing blends across it; the lookups (area, search) are read as they are.
+#if defined(PASS_SMAA_BLEND) || defined(PASS_SMAA_BLEND_KEEP)
+#define SMAASampleLevelZero(tex, coord) tex.SampleLevel(LinearSampler, InPicture(coord), 0)
+#else
 #define SMAASampleLevelZero(tex, coord) tex.SampleLevel(LinearSampler, coord, 0)
+#endif
 #define SMAASampleLevelZeroPoint(tex, coord) tex.SampleLevel(PointSampler, coord, 0)
 #define SMAASampleLevelZeroOffset(tex, coord, offset) tex.SampleLevel(LinearSampler, coord, 0, offset)
 #define SMAASample(tex, coord) tex.Sample(LinearSampler, coord)
+#if defined(PASS_SMAA_EDGES)
+#define SMAASamplePoint(tex, coord) tex.Sample(PointSampler, InPicture(coord))
+#else
 #define SMAASamplePoint(tex, coord) tex.Sample(PointSampler, coord)
+#endif
 #define SMAASampleOffset(tex, coord, offset) tex.Sample(LinearSampler, coord, offset)
 #define SMAA_FLATTEN [flatten]
 #define SMAA_BRANCH [branch]
@@ -233,8 +329,8 @@ EdgesOut VSMain(uint id : SV_VertexID) {
     const FullscreenOut f = FullscreenTriangle(id);
     EdgesOut o;
     o.pos = f.pos;
-    o.uv = f.uv;
-    SMAAEdgeDetectionVS(f.uv, o.offset);
+    o.uv = f.uv * PictureScale();
+    SMAAEdgeDetectionVS(o.uv, o.offset);
     return o;
 }
 float2 PSMain(EdgesOut i) : SV_Target {
@@ -256,8 +352,8 @@ WeightsOut VSMain(uint id : SV_VertexID) {
     const FullscreenOut f = FullscreenTriangle(id);
     WeightsOut o;
     o.pos = f.pos;
-    o.uv = f.uv;
-    SMAABlendingWeightCalculationVS(f.uv, o.pixcoord, o.offset);
+    o.uv = f.uv * PictureScale();
+    SMAABlendingWeightCalculationVS(o.uv, o.pixcoord, o.offset);
     return o;
 }
 float4 PSMain(WeightsOut i) : SV_Target {
@@ -278,8 +374,8 @@ BlendOut VSMain(uint id : SV_VertexID) {
     const FullscreenOut f = FullscreenTriangle(id);
     BlendOut o;
     o.pos = f.pos;
-    o.uv = f.uv;
-    SMAANeighborhoodBlendingVS(f.uv, o.offset);
+    o.uv = f.uv * PictureScale();
+    SMAANeighborhoodBlendingVS(o.uv, o.offset);
     return o;
 }
 float4 PSMain(BlendOut i) : SV_Target {
@@ -339,10 +435,10 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 // textures, so it is the fallback when SMAA is unavailable.
 Texture2D inputTex : register(t0);
 float FxaaLuma(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
-float FxaaLumaAt(float2 uv) { return FxaaLuma(inputTex.SampleLevel(LinearSampler, uv, 0).rgb); }
-// The neighbour (x, y) texels away: literal offsets at each use, so the SPIR-V carries ConstOffset (a variable offset is
-// an Offset operand, which needs shaderImageGatherExtended).
-#define FxaaLumaOff(uv, x, y) FxaaLuma(inputTex.SampleLevel(PointSampler, uv, 0, int2(x, y)).rgb)
+// Every read is held in the picture (InPicture).
+float FxaaLumaAt(float2 uv) { return FxaaLuma(inputTex.SampleLevel(LinearSampler, InPicture(uv), 0).rgb); }
+// The neighbour (x, y) texels away, its centre's own value.
+#define FxaaLumaOff(uv, x, y) FxaaLuma(inputTex.SampleLevel(PointSampler, InPicture((uv) + float2(x, y) * g_rt_metrics.xy), 0).rgb)
 FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
 float4 PSMain(FullscreenOut i) : SV_Target {
     const float2 texel = g_rt_metrics.xy;
@@ -409,7 +505,7 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     offset = max(offset, sub2 * sub2 * 0.75);
     float2 final_uv = uv;
     if (horz) final_uv.y += offset * across; else final_uv.x += offset * across;
-    return float4(inputTex.SampleLevel(LinearSampler, final_uv, 0).rgb, centre.a);
+    return float4(inputTex.SampleLevel(LinearSampler, InPicture(final_uv), 0).rgb, centre.a);
 }
 #endif
 

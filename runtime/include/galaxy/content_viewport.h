@@ -19,6 +19,10 @@ struct ContentViewport {
 };
 
 inline constexpr double kDesignContentAspect = 16.0 / 9.0;
+// The narrowest and widest shapes the game draws for (nebula_game_api.h's NEBULA_DISPLAY_*_ASPECT): a phone held
+// upright, and three 32:9 panels side by side. An output beyond them shows the nearest, fitted by the presentation.
+inline constexpr double kNarrowestContentAspect = 9.0 / 21.0;
+inline constexpr double kWidestContentAspect = 96.0 / 9.0;
 
 // Movies keep their 16:9 composition at every gameplay aspect except 4:3, where
 // the game's own 4:3 movie path (with its authored crop) applies.

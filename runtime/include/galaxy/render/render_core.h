@@ -5,6 +5,7 @@
 // between lists at the times the display wants. A full queue blocks the producer. A render-thread failure is rethrown from the
 // render_frame() call rather than leaving a frozen display.
 
+#include "galaxy/platform_time.h"
 #include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/movie_playback.h"
@@ -52,9 +53,11 @@
 
 namespace galaxy::render {
 
-// Replacement and scene LOD adjustments are floating-point mip levels.
-[[nodiscard]] SamplerKey make_sampler_key(const TextureSampler& mode, bool generated_mips, std::uint32_t mip_levels,
-    float lod_shift = 0.0f, bool arbitrary = false, float mip_lines_log2 = 0.0f, float scene_bias = 0.0f) noexcept;
+// Replacement and scene LOD adjustments are floating-point mip levels. `arbitrary`: a replacement whose levels pair with
+// the game's by index; `authored`: the game's own levels drawn by hand (TextureHandle::authored_levels). Both choose the
+// level the game showed at its authored lines (mip_lines_log2) without the scene's bias (kSamplerAuthoredLevels).
+[[nodiscard]] SamplerKey make_sampler_key(const TextureSampler& mode, std::uint32_t mip_levels, float lod_shift = 0.0f,
+    bool arbitrary = false, float mip_lines_log2 = 0.0f, float scene_bias = 0.0f, bool authored = false) noexcept;
 
 void note_layer_2d_lines(unsigned lines) noexcept;
 
@@ -92,6 +95,8 @@ public:
     [[nodiscard]] TextureStore& textures() noexcept { return texture_store_; }
     // The list the next render_frame hands over.
     void attach_frame_list(NebulaFrameList* list) noexcept { producer_list_ = list; }
+    // Simulation thread: the step clock's moment for the step now starting (render_api.h set_step_moment).
+    void set_step_moment(std::int64_t qpc) noexcept { producer_step_moment_qpc_.store(qpc, std::memory_order_relaxed); }
 
     // Simulation thread: the movie frame later submissions carry (movie_playback.h).
     void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, const void* data, std::uint64_t size,
@@ -150,6 +155,11 @@ private:
         bool black = false;  // the output shows black (no picture)
         bool present_swap_chain = true;
         bool present_only = false;
+        // When the game asked for this frame's present (QPC, its thread): the frame's arrival for the interpolation's
+        // clock, which a take on the render thread would see late by whatever that thread was drawing.
+        std::int64_t present_asked_qpc = 0;
+        // The moment of the step that made it on the step clock (set_step_moment); 0 none.
+        std::int64_t step_moment_qpc = 0;
         NebulaFrameList* list = nullptr;
     };
 
@@ -286,10 +296,11 @@ private:
     DeviceGate device_gate_;
     bool device_lost_ = false;
     std::uint32_t device_losses_ = 0u;
-    std::uint64_t table_sweep_at_ = 0u;  // the frame the next texture table sweep and (test builds) its log line are due
-    std::uint64_t table_log_at_ = 0u;
-    std::uint64_t vram_log_at_ = 0u;  // the frame the next look at whether a video memory line is due
-    std::uint64_t vram_report_at_ = 0u;  // the frame the line is due whatever changed
+    // Game frames (list serials), not pictures: the pictures a game frame is shown in vary with the rate.
+    std::uint64_t table_sweep_at_ = 0u;  // the game frame the next texture table sweep is due
+    std::uint64_t table_log_at_ = 0u;    // and --diagnostics memory's table line
+    std::uint64_t vram_log_at_ = 0u;  // the game frame the next look at whether a video memory line is due
+    std::uint64_t vram_report_at_ = 0u;  // the game frame the line is due whatever changed
     std::uint64_t vram_logged_budget_mb_ = 0u;
     std::uint64_t vram_logged_left_out_mb_ = 0u;
     std::atomic<bool> window_hidden_{false};
@@ -303,6 +314,19 @@ private:
 
     core::Registries registries_;
     core::Pairing pairing_;
+    // --diagnostics present-stats ([interp-coverage]): each list drawn between steps (not a cut), its items by category
+    // (NEBULA_ITEM_CATEGORY_*): those shown at the newest step only, because no item or block of the list before is
+    // theirs (new; missed: the list before held an item of the same slot, so it was there but did not pair), because
+    // their ring vertices have no pair of the same shape (ring-at-b), or because the game marks their vertices as having
+    // no identity (discrete). Run totals; each category's first misses are logged with what differed ([interp-miss]).
+    struct CoverageCount {
+        std::uint64_t items = 0u, new_items = 0u, missed = 0u, ring_at_b = 0u, discrete = 0u;
+    };
+    std::array<CoverageCount, 256> coverage_{};
+    std::uint64_t coverage_lists_ = 0u;
+    std::array<std::uint8_t, 256> coverage_misses_logged_{};  // per category
+    std::vector<std::uint32_t> coverage_slots_;  // the list before's item slots, sorted
+    void count_coverage(const core::ListData& now, const core::ListData& before) noexcept;
     core::WorldLightStats world_light_stats_;  // --diagnostics rt-inputs
     // Ray tracing (render/rt): the device's builder and the structures of the meshes one matrix places. Started with the
     // device when the setting is on and the device can trace; render thread.
@@ -820,9 +844,12 @@ private:
     // Present slot clock: next slot and slot length (with VSync, on the display's vblanks when they are timed).
     std::int64_t interp_slot_due_qpc_ = 0;
     std::int64_t interp_slot_period_qpc_ = 0;
-    // A native overlay (the HOME Menu, the settings) up while no interpolated frames run, at a display faster than
-    // 60 Hz (the interpolation's slots): the latest frame presents again at each slot without a present of its own
-    // (overlay_idle_due_qpc_: the next; 0 outside).
+    // An unlimited present rate (render_config.h kUnlimitedFrameRate, no VSync): no slot clock (period 0); each picture
+    // is drawn once the one before is and shows the moment it is drawn for.
+    bool interp_slot_unbounded_ = false;
+    // A native overlay (the HOME Menu, the settings) up while no interpolated frames run, at a present rate above
+    // 60 Hz (the interpolation's slots, or none at an unlimited rate): the latest frame presents again at each slot
+    // without a present of its own (overlay_idle_due_qpc_: the next; 0 outside).
     [[nodiscard]] bool overlay_idle_presents() const noexcept;
     std::int64_t overlay_idle_due_qpc_ = 0;
     // Presents by the vblanks since the one before (0, 1, 2, 3 or more), against the display's vblank grid, and the
@@ -833,8 +860,16 @@ private:
     double interp_slot_to_vblank_max_ms_ = 0.0;
     std::uint64_t interp_slot_to_vblank_samples_ = 0;
     void note_present_vblank(std::int64_t slot);
-    // Smoothed game-frame arrival clock (start_interp_sequence).
+    void skip_slot_for_depth();
+    // Smoothed game-frame arrival clock (start_interp_sequence), fed by the starting frame's present_asked_qpc.
     std::int64_t interp_arrival_qpc_ = 0;
+    std::int64_t interp_present_asked_qpc_ = 0;
+    // The starting frame's step moment (FrameChunk::step_moment_qpc), the delay its pictures are shown after their
+    // step's moment (start_interp_sequence) and the 97th percentile of the frames' lateness to this thread it follows.
+    std::int64_t interp_step_moment_qpc_ = 0;
+    std::int64_t interp_delay_qpc_ = 0;
+    std::int64_t interp_late_quantile_qpc_ = 0;
+    double interp_delay_ms_max_ = 0.0;  // the window's largest delay (present-stats)
     std::int64_t interp_frame_period_qpc_ = 0;
     std::uint64_t interp_late_slots_ = 0;   // slots a stall skipped
     std::uint64_t interp_superseded_ = 0;   // frames replaced before their own slot
@@ -842,7 +877,7 @@ private:
     void start_interp_sequence();
     // Generated frames per game frame within the GPU budget.
     unsigned interp_gpu_governor(double& rate);
-    unsigned interp_gpu_cap_ = 7u;
+    unsigned interp_gpu_cap_ = kUnboundedGeneratedFrames;
     std::uint64_t interp_gpu_cap_serial_ = 0;
     std::uint64_t interp_gpu_checked_ = 0;
     // After a rate or upscaler change, the time (QPC) before which GPU times are not used (pipeline,
@@ -857,7 +892,7 @@ private:
     [[nodiscard]] double interp_rate_with(unsigned generated) const;
     [[nodiscard]] unsigned interp_step_down(unsigned generated) const;
     [[nodiscard]] unsigned interp_step_up(unsigned generated) const;
-    unsigned interp_cadence_cap_ = 7u;
+    unsigned interp_cadence_cap_ = kUnboundedGeneratedFrames;
     unsigned interp_cadence_interval_s_ = 2u;
     std::int64_t interp_cadence_window_qpc_ = 0;
     std::int64_t interp_cadence_last_qpc_ = 0;
@@ -901,6 +936,7 @@ private:
     // The render thread's time rendering generated frames (advance_interp_sequence), in QPC ticks.
     std::uint64_t interp_generated_qpc_ = 0;
     std::uint64_t interp_cadence_generated_seen_ = 0;
+    std::uint64_t interp_cadence_presented_seen_ = 0;   // interp_presented_total_ at the window's start
     // A probe of the game's own misses: seconds of them in a row above the lowest rate, the cap a probe lowered and
     // their rate before it, and the earliest next probe.
     unsigned interp_cadence_own_windows_ = 0;
@@ -908,7 +944,8 @@ private:
     unsigned interp_cadence_probe_restore_ = 0;
     double interp_cadence_probe_misses_ = 0.0;
     std::int64_t interp_cadence_probe_after_qpc_ = 0;
-    std::uint64_t interp_presented_ = 0;
+    std::uint64_t interp_presented_ = 0;        // since the last stats report
+    std::uint64_t interp_presented_total_ = 0;  // since the start: the cadence governor's count (never reset)
     std::uint64_t interp_dropped_ = 0;
     std::uint64_t interp_failed_ = 0;     // generated frames that could not be recorded
     std::uint64_t interp_history_resets_ = 0;  // presented frames that start the temporal upscaler's history again
@@ -929,9 +966,15 @@ private:
     // frame now and drops the remaining generated frames).
     void advance_interp_sequence(bool flush);
     bool render_generated_frame(float t);
+    // A walk of `entry` at t: its motion from the picture the temporal history holds (the one walked last), else a new
+    // history. `count`: a presented picture, counted in the interpolation stats.
+    core::WalkTime interp_walk_time(const ListEntry& entry, float t, bool count);
+    // `entry` walked at t (presented or not): the picture the temporal history now holds.
+    void note_interp_walked(const ListEntry& entry, float t) noexcept;
     [[nodiscard]] std::int64_t interp_remaining_us() const;  // to the next slot
     [[nodiscard]] double interp_slot_t() const;
-    static void interp_sleep_us(std::int64_t us);
+    // Render thread: until a present slot's moment (qpc_now() ticks), precisely (precise_wait.h).
+    static void interp_wait_until(std::int64_t due_qpc);
     float scene_jitter_px_[2]{};
     // The walked list's scene camera, kept at its scene's end for the passes after it (draw.post's depth, draw.native's
     // matrices): the view (3x4 rows, the game's), its projection terms and viewport; `post_scene_known_` false before a
@@ -947,10 +990,17 @@ private:
     std::uint32_t walk_picture_ = 0u;
     bool producer_movie_content_{},render_movie_content_{};
     MovieFrameMark producer_movie_frame_{}, render_movie_frame_{};
+    // The step clock's moment for the step now running (set_step_moment); 0 none.
+    std::atomic<std::int64_t> producer_step_moment_qpc_{0};
+    // That moment for a present asked at `asked`, 0 when there is none or it has not come.
+    [[nodiscard]] std::int64_t step_moment_for(std::int64_t asked) const noexcept {
+        const std::int64_t moment = producer_step_moment_qpc_.load(std::memory_order_relaxed);
+        return moment > 0 && moment <= asked ? moment : 0;
+    }
     // The game's movies: the cooked movie's decoder (a worker), HD replacements (render thread), the folders last applied.
     MoviePlayback movie_playback_;
     std::uint64_t movie_mods_generation_ = ~0ull;
-    std::uint64_t movie_stats_tick_ = 0;
+    galaxy::ClockInterval movie_stats_report_{4'000};  // [movie] every four seconds while one plays
     std::array<std::uint64_t,512> pointer_latency_bins_{};
     std::uint64_t pointer_response_count_{}, pointer_latency_total_{}, pointer_latency_max_{}, pointer_report_ns_{};
     std::array<std::uint64_t,512> pointer_acquisition_age_bins_{};

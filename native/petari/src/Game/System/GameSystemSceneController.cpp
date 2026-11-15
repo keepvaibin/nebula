@@ -382,7 +382,8 @@ void GameSystemSceneController::exeInitializeScene() {
         initializeScene();
     }
 
-    if (mSceneInitializeDone) {
+    // Texture packs' replacements of its textures load behind the loading screen, never while the scene plays.
+    if (mSceneInitializeDone && NebulaHost::option(NEBULA_OPTION_SCENE_TEXTURES) == 0) {
         mSceneInitializeState = SceneInitializeState_End;
         mIntermissionScene->setCurrentSceneControllerState("[scene ready]");
 
