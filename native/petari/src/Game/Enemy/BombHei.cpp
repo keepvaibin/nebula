@@ -22,91 +22,45 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_f1, "exeLaunch.f1", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_f2, "exeLaunch.f2", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStarting_f1, "exeStarting.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStarting_f2, "exeStarting.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f3, "exeWait.f3", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f1, "exeWalk.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f2, "exeWalk.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f3, "exeWalk.f3", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f1, "exePursue.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePursue_f2, "exePursue.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePursueHit_f1, "exePursueHit.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePursueHit_f2, "exePursueHit.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinHit_f1, "exeSpinHit.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSpinHit_f2, "exeSpinHit.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePhysics_f1, "exePhysics.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePhysics_f2, "exePhysics.f2", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeExplode_f1, "exeExplode.f1", 800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeExplode_f2, "exeExplode.f2", 1200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeExplode_f3, "exeExplode.f3", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startBoundSound_f1, "startBoundSound.f1", 100.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_endCountdown_setBrkRate_1, "endCountdown.setBrkRate.1", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_reboundVelocityFromCollision_1, "exeLaunch.reboundVelocityFromCollision.1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_reboundVelocityFromCollision_2, "exeLaunch.reboundVelocityFromCollision.2", 6.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeLaunch_reboundVelocityFromCollision_3, "exeLaunch.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePhysics_reboundVelocityFromCollision_1, "exePhysics.reboundVelocityFromCollision.1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePhysics_reboundVelocityFromCollision_2, "exePhysics.reboundVelocityFromCollision.2", 6.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePhysics_reboundVelocityFromCollision_3, "exePhysics.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStop_reboundVelocityFromCollision_1, "exeStop.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStop_reboundVelocityFromCollision_2, "exeStop.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStop_reboundVelocityFromCollision_3, "exeStop.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStop_attenuateVelocity_1, "exeStop.attenuateVelocity.1", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeThrown_reboundVelocityFromCollision_1, "exeThrown.reboundVelocityFromCollision.1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeThrown_reboundVelocityFromCollision_2, "exeThrown.reboundVelocityFromCollision.2", 6.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeThrown_reboundVelocityFromCollision_3, "exeThrown.reboundVelocityFromCollision.3", 1.0f);
 
 namespace {
     static const s32 hStartBrkTime = NebulaFrameClock::stepsOfSeconds(10);
     static const s32 hBrkRateUpTime = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, hBrkSlowRate, 0.5f);
-    NEBULA_TUNABLE(f32, hBrkFastRate, 2.0f);
-    NEBULA_TUNABLE(f32, hTurnLimitRadian, 3.0f);
-    NEBULA_TUNABLE(f32, hGravity, 1.0f);
-    NEBULA_TUNABLE(f32, hGravityPhysicsOnGround, 0.5f);
-    NEBULA_TUNABLE(f32, hSpinHitJumpVel, 10.0f);
-    NEBULA_TUNABLE(f32, hPushedAcc, 2.0f);
-    NEBULA_TUNABLE(s32, hExplodeTime, 8);
+    const f32 hBrkSlowRate = 0.5f;
+    const f32 hBrkFastRate = 2.0f;
+    const f32 hTurnLimitRadian = 3.0f;
+    const f32 hGravity = 1.0f;
+    const f32 hGravityPhysicsOnGround = 0.5f;
+    const f32 hSpinHitJumpVel = 10.0f;
+    const f32 hPushedAcc = 2.0f;
+    const s32 hExplodeTime = 8;
     static const s32 hWaitTime = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(s32, hWalkTime, 160);
+    const s32 hWalkTime = 160;
     static const f32 hWalkVel = 0.5f;
     static const f32 hPursueVel = 1.5f;
     static const f32 hPursueVelFast = 2.0f;
-    NEBULA_TUNABLE(f32, hPrePursueJumpVel, 10.0f);
-    NEBULA_TUNABLE(s32, hPursueHitTime, 38);
-    NEBULA_TUNABLE(f32, hGravityThrown, 0.75);
-    NEBULA_TUNABLE(f32, hThrownDampVel, 0.98f);
-    NEBULA_TUNABLE(f32, hThrownReboundRate, 0.8f);
-    NEBULA_TUNABLE(f32, hThrownReboundMin, 0.0f);
+    const f32 hPrePursueJumpVel = 10.0f;
+    const s32 hPursueHitTime = 38;
+    const f32 hGravityThrown = 0.75;
+    const f32 hThrownDampVel = 0.98f;
+    const f32 hThrownReboundRate = 0.8f;
+    const f32 hThrownReboundMin = 0.0f;
     static const f32 hTurnVecValue = 2.0f;
     static const s32 hThrownCanNotGotTime = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, hMultVelAngle, 1.0f);
+    const f32 hMultVelAngle = 1.0f;
     static const s32 hThrownOffCalcGravityTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, hGroundCosine, 0.75f);
-    NEBULA_TUNABLE(f32, hStopDampValue, 0.8f);
-    NEBULA_TUNABLE(f32, hToStopVelLen, 5.0f);
-    NEBULA_TUNABLE(f32, hThrowVelH, 25.0f);
-    NEBULA_TUNABLE(f32, hThrowVelV, 18.0f);
-    NEBULA_TUNABLE(f32, hTranslateHeight, 53.0f);
-    NEBULA_TUNABLE(s32, hStopFrame, 3);
+    const f32 hGroundCosine = 0.75f;
+    const f32 hStopDampValue = 0.8f;
+    const f32 hToStopVelLen = 5.0f;
+    const f32 hThrowVelH = 25.0f;
+    const f32 hThrowVelV = 18.0f;
+    const f32 hTranslateHeight = 53.0f;
+    const s32 hStopFrame = 3;
     static const s32 hSpinHitCanGetTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 hTrampleTime = NebulaFrameClock::stepsOfSeconds(1);
 
-    NEBULA_TUNABLE_RECORD(BombHeiParam, hNoMoveNoTurnParam, {0.0f, 2.0f, 0.8f, 0.0f});
+    const BombHeiParam hNoMoveNoTurnParam = {0.0f, 2.0f, 0.8f, 0.0f};
     const BombHeiParam hWalkParam = {hWalkVel, 2.0f, 0.8f, hTurnVecValue};
     // const BombHeiParam hPursueParam =
     const BombHeiParam hPursueFarParam = {hPursueVel, 2.0f, 0.8f, hTurnVecValue + 1.0f};
@@ -191,8 +145,8 @@ void BombHei::init(const TableIter& rIter) {
 
     initHitSensor(2);
     f32 scl = mScale.y;
-    MR::addHitSensor(this, "body", ATYPE_BOMBHEI, 16, scl * cNum_init_f1, Vec3f(0.0f, scl * cNum_init_f2, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "explode", 32, mExplodeRadius * scl, Vec3f(0.0f, scl * cNum_init_f3, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_BOMBHEI, 16, scl * 60.0f, Vec3f(0.0f, scl * 60.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "explode", 32, mExplodeRadius * scl, Vec3f(0.0f, scl * 200.0f, 0.0f));
 
     if (mType == BOMB) {
         initNerve(GET_NERVE(BombHei, HostTypeNrvPhysics));
@@ -200,10 +154,10 @@ void BombHei::init(const TableIter& rIter) {
         initNerve(GET_NERVE(BombHei, HostTypeNrvWait));
     }
 
-    MR::initShadowVolumeSphere(this, cNum_init_f4);
+    MR::initShadowVolumeSphere(this, 60.0f);
     endCountdown();
     MR::validateClipping(this);
-    MR::initStarPointerTarget(this, cNum_init_f5, Vec3f(0.0f, cNum_init_f6, 0.0f));
+    MR::initStarPointerTarget(this, 70.0f, Vec3f(0.0f, 35.0f, 0.0f));
 
     mBodyJoint = MR::createJointDelegatorWithNullChildFunc(this, &BombHei::calcJoint, "Body");
 
@@ -254,7 +208,7 @@ void BombHei::startCountdown() {
 void BombHei::endCountdown() {
     mCountdown = -1;
     MR::startBrk(this, "Wait");
-    MR::setBrkRate(this, cNum_endCountdown_setBrkRate_1);
+    MR::setBrkRate(this, 1.0f);
     MR::deleteEffect(this, "Ignite");
     MR::validateClipping(this);
 }
@@ -274,7 +228,7 @@ void BombHei::exeLaunch() {
         MR::turnVecToVecRadian(&mFront, mFront, mTargetFront, ::hTurnLimitRadian, mGravity);
     }
 
-    mVelocity.mult(cNum_exeLaunch_f1);
+    mVelocity.mult(0.98f);
 
     if (!MR::isOnGroundCos(this, ::hGroundCosine)) {
         mVelocity.add(mGravity * ::hGravity);
@@ -285,7 +239,7 @@ void BombHei::exeLaunch() {
         f32 radius = getSensor("body")->mRadius;
         MR::rotateQuatRollBall(&mRotQuat, mVelocity, *MR::getGroundNormal(this), radius);
 
-        if (mGravity.dot(mVelocity) < cNum_exeLaunch_f2) {
+        if (mGravity.dot(mVelocity) < 5.0f) {
             if (mType == BOMB_HEI) {
                 setNerve(GET_NERVE(BombHei, HostTypeNrvStarting));
             } else if (mType == BOMB) {
@@ -295,7 +249,7 @@ void BombHei::exeLaunch() {
         }
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_exeLaunch_reboundVelocityFromCollision_1, cNum_exeLaunch_reboundVelocityFromCollision_2, cNum_exeLaunch_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.1f, 6.0f, 1.0f);
 }
 
 void BombHei::exeStarting() {
@@ -306,7 +260,7 @@ void BombHei::exeStarting() {
     }
 
     if (!MR::isNearZero(mGravity)) {
-        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, cNum_exeStarting_f1, cNum_exeStarting_f2);
+        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, 0.5f, 0.5f);
     }
 
     if (MR::isBckStopped(this)) {
@@ -327,10 +281,10 @@ void BombHei::exeWait() {
     }
 
     if (!MR::isNearZero(mGravity)) {
-        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, cNum_exeWait_f1, cNum_exeWait_f2);
+        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, 0.5f, 0.5f);
     }
 
-    if (MR::calcDistanceToPlayer(this) < cNum_exeWait_f3 && (!MR::isValidSwitchA(this) || MR::isOnSwitchA(this))) {
+    if (MR::calcDistanceToPlayer(this) < 1000.0f && (!MR::isValidSwitchA(this) || MR::isOnSwitchA(this))) {
         if (mCountdown > 0 && mCountdown < ::hBrkRateUpTime) {
             setNerve(GET_NERVE(BombHei, HostTypeNrvPursueFast));
         } else {
@@ -359,10 +313,10 @@ void BombHei::exeWalk() {
     }
 
     if (!MR::isNearZero(mGravity)) {
-        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, cNum_exeWalk_f1, cNum_exeWalk_f2);
+        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, 0.5f, 0.5f);
     }
 
-    if (MR::calcDistanceToPlayer(this) < cNum_exeWalk_f3 && (!MR::isValidSwitchA(this) || MR::isOnSwitchA(this))) {
+    if (MR::calcDistanceToPlayer(this) < 1000.0f && (!MR::isValidSwitchA(this) || MR::isOnSwitchA(this))) {
         if (mCountdown > 0 && mCountdown < ::hBrkRateUpTime) {
             setNerve(GET_NERVE(BombHei, HostTypeNrvPursueFast));
         } else {
@@ -392,7 +346,7 @@ void BombHei::exePursue() {
     }
 
     if (!MR::isNearZero(mGravity)) {
-        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, cNum_exePursue_f1, cNum_exePursue_f2);
+        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, 0.5f, 0.5f);
     }
 }
 
@@ -405,7 +359,7 @@ void BombHei::exePursueHit() {
     MR::moveAndTurnToPlayer(this, &mFront, {::hNoMoveNoTurnParam.mSpeedH, ::hNoMoveNoTurnParam.mGravAccel, ::hNoMoveNoTurnParam.mFriction, ::hNoMoveNoTurnParam.mTurnRate});
 
     if (!MR::isNearZero(mGravity)) {
-        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, cNum_exePursueHit_f1, cNum_exePursueHit_f2);
+        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, 0.5f, 0.5f);
     }
 
     if (MR::isGreaterStep(this, ::hPursueHitTime)) {
@@ -428,7 +382,7 @@ void BombHei::exeSpinHit() {
     MR::moveAndTurnToPlayer(this, &mFront, {::hNoMoveNoTurnParam.mSpeedH, ::hNoMoveNoTurnParam.mGravAccel, ::hNoMoveNoTurnParam.mFriction, ::hNoMoveNoTurnParam.mTurnRate});
 
     if (!MR::isNearZero(mGravity)) {
-        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, cNum_exeSpinHit_f1, cNum_exeSpinHit_f2);
+        MR::blendQuatUpFront(&mRotQuat, -mGravity, mFront, 0.5f, 0.5f);
     }
 
     if (MR::isOnGroundCos(this, ::hGroundCosine)) {
@@ -467,11 +421,11 @@ void BombHei::exePhysics() {
     mTargetFront.set(velH);
     MR::normalizeOrZero(&mTargetFront);
 
-    if (!MR::isNearZero(mTargetFront) && cNum_exePhysics_f1 < velH.length()) {
+    if (!MR::isNearZero(mTargetFront) && 2.0f < velH.length()) {
         MR::turnVecToVecRadian(&mFront, mFront, mTargetFront, ::hTurnLimitRadian, mGravity);
     }
 
-    mVelocity.mult(cNum_exePhysics_f2);
+    mVelocity.mult(0.98f);
 
     if (!MR::isOnGroundCos(this, ::hGroundCosine)) {
         mVelocity.add(mGravity * ::hGravity);
@@ -490,7 +444,7 @@ void BombHei::exePhysics() {
         mBinder->mIsStopAtFirstHit = 1;
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_exePhysics_reboundVelocityFromCollision_1, cNum_exePhysics_reboundVelocityFromCollision_2, cNum_exePhysics_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.1f, 6.0f, 1.0f);
     MR::killVelocityOnGroundCosH(this, ::hGroundCosine);
 }
 
@@ -500,14 +454,14 @@ void BombHei::exeStop() {
     }
 
     MR::addVelocityToGravityOrGround(this, ::hGravity);
-    MR::reboundVelocityFromCollision(this, cNum_exeStop_reboundVelocityFromCollision_1, cNum_exeStop_reboundVelocityFromCollision_2, cNum_exeStop_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 
     if (MR::isOnGround(this)) {
         MR::attenuateVelocity(this, ::hStopDampValue);
         f32 radius = getSensor("body")->mRadius;
         MR::rotateQuatRollBall(&mRotQuat, mVelocity, *MR::getGroundNormal(this), radius);
     } else {
-        MR::attenuateVelocity(this, cNum_exeStop_attenuateVelocity_1);
+        MR::attenuateVelocity(this, 0.98f);
         f32 radius = getSensor("body")->mRadius;
         MR::rotateQuatRollBall(&mRotQuat, mVelocity, -mGravity, radius);
     }
@@ -550,7 +504,7 @@ void BombHei::exeThrown() {
         return;
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_exeThrown_reboundVelocityFromCollision_1, cNum_exeThrown_reboundVelocityFromCollision_2, cNum_exeThrown_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.1f, 6.0f, 1.0f);
 }
 
 void BombHei::endThrown() {
@@ -590,7 +544,7 @@ void BombHei::exeExplode() {
         }
         mCarrySensor = nullptr;
         endCountdown();
-        MR::tryRumblePadAndCameraDistanceStrong(this, cNum_exeExplode_f1, cNum_exeExplode_f2, cNum_exeExplode_f3);
+        MR::tryRumblePadAndCameraDistanceStrong(this, 800.0f, 1200.0f, 2000.0f);
         MR::invalidateClipping(this);
     }
 
@@ -858,6 +812,6 @@ bool BombHei::receiveMsgThrow(HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) 
 }
 
 void BombHei::startBoundSound() {
-    s32 level = mGravity.dot(mVelocity) * cNum_startBoundSound_f1;
+    s32 level = mGravity.dot(mVelocity) * 100.0f;
     MR::startSound(this, "SE_EM_BOMB_BOUND", level);
 }

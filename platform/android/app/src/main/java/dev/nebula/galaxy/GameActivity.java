@@ -32,6 +32,7 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -113,6 +114,10 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     }
 
     private File nativeData() {
+        final File harness = Harness.data(this);
+        if (harness != null) {
+            return harness;
+        }
         return isProfileRun() ? new File(GameFiles.data(this), "profiling") : GameFiles.data(this);
     }
 
@@ -128,20 +133,53 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     @Override
     protected String[] getArguments() {
         passLocale();
+        // A test runner's run (test builds only): its own command line.
+        final String[] harness = Harness.arguments(this);
+        if (harness != null) {
+            return harness;
+        }
         // The launcher's Record diagnostics: this run only.
         final SharedPreferences prefs = GameFiles.controls(this);
         final boolean record = isProfileRun() || prefs.getBoolean(GameFiles.RECORD_NEXT_RUN, false);
         if (record && !isProfileRun()) {
             prefs.edit().remove(GameFiles.RECORD_NEXT_RUN).commit();
         }
-        // The native game's settings, saves and log: the app's private storage.
-        return new String[] {
+        // The launcher's Benchmark (Benchmark.kt, perf/bench's contract): no saves, the result file in their place;
+        // the game shows its steps and exits by itself.
+        if (getIntent().getBooleanExtra(Benchmark.EXTRA, false) && !isProfileRun()) {
+            final List<String> bench = new ArrayList<>(Arrays.asList(
+                "--data", nativeData().getPath(),
+                "--pak", GameFiles.pak(this).getPath(),
+                "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
+                "--diagnostics", "0",
+                "--benchmark", "1",
+                "--benchmark-out", Benchmark.INSTANCE.resultFile(this).getPath()));
+            addDriver(bench);
+            return bench.toArray(new String[0]);
+        }
+        // The native game's settings, saves and log: the app's private storage. The mods that come with the app are
+        // installed by the game from where they were unpacked.
+        final List<String> args = new ArrayList<>(Arrays.asList(
             "--data", nativeData().getPath(),
             "--pak", GameFiles.pak(this).getPath(),
             "--saves", GameFiles.savesIn(nativeData()).getPath(),
             "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
-            "--diagnostics", record ? "1" : "0",
-        };
+            "--diagnostics", record ? "1" : "0"));
+        final File shipped = GameFiles.shippedMods(this);
+        if (shipped != null) {
+            args.add("--shipped-mods");
+            args.add(shipped.getPath());
+        }
+        addDriver(args);
+        return args.toArray(new String[0]);
+    }
+
+    // The graphics driver the player selected in the launcher (GpuDrivers.launchArguments, given with the start).
+    private void addDriver(List<String> args) {
+        final List<String> driver = getIntent().getStringArrayListExtra(GpuDrivers.EXTRA);
+        if (driver != null) {
+            args.addAll(driver);
+        }
     }
 
     // The frame-rate setting saved last (config.ini max_fps; 0: the display's own), before the game has read it.

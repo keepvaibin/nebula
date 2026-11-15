@@ -22,42 +22,30 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityToRailPoint_f1, "addVelocityToRailPoint.f1", 0.4f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityBase_reboundVelocityFromCollision_1, "addVelocityBase.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityBase_reboundVelocityFromCollision_2, "addVelocityBase.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addVelocityBase_reboundVelocityFromCollision_3, "addVelocityBase.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitAttacked_turnDirectionToPlayerDegree_1, "exeHitAttacked.turnDirectionToPlayerDegree.1", 160.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHitAttacked_reboundVelocityFromCollision_1, "exeHitAttacked.reboundVelocityFromCollision.1", 0.9f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sBodyHitRadius, 100.0f);
-    NEBULA_TUNABLE(f32, sBodyHitYOffset, 100.0f);
-    NEBULA_TUNABLE(f32, sAttackHitRadius, 70.0f);
-    NEBULA_TUNABLE(f32, sAttackHitYOffset, 70.0f);
-    NEBULA_TUNABLE(f32, sBinderRadius, 90.0f);
-    NEBULA_TUNABLE(f32, sShadowRadius, 90.0f);
-    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
-    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.1f);
-    NEBULA_TUNABLE(f32, sNormalFreq, 0.9f);
-    NEBULA_TUNABLE(f32, sNormalGravity, 0.2f);
-    NEBULA_TUNABLE(f32, sRailCoordStepInterval, 50.0f);
+    const f32 sBodyHitRadius = 100.0f;
+    const f32 sBodyHitYOffset = 100.0f;
+    const f32 sAttackHitRadius = 70.0f;
+    const f32 sAttackHitYOffset = 70.0f;
+    const f32 sBinderRadius = 90.0f;
+    const f32 sShadowRadius = 90.0f;
+    const f32 sFrontVecBlendRate = 0.2f;
+    const f32 sUpVecBlendRate = 0.1f;
+    const f32 sNormalFreq = 0.9f;
+    const f32 sNormalGravity = 0.2f;
+    const f32 sRailCoordStepInterval = 50.0f;
     static const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sWalkSpeed, 0.2f);
-    NEBULA_TUNABLE(f32, sWalkTurnDegree, 2.0f);
-    NEBULA_TUNABLE(f32, sWalkGoalRange, 25.0f);
-    NEBULA_TUNABLE(s32, sHitAttackedMinTime, 1);
-    NEBULA_TUNABLE(s32, sHitAttackedMaxTime, 1);
-    NEBULA_TUNABLE(f32, sHitAttackedAccelH, 15.0f);
-    NEBULA_TUNABLE(f32, sHitAttackedAccelV, 30.0f);
-    NEBULA_TUNABLE(f32, sHitAttackedGravity, 1.6f);
-    NEBULA_TUNABLE(f32, sHitAttackedFreq, 0.99f);
+    const f32 sWalkSpeed = 0.2f;
+    const f32 sWalkTurnDegree = 2.0f;
+    const f32 sWalkGoalRange = 25.0f;
+    const s32 sHitAttackedMinTime = 1;
+    const s32 sHitAttackedMaxTime = 1;
+    const f32 sHitAttackedAccelH = 15.0f;
+    const f32 sHitAttackedAccelV = 30.0f;
+    const f32 sHitAttackedGravity = 1.6f;
+    const f32 sHitAttackedFreq = 0.99f;
 };  // namespace
 
 namespace NrvKabokuri {
@@ -107,7 +95,7 @@ void Kabokuri::init(const TableIter& rIter) {
     initSensor();
     MR::initShadowVolumeSphere(this, ::sShadowRadius);
     initNerve(GET_NERVE(Kabokuri, KabokuriNrvWait));
-    MR::initStarPointerTarget(this, cNum_init_f1 * mScale.y, Vec3f(0.0f, cNum_init_f2 * mScale.y, 0.0f));
+    MR::initStarPointerTarget(this, 90.0f * mScale.y, Vec3f(0.0f, 90.0f * mScale.y, 0.0f));
 
     mAnimeScale = new AnimScaleController(nullptr);
     mAnimeScale->setParamTight();
@@ -184,7 +172,7 @@ void Kabokuri::addVelocityBase() {
         MR::attenuateVelocity(this, ::sNormalFreq);
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_addVelocityBase_reboundVelocityFromCollision_1, cNum_addVelocityBase_reboundVelocityFromCollision_2, cNum_addVelocityBase_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 }
 
 void Kabokuri::addVelocityHitAttacked() {
@@ -211,7 +199,7 @@ void Kabokuri::addVelocityToRailPoint(f32 speed) {
 
     Vec3f velocity;
     MR::calcVelocityMoveToTarget(&velocity, this, MR::getRailPos(this), 1.0f);
-    if (velocity.dot(mFrontVec) > cNum_addVelocityToRailPoint_f1) {
+    if (velocity.dot(mFrontVec) > 0.4f) {
         mVelocity.add(velocity * speed);
     }
 }
@@ -401,13 +389,13 @@ void Kabokuri::exeHitAttacked() {
         MR::startAction(this, "Wait");
 
         for (int i = 0; i < 6; i++) {
-            MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeHitAttacked_turnDirectionToPlayerDegree_1);
+            MR::turnDirectionToPlayerDegree(this, &mFrontVec, 160.0f);
             updatePose();
         }
     }
 
     addVelocityHitAttacked();
-    MR::reboundVelocityFromCollision(this, cNum_exeHitAttacked_reboundVelocityFromCollision_1);
+    MR::reboundVelocityFromCollision(this, 0.9f);
 
     if (MR::isGreaterStep(this, ::sHitAttackedMaxTime) || (MR::isGreaterStep(this, ::sHitAttackedMinTime) && MR::isBinded(this))) {
         mKuribo->appearBlowed(mPosition, mRotationQuat, mVelocity);

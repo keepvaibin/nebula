@@ -1,0 +1,17 @@
+{
+  "harness": 1,
+  "name": "hud-shown",
+  "about": "With Hide the HUD off, the galaxy shows its counters and life meter as the game does",
+  "proves": ["kernel.hook.before"],
+  "mods": [{ "path": "../..", "options": { "hide": false } }],
+  "stage": { "name": "EggStarGalaxy", "scenario": 1 },
+  "steps": [
+    { "at": 60, "call": "MR::isActiveDefaultGameLayout", "signature": "bool()", "fact": "hud_active" },
+    { "at": 60, "picture": "shown" },
+    { "at": 70, "end": true }
+  ],
+  "expect": [
+    { "fact": "hud_active", "is": true },
+    { "picture": "shown", "box": [1050, 100, 60, 60], "mean_rgb": [65, 173, 209], "within": 40 }
+  ]
+}

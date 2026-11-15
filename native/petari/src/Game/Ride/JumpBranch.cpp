@@ -14,26 +14,18 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 1500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 30.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sPointGravity, 0.2f);
-    NEBULA_TUNABLE(f32, sPointFrictionRate, 0.995f);
-    NEBULA_TUNABLE(f32, sSensorMoveDistance, 50.0f);
-    NEBULA_TUNABLE(f32, sPointInterval, 30.0f);
-    NEBULA_TUNABLE(f32, sDistanceStartBindZ, 70.0f);
-    NEBULA_TUNABLE(f32, sTransDiffMinY, 1.0f);
+    const f32 sPointGravity = 0.2f;
+    const f32 sPointFrictionRate = 0.995f;
+    const f32 sSensorMoveDistance = 50.0f;
+    const f32 sPointInterval = 30.0f;
+    const f32 sDistanceStartBindZ = 70.0f;
+    const f32 sTransDiffMinY = 1.0f;
     static const s32 sStepInvalidBind = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sJumpSpeed, 10.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedOffsetY, 16.0f);
+    const f32 sJumpSpeed = 10.0f;
+    const f32 sJumpSpeedOffsetY = 16.0f;
 };  // namespace
 
 namespace NrvJumpBranch {
@@ -64,13 +56,13 @@ void JumpBranch::init(const TableIter& rIter) {
     MR::connectToSceneRide(this);
 
     initHitSensor(1);
-    MR::addHitSensorCallbackBinder(this, "bind", 8, cNum_init_f1);
+    MR::addHitSensorCallbackBinder(this, "bind", 8, 80.0f);
 
     initEffectKeeper(0, nullptr);
     MR::onCalcGravity(this);
 
-    MR::initShadowVolumeBox(this, Vec3f(cNum_init_f2, cNum_init_f3, cNum_init_f4));
-    MR::setShadowDropLength(this, nullptr, cNum_init_f5);
+    MR::initShadowVolumeBox(this, Vec3f(120.0f, 10.0f, 10.0f));
+    MR::setShadowDropLength(this, nullptr, 1500.0f);
     MR::onCalcShadowOneTime(this, nullptr);
 
     mSwingPoint = new SwingRopePoint(mPosition);
@@ -160,7 +152,7 @@ bool JumpBranch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
         }
 
         Vec3f grabUp = diff;
-        diff.scale(cNum_receiveOtherMsg_f1);
+        diff.scale(30.0f);
         diff.add(mPosition);
 
         f32 speed = MR::getPlayerVelocity()->length();

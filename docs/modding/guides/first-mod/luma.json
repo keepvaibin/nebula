@@ -1,0 +1,78 @@
+{
+  "format": "1.0",
+  "id": "jump-counter",
+  "version": "0.1.0",
+  "name": "Jump Counter",
+  "summary": "Counts Mario's jumps in the top left corner.",
+  "text": {
+    "EuEnglish": {
+      "name": "Jump Counter",
+      "summary": "Counts Mario's jumps in the top left corner."
+    },
+    "UsFrench": {
+      "name": "Compteur de sauts",
+      "summary": "Compte les sauts de Mario en haut à gauche."
+    },
+    "EuFrench": {
+      "name": "Compteur de sauts",
+      "summary": "Compte les sauts de Mario en haut à gauche."
+    },
+    "UsSpanish": {
+      "name": "Contador de saltos",
+      "summary": "Cuenta los saltos de Mario en la esquina superior izquierda."
+    },
+    "EuSpanish": {
+      "name": "Contador de saltos",
+      "summary": "Cuenta los saltos de Mario en la esquina superior izquierda."
+    },
+    "EuGerman": {
+      "name": "Sprungzähler",
+      "summary": "Zählt Marios Sprünge oben links."
+    },
+    "EuItalian": {
+      "name": "Contasalti",
+      "summary": "Conta i salti di Mario in alto a sinistra."
+    },
+    "EuDutch": {
+      "name": "Sprongenteller",
+      "summary": "Telt Mario's sprongen linksboven."
+    },
+    "UsPortuguese": {
+      "name": "Contador de pulos",
+      "summary": "Conta os pulos do Mario no canto superior esquerdo."
+    },
+    "JpJapanese": {
+      "name": "ジャンプカウンター",
+      "summary": "マリオのジャンプを左上で数えます。"
+    },
+    "KrKorean": {
+      "name": "점프 카운터",
+      "summary": "마리오의 점프 횟수를 왼쪽 위에 셉니다."
+    },
+    "CnSimpChinese": {
+      "name": "跳跃计数器",
+      "summary": "在左上角计算马力欧的跳跃次数。"
+    },
+    "TwTradChinese": {
+      "name": "跳躍計數器",
+      "summary": "在左上角計算瑪利歐的跳躍次數。"
+    }
+  },
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  },
+  "needs": [
+    {
+      "id": "lumakit",
+      "version": "*"
+    }
+  ]
+}

@@ -454,6 +454,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
     controls_frame.allow_background_device_input = true;
     controls_frame.allow_absolute_pointer = true;
     controls_frame.context = context;
+    controls_frame.host_menu = galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible();
     controls_frame.tilt_section = section;
     controls_frame.extra = touch_logic(state);
     // No controller in hand: the device's own sensors are the remote's.

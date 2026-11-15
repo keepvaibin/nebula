@@ -2,6 +2,7 @@
 #include "render/core/pipelines.h"
 
 #include "render/core/pipeline_cache_file.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
@@ -78,6 +79,7 @@ std::uint32_t input_location(std::uint32_t semantic) noexcept {
     case NEBULA_INPUT_BINORMAL: return kBinormal;
     case NEBULA_INPUT_WIDEN: return kWiden;
     case NEBULA_INPUT_MATRIX: return kMatrix;
+    case NEBULA_INPUT_GAIN: return kWiden;  // a uint at the widened corner's place: only sites read that one
     default: return semantic >= NEBULA_INPUT_COORD0 ? kCoord0 + (semantic - NEBULA_INPUT_COORD0) : kNoLocation;
     }
 }
@@ -113,8 +115,8 @@ std::vector<bool> input_locations(const ProgramBytes& program) {
     return reads;
 }
 
-// The prepass's pixel module with an unread input at each location the vertex module writes and it declares none of
-// (defect D10): a 32-bit float or integer scalar or vector as the output is, integers flat, listed in the fragment entry
+// A tracer pipeline's pixel module with an unread input at each location the vertex module writes and it declares
+// none of (defect D10): a 32-bit float or integer scalar or vector as the output is, integers flat, listed in the fragment entry
 // point. Empty when nothing is missing or a module is not as expected (the pipeline then takes the module as it is).
 std::vector<std::uint32_t> with_unread_inputs(const ProgramBytes& pixel, const ProgramBytes& vertex) {
     constexpr std::uint32_t kOpEntryPoint = 15u, kOpTypeInt = 21u, kOpTypeFloat = 22u, kOpTypeVector = 23u, kOpTypePointer = 32u,
@@ -290,11 +292,18 @@ struct WidenedModules {
 };
 WidenedModules gWidened;
 
-ProgramBytes widened_pixel(const ProgramBytes& pixel, const ProgramBytes& vertex) {
+// `named`: with --diagnostics rt-inputs, a pair first widened here is named (a pipeline other than the prepass, whose
+// pixel form should read what its vertex stage writes).
+ProgramBytes widened_pixel(const ProgramBytes& pixel, const ProgramBytes& vertex, std::uint64_t pixel_id, std::uint64_t vertex_id,
+                           unsigned form, unsigned aux, bool named) {
     std::lock_guard guard(gWidened.lock);
     auto [it, made] = gWidened.words.try_emplace({pixel.data, vertex.data});
     if (made) {
         it->second = with_unread_inputs(pixel, vertex);
+        if (named && !it->second.empty() && ::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs)) {
+            std::fprintf(stderr, "[rt-inputs] vk interface: pixel %016llx form %u (aux %u) lacks varyings vertex %016llx writes\n",
+                         static_cast<unsigned long long>(pixel_id), form, aux, static_cast<unsigned long long>(vertex_id));
+        }
     }
     return it->second.empty() ? pixel : ProgramBytes{it->second.data(), it->second.size() * 4u};
 }
@@ -339,6 +348,8 @@ struct Modules {
     std::filesystem::path cache_file;
     std::unordered_map<const void*, VkShaderModule> modules;
     std::uint64_t on_disk = 0u;  // the hash of the bytes the file holds: an unchanged cache is not written again
+    std::uint64_t accepted = 0u; // the hash of the data the cache was made from at the start (0: none, or refused)
+    bool stale = false;          // the last write failed: the file lacks pipelines the cache has
     bool file_read = false;      // the cache file has been read since the device came up (once, even when creating fails)
     std::vector<char> initial;   // its data until the cache exists
 };
@@ -439,12 +450,21 @@ std::size_t write_driver_cache() noexcept {
         on_disk = gModules.on_disk;
     }
     std::size_t size = 0u;
-    if (cache == VK_NULL_HANDLE || vk::Context::get().quirks().no_cache_file ||
-        vkGetPipelineCacheData(device, cache, &size, nullptr) != VK_SUCCESS || size == 0u) {
+    if (cache == VK_NULL_HANDLE || vk::Context::get().quirks().no_cache_file) {
         return 0u;
+    }
+    if (vkGetPipelineCacheData(device, cache, &size, nullptr) != VK_SUCCESS) {
+        std::lock_guard guard(gModules.lock);
+        gModules.stale = true;
+        return 0u;
+    }
+    if (size == 0u) {
+        return 0u;  // nothing made: nothing the file lacks
     }
     std::vector<char> bytes(size);
     if (vkGetPipelineCacheData(device, cache, &size, bytes.data()) != VK_SUCCESS) {
+        std::lock_guard guard(gModules.lock);
+        gModules.stale = true;
         return 0u;
     }
     bytes.resize(size);
@@ -454,10 +474,13 @@ std::size_t write_driver_cache() noexcept {
     }
     const std::vector<char> out = wrap_vk_cache(cache_identity(), bytes.data(), bytes.size());
     if (!replace_file(file, out.data(), out.size())) {
+        std::lock_guard guard(gModules.lock);
+        gModules.stale = true;
         return 0u;
     }
     std::lock_guard guard(gModules.lock);
     gModules.on_disk = hash;
+    gModules.stale = false;
     return bytes.size();
 }
 
@@ -498,14 +521,18 @@ VkPipelineCache driver_cache(VkDevice device) {
             gModules.initial = unwrap_cache_file(file);
         }
         gModules.on_disk = gModules.initial.empty() ? 0u : bytes_hash(gModules.initial);
+        gModules.stale = false;
     }
     VkPipelineCacheCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
     info.initialDataSize = gModules.initial.size();
     info.pInitialData = gModules.initial.empty() ? nullptr : gModules.initial.data();
+    gModules.accepted = 0u;
     if (vkCreatePipelineCache(device, &info, nullptr, &gModules.cache) != VK_SUCCESS) {
         info.initialDataSize = 0u;
         info.pInitialData = nullptr;
         vkCreatePipelineCache(device, &info, nullptr, &gModules.cache);
+    } else if (!gModules.initial.empty()) {
+        gModules.accepted = gModules.on_disk;
     }
     if (gModules.cache != VK_NULL_HANDLE) {
         std::vector<char>().swap(gModules.initial);
@@ -543,8 +570,10 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
     const unsigned bound = aux_targets(aux);  // the targets: 0-4, or the prepass's
     const bool prepass = bound == kAuxPrepass;
     const VkShaderModule vs_module = module_of(device, vs);
-    // The prepass's pixel stage declares every varying its vertex stage writes (D10: no interface notes).
-    const VkShaderModule ps_module = module_of(device, prepass ? widened_pixel(ps, vs) : ps);
+    // A tracer's pipeline (the prepass and the traced forms, made only with ray tracing on): its pixel stage declares
+    // every varying its vertex stage writes (no interface notes). Ray tracing off, every pipeline is as it was.
+    const VkShaderModule ps_module =
+        module_of(device, aux >= kAuxPrepass ? widened_pixel(ps, vs, desc.pixel, desc.vertex, program, aux, !prepass) : ps);
     if (vs_module == VK_NULL_HANDLE || ps_module == VK_NULL_HANDLE) {
         return nullptr;
     }
@@ -689,6 +718,17 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         color.srcAlphaBlendFactor = alpha_factor(color.srcColorBlendFactor);
         color.dstAlphaBlendFactor = alpha_factor(color.dstColorBlendFactor);
         color.alphaBlendOp = color.colorBlendOp;
+    }
+    // An added clear shell's traced form: an exchange, premultiplied: the program gives F R and
+    // F, what is behind keeps 1 - F.
+    if (aux >= kAuxTraced && (aux & kAuxExchange) != 0u) {
+        color.blendEnable = VK_TRUE;
+        color.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        color.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        color.colorBlendOp = VK_BLEND_OP_ADD;
+        color.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        color.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        color.alphaBlendOp = VK_BLEND_OP_ADD;
     }
     if (prepass) {
         color.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT;  // the item target alone: the draw's item and triangle where it is nearest
@@ -852,6 +892,9 @@ gpu::Pipeline* Pipelines::build_vk(const PipelineEntry& entry, unsigned variant,
         result = vkCreateGraphicsPipelines(device, cache, 1u, &info, nullptr, &pipeline);
     }
     if (result != VK_SUCCESS) {
+        if (result == VK_ERROR_OUT_OF_HOST_MEMORY || result == VK_ERROR_OUT_OF_DEVICE_MEMORY) {
+            note_pipeline_out_of_memory();
+        }
         std::fprintf(stderr, "[pipelines] create failed %d: %llx %llx state %08x variant %u aux %u\n", static_cast<int>(result),
                      static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant, aux);
         return nullptr;
@@ -898,4 +941,38 @@ std::size_t Pipelines::save_cache() noexcept {
     return write_driver_cache();
 }
 
+bool Pipelines::cache_file_state(std::filesystem::path& file, std::uint64_t& accepted) {
+    if (vk::Context::get().quirks().no_cache_file || driver_cache(device_) == VK_NULL_HANDLE) {
+        return false;
+    }
+    std::lock_guard guard(gModules.lock);
+    file = gModules.cache_file;
+    accepted = gModules.accepted;
+    return true;
+}
+
+std::uint64_t Pipelines::cache_file_hash() noexcept {
+    std::lock_guard guard(gModules.lock);
+    return gModules.stale ? 0u : gModules.on_disk;
+}
+
 }  // namespace galaxy::render::core
+
+namespace galaxy::render::vk {
+
+VkPipelineCache shared_pipeline_cache() {
+    return core::driver_cache(Context::get().device());
+}
+
+void release_shared_pipeline_cache() noexcept {
+    (void)core::write_driver_cache();
+    std::lock_guard guard(core::gModules.lock);
+    if (core::gModules.cache != VK_NULL_HANDLE) {
+        vkDestroyPipelineCache(core::gModules.device, core::gModules.cache, nullptr);
+        core::gModules.cache = VK_NULL_HANDLE;
+    }
+    core::gModules.file_read = false;
+    std::vector<char>().swap(core::gModules.initial);
+}
+
+}  // namespace galaxy::render::vk

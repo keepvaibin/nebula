@@ -10,6 +10,15 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 #include "Game/System/GameAssets.hpp"
+#include "Game/System/LumaContentFx.hpp"
+#include "Game/System/LumaContentModel.hpp"
+#include "Game/System/LumaDraw.hpp"
+#include "Game/System/LumaDrawInst.hpp"
+#include "Game/System/LumaDrawView.hpp"
+#include "Game/System/LumaAnim.hpp"
+#include "Game/System/LumaPlayer.hpp"
+#include "Game/System/LumaUi.hpp"
+#include "Game/System/LumaCore.hpp"
 
 #ifdef NEBULA_ASAN_HEAPS
 // AddressSanitizer test builds: what no block holds is poisoned, so overflows and uses after free inside an arena are reported.
@@ -155,6 +164,22 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
 }
 
 void NebulaArena::destroy(NebulaArena* pArena) {
+    // Mods that keep objects forget those in it, before any of them or its memory goes.
+    lumacore::released(pArena->mStart, pArena->mEnd);
+    // The mods' effects on actors in it (content.fx): ended, never touched again.
+    luma::content::fx::released(pArena->mStart, pArena->mEnd);
+    // The mods' attached models made in it or on actors in it (content.model): ended, never touched again.
+    luma::content::model::released(pArena->mStart, pArena->mEnd);
+    // The mods' overrides of actors in it (draw.inst): ended, never touched again.
+    luma::draw::inst::released(pArena->mStart, pArena->mEnd);
+    luma::draw::released(pArena->mStart, pArena->mEnd);  // draw.mesh's models made in it
+    luma::draw::view::released(pArena->mStart, pArena->mEnd);  // views stop following actors in it
+    // The mods' screens made in it (ui): ended, never touched again.
+    luma::ui::released(pArena->mStart, pArena->mEnd);
+    luma::anim::released(pArena->mStart, pArena->mEnd);
+    // The mods' extra players made in it (player): forgotten.
+    luma::player::released(pArena->mStart, pArena->mEnd);
+
     // Its objects first: one that owns a child arena destroys it itself.
     pArena->destroyOwned();
 

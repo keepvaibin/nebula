@@ -14,7 +14,7 @@ namespace Nebula.Launcher
     /// <summary>
     /// The Mods tab: the game's mods, texture packs and HD movies (galaxy::mods) in two lists, disabled on the left and
     /// enabled on the right, where the higher one wins where two change the same file or texture. The game reads,
-    /// imports and removes them (NebulaNative --list-mods, --import-mod, --remove-mod), so the launcher and the in-game
+    /// imports and removes them (Nebula --list-mods, --import-mod, --remove-mod), so the launcher and the in-game
     /// menu share one implementation; the order and on/off state go to mods.ini as the game writes it.
     /// </summary>
     internal sealed class ModsPage
@@ -66,17 +66,17 @@ namespace Nebula.Launcher
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr SendMessage(IntPtr control, int message, IntPtr wParam, string lParam);
 
-        /// <summary>The game (NebulaNative.exe) is beside the launcher: the tab shows only then.</summary>
+        /// <summary>The game (Nebula.exe) is beside the launcher: the tab shows only then.</summary>
         public static bool Available(string app)
         {
-            return File.Exists(Path.Combine(app, "NebulaNative.exe"));
+            return File.Exists(Path.Combine(app, "Nebula.exe"));
         }
 
         public ModsPage(TabPage page, string app, string content)
         {
             this.page = page;
             window = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
-            native = Path.Combine(app, "NebulaNative.exe");
+            native = Path.Combine(app, "Nebula.exe");
             pak = content != null ? Path.Combine(content, "game.pak") : null;
             lastList = offList;
 
@@ -330,9 +330,17 @@ namespace Nebula.Launcher
 
         private readonly List<Action> afterRead = new List<Action>();
 
-        // Runs on the window's thread (never after the tab is gone).
+        // Runs on the window's thread (never after the tab is gone): through the window once it has a handle, dropped once
+        // it has closed; before any handle exists (the page is built before its window is shown) the thread's context
+        // queues it.
         private void Post(Action action)
         {
+            Control target = page.TopLevelControl ?? page;
+            if (target.IsHandleCreated || target.IsDisposed || target.Disposing)
+            {
+                UiThread.Post(target, delegate { Safe(action); });
+                return;
+            }
             window.Post(delegate { Safe(action); }, null);
         }
 

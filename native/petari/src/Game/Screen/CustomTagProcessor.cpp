@@ -13,23 +13,10 @@
 #include <Game/Ui/TextBox.hpp>
 #include <Game/Ui/TextWriterBase.hpp>
 #include "Game/Util/ByteView.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_alpha_f1, "alpha.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_CustomTagProcessor_f1, "CustomTagProcessor.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_CustomTagProcessor_f2, "CustomTagProcessor.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFontSizeGroup_f1, "exeFontSizeGroup.f1", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFontSizeGroup_f2, "exeFontSizeGroup.f2", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFontSizeGroup_f3, "exeFontSizeGroup.f3", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFontSizeGroup_f4, "exeFontSizeGroup.f4", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSystemGroupRuby_f1, "exeSystemGroupRuby.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDisplayGroupOffset_f1, "exeDisplayGroupOffset.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDisplayGroupCenter_f1, "exeDisplayGroupCenter.f1", 2.0f);
-
 
 namespace {
-    NEBULA_TUNABLE(f32, mRubyBaseLineOffset, 3.0f);
-    NEBULA_TUNABLE(f32, mRubyCharSpace, 2.0f);
+    const f32 mRubyBaseLineOffset = 3.0f;
+    const f32 mRubyCharSpace = 2.0f;
 
     NebulaColor8 sTextColor[] = {{255, 255, 255, 255}, {220, 130, 130, 255}, {80, 170, 80, 255},   {80, 140, 210, 255},
                             {235, 200, 0, 255},   {180, 110, 200, 255}, {255, 190, 190, 255}, {110, 243, 70, 255},
@@ -96,7 +83,7 @@ void CustomTagAlphaCtrl::init(u32 count, f32 speed, f32 interval, s32 startDelay
 u8 CustomTagAlphaCtrl::alpha() const {
     if (mEnabled) {
         f32 value = mFadeSpeed * (mFrame - mWaitTime) - mCharIndex * mCharInterval;
-        return (s32)(cNum_alpha_f1 * std::max(0.0f, std::min(1.0f, value)));
+        return (s32)(255.0f * std::max(0.0f, std::min(1.0f, value)));
     }
 
     return 255;
@@ -156,6 +143,7 @@ namespace Ui {
         f32 yCursorAdj = 0.0f;
         f32 textWidth = 0;
         bool bCharSpace = false;
+        CharCode prevCode = 0;  // the character before on this line, for the font's kerning (0: none)
         StreamType prevStreamPos = str;
         StreamType prevNewLinePos = str;
 
@@ -168,12 +156,10 @@ namespace Ui {
         CharStrmReader reader = GetFont()->GetCharStrmReader();
         reader.Set(str);
 
-        CustomTagProcessor* processor = nullptr;
+        // The processor's own fade (CustomTagProcessor's): any other processor (a mod's subtitle skips the game's tags
+        // with MessageTagSkipTagProcessor) leaves the writer's alpha alone.
         const u8 alpha = GetAlpha();
-        if (&mDefaultTagProcessor != mTagProcessor) {
-            processor = static_cast< CustomTagProcessor* >(mTagProcessor);
-            processor->reset(str);
-        }
+        mTagProcessor->BeginPrint(str);
 
         for (CharCode code = reader.Next(); reinterpret_cast< StreamType >(reader.GetCurrentPos()) - str <= length;) {
             if (code < ' ')
@@ -183,6 +169,7 @@ namespace Ui {
                 context.str = reinterpret_cast< StreamType >(reader.GetCurrentPos());
                 context.flags = 0;
                 context.flags |= bCharSpace ? 0 : CONTEXT_NO_CHAR_SPACE;
+                prevCode = 0;
 
                 if (bUseLimit && (code != '\n') && (prevStreamPos != prevNewLinePos)) {
                     PrintContext< CharType > context2 = context;
@@ -236,9 +223,8 @@ namespace Ui {
             } else
 
             {
-                if (processor) {
-                    SetAlpha(processor->mAlphaCtrl.alpha());
-                    processor->mAlphaCtrl.mCharIndex++;
+                if (u8 charAlpha = 0; mTagProcessor->NextCharAlpha(&charAlpha)) {
+                    SetAlpha(charAlpha);
                 }
 
                 const f32 baseY = GetCursorY();
@@ -250,10 +236,13 @@ namespace Ui {
                     continue;
                 }
 
+                // The font's kerning before this character (CalcLineRectImpl measures it the same).
+                const f32 kern = IsWidthFixed() || prevCode == 0 ? 0.0f : GetFont()->GetKerning(prevCode, code) * GetScaleH();
+
                 if (bUseLimit && (prevStreamPos != prevNewLinePos)) {
                     f32 baseX = GetCursorX();
                     f32 charSpace = bCharSpace ? GetCharSpace() : 0.0f;
-                    f32 charWidth = IsWidthFixed() ? GetFixedWidth() : GetFont()->GetCharWidth(code) * GetScaleH();
+                    f32 charWidth = IsWidthFixed() ? GetFixedWidth() : GetFont()->GetCharWidth(code) * GetScaleH() + kern;
 
                     if (baseX - xOrigin + charSpace + charWidth > mWidthLimit) {
                         code = '\n';
@@ -266,6 +255,7 @@ namespace Ui {
                     MoveCursorX(GetCharSpace());
                 }
                 bCharSpace = true;
+                MoveCursorX(kern);
 
                 {
                     const Font* pFont = GetFont();
@@ -274,6 +264,7 @@ namespace Ui {
                 }
 
                 CharWriter::Print(code);
+                prevCode = code;
 
 
                 SetCursorY(baseY);
@@ -297,9 +288,7 @@ namespace Ui {
             MoveCursorY(yCursorAdj);
         }
 
-        if (processor) {
-            SetAlpha(alpha);
-        }
+        SetAlpha(alpha);
 
         return textWidth;
     }
@@ -308,8 +297,8 @@ namespace Ui {
 CustomTagProcessor::CustomTagProcessor(Ui::TextBox* textBox)
     : mAlphaCtrl(), mPlayedSounds(), mColorMappingMin(::toColor8(textBox->GetMaterial()->GetStageColor(0))),
       mColorMappingMax(::toColor8(textBox->GetMaterial()->GetStageColor(1))) {
-    mRubyFontWidth = cNum_CustomTagProcessor_f1 * textBox->mFontSize.width;
-    mRubyFontHeight = cNum_CustomTagProcessor_f2 * textBox->mFontSize.height;
+    mRubyFontWidth = 0.5f * textBox->mFontSize.width;
+    mRubyFontHeight = 0.5f * textBox->mFontSize.height;
     mFontWidth = textBox->mFontSize.width;
     mFontHeight = textBox->mFontSize.height;
 
@@ -341,6 +330,16 @@ CustomTagProcessor::Operation CustomTagProcessor::CalcRect(Ui::Rect* rect, u16 c
 
     context->str += tag.getSkipLength();
     return operation;
+}
+
+void CustomTagProcessor::BeginPrint(const char16_t* pStr) {
+    reset(pStr);
+}
+
+bool CustomTagProcessor::NextCharAlpha(u8* pAlpha) {
+    *pAlpha = mAlphaCtrl.alpha();
+    mAlphaCtrl.mCharIndex++;
+    return true;
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::Process(u16 code, ContextType* context) {
@@ -541,13 +540,13 @@ CustomTagProcessor::Operation CustomTagProcessor::exeFontSizeGroup(Ui::Rect* rec
     Ui::TextWriterBase< char16_t >* writer = context->writer;
     switch (tag.getTag()) {
     case 0:
-        writer->SetFontSize(cNum_exeFontSizeGroup_f1 * mFontWidth, cNum_exeFontSizeGroup_f2 * mFontHeight);
+        writer->SetFontSize(0.75f * mFontWidth, 0.75f * mFontHeight);
         break;
     case 1:
         writer->SetFontSize(mFontWidth, mFontHeight);
         break;
     case 2:
-        writer->SetFontSize(cNum_exeFontSizeGroup_f3 * mFontWidth, cNum_exeFontSizeGroup_f4 * mFontHeight);
+        writer->SetFontSize(1.5f * mFontWidth, 1.5f * mFontHeight);
         break;
     }
 
@@ -671,7 +670,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupRuby(Ui::Rect* r
             rubyWriter.MoveCursorX(space);
             rubyWriter.SetCharSpace(mRubyCharSpace + space);
         } else {
-            rubyWriter.MoveCursorX(extraWidth / cNum_exeSystemGroupRuby_f1);
+            rubyWriter.MoveCursorX(extraWidth / 2.0f);
         }
 
         rubyWriter.MoveCursorY(mRubyBaseLineOffset + -writer->GetFontAscent());
@@ -702,7 +701,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupOffset(Ui::Rect
     Ui::Rect bounds;
     if (mTextBox->GetTextPositionV() == 0) {
         writer->CalcStringRect(&bounds, string, MR::getStringLengthWithMessageTag(string));
-        writer->MoveCursorY((mTextBox->GetDrawSize().height - bounds.GetHeight()) / cNum_exeDisplayGroupOffset_f1);
+        writer->MoveCursorY((mTextBox->GetDrawSize().height - bounds.GetHeight()) / 2.0f);
     }
 
     return OPERATION_NO_CHAR_SPACE;
@@ -714,7 +713,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupCenter(Ui::Rect
     const char16_t* string = context->str + tag.getSkipLength();
     Ui::Rect bounds;
     writer.CalcStringRect(&bounds, string, MR::getStringLengthWithMessageTag(string));
-    f32 offset = (mTextBox->GetDrawSize().width - bounds.GetWidth()) / cNum_exeDisplayGroupCenter_f1;
+    f32 offset = (mTextBox->GetDrawSize().width - bounds.GetWidth()) / 2.0f;
     context->writer->MoveCursorX(offset);
     context->xOrigin += offset;
     return OPERATION_NO_CHAR_SPACE;

@@ -10,24 +10,10 @@
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWipeIn_f1, "exeWipeIn.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWipeOut_f1, "exeWipeOut.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setCenterPos_f1, "setCenterPos.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setCenterPos_f2, "setCenterPos.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_canCenterOnMario_f1, "canCenterOnMario.f1", 15060.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_canCenterOnMario_f2, "canCenterOnMario.f2", 11800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_canCenterOnMario_f3, "canCenterOnMario.f3", 1260.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_canCenterOnMario_f4, "canCenterOnMario.f4", 600.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcRadius_f1, "calcRadius.f1", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcMaxRadius_f1, "calcMaxRadius.f1", 900160.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePlayerPos_f1, "updatePlayerPos.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePlayerPos_f2, "updatePlayerPos.f2", 0.5f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sAnimFrame, 60);
+    const s32 sAnimFrame = 60;
     static const char* sOutAnimName = "Out";
     static const char* sInAnimName = "In";
 
@@ -82,7 +68,7 @@ void WipeRing::exeWipeIn() {
     mWipeInFrame = radiusRate * MR::getAnimCtrl(this, 0)->getEnd();
 
     const f32 angle = (1.0f + static_cast< f32 >(getNerveStep()) / mAnimFrame) * FloatUtil::PI();
-    f32 f = MR::sin(cNum_exeWipeIn_f1 * angle);
+    f32 f = MR::sin(0.5f * angle);
 
     MR::getAnimCtrl(this, 0)->setFrame(mWipeInFrame * (1.0f - f));
 
@@ -109,7 +95,7 @@ void WipeRing::exeWipeOut() {
     mWipeOutFrame = invRadiusRate * MR::getAnimCtrl(this, 0)->getEnd();
 
     const f32 angle = (static_cast< f32 >(getNerveStep()) / mAnimFrame) * FloatUtil::PI();
-    f32 f = MR::sin(cNum_exeWipeOut_f1 * angle);
+    f32 f = MR::sin(0.5f * angle);
 
     MR::getAnimCtrl(this, 0)->setFrame(mWipeOutFrame * (1.0f - f) + f * MR::getAnimCtrl(this, 0)->getEnd());
 
@@ -180,7 +166,7 @@ void WipeRing::setCenterPos(const Vec3f& rPos) {
         return;
     }
 
-    mCenterPos.set(MR::getScreenWidth() * cNum_setCenterPos_f1, MR::getScreenHeight() * cNum_setCenterPos_f2);
+    mCenterPos.set(MR::getScreenWidth() * 0.5f, MR::getScreenHeight() * 0.5f);
 }
 
 void WipeRing::startAnim(const char* pAnimName) {
@@ -191,8 +177,8 @@ void WipeRing::startAnim(const char* pAnimName) {
 namespace {
     bool canCenterOnMario() {
         if (MR::isEqualStageName("IceVolcanoGalaxy") && MR::getCurrentScenarioNo() == 1) {
-            Vec3f position(cNum_canCenterOnMario_f1, -cNum_canCenterOnMario_f2, cNum_canCenterOnMario_f3);
-            if (MR::getPlayerPos()->distance(position) < cNum_canCenterOnMario_f4) {
+            Vec3f position(15060.0f, -11800.0f, 1260.0f);
+            if (MR::getPlayerPos()->distance(position) < 600.0f) {
                 return false;
             }
         }
@@ -220,7 +206,7 @@ f32 WipeRing::calcRadius() const {
     const bool extended = MR::isScreen16Per9() && display.wide;
     const f32 canvasWidth = extended ? display.layout_width : NebulaFrameClock::cLayoutWidth;
     const f32 vertical = extended ? display.vertical_fit : 1.0f;
-    const f32 locationX = MR::isScreen16Per9() ? cNum_calcRadius_f1 : 1.0f;
+    const f32 locationX = MR::isScreen16Per9() ? 0.75f : 1.0f;
     const f32 x = __builtin_fmaxf(__builtin_fabsf(mCenterPos.x), __builtin_fabsf(width - mCenterPos.x)) *
                   canvasWidth / (width * locationX);
     const f32 y = __builtin_fmaxf(__builtin_fabsf(mCenterPos.y), __builtin_fabsf(height - mCenterPos.y)) * vertical;
@@ -228,7 +214,7 @@ f32 WipeRing::calcRadius() const {
 }
 
 f32 WipeRing::calcMaxRadius() const {
-    return NebulaSqrt(cNum_calcMaxRadius_f1);
+    return NebulaSqrt(900160.0f);
 }
 
 void WipeRing::updatePlayerPos() {
@@ -246,5 +232,5 @@ void WipeRing::updatePlayerPos() {
         return;
     }
 
-    mCenterPos.set(MR::getScreenWidth() * cNum_updatePlayerPos_f1, MR::getScreenHeight() * cNum_updatePlayerPos_f2);
+    mCenterPos.set(MR::getScreenWidth() * 0.5f, MR::getScreenHeight() * 0.5f);
 }

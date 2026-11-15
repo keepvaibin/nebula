@@ -1,10 +1,9 @@
 #include "Game/Enemy/TakoHeiInkHolder.hpp"
 #include "Game/Enemy/TakoHeiInk.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sMaxTakoHeiInk, 16);
+    const s32 sMaxTakoHeiInk = 16;
 };  // namespace
 
 TakoHeiInkHolder::TakoHeiInkHolder() : DeriveActorGroup< TakoHeiInk >("タコヘイ墨管理", ::sMaxTakoHeiInk) {

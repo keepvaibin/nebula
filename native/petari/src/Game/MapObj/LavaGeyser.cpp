@@ -3,12 +3,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 100.f);
 
 namespace NrvLavaGeyser {
     NEW_NERVE(HostTypeNrvWaitSwitch, LavaGeyser, WaitSwitch);
@@ -41,10 +36,10 @@ void LavaGeyser::init(const TableIter& iter) {
     MR::hideModel(this);
     MR::connectToSceneMapObj(this);
     initHitSensor(3);
-    MR::addHitSensorCallbackMapObj(this, "attack", 1, mScale.y * cNum_init_f1);
+    MR::addHitSensorCallbackMapObj(this, "attack", 1, mScale.y * 100.0f);
     initEffectKeeper(0, nullptr);
     initSound(4, false);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f2);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::setGroupClipping(this, iter, 16);
     if (MR::isValidSwitchA(this)) {
         initNerve(GET_NERVE(LavaGeyser, HostTypeNrvWaitSwitch));
@@ -69,7 +64,7 @@ void LavaGeyser::updateHitSensor(HitSensor* pSensor) {
     f32 playerHeight = mUp.dot(cPos);
     Vec3f toTop = mTopPos;
     toTop -= mPosition;
-    f32 maxHeight = mUp.dot(toTop) + -cNum_updateHitSensor_f1;
+    f32 maxHeight = mUp.dot(toTop) + -100.f;
     if (maxHeight < 0.f) {
         pSensor->mPosition.set(mTopPos);
         return;

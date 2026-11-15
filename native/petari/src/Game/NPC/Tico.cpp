@@ -20,29 +20,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initBase_f1, "initBase.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initBase_f2, "initBase.f2", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initBase_f3, "initBase.f3", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initBase_f4, "initBase.f4", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initBase_f5, "initBase.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initBase_f6, "initBase.f6", 12.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMessage_f1, "initMessage.f1", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMessage_f2, "initMessage.f2", 350.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMessage_f3, "initMessage.f3", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMessage_f4, "initMessage.f4", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMessage_f5, "initMessage.f5", 350.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initMessage_f6, "initMessage.f6", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.998646f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 11.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f4, "control.f4", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f5, "control.f5", 150.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRed1_isNearPlayer_1, "exeRed1.isNearPlayer.1", 400.0f);
 
 namespace NrvTico {
     NEW_NERVE(TicoNrvNoReaction, Tico, NoReaction);
@@ -88,7 +66,7 @@ void Tico::initBase(const TableIter& rIter, s32 color) {
     caps.mUseShadow = true;
     caps.mWaitNerve = GET_NERVE(Tico, TicoNrvWait);
     caps.mSensorJoint = "Body";
-    caps.mSensorSize = cNum_initBase_f1;
+    caps.mSensorSize = 60.0f;
     caps.mSensorOffset.zero();
     caps.mPointerJoint = "Body";
     caps.mBinder = 0;
@@ -99,7 +77,7 @@ void Tico::initBase(const TableIter& rIter, s32 color) {
 
     setDefaults2();
     mReactionAction = "Spin";
-    mSwingReactDist = cNum_initBase_f2;
+    mSwingReactDist = 1000.0f;
     const char* wait = "Wait";
     const char* talk = "Talk";
     const char* fly = "Fly";
@@ -109,10 +87,10 @@ void Tico::initBase(const TableIter& rIter, s32 color) {
     mParam.mTalkTurnAction = talk;
     mMoveAction = fly;
     mMoveTalkAction = fly;
-    mRailSpeed = cNum_initBase_f3;
-    mRailAccel = cNum_initBase_f4;
-    mParam.mTiltSpeed = cNum_initBase_f5;
-    mParam.mTiltMaxAngle = cNum_initBase_f6;
+    mRailSpeed = 8.0f;
+    mRailAccel = 0.2f;
+    mParam.mTiltSpeed = 0.5f;
+    mParam.mTiltMaxAngle = 12.0f;
     initialize(rIter, caps);
     if (color != -1) {
         MR::startBrk(this, "ColorChange");
@@ -130,24 +108,24 @@ void Tico::initBase(const TableIter& rIter, s32 color) {
 }
 
 void Tico::initMessage(const TableIter& rIter, const char* pMessageId) {
-    if (initTalkCtrl(rIter, pMessageId, Vec3f(0.0f, cNum_initMessage_f1, 0.0f), nullptr)) {
+    if (initTalkCtrl(rIter, pMessageId, Vec3f(0.0f, 120.0f, 0.0f), nullptr)) {
         MR::registerKillFunc(getMsgCtrl(), TalkMessageFunc< Tico >(this, &Tico::killFunc));
-        MR::setDistanceToTalk(mMsgCtrl, cNum_initMessage_f2);
+        MR::setDistanceToTalk(mMsgCtrl, 350.0f);
     }
 
-    mTicoTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_Tico000", Vec3f(0.0f, cNum_initMessage_f3, 0.0f), nullptr);
+    mTicoTalkCtrl = MR::createTalkCtrlDirect(this, rIter, "Common_Tico000", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
     MR::offRootNodeAutomatic(mTicoTalkCtrl);
 }
 
 void Tico::initMessage(const char* pMessageId) {
     TableIter iter;
 
-    if (initTalkCtrlDirect(iter, pMessageId, Vec3f(0.0f, cNum_initMessage_f4, 0.0f), nullptr)) {
+    if (initTalkCtrlDirect(iter, pMessageId, Vec3f(0.0f, 120.0f, 0.0f), nullptr)) {
         MR::registerKillFunc(getMsgCtrl(), TalkMessageFunc< Tico >(this, &Tico::killFunc));
-        MR::setDistanceToTalk(mMsgCtrl, cNum_initMessage_f5);
+        MR::setDistanceToTalk(mMsgCtrl, 350.0f);
     }
 
-    mTicoTalkCtrl = MR::createTalkCtrlDirect(this, iter, "Common_Tico000", Vec3f(0.0f, cNum_initMessage_f6, 0.0f), nullptr);
+    mTicoTalkCtrl = MR::createTalkCtrlDirect(this, iter, "Common_Tico000", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
     MR::offRootNodeAutomatic(mTicoTalkCtrl);
 }
 
@@ -240,7 +218,7 @@ void Tico::control() {
     if (mLightJointMtx) {
         Vec3f trans;
         MR::extractMtxTrans(mLightJointMtx, &trans);
-        MR::requestPointLight(this, trans, mLightColor, cNum_control_f1, -1);
+        MR::requestPointLight(this, trans, mLightColor, 0.998646f, -1);
     }
 
     if (isNerve(mMetaNerve)) {
@@ -250,9 +228,9 @@ void Tico::control() {
             MR::startLevelSound(this, "SE_SM_LV_TICO_WAIT");
         }
         Vec3f len = mPosition - mPrevPos;
-        MR::startLevelSound(this, "SE_SM_LV_TICO_FLOAT", (cNum_control_f2 * MR::getLinerValueFromMinMax(len.length(), 1.0f, cNum_control_f3, cNum_control_f4, 1.0f)));
+        MR::startLevelSound(this, "SE_SM_LV_TICO_FLOAT", (100.0f * MR::getLinerValueFromMinMax(len.length(), 1.0f, 11.0f, 0.2f, 1.0f)));
         mPrevPos.set(mPosition);
-        mFloatOffset = MR::calcFloatOffset(this, mFloatOffset, cNum_control_f5);
+        mFloatOffset = MR::calcFloatOffset(this, mFloatOffset, 150.0f);
         NPCActor::control();
     }
 }
@@ -420,7 +398,7 @@ void Tico::exeRed1() {
 
     MR::tryStartTurnAction(this);
 
-    if (MR::isNearPlayer(this, cNum_exeRed1_isNearPlayer_1)) {
+    if (MR::isNearPlayer(this, 400.0f)) {
         setNerve(GET_NERVE(Tico, TicoNrvRed2));
     }
 }

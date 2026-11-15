@@ -55,27 +55,36 @@ bool read_file(const std::filesystem::path& path, std::vector<std::uint8_t>& byt
     return static_cast<bool>(in.read(reinterpret_cast<char*>(bytes.data()), size));
 }
 
-// A premultiplied-alpha 2x2 box of the level above, with fixed rounding.
+// A premultiplied-alpha 2x2 box of the level above, with fixed rounding. Both levels are RGBA8 bytes, read and written in
+// place (no copy of either level).
 void box_level(
-    const std::vector<RGBA8>& source,
+    const std::uint8_t* source_bytes,
     std::uint32_t source_width,
     std::uint32_t source_height,
-    std::vector<RGBA8>& dest,
+    std::uint8_t* dest_bytes,
     std::uint32_t dest_width,
     std::uint32_t dest_height) {
-    dest.resize(
-        static_cast<std::size_t>(dest_width) *
-        static_cast<std::size_t>(dest_height));
+    const auto read = [source_bytes](std::size_t i) {
+        const std::uint8_t* const p = source_bytes + i * 4u;
+        return RGBA8{p[0], p[1], p[2], p[3]};
+    };
+    const auto write = [dest_bytes](std::size_t i, const RGBA8& pixel) {
+        std::uint8_t* const p = dest_bytes + i * 4u;
+        p[0] = pixel.r;
+        p[1] = pixel.g;
+        p[2] = pixel.b;
+        p[3] = pixel.a;
+    };
     for (std::uint32_t y = 0; y < dest_height; ++y) {
         for (std::uint32_t x = 0; x < dest_width; ++x) {
             const std::uint32_t src_x = x * 2u;
             const std::uint32_t src_y = y * 2u;
             if (src_x + 1u < source_width && src_y + 1u < source_height) {
                 const std::size_t top = static_cast<std::size_t>(src_y) * source_width + src_x;
-                const RGBA8& p0 = source[top];
-                const RGBA8& p1 = source[top + 1u];
-                const RGBA8& p2 = source[top + source_width];
-                const RGBA8& p3 = source[top + source_width + 1u];
+                const RGBA8 p0 = read(top);
+                const RGBA8 p1 = read(top + 1u);
+                const RGBA8 p2 = read(top + source_width);
+                const RGBA8 p3 = read(top + source_width + 1u);
                 if (((p0.a ^ p1.a) | (p0.a ^ p2.a) | (p0.a ^ p3.a)) == 0u) {
                     // Equal nonzero alpha cancels from (alpha * sum + 2 * alpha) / (4 * alpha).
                     // Fully transparent input keeps zero RGB.
@@ -87,7 +96,7 @@ void box_level(
                             static_cast<std::uint8_t>((p0.b + p1.b + p2.b + p3.b + 2u) >> 2u),
                             p0.a};
                     }
-                    dest[static_cast<std::size_t>(y) * dest_width + x] = pixel;
+                    write(static_cast<std::size_t>(y) * dest_width + x, pixel);
                     continue;
                 }
             }
@@ -106,9 +115,7 @@ void box_level(
                     if (sample_x >= source_width) {
                         continue;
                     }
-                    const RGBA8& px =
-                        source[static_cast<std::size_t>(sample_y) *
-                               source_width + sample_x];
+                    const RGBA8 px = read(static_cast<std::size_t>(sample_y) * source_width + sample_x);
                     premul_r += static_cast<std::uint32_t>(px.r) * px.a;
                     premul_g += static_cast<std::uint32_t>(px.g) * px.a;
                     premul_b += static_cast<std::uint32_t>(px.b) * px.a;
@@ -121,7 +128,7 @@ void box_level(
             }
             const std::uint32_t avg_a = (a + count / 2u) / count;
             const std::uint32_t color_divisor = a == 0u ? count : a;
-            dest[static_cast<std::size_t>(y) * dest_width + x] = RGBA8{
+            write(static_cast<std::size_t>(y) * dest_width + x, RGBA8{
                 static_cast<std::uint8_t>(
                     (premul_r + color_divisor / 2u) / color_divisor),
                 static_cast<std::uint8_t>(
@@ -129,7 +136,7 @@ void box_level(
                 static_cast<std::uint8_t>(
                     (premul_b + color_divisor / 2u) / color_divisor),
                 static_cast<std::uint8_t>(avg_a),
-            };
+            });
         }
     }
 }
@@ -140,18 +147,13 @@ void generate_levels(TexturePackPixels& image) {
     if (image.levels.empty()) {
         return;
     }
-    std::vector<RGBA8> above;
     for (std::uint32_t level = static_cast<std::uint32_t>(image.levels.size()); level < count; ++level) {
         const std::uint32_t aw = std::max(1u, image.width >> (level - 1u));
         const std::uint32_t ah = std::max(1u, image.height >> (level - 1u));
         const std::uint32_t lw = std::max(1u, image.width >> level);
         const std::uint32_t lh = std::max(1u, image.height >> level);
-        above.resize(static_cast<std::size_t>(aw) * ah);
-        std::memcpy(above.data(), image.levels[level - 1u].data(), above.size() * 4u);
-        std::vector<RGBA8> next;
-        box_level(above, aw, ah, next, lw, lh);
-        std::vector<std::uint8_t> bytes(next.size() * 4u);
-        std::memcpy(bytes.data(), next.data(), bytes.size());
+        std::vector<std::uint8_t> bytes(static_cast<std::size_t>(lw) * lh * 4u);
+        box_level(image.levels[level - 1u].data(), aw, ah, bytes.data(), lw, lh);
         image.levels.push_back(std::move(bytes));
     }
 }
@@ -260,6 +262,8 @@ bool load_image(const std::filesystem::path& file, bool dds, TexturePackPixels& 
         out.levels.emplace_back(pixels, pixels + static_cast<std::size_t>(width) * height * 4u);
         stbi_image_free(pixels);
     }
+    // The file's bytes go before the levels are made: a large DDS no longer sits beside its decoded chain.
+    bytes = {};
     generate_levels(out);
     return true;
 }

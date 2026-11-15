@@ -6,6 +6,8 @@
 #ifndef NEBULA_FRAME_LIST_H
 #define NEBULA_FRAME_LIST_H
 
+#include "luma_draw_native.h"
+
 #include <stdint.h>
 #include "nebula_limits.h"
 
@@ -82,15 +84,47 @@ typedef struct NebulaFrameWorldLight {
     float reserved;
 } NebulaFrameWorldLight;
 
+/* A clip area's volume this frame (Matter Splatter, the dark rooms: ClipArea::draw). The map parts the game draws as
+   NEBULA_CATEGORY_CLIPPED_MAP_PARTS are drawn whole and painted over where the list's clip_rule says: what shows of
+   them is their points inside some volume (NEBULA_CLIP_RULE_INSIDE) or outside every one (NEBULA_CLIP_RULE_OUTSIDE).
+   `place`: the world from the volume's own space (rows of a 3x4 matrix), where it is the unit shape `shape`. */
+enum {
+    NEBULA_CLIP_SPHERE,    /* |p| < 1 */
+    NEBULA_CLIP_BOX,       /* |x|, |y|, |z| <= 1 */
+    NEBULA_CLIP_BOX_UP,    /* |x|, |z| <= 1, 0 <= y <= 2: the box standing on its origin */
+    NEBULA_CLIP_CONE_UP,   /* 0 <= y <= 1, x^2 + z^2 < y^2: the tip at the origin */
+    NEBULA_CLIP_CONE_DOWN, /* 0 <= y <= 1, x^2 + z^2 < (1 - y)^2: the tip at y 1 */
+};
+enum {
+    NEBULA_CLIP_RULE_NONE,    /* no clip areas paint this frame: the clipped map parts show whole */
+    NEBULA_CLIP_RULE_INSIDE,  /* they show inside the volumes */
+    NEBULA_CLIP_RULE_OUTSIDE, /* they show outside every volume */
+};
+typedef struct NebulaFrameClipVolume {
+    float place[3][4];
+    uint32_t shape; /* NEBULA_CLIP_* */
+    uint32_t reserved[3];
+} NebulaFrameClipVolume;
+
 /* Whose lights a light set holds, one per set (list->light_set_owners, in the sets' order). `actor_light`: the world
    lights `actor_light` (the key, the set's light 0) and `actor_light + 1` (the fill, its light 1); 0 when the set's
    lights are no light of the world (every light white at the eye). `point_light`: the id of the world light that is
-   the set's light 4, or 0. `ambient`: the ambient colour loaded with the lights, 0 to 1. */
+   the set's light 4, or 0. `ambient`: the ambient colour loaded with the lights, 0 to 1. `kind`: which of an area's
+   light records the key and fill are (NEBULA_LIGHT_OWNER_*; the game lights characters, enemies and objects from the
+   player, strong and weak records and the environment from the planet record), none where unknown. */
+enum {
+    NEBULA_LIGHT_OWNER_NONE = 0,
+    NEBULA_LIGHT_OWNER_PLAYER,
+    NEBULA_LIGHT_OWNER_STRONG,
+    NEBULA_LIGHT_OWNER_WEAK,
+    NEBULA_LIGHT_OWNER_PLANET,
+    NEBULA_LIGHT_OWNER_COIN,
+};
 typedef struct NebulaFrameLightOwner {
     uint64_t actor_light;
     uint64_t point_light;
     float ambient[3];
-    float reserved;
+    uint32_t kind; /* NEBULA_LIGHT_OWNER_* */
 } NebulaFrameLightOwner;
 
 /* A point light an actor asked for this frame (MR::requestPointLight: a Luma, a power star, a fireball, a Boo, an
@@ -302,7 +336,23 @@ typedef enum NebulaPassKind {
     NEBULA_PASS_PROBE,       /* depth at `probes`, in `probe_channel`; `arg0` NEBULA_PROBE_* */
     NEBULA_PASS_SHOW,        /* the frame drawn so far is the picture this frame shows */
     NEBULA_PASS_SCENE_BEGIN, /* the 3D scene starts: `scene_camera`, `scene_view` */
+    NEBULA_PASS_POST,        /* draw.post: program `arg0` (post_register) over the frame into a new picture, the frame
+                                from here; its params the 4 rows of instance_rows from `first_item` */
+    NEBULA_PASS_NATIVE,      /* draw.native: native_calls[first_item] called with the frame at draw point `arg0` */
+    NEBULA_PASS_TRACED_DRAW, /* items in the ray tracer's scene alone, as things that stop light: never drawn (a body the
+                                game hides from its own camera, which still casts: first-person view) */
 } NebulaPassKind;
+
+/* draw.native (services/draw.md): what a native call is given, valid only during it (one struct with the mods'). */
+typedef LumaDrawNativeFrame NebulaFrame;
+
+/* A native call: the game's trampoline and its word. The host calls it on its render thread at the pass, for every picture
+   it draws from the list, with its own render pass ended (Vulkan) or its list open (D3D12), and restores its state
+   after. */
+typedef struct NebulaCall {
+    void (*fn)(void* user, const NebulaFrame* frame);
+    void* user;
+} NebulaCall;
 
 /* A probe pass's `arg0`. */
 enum {
@@ -390,9 +440,15 @@ typedef struct NebulaFrameList {
     float sky_up[3];           /* the player's up, unit length, in eye space of the scene's view */
     uint32_t sky_up_known;
     uint32_t game_frame;       /* set by the host: the game frame that made the list */
+    const NebulaFrameClipVolume* clip_volumes; /* the clip areas' volumes this frame, clip_volume_count of them */
+    uint32_t clip_volume_count;
+    uint32_t clip_rule;        /* NEBULA_CLIP_RULE_*: where the clipped map parts show */
     /* Set by the renderer when it no longer reads this list. */
     volatile uint32_t released;
     uint32_t reserved;
+    const NebulaCall* native_calls; /* NEBULA_PASS_NATIVE's calls */
+    uint32_t native_call_count;
+    uint32_t reserved_native;
 } NebulaFrameList;
 
 /* A pipeline: two programs named by their texts' hashes, or for a written shader NEBULA_PROGRAM_SITE | shader number << 1

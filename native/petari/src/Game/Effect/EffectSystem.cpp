@@ -70,6 +70,10 @@ void EffectSystem::forceDeleteSingleEmitter(SingleEmitter* pSingleEmitter) const
 
 void EffectSystem::createSingleEmitter(SingleEmitter* pSingleEmitter, MultiEmitterCallBackBase* pCallBack,
                                        MultiEmitterParticleCallBack* pParticleCallBack) {
+    // A name the resources lack (MultiEmitter::allocateEmitter said so once): nothing to make.
+    if (pSingleEmitter->mResourceId == SingleEmitter::cNoResource) {
+        return;
+    }
     if (pSingleEmitter->isValid()) {
         if (!pSingleEmitter->isOneTime()) {
             return;

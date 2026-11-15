@@ -3,7 +3,7 @@
 
 // TextureStore's GPU side: shader views by slot, mapped upload staging, textures, and the recorded upload of a
 // texture's levels. The cache's logic (keys, maps, aliases, eviction, retirement) is shared; each API implements
-// this class (gpu_texture_backend_d3d12.cpp, vk/texture_backend_vk.cpp).
+// this class (gpu_texture_backend_d3d12.cpp, vk/texture_backend_vk.cpp, mtl/, d3d11/texture_backend_d3d11.cpp).
 
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/texel_format.h"
@@ -16,6 +16,8 @@
 #include "galaxy/render/vk/texture_backend_vk.h"
 #elif defined(NEBULA_GPU_METAL)
 #include "galaxy/render/mtl/texture_backend_mtl.h"
+#elif defined(NEBULA_GPU_D3D11)
+#include "galaxy/render/d3d11/texture_backend_d3d11.h"
 #else
 #include "galaxy/render/gpu_placed_textures.h"
 
@@ -54,6 +56,8 @@ public:
     // A texture create_texture made in CPU-visible memory: it is never uploaded again in place.
     [[nodiscard]] static bool direct_written(ID3D12Resource* texture) noexcept;
     [[nodiscard]] static bool supports_bc1() noexcept { return true; }
+    [[nodiscard]] static bool supports_astc4x4() noexcept { return false; }
+    [[nodiscard]] static bool supports_rgb565() noexcept { return false; }
     // A texture made by create_texture that the pool may hand out again for the same extent.
     [[nodiscard]] static bool poolable(ID3D12Resource* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);

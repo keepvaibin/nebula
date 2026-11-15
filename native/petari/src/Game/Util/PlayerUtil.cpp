@@ -21,10 +21,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_getPlayerHitRadius_f1, "getPlayerHitRadius.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getPlayerHitRadius_f2, "getPlayerHitRadius.f2", 60.0f);
 
 namespace MR {
     bool isOnGroundPlayer() {
@@ -108,7 +104,7 @@ namespace MR {
     }
 
     f32 getPlayerHitRadius() {
-        return MarioAccess::getPlayerActor()->mPlayerMode == (s16)6 ? cNum_getPlayerHitRadius_f1 : cNum_getPlayerHitRadius_f2;
+        return MarioAccess::getPlayerActor()->mPlayerMode == (s16)6 ? 100.0f : 60.0f;
     }
 
     void setPlayerWalkingResist(f32 resist) {

@@ -6,11 +6,16 @@
 //   forms, then its ray tracing forms) offset u32 and size u32.
 #include "galaxy/render/program_table.h"
 
+#include "galaxy/launch_args.h"
+#include "galaxy/platform_paths.h"
 #include "galaxy/render/mod_shaders.h"
 
 #include <algorithm>
 #include <atomic>
+#include <cstdio>
 #include <cstring>
+#include <exception>
+#include <vector>
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
@@ -49,8 +54,25 @@ struct Blob {
     char interface_text[41]{};
 };
 
+// A dev run's programs: dev/programs.bin beside the program, kept for the run.
+std::vector<unsigned char> g_dev_programs;
+
 Blob open_blob() noexcept {
     Blob blob;
+    try {
+        if (dev_shader_file("programs.bin", g_dev_programs)) {
+            if (g_dev_programs.size() >= 64u && std::memcmp(g_dev_programs.data(), "NBPROG03", 8u) == 0) {
+                blob.bytes = g_dev_programs.data();
+                std::fprintf(stderr, "[dev-shaders] programs from dev/programs.bin (%zu bytes, interface %.40s)\n",
+                             g_dev_programs.size(), reinterpret_cast<const char*>(g_dev_programs.data() + 16u));
+            } else {
+                std::fprintf(stderr, "[dev-shaders] dev/programs.bin refused (not a programs file): the linked ones\n");
+            }
+        }
+    } catch (const std::exception&) {
+        blob.bytes = nullptr;
+    }
+    if (blob.bytes == nullptr) {  // the linked programs
 #if defined(_WIN32)
     const HMODULE module = GetModuleHandleW(nullptr);
     HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(101), MAKEINTRESOURCEW(10));
@@ -61,6 +83,7 @@ Blob open_blob() noexcept {
 #else
     blob.bytes = nebula_programs_begin;
 #endif
+    }
     if (blob.bytes == nullptr || std::memcmp(blob.bytes, "NBPROG03", 8u) != 0) {
         blob.bytes = nullptr;
         return blob;
@@ -112,13 +135,14 @@ ProgramBytes program_bytes(std::uint64_t id, unsigned variant, bool pixel) noexc
     if (variant >= kProgramVariants && !traced) {
         return {};
     }
-    // A traced form's vertex stage: a written lit material's own (its light varyings) where it has one, for its
-    // prepass too: the prepass writes the depth the scene pass then tests, so both run one vertex stage.
+    // A traced form's vertex stage: its own where it has one (a written lit material's light varyings; a generated
+    // stage's de-lit colour, D2), a mod's too, for its prepass too: the prepass writes the depth the scene pass then
+    // tests, so both run one vertex stage.
     bool own_form = false;
     if (!pixel && traced) {
         const unsigned own = variant == kProgramTracedMotion ? unsigned{kProgramTracedMotion} : unsigned{kProgramTraced};
         const Row* const row = find(id, false);
-        if (row != nullptr && row->variants[own].size != 0u) {
+        if (row != nullptr ? row->variants[own].size != 0u : mod_program_bytes(id, own, false).size != 0u) {
             variant = own;
             own_form = true;
         }
@@ -176,24 +200,36 @@ unsigned program_variant(std::uint64_t pixel, unsigned aux, unsigned samples_log
     return samples_log2 != 0u && exists(pixel, kProgramSample, true) ? kProgramSample : kProgramBase;
 }
 
+namespace {
+
+// A program with no row is a mod's: its flags are the cook's (mod_program_flags, flags.tsv). One the cook never named
+// reads the world (the safe choice) and is otherwise plain.
+std::uint32_t flags_of(std::uint64_t id, bool pixel) noexcept {
+    const Row* row = find(id, pixel);
+    if (row != nullptr) {
+        return row->flags;
+    }
+    const ModProgramFlags mod = mod_program_flags(id, pixel);
+    return mod.known ? mod.flags : pixel ? 0u : kReadsWorld;
+}
+
+}  // namespace
+
 bool program_reads_world(std::uint64_t vertex) noexcept {
-    const Row* row = find(vertex, false);
-    return row == nullptr || (row->flags & kReadsWorld) != 0u;
+    return (flags_of(vertex, false) & kReadsWorld) != 0u;
 }
 
 std::uint32_t program_coords(std::uint64_t vertex) noexcept {
     const Row* row = find(vertex, false);
-    return row != nullptr ? row->coords : 0u;
+    return row != nullptr ? row->coords : mod_program_flags(vertex, false).coords;
 }
 
 bool program_lit(std::uint64_t pixel) noexcept {
-    const Row* row = find(pixel, true);
-    return row != nullptr && (row->flags & kLit) != 0u;
+    return (flags_of(pixel, true) & kLit) != 0u;
 }
 
 bool program_sums_key(std::uint64_t pixel) noexcept {
-    const Row* row = find(pixel, true);
-    return row != nullptr && (row->flags & kSumsKey) != 0u;
+    return (flags_of(pixel, true) & kSumsKey) != 0u;
 }
 
 bool program_traced(std::uint64_t pixel) noexcept {
@@ -206,6 +242,8 @@ const char* program_file_name() noexcept {
     return "spirv.shaders";
 #elif defined(NEBULA_GPU_METAL)
     return "msl.shaders";
+#elif defined(NEBULA_GPU_D3D11)
+    return "dxbc.shaders";
 #else
     return "dxil.shaders";
 #endif
@@ -213,6 +251,24 @@ const char* program_file_name() noexcept {
 
 const char* program_interface() noexcept {
     return blob().interface_text;
+}
+
+bool dev_shader_file(const char* name, std::vector<unsigned char>& into) {
+    into.clear();
+    if (::galaxy::launch_args().diagnostics == 0u) {
+        return false;
+    }
+    const std::filesystem::path folder = ::galaxy::program_directory();
+    std::FILE* const file = folder.empty() ? nullptr : ::galaxy::open_path(folder / "dev" / name, "rb");
+    if (file == nullptr) {
+        return false;
+    }
+    unsigned char chunk[65536];
+    for (std::size_t got = 0; (got = std::fread(chunk, 1u, sizeof(chunk), file)) != 0u;) {
+        into.insert(into.end(), chunk, chunk + got);
+    }
+    std::fclose(file);
+    return !into.empty();
 }
 
 }  // namespace galaxy::render

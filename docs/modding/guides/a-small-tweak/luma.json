@@ -1,0 +1,72 @@
+{
+  "format": "1.0",
+  "id": "six-health",
+  "version": "0.1.0",
+  "name": "Six Health",
+  "summary": "Mario starts each level with six health.",
+  "text": {
+    "EuEnglish": {
+      "name": "Six Health",
+      "summary": "Mario starts each level with six health."
+    },
+    "UsFrench": {
+      "name": "Six points de vie",
+      "summary": "Mario commence chaque niveau avec six points de vie."
+    },
+    "EuFrench": {
+      "name": "Six points de vie",
+      "summary": "Mario commence chaque niveau avec six points de vie."
+    },
+    "UsSpanish": {
+      "name": "Seis de vida",
+      "summary": "Mario empieza cada nivel con seis de vida."
+    },
+    "EuSpanish": {
+      "name": "Seis de vida",
+      "summary": "Mario empieza cada nivel con seis de vida."
+    },
+    "EuGerman": {
+      "name": "Sechs Leben",
+      "summary": "Mario beginnt jedes Level mit sechs Lebenspunkten."
+    },
+    "EuItalian": {
+      "name": "Sei di energia",
+      "summary": "Mario inizia ogni livello con sei di energia."
+    },
+    "EuDutch": {
+      "name": "Zes levenspunten",
+      "summary": "Mario begint elk level met zes levenspunten."
+    },
+    "UsPortuguese": {
+      "name": "Seis de vida",
+      "summary": "Mario começa cada fase com seis de vida."
+    },
+    "JpJapanese": {
+      "name": "ライフ6",
+      "summary": "マリオはどのステージもライフ6で始まります。"
+    },
+    "KrKorean": {
+      "name": "체력 6",
+      "summary": "마리오가 모든 스테이지를 체력 6으로 시작합니다."
+    },
+    "CnSimpChinese": {
+      "name": "六格生命",
+      "summary": "马力欧每关开始时有六格生命。"
+    },
+    "TwTradChinese": {
+      "name": "六格生命",
+      "summary": "瑪利歐每關開始時有六格生命。"
+    }
+  },
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  }
+}

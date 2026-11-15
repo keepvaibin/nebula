@@ -6,6 +6,7 @@
 #include "Game/MapObj/CollectCounter.hpp"
 #include "Game/MapObj/IceStep.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
+#include "Game/Player/JetTurtleShadow.hpp"
 #include "Game/Player/PlayerModel.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/Render/ModelData.hpp"
@@ -18,6 +19,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
@@ -38,25 +40,10 @@
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initDrawAndModel_f1, "initDrawAndModel.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDrawAndModel_f2, "initDrawAndModel.f2", 0.14f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDrawAndModel_f3, "initDrawAndModel.f3", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDrawAndModel_f4, "initDrawAndModel.f4", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initTeresaMario_f1, "initTeresaMario.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateFace_f1, "updateFace.f1", 0.49f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateFace_f2, "updateFace.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawReflectModel_f1, "drawReflectModel.f1", 0.00001f);
 
 namespace MR {
     void showMaterial(Model*, const char*);
 };  // namespace MR
-
-class JetTurtleShadow : public LiveActor {
-public:
-    void drawType0() const;
-};
 
 void MarioActor::initDrawAndModel() {
     mNumModPowerUps = NebulaMods::powerUpCount();
@@ -66,17 +53,21 @@ void MarioActor::initDrawAndModel() {
     }
 
     mShadowDrawer = new DrawAdaptor(MR::Functor(this, &MarioActor::drawShadow), MR::DrawType_AlphaShadow);
-    // The scene holds each drawer (a NameObj).
+    // The scene holds each drawer (a NameObj). The screen's own (wipe, blur, the indirect pass) are the scene's
+    // player's.
     new DrawAdaptor(MR::Functor(this, &MarioActor::drawSilhouette), MR::DrawType_PlayerSilhouette);
-    new DrawAdaptor(MR::Functor(this, &MarioActor::drawPreWipe), MR::DrawType_CometScreenFilter);
-    new DrawAdaptor(MR::Functor(this, &MarioActor::drawScreenBlend), MR::DrawType_CenterScreenBlur);
-    new DrawAdaptor(MR::Functor(this, &MarioActor::drawIndirect), MR::DrawType_PlayerIndirect);
+    if (!mExtra) {
+        new DrawAdaptor(MR::Functor(this, &MarioActor::drawPreWipe), MR::DrawType_CometScreenFilter);
+        new DrawAdaptor(MR::Functor(this, &MarioActor::drawScreenBlend), MR::DrawType_CenterScreenBlur);
+        new DrawAdaptor(MR::Functor(this, &MarioActor::drawIndirect), MR::DrawType_PlayerIndirect);
 
-    // MarioAnime's material animations are bound to this player's model, also when a ghost's model used the archive first
-    // or the other player's did before a restart of the same stage.
-    ResourceHolder* const pPlayerHolder = MR::createAndAddResourceHolder(gIsLuigi ? "Luigi" : "Mario");
-    MR::createAndAddResourceHolder("MarioAnime")
-        ->bindMaterialAnimations(static_cast< ModelData* >(pPlayerHolder->mModelResTable->getRes(gIsLuigi ? "luigi" : "mario")));
+        // MarioAnime's material animations are bound to this player's model, also when a ghost's model used the
+        // archive first or the other player's did before a restart of the same stage. An extra player is the same
+        // brother: the scene's player bound them.
+        ResourceHolder* const pPlayerHolder = MR::createAndAddResourceHolder(gIsLuigi ? "Luigi" : "Mario");
+        MR::createAndAddResourceHolder("MarioAnime")
+            ->bindMaterialAnimations(static_cast< ModelData* >(pPlayerHolder->mModelResTable->getRes(gIsLuigi ? "luigi" : "mario")));
+    }
 
     if (gIsLuigi) {
         initModelManagerWithAnm("Luigi", "MarioAnime", true);
@@ -124,7 +115,7 @@ void MarioActor::initDrawAndModel() {
 
     {
         NebulaArena::CurrentScope restorer(Arenas::scene());
-        mBlurTexture = GameTexture::createTarget(cNum_initDrawAndModel_f1, cNum_initDrawAndModel_f2);
+        mBlurTexture = GameTexture::createTarget(0.2f, 0.14f);
 
         for (u32 i = 0; i < 2; i++) {
             mMaskTextures[i] = new GameTexture(8, 8, NEBULA_TEXTURE_LINEAR_LA8);
@@ -132,8 +123,8 @@ void MarioActor::initDrawAndModel() {
         }
 
         mMaskIndex = 0;
-        updateRandomTexture(cNum_initDrawAndModel_f3);
-        updateRandomTexture(cNum_initDrawAndModel_f4);
+        updateRandomTexture(1000.0f);
+        updateRandomTexture(1000.0f);
     }
 
     initScreenBox();
@@ -291,7 +282,7 @@ void MarioActor::initTeresaMario() {
     mTeresaTilt = 0.0f;
     mTeresaBlinkTimer = 0;
 
-    MR::initShadowVolumeSphere(mTeresaModel, cNum_initTeresaMario_f1);
+    MR::initShadowVolumeSphere(mTeresaModel, 90.0f);
     initTeresaMarioAnimation();
 }
 
@@ -516,6 +507,23 @@ void MarioActor::drawMarioModel() const {
     if (!mFlag.mIsHiddenModel) {
         model->mDrawPasses &= ~PlayerModel::Pass_BehindMark;
         if (mMario->isStatusActive(MarioStatus_FpView)) {
+            // With ray tracing on, the body the camera fades or hides still casts: whole, into the tracer's scene
+            // alone (the faded draw below is blended, so no light stops at it).
+            if ((NebulaHost::option(NEBULA_OPTION_RAY_TRACING) & static_cast< u32 >(NEBULA_RAY_TRACING_ON)) != 0) {
+                const u32 passes = model->mDrawPasses;
+                MR::showJoint(model, "HandR0");
+                MR::showJoint(model, "HandL0");
+                MR::showJoint(model, "Face0");
+                model->setDynamicList(mCurrModel == 4 ? nullptr : &mLightTint);  // as the third-person draw below
+                Frame::tracedOnly(true);
+                model->setDrawView(0);
+                model->directDraw();
+                Frame::tracedOnly(false);
+                model->mDrawPasses = passes;
+                MR::hideJoint(model, "HandR0");
+                MR::hideJoint(model, "HandL0");
+                MR::hideJoint(model, "Face0");
+            }
             if (mFpViewHidden) {
                 return;
             }
@@ -696,7 +704,7 @@ void MarioActor::updateFace() {
         player->getMainAnimationTrans(static_cast< u32 >(partsControlJoint), &partsControl);
     }
 
-    mFacePose = MR::clamp(static_cast< s32 >(cNum_updateFace_f1 + partsControl.x / cNum_updateFace_f2), 0, mFacePoseCount - 1);
+    mFacePose = MR::clamp(static_cast< s32 >(0.49f + partsControl.x / 10.0f), 0, mFacePoseCount - 1);
 
     for (u32 i = 0; i < mFacePoseCount; i++) {
         Joint* eyeJoint = MR::getJoint(mFaceModel, i + 1);
@@ -878,7 +886,7 @@ void MarioActor::drawReflectModel() const {
     model->mDrawPasses = 0;
 
     if (mShadowMode == 2) {
-        Frame::setZScaleOffset(1.0f, cNum_drawReflectModel_f1);
+        Frame::setZScaleOffset(1.0f, 0.00001f);
         model->mDrawPasses |= PlayerModel::Pass_DepthOnly;
         model->setDrawView(3);
         model->directDraw();
@@ -998,7 +1006,9 @@ void MarioActor::copyMaterial(Model* pModel, u32 materialNo, s32 packetIndex) {
         end = static_cast< u32 >(packetIndex);
     }
 
-    for (u32 i = start; i <= end; i++) {
+    // A part model a mod hid (no meshes or materials, models.md section 2) has no entries to take the body's material.
+    const ModelData* part = pModel->getModelData();
+    for (u32 i = start; i <= end && i < part->getMeshCount() && i < part->getMaterialCount(); i++) {
         MaterialEntry* matPacket = pModel->getMaterialEntry(i);
         matPacket->mMaterial = modelData->getMaterialAt(materialIndex);
         MeshEntry* shapePacket = pModel->getMeshEntry(i);

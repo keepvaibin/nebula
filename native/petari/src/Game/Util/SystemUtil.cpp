@@ -34,6 +34,8 @@ namespace {
     NameObjHolder* getSceneNameObjHolder() {
         return SingletonHolder< GameSystem >::get()->mSceneController->mObjHolder;
     }
+
+    u32 sFixedRandomSeed = 0;  // MR::setFixedRandomSeed's; 0: the stage's name seeds
 };  // namespace
 
 namespace MR {
@@ -78,7 +80,18 @@ namespace MR {
     }
 
     void setRandomSeedFromStageName() {
-        getGameSystemObjHolder()->mRandom.mSeed = getHashCode(getCurrentStageName());
+        getGameSystemObjHolder()->mRandom.mSeed = sFixedRandomSeed != 0 ? sFixedRandomSeed : getHashCode(getCurrentStageName());
+    }
+
+    void setFixedRandomSeed(u32 seed) {
+        sFixedRandomSeed = seed;
+        if (seed != 0) {
+            getGameSystemObjHolder()->mRandom.mSeed = seed;
+        }
+    }
+
+    u32 getFixedRandomSeed() {
+        return sFixedRandomSeed;
     }
 
     void holdSceneInitialize() {

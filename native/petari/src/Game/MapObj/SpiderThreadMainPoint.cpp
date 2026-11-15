@@ -5,16 +5,15 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sFrictionRate, 0.9f);
-    NEBULA_TUNABLE(f32, sWindFrictionRate, 0.9f);
-    NEBULA_TUNABLE(f32, sBasePosAccelRate, 0.3f);
-    NEBULA_TUNABLE(f32, sBasePosDiffMin, 1.0f);
-    NEBULA_TUNABLE(f32, sNearMainPointAccelRate, 0.1f);
-    NEBULA_TUNABLE(f32, sNearHangPointAccelRate, 0.02f);
-    NEBULA_TUNABLE(f32, sNearPointDiffMin, 1.0f);
+    const f32 sFrictionRate = 0.9f;
+    const f32 sWindFrictionRate = 0.9f;
+    const f32 sBasePosAccelRate = 0.3f;
+    const f32 sBasePosDiffMin = 1.0f;
+    const f32 sNearMainPointAccelRate = 0.1f;
+    const f32 sNearHangPointAccelRate = 0.02f;
+    const f32 sNearPointDiffMin = 1.0f;
 };  // namespace
 
 SpiderThreadPointNearInfo::SpiderThreadPointNearInfo()

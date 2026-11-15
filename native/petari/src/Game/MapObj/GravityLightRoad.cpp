@@ -11,18 +11,12 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 250.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 0.5f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sBaseInterpoleRate, 0.2f);
-    NEBULA_TUNABLE(f32, sAccel, 2.0f);
-    NEBULA_TUNABLE(f32, sSpeedMax, 20.0f);
+    const f32 sBaseInterpoleRate = 0.2f;
+    const f32 sAccel = 2.0f;
+    const f32 sSpeedMax = 20.0f;
     const s32 sForceEndBindTime = NebulaFrameClock::stepsOfSeconds(30);
 };  // namespace
 
@@ -39,25 +33,25 @@ GravityLightRoad::GravityLightRoad(const char* pName) : LiveActor(pName), mHost(
 void GravityLightRoad::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
 
-    mRadius = cNum_init_f1 * mScale.y;
+    mRadius = 2500.0f * mScale.y;
 
     initModelManagerWithAnm("GravityLightRoad", nullptr, false);
 
     MR::connectToSceneMapObj(this);
 
     initHitSensor(1);
-    MR::addHitSensorCallbackPriorBinder(this, "body", 4, cNum_init_f2);
+    MR::addHitSensorCallbackPriorBinder(this, "body", 4, 250.0f);
 
     f32 boundingRadius;
     MR::calcModelBoundingRadius(&boundingRadius, this);
 
-    boundingRadius += cNum_init_f3 * mRadius;
+    boundingRadius += 0.5f * mRadius;
 
     Vec3f upVec;
     MR::calcUpVec(&upVec, this);
     upVec.negate();
 
-    mEndPos.scaleAdd(cNum_init_f4 * mRadius, upVec, mPosition);
+    mEndPos.scaleAdd(0.5f * mRadius, upVec, mPosition);
 
     MR::setClippingTypeSphere(this, boundingRadius, &mEndPos);
 

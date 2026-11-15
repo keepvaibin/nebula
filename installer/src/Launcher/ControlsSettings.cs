@@ -102,6 +102,8 @@ namespace Nebula.Launcher
         private static KeyValuePair<int, string> K(int vk, string name) { return new KeyValuePair<int, string>(vk, name); }
 
         public int InputMode; // ModeAuto, ModeKeyboardMouse, ModeController, ModeRealWiimote (kept, not offered)
+        // Co-Star: a second controller aims a second pointer that collects star bits (runtime_settings.cpp co_star).
+        public bool CoStar;
         public readonly InputSource[][][] Bindings = new InputSource[SchemeCount][][];
         public readonly SchemeTuning[] Tuning = new SchemeTuning[SchemeCount];
 
@@ -402,6 +404,7 @@ namespace Nebula.Launcher
                 if (eq <= 0) continue;
                 string key = line.Substring(0, eq).Trim(), value = line.Substring(eq + 1).Trim();
                 if (key == "controls_version") { int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out version); continue; }
+                if (key == "co_star") { settings.CoStar = value == "1" || value == "true"; continue; }
                 settings.Apply(key, value);
             }
             bool migrated = lines.Length != 0 && version < ControlsVersion;
@@ -487,6 +490,7 @@ namespace Nebula.Launcher
                 lines.Add(new KeyValuePair<string, string>("input_mode",
                     InputMode == ModeController ? "controller" : InputMode == ModeKeyboardMouse ? "keyboard_mouse" : "auto"));
             lines.Add(new KeyValuePair<string, string>("controls_version", ControlsVersion.ToString(CultureInfo.InvariantCulture)));
+            lines.Add(new KeyValuePair<string, string>("co_star", CoStar ? "1" : "0"));
             for (int s = 0; s < SchemeCount; s++)
             {
                 string p = SchemeIds[s] + ".";

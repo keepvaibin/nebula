@@ -2,53 +2,29 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_fadeIn_f1, "fadeIn.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fadeIn_f2, "fadeIn.f2", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateStopVelocity_f1, "updateStopVelocity.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRun_f1, "updateRun.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRun_f2, "updateRun.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRun_f3, "updateRun.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide_f1, "exeGuide.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide_f2, "exeGuide.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide_f3, "exeGuide.f3", 2.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_updateNormalVelocity_reboundVelocityFromCollision_1, "updateNormalVelocity.reboundVelocityFromCollision.1", -0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDemo_turnDirectionToPlayerDegree_1, "exeDemo.turnDirectionToPlayerDegree.1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTalk_turnDirectionToPlayerDegree_1, "exeTalk.turnDirectionToPlayerDegree.1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_turnDirectionToPlayerDegree_1, "exeWait.turnDirectionToPlayerDegree.1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGoal_turnDirectionToPlayerDegree_1, "exeGoal.turnDirectionToPlayerDegree.1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGoal_isNearPlayer_1, "exeGoal.isNearPlayer.1", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide_checkPassBckFrame_1, "exeGuide.checkPassBckFrame.1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_checkPassBckFrame_1, "exeRunaway.checkPassBckFrame.1", 3.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 5);
-
 namespace {
-    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.1f);
-    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
-    NEBULA_TUNABLE(f32, sGroundGravityAccel, 0.1f);
-    NEBULA_TUNABLE(f32, sAirGravityAccel, 1.0f);
-    NEBULA_TUNABLE(f32, sGroundFric, 0.9f);
-    NEBULA_TUNABLE(f32, sAirFric, 0.99f);
-    NEBULA_TUNABLE(s32, sIsAirTime, 5);
-    NEBULA_TUNABLE(f32, sInRunawayRange, 800.0f);
-    NEBULA_TUNABLE(f32, sOutRunawayRange, 1100.0f);
-    NEBULA_TUNABLE(f32, sTalkRunawayRange, 1300.0f);
-    NEBULA_TUNABLE(f32, sRunawayAccel, 1.55f);
-    NEBULA_TUNABLE(f32, sRunawayEndAccel, 1.2f);
+    const f32 sUpVecBlendRate = 0.1f;
+    const f32 sFrontVecBlendRate = 0.2f;
+    const f32 sGroundGravityAccel = 0.1f;
+    const f32 sAirGravityAccel = 1.0f;
+    const f32 sGroundFric = 0.9f;
+    const f32 sAirFric = 0.99f;
+    const s32 sIsAirTime = 5;
+    const f32 sInRunawayRange = 800.0f;
+    const f32 sOutRunawayRange = 1100.0f;
+    const f32 sTalkRunawayRange = 1300.0f;
+    const f32 sRunawayAccel = 1.55f;
+    const f32 sRunawayEndAccel = 1.2f;
     static const s32 sRunawayDeccelTime = NebulaFrameClock::stepsOfSeconds(15);
-    NEBULA_TUNABLE(f32, sRunawayTurnStartLimit, 10.0f);
-    NEBULA_TUNABLE(f32, sRunawayTurnLimit, 1.5f);
+    const f32 sRunawayTurnStartLimit = 10.0f;
+    const f32 sRunawayTurnLimit = 1.5f;
     static const s32 sRunawayTurnDeccelTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sWallJumpPowerV, 30.0f);
-    NEBULA_TUNABLE(f32, sAppearJumpPowerV, 20.0f);
-    NEBULA_TUNABLE(f32, sNearGoalDistance, 130.0f);
-    NEBULA_TUNABLE(f32, sReachGoalDistance, 100.0f);
+    const f32 sWallJumpPowerV = 30.0f;
+    const f32 sAppearJumpPowerV = 20.0f;
+    const f32 sNearGoalDistance = 130.0f;
+    const f32 sReachGoalDistance = 100.0f;
 };  // namespace
 
 namespace NrvDemoRabbit {
@@ -143,7 +119,7 @@ void DemoRabbit::fadeIn() {
     MR::calcGravityVector(this, railEndPos, &gravityVector, nullptr, 0);
 
 
-    MR::getFirstPolyOnLineToMap(&railEndPos, nullptr, railEndPos - gravityVector * cNum_fadeIn_f1, gravityVector * cNum_fadeIn_f2);
+    MR::getFirstPolyOnLineToMap(&railEndPos, nullptr, railEndPos - gravityVector * 100.0f, gravityVector * 1000.0f);
     mPosition.set(railEndPos);
 
     MR::timeKeepDemoFadeIn();
@@ -157,7 +133,7 @@ void DemoRabbit::updateStopVelocity() {
     // No ground within 10 units: the up vector (the fall kept, the drift stopped). Left unset, `normal` can be a long
     // vector, which makes the kept part of the velocity grow each frame until the binder steps through the ground.
     Vec3f normal(-mGravity);
-    MR::getFirstPolyNormalOnLineToMap(&normal, mPosition, mGravity * cNum_updateStopVelocity_f1, nullptr, nullptr);
+    MR::getFirstPolyNormalOnLineToMap(&normal, mPosition, mGravity * 10.0f, nullptr, nullptr);
     MR::vecKillElement(mVelocity, normal, &normal);
     mVelocity.sub(normal);
 }
@@ -173,7 +149,7 @@ void DemoRabbit::updateNormalVelocity() {
         MR::addVelocityToGravityOrGround(this, ::sAirGravityAccel);
     }
 
-    MR::reboundVelocityFromCollision(this, cNum_updateNormalVelocity_reboundVelocityFromCollision_1);
+    MR::reboundVelocityFromCollision(this, -0.05f);
 }
 
 void DemoRabbit::updateRun(const Vec3f& targetDir, bool /*unused*/) {
@@ -183,13 +159,13 @@ void DemoRabbit::updateRun(const Vec3f& targetDir, bool /*unused*/) {
 
     f32 accel = MR::calcNerveValue(this, ::sRunawayDeccelTime, ::sRunawayAccel, ::sRunawayEndAccel);
 
-    while (MR::isExistMapCollision(mPosition, mFrontVec * cNum_updateRun_f1)) {
+    while (MR::isExistMapCollision(mPosition, mFrontVec * 200.0f)) {
         f32 oldLength = mFrontVec.length();
-        mFrontVec = (mFrontVec + -mGravity) / cNum_updateRun_f2;
+        mFrontVec = (mFrontVec + -mGravity) / 2.0f;
         mFrontVec.setLength(oldLength);
     }
 
-    MR::addVelocityMoveToDirection(this, mFrontVec, mAirTimer < ::sIsAirTime ? accel : accel / cNum_updateRun_f3);
+    MR::addVelocityMoveToDirection(this, mFrontVec, mAirTimer < ::sIsAirTime ? accel : accel / 2.0f);
 }
 
 void DemoRabbit::updateJump() {
@@ -244,7 +220,7 @@ void DemoRabbit::exeAppear() {
     MR::addVelocityToGravity(this, ::sAirGravityAccel);
     MR::attenuateVelocity(this, ::sAirFric);
 
-    if (MR::isGreaterStep(this, cStep_exeAppear_1) && MR::isBindedGround(this)) {
+    if (MR::isGreaterStep(this, 5) && MR::isBindedGround(this)) {
         mVelocity.zero();
         setNerve(GET_NERVE(DemoRabbit, DemoRabbitNrvDemo));
     }
@@ -255,7 +231,7 @@ void DemoRabbit::exeDemo() {
         MR::startAction(this, "Wait");
     }
 
-    MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeDemo_turnDirectionToPlayerDegree_1);
+    MR::turnDirectionToPlayerDegree(this, &mFrontVec, 10.0f);
     updateStopVelocity();
 }
 
@@ -272,7 +248,7 @@ void DemoRabbit::exeTalk() {
         }
     }
 
-    MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeTalk_turnDirectionToPlayerDegree_1);
+    MR::turnDirectionToPlayerDegree(this, &mFrontVec, 10.0f);
     updateStopVelocity();
 }
 
@@ -282,7 +258,7 @@ void DemoRabbit::exeWait() {
     }
 
     MR::tryTalkNearPlayer(mMsgCtrl);
-    MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeWait_turnDirectionToPlayerDegree_1);
+    MR::turnDirectionToPlayerDegree(this, &mFrontVec, 10.0f);
     updateStopVelocity();
 
     if (tryGuide()) {
@@ -295,14 +271,14 @@ void DemoRabbit::exeGoal() {
         MR::startAction(this, "Wait");
     }
 
-    MR::turnDirectionToPlayerDegree(this, &mFrontVec, cNum_exeGoal_turnDirectionToPlayerDegree_1);
+    MR::turnDirectionToPlayerDegree(this, &mFrontVec, 10.0f);
     updateStopVelocity();
 
     if (MR::isDemoActive()) {
         return;
     }
 
-    if (MR::isNearPlayer(mMsgCtrl, cNum_exeGoal_isNearPlayer_1)) {
+    if (MR::isNearPlayer(mMsgCtrl, 500.0f)) {
         MR::startTimeKeepDemoMarioPuppetable(this, "チコガイドデモ", "ウサギ追いかけ[フェードアウト]");
     } else {
         MR::tryTalkNearPlayer(mMsgCtrl);
@@ -315,17 +291,17 @@ void DemoRabbit::exeGuide() {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
     }
 
-    if (MR::checkPassBckFrame(this, cNum_exeGuide_checkPassBckFrame_1)) {
+    if (MR::checkPassBckFrame(this, 3.0f)) {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
     }
 
     Vec3f railPosFrontCoord;
-    MR::calcRailPosFrontCoord(&railPosFrontCoord, this, cNum_exeGuide_f1);
+    MR::calcRailPosFrontCoord(&railPosFrontCoord, this, 200.0f);
 
     if (MR::isRailReachedNearGoal(this, ::sNearGoalDistance)) {
-        updateRun(railPosFrontCoord - mGravity * cNum_exeGuide_f2, true);
+        updateRun(railPosFrontCoord - mGravity * 2.0f, true);
     } else {
-        updateRun(railPosFrontCoord - mGravity * cNum_exeGuide_f3, false);
+        updateRun(railPosFrontCoord - mGravity * 2.0f, false);
     }
 
     updateNormalVelocity();
@@ -344,7 +320,7 @@ void DemoRabbit::exeRunaway() {
     }
 
     MR::invalidateClipping(this);
-    if (MR::checkPassBckFrame(this, cNum_exeRunaway_checkPassBckFrame_1)) {
+    if (MR::checkPassBckFrame(this, 3.0f)) {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
     }
 

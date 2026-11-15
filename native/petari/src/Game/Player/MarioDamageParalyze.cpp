@@ -2,10 +2,6 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioParalyze.hpp"
 #include "Game/Player/MarioState.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_close_f1, "close.f1", 10.0f);
 
 bool Mario::doParalyze() {
     if (mMovementStates.invincible) {
@@ -73,7 +69,7 @@ bool MarioParalyze::update() {
     if (mTimer != 0) {
         mTimer--;
         if (mRecovering != 0 && getPlayer()->getMovementStates().onGround) {
-            addVelocity(getFrontVec(), -cNum_update_f1);
+            addVelocity(getFrontVec(), -3.0f);
         }
     }
 
@@ -126,7 +122,7 @@ bool MarioParalyze::close() {
     mAfterTimer = 120;
 
     if (!getPlayer()->isStatusActive(MarioStatus_Swim) && !getPlayer()->getMovementStates().onGround) {
-        getPlayer()->tryFreeJump(getFrontVec() * -cNum_close_f1, true);
+        getPlayer()->tryFreeJump(getFrontVec() * -10.0f, true);
     }
 
     return true;

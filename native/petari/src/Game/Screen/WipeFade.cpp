@@ -3,13 +3,10 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 255.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sFadeFrame, 30);
+    const s32 sFadeFrame = 30;
 };  // namespace
 
 WipeFade::WipeFade(const char* pName, const Color8& rFillColor)
@@ -45,7 +42,7 @@ void WipeFade::draw() const {
     fillColor.r = mFillColor.r;
     fillColor.g = mFillColor.g;
     fillColor.b = mFillColor.b;
-    fillColor.a = (s32)(cNum_draw_f1 * alpha);
+    fillColor.a = (s32)(255.0f * alpha);
     MR::fillScreen(fillColor);
 }
 

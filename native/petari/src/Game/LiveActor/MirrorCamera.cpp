@@ -5,12 +5,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Render/ModelData.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updateViewMtx_f1, "updateViewMtx.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateViewMtx_f2, "updateViewMtx.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateViewMtx_f3, "updateViewMtx.f3", 2.0f);
 
 MirrorCamera::MirrorCamera(const char* pName) : NameObj(pName), mMirrorPos(0.0f, 0.0f, 0.0f), mMirrorNormal(0.0f, 1.0f, 0.0f), mPlaneD() {
     lumacore::setClass(this, lumacore::kClassId< MirrorCamera >);
@@ -48,10 +43,10 @@ void MirrorCamera::updateViewMtx() {
     cameraInv.getYDir(y);
     cameraInv.getZDir(z);
     cameraInv.getTrans(trans);
-    y -= mMirrorNormal * (mMirrorNormal.dot(y) * cNum_updateViewMtx_f1);
-    z -= mMirrorNormal * (mMirrorNormal.dot(z) * cNum_updateViewMtx_f2);
+    y -= mMirrorNormal * (mMirrorNormal.dot(y) * 2.0f);
+    z -= mMirrorNormal * (mMirrorNormal.dot(z) * 2.0f);
     Vec3f x = y.cross(z);
-    trans -= mMirrorNormal * ((mMirrorNormal.dot(trans) + mPlaneD) * cNum_updateViewMtx_f3);
+    trans -= mMirrorNormal * ((mMirrorNormal.dot(trans) + mPlaneD) * 2.0f);
     mViewMtx.setTR(x, y, z, trans);
     mViewMtx.invert(mViewMtx);
 }

@@ -8,10 +8,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 namespace NrvItemAppearStone {
     NEW_NERVE(HostTypeWait, ItemAppearStone, Wait);
@@ -32,7 +29,7 @@ void ItemAppearStone::init(const TableIter& rIter) {
     initHitSensor(1);
     HitSensor* sensor = MR::addBodyMessageSensorMapObjMoveCollision(this);
     MR::initCollisionParts(this, model_name, sensor, MR::getJointMtx(this, "Move"));
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::needStageSwitchReadB(this, rIter);
     initNerve(GET_NERVE(ItemAppearStone, HostTypeWait));
     makeActorAppeared();

@@ -4,11 +4,7 @@
 #include "Game/Util/CollisionPartsFilter.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcMinMaxAndRadius_f1, "calcMinMaxAndRadius.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addAndUpdateMinMax_f1, "addAndUpdateMinMax.f1", 0.1f);
 
 CollisionCategorizedKeeper::CollisionCategorizedKeeper(s32 category)
     : NameObj("地形コリジョンカテゴリキーパー"), mHitInfoArray(), mNumHits(), mPartsCount(), mCategory(category), mZonesInitialized(),
@@ -23,7 +19,37 @@ void CollisionCategorizedKeeper::movement() {
 
     for (CollisionZone** pZone = mZones.begin(); pZone != mZones.end(); pZone++) {
         s32 count = (*pZone)->mParts.size();
+#if defined(NEBULA_PLAIN_MODULE)
+        // The global zone (the first) has no bounds: every query takes its parts without a zone test, and addParts
+        // never makes them. The others' first bounds are made once, from every part's new matrix (as the last of a
+        // remake per valid part left them). A module with hook points makes the game's calls.
+        const bool bounded = pZone != mZones.begin();
+        bool remake = false;
 
+        for (int i = 0; i < count; i++) {
+            pParts = (*pZone)->mParts[i];
+
+            if (pParts->mIsValid) {
+                if (mCategory == pParts->mKeeperIndex) {
+                    pParts->updateMtx();
+                }
+
+                if (!bounded) {
+                    continue;
+                }
+
+                if (mUpdateZoneBounds) {
+                    remake = true;
+                } else if (pParts->mStillCount == 0) {
+                    (*pZone)->calcMinMaxAndRadiusIfMoveOuter(pParts);
+                }
+            }
+        }
+
+        if (remake) {
+            (*pZone)->calcMinMaxAndRadius();
+        }
+#else
         for (int i = 0; i < count; i++) {
             pParts = (*pZone)->mParts[i];
 
@@ -39,6 +65,7 @@ void CollisionCategorizedKeeper::movement() {
                 }
             }
         }
+#endif
     }
 
     mUpdateZoneBounds = false;
@@ -572,7 +599,7 @@ void CollisionZone::calcMinMaxAndRadius() {
         addAndUpdateMinMax(min, max);
     }
 
-    mCenter = (mMax + mMin) / cNum_calcMinMaxAndRadius_f1;
+    mCenter = (mMax + mMin) / 2.0f;
     f32 radius = 0.0f;
 
     for (pCurrent = mParts.begin(); pCurrent != mParts.end(); pCurrent++) {
@@ -608,7 +635,7 @@ void CollisionZone::calcMinMaxAndRadiusIfMoveOuter(CollisionParts* pParts) {
 
 void CollisionZone::addAndUpdateMinMax(Vec3f min, Vec3f max) {
     if (mRadius == 0.0f) {
-        mRadius = cNum_addAndUpdateMinMax_f1;
+        mRadius = 0.1f;
         mMin.set(min);
         mMax.set(max);
     } else {

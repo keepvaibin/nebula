@@ -13,22 +13,17 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_2, "exeWait.reboundVelocityFromCollision.2", 1.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sFireRadius, 58.0f);
-    NEBULA_TUNABLE(s32, sLife, 180);
-    NEBULA_TUNABLE(f32, sInitVerticalSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, sInitHorizonSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, sGravityAccel, 0.5f);
-    NEBULA_TUNABLE(f32, sFreqRate, 0.995f);
-    NEBULA_TUNABLE(f32, sReboundRate, 0.4f);
-    NEBULA_TUNABLE(s32, sSweepTime, 40);
+    const f32 sFireRadius = 58.0f;
+    const s32 sLife = 180;
+    const f32 sInitVerticalSpeed = 15.0f;
+    const f32 sInitHorizonSpeed = 15.0f;
+    const f32 sGravityAccel = 0.5f;
+    const f32 sFreqRate = 0.995f;
+    const f32 sReboundRate = 0.4f;
+    const s32 sSweepTime = 40;
     static Color8 sPointLightColor(0xFF, 0x64, 0, 0xFF);
 };  // namespace
 
@@ -148,7 +143,7 @@ void KameckFireBall::exeWait() {
     MR::addVelocityToGravity(this, ::sGravityAccel);
     MR::attenuateVelocity(this, ::sFreqRate);
 
-    if (MR::reboundVelocityFromCollision(this, ::sReboundRate, cNum_exeWait_reboundVelocityFromCollision_1, cNum_exeWait_reboundVelocityFromCollision_2)) {
+    if (MR::reboundVelocityFromCollision(this, ::sReboundRate, 0.0f, 1.0f)) {
         if (mVelocity.dot(-mGravity) >= 1.0f) {
             MR::startSound(this, "SE_BM_KAMECK_FIRE_BOUND");
         }

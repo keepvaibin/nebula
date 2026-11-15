@@ -13,20 +13,12 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDemoWait_f1, "exeDemoWait.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePlay_f1, "exePlay.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePlay_f2, "exePlay.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePlay_f3, "exePlay.f3", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePlay_f4, "exePlay.f4", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePlay_f5, "exePlay.f5", 40.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sOpeningHideFrame, 60);
-    NEBULA_TUNABLE(s32, sOpeningAppearSmileSoundStep, 55);
-    NEBULA_TUNABLE(s32, sDieSoundStep, 242);
+    const s32 sOpeningHideFrame = 60;
+    const s32 sOpeningAppearSmileSoundStep = 55;
+    const s32 sDieSoundStep = 242;
 };  // namespace
 
 namespace {
@@ -111,7 +103,7 @@ void DodoryuDemoOpening::exeDemoWait() {
     MR::startBva(mHost, "Normal");
     MR::requestMovementOnImageEffect();
     MR::setImageEffectControlAuto();
-    mHost->shiftMoveStateRail(cNum_exeDemoWait_f1);
+    mHost->shiftMoveStateRail(10.0f);
     mHost->killAllHillPieces();
     mHost->stopHillForce();
     MR::moveCoordToStartPos(mHost);
@@ -291,7 +283,7 @@ void DodoryuDemoAppear::exePlay() {
         Dodoryu* pHost = mHost;
         Vec3f jointPos;
         MR::copyJointPos(mHost, "Nose", &jointPos);
-        MR::appearStarPiece(pHost, jointPos, 8, cNum_exePlay_f1, cNum_exePlay_f2, false);
+        MR::appearStarPiece(pHost, jointPos, 8, 20.0f, 40.0f, false);
 
         MR::startSound(mHost, "SE_OJ_STAR_PIECE_BURST");
     }
@@ -342,7 +334,7 @@ void DodoryuDemoAngry::exePlay() {
     }
 
     if (MR::isStep(this, NebulaFrameClock::stepsOfSeconds(2))) {
-        MR::startCenterScreenBlur(60, cNum_exePlay_f3, 80, 5, 30);
+        MR::startCenterScreenBlur(60, 15.0f, 80, 5, 30);
     }
 
     if (MR::isBckStopped(mHost)) {
@@ -352,7 +344,7 @@ void DodoryuDemoAngry::exePlay() {
         Dodoryu* pHost = mHost;
         Vec3f jointPos;
         MR::copyJointPos(mHost, "Nose", &jointPos);
-        MR::appearStarPiece(pHost, jointPos, 16, cNum_exePlay_f4, cNum_exePlay_f5, false);
+        MR::appearStarPiece(pHost, jointPos, 16, 20.0f, 40.0f, false);
 
         MR::startSound(mHost, "SE_OJ_STAR_PIECE_BURST");
     }

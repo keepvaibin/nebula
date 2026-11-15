@@ -3,6 +3,7 @@
 // copies and screen probes are renderer_mtl_scene.mm and renderer_mtl_draw.mm.
 #include "renderer_mtl_internal.h"
 
+#include "galaxy/benchmark.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/launch_args.h"
@@ -231,6 +232,11 @@ void RendererMtl::read_display_hdr() {
 // Apple GPU keep the display's own pixels: the Radeon Pro 560 draws the heavier galaxies at 3360 by 1856 in 7.9 ms.
 void RendererMtl::choose_first_start_scale() {
 #if TARGET_OS_OSX
+    if (!galaxy::ordinary_start() || galaxy::bench::running()) {
+        // A hidden, timed or extension-driven start (a test's, a tool's), or a benchmark, which measures the settings
+        // as they are: the first start stays the player's.
+        return;
+    }
     std::error_code ignored;
     const std::filesystem::path settings = render_config_path();
     const mtl::DeviceCaps& caps = mtl::Context::get().caps();
@@ -333,6 +339,11 @@ void RendererMtl::shutdown() {
             drop(run.parallel);
         }
         record_runs_.clear();
+        if (scene_parallel_ != nullptr) {
+            [(__bridge id<MTLParallelRenderCommandEncoder>)scene_parallel_ endEncoding];
+            drop(scene_parallel_);
+        }
+        parallel_scene_pass_ = false;
         wait_for_gpu_idle();
         if (mirrored_store_ != nullptr) {
             mirrored_store_->backend().set_open_pass(nullptr);
@@ -700,7 +711,10 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
         // The uploads first: TextureStore never writes a texture after a draw of the same frame read it.
         [(__bridge id<MTLBlitCommandEncoder>)frame.upload_blit endEncoding];
         drop(frame.upload_blit);
-        (void)context.commit(frame.uploads);
+        // A frame that copied nothing sends no buffer for it: the empty one is released uncommitted.
+        if (mirrored_store_ != nullptr && mirrored_store_->backend().take_uploaded()) {
+            (void)context.commit(frame.uploads);
+        }
         drop(frame.uploads);
         const std::shared_ptr<std::array<std::atomic<double>, 2>> times = frame.gpu_time;
         (*times)[0].store(0.0, std::memory_order_release);

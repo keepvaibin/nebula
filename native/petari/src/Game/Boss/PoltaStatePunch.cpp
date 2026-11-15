@@ -8,10 +8,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeToWait_1, "exeToWait.1", 70);
 
 namespace NrvPoltaStatePunch {
     NEW_NERVE(PoltaStatePunchNrvStart, PoltaStatePunch, Start);
@@ -82,7 +78,7 @@ void PoltaStatePunch::exeToWait() {
         kill();
         return;
     }
-    if (MR::isGreaterStep(this, cStep_exeToWait_1)) {
+    if (MR::isGreaterStep(this, 70)) {
         getHost()->rotateToPlayer();
     }
     if (MR::isActionEnd(getAttackActor())) {

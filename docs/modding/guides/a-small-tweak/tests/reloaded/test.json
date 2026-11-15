@@ -1,0 +1,72 @@
+{
+  "harness": 1,
+  "name": "reloaded",
+  "about": "The mod's code reloaded while the game runs: the next galaxy still starts Mario with six health",
+  "proves": [
+    "kernel.reload.code"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "read": "MarioActor.mHealth",
+      "of": "player",
+      "type": "u32",
+      "fact": "health_before"
+    },
+    {
+      "at": 40,
+      "reload": "six-health",
+      "wait": true
+    },
+    {
+      "at": 60,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 1
+      }
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "exists": true
+      },
+      "read": "MarioActor.mHealth",
+      "of": "player",
+      "type": "u32",
+      "fact": "health_after"
+    },
+    {
+      "after": {
+        "fact": "health_after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "health_before",
+      "is": 6
+    },
+    {
+      "fact": "health_after",
+      "is": 6
+    },
+    {
+      "fact": "reload.six-health",
+      "field": "ok",
+      "is": true
+    },
+    {
+      "log": "six-health reloaded"
+    }
+  ],
+  "limit_seconds": 240
+}

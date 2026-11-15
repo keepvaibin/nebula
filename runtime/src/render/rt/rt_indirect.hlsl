@@ -19,7 +19,8 @@
 // Writes the half-res guide and motion the filters (rt_lights_time.hlsl, rt_lights_space.hlsl at half res) read, the
 // raw I in their channels (r, b, a), and the reservoirs: the sample's place (float bits, eye space of this frame) with
 // its normal and M in Rgba32ui, its light (ratio) and W in Rgba16f.
-// Pass constants: g_pass.y the mode; g_pass.z bit 0 the frame before's reservoirs and I count; g_pass.w the shading
+// Pass constants: g_pass.y the mode; g_pass.z bit 0 the frame before's reservoirs and I count, bit 1 the near field
+// runs (rt_near.hlsl: the gather from its reach on); g_pass.w the shading
 // frame's first byte in t4; g_pass_value[0..2] this frame's eye space from the frame before's (3x4 rows).
 #include "rt_shade.hlsli"
 
@@ -31,6 +32,8 @@ Texture2D<uint4> g_reservoirs_before : register(t13);
 Texture2D<float4> g_weights_before : register(t14);
 Texture2D<float4> g_half_guide_before : register(t15);
 Texture2D<float4> g_out_before : register(t16);  // the frame before's I out (full res): the screen's own
+Texture2D<float4> g_added_before : register(t17);    // the walk before's D out (the local lights' share): the screen's own
+Texture2D<float4> g_blended_before : register(t18);  // the walk before's blended guide (rt_screen_lights)
 RT_FORMAT(rgba32ui) RWTexture2D<uint4> g_reservoirs : register(u0);
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_weights : register(u1);
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_half_guide : register(u2);
@@ -98,13 +101,18 @@ void gi_take(inout GiReservoir r, GiReservoir other, float weight, inout uint se
     }
 }
 
-// Whether something solid stands between the ray's origin and a sample (short of the sample itself).
-bool gi_hidden(float3 origin, float3 sample_at) {
+// Whether something solid stands between the ray's origin and a sample (short of the sample itself), tested from
+// `skip` on (High: the near field's reach). A sample nearer than `skip` is the near field's: hidden here.
+bool gi_hidden(float3 origin, float3 sample_at, float skip) {
     const float3 to = sample_at - origin;
     const float far_ = length(to);
-    const float reach = min(far_, kIndirectReach) - max(0.002f * far_, 1.0f);
+    if (far_ < skip) {
+        return true;
+    }
+    const float3 way = to / max(far_, 1e-4f);
+    const float reach = min(far_, kIndirectReach) - max(0.002f * far_, 1.0f) - skip;
     uint met;
-    return reach > 1.0f && blocked(origin, to / far_, reach, kMaskSolid | kMaskCutout, true, met);
+    return reach > 1.0f && blocked(origin + way * skip, way, reach, kMaskSolid | kMaskCutout, true, met);
 }
 
 void write_nothing(uint2 half_pixel, float4 guide) {
@@ -122,6 +130,10 @@ void main(uint3 id : SV_DispatchThreadID) {
     g_guide.GetDimensions(width, height);
     if (id.x >= half_width || id.y >= half_height || g_pass.x != 0u) {
         return;
+    }
+    if (all(id.xy < uint2(64u, 64u))) {
+        rt_shade_begin(g_pass.w);
+        rt_count_dome_directions(id.xy);  // the dome's mean, the stage's, not the view's
     }
     const uint turn = g_more.y & 3u;
     static const uint2 kVisit[4] = {uint2(0u, 0u), uint2(1u, 1u), uint2(1u, 0u), uint2(0u, 1u)};
@@ -148,6 +160,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     const uint mode = g_pass.y;
     // The ray's direction from the frame's blue noise (rt_sample.hlsli); the reservoirs' picks from the hash.
     const float3 dir = rt_cosine(n, rt_sample(id.xy, g_more.y, kSampleIndirect));
+    // High: the far field only, from the near field's reach on (rt_near.hlsl sees 0..r at full size).
+    const float skip = mode == kModeHigh && (g_pass.z & 2u) != 0u ? rt_near_reach(s.away) : 0.0f;
+    const float3 origin = rt_ray_origin(s, dir);
 
     if (mode == kModeSky) {
         // Traced ambient occlusion in the sky's colour: what stands within kSkyReach hides the sky.
@@ -171,25 +186,22 @@ void main(uint3 id : SV_DispatchThreadID) {
         uint item, triangle_;
         float2 where_;
         float far_;
-        const uint met = rt_gather(s.origin, dir, item, triangle_, where_, far_);
+        const float3 from = origin + dir * skip;  // TMin r
+        const uint met = rt_gather(from, dir, item, triangle_, where_, far_);
         GiReservoir fresh;
         fresh.m = 1.0f;
         fresh.sum = 0.0f;
         fresh.w = 0.0f;
         fresh.n = -dir;
         if (met == 0u) {
-            fresh.at = s.origin + dir * kIndirectReach;
+            fresh.at = from + dir * kIndirectReach;
             fresh.light = float3(1.0f, 1.0f, 1.0f);  // nothing at all: the stage's ambient itself
         } else {
             RtHit h;
-            rt_hit_read(item, triangle_, where_, far_, s.origin, dir, 0.05f, h);
+            rt_hit_read(item, triangle_, where_, far_, from, dir, 0.05f, h);
             fresh.at = h.at;
             if (met == 1u || (h.item_flags & kItemSky) != 0u) {
-                const float3 dome = rt_dome(h);
-                if (((id.x | id.y) & 3u) == 0u) {
-                    rt_count_dome(dome);
-                }
-                fresh.light = rt_sky_ratio(dome);
+                fresh.light = rt_sky_ratio(rt_lin(rt_dome(h)));  // the dome's mean: rt_count_dome_directions (linear)
             } else {
                 fresh.n = h.ng;
                 const uint options = kRtShadeSunRay | kRtShadeLighting | (mode == kModeHigh ? kRtShadeLightRay : 0u);
@@ -200,8 +212,33 @@ void main(uint3 id : SV_DispatchThreadID) {
                         o = seen;
                     }
                 }
-                fresh.light = g_shade.gains.z * rt_hit_radiance(h, options, o, seed) / max(g_shade.authored.rgb, 0.02f);
+                // The lamps on a hit the screen shows, as the screen has them, else the grid's.
+                float3 d_seen;
+                const bool d_known = (g_pass.z & 1u) != 0u && rt_screen_lights(g_guide, g_added_before, g_blended_before, h.at, d_seen);
+                const float3 bounce = g_shade.gains.z * rt_hit_radiance_with(h, options, o, d_known, d_seen, seed) /
+                                      rt_o_unit();  // O's unit (the model's under the relight)
+                if (h.glows && !h.listed) {
+                    fresh.light = bounce;  // it shines of itself: its light as it is
+                } else {
+                    // A surface lit by the scene: against the mean of such hits, as the sky against its own;
+                    // an area glow's emission over it as it is.
+                    if (((id.x | id.y) & 3u) == 0u) {
+                        rt_count_hit(bounce);
+                    }
+                    const float3 glow = g_shade.gains.z * rt_hit_area_glow(h, true) / rt_o_unit();
+                    fresh.light = bounce * g_shade.authored.w + glow;
+                    // In a room a near hit stands over the point: kRoomNearShare of its light.
+                    // Under open sky the line above's light, bit for bit.
+                    const float near_ = rt_room_near(s, n, skip + far_);
+                    if (near_ < 1.0f) {
+                        fresh.light = bounce * (g_shade.authored.w * near_) + glow;
+                    }
+                }
             }
+        }
+        // High: what the water on the way lets through, after the hits' mean is counted.
+        if (mode == kModeHigh) {
+            fresh.light *= rt_water_way(from, dir, met == 2u ? far_ : kIndirectReach);
         }
         // Cosine sampling: the first weight is the target over the chance, pi * lum(L).
         gi_take(r, fresh, kRtPi * rt_lum(fresh.light), seed);
@@ -222,9 +259,12 @@ void main(uint3 id : SV_DispatchThreadID) {
             const int2 at = int2(floor(before_half));
             if (all(at >= int2(0, 0)) && all(at < int2(half_width, half_height))) {
                 const float4 was = g_half_guide_before.Load(int3(at, 0));
-                if (was.a != 0.0f && was.g == guide.g && was.b == guide.b && abs(was.r - motion.z) < 0.05f * motion.z + 2.0f) {
+                if (was.a != 0.0f && was.g == guide.g && was.b == guide.b && abs(was.r - motion.z) < 0.05f * motion.z + 2.0f &&
+                    dot(n, normalize(mul((float3x3)now_from_before, rt_unpack_normal(was.a)))) >= 0.906f) {
                     const GiReservoir before = gi_load(at, now_from_before);
-                    if (before.m > 0.0f) {
+                    // Only a sample this receiver could have drawn counts its M: in front of its plane, past the near
+                    // field's reach.
+                    if (before.m > 0.0f && dot(n, before.at - x) > 0.0f && length(before.at - x) >= skip) {
                         const uint picked = r.sum > 0.0f ? 0u : 1u;
                         const float3 kept_at = r.at;
                         gi_take(r, before, gi_target(before.light, before.at, x, n) * before.w * before.m, seed);
@@ -249,8 +289,11 @@ void main(uint3 id : SV_DispatchThreadID) {
             if (was.a == 0.0f) {
                 continue;
             }
-            // The neighbour's receiver, moved into this frame: in the receiver's plane and facing as it does.
-            const float3 q = mul(now_from_before, float4(rt_eye_ray(g_ray_before, float2(at) * 2.0f + 1.0f) * was.r, 1.0f));
+            // The neighbour's receiver, moved into this frame: in the receiver's plane and facing as it does. Its
+            // place is the pixel that drew it: the block's visit the frame before (the turn counts one a
+            // frame), not the block's corner (a Jacobian off by that much fed itself through the reservoirs).
+            const int2 drew = at * 2 + int2(kVisit[(g_more.y - 1u) & 3u]);
+            const float3 q = mul(now_from_before, float4(rt_eye_ray(g_ray_before, float2(drew) + 0.5f) * was.r, 1.0f));
             const float3 nq = normalize(mul((float3x3)now_from_before, rt_unpack_normal(was.a)));
             if (dot(n, nq) < 0.906f || abs(dot(n, q - x)) > 0.05f * s.away + 2.0f) {
                 continue;
@@ -268,8 +311,11 @@ void main(uint3 id : SV_DispatchThreadID) {
             if (!(cos_q > 1e-4f) || !(far_r > 1e-6f)) {
                 continue;
             }
-            const float jacobian = clamp(cos_r / cos_q * far_q / far_r, 0.0f, kMostJacobian);
-            if (gi_hidden(s.origin, other.at)) {
+            const float jacobian = cos_r / cos_q * far_q / far_r;
+            if (!(jacobian <= kMostJacobian)) {
+                continue;  // its weight would be cut, its sample kept: left out instead
+            }
+            if (gi_hidden(s.origin, other.at, skip)) {
                 continue;  // hidden from here: neither its light nor its count
             }
             gi_take(r, other, gi_target(other.light, other.at, x, n) * other.w * other.m * jacobian, seed);
@@ -282,13 +328,14 @@ void main(uint3 id : SV_DispatchThreadID) {
     float target = gi_target(r.light, r.at, x, n);
     r.w = target > 0.0f && r.m > 0.0f ? min(r.sum / (r.m * target), kMostWeight) : 0.0f;
     const bool own_earlier = reused && all(r.at == own_at) && any(r.at != fresh_only.at);
-    if (mode == kModeHigh && own_earlier && r.w > 0.0f && gi_hidden(s.origin, r.at)) {
+    if (mode == kModeHigh && own_earlier && r.w > 0.0f && gi_hidden(s.origin, r.at, skip)) {
         r = fresh_only;
         target = gi_target(r.light, r.at, x, n);
         r.w = target > 0.0f && r.m > 0.0f ? min(r.sum / (r.m * target), kMostWeight) : 0.0f;
     }
     const float facing = max(dot(n, normalize(r.at - x)), 0.0f);
-    const float3 ratio = min(r.light * r.w * facing / kRtPi, g_shade.gains.w);
+    // Whole: the guard is the mean's clamp after the filters (rt_indirect_up); a half float's range only.
+    const float3 ratio = min(r.light * r.w * facing / kRtPi, kMostWeight);
     g_reservoirs[id.xy] = uint4(asuint(r.at), gi_pack(r.n, min(r.m, kMostM * fb_history_scale())));
     g_weights[id.xy] = float4(r.light, r.w);
     g_raw[id.xy] = float4(ratio.r, 0.0f, ratio.g, ratio.b);

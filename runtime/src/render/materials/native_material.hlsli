@@ -16,7 +16,7 @@
 // NATIVE_LIT (set by a written material that sums the game's lights in its vertex stage: fur, the Mii face, the
 // trample star): its traced form (NATIVE_TRACED, a vertex form of its own) carries where the vertex is, its normal,
 // its light set and its colour 0 to the pixel stage, which sums the same lights again, each by its share
-// (program_lit.hlsli: light_term by traced_light, the ambient by AMBIENT_TERM), through material_relight.
+// (program_lit.hlsli: light_term by traced_light, the ambient by AMBIENT_TERM), through material_relight
 // Its other forms are as they were.
 #if NATIVE_LIT
 #include "program_lit.hlsli"
@@ -90,7 +90,8 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
     case 7u: f = 1.0 - f; f = exp2(-8.0 * f * f); break;
     default: break;
     }
-    return lerp(c, fog_color.rgb, f);
+    // A traced form fogs after its light, the fog lit by the traced share (program.hlsli, 15.3).
+    return program_fog_curve(c, fog_color.rgb, f, float4(fog.x, fog.y, ze, float(type)));
 }
 
 #if NATIVE_LIT && NATIVE_TRACED
@@ -255,6 +256,9 @@ NativeOut native_ps(NativeVaryings i) {
     if ((view_flags & 8u) != 0u) {
         g_light_base = i.lit_light;
         g_traced = traced_at(i.pos);
+        bool coloured = false;
+        g_traced_o = traced_o(g_traced, i.pos, coloured);  // O a channel at a time, as enh_begin_traced
+        traced_o_held();
         g_traced_lit = material_relight(i, dot(i.lit_nrm, i.lit_nrm) > 0.0 ? normalize(i.lit_nrm) : i.lit_nrm);
     }
 #endif

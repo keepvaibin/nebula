@@ -13,17 +13,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_makeEqualScale_f1, "makeEqualScale.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBoundingSphereRange_f1, "updateBoundingSphereRange.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStrikePoint_f1, "checkStrikePoint.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStrikePoint_f2, "checkStrikePoint.f2", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStrikePoint_f3, "checkStrikePoint.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStrikeBall_f1, "checkStrikeBall.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStrikeBall_f2, "checkStrikeBall.f2", 35000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStrikeBall_f3, "checkStrikeBall.f3", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStrikeBallWithThickness_f1, "checkStrikeBallWithThickness.f1", 3.0f);
 
 CollisionParts::CollisionParts()
     : mFollowMtx(), mHitSensor(), mIsValid(), mIsUpdate(true), mIsUpdateOnce(), mUseEqualScale(), mIsNotUsingScale(), mStillCount(), mBoundingRadius(-1.0f), mScale(1.0f), mKeeperIndex(-1), mZone() {
@@ -211,7 +200,7 @@ f32 CollisionParts::makeEqualScale(Pos3f& mtx) {
         invScale.set< f32 >(uniformScale / scale.x, uniformScale / scale.y, uniformScale / scale.z);
         uniformScale = 1.0f;
     } else if (mUseEqualScale) {
-        uniformScale = (scale.x + scale.y + scale.z) / cNum_makeEqualScale_f1;
+        uniformScale = (scale.x + scale.y + scale.z) / 3.0f;
         invScale.set< f32 >(uniformScale / scale.x, uniformScale / scale.y, uniformScale / scale.z);
     }
 
@@ -237,7 +226,7 @@ void CollisionParts::updateBoundingSphereRange() {
 }
 
 void CollisionParts::updateBoundingSphereRange(Vec3f scale) {
-    f32 range = (scale.x + scale.y + scale.z) / cNum_updateBoundingSphereRange_f1;
+    f32 range = (scale.x + scale.y + scale.z) / 3.0f;
     updateBoundingSphereRangePrivate(range);
 }
 
@@ -269,14 +258,14 @@ bool CollisionParts::checkStrikePoint(HitInfo* pHitInfo, const Vec3f& rPos) {
     mInvBaseMatrix.mult(rPos, localPos);
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
-    f32 averageScale = (scale.x + scale.y + scale.z) / cNum_checkStrikePoint_f1;
+    f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
     f32 distance;
     KC_PrismData* prism = nullptr;
     u8 classification;
 
     if (1.0f < averageScale) {
-        f32 radius = cNum_checkStrikePoint_f2 * averageScale;
-        mServer->checkSphereWithThickness(&localPos, radius, averageScale, 1, &prism, &distance, &classification, cNum_checkStrikePoint_f3 * radius);
+        f32 radius = 20.0f * averageScale;
+        mServer->checkSphereWithThickness(&localPos, radius, averageScale, 1, &prism, &distance, &classification, 2.0f * radius);
         if (prism == nullptr) {
             return false;
         }
@@ -340,7 +329,7 @@ u32 CollisionParts::checkStrikeBall(HitInfo* pHitInfo, u32 maxHits, const Vec3f&
     mInvBaseMatrix.mult(rPos, localPos);
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
-    f32 averageScale = (scale.x + scale.y + scale.z) / cNum_checkStrikeBall_f1;
+    f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
     f32 inverseScale = 1.0f / averageScale;
     radius *= averageScale;
     Vec3f movement(0, 0, 0);
@@ -354,7 +343,7 @@ u32 CollisionParts::checkStrikeBall(HitInfo* pHitInfo, u32 maxHits, const Vec3f&
         mBaseMatrix.mult33(worldMovement, worldMovement);
         // One check per 35 units the part moved; 35000 or more, or not a number, takes 1000 (it would not end).
         const f32 movedLength = localMovement.length();
-        s32 steps = movedLength < cNum_checkStrikeBall_f2 ? static_cast< s32 >((1.0f / cNum_checkStrikeBall_f3) * movedLength) + 1 : 1000;
+        s32 steps = movedLength < 35000.0f ? static_cast< s32 >((1.0f / 35.0f) * movedLength) + 1 : 1000;
         Vec3f step(localMovement);
 
         if (steps > 1) {
@@ -429,7 +418,7 @@ u32 CollisionParts::checkStrikeBallWithThickness(HitInfo* pHitInfo, u32 maxHits,
     mInvBaseMatrix.mult(rPos, localPos);
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
-    f32 averageScale = (scale.x + scale.y + scale.z) / cNum_checkStrikeBallWithThickness_f1;
+    f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
     f32 scaledRadius = radius * averageScale;
     u32 count = mServer->checkSphereWithThickness(&localPos,scaledRadius, averageScale, maxHits, prisms, distances, classifications, thickness);
     f32 inverseScale = 1.0f / averageScale;

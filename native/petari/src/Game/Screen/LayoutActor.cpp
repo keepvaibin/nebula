@@ -38,9 +38,6 @@ void LayoutActor::calcAnim() {
 }
 
 void LayoutActor::draw() const {
-    if (mFlag.mHudPart != 0 && NebulaMods::isHudHidden(mFlag.mHudPart)) {
-        return;
-    }
     if (MR::isExecuteDrawLayout(this)) {
         MotionSignal::drawObject(mDrawSlot, mMotionEpoch);
         mLayoutManager->setDrawGeneration(mMotionEpoch);
@@ -126,6 +123,10 @@ MtxPtr LayoutActor::getPaneMtxRef(const char* pParam1) {
 
 void LayoutActor::initLayoutManager(const char* pName, u32 rootPaneAnimLayerNum) {
     mLayoutManager = new LayoutManager(pName, true, rootPaneAnimLayerNum, 0x100);
+}
+
+void LayoutActor::initLayoutManagerKeepText(const char* pName, u32 rootPaneAnimLayerNum) {
+    mLayoutManager = new LayoutManager(pName, true, rootPaneAnimLayerNum, 0x100, true);
 }
 
 void LayoutActor::initLayoutManagerNoConvertFilename(const char* pName, u32 rootPaneAnimLayerNum) {

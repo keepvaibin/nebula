@@ -64,24 +64,19 @@ object MiiImport {
         }
         if (miis == 0) {
             if (unkept.isNotEmpty()) {
-                return TransferResult(false, "The Miis could not be kept", "Nebula's Mii folder could not be written.")
+                return TransferResult(false, context.getString(R.string.MiisNotKept), context.getString(R.string.MiiFolderUnwritable))
             }
             return TransferResult(
-                false, "No Miis in ${if (uris.size == 1) "that file" else "those files"}",
-                "Choose Mii files from a Wii, DS, 3DS, Wii U or Switch, or from Mii Studio or Mii Creator.",
+                false, context.getString(if (uris.size == 1) R.string.NoMiisOne else R.string.NoMiisMany),
+                context.getString(R.string.ChooseMiiFiles),
             )
         }
-        val parts = mutableListOf(if (miis == 1) "1 Mii found." else "$miis Miis found.")
-        if (converted == 1) parts += "1 from a newer console takes the Wii's nearest parts and colours."
-        if (converted > 1) parts += "$converted from newer consoles take the Wii's nearest parts and colours."
-        if (unread.isNotEmpty()) parts += "Not Mii data: ${unread.joinToString(", ")}."
-        if (unkept.isNotEmpty()) parts += "Could not be kept: ${unkept.joinToString(", ")}."
-        parts += if (SaveTransfer.gameRunning(context)) {
-            "They join your Miis when the game starts again."
-        } else {
-            "They join your Miis when the game starts. Miis it already has are not added twice."
-        }
-        return TransferResult(true, "Miis imported", parts.joinToString(" "))
+        val parts = mutableListOf(context.getString(R.string.MiisFound, miis))
+        if (converted > 0) parts += context.getString(R.string.MiisConverted, converted)
+        if (unread.isNotEmpty()) parts += context.getString(R.string.NotMiiData, unread.joinToString(", "))
+        if (unkept.isNotEmpty()) parts += context.getString(R.string.NotKept, unkept.joinToString(", "))
+        parts += context.getString(if (SaveTransfer.gameRunning(context)) R.string.MiisNextStartAgain else R.string.MiisNextStart)
+        return TransferResult(true, context.getString(R.string.MiisImported), parts.joinToString(" "))
     }
 
     private fun displayName(context: Context, uri: Uri): String? =

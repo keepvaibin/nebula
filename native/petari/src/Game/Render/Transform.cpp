@@ -1,16 +1,6 @@
 #include "Game/Render/Model.hpp"
 #include "Game/Render/Transform.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_textureMtxMaya_f1, "textureMtxMaya.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_textureMtxMaya_f2, "textureMtxMaya.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_textureMtxMaya_f3, "textureMtxMaya.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_textureMtxMaya_f4, "textureMtxMaya.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_textureMtxMayaOld_f1, "textureMtxMayaOld.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_textureMtxMayaOld_f2, "textureMtxMayaOld.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_textureMtxMayaOld_f3, "textureMtxMayaOld.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_textureMtxMayaOld_f4, "textureMtxMayaOld.f4", 0.5f);
 
 void billboardMtx(Mtx mtx) {
     f32 x = (mtx[0][0] * mtx[0][0]) + (mtx[1][0] * mtx[1][0]) + (mtx[2][0] * mtx[2][0]);
@@ -169,16 +159,16 @@ void textureMtxOld(const TextureTransform& srt, const Vec& center, Mtx dst) {
 void textureMtxMaya(const TextureTransform& srt, Mtx dst) {
     f32 sr, cr;
     NebulaSinCos(srt.mRotation, &sr, &cr);
-    f32 tx = srt.mTranslationX - cNum_textureMtxMaya_f1;
-    f32 ty = srt.mTranslationY - cNum_textureMtxMaya_f2;
+    f32 tx = srt.mTranslationX - 0.5f;
+    f32 ty = srt.mTranslationY - 0.5f;
 
     dst[0][0] = srt.mScaleX * cr;
     dst[0][1] = srt.mScaleY * sr;
-    dst[0][2] = tx * cr - sr * (ty + srt.mScaleY) + cNum_textureMtxMaya_f3;
+    dst[0][2] = tx * cr - sr * (ty + srt.mScaleY) + 0.5f;
 
     dst[1][0] = -srt.mScaleX * sr;
     dst[1][1] = srt.mScaleY * cr;
-    dst[1][2] = -tx * sr - cr * (ty + srt.mScaleY) + cNum_textureMtxMaya_f4;
+    dst[1][2] = -tx * sr - cr * (ty + srt.mScaleY) + 0.5f;
 
     dst[0][3] = dst[1][3] = dst[2][0] = dst[2][1] = dst[2][3] = 0.0f;
     dst[2][2] = 1.0f;
@@ -187,16 +177,16 @@ void textureMtxMaya(const TextureTransform& srt, Mtx dst) {
 void textureMtxMayaOld(const TextureTransform& srt, Mtx dst) {
     f32 sr, cr;
     NebulaSinCos(srt.mRotation, &sr, &cr);
-    f32 tx = srt.mTranslationX - cNum_textureMtxMayaOld_f1;
-    f32 ty = srt.mTranslationY - cNum_textureMtxMayaOld_f2;
+    f32 tx = srt.mTranslationX - 0.5f;
+    f32 ty = srt.mTranslationY - 0.5f;
 
     dst[0][0] = srt.mScaleX * cr;
     dst[0][1] = srt.mScaleY * sr;
-    dst[0][3] = tx * cr - sr * (ty + srt.mScaleY) + cNum_textureMtxMayaOld_f3;
+    dst[0][3] = tx * cr - sr * (ty + srt.mScaleY) + 0.5f;
 
     dst[1][0] = -srt.mScaleX * sr;
     dst[1][1] = srt.mScaleY * cr;
-    dst[1][3] = -tx * sr - cr * (ty + srt.mScaleY) + cNum_textureMtxMayaOld_f4;
+    dst[1][3] = -tx * sr - cr * (ty + srt.mScaleY) + 0.5f;
 
     dst[0][2] = dst[1][2] = dst[2][0] = dst[2][1] = dst[2][3] = 0.0f;
     dst[2][2] = 1.0f;

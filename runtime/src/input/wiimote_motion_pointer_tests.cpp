@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The MotionPlus's samples, the Nunchuk passed through it, and the motion pointer (docs/WII_REMOTE.md).
+// The MotionPlus's samples, the Nunchuk passed through it, and the motion pointer (docs/using-nebula/using-a-wii-remote.md).
 #include "galaxy/input/wiimote_input.h"
 #include "galaxy/input/wiimote_motion_pointer.h"
 

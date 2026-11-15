@@ -3,11 +3,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearDemo_setBckRate_1, "exeAppearDemo.setBckRate.1", 1.0f);
 
 namespace NrvOtaKingLongFoot {
     NEW_NERVE(OtaKingLongFootNrvWait, OtaKingLongFoot, Wait)
@@ -17,18 +13,18 @@ namespace NrvOtaKingLongFoot {
 };  // namespace NrvOtaKingLongFoot
 
 namespace {
-    NEBULA_TUNABLE(f32, cFoot14SensorRadius, 50.0f);
-    NEBULA_TUNABLE_RECORD(Vec, cFoot14SensorOffset, {50.0f, 0.0f, 20.0f});
-    NEBULA_TUNABLE(f32, cFoot12SensorRadius, 90.0f);
-    NEBULA_TUNABLE_RECORD(Vec, cFoot12SensorOffset, {75.0f, 0.0f, 20.0f});
-    NEBULA_TUNABLE(f32, cFoot10SensorRadius, 110.0f);
-    NEBULA_TUNABLE_RECORD(Vec, cFoot10SensorOffset, {125.0f, 0.0f, 0.0f});
-    NEBULA_TUNABLE(f32, cFoot08SensorRadius, 150.0f);
-    NEBULA_TUNABLE_RECORD(Vec, cFoot08SensorOffset, {125.0f, 0.0f, -40.0f});
-    NEBULA_TUNABLE(f32, cFoot06SensorRadius, 150.0f);
-    NEBULA_TUNABLE_RECORD(Vec, cFoot06SensorOffset, {100.0f, 0.0f, -30.0f});
-    NEBULA_TUNABLE(f32, cFoot05SensorRadius, 150.0f);
-    NEBULA_TUNABLE_RECORD(Vec, cFoot05SensorOffset, {80.0f, 0.0f, -40.0f});
+    const f32 cFoot14SensorRadius = 50.0f;
+    const Vec cFoot14SensorOffset = {50.0f, 0.0f, 20.0f};
+    const f32 cFoot12SensorRadius = 90.0f;
+    const Vec cFoot12SensorOffset = {75.0f, 0.0f, 20.0f};
+    const f32 cFoot10SensorRadius = 110.0f;
+    const Vec cFoot10SensorOffset = {125.0f, 0.0f, 0.0f};
+    const f32 cFoot08SensorRadius = 150.0f;
+    const Vec cFoot08SensorOffset = {125.0f, 0.0f, -40.0f};
+    const f32 cFoot06SensorRadius = 150.0f;
+    const Vec cFoot06SensorOffset = {100.0f, 0.0f, -30.0f};
+    const f32 cFoot05SensorRadius = 150.0f;
+    const Vec cFoot05SensorOffset = {80.0f, 0.0f, -40.0f};
 };  // namespace
 
 OtaKingLongFoot::OtaKingLongFoot(LiveActor* pHost, s32 demoBckStep, const char* pName)
@@ -132,7 +128,7 @@ void OtaKingLongFoot::exeAppearDemo() {
     }
 
     if (MR::isStep(this, mDemoBckStep)) {
-        MR::setBckRate(this, cNum_exeAppearDemo_setBckRate_1);
+        MR::setBckRate(this, 1.0f);
     }
 }
 

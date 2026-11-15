@@ -17,30 +17,25 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 140.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, cBodyRadius, 145.0f);
-    NEBULA_TUNABLE(f32, cBodyHopRadius, 120.0f);
+    const f32 cBodyRadius = 145.0f;
+    const f32 cBodyHopRadius = 120.0f;
     // The shadow grows from the hidden to the up radius as it rises.
-    NEBULA_TUNABLE(f32, cShadowHideRadius, 110.0f);
-    NEBULA_TUNABLE(f32, cShadowRiseRadius, 30.0f);
+    const f32 cShadowHideRadius = 110.0f;
+    const f32 cShadowRiseRadius = 30.0f;
     // Comes up when the player is this near, and hides again past the leave distance.
-    NEBULA_TUNABLE(f32, cAppearDistance, 3000.0f);
-    NEBULA_TUNABLE(f32, cLeaveDistance, 3200.0f);
-    NEBULA_TUNABLE(f32, cGroupHeight, 500.0f);
+    const f32 cAppearDistance = 3000.0f;
+    const f32 cLeaveDistance = 3200.0f;
+    const f32 cGroupHeight = 500.0f;
     const s32 cHopWaitSteps = NebulaFrameClock::stepsOfSeconds(5);
     // One beam each interval, charged over the interval; then it closes.
     const s32 cBeamInterval = 80;
     const s32 cOpenSteps = cBeamInterval * JumpBeamer::sBeamCount;
-    NEBULA_TUNABLE(s32, cInterSteps, 80);
-    NEBULA_TUNABLE(f32, cDefaultBeamSpeed, 20.0f);
-    NEBULA_TUNABLE(s32, cDefaultBeamLife, 100);
+    const s32 cInterSteps = 80;
+    const f32 cDefaultBeamSpeed = 20.0f;
+    const s32 cDefaultBeamLife = 100;
 };  // namespace
 
 namespace NrvJumpBeamer {
@@ -85,12 +80,12 @@ void JumpBeamer::init(const TableIter& rIter) {
     MR::connectToSceneEnemy(this);
     MR::initLightCtrl(this);
     initHitSensor(2);
-    MR::addHitSensorMtx(this, "Jump", ATYPE_PLAYER_AUTO_JUMP, 8, cBodyRadius, MR::getJointMtx(mHeadModel, "SpringJoint3"), Vec3f(0.0f, -cNum_init_f1, 0.0f));
-    MR::addHitSensorMtxEnemy(this, "Body", 8, cBodyRadius, MR::getJointMtx(this, "Body"), Vec3f(0.0f, cNum_init_f2, 0.0f));
+    MR::addHitSensorMtx(this, "Jump", ATYPE_PLAYER_AUTO_JUMP, 8, cBodyRadius, MR::getJointMtx(mHeadModel, "SpringJoint3"), Vec3f(0.0f, -100.0f, 0.0f));
+    MR::addHitSensorMtxEnemy(this, "Body", 8, cBodyRadius, MR::getJointMtx(this, "Body"), Vec3f(0.0f, 35.0f, 0.0f));
     getSensor("Body")->setType(ATYPE_BEGOMAN);
     getSensor("Body")->validate();
     getSensor("Jump")->invalidate();
-    MR::initShadowVolumeSphere(this, cNum_init_f3);
+    MR::initShadowVolumeSphere(this, 140.0f);
     MR::invalidateShadow(this, nullptr);
     initEffectKeeper(1, nullptr);
     initSound(8, false);

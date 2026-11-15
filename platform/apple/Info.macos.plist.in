@@ -89,6 +89,28 @@
             </array>
         </dict>
     </array>
+    <!-- nebula:// links (6.1's import by link): Nebula comes to the front; the link waits on net.internet
+         (files_opened takes file URLs only). -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>dev.nebula.galaxy.link</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>nebula</string>
+            </array>
+        </dict>
+    </array>
+    <!-- Plan 2.9: the system's questions before a mod first uses the microphone (capture.audio), the camera
+         (capture.video) or the local network (net.local). Asked only then, never at the start. English here; every
+         language's in <lang>.lproj/InfoPlist.strings (tools/package_text.py, localization/PackageText.tsv). -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>A mod you allowed asks to use the microphone.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>A mod you allowed asks to use the camera.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>A mod you allowed asks to connect to devices on your local network.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Nebula is free software under the GNU General Public License, version 3. Not affiliated with Nintendo.</string>
 </dict>

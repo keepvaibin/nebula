@@ -1,4 +1,4 @@
-//! The importer as C functions, for an app that links it (Apple's: docs/APPLE.md): what the command line's `identify`
+//! The importer as C functions, for an app that links it (Apple's): what the command line's `identify`
 //! and `import` do, by path. A document picker's file is read where it lies; nothing is copied.
 
 use crate::{identify_input, json_string, Partition};

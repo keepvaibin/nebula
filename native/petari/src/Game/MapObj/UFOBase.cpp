@@ -20,14 +20,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <cstddef>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSubModel_f1, "initSubModel.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSubModel_f2, "initSubModel.f2", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensorType_f1, "initSensorType.f1", 100.0f);
 
 namespace NrvUFOBase {
     NEW_NERVE(UFOBaseNrvWait, UFOBase, Wait);
@@ -77,7 +70,7 @@ void UFOBase::init(const TableIter& rIter) {
         mRailMover->init(rIter);
     }
 
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::setGroupClipping(this, rIter, 32);
     MR::useStageSwitchReadB(this, rIter);
     MR::useStageSwitchWriteDead(this, rIter);
@@ -87,7 +80,7 @@ void UFOBase::init(const TableIter& rIter) {
     MR::tryRegisterDemoCast(this, rIter);
     MR::calcFrontVec(&mFront, this);
     MR::getMapPartsArgRotateSpeed(&mRotateSpeed, rIter);
-    mRotateSpeed *= cNum_init_f2;
+    mRotateSpeed *= 0.01f;
     MR::getMapPartsArgMoveConditionType(&mMoveConditionType, rIter);
     MR::tryStartAllAnim(this, name);
 
@@ -194,12 +187,12 @@ void UFOBase::calcAndSetBaseMtx() {
 }
 
 void UFOBase::initSubModel(const TableIter& rIter, const char* name) {
-    mLODCtrl = MR::createLodCtrlMapObj(this, rIter, cNum_initSubModel_f1);
+    mLODCtrl = MR::createLodCtrlMapObj(this, rIter, 100.0f);
     if (MR::isExistSubModel(name, "Bloom")) {
         MR::FormattedName buf("%sBloom", name);
         const char* name2 = mName;
         mModel = MR::createModelObjBloomModel(name2, buf.c_str(), getBaseMtx());
-        f32 num = cNum_initSubModel_f2;
+        f32 num = 500.0f;
         MR::calcModelBoundingRadius(&num, this);
         MR::setClippingFarMax(mModel);
         MR::setClippingTypeSphere(mModel, num);
@@ -216,7 +209,7 @@ UFOBreakable::UFOBreakable(const char* pName) : UFOBase(pName) {
 }
 
 void UFOBreakable::initSensorType() {
-    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_MAPOBJ, 8, cNum_initSensorType_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KILLER_TARGET_MAPOBJ, 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
 }
 
 bool UFOBreakable::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* /*pReceiver*/) {

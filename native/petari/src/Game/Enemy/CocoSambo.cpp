@@ -8,40 +8,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f1, "exeFall.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f2, "exeFall.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFall_f3, "exeFall.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryToFallHead_f1, "tryToFallHead.f1", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f1, "exeAppear.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_f1, "exeAttack.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_f1, "exeRecover.f1", 180.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_1, "exeWait.isNearPlayer.1", 700.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_isNearPlayer_2, "exeWait.isNearPlayer.2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttack_checkPassBckFrame_1, "exeAttack.checkPassBckFrame.1", 115.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRecoverWait_setBckRate_1, "exeRecoverWait.setBckRate.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRecover_setBckRate_1, "exeRecover.setBckRate.1", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePressY_setBckRate_1, "exePressY.setBckRate.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePointerAiming_setBckRate_1, "exePointerAiming.setBckRate.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePointerAiming_setBckRate_2, "exePointerAiming.setBckRate.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_endPointerAiming_setBckRate_1, "endPointerAiming.setBckRate.1", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_endPointerAiming_setBckRate_2, "endPointerAiming.setBckRate.2", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHide_1, "exeHide.1", 65);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeFallHead_1, "exeFallHead.1", 2);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeFallHead_2, "exeFallHead.2", 3);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_1, "exeBlow.1", 1);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_2, "exeBlow.2", 2);
 
 namespace NrvCocoSamboHead {
     NEW_NERVE(CocoSamboHeadNrvHeadConnectedBody, CocoSamboHead, ConnectedBody);
@@ -53,31 +20,31 @@ namespace NrvCocoSamboHead {
 };  // namespace NrvCocoSamboHead
 
 namespace {
-    NEBULA_TUNABLE_RECORD(Vec, cHeadSensorOffset, {60.0f, 0.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, cBlowVelocity, {0.0f, 20.0f, -100.0f});
-    NEBULA_TUNABLE_RECORD(Vec, cSensorOffset, {40.0f, 0.0f, 0.0f});
+    const Vec cHeadSensorOffset = {60.0f, 0.0f, 0.0f};
+    const Vec cBlowVelocity = {0.0f, 20.0f, -100.0f};
+    const Vec cSensorOffset = {40.0f, 0.0f, 0.0f};
     const char* const cPointingJointName[] = {"Spine1", "Spine2", "Spine3", "Head"};
-    NEBULA_TUNABLE(f32, cHeadSensorRadius, 100.0f);
-    NEBULA_TUNABLE(f32, cTrampleSensorRadius, 150.0f);
-    NEBULA_TUNABLE(s32, cFallFrame, 45);
+    const f32 cHeadSensorRadius = 100.0f;
+    const f32 cTrampleSensorRadius = 150.0f;
+    const s32 cFallFrame = 45;
     // const f32 cFallGravity =
-    NEBULA_TUNABLE(s32, cSwoonFrame, 180);
-    NEBULA_TUNABLE(s32, cSwoonEndDamagedFrame, 95);
+    const s32 cSwoonFrame = 180;
+    const s32 cSwoonEndDamagedFrame = 95;
     // const s32 cRecoverWaitFrame =
-    NEBULA_TUNABLE(s32, cPressFrame, 35);
+    const s32 cPressFrame = 35;
     // const s32 cAttackEffectEmitStep =
     // const s32 cHitStopSceneFrame =
     // const s32 cBlowStopSceneStep =
     // const s32 cBlowStopSceneFrame =
     // const f32 cBlowGravity =
-    NEBULA_TUNABLE(s32, cBlowFrame, 20);
+    const s32 cBlowFrame = 20;
     // const f32 cSensorRadius =
     // const f32 cAttackDistance =
     // const s32 cAttackInterval =
     // const f32 cRotateSpeed =
     // const s32 cAttackRotateFrame =
-    NEBULA_TUNABLE(s32, cAppearUpFrame, 60);
-    NEBULA_TUNABLE(s32, cAppearLandFrame, 105);
+    const s32 cAppearUpFrame = 60;
+    const s32 cAppearLandFrame = 105;
     // const s32 cHideDownFrame =
     // const s32 cSwoonEndHideShadowFrame =
     const s32 cPointingActorNum = 4;
@@ -127,7 +94,7 @@ void CocoSamboHead::init(const TableIter& rIter) {
     initHitSensor(2);
     MR::addHitSensorAtJoint(this, "body", "Head", ATYPE_SAMBO_HEAD, 8, (::cHeadSensorRadius * mScale.x), sensorOffs);
     MR::addHitSensorAtJoint(this, "trample", "Head", ATYPE_SAMBO_HEAD, 8, (::cTrampleSensorRadius * mScale.x), sensorOffs);
-    initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -cNum_init_f1, -cNum_init_f2), "Head");
+    initFixedPosition(Vec3f(0.0f, 0.0f, 0.0f), Vec3f(0.0f, -90.0f, -90.0f), "Head");
     initNerve(GET_NERVE(CocoSamboHead, CocoSamboHeadNrvHeadConnectedBody));
     PartsModel::init(rIter);
 }
@@ -246,7 +213,7 @@ void CocoSamboHead::updateFrontVecToPlayer(const Vec3f& rGravity) {
 void CocoSamboHead::exeFall() {
     Vec3f gravity(mHost->mGravity);
     Vec3f acceleration;
-    acceleration.scale(cNum_exeFall_f1, gravity);
+    acceleration.scale(2.0f, gravity);
 
     if (MR::isFirstStep(this)) {
         mFixedPosition->copyTrans(&mPosition);
@@ -265,7 +232,7 @@ void CocoSamboHead::exeFall() {
         verticalOffset.scale(up.dot(offset), up);
         MR::vecKillElement(offset, up, &offset);
         horizontalVelocity.scale(1.0f / fallFrame, offset);
-        verticalVelocity = (verticalOffset * cNum_exeFall_f2 - acceleration * fallFrame * fallFrame) / (cNum_exeFall_f3 * fallFrame);
+        verticalVelocity = (verticalOffset * 2.0f - acceleration * fallFrame * fallFrame) / (2.0f * fallFrame);
         mVelocity.add(horizontalVelocity, verticalVelocity);
     }
 
@@ -360,8 +327,8 @@ void CocoSambo::init(const TableIter& rIter) {
         mPointingActorArray[i] = new LiveActor("ポインティング用アクター");
         mPointingActorArray[i]->initWithoutIter();
         MR::invalidateClipping(mPointingActorArray[i]);
-        MR::initStarPointerTargetAtMtx(mPointingActorArray[i], cNum_init_f3 * mScale.x, MR::getJointMtx(this, ::cPointingJointName[i]),
-                                       Vec3f(mScale.x * cNum_init_f4, 0.0f, 0.0f));
+        MR::initStarPointerTargetAtMtx(mPointingActorArray[i], 80.0f * mScale.x, MR::getJointMtx(this, ::cPointingJointName[i]),
+                                       Vec3f(mScale.x * 100.0f, 0.0f, 0.0f));
         mPointingActorArray[i]->makeActorAppeared();
     }
 
@@ -394,7 +361,7 @@ bool CocoSambo::tryToFallHead(const HitSensor* pReceiver, const HitSensor* pSend
     }
 
     MR::deleteEffectAll(this);
-    mHitEffectScale.lerp(pReceiver->mPosition, pSender->mPosition, cNum_tryToFallHead_f1);
+    mHitEffectScale.lerp(pReceiver->mPosition, pSender->mPosition, 0.75f);
     setNerve(GET_NERVE(CocoSambo, CocoSamboNrvFallHead));
     return true;
 }
@@ -491,7 +458,7 @@ void CocoSambo::initMapToolInfo(const TableIter& rIter) {
 }
 
 void CocoSambo::initSensor() {
-    f32 f = mScale.x * cNum_initSensor_f1;
+    f32 f = mScale.x * 80.0f;
     Vec3f offset(::cSensorOffset);
     offset.scale(mScale.x);
     initHitSensor(3);
@@ -556,7 +523,7 @@ void CocoSambo::exeAppear() {
     if (MR::isFirstStep(this)) {
         startBckThisAndHead("Appear");
         MR::validateHitSensors(mHead);
-        dirToPlayer(cNum_exeAppear_f1);
+        dirToPlayer(180.0f);
         MR::showMaterial(mHead, "SanboNeedleMat_v");
     }
 
@@ -593,9 +560,9 @@ void CocoSambo::exeWait() {
         return;
     }
 
-    if (MR::isNearPlayer(this, cNum_exeWait_isNearPlayer_1)) {
+    if (MR::isNearPlayer(this, 700.0f)) {
         setNerve(GET_NERVE(CocoSambo, CocoSamboNrvAttack));
-    } else if (!MR::isNearPlayer(this, mPlayerSearchDistance + cNum_exeWait_isNearPlayer_2)) {
+    } else if (!MR::isNearPlayer(this, mPlayerSearchDistance + 100.0f)) {
         setNerve(GET_NERVE(CocoSambo, CocoSamboNrvHide));
     }
 }
@@ -605,7 +572,7 @@ void CocoSambo::exeHide() {
         startBckThisAndHead("Hide");
     }
 
-    if (MR::isStep(this, cStep_exeHide_1)) {
+    if (MR::isStep(this, 65)) {
         MR::emitEffect(this, "CocoSamboSmoke");
         MR::startSound(this, "SE_EM_SFSAMBO_HIDE");
         MR::invalidateShadow(this, nullptr);
@@ -621,12 +588,12 @@ void CocoSambo::exeAttack() {
         startBckThisAndHead("Attack");
     }
 
-    if (MR::getBckFrame(this) < cNum_exeAttack_f1) {
+    if (MR::getBckFrame(this) < 30.0f) {
         dirToPlayer(1.0f);
     }
 
     if (!tryPointerAiming(GET_NERVE(CocoSambo, CocoSamboNrvAttack))) {
-        if (MR::checkPassBckFrame(this, cNum_exeAttack_checkPassBckFrame_1)) {
+        if (MR::checkPassBckFrame(this, 115.0f)) {
             MR::emitEffect(mHead, "CocoSamboAttack");
             MR::tryRumblePadStrong(this, PLAYER_1);
             MR::shakeCameraNormal();
@@ -658,11 +625,11 @@ void CocoSambo::exeFallHead() {
         MR::hideMaterial(mHead, "SanboNeedleMat_v");
     }
 
-    if (MR::isStep(this, cStep_exeFallHead_1)) {
+    if (MR::isStep(this, 2)) {
         MR::stopScene(10);
     }
 
-    if (MR::isStep(this, cStep_exeFallHead_2)) {
+    if (MR::isStep(this, 3)) {
         MR::shakeCameraNormal();
     }
 
@@ -688,7 +655,7 @@ void CocoSambo::exeFallHeadHide() {
 void CocoSambo::exeRecoverWait() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Recover");
-        MR::setBckRate(this, cNum_exeRecoverWait_setBckRate_1);
+        MR::setBckRate(this, 0.0f);
         MR::invalidateHitSensors(mHead);
     }
 
@@ -697,19 +664,19 @@ void CocoSambo::exeRecoverWait() {
 
 void CocoSambo::exeRecover() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, cNum_exeRecover_setBckRate_1);
+        MR::setBckRate(this, 1.0f);
         MR::startBck(mHead, "Recover");
         mHead->mIsCalcOwnMtx = true;
         MR::showMaterial(mHead, "SanboNeedleMat_v");
     }
 
-    dirToPlayer(cNum_exeRecover_f1);
+    dirToPlayer(180.0f);
     MR::setNerveAtBckStopped(this, GET_NERVE(CocoSambo, CocoSamboNrvAppear));
 }
 
 void CocoSambo::exePressY() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, cNum_exePressY_setBckRate_1);
+        MR::setBckRate(this, 0.0f);
         MR::startBck(mHead, "PressY");
         MR::startSound(this, "SE_EM_STOMPED_S");
         MR::tryRumblePadMiddle(this, PLAYER_1);
@@ -728,11 +695,11 @@ void CocoSambo::exeBlow() {
         mHead->setNerve(GET_NERVE(CocoSamboHead, CocoSamboHeadNrvHeadBlow));
     }
 
-    if (MR::isStep(this, cStep_exeBlow_1)) {
+    if (MR::isStep(this, 1)) {
         MR::stopScene(6);
     }
 
-    if (MR::isStep(this, cStep_exeBlow_2)) {
+    if (MR::isStep(this, 2)) {
         MR::shakeCameraNormal();
     }
 
@@ -743,8 +710,8 @@ void CocoSambo::exeBlow() {
 
 void CocoSambo::exePointerAiming() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, cNum_exePointerAiming_setBckRate_1);
-        MR::setBckRate(mHead, cNum_exePointerAiming_setBckRate_2);
+        MR::setBckRate(this, 0.0f);
+        MR::setBckRate(mHead, 0.0f);
         MR::emitEffect(this, "Touch1");
         MR::emitEffect(this, "Touch2");
         MR::emitEffect(this, "Touch3");
@@ -760,8 +727,8 @@ void CocoSambo::exePointerAiming() {
 }
 
 void CocoSambo::endPointerAiming() {
-    MR::setBckRate(this, cNum_endPointerAiming_setBckRate_1);
-    MR::setBckRate(mHead, cNum_endPointerAiming_setBckRate_2);
+    MR::setBckRate(this, 1.0f);
+    MR::setBckRate(mHead, 1.0f);
     MR::deleteEffect(this, "Touch1");
     MR::deleteEffect(this, "Touch2");
     MR::deleteEffect(this, "Touch3");

@@ -2,36 +2,28 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateChaseFrontVec_f1, "updateChaseFrontVec.f1", 40.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeChase_checkPassBckFrame_1, "exeChase.checkPassBckFrame.1", 0.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, cSensorRadius, 30.0f);
-    NEBULA_TUNABLE(f32, cBinderRadius, 40.0f);
-    NEBULA_TUNABLE(s32, cCoinMaxNum, 2);
-    NEBULA_TUNABLE(s32, cRandomActFrame, 120);
-    NEBULA_TUNABLE(f32, cStarWandRadius, 150.0f);
-    NEBULA_TUNABLE(f32, cAppearGravity, 0.75f);
-    NEBULA_TUNABLE(s32, cChaseInvalidFrame, 300);
-    NEBULA_TUNABLE(s32, cForceKillFrame, 600);
-    NEBULA_TUNABLE(f32, cChaseStartDistance, 2000.0f);
-    NEBULA_TUNABLE(f32, cChaseSpeed, 4.0f);
-    NEBULA_TUNABLE(f32, cChaseGravity, 2.0f);
-    NEBULA_TUNABLE(f32, cChaseRotateSpeed, 1.0f);
-    NEBULA_TUNABLE(s32, cChaseFrame, 30);
-    NEBULA_TUNABLE(f32, cReflectGravity, 1.5f);
+    const f32 cSensorRadius = 30.0f;
+    const f32 cBinderRadius = 40.0f;
+    const s32 cCoinMaxNum = 2;
+    const s32 cRandomActFrame = 120;
+    const f32 cStarWandRadius = 150.0f;
+    const f32 cAppearGravity = 0.75f;
+    const s32 cChaseInvalidFrame = 300;
+    const s32 cForceKillFrame = 600;
+    const f32 cChaseStartDistance = 2000.0f;
+    const f32 cChaseSpeed = 4.0f;
+    const f32 cChaseGravity = 2.0f;
+    const f32 cChaseRotateSpeed = 1.0f;
+    const s32 cChaseFrame = 30;
+    const f32 cReflectGravity = 1.5f;
     const s32 cReflectWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, cReflectCursorSpeed, 10.0f);
+    const f32 cReflectCursorSpeed = 10.0f;
     const s32 cAppearInterval = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE_RECORD(Vec, cAppearVelocity, {0.0f, 35.0f, 6.0f});
-    NEBULA_TUNABLE_RECORD(Vec, cReflectVelocity, {0.0f, 40.0f, -15.0f});
+    const Vec cAppearVelocity = {0.0f, 35.0f, 6.0f};
+    const Vec cReflectVelocity = {0.0f, 40.0f, -15.0f};
 };  // namespace
 
 namespace NrvFireBubble {
@@ -64,11 +56,11 @@ void FireBubble::init(const TableIter& rIter) {
     initModelManagerWithAnm("FireBubble", nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensors("body", "Body");
-    initBinder(::cBinderRadius, cNum_init_f1, 0);
+    initBinder(::cBinderRadius, 40.0f, 0);
     initEffectKeeper(1, nullptr);
     MR::initStarPointerTargetAtJoint(this, "Body", ::cStarWandRadius, Vec3f(0.0f, 0.0f, 0.0f));
     initSound(4, false);
-    MR::initShadowVolumeCylinder(this, cNum_init_f2);
+    MR::initShadowVolumeCylinder(this, 40.0f);
     MR::invalidateClipping(this);
     MR::declareCoin(this, ::cCoinMaxNum);
     initNerve(GET_NERVE(FireBubble, FireBubbleNrvAppear));
@@ -172,7 +164,7 @@ void FireBubble::updateChaseFrontVec(f32 turnDegree) {
 
     MR::getPlayerUpVec(&playerUpVec);
     MR::normalize(&playerUpVec);
-    playerUpVec.scale(cNum_updateChaseFrontVec_f1);
+    playerUpVec.scale(40.0f);
 
     pos.add(*MR::getPlayerPos(), playerUpVec);
     toPlayer.sub(pos, *getPosition());
@@ -322,7 +314,7 @@ void FireBubble::exeChase() {
     updateChaseFrontVecAndVelocity(::cChaseRotateSpeed);
     updateGravity(::cChaseGravity);
 
-    if (MR::checkPassBckFrame(this, cNum_exeChase_checkPassBckFrame_1)) {
+    if (MR::checkPassBckFrame(this, 0.0f)) {
         MR::startSound(this, "SE_EM_FIRE_BUBBLE_JUMP");
     }
 

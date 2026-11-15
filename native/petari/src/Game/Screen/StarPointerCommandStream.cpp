@@ -8,16 +8,15 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sMinWidth, 6.0f);
-    NEBULA_TUNABLE(f32, sMaxWidth, 32.0f);
-    NEBULA_TUNABLE(f32, sMinLineWidthDistance, 40.0f);
-    NEBULA_TUNABLE(f32, sMaxLineWidthDistance, 400.0f);
-    NEBULA_TUNABLE(f32, hDefaultLength, 80.0f);
-    NEBULA_TUNABLE(f32, hDefaultWidth, 30.0f);
+    const f32 sMinWidth = 6.0f;
+    const f32 sMaxWidth = 32.0f;
+    const f32 sMinLineWidthDistance = 40.0f;
+    const f32 sMaxLineWidthDistance = 400.0f;
+    const f32 hDefaultLength = 80.0f;
+    const f32 hDefaultWidth = 30.0f;
 };  // namespace
 
 namespace NrvStarPointerCommandStream {

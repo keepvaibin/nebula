@@ -1,14 +1,6 @@
 #include "Game/Sound/SoundAnimator.hpp"
 #include "Game/Sound/Sound.hpp"
 #include "Game/Sound/SoundHandles.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_modifySoundParams_f1, "modifySoundParams.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_modifySoundParams_f2, "modifySoundParams.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_modifySoundParams_f3, "modifySoundParams.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_modifySoundParams_f4, "modifySoundParams.f4", 127.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_modifySoundParams_f5, "modifySoundParams.f5", 32.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_modifySoundParams_f6, "modifySoundParams.f6", 127.0f);
 
 SoundAnimation* SoundAnimation::load(void* pFile, const char* pName) {
     if (pFile == nullptr) {
@@ -190,23 +182,23 @@ bool SoundAnimator::playsSound(const SoundAnimationSound* pAnimation, const Vec3
 }
 
 void SoundAnimator::modifySoundParams(SoundParams* pParams, const SoundAnimationSound* pAnimation, f32 time) {
-    if (time > cNum_modifySoundParams_f1) {
-        time = cNum_modifySoundParams_f2;
+    if (time > 3.0f) {
+        time = 3.0f;
     }
     time = time < 0.0f ? -time - 1.0f : time - 1.0f;
 
     f32 volume = pAnimation->mBaseVolume;
     if (pAnimation->mVolumeDelta != 0) {
-        volume += pAnimation->mVolumeDelta * cNum_modifySoundParams_f3 * time;
+        volume += pAnimation->mVolumeDelta * 2.0f * time;
     }
 
-    pParams->mVolume = volume * (1.0f / cNum_modifySoundParams_f4);
+    pParams->mVolume = volume * (1.0f / 127.0f);
 
     if (pAnimation->mPitchDelta != 0) {
-        pParams->mPitch = pAnimation->mBasePitch + pAnimation->mPitchDelta * time * (1.0f / cNum_modifySoundParams_f5);
+        pParams->mPitch = pAnimation->mBasePitch + pAnimation->mPitchDelta * time * (1.0f / 32.0f);
     } else {
         pParams->mPitch = pAnimation->mBasePitch;
     }
 
-    pParams->mPan = pAnimation->mBasePan * (1.0f / cNum_modifySoundParams_f6);
+    pParams->mPan = pAnimation->mBasePan * (1.0f / 127.0f);
 }

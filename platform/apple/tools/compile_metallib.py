@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""The programs' file as Metal libraries (docs/APPLE.md, "Shaders").
+"""The programs' file as Metal libraries.
 
 The Metal renderer's programs are MSL text (programs_msl.bin, written by tools/programs_msl). Metal compiles a text in two
 steps: the text to its own bytecode (a tenth of a second a program on a 2017 MacBook Pro, which a first start would pay

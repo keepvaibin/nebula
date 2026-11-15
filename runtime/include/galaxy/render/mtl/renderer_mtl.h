@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The renderer on Metal (docs/APPLE.md), with the interface RenderCore uses on RendererD3D12 and RendererVk.
+// The renderer on Metal, with the interface RenderCore uses on RendererD3D12 and RendererVk.
 //
 // The scene target is a colour texture (RGB10A2) and a depth texture (Depth32Float_Stencil8) drawn through one render
 // command encoder, the scene pass; a scene target copy, screen probe or present ends that encoder, and the next scene
 // target operation begins another, loading what the last stored. kFramesInFlight frames are recorded ahead of the GPU.
 // A frame is a row of command buffers committed in order: the frame's texture uploads (a blit encoder), then its
-// draws; a pass recorded on several threads (parallel_record_*) is a command buffer of its own in that row.
+// draws; a pass recorded on several threads (parallel_record_*) runs inside the scene pass on a tile-based GPU, else in a
+// command buffer of its own in that row.
 //
 // Draw bindings follow gpu::Encoder (core/gpu_encoder.h, mtl/shader_msl.h). Addresses (gpu::Address) name a buffer
 // and an offset (mtl::Context::resolve). Metal's clip space is Direct3D's: nothing is turned over.
@@ -34,6 +35,8 @@
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
+#include "galaxy/render/mod_post.h"
+#include <nebula_frame_list.h>
 #include "render/core/draw_record.h"
 #include "render/core/gpu_encoder.h"
 
@@ -74,6 +77,9 @@ public:
     [[nodiscard]] Kept take_apart_lost_device();
     void keep(const Kept& kept, bool) noexcept { window_ = kept.window; }
     void shutdown();
+    // The pictures handed to an extension, taken from the GPU and written (render thread; RenderCore::finish_pictures,
+    // at a host's exit that skips shutdown).
+    void finish_pictures();
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
 
     // SMAA or FXAA of the 3D scene in the scene target before the 2D layer draws (mtl::PostProcessor).
@@ -95,7 +101,7 @@ public:
     [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
     [[nodiscard]] double gpu_ms_per_tick() const noexcept { return 0.0; }  // the tracer's measure: none yet
-    // Smoothed GPU time of a frame that drew the scene (0 until measured): the tracer's build budget (5.3 G-3).
+    // Smoothed GPU time of a frame that drew the scene (0 until measured): the tracer's build budget.
     [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return native_scene_gpu_ema_ms_; }
     void set_scene_view(const std::array<float, 12>* view) noexcept {
         scene_view_known_ = view != nullptr;
@@ -110,7 +116,7 @@ public:
     [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (mtl::SceneCamera).
     bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
-    void end_wide_scene();
+    void end_wide_scene(unsigned finish = 0u);  // finish: the traced relight's camera (none on Metal yet)
     [[nodiscard]] bool temporal_mode() const;
     // The upscaler reads the motion but no reactive mask (SGSR 2): every draw of the scene shares the motion pass.
     [[nodiscard]] bool motion_pass_only() const;
@@ -224,6 +230,11 @@ public:
     [[nodiscard]] gpu::Address zero_stream(std::uint32_t bytes);
     // The frame so far is the frame's picture now: `fresh` (or a new target) takes its place.
     [[nodiscard]] gpu::TextureRef take_frame_picture(gpu::TextureRef fresh);
+    // draw.post and draw.native (mod_post.h, luma_draw_native.h): not on Metal yet. No compiler is installed, so every
+    // post program is refused at post_register ("no compiler for post programs on this renderer") and no list names
+    // one; draw.native's backend values are D3D12 and Vulkan only, so no native call reaches here.
+    void record_mod_post(const ModPostProgram&, ModPostConstants, const gpu::TextureRef&, bool) {}
+    void record_native_call(const NebulaCall&, LumaDrawNativeFrame&, bool) {}
     [[nodiscard]] bool can_take_scene() const noexcept;
     bool take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureStore& textures, gpu::TextureRef& released);
     void open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key, TextureStore& textures);
@@ -436,9 +447,13 @@ private:
 
     // Frame recording.
     void begin_scene_pass(const SceneClearValues* clear = nullptr, const char* caller = __builtin_FUNCTION());
-    // `parallel`: the pass is a parallel one whose chunks have encoders of their own (parallel_record_begin).
+    // With parallel_scene_pass_ the pass is a parallel encoder and pass_ its encoder for the draws in order.
     void begin_scene_pass_with(unsigned aux, const SceneClearValues* clear = nullptr, bool discard_color = false,
                                const char* caller = __builtin_FUNCTION(), unsigned clear_depth = 0u);
+    // pass_, new in the open scene pass: the textures its draws read, the walker's encoder, the scene's rectangles.
+    void attach_scene_encoder();
+    // The chunks as encoders of the open parallel scene pass, between the draws before them and those after.
+    [[nodiscard]] bool parallel_record_in_pass(const std::uint8_t* chunk_aux, unsigned chunk_count);
     // The scene pass's descriptor (an MTLRenderPassDescriptor*, the caller's to release) for the live set.
     [[nodiscard]] mtl::Object scene_pass_descriptor(unsigned aux, const SceneClearValues* clear, bool discard_color,
                                                     unsigned clear_depth, mtl::Object visibility);
@@ -481,6 +496,11 @@ private:
     Frame* frame_ = &frames_[0];
     mtl::Object commands_ = nullptr;  // id<MTLCommandBuffer> where work records (frame_->lists.back())
     mtl::Object pass_ = nullptr;      // id<MTLRenderCommandEncoder>: the open scene pass
+    // id<MTLParallelRenderCommandEncoder>: the open scene pass when it is a parallel one (pass_ is then one of its
+    // encoders). A tile-based GPU's scene passes are, once a walk has recorded a pass in chunks: the chunks then run in
+    // the pass, where a pass of their own stored the targets and loaded them again before and after.
+    mtl::Object scene_parallel_ = nullptr;
+    bool parallel_scene_pass_ = false;
     std::uint64_t frame_index_ = 0;
     std::uint64_t last_submitted_ = 0;
 

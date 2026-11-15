@@ -22,6 +22,7 @@ struct Entry {
     std::uint64_t length = 0;   // a file's length in bytes; a folder's, from its first file to its last one's end
     std::uint64_t position = 0; // the first byte in the store
     std::uint32_t children = 0; // a folder's entries
+    bool from_overlay = false;  // a mods' store's entry (attach_overlay), not the game's own
     const char* name = nullptr; // valid while the store is open
 };
 
@@ -47,6 +48,14 @@ public:
     // had. Ended by unmap_private, or kept while the store is open.
     [[nodiscard]] std::uint8_t* map_private(std::uint64_t position, std::size_t size) const;
     void unmap_private(void* data, std::size_t size) const;
+    // A start-again's hand-over (host_main.cpp finish_and_exit), with every other thread of the process stopped: the
+    // store's files are let go (its view, mapping and file, the overlays' too) without freeing anything, so the new
+    // process can replace them. Views given out by map_private are the caller's to unmap. Nothing may read the store
+    // after; the process ends next.
+    void let_go_of_files() noexcept;
+    // The system wants memory: the read-only view's pages leave this process (Linux, Android; they stay in the file
+    // cache and come back on the next read, the same bytes at the same addresses). Windows trims a view by itself.
+    void release_pages() const noexcept;
 
     [[nodiscard]] std::optional<Entry> entry(std::int32_t index) const;
     [[nodiscard]] std::optional<Entry> find(std::string_view path) const;
@@ -112,6 +121,10 @@ private:
 
 // The store's first bytes hold this.
 inline constexpr char kStoreMagic[8] = {'N', 'B', 'S', 'T', 'O', 'R', 'E', '\0'};
+
+// The disc's game id ("RMGE01") in the header of the store at `path`, read without opening the store; empty when the
+// file is not a store (or cannot be read).
+[[nodiscard]] std::string store_game_id(const std::filesystem::path& path);
 // The store's contents' form (store_version.inc, which the importer writes): a store of another version needs
 // importing again.
 inline constexpr std::uint32_t kStoreVersion =

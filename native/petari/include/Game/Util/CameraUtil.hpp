@@ -1,6 +1,7 @@
 #pragma once
 
 #include <nebula_geometry.hpp>
+#include "Game/LumaMarks.hpp"
 
 class LiveActor;
 class ActorCameraInfo;
@@ -9,13 +10,13 @@ class NameObj;
 class TableIter;
 
 namespace MR {
-    bool calcScreenPosition(Vec2f*, const Vec3f&);
-    bool calcScreenPosition(Vec3f*, const Vec3f&);
+    bool calcScreenPosition(LUMA_OUT Vec2f*, const Vec3f&);
+    bool calcScreenPosition(LUMA_OUT Vec3f*, const Vec3f&);
     bool calcNormalizedScreenPosition(Vec3f*, const Vec3f&);
     bool calcNormalizedScreenPositionFromView(Vec3f*, const Vec3f&);
     bool calcWorldPositionFromScreen(Vec3f*, const Vec2f&, f32);
     bool calcWorldPositionFromCenterScreen(Vec3f*, const Vec2f&, f32);
-    bool calcWorldRayDirectionFromScreen(Vec3f*, const Vec2f&);
+    bool calcWorldRayDirectionFromScreen(LUMA_OUT Vec3f*, const Vec2f&);
 
     f32 calcCameraDistanceZ(const Vec3f&);
     void loadProjectionMtx();

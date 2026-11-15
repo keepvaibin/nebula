@@ -2,7 +2,7 @@
 // The reflections (rt_reflect.hlsl): what glass, water, metal and glossy things mirror,
 // one ray a pixel of the opaque layer; over time by the mirror image's own point (rt_reflect_time), over space by the
 // reflection's lobe (rt_reflect_space, two steps; mirrors stay sharp); then into the mirror picture the programs read
-// (rt_reflect_out: ADD by Fresnel, or the first cut's multiply where a painted environment map is until 22.13). The
+// (rt_reflect_out: ADD by Fresnel, or where a painted environment map is, R in its place: the SUBSTITUTE). The
 // light pass leaves the opaque layer's mirror to this pass (bit 10 of the frame's flags). Off at the part's levels
 // off and low (the painted maps stay), with the reference and with the emitters alone; high: every reflecting class.
 #include "galaxy/render/render_core.h"
@@ -36,7 +36,9 @@ void RenderCore::rt_pass_reflect() {
     const float none[3][4] = {};
     const std::uint32_t guide = rt_now(RtImage::GuideA), raw = rt_image(RtImage::ReflectRaw), out = rt_image(RtImage::Reflect);
     const std::uint32_t material = rt_image(RtImage::Material), average = rt_now(RtImage::ReflectAverageA);
-    binds.pass_constants = rt_bounce_constants(rt_levels_[kFbReflect] >= 3u ? 2u : 1u, rt_pass_indirect_on() ? 1u : 0u, shade_at, none);
+    // g_pass.z bit 0: this walk's I to read at hits; bit 1: the walk before's local lights (rt_screen_lights).
+    binds.pass_constants = rt_bounce_constants(rt_levels_[kFbReflect] >= 3u ? 2u : 1u,
+                                               (rt_pass_indirect_on() ? 1u : 0u) | (frame.history ? 2u : 0u), shade_at, none);
     binds.reads[0] = guide;
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);
@@ -44,6 +46,8 @@ void RenderCore::rt_pass_reflect() {
     binds.reads[4] = rt_pass_indirect_on() ? rt_image(RtImage::Indirect) : rt::kNoImage;
     binds.reads[5] = rt_image(RtImage::LightsSpec);
     binds.reads[6] = rt_image(RtImage::Base);
+    binds.reads[7] = rt_image(RtImage::Added);  // the walk before's (this walk's filters write it after this pass)
+    binds.reads[8] = rt_before(RtImage::BlendGuideA);
     binds.writes[0] = raw;
     rt_backend_.dispatch(RtShader::Reflect, binds, frame.across, frame.down);
 
@@ -100,7 +104,7 @@ void RenderCore::rt_pass_guides() {
         rows[i][2] = view[2u * 4u + i];
     }
     const bool reflected = rt_reflect_moved_;  // the reflections pass ran this frame (R raw holds its rays)
-    rt::PassBinds binds;
+    rt::PassBinds binds = rt_pass_binds();  // the item table and the pixels' items too (the index's F0)
     binds.constants = frame.binds.constants;
     binds.pass_constants = rt_bounce_constants(0u, 0u, reflected ? 1u : 0u, rows);
     binds.reads[0] = rt_image(RtImage::Material);

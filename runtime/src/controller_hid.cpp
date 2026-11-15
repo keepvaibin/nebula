@@ -824,7 +824,7 @@ void init_switch2(Device& device) {
     if (!device.winusb) {
         device.needs_driver = true;
         std::cerr << "[controller] " << device.model_name << " (usb): interface 1 has no WinUSB driver; "
-                     "input needs the vendor init command (docs/KEYBOARD_CONTROLS.md)\n";
+                     "input needs the vendor init command (docs/using-nebula/keyboard-and-controller-controls.md)\n";
         return;
     }
     WinUsbPipes& pipes = *device.winusb;

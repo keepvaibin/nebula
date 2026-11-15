@@ -423,6 +423,27 @@ void test_movie_room() {
     expect(movie.room() == 0u && !movie.push(nullptr, 0u), "a full queue has no room");
 }
 
+// The movie's end is heard once its last sample has left the output, while the mixer goes on making other sound after
+// it (the output's latency stays in unplayed for good): position reaches the frame count.
+void test_movie_end_heard() {
+    galaxy::audio::MovieAudio movie;
+    movie.open(false);
+    const std::vector<std::uint8_t> record = thp_record(100u, 2048, -2048);
+    expect(movie.push(record.data(), record.size()), "the first frame queues");
+    expect(movie.push(record.data(), record.size()), "the second frame queues");
+    std::vector<float> out(2u * 300u, 0.0f);
+    movie.pull(out.data(), 300u);  // both frames, then 100 samples of the mixer's other sound
+    movie.set_unplayed(300u);
+    expect(near(movie.position(), 0.0, 1e-9), "nothing played yet", movie.position());
+    movie.set_unplayed(150u);
+    expect(near(movie.position(), 1.5, 1e-9), "half of the second frame played", movie.position());
+    for (int i = 0; i < 4; ++i) {
+        movie.pull(out.data(), 300u);  // the mixer goes on; the output keeps its latency
+        movie.set_unplayed(300u);
+    }
+    expect(near(movie.position(), 2.0, 1e-9), "the last frame is heard with the latency still queued", movie.position());
+}
+
 // The movie's sound at 48 kHz: its level through the player's volume (a square law), and silent until the frame
 // after the current one is decoded too.
 void test_stream() {
@@ -493,6 +514,7 @@ int main() {
     test_categories();
     test_movie_record();
     test_movie_room();
+    test_movie_end_heard();
     test_stream();
     test_forced_stop();
     if (g_failures != 0) {

@@ -1,6 +1,7 @@
 // Tests for galaxy/asset_store.h on a small store: paths in either case, "." and "..", '/' returning to the root, a folder's
 // entries in order, 64-bit positions, malformed stores refused.
 #include "galaxy/asset_store.h"
+#include "galaxy/luma_game_store.h"
 #include "galaxy/test_temp.h"
 
 #include <algorithm>
@@ -222,6 +223,81 @@ int main() {
                              "only files the disc has, and only for a language a mod adds");
         }
         std::filesystem::remove(pack_path);
+    }
+
+    // The validator's view of the game (luma_game_store.h): the same answers as LumaLink's PakStore.
+    {
+        const std::vector<Item> game = {
+            {"", "", 1, 1, 0, true},
+            {"StageData", "StageData", 2, 3, 0, true},
+            {"StageData/EggStarGalaxyScenario", "EggStarGalaxyScenario", 5, 2, 1, true},
+            {"StageData/Scenario", "Scenario", 0, 0, 1, true},
+            {"StageData/HeavensDoorGalaxyScenario", "HeavensDoorGalaxyScenario", 0x4100, 8, 1, false},
+            {"StageData/EggStarGalaxyScenario/ScenarioData.bcsv", "ScenarioData.bcsv", 0x4000, 12, 2, false},
+            {"StageData/EggStarGalaxyScenario/Readme.txt", "Readme.txt", 0x4100, 8, 2, false},
+        };
+        std::vector<std::uint8_t> image = store_of(game);
+        image.resize(0x4000);
+        const std::uint8_t table_bytes[12] = {'N', 'T', 'B', 'L', 1, 2, 3, 4, 5, 6, 7, 8};
+        image.insert(image.end(), table_bytes, table_bytes + 12);
+        image.resize(0x4100);
+        const std::uint8_t other_bytes[8] = {'N', 'T', 'B', 'X', 0, 0, 0, 0};
+        image.insert(image.end(), other_bytes, other_bytes + 8);
+        AssetStore assets;
+        passed &= expect(assets.load(image.data(), image.size()), "the game for the validator's view loads");
+        galaxy::LumaGameStoreView view(assets);
+        const LumaGameStore* store = view.get();
+        passed &= expect(store->size == sizeof(LumaGameStore) && store->context != nullptr && store->path && store->table &&
+                             store->folder,
+                         "the view gives its size and all three functions");
+        const auto path_of = [store](const char* lower) {
+            char out[64] = {};
+            const std::uint32_t n = store->path(store->context, lower, out, sizeof(out));
+            return n == 0 ? std::string("-") : std::string(out, n);
+        };
+        passed &= expect(path_of("stagedata/eggstargalaxyscenario/scenariodata.bcsv") ==
+                             "StageData/EggStarGalaxyScenario/ScenarioData.bcsv",
+                         "a lowercase path in the game's case");
+        passed &= expect(path_of("stagedata/eggstargalaxy/eggstargalaxyscenario.arc/scenariodata.bcsv") ==
+                             "StageData/EggStarGalaxyScenario/ScenarioData.bcsv",
+                         "a disc path is the store's path");
+        passed &= expect(path_of("/stagedata") == "StageData", "a leading '/' is the root");
+        passed &= expect(path_of("") == "-" && path_of("stagedata/") == "-" && path_of("stagedata/./scenario") == "-" &&
+                             path_of("stagedata/x/../scenario") == "-" && path_of("stagedata//scenario") == "-" &&
+                             path_of("stagedata/none") == "-",
+                         "no root, no '.', '..' or empty step, no trailing '/', nothing the game lacks");
+        char small[4] = {};
+        passed &= expect(store->path(store->context, "stagedata", small, sizeof(small)) == 9 && small[0] == '\0',
+                         "a path longer than `out` gives its length and writes nothing");
+        const std::uint8_t* got = nullptr;
+        std::uint64_t size = 0;
+        const char* at = nullptr;
+        passed &= expect(store->table(store->context, "StageData/EggStarGalaxyScenario/ScenarioData.bcsv", &got, &size, &at) == 1 &&
+                             size == 12 && got != nullptr && std::memcmp(got, "NTBL", 4) == 0 && got[11] == 8 &&
+                             at != nullptr && std::strcmp(at, "StageData/EggStarGalaxyScenario/ScenarioData.bcsv") == 0,
+                         "a cooked table's bytes and its store path");
+        passed &= expect(store->table(store->context, "stagedata/eggstargalaxyscenario/readme.txt", &got, &size, &at) == 0 &&
+                             got == nullptr && size == 0 && at == nullptr,
+                         "a file that is no NTBL is no table");
+        passed &= expect(store->table(store->context, "stagedata/eggstargalaxyscenario", &got, &size, &at) == 0 &&
+                             store->table(store->context, "stagedata/none.bcsv", &got, &size, &at) == 0,
+                         "a folder and a missing file are no table");
+        std::string listed;
+        const LumaFolderSink sink = [](void* context, const char* name, std::uint32_t is_folder) {
+            *static_cast<std::string*>(context) += std::string(name) + (is_folder != 0 ? "/ " : " ");
+        };
+        passed &= expect(store->folder(store->context, "stagedata", sink, &listed) == 3 &&
+                             listed == "EggStarGalaxyScenario/ Scenario/ HeavensDoorGalaxyScenario ",
+                         "a folder's names in the game's case, in the store's order, folders marked");
+        listed.clear();
+        passed &= expect(store->folder(store->context, "/", sink, &listed) == 1 && listed == "StageData/ ", "the root's names");
+        listed.clear();
+        passed &= expect(store->folder(store->context, "stagedata/eggstargalaxyscenario/", sink, &listed) == 2 &&
+                             listed == "ScenarioData.bcsv Readme.txt ",
+                         "a folder with a trailing '/'");
+        passed &= expect(store->folder(store->context, "stagedata/heavensdoorgalaxyscenario", sink, &listed) == -1 &&
+                             store->folder(store->context, "nothing", sink, &listed) == -1,
+                         "a file and a missing path are no folder");
     }
 
     if (!passed) {

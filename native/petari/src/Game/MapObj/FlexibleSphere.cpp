@@ -19,27 +19,16 @@
 #include "Game/Render/ModelData.hpp"
 #include <nebula_math.h>
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 3000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 0.95f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_startQuake_shakeCameraInfinity_1, "startQuake.shakeCameraInfinity.1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startQuake_shakeCameraInfinity_2, "startQuake.shakeCameraInfinity.2", 3.0f);
 
 namespace {
     // Placement args 0-2 are scales in ten-thousandths.
-    NEBULA_TUNABLE(f32, cArgScaleUnit, 10000.0f);
-    NEBULA_TUNABLE(f32, cDefaultMaxScale, 1.0f);
-    NEBULA_TUNABLE(f32, cDefaultMinScale, 0.1f);
-    NEBULA_TUNABLE(f32, cDefaultScaleRate, 0.002f);
-    NEBULA_TUNABLE(f32, cQuakeHearDistance, 4000.0f);
-    NEBULA_TUNABLE(u16, cQuakeFrames, 60);
+    const f32 cArgScaleUnit = 10000.0f;
+    const f32 cDefaultMaxScale = 1.0f;
+    const f32 cDefaultMinScale = 0.1f;
+    const f32 cDefaultScaleRate = 0.002f;
+    const f32 cQuakeHearDistance = 4000.0f;
+    const u16 cQuakeFrames = 60;
     const s32 cTimerSoundInterval = NebulaFrameClock::stepsOfSeconds(1);
 
     // The texture coordinate scale of the sphere being drawn: the surface pattern keeps its size as the sphere shrinks.
@@ -71,7 +60,7 @@ void FlexibleSphere::init(const TableIter& rIter) {
     initModelManagerWithAnm(arcName.c_str(), nullptr, false);
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensors(this);
 
     initEffectKeeper(0, nullptr);
@@ -85,7 +74,7 @@ void FlexibleSphere::init(const TableIter& rIter) {
     MR::connectToScene(this, MR::MovementType_Planet, MR::CalcAnimType_Planet, MR::DrawBufferType_None, MR::DrawType_FlexibleSphere);
 
     MR::setGroupClipping(this, rIter, 32);
-    MR::setClippingTypeSphere(this, cNum_init_f2);
+    MR::setClippingTypeSphere(this, 3000.0f);
     MR::setClippingFarMax(this);
 
     // ModelUtil makes FlexibleSphere models PlayerModels.
@@ -165,7 +154,7 @@ void FlexibleSphere::control() {
 
     // Equal limits (placement args 0 and 1) give the sound no range, not a division by 0.
     const f32 scaleRange = mMaxScale - mMinScale;
-    MR::startLevelSound(this, "SE_OJ_LV_FLEX_SPHERE_MOVE", scaleRange != 0.0f ? ((mScale.x - mMinScale) / scaleRange) * cNum_control_f1 : 0.0f);
+    MR::startLevelSound(this, "SE_OJ_LV_FLEX_SPHERE_MOVE", scaleRange != 0.0f ? ((mScale.x - mMinScale) / scaleRange) * 100.0f : 0.0f);
 
     f32 scale = mScale.x;
 
@@ -245,7 +234,7 @@ void FlexibleSphere::startQuake() {
     mShakeTimer = cQuakeFrames;
 
     if (MR::calcDistanceToPlayer(mPosition) < cQuakeHearDistance) {
-        MR::shakeCameraInfinity(this, cNum_startQuake_shakeCameraInfinity_1, cNum_startQuake_shakeCameraInfinity_2);
+        MR::shakeCameraInfinity(this, 0.2f, 3.0f);
         MR::invalidateClipping(this);
     }
 
@@ -270,7 +259,7 @@ void FlexibleSphere::draw() const {
         PlayerModel* pModel = static_cast< PlayerModel* >(MR::getModel(this));
         pModel->viewCalc2();
         // A sphere shrunk to a scale of 0 (a minimum of 0 in placement arg 1) keeps the plain pattern size.
-        sCoordScale = mScale.x > 0.0f ? cNum_draw_f1 / mScale.x + cNum_draw_f2 : 1.0f;
+        sCoordScale = mScale.x > 0.0f ? 0.05f / mScale.x + 0.95f : 1.0f;
         pModel->directDraw();
     }
 }

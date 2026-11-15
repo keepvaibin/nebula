@@ -7,10 +7,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
 
 namespace NrvWaterBazookaCapsule {
     NEW_NERVE(WaterBazookaCapsuleNrvNormal, WaterBazookaCapsule, Normal);
@@ -25,7 +22,7 @@ WaterBazookaCapsule::WaterBazookaCapsule(LiveActor* pActor, const char* pName)
 
 void WaterBazookaCapsule::init(const TableIter& /*rIter*/) {
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_WATER_BAZOOKA_CAPSULE, 4, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_WATER_BAZOOKA_CAPSULE, 4, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     MR::initCollisionParts(this, "WaterBazookaCapsule", getSensor(nullptr), nullptr);
     initEffectKeeper(0, nullptr);

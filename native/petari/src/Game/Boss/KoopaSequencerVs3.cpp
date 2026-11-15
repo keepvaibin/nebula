@@ -25,15 +25,14 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sLastImpactSeStep, 70);
-    NEBULA_TUNABLE(s32, sFallSeStartStep, 471);
-    NEBULA_TUNABLE(s32, sFallAmbientSeStartStep, 544);
+    const s32 sLastImpactSeStep = 70;
+    const s32 sFallSeStartStep = 471;
+    const s32 sFallAmbientSeStartStep = 544;
     const s32 sFallBurnStartStep = NebulaFrameClock::stepsOfMilliseconds(15500);
-    NEBULA_TUNABLE(s32, sFallEndStep, 1049);
-    NEBULA_TUNABLE(s32, sDownCameraCoverStep, 640);
+    const s32 sFallEndStep = 1049;
+    const s32 sDownCameraCoverStep = 640;
 };  // namespace
 
 namespace NrvKoopaSequencerVs3 {

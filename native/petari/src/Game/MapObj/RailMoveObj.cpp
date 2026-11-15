@@ -18,10 +18,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
 
 namespace {
     const char* cMoveBckName = "Move";
@@ -62,7 +59,7 @@ void RailMoveObj::init(const TableIter& rIter) {
     if (MR::isConnectedWithRail(rIter)) {
         f32 radius = 0.0f;
         MR::calcModelBoundingRadius(&radius, this);
-        MR::initAndSetRailClipping(&mRailClippingCenter, this, cNum_init_f1, radius);
+        MR::initAndSetRailClipping(&mRailClippingCenter, this, 100.0f, radius);
     } else {
         setNerve(GET_NERVE(RailMoveObj, HostTypeDone));
     }

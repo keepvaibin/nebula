@@ -14,11 +14,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updateButton_f1, "updateButton.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateButton_f2, "updateButton.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateButton_f3, "updateButton.f3", 60.0f);
 
 TalkState::TalkState() : mMsgCtrl(), mBalloon() {
 }
@@ -252,14 +247,14 @@ void TalkStateNormal::updateButton() {
     f32 upright = camY.dot(up);
     facing = facing * facing;
 
-    MR::calcNormalizedScreenPosition(&up, up * cNum_updateButton_f1 + centerPlayer);
+    MR::calcNormalizedScreenPosition(&up, up * 1000.0f + centerPlayer);
     MR::calcNormalizedScreenPosition(&centerPlayer, centerPlayer);
     MR::normalize(up - centerPlayer, &up);
     Vec2f playerScreenPos;
     MR::calcScreenPosition(&playerScreenPos, *MR::getPlayerCenterPos());
 
-    playerScreenPos.add(Vec2f(0.0f, -1.0f) * (cNum_updateButton_f2 * facing));
-    playerScreenPos.add(Vec2f(up.x, up.y) * (cNum_updateButton_f3 * upright));
+    playerScreenPos.add(Vec2f(0.0f, -1.0f) * (40.0f * facing));
+    playerScreenPos.add(Vec2f(up.x, up.y) * (60.0f * upright));
 
     mAButton->setTrans(playerScreenPos);
 }

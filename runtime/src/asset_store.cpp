@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <cstring>
+#include <fstream>
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
@@ -97,6 +98,25 @@ bool AssetStore::attach_overlay(const std::filesystem::path& path) {
         }
     }
     return true;
+}
+
+void AssetStore::let_go_of_files() noexcept {
+    // No allocation or free here: a stopped thread may hold the heap's lock.
+    if (overlay_ != nullptr) overlay_->let_go_of_files();
+#if defined(_WIN32)
+    if (view_ != nullptr) {
+        UnmapViewOfFile(view_);
+        view_ = nullptr;
+    }
+    if (mapping_ != nullptr) {
+        CloseHandle(mapping_);
+        mapping_ = nullptr;
+    }
+    if (file_ != nullptr) {
+        CloseHandle(file_);
+        file_ = nullptr;
+    }
+#endif
 }
 
 void AssetStore::close() {
@@ -252,6 +272,18 @@ const std::uint8_t* AssetStore::map(std::uint64_t position, std::size_t size) co
     return data;
 }
 
+void AssetStore::release_pages() const noexcept {
+#if !defined(_WIN32)
+    // PROT_READ and MAP_PRIVATE: no page of the view was ever written, so nothing is lost.
+    if (view_ != nullptr) {
+        (void)madvise(const_cast<std::uint8_t*>(view_), static_cast<std::size_t>(size_), MADV_DONTNEED);
+    }
+#endif
+    if (overlay_ != nullptr) {
+        overlay_->release_pages();
+    }
+}
+
 // A view starts where the system's granularity allows, at most 64 KB before the file; the bytes before it are the store's.
 // Where a view of the store can start: 64 KB on Windows, a page elsewhere (where mmap returns a page, whatever the file
 // offset). map_private and unmap_private round by the same value, as unmap_private has only the address to go on.
@@ -357,6 +389,7 @@ std::optional<Entry> AssetStore::entry(std::int32_t index) const {
         if (found) {
             found->index += static_cast<std::int32_t>(count_);
             found->position += kOverlayPosition;
+            found->from_overlay = true;
         }
         return found;
     }
@@ -382,6 +415,7 @@ std::optional<Entry> AssetStore::child(std::int32_t folder, std::uint32_t index)
         if (found) {
             found->index += static_cast<std::int32_t>(count_);
             found->position += kOverlayPosition;
+            found->from_overlay = true;
         }
         return found;
     }
@@ -409,6 +443,7 @@ std::optional<Entry> AssetStore::added_child(std::string_view path, std::uint32_
         if (added++ == index) {
             found->index += static_cast<std::int32_t>(count_);
             found->position += kOverlayPosition;
+            found->from_overlay = true;
             return found;
         }
     }
@@ -439,6 +474,7 @@ std::optional<Entry> AssetStore::find_merged(std::string_view path) const {
             if (!found->folder || found->archive || !find_own(path)) {
                 found->index += static_cast<std::int32_t>(count_);
                 found->position += kOverlayPosition;
+                found->from_overlay = true;
                 return found;
             }
         }
@@ -516,6 +552,13 @@ std::vector<std::string> AssetStore::language_folders() const {
         }
     }
     return folders;
+}
+
+std::string store_game_id(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    char header[64];
+    if (!file.read(header, sizeof(header)) || std::memcmp(header, kStoreMagic, sizeof(kStoreMagic)) != 0) return {};
+    return std::string(header + 48, 6);
 }
 
 }  // namespace galaxy::assets

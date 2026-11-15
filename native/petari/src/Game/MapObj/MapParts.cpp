@@ -5,12 +5,7 @@
 #include <nebula_geometry.hpp>
 #include "math_types.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndCollision_f1, "initModelAndCollision.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndCollision_f2, "initModelAndCollision.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndCollision_f3, "initModelAndCollision.f3", 0.5f);
 
 namespace {
     const char* cFollowJointName = "Move";
@@ -60,7 +55,7 @@ void MapParts::initModelAndCollision(const TableIter& rIter) {
     Vec3f lerpVec;
     Vec3f sensor_offs(0.0f, 0.0f, 0.0f);
     u32 sensorNum = getSensorNumMax();
-    HitSensor* sensor = MR::addHitSensorMapObj(this, "body", sensorNum, cNum_initModelAndCollision_f1, sensor_offs);
+    HitSensor* sensor = MR::addHitSensorMapObj(this, "body", sensorNum, 100.0f, sensor_offs);
     if (MR::isExistJoint(this, ::cFollowJointName)) {
         MtxPtr jointMtx = MR::getJointMtx(this, ::cFollowJointName);
         MR::initCollisionParts(this, name.c_str(), sensor, jointMtx);
@@ -75,8 +70,8 @@ void MapParts::initModelAndCollision(const TableIter& rIter) {
         Box3f box;
         MR::calcModelBoundingBox(&box, this);
         dist.sub(box.f, box.i);
-        sensorRange = cNum_initModelAndCollision_f2 * dist.length();
-        lerpVec.lerp(box.f, box.i, cNum_initModelAndCollision_f3);
+        sensorRange = 0.5f * dist.length();
+        lerpVec.lerp(box.f, box.i, 0.5f);
         MR::setSensorOffset(this, "body", lerpVec - mPosition);
     } else {
         sensorRange = MR::getCollisionBoundingSphereRange(this);

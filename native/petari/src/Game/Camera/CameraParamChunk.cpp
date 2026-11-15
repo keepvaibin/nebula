@@ -4,9 +4,6 @@
 #include "Game/Camera/DotCamParams.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_load_f1, "load.f1", 30.0f);
 
 namespace {
     const char* const sFlagName[] = {"flag.noreset",     "flag.nofovy",       "flag.lofserpoff",
@@ -176,7 +173,7 @@ void CameraParamChunk::load(DotCamReader* pReader, CameraHolder* pHolder) {
     pReader->getValueVec("up", &mGeneralParam->mUp);
 
     if (!pReader->getValueFloat("angleA", &mGeneralParam->mAngleA) && isPlanet) {
-        mGeneralParam->mAngleA = cNum_load_f1;
+        mGeneralParam->mAngleA = 30.0f;
     }
 
     pReader->getValueFloat("angleB", &mGeneralParam->mAngleB);

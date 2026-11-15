@@ -32,12 +32,6 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_getScreenAspect_f1, "getScreenAspect.f1", 16.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getScreenAspect_f2, "getScreenAspect.f2", 9.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getScreenMargin_f1, "getScreenMargin.f1", 0.045f);
-
 
 namespace {
     char sWipeCircle[] = "円ワイプ";
@@ -100,13 +94,13 @@ namespace MR {
 
     f32 getScreenAspect() {
         if (isScreen16Per9()) {
-            return getDisplay().wide ? getDisplay().content_aspect : cNum_getScreenAspect_f1 / cNum_getScreenAspect_f2;
+            return getDisplay().wide ? getDisplay().content_aspect : 16.0f / 9.0f;
         }
         return static_cast< f32 >(getScreenWidth()) / getScreenHeight();
     }
 
     s32 getScreenMargin() {
-        return getScreenWidth() * cNum_getScreenMargin_f1;
+        return getScreenWidth() * 0.045f;
     }
 
     void convertScreenPosToFrame(Vec2f* pFrame, const Vec2f& rScreenPos) {

@@ -116,8 +116,10 @@ inline void billboard_y(float (*m)[4]) noexcept {
 }
 
 // An envelope: the mix of its joints' world matrices over their inverse binds, and whether all of them are scale free.
+// With `skin` (ComposeInput::skin), a joint's product is made once and read by every envelope after.
 inline bool weighted_sum(const ModelTables& model, std::uint32_t envelope, const float (*joints)[4],
-                         const std::uint32_t* scale_flags, float (*sum)[4]) noexcept {
+                         const std::uint32_t* scale_flags, float (*skin)[4], std::uint8_t* skin_made,
+                         float (*sum)[4]) noexcept {
     std::memset(sum, 0, 12u * sizeof(float));
     bool flag = true;
     const NebulaModelEnvelope& e = model.envelopes[envelope];
@@ -126,10 +128,22 @@ inline bool weighted_sum(const ModelTables& model, std::uint32_t envelope, const
         const float (*inv)[4] = model.inverse_binds + 3u * mix.joint;
         const float (*world)[4] = joints + 3u * mix.joint;
         const float weight = mix.weight;
+        // This joint's rows: its world rows times the inverse bind, translation last.
+        float own[3][4];
+        float (*product)[4] = own;
+        bool make = true;
+        if (skin != nullptr) {
+            product = skin + 3u * mix.joint;
+            make = skin_made[mix.joint] == 0u;
+            skin_made[mix.joint] = 1u;
+        }
+        if (make) {
+            for (unsigned r = 0; r < 3u; ++r) {
+                concat_row(world[r], inv, product[r]);
+            }
+        }
         for (unsigned r = 0; r < 3u; ++r) {
-            // This joint's row: its world row times the inverse bind, translation last.
-            float row[4];
-            concat_row(world[r], inv, row);
+            const float* row = product[r];
 #if NEBULA_COMPOSE_SSE
             _mm_storeu_ps(sum[r], _mm_add_ps(_mm_loadu_ps(sum[r]), _mm_mul_ps(_mm_loadu_ps(row), _mm_set1_ps(weight))));
 #elif NEBULA_COMPOSE_NEON
@@ -172,7 +186,7 @@ void compose(const ComposeInput& in, const float (*view)[4], const float (*base)
         bool flag;
         if (weighted) {
             float sum[3][4];
-            flag = weighted_sum(*in.model, index, in.joints, in.scale_flags, sum);
+            flag = weighted_sum(*in.model, index, in.joints, in.scale_flags, in.skin, in.skin_made, sum);
             if (view != nullptr) {
                 concat34(view, sum, place);
             } else {

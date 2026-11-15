@@ -12,40 +12,28 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBloom_f1, "loadMaterialBloom.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBloom_f2, "loadMaterialBloom.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBloom_f3, "loadMaterialBloom.f3", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBloom_f4, "loadMaterialBloom.f4", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBloom_f5, "loadMaterialBloom.f5", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBloom_f6, "loadMaterialBloom.f6", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBloom_f7, "loadMaterialBloom.f7", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBloom_f8, "loadMaterialBloom.f8", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBloom_f9, "loadMaterialBloom.f9", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadMaterialBloom_f10, "loadMaterialBloom.f10", 105.0f);
 
 namespace {
-    NEBULA_TUNABLE(f32, sDistancePartMesh, 13000.0f);
-    NEBULA_TUNABLE(f32, sTexSpeed0U, -0.003f);
-    NEBULA_TUNABLE(f32, sTexSpeed0V, -0.001f);
-    NEBULA_TUNABLE(f32, sTexSpeed1U, -0.002f);
-    NEBULA_TUNABLE(f32, sTexSpeed1V, 0.001f);
-    NEBULA_TUNABLE(f32, sTexSpeed2V, 0.003f);
-    NEBULA_TUNABLE(f32, sIndirectScale, 0.1f);
-    NEBULA_TUNABLE(f32, sBloomCameraOffsetZ, 3000.0f);
-    NEBULA_TUNABLE(f32, sDistancePartDrawBloom, 4000.0f);
+    const f32 sDistancePartMesh = 13000.0f;
+    const f32 sTexSpeed0U = -0.003f;
+    const f32 sTexSpeed0V = -0.001f;
+    const f32 sTexSpeed1U = -0.002f;
+    const f32 sTexSpeed1V = 0.001f;
+    const f32 sTexSpeed2V = 0.003f;
+    const f32 sIndirectScale = 0.1f;
+    const f32 sBloomCameraOffsetZ = 3000.0f;
+    const f32 sDistancePartDrawBloom = 4000.0f;
 
     // Draw numbers a part keeps for itself: one strip per segment of the part, a part has fewer segments than this.
-    NEBULA_TUNABLE(u32, cPartsPerDrawer, 256);
+    const u32 cPartsPerDrawer = 256;
 
     // Material colours 0 and 4.
     const NebulaColor8 cBaseColor = {0x28, 0x28, 0x28, 0x14};
     const NebulaColor8 cWaterColor = {0x76, 0xD7, 0xFF, 0xFF};
 
     // Texture steps: U per segment along the rail, V per point across it. Textures 0 and 1 share the step.
-    NEBULA_TUNABLE(f32, cTexStep01, 0.05f);
-    NEBULA_TUNABLE(f32, cTexStep2, 0.1f);
+    const f32 cTexStep01 = 0.05f;
+    const f32 cTexStep2 = 0.1f;
 
     struct OceanRingUV {
         f32 u0, u1, u2;
@@ -333,14 +321,14 @@ SiteMaterial OceanRingDrawer::loadMaterialBloom() const {
 
     // The bloom fades in as the camera looks up (-0.2 to 0.1) and sinks (150 to 300 deep); the lower of the two wins.
     Vec3f zDir = MR::getCamZdir();
-    const f32 lookUpRate = ((MR::clamp(zDir.y, -cNum_loadMaterialBloom_f1, cNum_loadMaterialBloom_f2) - -cNum_loadMaterialBloom_f3) / cNum_loadMaterialBloom_f4);
-    f32 rate = ((MR::clamp(WaterAreaFunction::getCameraWaterDepth(), cNum_loadMaterialBloom_f5, cNum_loadMaterialBloom_f6) - cNum_loadMaterialBloom_f7) / cNum_loadMaterialBloom_f8);
+    const f32 lookUpRate = ((MR::clamp(zDir.y, -0.2f, 0.1f) - -0.2f) / 0.3f);
+    f32 rate = ((MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 150.0f, 300.0f) - 150.0f) / 150.0f);
 
     if (lookUpRate < rate) {
         rate = lookUpRate;
     }
 
-    const f32 alphaF = (cNum_loadMaterialBloom_f9 + (cNum_loadMaterialBloom_f10 * rate));
+    const f32 alphaF = (150.0f + (105.0f * rate));
     const u8 alpha = (s32)(alphaF);
     // runtime/src/render/materials/ocean_ring_bloom.hlsl: (80, 80, 80) plus the water (texture 0) at the first two
     // scrolls times (80, 80, 80, alpha); blended by alpha where above zero, depth tested and written, no culling.

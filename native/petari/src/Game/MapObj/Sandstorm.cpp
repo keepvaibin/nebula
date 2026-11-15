@@ -3,41 +3,17 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/ActorCameraUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTrap_f1, "exeTrap.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTrap_f2, "exeTrap.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTrap_f3, "exeTrap.f3", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTrap_f4, "exeTrap.f4", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTrap_f5, "exeTrap.f5", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f12, "init.f12", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSandstormParam_f1, "initSandstormParam.f1", 0.0001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initTrapModel_f1, "initTrapModel.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBindActorMtx_f1, "updateBindActorMtx.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBindActorMtx_f2, "updateBindActorMtx.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBindActorMtx_f3, "updateBindActorMtx.f3", 270.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sRailSpeed, 3.0f);
-    NEBULA_TUNABLE(f32, sTurnRate, 2.0f);
-    NEBULA_TUNABLE(f32, sActiveRadius, 7000.0f);
-    NEBULA_TUNABLE(s32, sStepToEnableSpin, 15);
+    const f32 sRailSpeed = 3.0f;
+    const f32 sTurnRate = 2.0f;
+    const f32 sActiveRadius = 7000.0f;
+    const s32 sStepToEnableSpin = 15;
     static const s32 sTrapNum = 2;  // on opposite sides
-    NEBULA_TUNABLE(f32, sTrapOffsetY, 200.0f);
-    NEBULA_TUNABLE(f32, sTrapOffsetZ, 220.0f);
-    NEBULA_TUNABLE(f32, sTrapRotateSpeed, 4.0f);
+    const f32 sTrapOffsetY = 200.0f;
+    const f32 sTrapOffsetZ = 220.0f;
+    const f32 sTrapRotateSpeed = 4.0f;
     static const char* const sParamFileName = "SandstormParam.bcsv";
 };  // namespace
 
@@ -52,15 +28,15 @@ SunakazeKunTrap::SunakazeKunTrap(LiveActor* pHost, const Vec3f& rLocalPos)
 
 void SunakazeKunTrap::init(const TableIter& /*rIter*/) {
     initHitSensor(1);
-    MR::addHitSensorEnemyAttack(this, "attack", 4, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initShadowVolumeCylinder(this, cNum_init_f2);
+    MR::addHitSensorEnemyAttack(this, "attack", 4, 40.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initShadowVolumeCylinder(this, 40.0f);
 
     Vec3f up;
     MR::calcUpVec(&up, mHost);
     up.negate();
 
     MR::setShadowDropDirection(this, nullptr, up);
-    MR::setShadowDropLength(this, nullptr, cNum_init_f3);
+    MR::setShadowDropLength(this, nullptr, 500.0f);
     NebulaMtxMultVec(mHost->getBaseMtx(), &mLocalPos, &mPosition);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(SunakazeKunTrap, SunakazeKunTrapNrvTrap));
@@ -72,11 +48,11 @@ void SunakazeKunTrap::exeTrap() {
 
     MR::rotateVecDegree(&mLocalPos, axis, ::sTrapRotateSpeed);
     NebulaMtxMultVec(mHost->getBaseMtx(), &mLocalPos, &mPosition);
-    f32 value = MR::getEaseInValue(getNerveStep() % 100, cNum_exeTrap_f1, 1.0f, cNum_exeTrap_f2);
-    f32 angle = MR::sinDegree(getNerveStep() * cNum_exeTrap_f3);
+    f32 value = MR::getEaseInValue(getNerveStep() % 100, 0.5f, 1.0f, 30.0f);
+    f32 angle = MR::sinDegree(getNerveStep() * 5.0f);
 
-    mPosition.scaleAdd(cNum_exeTrap_f4 * value * angle, axis, mPosition);
-    Vec3f rotation(cNum_exeTrap_f5);
+    mPosition.scaleAdd(40.0f * value * angle, axis, mPosition);
+    Vec3f rotation(5.0f);
     mRotation.add(rotation);
 }
 
@@ -121,12 +97,12 @@ void Sandstorm::init(const TableIter& rIter) {
     initSandstormParam();
     initHitSensor(2);
     MR::addHitSensorCallbackPriorBinder(this, "binder", 4, 0.0f);
-    MR::addHitSensorMapObjSimple(this, "star_piece", 4, mSensorHeight / cNum_init_f4 + cNum_init_f5, Vec3f(0.0f, mSensorHeight / cNum_init_f6 + cNum_init_f7, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "star_piece", 4, mSensorHeight / 2.0f + 200.0f, Vec3f(0.0f, mSensorHeight / 2.0f + 200.0f, 0.0f));
     initEffectKeeper(0, nullptr);
     initSound(6, false);
-    MR::initShadowVolumeCylinder(this, cNum_init_f8);
-    MR::setShadowVolumeStartDropOffset(this, nullptr, -cNum_init_f9);
-    MR::setShadowDropLength(this, nullptr, cNum_init_f10);
+    MR::initShadowVolumeCylinder(this, 100.0f);
+    MR::setShadowVolumeStartDropOffset(this, nullptr, -100.0f);
+    MR::setShadowDropLength(this, nullptr, 300.0f);
     MR::calcGravity(this);
     MR::initActorCamera(this, rIter, &mCameraInfo);
 
@@ -146,7 +122,7 @@ void Sandstorm::init(const TableIter& rIter) {
     MR::calcModelBoundingRadius(&boundingRadius, this);
 
     f32 railBoundingRadius;
-    MR::calcRailClippingInfo(&mClippingCenter, &railBoundingRadius, this, cNum_init_f11, cNum_init_f12);
+    MR::calcRailClippingInfo(&mClippingCenter, &railBoundingRadius, this, 100.0f, 500.0f);
 
     MR::setClippingTypeSphere(this, boundingRadius + railBoundingRadius, &mClippingCenter);
     MR::setGroupClipping(this, rIter, 8);
@@ -413,7 +389,7 @@ void Sandstorm::initSandstormParam() {
         mStepAdjust = 1;
     }
 
-    if (MR::isNearZero(mBindHeight, cNum_initSandstormParam_f1)) {
+    if (MR::isNearZero(mBindHeight, 0.0001f)) {
         mBindHeight = 1.0f;
     }
 }
@@ -428,7 +404,7 @@ void Sandstorm::initTrapModel() {
     for (s32 i = 0; i < ::sTrapNum; i++) {
         Vec3f axis = Vec3f(0.0f, 1.0f, 0.0f);
         Vec3f offset = Vec3f(0.0f, ::sTrapOffsetY, ::sTrapOffsetZ);
-        MR::rotateVecDegree(&offset, axis, i * cNum_initTrapModel_f1);
+        MR::rotateVecDegree(&offset, axis, i * 180.0f);
 
         mTrapModel[i] = new SunakazeKunTrap(this, offset);
         mTrapModel[i]->initWithoutIter();
@@ -451,7 +427,7 @@ void Sandstorm::updateBindActorMtx() {
         vec.killElement(toPlayerCenter, up);
 
         f32 len = vec.length();
-        f32 rate = mBindStep / cNum_updateBindActorMtx_f1;
+        f32 rate = mBindStep / 10.0f;
         radius = MR::getLinerValue(rate, len, mBindRadius, 1.0f);
     } else {
         radius = mBindRadius;
@@ -465,7 +441,7 @@ void Sandstorm::updateBindActorMtx() {
     bool isSunakaze = isSunakazeKun();
 
     if (!isSunakaze && isNerve(GET_NERVE(Sandstorm, SandstormNrvStormFix))) {
-        vec.y += MR::sinDegree(getNerveStep() * cNum_updateBindActorMtx_f2) * cNum_updateBindActorMtx_f3;
+        vec.y += MR::sinDegree(getNerveStep() * 3.0f) * 270.0f;
     }
 
     pPosition = &mBindActor->mPosition;

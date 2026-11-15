@@ -7,16 +7,15 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     static MR::ActorMoveParam sFallParam = {0.0f, 1.0f, 1.0f, 0.0f};
-    NEBULA_TUNABLE(s32, sStepToEmitFire, 1);
-    NEBULA_TUNABLE(s32, sStepToNextAttack, 45);
+    const s32 sStepToEmitFire = 1;
+    const s32 sStepToNextAttack = 45;
     static const s32 sStepToNextAttackVs2 = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sStepToNextAttackVs3 = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, sStepToNextAttackVs3Angry, 15);
-    NEBULA_TUNABLE(f32, sTurnSpeed, 2.0f);
+    const s32 sStepToNextAttackVs3Angry = 15;
+    const f32 sTurnSpeed = 2.0f;
 };  // namespace
 
 namespace NrvKoopaStateAttackFireShort {

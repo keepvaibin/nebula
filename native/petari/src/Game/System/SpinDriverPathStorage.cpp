@@ -6,9 +6,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/SaveBytes.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_serialize_f1, "serialize.f1", 256.0f);
 
 // Saved layout. A scenario block: u16 size, then per zone a zone byte followed by its entries, then an end byte.
 // An entry: a header byte (id and flags), then one draw range byte when Interrupted is set (0 means whole).
@@ -26,7 +23,7 @@ namespace {
     };
 
     const u32 cScenarioHeaderSize = 2;
-    NEBULA_TUNABLE(u32, cGalaxyHeaderSize, 6);
+    const u32 cGalaxyHeaderSize = 6;
 }  // namespace
 
 SpinDriverPathStorageOne::SpinDriverPathStorageOne() {
@@ -57,7 +54,7 @@ s32 SpinDriverPathStorageOne::serialize(u8* pData) const {
 
     pData[0] = (mSpinDriverId & EntryFlag_IdMask) | EntryFlag_Interrupted;
 
-    const s32 drawRange = cNum_serialize_f1 * getDrawRange();
+    const s32 drawRange = 256.0f * getDrawRange();
     if (drawRange <= 0) {
         return 1;
     }

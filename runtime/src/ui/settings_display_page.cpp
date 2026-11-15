@@ -115,12 +115,24 @@ std::vector<SettingsRow> display_page(const RenderConfig& render, const DisplayP
         }
     }
     rows.push_back({"INTERFACE", {}, nullptr, {}, true});
-    // An exact internal resolution and a temporal upscaler always draw the HUD at the display's.
-    const bool fixed = render_internal_height(render) != 0u || state.temporal_upscaling;
-    rows.push_back({"HUD RESOLUTION", (render.hud_output_resolution || fixed) ? "DISPLAY" : "INTERNAL",
-                    fixed ? std::function<void(RenderConfig&, int)>{}
-                          : std::function<void(RenderConfig&, int)>{[](RenderConfig& draft, int) { draft.hud_output_resolution = !draft.hud_output_resolution; }},
-                    "DISPLAY DRAWS MENUS AND TEXT SHARP AT THE SCREEN RESOLUTION"});
+    // A temporal upscaler always draws the HUD at the display's. With an exact internal resolution INTERNAL is
+    // hud_internal_resolution (the scene not enlarged before the HUD: one enlarge at present) and DISPLAY its default.
+    const bool fixed = state.temporal_upscaling;
+    const bool exact = render_internal_height(render) != 0u;
+    const bool display = render.hud_output_resolution || fixed || (exact && !render.hud_internal_resolution);
+    std::function<void(RenderConfig&, int)> choose;
+    if (exact) {
+        choose = [](RenderConfig& draft, int) {
+            const bool internal = !draft.hud_output_resolution && draft.hud_internal_resolution;
+            draft.hud_internal_resolution = !internal;
+            draft.hud_output_resolution = false;
+        };
+    } else if (!fixed) {
+        choose = [](RenderConfig& draft, int) { draft.hud_output_resolution = !draft.hud_output_resolution; };
+    }
+    rows.push_back({"HUD RESOLUTION", display ? "DISPLAY" : "INTERNAL", choose,
+                    exact ? "INTERNAL IS FASTER WITH SOFTER TEXT. DISPLAY DRAWS MENUS AND TEXT SHARP AT THE SCREEN RESOLUTION"
+                          : "DISPLAY DRAWS MENUS AND TEXT SHARP AT THE SCREEN RESOLUTION"});
     return rows;
 }
 

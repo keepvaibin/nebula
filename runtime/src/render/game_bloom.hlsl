@@ -40,6 +40,53 @@ void DownCS(uint3 id : SV_DispatchThreadID) {
     const uint2 region = uint2(c_uv.xy);
     const uint2 base = id.xy * c_size.z;
     float3 sum = 0.0f;
+    if (c_size.z == 4u && all(base + 4u <= region)) {
+        // A whole 4 x 4 box (every first-level box but those the picture's right or bottom edge cuts): its texels fetched
+        // 2 x 2 by Gather, which returns them as Load does, each clamped and added in the loop's order below (rows, then
+        // across): the same sum. Gather's order about the 2 x 2's top left: x (0, 1), y (1, 1), z (1, 0), w (0, 0).
+        uint width, height;
+        t_source.GetDimensions(width, height);
+        const float2 uv = (float2(base) + 1.0f) / float2(width, height);
+        // precise: the adds stay in this order (the loop's sum cannot be reordered across its turns; this one could). The
+        // offsets are written out: constant offsets need no device feature.
+        precise float3 box = 0.0f;
+        // Rows 0 and 1: texels 0-1 and 2-3 of each.
+        {
+            const float4 r0 = t_source.GatherRed(s_linear, uv, int2(0, 0));
+            const float4 g0 = t_source.GatherGreen(s_linear, uv, int2(0, 0));
+            const float4 b0 = t_source.GatherBlue(s_linear, uv, int2(0, 0));
+            const float4 r1 = t_source.GatherRed(s_linear, uv, int2(2, 0));
+            const float4 g1 = t_source.GatherGreen(s_linear, uv, int2(2, 0));
+            const float4 b1 = t_source.GatherBlue(s_linear, uv, int2(2, 0));
+            box += saturate(float3(r0.w, g0.w, b0.w));
+            box += saturate(float3(r0.z, g0.z, b0.z));
+            box += saturate(float3(r1.w, g1.w, b1.w));
+            box += saturate(float3(r1.z, g1.z, b1.z));
+            box += saturate(float3(r0.x, g0.x, b0.x));
+            box += saturate(float3(r0.y, g0.y, b0.y));
+            box += saturate(float3(r1.x, g1.x, b1.x));
+            box += saturate(float3(r1.y, g1.y, b1.y));
+        }
+        // Rows 2 and 3: texels 0-1 and 2-3 of each.
+        {
+            const float4 r0 = t_source.GatherRed(s_linear, uv, int2(0, 2));
+            const float4 g0 = t_source.GatherGreen(s_linear, uv, int2(0, 2));
+            const float4 b0 = t_source.GatherBlue(s_linear, uv, int2(0, 2));
+            const float4 r1 = t_source.GatherRed(s_linear, uv, int2(2, 2));
+            const float4 g1 = t_source.GatherGreen(s_linear, uv, int2(2, 2));
+            const float4 b1 = t_source.GatherBlue(s_linear, uv, int2(2, 2));
+            box += saturate(float3(r0.w, g0.w, b0.w));
+            box += saturate(float3(r0.z, g0.z, b0.z));
+            box += saturate(float3(r1.w, g1.w, b1.w));
+            box += saturate(float3(r1.z, g1.z, b1.z));
+            box += saturate(float3(r0.x, g0.x, b0.x));
+            box += saturate(float3(r0.y, g0.y, b0.y));
+            box += saturate(float3(r1.x, g1.x, b1.x));
+            box += saturate(float3(r1.y, g1.y, b1.y));
+        }
+        u_first[id.xy] = float4(box / 16.0f, 1.0f);
+        return;
+    }
     uint count = 0u;
     [loop] for (uint j = 0u; j < c_size.z; ++j) {
         [loop] for (uint i = 0u; i < c_size.z; ++i) {

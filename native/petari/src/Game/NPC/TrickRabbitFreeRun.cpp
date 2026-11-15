@@ -8,32 +8,20 @@
 #include "Game/NPC/RabbitStateWaitStart.hpp"
 #include "Game/NPC/TrickRabbitUtil.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgBlowDamage_f1, "receiveMsgBlowDamage.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgBlowDamage_f2, "receiveMsgBlowDamage.f2", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePowerStarDemo_f1, "exePowerStarDemo.f1", 200.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRunawayStart_checkPassBckFrame_1, "exeRunawayStart.checkPassBckFrame.1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_checkPassBckFrame_1, "exeRunaway.checkPassBckFrame.1", 3.0f);
 
 namespace {
     static MR::ActorMoveParam sStartAwayParam = {1.4f, 1.0f, 0.9f, 4.0f};
-    NEBULA_TUNABLE(f32, sBodyRadius, 70.0f);
-    NEBULA_TUNABLE(f32, sCatchRadius, 30.0f);
-    NEBULA_TUNABLE(f32, sBindRadius, 60.0f);
-    NEBULA_TUNABLE(f32, sBindYOffset, 60.0f);
-    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.1f);
-    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
-    NEBULA_TUNABLE(f32, sPressureRange, 600.0f);
-    NEBULA_TUNABLE(f32, sNormalAccel, 0.7f);
-    NEBULA_TUNABLE(f32, sPressureAccel, 1.5f);
-    NEBULA_TUNABLE(f32, sBrakeAccelRate, 0.3f);
+    const f32 sBodyRadius = 70.0f;
+    const f32 sCatchRadius = 30.0f;
+    const f32 sBindRadius = 60.0f;
+    const f32 sBindYOffset = 60.0f;
+    const f32 sUpVecBlendRate = 0.1f;
+    const f32 sFrontVecBlendRate = 0.2f;
+    const f32 sPressureRange = 600.0f;
+    const f32 sNormalAccel = 0.7f;
+    const f32 sPressureAccel = 1.5f;
+    const f32 sBrakeAccelRate = 0.3f;
 };  // namespace
 
 namespace NrvTrickRabbitFreeRun {
@@ -60,7 +48,7 @@ void TrickRabbitFreeRun::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     MR::makeQuatAndFrontFromRotate(&mRotateQuat, &mFrontVec, this);
 
-    mSpotMarkLight = new SpotMarkLight(this, cNum_init_f1, cNum_init_f2, nullptr);
+    mSpotMarkLight = new SpotMarkLight(this, 100.0f, 1500.0f, nullptr);
     mSpotMarkLight->initWithoutIter();
 
     MR::initShadowFromCSV(this, "Shadow");
@@ -73,7 +61,7 @@ void TrickRabbitFreeRun::init(const TableIter& rIter) {
     initSensor();
     initBinder(::sBindRadius, ::sBindYOffset, 0);
 
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "TrickRabbit", Vec3f(0.0f, cNum_init_f3, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "TrickRabbit", Vec3f(0.0f, 120.0f, 0.0f), nullptr);
 
     initState();
     initSound(4, false);
@@ -178,7 +166,7 @@ bool TrickRabbitFreeRun::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor*
 
 bool TrickRabbitFreeRun::receiveMsgBlowDamage(HitSensor* pSender, HitSensor* pReceiver) {
     if (isEnableBlowDamage()) {
-        MR::setVelocitySeparateHV(this, pSender, pReceiver, cNum_receiveMsgBlowDamage_f1, cNum_receiveMsgBlowDamage_f2);
+        MR::setVelocitySeparateHV(this, pSender, pReceiver, 20.0f, 20.0f);
         setNerve(GET_NERVE(TrickRabbitFreeRun, TrickRabbitFreeRunNrvBlowDamage));
 
         return true;
@@ -223,7 +211,7 @@ void TrickRabbitFreeRun::exeRunawayStart() {
 
     MR::escapeFromPlayer(this, &mFrontVec, ::sStartAwayParam);
 
-    if (MR::checkPassBckFrame(this, cNum_exeRunawayStart_checkPassBckFrame_1)) {
+    if (MR::checkPassBckFrame(this, 3.0f)) {
         startJumpSound();
     }
 
@@ -236,7 +224,7 @@ void TrickRabbitFreeRun::exeRunawayStart() {
 void TrickRabbitFreeRun::exeRunaway() {
     MR::updateActorState(this, mStateRunaway);
 
-    if (mStateRunaway->isRunning() && MR::checkPassBckFrame(this, cNum_exeRunaway_checkPassBckFrame_1)) {
+    if (mStateRunaway->isRunning() && MR::checkPassBckFrame(this, 3.0f)) {
         startJumpSound();
     }
 
@@ -275,7 +263,7 @@ void TrickRabbitFreeRun::exePowerStarDemo() {
     if (MR::isFirstStep(this)) {
         MR::endDemo(this, "捕まり");
         MR::startAfterBossBGM();
-        MR::requestAppearPowerStar(this, mPosition - mGravity * cNum_exePowerStarDemo_f1);
+        MR::requestAppearPowerStar(this, mPosition - mGravity * 200.0f);
         MR::startAction(this, "Wait");
         mFootPrint->clear();
         mSpotMarkLight->kill();

@@ -46,7 +46,7 @@ inline constexpr std::uint32_t kExtensionSetup2 = 0xa400fb;
 inline constexpr std::uint32_t kExtensionId = 0xa400fa;
 inline constexpr std::uint32_t kExtensionCalibration = 0xa40020;
 inline constexpr std::uint16_t kExtensionCalibrationBytes = 32;
-// Wii MotionPlus (docs/WII_REMOTE.md): inactive at 0xA6, then in the extension's place at 0xA4 once a mode is written.
+// Wii MotionPlus (docs/using-nebula/using-a-wii-remote.md): inactive at 0xA6, then in the extension's place at 0xA4 once a mode is written.
 inline constexpr std::uint32_t kMotionPlusInactiveId = 0xa600fa;
 inline constexpr std::uint32_t kMotionPlusInit = 0xa600f0;
 inline constexpr std::uint32_t kMotionPlusMode = 0xa600fe;

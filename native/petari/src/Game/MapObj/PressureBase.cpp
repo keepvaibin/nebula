@@ -2,26 +2,19 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 75.0f);
 
 namespace {
     static const s32 sDefaultShotInterval = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(f32, sDefaultFirstSpeed, 30.0f);
-    NEBULA_TUNABLE(s32, sStepForChargeToShot, 16);
-    NEBULA_TUNABLE(s32, sStepForChargeToShortShot, 54);
+    const f32 sDefaultFirstSpeed = 30.0f;
+    const s32 sStepForChargeToShot = 16;
+    const s32 sStepForChargeToShortShot = 54;
     static const s32 sSyncWaitTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sAimTurnRate, 5.0f);
-    NEBULA_TUNABLE(s32, sStepForBound, 20);
-    NEBULA_TUNABLE(f32, sBoundFreq, 1.0f);
-    NEBULA_TUNABLE(f32, sBoundAmp, 0.2f);
-    NEBULA_TUNABLE(f32, sRelaxAngleFix, -45.0f);
+    const f32 sAimTurnRate = 5.0f;
+    const s32 sStepForBound = 20;
+    const f32 sBoundFreq = 1.0f;
+    const f32 sBoundAmp = 0.2f;
+    const f32 sRelaxAngleFix = -45.0f;
 };  // namespace
 
 namespace NrvPressureMessenger {
@@ -73,11 +66,11 @@ void PressureBase::init(const TableIter& rIter) {
     MR::calcFrontVec(&mFront, this);
     MR::connectToSceneNoShadowedMapObjStrongLight(this);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
-    MR::addHitSensorAtJointMapObjSimple(this, "cannon", "Cannon1", 8, cNum_init_f3, Vec3f(cNum_init_f4, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 70.0f, Vec3f(0.0f, 30.0f, 0.0f));
+    MR::addHitSensorAtJointMapObjSimple(this, "cannon", "Cannon1", 8, 70.0f, Vec3f(40.0f, 0.0f, 0.0f));
     initEffectKeeper(0, nullptr);
     initSound(6, false);
-    MR::initShadowVolumeSphere(this, cNum_init_f5);
+    MR::initShadowVolumeSphere(this, 75.0f);
     MR::invalidateShadow(this, nullptr);
 
     mJointController = MR::createJointDelegatorWithNullChildFunc(this, &PressureBase::calcJointCannonV, "Cannon1");

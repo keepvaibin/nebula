@@ -7,27 +7,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHideDown_f1, "exeHideDown.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 5.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeWaitToHideDown_1, "exeWaitToHideDown.1", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeWaitToShowUp_1, "exeWaitToShowUp.1", 20);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHideDown_1, "exeHideDown.1", 15);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHideDown_2, "exeHideDown.2", 15);
 
 namespace NrvEarthenPipe {
     NEW_NERVE(EarthenPipeNrvWait, EarthenPipe, Wait);
@@ -58,7 +38,7 @@ namespace {
         PIPE_REARM_WHEN_AWAY = 4,
     };
 
-    NEBULA_TUNABLE(f32, sRearmDistance, 100.0f);
+    const f32 sRearmDistance = 100.0f;
     // The rise out of the lava takes half a second.
     const s32 sRiseSteps = NebulaFrameClock::stepsOfSeconds(1) / 2;
 
@@ -119,7 +99,7 @@ void EarthenPipe::init(const TableIter& rIter) {
     mLavaEffectMtx.setInline(jointMtx);
     Vec3f bottomPos(mBasePos);
     Vec3f bottomOffset(mUp);
-    bottomOffset.scale(cNum_init_f1);
+    bottomOffset.scale(50.0f);
     bottomPos.sub(bottomOffset);
     jointMtx.setTrans(bottomPos);
     NebulaMtxCopy(jointMtx, mBottomJointMtx);
@@ -132,11 +112,11 @@ void EarthenPipe::init(const TableIter& rIter) {
         initHitSensor(1);
     }
 
-    MR::addHitSensorBinder(this, "binder", 8, cNum_init_f2, Vec3f(0.0f, -cNum_init_f3, 0.0f));
+    MR::addHitSensorBinder(this, "binder", 8, 70.0f, Vec3f(0.0f, -50.0f, 0.0f));
 
     if (isWaterPipe) {
-        MR::addHitSensorBinder(this, "BinderWaterUpper", 8, cNum_init_f4, Vec3f(0.0f, cNum_init_f5, 0.0f));
-        MR::addHitSensorBinder(this, "BinderWaterLower", 8, cNum_init_f6, Vec3f(0.0f, cNum_init_f7, 0.0f));
+        MR::addHitSensorBinder(this, "BinderWaterUpper", 8, 200.0f, Vec3f(0.0f, 180.0f, 0.0f));
+        MR::addHitSensorBinder(this, "BinderWaterLower", 8, 80.0f, Vec3f(0.0f, 50.0f, 0.0f));
     }
 
     if (mPipeMode == PIPE_SHORT) {
@@ -146,7 +126,7 @@ void EarthenPipe::init(const TableIter& rIter) {
     }
 
     // The placement Y scale is the pipe length (in 100s); the model is moved, not stretched.
-    mPipeLength = cNum_init_f8 * mScale.y;
+    mPipeLength = 100.0f * mScale.y;
     mScale.y = 1.0f;
     calcTrans(1.0f);
     initEffectKeeper(0, nullptr);
@@ -166,7 +146,7 @@ void EarthenPipe::init(const TableIter& rIter) {
 
     if (isWaterPipe) {
         mPipeStreamModel = MR::createPartsModelMapObj(this, "土管水流", "EarthenPipeStream", nullptr);
-        MR::setClippingTypeSphere(mPipeStreamModel, cNum_init_f9);
+        MR::setClippingTypeSphere(mPipeStreamModel, 500.0f);
         MR::tryStartAllAnim(mPipeStreamModel, "EarthenPipeStream");
         mPipeStreamModel->appear();
     }
@@ -342,13 +322,13 @@ void EarthenPipe::exeHide() {}
 void EarthenPipe::exeShow() {}
 
 void EarthenPipe::exeWaitToHideDown() {
-    if (MR::isStep(this, cStep_exeWaitToHideDown_1)) {
+    if (MR::isStep(this, 40)) {
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvHideDown));
     }
 }
 
 void EarthenPipe::exeWaitToShowUp() {
-    if (MR::isStep(this, cStep_exeWaitToShowUp_1)) {
+    if (MR::isStep(this, 20)) {
         setNerve(GET_NERVE(EarthenPipe, EarthenPipeNrvShowUp));
     }
 }
@@ -379,13 +359,13 @@ void EarthenPipe::exeHideDown() {
         MR::emitEffect(this, "LavaVanish");
     }
 
-    f32 easeIn = MR::getEaseInValue((15 - getNerveStep()) / cNum_exeHideDown_f1, 0.0f, 1.0f, 1.0f);
+    f32 easeIn = MR::getEaseInValue((15 - getNerveStep()) / 15.0f, 0.0f, 1.0f, 1.0f);
     calcTrans(easeIn);
-    if (MR::isLessStep(this, cStep_exeHideDown_1)) {
+    if (MR::isLessStep(this, 15)) {
         MR::startLevelSound(this, "SE_OJ_LV_PIPE_VANISH_MAGMA");
     }
 
-    if (MR::isStep(this, cStep_exeHideDown_2)) {
+    if (MR::isStep(this, 15)) {
         MR::hideModel(this);
         MR::invalidateCollisionParts(this);
         MR::validateClipping(this);
@@ -415,7 +395,7 @@ bool EarthenPipe::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*pRec
         Vec3f diff = *MR::getPlayerPos() - Vec3f(mTopJointMtx[0][3], mTopJointMtx[1][3], mTopJointMtx[2][3]);
         Vec3f delta = diff;
         MR::vecKillElement(delta, mGravity, &delta);
-        if (!MR::isPlayerSwimming() && delta.length() > cNum_receiveOtherMsg_f1 && diff.dot(mUp) < -cNum_receiveOtherMsg_f2) {
+        if (!MR::isPlayerSwimming() && delta.length() > 50.0f && diff.dot(mUp) < -5.0f) {
             return false;
         }
         mHostActor = MR::getSensorHost(pSender);

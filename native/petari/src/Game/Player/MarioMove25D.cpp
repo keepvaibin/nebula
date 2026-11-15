@@ -3,13 +3,6 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update25Dmode_f1, "update25Dmode.f1", 0.965f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update25Dmode_f2, "update25Dmode.f2", 0.9397f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update25Dmode_f3, "update25Dmode.f3", 0.7f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update25Dmode_f4, "update25Dmode.f4", 0.7853982f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateAxisFromMode_f1, "updateAxisFromMode.f1", 0.99f);
 
 void Mario::set25Dmode(const AreaObj* pArea) {
     Mtx matrix;
@@ -57,9 +50,9 @@ void Mario::update25Dmode() {
 
     if (mode == 2 || mode == 3) {
         if (mode == 2 || mode == 3) {
-            f32 threshold = cNum_update25Dmode_f1;
+            f32 threshold = 0.965f;
             if (m25DMode == 2 || m25DMode == 3) {
-                threshold = cNum_update25Dmode_f2;
+                threshold = 0.9397f;
             }
 
             if (sideAbs < threshold) {
@@ -79,13 +72,13 @@ void Mario::update25Dmode() {
     if (!isStickOn()) {
         m25DMode = mode;
         mMovementStates.stick25DLatched = false;
-    } else if (!mMovementStates.stick25DLatched && mStickPos.z > cNum_update25Dmode_f3) {
+    } else if (!mMovementStates.stick25DLatched && mStickPos.z > 0.7f) {
         m25DStick.set(mStickPos.x, mStickPos.y);
         m25DMode = mode;
         mMovementStates.stick25DLatched = true;
     } else {
         Vec2f stick(mStickPos.x, mStickPos.y);
-        if (MR::diffAngleAbs(m25DStick, stick) >= cNum_update25Dmode_f4) {
+        if (MR::diffAngleAbs(m25DStick, stick) >= 0.7853982f) {
             m25DMode = mode;
             m25DStick.set(mStickPos.x, mStickPos.y);
         }
@@ -107,7 +100,7 @@ void Mario::updateAxisFromMode(u8 mode) {
         MR::normalizeOrZero(&up);
         MR::normalizeOrZero(&planeUp);
         f32 dot = up.dot(planeUp);
-        if (MR::abs(dot) > cNum_updateAxisFromMode_f1) {
+        if (MR::abs(dot) > 0.99f) {
             switch (mode) {
             case 0:
                 side = m25DAcross;

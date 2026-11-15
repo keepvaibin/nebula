@@ -1,11 +1,10 @@
 #include "Game/Mii/MiiParts.hpp"
 #include <nebula_cooked_texture.h>
 #include <string.h>
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(u32, cMagic, 0x54504D4Eu);  // "NMPT"
-    NEBULA_TUNABLE(u32, cVersion, 1);
+    const u32 cMagic = 0x54504D4Eu;  // "NMPT"
+    const u32 cVersion = 1;
     const u32 cHeader = 8 + 4 * (Mii::ShapeKindCount + Mii::TextureKindCount);
 
     u32 read32(const u8* pFile, u32 at) {

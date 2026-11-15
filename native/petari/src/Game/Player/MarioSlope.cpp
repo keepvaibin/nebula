@@ -6,24 +6,6 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_isUseSimpleGroundCheck_f1, "isUseSimpleGroundCheck.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isUseSimpleGroundCheck_f2, "isUseSimpleGroundCheck.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isUseSimpleGroundCheck_f3, "isUseSimpleGroundCheck.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isUseSimpleGroundCheck_f4, "isUseSimpleGroundCheck.f4", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f1, "checkGroundOnSlope.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f2, "checkGroundOnSlope.f2", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f3, "checkGroundOnSlope.f3", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f4, "checkGroundOnSlope.f4", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f5, "checkGroundOnSlope.f5", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f6, "checkGroundOnSlope.f6", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f7, "checkGroundOnSlope.f7", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f8, "checkGroundOnSlope.f8", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f9, "checkGroundOnSlope.f9", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f10, "checkGroundOnSlope.f10", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f11, "checkGroundOnSlope.f11", 0.1908f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkGroundOnSlope_f12, "checkGroundOnSlope.f12", 5.0f);
 
 void Mario::lockGroundCheck(void* owner, bool simple) {
     mGroundCheckOwner = owner;
@@ -52,10 +34,10 @@ bool Mario::isUseSimpleGroundCheck() const {
     if (!mMovementStates.onGround) {
         return mMovementStates.slopeSlide;
     }
-    if (calcAngleD(mGroundNorm) > mActor->getConst().getTable()->mFlatAngle - cNum_isUseSimpleGroundCheck_f1) {
+    if (calcAngleD(mGroundNorm) > mActor->getConst().getTable()->mFlatAngle - 5.0f) {
         Triangle ground;
-        if (MR::getFirstPolyOnLineBFast(mPosition - *getGravityVec() * cNum_isUseSimpleGroundCheck_f2, *getGravityVec() * cNum_isUseSimpleGroundCheck_f3, nullptr, &ground)) {
-            if (calcAngleD(*ground.getNormal(0)) < mActor->getConst().getTable()->mFlatAngle - cNum_isUseSimpleGroundCheck_f4) {
+        if (MR::getFirstPolyOnLineBFast(mPosition - *getGravityVec() * 30.0f, *getGravityVec() * 100.0f, nullptr, &ground)) {
+            if (calcAngleD(*ground.getNormal(0)) < mActor->getConst().getTable()->mFlatAngle - 5.0f) {
                 return false;
             }
         }
@@ -86,38 +68,38 @@ bool Mario::checkGroundOnSlope() {
     mMovementStates.groundMissing = true;
     f32 distance;
     if (mMovementStates.jumping && isRising()) {
-        distance = cNum_checkGroundOnSlope_f1;
+        distance = 10.0f;
     } else if (mLedgeFallTimer) {
-        distance = cNum_checkGroundOnSlope_f2;
+        distance = 20.0f;
     } else {
-        distance = cNum_checkGroundOnSlope_f3;
+        distance = 60.0f;
     }
     if (mMovementStates.onGround) {
-        f32 angle = calcAngleD(mGroundNorm) - cNum_checkGroundOnSlope_f4;
+        f32 angle = calcAngleD(mGroundNorm) - 30.0f;
         if (angle < 0.0f) {
             angle = 0.0f;
         }
-        if (angle > cNum_checkGroundOnSlope_f5) {
-            angle = cNum_checkGroundOnSlope_f6;
+        if (angle > 40.0f) {
+            angle = 40.0f;
         }
-        distance += cNum_checkGroundOnSlope_f7 * angle;
+        distance += 2.0f * angle;
     }
     if (getCurrentStatus() == MarioStatus_Slider) {
-        distance = cNum_checkGroundOnSlope_f8;
+        distance = 100.0f;
     }
     s32 groundCount = 0;
     Vec3f hitPosition;
     Vec3f positionSum;
     positionSum.zero();
     Vec3f groundPosition;
-    Vec3f origin(mPosition - *getGravityVec() * cNum_checkGroundOnSlope_f9);
+    Vec3f origin(mPosition - *getGravityVec() * 30.0f);
     hit = MR::getFirstPolyOnLineBFast(origin, *getGravityVec() * distance, &hitPosition, &ground);
     if (hit) {
-        if (calcAngleD(*ground.getNormal(0)) >= cNum_checkGroundOnSlope_f10) {
+        if (calcAngleD(*ground.getNormal(0)) >= 80.0f) {
             hit = false;
         }
         f32 gravityDot = getGravityVec()->dot(*ground.getNormal(0));
-        if (getCurrentStatus() != MarioStatus_Slider && gravityDot > -cNum_checkGroundOnSlope_f11) {
+        if (getCurrentStatus() != MarioStatus_Slider && gravityDot > -0.1908f) {
             hit = false;
         }
         if (hit) {
@@ -172,7 +154,7 @@ bool Mario::checkGroundOnSlope() {
             return true;
         }
     }
-    if (mVerticalSpeed < cNum_checkGroundOnSlope_f12) {
+    if (mVerticalSpeed < 5.0f) {
         return true;
     }
     if (mDrawStates.binderFloorHit) {

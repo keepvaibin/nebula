@@ -19,24 +19,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_JellyfishElectric_f1, "JellyfishElectric.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 350.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 230.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.9999f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 700.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_waitTurn_f1, "waitTurn.f1", 280.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_waitTurn_f2, "waitTurn.f2", 0.2f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_selectNerveAfterWait_1, "selectNerveAfterWait.1", 280);
 
 namespace NrvJellyfishElectric {
     NEW_NERVE(JellyfishElectricNrvWait, JellyfishElectric, Wait);
@@ -62,7 +45,7 @@ JellyfishElectric::JellyfishElectric(const char* pName) : LiveActor(pName) {
     mFront.set(0.0f, 0.0f, 1.0f);
     mIsDanger = false;
     mIsConnectedRail = 0;
-    mRailSpeed = cNum_JellyfishElectric_f1;
+    mRailSpeed = 5.0f;
     mRailGoalWaitStep = NebulaFrameClock::stepsOfSeconds(1);
     mIsRailTurnBack = 0;
     mClipCenter.set(0.0f, 0.0f, 0.0f);
@@ -75,25 +58,25 @@ void JellyfishElectric::init(const TableIter& rIter) {
     MR::addToAttributeGroupSearchTurtle(this);
     initHitSensor(1);
     Vec3f sensorOffs;
-    sensorOffs.set(0.0f, -cNum_init_f1, 0.0f);
-    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f2, sensorOffs);
-    initBinder(cNum_init_f3, 0.0f, 0);
+    sensorOffs.set(0.0f, -60.0f, 0.0f);
+    MR::addHitSensorEnemy(this, "body", 8, 350.0f, sensorOffs);
+    initBinder(400.0f, 0.0f, 0);
     MR::offBind(this);
     mController = new AnimScaleController(nullptr);
     mController->setParamTight();
     initEffectKeeper(2, nullptr);
     MR::addEffectHitNormal(this, nullptr);
     initSound(4, false);
-    MR::initStarPointerTarget(this, cNum_init_f4, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, 400.0f, Vec3f(0.0f, 0.0f, 0.0f));
     mController = new AnimScaleController(nullptr);
     mBindStarPtr = new WalkerStateBindStarPointer(this, mController);
-    MR::initShadowVolumeSphere(this, cNum_init_f5);
+    MR::initShadowVolumeSphere(this, 230.0f);
     MR::declareCoin(this, 1);
 
     if (MR::isConnectedWithRail(rIter)) {
         mIsConnectedRail = true;
         initRailRider(rIter);
-        MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f6, cNum_init_f7);
+        MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
         MR::moveCoordToNearestPos(this, mPosition);
         MR::getPlacementArg0NoInit(rIter, &mRailSpeed);
         MR::getPlacementArg1NoInit(rIter, &mRailGoalWaitStep);
@@ -114,8 +97,8 @@ void JellyfishElectric::kill() {
 }
 
 void JellyfishElectric::control() {
-    MR::requestPointLight(this, Vec3f(mPosition), ::sPointLightColor, cNum_control_f1, -1);
-    MR::changeShowModelFlagSyncNearClipping(this, cNum_control_f2);
+    MR::requestPointLight(this, Vec3f(mPosition), ::sPointLightColor, 0.9999f, -1);
+    MR::changeShowModelFlagSyncNearClipping(this, 700.0f);
     mController->updateNerve();
 
     if (!tryPointerSwoon() && !isNerve(GET_NERVE(JellyfishElectric, JellyfishElectricNrvDeath))) {
@@ -284,7 +267,7 @@ bool JellyfishElectric::receiveMsgEnemyAttack(u32 msg, HitSensor* /*pSender*/, H
 
 void JellyfishElectric::waitTurn() {
     f32 turnDirection;
-    f32 turnDecay = (1.0f - (getNerveStep() / cNum_waitTurn_f1));
+    f32 turnDecay = (1.0f - (getNerveStep() / 280.0f));
 
     if (isNerve(GET_NERVE(JellyfishElectric, JellyfishElectricNrvWaitWithLeftTurn))) {
         turnDirection = 1.0f;
@@ -292,7 +275,7 @@ void JellyfishElectric::waitTurn() {
         turnDirection = -1.0f;
     }
 
-    MR::rotateVecDegree(&mFront, -mGravity, (turnDirection * (cNum_waitTurn_f2 * turnDecay)));
+    MR::rotateVecDegree(&mFront, -mGravity, (turnDirection * (0.2f * turnDecay)));
 }
 
 void JellyfishElectric::knockOut() {
@@ -343,7 +326,7 @@ bool JellyfishElectric::tryPointerSwoon() {
 }
 
 bool JellyfishElectric::selectNerveAfterWait() {
-    if (MR::isStep(this, cStep_selectNerveAfterWait_1)) {
+    if (MR::isStep(this, 280)) {
         s32 rand;
 
         if (isNerve(GET_NERVE(JellyfishElectric, JellyfishElectricNrvWait))) {

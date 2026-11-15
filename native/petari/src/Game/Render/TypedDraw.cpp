@@ -6,12 +6,6 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_shader_rows.h>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setColor_f1, "setColor.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setColor_f2, "setColor.f2", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setColor_f3, "setColor.f3", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setColor_f4, "setColor.f4", 255.0f);
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -108,10 +102,10 @@ void SiteMaterial::setTextureId(u32 slot, u32 id, const SiteTexture& rSampling) 
 }
 
 void SiteMaterial::setColor(u32 at, u8 r, u8 g, u8 b, u8 a) {
-    constants[at] = r / cNum_setColor_f1;
-    constants[at + 1] = g / cNum_setColor_f2;
-    constants[at + 2] = b / cNum_setColor_f3;
-    constants[at + 3] = a / cNum_setColor_f4;
+    constants[at] = r / 255.0f;
+    constants[at + 1] = g / 255.0f;
+    constants[at + 2] = b / 255.0f;
+    constants[at + 3] = a / 255.0f;
 }
 
 void TypedDraw::clearFields() {

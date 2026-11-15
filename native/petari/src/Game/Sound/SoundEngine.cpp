@@ -2,15 +2,10 @@
 #include "Game/Sound/MeTrack.hpp"
 #include "Game/Sound/SoundMemory.hpp"
 #include "Game/Sound/StreamPlayer.hpp"
+#include "Game/System/LumaTime.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include <cstring>
 #include <new>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setOutputLevel_f1, "setOutputLevel.f1", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setEffectLine_f1, "setEffectLine.f1", 32768.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setEffectLine_f2, "setEffectLine.f2", 32768.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setEffectLine_f3, "setEffectLine.f3", 32768.0f);
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -174,7 +169,42 @@ void SoundEngine::tick() {
     if (mResetting) {
         resetStep();
     }
-    mVoices.updateAll();
+    // The world clock's tape (services/time.md 7): at a rate other than real time the logic (the voices' updates, the
+    // tracks, the streams) runs rate/1000 times a tick, rounded down with the rest carried, and every voice plays
+    // rate/1000 as fast; the output stays one tick, so music, sequences, effects and streams change speed and pitch
+    // together. 0 is the world's sound held, which AudSystem does as the pause menu does: the engine runs at real time.
+    const u32 rate = luma::time::soundRate();
+    if (rate == 1000u || rate == 0u) {
+        if (mTapeRate != 1000u) {
+            mTapeRate = 1000u;
+            mTapeAcc = 0;
+            Voices::setRateScale(1.0f);
+        }
+        mVoices.updateAll();
+        runJobs(true);
+    } else {
+        if (rate != mTapeRate) {
+            mTapeRate = rate;
+            Voices::setRateScale(static_cast< f32 >(rate) / 1000.0f);
+        }
+        mTapeAcc += rate;
+        const u32 logicTicks = mTapeAcc / 1000u;
+        mTapeAcc -= logicTicks * 1000u;
+        for (u32 i = 0; i < logicTicks; i++) {
+            mVoices.updateSlots();
+            runJobs(false);
+        }
+        mVoices.mix();
+        // The remote's speaker mixes one output tick of its own samples (6 kHz to the remote), at its own pace.
+        if (mSpeakerJob.mListed) {
+            mSpeakerJob.mCall(mSpeakerJob.mData);
+        }
+    }
+    const NebulaHostServices* const host = nebula_host();
+    host->voices_frame(host->user);
+}
+
+void SoundEngine::runJobs(bool speaker) {
     // The jobs by place, each found again after the last ran: one may end another (a stream's last note dropped).
     u32 next = 0;
     for (;;) {
@@ -191,13 +221,15 @@ void SoundEngine::tick() {
             runTracks();
             break;
         case SoundJob::JOB_STREAM:
-        case SoundJob::JOB_CALL:
             job->mCall(job->mData);
+            break;
+        case SoundJob::JOB_CALL:
+            if (speaker) {
+                job->mCall(job->mData);
+            }
             break;
         }
     }
-    const NebulaHostServices* const host = nebula_host();
-    host->voices_frame(host->user);
 }
 
 // The first free place.
@@ -556,7 +588,7 @@ void SoundEngine::applyPlayer(SoundPlayer* pPlayer, const SoundCommand& rCommand
 
 void SoundEngine::setOutputLevel(f32 level) {
     mOutputLevel = level;
-    mMixerGain = cNum_setOutputLevel_f1 * level;
+    mMixerGain = 4.0f * level;
 }
 
 // Settings change, the line's delay kept; with settings and a restart the line starts over, silent. Without settings the line
@@ -564,13 +596,13 @@ void SoundEngine::setOutputLevel(f32 level) {
 void SoundEngine::setEffectLine(const EffectLineCommand& rLine) {
     NebulaEffectLine& rEffect = mEffects[rLine.mLine];
     if (rLine.mHasConfig) {
-        rEffect.volume_a = rLine.mVolumeA / cNum_setEffectLine_f1;
+        rEffect.volume_a = rLine.mVolumeA / 32768.0f;
         rEffect.bus_a = cEffectDestinations[rLine.mBusA];
-        rEffect.volume_b = rLine.mVolumeB / cNum_setEffectLine_f2;
+        rEffect.volume_b = rLine.mVolumeB / 32768.0f;
         rEffect.bus_b = cEffectDestinations[rLine.mBusB];
         rEffect.subframes = static_cast< u16 >(rLine.mSubframes);
         for (int i = 0; i < 8; i++) {
-            rEffect.fir[i] = rLine.mFir[i] / cNum_setEffectLine_f3;
+            rEffect.fir[i] = rLine.mFir[i] / 32768.0f;
         }
     }
     if (rLine.mRestart && rLine.mHasConfig) {

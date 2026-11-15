@@ -30,7 +30,8 @@ public:
 
     // `heap_flags` selects the resource class: D3D12_HEAP_FLAG_ALLOW_ONLY_
     // NON_RT_DS_TEXTURES for sampled textures, ..._ALLOW_ONLY_RT_DS_TEXTURES
-    // for render targets. Requests larger than half a heap are committed. `properties`: the heaps' (and the committed
+    // for render targets. `heap_bytes` is the largest heap: the first is an eighth of it, each further one twice the
+    // largest held. Requests larger than half of `heap_bytes` are committed. `properties`: the heaps' (and the committed
     // fallback's) properties; none means the DEFAULT heap type. A custom CPU-visible heap is for WriteToSubresource.
     PlacedTextureAllocator(D3D12_HEAP_FLAGS heap_flags, std::uint64_t heap_bytes,
                            const D3D12_HEAP_PROPERTIES* properties = nullptr);

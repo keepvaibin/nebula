@@ -1,7 +1,6 @@
 #include "Game/LiveActor/HitSensorInfo.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/System/LumaClass.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
@@ -46,11 +45,7 @@ void HitSensorInfo::update() {
 void HitSensorInfo::doObjCol() {
     for (s32 i = 0; i < mSensor->mSensorCount; i++) {
         if (!MR::isDead(mSensor->mSensors[i]->mHost)) {
-            // A mod's class may take the touch in the class's place.
-            LiveActor* const host = mSensor->mHost;
-            if (host->mModActor == nullptr || !lumacore::classTouch(host, mSensor, mSensor->mSensors[i])) [[likely]] {
-                host->attackSensor(mSensor, mSensor->mSensors[i]);
-            }
+            mSensor->mHost->attackSensor(mSensor, mSensor->mSensors[i]);
         }
     }
 }

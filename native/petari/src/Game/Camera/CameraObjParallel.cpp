@@ -2,11 +2,7 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraParamChunk.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
 
 CameraObjParallel::CameraObjParallel(const char* pName) : Camera(pName), mAngleX(), mAngleY(), mDist(3000.0f) {
     lumacore::setClass(this, lumacore::kClassId< CameraObjParallel >);
@@ -32,7 +28,7 @@ CameraTargetObj* CameraObjParallel::calc() {
     mtx.concat(rotX);
 
     Vec3f watchPoint;
-    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, cNum_calc_f1 / cNum_calc_f2);
+    CameraLocalUtil::makeWatchPoint(&watchPoint, this, target, 0.1f / 15.0f);
     CameraLocalUtil::setWatchPos(this, watchPoint);
 
     Vec3f offset;

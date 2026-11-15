@@ -37,7 +37,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     float weight = kTap[0] * kTap[0];
     for (int y = -2; y <= 2; ++y) {
         for (int x = -2; x <= 2; ++x) {
-            if ((x == 0 && y == 0) || (g_more.z & 2048u) != 0u) {  // raw signals (22.20): the centre alone
+            if ((x == 0 && y == 0) || (g_more.z & 2048u) != 0u) {  // raw signals: the centre alone
                 continue;
             }
             const int2 at = pixel + int2(x, y) * step_;

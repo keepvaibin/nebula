@@ -25,20 +25,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f3, "initAfterPlacement.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f4, "initAfterPlacement.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePatrol_f1, "exePatrol.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePatrol_f2, "exePatrol.f2", 0.5f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_tryPatrol_1, "tryPatrol.1", 500);
 
 namespace NrvEyeBeamer {
     NEW_NERVE(EyeBeamerNrvDemoStartWait, EyeBeamer, DemoStartWait);
@@ -53,9 +40,9 @@ namespace NrvEyeBeamer {
 
 namespace {
     // The beam model is this long at scale 1.
-    NEBULA_TUNABLE(f32, cBeamModelLength, 2000.0f);
-    NEBULA_TUNABLE(f32, cBeamRadius, 140.0f);
-    NEBULA_TUNABLE(f32, cClipMargin, 300.0f);
+    const f32 cBeamModelLength = 2000.0f;
+    const f32 cBeamRadius = 140.0f;
+    const f32 cClipMargin = 300.0f;
 };  // namespace
 
 EyeBeamer::EyeBeamer(const char* pName)
@@ -78,7 +65,7 @@ void EyeBeamer::init(const TableIter& rIter) {
     MR::getPlacementArg1NoInit(rIter, &mWaterSurfaceHeight);
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "body", 8, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEye(this, "beam", 8, cBeamRadius + (cNum_init_f1 * mBeamLength), Vec3f(0.0f, cNum_init_f2 * (-mBeamLength), 0.0f));
+    MR::addHitSensorEye(this, "beam", 8, cBeamRadius + (0.5f * mBeamLength), Vec3f(0.0f, 0.5f * (-mBeamLength), 0.0f));
     initSound(4, 0);
     MR::initCollisionParts(this, "EyeBeamer", getSensor("body"), 0);
     initRailMoveFunction(rIter);
@@ -141,11 +128,11 @@ void EyeBeamer::initAfterPlacement() {
     f32 clipRadius;
     if (MR::getFirstPolyOnLineToMapExceptActor(&hitPos, 0, rayStart, down * (cClipMargin + mBeamLength), this)) {
         f32 distance = hitPos.distance(mPosition);
-        mClipCenter.set((hitPos + mPosition) * cNum_initAfterPlacement_f1);
-        clipRadius = cClipMargin + cNum_initAfterPlacement_f2 * distance;
+        mClipCenter.set((hitPos + mPosition) * 0.5f);
+        clipRadius = cClipMargin + 0.5f * distance;
     } else {
-        mClipCenter.set(mPosition + ((down * mBeamLength) * cNum_initAfterPlacement_f3));
-        clipRadius = cClipMargin + (cNum_initAfterPlacement_f4 * mBeamLength);
+        mClipCenter.set(mPosition + ((down * mBeamLength) * 0.5f));
+        clipRadius = cClipMargin + (0.5f * mBeamLength);
     }
 
     MR::setClippingTypeSphere(this, clipRadius, &mClipCenter);
@@ -252,7 +239,7 @@ bool EyeBeamer::tryGotoPatrol() {
 }
 
 bool EyeBeamer::tryPatrol() {
-    if (MR::isGreaterStep(this, cStep_tryPatrol_1)) {
+    if (MR::isGreaterStep(this, 500)) {
         setNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvPatrol));
         return true;
     }
@@ -327,8 +314,8 @@ void EyeBeamer::exePatrol() {
     Vec3f down;
     MR::calcUpVec(&down, this);
     down.negate();
-    mClipCenter.set(mPosition + ((down * mBeamLength) * cNum_exePatrol_f1));
-    MR::setClippingTypeSphere(this, cClipMargin + (cNum_exePatrol_f2 * mBeamLength), &mClipCenter);
+    mClipCenter.set(mPosition + ((down * mBeamLength) * 0.5f));
+    MR::setClippingTypeSphere(this, cClipMargin + (0.5f * mBeamLength), &mClipCenter);
     mRailMover->movement();
     mBasePos.set(mRailMover->mStartPos);
 }

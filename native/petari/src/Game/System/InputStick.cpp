@@ -1,12 +1,12 @@
 #include "Game/System/InputStick.hpp"
 #include "Game/System/PlayerInput.hpp"
 #include "Game/System/PlayerInputs.hpp"
+#include "Game/System/LumaTime.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // A direction is on past this deflection.
-    NEBULA_TUNABLE(f32, cIsOnValue, 0.2f);
+    const f32 cIsOnValue = 0.2f;
 
     u32 calcDirections(const Vec2f& rStick) {
         u32 directions = 0;
@@ -32,7 +32,7 @@ namespace {
 }  // namespace
 
 InputStick::InputStick(const PlayerInput* pPad)
-    : mPad(pPad), mStick(0.0f, 0.0f), mSpeed(), mHold(), mTrigger(), mRelease() {
+    : mPad(pPad), mStick(0.0f, 0.0f), mSpeed(), mHold(), mTrigger(), mRelease(), mCarriedTrigger(0), mCarriedRelease(0) {
 }
 
 void InputStick::update() {
@@ -51,4 +51,12 @@ void InputStick::update() {
     mHold = directions;
     mTrigger = directions & ~directionsPrev;
     mRelease = directionsPrev & ~directions;
+    if (luma::time::isStepWithheld()) {
+        mCarriedTrigger |= mTrigger;
+        mCarriedRelease |= mRelease;
+    } else if ((mCarriedTrigger | mCarriedRelease) != 0) {
+        mTrigger |= mCarriedTrigger;
+        mRelease |= mCarriedRelease;
+        mCarriedTrigger = mCarriedRelease = 0;
+    }
 }

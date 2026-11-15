@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/live_controls_engine.h"
+#include "galaxy/input/mod_actions.h"
+#include "galaxy/luma_input_service.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 
@@ -340,6 +343,22 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     const float gyro_threshold = s_pointer_owner.owner == galaxy::input::PointerSource::Mouse
         ? kGyroTakesMouseUnitsPerSecond
         : kGyroActiveUnitsPerSecond;
+    // A mod's choice of what aims the pointer (input 1.2 pointer_source): only that source moves it; the gyro turns
+    // by the mod's sensitivity. What could aim it now goes to the service for its next answer.
+    const galaxy::luma_input::PointerChoice mod_choice = galaxy::luma_input::pointer_choice();
+    const auto chosen = static_cast<galaxy::input::PointerSource>(mod_choice.source);
+    {
+        const auto bit = [](galaxy::input::PointerSource source) { return 1u << static_cast<unsigned>(source); };
+        const bool any_pad = use_pads && std::any_of(live_pads.begin(), live_pads.end(),
+                                                     [](const LivePad& pad) { return pad.sample.connected; });
+        galaxy::luma_input::set_pointer_sources((allow_absolute_pointer && use_keyboard ? bit(galaxy::input::PointerSource::Mouse) : 0u) |
+                                                (pad_gyro_pointing ? bit(galaxy::input::PointerSource::Gyro) : 0u) |
+                                                (any_pad ? bit(galaxy::input::PointerSource::Stick) : 0u));
+    }
+    if (chosen == galaxy::input::PointerSource::Gyro) {
+        gyro_x *= mod_choice.gyro_scale;
+        gyro_y *= mod_choice.gyro_scale;
+    }
     const float gyro_motion = std::sqrt(gyro_x * gyro_x + gyro_y * gyro_y);
     galaxy::input::PointerActivity activity{};
     activity.mouse = mouse_moved;
@@ -347,6 +366,11 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     activity.stick = stick_velocity.x != 0.0f || stick_velocity.y != 0.0f;
     activity.gyro = pad_gyro_pointing && dt > 0.0f && gyro_motion > gyro_threshold * dt;
     activity.touch = pad_touch_pointing && std::fabs(touch_x) + std::fabs(touch_y) > 0.0f;
+    if (chosen != galaxy::input::PointerSource::None) {
+        activity = {};
+        s_pointer_owner.owner = chosen;
+        s_pointer_owner.last_active_us = now_us;
+    }
     // Recenter (pointer_control.h RecenterHold): the press gives the pointer to the recentering device
     // at the picture centre. While the button is held, the pointer stays there and that device keeps it.
     const bool recenter_held = held(GameInput::PointerRecenter);
@@ -472,6 +496,42 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     s_previous_shake = shake_pressed;
     snapshot.shake = shake_pressed;
     snapshot.nunchuk_shake = held(GameInput::NunchukShake) || motion_shake_nunchuk;
+
+    // The mods' actions (services/input.md): their own bindings on the keyboard and the pads, else the game control
+    // each follows as the game gets it this sample (the player's bindings and the extensions' buttons). Nothing with
+    // none.
+    if (galaxy::input::mod_actions::any()) {
+        std::uint32_t game_held = logic.pressed;
+        const auto also = [&game_held](bool on, GameInput target) {
+            if (on) game_held |= galaxy::input::game_input_bit(target);
+        };
+        also(snapshot.buttons.a, GameInput::A);
+        also(snapshot.buttons.b, GameInput::B);
+        also(snapshot.buttons.one, GameInput::One);
+        also(snapshot.buttons.two, GameInput::Two);
+        also(snapshot.buttons.plus, GameInput::Plus);
+        also(snapshot.buttons.minus, GameInput::Minus);
+        also(snapshot.buttons.home, GameInput::Home);
+        also(snapshot.buttons.up, GameInput::DpadUp);
+        also(snapshot.buttons.down, GameInput::DpadDown);
+        also(snapshot.buttons.left, GameInput::DpadLeft);
+        also(snapshot.buttons.right, GameInput::DpadRight);
+        also(snapshot.buttons.c, GameInput::C);
+        also(snapshot.buttons.z, GameInput::Z);
+        also(shake_pressed, GameInput::Shake);
+        also(snapshot.nunchuk_shake, GameInput::NunchukShake);
+        std::array<galaxy::input::mod_actions::PadLevels, 8> pad_levels{};
+        std::size_t pad_count = 0;
+        if (use_pads) {
+            for (const LivePad& pad : live_pads) {
+                if (!pad.sample.connected || pad_count == pad_levels.size()) continue;
+                pad_levels[pad_count++] = {pad.sample.scheme, pad.sample};
+            }
+        }
+        galaxy::input::mod_actions::sample(frame.host_menu || galaxy::luma_input::text_open(), use_keyboard, keyboard_levels,
+                                           std::span<const galaxy::input::mod_actions::PadLevels>(pad_levels.data(), pad_count),
+                                           game_held);
+    }
     return result;
 }
 }  // namespace galaxy::host::controls

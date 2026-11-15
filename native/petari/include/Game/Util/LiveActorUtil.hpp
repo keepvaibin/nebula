@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/LumaMarks.hpp"
+
 #include "Game/Util/Color.hpp"
 
 #include "Game/Animation/AnmPlayer.hpp"
@@ -99,7 +101,7 @@ namespace MR {
     bool isClipped(const LiveActor*);
     bool isInvalidClipping(const LiveActor*);
 
-    void setBaseTRMtx(LiveActor*, MtxPtr);
+    void setBaseTRMtx(LiveActor*, LUMA_IN MtxPtr);
     void setBaseTRMtx(LiveActor*, const Pos3f&);
     void setBaseTRMtx(LiveActor*, const Quat4f&);
     void setBaseScale(LiveActor*, const Vec3f&);
@@ -372,7 +374,7 @@ namespace MR {
     void initFurPlanet(LiveActor*);
     FurMulti* initFurPlayer(LiveActor*);
 
-    void initCollisionParts(LiveActor*, const char*, HitSensor*, MtxPtr);
+    void initCollisionParts(LiveActor*, const char*, HitSensor*, LUMA_KEPT LUMA_NULLABLE MtxPtr);
     void initCollisionPartsAutoEqualScale(LiveActor*, const char*, HitSensor*, MtxPtr);
     void initCollisionPartsAutoEqualScaleOne(LiveActor*, const char*, HitSensor*, MtxPtr);
     void initCollisionPartsFromResourceHolder(LiveActor*, const char*, HitSensor*, ResourceHolder*, MtxPtr);

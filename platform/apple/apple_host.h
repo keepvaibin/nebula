@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// What the host asks of Apple's systems (macOS, iOS, iPadOS) outside SDL: docs/APPLE.md.
+// What the host asks of Apple's systems (macOS, iOS, iPadOS) outside SDL.
 #pragma once
 
 #include <string>

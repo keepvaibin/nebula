@@ -10,18 +10,17 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
     // A player further than this from the rail is not judged; a coord jump this long is not taken.
-    NEBULA_TUNABLE(f32, cRaceJudgeLength, 10000.0f);
-    NEBULA_TUNABLE(f32, cGoalReach, 100.0f);
+    const f32 cRaceJudgeLength = 10000.0f;
+    const f32 cGoalReach = 100.0f;
     // The Penguin race starts on the water: cast from cWaterCheckHeight above, cWaterCheckLength down, and sink by cWaterSinkDepth.
-    NEBULA_TUNABLE(f32, cWaterCheckHeight, 500.0f);
-    NEBULA_TUNABLE(f32, cWaterCheckLength, 1000.0f);
-    NEBULA_TUNABLE(f32, cWaterSinkDepth, 15.0f);
-    NEBULA_TUNABLE(f32, cGroundCheckLength, 1000.0f);
+    const f32 cWaterCheckHeight = 500.0f;
+    const f32 cWaterCheckLength = 1000.0f;
+    const f32 cWaterSinkDepth = 15.0f;
+    const f32 cGroundCheckLength = 1000.0f;
 }  // namespace
 
 RaceRail::RaceRail(const char* pName) : NameObj(pName) {

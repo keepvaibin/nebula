@@ -2,19 +2,13 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraPoseParam.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_calcStartPose_f1, "calcStartPose.f1", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcSafePose_f1, "calcSafePose.f1", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcSafePose_f2, "calcSafePose.f2", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_moveToIdealPosition_f1, "moveToIdealPosition.f1", 0.5f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sMinDistance, 1.0f);
-    NEBULA_TUNABLE(f32, sBaseLength, 300.0f);
-    NEBULA_TUNABLE(f32, sAccel, 1.0f);
-    NEBULA_TUNABLE(f32, sSpeedMax, 100.0f);
+    const f32 sMinDistance = 1.0f;
+    const f32 sBaseLength = 300.0f;
+    const f32 sAccel = 1.0f;
+    const f32 sSpeedMax = 100.0f;
 };  // namespace
 
 OnlyCamera::OnlyCamera(const char* pName)
@@ -56,7 +50,7 @@ void OnlyCamera::calcStartPose(CameraMan* pCameraMan) {
     MR::normalize(&front);
     MR::normalizeOrZero(&up);
 
-    if (MR::isNearZero(up) || MR::abs(front.dot(up)) > cNum_calcStartPose_f1) {
+    if (MR::isNearZero(up) || MR::abs(front.dot(up)) > 0.98f) {
         Quat4f rot;
         rot.setRotate(Vec3f(0.0f, 0.0f, -1.0f), front);
         up.set< f32 >(0.0f, 1.0f, 0.0f);
@@ -96,10 +90,10 @@ void OnlyCamera::calcSafePose(CameraMan* pCameraMan) {
     MR::normalize(&front);
     MR::normalizeOrZero(&up);
 
-    if (MR::isNearZero(up) || MR::abs(front.dot(up)) > cNum_calcSafePose_f1) {
+    if (MR::isNearZero(up) || MR::abs(front.dot(up)) > 0.98f) {
         Vec3f poseFront = mPoseParam->mWatchPos - mPoseParam->mPos;
         MR::normalize(&poseFront);
-        if (MR::abs(front.dot(poseFront)) > cNum_calcSafePose_f2) {
+        if (MR::abs(front.dot(poseFront)) > 0.98f) {
             up.set(mPoseParam->mUpVec);
         } else {
             Quat4f rot;
@@ -127,7 +121,7 @@ void OnlyCamera::moveToIdealPosition(Vec3f* pPos) {
         Vec3f offset = pos - *pPos;
         f32 dist = offset.length();
 
-        if (dist < mSpeed * cNum_moveToIdealPosition_f1 * (s32)mSpeed) {
+        if (dist < mSpeed * 0.5f * (s32)mSpeed) {
             mSpeed -= ::sAccel;
             if (mSpeed < 0.0f) {
                 mSpeed = 0.0f;

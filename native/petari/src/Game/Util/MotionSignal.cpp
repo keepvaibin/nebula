@@ -12,14 +12,13 @@
 #include "Game/Particle/EmitterManager.hpp"
 #include "Game/Particle/ParticleResource.hpp"
 #include <nebula_module.h>
-#include "Game/Util/Tunable.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     // MarioAccess::setTrans and setBaseMtx also carry the player every frame (demos, carriers, the dome's galaxy
     // map); only a jump farther than this from the player's position is a new life. Walking moves ~15 units a frame.
-    NEBULA_TUNABLE(f32, cPlayerTeleportDistance, 500.0f);
+    const f32 cPlayerTeleportDistance = 500.0f;
 
     u32 sCameraCuts;
 

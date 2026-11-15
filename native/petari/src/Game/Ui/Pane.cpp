@@ -8,9 +8,6 @@
 #include "Game/Ui/Pane.hpp"
 #include <cstdio>
 #include <cstring>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_CalculateMtxSelf_f1, "CalculateMtxSelf.f1", 255.0f);
 
 namespace Ui {
     void ReverseYAxis(Mtx34f* pMtx) {
@@ -251,7 +248,7 @@ namespace Ui {
         }
 
         if (IsInfluencedAlpha() && mAlpha != 255) {
-            rContextAlpha = rContextAlpha * mAlpha * (1.0f / cNum_CalculateMtxSelf_f1);
+            rContextAlpha = rContextAlpha * mAlpha * (1.0f / 255.0f);
             rContextInfluenced = true;
         }
     }

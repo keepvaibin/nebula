@@ -45,15 +45,23 @@ public:
     // New settings between frames; an SMAA quality change rebuilds its two pipelines.
     void apply_settings(const PostProcessSettings& settings);
 
+    // The scene target's image traded for `spare` (RendererVk::swap_scene_color): the scene's own image comes back,
+    // shader-readable, and the scene target goes on in `spare` (or one made for it), its old contents dropped.
+    using SceneTrade = std::function<std::shared_ptr<Texture>(std::shared_ptr<Texture> spare)>;
+
     // Scene AA of the scene target colour `color` (RGBA8, COLOR_ATTACHMENT_OPTIMAL, no render pass open), in two parts
     // around the renderer beginning its scene target pass again: prepare_scene_aa records the passes before (a copy of the
     // scene, SMAA's edges and weights) and returns the pass to finish with; finish_scene_aa draws the result into the
-    // open scene target pass, RGB only (the alpha the game left there stays).
+    // open scene target pass, RGB only (the alpha the game left there stays). With `trade` (a single-sample scene) a pass
+    // that runs reads the scene's own image instead of a copy, and finish_scene_aa writes every pixel and channel of
+    // the image that took its place (the alpha the scene's): the scene target pass may open without loading it.
     AaRun prepare_scene_aa(VkCommandBuffer commands, const Texture& color, unsigned width, unsigned height,
                            unsigned picture_width, unsigned picture_height, unsigned display_width,
-                           unsigned display_height, const SetAllocator& allocate);
+                           unsigned display_height, const SetAllocator& allocate, const SceneTrade& trade = {});
     void finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsigned width, unsigned height,
                          const SetAllocator& allocate, VkRenderPass scene_pass, unsigned samples_log2);
+    // The last prepare_scene_aa traded the scene's image: its finish writes the whole scene target.
+    [[nodiscard]] bool scene_traded() const noexcept { return scene_traded_; }
     // The scaling chain from `source` (shader-readable) to a `target_width` x `target_height` picture: prepare
     // records the passes outside the target's render pass (into the window-sized intermediate); finish draws the
     // last one in the target's pass (the present pass when `present`, else the RGBA8 pass, dithered either way) at `viewport`, whose
@@ -63,17 +71,22 @@ public:
         VkPipeline pipeline = VK_NULL_HANDLE;
         VkImageView input = VK_NULL_HANDLE;
         PostConstants constants{};
+        unsigned width = 0;  // the target size prepare_present was given
+        unsigned height = 0;
     };
     PresentStep prepare_present(VkCommandBuffer commands, const Texture& source, unsigned source_width,
                                 unsigned source_height, unsigned target_width, unsigned target_height,
                                 bool present, const SetAllocator& allocate);
     // `output.hdr`: the target is an HDR10 swap chain image (the present pass made for its format); the default is the 8-bit
-    // window's write.
+    // window's write. `quarter_turns`: the target is turned by 1-3 quarter turns clockwise (a pre-rotated swap chain image;
+    // `viewport` is then the turned rectangle), and the pass writes each of its pixels from the picture's turned-back one.
     void finish_present(VkCommandBuffer commands, const PresentStep& step, const VkRect2D& viewport,
-                        const SetAllocator& allocate, const PostOutput& output = PostOutput{});
+                        const SetAllocator& allocate, const PostOutput& output = PostOutput{},
+                        unsigned quarter_turns = 0u);
     // The chain's pipelines into the present pass exist (an HDR10 swap chain needs them: nothing else writes its encoding).
     [[nodiscard]] bool present_ready() const noexcept {
-        return to_present_.rcas != VK_NULL_HANDLE && to_present_.rcas_scaled != VK_NULL_HANDLE && to_present_.resample != VK_NULL_HANDLE;
+        return to_present_.rcas != VK_NULL_HANDLE && to_present_.rcas_scaled != VK_NULL_HANDLE && to_present_.resample != VK_NULL_HANDLE &&
+               to_present_.copy != VK_NULL_HANDLE;
     }
 
 private:
@@ -96,6 +109,7 @@ private:
         VkPipeline rcas = VK_NULL_HANDLE;
         VkPipeline rcas_scaled = VK_NULL_HANDLE;
         VkPipeline resample = VK_NULL_HANDLE;
+        VkPipeline copy = VK_NULL_HANDLE;  // the resample at 1:1 (PostProcessPlan::copy)
     };
 
     VkShaderModule module(Program program) const;
@@ -127,7 +141,6 @@ private:
     bool built_ = false;
     bool to_build_ = false;  // initialized: poll_ready makes the pipelines
     unsigned spirv_quality_ = 0;  // the SMAA quality module() takes the quality-dependent programs at
-    bool easu_ = false;  // the device has EASU's single-channel gathers
     VkRenderPass scene_pass_ = VK_NULL_HANDLE;
     VkRenderPass color_pass_ = VK_NULL_HANDLE;
     VkRenderPass window_pass_ = VK_NULL_HANDLE;
@@ -150,6 +163,9 @@ private:
     VkPipeline smaa_blend_rgb_ = VK_NULL_HANDLE;  // scene target pass, RGB only
     VkPipeline fxaa_ = VK_NULL_HANDLE;
     VkPipeline fxaa_rgb_ = VK_NULL_HANDLE;
+    // The same last passes writing every channel, after a trade (prepare_scene_aa).
+    VkPipeline smaa_blend_scene_ = VK_NULL_HANDLE;
+    VkPipeline fxaa_scene_ = VK_NULL_HANDLE;
     // FXAA's, SMAA's last pass over MSAA: per sample count (log2).
     VkPipeline scene_pass_ms_[2][4]{};
     PassPipelines to_color_{};
@@ -163,6 +179,10 @@ private:
     Target stencil_;  // shared by edges and weights
     Target antialiased_;
     Target scaled_;
+    // The scene's image traded out this frame (prepare_scene_aa with a trade): the passes' source, the next trade's spare.
+    std::shared_ptr<Texture> traded_;
+    std::uint64_t traded_used_ = 0;  // clock_ at the last trade
+    bool scene_traded_ = false;  // this frame's passes read traded_
     std::uint64_t clock_ = 0;      // scene AA calls so far
     std::uint64_t smaa_used_ = 0;  // clock_ when SMAA's three targets were last asked for
 };

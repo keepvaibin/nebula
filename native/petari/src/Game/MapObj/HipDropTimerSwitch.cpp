@@ -20,13 +20,7 @@
 
 #include <nebula_math.h>
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_HipDropTimerSwitch_f1, "HipDropTimerSwitch.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_HipDropTimerSwitch_f2, "HipDropTimerSwitch.f2", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOff_f1, "exeOff.f1", 10.0f);
 
 namespace {
     const char* const sTimerSeSet[2][4] = {{"SE_SY_TIMER_A_2", "SE_SY_TIMER_A_1", "SE_SY_TIMER_A_QUASI_0", "SE_SY_TIMER_A_0"},
@@ -46,7 +40,7 @@ HipDropTimerSwitch::HipDropTimerSwitch(const char* pName)
     lumacore::setClass(this, lumacore::kClassId< HipDropTimerSwitch >);
     mSpring = new SpringValue;
     mMapObjConnector = new MapObjConnector(this);
-    mSpring->setParam(0.0f, 0.0f, cNum_HipDropTimerSwitch_f1, cNum_HipDropTimerSwitch_f2, 0.0f);
+    mSpring->setParam(0.0f, 0.0f, 0.2f, 0.9f, 0.0f);
 }
 
 void HipDropTimerSwitch::init(const TableIter& rIter) {
@@ -58,7 +52,7 @@ void HipDropTimerSwitch::init(const TableIter& rIter) {
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "body", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::addHitSensorMapObj(this, "hit", 16, 0.0f, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initStarPointerTarget(this, cNum_init_f1, Vec3f(0.0f));
+    MR::initStarPointerTarget(this, 150.0f, Vec3f(0.0f));
     MR::initCollisionParts(this, "HipDropTimerSwitch", getSensor("body"), nullptr);
     mCollisionParts = MR::createCollisionPartsFromLiveActor(this, "Move", getSensor("hit"), MR::CollisionScaleType_Default);
     MR::validateCollisionParts(mCollisionParts);
@@ -197,7 +191,7 @@ void HipDropTimerSwitch::exeOff() {
     }
 
     if (!mWasLightPressed && mIsLightPressed) {
-        mSpring->mVelocity += -cNum_exeOff_f1;
+        mSpring->mVelocity += -10.0f;
         MR::startSound(this, "SE_OJ_PNC_KINOKO_BOUND");
     }
 

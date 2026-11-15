@@ -2,15 +2,15 @@
 # run.sh SECONDS OUT [NAME=value ...]: runs a frozen build of the native host for a test, hidden and silent: the window
 # hidden, the sound to OUT/audio.wav, present snapshots and crash dumps into OUT, private settings and app-data.
 # Windows (Git Bash). The machine's paths come from the environment:
-#   NEBULA_BIN       folder with NebulaNative.exe and smg_game.dll (and tables/*.tsv when the build has them)
-#   NEBULA_EXE       the host to run, NebulaNative.exe (D3D12) unless set, e.g. NebulaNativeVk.exe (Vulkan)
+#   NEBULA_BIN       folder with Nebula.exe and smg_game.dll (and tables/*.tsv when the build has them)
+#   NEBULA_EXE       the host to run, Nebula.exe (D3D12) unless set, e.g. NebulaVk.exe (Vulkan)
 #   NEBULA_PAK       the game content (game.pak); a build whose folder holds pak.path runs that file's game.pak
 #                    instead (a cooked candidate beside a base on content packed before cooking)
 #   NEBULA_SAVES     a test saves folder (never a player's)
 #   NEBULA_APPDATA   a test app-data folder (shader caches; one per build when builds are compared)
 #   NEBULA_SETTINGS  a test settings folder (config.ini, runtime_settings.ini)
 #   NEBULA_GPU       optional: the GPU to run on, as config.ini's gpu= names it (render_config.h gpu_identity)
-#   NEBULA_DIAGNOSTICS optional: what the run records (--diagnostics, docs/DIAGNOSTICS.md)
+#   NEBULA_DIAGNOSTICS optional: what the run records (--diagnostics, docs/using-nebula/diagnostics.md)
 # The run's own copy of the binaries goes to OUT/bin and is removed afterwards unless the run left a crash dump.
 set -e
 seconds=$1
@@ -26,7 +26,7 @@ done
 if [ -f "$NEBULA_BIN/pak.path" ]; then
     NEBULA_PAK=$(tr -d '\r\n' < "$NEBULA_BIN/pak.path")
 fi
-exe=${NEBULA_EXE:-NebulaNative.exe}
+exe=${NEBULA_EXE:-Nebula.exe}
 mkdir -p "$out/bin" "$(cygpath -u "$NEBULA_APPDATA")" "$(cygpath -u "$NEBULA_SETTINGS")"
 cp "$NEBULA_BIN/$exe" "$NEBULA_BIN"/smg_game.dll "$out/bin/"
 cp "$NEBULA_BIN"/*.pdb "$out/bin/" 2>/dev/null || true
@@ -43,7 +43,7 @@ if [ -n "${NEBULA_GPU:-}" ]; then
         echo "gpu=$NEBULA_GPU" >> "$config"
     fi
 fi
-# The run's folders are arguments (docs/COMMAND_LINE.md); a build from before them reads the environment names below.
+# The run's folders are arguments (docs/using-nebula/command-line-arguments.md); a build from before them reads the environment names below.
 folders=""
 if grep -qa -- "--crash-dumps" "$out/bin/$exe"; then
     folders="--settings $settings --crash-dumps $(cygpath -w "$out")"

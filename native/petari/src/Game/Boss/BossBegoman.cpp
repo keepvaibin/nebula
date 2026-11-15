@@ -22,111 +22,107 @@
 #include "Game/Util/ParabolicPath.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_control_1, "control.1", 1);
-
 namespace {
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hWaitParam, {0.0f, 3.0f, 0.95f, 1.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hSignAttackParam, {0.0f, 3.0f, 0.8f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hPursueParam, {1.3f, 3.0f, 0.97f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hTurnParam, {0.4f, 3.0f, 0.95f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hHitReactionParam, {0.0f, 3.0f, 0.95f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hOnWeakParam, {-0.5f, 3.0f, 0.95f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hOnWeakNoMoveParam, {0.0f, 3.0f, 0.95f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hTrampleReactionParam, {0.0f, 3.0f, 0.95f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hAwareParam, {0.0f, 3.0f, 0.95f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hElectricReturnParam, {0.0f, 3.0f, 0.8f, 0.0f});
-    NEBULA_TUNABLE(f32, sLaunchRadius, 100.0f);
-    NEBULA_TUNABLE(f32, sBabyLaunchVelH, 10.0f);
-    NEBULA_TUNABLE(f32, sBabyLaunchVelV, 15.0f);
-    NEBULA_TUNABLE(f32, hSpikeLaunchVelH, 10.0f);
-    NEBULA_TUNABLE(f32, hSpikeLaunchVelV, 20.0f);
-    NEBULA_TUNABLE(f32, hSideCheckOffsetY, 80.0f);
-    NEBULA_TUNABLE(f32, hSideCheckDot, 0.25f);
-    NEBULA_TUNABLE(s32, sDefaultLife, 3);
-    NEBULA_TUNABLE(f32, sWaitRotate, 0.15f);
-    NEBULA_TUNABLE(f32, sSignAttackRotate, 0.5f);
-    NEBULA_TUNABLE(f32, sPursueRotate, 0.5f);
-    NEBULA_TUNABLE(f32, sTurnRotate, 0.4f);
-    NEBULA_TUNABLE(f32, sOnWeakRotate, 0.4f);
+    const MR::ActorMoveParam hWaitParam = {0.0f, 3.0f, 0.95f, 1.0f};
+    const MR::ActorMoveParam hSignAttackParam = {0.0f, 3.0f, 0.8f, 3.0f};
+    const MR::ActorMoveParam hPursueParam = {1.3f, 3.0f, 0.97f, 3.0f};
+    const MR::ActorMoveParam hTurnParam = {0.4f, 3.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam hHitReactionParam = {0.0f, 3.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam hOnWeakParam = {-0.5f, 3.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hOnWeakNoMoveParam = {0.0f, 3.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hTrampleReactionParam = {0.0f, 3.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hAwareParam = {0.0f, 3.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam hElectricReturnParam = {0.0f, 3.0f, 0.8f, 0.0f};
+    const f32 sLaunchRadius = 100.0f;
+    const f32 sBabyLaunchVelH = 10.0f;
+    const f32 sBabyLaunchVelV = 15.0f;
+    const f32 hSpikeLaunchVelH = 10.0f;
+    const f32 hSpikeLaunchVelV = 20.0f;
+    const f32 hSideCheckOffsetY = 80.0f;
+    const f32 hSideCheckDot = 0.25f;
+    const s32 sDefaultLife = 3;
+    const f32 sWaitRotate = 0.15f;
+    const f32 sSignAttackRotate = 0.5f;
+    const f32 sPursueRotate = 0.5f;
+    const f32 sTurnRotate = 0.4f;
+    const f32 sOnWeakRotate = 0.4f;
     const s32 sOnWeakTime = NebulaFrameClock::stepsOfSeconds(7);
     const s32 hOnWeakSignSubTime = NebulaFrameClock::stepsOfSeconds(4);
     const s32 hOnWeakSignFastSubTime = NebulaFrameClock::stepsOfSeconds(6);
-    NEBULA_TUNABLE(f32, hSignSlowRate, 0.5f);
-    NEBULA_TUNABLE(f32, hSignFastRate, 2.0f);
+    const f32 hSignSlowRate = 0.5f;
+    const f32 hSignFastRate = 2.0f;
     const s32 hOnWeakTurnTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, hOnWeakSideVel, 0.35f);
+    const f32 hOnWeakSideVel = 0.35f;
     // Inside this distance a weak boss backs away from the player.
-    NEBULA_TUNABLE(f32, hOnWeakEscapeDist, 600.0f);
-    NEBULA_TUNABLE(f32, sBrakeRotate, 0.2f);
-    NEBULA_TUNABLE(f32, sStepBackRotate, 0.2f);
-    NEBULA_TUNABLE(f32, sReturnRotate, 0.2f);
-    NEBULA_TUNABLE(f32, sKeepDistanceRotate, 0.2f);
-    NEBULA_TUNABLE(f32, sProvokeRotate, 0.3f);
-    NEBULA_TUNABLE(s32, sTrampleReactionOnSwitchTime, 80);
-    NEBULA_TUNABLE(f32, sTrampleReactionRotate, 0.25f);
+    const f32 hOnWeakEscapeDist = 600.0f;
+    const f32 sBrakeRotate = 0.2f;
+    const f32 sStepBackRotate = 0.2f;
+    const f32 sReturnRotate = 0.2f;
+    const f32 sKeepDistanceRotate = 0.2f;
+    const f32 sProvokeRotate = 0.3f;
+    const s32 sTrampleReactionOnSwitchTime = 80;
+    const f32 sTrampleReactionRotate = 0.25f;
     // A trample within this many steps of the last one is ignored.
-    NEBULA_TUNABLE(s32, sTrampleRepeatGuardTime, 5);
+    const s32 sTrampleRepeatGuardTime = 5;
     // A body hit within this many steps of a trample is ignored.
     const s32 sTrampleHitGuardTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, hTrampleSlideSpeed, 25.0f);
+    const f32 hTrampleSlideSpeed = 25.0f;
     const s32 sAwareTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sAwareRotate, 0.1f);
-    NEBULA_TUNABLE(f32, sHitReactionRotate, 0.25f);
-    NEBULA_TUNABLE(s32, sStopSceneTime, 2);
-    NEBULA_TUNABLE(s32, sBlowFrame, 20);
-    NEBULA_TUNABLE(f32, hBlowVel, 40.0f);
-    NEBULA_TUNABLE(f32, hBlowVerticalVel, 40.0f);
-    NEBULA_TUNABLE(s32, sDeathStopSceneTime, 5);
+    const f32 sAwareRotate = 0.1f;
+    const f32 sHitReactionRotate = 0.25f;
+    const s32 sStopSceneTime = 2;
+    const s32 sBlowFrame = 20;
+    const f32 hBlowVel = 40.0f;
+    const f32 hBlowVerticalVel = 40.0f;
+    const s32 sDeathStopSceneTime = 5;
     const s32 sElectricDeathTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sElectricDeathStarPieceTime = NebulaFrameClock::stepsOfMilliseconds(500);
     // Star pieces burst on the first and second electric hits; the declared count is their sum.
-    NEBULA_TUNABLE(s32, sStarPieceFirstHit, 8);
-    NEBULA_TUNABLE(s32, sStarPieceSecondHit, 16);
-    NEBULA_TUNABLE(f32, hStarPieceHeight, 200.0f);
-    NEBULA_TUNABLE(f32, hStarPieceSpeedMin, 20.0f);
-    NEBULA_TUNABLE(f32, hStarPieceSpeedMax, 40.0f);
+    const s32 sStarPieceFirstHit = 8;
+    const s32 sStarPieceSecondHit = 16;
+    const f32 hStarPieceHeight = 200.0f;
+    const f32 hStarPieceSpeedMin = 20.0f;
+    const f32 hStarPieceSpeedMax = 40.0f;
     const s32 sElectricReturnTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, hElectricReturnSpeed, 25.0f);
+    const f32 hElectricReturnSpeed = 25.0f;
     const s32 sJumpToInitPosTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sJumpToInitPosRotate, 0.1f);
-    NEBULA_TUNABLE(f32, hJumpToInitPosHeight, 700.0f);
+    const f32 sJumpToInitPosRotate = 0.1f;
+    const f32 hJumpToInitPosHeight = 700.0f;
     // The rest position sits this far below the placement.
-    NEBULA_TUNABLE(f32, hInitPosDrop, 10.0f);
-    NEBULA_TUNABLE(f32, hKeepDistFar, 800.0f);
-    NEBULA_TUNABLE(f32, hKeepDistNear, 600.0f);
-    NEBULA_TUNABLE(f32, hNoCalcWaitTolerance, 0.005f);
-    NEBULA_TUNABLE(s32, sEdgeRecoverTime, 55);
-    NEBULA_TUNABLE(f32, hRecoverRumbleNear, 800.0f);
-    NEBULA_TUNABLE(f32, hRecoverRumbleMiddle, 1200.0f);
-    NEBULA_TUNABLE(f32, hRecoverRumbleFar, 2000.0f);
-    NEBULA_TUNABLE(f32, hPursueSpeedRateMin, 0.2f);
-    NEBULA_TUNABLE(f32, hPursueSpeedRateMax, 1.0f);
-    NEBULA_TUNABLE(f32, hPursueSpeedRateStep, 0.001f);
-    NEBULA_TUNABLE(f32, hBinderRadius, 160.0f);
-    NEBULA_TUNABLE(f32, hBinderOffsetY, 160.0f);
-    NEBULA_TUNABLE(f32, hBodyRadius, 190.0f);
-    NEBULA_TUNABLE(f32, hBodyRadiusOnWeak, 160.0f);
-    NEBULA_TUNABLE(f32, hPushedRailRadius, 250.0f);
-    NEBULA_TUNABLE(f32, hTrampleRadius, 180.0f);
-    NEBULA_TUNABLE(f32, hShadowRadius, 200.0f);
+    const f32 hInitPosDrop = 10.0f;
+    const f32 hKeepDistFar = 800.0f;
+    const f32 hKeepDistNear = 600.0f;
+    const f32 hNoCalcWaitTolerance = 0.005f;
+    const s32 sEdgeRecoverTime = 55;
+    const f32 hRecoverRumbleNear = 800.0f;
+    const f32 hRecoverRumbleMiddle = 1200.0f;
+    const f32 hRecoverRumbleFar = 2000.0f;
+    const f32 hPursueSpeedRateMin = 0.2f;
+    const f32 hPursueSpeedRateMax = 1.0f;
+    const f32 hPursueSpeedRateStep = 0.001f;
+    const f32 hBinderRadius = 160.0f;
+    const f32 hBinderOffsetY = 160.0f;
+    const f32 hBodyRadius = 190.0f;
+    const f32 hBodyRadiusOnWeak = 160.0f;
+    const f32 hPushedRailRadius = 250.0f;
+    const f32 hTrampleRadius = 180.0f;
+    const f32 hShadowRadius = 200.0f;
     // The shadow shrinks by this share of the head edge's retraction.
-    NEBULA_TUNABLE(f32, hShadowEdgeShrink, 0.35f);
-    NEBULA_TUNABLE(f32, hShadowDropLength, 4000.0f);
-    NEBULA_TUNABLE(f32, hEdgeSparkOffset, 180.0f);
-    NEBULA_TUNABLE(f32, hPushBackSpeed, 2.0f);
-    NEBULA_TUNABLE(f32, hEnemyPushSpeed, 6.0f);
+    const f32 hShadowEdgeShrink = 0.35f;
+    const f32 hShadowDropLength = 4000.0f;
+    const f32 hEdgeSparkOffset = 180.0f;
+    const f32 hPushBackSpeed = 2.0f;
+    const f32 hEnemyPushSpeed = 6.0f;
     // Needle sound volume over squared speed 0 .. 11^2.
-    NEBULA_TUNABLE(f32, hNeedleSoundSpeedSqMax, 121.0f);
-    NEBULA_TUNABLE(f32, hNeedleSoundVolumeMin, 70.0f);
-    NEBULA_TUNABLE(f32, hNeedleSoundVolumeMax, 100.0f);
-    NEBULA_TUNABLE(s32, sBabyFollowerNum, 3);
+    const f32 hNeedleSoundSpeedSqMax = 121.0f;
+    const f32 hNeedleSoundVolumeMin = 70.0f;
+    const f32 hNeedleSoundVolumeMax = 100.0f;
+    const s32 sBabyFollowerNum = 3;
     const s32 sSpikeFollowerNum = 2;
     const s32 sStageBgmFadeTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sOpeningOverlayTime, 2);
+    const s32 sOpeningOverlayTime = 2;
 
     template < typename T >
     bool isDeadAll(T* const* pList, s32 num) {
@@ -302,7 +298,7 @@ void BossBegoman::control() {
         mPursueSpeedRate = ::hPursueSpeedRateMin;
     }
 
-    if (MR::isStep(this, cStep_control_1)) {
+    if (MR::isStep(this, 1)) {
         if (isNerve(GET_NERVE(BossBegoman, HostTypeNrvWait)) || isNerve(GET_NERVE(BossBegoman, HostTypeNrvNoCalcWait))) {
             MR::validateClipping(this);
         } else {

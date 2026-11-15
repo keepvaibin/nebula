@@ -8,15 +8,14 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE_RECORD(Vec, cDefaultUp, {0.0f, 1.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, cZoomInPos, {0.0f, 3000.0f, -8500.0f});
-    NEBULA_TUNABLE(f32, cFovy, 60.0f);
-    NEBULA_TUNABLE(f32, cZoomOutPosZ, -22000.0f);
-    NEBULA_TUNABLE(f32, cZoomInTargetOffsetY, 200.0f);
+    const Vec cDefaultUp = {0.0f, 1.0f, 0.0f};
+    const Vec cZoomInPos = {0.0f, 3000.0f, -8500.0f};
+    const f32 cFovy = 60.0f;
+    const f32 cZoomOutPosZ = -22000.0f;
+    const f32 cZoomInTargetOffsetY = 200.0f;
 };  // namespace
 
 namespace NrvAstroDomeCameraController {

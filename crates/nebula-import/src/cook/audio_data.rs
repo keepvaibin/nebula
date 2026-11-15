@@ -1,5 +1,5 @@
-//! Sound data in host order (C-05): AST streams (header, block headers, PCM16 samples) and AW wave archives, every wave
-//! PCM16 (H-01: the disc's ADPCM and 8-bit waves are decoded here, so the mixer has one source form). An AW file has no
+//! Sound data in host order: AST streams (header, block headers, PCM16 samples) and AW wave archives, every wave
+//! PCM16 (the disc's ADPCM and 8-bit waves are decoded here, so the mixer has one source form). An AW file has no
 //! header: where its waves lie comes from the wave systems of the audio archive, which name their new places.
 
 use super::archive;

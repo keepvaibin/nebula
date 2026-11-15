@@ -24,4 +24,7 @@ public:
     u32 mHold;
     u32 mTrigger;
     u32 mRelease;
+    // As PlayerInputReader's: directions taken or let go in frames with no world step, for the next step (J22-3).
+    u32 mCarriedTrigger;
+    u32 mCarriedRelease;
 };

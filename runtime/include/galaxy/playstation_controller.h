@@ -3,7 +3,7 @@
 // Sony DualShock 4, DualSense and DualSense Edge over HID (USB and Bluetooth):
 // input report decoding, IMU calibration and the output (effects) reports.
 // Report layouts and feature report numbers follow SDL's zlib-licensed
-// SDL_hidapi_ps4.c and SDL_hidapi_ps5.c (see docs/KEYBOARD_CONTROLS.md); this
+// SDL_hidapi_ps4.c and SDL_hidapi_ps5.c (see docs/using-nebula/keyboard-and-controller-controls.md); this
 // file is an independent implementation.
 
 #include "galaxy/switch_controller.h"

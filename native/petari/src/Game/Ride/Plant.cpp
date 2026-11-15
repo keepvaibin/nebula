@@ -29,54 +29,42 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGrowUp_f1, "updateGrowUp.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBindLeaf_f1, "updateBindLeaf.f1", 20.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sDistanceNear, 700.0f);
-    NEBULA_TUNABLE(f32, sDistanceBody, 300.0f);
-    NEBULA_TUNABLE(f32, sDistancePush, 50.0f);
+    const f32 sDistanceNear = 700.0f;
+    const f32 sDistanceBody = 300.0f;
+    const f32 sDistancePush = 50.0f;
     static const s32 sStepDemoAppearEffect = NebulaFrameClock::stepsOfSeconds(1);
     static const s32 sStepDemoWaitGrowUp = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(f32, sHangUpStartTopLength, 150.0f);
-    NEBULA_TUNABLE(f32, sHangUpPlayerSpeedMin, 10.0f);
-    NEBULA_TUNABLE(f32, sHangStartRotateSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, sGrowUpPlayerSpeed, 10.0f);
-    NEBULA_TUNABLE(f32, sHangUpAccel, 1.0f);
-    NEBULA_TUNABLE(f32, sHangUpSpeedStartMin, -2.0f);
-    NEBULA_TUNABLE(f32, sHangDownGravity, 0.3f);
-    NEBULA_TUNABLE(f32, sHangUpSpeedMin, 15.0f);
-    NEBULA_TUNABLE(f32, sHangUpSpeedMax, 35.0f);
-    NEBULA_TUNABLE(f32, sHangDownSpeedMax, 20.0f);
-    NEBULA_TUNABLE(f32, sHangUpRotateSpeedMax, 30.0f);
-    NEBULA_TUNABLE(f32, sHangDownRotateSpeedMax, 20.0f);
-    NEBULA_TUNABLE(f32, sHangRotateSpeedRate, 1.3f);
-    NEBULA_TUNABLE(f32, sHangReachedDistance, 10.0f);
-    NEBULA_TUNABLE(f32, sDefaultJumpSpeed, 30.0f);
+    const f32 sHangUpStartTopLength = 150.0f;
+    const f32 sHangUpPlayerSpeedMin = 10.0f;
+    const f32 sHangStartRotateSpeed = 15.0f;
+    const f32 sGrowUpPlayerSpeed = 10.0f;
+    const f32 sHangUpAccel = 1.0f;
+    const f32 sHangUpSpeedStartMin = -2.0f;
+    const f32 sHangDownGravity = 0.3f;
+    const f32 sHangUpSpeedMin = 15.0f;
+    const f32 sHangUpSpeedMax = 35.0f;
+    const f32 sHangDownSpeedMax = 20.0f;
+    const f32 sHangUpRotateSpeedMax = 30.0f;
+    const f32 sHangDownRotateSpeedMax = 20.0f;
+    const f32 sHangRotateSpeedRate = 1.3f;
+    const f32 sHangReachedDistance = 10.0f;
+    const f32 sDefaultJumpSpeed = 30.0f;
     static const s32 sTimeInvalid = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sLeafIntervalMin, 100.0f);
-    NEBULA_TUNABLE(f32, sLeafIntervalMax, 300.0f);
-    NEBULA_TUNABLE(f32, sLeafPosOffsetStart, 100.0f);
-    NEBULA_TUNABLE(f32, sLeafPosOffsetEnd, 200.0f);
-    NEBULA_TUNABLE(f32, sLeafScaleMin, 1.0f);
-    NEBULA_TUNABLE(f32, sLeafScaleMax, 1.5f);
-    NEBULA_TUNABLE(f32, sLeafRotateMin, 90.0f);
-    NEBULA_TUNABLE(f32, sLeafRotateMax, 270.0f);
-    NEBULA_TUNABLE(f32, sLeafAxisDotMax, 0.7f);
+    const f32 sLeafIntervalMin = 100.0f;
+    const f32 sLeafIntervalMax = 300.0f;
+    const f32 sLeafPosOffsetStart = 100.0f;
+    const f32 sLeafPosOffsetEnd = 200.0f;
+    const f32 sLeafScaleMin = 1.0f;
+    const f32 sLeafScaleMax = 1.5f;
+    const f32 sLeafRotateMin = 90.0f;
+    const f32 sLeafRotateMax = 270.0f;
+    const f32 sLeafAxisDotMax = 0.7f;
 
-    NEBULA_TUNABLE(s32, sHangAccelInvalidTime, 0);
-    NEBULA_TUNABLE(f32, sDefaultJumpSpeedOffsetY, 0.0f);
+    const s32 sHangAccelInvalidTime = 0;
+    const f32 sDefaultJumpSpeedOffsetY = 0.0f;
 };  // namespace
 
 namespace NrvPlant {
@@ -118,7 +106,7 @@ void Plant::init(const TableIter& pMapInfoIter) {
     initNerve(GET_NERVE(Plant, PlantNrvWaitFar));
 
     initRailRider(pMapInfoIter);
-    MR::initAndSetRailClipping(&mClippingCenter, this, cNum_init_f1, cNum_init_f2);
+    MR::initAndSetRailClipping(&mClippingCenter, this, 100.0f, 500.0f);
     MR::calcRailStartPointPos(&mPosition, this);
 
     mStalk = new PlantStalk();
@@ -126,7 +114,7 @@ void Plant::init(const TableIter& pMapInfoIter) {
 
     mSeedPartsModel = new PartsModel(this, "種（伸び植物）", "PlantSeed", mSeedMtx, -1, false);
     mSeedPartsModel->initWithoutIter();
-    MR::initShadowVolumeSphere(mSeedPartsModel, cNum_init_f3);
+    MR::initShadowVolumeSphere(mSeedPartsModel, 50.0f);
     mSeedPartsModel->mPosition.set(mPosition);
     mSeedMtx.setTrans(mPosition);
 
@@ -137,9 +125,9 @@ void Plant::init(const TableIter& pMapInfoIter) {
 
     initLeaf();
     initHitSensor(3);
-    MR::addHitSensorCallbackBinder(this, "bind", 5, cNum_init_f4);
-    MR::addHitSensorMapObj(this, "seed", 5, cNum_init_f5, Vec3f(0.0f, cNum_init_f6, 0.0f));
-    MR::addHitSensorRide(this, "Ride", 8, cNum_init_f7, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorCallbackBinder(this, "bind", 5, 100.0f);
+    MR::addHitSensorMapObj(this, "seed", 5, 300.0f, Vec3f(0.0f, 50.0f, 0.0f));
+    MR::addHitSensorRide(this, "Ride", 8, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     MR::initMultiActorCamera(this, pMapInfoIter, &mCameraInfo, "出現デモ");
     MR::initMultiActorCamera(this, pMapInfoIter, &mCameraInfo, "掴まり");
@@ -154,7 +142,7 @@ void Plant::init(const TableIter& pMapInfoIter) {
 }
 
 void Plant::initAfterPlacement() {
-    MR::makeMtxOnMapCollision(&mSeedMtx, mSeedPartsModel, cNum_initAfterPlacement_f1);
+    MR::makeMtxOnMapCollision(&mSeedMtx, mSeedPartsModel, 1000.0f);
 }
 
 void Plant::appear() {
@@ -549,7 +537,7 @@ bool Plant::updateGrowUp() {
         Vec3f axisY;
         Vec3f pos;
         mStalk->calcPosAndAxisY(&pos, &axisY, mLeaves[leaf]->mLeafCoord * growthPercent);
-        mLeaves[leaf]->updateGrowUp(pos, axisY, growthPercent, cNum_updateGrowUp_f1);
+        mLeaves[leaf]->updateGrowUp(pos, axisY, growthPercent, 10.0f);
     }
 
     MR::tryRumblePadWeak(this, PLAYER_1);
@@ -609,7 +597,7 @@ void Plant::updateBindLeaf() {
         springPower *= -1.0f;
     }
 
-    Vec3f railDir = MR::getRailDirection(this) * cNum_updateBindLeaf_f1;
+    Vec3f railDir = MR::getRailDirection(this) * 20.0f;
     if (MR::isRailGoingToEnd(this)) {
         railDir.scale(-1.0f);
     }

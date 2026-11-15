@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// What the command line names (docs/COMMAND_LINE.md), in every build. The host's main fills it once, before any other
+// What the command line names (docs/using-nebula/command-line-arguments.md), in every build. The host's main fills it once, before any other
 // thread starts; everything after reads it.
 #pragma once
 
 #include <filesystem>
+#include <string>
 #include <string_view>
 #include <vector>
 
 namespace galaxy {
 
-// --diagnostics <what>[,<what>] (docs/DIAGNOSTICS.md): what a run records, into the log and the diagnostics folder
+// --diagnostics <what>[,<what>] (docs/using-nebula/diagnostics.md): what a run records, into the log and the diagnostics folder
 // (platform_paths.h). Nothing is recorded without it.
 enum Diagnostic : unsigned {
     kDiagnoseTimeline = 1u << 0u,        // timeline: the frame pipeline's events, written at exit (frame_timeline.h)
@@ -37,6 +38,11 @@ enum Diagnostic : unsigned {
     kDiagnoseRtMotion = 1u << 22u,       // rt-motion: where each pixel's point was the frame before, as colours (across red, down green, unknown blue)
     kDiagnoseRtNoGeometry = 1u << 24u,   // rt-no-geometry: a test: the Vulkan device is made as one without geometry shaders
     kDiagnoseRtToggle = 1u << 23u,       // rt-toggle: ray tracing switched off and on every 90 frames (the setting changed while the game runs)
+    kDiagnoseRtNoMicromaps = 1u << 25u,  // rt-no-micromaps: a test: no opacity micromaps (alpha-tested surfaces asked at every hit)
+    kDiagnoseProgramsDrawn = 1u << 26u,  // programs-drawn: each program pair a draw asks for, once (a stage compiles only those)
+    kDiagnoseRtAbsent = 1u << 27u,       // rt-absent: a test: the device is taken as one without ray tracing
+    kDiagnoseRingStress = 1u << 28u,     // ring-stress: the upload rings made again every kRingStressFrames frames (a test
+                                         // of their retirement: the old rings must outlive every frame that reads them)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -72,6 +78,10 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"rt-motion", kDiagnoseRtMotion},
     {"rt-no-geometry", kDiagnoseRtNoGeometry},
     {"rt-toggle", kDiagnoseRtToggle},
+    {"rt-no-micromaps", kDiagnoseRtNoMicromaps},
+    {"programs-drawn", kDiagnoseProgramsDrawn},
+    {"rt-absent", kDiagnoseRtAbsent},
+    {"ring-stress", kDiagnoseRingStress},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},
@@ -113,22 +123,55 @@ struct LaunchArgs {
     std::filesystem::path settings;     // --settings: the folder of config.ini and runtime_settings.ini; empty: the data folder
     std::filesystem::path crash_dumps;  // --crash-dumps: crash dumps and reports; empty: <data>/crashes
     std::filesystem::path timeline;     // --timeline: the recorded timeline's file; empty: the diagnostics folder's
-    // --dump-tunables: every tuning number mods can set is written there as the game module starts (docs/modding).
-    std::filesystem::path dump_tunables;
     unsigned diagnostics = 0u;          // --diagnostics: Diagnostic bits
     unsigned gpu_validation = 0u;       // --gpu-validation: 1 the graphics API's validation layer, 2 also Direct3D 12's GPU-based
     bool console_log = false;           // --console-log 1: the log stays on the console, not logs/latest.log
-    // Started with its window hidden (Windows: STARTUPINFO's SW_HIDE, as a test starts it): no window, dialog or Discord
-    // status, and no keyboard, mouse, controller motor or Wii Remote of the player's.
+    // Started with its window hidden (Windows: STARTUPINFO's SW_HIDE, as a test starts it; elsewhere --hidden 1): no
+    // window, dialog or Discord status, and no keyboard, mouse, controller motor or Wii Remote of the player's.
     bool started_hidden = false;
+    bool timed = false;                 // --seconds over 0: a run that ends by itself, a test's
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
+    unsigned started_again = 0u;        // --started-again: starts this run made again before this one
+    // --start-again-of <id>-<time> (Windows): the process this start takes over from, by its id and creation time.
+    std::string start_again_of;
+    // --renderer d3d12|d3d11 (0: not given): the Direct3D 12 host runs NebulaD11 for d3d11 without starting Direct3D
+    // 12, and for d3d12 never falls back to it (host_main.cpp hand_off_to_d3d11). The Direct3D 11 host never hands back.
+    unsigned renderer = 0u;  // 1 d3d12, 2 d3d11
     std::vector<std::filesystem::path> extensions;  // --extension, each time given: host extensions (host_extension.h)
+    // --import, each time given: mod files or folders imported as a drop on the window imports them, the result page
+    // after. "Open with" and the .luma association start the game with it; a game already running for the
+    // same folder takes them (show_existing_instance).
+    std::vector<std::filesystem::path> imports;
+    bool safe_start = false;  // --safe-start 1: every mod off for this start, the player's choices kept
+    // --shipped-mods: the folder of the .luma files that come with the game (mod_import.h install_shipped_mods); empty:
+    // <program folder>/luma/mods. Android's app gives the folder it unpacks them to.
+    std::filesystem::path shipped_mods;
+    // --mod-dev, each time given: a mod in dev mode (reload.md 4; `lumalink run` passes it): its reload requests
+    // (<mods>/.reload/<id>.request) are taken while the game runs.
+    std::vector<std::string> mod_dev;
+    // Android (arm64): a Vulkan driver the player imported in place of the system's (the launcher's Graphics driver).
+    // --gpu-driver: its package's folder; --gpu-driver-library: the driver's library in it (the package's meta.json
+    // libraryName); --gpu-driver-hooks: the app's native library folder, which holds libadrenotools' hooks. The
+    // launcher puts a file named "starting" in the folder before the start; the first frame shown removes it.
+    std::filesystem::path gpu_driver;
+    std::string gpu_driver_library;
+    std::filesystem::path gpu_driver_hooks;
 };
 
 inline LaunchArgs g_launch_args;
 
 [[nodiscard]] inline const LaunchArgs& launch_args() noexcept {
     return g_launch_args;
+}
+
+// ring-stress: how often the upload rings are made again (frames): often enough that a run of a test's length makes
+// them again hundreds of times, with frames in flight on both sides of each.
+inline constexpr unsigned kRingStressFrames = 5u;
+
+// A player's own start: shown, not timed, and with no host extension (a test driver's). Only it may choose settings for
+// the player (the first start's measured height).
+[[nodiscard]] inline bool ordinary_start() noexcept {
+    return !g_launch_args.started_hidden && !g_launch_args.timed && g_launch_args.extensions.empty();
 }
 
 // Whether this run records any of `what` (Diagnostic bits).

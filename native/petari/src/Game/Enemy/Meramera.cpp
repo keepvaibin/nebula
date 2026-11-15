@@ -21,27 +21,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_f1, "exeRunaway.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addRunawayJumpPower_f1, "addRunawayJumpPower.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addRunawayJumpPower_f2, "addRunawayJumpPower.f2", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addRunawayJumpPower_f3, "addRunawayJumpPower.f3", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addRunawayJumpPower_f4, "addRunawayJumpPower.f4", 0.8f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_reboundVelocityFromEachCollision_1, "exeDamage.reboundVelocityFromEachCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_reboundVelocityFromEachCollision_2, "exeDamage.reboundVelocityFromEachCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_reboundVelocityFromEachCollision_3, "exeDamage.reboundVelocityFromEachCollision.3", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_reboundVelocityFromEachCollision_4, "exeDamage.reboundVelocityFromEachCollision.4", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_reboundVelocityFromEachCollision_1, "exeRunaway.reboundVelocityFromEachCollision.1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_reboundVelocityFromEachCollision_2, "exeRunaway.reboundVelocityFromEachCollision.2", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_reboundVelocityFromEachCollision_3, "exeRunaway.reboundVelocityFromEachCollision.3", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_reboundVelocityFromEachCollision_4, "exeRunaway.reboundVelocityFromEachCollision.4", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStartDiving_setBckRate_1, "exeStartDiving.setBckRate.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDiving_setBckRate_1, "exeDiving.setBckRate.1", 1.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_reboundVelocityFromEachCollision_1, "exeDown.reboundVelocityFromEachCollision.1", 0.0f);
 
 namespace {
     enum { ElementType_Fire, ElementType_Ice };
@@ -64,106 +44,106 @@ namespace {
         f32 mSpeedMax;
     };
 
-    NEBULA_TUNABLE_RECORD(KeepHeightParam, sWaitHeight, {130.0f, 0.5f, 0.1f, 15.0f});
-    NEBULA_TUNABLE_RECORD(KeepHeightParam, sChaseStartHeight, {300.0f, 0.5f, 0.2f, 15.0f});
-    NEBULA_TUNABLE_RECORD(KeepHeightParam, sChaseDashLowHeight, {150.0f, 0.5f, 0.1f, 15.0f});
-    NEBULA_TUNABLE_RECORD(KeepHeightParam, sChaseDashHeight, {190.0f, 0.5f, 0.2f, 20.0f});
-    NEBULA_TUNABLE_RECORD(KeepHeightParam, sChaseTurnHeight, {190.0f, 0.3f, 0.3f, 20.0f});
-    NEBULA_TUNABLE_RECORD(KeepHeightParam, sDamageHeight, {140.0f, 0.0f, 1.2f, 15.0f});
-    NEBULA_TUNABLE_RECORD(KeepHeightParam, sFloatHeight, {100.0f, 0.9f, 0.1f, 50.0f});
-    NEBULA_TUNABLE_RECORD(KeepHeightParam, sIgnitionHeight, {100.0f, 0.5f, 0.1f, 50.0f});
-    NEBULA_TUNABLE_RECORD(KeepHeightParam, sAttackSuccessHeight, {50.0f, 0.5f, 0.1f, 15.0f});
+    const KeepHeightParam sWaitHeight = {130.0f, 0.5f, 0.1f, 15.0f};
+    const KeepHeightParam sChaseStartHeight = {300.0f, 0.5f, 0.2f, 15.0f};
+    const KeepHeightParam sChaseDashLowHeight = {150.0f, 0.5f, 0.1f, 15.0f};
+    const KeepHeightParam sChaseDashHeight = {190.0f, 0.5f, 0.2f, 20.0f};
+    const KeepHeightParam sChaseTurnHeight = {190.0f, 0.3f, 0.3f, 20.0f};
+    const KeepHeightParam sDamageHeight = {140.0f, 0.0f, 1.2f, 15.0f};
+    const KeepHeightParam sFloatHeight = {100.0f, 0.9f, 0.1f, 50.0f};
+    const KeepHeightParam sIgnitionHeight = {100.0f, 0.5f, 0.1f, 50.0f};
+    const KeepHeightParam sAttackSuccessHeight = {50.0f, 0.5f, 0.1f, 15.0f};
 
-    NEBULA_TUNABLE(f32, sBodyHitRadius, 55.0f);
-    NEBULA_TUNABLE(f32, sBreakHitRadius, 10.0f);
-    NEBULA_TUNABLE(f32, sAttackHitRadius, 70.0f);
-    NEBULA_TUNABLE(f32, sPointerRadius, 55.0f);
-    NEBULA_TUNABLE(f32, sBindRadius, 45.0f);
-    NEBULA_TUNABLE(f32, sShadowRadius, 50.0f);
-    NEBULA_TUNABLE(f32, sBaseScale, 150.0f);
-    NEBULA_TUNABLE(f32, sRecoveryDistance, 1500.0f);
-    NEBULA_TUNABLE(f32, sRecoveryClipRadius, 100.0f);
-    NEBULA_TUNABLE(f32, sOverWallAccel, 0.9f);
-    NEBULA_TUNABLE(f32, sOverWallProbe, 200.0f);
-    NEBULA_TUNABLE(f32, sMaxOverWallHeight, 250.0f);
+    const f32 sBodyHitRadius = 55.0f;
+    const f32 sBreakHitRadius = 10.0f;
+    const f32 sAttackHitRadius = 70.0f;
+    const f32 sPointerRadius = 55.0f;
+    const f32 sBindRadius = 45.0f;
+    const f32 sShadowRadius = 50.0f;
+    const f32 sBaseScale = 150.0f;
+    const f32 sRecoveryDistance = 1500.0f;
+    const f32 sRecoveryClipRadius = 100.0f;
+    const f32 sOverWallAccel = 0.9f;
+    const f32 sOverWallProbe = 200.0f;
+    const f32 sMaxOverWallHeight = 250.0f;
     const s32 sWaitTime = NebulaFrameClock::stepsOfSeconds(5);
     const s32 sWalkTime = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, sWalkRadius, 200.0f);
-    NEBULA_TUNABLE(f32, sWalkArriveDistance, 100.0f);
+    const f32 sWalkRadius = 200.0f;
+    const f32 sWalkArriveDistance = 100.0f;
     const s32 sAttackSuccessTime = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(s32, sShrinkTime, 20);
-    NEBULA_TUNABLE(f32, sChaseDistance, 900.0f);
-    NEBULA_TUNABLE(f32, sTerritoryChaseRange, 3000.0f);
+    const s32 sShrinkTime = 20;
+    const f32 sChaseDistance = 900.0f;
+    const f32 sTerritoryChaseRange = 3000.0f;
     const s32 sChaseEndTime = NebulaFrameClock::stepsOfSeconds(4);
     const s32 sChaseStartTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sChaseDashTime, 45);
-    NEBULA_TUNABLE(s32, sChaseTurnTime, 50);
+    const s32 sChaseDashTime = 45;
+    const s32 sChaseTurnTime = 50;
     const s32 sChaseDashLowTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sChaseDashMoveAccel, 0.175f);
-    NEBULA_TUNABLE(f32, sChaseDashAccel, 0.98f);
-    NEBULA_TUNABLE(f32, sChaseTurnAccel, 0.97f);
-    NEBULA_TUNABLE(f32, sChaseTurnGravityAccel, 0.99f);
-    NEBULA_TUNABLE(f32, sChaseTurnFloatAccel, 0.05f);
-    NEBULA_TUNABLE(f32, sWalkMoveAccel, 0.05f);
-    NEBULA_TUNABLE(f32, sWalkTurnCos, 0.995f);
-    NEBULA_TUNABLE(f32, sChaseStartTurnCos, 0.99f);
-    NEBULA_TUNABLE(f32, sDefaultAttenuate, 0.98f);
-    NEBULA_TUNABLE(f32, sChaseStartAttenuate, 0.97f);
-    NEBULA_TUNABLE(f32, sDamageAttenuate, 0.9f);
-    NEBULA_TUNABLE(f32, sFloatAttenuate, 0.94f);
-    NEBULA_TUNABLE(f32, sDownAttenuate, 0.99f);
-    NEBULA_TUNABLE(s32, sSinkTime, 50);
+    const f32 sChaseDashMoveAccel = 0.175f;
+    const f32 sChaseDashAccel = 0.98f;
+    const f32 sChaseTurnAccel = 0.97f;
+    const f32 sChaseTurnGravityAccel = 0.99f;
+    const f32 sChaseTurnFloatAccel = 0.05f;
+    const f32 sWalkMoveAccel = 0.05f;
+    const f32 sWalkTurnCos = 0.995f;
+    const f32 sChaseStartTurnCos = 0.99f;
+    const f32 sDefaultAttenuate = 0.98f;
+    const f32 sChaseStartAttenuate = 0.97f;
+    const f32 sDamageAttenuate = 0.9f;
+    const f32 sFloatAttenuate = 0.94f;
+    const f32 sDownAttenuate = 0.99f;
+    const s32 sSinkTime = 50;
     const s32 sFloatTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sFloatUpSpeed, 50.0f);
-    NEBULA_TUNABLE(s32, sIgnitionStartStep, 15);
-    NEBULA_TUNABLE(f32, sIgnitionUpSpeed, 25.0f);
-    NEBULA_TUNABLE(f32, sIgnitionForceJump, 15.0f);
-    NEBULA_TUNABLE(s32, sIgnitionTime, 20);
+    const f32 sFloatUpSpeed = 50.0f;
+    const s32 sIgnitionStartStep = 15;
+    const f32 sIgnitionUpSpeed = 25.0f;
+    const f32 sIgnitionForceJump = 15.0f;
+    const s32 sIgnitionTime = 20;
     const s32 sRunawayTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, sDivingDelayTime, 35);
-    NEBULA_TUNABLE(s32, sDivingTime, 40);
-    NEBULA_TUNABLE(f32, sDivingHeight, 300.0f);
+    const s32 sDivingDelayTime = 35;
+    const s32 sDivingTime = 40;
+    const f32 sDivingHeight = 300.0f;
     const f32 sDivingProbeRate = 1.0f / 0.35f;
-    NEBULA_TUNABLE(f32, sDivingFireTurnDegree, 180.0f);
-    NEBULA_TUNABLE(s32, sDownStopFrame, 2);
-    NEBULA_TUNABLE(f32, sDownGravityAccel, 0.5f);
+    const f32 sDivingFireTurnDegree = 180.0f;
+    const s32 sDownStopFrame = 2;
+    const f32 sDownGravityAccel = 0.5f;
     // The down bounce has no backward part; the zero term keeps the result bit-exact.
-    NEBULA_TUNABLE(f32, sDownBackSpeed, 0.0f);
-    NEBULA_TUNABLE(f32, sDownUpSpeed, 25.0f);
-    NEBULA_TUNABLE(f32, sDownRebound, 0.9f);
+    const f32 sDownBackSpeed = 0.0f;
+    const f32 sDownUpSpeed = 25.0f;
+    const f32 sDownRebound = 0.9f;
     const s32 sReadyRestartTime = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(f32, sSpinNearDistance, 300.0f);
-    NEBULA_TUNABLE(f32, sSpinTurnDegree, 5.0f);
-    NEBULA_TUNABLE(f32, sExtinguishTurnDegree, 10.0f);
-    NEBULA_TUNABLE(f32, sSpinBlowSpeed, 35.0f);
-    NEBULA_TUNABLE(f32, sPushSpeed, 0.5f);
-    NEBULA_TUNABLE(s32, sDamageExtinguishStep, 3);
-    NEBULA_TUNABLE(f32, sFireTurnDegree, 1.0f);
-    NEBULA_TUNABLE(s32, sRunawayEscapeEffectStep, 10);
-    NEBULA_TUNABLE(f32, sRunawayBoundSpeed, 12.0f);
-    NEBULA_TUNABLE(s32, sRunawayJumpStep, 70);
+    const f32 sSpinNearDistance = 300.0f;
+    const f32 sSpinTurnDegree = 5.0f;
+    const f32 sExtinguishTurnDegree = 10.0f;
+    const f32 sSpinBlowSpeed = 35.0f;
+    const f32 sPushSpeed = 0.5f;
+    const s32 sDamageExtinguishStep = 3;
+    const f32 sFireTurnDegree = 1.0f;
+    const s32 sRunawayEscapeEffectStep = 10;
+    const f32 sRunawayBoundSpeed = 12.0f;
+    const s32 sRunawayJumpStep = 70;
     // On the ground slower than this, the jump timer counts down.
-    NEBULA_TUNABLE(f32, sRunawayJumpSpeedH, 3.0f);
-    NEBULA_TUNABLE(s32, sRunawayJumpIntervalRandom, 10);
+    const f32 sRunawayJumpSpeedH = 3.0f;
+    const s32 sRunawayJumpIntervalRandom = 10;
     const s32 sRunawayJumpInterval = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sRunawayDiveProbe, 250.0f);
-    NEBULA_TUNABLE(f32, sRunawayDiveSpread, 80.0f);
-    NEBULA_TUNABLE(f32, sRunawayGravity, 2.0f);
-    NEBULA_TUNABLE(f32, sRunawayGroundAttenuate, 0.8f);
-    NEBULA_TUNABLE(f32, sRunawayAirAttenuate, 0.98f);
-    NEBULA_TUNABLE(f32, sJumpDiveNear, 10.0f);
-    NEBULA_TUNABLE(f32, sJumpDiveFar, 500.0f);
-    NEBULA_TUNABLE(f32, sJumpFleeDistance, 1000.0f);
-    NEBULA_TUNABLE(f32, sJumpRandom, 0.5f);
-    NEBULA_TUNABLE(f32, sJumpSpeedH, 20.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedVMin, 45.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedVMax, 50.0f);
-    NEBULA_TUNABLE(f32, sDiveProbeLift, 100.0f);
-    NEBULA_TUNABLE(f32, sDiveProbeDepth, 600.0f);
-    NEBULA_TUNABLE(f32, sRollRadius, 50.0f);
-    NEBULA_TUNABLE(f32, sPoseBlendRate, 0.25f);
-    NEBULA_TUNABLE(f32, sExtinguishPullRate, 0.9f);
-    NEBULA_TUNABLE(f32, sExtinguishMinDistance, 100.0f);
+    const f32 sRunawayDiveProbe = 250.0f;
+    const f32 sRunawayDiveSpread = 80.0f;
+    const f32 sRunawayGravity = 2.0f;
+    const f32 sRunawayGroundAttenuate = 0.8f;
+    const f32 sRunawayAirAttenuate = 0.98f;
+    const f32 sJumpDiveNear = 10.0f;
+    const f32 sJumpDiveFar = 500.0f;
+    const f32 sJumpFleeDistance = 1000.0f;
+    const f32 sJumpRandom = 0.5f;
+    const f32 sJumpSpeedH = 20.0f;
+    const f32 sJumpSpeedVMin = 45.0f;
+    const f32 sJumpSpeedVMax = 50.0f;
+    const f32 sDiveProbeLift = 100.0f;
+    const f32 sDiveProbeDepth = 600.0f;
+    const f32 sRollRadius = 50.0f;
+    const f32 sPoseBlendRate = 0.25f;
+    const f32 sExtinguishPullRate = 0.9f;
+    const f32 sExtinguishMinDistance = 100.0f;
 
     s32 getElementList(const TableIter& rIter) {
         for (s32 idx = 0; idx < ARRAY_SIZE(::sElementArcName); idx++) {
@@ -936,7 +916,7 @@ void Meramera::exeDamage() {
 
     ::keepHeight(this, ::sDamageHeight);
     MR::attenuateVelocity(this, ::sDamageAttenuate);
-    MR::reboundVelocityFromEachCollision(this, cNum_exeDamage_reboundVelocityFromEachCollision_1, cNum_exeDamage_reboundVelocityFromEachCollision_2, cNum_exeDamage_reboundVelocityFromEachCollision_3, cNum_exeDamage_reboundVelocityFromEachCollision_4);
+    MR::reboundVelocityFromEachCollision(this, 0.0f, 0.0f, 0.0f, 0.0f);
 
     tryRunaway();
 }
@@ -992,7 +972,7 @@ void Meramera::exeRunaway() {
 
         // Probe for a dive point ahead, sweeping alternately left and right.
         if (!mCanDive) {
-            f32 angleDegree = (getNerveStep() % 5 * ::sRunawayDiveSpread) / cNum_exeRunaway_f1;
+            f32 angleDegree = (getNerveStep() % 5 * ::sRunawayDiveSpread) / 5.0f;
 
             if (getNerveStep() % 2 == 1) {
                 angleDegree = -angleDegree;
@@ -1007,7 +987,7 @@ void Meramera::exeRunaway() {
     }
 
     MR::attenuateVelocity(this, MR::isBindedGround(this) ? ::sRunawayGroundAttenuate : ::sRunawayAirAttenuate);
-    MR::reboundVelocityFromEachCollision(this, cNum_exeRunaway_reboundVelocityFromEachCollision_1, cNum_exeRunaway_reboundVelocityFromEachCollision_2, cNum_exeRunaway_reboundVelocityFromEachCollision_3, cNum_exeRunaway_reboundVelocityFromEachCollision_4);
+    MR::reboundVelocityFromEachCollision(this, 0.5f, 0.3f, 0.0f, 10.0f);
 
     tryRecovery();
 }
@@ -1020,7 +1000,7 @@ void Meramera::exeStartDiving() {
         deleteEffectHead(false);
         emitEffectColdBody();
 
-        MR::setBckRate(this, cNum_exeStartDiving_setBckRate_1);
+        MR::setBckRate(this, 0.0f);
     }
 
     if (MR::isLessStep(this, ::sDivingDelayTime)) {
@@ -1041,7 +1021,7 @@ void Meramera::exeDiving() {
 
         MR::invalidateClipping(this);
 
-        MR::setBckRate(this, cNum_exeDiving_setBckRate_1);
+        MR::setBckRate(this, 1.4f);
         MR::emitEffect(this, "EscapeRock");
         MR::startSound(this, "SE_EM_MERAMERA_JUMP");
     }
@@ -1178,7 +1158,7 @@ void Meramera::exeDown() {
     }
 
     MR::attenuateVelocity(this, ::sDownAttenuate);
-    MR::reboundVelocityFromEachCollision(this, ::sDownRebound, ::sDownRebound, ::sDownRebound, cNum_exeDown_reboundVelocityFromEachCollision_1);
+    MR::reboundVelocityFromEachCollision(this, ::sDownRebound, ::sDownRebound, ::sDownRebound, 0.0f);
 
     if (MR::isGreaterStep(this, 0)) {
         MR::startSound(this, "SE_EM_MERAMERA_EXPLODE");
@@ -1277,9 +1257,9 @@ void Meramera::addRunawayJumpPower() {
     MR::normalizeOrZero(&dir);
     MR::addRandomVector(&dir, dir, ::sJumpRandom * rate);
 
-    f32 speedH = ::sJumpSpeedH * (cNum_addRunawayJumpPower_f1 + rate * cNum_addRunawayJumpPower_f2);
+    f32 speedH = ::sJumpSpeedH * (0.1f + rate * 0.9f);
     f32 randomSpeedV = MR::getRandom(::sJumpSpeedVMin, ::sJumpSpeedVMax);
-    f32 speedV = (cNum_addRunawayJumpPower_f3 + rate * cNum_addRunawayJumpPower_f4) * randomSpeedV;
+    f32 speedV = (0.2f + rate * 0.8f) * randomSpeedV;
     addMovingAccel(dir, speedH, -1.0f);
     mVelocity -= mGravity * speedV;
 }

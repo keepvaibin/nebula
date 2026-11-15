@@ -164,7 +164,7 @@ void plans() {
     expect(p.aa_wanted && !p.fxaa && !p.smaa, "a failed fxaa is not replaced by smaa");
     // 6x (3840x2736) into 2560x1440: supersampled on both axes.
     p = plan_post_process(3840, 2736, 2560, 1440, with(Aa::kAuto));
-    expect(p.supersampled && !p.aa_wanted && !p.smaa && p.resample && p.resample_to_target, "auto skips supersampled");
+    expect(p.supersampled && !p.aa_wanted && !p.smaa && p.resample && p.resample_to_target && !p.copy, "auto skips supersampled");
     p = plan_post_process(3840, 2736, 2560, 1440, with(Aa::kSmaa));
     expect(p.smaa && p.resample, "forced smaa on a supersampled image");
     // 6x into 3840x2160: 1.0x horizontally, so not supersampled.
@@ -172,16 +172,20 @@ void plans() {
     expect(!p.supersampled && p.smaa && !p.easu && p.resample, "6x into 4K is not supersampled");
     // Same size: RCAS alone writes the window; without RCAS the copy does.
     p = plan_post_process(1280, 720, 1280, 720, with(Aa::kOff, 20));
-    expect(p.rcas && !p.resample && !p.easu, "same size + rcas");
+    expect(p.rcas && !p.resample && !p.easu && !p.copy, "same size + rcas");
     p = plan_post_process(1280, 720, 1280, 720, with(Aa::kOff, 0));
-    expect(!p.rcas && p.resample && p.resample_to_target, "same size copy");
+    expect(!p.rcas && p.resample && p.resample_to_target && p.copy, "same size copy");
     // Enlarging with RCAS: EASU into the intermediate, RCAS to the window.
     p = plan_post_process(640, 456, 1920, 1080, with(Aa::kOff, 20));
     expect(p.easu && p.rcas && !p.resample, "easu then rcas");
     PostProcessSettings bilinear = with(Aa::kOff, 0);
     bilinear.upscaler = PostProcessSettings::Upscaler::kBilinear;
     p = plan_post_process(640, 456, 1920, 1080, bilinear);
-    expect(!p.easu && p.resample && p.resample_to_target, "bilinear enlargement");
+    expect(!p.easu && p.resample && p.resample_to_target && !p.copy, "bilinear enlargement");
+    p = plan_post_process(1280, 720, 1280, 720, bilinear);
+    expect(!p.easu && p.resample && p.resample_to_target && p.copy, "same size copy with bilinear");
+    p = plan_post_process(1280, 720, 1280, 721, bilinear);
+    expect(p.resample_to_target && !p.copy, "one row taller is a resample");
     p = plan_post_process(0, 456, 1920, 1080, with(Aa::kSmaa));
     expect(!p.aa_wanted && !p.smaa && !p.resample, "empty source draws nothing");
 }
@@ -292,7 +296,8 @@ void self_test_on_warp() {
 }
 
 // The scene passes on a 64x64 scene target-like target with a stair-stepped edge and an alpha ramp:
-// they change colour near the edge and never the alpha.
+// they change colour near the edge and never the alpha; with the scene's image traded to them (RendererD3D12's
+// swap_scene_color) the image that takes its place ends as the copy's scene target does, every bit.
 void scene_aa_on_warp() {
     using Microsoft::WRL::ComPtr;
     ComPtr<IDXGIFactory4> factory;
@@ -319,7 +324,7 @@ void scene_aa_on_warp() {
             std::memcpy(&pattern[y * kPitch + x * 4u], &texel, sizeof(texel));
         }
     }
-    const auto run = [&](Aa aa, unsigned display, AaRun& ran) {
+    const auto run = [&](Aa aa, unsigned display, AaRun& ran, bool trade = false) {
         std::array<unsigned char, kPitch * kSize> out{};
         PostProcessSettings settings{};
         settings.aa = aa;
@@ -328,7 +333,7 @@ void scene_aa_on_warp() {
         ComPtr<ID3D12GraphicsCommandList> list;
         ComPtr<ID3D12Fence> fence;
         ComPtr<ID3D12DescriptorHeap> rtv_heap;
-        ComPtr<ID3D12Resource> target, upload, readback;
+        ComPtr<ID3D12Resource> target, other, upload, readback;
         galaxy::render::DescriptorRing ring;
         D3D12_DESCRIPTOR_HEAP_DESC hd{};
         hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -364,6 +369,9 @@ void scene_aa_on_warp() {
             !ring.initialize(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 64u, 1u) ||
             FAILED(device->CreateCommittedResource(&def, D3D12_HEAP_FLAG_NONE, &td, D3D12_RESOURCE_STATE_COPY_DEST,
                                                    nullptr, IID_PPV_ARGS(&target))) ||
+            FAILED(device->CreateCommittedResource(&def, D3D12_HEAP_FLAG_NONE, &td,
+                                                   D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr,
+                                                   IID_PPV_ARGS(&other))) ||
             FAILED(device->CreateCommittedResource(&up, D3D12_HEAP_FLAG_NONE, &bd,
                                                    D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
                                                    IID_PPV_ARGS(&upload))) ||
@@ -395,8 +403,23 @@ void scene_aa_on_warp() {
         b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
         list->ResourceBarrier(1, &b);
         ring.bind(list.Get());
+        galaxy::render::PostProcessor::SceneTrade traded;
+        if (trade) {
+            // The scene's image goes to the passes shader-readable; the scene target's view takes the other image.
+            traded = [&](ComPtr<ID3D12Resource>) {
+                b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+                b.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+                list->ResourceBarrier(1, &b);
+                device->CreateRenderTargetView(other.Get(), nullptr, rtv);
+                ComPtr<ID3D12Resource> scene = std::move(target);
+                target = other;
+                return scene;
+            };
+        }
         ran = post.record_scene_aa(list.Get(), ring, target.Get(), rtv, kSize, kSize, kSize, kSize, display,
-                                   display, 1u, 1u);
+                                   display, 1u, 1u, 1u, traded);
+        b.Transition.pResource = target.Get();
+        texture.pResource = target.Get();
         b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
         list->ResourceBarrier(1, &b);
@@ -421,8 +444,10 @@ void scene_aa_on_warp() {
         const auto out = run(aa, kSize, ran);
         bool alpha_kept = true;
         unsigned changed = 0u;
-        for (unsigned y = 0; y < kSize; ++y) {
-            for (unsigned x = 0; x < kSize; ++x) {
+        unsigned columns = 0u;
+        for (unsigned x = 0; x < kSize; ++x) {
+            bool column = false;
+            for (unsigned y = 0; y < kSize; ++y) {
                 const unsigned i = y * kPitch + x * 4u;
                 std::uint32_t got = 0u;
                 std::uint32_t was = 0u;
@@ -431,8 +456,10 @@ void scene_aa_on_warp() {
                 alpha_kept = alpha_kept && got >> 30u == was >> 30u;
                 if ((got & 0x3FFFFFFFu) != (was & 0x3FFFFFFFu)) {
                     ++changed;
+                    column = true;
                 }
             }
+            columns += column;
         }
         std::string what = std::string(name) + " runs on the scene";
         expect(ran == want, what.c_str());
@@ -440,6 +467,16 @@ void scene_aa_on_warp() {
         expect(alpha_kept, what.c_str());
         what = std::string(name) + " smooths the edge";
         expect(changed >= 8u, what.c_str());
+        if (want == AaRun::kFxaa) {
+            // The edge runs along the rows, a step down every four columns: FXAA blends across it in every column,
+            // not only at the steps.
+            what = std::string(name) + " blends along the whole edge";
+            expect(columns == kSize, what.c_str());
+        }
+        AaRun traded_ran = AaRun::kNone;
+        const auto traded = run(aa, kSize, traded_ran, true);
+        what = std::string(name) + " on the traded image ends as on the copy";
+        expect(traded_ran == want && traded == out, what.c_str());
     };
     check(Aa::kSmaa, AaRun::kSmaa, "SMAA");
     check(Aa::kFxaa, AaRun::kFxaa, "FXAA");

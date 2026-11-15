@@ -50,11 +50,48 @@ namespace Nebula
             get { return Path.Combine(LocalAppData, "Programs", ProductName); }
         }
 
-        /// <summary>User data root: %LOCALAPPDATA%\Nebula. The runtime keeps its
+        /// <summary>User data root: %LOCALAPPDATA%\Nebula, or a portable copy's data folder. The runtime keeps its
         /// shader cache and config.ini here as well.</summary>
         public static string DataRoot
         {
-            get { return Path.Combine(LocalAppData, ProductName); }
+            get { return portableRoot != null ? PortableData(portableRoot) : Path.Combine(LocalAppData, ProductName); }
+        }
+
+        /// <summary>The file that makes an install folder a portable copy (Setup's portable choice): the game, the launcher
+        /// and Setup then keep everything in its data folder, and nothing is registered with Windows. The game checks for
+        /// it too (platform_paths.h).</summary>
+        public const string PortableMarker = "portable.txt";
+
+        private static string portableRoot = FindPortableRoot();
+
+        /// <summary>The portable copy this program belongs to (its folder), or null.</summary>
+        public static string PortableRoot { get { return portableRoot; } }
+
+        public static bool IsPortableRoot(string root)
+        {
+            try { return !string.IsNullOrEmpty(root) && File.Exists(Path.Combine(root, PortableMarker)); }
+            catch (ArgumentException) { return false; }
+            catch (NotSupportedException) { return false; }
+        }
+
+        /// <summary>A portable copy's saves, settings and caches.</summary>
+        public static string PortableData(string root) { return Path.Combine(Path.GetFullPath(root), "data"); }
+
+        /// <summary>From here on, the data of the portable copy in <paramref name="root"/> (Setup working on one).</summary>
+        public static void UsePortableRoot(string root) { portableRoot = Path.GetFullPath(root); }
+
+        // The program's folder is the copy's (its Setup and its launcher) or versions\<version> inside it.
+        private static string FindPortableRoot()
+        {
+            try
+            {
+                string here = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+                string above = Path.GetDirectoryName(Path.GetDirectoryName(here));
+                foreach (string folder in new[] { here, above })
+                    if (IsPortableRoot(folder)) return Path.GetFullPath(folder);
+            }
+            catch (Exception) { }
+            return null;
         }
 
         public static string Saves { get { return Path.Combine(DataRoot, "saves"); } }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// A real Wii Remote's pointer from its Wii MotionPlus (docs/WII_REMOTE.md, Motion pointer): the remote's
+// A real Wii Remote's pointer from its Wii MotionPlus (docs/using-nebula/using-a-wii-remote.md, Motion pointer): the remote's
 // accelerometer and rates go through the pad gyro pointer (switch_controller.h SwitchMotion), and the pointer behaves
 // as the gyro pointer of the game's Switch release (pointer_control.h): 2 puts it in the middle and shows it, it hides
 // after a rest, it leaves the picture as a remote pointed past the screen does.

@@ -5,31 +5,6 @@
 #include "Game/Player/MarioAnimator.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_postureCtrl_f1, "postureCtrl.f1", 3.1415927f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 1.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f5, "update.f5", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f6, "update.f6", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f7, "update.f7", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f8, "update.f8", 0.04f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f9, "update.f9", 0.04f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f10, "update.f10", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f11, "update.f11", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f12, "update.f12", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f13, "update.f13", 0.3926991f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f14, "update.f14", 0.3926991f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f15, "update.f15", 0.5235988f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f16, "update.f16", 0.5235988f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f17, "update.f17", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f18, "update.f18", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f19, "update.f19", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f20, "update.f20", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f21, "update.f21", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_close_f1, "close.f1", 1.5f);
 
 bool Mario::isSkatableFloor() const {
     if (mFloorCode == CollisionFloorCode_Ice) {
@@ -59,7 +34,7 @@ MarioSkate::MarioSkate(MarioActor* pActor) : MarioState(pActor, MarioStatus_Skat
 bool MarioSkate::postureCtrl(MtxPtr pMtx) {
     getPlayer()->postureCtrl(pMtx);
     f32 rotation = mTwist;
-    rotation *= cNum_postureCtrl_f1;
+    rotation *= 3.1415927f;
     NebulaMtxConcat(pMtx, MR::tmpMtxRotYRad(rotation), pMtx);
     NebulaMtxConcat(pMtx, MR::tmpMtxRotZRad(mTilt), pMtx);
     Mtx direction;
@@ -153,7 +128,7 @@ bool MarioSkate::update() {
         }
     } else if (mStrideCount == 1) {
         f32 stick = getStickP();
-        f32 frame = cNum_update_f1 + cNum_update_f2 * (1.0f - stick);
+        f32 frame = 20.0f + 50.0f * (1.0f - stick);
         if (getAnimator()->getFrame() > frame && getStickP()) {
             mStrideReady = 1;
         }
@@ -166,19 +141,19 @@ bool MarioSkate::update() {
             playSound("スケートスピン");
             playSound("スピンジャンプ");
             playSound("声パンチ");
-            if (getPlayer()->mWalkSpeed < cNum_update_f3) {
-                getPlayer()->mWalkSpeed = cNum_update_f4 * getPlayer()->mWalkSpeed;
+            if (getPlayer()->mWalkSpeed < 1.25f) {
+                getPlayer()->mWalkSpeed = 1.5f * getPlayer()->mWalkSpeed;
             }
         }
 
-        if (getAnimator()->getFrame() > cNum_update_f5) {
+        if (getAnimator()->getFrame() > 20.0f) {
             mStrideReady = 1;
         }
     }
 
     speed = getPlayer()->mWalkSpeed;
-    if (speed < cNum_update_f6 * getStickP()) {
-        getPlayer()->mWalkSpeed = cNum_update_f7 * getStickP();
+    if (speed < 1.2f * getStickP()) {
+        getPlayer()->mWalkSpeed = 1.2f * getStickP();
     }
 
     if (speed > 0.0f && !isAnimationRun("基本")) {
@@ -186,7 +161,7 @@ bool MarioSkate::update() {
     }
 
     if (mBackward) {
-        mTwist += cNum_update_f8;
+        mTwist += 0.04f;
         mTwist = MR::clamp(mTwist, -1.0f, 1.0f);
     } else {
         if (mTwist == 1.0f) {
@@ -198,7 +173,7 @@ bool MarioSkate::update() {
             negative = true;
         }
 
-        mTwist += cNum_update_f9;
+        mTwist += 0.04f;
         if (negative) {
             mTwist = -MR::clamp(-mTwist, 0.0f, 1.0f);
         } else {
@@ -227,7 +202,7 @@ bool MarioSkate::update() {
 
     if (mStrideTimer >= interval) {
         if (mStrideReady) {
-            if (!(angle >= cNum_update_f10 && mStrideSide == 1) && !(angle <= -cNum_update_f11 && mStrideSide == 0)) {
+            if (!(angle >= 0.1f && mStrideSide == 1) && !(angle <= -0.1f && mStrideSide == 0)) {
                 mStrideReady = 0;
                 mStrideTimer = 0;
                 mStrideSide = 1 - mStrideSide;
@@ -266,23 +241,23 @@ bool MarioSkate::update() {
     }
 
     f32 animationSpeed = 1.0f;
-    f32 animationScale = 1.0f - cNum_update_f12 * (1.0f - getStickP());
+    f32 animationScale = 1.0f - 0.5f * (1.0f - getStickP());
     if (!isAnimationRun("スケート着地")) {
         getAnimator()->setSpeed(animationSpeed * animationScale);
     }
 
     f32 tilt;
     if (mBackward) {
-        tilt = MR::clamp(angle, -cNum_update_f13, cNum_update_f14);
+        tilt = MR::clamp(angle, -0.3926991f, 0.3926991f);
     } else {
-        tilt = MR::clamp(angle, -cNum_update_f15, cNum_update_f16);
+        tilt = MR::clamp(angle, -0.5235988f, 0.5235988f);
     }
 
-    f32 targetTilt = tilt * (1.0f - cNum_update_f17 * (1.0f - getStickP()));
+    f32 targetTilt = tilt * (1.0f - 0.8f * (1.0f - getStickP()));
     if (MR::abs(targetTilt) > MR::abs(mTilt)) {
-        mTilt = cNum_update_f18 * mTilt + cNum_update_f19 * targetTilt;
+        mTilt = 0.9f * mTilt + 0.1f * targetTilt;
     } else {
-        mTilt = cNum_update_f20 * mTilt + cNum_update_f21 * targetTilt;
+        mTilt = 0.95f * mTilt + 0.05f * targetTilt;
     }
 
     return true;
@@ -306,7 +281,7 @@ bool MarioSkate::close() {
             Vec3f velocity;
             Mario* pPlayer = getPlayer();
             f32 vertical = MR::vecKillElement(pPlayer->mJumpVec, getGravityVec(), &velocity);
-            velocity *= cNum_close_f1;
+            velocity *= 1.5f;
             velocity += getGravityVec() * vertical;
             getPlayer()->setJumpVec(velocity);
         }

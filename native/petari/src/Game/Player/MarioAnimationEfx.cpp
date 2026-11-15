@@ -1,10 +1,6 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioAnimator.hpp"
 #include "Game/Util/HashUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_spinUpdate_f1, "spinUpdate.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_squatSpinCheck_f1, "squatSpinCheck.f1", 40.0f);
 
 struct MarioAnimationCallback {
     const char* mAnimation;
@@ -118,7 +114,7 @@ void MarioAnimator::spinEntry() {
 }
 
 void MarioAnimator::spinUpdate() {
-    if (getFrame() > cNum_spinUpdate_f1) {
+    if (getFrame() > 30.0f) {
         stopEffect("スピンライト");
     }
 }
@@ -181,7 +177,7 @@ void MarioAnimator::throwClose() {
 }
 
 void MarioAnimator::squatSpinCheck() {
-    if (!getPlayer()->mMovementStates.squat && getFrame() >= cNum_squatSpinCheck_f1) {
+    if (!getPlayer()->mMovementStates.squat && getFrame() >= 40.0f) {
         stopAnimation(nullptr);
     }
 }

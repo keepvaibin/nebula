@@ -31,6 +31,9 @@ namespace Nebula.Setup
         public bool DesktopShortcut;
         /// <summary>Download NVIDIA DLSS into the user data folder (the player accepted NVIDIA's license).</summary>
         public bool InstallDlss;
+        /// <summary>A portable copy: everything (saves and settings too) in <see cref="InstallRoot"/>, nothing registered
+        /// with Windows (<see cref="NebulaPaths.PortableMarker"/>).</summary>
+        public bool Portable;
     }
 
     /// <summary>Progress reporting from the engine to the UI.</summary>
@@ -58,16 +61,26 @@ namespace Nebula.Setup
         /// <summary>The content format nebula-import's cook command converts from; a version of it reads only version 2 saves.</summary>
         internal const int CookableContentFormatVersion = 1;
 
-        /// <summary>The instruction set NebulaNative.exe and smg_game.dll are built for (the module: x86-64-v3, which every
-        /// AVX2 CPU runs; native/CMakeLists.txt, NEBULA_CPU_LEVEL).</summary>
-        private const string NativeIsa = "AVX2";
+        /// <summary>The lowest CPU level the package's programs and game modules are built for: Nebula.exe and
+        /// smg_game.dll are x86-64-v3, Nebula-x86-64-v2.exe and x86-64-v2\smg_game.dll x86-64-v2 (Nebula.exe
+        /// starts the other program where the CPU lacks x86-64-v3, and the host loads the module the CPU runs); NebulaD11.exe and
+        /// NebulaD11-x86-64-v2.exe the same pair on Direct3D 11.</summary>
+        private const string NativeIsa = "x86-64-v2";
 
         /// <summary>What a version folder holds (each from the package, by its published name).</summary>
         private static readonly string[] NativeFiles =
         {
-            "NebulaNative.exe", "smg_game.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
-            "Nebula.exe", "NebulaSettings.exe", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md"
+            "Nebula.exe", "Nebula-x86-64-v2.exe", "NebulaD11.exe", "NebulaD11-x86-64-v2.exe", "smg_game.dll", "smg_game_plain.dll", @"x86-64-v2\smg_game.dll", @"x86-64-v2\smg_game_plain.dll", "nebula_import.dll", "nebula-import.exe", @"dxc\dxc.exe", @"dxc\dxcompiler.dll", @"dxc\dxil.dll", @"dxc\LICENSE-MS.txt", @"dxc\LICENCE-MIT.txt", @"dxc\LICENSE-LLVM.txt", @"glslang\glslang.exe", @"glslang\LICENSE.txt", @"D3D12\D3D12Core.dll", @"D3D12\LICENSE.txt",
+            "NebulaLauncher.exe", "NebulaSettings.exe", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md"
         };
+
+        /// <summary>The ray tracer's tables: installed when the package has them (the game runs without them).</summary>
+        private static readonly string[] OptionalNativeFiles = { "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv" };
+
+        /// <summary>The game's self-description (function rows, type description, placement facts, services list),
+        /// its SDK headers (luma\sdk), the mods that come with the game (luma\mods) and the test runner (luma\test),
+        /// packed as one file and unpacked to luma\ in the version folder, where LumaLink reads it.</summary>
+        private const string SelfDescription = "luma.zip";
 
         private readonly InstallRequest request;
         private readonly IInstallProgress progress;
@@ -85,6 +98,15 @@ namespace Nebula.Setup
             this.progress = progress;
             this.cancel = cancel;
             layout = new InstallLayout(request.InstallRoot);
+            // A portable copy is marked first: its log, the snapshot of its saves and DLSS go to its own data folder.
+            if (request.Portable || NebulaPaths.IsPortableRoot(layout.Root))
+            {
+                Directory.CreateDirectory(layout.Root);
+                string marker = Path.Combine(layout.Root, NebulaPaths.PortableMarker);
+                if (!File.Exists(marker))
+                    File.WriteAllText(marker, "Nebula keeps its saves and settings in the data folder here. Keep this folder together: copy or move it whole.\r\n");
+                NebulaPaths.UsePortableRoot(layout.Root);
+            }
             Directory.CreateDirectory(NebulaPaths.SetupLogs);
             string logPath = Path.Combine(NebulaPaths.SetupLogs,
                 DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + "-" + Guid.NewGuid().ToString("N") + ".log");
@@ -108,9 +130,10 @@ namespace Nebula.Setup
             var problems = new List<string>();
             if (!Environment.Is64BitOperatingSystem) problems.Add("Nebula needs 64-bit Windows 10 or 11.");
             if (Environment.OSVersion.Version.Major < 10) problems.Add("Nebula needs Windows 10 or 11.");
-            // Without AVX2 the game would stop at its first AVX2 instruction (an illegal-instruction fault), not here.
-            if (!HostSupportsAvx2())
-                problems.Add(NebulaText.Of("This package's runtime was built for AVX2, which this CPU does not expose."));
+            // The lowest CPU level the package is built for, x86-64-v2 (SSE4.2; the host picks the AVX2 game module where it
+            // runs): without it the game would stop at its first such instruction, not here.
+            if (!HostSupportsSse42())
+                problems.Add(NebulaText.Of("This package's runtime needs SSE4.2, which this CPU does not expose."));
             try
             {
                 string fs = FileUtil.FileSystemName(installRoot);
@@ -124,10 +147,10 @@ namespace Nebula.Setup
             return problems;
         }
 
-        /// <summary>PF_AVX2_INSTRUCTIONS_AVAILABLE: the CPU and the OS support AVX2.</summary>
-        private static bool HostSupportsAvx2()
+        /// <summary>PF_SSE4_2_INSTRUCTIONS_AVAILABLE: the CPU supports SSE4.2 (every such CPU also has POPCNT).</summary>
+        private static bool HostSupportsSse42()
         {
-            try { return IsProcessorFeaturePresent(40); }
+            try { return IsProcessorFeaturePresent(38); }
             catch (Exception) { return false; }
         }
 
@@ -218,6 +241,9 @@ namespace Nebula.Setup
             string app = Path.Combine(staging, "app");
             Directory.CreateDirectory(app);
             foreach (var name in NativeFiles) Payload.Extract(name, Path.Combine(app, name));
+            foreach (var name in OptionalNativeFiles)
+                if (Payload.Has(name)) Payload.Extract(name, Path.Combine(app, name));
+            Payload.ExtractZip(SelfDescription, Path.Combine(app, "luma"));
             File.WriteAllText(Path.Combine(app, "runtime-isa.txt"), NativeIsa);
             var files = new Dictionary<string, object>();
             foreach (var path in Directory.GetFiles(app, "*", SearchOption.AllDirectories))
@@ -505,7 +531,7 @@ namespace Nebula.Setup
                     contentSwapped = true;
                 }
                 // The previous version and its packed game stay beside the new ones until the new ones are seen whole in place.
-                if (!File.Exists(Path.Combine(versionDir, "NebulaNative.exe")) || !StoreOpens(layout.Content))
+                if (!File.Exists(Path.Combine(versionDir, "Nebula.exe")) || !StoreOpens(layout.Content))
                     throw new InvalidOperationException(NebulaText.Of("The new version or its packed game did not come out whole. The previous version is back."));
                 Json.Save(layout.Current, new Dictionary<string, object>
                 {
@@ -524,8 +550,8 @@ namespace Nebula.Setup
             string self = Assembly.GetExecutingAssembly().Location;
             if (!string.Equals(Path.GetFullPath(self), layout.SetupCopy, StringComparison.OrdinalIgnoreCase))
                 CopySetup(self);
-            foreach (var failure in Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut))
-                Log("Could not create the shortcut " + failure + "; Nebula.exe is in " + versionDir + ".");
+            foreach (var failure in Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut && !NebulaPaths.IsPortableRoot(layout.Root)))
+                Log("Could not create the shortcut " + failure + "; NebulaLauncher.exe is in " + versionDir + ".");
             InstalledVersionDir = versionDir;
             Log("Installed " + BuildInfo.Version + " to " + versionDir + (previous != null ? "; kept " + previous + " for rollback." : "."));
             return previous;
@@ -591,7 +617,7 @@ namespace Nebula.Setup
             while (true)
             {
                 string running = replacingVersion ? Running.Find(layout.VersionDir(BuildInfo.Version), Running.Programs) : null;
-                if (running == null && replacingGameFiles) running = Running.Find(layout.Root, "NebulaRuntime", "NebulaNative");
+                if (running == null && replacingGameFiles) running = Running.Find(layout.Root, "Nebula", "NebulaNative", "NebulaRuntime");
                 if (running == null) return;
                 Log("Waiting for " + running + " to close.");
                 if (!progress.AskToClose(NebulaText.Of("Nebula is running ({0}). Close the game, the Nebula launcher and Nebula Settings, then choose Retry to finish installing Nebula {1}.", running, BuildInfo.Version)))

@@ -6,39 +6,29 @@
 #include "Game/Util.hpp"
 #include "math_types.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBreak_f1, "exeBreak.f1", 2.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, cSensorRadius, 130.0f);
-    NEBULA_TUNABLE(f32, cSmallClippingRadius, 300.0f);
-    NEBULA_TUNABLE(f32, cClippingRadius, 600.0f);
+    const f32 cSensorRadius = 130.0f;
+    const f32 cSmallClippingRadius = 300.0f;
+    const f32 cClippingRadius = 600.0f;
     // The ground is looked for this far above and below.
-    NEBULA_TUNABLE(f32, cGroundSearchHeight, 300.0f);
-    NEBULA_TUNABLE(f32, cLargeGroundSearchHeight, 1000.0f);
-    NEBULA_TUNABLE(f32, cBinderRadius, 50.0f);
-    NEBULA_TUNABLE(f32, cBinderLift, 50.0f);
-    NEBULA_TUNABLE(f32, cBinderFallSpeed, 2.0f);
-    NEBULA_TUNABLE(f32, cLargeStarHeight, 250.0f);
-    NEBULA_TUNABLE(s32, cLargeHitPoint, 2);
+    const f32 cGroundSearchHeight = 300.0f;
+    const f32 cLargeGroundSearchHeight = 1000.0f;
+    const f32 cBinderRadius = 50.0f;
+    const f32 cBinderLift = 50.0f;
+    const f32 cBinderFallSpeed = 2.0f;
+    const f32 cLargeStarHeight = 250.0f;
+    const s32 cLargeHitPoint = 2;
     // Hits after one that does not break it are ignored this long.
-    NEBULA_TUNABLE(s32, cHitInvalidSteps, 20);
+    const s32 cHitInvalidSteps = 20;
     // A small cage's sensor slides along its axis to the point nearest the player.
-    NEBULA_TUNABLE(f32, cSmallSensorBottom, -40.0f);
-    NEBULA_TUNABLE(f32, cSmallSensorTop, 140.0f);
+    const f32 cSmallSensorBottom = -40.0f;
+    const f32 cSmallSensorTop = 140.0f;
     // A super spin driver comes out a little after the cage breaks.
-    NEBULA_TUNABLE(s32, cSuperSpinDriverDeadStep, 10);
-    NEBULA_TUNABLE(s32, cBreakHitStopStep, 2);
-    NEBULA_TUNABLE(s32, cBreakHitStopFrames, 3);
+    const s32 cSuperSpinDriverDeadStep = 10;
+    const s32 cBreakHitStopStep = 2;
+    const s32 cBreakHitStopFrames = 3;
 };  // namespace
 
 namespace NrvCrystalCage {
@@ -105,9 +95,9 @@ void CrystalCage::init(const TableIter& rIter) {
         Vec3f itemOffset;
 
         if (mCrystalCageType == CrystalCageType_Small) {
-            itemOffset.set< f32 >(-cNum_init_f1, cNum_init_f2, -cNum_init_f3);
+            itemOffset.set< f32 >(-30.0f, 100.0f, -30.0f);
         } else {
-            itemOffset.set< f32 >(0.0f, cNum_init_f4, 0.0f);
+            itemOffset.set< f32 >(0.0f, 200.0f, 0.0f);
         }
 
         mDisplayModel = MR::createDummyDisplayModelCrystalItem(this, rIter, itemOffset, Vec3f(0.0f, 0.0f, 0.0f));
@@ -128,7 +118,7 @@ void CrystalCage::init(const TableIter& rIter) {
     MR::setBvaFrameAndStop(this, 0.0f);
 
     if (mHitPoint > 1) {
-        mRumbleCalc = new RumbleCalculatorCosMultLinear(cNum_init_f5, HALF_PI, cNum_init_f6, 20);
+        mRumbleCalc = new RumbleCalculatorCosMultLinear(4.0f, HALF_PI, 50.0f, 20);
     }
 
     MR::joinToGroupArray(this, rIter, nullptr, 32);
@@ -169,7 +159,7 @@ void CrystalCage::initAfterPlacement() {
     Vec3f lineStart;
     MR::calcUpVec(&up, this);
     lineStart.add(mPosition, up * (searchHeight * mScale.x));
-    lineDir.scale((-(cNum_initAfterPlacement_f1 * searchHeight) * mScale.x), up);
+    lineDir.scale((-(2.0f * searchHeight) * mScale.x), up);
 
     if (!MR::getFirstPolyOnLineToMapExceptActor(&mGroundPos, 0, lineStart, lineDir, this)) {
         mGroundPos.set(mPosition);
@@ -356,7 +346,7 @@ void CrystalCage::exeBreak() {
         if (mVanishOnBreak) {
             MR::hideModel(this);
         } else {
-            MR::setBvaFrameAndStop(this, mCrystalCageType == CrystalCageType_Large ? cNum_exeBreak_f1 : 1.0f);
+            MR::setBvaFrameAndStop(this, mCrystalCageType == CrystalCageType_Large ? 2.0f : 1.0f);
             mPosition.set(mGroundPos);
         }
 

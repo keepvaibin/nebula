@@ -10,7 +10,7 @@
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
-#include "Game/Screen/NebulaModText.hpp"
+#include "Game/Screen/NebulaModLogNotice.hpp"
 #include "Game/Screen/NoteCounter.hpp"
 #include "Game/Screen/OneUpBoard.hpp"
 #include "Game/Screen/PurpleCoinCounter.hpp"
@@ -23,7 +23,7 @@
 GameSceneLayoutHolder::GameSceneLayoutHolder()
     : NameObj("ゲームシーンのレイアウト保持"), mCameraInfo(nullptr), mInformationMessage(nullptr), mMarioMeter(nullptr), mMarioSubMeter(nullptr),
       mMissLayout(nullptr), mNoteCounter(nullptr), mYesNoLayout(nullptr), mPurpleCoinCounter(nullptr), mIsStatusInvalidatePending(false),
-      mCounterLayoutCtrl(nullptr), mIsActiveDefaultGameLayout(true), mAchievementToast(nullptr), mModText(nullptr), mAchievementBoard(nullptr) {
+      mCounterLayoutCtrl(nullptr), mIsActiveDefaultGameLayout(true), mAchievementToast(nullptr), mAchievementBoard(nullptr) {
     lumacore::setClass(this, lumacore::kClassId< GameSceneLayoutHolder >);
     MR::joinToNameObjGroup(this, "IgnorePauseNameObj");
     MR::connectToSceneLayoutMovement(this);
@@ -59,10 +59,8 @@ GameSceneLayoutHolder::GameSceneLayoutHolder()
 
     mAchievementToast = new NebulaAchievementToast();
     mAchievementToast->initWithoutIter();
-    if (NebulaMods::hasCode()) {
-        mModText = new NebulaModText();
-        mModText->initWithoutIter();
-    }
+    // The mod log's notice: only when the session has mods or something was said.
+    NebulaModLogNotice::make();
     mAchievementBoard = nullptr;
     if (NebulaAchievementLuma::isHere()) {
         mAchievementBoard = new NebulaAchievementBoard();

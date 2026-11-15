@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/LumaMarks.hpp"
+
 #include "Game/Util/Table.hpp"
 #include <nebula_geometry.hpp>
 #include <NebulaGpu.h>
@@ -25,9 +27,9 @@ namespace MR {
     bool getPlacementArg3WithInit(const TableIter& rIter, bool*);
     bool getPlacementArg4WithInit(const TableIter& rIter, bool*);
     bool getPlacementArg7WithInit(const TableIter& rIter, bool*);
-    bool getPlacementArg0NoInit(const TableIter& rIter, s32*);
-    bool getPlacementArg0NoInit(const TableIter& rIter, f32*);
-    bool getPlacementArg0NoInit(const TableIter& rIter, bool*);
+    bool getPlacementArg0NoInit(const TableIter& rIter, LUMA_OUT s32*);
+    bool getPlacementArg0NoInit(const TableIter& rIter, LUMA_OUT f32*);
+    bool getPlacementArg0NoInit(const TableIter& rIter, LUMA_OUT bool*);
     bool getPlacementArg1NoInit(const TableIter& rIter, s32*);
     bool getPlacementArg1NoInit(const TableIter& rIter, f32*);
     bool getPlacementArg1NoInit(const TableIter& rIter, bool*);

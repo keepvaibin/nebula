@@ -25,6 +25,7 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaMods.hpp"
+#include "Game/System/LumaClasses.hpp"
 
 
 namespace {
@@ -181,6 +182,9 @@ void GameSystemSceneController::destroyScene() {
     } else {
         Arenas::destroyScene();
     }
+    // Mods' objects went with the scene (docs/modding/reference/lumascript/defining-classes.md): forgotten, their data freed. Nothing when
+    // there are none.
+    luma::classes::sceneGone();
 }
 
 bool GameSystemSceneController::isStopSound() const {
@@ -218,6 +222,10 @@ bool GameSystemSceneController::isReadyToStartScene() const {
            !mScenarioSelectScene->isScenarioSelecting();
 }
 
+bool GameSystemSceneController::isNerveNormal() const {
+    return isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNormal));
+}
+
 bool GameSystemSceneController::isFirstUpdateSceneNerveNormal() const {
     return isCurrentNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNormal)) && mSpine->mStep == 1;
 }
@@ -250,7 +258,6 @@ void GameSystemSceneController::calcAnimScene() {
     Scene* pScene = getCurrentSceneForExecute();
 
     if (pScene != nullptr) {
-        const NebulaMods::InStage inStage(mCurrSceneControlInfo.mScene == SceneKind_Game);
         pScene->calcAnim();
         mScenarioSelectScene->calcAnim();
     }
@@ -260,7 +267,6 @@ void GameSystemSceneController::drawScene() {
     Scene* pScene = getCurrentSceneForExecute();
 
     if (pScene != nullptr) {
-        const NebulaMods::InStage inStage(mCurrSceneControlInfo.mScene == SceneKind_Game);
         pScene->draw();
         mScenarioSelectScene->draw();
     }

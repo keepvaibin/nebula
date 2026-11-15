@@ -7,24 +7,13 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SpringValue.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_TripodBossBreakMovement_f1, "TripodBossBreakMovement.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_TripodBossBreakMovement_f2, "TripodBossBreakMovement.f2", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 0.995f);
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f2, "start.f2", 0.997f);
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f3, "start.f3", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f4, "start.f4", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setBreakDownLevel_f1, "setBreakDownLevel.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setBreakDownLevel_f2, "setBreakDownLevel.f2", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setBreakDownLevel_f3, "setBreakDownLevel.f3", 50.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sBreakRandamaize, 1.0f);
-    NEBULA_TUNABLE(f32, sMinStartMoment, 0.01f);
-    NEBULA_TUNABLE(f32, sMaxStartMoment, 0.04f);
-    NEBULA_TUNABLE(f32, sGravityAccel, 0.2f);
+    const f32 sBreakRandamaize = 1.0f;
+    const f32 sMinStartMoment = 0.01f;
+    const f32 sMaxStartMoment = 0.04f;
+    const f32 sGravityAccel = 0.2f;
 };  // namespace
 
 namespace NrvTripodBossBreakMovement {
@@ -40,7 +29,7 @@ TripodBossBreakMovement::TripodBossBreakMovement(const char* pName)
     initNerve(GET_NERVE(TripodBossBreakMovement, TripodBossBreakMovementNrvWait));
     MR::invalidateClipping(this);
     mSpring = new SpringValue();
-    mSpring->setParam(0.0f, 0.0f, cNum_TripodBossBreakMovement_f1, cNum_TripodBossBreakMovement_f2, 0.0f);
+    mSpring->setParam(0.0f, 0.0f, 0.2f, 0.9f, 0.0f);
     setBreakDownLevel(1);
 }
 
@@ -48,12 +37,15 @@ void TripodBossBreakMovement::start(const Pos3f& rMtx, s32 jointIndex) {
     mMtx.set(rMtx);
     mMtx.getTrans(mPos);
 
-    mMoment.set< f32 >(MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize), MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize),
-                   MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize));
+    // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+    const f32 momentZ = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    const f32 momentY = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    const f32 momentX = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    mMoment.set< f32 >(momentX, momentY, momentZ);
     MR::normalizeOrZero(&mMoment);
     mMoment *= MR::getRandom(::sMinStartMoment, ::sMaxStartMoment);
 
-    mDamping = MR::getRandom(cNum_start_f1, cNum_start_f2);
+    mDamping = MR::getRandom(0.995f, 0.997f);
 
     MR::zeroVelocity(this);
 
@@ -64,11 +56,14 @@ void TripodBossBreakMovement::start(const Pos3f& rMtx, s32 jointIndex) {
     jointMtx.getYDir(mFlyDir);
 
     Vec3f jitter;
-    jitter.set< f32 >(MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize), MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize),
-                      MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize));
+    // Drawn z, y, x: the console's right-to-left order of the arguments (as the Windows build's), on every platform.
+    const f32 jitterZ = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    const f32 jitterY = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    const f32 jitterX = MR::getRandom(-::sBreakRandamaize, ::sBreakRandamaize);
+    jitter.set< f32 >(jitterX, jitterY, jitterZ);
     mFlyDir += jitter * mFlyDirRandomRate;
 
-    mSpring->mVelocity += MR::getRandom(cNum_start_f3, cNum_start_f4);
+    mSpring->mVelocity += MR::getRandom(20.0f, 25.0f);
 
     setNerve(GET_NERVE(TripodBossBreakMovement, TripodBossBreakMovementNrvStartBreak));
     MR::invalidateClipping(this);
@@ -92,10 +87,10 @@ void TripodBossBreakMovement::setBreakDownLevel(s32 level) {
     case 0:
     case 1:
     case 2:
-        mFlySpeed = MR::getRandom(cNum_setBreakDownLevel_f1, cNum_setBreakDownLevel_f2);
+        mFlySpeed = MR::getRandom(50.0f, 90.0f);
         break;
     case 3:
-        mFlySpeed = cNum_setBreakDownLevel_f3;
+        mFlySpeed = 50.0f;
         mFlyDirRandomRate = 0.0f;
         break;
     }

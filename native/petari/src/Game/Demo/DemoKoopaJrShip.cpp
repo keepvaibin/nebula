@@ -12,16 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 5.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_startLeaveAnim_setBckRate_1, "startLeaveAnim.setBckRate.1", -1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 1);
 
 namespace {
     struct Anim {
@@ -29,10 +20,10 @@ namespace {
         const char* mLeaveAnimName;
     };
 
-    NEBULA_TUNABLE_RECORD(Vec, sKoopaJrPos, {135.0f, 188.0f, 0.0f});
+    const Vec sKoopaJrPos = {135.0f, 188.0f, 0.0f};
     static const char* sPartName = "クッパＪｒ．デモ";
     static const char* sJointNameKoopaJrPos = "obj";
-    NEBULA_TUNABLE(s32, sBgmStartStep, 309);
+    const s32 sBgmStartStep = 309;
     static const Anim sAnim[] = {
         {
             "KoopaJrEntryTriPodDemo",
@@ -83,7 +74,7 @@ void DemoKoopaJrShip::exeAppear() {
         MR::hideModel(this);
     }
 
-    if (MR::isGreaterEqualStep(this, cStep_exeAppear_1) && MR::isHiddenModel(this)) {
+    if (MR::isGreaterEqualStep(this, 1) && MR::isHiddenModel(this)) {
         MR::showModel(this);
     }
 
@@ -138,7 +129,7 @@ void DemoKoopaJrShip::control() {
     Mtx34f jointMtx;
     jointMtx.setInline(MR::getJointMtx(this, ::sJointNameKoopaJrPos));
 
-    MR::faceToPoint(jointMtx, *MR::getPlayerPos(), cNum_control_f1);
+    MR::faceToPoint(jointMtx, *MR::getPlayerPos(), 5.0f);
 
     jointMtx.mult(::sKoopaJrPos, mKoopaJrObj->mPosition);
 }
@@ -185,7 +176,7 @@ void DemoKoopaJrShip::startLeaveAnim() {
     if (mAnimCameraIndex == -1) {
         MR::startBck(this, "Arrival");
         MR::setBckFrame(this, MR::getBckCtrl(this)->getEnd() - 1.0f);
-        MR::setBckRate(this, cNum_startLeaveAnim_setBckRate_1);
+        MR::setBckRate(this, -1.0f);
     } else {
         MR::startBck(this, ::sAnim[mAnimCameraIndex].mLeaveAnimName);
 

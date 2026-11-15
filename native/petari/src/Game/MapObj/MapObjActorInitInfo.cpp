@@ -3,10 +3,6 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setupInitInfoTypical_f1, "setupInitInfoTypical.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setupInitInfoTypical_f2, "setupInitInfoTypical.f2", 200.0f);
 
 MapObjActorInitInfo::MapObjActorInitInfo()
     : mSetDefaultPosition(), mConnectToScene(), mInitBinder(), mHasEffect(), mHasSensors(), mHasShadows(), mCalcGravity(), mUseProjectMapMtx(),
@@ -193,7 +189,7 @@ void MapObjActorUtil::setupInitInfoTypical(MapObjActorInitInfo* pInitInfo, const
 
     if (MR::isEqualString("DangerSignBoard", pName)) {
         pInitInfo->setupHitSensor();
-        pInitInfo->setupHitSensorParam(4, cNum_setupInitInfoTypical_f1, Vec3f(0.0f, cNum_setupInitInfoTypical_f2, 0.0f));
+        pInitInfo->setupHitSensorParam(4, 200.0f, Vec3f(0.0f, 200.0f, 0.0f));
     }
 }
 

@@ -10,43 +10,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_addDodgeTargetVelocity_f1, "addDodgeTargetVelocity.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f2, "attackSensor.f2", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryRebound_f1, "tryRebound.f1", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeReverse_f1, "exeReverse.f1", 8.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_requestPunch_addVelocitySeparateHV_1, "requestPunch.addVelocitySeparateHV.1", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_requestPunch_addVelocitySeparateHV_2, "requestPunch.addVelocitySeparateHV.2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_addVelocityToGravity_1, "exeWait.addVelocityToGravity.1", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_attenuateVelocity_1, "exeWait.attenuateVelocity.1", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_2, "exeWait.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_3, "exeWait.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeShoot_reboundVelocityFromCollision_1, "exeShoot.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeShoot_reboundVelocityFromCollision_2, "exeShoot.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeShoot_reboundVelocityFromCollision_3, "exeShoot.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCharge_attenuateVelocity_1, "exeCharge.attenuateVelocity.1", 0.88f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCharge_reboundVelocityFromCollision_1, "exeCharge.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCharge_reboundVelocityFromCollision_2, "exeCharge.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCharge_reboundVelocityFromCollision_3, "exeCharge.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeReverse_attenuateVelocity_1, "exeReverse.attenuateVelocity.1", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeReverse_reboundVelocityFromCollision_1, "exeReverse.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeReverse_reboundVelocityFromCollision_2, "exeReverse.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeReverse_reboundVelocityFromCollision_3, "exeReverse.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRebound_addVelocityToGravity_1, "exeRebound.addVelocityToGravity.1", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRebound_attenuateVelocity_1, "exeRebound.attenuateVelocity.1", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRebound_reboundVelocityFromCollision_1, "exeRebound.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRebound_reboundVelocityFromCollision_2, "exeRebound.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRebound_reboundVelocityFromCollision_3, "exeRebound.reboundVelocityFromCollision.3", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeCharge_1, "exeCharge.1", 35);
 
 namespace NrvDinoPackunBall {
     NEW_NERVE(DinoPackunBallNrvWait, DinoPackunBall, Wait);
@@ -58,12 +22,12 @@ namespace NrvDinoPackunBall {
 };  // namespace NrvDinoPackunBall
 
 namespace {
-    NEBULA_TUNABLE(f32, sRadius, 135.0f);
+    const f32 sRadius = 135.0f;
     // Steps the drag sound keeps going after the ball stops dragging.
-    NEBULA_TUNABLE(s32, sDragSoundSteps, 10);
+    const s32 sDragSoundSteps = 10;
     // Shot away from the head it stays clear of it out to sDodgeFarDistance and is pushed off inside sDodgeNearDistance.
-    NEBULA_TUNABLE(f32, sDodgeNearDistance, 500.0f);
-    NEBULA_TUNABLE(f32, sDodgeFarDistance, 1500.0f);
+    const f32 sDodgeNearDistance = 500.0f;
+    const f32 sDodgeFarDistance = 1500.0f;
     const s32 sReboundSteps = NebulaFrameClock::stepsOfSeconds(3);
 };  // namespace
 
@@ -164,7 +128,7 @@ void DinoPackunBall::addDodgeTargetVelocity() {
     f32 awaySpeed = mVelocity.dot(away);
 
     if (MR::isNearZero(distance)) {
-        MR::addRandomVector(&mVelocity, mVelocity, cNum_addDodgeTargetVelocity_f1);
+        MR::addRandomVector(&mVelocity, mVelocity, 2.0f);
         return;
     }
 
@@ -195,7 +159,7 @@ void DinoPackunBall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         f32 awaySpeed = mVelocity.dot(away);
 
         if (MR::isSensorPlayer(pReceiver)) {
-            if (awaySpeed < cNum_attackSensor_f1) {
+            if (awaySpeed < 5.0f) {
                 mVelocity.add(away);
             }
         } else if (awaySpeed < 0.0f) {
@@ -211,7 +175,7 @@ void DinoPackunBall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         MR::calcSensorDirection(&bounceDir, pReceiver, pSender);
         MR::normalizeOrZero(&bounceDir);
         f32 speed = mVelocity.length();
-        mVelocity.set((bounceDir * speed) * cNum_attackSensor_f2);
+        mVelocity.set((bounceDir * speed) * 0.3f);
         setNerve(GET_NERVE(DinoPackunBall, DinoPackunBallNrvRebound));
     }
 }
@@ -243,7 +207,7 @@ bool DinoPackunBall::receiveMsgEnemyAttack(u32 /*msg*/, HitSensor* /*pSender*/, 
 // A spin while it waits shoots the ball away from the player.
 bool DinoPackunBall::requestPunch(HitSensor* pReceiver, HitSensor* pSender) {
     if (isNerve(GET_NERVE(DinoPackunBall, DinoPackunBallNrvWait)) && MR::sendArbitraryMsg(ACTMES_DINO_PACKUN_PUNCHED_BALL, mWeakSensor, pReceiver)) {
-        MR::addVelocitySeparateHV(this, pSender, pReceiver, cNum_requestPunch_addVelocitySeparateHV_1, cNum_requestPunch_addVelocitySeparateHV_2);
+        MR::addVelocitySeparateHV(this, pSender, pReceiver, 120.0f, 40.0f);
         setNerve(GET_NERVE(DinoPackunBall, DinoPackunBallNrvShoot));
         return true;
     }
@@ -267,18 +231,18 @@ bool DinoPackunBall::tryRebound() {
 
     Vec3f reaction(*MR::getBindedFixReactionVector(this));
     MR::normalizeOrZero(&reaction);
-    mReboundVelocity.set(reaction * cNum_tryRebound_f1);
+    mReboundVelocity.set(reaction * 40.0f);
     MR::zeroVelocity(this);
     setNerve(GET_NERVE(DinoPackunBall, DinoPackunBallNrvRebound));
     return true;
 }
 
 void DinoPackunBall::exeWait() {
-    MR::addVelocityToGravity(this, cNum_exeWait_addVelocityToGravity_1);
-    MR::attenuateVelocity(this, cNum_exeWait_attenuateVelocity_1);
-    MR::reboundVelocityFromCollision(this, cNum_exeWait_reboundVelocityFromCollision_1, cNum_exeWait_reboundVelocityFromCollision_2, cNum_exeWait_reboundVelocityFromCollision_3);
+    MR::addVelocityToGravity(this, 1.0f);
+    MR::attenuateVelocity(this, 0.9f);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 
-    if (MR::isBindedGround(this) && mVelocity.length() > cNum_exeWait_f1) {
+    if (MR::isBindedGround(this) && mVelocity.length() > 5.0f) {
         if (!mIsOnFire) {
             MR::emitEffect(this, getDragEffectName());
         }
@@ -299,7 +263,7 @@ void DinoPackunBall::exeShoot() {
     }
 
     addDodgeTargetVelocity();
-    MR::reboundVelocityFromCollision(this, cNum_exeShoot_reboundVelocityFromCollision_1, cNum_exeShoot_reboundVelocityFromCollision_2, cNum_exeShoot_reboundVelocityFromCollision_3);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 
     f32 distanceToWeakSensor = MR::getSensorPos(mWeakSensor).distance(mPosition);
 
@@ -315,11 +279,11 @@ void DinoPackunBall::exeCharge() {
     }
 
     addDodgeTargetVelocity();
-    MR::attenuateVelocity(this, cNum_exeCharge_attenuateVelocity_1);
-    MR::reboundVelocityFromCollision(this, cNum_exeCharge_reboundVelocityFromCollision_1, cNum_exeCharge_reboundVelocityFromCollision_2, cNum_exeCharge_reboundVelocityFromCollision_3);
+    MR::attenuateVelocity(this, 0.88f);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
     MR::startLevelSound(this, "SE_BM_LV_D_PAKKUN_TAIL_CRG");
 
-    if (MR::isGreaterStep(this, cStep_exeCharge_1)) {
+    if (MR::isGreaterStep(this, 35)) {
         setNerve(GET_NERVE(DinoPackunBall, DinoPackunBallNrvReverse));
     }
 }
@@ -333,16 +297,16 @@ void DinoPackunBall::exeReverse() {
     Vec3f toHead;
     toHead.set(MR::getSensorPos(mWeakSensor) - mPosition);
     MR::normalizeOrZero(&toHead);
-    mVelocity.add(toHead * cNum_exeReverse_f1);
-    MR::attenuateVelocity(this, cNum_exeReverse_attenuateVelocity_1);
-    MR::reboundVelocityFromCollision(this, cNum_exeReverse_reboundVelocityFromCollision_1, cNum_exeReverse_reboundVelocityFromCollision_2, cNum_exeReverse_reboundVelocityFromCollision_3);
+    mVelocity.add(toHead * 8.0f);
+    MR::attenuateVelocity(this, 0.98f);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
     tryRebound();
 }
 
 void DinoPackunBall::exeRebound() {
-    MR::addVelocityToGravity(this, cNum_exeRebound_addVelocityToGravity_1);
-    MR::attenuateVelocity(this, cNum_exeRebound_attenuateVelocity_1);
-    MR::reboundVelocityFromCollision(this, cNum_exeRebound_reboundVelocityFromCollision_1, cNum_exeRebound_reboundVelocityFromCollision_2, cNum_exeRebound_reboundVelocityFromCollision_3);
+    MR::addVelocityToGravity(this, 1.0f);
+    MR::attenuateVelocity(this, 0.9f);
+    MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
 
     if (MR::isGreaterStep(this, sReboundSteps)) {
         setNerve(GET_NERVE(DinoPackunBall, DinoPackunBallNrvWait));

@@ -24,7 +24,7 @@ namespace NameObjFactory {
     CreatorFuncPtr getCreator(const char*);
     bool isPlayerArchiveLoaderObj(const char*);
     const Name2CreateFunc* getName2CreateFunc(const char* pName);
-    // The factory's table, for the object registry (LumaRegistry): its size, and a row's name (null for an empty row).
+    // The factory's table: its size, and a row's name (null for an empty row).
     u32 getCreateTableNum();
     const char* getCreateTableName(u32 index);
 };  // namespace NameObjFactory

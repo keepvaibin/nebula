@@ -59,7 +59,6 @@ public:
     virtual bool turnPage() override;
     virtual void skipMessage() override;
     virtual bool isTextAppearedAll() override;
-    virtual void updateBalloon() override;
 
     void initInterval();
     void exeTalk();
@@ -67,13 +66,9 @@ public:
     void exeOpen();
     void updateBeak();
     void exeClose();
-    void placeByPlugin();
 
     u32 mFormMode;
     IconAButton* mAButton;
-    // Moved by a plugin (place_talk_box): its own root place, to go back to.
-    bool mPlaced;
-    Vec2f mHome;
 };
 
 class TalkBalloonSign : public TalkBalloonEvent {

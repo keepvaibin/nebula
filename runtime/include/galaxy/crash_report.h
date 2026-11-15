@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Turns what the crash handler knows (where, which thread was doing what, this session's mods, the last mod file the
-// game read) into a code the player can look up (docs/ERROR_CODES.md), a sentence and what to do. classify() and
+// game read) into a code the player can look up (docs/using-nebula/error-codes.md), a sentence and what to do. classify() and
 // format_report() take no locks and allocate nothing: they run in a process that just crashed.
 #pragma once
 

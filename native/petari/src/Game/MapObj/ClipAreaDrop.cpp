@@ -6,11 +6,10 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sExtendsEndTime, 15);
+    const s32 sExtendsEndTime = 15;
     const s32 sShrinkStartTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sShrinkEndTime = NebulaFrameClock::stepsOfSeconds(4);
 };  // namespace

@@ -3,7 +3,9 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 
 #if defined(_WIN32)
@@ -31,6 +33,8 @@ std::uint32_t g_flags = 0u;
 bool g_controls = false;
 bool g_pictures = false;
 bool g_sound = false;
+bool g_motor = false;              // an extension takes the motor (NEBULA_EXT_CONTROLS_PAD and `motor`)
+std::uint8_t g_motor_given = 0u;   // the strength it was last given
 std::uint32_t g_vram_budget_mb = 0u;
 std::uint32_t g_disc_read_delay_us = 0u;
 
@@ -91,18 +95,42 @@ bool attach(std::span<const std::filesystem::path> files, const NebulaHostForExt
             error = name + ": an extension version this host does not know";
             return false;
         }
-        NebulaHostExtension& kept = g_extensions[g_count++];
+        NebulaHostExtension kept{};
         std::memcpy(&kept, given, std::min<std::size_t>(given->size, sizeof(kept)));
+        // Its LumaCore providers: "test." services only, each whole (services/registry.md 14).
+        if (kept.luma_provider_count != 0u && kept.luma_providers == nullptr) {
+            error = name + ": it lists " + std::to_string(kept.luma_provider_count) + " LumaCore services and gives none";
+            return false;
+        }
+        for (std::uint32_t i = 0; i < kept.luma_provider_count; ++i) {
+            const LumaServiceProvider* const provider = kept.luma_providers[i];
+            if (provider == nullptr || provider->name == nullptr || std::strncmp(provider->name, "test.", 5) != 0) {
+                error = name + ": it provides the LumaCore service \"" +
+                        std::string(provider != nullptr && provider->name != nullptr ? provider->name : "(none)") +
+                        "\"; an extension provides only services named test.*";
+                return false;
+            }
+        }
+        g_extensions[g_count++] = kept;
         g_flags |= kept.flags;
         g_controls = g_controls || kept.controls != nullptr;
         g_pictures = g_pictures || kept.picture_path != nullptr;
         g_sound = g_sound || kept.sound != nullptr;
+        g_motor = g_motor || ((kept.flags & NEBULA_EXT_CONTROLS_PAD) != 0u && kept.motor != nullptr);
         if (kept.vram_budget_mb != 0u && (g_vram_budget_mb == 0u || kept.vram_budget_mb < g_vram_budget_mb)) {
             g_vram_budget_mb = kept.vram_budget_mb;
         }
         g_disc_read_delay_us = std::max(g_disc_read_delay_us, kept.disc_read_delay_us);
     }
     return true;
+}
+
+void luma_providers(void (*give)(const LumaServiceProvider* provider, void* user), void* user) noexcept {
+    for (std::size_t i = 0; i < g_count; ++i) {
+        for (std::uint32_t k = 0; k < g_extensions[i].luma_provider_count; ++k) {
+            give(g_extensions[i].luma_providers[k], user);
+        }
+    }
 }
 
 std::uint64_t vram_budget_bytes() noexcept {
@@ -113,6 +141,36 @@ std::uint32_t disc_read_delay_us() noexcept {
     return g_disc_read_delay_us;
 }
 
+void log_line(const char* tag, const char* text) noexcept {
+    bool any = false;
+    for (std::size_t i = 0; i < g_count; ++i) {
+        any = any || g_extensions[i].log_line != nullptr;
+    }
+    if (!any) {
+        return;
+    }
+    // Given as it is: a line of any length reaches the extension whole.
+    for (std::size_t i = 0; i < g_count; ++i) {
+        if (g_extensions[i].log_line != nullptr) {
+            g_extensions[i].log_line(g_extensions[i].user, tag != nullptr ? tag : "", text != nullptr ? text : "");
+        }
+    }
+}
+
+const void* service(const char* name, std::uint32_t major, std::uint32_t minor) noexcept {
+    if (name == nullptr) {
+        return nullptr;
+    }
+    for (std::size_t i = 0; i < g_count; ++i) {
+        if (g_extensions[i].service != nullptr) {
+            if (const void* const table = g_extensions[i].service(g_extensions[i].user, name, major, minor)) {
+                return table;
+            }
+        }
+    }
+    return nullptr;
+}
+
 std::uint32_t flags() noexcept {
     return g_flags;
 }
@@ -121,6 +179,18 @@ void frame(const NebulaExtensionFrame& frame) noexcept {
     for (std::size_t i = 0; i < g_count; ++i) {
         if (g_extensions[i].frame != nullptr) {
             g_extensions[i].frame(g_extensions[i].user, &frame);
+        }
+    }
+}
+
+void motor(std::uint8_t strength) noexcept {
+    if (!g_motor || strength == g_motor_given) {
+        return;
+    }
+    g_motor_given = strength;
+    for (std::size_t i = 0; i < g_count; ++i) {
+        if ((g_extensions[i].flags & NEBULA_EXT_CONTROLS_PAD) != 0u && g_extensions[i].motor != nullptr) {
+            g_extensions[i].motor(g_extensions[i].user, strength);
         }
     }
 }
@@ -191,6 +261,24 @@ bool mods_changed() noexcept {
         }
     }
     return changed;
+}
+
+bool holds_menus() noexcept {
+    for (std::size_t i = 0; i < g_count; ++i) {
+        if (g_extensions[i].holds_menus != nullptr && g_extensions[i].holds_menus(g_extensions[i].user) != 0u) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::atomic<bool> g_ended{false};
+
+void ending(bool again) noexcept {
+    if (g_ended.exchange(true)) return;
+    for (std::size_t i = 0; i < g_count; ++i) {
+        if (g_extensions[i].ending != nullptr) g_extensions[i].ending(g_extensions[i].user, again ? 1u : 0u);
+    }
 }
 
 }  // namespace galaxy::extensions

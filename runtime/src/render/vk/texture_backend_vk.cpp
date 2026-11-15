@@ -31,6 +31,8 @@ VkFormat vulkan_format_of(TexelFormat format) noexcept {
     return format == TexelFormat::R8    ? VK_FORMAT_R8_UNORM
            : format == TexelFormat::Rg8 ? VK_FORMAT_R8G8_UNORM
            : format == TexelFormat::Bc1 ? VK_FORMAT_BC1_RGBA_UNORM_BLOCK
+           : format == TexelFormat::Astc4x4 ? VK_FORMAT_ASTC_4x4_UNORM_BLOCK
+           : format == TexelFormat::Rgb565 ? VK_FORMAT_R5G6B5_UNORM_PACK16
                                         : VK_FORMAT_R8G8B8A8_UNORM;
 }
 
@@ -59,7 +61,8 @@ std::vector<VkBufferImageCopy> copy_regions(const vk::Texture& texture, std::uin
         region = {};
         region.bufferOffset = offset + offsets[l];
         region.bufferRowLength = texture.format == VK_FORMAT_R8_UNORM          ? pitches[l]
-                                 : texture.format == VK_FORMAT_R8G8_UNORM      ? pitches[l] / 2u
+                                 : texture.format == VK_FORMAT_R8G8_UNORM || texture.format == VK_FORMAT_R5G6B5_UNORM_PACK16
+                                     ? pitches[l] / 2u
                                  : texture.format == VK_FORMAT_BC1_RGBA_UNORM_BLOCK ? pitches[l] / 2u
                                                                                 : pitches[l] / 4u;
         region.bufferImageHeight = 0;
@@ -78,8 +81,11 @@ constexpr VkAccessFlags2 kAcquireAccess = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | 
 bool TextureBackend::initialize(gpu::Device*, std::uint32_t view_capacity) {
     host_formats_ = 0u;
     if (vk::Context::get().host_image_copy()) {
-        for (const TexelFormat format : {TexelFormat::Rgba8, TexelFormat::R8, TexelFormat::Rg8, TexelFormat::Bc1}) {
-            if ((format != TexelFormat::Bc1 || supports_bc1()) && host_copy_format(vulkan_format_of(format))) {
+        for (const TexelFormat format : {TexelFormat::Rgba8, TexelFormat::R8, TexelFormat::Rg8, TexelFormat::Bc1, TexelFormat::Astc4x4,
+                                         TexelFormat::Rgb565}) {
+            if ((format != TexelFormat::Bc1 || supports_bc1()) && (format != TexelFormat::Astc4x4 || supports_astc4x4()) &&
+                (format != TexelFormat::Rgb565 || supports_rgb565()) &&
+                host_copy_format(vulkan_format_of(format))) {
                 host_formats_ |= 1u << static_cast<unsigned>(format);
             }
         }
@@ -222,6 +228,18 @@ bool TextureBackend::supports_bc1() {
     return vk::Context::get().bc_textures();
 }
 
+bool TextureBackend::supports_astc4x4() {
+    return vk::Context::get().astc_textures();
+}
+
+bool TextureBackend::supports_rgb565() {
+    VkFormatProperties properties{};
+    vkGetPhysicalDeviceFormatProperties(vk::Context::get().physical_device(), VK_FORMAT_R5G6B5_UNORM_PACK16, &properties);
+    constexpr VkFormatFeatureFlags kNeeded = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+                                             VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+    return (properties.optimalTilingFeatures & kNeeded) == kNeeded;
+}
+
 gpu::TextureRef TextureBackend::create_texture(
     std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, TexelFormat format,
     bool writable) {
@@ -293,7 +311,8 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
             region.pHostPointer = staging.cpu_base + offset + offsets[l];
             // In texels, as the copy path's bufferRowLength.
             region.memoryRowLength = texture->format == VK_FORMAT_R8_UNORM          ? pitches[l]
-                                     : texture->format == VK_FORMAT_R8G8_UNORM      ? pitches[l] / 2u
+                                     : texture->format == VK_FORMAT_R8G8_UNORM || texture->format == VK_FORMAT_R5G6B5_UNORM_PACK16
+                                         ? pitches[l] / 2u
                                      : texture->format == VK_FORMAT_BC1_RGBA_UNORM_BLOCK ? pitches[l] / 2u
                                                                                     : pitches[l] / 4u;
             region.memoryImageHeight = 0;

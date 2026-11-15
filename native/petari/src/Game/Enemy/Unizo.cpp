@@ -28,100 +28,70 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setQuatXYZ_f1, "setQuatXYZ.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setQuatXYZ_f2, "setQuatXYZ.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setQuatXYZ_f3, "setQuatXYZ.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setQuatXYZ_f4, "setQuatXYZ.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setQuatXYZ_f5, "setQuatXYZ.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setQuatXYZ_f6, "setQuatXYZ.f6", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFireDown_f1, "exeFireDown.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFireDown_f2, "exeFireDown.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f2, "updateVelocity.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_f1, "updateInfluence.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_f2, "updateInfluence.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_f3, "updateInfluence.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_f4, "updateInfluence.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doJump_f1, "doJump.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doFireDown_f1, "doFireDown.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doFireDown_f2, "doFireDown.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doBreak_f1, "doBreak.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doBreak_f2, "doBreak.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startWallHitSound_f1, "startWallHitSound.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startWallHitSound_f2, "startWallHitSound.f2", 100.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_reboundVelocityFromCollision_1, "updateInfluence.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_reboundVelocityFromCollision_2, "updateInfluence.reboundVelocityFromCollision.2", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_reboundVelocityFromCollision_3, "updateInfluence.reboundVelocityFromCollision.3", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_reboundVelocityFromCollision_4, "updateInfluence.reboundVelocityFromCollision.4", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateInfluence_reboundVelocityFromCollision_5, "updateInfluence.reboundVelocityFromCollision.5", 1.0f);
 
 namespace {
     // rQuat = Z * X * Y of the half-angle axis turns in rRot (radians).
     inline void setQuatXYZ(Quat4f& rQuat, const Vec3f& rRot) {
-        Quat4f quatX(sin(rRot.x * cNum_setQuatXYZ_f1), 0.0f, 0.0f, cos(rRot.x * cNum_setQuatXYZ_f2));
-        Quat4f quatY(0.0f, sin(rRot.y * cNum_setQuatXYZ_f3), 0.0f, cos(rRot.y * cNum_setQuatXYZ_f4));
-        Quat4f quatZ(0.0f, 0.0f, sin(rRot.z * cNum_setQuatXYZ_f5), cos(rRot.z * cNum_setQuatXYZ_f6));
+        Quat4f quatX(sin(rRot.x * 0.5f), 0.0f, 0.0f, cos(rRot.x * 0.5f));
+        Quat4f quatY(0.0f, sin(rRot.y * 0.5f), 0.0f, cos(rRot.y * 0.5f));
+        Quat4f quatZ(0.0f, 0.0f, sin(rRot.z * 0.5f), cos(rRot.z * 0.5f));
 
         rQuat.mult(quatZ, quatX);
         rQuat.mult(rQuat, quatY);
     }
 
-    NEBULA_TUNABLE(f32, sChaseRadius, 1500.0f);
-    NEBULA_TUNABLE(f32, sChaseDegree, 90.0f);
-    NEBULA_TUNABLE(f32, sChaseCycle, 20.0f);
-    NEBULA_TUNABLE(f32, sRollHeightSea, 30.0f);
-    NEBULA_TUNABLE(f32, sRollCycle, 60.0f);
-    NEBULA_TUNABLE(f32, sAccelerate, 0.1f);
-    NEBULA_TUNABLE(f32, sChaseSpeedMax, 4.0f);
-    NEBULA_TUNABLE(f32, sSpinSpeedMax, 6.0f);
-    NEBULA_TUNABLE(f32, sTotalSpeedMax, 12.0f);
-    NEBULA_TUNABLE(f32, sBrakeRate, 0.9f);
-    NEBULA_TUNABLE(f32, sBrakeRateChase, 0.96f);
-    NEBULA_TUNABLE(f32, sGravityRateSea, 0.15f);
-    NEBULA_TUNABLE(f32, sGravityRateLand, 0.8f);
-    NEBULA_TUNABLE(f32, sGravityRateGround0, 0.2f);
-    NEBULA_TUNABLE(f32, sGravityRateGround1, 0.8f);
-    NEBULA_TUNABLE(f32, sDriftSpeedRate, 0.02f);
-    NEBULA_TUNABLE(f32, sStopSpeed, 0.5f);
-    NEBULA_TUNABLE(f32, sReboundFloor, 0.6f);
-    NEBULA_TUNABLE(f32, sReboundEnemy, 0.2f);
-    NEBULA_TUNABLE(f32, sReboundPlayerV, 5.0f);
-    NEBULA_TUNABLE(f32, sReboundPlayerH, 1.0f);
-    NEBULA_TUNABLE(f32, sRadiusScale, 1.0f);
-    NEBULA_TUNABLE(f32, sJumpHeight, 70.0f);
-    NEBULA_TUNABLE(s32, sCollidePlayerCount, 120);
-    NEBULA_TUNABLE(s32, sCollideEnemyCount, 60);
-    NEBULA_TUNABLE(s32, sSpinAnimationCount, 50);
-    NEBULA_TUNABLE(s32, sRollSoundTime, 20);
-    NEBULA_TUNABLE(f32, sRollSoundSpeed, 2.0f);
-    NEBULA_TUNABLE(f32, sLandSoundLandSpeed, 2.0f);
-    NEBULA_TUNABLE(f32, sWallHitSoundSpeed, 3.0f);
+    const f32 sChaseRadius = 1500.0f;
+    const f32 sChaseDegree = 90.0f;
+    const f32 sChaseCycle = 20.0f;
+    const f32 sRollHeightSea = 30.0f;
+    const f32 sRollCycle = 60.0f;
+    const f32 sAccelerate = 0.1f;
+    const f32 sChaseSpeedMax = 4.0f;
+    const f32 sSpinSpeedMax = 6.0f;
+    const f32 sTotalSpeedMax = 12.0f;
+    const f32 sBrakeRate = 0.9f;
+    const f32 sBrakeRateChase = 0.96f;
+    const f32 sGravityRateSea = 0.15f;
+    const f32 sGravityRateLand = 0.8f;
+    const f32 sGravityRateGround0 = 0.2f;
+    const f32 sGravityRateGround1 = 0.8f;
+    const f32 sDriftSpeedRate = 0.02f;
+    const f32 sStopSpeed = 0.5f;
+    const f32 sReboundFloor = 0.6f;
+    const f32 sReboundEnemy = 0.2f;
+    const f32 sReboundPlayerV = 5.0f;
+    const f32 sReboundPlayerH = 1.0f;
+    const f32 sRadiusScale = 1.0f;
+    const f32 sJumpHeight = 70.0f;
+    const s32 sCollidePlayerCount = 120;
+    const s32 sCollideEnemyCount = 60;
+    const s32 sSpinAnimationCount = 50;
+    const s32 sRollSoundTime = 20;
+    const f32 sRollSoundSpeed = 2.0f;
+    const f32 sLandSoundLandSpeed = 2.0f;
+    const f32 sWallHitSoundSpeed = 3.0f;
     const s32 sUnizoCollisionSePlayTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sSurfaceEffectMinLimit, 40.0f);
-    NEBULA_TUNABLE(f32, sSurfaceEffectMaxLimit, 200.0f);
-    NEBULA_TUNABLE(f32, sSurfaceEffectMaxRunLimit, 280.0f);
-    NEBULA_TUNABLE(f32, sSurfaceEffectRunSpeed, 5.0f);
-    NEBULA_TUNABLE(f32, sFireDownVertical, 22.0f);
-    NEBULA_TUNABLE(f32, sFireDownHorizontal, 6.0f);
-    NEBULA_TUNABLE(f32, sFireDownAttenuate, 1.0f);
-    NEBULA_TUNABLE(f32, sFireDownGravity, 1.1f);
-    NEBULA_TUNABLE(s32, sFireDownStarPiece, 34);
-    NEBULA_TUNABLE(f32, sDamageFloorVertical, 30.0f);
-    NEBULA_TUNABLE(s32, sDamageFloorFrame, 50);
-    NEBULA_TUNABLE(s32, sJumpNow, 1);
-    NEBULA_TUNABLE(s32, sStarPieceNum, 6);
-    NEBULA_TUNABLE(f32, sRollHeightLand, 0.0f);
-    NEBULA_TUNABLE(s32, sStartSearch, 0);
-    NEBULA_TUNABLE(f32, sSurfaceEffectMinRunLimit, 0.0f);
-    NEBULA_TUNABLE(f32, sBodyRadius, 126.36f);  // binder and roll radius; the body sensor sits this high
-    NEBULA_TUNABLE(f32, sSensorRadius, 115.2f);
-    NEBULA_TUNABLE(f32, sShadowRadius, 106.36f);
-    NEBULA_TUNABLE(s32, sBlinkCycle, 200);
+    const f32 sSurfaceEffectMinLimit = 40.0f;
+    const f32 sSurfaceEffectMaxLimit = 200.0f;
+    const f32 sSurfaceEffectMaxRunLimit = 280.0f;
+    const f32 sSurfaceEffectRunSpeed = 5.0f;
+    const f32 sFireDownVertical = 22.0f;
+    const f32 sFireDownHorizontal = 6.0f;
+    const f32 sFireDownAttenuate = 1.0f;
+    const f32 sFireDownGravity = 1.1f;
+    const s32 sFireDownStarPiece = 34;
+    const f32 sDamageFloorVertical = 30.0f;
+    const s32 sDamageFloorFrame = 50;
+    const s32 sJumpNow = 1;
+    const s32 sStarPieceNum = 6;
+    const f32 sRollHeightLand = 0.0f;
+    const s32 sStartSearch = 0;
+    const f32 sSurfaceEffectMinRunLimit = 0.0f;
+    const f32 sBodyRadius = 126.36f;  // binder and roll radius; the body sensor sits this high
+    const f32 sSensorRadius = 115.2f;
+    const f32 sShadowRadius = 106.36f;
+    const s32 sBlinkCycle = 200;
 
     inline f32 toDeg(f32 x) {
         return _180_PI * x;
@@ -386,7 +356,7 @@ void Unizo::exeFireDown() {
     fallBroken();
 
     if (MR::isStep(this, sFireDownStarPiece)) {
-        if (MR::appearStarPiece(this, mBreakModel->mPosition, sStarPieceNum, cNum_exeFireDown_f1, cNum_exeFireDown_f2, true)) {
+        if (MR::appearStarPiece(this, mBreakModel->mPosition, sStarPieceNum, 10.0f, 40.0f, true)) {
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         }
     }
@@ -506,7 +476,7 @@ void Unizo::updateVelocity() {
     f32 speedRate = mVelocity.length() / sChaseSpeedMax;
     chaseRate *= speedRate >= 1.0f ? 1.0f : speedRate;
     Pos3f rotateMtx;
-    f32 angle = (PI / cNum_updateVelocity_f1) * (sChaseDegree * chaseRate / cNum_updateVelocity_f2);
+    f32 angle = (PI / 180.0f) * (sChaseDegree * chaseRate / 2.0f);
     rotateMtx.makeRotate(mGravity, angle);
     rotateMtx.mult(direction, direction);
 
@@ -524,9 +494,9 @@ void Unizo::updateInfluence() {
     bool rebound;
     if (mJumpCount != 0) {
         MR::addVelocityToGravity(this, mGravityRate);
-        rebound = MR::reboundVelocityFromCollision(this, sReboundFloor, cNum_updateInfluence_reboundVelocityFromCollision_1, cNum_updateInfluence_reboundVelocityFromCollision_2);
+        rebound = MR::reboundVelocityFromCollision(this, sReboundFloor, 0.0f, 1.0f);
     } else {
-        rebound = MR::reboundVelocityFromCollision(this, cNum_updateInfluence_reboundVelocityFromCollision_3, cNum_updateInfluence_reboundVelocityFromCollision_4, cNum_updateInfluence_reboundVelocityFromCollision_5);
+        rebound = MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
         if (MR::isBindedGround(this)) {
             MR::addVelocityToGravity(this, sGravityRateGround0);
         } else {
@@ -544,9 +514,9 @@ void Unizo::updateInfluence() {
         f32 verticalSpeed = -mGravity.dot(mVelocity);
         if (verticalSpeed >= sLandSoundLandSpeed) {
             if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
-                MR::startLevelSound(this, "SE_EM_LV_UNIZO_LAND_WATER", cNum_updateInfluence_f1 * verticalSpeed, 30);
+                MR::startLevelSound(this, "SE_EM_LV_UNIZO_LAND_WATER", 100.0f * verticalSpeed, 30);
             } else {
-                MR::startLevelSound(this, "SE_EM_LV_UNIZO_LAND", cNum_updateInfluence_f2 * verticalSpeed, 30);
+                MR::startLevelSound(this, "SE_EM_LV_UNIZO_LAND", 100.0f * verticalSpeed, 30);
             }
         }
         if (MR::isBindedWall(this)) {
@@ -575,9 +545,9 @@ void Unizo::updateInfluence() {
         f32 speed = mVelocity.length();
         if (speed >= sRollSoundSpeed) {
             if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
-                MR::startLevelSound(this, "SE_EM_LV_UNIZO_ROLL_WATER", cNum_updateInfluence_f3 * speed);
+                MR::startLevelSound(this, "SE_EM_LV_UNIZO_ROLL_WATER", 100.0f * speed);
             } else {
-                MR::startLevelSound(this, "SE_EM_LV_UNIZO_ROLL_GROUND", cNum_updateInfluence_f4 * speed);
+                MR::startLevelSound(this, "SE_EM_LV_UNIZO_ROLL_GROUND", 100.0f * speed);
             }
         }
         mRollSoundTimer--;
@@ -631,7 +601,7 @@ void Unizo::deleteEffect() {
 void Unizo::doJump() {
     f32 gravity = mGravityRate * mGravity.length();
     mJumpCount = sJumpNow;
-    f32 speed = MR::sqrt(cNum_doJump_f1 * (mRadiusScale * (sJumpHeight * gravity)));
+    f32 speed = MR::sqrt(2.0f * (mRadiusScale * (sJumpHeight * gravity)));
     mVelocity.add(mGravity * speed * -1.0f);
 }
 
@@ -661,7 +631,7 @@ void Unizo::doJumpDown() {
 void Unizo::doFireDown(const Vec3f& rDirection) {
     appearBreakModel();
     if (mType == TypeShoal) {
-        if (MR::appearStarPiece(this, mPosition, sStarPieceNum, cNum_doFireDown_f1, cNum_doFireDown_f2, true)) {
+        if (MR::appearStarPiece(this, mPosition, sStarPieceNum, 10.0f, 40.0f, true)) {
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
         }
         MR::startBck(mBreakModel, "Firedown");
@@ -682,7 +652,7 @@ void Unizo::doFireDown(const Vec3f& rDirection) {
 }
 
 void Unizo::doBreak() {
-    if (MR::appearStarPiece(this, mPosition, sStarPieceNum, cNum_doBreak_f1, cNum_doBreak_f2, mType != TypeSea)) {
+    if (MR::appearStarPiece(this, mPosition, sStarPieceNum, 10.0f, 40.0f, mType != TypeSea)) {
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
     }
     MR::startSound(this, "SE_EM_UNIZO_BREAK");
@@ -786,9 +756,9 @@ void Unizo::startWallHitSound() {
     f32 speed = mVelocity.length();
     if (speed >= sWallHitSoundSpeed) {
         if (MR::isInWater(this, Vec3f(0.0f, 0.0f, 0.0f))) {
-            MR::startLevelSound(this, "SE_EM_LV_UNIZO_COLLISION_WATER", cNum_startWallHitSound_f1 * speed, sUnizoCollisionSePlayTime);
+            MR::startLevelSound(this, "SE_EM_LV_UNIZO_COLLISION_WATER", 100.0f * speed, sUnizoCollisionSePlayTime);
         } else {
-            MR::startLevelSound(this, "SE_EM_LV_UNIZO_COLLISION", cNum_startWallHitSound_f2 * speed, sUnizoCollisionSePlayTime);
+            MR::startLevelSound(this, "SE_EM_LV_UNIZO_COLLISION", 100.0f * speed, sUnizoCollisionSePlayTime);
         }
     }
 }

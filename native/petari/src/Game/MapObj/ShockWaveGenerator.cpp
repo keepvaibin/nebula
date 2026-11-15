@@ -12,20 +12,14 @@
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isHitCylinder_f1, "isHitCylinder.f1", 140.0f);
 
 namespace {
     static const char* cDemoCameraName = "衝撃波カメラ";
-    NEBULA_TUNABLE(s32, sStepForGenerate, 50);
-    NEBULA_TUNABLE(s32, sStepForDemoEcho, 1);
-    NEBULA_TUNABLE(f32, sHitCylinderRadius, 400.0f);
-    NEBULA_TUNABLE(f32, sEnableCameraStartDistance, 2000.0f);
+    const s32 sStepForGenerate = 50;
+    const s32 sStepForDemoEcho = 1;
+    const f32 sHitCylinderRadius = 400.0f;
+    const f32 sEnableCameraStartDistance = 2000.0f;
 };  // namespace
 
 namespace NrvShockWaveGenerator {
@@ -44,8 +38,8 @@ void ShockWaveGenerator::init(const TableIter& rIter) {
     MR::connectToSceneIndirectMapObj(this);
     initHitSensor(3);
     MR::addBodyMessageSensorMapObj(this);
-    MR::addHitSensorMapObjSimple(this, "spin", 8, ::sHitCylinderRadius, Vec3f(0.0f, cNum_init_f1, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "shock", 16, cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "spin", 8, ::sHitCylinderRadius, Vec3f(0.0f, 200.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "shock", 16, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "ShockWaveGenerator", getSensor("body"), nullptr);
 
     if (!MR::initActorCamera(this, rIter, &mCameraInfo)) {
@@ -55,7 +49,7 @@ void ShockWaveGenerator::init(const TableIter& rIter) {
     initEffectKeeper(0, nullptr);
     initSound(2, false);
 
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f3);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::useStageSwitchSleep(this, rIter);
     initNerve(GET_NERVE(ShockWaveGenerator, ShockWaveGeneratorNrvWait));
     makeActorAppeared();
@@ -174,5 +168,5 @@ bool ShockWaveGenerator::isHitCylinder(HitSensor* pSender, HitSensor* pReceiver)
     Vec3f up;
     MR::calcUpVec(&up, this);
     Vec3f horiz = diff.killElement(up);
-    return horiz.length() <= pSender->getRadius() + cNum_isHitCylinder_f1;
+    return horiz.length() <= pSender->getRadius() + 140.0f;
 }

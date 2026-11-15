@@ -12,17 +12,11 @@
 #include <nebula_game_api.h>
 #include <cstring>
 #include "Game/System/NebulaHost.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_postDraw_f1, "postDraw.f1", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_postDraw_f2, "postDraw.f2", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f1, "initDraw.f1", 10000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initDraw_f2, "initDraw.f2", 10000.0f);
-
 namespace {
-    NEBULA_TUNABLE(u32, sL1RoundPoints, 6);
-    NEBULA_TUNABLE(u32, sL2RoundPoints, 12);
+    const u32 sL1RoundPoints = 6;
+    const u32 sL2RoundPoints = 12;
 
     // Whether the renderer's bloom is there (NEBULA_OPTION_BLOOM): decided at the frame's first pass, so a change in
     // between never draws a bloom over a scene that was not kept.
@@ -65,8 +59,8 @@ void BloomEffect::postDraw() const {
     // Drawn by the renderer at the frame's own size: the threshold, both blurs' tap weights, the intensity and the
     // rings' horizontal radius per unit.
     const u8 intensity = mBloomIntensity * getFadeLevel();
-    const u32 tap1 = static_cast< u8 >(static_cast< s32 >(mIntensity1 * cNum_postDraw_f1));
-    const u32 tap2 = static_cast< u8 >(static_cast< s32 >(mIntensity2 * cNum_postDraw_f2));
+    const u32 tap1 = static_cast< u8 >(static_cast< s32 >(mIntensity1 * 255.0f));
+    const u32 tap2 = static_cast< u8 >(static_cast< s32 >(mIntensity2 * 255.0f));
     Frame::bloom(NEBULA_PASS_BLOOM_NORMAL, mThreshold | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,
                               floatBits(1.0f / MR::getAspect()));
     initDraw();
@@ -88,7 +82,7 @@ void BloomEffect::initDraw() const {
     MR::resetDrawState();
 
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -cNum_initDraw_f1, cNum_initDraw_f2);
+    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -10000.0f, 10000.0f);
     Frame::setOrthographic(projectionMtx);
 
     MR::loadViewMtxFor2DModel();

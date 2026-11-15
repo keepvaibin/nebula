@@ -1,0 +1,265 @@
+//! L300-L309: layers and the paths in them (luma.md 4, 5).
+
+use super::{p, t, Ctx};
+use crate::zip::EntryKind;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// Where each source ending the cook does not make at a game path belongs instead (L304's `expected`, as the cook in
+/// nebula-import overlay.rs reads them): every ending of SOURCE_ENDINGS is cooked there or listed here (a test holds
+/// it). A font, movie or MIDI file is read by a `.font.json`, `.movie.json` or `.sound.json` in a layer's assets/; a
+/// buffer or image only by the model that names it; a `.dds` also as a texture pack's texture.
+pub const WHERE: [(&str, &str); 11] = [
+    (".bin", "Where.ModelPart"),
+    (".jpg", "Where.ModelPart"),
+    (".jpeg", "Where.ModelPart"),
+    (".ktx2", "Where.ModelPart"),
+    (".dds", "Where.Texture"),
+    (".mid", "Where.Music"),
+    (".json", "Where.Table"),
+    (".ttf", "Where.Font"),
+    (".otf", "Where.Font"),
+    (".webm", "Where.Movie"),
+    (".mp4", "Where.Movie"),
+];
+
+/// The most of a model file read to find the files it names.
+const MAX_MODEL: u64 = 1 << 30;
+
+/// The files (paths under the layer's `files/`, as spelled) that a `.gltf` or `.glb` of the layer names by a buffer's or
+/// an image's `uri`, read by `crate::uri::model_uri` as the cook (gltf.rs read_uri) reads it: a file beside the model.
+/// The cook refuses the others by name.
+fn model_parts(ctx: &mut Ctx, layer: &str) -> BTreeSet<String> {
+    let prefix = format!("layers/{layer}/files/");
+    let models: Vec<(usize, String)> = ctx
+        .m
+        .items
+        .iter()
+        .enumerate()
+        .filter(|(_, i)| i.kind == EntryKind::File)
+        .filter_map(|(n, i)| i.name.strip_prefix(&prefix).map(|path| (n, path.to_string())))
+        .filter(|(_, path)| {
+            let lower = path.to_ascii_lowercase();
+            lower.ends_with(".gltf") || lower.ends_with(".glb")
+        })
+        .collect();
+    let mut parts = BTreeSet::new();
+    for (index, path) in models {
+        // A model that cannot be read is the container's finding (L105, L106) or the cook's (L804).
+        let Ok(bytes) = ctx.m.read(index, MAX_MODEL) else { continue };
+        let json = if path.to_ascii_lowercase().ends_with(".glb") { glb_json(&bytes) } else { Some(&bytes[..]) };
+        let Some(Ok(root)) = json.map(crate::json::parse) else { continue };
+        let folder = path.rsplit_once('/').map_or("", |(f, _)| f);
+        for list in ["buffers", "images"] {
+            for item in root.get(list).map(|l| l.items().to_vec()).unwrap_or_default() {
+                let Some(uri) = item.get("uri").and_then(|u| u.as_str()) else { continue };
+                if let crate::uri::ModelUri::File(file) = crate::uri::model_uri(uri) {
+                    parts.insert(if folder.is_empty() { file } else { format!("{folder}/{file}") });
+                }
+            }
+        }
+    }
+    parts
+}
+
+/// The JSON chunk of a binary glTF (`glTF`, version 2, then a chunk of type `JSON`).
+fn glb_json(bytes: &[u8]) -> Option<&[u8]> {
+    let word = |at: usize| bytes.get(at..at + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+    if bytes.get(0..4)? != b"glTF" || word(4)? != 2 || word(16)? != 0x4E4F_534A {
+        return None;
+    }
+    let length = usize::try_from(word(12)?).ok()?;
+    bytes.get(20..20usize.checked_add(length)?)
+}
+
+/// Source endings a whole file may have instead of the game format's (luma.md 5).
+pub const SOURCE_ENDINGS: [&str; 16] =
+    [".gltf", ".glb", ".bin", ".png", ".jpg", ".jpeg", ".ktx2", ".dds", ".wav", ".ogg", ".mid", ".json", ".ttf", ".otf", ".webm", ".mp4"];
+
+/// A source file (lowercase path under `files/`) of a kind the cook makes: a model, an animation file, collision, a
+/// cutscene camera (`.glb`, `.gltf` and their `.anim.`, `.kcl.`, `.canm.` forms), a picture (`.png`), a stream (`.wav`,
+/// `.ogg`), a table (`.bcsv.json`, `.bcam.json`, a stage's placement `.arc/jmp/**.json`), a screen layout
+/// (`.layout.json`), a clip's frame events (`.anim.json` in an archive), a sound (`.sound.json`), a font (`.font.json`)
+/// or a movie (`.movie.json`); the last three belong in `assets/`: the cook refuses them here by name.
+/// What it stands in for is the cook's to say (nebula-import cook::overlay::cook_source, which a test holds to this
+/// list): it refuses by name (L804) at the game's start and in LumaLink's check before a pack.
+pub fn cooked_source(lower: &str) -> bool {
+    [".glb", ".gltf", ".png", ".wav", ".ogg", ".bcsv.json", ".bcam.json", ".layout.json", ".sound.json", ".anim.json", ".font.json", ".movie.json", ".model.json"]
+        .iter()
+        .any(|e| lower.ends_with(e))
+        || (lower.ends_with(".json") && lower.contains(".arc/jmp/"))
+}
+
+/// The game path a file at `layers/<l>/files/<path>` stands at, as kept for L305: lowercase, and a source form with
+/// `.json` added to a file name that has its own ending (`scenariodata.bcsv.json`) is that file, so two mods bringing
+/// one file in either form are named.
+fn replaced(path: &str) -> String {
+    let lower = path.to_lowercase();
+    // A hidden model replaces the model it names.
+    if let Some(model) = lower.strip_suffix(".model.json") {
+        return model.to_string();
+    }
+    match lower.strip_suffix(".json") {
+        Some(stem) if stem.rsplit('/').next().is_some_and(|name| name.contains('.')) => stem.to_string(),
+        _ => lower,
+    }
+}
+
+/// Ray tracing's tables a layer's `merge/` may hold (lowercase): rows the host reads after the game's, and the tables
+/// that class a pack's models as they cook.
+pub const MERGE_TABLES: [&str; 5] =
+    ["nebuladata/rtstages.tsv", "nebuladata/rteffects.tsv", "nebuladata/rtmaterials.tsv", "nebuladata/rtglow.tsv", "nebuladata/rtwater.tsv"];
+
+/// A `merge/<game path>` the import's cook reads (nebula-import overlay.rs run_merges and write_overlay, which take
+/// this as their gate): a table or a message file in its JSON form (`.json`: `<Table>.bcsv.json`, `message.bmg.json`,
+/// `MessageData/messages.json`, a particle file's `.jpc.json`), a particle file (`.jpc`), or one of MERGE_TABLES.
+pub fn mergeable(path: &str) -> bool {
+    let lower = path.trim_start_matches('/').to_ascii_lowercase();
+    lower.ends_with(".json") || lower.ends_with(".jpc") || MERGE_TABLES.contains(&lower.as_str())
+}
+
+pub(crate) fn check(ctx: &mut Ctx) {
+    let listed: Vec<(String, crate::json::Pos, String)> = ctx.facts.layers.clone();
+    let mut folders: BTreeSet<String> = BTreeSet::new();
+    for item in ctx.m.items.clone() {
+        let mut parts = item.name.splitn(4, '/');
+        if parts.next() != Some("layers") {
+            continue;
+        }
+        let Some(layer) = parts.next() else { continue };
+        let is_folder_entry = item.kind == EntryKind::Folder;
+        let part = parts.next();
+        if part.is_none() && !is_folder_entry {
+            // A file directly under layers/.
+            ctx.add(306, &item.name, None, None, vec![("entry", t(item.name.clone()))]);
+            continue;
+        }
+        folders.insert(layer.to_string());
+        let Some(part) = part else { continue };
+        let rest = parts.next();
+        // textures/: the game's textures replaced by their names (`<model>/<texture>.png` or `.dds`, or Dolphin's
+        // `tex1_` names, which the game names at install), as a texture pack (luma.md 5).
+        let texture_ok = rest.is_some_and(|r| {
+            let lower = r.to_ascii_lowercase();
+            is_folder_entry || lower.ends_with(".png") || lower.ends_with(".dds")
+        });
+        if !matches!(part, "files" | "patches" | "merge" | "assets" | "textures") || (rest.is_none() && !is_folder_entry) || (part == "textures" && rest.is_some() && !texture_ok) {
+            ctx.add(306, &item.name, None, None, vec![("entry", t(item.name.clone()))]);
+        } else if part == "merge" && !is_folder_entry && rest.is_some_and(|r| !mergeable(r)) {
+            // L309: merge/ adds to a file of the game's (the import's cook, overlay.rs apply_merges): only what it can add to.
+            ctx.add(309, &item.name, None, None, vec![("entry", t(item.name.clone()))]);
+        }
+    }
+    // A layer whose whole content is the previous engine's rows (`pre_standard.layers.<name>`, OLD-ROWS) has no folder:
+    // a .luma holds no empty folders.
+    let rows_only: BTreeSet<String> = ctx
+        .manifest
+        .as_ref()
+        .and_then(|m| m.get("pre_standard"))
+        .and_then(|p| p.get("layers"))
+        .map(|l| l.members().iter().map(|m| m.key.clone()).collect())
+        .unwrap_or_default();
+    for (name, pos, ptr) in &listed {
+        if !folders.contains(name) && !rows_only.contains(name) {
+            let ptr = if ptr.is_empty() { None } else { Some(ptr.as_str()) };
+            ctx.add(300, "luma.json", Some(*pos), ptr, vec![("layer", t(name.clone())), ("why", p("Layer.NoFolder"))]);
+        }
+    }
+    for folder in &folders {
+        if !listed.iter().any(|(n, _, _)| n == folder) {
+            ctx.add(300, &format!("layers/{folder}/"), None, None, vec![("layer", t(folder.clone())), ("why", p("Layer.NotListed"))]);
+        }
+    }
+
+    // L307: a layer the mod's code chooses, on a platform it may apply to where the mod has no code.
+    if let Some(root) = ctx.manifest.clone() {
+        for (i, layer) in root.get("layers").map(|l| l.items().to_vec()).unwrap_or_default().iter().enumerate() {
+            let Some(when) = layer.get("when") else { continue };
+            if when.get("code").and_then(|c| c.as_bool()) != Some(true) {
+                continue;
+            }
+            let name = layer.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
+            let platforms: Vec<String> = match when.get("platform") {
+                Some(list) => list.items().iter().filter_map(|x| x.as_str().map(str::to_string)).collect(),
+                None => ctx.input.platforms.iter().map(|s| s.to_string()).collect(),
+            };
+            for platform in platforms {
+                if !ctx.facts.code_platforms.contains(&platform) {
+                    ctx.add(307, "luma.json", Some(when.pos), Some(&format!("/layers/{i}/when")), vec![("layer", t(name.clone())), ("platform", t(platform))]);
+                }
+            }
+        }
+    }
+
+    // L302-L304: whole files at game paths, against the player's game.
+    let store = ctx.game().and_then(|g| g.store);
+    let mut parts_of: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for item in ctx.m.items.clone() {
+        if item.kind != EntryKind::File {
+            continue;
+        }
+        let parts: Vec<&str> = item.name.splitn(4, '/').collect();
+        if parts.len() != 4 || parts[0] != "layers" {
+            continue;
+        }
+        match parts[2] {
+            "files" => {
+                let path = parts[3];
+                ctx.facts.touches.replaces.push(replaced(path));
+                let Some(store) = store else {
+                    ctx.not_checked(302, "Missing.Store");
+                    ctx.not_checked(303, "Missing.Store");
+                    continue;
+                };
+                let lower = path.to_lowercase();
+                // L308: `<path>.model.json` ({"hide": true}) hides a model of the game: `<path>` must be one (a .bdl
+                // or .bmd the game has; a plain `<Name>` is the archive's model of that name, the cook's to find).
+                if let Some(hidden) = lower.strip_suffix(".model.json") {
+                    let model = if hidden.ends_with(".bdl") || hidden.ends_with(".bmd") {
+                        store.path(hidden).is_some()
+                    } else {
+                        store.path(&format!("{hidden}.bdl")).is_some() || store.path(&format!("{hidden}.bmd")).is_some()
+                    };
+                    if !model {
+                        ctx.add(308, &item.name, None, None, vec![("found", t(hidden.to_string()))]);
+                    }
+                    continue;
+                }
+                let source = SOURCE_ENDINGS.iter().find(|e| lower.ends_with(**e));
+                match store.path(&lower) {
+                    Some(game_path) => {
+                        if store.table(&game_path).is_some() {
+                            ctx.add(303, &item.name, None, None, vec![("found", t(game_path))]);
+                        }
+                    }
+                    None => {
+                        // A source form of a game table at the table's own path (`objinfo.json` beside `objinfo`,
+                        // as `lumalink extract --game` writes it) still replaces rows: L303, in any form.
+                        let table = source.and_then(|e| store.path(&lower[..lower.len() - e.len()])).filter(|g| store.table(g).is_some());
+                        if let Some(game_path) = table {
+                            ctx.add(303, &item.name, None, None, vec![("found", t(game_path))]);
+                        } else if let Some(ending) = source.filter(|_| !cooked_source(&lower)) {
+                            // A source of a kind the cook does not make at a game path: a file a model of the layer
+                            // names is that model's (read by its cook, L804); anything else is placed where the game
+                            // never reads it, so it is named with where it belongs.
+                            let layer = parts[1].to_string();
+                            if !parts_of.contains_key(&layer) {
+                                let found = model_parts(ctx, &layer);
+                                parts_of.insert(layer.clone(), found);
+                            }
+                            if !parts_of[&layer].contains(path) {
+                                let expected = WHERE.iter().find(|(e, _)| e == ending).map_or("Where.ModelPart", |(_, phrase)| phrase);
+                                ctx.add(304, &item.name, None, None, vec![("kind", t(*ending)), ("found", t(path)), ("expected", p(expected))]);
+                            }
+                        } else if !store.may_be_new(&lower) {
+                            ctx.add(302, &item.name, None, None, vec![("found", t(path))]);
+                        }
+                    }
+                }
+            }
+            "assets" => {
+                ctx.facts.touches.assets.push(parts[3].to_string());
+            }
+            _ => {}
+        }
+    }
+}

@@ -6,14 +6,11 @@
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_findGround_f1, "findGround.f1", 1.25f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sListCapacity, 2560);
-    NEBULA_TUNABLE(u32, sTableSize, 8192);
+    const s32 sListCapacity = 2560;
+    const u32 sTableSize = 8192;
 
     u32 hashActor(const LiveActor* pActor) {
         return static_cast< u32 >(reinterpret_cast< uintptr_t >(pActor) >> 4) * 0x9E3779B1u;
@@ -119,7 +116,7 @@ const ClippingActorInfo* ClippingActorHolder::findGround(const ClippingActorInfo
         if (planet == pInfo) {
             return nullptr;
         }
-        const f32 reach = planet->mRadius * cNum_findGround_f1;
+        const f32 reach = planet->mRadius * 1.25f;
         const f32 x = pos.x - planet->mCenter->x;
         const f32 y = pos.y - planet->mCenter->y;
         const f32 z = pos.z - planet->mCenter->z;

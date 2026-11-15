@@ -39,6 +39,8 @@ struct PostProcessPlan {
     bool rcas = false;
     // The resample writes the window directly unless RCAS follows it.
     bool resample_to_target = false;
+    // That write at the picture's own size: each pixel its texel (the copy pass, without the box filter's arithmetic).
+    bool copy = false;
 };
 
 // smaa_available / fxaa_available: the pass passed its start-up self-test.
@@ -62,8 +64,12 @@ struct PostConstants {
     // 8-bit window (dithered), 2 the last write as HDR10 (set_post_output). origin[3]: with 2, the paper white and the
     // display's peak (post_output_word).
     std::int32_t origin[4];
+    // turn[0]: the target turned by 0-3 quarter turns clockwise (a pre-rotated Vulkan swap chain image), so the passes
+    // turn its pixels back to the picture's; turn[1..2]: the picture's width and height.
+    std::int32_t turn[4];
 };
-static_assert(sizeof(PostConstants) == 28u * 4u);
+// 128 bytes: Vulkan's least push constant size.
+static_assert(sizeof(PostConstants) == 32u * 4u);
 
 // rt_metrics for a pass reading a `width` x `height` input.
 void set_post_input_size(PostConstants& constants, unsigned width, unsigned height) noexcept;
@@ -132,6 +138,10 @@ void rgba8_to_ten_bit(const std::uint8_t* rgba, std::uint8_t* words, unsigned wi
                       unsigned pitch) noexcept;
 void ten_bit_to_rgba8(const std::uint8_t* words, std::uint8_t* rgba, unsigned width, unsigned height,
                       unsigned word_pitch, unsigned rgba_pitch) noexcept;
+// The wide scene's RGBA16F rows as the 10-bit scene's words: each channel round(clamp(v, 0, 1) * 1023), the
+// alpha round(a * 3), what the 10-bit target would have held; its readbacks then read as the 10-bit target's.
+void half4_to_ten_bit(const std::uint8_t* halves, std::uint8_t* words, unsigned width, unsigned height,
+                      unsigned half_pitch, unsigned word_pitch) noexcept;
 
 // The AA start-up self-test: a 32 x 32 white-over-black edge stepping down one row every four columns, the jagged
 // case both passes exist for. A working pass blends a few dozen pixels along the steps and leaves flat areas alone.

@@ -8,6 +8,7 @@ public:
     ScenePlayingResult();
 
     void incCoin(int num);
+    bool payCoin(s32 num);
     s32 getCoinNum() const;
     void incPurpleCoin();
     void incStarPiece(int num);

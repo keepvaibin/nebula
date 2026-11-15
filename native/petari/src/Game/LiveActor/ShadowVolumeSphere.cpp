@@ -3,11 +3,10 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include <NebulaGpu.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sModelScale, 100.0f);
+    const f32 sModelScale = 100.0f;
 };  // namespace
 
 ShadowVolumeSphere::~ShadowVolumeSphere() {

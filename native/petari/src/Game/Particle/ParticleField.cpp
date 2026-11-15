@@ -3,10 +3,6 @@
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/ParticleCore.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 10.0f);
 
 void FieldBase::calcAffect(ParticleField* block, ParticleCore* ptcl) {
     Vec3f vec = mAccel;
@@ -141,9 +137,9 @@ void FieldNewton::calc(EmitterWork* /*work*/, ParticleField* block, ParticleCore
     mAccel.sub(mDir, ptcl->mLocalPosition);
     f32 len_sq = mAccel.squared();
     if (len_sq > mCutoff) {
-        mAccel.setLength(mCutoff * (block->getMag() * cNum_calc_f1) / len_sq);
+        mAccel.setLength(mCutoff * (block->getMag() * 10.0f) / len_sq);
     } else {
-        mAccel.setLength(block->getMag() * cNum_calc_f2);
+        mAccel.setLength(block->getMag() * 10.0f);
     }
     calcAffect(block, ptcl);
 }
@@ -164,7 +160,11 @@ void FieldConvection::calc(EmitterWork* /*work*/, ParticleField* block, Particle
 void FieldRandom::calc(EmitterWork* work, ParticleField* block, ParticleCore* ptcl) {
     if (ptcl->mAge == 0 || (block->getCycle() != 0 && ptcl->mAge % block->getCycle() == 0)) {
         EmitterCore* emtr = work->mpEmtr;
-        mAccel.set< f32 >(emtr->get_r_zh(), emtr->get_r_zh(), emtr->get_r_zh());
+        // Drawn z, y, x: the console's right-to-left order of the arguments, on every platform.
+        const f32 z = emtr->get_r_zh();
+        const f32 y = emtr->get_r_zh();
+        const f32 x = emtr->get_r_zh();
+        mAccel.set< f32 >(x, y, z);
         mAccel.scale(block->getMag());
         calcAffect(block, ptcl);
     }

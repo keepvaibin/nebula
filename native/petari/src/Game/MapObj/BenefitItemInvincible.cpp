@@ -10,21 +10,17 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_doEscape_addVelocityToGravity_1, "doEscape.addVelocityToGravity.1", 1.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, cAppearThrowUpSpd, 10.0f);
-    NEBULA_TUNABLE(f32, cAppearThrowFwdSpd, 5.0f);
-    NEBULA_TUNABLE(f32, cBoundUpSpd, 20.0f);
-    NEBULA_TUNABLE(f32, cBoundFwdSpd, 10.0f);
-    NEBULA_TUNABLE(f32, cAirFriction, 0.98f);
-    NEBULA_TUNABLE(f32, cFallAccel, 0.5f);
-    NEBULA_TUNABLE(f32, cFallSpeedMax, 20.0f);
-    NEBULA_TUNABLE(f32, cRadius, 60.0f);
+    const f32 cAppearThrowUpSpd = 10.0f;
+    const f32 cAppearThrowFwdSpd = 5.0f;
+    const f32 cBoundUpSpd = 20.0f;
+    const f32 cBoundFwdSpd = 10.0f;
+    const f32 cAirFriction = 0.98f;
+    const f32 cFallAccel = 0.5f;
+    const f32 cFallSpeedMax = 20.0f;
+    const f32 cRadius = 60.0f;
     const s32 cEscapeSensorOffSteps = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 
@@ -103,7 +99,7 @@ void BenefitItemInvincible::initEscape() {
 
 void BenefitItemInvincible::doEscape() {
     MR::calcGravity(this);
-    MR::addVelocityToGravity(this, cNum_doEscape_addVelocityToGravity_1);
+    MR::addVelocityToGravity(this, 1.0f);
 
     if (MR::isBindedGround(this)) {
         MR::vecKillElement(mFwdAxis, mGravity, &mFwdAxis);

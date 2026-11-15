@@ -199,6 +199,139 @@ private:
 };
 
 }  // namespace galaxy::render::gpu
+#elif defined(NEBULA_GPU_D3D11)
+#include <vector>
+
+namespace galaxy::render::gpu {
+
+struct DrawOp;  // draw_record.h
+
+// Direct3D 11 (d3d11/encoder_d3d11.cpp). A draw's data is upload memory whose written bytes must reach the GPU before
+// the draw runs (d3d11_context.h), and the walker writes them as it goes: so a scene pass's calls are recorded as DrawOps
+// (draw_record.h) and replayed on the immediate context when the pass ends or the renderer draws in it, after
+// Context::upload_written (RendererD3D11::flush_draws). What is bound is compared here, so only changes are recorded.
+// Bindings: b0 the view, b1 and b2 the material's rows, b3 the draw's root constants (a constant buffer of the renderer's,
+// written per change), t16 the composed rows and t17 the instances (structured views at their addresses), the draw's own
+// tables at t0 and s0 (programs compiled with NEBULA_BOUND_TABLES), the streams at input slots 0 to 5.
+class Encoder {
+public:
+    // Where the calls go: the renderer's op stream for the open pass.
+    void attach(std::vector<DrawOp>* ops) noexcept {
+        ops_ = ops;
+        reset();
+    }
+    // Other code bound things: nothing is taken as bound any more.
+    void reset() noexcept {
+        pipeline_ = nullptr;
+        view_ = vertex_rows_ = pixel_rows_ = rows_ = instances_ = 0u;
+        textures_ = samplers_ = 0u;
+        root_valid_ = scissor_valid_ = viewport_valid_ = index_valid_ = false;
+        for (StreamView& s : streams_) s = StreamView{};
+    }
+    // Other code set the viewport and scissor.
+    void forget_rects() noexcept { scissor_valid_ = viewport_valid_ = false; }
+    void set_pipeline(Pipeline* pipeline) noexcept {
+        if (pipeline != pipeline_) {
+            pipeline_ = pipeline;
+            emit_pipeline(pipeline);
+        }
+    }
+    void set_view(Address view) noexcept {
+        if (view != view_) {
+            view_ = view;
+            emit_view(view);
+        }
+    }
+    void set_material(Address vertex_rows, Address pixel_rows) noexcept {
+        if (vertex_rows != vertex_rows_ || pixel_rows != pixel_rows_) {
+            vertex_rows_ = vertex_rows;
+            pixel_rows_ = pixel_rows;
+            emit_material(vertex_rows, pixel_rows);
+        }
+    }
+    void set_root(const DrawRoot& root) noexcept {
+        if (!root_valid_ || root.first_instance != root_.first_instance || root.flags != root_.flags ||
+            root.half_line != root_.half_line || root.half_point != root_.half_point || root.table != root_.table) {
+            root_ = root;
+            root_valid_ = true;
+            emit_root(root);
+        }
+    }
+    // A draw's own tables: d3d11::BoundTable behind the tables' ptr.
+    void set_tables(Table textures, Table samplers) noexcept {
+        if (textures.ptr != textures_ || samplers.ptr != samplers_) {
+            textures_ = textures.ptr;
+            samplers_ = samplers.ptr;
+            emit_tables(textures, samplers);
+        }
+    }
+    // Never called: the renderer has no arrays (bindless() is false).
+    void set_texture_arrays(Table, Table, Address) noexcept {}
+    void set_rows(Address rows, Address instances) noexcept {
+        if (rows != rows_ || instances != instances_) {
+            rows_ = rows;
+            instances_ = instances;
+            emit_rows(rows, instances);
+        }
+    }
+    void set_scissor(const Rect& rect) noexcept {
+        if (!scissor_valid_ || rect.left != scissor_.left || rect.top != scissor_.top || rect.right != scissor_.right ||
+            rect.bottom != scissor_.bottom) {
+            scissor_ = rect;
+            scissor_valid_ = true;
+            emit_scissor(rect);
+        }
+    }
+    void set_viewport(const ViewportRect& rect) noexcept {
+        if (!viewport_valid_ || !(rect == viewport_)) {
+            viewport_ = rect;
+            viewport_valid_ = true;
+            emit_viewport(rect);
+        }
+    }
+    void set_stream(unsigned slot, const StreamView& view) noexcept {
+        if (view.address != streams_[slot].address || view.stride != streams_[slot].stride) {
+            streams_[slot] = view;
+            emit_stream(slot, view);
+        }
+    }
+    void set_indices(Address address, std::uint32_t bytes, std::uint32_t index_bytes) noexcept {
+        if (!index_valid_ || address != index_address_ || index_bytes != index_stride_) {
+            index_address_ = address;
+            index_stride_ = index_bytes;
+            index_valid_ = true;
+            emit_indices(address, bytes, index_bytes);
+        }
+    }
+    void draw_indexed(std::uint32_t count, std::uint32_t instances, std::uint32_t first, std::int32_t base_vertex) noexcept;
+    void draw(std::uint32_t count, std::uint32_t instances, std::uint32_t first) noexcept;
+
+private:
+    void emit_pipeline(Pipeline* pipeline) noexcept;
+    void emit_view(Address view) noexcept;
+    void emit_material(Address vertex_rows, Address pixel_rows) noexcept;
+    void emit_root(const DrawRoot& root) noexcept;
+    void emit_tables(Table textures, Table samplers) noexcept;
+    void emit_rows(Address rows, Address instances) noexcept;
+    void emit_scissor(const Rect& rect) noexcept;
+    void emit_viewport(const ViewportRect& rect) noexcept;
+    void emit_stream(unsigned slot, const StreamView& view) noexcept;
+    void emit_indices(Address address, std::uint32_t bytes, std::uint32_t index_bytes) noexcept;
+
+    std::vector<DrawOp>* ops_ = nullptr;
+    Pipeline* pipeline_ = nullptr;
+    Address view_ = 0u, vertex_rows_ = 0u, pixel_rows_ = 0u, rows_ = 0u, instances_ = 0u;
+    std::uint64_t textures_ = 0u, samplers_ = 0u;
+    DrawRoot root_{};
+    Rect scissor_{};
+    ViewportRect viewport_{};
+    StreamView streams_[kStreamCount]{};
+    Address index_address_ = 0u;
+    std::uint32_t index_stride_ = 0u;
+    bool root_valid_ = false, scissor_valid_ = false, viewport_valid_ = false, index_valid_ = false;
+};
+
+}  // namespace galaxy::render::gpu
 #elif !defined(NEBULA_GPU_VULKAN)
 #include <d3d12.h>
 

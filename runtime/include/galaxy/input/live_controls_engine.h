@@ -68,6 +68,8 @@ struct LiveControlsFrame {
     bool allow_absolute_pointer = false;
     bool drop_injected = false;
     bool script_pointer_force = false;
+    // A menu of the host is open (Settings, the HOME menu): the mods' actions read up (services-input).
+    bool host_menu = false;
     galaxy::input::PlayContext context = galaxy::input::PlayContext::Play;
     galaxy::input::tilt::Section tilt_section = galaxy::input::tilt::Section::None;
     // The host's own controls with no binding table (a phone's on-screen buttons and stick), merged with the bindings'.

@@ -24,18 +24,8 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRailMove_f1, "exeRailMove.f1", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBindPosition_f1, "updateBindPosition.f1", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcShootMotionTime_f1, "calcShootMotionTime.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcShootMotionTime_f2, "calcShootMotionTime.f2", 0.05f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeRailMove_1, "exeRailMove.1", 10);
-NEBULA_TUNABLE_NAMED(s32, cStep_trySkipTrigger_1, "trySkipTrigger.1", 10);
+#include <nebula_module.h>
 
 namespace NrvScenarioStarter {
     NEW_NERVE(ScenarioStarterWaitScenarioCameraEnd, ScenarioStarter, WaitScenarioCameraEnd);
@@ -55,6 +45,20 @@ ScenarioStarter::ScenarioStarter(const char* pName)
 }
 
 void ScenarioStarter::init(const TableIter& rIter) {
+    // The opening flight follows the starter's rail. A starter whose rail the stage does not have is not made: it is
+    // renamed so the scene does not find it (MR::isBeginScenarioStarter) and joins no list, and the stage starts with
+    // the player at the start position, as a stage with no starter does.
+    const Table* pPoints = nullptr;
+    TableIter rail;
+    if (MR::isConnectedWithRail(rIter)) {
+        MR::getRailInfo(&rail, &pPoints, rIter);
+    }
+    if (pPoints == nullptr || pPoints->getNumEntries() < 2) {
+        nebula_log("ScenarioStarter: its rail is not in the stage (CommonPath_ID names no rail with two points); not made, "
+                   "the stage starts without its opening flight\n");
+        setName("ScenarioStarter (no rail)");
+        return;
+    }
     MR::initDefaultPos(this, rIter);
     MR::connectToSceneMapObjMovement(this);
     MR::getPlacementArg0NoInit(rIter, &mFlightTime);
@@ -64,7 +68,7 @@ void ScenarioStarter::init(const TableIter& rIter) {
     mSpinDriverCamera->init(rIter, this);
 
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ACTMES_GROUP_LOD_LOW, 8, cNum_init_f1, Vec3f(0.0f));
+    MR::addHitSensor(this, "body", ACTMES_GROUP_LOD_LOW, 8, 200.0f, Vec3f(0.0f));
     MR::invalidateClipping(this);
     mWelcomeLayout = MR::createSimpleLayout("Welcome表示", "Welcome", 1);
     mWelcomeLayout->kill();
@@ -114,14 +118,14 @@ void ScenarioStarter::exeRailMove() {
         rotMtx.getQuat(mBindQuat);
     }
 
-    if (MR::isStep(this, cStep_exeRailMove_1)) {
+    if (MR::isStep(this, 10)) {
         MR::tryBlankToFrameCinemaFrame();
         mTitle->start();
     }
 
     updateBindPosition();
     if (!MR::isNearZero(mHeadDir)) {
-        turnBindHead(mHeadDir, cNum_exeRailMove_f1);
+        turnBindHead(mHeadDir, 0.4f);
     }
 
     updateShootMotion();
@@ -217,7 +221,7 @@ void ScenarioStarter::updateBindPosition() {
     Vec3f pathDir;
     f32 nerveRate = MR::calcNerveRate(this, mFlightTime);
     mShootPath->calcPosition(&pathPos, nerveRate);
-    mShootPath->calcDirection(&pathDir, nerveRate, cNum_updateBindPosition_f1);
+    mShootPath->calcDirection(&pathDir, nerveRate, 0.01f);
     if (!MR::isNearZero(pathDir)) {
         mHeadDir = pathDir;
     }
@@ -300,7 +304,7 @@ void ScenarioStarter::calcShootMotionTime() {
 
     mFlyEndStep = mFlightTime - (endTime + 20);
     mFallMotionStartStep = mFlightTime - 20;
-    s32 flyTime = cNum_calcShootMotionTime_f1 * mFlightTime;
+    s32 flyTime = 0.2f * mFlightTime;
     if (flyTime > 90) {
         flyTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     }
@@ -310,7 +314,7 @@ void ScenarioStarter::calcShootMotionTime() {
         mFlyMotionStartStep = 0;
     }
 
-    f32 duration = cNum_calcShootMotionTime_f2 * (mFlyEndStep - mFlyMotionStartStep);
+    f32 duration = 0.05f * (mFlyEndStep - mFlyMotionStartStep);
     mSpinAngle = 0.0f;
     mSpinAngleMax = static_cast< s32 >(duration / TWO_PI) * TWO_PI;
 }
@@ -331,7 +335,7 @@ bool ScenarioStarter::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* /*
 }
 
 bool ScenarioStarter::trySkipTrigger() const {
-    return MR::isAlreadyVisitedCurrentStageAndScenario() && MR::isGreaterStep(this, cStep_trySkipTrigger_1) && MR::isLessStep(this, mFlyEndStep) &&
+    return MR::isAlreadyVisitedCurrentStageAndScenario() && MR::isGreaterStep(this, 10) && MR::isLessStep(this, mFlyEndStep) &&
            MR::testSystemPadTriggerDecide();
 }
 

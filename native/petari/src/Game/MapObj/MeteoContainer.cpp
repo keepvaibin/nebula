@@ -9,16 +9,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 150.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeDestroy_1, "exeDestroy.1", 2);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeDestroy_2, "exeDestroy.2", 3);
 
 namespace NrvMeteoContainer {
     NEW_NERVE(MeteoContainerNrvWait, MeteoContainer, Wait);
@@ -42,12 +33,12 @@ void MeteoContainer::init(const TableIter& rIter) {
     initHitSensor(1);
     Vec3f sensorOffs;
     sensorOffs.x = 0.0f;
-    sensorOffs.y = cNum_init_f1;
+    sensorOffs.y = 150.0f;
     sensorOffs.z = 0.0f;
-    MR::addHitSensorMapObj(this, "body", 16, cNum_init_f2, sensorOffs);
+    MR::addHitSensorMapObj(this, "body", 16, 150.0f, sensorOffs);
     initSound(4, false);
     initNerve(GET_NERVE(MeteoContainer, MeteoContainerNrvWait));
-    MR::initShadowVolumeSphere(this, cNum_init_f3);
+    MR::initShadowVolumeSphere(this, 150.0f);
     MR::onCalcShadowOneTime(this, nullptr);
     MR::needStageSwitchWriteDead(this, rIter);
     initEffectKeeper(1, nullptr);
@@ -96,11 +87,11 @@ void MeteoContainer::exeWait() {
 }
 
 void MeteoContainer::exeDestroy() {
-    if (MR::isStep(this, cStep_exeDestroy_1)) {
+    if (MR::isStep(this, 2)) {
         MR::stopScene(10);
     }
 
-    if (MR::isStep(this, cStep_exeDestroy_2)) {
+    if (MR::isStep(this, 3)) {
         MR::shakeCameraNormal();
         kill();
     }

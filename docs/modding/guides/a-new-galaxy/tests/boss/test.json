@@ -1,0 +1,19 @@
+{
+  "harness": 1,
+  "name": "orb-galaxy-boss",
+  "about": "Coming near the Orb King wakes it: its scene plays, then its meter shows three",
+  "proves": ["kit.actor", "kit.cutscene", "kit.hud", "services.audio.music"],
+  "mods": ["../.."],
+  "stage": {"name": "OrbKingGalaxy", "scenario": 1},
+  "limit_seconds": 300,
+  "steps": [
+    {"at": 60, "picture": "scene"},
+    {"at": 240, "picture": "fight"},
+    {"at": 250, "end": true}
+  ],
+  "expect": [
+    {"log": "the Orb King wakes"},
+    {"picture": "fight", "box": [930, 46, 300, 16], "mean_rgb": [240, 192, 64], "within": 30}
+  ],
+  "player": {"position": [0, -400, 940]}
+}

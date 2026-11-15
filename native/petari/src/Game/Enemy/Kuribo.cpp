@@ -27,55 +27,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f1, "KuriboParam.f1", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f2, "KuriboParam.f2", 0.99f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f3, "KuriboParam.f3", 0.93f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f4, "KuriboParam.f4", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f5, "KuriboParam.f5", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f6, "KuriboParam.f6", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f7, "KuriboParam.f7", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f8, "KuriboParam.f8", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f9, "KuriboParam.f9", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f10, "KuriboParam.f10", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_KuriboParam_f11, "KuriboParam.f11", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 75.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 75.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 75.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 45.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 75.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f3, "control.f3", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_requestBlowDown_f1, "requestBlowDown.f1", 36.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_requestBlowDown_f2, "requestBlowDown.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearFromBox_f1, "exeAppearFromBox.f1", 7.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearFromBox_f2, "exeAppearFromBox.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAttackSuccess_f1, "exeAttackSuccess.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBlowDown_f1, "exeBlowDown.f1", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_f1, "calcPassiveMovement.f1", 0.93f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_f2, "calcPassiveMovement.f2", 0.99f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_f3, "calcPassiveMovement.f3", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_f4, "calcPassiveMovement.f4", 0.7f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_addVelocityFromPush_1, "receiveMsgPush.addVelocityFromPush.1", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryNonActive_isNearPlayerAnyTime_1, "tryNonActive.isNearPlayerAnyTime.1", 3000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryActive_isNearPlayerAnyTime_1, "tryActive.isNearPlayerAnyTime.1", 3000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPassiveMovement_addVelocityToGravity_1, "calcPassiveMovement.addVelocityToGravity.1", 1.5f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_tryEndBlow_1, "tryEndBlow.1", 10);
-NEBULA_TUNABLE_NAMED(s32, cStep_tryEndBlowLand_1, "tryEndBlowLand.1", 15);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeBlow_1, "exeBlow.1", 10);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHipDropDown_1, "exeHipDropDown.1", 40);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeFlatDown_1, "exeFlatDown.1", 20);
 
 namespace {
     class KuriboParam {
@@ -90,19 +42,19 @@ namespace {
     };
 
     KuriboParam::KuriboParam() {
-        mStateParam.mGravityAccel = cNum_KuriboParam_f1;
-        mStateParam.mAirFriction = cNum_KuriboParam_f2;
-        mStateParam.mGroundFriction = cNum_KuriboParam_f3;
-        mStateParam.mPlayerNearDistance = cNum_KuriboParam_f4;
-        mStateParam.mPlayerSightFanDegreeH = cNum_KuriboParam_f5;
-        mStateParam.mPlayerSightFanDegreeV = cNum_KuriboParam_f6;
-        mWanderParam.mSpeed = cNum_KuriboParam_f7;
+        mStateParam.mGravityAccel = 1.5f;
+        mStateParam.mAirFriction = 0.99f;
+        mStateParam.mGroundFriction = 0.93f;
+        mStateParam.mPlayerNearDistance = 1000.0f;
+        mStateParam.mPlayerSightFanDegreeH = 70.0f;
+        mStateParam.mPlayerSightFanDegreeV = 30.0f;
+        mWanderParam.mSpeed = 0.2f;
         mWanderParam.mWaitTime = NebulaFrameClock::stepsOfSeconds(2);
         mWanderParam.mWalkTime = NebulaFrameClock::stepsOfSeconds(2);
-        mWanderParam.mTurnMaxRateDegree = cNum_KuriboParam_f8;
-        mChaseParam.mChaseSpeed = cNum_KuriboParam_f9;
-        mFindPlayerParam.mTurnMaxRateDegree = cNum_KuriboParam_f10;
-        mFindPlayerParam.mJumpVelocity = cNum_KuriboParam_f11;
+        mWanderParam.mTurnMaxRateDegree = 3.0f;
+        mChaseParam.mChaseSpeed = 0.4f;
+        mFindPlayerParam.mTurnMaxRateDegree = 5.0f;
+        mFindPlayerParam.mJumpVelocity = 20.0f;
     }
 
     static KuriboParam sParam;
@@ -153,7 +105,7 @@ void Kuribo::init(const TableIter& rIter) {
 
     mScaleController = new AnimScaleController(nullptr);
     mItemGenerator = new ItemGenerator();
-    MR::initStarPointerTarget(this, cNum_init_f1 * mScale.y, Vec3f(0.0f, cNum_init_f2 * mScale.y, 0.0f));
+    MR::initStarPointerTarget(this, 70.0f * mScale.y, Vec3f(0.0f, 75.0f * mScale.y, 0.0f));
     initSound(4, false);
     if (MR::isEqualStageName("KoopaBattleVs2Galaxy")) {
         MR::setSeVersion(this, SeVersion_2D);
@@ -161,10 +113,10 @@ void Kuribo::init(const TableIter& rIter) {
         MR::setSeVersion(this, SeVersion_NORMAL);
     }
 
-    initBinder((cNum_init_f3 * mScale.y), (cNum_init_f4 * mScale.y), 0);
+    initBinder((70.0f * mScale.y), (70.0f * mScale.y), 0);
     initEffectKeeper(1, nullptr);
     initSensor();
-    MR::initShadowVolumeSphere(this, cNum_init_f5);
+    MR::initShadowVolumeSphere(this, 60.0f);
     initState();
     initNerve(GET_NERVE(Kuribo, KuriboNrvWander));
     initAppearState(rIter);
@@ -202,8 +154,8 @@ void Kuribo::initState() {
 void Kuribo::initSensor() {
     f32 y_scale = mScale.y;
     initHitSensor(2);
-    MR::addHitSensor(this, "body", ATYPE_KURIBO, 8, cNum_initSensor_f1 * y_scale, Vec3f(0.0f, cNum_initSensor_f2 * y_scale, 0.0f));
-    MR::addHitSensor(this, "attack", ATYPE_ENEMY_ATTACK, 8, cNum_initSensor_f3 * y_scale, Vec3f(0.0f, cNum_initSensor_f4 * y_scale, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KURIBO, 8, 75.0f * y_scale, Vec3f(0.0f, 75.0f * y_scale, 0.0f));
+    MR::addHitSensor(this, "attack", ATYPE_ENEMY_ATTACK, 8, 45.0f * y_scale, Vec3f(0.0f, 75.0f * y_scale, 0.0f));
 }
 
 void Kuribo::initAppearState(const TableIter& rIter) {
@@ -252,11 +204,11 @@ void Kuribo::control() {
         MR::calcGravityOrZero(this);
     }
 
-    MR::blendQuatFromGroundAndFront(&mPoseQuat, this, mFront, cNum_control_f1, cNum_control_f2);
+    MR::blendQuatFromGroundAndFront(&mPoseQuat, this, mFront, 0.05f, 0.5f);
     if (!isNerve(GET_NERVE(Kuribo, KuriboNrvBindStarPointer))) {
         Vec3f groundMove(0, 0, 0);
         if (MR::calcVelocityAreaOrRailMoveOnGround(&groundMove, this)) {
-            MR::addVelocity(this, groundMove * cNum_control_f3);
+            MR::addVelocity(this, groundMove * 0.05f);
         }
     }
 
@@ -344,7 +296,7 @@ bool Kuribo::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
 
     if (MR::isSensorEnemy(pSender) || (MR::isSensorRide(pSender) || (!isEnableAttack() && MR::isSensorPlayer(pSender)))) {
         if (isEnablePushMove()) {
-            MR::addVelocityFromPush(this, cNum_receiveMsgPush_addVelocityFromPush_1, pSender, pReceiver);
+            MR::addVelocityFromPush(this, 1.5f, pSender, pReceiver);
             return true;
         }
     }
@@ -462,7 +414,7 @@ bool Kuribo::requestBlowDown(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     MR::deleteEffectAll(this);
-    MR::setVelocityBlowAttack(this, pSender, pReceiver, cNum_requestBlowDown_f1, cNum_requestBlowDown_f2, 4);
+    MR::setVelocityBlowAttack(this, pSender, pReceiver, 36.0f, 30.0f, 4);
     setNerve(GET_NERVE(Kuribo, KuriboNrvBlowDown));
     mItemGenerator->setTypeStarPeace(3);
     return true;
@@ -515,7 +467,7 @@ void Kuribo::appearHipDropped(const Vec3f& rPosition, const Quat4f& rPose) {
 }
 
 bool Kuribo::tryNonActive() {
-    bool isNotNearPlayer = !MR::isNearPlayerAnyTime(this, cNum_tryNonActive_isNearPlayerAnyTime_1);
+    bool isNotNearPlayer = !MR::isNearPlayerAnyTime(this, 3000.0f);
     if (isNotNearPlayer && MR::isBindedGround(this)) {
         MR::zeroVelocity(this);
         setNerve(GET_NERVE(Kuribo, KuriboNrvNonActive));
@@ -526,7 +478,7 @@ bool Kuribo::tryNonActive() {
 }
 
 bool Kuribo::tryActive() {
-    if (MR::isNearPlayerAnyTime(this, cNum_tryActive_isNearPlayerAnyTime_1)) {
+    if (MR::isNearPlayerAnyTime(this, 3000.0f)) {
         setNerve(GET_NERVE(Kuribo, KuriboNrvWander));
         return true;
     }
@@ -535,7 +487,7 @@ bool Kuribo::tryActive() {
 }
 
 bool Kuribo::tryEndBlow() {
-    if (MR::isBindedGround(this) && MR::isGreaterStep(this, cStep_tryEndBlow_1)) {
+    if (MR::isBindedGround(this) && MR::isGreaterStep(this, 10)) {
         MR::startAction(this, "Land");
         MR::onBind(this);
         setNerve(GET_NERVE(Kuribo, KuriboNrvBlowLand));
@@ -546,7 +498,7 @@ bool Kuribo::tryEndBlow() {
 }
 
 bool Kuribo::tryEndBlowLand() {
-    if (MR::isGreaterStep(this, cStep_tryEndBlowLand_1)) {
+    if (MR::isGreaterStep(this, 15)) {
         setNerve(GET_NERVE(Kuribo, KuriboNrvChase));
         return true;
     }
@@ -657,7 +609,7 @@ void Kuribo::exeAppearFromBox() {
         MR::startAction(this, "AppearFromBox");
         Vec3f zDir;
         mPoseQuat.getZDir(zDir);
-        MR::setVelocitySeparateHV(this, zDir, cNum_exeAppearFromBox_f1, cNum_exeAppearFromBox_f2);
+        MR::setVelocitySeparateHV(this, zDir, 7.0f, 30.0f);
         MR::offBind(this);
     }
     exeBlow();
@@ -665,7 +617,7 @@ void Kuribo::exeAppearFromBox() {
 
 void Kuribo::exeBlow() {
     calcPassiveMovement();
-    if (MR::isStep(this, cStep_exeBlow_1)) {
+    if (MR::isStep(this, 10)) {
         MR::onBind(this);
     }
 
@@ -679,7 +631,7 @@ void Kuribo::exeAttackSuccess() {
         MR::startAction(this, "Hit");
     }
 
-    MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *MR::getPlayerPos(), cNum_exeAttackSuccess_f1);
+    MR::turnDirectionToTargetUseGroundNormalDegree(this, &mFront, *MR::getPlayerPos(), 5.0f);
     calcPassiveMovement();
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(1))) {
         setNerve(GET_NERVE(Kuribo, KuriboNrvWander));
@@ -700,7 +652,7 @@ void Kuribo::exeHipDropDown() {
         MR::zeroVelocity(this);
     }
 
-    if (MR::isGreaterStep(this, cStep_exeHipDropDown_1)) {
+    if (MR::isGreaterStep(this, 40)) {
         kill();
     }
 }
@@ -711,7 +663,7 @@ void Kuribo::exeFlatDown() {
         MR::zeroVelocity(this);
     }
 
-    if (MR::isGreaterStep(this, cStep_exeFlatDown_1)) {
+    if (MR::isGreaterStep(this, 20)) {
         kill();
     }
 }
@@ -735,7 +687,7 @@ void Kuribo::exeBlowDown() {
     }
 
     calcPassiveMovement();
-    MR::turnDirectionDegree(this, &mFront, -mVelocity, cNum_exeBlowDown_f1);
+    MR::turnDirectionDegree(this, &mFront, -mVelocity, 30.0f);
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(500))) {
         kill();
     }
@@ -743,20 +695,20 @@ void Kuribo::exeBlowDown() {
 
 void Kuribo::calcPassiveMovement() {
     if (!MR::isOnGround(this)) {
-        MR::addVelocityToGravity(this, cNum_calcPassiveMovement_addVelocityToGravity_1);
+        MR::addVelocityToGravity(this, 1.5f);
     }
 
     f32 vel;
 
     if (MR::isOnGround(this)) {
-        vel = cNum_calcPassiveMovement_f1;
+        vel = 0.93f;
     } else {
-        vel = cNum_calcPassiveMovement_f2;
+        vel = 0.99f;
     }
 
     MR::attenuateVelocity(this, vel);
     if (MR::isBindedWall(this)) {
-        MR::calcReboundVelocity(&mVelocity, *MR::getWallNormal(this), cNum_calcPassiveMovement_f3, cNum_calcPassiveMovement_f4);
+        MR::calcReboundVelocity(&mVelocity, *MR::getWallNormal(this), 0.2f, 0.7f);
     }
 }
 

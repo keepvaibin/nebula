@@ -23,6 +23,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Screen/NebulaHomeMenu.hpp"
+#include "Game/Screen/NebulaLauncher.hpp"
 #include <cstdio>
 #include <cstring>
 #include <nebula_game_api.h>
@@ -30,7 +31,6 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/Render/RenderTexture.hpp"
 #include <nebula_cooked_texture.h>
 
@@ -38,104 +38,104 @@ using namespace NebulaUi;
 
 namespace {
     // Screen units (NebulaUi::readScreen): 456 high, 810 wide at 16:9.
-    NEBULA_TUNABLE(f32, cMargin, 16.0f);     // the window from the screen's edges
-    NEBULA_TUNABLE(f32, cMaxWidth, 900.0f);  // a wide screen keeps a window that reads as one
-    NEBULA_TUNABLE(f32, cMinWindowWidth, 480.0f);  // the tabs and the footer keep their shape down to this
-    NEBULA_TUNABLE(f32, cReadableTextDp, 14.0f);  // a row's text on the screen, at the least, unless the player chooses otherwise
-    NEBULA_TUNABLE(f32, cZoomMax, 1.8f);
-    NEBULA_TUNABLE(f32, cPad, 26.0f);        // the window's inside
-    NEBULA_TUNABLE(f32, cTitleSize, 21.0f);
-    NEBULA_TUNABLE(f32, cTabHeight, 30.0f);
-    NEBULA_TUNABLE(f32, cTabSize, 12.5f);
-    NEBULA_TUNABLE(f32, cTabGap, 5.0f);
-    NEBULA_TUNABLE(f32, cRowHeight, 52.0f);
-    NEBULA_TUNABLE(s32, cSwipeHoverFrames, 12);
-    NEBULA_TUNABLE(f32, cRowGap, 3.0f);  // between two rows' frames
-    NEBULA_TUNABLE(f32, cModHeight, 40.0f);  // a mod in the MODS page's lists
-    NEBULA_TUNABLE(f32, cTextSize, 15.5f);
-    NEBULA_TUNABLE(f32, cHeadingSize, 13.5f);
-    NEBULA_TUNABLE(f32, cFooterSize, 12.0f);
-    NEBULA_TUNABLE(f32, cFooterLine, 19.0f);
-    NEBULA_TUNABLE(f32, cButtonHeight, 30.0f);
-    NEBULA_TUNABLE(f32, cButtonSize, 12.5f);
-    NEBULA_TUNABLE(f32, cButtonGap, 10.0f);
-    NEBULA_TUNABLE(f32, cRowButtonHeight, 36.0f);  // a row's own buttons (IMPORT, OPEN) and a setting's arrows
-    NEBULA_TUNABLE(f32, cRowButtonSize, 14.0f);
-    NEBULA_TUNABLE(f32, cRowButtonGap, 8.0f);
-    NEBULA_TUNABLE(f32, cRowButtonMin, 76.0f);
-    NEBULA_TUNABLE(f32, cArrowWidth, 58.0f);
-    NEBULA_TUNABLE(f32, cArrowSize, 20.0f);
-    NEBULA_TUNABLE(f32, cValueMin, 120.0f);  // a setting's value between its arrows, the same on every row
-    NEBULA_TUNABLE(f32, cValueMax, 250.0f);
-    NEBULA_TUNABLE(f32, cSliderHeight, 8.0f);  // a slider's track; its knob is the game's round button
-    NEBULA_TUNABLE(f32, cKnobSize, 32.0f);
-    NEBULA_TUNABLE(f32, cSliderValue, 64.0f);  // its value after it
-    NEBULA_TUNABLE(s32, cRepeatDelay, 18);     // an arrow held down: the frames before it steps again, then between steps
-    NEBULA_TUNABLE(s32, cRepeatEvery, 5);
-    NEBULA_TUNABLE(f32, cEdgeDrop, 2.0f);  // a row's own button's darker edge under it; the two centred together on the row
-    NEBULA_TUNABLE(f32, cRowButtonRadius, 11.0f);  // a row's own buttons have the rows' corners, near enough (the rows': 12)
-    NEBULA_TUNABLE(f32, cReach, 8.0f);  // how far past a button's edge above and below the pointer still has it
-    NEBULA_TUNABLE(f32, cMinSqueeze, 0.6f);  // the narrowest a line of text is drawn
-    NEBULA_TUNABLE(f32, cKeyGap, 6.0f);  // a key from its word
-    NEBULA_TUNABLE(f32, cBadgeScale, 1.35f);  // a controller's button: its height for the text's size
-    NEBULA_TUNABLE(f32, cBadgeGap, 3.0f);
+    const f32 cMargin = 16.0f;     // the window from the screen's edges
+    const f32 cMaxWidth = 900.0f;  // a wide screen keeps a window that reads as one
+    const f32 cMinWindowWidth = 480.0f;  // the tabs and the footer keep their shape down to this
+    const f32 cReadableTextDp = 14.0f;  // a row's text on the screen, at the least, unless the player chooses otherwise
+    const f32 cZoomMax = 1.8f;
+    const f32 cPad = 26.0f;        // the window's inside
+    const f32 cTitleSize = 21.0f;
+    const f32 cTabHeight = 30.0f;
+    const f32 cTabSize = 12.5f;
+    const f32 cTabGap = 5.0f;
+    const f32 cRowHeight = 52.0f;
+    const s32 cSwipeHoverFrames = 12;
+    const f32 cRowGap = 3.0f;  // between two rows' frames
+    const f32 cModHeight = 40.0f;  // a mod in the MODS page's lists
+    const f32 cTextSize = 15.5f;
+    const f32 cHeadingSize = 13.5f;
+    const f32 cFooterSize = 12.0f;
+    const f32 cFooterLine = 19.0f;
+    const f32 cButtonHeight = 30.0f;
+    const f32 cButtonSize = 12.5f;
+    const f32 cButtonGap = 10.0f;
+    const f32 cRowButtonHeight = 36.0f;  // a row's own buttons (IMPORT, OPEN) and a setting's arrows
+    const f32 cRowButtonSize = 14.0f;
+    const f32 cRowButtonGap = 8.0f;
+    const f32 cRowButtonMin = 76.0f;
+    const f32 cArrowWidth = 58.0f;
+    const f32 cArrowSize = 20.0f;
+    const f32 cValueMin = 120.0f;  // a setting's value between its arrows, the same on every row
+    const f32 cValueMax = 250.0f;
+    const f32 cSliderHeight = 8.0f;  // a slider's track; its knob is the game's round button
+    const f32 cKnobSize = 32.0f;
+    const f32 cSliderValue = 64.0f;  // its value after it
+    const s32 cRepeatDelay = 18;     // an arrow held down: the frames before it steps again, then between steps
+    const s32 cRepeatEvery = 5;
+    const f32 cEdgeDrop = 2.0f;  // a row's own button's darker edge under it; the two centred together on the row
+    const f32 cRowButtonRadius = 11.0f;  // a row's own buttons have the rows' corners, near enough (the rows': 12)
+    const f32 cReach = 8.0f;  // how far past a button's edge above and below the pointer still has it
+    const f32 cMinSqueeze = 0.6f;  // the narrowest a line of text is drawn
+    const f32 cKeyGap = 6.0f;  // a key from its word
+    const f32 cBadgeScale = 1.35f;  // a controller's button: its height for the text's size
+    const f32 cBadgeGap = 3.0f;
     const s32 cGlyphPad = 'C';  // the picture font's +Control Pad
-    NEBULA_TUNABLE(f32, cHintGap, 18.0f);
-    NEBULA_TUNABLE(f32, cQuestionWidth, 470.0f);
-    NEBULA_TUNABLE(f32, cLicenseTextSize, 12.0f);
-    NEBULA_TUNABLE(f32, cLicenseInset, 12.0f);  // the license's window inside the menu's
-    NEBULA_TUNABLE(f32, cQuestionHeight, 180.0f);
-    NEBULA_TUNABLE(f32, cQuestionMargin, 22.0f);  // the answers from the window's sides and foot
-    NEBULA_TUNABLE(f32, cQuestionRing, 6.4f);     // the window's white ring (measured), inside its edges
-    // The Pair Joy-Con question: the letters L and R, the halves (the drawing, cJoyConUnit of the menu's units
+    const f32 cHintGap = 18.0f;
+    const f32 cQuestionWidth = 470.0f;
+    const f32 cLicenseTextSize = 12.0f;
+    const f32 cLicenseInset = 12.0f;  // the license's window inside the menu's
+    const f32 cQuestionHeight = 180.0f;
+    const f32 cQuestionMargin = 22.0f;  // the answers from the window's sides and foot
+    const f32 cQuestionRing = 6.4f;     // the window's white ring (measured), inside its edges
+    // The Pair Joy-Con question: the letters L and R, the halves (its drawing, cJoyConUnit of the menu's units
     // to its each; NebulaIcons paints them), its text and its answer, as far from each other as the answer is from the
     // window's ring.
-    NEBULA_TUNABLE(f32, cJoyConUnit, 3.4f);
+    const f32 cJoyConUnit = 3.4f;
     const f32 cJoyConGap = 5.36f;  // between the rails
     const f32 cJoyConCentre = cJoyConGap * 0.5f + NebulaIcons::cJoyConRail + NebulaIcons::cJoyConBody[0] * 0.5f;  // a body's middle
-    NEBULA_TUNABLE(f32, cJoyConLetter, 1.0f);             // a letter toward its half's outer side
-    NEBULA_TUNABLE(f32, cJoyConLetterGap, 6.0f);          // the letters' feet to the shoulders' tops, menu units
-    NEBULA_TUNABLE(u32, cJoyConPaintAhead, 1500);         // painting the pictures a frame, us: on the Controls page
-    NEBULA_TUNABLE(u32, cJoyConPaintShown, 6000);         // and on the Pair Joy-Con screen
-    NEBULA_TUNABLE(f32, cHomeWidth, 340.0f);  // the HOME Menu's window: its title over its buttons, one above the other
-    NEBULA_TUNABLE(f32, cHomeButtonWidth, 250.0f);
-    NEBULA_TUNABLE(f32, cHomeGap, 12.0f);
-    NEBULA_TUNABLE(s32, cDropFrames, 16);  // the window's drop from above, and its rise away
-    NEBULA_TUNABLE(s32, cRowsFirst, 96);  // the rows made with the screen; more when a page has more
-    NEBULA_TUNABLE(s32, cTabsFirst, 8);   // the page buttons made with the screen; more when there are more pages
+    const f32 cJoyConLetter = 1.0f;             // a letter toward its half's outer side
+    const f32 cJoyConLetterGap = 6.0f;          // the letters' feet to the shoulders' tops, menu units
+    const u32 cJoyConPaintAhead = 1500;         // painting the pictures a frame, us: on the Controls page
+    const u32 cJoyConPaintShown = 6000;         // and on the Pair Joy-Con screen
+    const f32 cHomeWidth = 340.0f;  // the HOME Menu's window: its title over its buttons, one above the other
+    const f32 cHomeButtonWidth = 250.0f;
+    const f32 cHomeGap = 12.0f;
+    const s32 cDropFrames = 16;  // the window's drop from above, and its rise away
+    const s32 cRowsFirst = 96;  // the rows made with the screen; more when a page has more
+    const s32 cTabsFirst = 8;   // the page buttons made with the screen; more when there are more pages
     const s32 cHintsMax = 3;
-    NEBULA_TUNABLE(s32, cRowButtonsFirst, 6);  // the launcher's buttons made with the screen; more when a row has more
-    NEBULA_TUNABLE(f32, cModsGap, 26.0f);      // the MODS page: between its two lists
-    NEBULA_TUNABLE(f32, cDragStart, 5.0f);     // how far the pointer moves something held down before it is dragged
-    NEBULA_TUNABLE(f32, cEdgeScrollRows, 8.0f);  // a list under a dragged mod at its edge scrolls this many rows a second at most
-    NEBULA_TUNABLE(s32, cRowChipsFirst, 48);   // the rows' buttons made with the screen; more when the rows in sight need them
+    const s32 cRowButtonsFirst = 6;  // the launcher's buttons made with the screen; more when a row has more
+    const f32 cModsGap = 26.0f;      // the MODS page: between its two lists
+    const f32 cDragStart = 5.0f;     // how far the pointer moves something held down before it is dragged
+    const f32 cEdgeScrollRows = 8.0f;  // a list under a dragged mod at its edge scrolls this many rows a second at most
+    const s32 cRowChipsFirst = 48;   // the rows' buttons made with the screen; more when the rows in sight need them
 
     // The quit question's window and text; the game's blue for what is chosen.
     const u32 cText = 0x4A5274FF;
-    NEBULA_TUNABLE(u32, cSubText, 0x737B9AFF);
-    NEBULA_TUNABLE(u32, cAccent, 0x2F6FD0FF);
+    const u32 cSubText = 0x737B9AFF;
+    const u32 cAccent = 0x2F6FD0FF;
     const u32 cDisabled = NEBULA_RGBA(0x9A, 0xA2, 0xBC, 0xFF);
     const u32 cWarning = NEBULA_RGBA(0xC8, 0x40, 0x2E, 0xFF);
-    NEBULA_TUNABLE(u32, cHighlightFill, 0xFFFFFFFF);
-    NEBULA_TUNABLE(u32, cFrameFill, 0xFFFFFFB4);   // a row's frame
-    NEBULA_TUNABLE(u32, cFrameFixed, 0xFFFFFF5A);  // a row that only shows something
+    const u32 cHighlightFill = 0xFFFFFFFF;
+    const u32 cFrameFill = 0xFFFFFFB4;   // a row's frame
+    const u32 cFrameFixed = 0xFFFFFF5A;  // a row that only shows something
     const u32 cFrameRing = NEBULA_RGBA(0xC6, 0xD3, 0xEB, 0xFF);
-    NEBULA_TUNABLE(u32, cHighlightRing, 0x7EC8F4FF);
-    NEBULA_TUNABLE(u32, cRule, 0xB4C2DEFF);
-    NEBULA_TUNABLE(u32, cTrack, 0x4A527428);
+    const u32 cHighlightRing = 0x7EC8F4FF;
+    const u32 cRule = 0xB4C2DEFF;
+    const u32 cTrack = 0x4A527428;
     const u32 cSliderTrack = NEBULA_RGBA(0xCB, 0xD6, 0xEB, 0xFF);
-    NEBULA_TUNABLE(u32, cSliderFill, 0x6FA6EAFF);
-    NEBULA_TUNABLE(u32, cRowButtonFill, 0xE4F6FFFF);  // a row's own button: its face, its ring, the edge under it
-    NEBULA_TUNABLE(u32, cRowButtonRing, 0x5CC4F0FF);
-    NEBULA_TUNABLE(u32, cRowButtonLit, 0xFFFFFFFF);  // focused
-    NEBULA_TUNABLE(u32, cRowButtonLitRing, 0x2F9AEEFF);
-    NEBULA_TUNABLE(u32, cRowButtonEdge, 0x3E86C8FF);
-    NEBULA_TUNABLE(u32, cRowButtonOff, 0xEEF1F6FF);  // unavailable
-    NEBULA_TUNABLE(u32, cThumb, 0x7EA8E8FF);
-    NEBULA_TUNABLE(u32, cButtonText, 0x505050FF);
+    const u32 cSliderFill = 0x6FA6EAFF;
+    const u32 cRowButtonFill = 0xE4F6FFFF;  // a row's own button: its face, its ring, the edge under it
+    const u32 cRowButtonRing = 0x5CC4F0FF;
+    const u32 cRowButtonLit = 0xFFFFFFFF;  // focused
+    const u32 cRowButtonLitRing = 0x2F9AEEFF;
+    const u32 cRowButtonEdge = 0x3E86C8FF;
+    const u32 cRowButtonOff = 0xEEF1F6FF;  // unavailable
+    const u32 cThumb = 0x7EA8E8FF;
+    const u32 cButtonText = 0x505050FF;
 
     enum { FooterApply, FooterBack, FooterNum };
-    enum { ChoiceNum = 3 };
+    enum { ChoiceNum = 4 };  // the most answers a screen shows: the launcher's four rows
 
     // What the hints and buttons name a key or button for. KeyPress: a row's button (IMPORT, OPEN) is pressed with
     // Space or the bottom button.
@@ -227,10 +227,25 @@ namespace {
          {"SettingsChoiceRemove", "SettingsChoiceKeep", nullptr},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
          {KeyApply, KeyBack, 0}},
+        // A removed mod's kept numbers and saved data (services/mods.md 8): its id above the question (fillTexts).
+        {NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK, "SettingsModForgetAsk", "SettingsModForgetAsk", 2,
+         {"SettingsChoiceForget", "SettingsChoiceKeep", nullptr},
+         {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
+         {KeyApply, KeyBack, 0}},
     };
     // The ABOUT window's pictures: at most this many texels a side (the host fits them so).
     const u32 cModPictureSide = 1024;
     const s32 cQuestionNum = sizeof(cQuestions) / sizeof(cQuestions[0]);
+
+    // The host asks one of cQuestions: NEBULA_SETTINGS_CLOSE would answer it.
+    bool isAsking(u32 status) {
+        for (s32 i = 0; i < cQuestionNum; i++) {
+            if (cQuestions[i].mStatus == status) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     // A half of the Pair Joy-Con picture: its texture (made when the screen first shows) and its shoulder's letter.
     struct JoyConHalf {
@@ -247,6 +262,21 @@ namespace {
     const char* const cHomeAnswers[] = {"HomeMenuNo", "HomeMenuYes"};
     const s32 cHomeRowNum = sizeof(cHomeRows) / sizeof(cHomeRows[0]);
     const s32 cHomeAnswerNum = sizeof(cHomeAnswers) / sizeof(cHomeAnswers[0]);
+    // Launcher mode's home screen (NEBULA_HOME_MENU_LAUNCHER_*), drawn as the HOME Menu: views with bit 16; its rows,
+    // on page 1 an update's notice ("{v}": its version) and its notes over Back, on page 2 the benchmark's message
+    // (it gave no recommendation) over Back, on page 3 the benchmark report's upload question over its three answers
+    // (cLauncherUpload), on pages 4-6 the send's state (sending, sent, not sent) over Back.
+    const s32 cLauncherView = 1 << 16;
+    const char* const cLauncherUpload[] = {"Diag.DontSend", "Diag.ShowReport", "Diag.Send"};
+    const char* const cLauncherQuestion[] = {"Diag.Question", "Diag.Why", "Diag.WhatSent", "Diag.NeverSent"};
+    const char* const cLauncherSend[] = {"LauncherDiagSending", "Diag.Done", "Diag.Failed"};
+    // In the host's order (LauncherModel::Row); without Benchmark where the view has bit 17 (the host cannot start it).
+    const char* const cLauncherRows[] = {"LauncherPlay", "SettingsTitle", "LauncherBenchmark", "Quit"};
+    const char* const cLauncherRowsNoBenchmark[] = {"LauncherPlay", "SettingsTitle", "Quit"};
+    const s32 cLauncherRowNum = sizeof(cLauncherRows) / sizeof(cLauncherRows[0]);
+    const s32 cLauncherNoBenchmark = 1 << 17;
+    const s32 cLauncherVersionUnits = 64;  // the host's limits (runtime/src/ui/launcher.cpp)
+    const s32 cLauncherNotesUnits = 400;
 
     // One of a row's buttons: its word, whether it is unavailable, and where it was drawn.
     struct RowButton {
@@ -340,7 +370,7 @@ namespace {
     };
     const char16_t* const cPadShoulders[3][2] = {{u"LB", u"RB"}, {u"L", u"R"}, {u"L1", u"R1"}};
     const PadButton cShoulders[3] = {{nullptr, 0x45474EFF, 0xFFFFFFFF}, {nullptr, 0xFFFFFFFF, cText}, {nullptr, 0xFFFFFFFF, cText}};
-    NEBULA_TUNABLE(u32, cBadgeRing, 0xB4C2DEFF);  // round a white badge, as the window's rules
+    const u32 cBadgeRing = 0xB4C2DEFF;  // round a white badge, as the window's rules
 
     // A button in the game's art with its key before its word ("Enter  Apply").
     struct Button {
@@ -951,6 +981,7 @@ private:
     void placeModPicture(bool shown, f32 width, f32 top, f32 bottom);
     void paintJoyCon(u32 budgetMicros, f32* pPixelsX, f32* pPixelsY) const;
     void fillHome(s32 homeView);
+    void fillLauncher(s32 view);
     void readPointer(const NebulaSettingsView& rView);
     void readHomePointer(f32 x, f32 y);
     void clickRow(const NebulaSettingsView& rView, s32 row);
@@ -1721,7 +1752,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     }
 
     const s32 hint = firstHint(rView);
-    if (pShown != nullptr && pShown->status == rView.status && pShown->status_number == rView.status_number &&
+    if (pShown != nullptr && pShown->status == rView.status && pShown->status_number == rView.status_number && pShown->help_as_is == rView.help_as_is &&
         MR::isEqualString(pShown->help, rView.help) && MR::isEqualString(pShown->status_text, rView.status_text) &&
         MR::isEqualString(pShown->long_text, rView.long_text) && pShown->page == rView.page && pShown->input == rView.input && firstHint(*pShown) == hint) {
         return;
@@ -1778,6 +1809,8 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     }
     if (pStatusId != nullptr) {
         getNumbered(mStatusText, pStatusId, rView.status_number);
+    } else if (rView.status == NEBULA_SETTINGS_STATUS_HELP && rView.help_as_is != 0) {
+        fromUtf8(mStatusText, 0, pStatusText);  // already in the played language (a mod's refusal)
     } else {
         translateLine(mStatusText, pStatusText, false);
     }
@@ -1931,8 +1964,9 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
                                                                : "SettingsJoyConConnect";
     }
     getNumbered(text, pText, rView.status_number);
-    if (rView.status == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK && rView.status_text != nullptr && rView.status_text[0] != 0) {
-        // The mod's name above the question: more than one can wait for an answer.
+    if ((rView.status == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK || rView.status == NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK) &&
+        rView.status_text != nullptr && rView.status_text[0] != 0) {
+        // The mod's name above the question: more than one can wait for an answer (a removed mod's: its id).
         MR::Text16 asked;
         getNumbered(asked, pText, rView.status_number);
         fromUtf8(text, 0, rView.status_text);
@@ -2004,6 +2038,13 @@ void NebulaSettingsScreen::setQuestion(s32 question) {
 
 // The HOME Menu as the host has it: its title and rows, or "are you sure?" and its answers; the selected one focused.
 void NebulaSettingsScreen::fillHome(s32 homeView) {
+    if ((homeView & cLauncherView) != 0) {
+        fillLauncher(homeView);
+        return;
+    }
+    if (mHomeView >= 0 && (mHomeView & cLauncherView) != 0) {
+        mHomeView = -1;  // the HOME Menu opened over the launcher's screen: its texts all again
+    }
     // HOME reuses the modal, but never its progress bar or controller-pairing illustration.
     mProgressTrack->SetVisible(false);
     mProgressFill->SetVisible(false);
@@ -2051,6 +2092,140 @@ void NebulaSettingsScreen::fillHome(s32 homeView) {
     }
     mHomeView = homeView;
     const s32 selected = homeView & 0xFF;
+    mFocusButton = selected < mChoiceCount ? &mChoices[selected] : nullptr;
+}
+
+// Launcher mode's home screen as the host has it: its title over its rows, or an update's notice or the benchmark's
+// message over Back; the selected one focused. Placed as the HOME Menu (placeHome: page 0 its list, others a question).
+void NebulaSettingsScreen::fillLauncher(s32 view) {
+    mProgressTrack->SetVisible(false);
+    mProgressFill->SetVisible(false);
+    mJoyCon->SetVisible(false);
+    mQuestionText->SetVisible(true);
+    setAnchor(mQuestionText, 4);
+    const s32 page = view >> 8 & 0xFF;
+    const bool notice = page != 0;
+    const bool threeRows = (view & cLauncherNoBenchmark) != 0;
+    const char* const* const pRows = threeRows ? cLauncherRowsNoBenchmark : cLauncherRows;
+    const s32 rowNum = threeRows ? cLauncherRowNum - 1 : cLauncherRowNum;
+    if (mHomeView < 0 || (view >> 8) != (mHomeView >> 8)) {
+        MR::Text16 text;
+        f32 width = 0.0f;
+        f32 height = 0.0f;
+        // The upload question: what it asks, why, what a report holds and what it never does, one under another; without
+        // the why when even the smallest text is too tall (below). Each part is copied up to its own length or its end,
+        // whichever comes first, into room grown for it.
+        const auto buildQuestion = [&](bool withWhy) {
+            const s32 firstLength = getText(text, cLauncherQuestion[0]);
+            u32 used = firstLength > 0 ? static_cast< u32 >(firstLength) : 0u;
+            for (u32 k = 1; k < sizeof(cLauncherQuestion) / sizeof(cLauncherQuestion[0]); k++) {
+                if (k == 1 && !withWhy) {
+                    continue;
+                }
+                MR::Text16 part;
+                const s32 partText = getText(part, cLauncherQuestion[k]);
+                const u32 partLength = partText > 0 ? static_cast< u32 >(partText) : 0u;
+                char16_t* const pText = text.grow(used + 1, used + 1 + partLength + 1);
+                pText[used] = u'\n';
+                const char16_t* const pPart = part.c_str();
+                u32 c = 0;
+                for (; c < partLength && pPart[c] != 0; c++) {
+                    pText[used + 1 + c] = pPart[c];
+                }
+                pText[used + 1 + c] = 0;
+                used += 1 + c;
+            }
+        };
+        if (!notice) {
+            getText(text, "LauncherTitle");
+            setTextSize(mQuestionText, cTitleSize);
+        } else if (page == 2) {
+            // The benchmark this start returned from gave no recommendation.
+            getText(text, "LauncherBenchmarkNone");
+            setTextSize(mQuestionText, cTextSize + 1.0f);
+        } else if (page == 3) {
+            buildQuestion(true);
+            setTextSize(mQuestionText, cTextSize);
+        } else if (page >= 4 && page <= 6) {
+            getText(text, cLauncherSend[page - 4]);
+            setTextSize(mQuestionText, cTextSize + 1.0f);
+        } else {
+            // "Nebula {v} is available", then the notes. The text is a language pack's to replace: its head line holds
+            // as much of it, every "{v}" the version, as fits its room, whatever the text says; then a break, the notes
+            // (readText stops at its capacity) and the end, always inside the room.
+            MR::Text16 pattern;
+            const s32 patternLength = getText(pattern, "LauncherUpdate");
+            char16_t version[cLauncherVersionUnits + 1];
+            const s32 versionLength = NebulaLauncher::readText(0, version, cLauncherVersionUnits + 1);
+            const s32 headRoom = (patternLength > 0 ? patternLength : 0) + versionLength;
+            const s32 room = headRoom + 1 + cLauncherNotesUnits + 1;
+            char16_t* const pText = text.room(static_cast< u32 >(room));
+            s32 length = 0;
+            for (const char16_t* p = pattern.c_str(); *p != 0 && length < headRoom; p++) {
+                if (p[0] == u'{' && p[1] == u'v' && p[2] == u'}') {
+                    for (s32 k = 0; k < versionLength && length < headRoom; k++) {
+                        pText[length++] = version[k];
+                    }
+                    p += 2;
+                    continue;
+                }
+                pText[length++] = *p;
+            }
+            pText[length++] = u'\n';
+            NebulaLauncher::readText(1, pText + length, room - length);
+            pText[room - 1] = 0;
+            setTextSize(mQuestionText, cTextSize + 1.0f);
+        }
+        setText(mQuestionText, text.c_str());
+        measure(mQuestionText, (notice ? cQuestionWidth : cHomeWidth) - 48.0f, &width, &height);
+        if (notice) {
+            // A page whose text (a translation, a language pack's, the host's notes) is taller than the screen offers at
+            // this menu size: the text smaller, step by step, down to cMinSqueeze of its size (the menu's floor for any
+            // narrowed text), until the window fits between the margins. The question, still too tall there, goes without
+            // its why: what is sent and what never is stay, and Show the full report shows the report itself.
+            const f32 textRoom = mHeight - cMargin * 2.0f - (cPad * 2.0f + cQuestionMargin + cButtonHeight);
+            const f32 fullSize = page == 3 ? cTextSize : cTextSize + 1.0f;
+            const f32 smallest = fullSize * cMinSqueeze;
+            for (s32 pass = 0; pass < 2 && height > textRoom; pass++) {
+                if (pass == 1) {
+                    if (page != 3) {
+                        break;
+                    }
+                    buildQuestion(false);
+                    setTextSize(mQuestionText, fullSize);
+                    setText(mQuestionText, text.c_str());
+                    measure(mQuestionText, cQuestionWidth - 48.0f, &width, &height);
+                }
+                f32 size = fullSize;
+                while (height > textRoom && size > smallest) {
+                    size = size * 0.92f > smallest ? size * 0.92f : smallest;
+                    setTextSize(mQuestionText, size);
+                    measure(mQuestionText, cQuestionWidth - 48.0f, &width, &height);
+                }
+            }
+        }
+        mChoiceCount = page == 3 ? 3 : notice ? 1 : rowNum;
+        for (s32 i = 0; i < ChoiceNum; i++) {
+            Button& rChoice = mChoices[i];
+            rChoice.mChip.mRoot->SetVisible(i < mChoiceCount);
+            rChoice.mChip.mFocusLevel = 0.0f;
+            if (i < mChoiceCount) {
+                fillButton(rChoice, page == 3 ? cLauncherUpload[i] : notice ? "SettingsBack" : pRows[i]);
+                fillKeyCap(rChoice.mKey, -1, 0, false);
+            }
+        }
+        // The notice's window holds its text above its answer, the question's margins around them.
+        const f32 panelWidth = notice ? cQuestionWidth : cHomeWidth;
+        const f32 noticeHeight = height + cPad * 2.0f + cQuestionMargin + cButtonHeight;
+        const f32 panelHeight = notice ? (noticeHeight > cQuestionHeight ? noticeHeight : cQuestionHeight)
+                                       : cPad * 2.0f + cTitleSize + 18.0f + cButtonHeight * rowNum +
+                                             cHomeGap * (rowNum - 1);
+        mQuestionPanel->mSize = Ui::Size(panelWidth, panelHeight);
+        mQuestionShadow->mSize = Ui::Size(panelWidth, panelHeight);
+        mQuestion->SetVisible(true);
+    }
+    mHomeView = view;
+    const s32 selected = view & 0xFF;
     mFocusButton = selected < mChoiceCount ? &mChoices[selected] : nullptr;
 }
 
@@ -3354,6 +3529,9 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
         static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_MENU_TEXT_SIZE)) != mTextSizeChosen ||
         static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_WINDOW_WIDTH_DP)) != mWindowDp) {
         arrange();
+        if (mHome) {
+            mHomeView = -1;  // its text measured again for the new screen (fillLauncher fits a notice to it)
+        }
     }
     if (!mHome && rView.page == rView.controls_page && rView.status != NEBULA_SETTINGS_STATUS_JOYCON) {
         f32 pixelsX;
@@ -3453,8 +3631,10 @@ namespace NebulaSettingsMenu {
         NebulaHost::settingsView(&sView);
         // Not during the boot (the logos): asked for there, it closes at once. The title and the file select open it
         // (F1, the file select's Settings button), over everything they draw.
+        // Launcher mode's home screen opens it there. A question the host asks (an imported mod's code) is never answered
+        // by this close: it shows, and the boot waits for the player's answer.
         if (sView.open && !sScreen->isShown() && !GameSystemFunction::isOccurredSystemWarning() &&
-            MR::isCurrentScene(SceneKind_Boot)) {
+            MR::isCurrentScene(SceneKind_Boot) && !NebulaLauncher::isHolding() && !isAsking(sView.status)) {
             NebulaHost::settingsInput(NEBULA_SETTINGS_CLOSE, 0);
             sView.open = 0;
         }
@@ -3503,5 +3683,25 @@ namespace NebulaSettingsMenu {
 
     void requestOpen() {
         NebulaHost::settingsInput(NEBULA_SETTINGS_OPEN, 0);
+    }
+
+    s32 translateHost(char16_t* pDst, s32 capacity, const char* pText) {
+        if (capacity <= 0) {
+            return 0;
+        }
+        MR::Text16 text;
+        translate(text, pText, false);
+        const char16_t* const pFrom = text.c_str();
+        s32 n = 0;
+        while (pFrom[n] != 0 && n + 1 < capacity) {
+            pDst[n] = pFrom[n];
+            n++;
+        }
+        // Cut short: never half a pair.
+        if (pFrom[n] != 0 && n > 0 && pDst[n - 1] >= 0xD800u && pDst[n - 1] < 0xDC00u) {
+            n--;
+        }
+        pDst[n] = 0;
+        return n;
     }
 };  // namespace NebulaSettingsMenu

@@ -16,9 +16,11 @@ namespace Nebula
         /// <summary>
         /// The box is offered on a PC that runs Nebula's ray tracing (as the game recorded for its GPU in adapter.ini,
         /// else when it has an NVIDIA RTX GPU) while ray tracing is off: with it on, the next start prepares anyway.
+        /// Never in a build without ray tracing (BuildInfo.RayTracing).
         /// </summary>
         public static bool Offered()
         {
+            if (!BuildInfo.RayTracing) return false;
             var adapter = ReadKeys(Path.Combine(NebulaPaths.DataRoot, "adapter.ini"));
             string value;
             bool capable = adapter != null && adapter.TryGetValue("ray_tracing", out value)

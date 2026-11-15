@@ -13,12 +13,11 @@
 #include <cstring>
 #include <Game/Ui/Pane.hpp>
 #include <Game/Ui/TextBox.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
     // A button waits this long after its corner frees up: a pointer crossing between files does not flash it.
-    NEBULA_TUNABLE(s32, cShowDelayFrames, 8);
+    const s32 cShowDelayFrames = 8;
 
     // Each button's own layout name, for the canvas rules (LayoutAspect): Quit follows the left and top edges, Settings
     // the right and top.

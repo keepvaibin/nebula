@@ -10,27 +10,24 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
 
 namespace {
     // Passing: within this far of the ring's plane and this far of its centre.
-    NEBULA_TUNABLE(f32, cPassPlaneDistance, 20.0f);
-    NEBULA_TUNABLE(f32, cPassRadius, 200.0f);
+    const f32 cPassPlaneDistance = 20.0f;
+    const f32 cPassRadius = 200.0f;
     // Farther than this, the ring turns a little to face the player.
-    NEBULA_TUNABLE(f32, cTurnDistance, 300.0f);
-    NEBULA_TUNABLE(f32, cTurnRate, 0.03f);
+    const f32 cTurnDistance = 300.0f;
+    const f32 cTurnRate = 0.03f;
     // After a pass it follows the player this long, then rests before coming back.
-    NEBULA_TUNABLE(u16, cActiveSteps, 15);
+    const u16 cActiveSteps = 15;
     const u16 cRevivalSteps = NebulaFrameClock::stepsOfSeconds(3);
     // Following the player farther than this from home sends it back.
-    NEBULA_TUNABLE(f32, cFollowLimit, 2000.0f);
+    const f32 cFollowLimit = 2000.0f;
     // Defaults for args 0-2 (arg 2 in hundredths).
     const s32 cDefaultBoostTime = NebulaFrameClock::stepsOfSeconds(5);
     const s32 cDefaultMaxDuration = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, cDefaultSpeedScale, 2.5f);
-    NEBULA_TUNABLE(f32, cSpeedScaleArgUnit, 100.0f);
+    const f32 cDefaultSpeedScale = 2.5f;
+    const f32 cSpeedScaleArgUnit = 100.0f;
 
     void startAnim(LiveActor* pActor, const char* pName) {
         MR::startBck(pActor, pName);
@@ -50,7 +47,7 @@ void DashRing::init(const TableIter& rIter) {
     MR::connectToSceneMapObj(this);
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "body", 4, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 4, 1000.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::validateClipping(this);
     calcAxis();
 

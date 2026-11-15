@@ -14,8 +14,10 @@ namespace galaxy::render {
 
 namespace {
 
-// A heap of the usual size; a texture that takes more than half of one has a heap of its own.
+// The largest shared heap; a texture that takes more than half of one has a heap of its own. The first shared heap is
+// kFirstHeapBytes, each further one twice the largest held.
 constexpr std::uint64_t kHeapBytes = 64ull << 20u;
+constexpr std::uint64_t kFirstHeapBytes = 8ull << 20u;
 // The array's first length in slots (it doubles as the store's indices reach its end).
 constexpr std::uint32_t kFirstArraySlots = 4096u;
 
@@ -27,6 +29,7 @@ mtl::Format format_of(TexelFormat format) noexcept {
     return format == TexelFormat::R8    ? mtl::Format::R8
            : format == TexelFormat::Rg8 ? mtl::Format::Rg8
            : format == TexelFormat::Bc1 ? mtl::Format::Bc1
+           : format == TexelFormat::Astc4x4 ? mtl::Format::Astc4x4
                                         : mtl::Format::Rgba8;
 }
 
@@ -255,6 +258,10 @@ bool TextureBackend::supports_bc1() {
     return mtl::Context::get().caps().bc_textures;
 }
 
+bool TextureBackend::supports_astc4x4() {
+    return mtl::Context::get().caps().apple_gpu;
+}
+
 // A texture of `descriptor` (an MTLTextureDescriptor*) from a heap with room, else from a new heap.
 mtl::Object TextureBackend::allocate(void* descriptor, mtl::Object& heap_out) {
     MTLTextureDescriptor* const wanted = (__bridge MTLTextureDescriptor*)descriptor;
@@ -281,7 +288,15 @@ mtl::Object TextureBackend::allocate(void* descriptor, mtl::Object& heap_out) {
     // that read them on a GPU that runs independent passes side by side (Apple's). Tracked by the heap, the uploads'
     // blit and each pass that names the heap run in the order they were recorded.
     heap_descriptor.hazardTrackingMode = MTLHazardTrackingModeTracked;
-    heap_descriptor.size = single ? ((need.size + need.align - 1u) / need.align) * need.align : kHeapBytes;
+    // A shared heap: twice the largest shared heap held (kFirstHeapBytes when none), at least twice the texture, at most
+    // kHeapBytes.
+    std::uint64_t shared_size = kFirstHeapBytes;
+    for (const Heap& held : heaps_) {
+        if (!held.single) shared_size = std::max<std::uint64_t>(shared_size, std::uint64_t{held.size} * 2u);
+    }
+    while (shared_size < std::uint64_t{need.size} * 2u) shared_size *= 2u;
+    shared_size = std::min(shared_size, kHeapBytes);
+    heap_descriptor.size = single ? ((need.size + need.align - 1u) / need.align) * need.align : shared_size;
     id<MTLHeap> const fresh = [device() newHeapWithDescriptor:heap_descriptor];
     if (fresh == nil) {
         return nullptr;
@@ -370,7 +385,7 @@ void TextureBackend::record_upload(mtl::Texture* texture, bool, const UploadChun
     id<MTLBlitCommandEncoder> const blit = (__bridge id<MTLBlitCommandEncoder>)upload_list_;
     id<MTLBuffer> const source = (__bridge id<MTLBuffer>)staging.resource->buffer;
     id<MTLTexture> const target = (__bridge id<MTLTexture>)texture->texture;
-    const bool blocks = texture->format == mtl::Format::Bc1;
+    const bool blocks = texture->format == mtl::Format::Bc1 || texture->format == mtl::Format::Astc4x4;
     for (unsigned level = 0; level < levels; ++level) {
         const std::uint32_t level_width = std::max<std::uint32_t>(1u, width >> level);
         const std::uint32_t level_height = std::max<std::uint32_t>(1u, height >> level);

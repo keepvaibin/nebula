@@ -15,14 +15,13 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, cHitSensorRadius, 30.0f);
+    const f32 cHitSensorRadius = 30.0f;
     // Draw numbers a rail owns among the holder's: its place in the list times this. Room for the strips of a rail
     // (two planes a level) or its sent mesh.
-    NEBULA_TUNABLE(u32, cPartsPerRail, 1024);
+    const u32 cPartsPerRail = 1024;
 
     ElectricRailHolder* getHolder() {
         return MR::getSceneObj< ElectricRailHolder >(SceneObj_ElectricRailHolder);

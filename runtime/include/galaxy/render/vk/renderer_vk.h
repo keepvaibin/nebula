@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The renderer on Vulkan (docs/VULKAN.md), with the interface RenderCore uses on RendererD3D12.
+// The renderer on Vulkan, with the interface RenderCore uses on RendererD3D12.
 //
 // The scene target is a colour target (A2B10G10R10) and a depth target (D32 float with stencil; D24S8 where the device lacks it or
 // its D32F clears are broken, DeviceQuirks::depth_d24) drawn through
@@ -37,6 +37,8 @@
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
+#include "galaxy/render/mod_post.h"
+#include <nebula_frame_list.h>
 
 #include <array>
 #include <chrono>
@@ -80,6 +82,8 @@ struct RenderLayout {
     // A whole-target depth clear opening the pass: the colour loaded, the depth cleared, the stencil loaded ([0]: as the
     // depth-clearing draw keeps it) or cleared ([1]: as vkCmdClearAttachments clears it).
     std::array<std::array<std::array<VkRenderPass, 4>, 2>, 2> depth_clear_passes{};
+    // The same depth clears where the opening replaces the whole colour (discard_color_passes' colour, never loaded).
+    std::array<std::array<std::array<VkRenderPass, 4>, 2>, 2> discard_depth_clear_passes{};
     // A texture target's pass (kSceneVariantTarget): RGBA8, one sample.
     VkRenderPass target_pass = VK_NULL_HANDLE;
     VkRenderPass target_pass_clear = VK_NULL_HANDLE;
@@ -135,6 +139,9 @@ public:
     [[nodiscard]] Kept take_apart_lost_device();
     void keep(const Kept& kept, bool) noexcept { window_ = kept.window; }
     void shutdown();
+    // The pictures handed to an extension, taken from the GPU and written (render thread; RenderCore::finish_pictures,
+    // at a host's exit that skips shutdown).
+    void finish_pictures();
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
 
     // SMAA or FXAA of the 3D scene in the scene target before the 2D layer draws (PostProcessorVk).
@@ -183,6 +190,13 @@ public:
     // The game's bloom (game_bloom_vk.h): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
+    // draw.post (mod_post.h, mod_post_vk.cpp): `program` full screen over `picture` (the frame so far, from
+    // take_frame_picture) into the scene target, in a pass of its own; `depth_known` the walker could give the depth terms.
+    void record_mod_post(const ModPostProgram& program, ModPostConstants constants, const gpu::TextureRef& picture,
+                         bool depth_known);
+    // draw.native (luma_draw_native.h): `call` with the device and the command buffer between passes, the scene target
+    // (with its depth at a scene point); the projection's y row turned for Vulkan's clip space.
+    void record_native_call(const NebulaCall& call, LumaDrawNativeFrame& frame, bool scene_point);
     void reset_generated_gpu_ema() noexcept { generated_gpu_ema_ms_ = 0.0; }
     [[nodiscard]] double generated_gpu_ema_ms() const noexcept { return generated_gpu_ema_ms_; }
     [[nodiscard]] double interpolation_gpu_cost_ms() const noexcept {
@@ -193,7 +207,7 @@ public:
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
     // Milliseconds a GPU timestamp tick (0: the device has no compute timestamps).
     [[nodiscard]] double gpu_ms_per_tick() const noexcept { return timestamp_period_ns_ / 1'000'000.0; }
-    // Smoothed GPU time of a frame that drew the scene (0 until measured): the tracer's build budget (5.3 G-3).
+    // Smoothed GPU time of a frame that drew the scene (0 until measured): the tracer's build budget.
     [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return native_scene_gpu_ema_ms_; }
     void set_scene_view(const std::array<float, 12>* view) noexcept {
         scene_view_known_ = view != nullptr;
@@ -208,7 +222,7 @@ public:
     [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (scene_camera_vk.h).
     bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
-    void end_wide_scene();
+    void end_wide_scene(unsigned finish = 0u);  // finish: the traced relight's camera (scene_camera.hlsl g_finish)
     [[nodiscard]] bool temporal_mode() const;
     // The upscaler reads the motion but no reactive mask (SGSR 2): every draw of the scene shares the motion pass, the
     // ones without motion leaving it as it is, so the pass is not closed and reopened between them.
@@ -326,7 +340,7 @@ public:
     // `black`: the frame is presented black (the pass clears; the display picture is not drawn).
     bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // The 2D layer at the window's resolution (hud_output_resolution): at the scene's end the scene target is resampled into
+    // The 2D layer at the window's resolution (render_hud_at_output): at the scene's end the scene target is resampled into
     // an scene target at the window's scale, which the 2D layer and the display copy then use, until end_output_scene.
     [[nodiscard]] bool begin_output_scene(bool resolve_msaa_only = false);
     // A pass into texture target `key` (E-07): its target, `width` x `height` game units at the scene target's scale, takes
@@ -523,7 +537,8 @@ private:
                                                      vk::UtilitySpirv vs_shader, vk::UtilitySpirv ps_shader,
                                                      VkColorComponentFlags write_mask, bool blend, bool strip,
                                                      bool depth_write,
-                                                     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
+                                                     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT,
+                                                     bool color_attachment = true);
     [[nodiscard]] VkShaderModule utility_module(vk::UtilitySpirv shader);
 
     // Frame recording.
@@ -551,8 +566,6 @@ private:
     RtView scene_ao_view_{};
     std::vector<ao::ObjectOccluder> scene_ao_objects_;
     void sync_post_process();
-    // The picture through the post chain before a turned swap chain's blit (pre-rotated images).
-    gpu::TextureRef oriented_;
     // DLSS Frame Generation (RendererD3D12's fg_hudless_*): the frame without its 2D layer, and whether a frame's Streamline
     // markers are open.
     gpu::TextureRef fg_hudless_scene_color_;
@@ -629,7 +642,7 @@ private:
     // The scene target's framebuffer and colour conversion input: the set's own, or for an image taken into the
     // scene, the image's framebuffer (vk::Texture::scene_framebuffer, with the scene target's depth) and a set in the
     // frame's descriptors.
-    [[nodiscard]] VkFramebuffer scene_framebuffer(bool resolved = false);
+    [[nodiscard]] VkFramebuffer scene_framebuffer();
     [[nodiscard]] VkDescriptorSet scene_color_source();
     [[nodiscard]] VkFramebuffer framebuffer_for(vk::Texture& texture);
     void refresh_display_rate();
@@ -657,6 +670,7 @@ private:
     Swapchain swapchain_;
     bool swapchain_dirty_ = false;
     bool surface_lost_ = false;  // the driver reported it: made again from the window at the next frame
+    bool driver_confirmed_ = false;  // a frame was shown: an imported driver works (launch_args gpu_driver)
     std::uint32_t swap_image_ = UINT32_MAX;  // acquired for this frame's present
     // host_window::surface_use, from acquiring this frame's image until it is presented.
     std::unique_lock<std::timed_mutex> surface_lock_;
@@ -690,11 +704,10 @@ private:
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         VkDescriptorSet color_source = VK_NULL_HANDLE;
         // MSAA (samples above one): the multisampled targets the scene target pass draws into, color and depth above being
-        // their resolves; resolve_framebuffer (scene_pass) holds color and depth for the depth resolve.
+        // their resolves (the depth's by resolve_scene_depth, a pass over depth alone).
         unsigned samples = 1u;
         gpu::TextureRef ms_color;
         gpu::TextureRef ms_depth;
-        VkFramebuffer resolve_framebuffer = VK_NULL_HANDLE;
         VkDescriptorSet ms_depth_source = VK_NULL_HANDLE;
         bool depth_dirty = false;
         // Its colour is an image a hand-over gave it (E-10): framebuffer and colour input per image (scene_framebuffer).
@@ -709,7 +722,7 @@ private:
     bool wide_base_sampled_ = false;
     bool ensure_wide_set(SceneSet& set);
     void record_wide_begin(const SceneClearValues* initial_clear);
-    void record_wide_end();
+    void record_wide_end(unsigned finish = 0u);
     vk::SceneCameraVk scene_camera_;
     std::chrono::steady_clock::time_point camera_metered_{};
     std::uint64_t scene_depth_serial_ = 0;
@@ -762,6 +775,9 @@ private:
     FrameMap target_scene_map_{};
     bool target_pass_active_ = false;
     bool output_scene_active_ = false;
+    // The scene target's colour, which the output scene's first draw sampled, waits in the sampling layout until
+    // end_output_scene gives it back its attachment layout.
+    bool output_source_sampled_ = false;
     [[nodiscard]] FrameMap output_frame_for_window() const;
     bool enter_output_scene(const FrameMap& output);
     void swap_scene_sets();
@@ -780,6 +796,30 @@ private:
         FrameMap map{};
     };
     MotionTargets motion_;
+    // draw.post's layout, its colour-only passes (by format and samples) and the programs' pipelines.
+    struct ModPostPass {
+        VkFormat format = VK_FORMAT_UNDEFINED;
+        unsigned samples = 1u;
+        VkRenderPass pass = VK_NULL_HANDLE;
+    };
+    struct ModPostPipelineVk {
+        std::uint32_t program = 0u;
+        VkFormat format = VK_FORMAT_UNDEFINED;
+        unsigned samples = 1u;
+        VkPipeline pipeline = VK_NULL_HANDLE;  // null: the device refused it
+    };
+    VkSampler mod_post_samplers_[2]{};
+    VkDescriptorSetLayout mod_post_set_layout_ = VK_NULL_HANDLE;
+    VkPipelineLayout mod_post_layout_ = VK_NULL_HANDLE;
+    bool mod_post_failed_ = false;
+    std::vector<ModPostPass> mod_post_passes_;
+    std::vector<ModPostPipelineVk> mod_post_pipelines_;
+    std::uint64_t mod_post_epoch_ = 0u;
+    bool ensure_mod_post_layout();
+    [[nodiscard]] VkRenderPass mod_post_pass(VkFormat format, unsigned samples);
+    [[nodiscard]] VkPipeline mod_post_pipeline(const ModPostProgram& program, VkFormat format, unsigned samples,
+                                               VkRenderPass pass);
+    void release_mod_post();
     [[nodiscard]] bool ensure_motion_targets();
     void clear_motion_targets(bool motion = true);  // the reactive mask too where it is read
     // The layer's targets to nothing added (zero colour) and everything let through (transmittance one).
@@ -821,6 +861,8 @@ private:
     }
     void settle_depth_clear();
     void clear_depth_in_pass(float reversed_depth, const VkRect2D& rect);
+    void clear_depth_alone(float reversed_depth, unsigned mode);
+    std::array<std::array<VkRenderPass, 4>, 2> depth_alone_passes_{};  // [stencil cleared][log2 samples]
     // The upscaler takes the generated frames (and the frame at t = 1) instead of the game frames.
     bool temporal_interp_ = false;
     // suspend_temporal_interpolation, and the settings it was decided at.
@@ -855,8 +897,9 @@ private:
     VkPipelineLayout probe_layout_ = VK_NULL_HANDLE;
     VkPipeline probe_pipeline_ = VK_NULL_HANDLE;
     // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
-    // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
-    enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
+    // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise), and the output scene's
+    // first draw, the scene resampled as conversion_pipeline_ and display_filter_pipeline_ do (enter_output_scene).
+    enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Conversion, DisplayFilter, Count };
     std::array<std::array<VkPipeline, kSceneVariantCount>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
     [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
     // A compared probe's test in the open scene target pass (by the pass's aux target, 0 to 3, and scene variant): the
@@ -875,6 +918,7 @@ private:
     UploadRing matrix_ring_;
     std::unordered_map<SamplerCacheKey, VkSampler, SamplerCacheKeyHasher> samplers_;  // sampler key << 32 | config key
     std::unordered_map<SamplerTableKey, VkDescriptorSet, SamplerTableKeyHasher> sampler_tables_;
+    std::vector<VkDescriptorSet> free_sampler_tables_;  // sets of tables of an older sampler configuration, written again
     std::uint32_t sampler_config_ = 0;
     gpu::Table default_sampler_table_{};
     // Descriptor indexing (vk::Context::bindless): the image array (set 1) and the sampler array (set 2) every draw reads,
@@ -894,6 +938,9 @@ private:
     std::uint32_t null_texture_slot_ = 0u;
     std::uint32_t texture_array_slots_ = 0u;
     std::uint32_t texture_array_limit_ = 0u;
+    // The driver takes a variable-length set's room from its layout's upper bound, not from the length asked for (probed
+    // when the layouts are made): the layout is kBindlessTextureSlotsWhole long and every image set has its full length.
+    bool texture_array_whole_ = false;
     const void* mirrored_backend_ = nullptr;
     TextureStore* mirrored_store_ = nullptr;
     TextureStore* uploads_store_ = nullptr;  // the store whose uploads the transfer queue may take (attach_texture_uploads)
@@ -959,6 +1006,7 @@ private:
     std::string scene_capture_pending_path_;
     unsigned scene_capture_width_ = 0;
     unsigned scene_capture_height_ = 0;
+    bool scene_capture_wide_ = false;  // the copy is of the wide (RGBA16F) scene target: 8 bytes a pixel
     Readback backbuffer_capture_;
     std::string backbuffer_capture_pending_path_;
     unsigned backbuffer_capture_width_ = 0;
@@ -1103,7 +1151,10 @@ private:
         AoDistance, AoOcclusion, AoDenoise, AoUpsample, AoApply, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
+    static constexpr unsigned kNoPassMark = ~0u;
     void gpu_pass(GpuPass pass);
+    [[nodiscard]] unsigned gpu_pass_mark(GpuPass pass, bool pass_begins);
+    void gpu_pass_restore(GpuPass outer);
     void read_gpu_passes();
     void prepare_gpu_pass_queries();
     bool profile_frame_ = false;
@@ -1113,7 +1164,7 @@ private:
         GpuPassScope(RendererVk& renderer, GpuPass pass) : renderer_(renderer), outer_(renderer.current_pass_) {
             renderer_.gpu_pass(pass);
         }
-        ~GpuPassScope() { renderer_.gpu_pass(outer_); }
+        ~GpuPassScope() { renderer_.gpu_pass_restore(outer_); }
         GpuPassScope(const GpuPassScope&) = delete;
         GpuPassScope& operator=(const GpuPassScope&) = delete;
     private:
@@ -1121,6 +1172,7 @@ private:
         GpuPass outer_;
     };
     VkQueryPool pass_queries_ = VK_NULL_HANDLE;
+    unsigned open_pass_mark_ = kNoPassMark;  // the mark written as the open scene pass began
     // The frame's shader invocations (gpu-stats): vertex, clipped
     // primitives, fragment and compute, in VkQueryPipelineStatisticFlagBits' order.
     VkQueryPool stats_queries_ = VK_NULL_HANDLE;
@@ -1140,6 +1192,7 @@ private:
     [[nodiscard]] VkFramebuffer item_framebuffer();
     void destroy_item_framebuffer();
     static constexpr std::uint64_t kRtLightPicture = 1ull << 62u | 1u;  // the traced light's key among the pictures
+    static constexpr unsigned kRtLightPictures = 10u;  // its pictures, kRtLightPicture + 0 to 9 (rt_publish_light's which)
     bool pass_recording_ = false;  // between begin_frame and end_frame
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_ (every frame is profiled while it is), and each pass's running

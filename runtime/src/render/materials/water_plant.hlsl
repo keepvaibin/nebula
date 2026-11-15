@@ -20,5 +20,5 @@ float4 material_color(NativeVaryings i) {
         discard;
     }
     const float f = saturate((i.pos.w - material.fog.x) / max(material.fog.y - material.fog.x, 1.0e-6));
-    return float4(lerp(t.rgb, material.fog_color.rgb, f), t.a);
+    return float4(program_fog(t.rgb, material.fog_color.rgb, f), t.a);  // a traced form fogs after its light (15.3)
 }

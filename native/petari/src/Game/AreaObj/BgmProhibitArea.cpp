@@ -4,10 +4,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 10000.0f);
 
 struct BgmMuteSet {
     const char* mGalaxyName;
@@ -54,7 +51,7 @@ void BgmProhibitArea::movement() {
         if (!mIsMuteSet && MR::isPlayingStageBgm()) {
             if (mMuteSet != nullptr) {
                 // A jump of 100 m in one step (a warp) mutes at once.
-                MR::setStageBGMState(mMuteSet->mMuteState, distToPlayer >= cNum_movement_f1 ? 0 : 120);
+                MR::setStageBGMState(mMuteSet->mMuteState, distToPlayer >= 10000.0f ? 0 : 120);
             }
 
             mIsMuteSet = true;

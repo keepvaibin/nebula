@@ -1,0 +1,572 @@
+// Numbers and tables in the game's code by name (LumaNumbers.hpp; docs/modding/reference/lumascript/types.md).
+#include "Game/System/LumaNumbers.hpp"
+
+#include "Game/System/LumaHook.hpp"
+#include "Game/System/LumaLoader.hpp"
+
+#include <luma_hook.h>
+#include <nebula_format.h>
+#include <stdlib.h>
+
+namespace luma {
+#if defined(__APPLE__)
+    extern const Numbers sNumbersStart __asm__("section$start$__DATA$lumanum");
+    extern const Numbers sNumbersStop __asm__("section$end$__DATA$lumanum");
+#elif !defined(_WIN32)
+    // Weak: the linker defines them only when the section exists, and the module without rows has none;
+    // both are then null, so there are no numbers.
+    extern "C" __attribute__((weak, visibility("hidden"))) const Numbers __start_lumanum[];
+    extern "C" __attribute__((weak, visibility("hidden"))) const Numbers __stop_lumanum[];
+#endif
+
+    namespace numbers {
+        namespace {
+            // The units' records the linker gathered. On Windows "lumanum$a" < "$m" < "$z", and the linker may pad
+            // between objects with zeros: each record is 32 bytes aligned to 32 (luma_hook.h), so a pad is whole
+            // records, each with a null unit.
+#if defined(_WIN32)
+            __attribute__((section("lumanum$a"), used)) const Numbers sBefore = {};
+            __attribute__((section("lumanum$z"), used)) const Numbers sAfter = {};
+            const Numbers* hidden(const Numbers* p) {
+                // The walk goes from one marker to the other: the compiler must not know they are two objects.
+                __asm__("" : "+r"(p));
+                return p;
+            }
+            const Numbers* unitsBegin() { return hidden(&sBefore) + 1; }
+            const Numbers* unitsEnd() { return hidden(&sAfter); }
+#elif defined(__APPLE__)
+            const Numbers* unitsBegin() { return &sNumbersStart; }
+            const Numbers* unitsEnd() { return &sNumbersStop; }
+#else
+            const Numbers* unitsBegin() { return __start_lumanum; }
+            const Numbers* unitsEnd() { return __stop_lumanum; }
+#endif
+
+            // Every number by (name, place): open addressing, linear probing, made at the first ask and never changed.
+            const Number** sSlots = nullptr;
+            u32 sSlotCount = 0;  // a power of two
+            u32 sCount = 0;
+            // Every table by name, the same way.
+            const Table** sTableSlots = nullptr;
+            u32 sTableSlotCount = 0;  // a power of two
+            u32 sTableCount = 0;
+            u32 sBuilt = 0;  // 1 once sSlots is whole (read with acquire)
+            u32 sLock = 0;
+
+            // What mods set: each number one has set, with the game's value from before the first set; and each set,
+            // in order (a mod's later set of one number replaces its earlier one at the end).
+            struct Touched {
+                const Number* number;
+                u64 game;
+            };
+            struct Setting {
+                u32 touched;
+                const LumaMod* mod;
+                u64 bits;
+            };
+            Touched* sTouched = nullptr;
+            u32 sTouchedCount = 0;
+            u32 sTouchedRoom = 0;
+            Setting* sSettings = nullptr;
+            u32 sSettingCount = 0;
+            u32 sSettingRoom = 0;
+
+            // What mods wrote in tables: each table a write of a mod still here is in, with each byte's value from
+            // before the first write that covered it (the game's, taken byte by byte as writes come, so what the game
+            // itself changes in the table meanwhile is never put back); and each write, in order, with its own copy.
+            struct TableTouched {
+                const Table* table;
+                u8* game;     // pTable->size bytes; game[b] is meaningful while covered[b] is 1
+                u8* covered;  // pTable->size bytes: 1 where a write of a mod still here lies
+            };
+            struct TableWrite {
+                u32 touched;
+                const LumaMod* mod;
+                u32 offset;
+                u32 size;
+                u8* bytes;
+            };
+            TableTouched* sTablesTouched = nullptr;
+            u32 sTablesTouchedCount = 0;
+            u32 sTablesTouchedRoom = 0;
+            TableWrite* sTableWrites = nullptr;
+            u32 sTableWriteCount = 0;
+            u32 sTableWriteRoom = 0;
+
+            void lock() {
+                while (__atomic_exchange_n(&sLock, 1u, __ATOMIC_ACQUIRE) != 0u) {
+#if defined(__x86_64__) || defined(__i386__)
+                    __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+                    __asm__ volatile("yield");
+#endif
+                }
+            }
+
+            void unlock() { __atomic_store_n(&sLock, 0u, __ATOMIC_RELEASE); }
+
+            __attribute__((format(printf, 2, 3))) void say(const LumaMod* pMod, const char* pFormat, ...) {
+                char text[512];
+                __builtin_va_list args;
+                __builtin_va_start(args, pFormat);
+                nebula_vsnprintf(text, sizeof(text), pFormat, args);
+                __builtin_va_end(args);
+                luma::core()->log(pMod, text);
+            }
+
+            bool same(const char* pA, const char* pB) {
+                while (*pA != 0 && *pA == *pB) {
+                    pA++;
+                    pB++;
+                }
+                return *pA == *pB;
+            }
+
+            u32 hashOf(const char* pName, u32 place) {
+                u32 h = 2166136261u;
+                for (const char* p = pName; *p != 0; p++) {
+                    h = (h ^ static_cast<u8>(*p)) * 16777619u;
+                }
+                h = (h ^ place) * 16777619u;
+                return h ^ (h >> 15);
+            }
+
+            // false: no memory (said by the caller).
+            bool build() {
+                if (__atomic_load_n(&sBuilt, __ATOMIC_ACQUIRE) != 0u) {
+                    return true;
+                }
+                lock();
+                if (sBuilt == 0u) {
+                    u32 count = 0;
+                    u32 tables = 0;
+                    for (const Numbers* pUnit = unitsBegin(); pUnit < unitsEnd(); pUnit++) {
+                        if (pUnit->unit != nullptr) {
+                            count += pUnit->count;
+                            tables += pUnit->tableCount;
+                        }
+                    }
+                    u32 slots = 16;
+                    while (slots < count * 2u) {
+                        slots <<= 1;
+                    }
+                    u32 tableSlots = 16;
+                    while (tableSlots < tables * 2u) {
+                        tableSlots <<= 1;
+                    }
+                    const Number** const pSlots = static_cast<const Number**>(::calloc(slots, sizeof(const Number*)));
+                    const Table** const pTableSlots = static_cast<const Table**>(::calloc(tableSlots, sizeof(const Table*)));
+                    if (pSlots == nullptr || pTableSlots == nullptr) {
+                        ::free(pSlots);
+                        ::free(pTableSlots);
+                        unlock();
+                        return false;
+                    }
+                    for (const Numbers* pUnit = unitsBegin(); pUnit < unitsEnd(); pUnit++) {
+                        if (pUnit->unit == nullptr) {
+                            continue;
+                        }
+                        for (u32 i = 0; i < pUnit->count; i++) {
+                            const Number* const pNumber = &pUnit->numbers[i];
+                            u32 at = hashOf(pNumber->name, pNumber->place) & (slots - 1);
+                            while (pSlots[at] != nullptr) {
+                                at = (at + 1) & (slots - 1);
+                            }
+                            pSlots[at] = pNumber;
+                        }
+                        for (u32 i = 0; i < pUnit->tableCount; i++) {
+                            const Table* const pTable = &pUnit->tables[i];
+                            u32 at = hashOf(pTable->name, 0) & (tableSlots - 1);
+                            while (pTableSlots[at] != nullptr) {
+                                at = (at + 1) & (tableSlots - 1);
+                            }
+                            pTableSlots[at] = pTable;
+                        }
+                    }
+                    sSlots = pSlots;
+                    sSlotCount = slots;
+                    sCount = count;
+                    sTableSlots = pTableSlots;
+                    sTableSlotCount = tableSlots;
+                    sTableCount = tables;
+                    __atomic_store_n(&sBuilt, 1u, __ATOMIC_RELEASE);
+                }
+                unlock();
+                return true;
+            }
+
+            // The number, or null with *pSeveral the count of matches when a null signature matches more than one.
+            const Number* lookUp(const char* pName, const char* pSignature, u32 place, u32* pSeveral) {
+                *pSeveral = 0;
+                const Number* pFound = nullptr;
+                const char* const pWanted = pSignature;
+                for (u32 at = hashOf(pName, place) & (sSlotCount - 1); sSlots[at] != nullptr; at = (at + 1) & (sSlotCount - 1)) {
+                    const Number* const pNumber = sSlots[at];
+                    if (pNumber->place != place || !same(pNumber->name, pName)) {
+                        continue;
+                    }
+                    if (pWanted != nullptr) {
+                        if (same(pNumber->signature, pWanted)) {
+                            return pNumber;
+                        }
+                        continue;
+                    }
+                    pFound = pNumber;
+                    (*pSeveral)++;
+                }
+                if (*pSeveral > 1) {
+                    return nullptr;
+                }
+                *pSeveral = 0;
+                return pFound;
+            }
+
+            u32 sizeOf(u32 kind) {
+                static const u8 kSizes[12] = {0, 4, 8, 1, 1, 2, 2, 4, 4, 8, 8, 1};
+                return kind < 12 ? kSizes[kind] : 0;
+            }
+
+            u64 read(const Number* pNumber) {
+                u64 bits = 0;
+                __builtin_memcpy(&bits, pNumber->address, sizeOf(pNumber->kind));
+                return bits;
+            }
+
+            void write(const Number* pNumber, u64 bits) { __builtin_memcpy(pNumber->address, &bits, sizeOf(pNumber->kind)); }
+
+            // The value as the number's kind; false when it does not fit (not whole for a whole number, out of range).
+            bool encode(u32 kind, f64 value, u64* pBits) {
+                if (!(value == value)) {
+                    return false;
+                }
+                if (kind == 1) {
+                    if (value > 3.4028234663852886e38 || value < -3.4028234663852886e38) {
+                        return false;
+                    }
+                    const f32 f = static_cast<f32>(value);
+                    u32 b;
+                    __builtin_memcpy(&b, &f, 4);
+                    *pBits = b;
+                    return true;
+                }
+                if (kind == 2) {
+                    __builtin_memcpy(pBits, &value, 8);
+                    return true;
+                }
+                if (kind == 11) {
+                    if (value != 0.0 && value != 1.0) {
+                        return false;
+                    }
+                    *pBits = value == 1.0 ? 1u : 0u;
+                    return true;
+                }
+                // Whole kinds: the range first (low included, high excluded: both exact as doubles), so no cast is out of
+                // range; then whole.
+                static const f64 kLow[11] = {0, 0, 0, -128.0, 0, -32768.0, 0, -2147483648.0, 0, -9223372036854775808.0, 0};
+                static const f64 kHigh[11] = {0, 0, 0, 128.0, 256.0, 32768.0, 65536.0, 2147483648.0, 4294967296.0,
+                                              9223372036854775808.0, 18446744073709551616.0};
+                if (kind < 3 || kind > 10 || value < kLow[kind] || value >= kHigh[kind] || __builtin_trunc(value) != value) {
+                    return false;
+                }
+                // Even kinds are unsigned (4, 6, 8, 10).
+                *pBits = (kind % 2 == 0) ? static_cast<u64>(value) : static_cast<u64>(static_cast<s64>(value));
+                return true;
+            }
+
+            template <class T> bool grow(T** ppItems, u32* pRoom, u32 count) {
+                if (count < *pRoom) {
+                    return true;
+                }
+                const u32 room = *pRoom == 0 ? 64 : *pRoom * 2;
+                T* const pNew = static_cast<T*>(::realloc(*ppItems, room * sizeof(T)));
+                if (pNew == nullptr) {
+                    return false;
+                }
+                *ppItems = pNew;
+                *pRoom = room;
+                return true;
+            }
+
+            void nameOf(char* pOut, u32 size, const char* pName, const char* pSignature, u32 place) {
+                if (pSignature != nullptr && pSignature[0] != 0) {
+                    nebula_snprintf(pOut, size, "%s %s.%u", pName, pSignature, place);
+                } else {
+                    nebula_snprintf(pOut, size, "%s.%u", pName, place);
+                }
+            }
+
+            // The number a mod names, or null, said.
+            const Number* named(const LumaMod* pMod, const char* pName, const char* pSignature, u32 place, const char* pAsk) {
+                if (pName == nullptr || pName[0] == 0) {
+                    say(pMod, "%s: no name", pAsk);
+                    return nullptr;
+                }
+                if (!build()) {
+                    say(pMod, "%s %s: no memory for the numbers' index", pAsk, pName);
+                    return nullptr;
+                }
+                // A file's constant has the signature "": null asks the same.
+                const char* const pSig = (place == 0 && pSignature == nullptr) ? "" : pSignature;
+                u32 several = 0;
+                const Number* const pNumber = lookUp(pName, pSig, place, &several);
+                if (pNumber == nullptr) {
+                    char name[320];
+                    nameOf(name, sizeof(name), pName, pSig, place);
+                    if (several > 1) {
+                        say(pMod, "%s %s: %u functions of that name have a number at that place; give the signature", pAsk, name, several);
+                    } else {
+                        say(pMod, "%s %s: the game's code has no such number (luma_numbers.json lists them)", pAsk, name);
+                    }
+                }
+                return pNumber;
+            }
+            // The table a mod names, or null, said. (gen_types.py fails the build when two tables share a name.)
+            const Table* namedTable(const LumaMod* pMod, const char* pName, const char* pAsk) {
+                if (pName == nullptr || pName[0] == 0) {
+                    say(pMod, "%s: no name", pAsk);
+                    return nullptr;
+                }
+                if (!build()) {
+                    say(pMod, "%s %s: no memory for the tables' index", pAsk, pName);
+                    return nullptr;
+                }
+                for (u32 at = hashOf(pName, 0) & (sTableSlotCount - 1); sTableSlots[at] != nullptr; at = (at + 1) & (sTableSlotCount - 1)) {
+                    if (same(sTableSlots[at]->name, pName)) {
+                        return sTableSlots[at];
+                    }
+                }
+                say(pMod, "%s %s: the game has no such table (luma_numbers.json lists them)", pAsk, pName);
+                return nullptr;
+            }
+        }  // namespace
+
+        void* find(const LumaMod* pMod, const char* pName, const char* pSignature, u32 place, u32* pKind) {
+            const Number* const pNumber = named(pMod, pName, pSignature, place, "number");
+            if (pKind != nullptr) {
+                *pKind = pNumber != nullptr ? pNumber->kind : 0;
+            }
+            return pNumber != nullptr ? pNumber->address : nullptr;
+        }
+
+        s32 set(const LumaMod* pMod, const char* pName, const char* pSignature, u32 place, f64 value) {
+            if (!onGameThread()) {
+                return -3;
+            }
+            const Number* const pNumber = named(pMod, pName, pSignature, place, "set_number");
+            if (pNumber == nullptr) {
+                return -1;
+            }
+            u64 bits = 0;
+            if (!encode(pNumber->kind, value, &bits)) {
+                static const char* const kKinds[12] = {"?", "f32", "f64", "s8", "u8", "s16", "u16", "s32", "u32", "s64", "u64",
+                                                       "bool"};
+                char name[320];
+                nameOf(name, sizeof(name), pNumber->name, pNumber->signature, pNumber->place);
+                const char* const pKind = kKinds[pNumber->kind < 12 ? pNumber->kind : 0];
+                if (pNumber->kind == 11) {
+                    say(pMod, "set_number %s: a bool is 0 or 1", name);
+                } else if (!(value == value)) {
+                    say(pMod, "set_number %s: NaN is no %s", name, pKind);
+                } else if (pNumber->kind >= 3 && value > -1e15 && value < 1e15 && __builtin_trunc(value) != value) {
+                    say(pMod, "set_number %s: %.6f is no whole number (%s)", name, value, pKind);
+                } else {
+                    say(pMod, "set_number %s: the value is out of %s's range", name, pKind);
+                }
+                return -2;
+            }
+            u32 touched = 0;
+            while (touched < sTouchedCount && sTouched[touched].number != pNumber) {
+                touched++;
+            }
+            if (touched == sTouchedCount) {
+                if (!grow(&sTouched, &sTouchedRoom, sTouchedCount)) {
+                    say(pMod, "set_number %s: no memory to remember the game's number", pNumber->name);
+                    return -1;
+                }
+                sTouched[sTouchedCount++] = {pNumber, read(pNumber)};
+            }
+            // The mod's earlier set of this number goes; this one is the last.
+            for (u32 i = 0; i < sSettingCount; i++) {
+                if (sSettings[i].touched == touched && sSettings[i].mod == pMod) {
+                    for (u32 j = i + 1; j < sSettingCount; j++) {
+                        sSettings[j - 1] = sSettings[j];
+                    }
+                    sSettingCount--;
+                    break;
+                }
+            }
+            if (!grow(&sSettings, &sSettingRoom, sSettingCount)) {
+                say(pMod, "set_number %s: no memory to remember the set", pNumber->name);
+                return -1;
+            }
+            sSettings[sSettingCount++] = {touched, pMod, bits};
+            write(pNumber, bits);
+            return 0;
+        }
+
+        u32 count() {
+            return build() ? sCount : 0;
+        }
+
+        s32 table(const LumaMod* pMod, const char* pName, LumaTable* pOut) {
+            const Table* const pTable = namedTable(pMod, pName, "table");
+            if (pOut != nullptr) {
+                *pOut = pTable != nullptr ? LumaTable{pTable->address, pTable->type, pTable->size, pTable->count} : LumaTable{};
+            }
+            return pTable != nullptr ? 0 : -1;
+        }
+
+        s32 setTable(const LumaMod* pMod, const char* pName, u32 offset, const void* pBytes, u32 size) {
+            if (!onGameThread()) {
+                return -3;
+            }
+            const Table* const pTable = namedTable(pMod, pName, "set_table");
+            if (pTable == nullptr) {
+                return -1;
+            }
+            if (pBytes == nullptr || size == 0 || offset > pTable->size || size > pTable->size - offset) {
+                say(pMod, "set_table %s: %u bytes at %u are not inside its %u", pTable->name, size, offset, pTable->size);
+                return -2;
+            }
+            u32 touched = 0;
+            while (touched < sTablesTouchedCount && sTablesTouched[touched].table != pTable) {
+                touched++;
+            }
+            const bool added = touched == sTablesTouchedCount;
+            if (added) {
+                u8* const pGame = static_cast<u8*>(::malloc(pTable->size));
+                u8* const pCovered = static_cast<u8*>(::calloc(pTable->size, 1));
+                if (pGame == nullptr || pCovered == nullptr || !grow(&sTablesTouched, &sTablesTouchedRoom, sTablesTouchedCount)) {
+                    ::free(pGame);
+                    ::free(pCovered);
+                    say(pMod, "set_table %s: no memory to remember the game's table", pTable->name);
+                    return -1;
+                }
+                sTablesTouched[sTablesTouchedCount++] = {pTable, pGame, pCovered};
+            }
+            u8* const pCopy = static_cast<u8*>(::malloc(size));
+            if (pCopy == nullptr || !grow(&sTableWrites, &sTableWriteRoom, sTableWriteCount)) {
+                ::free(pCopy);
+                if (added) {
+                    sTablesTouchedCount--;
+                    ::free(sTablesTouched[sTablesTouchedCount].game);
+                    ::free(sTablesTouched[sTablesTouchedCount].covered);
+                }
+                say(pMod, "set_table %s: no memory to remember the write", pTable->name);
+                return -1;
+            }
+            __builtin_memcpy(pCopy, pBytes, size);
+            // The game's value of each byte this write is the first to cover, as the game has it now.
+            const TableTouched& rTouched = sTablesTouched[touched];
+            const u8* const pNow = static_cast<const u8*>(pTable->address);
+            for (u32 b = offset; b < offset + size; b++) {
+                if (rTouched.covered[b] == 0) {
+                    rTouched.game[b] = pNow[b];
+                    rTouched.covered[b] = 1;
+                }
+            }
+            sTableWrites[sTableWriteCount++] = {touched, pMod, offset, size, pCopy};
+            __builtin_memcpy(static_cast<u8*>(pTable->address) + offset, pCopy, size);
+            return 0;
+        }
+
+        u32 tableCount() {
+            return build() ? sTableCount : 0;
+        }
+
+        void modGone(const LumaMod* pMod) {
+            u32 kept = 0;
+            u32 undone = 0;
+            for (u32 i = 0; i < sSettingCount; i++) {
+                if (sSettings[i].mod != pMod) {
+                    sSettings[kept++] = sSettings[i];
+                    continue;
+                }
+                const u32 touched = sSettings[i].touched;
+                undone++;
+                // What the mods still here set last, or the game's own.
+                u64 bits = sTouched[touched].game;
+                for (u32 j = sSettingCount; j-- > 0;) {
+                    if (sSettings[j].touched == touched && sSettings[j].mod != pMod) {
+                        bits = sSettings[j].bits;
+                        break;
+                    }
+                }
+                write(sTouched[touched].number, bits);
+            }
+            sSettingCount = kept;
+            if (undone != 0) {
+                say(pMod, "its %u numbers are the game's again (or another mod's)", undone);
+            }
+            // Tables: only the bytes the mod wrote change. Each is the last write of a mod still here that covers it,
+            // in order, else the game's value from before the first write that covered it (and no longer covered).
+            u32 tables = 0;
+            for (u32 touched = 0; touched < sTablesTouchedCount; touched++) {
+                bool wrote = false;
+                for (u32 i = 0; i < sTableWriteCount && !wrote; i++) {
+                    wrote = sTableWrites[i].touched == touched && sTableWrites[i].mod == pMod;
+                }
+                if (!wrote) {
+                    continue;
+                }
+                tables++;
+                const TableTouched& rTouched = sTablesTouched[touched];
+                u8* const pNow = static_cast<u8*>(rTouched.table->address);
+                for (u32 i = 0; i < sTableWriteCount; i++) {
+                    const TableWrite& rGone = sTableWrites[i];
+                    if (rGone.touched != touched || rGone.mod != pMod) {
+                        continue;
+                    }
+                    for (u32 b = rGone.offset; b < rGone.offset + rGone.size; b++) {
+                        const TableWrite* pLast = nullptr;
+                        for (u32 j = 0; j < sTableWriteCount; j++) {
+                            const TableWrite& rOther = sTableWrites[j];
+                            if (rOther.touched == touched && rOther.mod != pMod && b >= rOther.offset &&
+                                b - rOther.offset < rOther.size) {
+                                pLast = &rOther;
+                            }
+                        }
+                        if (pLast != nullptr) {
+                            pNow[b] = pLast->bytes[b - pLast->offset];
+                        } else {
+                            pNow[b] = rTouched.game[b];
+                            rTouched.covered[b] = 0;
+                        }
+                    }
+                }
+            }
+            kept = 0;
+            for (u32 i = 0; i < sTableWriteCount; i++) {
+                if (sTableWrites[i].mod == pMod) {
+                    ::free(sTableWrites[i].bytes);
+                } else {
+                    sTableWrites[kept++] = sTableWrites[i];
+                }
+            }
+            sTableWriteCount = kept;
+            // A table no write is left in lets its copies go; the writes' indexes follow the tables kept.
+            u32 tablesKept = 0;
+            for (u32 touched = 0; touched < sTablesTouchedCount; touched++) {
+                bool used = false;
+                for (u32 i = 0; i < sTableWriteCount && !used; i++) {
+                    used = sTableWrites[i].touched == touched;
+                }
+                if (!used) {
+                    ::free(sTablesTouched[touched].game);
+                    ::free(sTablesTouched[touched].covered);
+                    continue;
+                }
+                for (u32 i = 0; i < sTableWriteCount; i++) {
+                    if (sTableWrites[i].touched == touched) {
+                        sTableWrites[i].touched = tablesKept;
+                    }
+                }
+                sTablesTouched[tablesKept++] = sTablesTouched[touched];
+            }
+            sTablesTouchedCount = tablesKept;
+            if (tables != 0) {
+                say(pMod, "the bytes it wrote are the game's again, or another mod's (%u tables)", tables);
+            }
+        }
+    }
+}

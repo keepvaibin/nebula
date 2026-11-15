@@ -61,6 +61,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
         unsigned width = 0;
         unsigned height = 0;
+        DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
         gpu::Use use = gpu::Use::ComputeRead;
         std::uint64_t used_frame = 0;   // the last frame record() asked for it
     };
@@ -83,13 +84,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> occlusion_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> ssao_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> denoise_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> upsample_;
     // 1, 2, 4, 8 samples; then HDR.
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> apply_{};
     Target distance_;  // eye distance per occlusion pixel (R32F)
     Target raw_;       // occlusion, eye distance (R16G16F)
     Target denoised_;
-    Target scale_;     // the colour multiplier per scene target pixel (RGBA8)
     std::vector<Retired> retired_;
 };
 

@@ -1,15 +1,17 @@
-// The native game's host (docs/NATIVE_PORT.md, "Module layout"): loads the game module (smg_game.dll), gives it
+// The native game's host: loads the game module (smg_game.dll), gives it
 // Nebula's services (nebula_game_api.h) and runs it. Built three ways:
 //   - nebula_native_host (native/CMakeLists.txt): headless. Records are dropped as they arrive; audio is paced but not
 //     played; no remotes connect.
-//   - NebulaNative (the top-level build, NEBULA_HOST_RENDERER): the records go to Nebula's D3D12 renderer.
+//   - Nebula (the top-level build, NEBULA_HOST_RENDERER): the records go to Nebula's D3D12 renderer.
 //   - On SDL platforms (platform/sdl, NEBULA_HOST_SDL): the same with the Vulkan renderer, SDL's window, sound and
 //     input; on Android SDL's activity calls SDL_main.
 //
-//   <host> --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/COMMAND_LINE.md)
+//   <host> --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/using-nebula/command-line-arguments.md)
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
 #include "galaxy/windows_paths.h"
+#include "galaxy/windows_child.h"
+#include "run_sibling_win32.h"
 #endif
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
 #include <dwmapi.h>
@@ -20,6 +22,8 @@
 #include <nebula_game_api.h>
 
 #include "galaxy/atomic_file.h"
+#include "galaxy/luma_assets_service.h"
+#include "galaxy/luma_audio_service.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/host_extension.h"
 #include "galaxy/path_text.h"
@@ -28,20 +32,37 @@
 #include "galaxy/asset_store.h"
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
-#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+#include "galaxy/game_module.h"
+#include "galaxy/luma_guard_host.h"
+#if defined(_WIN32)
+#include "crash_watch.h"
+#endif
+#if (defined(NEBULA_HOST_RENDERER) && defined(_WIN32)) || (defined(NEBULA_HOST_SDL) && !defined(__ANDROID__) && !defined(NEBULA_HOST_APPLE))
 #include "galaxy/hidden_start.h"
 #endif
 #include "galaxy/discord_presence.h"
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
+#include "galaxy/luma_input_service.h"
+#include "galaxy/luma_mods_service.h"
 #include "galaxy/mods.h"
+#include <luma_input.h>
+#include <luma_refs.h>
 #include "galaxy/render/host_window.h"
+#include "galaxy/mod_log.h"
+#include "galaxy/mod_screens.h"
+#include "galaxy/mod_start_check.h"
 #include "galaxy/mod_plugins.h"
+#include "galaxy/render/mod_post.h"
 #include "galaxy/render/mod_shaders.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/pointer_control.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/benchmark.h"
+#if defined(NEBULA_DIAG_REPORTS)
+#include "galaxy/diag_report.h"
+#endif
 #include "galaxy/frame_timeline.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/controller_hid.h"
@@ -77,6 +98,11 @@
 #include "galaxy/render/texture_store.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "render/core/frame_core.h"
+#include "galaxy/ui/launcher.h"
+#include "galaxy/ui/launcher_model.h"
+#if defined(NEBULA_UPDATE_CHECK)
+#include "galaxy/update.h"
+#endif
 #endif
 #include <nebula_frame_list.h>
 #include "galaxy/render/rt_materials.h"
@@ -115,6 +141,7 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
@@ -147,6 +174,8 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <intrin.h>
 #include <dbghelp.h>
 #include <psapi.h>
+#include <tlhelp32.h>
+#include "cpu_level_x86.h"
 #else
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -154,6 +183,16 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#if defined(__ANDROID__)
+#include <malloc.h>
+#endif
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#include <mach-o/dyld.h>
+#elif defined(__linux__)
+#include <sys/syscall.h>
+#endif
+#include <sys/wait.h>
 #endif
 
 namespace fs = std::filesystem;
@@ -195,7 +234,36 @@ void log_line(const char* tag, const char* text) {
     const double t = std::chrono::duration<double>(Clock::now() - kStart).count();
     std::fprintf(stdout, "[%9.3f] %s %s\n", t, tag, text);
     std::fflush(stdout);
+    galaxy::extensions::log_line(tag, text);
 }
+
+#if !defined(_WIN32)
+// A crash report line from a fault handler (luma_guard_host.h set_crash_line): log_line's form with write only.
+void crash_line_from_signal(const char* tag, const char* text) noexcept {
+    const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - kStart).count();
+    char line[640];
+    std::size_t at = 0;
+    const auto add = [&](char c) {
+        if (at + 1 < sizeof(line)) line[at++] = c;
+    };
+    char digits[24];
+    int n = 0;
+    for (long long s = ms / 1000; n == 0 || s != 0; s /= 10) digits[n++] = static_cast<char>('0' + s % 10);
+    add('[');
+    for (int pad = n; pad < 5; ++pad) add(' ');
+    while (n > 0) add(digits[--n]);
+    add('.');
+    add(static_cast<char>('0' + ms / 100 % 10));
+    add(static_cast<char>('0' + ms / 10 % 10));
+    add(static_cast<char>('0' + ms % 10));
+    add(']');
+    for (const char* parts[] = {" ", tag, " ", text}; const char* part : parts) {
+        for (; part != nullptr && *part != '\0'; ++part) add(*part);
+    }
+    add('\n');
+    (void)!write(1, line, at);
+}
+#endif
 
 // The start, step by step ("boot:" lines, milliseconds from the process's creation): the black screen before the
 // title is their sum.
@@ -520,8 +588,49 @@ void finish() {
 std::vector<galaxy::mods::PluginFile> gPlugins;
 galaxy::mods::ModRows gModRows;
 bool gModsChangeGame = false;
+// The mods on this session (the scan's enabled ones): the mod log is made only when there are any.
+std::uint32_t gModsOn = 0;
+// Those of them a player turned on: every one but the harness's own game half (is_harness_half). With none the game's
+// check of placements after the start is not called (luma_refs.h).
+std::uint32_t gPlayersModsOn = 0;
+// The placed packages of this start, for the start's check (modlog::check_packages).
+std::vector<galaxy::modlog::StartPackage> gStartPackages;
+
+// The two folders the host reads from (the package layout):
+// - the program's folder (program_directory(), executable_path()): one for both CPU levels, since Nebula.exe and
+//   Nebula-x86-64-v2.exe lie side by side. Tables, dxc\, nebula-import.exe, the launcher, the restart's and the
+//   crash report's program come from there.
+// - module_folder(): the folder of the game module actually loaded (the program's folder, x86-64-v2\ on a CPU without
+//   x86-64-v3, or --module's folder). Everything that belongs to one build of the module is read from here, never from
+//   the program's folder: each CPU folder holds its own module and the files made with it.
+fs::path gModuleFolder;
+
+[[maybe_unused]] const fs::path& module_folder() {
+    return gModuleFolder;
+}
+
+// The module beside the program for this CPU: x86-64-v2\ holds the build for a CPU without x86-64-v3 (native/build.ps1).
+fs::path default_module_path(const fs::path& program_folder) {
+#if defined(_WIN32)
+    fs::path module = program_folder;
+#if defined(_M_X64)
+    if (!cpu_runs_x86_64_v3()) {
+        module /= "x86-64-v2";
+        log_line("host:", "the CPU lacks x86-64-v3: the x86-64-v2 game module");
+    }
+#endif
+    return module / "smg_game.dll";
+#elif defined(__APPLE__)
+    return program_folder / "libsmg_game.dylib";
+#else
+    return program_folder / "libsmg_game.so";
+#endif
+}
 
 void load_module(const fs::path& path) {
+    std::error_code absolute_error;
+    const fs::path absolute = fs::absolute(path, absolute_error);
+    gModuleFolder = (absolute_error ? path : absolute).parent_path();
 #if defined(_WIN32)
     void* module = LoadLibraryW(path.wstring().c_str());
 #else
@@ -552,6 +661,33 @@ struct Pak {
     fs::path store_file;
 };
 Pak gPak;
+// A part of the game a start with mods needs, found missing at the start check's first step: every mod is off
+// (docs/modding/concepts/how-nebula-loads-mods.md).
+std::optional<galaxy::startcheck::MissingPart> gMissingPart;
+
+// The harness's own game half (luma-test, placed by tools/lumacore/luma_test.py in a harness run, which sets
+// LUMA_HARNESS_PLAN) is the test's instrument, not a player's mod: a start that turns every mod off (a safe start, a
+// missing part) leaves it on, or no such start could be run as a test (it gives the setup and the steps, and ends the run).
+bool is_harness_half(const std::string& mod_id) {
+#if defined(_WIN32)
+    const bool harness_run = GetEnvironmentVariableA("LUMA_HARNESS_PLAN", nullptr, 0) != 0;
+#else
+    const bool harness_run = std::getenv("LUMA_HARNESS_PLAN") != nullptr;
+#endif
+    return harness_run && mod_id == "luma-test";
+}
+
+// A safe start asked at launch: --safe-start 1, or Shift held as Nebula starts (Windows, a visible start).
+bool safe_start_asked() {
+    bool asked = ::galaxy::launch_args().safe_start;
+#if defined(NEBULA_HOST_RENDERER)
+    asked = asked || galaxy::bench::running();  // a benchmark measures the game itself: every mod off, as a safe start
+#endif
+#if defined(_WIN32)
+    asked = asked || (!::galaxy::launch_args().started_hidden && (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
+#endif
+    return asked;
+}
 
 bool open_pak(const fs::path& path) {
     gPak.store_file = path;
@@ -1048,10 +1184,61 @@ HANDLE gCrashDone;
 EXCEPTION_POINTERS* gCrashInfo;
 DWORD gCrashThread;
 std::atomic<int> gCrashing{0};
+std::atomic<DWORD> gCrashWriterThread{0};
+// The fault is outside the host and the game module (a graphics driver, a system library, a jump to no code): its
+// dump keeps the process's private memory too, the heaps where that code's objects live (driver-pso-crash.md: a
+// driver object's table read 0xFF, which stacks alone cannot explain). Set before gCrashRequest.
+bool gCrashForeign = false;
+constexpr DWORD kHeapCorruption = 0xC0000374u;  // STATUS_HEAP_CORRUPTION (ntstatus.h, which windows.h leaves out)
+
+// After the dump: the report beside it, the progress written, the crashed thread let go, and the process ended.
+[[noreturn]] void finish_crash_report(const fs::path& dump) {
+    report_crash_facts(dump);
+#if defined(NEBULA_HOST_RENDERER)
+    flush_progress_bounded(1500u);
+#endif
+    SetEvent(gCrashDone);
+    // The dump and report are written: whatever the crashed thread still does (a flush behind a lock another thread
+    // held when it stopped) never keeps the process alive.
+    Sleep(5000);
+    TerminateProcess(GetCurrentProcess(), 4);
+    std::_Exit(4);
+}
 
 void crash_writer() {
+    gCrashWriterThread.store(GetCurrentThreadId());
     for (;;) {
         WaitForSingleObject(gCrashRequest, INFINITE);
+        // Stacks and what they point at (the module's data segments would add its half-gigabyte image window); for a
+        // fault outside our code, the private memory and the handles as well. A region that cannot be read (freed or
+        // made inaccessible while the dump is written) is left out, not the end of the dump: without it a wide dump
+        // stopped at ERROR_PARTIAL_COPY with no module list (p0479 kit-replay).
+        const unsigned dump_type = MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo | MiniDumpIgnoreInaccessibleMemory |
+                                   (gCrashForeign ? MiniDumpWithPrivateReadWriteMemory | MiniDumpWithHandleData : 0u);
+        // The watcher writes the dump from outside (crash_watch.h), asked with no heap and no lock of this process.
+        static wchar_t watched[1024];
+        DWORD watch_error = 0;
+        DWORD watch_snapshot = 0;
+        const galaxy::crash_watch::Result watch = galaxy::crash_watch::write_dump(
+            gCrashThread, gCrashInfo, dump_type, watched, sizeof(watched) / sizeof(watched[0]), &watch_error, &watch_snapshot, 30000u);
+        if (watch != galaxy::crash_watch::Result::kNoWatcher) {
+            const fs::path path(watched);
+            char text[MAX_PATH + 64];
+            if (watch == galaxy::crash_watch::Result::kWritten) {
+                std::snprintf(text, sizeof(text), "minidump %ls", path.filename().c_str());
+            } else {
+                std::snprintf(text, sizeof(text), "minidump failed (0x%08lX): %ls", watch_error, path.filename().c_str());
+            }
+            log_line("crash:", text);
+            // How it was read: a snapshot (the process held still), or the live process and why no snapshot.
+            if (watch_snapshot == 0) {
+                std::snprintf(text, sizeof(text), "the dump read a snapshot of the process");
+            } else {
+                std::snprintf(text, sizeof(text), "the dump read the live process: no snapshot (0x%08lX)", watch_snapshot);
+            }
+            log_line("crash:", text);
+            finish_crash_report(path);
+        }
         const fs::path folder = crash_folder();
         std::error_code ignored;
         fs::create_directories(folder, ignored);
@@ -1068,10 +1255,9 @@ void crash_writer() {
                                : nullptr;
         const HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (write != nullptr && file != INVALID_HANDLE_VALUE) {
+            // No watcher (it could not start): written here, which can stop on a lock a suspended thread holds.
             MINIDUMP_EXCEPTION_INFORMATION exception{gCrashThread, gCrashInfo, FALSE};
-            // Stacks and what they point at (the module's data segments would add its half-gigabyte image window).
-            const auto type = static_cast<MINIDUMP_TYPE>(MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo);
-            const BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, type,
+            const BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, static_cast<MINIDUMP_TYPE>(dump_type),
                                   gCrashInfo != nullptr ? &exception : nullptr, nullptr, nullptr);
             char text[MAX_PATH + 32];
             std::snprintf(text, sizeof(text), "%s %ls", ok ? "minidump" : "minidump failed:", fs::path(path).filename().c_str());
@@ -1080,15 +1266,7 @@ void crash_writer() {
         if (file != INVALID_HANDLE_VALUE) {
             CloseHandle(file);
         }
-        report_crash_facts(fs::path(path));
-#if defined(NEBULA_HOST_RENDERER)
-        flush_progress_bounded(1500u);
-#endif
-        SetEvent(gCrashDone);
-        // The dump and report are written: whatever the crashed thread still does (a flush behind a lock another thread
-        // held when it stopped) never keeps the process alive.
-        Sleep(5000);
-        TerminateProcess(GetCurrentProcess(), 4);
+        finish_crash_report(fs::path(path));
     }
 }
 
@@ -1148,6 +1326,14 @@ __declspec(noinline) const char* plugin_in_fault(const EXCEPTION_POINTERS* info,
 
 // The crash's mod, when a plugin's code was running (gCrashFacts after gather_crash_facts).
 void note_crash_plugin(const EXCEPTION_POINTERS* info) noexcept {
+    // A fault the guard saw in a mod's code and did not resume: its sentence, and the mod is the guard's.
+    if (const char* guard = galaxy::luma_guard::note_text(info->ExceptionRecord->ExceptionAddress)) {
+        log_line("crash: guard:", guard);
+        std::snprintf(gCrashPlugin, sizeof(gCrashPlugin), "%s", galaxy::luma_guard::note_mod());
+        gCrashFacts.plugin_mod = gCrashPlugin;
+        gCrashFacts.in_plugin = true;
+        return;
+    }
     bool in_plugin = false;
     if (const char* mod = plugin_in_fault(info, &in_plugin)) {
         std::snprintf(gCrashPlugin, sizeof(gCrashPlugin), "%s", mod);
@@ -1175,7 +1361,7 @@ void note_crash_plugin(const EXCEPTION_POINTERS* info) noexcept {
                                                       : 0));
     log_line("crash:", text);
     log_line("crash: stage", gSceneStage.c_str());
-    gather_crash_facts(galaxy::crash::Facts::Kind::Fault, text, owner == GetModuleHandleW(L"smg_game.dll"),
+    gather_crash_facts(galaxy::crash::Facts::Kind::Fault, text, owner == static_cast<HMODULE>(gModule.module),
                        code == EXCEPTION_STACK_OVERFLOW);
     note_crash_plugin(info);
     report_crash(info);
@@ -1250,11 +1436,33 @@ LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
             const auto exe = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
             for (USHORT f = 0; f < count; ++f) {
                 const auto at = reinterpret_cast<std::uintptr_t>(frames[f]);
-                std::snprintf(line, sizeof(line), "NebulaNative.exe+0x%llx", static_cast<unsigned long long>(at - exe));
+                std::snprintf(line, sizeof(line), "Nebula.exe+0x%llx", static_cast<unsigned long long>(at - exe));
                 log_line("thrown from:", line);
             }
         }
         return EXCEPTION_CONTINUE_SEARCH;
+    }
+    // STATUS_HEAP_CORRUPTION: a heap found its own records broken. ntdll raises it inside its own __except, whose
+    // filter ends the process without calling the unhandled-exception filter, so this handler is the only code of the
+    // process that sees it. It is raised from ntdll whichever code broke the heap, and the process ends after it
+    // whoever handles it: reported here for any module, with the private memory (the heaps) in the dump.
+    if (code == kHeapCorruption) {
+        HMODULE owner = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner)) {
+            owner = GetModuleHandleW(L"ntdll.dll");
+        }
+        if (gCrashing.exchange(1) != 0) {
+            // Another fault is being written: passed on, this one would end the process mid-write. The writer's own
+            // is passed on (nothing would be left to wait for).
+            if (GetCurrentThreadId() != gCrashWriterThread.load() && gCrashDone != nullptr) {
+                WaitForSingleObject(gCrashDone, 60000);
+                Sleep(INFINITE);
+            }
+            return EXCEPTION_CONTINUE_SEARCH;
+        }
+        gCrashForeign = true;
+        report_fatal_exception(info, owner);
     }
     if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION && code != EXCEPTION_PRIV_INSTRUCTION &&
         code != EXCEPTION_STACK_OVERFLOW && code != EXCEPTION_INT_DIVIDE_BY_ZERO && code != EXCEPTION_INT_OVERFLOW &&
@@ -1265,7 +1473,7 @@ LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
     HMODULE owner = nullptr;
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                             static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner) ||
-        (owner != GetModuleHandleW(nullptr) && owner != GetModuleHandleW(L"smg_game.dll") &&
+        (owner != GetModuleHandleW(nullptr) && owner != static_cast<HMODULE>(gModule.module) &&
          galaxy::mods::plugin_at(info->ExceptionRecord->ExceptionAddress) == nullptr)) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
@@ -1310,35 +1518,63 @@ void abort_handler(int) {
 // line or dump.
 LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
     if (gCrashing.exchange(1) != 0) {
+        // Another thread's fault is being written: this one waits for the dump and the report (the process ends
+        // after them), so the first fault's dump is whole. Passed on, the system would end the process mid-write (an
+        // empty dump). The writer's own fault is passed on: nothing would be left to wait for.
+        if (GetCurrentThreadId() != gCrashWriterThread.load() && gCrashDone != nullptr) {
+            char line[96];
+            std::snprintf(line, sizeof(line), "another fault 0x%08lX (thread %lu) waits for the dump",
+                          info->ExceptionRecord->ExceptionCode, GetCurrentThreadId());
+            log_line("crash:", line);
+            WaitForSingleObject(gCrashDone, 60000);
+            Sleep(INFINITE);
+        }
         return EXCEPTION_CONTINUE_SEARCH;
+    }
+    HMODULE owner = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner);
+    // The module the fault is in and its offset, so a line names the place without the dump (a system module's
+    // fault reads as d3d12core.dll+0x1810, not as a bare address that moves every start).
+    char place[MAX_PATH + 32] = "";
+    if (owner != nullptr) {
+        wchar_t module[MAX_PATH];
+        const DWORD n = GetModuleFileNameW(owner, module, MAX_PATH);
+        const wchar_t* name = module;
+        for (DWORD i = 0; i < n; i++) {
+            if (module[i] == L'\\' || module[i] == L'/') {
+                name = module + i + 1;
+            }
+        }
+        std::snprintf(place, sizeof(place), " (%ls+0x%llX)", n != 0 ? name : L"?",
+                      static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(info->ExceptionRecord->ExceptionAddress) -
+                                                      reinterpret_cast<uintptr_t>(owner)));
     }
     char text[512];
     const bool cpp = info->ExceptionRecord->ExceptionCode == 0xE06D7363u;
     if (cpp) {
         describe_cpp_exception(info->ExceptionRecord, text, sizeof(text));
     } else {
-        std::snprintf(text, sizeof(text), "unhandled exception 0x%08lX at 0x%p", info->ExceptionRecord->ExceptionCode,
-                      info->ExceptionRecord->ExceptionAddress);
+        std::snprintf(text, sizeof(text), "unhandled exception 0x%08lX at 0x%p%s", info->ExceptionRecord->ExceptionCode,
+                      info->ExceptionRecord->ExceptionAddress, place);
     }
     char line[640];
     std::snprintf(line, sizeof(line), "%s (thread %lu)", text, GetCurrentThreadId());
     log_line("crash:", line);
-    HMODULE owner = nullptr;
-    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                       static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner);
     gather_crash_facts(cpp ? galaxy::crash::Facts::Kind::Exception : galaxy::crash::Facts::Kind::Fault, line,
-                       !cpp && owner != nullptr && owner == GetModuleHandleW(L"smg_game.dll"),
+                       !cpp && owner != nullptr && owner == static_cast<HMODULE>(gModule.module),
                        info->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW);
     if (!cpp) {
         note_crash_plugin(info);
     }
+    gCrashForeign = !cpp && owner != GetModuleHandleW(nullptr) && owner != static_cast<HMODULE>(gModule.module);
     report_crash(info);
     TerminateProcess(GetCurrentProcess(), 4);
     std::_Exit(4);
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-// NebulaNative --crash-report <file>: the report of an instance that stopped (report_crash_facts), shown by this new
+// Nebula --crash-report <file>: the report of an instance that stopped (report_crash_facts), shown by this new
 // process. The technical details stay in the file, which the dialog offers to show.
 // The language folder whose words the crash dialog uses: the player's setting, for Auto (or settings that do not load,
 // the reason for some reports) the system's.
@@ -1423,6 +1659,7 @@ int show_crash_report_dialog() {
 void install_crash_reporter() {
     gCrashRequest = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     gCrashDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    galaxy::crash_watch::start(crash_folder(), kStart);
     std::thread(crash_writer).detach();
     AddVectoredExceptionHandler(0, crash_handler);  // last: the module's own handlers (division, stack guards) first
     SetUnhandledExceptionFilter(unhandled_filter);  // whatever no frame handled, C++ exceptions included
@@ -1470,7 +1707,89 @@ void svc_fatal(void*, const char* text) {
 #if defined(_WIN32)
 // Arguments a restart adds to this start's command line (--gpu-start-retry).
 std::wstring gRestartArguments;
+#else
+// main's arguments as given: a restart (finish_and_exit) starts with them again.
+char** gArgv = nullptr;
+#if defined(NEBULA_HOST_RENDERER) && (defined(__linux__) || (defined(__APPLE__) && TARGET_OS_OSX)) && !defined(__ANDROID__)
+#define NEBULA_HOST_START_AGAIN 1
+// Arguments a restart adds after main's (read in order: a later value wins).
+std::vector<std::string> gRestartExtra;
 #endif
+#endif
+
+#if defined(NEBULA_HOST_START_AGAIN) && defined(NEBULA_DIAG_REPORTS)
+// The home screen's upload question (diag_report.h): the result it asks about.
+fs::path gUploadFile;
+
+// A file in the desktop's own viewer (open / xdg-open), in a process of its own that this one does not wait for.
+void show_file(const fs::path& file) {
+#if defined(__APPLE__)
+    const char* const tool = "/usr/bin/open";
+#else
+    const char* const tool = "xdg-open";
+#endif
+    std::string path = file.string();
+    std::string name = tool;
+    char* const argv[] = {name.data(), path.data(), nullptr};
+    const pid_t child = fork();
+    if (child == 0) {
+        if (fork() == 0) {  // the viewer's opener, adopted by init: no child of the game is left behind
+            for (int fd = 3; fd < 1024; ++fd) close(fd);
+            execvp(tool, argv);
+        }
+        _exit(0);
+    }
+    if (child > 0) (void)waitpid(child, nullptr, 0);
+}
+
+// The question's answers (the window's thread): 0 the full report, exactly what a send seals; 1 the send, once.
+void upload_answer(int what) {
+    if (what == 0) {
+        std::string report;
+        const galaxy::diag::SendResult preview = galaxy::diag::report_preview(gUploadFile, false, report);
+        fs::path shown = gUploadFile;
+        shown += ".report.json";
+        if (preview.exit == galaxy::diag::kOk && galaxy::io::write_file_atomically(shown, report)) {
+            show_file(shown);
+        } else {
+            log_line("diag:", preview.line.c_str());
+        }
+        return;
+    }
+    std::thread([] {
+        const galaxy::diag::SendResult sent = galaxy::diag::send_report_file(gUploadFile, false);
+        log_line("diag:", sent.line.c_str());
+        galaxy::ui::launcher_upload_finished(sent.exit == galaxy::diag::kOk || sent.exit == galaxy::diag::kAlreadySent);
+    }).detach();
+}
+
+// Whether the home screen may ask: the build has an endpoint, the run completed or failed (not closed by the player),
+// and the result was not sent.
+bool upload_offered(const fs::path& result) {
+    if (!galaxy::diag::uploads_enabled()) return false;
+    std::error_code error;
+    fs::path sent = result;
+    sent += ".sent";
+    if (fs::exists(sent, error)) return false;
+    std::ifstream in(result, std::ios::binary);
+    std::string head(4096, '\0');
+    in.read(head.data(), static_cast<std::streamsize>(head.size()));
+    head.resize(static_cast<std::size_t>(in.gcount()));
+    return head.starts_with("{\"schema\":1,") &&
+           (head.find("\"status\":\"complete\"") != std::string::npos || head.find("\"status\":\"failed\"") != std::string::npos);
+}
+#endif
+
+// An argument a restart adds (each a word of its own).
+[[maybe_unused]] void add_restart_argument(const fs::path& argument) {
+#if defined(_WIN32)
+    gRestartArguments += L" \"" + argument.wstring() + L"\"";
+#elif defined(NEBULA_HOST_START_AGAIN)
+    gRestartExtra.push_back(argument.string());
+#else
+    (void)argument;
+#endif
+}
 
 #if defined(NEBULA_HOST_RENDERER)
 // The renderer: the game's records reach it in frames (render_frame at the game's frame end and, while the start runs
@@ -1580,6 +1899,9 @@ std::string message_utf8(const uint16_t* text) {
 
 // What the player is doing, for Discord: the galaxy (or the file select) and the star, else the Power Stars.
 void svc_presence(void*, const uint16_t* galaxy, const uint16_t* star, int32_t power_stars) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (power_stars >= 0) galaxy::bench::scene_started();  // GameScene::start (the file select reports -1)
+#endif
     galaxy::discord::Activity activity;
     if (power_stars < 0) {
         activity.details = "Choosing a file";
@@ -1614,6 +1936,7 @@ int svc_achievement(void*, const char* id, uint16_t* name, uint32_t capacity) {
     (void)id, (void)name, (void)capacity;
     return 0;
 #else
+    if (galaxy::bench::running()) return 0;  // a benchmark unlocks nothing
     const galaxy::achievements::Info* info = id != nullptr ? galaxy::achievements::find(id) : nullptr;
     if (info == nullptr || !galaxy::achievements::unlock(id)) return 0;
     uint32_t i = 0;
@@ -1674,7 +1997,7 @@ int32_t svc_mod_achievement_unlocked(void*) {
 // The all-time counters the achievement board shows (stats.ini). The headless host keeps none.
 void svc_stat_add(void*, const char* name, uint64_t delta) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (name != nullptr) galaxy::stats::add(name, delta);
+    if (name != nullptr && !galaxy::bench::running()) galaxy::stats::add(name, delta);  // a benchmark counts nothing
 #else
     (void)name, (void)delta;
 #endif
@@ -1714,6 +2037,7 @@ struct SettingsContent {
     std::vector<std::string> pages;
     std::vector<SettingsRowContent> rows;
     std::string help;
+    uint32_t help_as_is = 0;
     std::string status_text;
     std::string long_text;
     // Held here while the view points at its pixels; the same pointer is the same picture.
@@ -1731,6 +2055,9 @@ struct SettingsViewStorage {
 };
 
 SettingsViewStorage g_settings_view;
+// The game's reads of the menu's view in a row that found it open (svc_settings_view; 0 once one finds it closed): at 1
+// the game has not yet drawn it, so a close then is the game's, not a press on it (svc_settings_input).
+std::uint32_t g_settings_open_views = 0;
 #endif
 
 #if defined(NEBULA_HOST_RENDERER)
@@ -1739,6 +2066,7 @@ static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Prepar
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Arrange) == NEBULA_SETTINGS_STATUS_ARRANGE &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModAbout) == NEBULA_SETTINGS_STATUS_MOD_ABOUT &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModRemoveAsk) == NEBULA_SETTINGS_STATUS_MOD_REMOVE_ASK &&
+              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModForgetAsk) == NEBULA_SETTINGS_STATUS_MOD_FORGET_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Leave) == NEBULA_SETTINGS_STATUS_LEAVE &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModsRestartAsk) == NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY &&
@@ -1773,6 +2101,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     const galaxy::render::NativeSettingsView source = galaxy::render::native_settings_view();
     SettingsContent next;
     next.open = source.open ? 1u : 0u;
+    g_settings_open_views = source.open ? g_settings_open_views + 1u : 0u;
     next.page = source.page;
     next.pages = source.pages;
     next.controls_page = source.controls_page;
@@ -1802,6 +2131,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     next.selected = static_cast<uint32_t>(selected);
     next.selected_button = source.selected_button;
     next.help = source.help;
+    next.help_as_is = source.help_as_is ? 1u : 0u;
     next.status = static_cast<uint32_t>(source.status);
     next.status_number = source.status_number;
     next.status_text = source.status_text;
@@ -1835,6 +2165,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
     view->mod_list_count[0] = content.mod_list_count[0];
     view->mod_list_count[1] = content.mod_list_count[1];
     view->help = content.help.c_str();
+    view->help_as_is = content.help_as_is;
     view->status = content.status;
     view->status_number = content.status_number;
     view->status_text = content.status_text.c_str();
@@ -1850,7 +2181,13 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
 // The pointer's input to the settings menu: NEBULA_SETTINGS_* are galaxy::render::NativeSettingsInput's values.
 void svc_settings_input(void*, uint32_t action, int32_t arg) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_SET_VALUE) {
+    if (action == NEBULA_SETTINGS_CLOSE && gSceneBegins.load(std::memory_order_relaxed) == 0u && g_settings_open_views <= 1u) {
+        // Before the game's first 3D scene (the boot) the game closes a menu asked for there in the frame it first reads
+        // it open, without drawing it: that close answers nothing, and a menu with a question is hidden until the first
+        // 3D scene (svc_submit_frame). A close in a later frame is a press on the menu the game shows (its launcher, a
+        // question it lets stand in the boot) and answers as Escape.
+        galaxy::render::native_settings_input(galaxy::render::NativeSettingsInput::CloseUnseen, arg);
+    } else if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_SET_VALUE) {
         galaxy::render::native_settings_input(static_cast<galaxy::render::NativeSettingsInput>(action), arg);
     }
 #else
@@ -2025,7 +2362,11 @@ void svc_texture_hd(void*, uint32_t texture, const void* hd) {
 }
 void svc_submit_frame(void*, NebulaFrameList* list) {
     if ((list->flags & NEBULA_FRAME_HAS_SCENE) != 0u) {
+        // The first 3D scene (the title's, or a test's galaxy) is where the game first shows a menu: one the boot's
+        // close hid with a question standing opens again (svc_settings_input). An extension preparing the game unseen
+        // (a test's setup, which needs the scene and its sequences going) holds it until it is done.
         gSceneBegins.fetch_add(1, std::memory_order_relaxed);
+        if (!galaxy::extensions::holds_menus()) galaxy::render::native_settings_reopen_held();
         end_boot_fast("first 3D scene");
     }
     list->game_frame = gGameFrames.load(std::memory_order_relaxed);
@@ -2035,6 +2376,17 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
 uint32_t svc_probe_results(void*, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity) {
     static_assert(sizeof(NebulaScreenProbe) == sizeof(galaxy::render::ScreenProbe));
     return galaxy::render::screen_probe_results(channel, reinterpret_cast<galaxy::render::ScreenProbe*>(probes), capacity);
+}
+// draw.post (docs/modding/reference/services/draw.md): the program compiled for the running renderer (mod_post.cpp).
+static_assert(int{galaxy::render::kModPostOk} == NEBULA_POST_OK && int{galaxy::render::kModPostCompile} == NEBULA_POST_COMPILE &&
+                  int{galaxy::render::kModPostNoMotion} == NEBULA_POST_NO_MOTION,
+              "post_register's results are the game's");
+int32_t svc_post_register(void*, const void* text, uint32_t size, uint32_t reads, uint32_t* program, char* error,
+                          uint32_t error_capacity) {
+    return galaxy::render::mod_post_register(text, size, reads, program, error, error_capacity);
+}
+void svc_post_free(void*, uint32_t program) {
+    galaxy::render::mod_post_free(program);
 }
 #else
 // With no renderer nothing is drawn: every id is 0 and a list is read by nobody.
@@ -2075,6 +2427,16 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
 uint32_t svc_probe_results(void*, uint32_t, NebulaScreenProbe*, uint32_t) {
     return 0u;
 }
+int32_t svc_post_register(void*, const void*, uint32_t, uint32_t, uint32_t* program, char* error, uint32_t error_capacity) {
+    if (program != nullptr) {
+        *program = 0u;
+    }
+    if (error != nullptr && error_capacity != 0u) {
+        std::snprintf(error, error_capacity, "%s", "no renderer: nothing is drawn");
+    }
+    return NEBULA_POST_COMPILE;
+}
+void svc_post_free(void*, uint32_t) {}
 #endif
 
 // The Mii library's file (mii_import.h) in the data folder; a Wii save folder's Mii database (or an earlier Nebula's)
@@ -2247,8 +2609,16 @@ int asset_entry_out(const std::optional<galaxy::assets::Entry>& entry, NebulaAss
     return 1;
 }
 
+// A file a mod provides (assets 1.1, luma_assets_service.h) comes before the store's at its path; its index, above
+// every store's, leads entry, child, map and read to it.
 int svc_asset_find(void*, const char* path, NebulaAssetEntry* out) {
-    return path != nullptr ? asset_entry_out(asset_table().find(path), out) : 0;
+    if (path == nullptr) {
+        return 0;
+    }
+    if (std::optional<galaxy::assets::Entry> provided = galaxy::luma_assets::provided_find(path)) {
+        return asset_entry_out(provided, out);
+    }
+    return asset_entry_out(asset_table().find(path), out);
 }
 
 int svc_asset_find_game(void*, const char* path, NebulaAssetEntry* out) {
@@ -2256,15 +2626,23 @@ int svc_asset_find_game(void*, const char* path, NebulaAssetEntry* out) {
 }
 
 int svc_asset_entry(void*, int32_t index, NebulaAssetEntry* out) {
-    return asset_entry_out(asset_table().entry(index), out);
+    return asset_entry_out(galaxy::luma_assets::is_provided(index) ? galaxy::luma_assets::provided_entry(index)
+                                                                   : asset_table().entry(index),
+                           out);
 }
 
 int svc_asset_added_child(void*, const char* path, uint32_t child, NebulaAssetEntry* out) {
-    return path != nullptr ? asset_entry_out(asset_table().added_child(path, child), out) : 0;
+    // What a mod provides at the path replaces the game's whole: nothing is added to it.
+    if (path == nullptr || galaxy::luma_assets::provided_find(path)) {
+        return 0;
+    }
+    return asset_entry_out(asset_table().added_child(path, child), out);
 }
 
 int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out) {
-    return asset_entry_out(asset_table().child(folder, child), out);
+    return asset_entry_out(galaxy::luma_assets::is_provided(folder) ? galaxy::luma_assets::provided_child(folder, child)
+                                                                    : asset_table().child(folder, child),
+                           out);
 }
 
 // The game's memory. An arena is reserved from the top of the address space down, far above 4 GB and the file views, so an
@@ -2314,6 +2692,9 @@ void test_drive_delay() {
 
 const void* svc_asset_map(void*, int32_t file) {
     test_drive_delay();
+    if (galaxy::luma_assets::is_provided(file)) {
+        return galaxy::luma_assets::provided_view(file);
+    }
     const std::optional<galaxy::assets::Entry> entry = asset_table().entry(file);
     if (!entry) {
         return nullptr;
@@ -2323,6 +2704,10 @@ const void* svc_asset_map(void*, int32_t file) {
 
 void* svc_asset_map_private(void*, int32_t file) {
     test_drive_delay();
+    // A provided file is no view of the store: the game reads it into its own memory instead (GameAssets::load).
+    if (galaxy::luma_assets::is_provided(file)) {
+        return nullptr;
+    }
     const std::optional<galaxy::assets::Entry> entry = asset_table().entry(file);
     if (!entry) {
         return nullptr;
@@ -2349,10 +2734,15 @@ int32_t svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size,
     gFileReads.fetch_add(1, std::memory_order_relaxed);
     // --diagnostics file-reads: each read with the frame it came on: two runs of deterministic mode compare by it.
     const bool trace_reads = ::galaxy::diagnosing(::galaxy::kDiagnoseFileReads);
-    const std::optional<galaxy::assets::Entry> entry = asset_table().entry(file);
+    const bool provided = galaxy::luma_assets::is_provided(file);
+    const std::optional<galaxy::assets::Entry> entry =
+        provided ? galaxy::luma_assets::provided_entry(file) : asset_table().entry(file);
     if (trace_reads) {
         std::fprintf(stderr, "[read] frame %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicFrames.load(std::memory_order_relaxed)),
                      file, static_cast<unsigned long long>(file_offset), size, entry && entry->name != nullptr ? entry->name : "?");
+    }
+    if (provided) {
+        return galaxy::luma_assets::provided_read(file, file_offset, size, dst) ? static_cast<int32_t>(size) : -1;
     }
     if (!entry || file_offset > entry->length || entry->length - file_offset < size ||
         !gPak.store.read(entry->position + file_offset, size, dst)) {
@@ -2380,6 +2770,10 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
     }
 #endif
     galaxy::extensions::frame({frame});
+    // Dev mode's reloads (reload.md 4): a request looked for every 30 frames, a reload's steps; nothing without --mod-dev.
+    galaxy::mods::dev_frame();
+    // The Mods screens' answers to mods' requests (galaxy/mod_screens.h), on the game thread at the frame's start.
+    galaxy::mods::run_screen_answers();
 #if defined(NEBULA_HOST_RENDERER)
     {
         // While the start runs ahead, one frame a display period goes to the screen.
@@ -2532,6 +2926,18 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 0;
 #endif
+    case NEBULA_OPTION_GRAPHICS_BACKEND:
+        // draw.native's LumaDrawNativeBackend: the renderer this program was built with (one a session). Metal has
+        // none yet (0: draw.native's functions are not called).
+#if defined(NEBULA_HOST_RENDERER) && defined(NEBULA_HOST_D3D12)
+        return 1u;
+#elif defined(NEBULA_HOST_RENDERER) && defined(NEBULA_GPU_D3D11)
+        return 3u;
+#elif defined(NEBULA_HOST_RENDERER) && !defined(__APPLE__)
+        return 2u;
+#else
+        return 0u;
+#endif
     case NEBULA_OPTION_RAY_TRACING:
 #if defined(NEBULA_HOST_RENDERER)
     {
@@ -2540,7 +2946,16 @@ uint32_t svc_option(void*, uint32_t what) {
         }
         // A stage's row may keep its shadow light sets as the artists made them (rt_stages.tsv `shadow sets`).
         const galaxy::render::RtStage* stage = galaxy::render::rt_stage(galaxy::render::rt_stage_hash(gSceneStage));
-        return NEBULA_RAY_TRACING_ON | (stage != nullptr && stage->shadow_sets_kept ? 0u : NEBULA_RAY_TRACING_SHADOW_SETS);
+        // Reflections traced at High show what a mirror shows: the game's mirror pass is not drawn.
+        // The reflections pass's own rule (rt_pass_reflect.cpp rt_pass_reflect_on): not under the reference
+        // (its preset or rt-reference) nor rt-added or rt-motion, which leave the pass out.
+        const galaxy::render::RenderConfig config = galaxy::render::get_render_config();
+        const bool mirror = galaxy::render::rt_part(config, galaxy::render::RtPart::Reflect) >= 3u &&
+                            config.rt_quality != galaxy::render::kRtPresetReference &&
+                            !::galaxy::diagnosing(::galaxy::kDiagnoseRtReference) && !::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded) &&
+                            !::galaxy::diagnosing(::galaxy::kDiagnoseRtMotion);
+        return NEBULA_RAY_TRACING_ON | (stage != nullptr && stage->shadow_sets_kept ? 0u : NEBULA_RAY_TRACING_SHADOW_SETS) |
+               (mirror ? NEBULA_RAY_TRACING_MIRROR : 0u);
     }
 #else
         return 0u;
@@ -2555,15 +2970,70 @@ static_assert(int{galaxy::saves::kDone} == NEBULA_SAVE_DONE && int{galaxy::saves
                   int{galaxy::saves::kFailed} == NEBULA_SAVE_FAILED,
               "save results are the game's");
 
+// The save half of the Mods page's REMOVED MODS line (services/save.md 5, services/mods.md 8): the mods' global files,
+// luma/<id>.bin in the save folder. Any thread: a removed mod runs nothing, so its file is only read or deleted here.
+fs::path mod_files_folder() {
+    fs::path folder;
+    return save_folder_path(gSaveDataPath.c_str(), &folder) ? folder / fs::path(galaxy::saves::kModFolder) : fs::path();
+}
+
+void kept_save_ids(std::vector<std::string>& out) {
+    const fs::path folder = mod_files_folder();
+    std::error_code error;
+    if (folder.empty() || !fs::is_directory(folder, error)) {
+        return;
+    }
+    for (fs::directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
+        std::error_code status;
+        if (it->is_regular_file(status) && it->path().extension() == ".bin") {
+            out.push_back(galaxy::path_text(it->path().stem()));
+        }
+    }
+}
+
+fs::path kept_save_file(std::string_view id) {
+    const fs::path folder = mod_files_folder();
+    const std::string name = std::string(id) + ".bin";
+    return folder.empty() || !galaxy::saves::is_plain_name(name) ? fs::path() : folder / fs::path(name);
+}
+
+std::uint64_t kept_save_bytes(std::string_view id) {
+    const fs::path file = kept_save_file(id);
+    std::error_code error;
+    const std::uintmax_t size = file.empty() ? 0u : fs::file_size(file, error);
+    return error ? 0u : static_cast<std::uint64_t>(size);
+}
+
+void forget_save(std::string_view id) {
+    const fs::path file = kept_save_file(id);
+    std::error_code error;
+    if (!file.empty()) {
+        fs::remove(file, error);
+    }
+}
+
 // A save file operation on the save worker (the game polls the status): galaxy/save_files.h in the game's save folder
 // (gSaveDataPath under the save folder, or a mod's save folder).
 std::atomic<int> gSavesPending{0};
+// The facts file of the mods' store attached this run (cook_mod_files), read into the mod log at the mods' start.
+fs::path gCookFacts;
+// Each planned file's store path and its mod: the cook's facts name the mod by it (mod-log.md 9).
+std::vector<std::pair<std::string, std::string>> gCookOwners;
 // The exit waits here for the saves still on the worker.
 std::mutex gSavesMutex;
 std::condition_variable gSavesDone;
 
+// gFs stays one worker taking its queue in order (FIFO): the game's save, save.global's luma/<id>.bin writes and a
+// broken file's luma/<id>.bin.broken copy rely on a later request never passing an earlier one.
 void svc_save_request(void*, const NebulaSaveRequest* request) {
     gSaveOps.fetch_add(1, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) {  // a benchmark's blank save, in memory: the player's files are not opened
+        *request->status = galaxy::bench::save_request(static_cast<int>(request->op), request->name != nullptr ? request->name : "",
+                                                       request->buffer, request->size, request->length);
+        return;
+    }
+#endif
     *request->status = NEBULA_SAVE_PENDING;
     gSavesPending.fetch_add(1, std::memory_order_acq_rel);
     const NebulaSaveRequest r = *request;
@@ -2572,16 +3042,37 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
         fs::path folder;
         galaxy::saves::Result result = galaxy::saves::kFailed;
         if (save_folder_path(name.starts_with("GameData.bin") ? gOldSaveDataPath.c_str() : gSaveDataPath.c_str(), &folder)) {
-            switch (r.op) {
-            case NEBULA_SAVE_READ:
-                result = galaxy::saves::read(folder, name, r.buffer, r.size, r.length);
-                break;
-            case NEBULA_SAVE_WRITE:
-                result = galaxy::saves::write(folder, name, r.buffer, r.size);
-                break;
-            case NEBULA_SAVE_DELETE:
-                result = galaxy::saves::remove(folder, name);
-                break;
+            // A mod's global file (services/save.md 7): "luma/<id>.bin" in the luma folder, made at its first write,
+            // kept without backups; a file save.game's offer replaced (services/save.md 8): "luma/replaced/<name>",
+            // written only. Any other name is the game's own file, a plain name in the save folder.
+            std::string_view file = name;
+            galaxy::saves::Backups backups = galaxy::saves::Backups::kKeep;
+            bool placed = true;
+            if (const std::string_view replaced = galaxy::saves::replaced_file_name(name); !replaced.empty()) {
+                file = replaced;
+                folder /= fs::path(galaxy::saves::kModFolder) / fs::path(galaxy::saves::kReplacedFolder);
+                backups = galaxy::saves::Backups::kNone;
+                std::error_code made;
+                placed = r.op == NEBULA_SAVE_WRITE && (fs::create_directories(folder, made) || !made);
+            } else if (name.starts_with(std::string(galaxy::saves::kModFolder) + "/")) {
+                file = galaxy::saves::mod_file_name(name);
+                folder /= fs::path(galaxy::saves::kModFolder);
+                backups = galaxy::saves::Backups::kNone;
+                std::error_code made;
+                placed = !file.empty() && (r.op != NEBULA_SAVE_WRITE || fs::create_directories(folder, made) || !made);
+            }
+            if (placed) {
+                switch (r.op) {
+                case NEBULA_SAVE_READ:
+                    result = galaxy::saves::read(folder, file, r.buffer, r.size, r.length);
+                    break;
+                case NEBULA_SAVE_WRITE:
+                    result = galaxy::saves::write(folder, file, r.buffer, r.size, backups);
+                    break;
+                case NEBULA_SAVE_DELETE:
+                    result = galaxy::saves::remove(folder, file);
+                    break;
+                }
             }
         }
 #if defined(__cpp_lib_atomic_ref)
@@ -2724,10 +3215,13 @@ bool input_device_missing(bool wii_remote) {
     return missing;
 }
 
-// The controls now (under gInputSampleLock). Each read renews the motor's state (a stale one stops).
+// The controls now (under gInputSampleLock). Each read renews the motor's state (a stale one stops): the game's, or a
+// mod's when stronger (input.rumble).
 galaxy::input::PlayerInput controls_input() {
     const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
-    galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), mode);
+    const uint8_t strength = std::max(gMotor.load(std::memory_order_relaxed), galaxy::luma_input::mod_rumble(0));
+    galaxy::host::native_game_rumble(strength, mode);
+    galaxy::extensions::motor(strength);
     return galaxy::host::native_game_input(gGameFrames.load(std::memory_order_relaxed), mode,
                                            static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
 }
@@ -2749,6 +3243,43 @@ void note_input_activity(const NebulaInputSample& sample) {
 }
 #endif
 
+#if defined(NEBULA_HOST_RENDERER)
+// The kind of device player 1 plays with now (LUMA_INPUT_DEVICE_*), for the input service: a real Wii Remote's motion
+// (the remote branch of svc_input_read), a phone's on-screen controls, a controller, or the keyboard and mouse.
+uint32_t main_device_kind(bool remote) {
+    if (remote) {
+        return LUMA_INPUT_DEVICE_MOTION;
+    }
+    if ((galaxy::extensions::flags() & NEBULA_EXT_CONTROLS_PAD) != 0u) {
+        return LUMA_INPUT_DEVICE_PAD;  // a test extension's controller (its motor the extension's)
+    }
+    const std::optional<galaxy::input::DeviceKey> last = galaxy::host::last_input_device();
+    if (!last || last->scheme == galaxy::input::ControlScheme::Keyboard) {
+        return galaxy::host::touch_controls_present() ? LUMA_INPUT_DEVICE_TOUCH : LUMA_INPUT_DEVICE_KEYBOARD_MOUSE;
+    }
+    return LUMA_INPUT_DEVICE_PAD;
+}
+
+// Whether a mod's rumble reaches player 1's device: a controller whose motor the host drives (the controller worker on
+// Windows, SDL's gamepads elsewhere; a test extension's, NEBULA_EXT_CONTROLS_PAD), or a real Wii Remote (its motor bit).
+// None for the keyboard or a phone's screen.
+bool main_motor(uint32_t device) {
+    if (device == LUMA_INPUT_DEVICE_PAD && (galaxy::extensions::flags() & NEBULA_EXT_CONTROLS_PAD) != 0u) {
+        return true;
+    }
+#if defined(NEBULA_REAL_WIIMOTE)
+    if (device == LUMA_INPUT_DEVICE_MOTION) {
+        return true;
+    }
+#endif
+#if defined(_WIN32)
+    return device == LUMA_INPUT_DEVICE_PAD && !galaxy::host::rumble_output_disabled();
+#else
+    return device == LUMA_INPUT_DEVICE_PAD;
+#endif
+}
+#endif
+
 // The players svc_input_read serves: player 1's live controls, and with the renderer player 2 (co-star mode).
 enum HostPlayer : uint32_t {
     kHostPlayerMain,
@@ -2763,6 +3294,21 @@ uint32_t svc_input_players(void*) {
 }
 
 uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, NebulaInputSample* sample) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) {  // a benchmark plays nothing: player 1's remote connected and at rest
+        if (device != nullptr) {
+            *device = {};
+            device->connected = player == kHostPlayerMain ? 1 : 0;
+            device->nunchuk = device->connected;
+            device->battery = device->connected != 0 ? 4 : 0;
+        }
+        if (player != kHostPlayerMain || sample == nullptr) return 0;
+        *sample = rest_input_sample();
+        gInputRead.store(true, std::memory_order_release);
+        gInputRead.notify_one();
+        return 1;
+    }
+#endif
     if (device != nullptr) {
         *device = {};
 #if defined(NEBULA_HOST_RENDERER)
@@ -2774,6 +3320,8 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
                 device->battery = 4;
                 if (sample != nullptr) {
                     *sample = input_sample(co_star);
+                    // Player 2 is always a controller (the last one attached); the worker drives no motor for it.
+                    galaxy::luma_input::game_read(1u, sample, LUMA_INPUT_DEVICE_PAD, false);
                     return 1;
                 }
             }
@@ -2806,6 +3354,8 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
         const bool missing = input_device_missing(gRemoteConnected.load(std::memory_order_relaxed));
         galaxy::host::set_input_missing_shown(missing);
         gInputConnected.store(missing ? 0u : 1u, std::memory_order_relaxed);
+        const uint32_t device = missing ? LUMA_INPUT_DEVICE_NONE : main_device_kind(false);
+        galaxy::luma_input::game_read(0u, sample, device, main_motor(device));
     } else {
         galaxy::input::wiimote::MotionFrame frame;
         const galaxy::input::PlayerInput input = gRemoteMotion.read(frame);
@@ -2816,10 +3366,11 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
         }
         sample->spin_presses = frame.spin_presses;
         sample->sub_spin_presses = frame.sub_spin_presses;
+        galaxy::luma_input::game_read(0u, sample, LUMA_INPUT_DEVICE_MOTION, main_motor(LUMA_INPUT_DEVICE_MOTION));
 #if defined(NEBULA_REAL_WIIMOTE)
-        // Its motor is on or off: a strength is how often it is on.
+        // Its motor is on or off: a strength is how often it is on (the game's, or a mod's when stronger).
         static uint32_t motor_share = 0;
-        motor_share += gMotor.load(std::memory_order_relaxed);
+        motor_share += std::max(gMotor.load(std::memory_order_relaxed), galaxy::luma_input::mod_rumble(0));
         const bool motor_on = motor_share >= 255u;
         if (motor_on) {
             motor_share -= 255u;
@@ -2830,7 +3381,9 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
     note_input_activity(*sample);
     return 1;
 #else
+    // The headless host samples no controls: a controller at rest, which a mod's injection (input.inject) replaces.
     *sample = rest_input_sample();
+    galaxy::luma_input::game_read(0u, sample, LUMA_INPUT_DEVICE_NONE, false);
     return 1;
 #endif
 }
@@ -2975,7 +3528,7 @@ void input_thread() {
 #include "galaxy/wiimote_speaker.h"
 #endif
 
-// The remote speaker's sound, player 1's (6 kHz blocks): the audio output mixes it at the speaker gain (I-06).
+// The remote speaker's sound, player 1's (6 kHz blocks): the audio output mixes it at the speaker gain.
 void svc_speaker_samples(void*, uint32_t player, const int16_t* samples, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
     if (player == 0u && samples != nullptr) {
@@ -3065,8 +3618,51 @@ void svc_audio_control(void*, uint32_t what, uint32_t value) {
 #endif
 }
 
+#if defined(NEBULA_UPDATE_CHECK)
+bool gUpdateOffered = false;  // the game thread's (svc_home_menu)
+#endif
+
 int svc_home_menu(void*, uint32_t what, uint32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
+    // Launcher mode's home screen is drawn as this menu while the HOME Menu itself is closed.
+    const bool launcher = galaxy::ui::launcher_visible() && !galaxy::render::home_menu_visible();
+    switch (what) {
+    case NEBULA_HOME_MENU_LAUNCHER_OPEN: {
+        const bool opened = galaxy::ui::launcher_open();
+#if defined(NEBULA_UPDATE_CHECK)
+        if (opened) {
+            if (const std::optional<galaxy::update::Release> release = galaxy::update::offer(galaxy::update::kFreshBudgetMs)) {
+                galaxy::ui::launcher_offer_update(release->version, release->notes);
+                gUpdateOffered = true;
+            }
+        }
+#endif
+        return opened ? 1 : 0;
+    }
+    case NEBULA_HOME_MENU_LAUNCHER_POLL:
+#if defined(NEBULA_UPDATE_CHECK)
+        // An answer that came after the screen opened (never waits).
+        if (!gUpdateOffered && galaxy::ui::launcher_visible()) {
+            if (const std::optional<galaxy::update::Release> release = galaxy::update::poll()) {
+                galaxy::ui::launcher_offer_update(release->version, release->notes);
+                gUpdateOffered = true;
+            }
+        }
+#endif
+        return galaxy::ui::launcher_poll();
+    case NEBULA_HOME_MENU_LAUNCHER_TEXT:
+        return static_cast<int>(galaxy::ui::launcher_text(value >> 16, value & 0xFFFFu));
+    default:
+        break;
+    }
+    if (launcher && (what == NEBULA_HOME_MENU_VIEW || what == NEBULA_HOME_MENU_POINT || what == NEBULA_HOME_MENU_CHOOSE)) {
+        if (what == NEBULA_HOME_MENU_POINT) {
+            galaxy::ui::launcher_point(value);
+        } else if (what == NEBULA_HOME_MENU_CHOOSE) {
+            galaxy::ui::launcher_choose(value);
+        }
+        return what == NEBULA_HOME_MENU_VIEW ? galaxy::ui::launcher_view() : 0;
+    }
     switch (what) {
     case NEBULA_HOME_MENU_OPEN:
         galaxy::render::home_menu_open();
@@ -3093,34 +3689,7 @@ int svc_home_menu(void*, uint32_t what, uint32_t value) {
 #endif
 }
 
-// Test hooks for hidden runs; the game performs them with its own calls each scene frame.
-//   GALAXY_TEST_GALAXY_TOUR=<file of "Stage scenario" lines>: each stop in turn, GALAXY_TEST_GALAXY_TOUR_FRAMES scene
-//     frames apart (default 1200), through MR::requestChangeStageInGameMoving.
-//   GALAXY_TEST_TELEPORT=x,y,z,frame[/x,y,z,frame...]: MR::setPlayerPos at those scene frames, held 30 frames (the
-//     player settles there); counted from the latest tour stop when touring.
-//   GALAXY_TEST_EVENTS=kind@frame[/kind@frame...]: once at that scene frame (from the latest stop when touring): kill (a
-//     miss: MR::forceKillPlayerByAbyss), movieN (MR::startMovie(N), in a stage with a movie sequence), wait (nothing:
-//     keeps a tour's last stop running until then), star / grandstar (the stop's star is collected: its result, the get
-//     demo, the save and what follows, the ending after KoopaBattleVs3Galaxy).
-//   GALAXY_TEST_GRAND_STARS=n: the save holds Grand Stars 1-n from the second scene frame, and the stage starts again
-//     with them (the Observatory's domes restored, lit and furnished as the game shows them for that many).
-//   GALAXY_TEST_EVENT_FLAGS=name[,name=value...]: the save's stored event flags on and event values set from the second
-//     scene frame, before the Grand Stars (with GALAXY_TEST_GRAND_STARS>=3, LibraryOpenNewStarCount=0 opens the Library
-//     and its first storybook chapter; PictureBookAlreadyRead=n: chapters 1-n read, which the Library's book lists;
-//     SpinAndStarPointer: the spin and pointer the Gateway's Luma grants; Achievement:<id>: that achievement's pop-up; AchievementBoard: the
-//     Observatory's achievement board).
-//   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport),
-//     with the animation they play, and whether they are shown, clipped, or drawn while clipped as shadow casters.
-//   GALAXY_TEST_EVENTS shake@frame: the screen shakes from that frame until the scene ends.
-//   GALAXY_TEST_EVENTS audio@frame: the sound mixer's counters then (the "host: jaudio" line, which otherwise comes in
-//     the first second of every 30 game seconds).
-//   GALAXY_TEST_EVENTS defeat:<model>@frame: the live actors with that model (as actors@ names it) are killed, as their
-//     defeat ends: what they leave appears (KuriboChief, the Gateway's big Goomba: its key).
-//   GALAXY_TEST_SCRIPT_CLOCK=frames: the scripted input (GALAXY_INPUT_*) counts scene frames instead of frames, so a
-//     run's game frames take the same input whatever its renderer's speed (builds compared frame for frame).
-//   GALAXY_TEST_SCRIPT_CLOCK=stop: the scripted input counts scene frames since the tour's current stop began (the clock
-//     of GALAXY_TEST_EVENTS and GALAXY_TEST_TELEPORT) and gives nothing before the first stop; without a tour it is the
-//     scene frames from boot, as frames is.
+// Set when an extension asks the game to end (extension_quit): the main loop closes the game.
 std::atomic<bool> gTourDone{false};
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
 HANDLE gHostWake = nullptr;
@@ -3140,10 +3709,22 @@ void extension_quit(void*) {
 }
 #if defined(NEBULA_HOST_RENDERER)
 void extension_menu_key(void*, uint32_t key) {
+    // An open text request takes the editing keys first, as the window's keyboard gives them to it.
+    if (galaxy::luma_input::text_open()) {
+        using galaxy::luma_input::TextKey;
+        switch (key) {
+        case NEBULA_EXT_KEY_ENTER: galaxy::luma_input::text_key(TextKey::Enter); return;
+        case NEBULA_EXT_KEY_ESCAPE: galaxy::luma_input::text_key(TextKey::Escape); return;
+        case NEBULA_EXT_KEY_BACKSPACE: galaxy::luma_input::text_key(TextKey::Backspace); return;
+        case NEBULA_EXT_KEY_LEFT: galaxy::luma_input::text_key(TextKey::Left); return;
+        case NEBULA_EXT_KEY_RIGHT: galaxy::luma_input::text_key(TextKey::Right); return;
+        default: break;
+        }
+    }
     static constexpr int kKeys[] = {0,         VK_UP,  VK_DOWN, VK_LEFT, VK_RIGHT, VK_RETURN,
                                     VK_ESCAPE, VK_TAB, VK_BACK, VK_SPACE, VK_F1};
     if (key != 0u && key < std::size(kKeys)) {
-        galaxy::render::native_settings_post_key(static_cast<std::uintptr_t>(kKeys[key]));
+        galaxy::render::native_settings_post_keyboard_key(static_cast<std::uintptr_t>(kKeys[key]));
     }
 }
 uint32_t extension_menu_open(void*) {
@@ -3158,7 +3739,40 @@ void extension_open_settings(void*, uint32_t page) {
 void extension_resize_window(void*, uint32_t width, uint32_t height) {
     galaxy::render::host_window::resize_window_client(width, height);
 }
+// The harness's text step: the code points SDL's text input hands its host (the Win32 window's WM_CHAR feeds each of
+// them to the same text_char).
+void extension_type_text(void*, const char* utf8) {
+    galaxy::luma_input::text_utf8(utf8);
+}
 #endif
+
+void extension_take_out_mod(void*, const char* mod_id) {
+    if (mod_id != nullptr) {
+        galaxy::mods::take_out(mod_id);
+    }
+}
+
+void extension_reload_mod(void*, const char* mod_id) {
+    if (mod_id != nullptr) {
+        galaxy::mods::reload(mod_id);
+    }
+}
+
+// The Mods page's FORGET (native_settings.cpp) for an id its REMOVED MODS line lists, and only then.
+void extension_forget_mod(void*, const char* mod_id) {
+    if (mod_id == nullptr) {
+        return;
+    }
+    std::vector<galaxy::luma_mods::KeptMod> kept;
+    galaxy::luma_mods::kept(kept);
+    const bool listed = std::any_of(kept.begin(), kept.end(),
+                                    [mod_id](const galaxy::luma_mods::KeptMod& row) { return row.id == mod_id; });
+    if (!listed) {
+        log_line("mods:", (std::string(mod_id) + " is not on the REMOVED MODS line: nothing to forget").c_str());
+        return;
+    }
+    galaxy::luma_mods::forget(mod_id);
+}
 
 void attach_extensions() {
     const std::vector<fs::path>& files = ::galaxy::launch_args().extensions;
@@ -3170,11 +3784,16 @@ void attach_extensions() {
     host.size = sizeof(host);
     host.log = extension_log;
     host.quit = extension_quit;
+    host.take_out_mod = extension_take_out_mod;
+    host.reload_mod = extension_reload_mod;
+    host.forget_mod = extension_forget_mod;
+    host.started_again = ::galaxy::launch_args().started_again;
 #if defined(NEBULA_HOST_RENDERER)
     host.menu_key = extension_menu_key;
     host.menu_open = extension_menu_open;
     host.open_settings = extension_open_settings;
     host.resize_window = extension_resize_window;
+    host.type_text = extension_type_text;
 #endif
     std::string error;
     if (!galaxy::extensions::attach(files, host, error)) {
@@ -3187,6 +3806,7 @@ void attach_extensions() {
 // and the Grand Stars with the Observatory they power.
 int svc_galaxy_travel(void*, char* stage, uint32_t capacity, int32_t* star) {
 #if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::running()) return galaxy::bench::scene_frame(gSceneStage, stage, capacity, star);
     std::size_t index = 0u;
     std::uint32_t chosen = 0u;
     if (galaxy::render::take_galaxy_travel(index, chosen)) {
@@ -3232,7 +3852,8 @@ bool one_game_at_a_time() {
     }
     log_line("host:", "the game is already running");
     // Up to 3 s: the first start may be opening its window still.
-    if (!galaxy::render::host_window::show_existing_instance(key != 0u ? key : 1u, 3000u)) {
+    // Files it was started to import (Open with, --import) go to the running game, which imports them.
+    if (!galaxy::render::host_window::show_existing_instance(key != 0u ? key : 1u, 3000u, galaxy::launch_args().imports)) {
         log_line("host:", "the running game has no window to bring forward");
     }
     return true;
@@ -3252,9 +3873,268 @@ void hold_runtime_lease() {
 }
 #endif
 
+// Whether finish_and_exit(true) starts the game again on this host (Windows: a new process; Android: the activity's
+// restartGame; Linux and macOS: an exec of the running executable). Where it does not (an iOS app), it only ends the
+// game, so a caller that would start again goes on instead.
+constexpr bool kHostStartsAgain =
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    false;
+#else
+    true;
+#endif
+#if defined(_WIN32)
+// A process's creation time as one number (FILETIME), 0 when it cannot be read.
+unsigned long long creation_of(HANDLE process) {
+    FILETIME made{}, ended{}, kernel{}, user{};
+    if (!GetProcessTimes(process, &made, &ended, &kernel, &user)) return 0;
+    return (static_cast<unsigned long long>(made.dwHighDateTime) << 32u) | made.dwLowDateTime;
+}
+
+// The hand-over's event, named for the old process's id and creation time: only the process it started finds it.
+std::wstring hand_over_event_name(unsigned long pid, unsigned long long created) {
+    return L"Local\\NebulaHandOver-" + std::to_wstring(pid) + L"-" + std::to_wstring(created);
+}
+
+// The hand-over of a start-again, the old process's half (finish_and_exit, after the new process is started; saves,
+// settings, records and the log are out by then). The new process needs this one's files, not its end: ending a
+// process with a renderer takes the system seconds to a minute (its device, its memory), which a player would wait.
+// So every other thread is stopped (as the end would stop them, only now), the files the new process's cook replaces
+// are let go, the event says so, and the process ends.
+// The cook and the store need these of the mods folder's .cooked (read from the code): mods.pak (the store's overlay:
+// its file, its mapping, its view, and views given out by map_private), mods.plan, mods.signature, mods.facts,
+// mods.left_out, built.shaders, mods.sources, validate, code-layers and its restart file. All but mods.pak are read or
+// written whole and closed, so only mods.pak is held: the store lets go of its handles and every view of a file under
+// .cooked is unmapped. The running copies of the mods' libraries (.cooked/code/<process>-<n>) stay: the new process
+// makes its own. Elsewhere: game.pak (read-shared both ways), mods.ini and the settings (written whole, atomically),
+// the shader cache (read whole at the start, replaced atomically), the Vulkan compile journal (its handle closed once
+// mapped), the saves (waited for before the hand-over), the log and a test's audio file (opened sharing reads and
+// writes): none is held so the new process cannot open it.
+// The new process is started first and the files let go after: once the threads are stopped only system calls that
+// take no lock of the process's run (one of them may hold the heap's lock or the C runtime's), and starting a process,
+// naming a mapped file (GetMappedFileNameW) or writing the log are not those. So the .cooked views are found and every
+// mapped view counted before the stop; after it they are unmapped, and so is any view mapped in between (unnamed: the
+// process ends next). A backstop thread, left running, sets the event and ends the process after 5 s, should a call
+// here still wait on a stopped thread: a process left behind would hold the files and its window.
+constexpr DWORD kHandOverBackstopMs = 5000;
+constexpr size_t kHandOverViews = 1024;
+
+DWORD WINAPI hand_over_backstop(void* event) {
+    Sleep(kHandOverBackstopMs);
+    SetEvent(static_cast<HANDLE>(event));
+    TerminateProcess(GetCurrentProcess(), 0);
+    return 0;
+}
+
+void hand_over(HANDLE event, const std::wstring& cooked) {
+    log_line("host:", "ending: the new process takes over");
+    std::fflush(stdout);
+    std::fflush(stderr);
+    // Before the stop: every mapped view's base, and those of files under .cooked, by the path the system names them
+    // with (\Device\...\mods\.cooked\...): the folder's path past its drive is found in it, letters in any case.
+    static const void* mapped[kHandOverViews];
+    static const void* cooked_views[kHandOverViews];
+    size_t mapped_count = 0;
+    size_t cooked_count = 0;
+    const wchar_t* const tail = cooked.size() > 2u && cooked[1] == L':' ? cooked.c_str() + 2 : cooked.c_str();
+    const size_t tail_length = std::wcslen(tail);
+    static wchar_t name[MAX_PATH * 2];
+    MEMORY_BASIC_INFORMATION region{};
+    for (const char* at = nullptr; VirtualQuery(at, &region, sizeof(region)) == sizeof(region);
+         at = static_cast<const char*>(region.BaseAddress) + region.RegionSize) {
+        if (region.Type != MEM_MAPPED || region.AllocationBase != region.BaseAddress) continue;
+        if (mapped_count < kHandOverViews) mapped[mapped_count++] = region.BaseAddress;
+        if (tail_length == 0u || cooked_count == kHandOverViews) continue;
+        const DWORD length = GetMappedFileNameW(GetCurrentProcess(), region.BaseAddress, name, MAX_PATH * 2);
+        for (DWORD i = 0; length >= tail_length && i + tail_length <= length; i++) {
+            if (_wcsnicmp(name + i, tail, tail_length) == 0) {
+                cooked_views[cooked_count++] = region.BaseAddress;
+                break;
+            }
+        }
+    }
+    DWORD backstop_id = 0;
+    const HANDLE backstop = CreateThread(nullptr, 64 * 1024, hand_over_backstop, event, 0, &backstop_id);
+    const DWORD self = GetCurrentThreadId();
+    const DWORD process = GetCurrentProcessId();
+    // Twice: a thread the first pass missed may have started one. A thread stopped twice stays stopped.
+    for (int pass = 0; pass < 2; pass++) {
+        const HANDLE threads = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (threads == INVALID_HANDLE_VALUE) continue;
+        THREADENTRY32 entry{};
+        entry.dwSize = sizeof(entry);
+        for (BOOL more = Thread32First(threads, &entry); more; more = Thread32Next(threads, &entry)) {
+            if (entry.th32OwnerProcessID != process || entry.th32ThreadID == self ||
+                (backstop != nullptr && entry.th32ThreadID == backstop_id)) {
+                continue;
+            }
+            if (const HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME, FALSE, entry.th32ThreadID)) {
+                SuspendThread(thread);
+                CloseHandle(thread);
+            }
+        }
+        CloseHandle(threads);
+    }
+    gPak.store.let_go_of_files();
+    for (size_t i = 0; i < cooked_count; i++) UnmapViewOfFile(cooked_views[i]);
+    // A view mapped since the count: not named (see above), unmapped as it may be one of .cooked's. With more views
+    // than the count holds, the rest are left (only .cooked's, named above, matter).
+    if (mapped_count < kHandOverViews) {
+        for (const char* at = nullptr; VirtualQuery(at, &region, sizeof(region)) == sizeof(region);
+             at = static_cast<const char*>(region.BaseAddress) + region.RegionSize) {
+            if (region.Type != MEM_MAPPED || region.AllocationBase != region.BaseAddress) continue;
+            bool known = false;
+            for (size_t i = 0; i < mapped_count && !known; i++) known = mapped[i] == region.BaseAddress;
+            if (!known) UnmapViewOfFile(region.BaseAddress);
+        }
+    }
+    if (event != nullptr) SetEvent(event);
+}
+
+// The new process's half: before it touches the mods folder it waits, at most 10 s, for the old one's event or its end,
+// whichever comes first, and says how long in the log and as the harness fact host.handover_ms. Without the event (an
+// old process of before it) or past the bound, it waits for the old process to end instead, at most 60 s, said. Then a
+// thread says when the old process ended. The id is checked against its creation time, so a process that took
+// a freed id is never waited for.
+void wait_for_hand_over() {
+    const std::string& words = ::galaxy::launch_args().start_again_of;
+    const size_t dash = words.find('-');
+    if (dash == std::string::npos) return;
+    unsigned long pid = 0;
+    unsigned long long created = 0;
+    try {
+        pid = std::stoul(words.substr(0, dash));
+        created = std::stoull(words.substr(dash + 1));
+    } catch (const std::exception&) {
+        return;
+    }
+    const auto began = std::chrono::steady_clock::now();
+    const auto since = [&began] {
+        return static_cast<long long>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - began).count());
+    };
+    HANDLE before = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (before != nullptr && creation_of(before) != created) {
+        CloseHandle(before);
+        before = nullptr;  // another process took the id: the old one has ended
+    }
+    const HANDLE event = OpenEventW(SYNCHRONIZE, FALSE, hand_over_event_name(pid, created).c_str());
+    DWORD came = WAIT_TIMEOUT;
+    if (event != nullptr && before != nullptr) {
+        const HANDLE either[2] = {event, before};
+        came = WaitForMultipleObjects(2, either, FALSE, 10000);
+    }
+    if (event != nullptr) CloseHandle(event);
+    std::string said;
+    if (came == WAIT_OBJECT_0) {
+        said = "the process before it handed over its files after " + std::to_string(since()) + " ms";
+    } else if (came == WAIT_OBJECT_0 + 1) {
+        said = "the process before it ended without a hand-over after " + std::to_string(since()) + " ms";
+    } else if (before != nullptr) {
+        said = event == nullptr ? "no hand-over from the process before it; " : "the hand-over did not come within 10 s; ";
+        said += WaitForSingleObject(before, 60000) == WAIT_OBJECT_0
+                    ? "waited " + std::to_string(since()) + " ms for it to end"
+                    : "it had not ended after 60 s; this one goes on";
+    } else {
+        said = "the process before it had ended";
+    }
+    const long long waited = since();
+    log_line("host: started again:", said.c_str());
+    galaxy::modlog::fact("host.handover_ms", std::to_string(waited));
+    if (before == nullptr) return;
+    // When the old process ended, from this one's start: the system's part of a start-again, said once it is known.
+    const unsigned long long mine = creation_of(GetCurrentProcess());
+    std::thread([before, mine] {
+        if (WaitForSingleObject(before, 120000) == WAIT_OBJECT_0) {
+            FILETIME made{}, ended{}, kernel{}, user{};
+            if (GetProcessTimes(before, &made, &ended, &kernel, &user)) {
+                const unsigned long long end = (static_cast<unsigned long long>(ended.dwHighDateTime) << 32u) | ended.dwLowDateTime;
+                const long long ms = end > mine ? static_cast<long long>((end - mine) / 10000u) : 0;
+                log_line("host: started again:", ("the process before it ended " + std::to_string(ms) +
+                                                   " ms after this one started").c_str());
+            }
+        }
+        CloseHandle(before);
+    }).detach();
+}
+#endif
+
+#if defined(_WIN32)
+// A start-again's hand-over, set up before the new process starts (finish_and_exit).
+HANDLE gHandOver = nullptr;
+std::wstring gHandOverCooked;
+// The program a start-again runs in this one's place: empty, this program (finish_and_exit); the Direct3D 11
+// program where no adapter runs Direct3D 12 (start_again_on_d3d11).
+std::wstring gStartAgainProgram;
+#endif
+
+#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_D3D12)
+// The Direct3D 11 host of this program's CPU level beside it (NebulaD11.exe, or NebulaD11-x86-64-v2.exe beside
+// the SSE4.2 host); empty, said in the log with `why`, when it is not there.
+std::wstring d3d11_program(const char* why) {
+    const std::wstring self = ::galaxy::windows::executable_path();
+    const std::size_t slash = self.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) {
+        return {};
+    }
+    constexpr std::wstring_view kBaseline = L"-x86-64-v2.exe";
+    const bool baseline = self.size() > kBaseline.size() &&
+                          _wcsicmp(self.c_str() + self.size() - kBaseline.size(), kBaseline.data()) == 0;
+    std::wstring path = self.substr(0, slash + 1u) + L"NebulaD11" + (baseline ? L"-x86-64-v2.exe" : L".exe");
+    if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        log_line("host: Direct3D 11 is wanted and its program is not beside the game:", why);
+        return {};
+    }
+    return path;
+}
+
+// Asked for Direct3D 11 (--renderer d3d11): its program runs in this one's place before this one takes anything, the
+// one-game lock, the log file, the safe start, the game module's choice, the mods folder and the window all its own
+// (nebula_run_sibling: same command line, startup information, handles, environment and folder, in a job, waited for);
+// this process ends with its exit code, so a caller sees one lifetime and one code. The Direct3D 11 host has no
+// hand-off, so the chain ends there. Returns when that program is not there or did not start.
+void hand_off_to_d3d11(const char* why) {
+    const std::wstring path = d3d11_program(why);
+    if (path.empty()) {
+        return;
+    }
+    log_line("host: Direct3D 11 takes the start:", why);
+    std::fflush(stdout);
+    std::fflush(stderr);
+    unsigned long code = 1u;
+    if (!nebula_run_sibling(path.c_str(), &code)) {
+        log_line("host: the Direct3D 11 program did not start:", why);
+        return;
+    }
+    std::fflush(stdout);
+    TerminateProcess(GetCurrentProcess(), static_cast<UINT>(code));
+}
+
+// No adapter runs the Direct3D 12 renderer (its probe passed over every one: "No hardware D3D12 adapter ..."), known
+// only once the start has chosen the game module and read the mods: the Direct3D 11 program takes over as a start-again
+// does (finish_and_exit), the new process waiting for this one's hand-over before it touches the mods folder. Returns
+// when that program is not there.
+void start_again_on_d3d11(const char* why) {
+    std::wstring path = d3d11_program(why);
+    if (path.empty()) {
+        return;
+    }
+    log_line("host: Direct3D 11 takes the start:", why);
+    gStartAgainProgram = std::move(path);
+    finish_and_exit(true);
+}
+#endif
+
 [[noreturn]] void finish_and_exit(bool restart) {
 #if defined(_WIN32)
     game_profile::finish();
+#endif
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::bench::at_exit();  // a benchmark that did not finish writes its result as aborted
+    // The process ends without the renderer's shutdown: the pictures handed to an extension (a test's) are taken from
+    // the GPU and written first, as that shutdown would.
+    if (galaxy::extensions::keeps_pictures() && !galaxy::render::finish_pictures(5000u)) {
+        log_line("host:", "the pictures asked were not all written at exit");
+    }
 #endif
 #if defined(NEBULA_HOST_RENDERER)
     // --diagnostics pipelines: the pipelines this run created (tools/dev/site_pipelines.py merges them).
@@ -3277,6 +4157,18 @@ void hold_runtime_lease() {
     galaxy::achievements::flush();
     galaxy::stats::flush();
 #endif
+    // The record of mods' numbers (services/mods.md 7), written off the game thread.
+    galaxy::luma_mods::flush_ids(2000u);
+    // The extensions' files complete (a test's sound dump); the start that takes over is told it is one, by its count.
+    galaxy::extensions::ending(restart);
+    if (restart) {
+        // The new start counts this one (launch_args.h started_again; a later value wins).
+        add_restart_argument("--started-again");
+        add_restart_argument(std::to_string(::galaxy::launch_args().started_again + 1u));
+    }
+#if defined(NEBULA_UPDATE_CHECK)
+    galaxy::update::finish();  // a check still running: its answer kept for the next start (at most its timeout)
+#endif
     std::fflush(stdout);
 #if defined(_WIN32)
     if (restart) {
@@ -3288,17 +4180,71 @@ void hold_runtime_lease() {
             CloseHandle(gRuntimeLease);
         }
 #endif
-        const std::wstring path = ::galaxy::windows::executable_path();
+        const std::wstring path = gStartAgainProgram.empty() ? ::galaxy::windows::executable_path() : gStartAgainProgram;
         if (!path.empty()) {
-            STARTUPINFOW startup{};
-            startup.cb = sizeof(startup);
+            // The new process writes to this one's output and error, when it has them (a tool reading its log), and
+            // inherits nothing else.
+            HANDLE pass[2] = {};
+            DWORD passed = 0;
+            for (const DWORD which : {STD_OUTPUT_HANDLE, STD_ERROR_HANDLE}) {
+                const HANDLE handle = GetStdHandle(which);
+                if (handle == nullptr || handle == INVALID_HANDLE_VALUE || GetFileType(handle) == FILE_TYPE_UNKNOWN) continue;
+                if (passed == 1u && pass[0] == handle) continue;
+                if (SetHandleInformation(handle, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)) pass[passed++] = handle;
+            }
+            STARTUPINFOEXW startup{};
+            startup.StartupInfo.cb = sizeof(startup);
+            if (::galaxy::launch_args().started_hidden) {
+                // A hidden start (a test's) stays hidden: the new process reads it from its own start the same way.
+                startup.StartupInfo.dwFlags |= STARTF_USESHOWWINDOW;
+                startup.StartupInfo.wShowWindow = SW_HIDE;
+            }
+            std::vector<unsigned char> attributes;
+            if (passed != 0u) {
+                SIZE_T bytes = 0;
+                InitializeProcThreadAttributeList(nullptr, 1, 0, &bytes);
+                attributes.resize(bytes);
+                startup.lpAttributeList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attributes.data());
+                if (!InitializeProcThreadAttributeList(startup.lpAttributeList, 1, 0, &bytes) ||
+                    !UpdateProcThreadAttribute(startup.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, pass, passed * sizeof(HANDLE), nullptr, nullptr)) {
+                    passed = 0;
+                    startup.lpAttributeList = nullptr;
+                } else {
+                    startup.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
+                    startup.StartupInfo.hStdInput = nullptr;
+                    startup.StartupInfo.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+                    startup.StartupInfo.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+                }
+            }
             PROCESS_INFORMATION process{};
             std::wstring command = GetCommandLineW();
             command += gRestartArguments;
-            if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
+            // The new process waits for this one's hand-over before it touches the mods folder (wait_for_hand_over):
+            // this one's id and creation time (--start-again-of, a later value wins), and the event named for them.
+            if (const unsigned long long when = creation_of(GetCurrentProcess()); when != 0u) {
+                command += L" --start-again-of " + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(when);
+                gHandOver = CreateEventW(nullptr, TRUE, FALSE, hand_over_event_name(GetCurrentProcessId(), when).c_str());
+                std::error_code whole;
+                fs::path cooked = fs::absolute(galaxy::mods::mods_folder() / ".cooked", whole);
+                if (!whole && !galaxy::mods::mods_folder().empty()) gHandOverCooked = cooked.make_preferred().wstring();
+            }
+            log_line("host:", "handing over to a new process");
+            if (CreateProcessW(path.c_str(), command.data(), nullptr, nullptr, passed != 0u ? TRUE : FALSE,
+                               passed != 0u ? EXTENDED_STARTUPINFO_PRESENT : 0u, nullptr, nullptr, &startup.StartupInfo, &process)) {
+                // Where crash reports go (--crash-dumps), `restarted` names the process that took over, so a tool
+                // waiting for this one follows it: its id and its creation time (FILETIME as one number), so an id the
+                // system gives again to another process later is never taken for it.
+                if (const fs::path dumps = ::galaxy::launch_args().crash_dumps; !dumps.empty()) {
+                    FILETIME created{}, ended{}, kernel{}, user{};
+                    if (GetProcessTimes(process.hProcess, &created, &ended, &kernel, &user)) {
+                        const unsigned long long when = (static_cast<unsigned long long>(created.dwHighDateTime) << 32u) | created.dwLowDateTime;
+                        std::ofstream(dumps / "restarted", std::ios::binary | std::ios::trunc) << process.dwProcessId << ' ' << when << "\n";
+                    }
+                }
                 CloseHandle(process.hThread);
                 CloseHandle(process.hProcess);
             }
+            if (startup.lpAttributeList != nullptr) DeleteProcThreadAttributeList(startup.lpAttributeList);
         }
     }
 #elif defined(__ANDROID__) && defined(NEBULA_HOST_RENDERER)
@@ -3306,44 +4252,233 @@ void hold_runtime_lease() {
         // The activity ends this process once the new one is on its way.
         std::this_thread::sleep_for(std::chrono::seconds(5));
     }
+#elif !(defined(__APPLE__) && TARGET_OS_IPHONE)
+    if (restart && gArgv != nullptr) {
+        // This process becomes the game again (exec: the same process id, so a tool waiting for it follows it as it
+        // is), the running executable with this start's arguments and the ones a restart adds (add_restart_argument).
+        // Every C stream is written out first; every file this start opened (the pak, the log, the facts, the sound
+        // dump) is closed by the exec itself, only standard input, output and error stay.
+        std::fflush(nullptr);
+#if defined(__APPLE__)
+        std::uint32_t size = 0u;
+        _NSGetExecutablePath(nullptr, &size);
+        std::string exe(size, '\0');
+        if (_NSGetExecutablePath(exe.data(), &size) != 0) exe.clear();
+        const char* const folder = "/dev/fd";
 #else
-    (void)restart;
+        std::string exe = "/proc/self/exe";
+        // An AppImage: the image file itself, which mounts itself again (the program in the old mount goes with the
+        // mount, which ends when the descriptors closed at the exec do).
+        if (const char* image = std::getenv("APPIMAGE"); image != nullptr && image[0] == '/') exe = image;
+        const char* const folder = "/proc/self/fd";
+#endif
+        std::vector<char*> arguments;
+        for (char** argument = gArgv; *argument != nullptr; ++argument) arguments.push_back(*argument);
+#if defined(NEBULA_HOST_START_AGAIN)
+        for (std::string& added : gRestartExtra) arguments.push_back(added.data());
+#endif
+        arguments.push_back(nullptr);
+        std::error_code error;
+        std::vector<int> open;
+        for (const fs::directory_entry& entry : fs::directory_iterator(folder, error)) {
+            const std::string name = entry.path().filename().string();
+            char* end = nullptr;
+            const long fd = std::strtol(name.c_str(), &end, 10);
+            if (end != name.c_str() && *end == '\0' && fd > 2) open.push_back(static_cast<int>(fd));
+        }
+        for (const int fd : open) {
+            const int flags = fcntl(fd, F_GETFD);
+            if (flags >= 0) fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
+        }
+        if (!exe.empty()) execv(exe.c_str(), arguments.data());
+        log_line("host:", ("the game could not start again: " + std::string(std::strerror(errno))).c_str());
+        std::fflush(stdout);
+    }
+#else
+    (void)restart;  // an iOS app cannot replace its own image: kHostStartsAgain is false there
 #endif
 #if defined(_WIN32)
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::host::stop_all_rumble();
 #endif
     // Saves and logs are out. No library's detach runs: Streamline's faults on state from before a lost card.
+    if (restart && gHandOver != nullptr) hand_over(gHandOver, gHandOverCooked);
     TerminateProcess(GetCurrentProcess(), 0);
 #endif
     std::_Exit(0);
 }
 
 void svc_app_exit(void*) {
+#if defined(NEBULA_HOST_RENDERER)
+    // The home screen's Benchmark: the game left as for Quit; a new start runs it (benchmark.h) and comes back.
+    if (galaxy::ui::launcher_poll() == galaxy::ui::LauncherModel::kChoiceBenchmark) {
+        for (const char* argument : {"--benchmark", "1", "--benchmark-return", "1"}) add_restart_argument(argument);
+        finish_and_exit(true);
+    }
+#endif
     finish_and_exit(false);
 }
 
-void svc_mods_start(void*) {
-    if (const fs::path& dump = ::galaxy::launch_args().dump_tunables; !dump.empty()) {
-        const auto game_api = reinterpret_cast<const NebulaModApi* (*)()>(find_symbol(gModule.module, "nebula_game_mod_api"));
-        if (game_api == nullptr || !galaxy::mods::dump_tunables(game_api(), dump)) {
-            log_line("mods:", ("the tunables could not be written to " + galaxy::path_text(dump)).c_str());
-        }
+// The layers mods' code chooses (luma.h LumaModInfo.layers). The content is cooked with the record
+// (galaxy::mods::code_layers_record); an answer that differs from it starts the game again once.
+// gStartedAgainForLayers: this process was started again for layers (the record's restart file was there at the
+// start), so it never starts again for them: no loop is possible. A background cook of this start waits for the
+// answer (gLayersWait) and is planned with it, so a new mod gets one start-again, not two.
+bool gStartedAgainForLayers = false;
+std::mutex gLayersMutex;
+std::condition_variable gLayersAnswered;
+bool gLayersWait = false;      // a background cook waits for the answer
+bool gLayersAnswer = false;    // the answer is in (or none will come)
+std::optional<galaxy::mods::ModPlan> gLayersPlan;  // the plan made with a changed answer
+// The start's scan, its game and language, kept to plan again with a changed answer.
+std::vector<galaxy::mods::ModInfo> gStartMods;
+std::string gStartGameId;
+std::string gStartLanguage;
+
+// Ends the background cook's wait: with a plan made from a changed answer, or with none (cook as planned).
+void layers_answered(std::optional<galaxy::mods::ModPlan> plan) {
+    {
+        const std::lock_guard<std::mutex> lock(gLayersMutex);
+        if (gLayersAnswer) return;
+        gLayersAnswer = true;
+        gLayersPlan = std::move(plan);
     }
+    gLayersAnswered.notify_all();
+}
+
+// start_plugins' choose: every begun mod's answer, compared with the record. Only a mod's own code layers count; any
+// other name is said once in the mod log. Equal: the start goes on.
+void layers_chosen(const std::vector<galaxy::mods::ChosenLayers>& chosen) {
+    const galaxy::mods::CodeLayers record = galaxy::mods::code_layers_record();
+    galaxy::mods::CodeLayers next = record;
+    std::vector<std::string> changed;
+    for (const galaxy::mods::ChosenLayers& one : chosen) {
+        const galaxy::mods::PluginFile& plugin = *one.plugin;
+        std::vector<std::string> said;
+        for (const std::string& name : one.names) {
+            const bool known = std::find(plugin.code_layers.begin(), plugin.code_layers.end(), name) != plugin.code_layers.end();
+            if (known || std::find(said.begin(), said.end(), name) != said.end()) continue;
+            said.push_back(name);
+            log_line("mods:", (plugin.mod_id + ": its code chose the layer \"" + name + "\", which is not one of its code layers; it is left out").c_str());
+            galaxy::modlog::add_row(3u, 0u, plugin.mod_id, 170u, "luma.json", "Layers.Unknown", {{"layer", name}});
+        }
+        if (plugin.code_layers.empty()) continue;  // nothing to choose: no record, never a start-again
+        // In the manifest's order, each once, so the same choice always reads the same.
+        std::vector<std::string> keep;
+        for (const std::string& name : plugin.code_layers) {
+            if (std::find(one.names.begin(), one.names.end(), name) != one.names.end()) keep.push_back(name);
+        }
+        const auto was = record.find(plugin.mod_id);
+        if (was != record.end() ? was->second != keep : !keep.empty()) changed.push_back(plugin.mod_id);
+        next[plugin.mod_id] = std::move(keep);
+    }
+    if (changed.empty()) {
+        layers_answered(std::nullopt);
+        return;
+    }
+    if (gStartedAgainForLayers) {
+        // Started again for these layers, and the answer changed again: the cooked layers stay for this session.
+        for (const std::string& mod : changed) {
+            log_line("mods:", (mod + ": its code chose other layers again after the game started again for them; the cooked ones stay").c_str());
+            galaxy::modlog::add_row(3u, 0u, mod, 171u, "", "Layers.Unstable", {});
+        }
+        layers_answered(std::nullopt);
+        return;
+    }
+    if (!galaxy::mods::write_code_layers_record(next)) {
+        log_line("mods:", "the layers the mods' code chose could not be written: the cooked ones stay");
+        layers_answered(std::nullopt);
+        return;
+    }
+    bool waits = false;
+    {
+        const std::lock_guard<std::mutex> lock(gLayersMutex);
+        waits = gLayersWait;
+    }
+    if (waits) {
+        // This start cooks in the background: that cook takes the new layers, and its start-again follows.
+        log_line("mods:", "the mods' code chose other layers: the files being prepared use them");
+        layers_answered(galaxy::mods::plan_mod_changes(gPak.store, gStartGameId, gStartLanguage, gStartMods));
+        return;
+    }
+    std::string ids;
+    for (const std::string& mod : changed) ids += (ids.empty() ? "" : ", ") + mod;
+    if constexpr (!kHostStartsAgain) {
+        // This host cannot start the game again (finish_and_exit): the record is written, so the next start cooks with
+        // the new layers; this one goes on with the cooked ones.
+        log_line("mods:", ("the code of " + ids + " chose other layers than the content was cooked with: they are used from the next start").c_str());
+        layers_answered(std::nullopt);
+        return;
+    }
+    log_line("mods:", ("the code of " + ids + " chose other layers than the content was cooked with: the game starts again with them").c_str());
+    std::ofstream(galaxy::mods::code_layers_restart_file(), std::ios::binary) << "layers\n";
+    finish_and_exit(true);
+}
+
+void svc_mods_start(void*) {
+    // A background cook waiting for the layers' answer is let go however this ends (no code, a crash flag, no answer).
+    struct AnswerAtEnd {
+        ~AnswerAtEnd() { layers_answered(std::nullopt); }
+    } answer_at_end;
     const fs::path crashed = galaxy::mods::mods_folder() / ".code_crashed";
     std::error_code crash_error;
     if (fs::exists(crashed, crash_error)) {
         fs::remove(crashed, crash_error);
         if (!gPlugins.empty()) {
-            log_line("mods:", "the last run crashed with mods' code on: it stays off for this run");
-            gPlugins.clear();
+            // A dev mod's code stays on: its maker is working on that crash (mods.h dev_mods).
+            log_line("mods:", galaxy::mods::dev_mods().empty() ? "the last run crashed with mods' code on: it stays off for this run"
+                                                                : "the last run crashed with mods' code on: it stays off for this run, but for the dev mods");
+            std::erase_if(gPlugins, [](const galaxy::mods::PluginFile& p) { return !galaxy::mods::dev_mod(p.mod_id); });
             galaxy::mods::set_code_off_after_crash();
         }
     }
+    // The plain module has no rows: no mod's code starts with it. The choice at start saw no such mod, or the crash flag
+    // above turned its code off; one here means the mods changed between that look and this start,
+    // and its code waits for the next start.
+    if (galaxy::game_module::plain_loaded() && !gPlugins.empty()) {
+        log_line("mods:", "a mod with code was turned on after the game module was chosen: its code starts at the next start");
+        gPlugins.clear();
+    }
+    // The mod log (galaxy/mod_log.h): how many mods are on, and the harness's facts in a harness run. With none it is
+    // never made.
+    galaxy::modlog::begin(
+        [](const char* name) -> void* {
+#if defined(_WIN32)
+            return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(gModule.module), name));
+#else
+            return dlsym(gModule.module, name);
+#endif
+        },
+        gModsOn);
+    // The game sounds mods replace (sound.md 6; the audio service), code or none. A module without the replacer is
+    // left alone.
+    galaxy::luma_audio::set_replacements([](const char* name) -> void* {
+#if defined(_WIN32)
+        return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(gModule.module), name));
+#else
+        return dlsym(gModule.module, name);
+#endif
+    });
+    // What the start's check and the cook said, in the mod log: after the mods' code started, or here with no mod that
+    // changes the game itself (texture pack pictures or patches alone).
+    const auto log_the_start = [] {
+        // The start check's one line when a part was missing (every mod off this session).
+        if (gMissingPart) galaxy::startcheck::report(*gMissingPart);
+        // Each mod whose code did not start, in the mod log as the Mods page says it.
+        galaxy::modlog::add_not_started();
+        // Each placed package through the validator, its findings in the mod log (kept: nothing runs when nothing
+        // changed).
+        galaxy::modlog::add_start_findings();
+        // The cooker's facts for the store attached this run: its refusals and notes, and in a harness run what it
+        // cooked.
+        galaxy::modlog::add_cook_facts(gCookFacts, gCookOwners);
+    };
     // Any mod at all tells the game: a stage then holds more than its level asks for.
     if (!gModsChangeGame) {
+        log_the_start();
         return;
     }
+    // A crash from here with code on leaves the code off at the next start; without, every mod (set at the scan).
     if (!gPlugins.empty()) {
         gCodeCrashFile = crashed;
     }
@@ -3351,6 +4486,11 @@ void svc_mods_start(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::mods::set_achievement_store(galaxy::achievements::unlock_mod);
 #endif
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::mods::set_message_language(galaxy::mods::language_folder(
+        std::string(gPak.store.game_id()),
+        static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language))));
+#endif  // a headless host has no language setting: refusals stay in English, the default
     galaxy::mods::start_plugins(gPlugins, gModRows, game_api(),
                                 [](const char* name) -> void* {
 #if defined(_WIN32)
@@ -3359,7 +4499,31 @@ void svc_mods_start(void*) {
                                     return dlsym(gModule.module, name);
 #endif
                                 },
-                                [](const char* text) { log_line("mods:", text); });
+                                [](const char* text) { log_line("mods:", text); }, layers_chosen);
+    // After the last mod's start, before the title (luma_refs.h), on the game thread: each placement of a class only
+    // code makes, from the start's check, looked up in the game's factory now that the mods' code has made its classes.
+    // One nobody makes is named in the mod log and placed as the placeholder object. With no mod a player turned on
+    // (the harness's own game half alone) it is not called.
+    if (gPlayersModsOn != 0) {
+#if defined(_WIN32)
+        const auto check = reinterpret_cast<LumaRefsCheckAfterStart>(
+            GetProcAddress(static_cast<HMODULE>(gModule.module), "luma_refs_check_after_start"));
+#else
+        const auto check = reinterpret_cast<LumaRefsCheckAfterStart>(dlsym(gModule.module, "luma_refs_check_after_start"));
+#endif
+        if (check != nullptr) {
+            const std::vector<galaxy::modlog::AfterStartRow> rows = galaxy::modlog::after_start_rows();
+            std::vector<LumaAfterStartRef> refs;
+            refs.reserve(rows.size());
+            for (const galaxy::modlog::AfterStartRow& row : rows) {
+                refs.push_back({row.mod.c_str(), row.class_name.c_str(), row.file.c_str(), row.line});
+            }
+            check(refs.empty() ? nullptr : refs.data(), static_cast<uint32_t>(refs.size()));
+        } else {
+            log_line("mods:", "the game module has no luma_refs_check_after_start: placements of classes only code makes are not checked");
+        }
+    }
+    log_the_start();
 }
 
 void svc_app_restart(void*) {
@@ -3367,11 +4531,26 @@ void svc_app_restart(void*) {
 }
 
 
+// The launcher's mod tools (run_mods_tool): the first argument names one.
+bool is_mods_tool(std::string_view first) {
+    return first == "--import-mod" || first == "--list-mods" || first == "--remove-mod";
+}
+
+// The launch arguments a mods tool takes too: the folders it works in.
+bool is_tool_folder_option(std::string_view key) {
+    return key == "--data" || key == "--settings" || key == "--crash-dumps" || key == "--shipped-mods";
+}
+
 }  // namespace
 
 
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/mod_import.h"
+
+#if defined(__APPLE__)
+// The importer, linked into the program on Apple (platform/apple/metal.cmake; crates/nebula-import/src/jni.rs).
+extern "C" int nebula_cook_overlay(const char* plan, const char* output);
+#endif
 
 namespace {
 
@@ -3403,6 +4582,65 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id, std::vector<galaxy::mods::ModInfo> mods) {
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+    // Started again because a mod's code chose other layers: read once and gone, so this start never starts again for
+    // them.
+    {
+        std::error_code restart_error;
+        const fs::path restarted = galaxy::mods::code_layers_restart_file();
+        gStartedAgainForLayers = !restarted.empty() && fs::exists(restarted, restart_error);
+        if (gStartedAgainForLayers) fs::remove(restarted, restart_error);
+    }
+    // Step 1 of a start with mods (mod_start_check.h): with a mod on, the game's own parts the mods need. One
+    // missing: every mod is off this session, with one mod-log line; nothing of the mods runs. No mod on: no check.
+    if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
+        // The cook writes about what the mods bring: their files' bytes are the estimate.
+        std::uint64_t bring = 0;
+        for (const galaxy::mods::ModInfo& mod : mods) {
+            if (!mod.enabled) continue;
+            std::error_code walk_error;
+            for (fs::recursive_directory_iterator it(mod.path, walk_error), end; !walk_error && it != end; it.increment(walk_error)) {
+                std::error_code size_error;
+                if (it->is_regular_file(size_error)) bring += it->file_size(size_error);
+            }
+        }
+        if (const std::optional<galaxy::startcheck::MissingPart> part =
+                galaxy::startcheck::missing_part(gPak.store, settings_folder / "mods" / ".cooked", bring)) {
+            log_line("mods:", ("a part a start with mods needs is missing (" + part->why + "): every mod is off this time").c_str());
+            gMissingPart = part;  // said in the mod log once it exists (start_mods)
+            for (galaxy::mods::ModInfo& mod : mods) {
+                if (!is_harness_half(mod.id)) mod.enabled = false;
+            }
+        }
+    }
+    gStartPackages.clear();
+    for (const galaxy::mods::ModInfo& mod : mods) {
+        if (mod.package) gStartPackages.push_back({mod.id, mod.path, mod.enabled});
+    }
+    // The validator's errors refuse a package at each start as at import (one reading, validator.md 2); its findings go
+    // to the mod log once the log exists (add_start_findings).
+    galaxy::modlog::check_packages(gStartPackages, game_id, language);
+    for (galaxy::mods::ModInfo& mod : mods) {
+        if (mod.package && mod.problem.empty() && galaxy::modlog::package_refused(mod.id)) {
+            mod.problem = galaxy::modlog::refused_sentence();
+        }
+    }
+    gModsOn = static_cast<std::uint32_t>(
+        std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; }));
+    gPlayersModsOn = static_cast<std::uint32_t>(std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) {
+        return mod.enabled && !is_harness_half(mod.id);
+    }));
+    // The answers the plan's granted lists come from: a declined permission's L506 is then the player's choice
+    // (consent.md 2.3).
+    galaxy::modlog::keep_permission_answers(mods);
+    // A mod whose code may choose layers: the scan is kept to plan again with a changed answer. No such mod, no copy.
+    if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) {
+            return mod.enabled && mod.luma &&
+                   std::any_of(mod.luma->layers.begin(), mod.luma->layers.end(), [](const galaxy::luma::Layer& layer) { return layer.when.code; });
+        })) {
+        gStartMods = mods;
+        gStartGameId = game_id;
+        gStartLanguage = language;
+    }
     const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(gPak.store, game_id, language, std::move(mods));
     gPlugins = plan.plugins;
     gModRows = plan.rows;
@@ -3433,6 +4671,10 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         log_line("mods:", note.c_str());
     }
     cook_mod_files(plan, settings_folder, game_id);
+#if defined(NEBULA_HOST_RENDERER)
+    // draw.post's compiles write their scratch files beside the cooked mods (a test run keeps to its own folder).
+    galaxy::render::set_mod_post_work_folder(settings_folder / "mods" / ".cooked");
+#endif
     // What the .luma mods' materials need: what they brought, then what the game built for them.
     {
         std::error_code built_error;
@@ -3440,6 +4682,8 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         if (fs::is_regular_file(built, built_error)) {
             galaxy::render::load_mod_shaders(built);
         }
+        // The flags program_table keeps for its own programs, for the mods' (the cook's, beside the texts).
+        galaxy::render::load_mod_program_flags(settings_folder / "mods" / ".cooked" / "mods.sources" / "flags.tsv");
     }
     for (const fs::path& folder : plan.luma_folders) {
         std::error_code shaders_error;
@@ -3466,18 +4710,62 @@ void cook_failed(const fs::path& overlay) {
     while (!why.empty() && (why.back() == '\n' || why.back() == '\r')) why.pop_back();
     log_line("mods:", why.empty() ? "the mods' files could not be cooked: the game runs without them"
                                   : ("the mods' files could not be cooked: the game runs without them: " + why).c_str());
+    // Its refusals are why: they reach the mod log as an attached cook's do (the cooker writes the file either way).
+    gCookFacts = overlay;
+    gCookFacts.replace_extension("facts");
+}
+
+// The cooker this build runs, by its file's size and time: another cooker (a new build, with its own applier and
+// cooks) cooks the mods again. "none" when it is not found; the cook then fails and says so.
+std::string cooker_identity() {
+#if defined(_WIN32)
+    const fs::path cooker = fs::path(::galaxy::windows::executable_path()).parent_path() / "nebula-import.exe";
+#else
+    fs::path cooker;
+    if (void* const library = dlopen("libnebula_import.so", RTLD_NOW | RTLD_LOCAL)) {
+        Dl_info info{};
+        if (void* const cook = dlsym(library, "nebula_cook_overlay"); cook != nullptr && dladdr(cook, &info) != 0 && info.dli_fname != nullptr) {
+            cooker = fs::path(info.dli_fname);
+        }
+    }
+#endif
+    std::error_code error;
+    const auto size = fs::file_size(cooker, error);
+    if (error) return "cooker none\n";
+    const auto time = fs::last_write_time(cooker, error).time_since_epoch().count();
+    return "cooker " + std::to_string(size) + " " + std::to_string(static_cast<long long>(time)) + "\n";
 }
 
 void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_folder, const std::string& game_id) {
-    if (plan.files.empty() && plan.merges.empty()) {
+    // A mod of texture pack pictures alone is cooked too: the cooker reads each picture as the pack reader does.
+    if (plan.files.empty() && plan.merges.empty() && plan.patches.empty() && plan.textures.empty()) {
         return;
+    }
+    // Each plan line that can make a cook fact, by the paths that fact names (its store path, or the mod's file as the
+    // plan writes it), with its mod: a merge by its own file, as two mods' merges add to one game file.
+    gCookOwners.clear();
+    for (const galaxy::mods::ModPlan::File& file : plan.files) {
+        if (!file.mod_id.empty()) gCookOwners.emplace_back(file.disc, file.mod_id);
+    }
+    for (const galaxy::mods::ModPlan::File& merge : plan.merges) {
+        if (!merge.mod_id.empty()) gCookOwners.emplace_back(galaxy::path_text(merge.host), merge.mod_id);
+    }
+    for (const galaxy::mods::ModPlan::Patch& patch : plan.patches) {
+        if (!patch.mod_id.empty()) gCookOwners.emplace_back(galaxy::path_text(patch.host), patch.mod_id);
+    }
+    for (const galaxy::mods::ModPlan::Patch& texture : plan.textures) {
+        if (!texture.mod_id.empty()) gCookOwners.emplace_back(galaxy::path_text(texture.host), texture.mod_id);
     }
     const fs::path folder = settings_folder / "mods" / ".cooked";
     const fs::path overlay = folder / "mods.pak";
     const fs::path signature_file = folder / "mods.signature";
-    // Another build's shader interface or shader compiler means their shaders are built again.
-    const std::string signature = galaxy::mods::plan_signature(plan, game_id) + galaxy::render::program_interface() + " " +
-                                  std::to_string(galaxy::render::mod_shader_compiler_revision()) + "\n";
+    // Another build's shader interface or shader compiler means their shaders are built again; another cooker, that
+    // the mods are cooked again (table-keys.md 9: cached by the mod list, the game and the applier).
+    const auto signature_of = [game_id](const galaxy::mods::ModPlan& planned) {
+        return galaxy::mods::plan_signature(planned, game_id) + galaxy::render::program_interface() + " " +
+               std::to_string(galaxy::render::mod_shader_compiler_revision()) + "\n" + cooker_identity();
+    };
+    const std::string signature = signature_of(plan);
     std::error_code error;
     fs::create_directories(folder, error);
     std::string kept;
@@ -3486,7 +4774,7 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
         kept.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     }
     if (kept != signature || !fs::is_regular_file(overlay, error)) {
-        const auto cook_now = [plan, folder, overlay, signature_file, signature, game_id]() -> bool {
+        const auto cook_now = [folder, overlay, signature_file, game_id](const galaxy::mods::ModPlan& plan, const std::string& signature) -> bool {
         const fs::path plan_file = folder / "mods.plan";
         if (!galaxy::io::write_file_atomically(plan_file, galaxy::mods::plan_text(plan, game_id))) {
             log_line("mods:", "the plan could not be written");
@@ -3498,12 +4786,11 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
         const fs::path cooker = fs::path(::galaxy::windows::executable_path()).parent_path() / "nebula-import.exe";
         std::wstring command = L"\"" + cooker.wstring() + L"\" overlay \"" + plan_file.wstring() + L"\" --output \"" +
                                overlay.wstring() + L"\"";
-        STARTUPINFOW startup{};
-        startup.cb = sizeof(startup);
         PROCESS_INFORMATION process{};
         DWORD exit_code = 1;
-        if (CreateProcessW(cooker.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr,
-                           &startup, &process)) {
+        // It ends with the game however the game ends (windows_child.h); a start-again comes only after it ended.
+        ::galaxy::windows::child_note().store([](const char* text) { log_line("mods:", text); });
+        if (::galaxy::windows::start_child(cooker.c_str(), command, CREATE_NO_WINDOW, process) != ::galaxy::windows::ChildStart::NotStarted) {
             WaitForSingleObject(process.hProcess, INFINITE);
             GetExitCodeProcess(process.hProcess, &exit_code);
             CloseHandle(process.hThread);
@@ -3512,6 +4799,12 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
             log_line("mods:", "the cooker (nebula-import) could not start");
         }
         if (exit_code != 0u) {
+            cook_failed(overlay);
+            return false;
+        }
+#elif defined(__APPLE__)
+        // The importer is linked into the program (platform/apple/metal.cmake).
+        if (nebula_cook_overlay(utf8_of(plan_file).c_str(), utf8_of(overlay).c_str()) != 0) {
             cook_failed(overlay);
             return false;
         }
@@ -3533,6 +4826,17 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
             std::string line;
             while (std::getline(lines, line)) {
                 log_line("mods: left out:", line.c_str());
+            }
+        }
+        // What the patches by key did that a player must hear of (table-keys: conflicts, rows not there, selectors'
+        // counts, patches left out), one fact a line, for the log here and the Mods screen.
+        {
+            fs::path facts = overlay;
+            facts.replace_extension("facts");
+            std::ifstream lines(facts);
+            std::string line;
+            while (std::getline(lines, line)) {
+                log_line("mods: patch:", line.c_str());
             }
         }
         {
@@ -3568,14 +4872,40 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
         };
 #if defined(NEBULA_HOST_RENDERER)
         // The game's own screen while they cook; then it starts again with them, so that they are there from its first file.
-        // A hidden test run cooks first, as its measurements start from the game with its mods.
-        if (!::galaxy::launch_args().started_hidden || (galaxy::extensions::flags() & NEBULA_EXT_MODS_SCREEN) != 0u) {
+        // A hidden test run cooks first, as its measurements start from the game with its mods. So does a start that is
+        // itself the start-again for a mod's code layers: a second start-again for the same layers is never made.
+        if ((!::galaxy::launch_args().started_hidden || (galaxy::extensions::flags() & NEBULA_EXT_MODS_SCREEN) != 0u) &&
+            !gStartedAgainForLayers) {
             gModsProgressFile = overlay;
             gModsProgressFile.replace_extension("progress");
             gModsPreparing.store(2u, std::memory_order_release);
             log_line("mods:", "preparing their files");
-            std::thread([cook_now]() {
-                if (cook_now()) {
+            // A mod whose code chooses layers: this cook waits for that answer (svc_mods_start, the game thread) and
+            // is planned with it when it changed, so the start-again that follows has the chosen layers.
+            const bool waits = std::any_of(plan.plugins.begin(), plan.plugins.end(),
+                                           [](const galaxy::mods::PluginFile& plugin) { return !plugin.code_layers.empty(); });
+            if (waits) {
+                const std::lock_guard<std::mutex> lock(gLayersMutex);
+                gLayersWait = true;
+            }
+            std::thread([cook_now, signature_of, plan, signature, waits]() {
+                galaxy::mods::ModPlan used = plan;
+                std::string used_signature = signature;
+                bool chosen = false;
+                if (waits) {
+                    std::unique_lock<std::mutex> lock(gLayersMutex);
+                    if (!gLayersAnswered.wait_for(lock, std::chrono::minutes(2), [] { return gLayersAnswer; })) {
+                        log_line("mods:", "the mods' code gave no layers in time: the files are prepared with the layers they had");
+                    } else if (gLayersPlan) {
+                        used = std::move(*gLayersPlan);
+                        gLayersPlan.reset();
+                        chosen = true;
+                    }
+                }
+                if (chosen) used_signature = signature_of(used);
+                if (cook_now(used, used_signature)) {
+                    // Planned with this start's answer: the next start does not start again for layers.
+                    if (chosen) std::ofstream(galaxy::mods::code_layers_restart_file(), std::ios::binary) << "layers\n";
                     finish_and_exit(true);
                 }
                 gModsPreparing.store(0u, std::memory_order_release);
@@ -3583,13 +4913,16 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
             return;
         }
 #endif
-        if (!cook_now()) {
+        if (!cook_now(plan, signature)) {
             return;
         }
     }
     if (gPak.store.attach_overlay(overlay)) {
+        gCookFacts = overlay;
+        gCookFacts.replace_extension("facts");
         char text[96];
-        std::snprintf(text, sizeof(text), "%zu files and %zu table or file merges applied", plan.files.size(), plan.merges.size());
+        std::snprintf(text, sizeof(text), "%zu files, %zu table or file merges and %zu patches by key applied", plan.files.size(),
+                      plan.merges.size(), plan.patches.size());
         log_line("mods:", text);
     } else {
         log_line("mods:", "the mods' files could not be read: the game runs without them");
@@ -3599,16 +4932,16 @@ void cook_mod_files(const galaxy::mods::ModPlan& plan, const fs::path& settings_
 // The game id from Setup's game.pak, read without mapping it; false (and nothing changed) for a file that is not one:
 // the tools then work without it.
 bool read_game_id(const fs::path& path, std::string& id) {
-    std::ifstream file(path, std::ios::binary);
-    char header[64];
-    if (!file.read(header, sizeof(header)) || std::memcmp(header, galaxy::assets::kStoreMagic, 8) != 0) return false;
-    id.assign(header + 48, 6);
+    std::string found = galaxy::assets::store_game_id(path);
+    if (found.empty()) return false;
+    id = std::move(found);
     return true;
 }
 
-// The launcher's mod tools: NebulaNative --import-mod <folder or archive>..., --remove-mod <id> or --list-mods
-// [--game <id>] [--pak <game.pak>], on the mods folder beside the settings (as the game uses it). One JSON line on
-// stdout; exit code 0 when everything succeeded.
+// The launcher's mod tools: Nebula --import-mod <folder or archive>..., --remove-mod <id> or --list-mods
+// [--game <id>] [--pak <game.pak>] [--data, --settings or --crash-dumps <folder>], on the mods folder beside the
+// settings (as the game uses it; the folder options read_launch_args took). One JSON line on stdout; exit code 0 when
+// everything succeeded.
 int run_mods_tool() {
     std::vector<fs::path> args;
 #if defined(_WIN32)
@@ -3620,6 +4953,7 @@ int run_mods_tool() {
 #endif
     std::string game_id = "RMGE01";
     std::vector<fs::path> sources;
+    fs::path pak;
     const bool list = !args.empty() && args[0] == "--list-mods";
     const bool remove = !args.empty() && args[0] == "--remove-mod";
     for (std::size_t i = 1; i < args.size(); ++i) {
@@ -3627,9 +4961,12 @@ int run_mods_tool() {
             game_id = utf8_of(args[++i]);
         } else if (args[i] == "--pak" && i + 1u < args.size()) {
             std::string id;
-            if (read_game_id(args[++i], id)) {
+            pak = args[++i];
+            if (read_game_id(pak, id)) {
                 game_id = id;
             }
+        } else if (is_tool_folder_option(utf8_of(args[i])) && i + 1u < args.size()) {
+            ++i;  // read_launch_args took it: not a mod to import
         } else {
             sources.push_back(args[i]);
         }
@@ -3642,6 +4979,12 @@ int run_mods_tool() {
     std::error_code error;
     fs::create_directories(settings_folder / "mods", error);
     galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
+    // The import's check reads the game's own files, as the game's does (a store that does not open: unchecked).
+    galaxy::assets::AssetStore store;
+    struct Unset {
+        ~Unset() { galaxy::modlog::set_check_store(nullptr); }
+    } unset;
+    if (!pak.empty() && store.open(pak)) galaxy::modlog::set_check_store(&store);
     if (remove) {
         std::string message;
         const bool ok = !sources.empty() &&
@@ -3650,9 +4993,14 @@ int run_mods_tool() {
         return ok ? 0 : 1;
     }
     if (list) {
+        // A library that comes with the game (LumaKit) is part of it: left out, as the game's Mods page leaves it out.
+        fs::path shipped = ::galaxy::launch_args().shipped_mods;
+        if (shipped.empty() && !galaxy::program_directory().empty()) shipped = galaxy::program_directory() / "luma" / "mods";
+        galaxy::mods::note_shipped_mods(shipped, settings_folder / "mods");
         std::string out = "{\"ok\":true,\"folder\":" + json_text(utf8_of(settings_folder / "mods")) + ",\"mods\":[";
         bool first = true;
         for (const galaxy::mods::ModInfo& mod : galaxy::mods::scan_mods(game_id)) {
+            if (galaxy::mods::built_in(mod)) continue;
             out += first ? "{" : ",{";
             first = false;
             out += "\"id\":" + json_text(mod.id) + ",\"enabled\":" + (mod.enabled ? "true" : "false") +
@@ -3690,15 +5038,35 @@ int run_mods_tool() {
         return 0;
     }
     int failed = 0;
-    std::string out = "{\"results\":[";
+    std::string out = "{\"folder\":" + json_text(utf8_of(settings_folder / "mods")) + ",\"results\":[";
+    // The same check as the game's own imports (validator.md 2 "at import"): against the packages placed now.
+    const galaxy::mods::ImportCheck check = [](const fs::path& staged, const std::string& id, galaxy::mods::ImportResult& result) {
+        std::vector<galaxy::modlog::StartPackage> others;
+        for (const galaxy::mods::ModInfo& mod : galaxy::mods::scan_mods()) {
+            if (mod.package && mod.id != id) others.push_back({mod.id, mod.path, mod.enabled});
+        }
+        const galaxy::modlog::ImportCheck found = galaxy::modlog::check_import(staged, others);
+        result.checked = found.ran;
+        result.refused = found.refused;
+        for (const galaxy::modlog::ImportFinding& f : found.findings) {
+            result.findings.push_back({f.error, f.code, f.file, f.text, f.line, f.column});
+        }
+        return !found.refused;
+    };
     for (std::size_t i = 0; i < sources.size(); ++i) {
-        const galaxy::mods::ImportResult result = galaxy::mods::import_mod(sources[i], settings_folder / "mods");
+        const galaxy::mods::ImportResult result = galaxy::mods::import_mod(sources[i], settings_folder / "mods", {}, nullptr, check);
         failed += result.ok ? 0 : 1;
+        std::string findings;
+        for (const galaxy::mods::ImportResult::Finding& f : result.findings) {
+            findings += std::string(findings.empty() ? "" : ",") + "{\"code\":" + std::to_string(f.code) + ",\"error\":" +
+                        (f.error ? "true" : "false") + ",\"file\":" + json_text(f.file) + ",\"text\":" + json_text(f.text) + "}";
+        }
         out += std::string(i ? "," : "") + "{\"ok\":" + (result.ok ? "true" : "false") + ",\"id\":" + json_text(result.id) +
                ",\"replaced\":" + (result.replaced ? "true" : "false") +
                ",\"already\":" + (result.already ? "true" : "false") + ",\"title\":" + json_text(result.title) + ",\"files\":" + std::to_string(result.files) +
                ",\"bytes\":" + std::to_string(result.bytes) + ",\"kinds\":" + json_text(result.kinds) +
-               ",\"message\":" + json_text(result.message) + "}";
+               ",\"message\":" + json_text(result.message) + ",\"checked\":" + (result.checked ? "true" : "false") +
+               ",\"refused\":" + (result.refused ? "true" : "false") + ",\"findings\":[" + findings + "]}";
     }
     out += "],\"ok\":" + std::string(failed == 0 && !sources.empty() ? "true" : "false") + "}";
     std::printf("%s\n", out.c_str());
@@ -3710,7 +5078,7 @@ int run_mods_tool() {
 
 namespace {
 
-// The command line's launch arguments (launch_args.h, docs/COMMAND_LINE.md), before anything reads them. Paths come
+// The command line's launch arguments (launch_args.h, docs/using-nebula/command-line-arguments.md), before anything reads them. Paths come
 // from the UTF-16 command line on Windows: argv is in the system's code page, which cannot hold every folder name.
 void read_launch_args(int argc, char** argv) {
     galaxy::LaunchArgs& args = galaxy::g_launch_args;
@@ -3726,7 +5094,24 @@ void read_launch_args(int argc, char** argv) {
 #endif
         return fs::path(argv[index]);
     };
-    for (int i = 1; i + 1 < argc; i += 2) {
+    // A mods tool (--import-mod a.luma b.luma --pak P --data D) has its own words between the options, so only its
+    // folder options are read, wherever they are (LumaLink's `run` names the data folder it found); a start's
+    // arguments are pairs.
+    if (argc >= 2 && is_mods_tool(argv[1])) {
+        for (int i = 2; i + 1 < argc; ++i) {
+            const std::string_view key = argv[i];
+            if (key == "--data") {
+                args.data = path_at(++i);
+            } else if (key == "--settings") {
+                args.settings = path_at(++i);
+            } else if (key == "--crash-dumps") {
+                args.crash_dumps = path_at(++i);
+            } else if (key == "--shipped-mods") {
+                args.shipped_mods = path_at(++i);
+            }
+        }
+    }
+    for (int i = 1; i + 1 < argc && !(argc >= 2 && is_mods_tool(argv[1])); i += 2) {
         const std::string_view key = argv[i];
         if (key == "--data") {
             args.data = path_at(i + 1);
@@ -3740,17 +5125,42 @@ void read_launch_args(int argc, char** argv) {
             args.console_log = argv[i + 1][0] == '1';
         } else if (key == "--gpu-start-retry") {
             args.gpu_start_retry = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
+        } else if (key == "--started-again") {
+            args.started_again = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
+        } else if (key == "--start-again-of") {
+            args.start_again_of = argv[i + 1];
+        } else if (key == "--hidden") {
+            args.started_hidden = argv[i + 1][0] == '1';  // Windows reads its start's window instead, below
+        } else if (key == "--renderer") {
+            const std::string_view api = argv[i + 1];
+            args.renderer = api == "d3d12" ? 1u : api == "d3d11" ? 2u : 0u;
         } else if (key == "--timeline") {
             args.timeline = path_at(i + 1);
-        } else if (key == "--dump-tunables") {
-            args.dump_tunables = path_at(i + 1);
         } else if (key == "--extension") {
             args.extensions.push_back(path_at(i + 1));
+        } else if (key == "--import") {
+            args.imports.push_back(path_at(i + 1));
+        } else if (key == "--safe-start") {
+            args.safe_start = argv[i + 1][0] == '1';
+        } else if (key == "--shipped-mods") {
+            args.shipped_mods = path_at(i + 1);
+        } else if (key == "--gpu-driver") {
+            args.gpu_driver = path_at(i + 1);
+        } else if (key == "--gpu-driver-library") {
+            args.gpu_driver_library = argv[i + 1];
+        } else if (key == "--gpu-driver-hooks") {
+            args.gpu_driver_hooks = path_at(i + 1);
+        } else if (key == "--mod-dev") {
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
+            args.mod_dev.emplace_back(argv[i + 1]);  // desktop only: no dev mode on a phone or tablet
+#endif
+        } else if (key == "--seconds") {
+            args.timed = std::atof(argv[i + 1]) > 0.0;
         } else if (key == "--diagnostics") {
             std::string_view unknown;
             unsigned what = 0u;
             if (!galaxy::diagnostics_from_text(argv[i + 1], what, unknown)) {
-                die("--diagnostics: no diagnostic is named %.*s (docs/DIAGNOSTICS.md)", static_cast<int>(unknown.size()), unknown.data());
+                die("--diagnostics: no diagnostic is named %.*s (docs/using-nebula/diagnostics.md)", static_cast<int>(unknown.size()), unknown.data());
             }
             args.diagnostics |= what;
         }
@@ -3769,6 +5179,16 @@ void read_launch_args(int argc, char** argv) {
 }  // namespace
 
 int main(int argc, char** argv) {
+#if !defined(_WIN32)
+    gArgv = argv;
+    galaxy::luma_guard::set_crash_line(crash_line_from_signal);
+#endif
+#if defined(_WIN32)
+    // The crash watcher's own run (crash_watch.h): before anything of the game's.
+    if (argc >= 4 && std::strcmp(argv[1], galaxy::crash_watch::kSwitch) == 0) {
+        return galaxy::crash_watch::run(argc, argv);
+    }
+#endif
 #if defined(NEBULA_HOST_APPLE)
     // An app has no command line: the app's own layout names the game, the saves and the module.
     galaxy::apple::launch_arguments(argc, argv);
@@ -3780,6 +5200,13 @@ int main(int argc, char** argv) {
     }
 #endif
     read_launch_args(argc, argv);
+    galaxy::mods::set_dev_mods(::galaxy::launch_args().mod_dev);
+#if defined(NEBULA_DIAG_REPORTS)
+    // The diagnostics report modes (--send-report and the rest): files and one HTTPS POST, nothing else, then exit.
+    if (const int code = galaxy::diag::run_command_line(argc, argv); code >= 0) {
+        return code;
+    }
+#endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     // A tool's hidden start keeps off the player's data (hidden_start.h), before anything is written.
     {
@@ -3796,11 +5223,23 @@ int main(int argc, char** argv) {
             return 2;
         }
     }
+#elif defined(NEBULA_HOST_SDL) && !defined(__ANDROID__) && !defined(NEBULA_HOST_APPLE)
+    // The same on Linux and macOS, over main's own arguments.
+    if (const char* const error = galaxy::host::hidden_start_error(::galaxy::launch_args().started_hidden, argc, argv)) {
+        std::fprintf(stderr, "[hidden-start] %s\n", error);
+        return 2;
+    }
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     if (argc >= 3 && std::strcmp(argv[1], "--crash-report") == 0) {
         return show_crash_report_dialog();
     }
+    // Asked for Direct3D 11: its program runs in this one's place before this one takes anything (hand_off_to_d3d11).
+#if defined(_M_X64) && defined(NEBULA_HOST_D3D12)
+    if (::galaxy::launch_args().renderer == 2u) {
+        hand_off_to_d3d11("--renderer d3d11");
+    }
+#endif
     if (one_game_at_a_time()) {
         return 0;
     }
@@ -3847,16 +5286,13 @@ int main(int argc, char** argv) {
     install_crash_reporter();
 #endif
 #if defined(NEBULA_HOST_RENDERER)
-    if (argc >= 2 && (std::strcmp(argv[1], "--import-mod") == 0 || std::strcmp(argv[1], "--list-mods") == 0 ||
-                      std::strcmp(argv[1], "--remove-mod") == 0)) {
+    if (argc >= 2 && is_mods_tool(argv[1])) {
         return run_mods_tool();
     }
 #endif
     if (::galaxy::launch_args().started_hidden) {
         log_line("host:", "started hidden");
     }
-    attach_extensions();
-    boot_mark("main");
     fs::path pak, saves, module;
     // A path in the command line: argv is in the system's code page, which cannot hold every folder name.
     const auto arg_path = [&](int index) {
@@ -3870,7 +5306,64 @@ int main(int argc, char** argv) {
 #endif
         return fs::path(argv[index]);
     };
+    // The module beside the program for this CPU (default_module_path: x86-64-v2\ on a CPU without x86-64-v3).
+    const auto default_module = [&] {
+#if defined(_WIN32)
+        return default_module_path(arg_path(0).parent_path());
+#else
+        return default_module_path(fs::path(argv[0]).parent_path());
+#endif
+    };
+    // --luma-describe <file> [--module <path>]: the module's type rows as JSON (docs/modding/reference/lumascript/the-game-by-name.md),
+    // compared by the build with the generator's (tools/lumacore/compare_types.py). --luma-services <file> [--module
+    // <path>]: the services catalog as JSON (luma_service_provider.h luma_services_describe), the names folder's
+    // luma_services.json. No disc; the module is attached with its heap, log and fatal errors (to stderr) only, as its
+    // malloc is the host's and its constructors run at attach.
+    const bool describe_services = argc >= 2 && std::strcmp(argv[1], "--luma-services") == 0;
+    if (argc >= 2 && (describe_services || std::strcmp(argv[1], "--luma-describe") == 0)) {
+        // Exactly `<file>` or `<file> --module <path>`: anything else is said, never ignored (A-LD1).
+        if (!(argc == 3 || (argc == 5 && std::strcmp(argv[3], "--module") == 0))) {
+            die("usage: %s <file> [--module <path>] (docs/using-nebula/command-line-arguments.md)", argv[1]);
+        }
+        const fs::path out = arg_path(2);
+        const fs::path from = argc == 5 ? arg_path(4) : default_module();
+        load_module(from);
+        static NebulaHostServices bare{};
+        bare.version = NEBULA_GAME_API_VERSION;
+        bare.size = sizeof(bare);
+        bare.log = [](void*, const char* text) { std::fprintf(stderr, "%s\n", text); };
+        bare.fatal = [](void*, const char* text) {
+            std::fprintf(stderr, "luma-describe: the game module stopped: %s\n", text);
+            std::fflush(stderr);
+            std::_Exit(3);
+        };
+        bare.heap_alloc = [](void*, size_t size) -> void* { return std::malloc(size); };
+        bare.heap_realloc = [](void*, void* data, size_t size) -> void* { return std::realloc(data, size); };
+        bare.heap_free = [](void*, void* data) { std::free(data); };
+        if (gModule.attach(&bare) != NEBULA_GAME_API_VERSION) {
+            die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
+        }
+        // Both exports take the same writer: (user, text, length), the pieces in order.
+        using DescribeFn = void (*)(void (*)(void*, const char*, uint32_t), void*);
+        const auto describe = reinterpret_cast<DescribeFn>(
+            find_symbol(gModule.module, describe_services ? "luma_services_describe" : "nebula_game_luma_describe"));
+        std::ofstream file(out, std::ios::binary | std::ios::trunc);
+        describe([](void* user, const char* text, uint32_t length) { static_cast<std::ofstream*>(user)->write(text, length); },
+                 &file);
+        file.close();
+        if (!file) {
+            std::fprintf(stderr, "%s: %s could not be written\n", argv[1] + 2, utf8_of(out).c_str());
+            return 2;
+        }
+        return 0;
+    }
+    attach_extensions();
+    boot_mark("main");
     double seconds = 0;
+    [[maybe_unused]] bool benchmark = false;  // --benchmark 1: benchmark.h's run, then exit
+    [[maybe_unused]] bool benchmark_return = false;  // --benchmark-return 1: then the home screen again
+    fs::path benchmark_out, benchmark_result;
+    [[maybe_unused]] int home = -1;  // --home: the launcher's home screen at the title's hold; -1 the platform's default
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i];
         if (key == "--pak") {
@@ -3881,30 +5374,93 @@ int main(int argc, char** argv) {
             module = arg_path(i + 1);
         } else if (key == "--diagnostics" || key == "--timeline" || key == "--data" || key == "--settings" ||
                    key == "--crash-dumps" || key == "--gpu-validation" || key == "--console-log" ||
-                   key == "--gpu-start-retry" || key == "--dump-tunables" || key == "--extension") {
+                   key == "--gpu-start-retry" || key == "--extension" || key == "--import" ||
+                   key == "--safe-start" || key == "--shipped-mods" || key == "--mod-dev" || key == "--renderer" || key == "--started-again" ||
+                   key == "--start-again-of" || key == "--hidden" || key == "--gpu-driver" || key == "--gpu-driver-library" ||
+                   key == "--gpu-driver-hooks") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
+        } else if (key == "--home") {
+            home = std::atoi(argv[i + 1]) != 0 ? 1 : 0;
+        } else if (key == "--benchmark") {
+            benchmark = std::atoi(argv[i + 1]) != 0;
+        } else if (key == "--benchmark-out") {
+            benchmark_out = arg_path(i + 1);
+        } else if (key == "--benchmark-return") {
+            benchmark_return = std::atoi(argv[i + 1]) != 0;
+        } else if (key == "--benchmark-result") {
+            benchmark_result = arg_path(i + 1);
         } else {
             die("unknown option %s", key.c_str());
         }
     }
-    if (pak.empty() || saves.empty()) {
-        die("usage: nebula_native_host --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/COMMAND_LINE.md)");
+#if defined(NEBULA_HOST_RENDERER)
+    if (benchmark) {
+        // No save folder: the game's saves stay in memory. Straight to the title, no time limit (it quits when done).
+        saves.clear();
+        home = 0;
+        seconds = 0;
+        galaxy::bench::start({pak.parent_path(), benchmark_out, benchmark_return});
+    }
+#endif
+    if (pak.empty() || (saves.empty() && !benchmark)) {
+        die("usage: nebula_native_host --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N] (docs/using-nebula/command-line-arguments.md)");
     }
     if (module.empty()) {
-#if defined(_WIN32)
-        module = arg_path(0).parent_path() / "smg_game.dll";
-#elif defined(__APPLE__)
-        module = fs::path(argv[0]).parent_path() / "libsmg_game.dylib";
-#else
-        module = fs::path(argv[0]).parent_path() / "libsmg_game.so";
-#endif
+        module = default_module();
     }
     gSaveRoot = saves;
     std::error_code error;
     if (!open_pak(pak)) return 2;
+    galaxy::luma_assets::set_store(&gPak.store);  // the assets service reads it (services/assets.md)
+    galaxy::luma_audio::set_store(&gPak.store);   // and the audio service a mod's cooked sounds (services/audio.md)
+    galaxy::modlog::set_check_store(&gPak.store);  // and the validator, at the start's check and at import
     boot_mark("disc opened");
+    {
+        // Two modules (game_module.h): the plain one unless a mod's code needs the rows. --module names the
+        // rows module; the plain one is beside it. Updates imported while a mod was in use land first, as below.
+        // A headless host (no NEBULA_HOST_RENDERER) is the test host: no settings folder, no player's mods, and the
+        // harness's extensions hook and call by name, so it keeps the module --module names (the rows one).
+#if defined(_WIN32)
+        wait_for_hand_over();  // a start-again: nothing reads or writes the mods folder before the old one lets go of it
+#endif
+#if defined(NEBULA_HOST_RENDERER)
+        fs::path mods_folder;
+        const fs::path settings_folder = galaxy::runtime_settings_folder();
+        if (!settings_folder.empty()) {
+            fs::create_directories(settings_folder / "mods", error);
+            galaxy::mods::apply_pending_updates(settings_folder / "mods");
+            mods_folder = settings_folder / "mods";
+        }
+        // The safe start is taken before the choice (and read again at the mods below): with every mod off no mod's
+        // code starts, so the plain module loads; the harness's own game half stays on and keeps the rows.
+        bool safe = false;
+        if (!mods_folder.empty()) {
+            galaxy::mods::set_mods_folder(mods_folder, settings_folder / "mods.ini", std::string(gPak.store.game_id()));
+            // The mods that come with the game (LumaKit), installed or brought up to date before anything reads the
+            // mods. A library among them loads only while a mod that is on needs it.
+            fs::path shipped = ::galaxy::launch_args().shipped_mods;
+            if (shipped.empty() && !galaxy::program_directory().empty()) shipped = galaxy::program_directory() / "luma" / "mods";
+            for (const galaxy::mods::ShippedMod& mod : galaxy::mods::install_shipped_mods(shipped, mods_folder)) {
+                const std::string said = mod.ok ? mod.id + " " + mod.version + " installed from " + mod.file
+                                                : mod.file + " was not installed: " + mod.message;
+                log_line("mods:", said.c_str());
+            }
+            safe = galaxy::mods::take_safe_start(safe_start_asked()) != galaxy::mods::SafeStart::kNo;
+        }
+        std::string why;
+        const fs::path rows_module = module;
+        module = galaxy::game_module::choose(rows_module, mods_folder, settings_folder / "mods.ini", std::string(gPak.store.game_id()),
+                                             false, safe, is_harness_half("luma-test") ? "luma-test" : "", &why);
+        galaxy::game_module::set_plain_loaded(module != rows_module);
+        log_line("game module:", why.c_str());
+#else
+        galaxy::game_module::set_plain_loaded(false);
+        log_line("game module:", "rows (headless test host)");
+#endif
+        boot_mark("game module chosen");
+    }
     load_module(module);
     boot_mark("game module loaded");
 #if defined(NEBULA_HOST_RENDERER)
@@ -3912,7 +5468,7 @@ int main(int argc, char** argv) {
 #if defined(_WIN32)
     hold_runtime_lease();
 #endif
-    {
+    if (!galaxy::bench::running()) {  // a benchmark's game has no Miis: their library is in the save folder
         // Mii import: the files in the import folder (next to the settings: any Mii files, mii_formats.h)
         // join the library before the game reads it; the settings import more while it runs.
         const fs::path settings_folder = galaxy::runtime_settings_folder();
@@ -3948,7 +5504,8 @@ int main(int argc, char** argv) {
         const galaxy::saves::SaveFolders save_folders = galaxy::saves::save_folders(std::string_view(gPak.id, 4));
         gOldSaveDataPath = save_folders.earlier;
         gSaveDataPath = save_folders.current;
-        fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
+        if (!gSaveRoot.empty()) fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
+        galaxy::luma_mods::set_save_half({kept_save_ids, kept_save_bytes, forget_save});
         if (!settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);
             // Updates imported while their mod's folder was in use take its place before anything reads the mods.
@@ -3969,6 +5526,21 @@ int main(int argc, char** argv) {
             const unsigned scanned_in = played();
             galaxy::mods::set_played_language(scanned_in);
             std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods(game_id);
+            // Safe start: every mod off for this start only (the copy planned; mods.ini stays the player's).
+            if (const galaxy::mods::SafeStart safe = galaxy::mods::take_safe_start(safe_start_asked());
+                safe != galaxy::mods::SafeStart::kNo) {
+                log_line("mods:", safe == galaxy::mods::SafeStart::kAsked
+                                      ? "safe start: every mod is off for this start"
+                                      : "safe start: the last run crashed with mods on; every mod is off for this start");
+                // The harness's own game half stays on (is_harness_half).
+                for (galaxy::mods::ModInfo& mod : mods) {
+                    if (!is_harness_half(mod.id)) mod.enabled = false;
+                }
+            } else if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
+                // A crash from here on (the cook, the packs, the game) makes the next start safe; svc_mods_start
+                // narrows it to the code when code is on.
+                gCodeCrashFile = galaxy::mods::safe_start_file();
+            }
             bool added_language = false;
             for (const galaxy::mods::ModInfo& mod : mods) {
                 if (!mod.enabled) continue;
@@ -4062,6 +5634,10 @@ int main(int argc, char** argv) {
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
     services.galaxy_select_name = svc_galaxy_select_name;
     services.take_pause_request = svc_take_pause_request;
+    services.post_register = svc_post_register;
+    services.post_free = svc_post_free;
+    // A mod's request screen pauses the game as Start does (services/mods.md 9, services/save.md 8).
+    galaxy::mods::set_screen_pause([] { gPauseRequest.store(true, std::memory_order_release); });
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
     services.texture_hd = svc_texture_hd;
     services.model_register = svc_model_register;
@@ -4139,6 +5715,11 @@ int main(int argc, char** argv) {
         if (retry_start_for_gpu_memory(reason)) {
             finish_and_exit(true);
         }
+#if defined(_WIN32) && defined(_M_X64) && defined(NEBULA_HOST_D3D12)
+        if (::galaxy::launch_args().renderer != 1u && reason.rfind("No hardware D3D12 adapter", 0) == 0u) {
+            start_again_on_d3d11(reason.c_str());
+        }
+#endif
         die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
     boot_mark("renderer started");
@@ -4167,8 +5748,44 @@ int main(int argc, char** argv) {
         [](std::uint64_t after) noexcept { return galaxy::render::poll_host_pointer_transition(after); });
     galaxy::host::install_native_keyboard_capture_provider([]() noexcept { return galaxy::render::native_window_input_captured(); });
     galaxy::host::install_native_settings_pad_hooks(
-        []() noexcept { return galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible(); },
+        []() noexcept {
+            return galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
+                galaxy::ui::launcher_visible();
+        },
         [](std::uintptr_t key) noexcept { galaxy::render::native_settings_post_key(key); });
+#if defined(__APPLE__) || (defined(__linux__) && !defined(__ANDROID__))
+    constexpr bool kHomeByDefault = true;  // no launcher app: the home screen is where a start begins
+#else
+    constexpr bool kHomeByDefault = false;  // the Windows and Android launcher apps are the home screen there
+#endif
+    // Tests (a hidden start, a timed run) start straight into the game unless they ask for it.
+#if defined(_WIN32) || defined(NEBULA_HOST_START_AGAIN)
+    galaxy::ui::launcher_offer_benchmark(true);
+#else
+    galaxy::ui::launcher_offer_benchmark(false);  // no start again here (iOS, Android): no Benchmark row
+#endif
+    if (!benchmark && !benchmark_result.empty()) {
+        // The benchmark the home screen started: its recommendation as the settings menu's draft when it opens.
+        galaxy::render::RenderConfig draft = galaxy::render::get_render_config_chosen();
+        if (galaxy::bench::read_recommendation(benchmark_result, draft)) {
+            galaxy::ui::launcher_show_draft(draft);
+        } else {
+            galaxy::ui::launcher_offer_message();  // it did not finish, or measured nothing usable
+        }
+#if defined(NEBULA_HOST_START_AGAIN) && defined(NEBULA_DIAG_REPORTS)
+        if (upload_offered(benchmark_result)) {
+            gUploadFile = benchmark_result;
+            galaxy::ui::launcher_offer_upload(upload_answer);
+        }
+#endif
+    }
+    const bool home_screen =
+        home >= 0 ? home == 1 : kHomeByDefault && !::galaxy::launch_args().started_hidden && seconds <= 0;
+    galaxy::ui::launcher_enable(home_screen);
+#if defined(NEBULA_UPDATE_CHECK)
+    // The home screen's update notice (update.h): the check runs while the game boots, its answer when the screen opens.
+    if (home_screen && !benchmark) galaxy::update::begin(NEBULA_VERSION);
+#endif
 #endif
     if (gModule.attach(&services) != NEBULA_GAME_API_VERSION) {
         die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
@@ -4219,15 +5836,27 @@ int main(int argc, char** argv) {
     bool first_frame = false;
     uint32_t reported = 0;
     auto next_report = Clock::now() + std::chrono::seconds(1);
+#if defined(_WIN32)
+    // A test run's stall: the game made no frame for kStall while in sight. Once per run, every thread's stack is
+    // dumped from outside (crash_watch, nebula-hang-*.dmp beside the crash dumps), for d/tools/read_dump.py; the run
+    // goes on, and the runner fails it for the stall. Test runs only (an extension loaded): a player's long stop (a
+    // debugger, a sleeping laptop) is not a fault worth a file.
+    constexpr auto kStall = std::chrono::seconds(10);
+    const bool watch_stalls = !::galaxy::launch_args().extensions.empty();
+    uint32_t stall_frames = 0;
+    auto stall_since = Clock::now();
+    bool stall_dumped = false;
+#endif
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
     gHostWake = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     galaxy::render::host_window::set_state_wake(gHostWake);
 #endif
     while (Clock::now() < end && !gTourDone.load(std::memory_order_relaxed)) {
 #if defined(NEBULA_HOST_RENDERER)
-        // The window's messages, on the thread that created it.
+        // The window's messages, on the thread that created it. Every 8 ms at most: a controller's state is at most that
+        // old when the game reads it once a frame, and a phone's main thread wakes 125 times a second, not 250.
 #if defined(NEBULA_HOST_SDL)
-        galaxy::sdl::pump_events(4);
+        galaxy::sdl::pump_events(8);
         if (const bool away = galaxy::sdl::in_background(); away != gSuspended) {
             {
                 std::lock_guard<std::mutex> lock(gSuspendLock);
@@ -4236,6 +5865,15 @@ int main(int argc, char** argv) {
             gSuspendWake.notify_all();
             gAudio->set_paused(away);
             log_line("host:", away ? "suspended (out of sight)" : "resumed");
+        }
+        // Android's onTrimMemory: what comes back by itself goes. The store's view pages return from the file cache on
+        // the next read; the C heap's free pages are new pages when used again.
+        if (galaxy::sdl::take_low_memory()) {
+            gPak.store.release_pages();
+#if defined(__ANDROID__)
+            (void)mallopt(M_PURGE, 0);
+#endif
+            log_line("host:", "the system asked for memory: the store's pages and the C heap's free pages released");
         }
 #else
         // Until a message, a change of the window or the game's end (gHostWake), or the once-a-second report.
@@ -4318,6 +5956,28 @@ int main(int argc, char** argv) {
 #endif
         next_report += std::chrono::seconds(1);
         const uint32_t frames = gGameFrames.load(std::memory_order_relaxed);
+#if defined(_WIN32)
+        if (frames != stall_frames || frames == 0u || gSuspended) {
+            stall_frames = frames;
+            stall_since = Clock::now();
+        } else if (watch_stalls && !stall_dumped && gCrashing.load() == 0 && Clock::now() - stall_since >= kStall) {
+            // A crash being written is no stall: its threads wait for the crash's dump.
+            stall_dumped = true;
+            static wchar_t hang[1024];
+            DWORD hang_error = 0;
+            DWORD hang_snapshot = 0;
+            const galaxy::crash_watch::Result written = galaxy::crash_watch::write_dump(
+                GetCurrentThreadId(), nullptr,
+                MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo | MiniDumpIgnoreInaccessibleMemory, hang,
+                sizeof(hang) / sizeof(hang[0]), &hang_error, &hang_snapshot, 30000u, L"nebula-hang");
+            char text[MAX_PATH + 160];
+            std::snprintf(text, sizeof(text), "the game made no frame for %lld s at frame %u: %s %ls (0x%08lX, snapshot 0x%08lX)",
+                          static_cast<long long>(kStall.count()), frames,
+                          written == galaxy::crash_watch::Result::kWritten ? "every thread's stack in" : "no stall dump",
+                          fs::path(hang).filename().c_str(), hang_error, hang_snapshot);
+            log_line("host:", text);
+        }
+#endif
         if (frames != reported) {
             char text[384];
             std::snprintf(text, sizeof(text), "frame %u, file reads %u, save ops %u, sound blocks %u, sound subframes %u",
@@ -4355,6 +6015,16 @@ int main(int argc, char** argv) {
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     galaxy::timeline::dump();
+#endif
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::bench::returns_home()) {
+        // A benchmark the home screen started, finished or failed: the home screen again, with its result.
+        for (const char* argument : {"--benchmark", "0", "--benchmark-return", "0", "--home", "1", "--benchmark-result"}) {
+            add_restart_argument(argument);
+        }
+        add_restart_argument(galaxy::bench::result_file());
+        finish_and_exit(true);
+    }
 #endif
     finish_and_exit(false);
 }

@@ -16,23 +16,15 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 2.0f);
 
 namespace {
     static const s32 sDefaultTimer = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(s32, sStepForAssemble, 10);
-    NEBULA_TUNABLE(s32, sStepForReturn, 10);
-    NEBULA_TUNABLE(s32, sFlashTime, 100);
-    NEBULA_TUNABLE(f32, sReturnOffset, 50.0f);
-    NEBULA_TUNABLE(f32, sFloatRotSpeedNoSign, 0.1f);
+    const s32 sStepForAssemble = 10;
+    const s32 sStepForReturn = 10;
+    const s32 sFlashTime = 100;
+    const f32 sReturnOffset = 50.0f;
+    const f32 sFloatRotSpeedNoSign = 0.1f;
     static const char* const sReturnPosName = "合体ブロック故郷点";
 };  // namespace
 
@@ -65,8 +57,8 @@ void AssemblyBlock::init(const TableIter& rIter) {
 
     if (!MR::tryFindLinkNamePos(this, ::sReturnPosName, mReturnMtx.toMtxPtr())) {
         defaultReturnOffset.x = 0.0f;
-        defaultReturnOffset.y = cNum_init_f1;
-        defaultReturnOffset.z = cNum_init_f2;
+        defaultReturnOffset.y = 1000.0f;
+        defaultReturnOffset.z = 1000.0f;
         defaultReturnPos.add(mPosition, defaultReturnOffset);
         mReturnMtx.setTrans(defaultReturnPos);
     }
@@ -97,16 +89,16 @@ void AssemblyBlock::init(const TableIter& rIter) {
     mAssembledMtx.getTrans(assembledPos);
     mReturnMtx.getTrans(returnPos);
     mClipCenter.add(assembledPos, returnPos);
-    mClipCenter.x *= cNum_init_f3;
-    mClipCenter.y *= cNum_init_f4;
-    mClipCenter.z *= cNum_init_f5;
+    mClipCenter.x *= 0.5f;
+    mClipCenter.y *= 0.5f;
+    mClipCenter.z *= 0.5f;
     f32 boundingRadius;
     MR::calcModelBoundingRadius(&boundingRadius, this);
     MR::setClippingTypeSphere(this, boundingRadius + mClipCenter.distance(returnPos), &mClipCenter);
     MR::getPlacementArg0NoInit(rIter, &mPlayerSearchDistance);
 
     if (mPlayerSearchDistance <= 0.0f) {
-        mPlayerSearchDistance = boundingRadius * cNum_init_f6;
+        mPlayerSearchDistance = boundingRadius * 2.0f;
     }
 
     MR::getPlacementArg1NoInit(rIter, &mTimer);

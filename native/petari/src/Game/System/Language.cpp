@@ -70,8 +70,11 @@ namespace MR {
         return ::cLanguageByRegion[::regionRow()][i];
     }
 
+    // Before the game's objects exist (a mod's start, the boot) the language they will take (GameSystemObjHolder's
+    // mLanguage is decideLanguage's).
     u32 getLanguage() {
-        return SingletonHolder< GameSystem >::get()->mObjHolder->mLanguage;
+        const GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+        return pSystem != nullptr && pSystem->mObjHolder != nullptr ? pSystem->mObjHolder->mLanguage : decideLanguage();
     }
 
     const char* getCurrentLanguagePrefix() {

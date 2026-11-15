@@ -1,0 +1,2 @@
+/* A mod library exports luma_mod alone (lumalink/loader.md): Linux and Android, -Wl,--version-script=luma_mod.map. */
+{ global: luma_mod; local: *; };

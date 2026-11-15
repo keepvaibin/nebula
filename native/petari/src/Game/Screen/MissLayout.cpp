@@ -2,11 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeActive_1, "exeActive.1", 18);
 
 namespace {
     NEW_NERVE(MissLayoutNrvWait, MissLayout, Wait);
@@ -54,7 +50,7 @@ void MissLayout::exeActive() {
         MR::startAnim(this, "Appear", 0);
     }
 
-    if (MR::isStep(this, cStep_exeActive_1)) {
+    if (MR::isStep(this, 18)) {
         MR::emitEffect(this, "TooBad");
     }
 

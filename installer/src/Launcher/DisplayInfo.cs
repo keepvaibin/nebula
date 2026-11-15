@@ -18,6 +18,8 @@ namespace Nebula.Launcher
         public string Device;
         public string Name;
         public bool Primary;
+        // Windows has HDR (advanced colour) on for this display: the game offers HDR only then (settings_display_page.cpp).
+        public bool Hdr;
         public Rectangle Bounds, WorkArea;
         public int Width, Height, Refresh;
         public List<MonitorMode> Modes = new List<MonitorMode>();
@@ -112,15 +114,26 @@ namespace Nebula.Launcher
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string MonitorDevicePath;
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct AdvancedColorInfo
+        {
+            public DeviceInfoHeader Header;
+            public uint Value;  // bit 0 supported, bit 1 enabled
+            public uint ColorEncoding;
+            public uint BitsPerColorChannel;
+        }
+
         [DllImport("user32.dll")] private static extern int GetDisplayConfigBufferSizes(uint flags, out uint paths, out uint modes);
         [DllImport("user32.dll")] private static extern int QueryDisplayConfig(uint flags, ref uint paths, [Out] PathInfo[] pathInfo,
             ref uint modes, [Out] ModeInfo[] modeInfo, IntPtr topology);
         [DllImport("user32.dll")] private static extern int DisplayConfigGetDeviceInfo(ref SourceDeviceName name);
         [DllImport("user32.dll")] private static extern int DisplayConfigGetDeviceInfo(ref TargetDeviceName name);
+        [DllImport("user32.dll")] private static extern int DisplayConfigGetDeviceInfo(ref AdvancedColorInfo info);
 
         private const uint QdcOnlyActivePaths = 2;
 
-        private static Dictionary<string, string> MonitorNames()
+        // Each active display's own name, and the GDI names of those Windows shows in HDR.
+        private static Dictionary<string, string> MonitorNames(HashSet<string> hdr)
         {
             var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
@@ -142,26 +155,34 @@ namespace Nebula.Launcher
                     target.Header.Size = Marshal.SizeOf(typeof(TargetDeviceName));
                     target.Header.AdapterId = paths[i].Target.AdapterId;
                     target.Header.Id = paths[i].Target.Id;
-                    if (DisplayConfigGetDeviceInfo(ref source) == 0 && DisplayConfigGetDeviceInfo(ref target) == 0 &&
-                        !string.IsNullOrEmpty(target.MonitorFriendlyDeviceName))
+                    if (DisplayConfigGetDeviceInfo(ref source) != 0) continue;
+                    if (DisplayConfigGetDeviceInfo(ref target) == 0 && !string.IsNullOrEmpty(target.MonitorFriendlyDeviceName))
                         names[source.ViewGdiDeviceName] = target.MonitorFriendlyDeviceName;
+                    var color = new AdvancedColorInfo();
+                    color.Header.Type = 9;
+                    color.Header.Size = Marshal.SizeOf(typeof(AdvancedColorInfo));
+                    color.Header.AdapterId = paths[i].Target.AdapterId;
+                    color.Header.Id = paths[i].Target.Id;
+                    if (DisplayConfigGetDeviceInfo(ref color) == 0 && (color.Value & 2u) != 0) hdr.Add(source.ViewGdiDeviceName);
                 }
             }
-            catch (Exception) { /* Names are cosmetic. */ }
+            catch (Exception) { /* Names are cosmetic; HDR stays off. */ }
             return names;
         }
 
         /// <summary>Main monitor first, then the others left to right.</summary>
         public static List<MonitorEntry> Enumerate()
         {
-            var names = MonitorNames();
+            var hdr = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var names = MonitorNames(hdr);
             var list = new List<MonitorEntry>();
             foreach (var screen in Screen.AllScreens)
             {
                 var entry = new MonitorEntry
                 {
                     Device = screen.DeviceName, Primary = screen.Primary, Bounds = screen.Bounds, WorkArea = screen.WorkingArea,
-                    Width = screen.Bounds.Width, Height = screen.Bounds.Height, Refresh = 60
+                    Width = screen.Bounds.Width, Height = screen.Bounds.Height, Refresh = 60,
+                    Hdr = hdr.Contains(screen.DeviceName)
                 };
                 string name;
                 if (names.TryGetValue(screen.DeviceName, out name)) entry.Name = name;

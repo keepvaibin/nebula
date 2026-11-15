@@ -15,6 +15,7 @@ folders-only = []
 proof-tools = []
 
 [dependencies]
+luma-validate = { path = "../luma-validate" }
 anyhow.workspace = true
 jni-sys = "0.4"
 nod = "=1.4.4"
@@ -22,7 +23,9 @@ encoding_rs = "0.8"
 lewton = "0.10"
 png = "0.17"
 zune-jpeg = "0.5"
+mikktspace = { version = "0.3", default-features = false, features = ["glam"] }
 serde_json = "1"
+ttf-parser = { version = "0.25", default-features = false, features = ["std", "opentype-layout"] }
 sha1.workspace = true
 
 [target.'cfg(windows)'.dependencies]
@@ -30,3 +33,6 @@ windows-sys.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+# The validator's test zip writer (tests/validate_c.rs shares luma-validate's tests/common).
+miniz_oxide = "0.8"
+crc32fast = "1"

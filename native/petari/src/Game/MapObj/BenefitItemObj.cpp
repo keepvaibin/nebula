@@ -22,50 +22,37 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f1, "initModelAndEfx.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f2, "initModelAndEfx.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f3, "initModelAndEfx.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initModelAndEfx_f4, "initModelAndEfx.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtxInMovement_f1, "calcAndSetBaseMtxInMovement.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtxInMovement_f2, "calcAndSetBaseMtxInMovement.f2", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcAndSetBaseMtxInMovement_f3, "calcAndSetBaseMtxInMovement.f3", 0.2f);
-
 namespace {
-    NEBULA_TUNABLE(f32, cAppearThrowUpSpd, 10.0f);
-    NEBULA_TUNABLE(f32, cAppearThrowUpSpd2, 15.0f);
-    NEBULA_TUNABLE(f32, cGravity, 0.5f);
-    NEBULA_TUNABLE(f32, cReflectWallX, 0.3f);
+    const f32 cAppearThrowUpSpd = 10.0f;
+    const f32 cAppearThrowUpSpd2 = 15.0f;
+    const f32 cGravity = 0.5f;
+    const f32 cReflectWallX = 0.3f;
     // Half a turn a second.
     const f32 cSpdRotateY = FloatUtil::PI() / static_cast< f32 >(NebulaFrameClock::stepsOfSeconds(1));
-    NEBULA_TUNABLE(f32, cDefaultRailSpeed, 5.0f);
-    NEBULA_TUNABLE(f32, cDefaultShadowLength, 2000.0f);
-    NEBULA_TUNABLE(s32, cDefaultDemoFrames, 120);
-    NEBULA_TUNABLE(s32, cShootLandSteps, 10);
+    const f32 cDefaultRailSpeed = 5.0f;
+    const f32 cDefaultShadowLength = 2000.0f;
+    const s32 cDefaultDemoFrames = 120;
+    const s32 cShootLandSteps = 10;
     const s32 cShootSensorOnStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cGroundAppearStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cPreEscapeSteps = NebulaFrameClock::stepsOfMilliseconds(500);
     const s16 cEscapeLifeSteps = NebulaFrameClock::stepsOfSeconds(10);
-    NEBULA_TUNABLE(f32, cEscapeSpeed, 7.0f);
-    NEBULA_TUNABLE(f32, cEscapeTurnAway, 0.02f);
-    NEBULA_TUNABLE(f32, cEscapeKeepAway, 0.01f);
-    NEBULA_TUNABLE(f32, cEscapeSpeedUp, 1.1f);
-    NEBULA_TUNABLE(f32, cEscapeAirFriction, 0.95f);
-    NEBULA_TUNABLE(f32, cEscapeGroundFall, 5.0f);
-    NEBULA_TUNABLE(f32, cEscapeFallAccel, 1.0f);
-    NEBULA_TUNABLE(f32, cEscapeFallSpeedMax, 20.0f);
-    NEBULA_TUNABLE(f32, cEscapeWallHop, 20.0f);
+    const f32 cEscapeSpeed = 7.0f;
+    const f32 cEscapeTurnAway = 0.02f;
+    const f32 cEscapeKeepAway = 0.01f;
+    const f32 cEscapeSpeedUp = 1.1f;
+    const f32 cEscapeAirFriction = 0.95f;
+    const f32 cEscapeGroundFall = 5.0f;
+    const f32 cEscapeFallAccel = 1.0f;
+    const f32 cEscapeFallSpeedMax = 20.0f;
+    const f32 cEscapeWallHop = 20.0f;
 
     // Before the escape runs out the item blinks: from these steps left, hidden this many of every this many steps.
-    NEBULA_TUNABLE(s16, cBlinkSlowLife, 180);
-    NEBULA_TUNABLE(s16, cBlinkMidLife, 120);
-    NEBULA_TUNABLE(s16, cBlinkFastLife, 60);
+    const s16 cBlinkSlowLife = 180;
+    const s16 cBlinkMidLife = 120;
+    const s16 cBlinkFastLife = 60;
 
     u8 toShadowType(s32 shadowArg) {
         switch (shadowArg) {
@@ -115,9 +102,9 @@ void BenefitItemObj::initModelAndEfx() {
     initModelManagerWithAnm(mModelName, nullptr, false);
     initEffectKeeper(5, mModelName);
 
-    initBinder(cNum_initModelAndEfx_f1, cNum_initModelAndEfx_f2, 0);
+    initBinder(50.0f, 50.0f, 0);
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_KINOKO_ONEUP, 4, cNum_initModelAndEfx_f3, Vec3f(0.0f, cNum_initModelAndEfx_f4, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KINOKO_ONEUP, 4, 50.0f, Vec3f(0.0f, 50.0f, 0.0f));
 }
 
 // Unplaced (created by code) it waits for appear. Placed, the args: 0 above 0 turns in place per arg 6; 1 the appear
@@ -156,12 +143,12 @@ void BenefitItemObj::init(const TableIter& rIter) {
 
         s32 railSpeed;
         if (mIsOnRail && MR::getRailArg0NoInit(this, &railSpeed)) {
-            mRailSpeed = railSpeed / cNum_init_f1;
+            mRailSpeed = railSpeed / 10.0f;
         }
     }
 
     MR::setClippingFar100m(this);
-    MR::setClippingTypeSphere(this, cNum_init_f2);
+    MR::setClippingTypeSphere(this, 100.0f);
 
     initNerve(GET_NERVE(BenefitItemObj, HostTypeNrvWait));
 
@@ -267,12 +254,12 @@ void BenefitItemObj::init(const TableIter& rIter) {
         return;
     }
 
-    MR::initShadowVolumeCylinder(this, cNum_init_f3);
+    MR::initShadowVolumeCylinder(this, 50.0f);
     MR::setShadowDropLength(this, nullptr, shadowLength);
 
     if (shadowLengthArg == -1) {
         MR::onShadowVolumeCutDropLength(this, nullptr);
-        MR::setShadowVolumeEndDropOffset(this, nullptr, cNum_init_f4);
+        MR::setShadowVolumeEndDropOffset(this, nullptr, 50.0f);
     }
 
     bool isEveryFrame = (mShadowType & ShadowBit_EveryFrame) != 0;
@@ -749,7 +736,7 @@ void BenefitItemObj::calcAndSetBaseMtxInMovement() {
     MR::normalizeOrZero(&front);
 
     if (isNerve(GET_NERVE(BenefitItemObj, HostTypeNrvPreEscape))) {
-        MR::vecBlendSphere(mBlendFront, front, &front, cNum_calcAndSetBaseMtxInMovement_f1);
+        MR::vecBlendSphere(mBlendFront, front, &front, 0.1f);
         mBlendFront = front;
     }
 
@@ -757,14 +744,14 @@ void BenefitItemObj::calcAndSetBaseMtxInMovement() {
         return;
     }
 
-    if (MR::isSameDirection(mUp, front, cNum_calcAndSetBaseMtxInMovement_f2)) {
+    if (MR::isSameDirection(mUp, front, 0.01f)) {
         MR::setMtxTrans(getBaseMtx(), mPosition);
         return;
     }
 
     Pos3f pose;
     MR::makeMtxUpFrontPos(&pose, mUp, front, mPosition);
-    MR::blendMtx(mModelMtx, pose, cNum_calcAndSetBaseMtxInMovement_f3, mModelMtx);
+    MR::blendMtx(mModelMtx, pose, 0.2f, mModelMtx);
     MR::multMtx(getBaseMtx(), MR::tmpMtxRotYRad(mRotateY), mModelMtx);
     MR::setMtxTrans(getBaseMtx(), mPosition);
 }

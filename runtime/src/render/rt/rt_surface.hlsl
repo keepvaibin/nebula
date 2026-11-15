@@ -169,7 +169,7 @@ void no_surface(uint2 id, bool second) {
     g_base[id] = float4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-// The item map's triangle where the prepass could not name it (a Vulkan device without geometry shaders, D11).
+// The item map's triangle where the prepass could not name it (a Vulkan device without geometry shaders).
 static const uint kItemNoTriangle = 0xFFFFFFFFu;
 
 // The pixel's triangle of `item` (from 1) by one ray from the eye along its view ray: of that item's triangles the
@@ -197,6 +197,125 @@ uint triangle_by_ray(uint item, float2 centre, float away) {
     }
     InterlockedAdd(g_counters[17], 1u);
     return found;
+}
+
+// A water surface's normal bent by its own moving map: item word 18 names the two rows of its first
+// map's coordinate (0: none); the luminance's change a texel along u' and v', at the level the pixel covers, tilts the
+// smooth normal against the rise, kWave of it. `place`: the pixel's point on the triangle (eye space).
+static const float kWave = 0.15f;
+// One map's slope at the pixel (from water_ripple's first half): `t` the map's coordinate at the corners,
+// `along_u`/`along_v` out: the change of place a unit of u' and v' (unit-free directions found below), `place` the
+// pixel's point; the luminance's change a texel of the map's own size along u' and v', at the level the pixel
+// covers. false: no slope there.
+bool water_map_slope(uint map, float2 t[3], float3 e1, float3 e2, float v, float w, float3 place, float3 smooth_,
+                     out float3 along_u, out float3 along_v, out float2 slope, out float lost) {
+    along_u = float3(0.0f, 0.0f, 0.0f);
+    along_v = float3(0.0f, 0.0f, 0.0f);
+    slope = float2(0.0f, 0.0f);
+    lost = 0.0f;
+    const float2 m1 = t[1] - t[0], m2 = t[2] - t[0];
+    const float turn = m1.x * m2.y - m1.y * m2.x;
+    if (!(abs(turn) > 1e-12f)) {
+        return false;
+    }
+    const float2 here = t[0] + m1 * v + m2 * w;
+    along_u = (e1 * m2.y - e2 * m1.y) / turn;
+    along_v = (e2 * m1.x - e1 * m2.x) / turn;
+    uint map_w, map_h;
+    g_textures[NonUniformResourceIndex(map)].GetDimensions(map_w, map_h);
+    const float pixel = -place.z * abs(g_ray.x) / max(abs(dot(smooth_, normalize(place))), 0.05f);
+    const float texels = pixel * float(max(map_w, map_h)) / max(min(length(along_u), length(along_v)), 1e-6f);
+    const float level = max(log2(max(texels, 1.0f)), 0.0f);
+    const float2 step_ = exp2(level) / float2(max(map_w, 1u), max(map_h, 1u));
+    const float3 luma = float3(0.2126f, 0.7152f, 0.0722f);
+    const float l0 = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here, level).rgb, luma);
+    const float lu = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here + float2(step_.x, 0.0f), level).rgb, luma);
+    const float lv = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here + float2(0.0f, step_.y), level).rgb, luma);
+    slope = float2(lu - l0, lv - l0) * exp2(-level);  // a texel of the map's own size
+    // The slope variance the level's filter took away (Toksvig): the slopes two levels finer at the four
+    // quarters of the footprint (a texel of this level), their mean square less the filtered slope's square.
+    if (level >= 1.0f) {
+        const float fine = max(level - 2.0f, 0.0f);
+        const float2 fine_step = exp2(fine) / float2(max(map_w, 1u), max(map_h, 1u));
+        const float2 quarter = 0.25f * step_;
+        float square = 0.0f;
+        [unroll] for (uint q = 0u; q < 4u; ++q) {
+            const float2 at = here + float2((q & 1u) != 0u ? quarter.x : -quarter.x, (q & 2u) != 0u ? quarter.y : -quarter.y);
+            const float f0 = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, at, fine).rgb, luma);
+            const float fu = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, at + float2(fine_step.x, 0.0f), fine).rgb, luma);
+            const float fv = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, at + float2(0.0f, fine_step.y), fine).rgb, luma);
+            const float2 s = float2(fu - f0, fv - f0) * exp2(-fine);
+            square += dot(s, s);
+        }
+        lost = max(0.25f * square - dot(slope, slope), 0.0f);
+    }
+    return true;
+}
+float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint map, uint triangle_, float3 place, float3 smooth_,
+                    out float wave_variance) {
+    wave_variance = 0.0f;
+    const uint rows_at = g_items.Load(item_at + 72u);
+    const uint arena = first.z;
+    if (rows_at == 0u || arena >= 8u) {
+        return smooth_;
+    }
+    const float4 ra = asfloat(g_items.Load4(g_at.x + rows_at)), rb = asfloat(g_items.Load4(g_at.x + rows_at + 16u));
+    // Map 1's rows and slot after map 0's (slot NONE: none).
+    const float4 ra1 = asfloat(g_items.Load4(g_at.x + rows_at + 32u)), rb1 = asfloat(g_items.Load4(g_at.x + rows_at + 48u));
+    const uint map1 = g_items.Load(g_at.x + rows_at + 64u);
+    const uint base = mesh_at(arena);
+    const uint3 corner = triangle_corners(first, second, triangle_);
+    float3 p[3];
+    float2 t[3], t1[3];
+    for (uint c = 0u; c < 3u; ++c) {
+        const uint row = vertex_rows(arena, base, second.w, stream, corner[c]);
+        const float4 r0 = asfloat(g_rows.Load4(row)), r1 = asfloat(g_rows.Load4(row + 16u)), r2 = asfloat(g_rows.Load4(row + 32u));
+        const float4 q = float4(asfloat(arena_words(arena, base + second.z + corner[c] * 12u)), 1.0f);
+        p[c] = float3(dot(r0, q), dot(r1, q), dot(r2, q));
+        const float4 uv = float4(asfloat(arena_words(arena, base + first.w + corner[c] * 24u + 12u).yz), 1.0f, 1.0f);
+        t[c] = float2(dot(uv, ra), dot(uv, rb));
+        t1[c] = float2(dot(uv, ra1), dot(uv, rb1));
+    }
+    // The point among the corners (the triangle's own, then each map's directions and slope).
+    const float3 e1 = p[1] - p[0], e2 = p[2] - p[0], e = place - p[0];
+    const float d11 = dot(e1, e1), d12 = dot(e1, e2), d22 = dot(e2, e2), de1 = dot(e, e1), de2 = dot(e, e2);
+    const float area = d11 * d22 - d12 * d12;
+    if (!(abs(area) > 1e-12f)) {
+        return smooth_;
+    }
+    const float v = (d22 * de1 - d12 * de2) / area, w = (d11 * de2 - d12 * de1) / area;
+    // Each map's tilt in the surface's plane: its slope along its own u' and v' directions (unit), against the rise.
+    float3 tilt = float3(0.0f, 0.0f, 0.0f);
+    float maps = 0.0f;
+    for (uint k = 0u; k < 2u; ++k) {
+        if (k == 1u && map1 == 0xFFFFFFFFu) {
+            break;
+        }
+        float3 along_u, along_v;
+        float2 slope;
+        float lost;
+        float2 tk[3];  // this map's coordinate at the corners
+        for (uint c = 0u; c < 3u; ++c) {
+            tk[c] = k == 0u ? t[c] : t1[c];
+        }
+        if (!water_map_slope(k == 0u ? map : map1, tk, e1, e2, v, w, place, smooth_, along_u, along_v, slope, lost)) {
+            continue;
+        }
+        const float3 tu = along_u - smooth_ * dot(along_u, smooth_), tv = along_v - smooth_ * dot(along_v, smooth_);
+        const float su = dot(tu, tu), sv = dot(tv, tv);
+        if (!(su > 1e-12f) || !(sv > 1e-12f)) {
+            continue;
+        }
+        tilt += slope.x * tu * rsqrt(su) + slope.y * tv * rsqrt(sv);
+        wave_variance += kWave * kWave * lost;  // independent maps' variances add
+        maps += 1.0f;
+    }
+    if (!(maps > 0.0f)) {
+        return smooth_;
+    }
+    // the normal tilted by both maps' slopes summed, as heights add (one map: its own, as before), kWave of it.
+    const float3 bent = normalize(smooth_ - kWave * tilt);
+    return dot(bent, smooth_) > 0.5f ? bent : smooth_;
 }
 
 [numthreads(8, 8, 1)]
@@ -232,7 +351,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     float away = -rt_eye_z(g_depth, depth);
     float3 at = rt_eye_ray(g_ray, centre) * away;
     float3 normal;
-    // The pixel's triangle: the prepass's, or where it could not name one the ray's (D11). The first layer with none
+    // The pixel's triangle: the prepass's, or where it could not name one the ray's. The first layer with none
     // found keeps the depth's own normal (no mesh: arena 8).
     uint triangle_ = named.y;
     if (triangle_ == kItemNoTriangle) {
@@ -246,7 +365,16 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
         away = -at.z;
     } else {
-        normal = surface_normal(pixel, at);
+        // The facet's own normal where the triangle is named and its plane passes through the pixel's place: the
+        // depth's is quantized, takes a neighbour facet across an edge and moves with the jitter, and a ray's origin
+        // and the terminator's lift go along it (the shadow terminator's sawtooth and its shimmer).
+        float3 on_facet, facet;
+        if (triangle_ != kItemNoTriangle && triangle_place(shaded, mesh, third.z, triangle_, rt_eye_ray(g_ray, centre), on_facet, facet) &&
+            abs(-on_facet.z - away) < 0.02f * away + 1.0f) {
+            normal = facet;
+        } else {
+            normal = surface_normal(pixel, at);
+        }
     }
     float3 lifted, before;
     bool before_known;
@@ -271,13 +399,23 @@ void main(uint3 id : SV_DispatchThreadID) {
         g_motion[id.xy] = float4(move, away_before, dot(lifted - at, normal));  // xy, z: both layers
     }
     g_guide[id.xy] = float4(away, float(words4.x & 1023u), float(words4.x >> 10u), rt_pack_normal(smooth_));
-    g_normals[id.xy] = float4(rt_oct(smooth_), rt_oct(normal));
+    // Water shades by its rippled normal; the guide keeps the smooth one for the filters. `shaded` and the
+    // resolved `triangle_`: with no triangle found its arena is 8 and the ripple stays out.
+    float wave_variance = 0.0f;  // the slope variance the waves' filter took away
+    const float3 shading = (third.w & 255u) == kClassWater && third.x != 0xFFFFFFFFu
+                               ? water_ripple(at_item, shaded, mesh, third.z, third.x, triangle_, at, smooth_, wave_variance)
+                               : smooth_;
+    g_normals[id.xy] = float4(rt_oct(shading), rt_oct(normal));
     // The material: the hit record's numbers as the item table carries them.
     const uint look = third.w;
     const uint class_ = look & 255u, hit_flags = look >> 8u & 255u;
     const uint flags = ((words4.y & kItemLit) != 0u ? kSurfaceLit : 0u) | (class_ == kClassEmissive ? kSurfaceEmissive : 0u) |
                        ((hit_flags & 16u) != 0u ? kSurfaceEnvironment : 0u) | ((words4.y & kItemThin) != 0u ? kSurfaceTwoSided : 0u);
-    g_material[id.xy] = float4(float(look >> 16u & 255u), float(look >> 24u), float((class_ & 15u) | flags), float(fourth.x >> 24u)) / 255.0f;
+    // Water's roughness is its waves' (Toksvig): alpha^2 the slope variance the level's filter took away,
+    // written as sqrt(alpha) as every pass squares it; 0 where nothing was lost (a mirror, as before).
+    const float rough_byte = class_ == kClassWater ? saturate(sqrt(sqrt(saturate(wave_variance)))) * 255.0f
+                                                   : float(look >> 16u & 255u);
+    g_material[id.xy] = float4(rough_byte, float(look >> 24u), float((class_ & 15u) | flags), float(fourth.x >> 24u)) / 255.0f;
     // Its colour: the record's under its first map at the pixel (the map's level by the pixel's footprint on it), by
     // the vertex's colour where the material takes it.
     float4 base = float4(float(fourth.x & 255u), float(fourth.x >> 8u & 255u), float(fourth.x >> 16u & 255u), 255.0f) / 255.0f;

@@ -4,41 +4,34 @@
 #include "Game/Map/SphereSelector.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f1, "playRotateSE.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f2, "playRotateSE.f2", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f3, "playRotateSE.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f4, "playRotateSE.f4", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_playRotateSE_f5, "playRotateSE.f5", 1.6f);
-
 namespace {
-    NEBULA_TUNABLE(s32, cHoldReduceOutScreenFrame, 5);
-    NEBULA_TUNABLE(f32, cRotateSpeedChangeMax, 0.2f);
-    NEBULA_TUNABLE(f32, cHoldReduceRate, 0.9f);
-    NEBULA_TUNABLE(f32, cSpinReduceRate, 0.95f);
-    NEBULA_TUNABLE(f32, cRotateSpeedMaxY, 5.0f);
-    NEBULA_TUNABLE(f32, cHoldRotateRateY, 0.2f);
-    NEBULA_TUNABLE(s32, cDemoRotateStartFrame, 60);
-    NEBULA_TUNABLE(f32, cDemoRotateSpeedY, 0.03f);
-    NEBULA_TUNABLE(f32, cRotateSpeedMaxX, 2.0f);
-    NEBULA_TUNABLE(f32, cHoldRotateRateX, 0.075f);
-    NEBULA_TUNABLE(f32, cRotateAppearX, 40.0f);
-    NEBULA_TUNABLE(f32, cRotateMinX, -15.0f);
-    NEBULA_TUNABLE(f32, cRotateMaxX, 80.0f);
-    NEBULA_TUNABLE(s32, cBgmAppearState, 2);
-    NEBULA_TUNABLE(s32, cBgmAppearFrames, 60);
-    NEBULA_TUNABLE(s32, cBgmDisappearState, 1);
-    NEBULA_TUNABLE(s32, cBgmDisappearFrames, 90);
-    NEBULA_TUNABLE(s32, cBgmRotateState, 4);
-    NEBULA_TUNABLE(s32, cBgmRotateFrames, 60);
-    NEBULA_TUNABLE(s32, cBgmNotRotateState, 3);
-    NEBULA_TUNABLE(s32, cBgmNotRotateFrames, 30);
-    NEBULA_TUNABLE(s32, cBgmConfirmState, 6);
-    NEBULA_TUNABLE(s32, cBgmConfirmFrames, 60);
-    NEBULA_TUNABLE(s32, cBgmNotConfirmState, 5);
-    NEBULA_TUNABLE(s32, cBgmNotConfirmFrames, 60);
+    const s32 cHoldReduceOutScreenFrame = 5;
+    const f32 cRotateSpeedChangeMax = 0.2f;
+    const f32 cHoldReduceRate = 0.9f;
+    const f32 cSpinReduceRate = 0.95f;
+    const f32 cRotateSpeedMaxY = 5.0f;
+    const f32 cHoldRotateRateY = 0.2f;
+    const s32 cDemoRotateStartFrame = 60;
+    const f32 cDemoRotateSpeedY = 0.03f;
+    const f32 cRotateSpeedMaxX = 2.0f;
+    const f32 cHoldRotateRateX = 0.075f;
+    const f32 cRotateAppearX = 40.0f;
+    const f32 cRotateMinX = -15.0f;
+    const f32 cRotateMaxX = 80.0f;
+    const s32 cBgmAppearState = 2;
+    const s32 cBgmAppearFrames = 60;
+    const s32 cBgmDisappearState = 1;
+    const s32 cBgmDisappearFrames = 90;
+    const s32 cBgmRotateState = 4;
+    const s32 cBgmRotateFrames = 60;
+    const s32 cBgmNotRotateState = 3;
+    const s32 cBgmNotRotateFrames = 30;
+    const s32 cBgmConfirmState = 6;
+    const s32 cBgmConfirmFrames = 60;
+    const s32 cBgmNotConfirmState = 5;
+    const s32 cBgmNotConfirmFrames = 60;
 };  // namespace
 
 namespace NrvSphereSelectorHandle {
@@ -266,16 +259,16 @@ void SphereSelectorHandle::playRotateSE() {
         return;
     }
 
-    f32 verticalRate = MR::abs(mRotateSpeedX) / cNum_playRotateSE_f1;
-    f32 horizontalRate = MR::abs(mRotateSpeed) / cNum_playRotateSE_f2;
+    f32 verticalRate = MR::abs(mRotateSpeedX) / 2.0f;
+    f32 horizontalRate = MR::abs(mRotateSpeed) / 5.0f;
     f32 rate = verticalRate > horizontalRate ? verticalRate : horizontalRate;
 
     if (rate > 1.0f) {
         rate = 1.0f;
     }
 
-    MR::startAtmosphereLevelSE("SE_AT_LV_ASTRO_DOME_WIND_1", static_cast< s32 >(cNum_playRotateSE_f3 * rate));
-    if (!(MR::abs(mRotateSpeed) >= cNum_playRotateSE_f4) && !(MR::abs(mRotateSpeedX) >= cNum_playRotateSE_f5)) {
+    MR::startAtmosphereLevelSE("SE_AT_LV_ASTRO_DOME_WIND_1", static_cast< s32 >(100.0f * rate));
+    if (!(MR::abs(mRotateSpeed) >= 4.0f) && !(MR::abs(mRotateSpeedX) >= 1.6f)) {
         return;
     }
 

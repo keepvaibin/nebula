@@ -77,6 +77,21 @@ public:
                                                                          std::uint64_t frame_index,
                                                                          unsigned frames_in_flight);
     void keep_picture(Microsoft::WRL::ComPtr<ID3D12Resource> picture, const Inputs& in);
+    // A normal bloom that adds nothing (bloom::adds_nothing) over a scene kept by a trade: the kept picture becomes the
+    // scene target's colour again (take_kept_back, kept_by_trade first: same size, format and flags as the scene target),
+    // and the image the glowing models were drawn on waits for the next trade (set_aside).
+    [[nodiscard]] bool kept_by_trade(const Inputs& in) const;
+    [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12Resource> take_kept_back(ID3D12GraphicsCommandList* list);
+    void set_aside(Microsoft::WRL::ComPtr<ID3D12Resource> image, const Inputs& in);
+    // The simple bloom's source without a copy: the scene target continues on the image this returns (null: it makes one),
+    // and give_source takes the scene's picture as the source; apply() copies nothing then, and with nothing else to draw
+    // draws the frame back from it. Only where the composite covers the whole target, which it then writes from the
+    // source; can_take_source first (the composite is there to draw).
+    [[nodiscard]] bool can_take_source(const Inputs& in);
+    [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12Resource> take_source_image(ID3D12GraphicsCommandList* list, const Inputs& in,
+                                                                           std::uint64_t frame_index,
+                                                                           unsigned frames_in_flight);
+    void give_source(Microsoft::WRL::ComPtr<ID3D12Resource> picture, const Inputs& in);
     // The game's own chain (the NATIVE setting) where it draws its kept copy back: the kept scene over the frame, as
     // the scene target held it (RGB; the game's alpha stays). Leaves this pass's root signature, pipeline and render target
     // bound.
@@ -120,6 +135,7 @@ private:
     ID3D12Device* device_ = nullptr;
     bool ready_ = false;
     bool kept_ = false;   // keep() ran since the last normal apply
+    bool source_given_ = false;  // give_source ran since the last apply
     std::uint64_t frame_ = 0;  // the frame of the last pass call, what keep_picture() stamps the kept image with
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> down_;

@@ -4,22 +4,18 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTitle_f1, "exeTitle.f1", 15000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTitle_f2, "exeTitle.f2", 15000.0f);
 
 namespace {
     // const Vec cTitleTargetPos = {};
     // const Vec cTitlePos = {};
-    NEBULA_TUNABLE_RECORD(Vec, cFarTarget, {0.0f, 800.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, cFarPoint, {0.0f, 0.0f, 15000.0f});
-    NEBULA_TUNABLE_RECORD(Vec, cNearTargetOffset, {0.0f, 1100.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, cNearPointOffset, {0.0f, 0.0f, 4800.0f});
-    NEBULA_TUNABLE(f32, cTitleFovy, 60.0f);
-    NEBULA_TUNABLE(f32, cFarFovy, 40.0f);
-    NEBULA_TUNABLE(f32, cNearFovy, 50.0f);
+    const Vec cFarTarget = {0.0f, 800.0f, 0.0f};
+    const Vec cFarPoint = {0.0f, 0.0f, 15000.0f};
+    const Vec cNearTargetOffset = {0.0f, 1100.0f, 0.0f};
+    const Vec cNearPointOffset = {0.0f, 0.0f, 4800.0f};
+    const f32 cTitleFovy = 60.0f;
+    const f32 cFarFovy = 40.0f;
+    const f32 cNearFovy = 50.0f;
 };  // namespace
 
 namespace {
@@ -83,8 +79,8 @@ bool FileSelectCameraController::isToOrAtNearPoint() const {
 
 void FileSelectCameraController::exeTitle() {
     if (MR::isFirstStep(this)) {
-        mWPoint.set< f32 >(::cFarTarget.x, ::cFarTarget.y + cNum_exeTitle_f1, ::cFarTarget.z);
-        mPosition.set< f32 >(::cFarPoint.x, ::cFarTarget.y + cNum_exeTitle_f2, ::cFarPoint.z);
+        mWPoint.set< f32 >(::cFarTarget.x, ::cFarTarget.y + 15000.0f, ::cFarTarget.z);
+        mPosition.set< f32 >(::cFarPoint.x, ::cFarTarget.y + 15000.0f, ::cFarPoint.z);
         mUpVec.set(0.0f, 1.0f, 0.0f);
     }
 }

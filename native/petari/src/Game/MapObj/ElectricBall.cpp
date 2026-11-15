@@ -5,17 +5,16 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sMoveRadiusDefault, 750.0f);
-    NEBULA_TUNABLE(f32, sMoveAngularSpeedDefault, 0.01f);
-    NEBULA_TUNABLE(s32, sNumBallsDefault, 4);
+    const f32 sMoveRadiusDefault = 750.0f;
+    const f32 sMoveAngularSpeedDefault = 0.01f;
+    const s32 sNumBallsDefault = 4;
     const s32 sAttackTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(f32, sSensorRadius, 75.0f);
-    NEBULA_TUNABLE(f32, sShadowRadius, 75.0f);
-    NEBULA_TUNABLE(s32, sNumBallsMax, 16);
+    const f32 sSensorRadius = 75.0f;
+    const f32 sShadowRadius = 75.0f;
+    const s32 sNumBallsMax = 16;
 };  // namespace
 
 namespace NrvElectricBall {

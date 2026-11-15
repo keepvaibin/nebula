@@ -3,24 +3,23 @@
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Sound/SoundChild.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sSpeedMin, 2.0f);
-    NEBULA_TUNABLE(f32, sSpeedMax, 22.0f);
-    NEBULA_TUNABLE(f32, sSpeedLowThreshold, 7.0f);
-    NEBULA_TUNABLE(f32, sSpeedMidThreshold, 12.0f);
-    NEBULA_TUNABLE(f32, sTempoRateMin, 0.55f);
-    NEBULA_TUNABLE(f32, sTempoRateMax, 1.22f);
-    NEBULA_TUNABLE(f32, sTempoRateVeryHigh, 1.478f);
-    NEBULA_TUNABLE(f32, sPitchRateNormal, 1.0f);
-    NEBULA_TUNABLE(f32, sPitchRateVeryHigh, 1.189f);
-    NEBULA_TUNABLE(s32, sFirstBarSteps, 107);
-    NEBULA_TUNABLE(s32, sStateNumLow, 1);
-    NEBULA_TUNABLE(s32, sStateNumMid, 2);
-    NEBULA_TUNABLE(s32, sStateNumHigh, 3);
-    NEBULA_TUNABLE(s32, sStateNumVeryHigh, 4);
-    NEBULA_TUNABLE(s32, sPercTrack, 14);
+    const f32 sSpeedMin = 2.0f;
+    const f32 sSpeedMax = 22.0f;
+    const f32 sSpeedLowThreshold = 7.0f;
+    const f32 sSpeedMidThreshold = 12.0f;
+    const f32 sTempoRateMin = 0.55f;
+    const f32 sTempoRateMax = 1.22f;
+    const f32 sTempoRateVeryHigh = 1.478f;
+    const f32 sPitchRateNormal = 1.0f;
+    const f32 sPitchRateVeryHigh = 1.189f;
+    const s32 sFirstBarSteps = 107;
+    const s32 sStateNumLow = 1;
+    const s32 sStateNumMid = 2;
+    const s32 sStateNumHigh = 3;
+    const s32 sStateNumVeryHigh = 4;
+    const s32 sPercTrack = 14;
 };  // namespace
 
 AudTamakoroBgmCtrl::AudTamakoroBgmCtrl() : mSteps(0) {

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Folders: NEBULA_BINS (frozen builds, one folder each with pak.path, NebulaNative.exe and NebulaNativeVk.exe), NEBULA_RUNS (output), NEBULA_TEST_SAVES (an empty saves folder to copy).
+# Folders: NEBULA_BINS (frozen builds, one folder each with pak.path, Nebula.exe and NebulaVk.exe), NEBULA_RUNS (output), NEBULA_TEST_SAVES (an empty saves folder to copy).
 : "${NEBULA_BINS:?NEBULA_BINS is not set}"; : "${NEBULA_RUNS:?NEBULA_RUNS is not set}"; : "${NEBULA_TEST_SAVES:?NEBULA_TEST_SAVES is not set}"
 # stopcross.sh BIN TAG [FRAMES] [EVERY] [LIMIT]: one build on D3D12 and on Vulkan, deterministic, through all 102 stops; a
 # picture every EVERY frames; stopcross.py ranks the differences (exit 1 when the worst picture is over LIMIT pixels past 8 levels).
@@ -7,7 +7,7 @@ V=$(cd "$(dirname "$0")" && pwd)
 B=$NEBULA_BINS/$1; T=$2; FR=${3:-300}; EV=${4:-100}; LIMIT=$5
 F=$(cygpath -w $V/tours/tour_enterable.txt)
 for side in dx vk; do
-    exe=NebulaNative.exe; [ $side = vk ] && exe=NebulaNativeVk.exe
+    exe=Nebula.exe; [ $side = vk ] && exe=NebulaVk.exe
     (
         OUT=$NEBULA_RUNS/cross_$T/$side
         rm -rf "$OUT"; mkdir -p "$OUT"; W=$(cygpath -w "$OUT")

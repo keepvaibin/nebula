@@ -60,10 +60,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     var screen by mutableStateOf(if (install != null) Screen.Home else Screen.Welcome)
     var disc by mutableStateOf<DiscPick?>(null)
         private set
-    var graphics by mutableStateOf(GraphicsSettings.read(app))
-        private set
-    var controls by mutableStateOf(ControlsSettings.read(app))
-        private set
     var gameExit by mutableStateOf<GameExit?>(null)
     var freeBytes by mutableStateOf(Storage.freeBytes(app))
         private set
@@ -74,6 +70,45 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     /** The next run records diagnostics in its log, to share after it. */
     var recordNextRun by mutableStateOf(GameFiles.controls(application).getBoolean(GameFiles.RECORD_NEXT_RUN, false))
         private set
+
+    /** The graphics drivers the player imported, and the one the game starts with (null: the system's). */
+    var gpuDrivers by mutableStateOf(GpuDrivers.list(application))
+        private set
+    var gpuDriver by mutableStateOf(GpuDrivers.selected(application))
+        private set
+
+    /** A driver import under way. */
+    var driverBusy by mutableStateOf(false)
+        private set
+
+    /** Why the last driver import failed, shown until the player closes it. */
+    var driverError by mutableStateOf<String?>(null)
+
+    fun selectDriver(driver: GpuDriver?) {
+        GpuDrivers.select(app, driver)
+        gpuDriver = GpuDrivers.selected(app)
+    }
+
+    fun removeDriver(driver: GpuDriver) {
+        GpuDrivers.remove(app, driver)
+        gpuDrivers = GpuDrivers.list(app)
+        gpuDriver = GpuDrivers.selected(app)
+    }
+
+    /** A driver package from a file the player picked; selected once it is in. */
+    fun importDriver(uri: Uri) {
+        if (driverBusy) return
+        driverBusy = true
+        viewModelScope.launch(Dispatchers.IO) {
+            val failure = runCatching { GpuDrivers.import(app, uri) }.exceptionOrNull()
+            withContext(Dispatchers.Main) {
+                driverBusy = false
+                gpuDrivers = GpuDrivers.list(app)
+                gpuDriver = GpuDrivers.selected(app)
+                if (failure != null) driverError = failure.message ?: app.getString(R.string.FileUnreadable)
+            }
+        }
+    }
 
     /** The mod import under way (its share done, 0 to 1), or null. */
     var modProgress by mutableStateOf<Float?>(null)
@@ -97,7 +132,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         Thread {
             val result = runCatching {
                 ModImport.import(app, uri) { share -> main.post { if (modProgress != null) modProgress = share } }
-            }.getOrElse { ModImportResult(false, "", "", "", it.message ?: "That file could not be read") }
+            }.getOrElse { ModImportResult(false, "", "", "", it.message ?: app.getString(R.string.FileUnreadable)) }
             val file = DropKind.nameAndSize(app, uri).first
             main.post {
                 modProgress = null
@@ -118,12 +153,12 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val ready = results.filter { it.second.ok }.map { it.second.name }
         val failed = results.filter { !it.second.ok }.map { "${it.first}: ${it.second.message}" }
         val title = when {
-            failed.isEmpty() -> "${ready.size} mods are ready"
-            ready.isEmpty() -> "Those files could not be imported"
-            else -> "${ready.size} of ${results.size} mods are ready"
+            failed.isEmpty() -> app.getString(R.string.ModsReady, ready.size)
+            ready.isEmpty() -> app.getString(R.string.ModsNoneReady)
+            else -> app.getString(R.string.ModsSomeReady, ready.size, results.size)
         }
         val parts = ArrayList<String>()
-        if (ready.isNotEmpty()) parts += ready.joinToString(", ") + ". Turn them on under Mods in the game's settings."
+        if (ready.isNotEmpty()) parts += app.getString(R.string.ModsReadyText, ready.joinToString(", "))
         if (failed.isNotEmpty()) parts += failed.joinToString("\n")
         return ModImportResult(failed.isEmpty(), "", "", "", parts.joinToString("\n\n"), title)
     }
@@ -143,7 +178,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
                     return@withContext
                 }
                 if (install == null) {
-                    transferResult = TransferResult(false, "Set up the game first", "Drop your disc image here to start.")
+                    transferResult = TransferResult(false, app.getString(R.string.SetUpFirstTitle), app.getString(R.string.SetUpFirstText))
                     return@withContext
                 }
                 kinds[DropKind.Saves]?.firstOrNull()?.let { importSaves(it) }
@@ -181,7 +216,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         miiBusy = true
         viewModelScope.launch(Dispatchers.IO) {
             val result = runCatching { MiiImport.import(app, uris) }
-                .getOrElse { TransferResult(false, "The Miis could not be imported", it.message ?: "Unknown error.") }
+                .getOrElse { TransferResult(false, app.getString(R.string.MiisFailed), it.message ?: app.getString(R.string.UnknownError)) }
             withContext(Dispatchers.Main) {
                 miiBusy = false
                 transferResult = result
@@ -199,7 +234,9 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         if (saveBusy) return
         saveBusy = true
         viewModelScope.launch(Dispatchers.IO) {
-            val result = runCatching(work).getOrElse { TransferResult(false, "The saves could not be moved", it.message ?: "Unknown error.") }
+            val result = runCatching(work).getOrElse {
+                TransferResult(false, app.getString(R.string.SavesFailed), it.message ?: app.getString(R.string.UnknownError))
+            }
             val saves = Storage.saveBytes(app)
             withContext(Dispatchers.Main) {
                 saveBusy = false
@@ -218,6 +255,199 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     init {
         if (Imports.state.value is ImportState.Running) screen = Screen.Import
+    }
+
+    /** A newer release to offer (Updates), over the launcher until the player answers. */
+    var update by mutableStateOf<Release?>(null)
+        private set
+
+    /** The update's download and hand-over under way: its share done (0 to 1), or null. */
+    var updateProgress by mutableStateOf<Float?>(null)
+        private set
+
+    /** Why the last Update did not reach Android's installer, shown in the prompt. */
+    var updateFailure by mutableStateOf<UpdateFailure?>(null)
+        private set
+
+    /** Android lets no app install packages until the player allows it for Nebula. */
+    var updateNeedsPermission by mutableStateOf(false)
+        private set
+
+    /** The check at start (Settings, Updates); on unless the player turns it off. */
+    var updatesAtStart by mutableStateOf(Updates.enabled(application))
+        private set
+
+    private val updateCanceled = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    // Not now (or Skip) answered: no other prompt in this run.
+    private var updateAnswered = false
+
+    // Handed to Android's installer, waiting on its answer (onInstallAnswered).
+    private var installing: Release? = null
+
+    init {
+        // The kept answer at once, the check's when it comes; it never holds up Play (a late answer is kept and
+        // offered at the next start).
+        offerUpdate(Updates.pending(app))
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Updates.begin(app) { release -> main.post { offerUpdate(release) } }
+        Updates.installAnswered = { failure -> onInstallAnswered(failure) }
+    }
+
+    // The installer did not install (declined, refused, blocked, no room, failed): the prompt again, with why. The
+    // release stays kept, so the next start offers it too.
+    private fun onInstallAnswered(failure: UpdateFailure?) {
+        val release = installing ?: return
+        installing = null
+        if (failure == null) return
+        updateAnswered = false
+        updateNeedsPermission = false
+        update = release
+        updateFailure = failure
+    }
+
+    override fun onCleared() {
+        Updates.installAnswered = null
+        super.onCleared()
+    }
+
+    private fun offerUpdate(release: Release?) {
+        // Installing replaces the app and ends a game running in its process: never offered meanwhile.
+        if (release == null || updateAnswered || updateProgress != null || SaveTransfer.gameRunning(app)) return
+        update = release
+    }
+
+    fun updateLater() {
+        updateAnswered = true
+        update = null
+        updateFailure = null
+        updateNeedsPermission = false
+    }
+
+    fun updateSkip() {
+        update?.let { Updates.skip(app, it.version) }
+        updateLater()
+    }
+
+    fun updateCancel() {
+        updateCanceled.set(true)
+    }
+
+    fun updateNow() {
+        val release = update ?: return
+        if (updateProgress != null || SaveTransfer.gameRunning(app)) return
+        if (!Updates.canInstall(app)) {
+            updateNeedsPermission = true
+            return
+        }
+        updateNeedsPermission = false
+        updateFailure = null
+        updateCanceled.set(false)
+        updateProgress = 0f
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        Thread({
+            var shown = -1
+            val result = runCatching {
+                val apk = Updates.download(app, release, { bytes ->
+                    // A step per percent reaches the screen, not one per piece read.
+                    val percent = if (release.apkBytes > 0L) (bytes * 100L / release.apkBytes).toInt().coerceIn(0, 100) else 0
+                    if (percent != shown) {
+                        shown = percent
+                        main.post { if (updateProgress != null) updateProgress = percent / 100f }
+                    }
+                }, updateCanceled::get)
+                Updates.install(app, apk)
+            }
+            main.post {
+                updateProgress = null
+                result.onSuccess {
+                    // Android's installer asks the player now (UpdateInstallReceiver) and replaces the app, or answers
+                    // why not (onInstallAnswered).
+                    installing = release
+                    updateAnswered = true
+                    update = null
+                }
+                result.onFailure { error ->
+                    if (!updateCanceled.get()) updateFailure = (error as? UpdateException)?.failure ?: UpdateFailure.Download
+                }
+            }
+        }, "nebula-update").start()
+    }
+
+    /** The system's "install unknown apps" switch for Nebula. */
+    fun openInstallPermission(context: Context) {
+        context.startActivity(
+            Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+
+    fun updateUpdatesAtStart(on: Boolean) {
+        updatesAtStart = on
+        Updates.setEnabled(app, on)
+        if (!on && updateProgress == null) update = null
+    }
+
+    /** The last benchmark's result (Settings, Performance); null before the first or after a run without one. */
+    var benchmark by mutableStateOf(Benchmark.read(application))
+        private set
+
+    /** The run that just ended wrote no result. */
+    var benchmarkUnfinished by mutableStateOf(false)
+        private set
+
+    /** Whether [benchmark] still holds against config.ini (Benchmark.state); read again at every return here. */
+    var benchmarkState by mutableStateOf(benchmark?.let { Benchmark.state(application, it) } ?: BenchmarkState.Stale)
+        private set
+
+    /** Apply could not write config.ini. */
+    var benchmarkApplyFailed by mutableStateOf(false)
+        private set
+
+    /** From the launcher's activity, like Play: the game runs the benchmark and ends back here (resumed reads it). */
+    fun startBenchmark(activity: Context) {
+        if (install == null || SaveTransfer.gameRunning(app)) return
+        Benchmark.clear(app)
+        benchmark = null
+        benchmarkUnfinished = false
+        benchmarkState = BenchmarkState.Stale
+        benchmarkApplyFailed = false
+        GameFiles.controls(app).edit()
+            .putLong(LAUNCHED_AT, System.currentTimeMillis())
+            .putBoolean(BENCHMARK_RAN, true)
+            .commit()
+        activity.startActivity(Intent(activity, GameActivity::class.java).putExtra(Benchmark.EXTRA, true)
+            .putStringArrayListExtra(GpuDrivers.EXTRA, ArrayList(GpuDrivers.launchArguments(app))))
+    }
+
+    fun applyBenchmark() {
+        val result = benchmark ?: return
+        if (SaveTransfer.gameRunning(app)) return
+        benchmarkState = Benchmark.state(app, result)
+        if (benchmarkState != BenchmarkState.Current) return
+        val ok = Benchmark.apply(app, result)
+        benchmarkApplyFailed = !ok
+        benchmarkState = Benchmark.state(app, result)
+    }
+
+    // Back from a benchmark run: its result, or that it did not finish.
+    private fun checkBenchmark() {
+        val prefs = GameFiles.controls(app)
+        // config.ini may have changed in the game's menu meanwhile.
+        benchmark?.let { benchmarkState = Benchmark.state(app, it) }
+        if (!prefs.getBoolean(BENCHMARK_RAN, false)) return
+        // The file is written whole before the game exits; without it, a game process still ending is waited for
+        // (the next return here reads it).
+        val result = Benchmark.read(app)
+        if (result == null && SaveTransfer.gameRunning(app)) return
+        prefs.edit().remove(BENCHMARK_RAN).apply()
+        // This launcher's run: its version is the one the result holds for (Benchmark.state).
+        if (result != null) Benchmark.recordRanBy(app)
+        benchmark = result
+        benchmarkUnfinished = result == null
+        benchmarkState = result?.let { Benchmark.state(app, it) } ?: BenchmarkState.Stale
+        benchmarkApplyFailed = false
+        screen = Screen.Settings
     }
 
     fun back(): Boolean {
@@ -242,12 +472,15 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Main) { saveBytes = saves }
         }
         if (install == null && screen == Screen.Home) screen = Screen.Welcome
+        // Back from the system's settings with installing allowed: the prompt offers Update again.
+        if (updateNeedsPermission && Updates.canInstall(app)) updateNeedsPermission = false
+        checkBenchmark()
         checkLastRun()
     }
 
     fun choose(uri: Uri) {
         val resolver = app.contentResolver
-        var name = uri.lastPathSegment ?: "disc image"
+        var name = uri.lastPathSegment ?: app.getString(R.string.DiscImage)
         var bytes = -1L
         runCatching {
             resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
@@ -263,7 +496,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val identity = runCatching {
                 resolver.openFileDescriptor(uri, "r")!!.use { DiscIdentity.parse(Importer.identify(it.fd)) }
-            }.getOrElse { DiscIdentity(false, "", "", "", "The disc image could not be read: ${it.message}") }
+            }.getOrElse { DiscIdentity(false, "", "", "", app.getString(R.string.DiscUnreadable, it.message.orEmpty())) }
             withContext(Dispatchers.Main) {
                 if (disc?.uri == uri) disc = disc?.copy(identity = identity)
             }
@@ -303,16 +536,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         screen = Screen.Disc
     }
 
-    fun updateGraphics(value: GraphicsSettings) {
-        graphics = value
-        value.write(app)
-    }
-
-    fun updateControls(value: ControlsSettings) {
-        controls = value
-        value.write(app)
-    }
-
     fun removeGame() {
         Storage.removeGame(app)
         install = null
@@ -323,10 +546,19 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     /** From the launcher's activity, so the game joins its task and ends back here. */
     fun launchGame(activity: Context) {
         GameFiles.controls(app).edit().putLong(LAUNCHED_AT, System.currentTimeMillis()).commit()
-        activity.startActivity(Intent(activity, GameActivity::class.java))
+        activity.startActivity(Intent(activity, GameActivity::class.java)
+            .putStringArrayListExtra(GpuDrivers.EXTRA, ArrayList(GpuDrivers.launchArguments(app))))
     }
 
     private fun checkLastRun() {
+        // The imported graphics driver showed no frame: the system's is selected again, and the player told why.
+        GpuDrivers.failedStart(app)?.let { name ->
+            gpuDrivers = GpuDrivers.list(app)
+            gpuDriver = GpuDrivers.selected(app)
+            GameFiles.controls(app).edit().remove(LAUNCHED_AT).apply()
+            gameExit = GameExit(app.getString(R.string.DriverFailed), app.getString(R.string.DriverFailedText, name), GameFiles.log(app).isFile)
+            return
+        }
         val prefs = GameFiles.controls(app)
         val launchedAt = prefs.getLong(LAUNCHED_AT, 0L)
         if (launchedAt == 0L) return
@@ -334,7 +566,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val hasLog = GameFiles.log(app).isFile
         val error = GameFiles.lastError(app)
         if (error.isFile) {
-            gameExit = GameExit("The game could not continue", error.readText().trim().ifEmpty { "Unknown error." }, hasLog)
+            gameExit = GameExit(app.getString(R.string.GameCouldNotContinue), error.readText().trim().ifEmpty { app.getString(R.string.UnknownError) }, hasLog)
             error.delete()
             return
         }
@@ -342,17 +574,16 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         val exit = activities.getHistoricalProcessExitReasons(app.packageName, 0, 8)
             .firstOrNull { it.processName.endsWith(":game") && it.timestamp >= launchedAt } ?: return
         val message = when (exit.reason) {
-            ApplicationExitInfo.REASON_CRASH, ApplicationExitInfo.REASON_CRASH_NATIVE ->
-                "The game stopped unexpectedly. The log of that run can help find out why."
-            ApplicationExitInfo.REASON_ANR -> "The game stopped responding and was closed."
-            ApplicationExitInfo.REASON_LOW_MEMORY ->
-                "Android closed the game to free memory. Closing other apps before playing can help."
+            ApplicationExitInfo.REASON_CRASH, ApplicationExitInfo.REASON_CRASH_NATIVE -> app.getString(R.string.GameCrashed)
+            ApplicationExitInfo.REASON_ANR -> app.getString(R.string.GameAnr)
+            ApplicationExitInfo.REASON_LOW_MEMORY -> app.getString(R.string.GameLowMemory)
             else -> return
         }
-        gameExit = GameExit("The game closed", message, hasLog)
+        gameExit = GameExit(app.getString(R.string.GameClosed), message, hasLog)
     }
 
     companion object {
         private const val LAUNCHED_AT = "launchedAt"
+        private const val BENCHMARK_RAN = "benchmarkRan"
     }
 }

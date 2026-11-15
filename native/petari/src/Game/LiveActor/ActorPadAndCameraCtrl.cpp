@@ -6,11 +6,10 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Render/Clip.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     const char* sFileName = "PadAndCameraCtrl";
-    NEBULA_TUNABLE(f32, sDefaultDistanceInvalid, 3000.0f);
+    const f32 sDefaultDistanceInvalid = 3000.0f;
 };  // namespace
 
 ActorPadAndCameraCtrl::ActorPadAndCameraCtrl(const ModelManager* pModelManager, const Vec3f* pPosition)

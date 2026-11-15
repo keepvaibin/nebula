@@ -12,21 +12,17 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_updatePowerUp_1, "updatePowerUp.1", 200);
 
 namespace {
     static const s32 sAppearKameckTime = NebulaFrameClock::stepsOfSeconds(2);
     static const s32 sVs1DemoAppearSeStopTime = NebulaFrameClock::stepsOfMilliseconds(4500);
-    NEBULA_TUNABLE(s32, sDeadVoiceSeTiming, 18);
-    NEBULA_TUNABLE(s32, sDeadMotionSeTiming, 150);
-    NEBULA_TUNABLE(s32, sAfterBossBgmTiming, 285);
-    NEBULA_TUNABLE(s32, sAppearPowerStarSeTiming, 345);
-    NEBULA_TUNABLE(s32, sVs2DemoAppearSeStopTime, 155);
-    NEBULA_TUNABLE(s32, sVs2DemoAppearVoiceTiming, 60);
+    const s32 sDeadVoiceSeTiming = 18;
+    const s32 sDeadMotionSeTiming = 150;
+    const s32 sAfterBossBgmTiming = 285;
+    const s32 sAppearPowerStarSeTiming = 345;
+    const s32 sVs2DemoAppearSeStopTime = 155;
+    const s32 sVs2DemoAppearVoiceTiming = 60;
 };  // namespace
 
 BossKameckDemoPosition::BossKameckDemoPosition() : LiveActor("キャスト位置") {
@@ -238,7 +234,7 @@ void BossKameckBattleDemo::updatePowerUp(const char* pAnimName, const char* pDem
         MR::startLevelSound(mHost, pLevelSe);
     }
 
-    if (MR::isStep(this, cStep_updatePowerUp_1)) {
+    if (MR::isStep(this, 200)) {
         mHost->startDemoAppearKameck();
     }
 

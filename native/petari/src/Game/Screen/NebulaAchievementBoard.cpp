@@ -32,7 +32,6 @@
 #include <NebulaGpu.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace NrvNebulaAchievementBoard {
@@ -53,75 +52,75 @@ namespace {
     // Board units: the layout's units made square. The game draws its 2D for a 16:9 picture on a canvas three quarters
     // as wide as it is shown (MR::isScreen16Per9), so the board's root pane narrows by 0.75 there and every size here
     // is what it looks like. The screen is 456 high at 16:9 and wider, taller below 16:9.
-    NEBULA_TUNABLE(f32, cMargin, 16.0f);   // the panel from the screen's sides and top
-    NEBULA_TUNABLE(f32, cFooter, 50.0f);   // below the panel: Back and the pad's guide
-    NEBULA_TUNABLE(f32, cPad, 18.0f);      // inside the panel
-    NEBULA_TUNABLE(f32, cHeaderHeight, 38.0f);
-    NEBULA_TUNABLE(f32, cTabHeight, 30.0f);
-    NEBULA_TUNABLE(f32, cTabGap, 8.0f);
-    NEBULA_TUNABLE(f32, cTabPadding, 18.0f);
-    NEBULA_TUNABLE(f32, cBackHeight, 32.0f);
-    NEBULA_TUNABLE(f32, cFilterHeight, 24.0f);
-    NEBULA_TUNABLE(f32, cFilterSize, 13.0f);
-    NEBULA_TUNABLE(f32, cFilterPadding, 14.0f);
-    NEBULA_TUNABLE(f32, cGap, 12.0f);  // between cards
-    NEBULA_TUNABLE(f32, cCardMinWidth, 330.0f);
-    NEBULA_TUNABLE(f32, cCardMinHeight, 78.0f);
-    NEBULA_TUNABLE(f32, cCardPad, 14.0f);
-    NEBULA_TUNABLE(f32, cBadge, 56.0f);
-    NEBULA_TUNABLE(f32, cIcon, 42.0f);
-    NEBULA_TUNABLE(f32, cBarHeight, 7.0f);
-    NEBULA_TUNABLE(f32, cTileMinWidth, 230.0f);
-    NEBULA_TUNABLE(f32, cTileHeight, 66.0f);
-    NEBULA_TUNABLE(f32, cSectionHeight, 34.0f);
-    NEBULA_TUNABLE(s32, cMaxColumns, 4);
+    const f32 cMargin = 16.0f;   // the panel from the screen's sides and top
+    const f32 cFooter = 50.0f;   // below the panel: Back and the pad's guide
+    const f32 cPad = 18.0f;      // inside the panel
+    const f32 cHeaderHeight = 38.0f;
+    const f32 cTabHeight = 30.0f;
+    const f32 cTabGap = 8.0f;
+    const f32 cTabPadding = 18.0f;
+    const f32 cBackHeight = 32.0f;
+    const f32 cFilterHeight = 24.0f;
+    const f32 cFilterSize = 13.0f;
+    const f32 cFilterPadding = 14.0f;
+    const f32 cGap = 12.0f;  // between cards
+    const f32 cCardMinWidth = 330.0f;
+    const f32 cCardMinHeight = 78.0f;
+    const f32 cCardPad = 14.0f;
+    const f32 cBadge = 56.0f;
+    const f32 cIcon = 42.0f;
+    const f32 cBarHeight = 7.0f;
+    const f32 cTileMinWidth = 230.0f;
+    const f32 cTileHeight = 66.0f;
+    const f32 cSectionHeight = 34.0f;
+    const s32 cMaxColumns = 4;
 
     // Text heights.
-    NEBULA_TUNABLE(f32, cTitleSize, 25.0f);
-    NEBULA_TUNABLE(f32, cTabSize, 15.0f);
-    NEBULA_TUNABLE(f32, cNameSize, 17.5f);
-    NEBULA_TUNABLE(f32, cHintSize, 13.0f);
-    NEBULA_TUNABLE(f32, cMetaSize, 12.0f);
-    NEBULA_TUNABLE(f32, cSummarySize, 16.0f);
-    NEBULA_TUNABLE(f32, cValueSize, 21.0f);
-    NEBULA_TUNABLE(f32, cLabelSize, 12.5f);
-    NEBULA_TUNABLE(f32, cSectionSize, 15.0f);
-    NEBULA_TUNABLE(f32, cFooterSize, 14.0f);
-    NEBULA_TUNABLE(f32, cFooterGlyph, 21.0f);
-    NEBULA_TUNABLE(f32, cBackGlyph, 18.0f);
-    NEBULA_TUNABLE(f32, cTitleGlyph, 26.0f);
+    const f32 cTitleSize = 25.0f;
+    const f32 cTabSize = 15.0f;
+    const f32 cNameSize = 17.5f;
+    const f32 cHintSize = 13.0f;
+    const f32 cMetaSize = 12.0f;
+    const f32 cSummarySize = 16.0f;
+    const f32 cValueSize = 21.0f;
+    const f32 cLabelSize = 12.5f;
+    const f32 cSectionSize = 15.0f;
+    const f32 cFooterSize = 14.0f;
+    const f32 cFooterGlyph = 21.0f;
+    const f32 cBackGlyph = 18.0f;
+    const f32 cTitleGlyph = 26.0f;
 
-    NEBULA_TUNABLE(f32, cCrownHeight, 0.71f);  // the crown's picture, of its size (measured)
-    NEBULA_TUNABLE(f32, cCrownLift, 0.02f);    // its middle above its box's middle
+    const f32 cCrownHeight = 0.71f;  // the crown's picture, of its size (measured)
+    const f32 cCrownLift = 0.02f;    // its middle above its box's middle
 
     // Colours, 0xRRGGBBAA: the pop-up's blue (InformationWindow) for what is earned, gold to mark it; deep night blue
     // for what is not.
-    NEBULA_TUNABLE(u32, cPanelFill, 0x0A1442C8);
-    NEBULA_TUNABLE(u32, cPanelRing, 0x6C8CE0FF);
-    NEBULA_TUNABLE(u32, cCardFill, 0x3C40D8FF);
-    NEBULA_TUNABLE(u32, cCardRing, 0xFFD860FF);
-    NEBULA_TUNABLE(u32, cLockedFill, 0x1A1E52FF);
-    NEBULA_TUNABLE(u32, cLockedRing, 0x3E4888FF);
-    NEBULA_TUNABLE(u32, cBadgeFill, 0x22248CFF);
-    NEBULA_TUNABLE(u32, cLockedBadgeFill, 0x10123AFF);
-    NEBULA_TUNABLE(u32, cShadow, 0x00000060);
-    NEBULA_TUNABLE(u32, cFocus, 0xFFFFFFFF);
-    NEBULA_TUNABLE(u32, cWhite, 0xFFFFFFFF);
-    NEBULA_TUNABLE(u32, cTextShadow, 0x00000070);
+    const u32 cPanelFill = 0x0A1442C8;
+    const u32 cPanelRing = 0x6C8CE0FF;
+    const u32 cCardFill = 0x3C40D8FF;
+    const u32 cCardRing = 0xFFD860FF;
+    const u32 cLockedFill = 0x1A1E52FF;
+    const u32 cLockedRing = 0x3E4888FF;
+    const u32 cBadgeFill = 0x22248CFF;
+    const u32 cLockedBadgeFill = 0x10123AFF;
+    const u32 cShadow = 0x00000060;
+    const u32 cFocus = 0xFFFFFFFF;
+    const u32 cWhite = 0xFFFFFFFF;
+    const u32 cTextShadow = 0x00000070;
     const u32 cSubText = NEBULA_RGBA(0xD2, 0xDC, 0xFF, 0xFF);
-    NEBULA_TUNABLE(u32, cLockedText, 0xA6AED6FF);
-    NEBULA_TUNABLE(u32, cLockedSubText, 0x7E88B8FF);
-    NEBULA_TUNABLE(u32, cGold, 0xFFD860FF);
-    NEBULA_TUNABLE(u32, cGoldTop, 0xFFF4B0FF);
-    NEBULA_TUNABLE(u32, cGoldBottom, 0xFFC038FF);
-    NEBULA_TUNABLE(u32, cIconLocked, 0x56628CFF);
-    NEBULA_TUNABLE(u32, cButtonText, 0x505050FF);  // the game's buttons' grey (BackButton's Txt material)
-    NEBULA_TUNABLE(u32, cTrack, 0x0000004C);
-    NEBULA_TUNABLE(u32, cTileFill, 0x2C2FA8F0);
-    NEBULA_TUNABLE(u32, cTileRing, 0x6C74E8FF);
+    const u32 cLockedText = 0xA6AED6FF;
+    const u32 cLockedSubText = 0x7E88B8FF;
+    const u32 cGold = 0xFFD860FF;
+    const u32 cGoldTop = 0xFFF4B0FF;
+    const u32 cGoldBottom = 0xFFC038FF;
+    const u32 cIconLocked = 0x56628CFF;
+    const u32 cButtonText = 0x505050FF;  // the game's buttons' grey (BackButton's Txt material)
+    const u32 cTrack = 0x0000004C;
+    const u32 cTileFill = 0x2C2FA8F0;
+    const u32 cTileRing = 0x6C74E8FF;
 
-    NEBULA_TUNABLE(s32, cFadeFrames, 20);  // to black, and back from it
-    NEBULA_TUNABLE(s32, cSwitchFrames, 12);
+    const s32 cFadeFrames = 20;  // to black, and back from it
+    const s32 cSwitchFrames = 12;
 
 
     // The picture font's buttons (MR::addPictureFontTag).

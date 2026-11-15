@@ -41,17 +41,10 @@ SamplerState g_wrap : register(s0);
 RWStructuredBuffer<uint> g_counters : register(u8);
 
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
-
-// Two numbers in 0-1 for a pixel, a frame and a use: interleaved gradient noise (Jimenez 2014), turned each frame,
-// and a hash of the same. The second layer has no filter after it: straight at the light.
-float2 light_noise(uint2 pixel, uint frame, uint light) {
-    if (rt_second_layer()) {
-        return float2(0.0f, 0.0f);
-    }
-    const float2 at = float2(pixel) + 5.588238f * float((frame + light * 17u) & 63u);
-    const float a = frac(52.9829189f * frac(0.06711056f * at.x + 0.00583715f * at.y));
-    const float b = float(rt_hash(pixel.x + pixel.y * 8192u + frame * 9781u + light * 6271u) & 0xFFFFu) / 65536.0f;
-    return float2(a, b);
+// sRGB's decode (the pictures the programs read are linear). Unclamped above 1, as traced_lin.
+float3 rt_lin(float3 c) {
+    c = max(c, 0.0f);
+    return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
 }
 
 float rt_unit(uint seed) {
@@ -136,29 +129,6 @@ float3 within(float3 toward, float spread, float2 noise) {
     return normalize(toward + (side * cos(turn) + up * sin(turn)) * out_);
 }
 
-// A direction over the half-space `n` faces, more often near `n` (by the cosine), by two numbers in 0-1.
-float3 around(float3 n, float2 noise) {
-    const float turn = 6.2831853f * noise.x;
-    const float out_ = sqrt(noise.y);
-    const float3 side = normalize(abs(n.y) < 0.9f ? cross(n, float3(0.0f, 1.0f, 0.0f)) : cross(n, float3(1.0f, 0.0f, 0.0f)));
-    const float3 up = cross(side, n);
-    return normalize(side * (out_ * cos(turn)) + up * (out_ * sin(turn)) + n * sqrt(max(1.0f - noise.y, 0.0f)));
-}
-
-// How far the ray goes before something solid stands on it: `reach` when nothing does.
-float clear_to(float3 origin, float3 direction, float reach) {
-    RayDesc ray;
-    ray.Origin = origin;
-    ray.Direction = direction;
-    ray.TMin = 0.0f;
-    ray.TMax = reach;
-    RayQuery<RAY_FLAG_NONE> query;
-    query.TraceRayInline(g_scene, RAY_FLAG_FORCE_OPAQUE, kMaskSolid, ray);
-    query.Proceed();
-    InterlockedAdd(g_counters[17], 1u);
-    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? query.CommittedRayT() : reach;
-}
-
 // The alpha of item `item`'s first map where a ray meets its triangle `triangle_` at `where_` (1: no map to read).
 float alpha_there(uint item, uint triangle_, float2 where_) {
     const uint at = g_at.x + item * kItemBytes;
@@ -176,17 +146,53 @@ float alpha_there(uint item, uint triangle_, float2 where_) {
     return g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate, 0.0f).a;
 }
 
+// Whether the clip areas show a clipped map part's point `at` (the eye's space): the game draws the
+// part whole and paints it over where its volumes say (FallOutFieldDraw), so what shows is its points inside some
+// volume (g_clip.z 1) or outside every one (2). The volumes' unit shapes: nebula_frame_list.h NEBULA_CLIP_*.
+bool clip_shows(float3 at) {
+    const float4 p = float4(at, 1.0f);
+    bool inside = false;
+    for (uint v = 0u; v < g_clip.y && !inside; ++v) {
+        const uint base = g_at.x + g_clip.x + v * 64u;
+        const float3 u = float3(dot(asfloat(g_items.Load4(base)), p), dot(asfloat(g_items.Load4(base + 16u)), p),
+                                dot(asfloat(g_items.Load4(base + 32u)), p));
+        const uint shape = g_items.Load(base + 48u);
+        if (shape == 0u) {
+            inside = dot(u, u) < 1.0f;
+        } else if (shape == 1u) {
+            inside = all(abs(u) <= 1.0f);
+        } else if (shape == 2u) {
+            inside = abs(u.x) <= 1.0f && abs(u.z) <= 1.0f && u.y >= 0.0f && u.y <= 2.0f;
+        } else {
+            const float rate = shape == 3u ? u.y : 1.0f - u.y;
+            inside = u.y >= 0.0f && u.y <= 1.0f && u.x * u.x + u.z * u.z < rate * rate;
+        }
+    }
+    return g_clip.z == 2u ? !inside : inside;
+}
+
 // Whether an alpha-tested surface is there where a ray meets it: item `item`'s triangle `triangle_`, at `where_`
-// among its corners (the second and third's weights). Its first map's alpha at the vertices' first coordinates,
-// against the material's threshold: what the cutout of a leaf, a fence or a flower is drawn by. Where the item gives
-// no mesh or no map (a skinned or frame-made mesh), it is not there: a sheet whose holes the pass cannot read casts
-// no shadow rather than a solid one (counted).
-bool cutout_there(uint item, uint triangle_, float2 where_) {
+// among its corners (the second and third's weights), `at_eye` the place met. Its first map's alpha at the vertices'
+// first coordinates, against the material's threshold: what the cutout of a leaf, a fence or a flower is drawn by.
+// Where the item gives no mesh or no map (a skinned or frame-made mesh), it is not there: a sheet whose holes the
+// pass cannot read casts no shadow rather than a solid one (counted). A clipped map part (kItemClipped) is there
+// where its clip areas show it (and its map, if it has one and its program alpha-tests, says so).
+bool cutout_there(uint item, uint triangle_, float2 where_, float3 at_eye) {
     const uint at = g_at.x + item * kItemBytes;
     const uint4 first = g_items.Load4(at), second = g_items.Load4(at + 16u);
     const uint2 map = g_items.Load2(at + 32u);
     const uint arena = first.z;
+    const bool clipped = (first.y & kItemClipped) != 0u;
+    if (clipped && !clip_shows(at_eye)) {
+        return false;
+    }
+    if (clipped && (first.y & kItemAlphaTested) == 0u) {
+        return true;  // its program discards nothing: its map's alpha is no test of it
+    }
     if (arena >= 8u || map.x == 0xFFFFFFFFu) {
+        if (clipped) {
+            return true;
+        }
         InterlockedAdd(g_counters[22], 1u);
         return false;
     }
@@ -204,19 +210,32 @@ bool cutout_there(uint item, uint triangle_, float2 where_) {
 // How far along the ray something of `mask` stands, or -1 where nothing does; `met`: the item of what does (the
 // nearest, unless `any` takes the first the walk meets). With kMaskCutout in the mask, alpha-tested surfaces stand
 // there where their map says they are.
-float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool any, out uint met) {
+// `own`: the item whose sun card (kKindCard) the ray passes over, the billboard it starts from (0xFFFFFFFF none);
+// with kOwnWhole every triangle of that item, opaque ones too (a clump of leaves, a crown, a cloud).
+float occluder_at_but(float3 origin, float3 direction, float reach, uint mask, bool any, uint own, out uint met) {
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
     ray.TMin = 0.0f;
     ray.TMax = reach;
-    const uint flags = ((mask & kMaskCutout) != 0u ? RAY_FLAG_NONE : RAY_FLAG_FORCE_OPAQUE) |
+    const bool own_whole = own != 0xFFFFFFFFu && (own & kOwnWhole) != 0u;
+    const uint own_id = own & ~kOwnWhole;
+    const uint flags = (own_whole ? RAY_FLAG_FORCE_NON_OPAQUE
+                        : (mask & kMaskCutout) != 0u || own != 0xFFFFFFFFu ? RAY_FLAG_NONE : RAY_FLAG_FORCE_OPAQUE) |
                        (any ? RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH : RAY_FLAG_NONE);
     RayQuery<RAY_FLAG_NONE> query;
     query.TraceRayInline(g_scene, flags, mask, ray);
     while (query.Proceed()) {
-        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
-            cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())) {
+        if (query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE) {
+            continue;
+        }
+        const uint kind = query.CandidateInstanceContributionToHitGroupIndex();
+        if (own != 0xFFFFFFFFu && query.CandidateInstanceID() == own_id && (own_whole || (kind & kKindCard) != 0u)) {
+            continue;  // the billboard's own sun card; its own clump
+        }
+        if ((kind & kKindCutout) == 0u ||
+            cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(),
+                         ray.Origin + ray.Direction * query.CandidateTriangleRayT())) {
             query.CommitNonOpaqueTriangleHit();
         }
     }
@@ -229,11 +248,77 @@ float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool 
     return query.CommittedRayT();
 }
 
+float occluder_at(float3 origin, float3 direction, float reach, uint mask, bool any, out uint met) {
+    return occluder_at_but(origin, direction, reach, mask, any, 0xFFFFFFFFu, met);
+}
+
+// The light a water surface gathers under it: at the place item `item`'s triangle
+// `triangle_` meets the sun's ray, its first map's brightness, two samples drifting apart over time (0.03 of the map
+// a second), their product over the square of the map's mean (its smallest level): 1 on the mean, more on the bright
+// lines the map's waves make, less between. 1 where the item has no mesh or map.
+static const float kCaustic = 0.6f;
+float caustic_there(uint item, uint triangle_, float2 where_) {
+    const uint at = g_at.x + item * kItemBytes;
+    const uint4 first = g_items.Load4(at), second = g_items.Load4(at + 16u);
+    const uint map = g_items.Load(at + 32u);
+    if (first.z >= 8u || map == 0xFFFFFFFFu) {
+        return 1.0f;
+    }
+    const uint base = mesh_at(first.z);
+    const uint3 corner = triangle_corners(first, second, triangle_);
+    const float2 c0 = asfloat(arena_words(first.z, base + first.w + corner.x * 24u + 12u).yz);
+    const float2 c1 = asfloat(arena_words(first.z, base + first.w + corner.y * 24u + 12u).yz);
+    const float2 c2 = asfloat(arena_words(first.z, base + first.w + corner.z * 24u + 12u).yz);
+    const float2 coordinate = c0 * (1.0f - where_.x - where_.y) + c1 * where_.x + c2 * where_.y;
+    const float seconds = g_stage.z;  // the game's time, not the frames shown
+    const float3 luma = float3(0.2126f, 0.7152f, 0.0722f);
+    const float a = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate + seconds * float2(0.03f, 0.017f), 0.0f).rgb, luma);
+    const float b = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate * 1.37f - seconds * float2(0.019f, 0.03f), 0.0f).rgb, luma);
+    const float mean = max(dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, coordinate, 16.0f).rgb, luma), 0.05f);
+    return clamp(1.0f + kCaustic * (a * b / (mean * mean) - 1.0f), 0.5f, 1.8f);
+}
+
+// Water's clear way, one for every stage: green's 1/e way in units, so that red loses 10 % in
+// 600 units (red's absorption kWaterAbsorb.r / 34270 = 1.756e-4 a unit): this art's lakes are swimming pools, clear
+// and colourless; the stage's own (g_look.w) is not read.
+static const float kWaterClear = 34270.0f;
+float rt_water_clear() {
+    return kWaterClear;
+}
+static const float kWaterLayer = 2.0f;  // water hits this near one another are one sheet of it drawn twice
+// Pure water's absorption against green's (Pope and Fry 1997: 0.340, 0.0565, 0.0092 per metre at 650, 550, 450 nm):
+// the way is in units of the stage's water clear, green's 1/e way.
+static const float3 kWaterAbsorb = float3(0.340f, 0.0565f, 0.0092f) / 0.0565f;
+
+// What a clear thing lets through at its own thickness ("everything clear"),
+// linear: lerp(white, its art's colour, k), k by its class as its own numbers say (item word 15's index, word
+// 11's roughness): crystal (index 1.7 and over) 0.25; ice (1.30 to 1.32) 0.35, an ice being (rougher, 0.07 and over)
+// 0.7; other glass 0.2 and never under 0.75 luminance. `at`: the item's first byte in g_items.
+float3 rt_clear_through(uint at) {
+    const uint colour = g_items.Load(at + 48u);
+    const float3 art = max(rt_lin(float3(float(colour & 255u), float(colour >> 8u & 255u), float(colour >> 16u & 255u)) / 255.0f),
+                           0.002f);
+    const uint ior_bits = g_items.Load(at + 60u) >> 12u & 255u;
+    const float ior = ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f : 1.5f;
+    const float roughness = float(g_items.Load(at + 44u) >> 16u & 255u) / 255.0f;
+    const bool ice = ior >= 1.295f && ior <= 1.325f;
+    const float k = ior >= 1.7f ? 0.25f : ice ? (roughness >= 0.07f ? 0.7f : 0.35f) : 0.2f;
+    float3 through = lerp(float3(1.0f, 1.0f, 1.0f), art, k);
+    if (!ice && ior < 1.7f) {
+        // Clear glass keeps at least 0.75 of white's luminance: what it takes, scaled down to that.
+        const float lum = dot(through, float3(0.2126f, 0.7152f, 0.0722f));
+        through = lum < 0.75f ? 1.0f - (1.0f - through) * (0.25f / max(1.0f - lum, 1e-4f)) : through;
+    }
+    return through;
+}
+
 // What the blended things on a ray let through, rgb; `first`: how far along the first of them stands (-1:
 // none). Every candidate is weighed and none committed (the product does not care for order), at most four: glass and
 // crystal their colour's square root (the absorption exp(-sigma t) with kGlassTint 0.5: the thickness cancels) by
-// 1 - F at normal incidence (index 1.5); water 0.9; a translucent thing (a cloud, a ghost, jelly) 1 - 0.5 alpha at
-// the hit; what glows, what is painted and the rest nothing.
+// 1 - F at normal incidence (index 1.5); water 0.9 once a ray (a body of water is drawn as several sheets at one
+// place: the surface, its back face, a cup; the others weigh nothing and do not count to the four); a translucent
+// thing (a cloud, a ghost, jelly, steam, a fall) none under 0.4 alpha at the hit and half from 0.6;
+// what glows, what is painted and the rest nothing.
 float3 let_through(float3 origin, float3 direction, float reach, out float first) {
     RayDesc ray;
     ray.Origin = origin;
@@ -244,29 +329,51 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
     query.TraceRayInline(g_scene, RAY_FLAG_FORCE_NON_OPAQUE, kMaskBlended, ray);
     float3 tint = float3(1.0f, 1.0f, 1.0f);
     uint weighed = 0u;
+    bool watered = false;
     first = -1.0f;
+    // The way the ray runs inside water: its water layers' count (hits within kWaterLayer of a layer met
+    // are that layer) and the nearest and farthest.
+    uint waters = 0u;
+    float water_near = 3.0e38f, water_far = 0.0f;
     while (query.Proceed()) {
         const uint item = query.CandidateInstanceID();
         const uint at = g_at.x + item * kItemBytes;
         const uint class_ = g_items.Load(at + 44u) & 255u;
         float3 passes = float3(1.0f, 1.0f, 1.0f);
+        bool counts = true;
         if (class_ == kClassGlass) {
-            const uint colour = g_items.Load(at + 48u);
-            const float3 base = float3(float(colour & 255u), float(colour >> 8u & 255u), float(colour >> 16u & 255u)) / 255.0f;
-            passes = sqrt(max(base, 0.02f)) * 0.96f;
+            // The body's transmittance (its class's through-colour), half a body a face, and 1 - F a face.
+            passes = sqrt(rt_clear_through(at)) * 0.96f;
         } else if (class_ == kClassWater) {
-            passes = float3(0.9f, 0.9f, 0.9f);
+            const float t_water = query.CandidateTriangleRayT();
+            if (waters == 0u || (abs(t_water - water_near) > kWaterLayer && abs(t_water - water_far) > kWaterLayer)) {
+                ++waters;
+                water_near = min(water_near, t_water);
+                water_far = max(water_far, t_water);
+            }
+            counts = !watered;
+            passes = !counts ? float3(1.0f, 1.0f, 1.0f)
+                             : 0.98f * (rt_part(kPartTransmit) >= 3u  // 1 - F head on
+                                           ? caustic_there(item, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())
+                                           : 1.0f).xxx;
+            watered = true;
         } else if (class_ == kClassTranslucent) {
-            passes = (1.0f - 0.5f * alpha_there(item, query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics())).xxx;
+            passes = (1.0f - 0.5f * smoothstep(0.4f, 0.6f, alpha_there(item, query.CandidatePrimitiveIndex(),
+                                                                       query.CandidateTriangleBarycentrics()))).xxx;
         } else {
             continue;
         }
         tint *= passes;
         const float t = query.CandidateTriangleRayT();
         first = first < 0.0f ? t : min(first, t);
-        if (++weighed == 4u) {
+        if (counts && ++weighed == 4u) {
             query.Abort();
         }
+    }
+    // One layer: the point is under that water, the way is to it; two or more: the ray crosses a body of water.
+    if (waters != 0u) {
+        const float way = waters == 1u ? water_near : water_far - water_near;
+        tint *= exp(-way / rt_water_clear() * kWaterAbsorb);
     }
     return tint;
 }
@@ -276,13 +383,58 @@ bool blocked(float3 origin, float3 direction, float reach, uint mask, bool any, 
     return occluder_at(origin, direction, reach, mask, any, met) >= 0.0f;
 }
 
+// Whether anything of `mask` but the items of slot `own` (a light's own body) stands on the ray before `reach`. The
+// walk ends at the first such hit: every candidate is offered (forced non-opaque), the own slot's are passed
+// over; a cutout's only where its texture is there (a railing's holes let the lamp through).
+bool blocked_but(float3 origin, float3 direction, float reach, uint mask, uint own) {
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = 0.0f;
+    ray.TMax = reach;
+    RayQuery<RAY_FLAG_NONE> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_FORCE_NON_OPAQUE, mask, ray);
+    while (query.Proceed()) {
+        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE &&
+            g_items.Load(g_at.x + query.CandidateInstanceID() * kItemBytes) != own &&
+            ((query.CandidateInstanceContributionToHitGroupIndex() & kKindCutout) == 0u ||
+             cutout_there(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(),
+                          ray.Origin + ray.Direction * query.CandidateTriangleRayT()))) {
+            query.CommitNonOpaqueTriangleHit();
+            query.Abort();
+        }
+    }
+    InterlockedAdd(g_counters[17], 1u);
+    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+}
+
 // What an emitter adds at a surface unshadowed, as a share of the surface's own colour: its intensity over the
-// distance squared and its own size squared, by the surface's facing, ending at its reach without a step. Nothing on
-// the thing it belongs to (`self`) nor past its reach.
+// distance squared and its own size squared, by the surface's facing max(n.l, 0) (no wrap),
+// ending at its reach without a step. Nothing on the thing it belongs to (`self`) nor past its reach.
 float3 emitter_light(uint emitter, float3 at, float3 facing, uint self, out float4 place, out uint slot) {
     place = asfloat(g_drops.Load4(emitter));
     const float4 colour = asfloat(g_drops.Load4(emitter + 16u));
     slot = g_drops.Load(emitter + 32u);
+    // A disc (a glowing mesh's kind 1, its word 40 bits 0-2 = 5): lit at its point nearest the
+    // surface (Karis 2013, area lights' representative point), by its own cosine there, one-sided unless bit 3.
+    // place.w stays its radius: the shadow ray's spread (rt_toward_light).
+    float disc_cosine = 1.0f;
+    const uint shape = g_drops.Load(emitter + 40u);
+    if (g_drops.Load(emitter + 36u) == 1u && (shape & 7u) == 5u) {
+        float3 n = float3(float2(shape >> 4u & 0x3FFFu, shape >> 18u) * (2.0f / 16383.0f) - 1.0f, 0.0f);
+        n.z = 1.0f - abs(n.x) - abs(n.y);
+        const float fold = saturate(-n.z);
+        n.xy += float2(n.x >= 0.0f ? -fold : fold, n.y >= 0.0f ? -fold : fold);
+        n = normalize(n);
+        const float3 off = at - place.xyz;
+        float3 across = off - dot(off, n) * n;
+        const float wide = length(across);
+        across *= wide > place.w ? place.w / wide : 1.0f;
+        place.xyz += across;
+        const float3 back = at - place.xyz;
+        const float c = dot(back, n) * rsqrt(max(dot(back, back), 1e-4f));
+        disc_cosine = (shape & 8u) != 0u ? abs(c) : max(c, 0.0f);
+    }
     const float3 to = place.xyz - at;
     const float far2 = dot(to, to);
     if (slot == self || far2 > colour.w * colour.w) {
@@ -290,7 +442,7 @@ float3 emitter_light(uint emitter, float3 at, float3 facing, uint self, out floa
     }
     const float facing_it = max(dot(facing, to) * rsqrt(max(far2, 1e-4f)), 0.0f);
     const float fade = saturate(1.0f - far2 / (colour.w * colour.w));
-    return colour.rgb * (place.w * place.w / (far2 + place.w * place.w) * (0.25f + 0.75f * facing_it) * fade * fade);
+    return colour.rgb * (place.w * place.w / (far2 + place.w * place.w) * facing_it * fade * fade * disc_cosine);
 }
 
 // ---- The surface images (rt_surface.hlsl writes them; every later pass reads them) ----

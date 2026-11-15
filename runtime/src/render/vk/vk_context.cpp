@@ -14,7 +14,7 @@
 
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
-#include <dxgi.h>
+#include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <xess/xess_vk.h>
 #endif
@@ -37,6 +37,11 @@
 
 #if !defined(_WIN32)
 #include <time.h>
+#endif
+
+#if defined(NEBULA_ADRENOTOOLS)
+#include <adrenotools/driver.h>
+#include <dlfcn.h>
 #endif
 
 namespace galaxy::render::vk {
@@ -135,6 +140,31 @@ std::uint32_t dxgi_subsystem(std::uint64_t luid) {
         }
     }
 }
+// Each adapter's place in Windows' order for performance (IDXGIFactory6::EnumAdapterByGpuPreference with
+// DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE: external GPUs, then discrete, then integrated, and the player's choice in
+// Windows' graphics settings), by LUID, so Vulkan takes the GPU Direct3D takes. Empty where DXGI 1.6 is missing.
+std::vector<std::uint64_t> dxgi_performance_order() {
+    std::vector<std::uint64_t> order;
+    const HMODULE module = LoadLibraryExW(L"dxgi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    using Create = HRESULT(WINAPI*)(REFIID, void**);
+    const auto create = module != nullptr ? reinterpret_cast<Create>(GetProcAddress(module, "CreateDXGIFactory1")) : nullptr;
+    Microsoft::WRL::ComPtr<IDXGIFactory6> factory;
+    if (create == nullptr || FAILED(create(IID_PPV_ARGS(&factory)))) {
+        return order;
+    }
+    for (UINT index = 0u;; ++index) {
+        Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+        if (FAILED(factory->EnumAdapterByGpuPreference(index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter)))) {
+            return order;
+        }
+        DXGI_ADAPTER_DESC1 description{};
+        std::uint64_t luid = 0u;
+        if (SUCCEEDED(adapter->GetDesc1(&description)) && (description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0u) {
+            std::memcpy(&luid, &description.AdapterLuid, sizeof(luid));
+            order.push_back(luid);
+        }
+    }
+}
 #endif
 
 // A device as Nebula Settings names it.
@@ -148,7 +178,8 @@ Adapter adapter_of(VkPhysicalDevice device) {
     VkPhysicalDeviceProperties core{};
     vkGetPhysicalDeviceProperties(device, &core);
     Adapter adapter;
-    if (core.apiVersion >= VK_API_VERSION_1_1) {
+    // Not on a Vulkan 1.0 loader's instance, whose 1.1 commands are absent (only Android 8 and older have one).
+    if (core.apiVersion >= VK_API_VERSION_1_1 && vkGetPhysicalDeviceProperties2 != nullptr) {
         VkPhysicalDeviceIDProperties id{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES};
         VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &id};
         vkGetPhysicalDeviceProperties2(device, &properties);
@@ -174,7 +205,45 @@ bool has_device_extension(VkPhysicalDevice device, const char* name) {
     });
 }
 
+// Set once load_vulkan opened the imported driver.
+bool s_imported_driver = false;
+
+// The Vulkan loader: the system's, or on Android (arm64, Adreno) the driver the player imported (launch_args
+// gpu_driver): libadrenotools opens the system's libvulkan.so in a linker namespace of its own whose driver is the
+// package's library, and volk starts from that loader's vkGetInstanceProcAddr. A driver that does not open leaves the
+// system's, said in the log; its "starting" file stays (RendererVk removes it only at a frame the imported driver
+// showed), so the launcher tells the player and selects the system driver again.
+VkResult load_vulkan() {
+#if defined(NEBULA_ADRENOTOOLS)
+    const LaunchArgs& args = launch_args();
+    if (!args.gpu_driver.empty() && !args.gpu_driver_library.empty() && !args.gpu_driver_hooks.empty()) {
+        const std::string folder = args.gpu_driver.string() + "/";
+        void* vulkan = adrenotools_open_libvulkan(RTLD_NOW | RTLD_LOCAL, ADRENOTOOLS_DRIVER_CUSTOM, nullptr,
+                                                  args.gpu_driver_hooks.c_str(), folder.c_str(),
+                                                  args.gpu_driver_library.c_str(), nullptr, nullptr);
+        const auto get_instance_proc_addr =
+            vulkan != nullptr ? reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(vulkan, "vkGetInstanceProcAddr")) : nullptr;
+        if (get_instance_proc_addr != nullptr) {
+            volkInitializeCustom(get_instance_proc_addr);
+            s_imported_driver = true;
+            std::fprintf(stderr, "[vulkan] driver %s from %s\n", args.gpu_driver_library.c_str(), folder.c_str());
+            return VK_SUCCESS;
+        }
+        if (vulkan != nullptr) {
+            dlclose(vulkan);
+        }
+        std::fprintf(stderr, "[vulkan] the imported driver %s did not open; the system driver runs\n",
+                     args.gpu_driver_library.c_str());
+    }
+#endif
+    return volkInitialize();
+}
+
 }  // namespace
+
+bool imported_driver_loaded() noexcept {
+    return s_imported_driver;
+}
 
 Texture::~Texture() {
     Context& context = Context::get();
@@ -186,7 +255,7 @@ Texture::~Texture() {
     const VkImage image_handle = image;
     VmaAllocation_T* const allocation_handle = allocation;
     const VkImageView views[2] = {view, target_view};
-    const VkFramebuffer framebuffers[3] = {framebuffer, scene_framebuffer, scene_resolve_framebuffer};
+    const VkFramebuffer framebuffers[2] = {framebuffer, scene_framebuffer};
     context.defer([=] {
         for (const VkFramebuffer f : framebuffers) {
             if (f != VK_NULL_HANDLE) {
@@ -233,7 +302,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         return true;
     }
     failure_.clear();
-    if (volkInitialize() != VK_SUCCESS) {
+    if (load_vulkan() != VK_SUCCESS) {
         std::fprintf(stderr, "[vulkan] no Vulkan loader\n");
         failure_ = "no Vulkan driver";
         return false;
@@ -254,13 +323,24 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     app.pEngineName = "Nebula";
     // FSR 3's shaders are SPIR-V 1.5: a Vulkan 1.2 instance where the loader has it. A 1.3 loader gets a 1.3 instance, so
     // a 1.3 device takes synchronization2 as core Vulkan (no extension).
-    std::uint32_t loader_version = VK_API_VERSION_1_1;
+    // A loader without vkEnumerateInstanceVersion is Vulkan 1.0, and refuses an instance that asks for more.
+    std::uint32_t loader_version = VK_API_VERSION_1_0;
     if (vkEnumerateInstanceVersion != nullptr) {
         (void)vkEnumerateInstanceVersion(&loader_version);
     }
     app.apiVersion = loader_version >= VK_API_VERSION_1_3                    ? VK_API_VERSION_1_3
                      : fsr3_compiled() && loader_version >= VK_API_VERSION_1_2 ? VK_API_VERSION_1_2
-                                                                               : VK_API_VERSION_1_1;
+                     : loader_version >= VK_API_VERSION_1_1                    ? VK_API_VERSION_1_1
+                                                                               : VK_API_VERSION_1_0;
+    // The physical-device queries of Vulkan 1.1 for a device of Vulkan 1.0 (core commands of a version serve only a device of
+    // that version): the extension they were promoted from, wherever the loader lists it.
+    const bool properties2_extension = has_instance_extension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    if (properties2_extension &&
+        std::none_of(instance_extensions.begin(), instance_extensions.end(), [](const char* have) {
+            return std::strcmp(have, VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) == 0;
+        })) {
+        instance_extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    }
 #if defined(_WIN32)
     // DLSS: what Streamline needs of the instance, where its files and an RTX adapter are here.
     bool streamline = streamline_vk::start();
@@ -377,18 +457,61 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     vkEnumeratePhysicalDevices(instance_, &count, nullptr);
     std::vector<VkPhysicalDevice> devices(count);
     vkEnumeratePhysicalDevices(instance_, &count, devices.data());
-    const VkPhysicalDeviceType wanted = VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+    // The automatic order: on Windows, Windows' order for performance (dxgi_performance_order); else and after it, a
+    // discrete GPU, then an integrated one, a virtual one, any other, and a software renderer
+    // last; among GPUs of one kind the one with the most memory of its own (a laptop's or desktop's stronger GPU),
+    // then the driver's order. The GPU chosen in the settings comes before all of them.
     {
-        std::vector<std::pair<unsigned, VkPhysicalDevice>> ranked;
+        const auto kind_rank = [](VkPhysicalDeviceType type) -> std::uint64_t {
+            switch (type) {
+                case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return 4u;
+                case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return 3u;
+                case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return 2u;
+                case VK_PHYSICAL_DEVICE_TYPE_CPU: return 0u;
+                default: return 1u;
+            }
+        };
+        struct Rank {
+            bool chosen;
+            std::uint64_t windows_place;  // its place in Windows' order for performance; ~0: not in it
+            std::uint64_t kind;
+            VkDeviceSize own_memory;
+        };
+#if defined(_WIN32)
+        const std::vector<std::uint64_t> windows_order = dxgi_performance_order();
+#endif
+        std::vector<std::pair<Rank, VkPhysicalDevice>> ranked;
         ranked.reserve(devices.size());
         for (const VkPhysicalDevice device : devices) {
             VkPhysicalDeviceProperties properties{};
             vkGetPhysicalDeviceProperties(device, &properties);
-            const bool chosen = !chosen_gpu.empty() && adapter_of(device).identity == chosen_gpu;
-            ranked.emplace_back((chosen ? 2u : 0u) + (properties.deviceType == wanted ? 1u : 0u), device);
+            VkPhysicalDeviceMemoryProperties memory{};
+            vkGetPhysicalDeviceMemoryProperties(device, &memory);
+            VkDeviceSize own = 0u;
+            for (std::uint32_t h = 0; h < memory.memoryHeapCount; ++h) {
+                if ((memory.memoryHeaps[h].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0u) {
+                    own = std::max(own, memory.memoryHeaps[h].size);
+                }
+            }
+            const Adapter adapter = adapter_of(device);
+            const bool chosen = !chosen_gpu.empty() && adapter.identity == chosen_gpu;
+            std::uint64_t place = ~std::uint64_t{0};
+#if defined(_WIN32)
+            for (std::size_t i = 0; i < windows_order.size() && adapter.luid != 0u; ++i) {
+                if (windows_order[i] == adapter.luid) {
+                    place = i;
+                    break;
+                }
+            }
+#endif
+            ranked.push_back({Rank{chosen, place, kind_rank(properties.deviceType), own}, device});
         }
-        std::stable_sort(ranked.begin(), ranked.end(),
-                         [](const auto& a, const auto& b) { return a.first > b.first; });
+        std::stable_sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
+            if (a.first.chosen != b.first.chosen) return a.first.chosen;
+            if (a.first.windows_place != b.first.windows_place) return a.first.windows_place < b.first.windows_place;
+            if (a.first.kind != b.first.kind) return a.first.kind > b.first.kind;
+            return a.first.own_memory > b.first.own_memory;
+        });
         for (std::size_t i = 0; i < ranked.size(); ++i) {
             devices[i] = ranked[i].second;
         }
@@ -398,10 +521,13 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         if (!has_device_extension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
             continue;
         }
-        // Vulkan 1.1 at least (the memory allocator's and the device queries' entry points).
+        // Vulkan 1.1, or 1.0 with what Nebula takes from 1.1 as the extensions it came from: the physical-device queries
+        // (instance) and VK_KHR_maintenance1 (the viewports' negative height, the transfer bits of format features). The
+        // version in use is the lower of the instance's and the device's.
         VkPhysicalDeviceProperties candidate_properties{};
         vkGetPhysicalDeviceProperties(candidate, &candidate_properties);
-        if (candidate_properties.apiVersion < VK_API_VERSION_1_1) {
+        if (std::min(app.apiVersion, candidate_properties.apiVersion) < VK_API_VERSION_1_1 &&
+            !(properties2_extension && has_device_extension(candidate, VK_KHR_MAINTENANCE1_EXTENSION_NAME))) {
             vulkan_1_0_only = true;
             continue;
         }
@@ -409,16 +535,19 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         vkGetPhysicalDeviceQueueFamilyProperties(candidate, &families, nullptr);
         std::vector<VkQueueFamilyProperties> props(families);
         vkGetPhysicalDeviceQueueFamilyProperties(candidate, &families, props.data());
-        for (std::uint32_t i = 0; i < families; ++i) {
-            VkBool32 presents = VK_TRUE;
-            if (window_surface != VK_NULL_HANDLE &&
-                vkGetPhysicalDeviceSurfaceSupportKHR(candidate, i, window_surface, &presents) != VK_SUCCESS) {
-                presents = VK_FALSE;
-            }
-            if ((props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0u && presents == VK_TRUE) {
-                physical_ = candidate;
-                queue_family_ = i;
-                break;
+        // The compute passes (AO, upscalers) are recorded on the same queue: a family with compute too where one presents
+        // (the spec promises graphics with compute in some family, not in every graphics family).
+        for (const VkQueueFlags wanted_flags : {VkQueueFlags{VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT}, VkQueueFlags{VK_QUEUE_GRAPHICS_BIT}}) {
+            for (std::uint32_t i = 0; i < families && physical_ == VK_NULL_HANDLE; ++i) {
+                VkBool32 presents = VK_TRUE;
+                if (window_surface != VK_NULL_HANDLE &&
+                    vkGetPhysicalDeviceSurfaceSupportKHR(candidate, i, window_surface, &presents) != VK_SUCCESS) {
+                    presents = VK_FALSE;
+                }
+                if ((props[i].queueFlags & wanted_flags) == wanted_flags && presents == VK_TRUE) {
+                    physical_ = candidate;
+                    queue_family_ = i;
+                }
             }
         }
         if (physical_ != VK_NULL_HANDLE) {
@@ -426,11 +555,26 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         }
     }
     if (physical_ == VK_NULL_HANDLE) {
-        return fail(vulkan_1_0_only ? "the GPU's Vulkan driver is version 1.0; Nebula needs Vulkan 1.1"
+        return fail(vulkan_1_0_only ? "the GPU's Vulkan driver is version 1.0 without VK_KHR_maintenance1 or "
+                                      "VK_KHR_get_physical_device_properties2"
                                     : "no device with a graphics queue that presents to the window, and swapchains");
     }
     vkGetPhysicalDeviceProperties(physical_, &properties_);
     device_name_ = properties_.deviceName;
+    // Vulkan 1.0 in use (a 1.0 device, or a 1.0 loader's instance): the parts of 1.1 Nebula uses come from the extensions
+    // they were promoted from.
+    const bool vulkan_1_0 = std::min(app.apiVersion, properties_.apiVersion) < VK_API_VERSION_1_1;
+    if (vulkan_1_0) {
+        // Every physical-device query of 1.1 below goes to the extension's command of the same signature (spec, "Extending
+        // Physical Device Core Functionality").
+        vkGetPhysicalDeviceFeatures2 = vkGetPhysicalDeviceFeatures2KHR;
+        vkGetPhysicalDeviceProperties2 = vkGetPhysicalDeviceProperties2KHR;
+        vkGetPhysicalDeviceFormatProperties2 = vkGetPhysicalDeviceFormatProperties2KHR;
+        vkGetPhysicalDeviceImageFormatProperties2 = vkGetPhysicalDeviceImageFormatProperties2KHR;
+        vkGetPhysicalDeviceMemoryProperties2 = vkGetPhysicalDeviceMemoryProperties2KHR;
+        vkGetPhysicalDeviceQueueFamilyProperties2 = vkGetPhysicalDeviceQueueFamilyProperties2KHR;
+        vkGetPhysicalDeviceSparseImageFormatProperties2 = vkGetPhysicalDeviceSparseImageFormatProperties2KHR;
+    }
     {
         Adapter adapter = adapter_of(physical_);
         gpu_id_ = std::move(adapter.identity);
@@ -452,13 +596,19 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     sample_rate_shading_ = available.sampleRateShading == VK_TRUE;
     enabled.samplerAnisotropy = available.samplerAnisotropy;
     enabled.textureCompressionBC = available.textureCompressionBC;
+    enabled.textureCompressionASTC_LDR = available.textureCompressionASTC_LDR;
     enabled.depthClamp = available.depthClamp;
     enabled.independentBlend = available.independentBlend;
+    independent_blend_ = available.independentBlend == VK_TRUE;
+    // No module of Nebula's own gathers with a run-time offset (FXAA's taps are ConstOffset, EASU's gathers carry none);
+    // enabled where offered for a mod's shader that does.
     enabled.shaderImageGatherExtended = available.shaderImageGatherExtended;
     enabled.pipelineStatisticsQuery = available.pipelineStatisticsQuery;
+    enabled.shaderStorageImageExtendedFormats = available.shaderStorageImageExtendedFormats;
+    storage_extended_formats_ = available.shaderStorageImageExtendedFormats == VK_TRUE;
     sampler_anisotropy_ = available.samplerAnisotropy == VK_TRUE;
     bc_textures_ = available.textureCompressionBC == VK_TRUE;
-    gather_extended_ = available.shaderImageGatherExtended == VK_TRUE;
+    astc_textures_ = available.textureCompressionASTC_LDR == VK_TRUE;
     pipeline_statistics_ = available.pipelineStatisticsQuery == VK_TRUE;
 
     const float priority = 1.0f;
@@ -467,6 +617,18 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     queue_info.queueCount = 1;
     queue_info.pQueuePriorities = &priority;
     std::vector<const char*> device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    // Vulkan 1.0: maintenance1 (checked at selection) and, where both are listed, dedicated allocations for the memory
+    // allocator.
+    bool dedicated_extension = false;
+    if (vulkan_1_0) {
+        device_extensions.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
+        dedicated_extension = has_device_extension(physical_, VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME) &&
+                              has_device_extension(physical_, VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
+        if (dedicated_extension) {
+            device_extensions.push_back(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
+            device_extensions.push_back(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
+        }
+    }
     // On a Vulkan 1.2 instance and device one chain carries every promoted feature: the separate structures must not
     // appear beside it.
     const bool core_12 = app.apiVersion >= VK_API_VERSION_1_2 && properties_.apiVersion >= VK_API_VERSION_1_2;
@@ -477,8 +639,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     // Descriptor indexing: one array of every texture and one of every sampler, written while bound and read by an
     // index that is the same for every pixel of a draw (no non-uniform indexing). Core in Vulkan 1.2, else
     // VK_EXT_descriptor_indexing. It is used only when all of it is here.
+    // The extension needs VK_KHR_maintenance3, core from Vulkan 1.1; on the 1.0 path it is enabled with it.
     const bool indexing_extension =
-        !core_12 && has_device_extension(physical_, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+        !core_12 && has_device_extension(physical_, VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME) &&
+        (!vulkan_1_0 || has_device_extension(physical_, VK_KHR_MAINTENANCE_3_EXTENSION_NAME));
     std::string indexing_note = "no descriptor indexing";
     if (core_12 || indexing_extension) {
         VkPhysicalDeviceDescriptorIndexingFeatures have{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES};
@@ -519,10 +683,13 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
                                   : "descriptor indexing limits below the texture and sampler arrays";
     }
     {
-        // A bound table's maps: what the per-stage image, sampler and resource limits leave beside the three constants
-        // buffers and two storage buffers of set 0.
+        // A bound table's maps: the per-stage image and sampler limits, and what maxPerStageResources leaves in the fragment
+        // stage beside set 0's three constants buffers and three storage buffers (RendererVk::create_layouts: bindings 3
+        // and 4 in both stages, 5 in the fragment stage) and at most four colour attachments (which count there). Samplers
+        // do not count against maxPerStageResources.
         const VkPhysicalDeviceLimits& limits = properties_.limits;
-        const std::uint32_t by_resources = limits.maxPerStageResources > 16u ? (limits.maxPerStageResources - 16u) / 2u : 0u;
+        constexpr std::uint32_t kBesideMaps = 3u + 3u + 4u;
+        const std::uint32_t by_resources = limits.maxPerStageResources > kBesideMaps ? limits.maxPerStageResources - kBesideMaps : 0u;
         table_slots_ = std::min({limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorSamplers, by_resources});
     }
     std::vector<float> queue_priorities(1u, priority);
@@ -559,7 +726,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             features.pNext = &have13;
             vkGetPhysicalDeviceFeatures2(physical_, &features);
             features13.maintenance4 = have13.maintenance4;
-            features13.privateData = have13.privateData;  // Streamline's private data slots (FB)
+            features13.privateData = have13.privateData;  // Streamline's private data slots
             optical_flow.opticalFlow = optical_flow_family != UINT32_MAX ? VK_TRUE : VK_FALSE;
         }
         if (1u + extra <= props[queue_family_].queueCount) {
@@ -777,7 +944,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         vkGetPhysicalDeviceFeatures2(physical_, &features);
         sync2_core = have13.synchronization2 == VK_TRUE;
         features13.synchronization2 = have13.synchronization2;
-        features13.privateData = have13.privateData;  // Streamline's private data slots (FB)
+        features13.privateData = have13.privateData;  // Streamline's private data slots
     }
     VkPhysicalDeviceSynchronization2FeaturesKHR sync2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR};
     bool sync2_extension = false;
@@ -832,7 +999,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     rt_caps_.shaders = rt_shaders_present();
     rt_caps_.bindless = bindless_;
     rt_caps_.unified_memory = properties_.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
-    if (core_12 && has_device_extension(physical_, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
+    // --diagnostics rt-absent: taken as a device without ray tracing.
+    if (!::galaxy::diagnosing(::galaxy::kDiagnoseRtAbsent) && core_12 &&
+        has_device_extension(physical_, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
         has_device_extension(physical_, VK_KHR_RAY_QUERY_EXTENSION_NAME) &&
         has_device_extension(physical_, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME)) {
         VkPhysicalDeviceVulkan12Features have12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
@@ -843,13 +1012,21 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         vkGetPhysicalDeviceFeatures2(physical_, &features);
         rt_caps_.acceleration_structures = rt_structures.accelerationStructure == VK_TRUE && have12.bufferDeviceAddress == VK_TRUE;
         rt_caps_.ray_queries = rt_queries.rayQuery == VK_TRUE;
-        rt_caps_.micromaps = has_device_extension(physical_, "VK_EXT_opacity_micromap");
+        // Opacity micromaps: the extension and its feature, with synchronization2's barriers (a micromap
+        // build's stage has no version-1 bit).
+        if (has_device_extension(physical_, VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) && (sync2_core || sync2_extension)) {
+            VkPhysicalDeviceOpacityMicromapFeaturesEXT have_micromaps{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT};
+            VkPhysicalDeviceFeatures2 micromap_features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+            micromap_features.pNext = &have_micromaps;
+            vkGetPhysicalDeviceFeatures2(physical_, &micromap_features);
+            rt_caps_.micromaps = have_micromaps.micromap == VK_TRUE;
+        }
         // A pass reads the texture a ray meets: an index that differs from pixel to pixel.
         rt_caps_.bindless = bindless_ && have12.shaderSampledImageArrayNonUniformIndexing == VK_TRUE;
     }
     // The prepass's pixel stage reads its triangle's number where Vulkan gives a fragment shader one: on a device with
     // geometry shaders. Without them (or under rt-no-geometry, the test of that) the prepass names its item only and
-    // the surface pass finds the triangle by a ray (D11).
+    // the surface pass finds the triangle by a ray.
     rt_caps_.triangle_ids = available.geometryShader == VK_TRUE && !::galaxy::diagnosing(::galaxy::kDiagnoseRtNoGeometry);
     const bool rt_enable = ray_tracing && rt_caps_.ray_queries && rt_caps_.acceleration_structures && rt_caps_.bindless;
     if (rt_enable && rt_caps_.triangle_ids) {
@@ -860,10 +1037,15 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     rt_structures.accelerationStructure = VK_TRUE;
     rt_queries = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
     rt_queries.rayQuery = VK_TRUE;
+    VkPhysicalDeviceOpacityMicromapFeaturesEXT micromaps_on{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT};
+    micromaps_on.micromap = VK_TRUE;
     if (rt_enable) {
         device_extensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
         device_extensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
         device_extensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+        if (rt_caps_.micromaps) {
+            device_extensions.push_back(VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME);
+        }
     }
     depth_clamp_ = available.depthClamp == VK_TRUE;
     VkDeviceCreateInfo device_info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
@@ -876,6 +1058,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         rt_queries.pNext = const_cast<void*>(device_info.pNext);
         rt_structures.pNext = &rt_queries;
         device_info.pNext = &rt_structures;
+    }
+    if (rt_enable && rt_caps_.micromaps) {
+        micromaps_on.pNext = const_cast<void*>(device_info.pNext);
+        device_info.pNext = &micromaps_on;
     }
     if (sync2_extension) {
         sync2.pNext = const_cast<void*>(device_info.pNext);
@@ -956,6 +1142,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             indexing_enabled.pNext = const_cast<void*>(device_info.pNext);
             device_info.pNext = &indexing_enabled;
             device_extensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+            if (vulkan_1_0) {
+                device_extensions.push_back(VK_KHR_MAINTENANCE_3_EXTENSION_NAME);
+            }
         }
     }
 #if defined(_WIN32)
@@ -1103,11 +1292,17 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
     functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
     VmaAllocatorCreateInfo allocator_info{};
-    allocator_info.vulkanApiVersion = VK_API_VERSION_1_1;
+    allocator_info.vulkanApiVersion = vulkan_1_0 ? VK_API_VERSION_1_0 : VK_API_VERSION_1_1;
+    if (dedicated_extension) {
+        allocator_info.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
+    }
     allocator_info.physicalDevice = physical_;
     allocator_info.device = device_;
     allocator_info.instance = instance_;
     allocator_info.pVulkanFunctions = &functions;
+    // Blocks of a large heap: VMA makes the first ones 1/8, 1/4 and 1/2 of this, so a device holds about what it places
+    // (8 MB first, against 32 MB with VMA's 256 MB default). Larger resources than half of it have memory of their own.
+    allocator_info.preferredLargeHeapBlockSize = VkDeviceSize{64} << 20u;
     if (memory_budget_) {
         allocator_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
     }
@@ -1184,6 +1379,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
 void Context::shutdown() noexcept {
     if (device_ != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device_);
+        release_shared_pipeline_cache();
     }
 #if defined(_WIN32)
     streamline_vk::shutdown();
@@ -1717,8 +1913,10 @@ bool Context::device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) 
     if (allocator_ == nullptr) {
         return false;
     }
-    VkPhysicalDeviceMemoryProperties memory{};
-    vkGetPhysicalDeviceMemoryProperties(physical_, &memory);
+    // The allocator's copy of the heaps, read from the driver once when it was made (no heap size limit is given to it).
+    const VkPhysicalDeviceMemoryProperties* properties = nullptr;
+    vmaGetMemoryProperties(allocator_, &properties);
+    const VkPhysicalDeviceMemoryProperties& memory = *properties;
     std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
     vmaGetHeapBudgets(allocator_, budgets.data());
     // The largest device-local heap holds the render targets (the only one on most devices).
@@ -1737,8 +1935,10 @@ bool Context::heap_stats(HeapStats& device_local, HeapStats& other) const noexce
     if (allocator_ == nullptr) {
         return false;
     }
-    VkPhysicalDeviceMemoryProperties memory{};
-    vkGetPhysicalDeviceMemoryProperties(physical_, &memory);
+    // The allocator's copy of the heaps, read from the driver once when it was made (no heap size limit is given to it).
+    const VkPhysicalDeviceMemoryProperties* properties = nullptr;
+    vmaGetMemoryProperties(allocator_, &properties);
+    const VkPhysicalDeviceMemoryProperties& memory = *properties;
     std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
     vmaGetHeapBudgets(allocator_, budgets.data());
     VkDeviceSize largest = 0u;

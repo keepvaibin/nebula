@@ -5,10 +5,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcGunPointFromCannon_f1, "calcGunPointFromCannon.f1", 200.0f);
 
 FirePressure::FirePressure(const char* pName) : PressureBase(pName), mIsDisableCollision(false) {
     lumacore::setClass(this, lumacore::kClassId< FirePressure >);
@@ -38,7 +35,7 @@ void FirePressure::calcGunPointFromCannon(Pos3f* pMtx) {
     jointMtx.getXDir(front);
     Vec3f muzzlePos;
     jointMtx.getTrans(muzzlePos);
-    muzzlePos.scaleAdd(cNum_calcGunPointFromCannon_f1, front, muzzlePos);
+    muzzlePos.scaleAdd(200.0f, front, muzzlePos);
     Vec3f up;
     jointMtx.getYDir(up);
     MR::makeMtxFrontUpPos(pMtx, front, up, muzzlePos);

@@ -9,6 +9,7 @@
 
 #include <vk_mem_alloc.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -90,6 +91,8 @@ struct Backend::State {
     VkQueryPool queries[kFramesInFlight]{};
     unsigned frame_slot = 0u;
     bool asked = false;
+    // The frame's first begin has joined the last frame's tracer work: cleared by frame().
+    bool joined = true;
 
     // Passes: one set layout for every pass (rt_bindings.hlsli as compile_rt_shaders.py places the registers: t at its
     // number, u at 200, b at 300), a pipeline a shader made at its first dispatch.
@@ -106,6 +109,7 @@ struct Backend::State {
     VkDescriptorSetLayout images_layout = VK_NULL_HANDLE;
     VkPipeline pipelines[static_cast<unsigned>(RtShader::Count)]{};
     bool refused[static_cast<unsigned>(RtShader::Count)]{};
+    [[nodiscard]] bool make_pipeline(unsigned index);  // false: refused, the pass left out
     // Counters: the GPU adds to `counters`; a frame slot's copy is read a frame later.
     VkBuffer counters = VK_NULL_HANDLE;
     VmaAllocation counters_allocation = nullptr;
@@ -123,10 +127,15 @@ struct Backend::State {
         bool for_builds = false;
     };
     std::vector<OwnBuffer> buffers;
+    // Opacity micromaps: the device builds them (the extension's feature and synchronization2).
+    bool micromaps = false;
 
     [[nodiscard]] bool make_passes();
     [[nodiscard]] std::uint64_t own_address(const TriangleInput& input) const {
         return input.own_buffer < buffers.size() ? buffers[input.own_buffer].address : 0u;
+    }
+    [[nodiscard]] std::uint64_t micromap_indices(const TriangleInput& input) const {
+        return input.micromap_buffer < buffers.size() ? buffers[input.micromap_buffer].address + input.micromap_indices : 0u;
     }
 };
 
@@ -259,8 +268,11 @@ std::uint64_t device_address(VkDevice device, gpu::Address address) {
     return vkGetBufferDeviceAddress(device, &info) + at.offset;
 }
 
-// `own`: the address of the tracer's buffer the input names, or 0.
-VkAccelerationStructureGeometryKHR geometry_of(VkDevice device, const TriangleInput& input, std::uint64_t own) {
+// `own`: the address of the tracer's buffer the input names, or 0. With a micromap, `omm` and `usage` (the caller's,
+// alive while the geometry is) carry it, its indices at `omm_indices`.
+VkAccelerationStructureGeometryKHR geometry_of(VkDevice device, const TriangleInput& input, std::uint64_t own,
+                                               VkAccelerationStructureTrianglesOpacityMicromapEXT& omm, VkMicromapUsageEXT& usage,
+                                               std::uint64_t omm_indices) {
     VkAccelerationStructureGeometryKHR g{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR};
     g.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
     // Opaque here; an instance whose material tests alpha says so itself.
@@ -274,9 +286,34 @@ VkAccelerationStructureGeometryKHR geometry_of(VkDevice device, const TriangleIn
     if (input.indices != 0u) {
         g.geometry.triangles.indexData.deviceAddress = device_address(device, input.indices);
     }
+    if (input.micromap != 0u) {
+        // Its micromap decides where a triangle is opaque, transparent or asks (the geometry's opaque flag stands where an
+        // instance turns micromaps off).
+        usage = {input.triangles(), input.micromap_level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
+        omm = {VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_TRIANGLES_OPACITY_MICROMAP_EXT};
+        omm.indexType = VK_INDEX_TYPE_UINT32;
+        omm.indexBuffer.deviceAddress = omm_indices;
+        omm.indexStride = 4u;
+        omm.usageCountsCount = 1u;
+        omm.pUsageCounts = &usage;
+        omm.micromap = reinterpret_cast<VkMicromapEXT>(input.micromap);
+        g.geometry.triangles.pNext = &omm;
+    }
     return g;
 }
 
+VkMicromapBuildInfoEXT micromap_info(const VkMicromapUsageEXT& usage) {
+    VkMicromapBuildInfoEXT info{VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT};
+    info.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    info.flags = VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
+    info.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
+    info.usageCountsCount = 1u;
+    info.pUsageCounts = &usage;
+    info.triangleArrayStride = 8u;
+    return info;
+}
+
+// (A structure over a micromap also lets its instances turn the micromap off: Scene's kInstanceNoMicromaps.)
 VkBuildAccelerationStructureFlagsKHR flags_of(BuildKind kind) {
     return kind == BuildKind::Static
                ? VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR
@@ -290,6 +327,34 @@ Backend::Backend() = default;
 Backend::~Backend() { stop(); }
 
 bool Backend::started() const noexcept { return state_ != nullptr; }
+
+bool Backend::State::make_pipeline(unsigned index) {
+    if (refused[index]) {
+        return false;
+    }
+    const RtShaderBytes code = rt_shader(static_cast<RtShader>(index));
+    VkShaderModule module = VK_NULL_HANDLE;
+    VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    module_info.codeSize = code.size;
+    module_info.pCode = static_cast<const std::uint32_t*>(code.data);
+    bool made = code.size != 0u && layout != VK_NULL_HANDLE && vkCreateShaderModule(device, &module_info, nullptr, &module) == VK_SUCCESS;
+    if (made) {
+        VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        info.stage.module = module;
+        info.stage.pName = "main";
+        info.layout = layout;
+        made = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1u, &info, nullptr, &pipelines[index]) == VK_SUCCESS;
+        vkDestroyShaderModule(device, module, nullptr);
+    }
+    if (!made) {
+        pipelines[index] = VK_NULL_HANDLE;
+        refused[index] = true;
+        std::fprintf(stderr, "[rt] pass %u: no pipeline; the pass is left out\n", index);
+    }
+    return made;
+}
 
 bool Backend::start(gpu::Device* device) {
     stop();
@@ -324,6 +389,8 @@ bool Backend::start(gpu::Device* device) {
         stop();
         return false;
     }
+    state->micromaps = context.rt_caps().micromaps && context.pipeline_barrier2() != nullptr && vkCreateMicromapEXT != nullptr &&
+                       vkCmdBuildMicromapsEXT != nullptr && vkGetMicromapBuildSizesEXT != nullptr;
     if (context.properties().limits.timestampComputeAndGraphics == VK_TRUE) {
         VkQueryPoolCreateInfo info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
         info.queryType = VK_QUERY_TYPE_TIMESTAMP;
@@ -332,6 +399,18 @@ bool Backend::start(gpu::Device* device) {
             state->times = VK_NULL_HANDLE;
         }
     }
+    // Every pass's pipeline now (a pass's first use in a frame never waits on the driver's compile).
+    const auto making = std::chrono::steady_clock::now();
+    unsigned made = 0u, wanted = 0u;
+    for (unsigned index = 0; index < static_cast<unsigned>(RtShader::Count); ++index) {
+        if (index == static_cast<unsigned>(RtShader::Omm) && !state->micromaps) {
+            continue;
+        }
+        ++wanted;
+        made += state->pipelines[index] != VK_NULL_HANDLE || state->make_pipeline(index) ? 1u : 0u;
+    }
+    std::fprintf(stderr, "[rt] passes: %u of %u pipelines made at the start in %.1f ms\n", made, wanted,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - making).count());
     return true;
 }
 
@@ -380,10 +459,14 @@ void Backend::stop() noexcept {
 }
 
 BuildSizes Backend::sizes(const TriangleInput& input, BuildKind kind) const {
-    const VkAccelerationStructureGeometryKHR geometry = geometry_of(state_->device, input, state_->own_address(input));
+    VkAccelerationStructureTrianglesOpacityMicromapEXT omm{};
+    VkMicromapUsageEXT usage{};
+    const VkAccelerationStructureGeometryKHR geometry =
+        geometry_of(state_->device, input, state_->own_address(input), omm, usage, state_->micromap_indices(input));
     VkAccelerationStructureBuildGeometryInfoKHR info{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    info.flags = flags_of(kind);
+    info.flags = flags_of(kind) |
+                 (input.micromap != 0u ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DISABLE_OPACITY_MICROMAPS_BIT_EXT : 0u);  // see flags_of
     info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     info.geometryCount = 1u;
     info.pGeometries = &geometry;
@@ -398,6 +481,9 @@ std::uint32_t Backend::make_page(std::uint64_t bytes, bool scratch) {
     buffer_info.size = bytes;
     buffer_info.usage = (scratch ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR) |
                         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    if (!scratch && state_->micromaps) {
+        buffer_info.usage |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;  // micromaps lie in the structures' pages
+    }
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
@@ -462,6 +548,7 @@ void Backend::frame(unsigned frame_slot) noexcept {
     }
     state_->pool_at = 0u;
     state_->counters_bound = false;  // the frame's first pass that counts zeroes them
+    state_->joined = false;          // the frame's first begin waits for the last frame's tracer work
 }
 
 void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noexcept {
@@ -469,6 +556,38 @@ void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noex
     s.commands = static_cast<VkCommandBuffer>(commands);
     s.frame_slot = frame_slot % kFramesInFlight;
     s.asked = false;
+    // The last frame's builds, micromap builds and passes before this frame's. Nothing else orders two
+    // submissions on one queue, and this frame takes the same build scratch again from its start, builds the top level
+    // into the same structure, refits Moving structures in place and writes the buffers builds read.
+    if (!s.joined && s.commands != VK_NULL_HANDLE) {
+        s.joined = true;
+        if (const PFN_vkCmdPipelineBarrier2 barrier2 = vk::Context::get().pipeline_barrier2(); barrier2 != nullptr) {
+            VkPipelineStageFlags2 stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+            VkAccessFlags2 writes = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_SHADER_WRITE_BIT;
+            VkAccessFlags2 reads = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_2_SHADER_READ_BIT;
+            if (s.micromaps) {
+                stages |= VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+                writes |= VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+                reads |= VK_ACCESS_2_MICROMAP_READ_BIT_EXT;
+            }
+            VkMemoryBarrier2 join{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+            join.srcStageMask = stages;
+            join.srcAccessMask = writes;
+            join.dstStageMask = stages;
+            join.dstAccessMask = reads | writes;
+            VkDependencyInfo dependency{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+            dependency.memoryBarrierCount = 1u;
+            dependency.pMemoryBarriers = &join;
+            barrier2(s.commands, &dependency);
+        } else {
+            VkMemoryBarrier join{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+            join.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_SHADER_WRITE_BIT;
+            join.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR |
+                                 VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            const VkPipelineStageFlags stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+            vkCmdPipelineBarrier(s.commands, stages, stages, 0u, 1u, &join, 0u, nullptr, 0u, nullptr);
+        }
+    }
     if (const auto* textures = static_cast<const TextureTable*>(descriptors); textures != nullptr && textures->layout != nullptr) {
         s.texture_set = static_cast<VkDescriptorSet>(textures->set);
         const auto images_layout = static_cast<VkDescriptorSetLayout>(textures->layout);
@@ -501,10 +620,14 @@ void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noex
 }
 
 void Backend::build(const TriangleInput& input, BuildKind kind, const Structure& to, const Range& scratch, bool refit) {
-    const VkAccelerationStructureGeometryKHR geometry = geometry_of(state_->device, input, state_->own_address(input));
+    VkAccelerationStructureTrianglesOpacityMicromapEXT omm{};
+    VkMicromapUsageEXT usage{};
+    const VkAccelerationStructureGeometryKHR geometry =
+        geometry_of(state_->device, input, state_->own_address(input), omm, usage, state_->micromap_indices(input));
     VkAccelerationStructureBuildGeometryInfoKHR info{VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR};
     info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    info.flags = flags_of(kind);
+    info.flags = flags_of(kind) |
+                 (input.micromap != 0u ? VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DISABLE_OPACITY_MICROMAPS_BIT_EXT : 0u);  // see flags_of
     info.mode = refit ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     const auto handle = reinterpret_cast<VkAccelerationStructureKHR>(to.handle);
     info.srcAccelerationStructure = refit ? handle : VK_NULL_HANDLE;
@@ -693,6 +816,26 @@ void Backend::free_image(std::uint32_t image) noexcept {
     }
 }
 
+Backend::Live Backend::live() const noexcept {
+    Live live;
+    if (state_ == nullptr) {
+        return live;
+    }
+    for (const std::shared_ptr<vk::Texture>& image : state_->images) {
+        if (image != nullptr) {
+            ++live.images;
+            live.image_bytes += image->allocation_bytes;
+        }
+    }
+    for (const State::OwnBuffer& buffer : state_->buffers) {
+        if (buffer.buffer != VK_NULL_HANDLE) {
+            ++live.buffers;
+            live.buffer_bytes += buffer.bytes;
+        }
+    }
+    return live;
+}
+
 // An image of the tracer's stays in the general layout, which a copy reads too, once the pass's writes are done.
 void* Backend::image_to_copy(std::uint32_t image) {
     if (image >= state_->images.size() || state_->images[image] == nullptr) {
@@ -728,29 +871,8 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
         s.layout == VK_NULL_HANDLE) {
         return;
     }
-    if (s.pipelines[index] == VK_NULL_HANDLE) {
-        const RtShaderBytes code = rt_shader(shader);
-        VkShaderModule module = VK_NULL_HANDLE;
-        VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        module_info.codeSize = code.size;
-        module_info.pCode = static_cast<const std::uint32_t*>(code.data);
-        bool made = code.size != 0u && vkCreateShaderModule(s.device, &module_info, nullptr, &module) == VK_SUCCESS;
-        if (made) {
-            VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-            info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-            info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-            info.stage.module = module;
-            info.stage.pName = "main";
-            info.layout = s.layout;
-            made = vkCreateComputePipelines(s.device, VK_NULL_HANDLE, 1u, &info, nullptr, &s.pipelines[index]) == VK_SUCCESS;
-            vkDestroyShaderModule(s.device, module, nullptr);
-        }
-        if (!made) {
-            s.pipelines[index] = VK_NULL_HANDLE;
-            s.refused[index] = true;
-            std::fprintf(stderr, "[rt] pass %u: no pipeline; the pass is left out\n", index);
-            return;
-        }
+    if (s.pipelines[index] == VK_NULL_HANDLE && !s.make_pipeline(index)) {
+        return;  // made at the start; here only after a refusal there
     }
     const VkCommandBuffer commands = s.commands;
     const auto image_of = [&](std::uint32_t image) -> vk::Texture* {
@@ -927,11 +1049,16 @@ std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char* name) {
     buffer_info.size = bytes;
     buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    if (state_->micromaps) {
+        buffer_info.usage |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;  // a micromap's input
+    }
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     State::OwnBuffer made;
-    if (vmaCreateBuffer(vk::Context::get().allocator(), &buffer_info, &alloc_info, &made.buffer, &made.allocation, nullptr) != VK_SUCCESS) {
+    // At a multiple of 256 bytes: a micromap build reads its input from there.
+    if (vmaCreateBufferWithAlignment(vk::Context::get().allocator(), &buffer_info, &alloc_info, kRangeAlign, &made.buffer, &made.allocation,
+                                     nullptr) != VK_SUCCESS) {
         return kNoBuffer;
     }
     if (name != nullptr) {
@@ -957,6 +1084,81 @@ void Backend::free_buffer(std::uint32_t buffer) noexcept {
     }
     vmaDestroyBuffer(vk::Context::get().allocator(), state_->buffers[buffer].buffer, state_->buffers[buffer].allocation);
     state_->buffers[buffer] = State::OwnBuffer{};
+}
+
+bool Backend::micromaps() const noexcept { return state_ != nullptr && state_->micromaps; }
+
+BuildSizes Backend::micromap_sizes(const MicromapInput& input) const {
+    const VkMicromapUsageEXT usage{input.triangles, input.level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
+    const VkMicromapBuildInfoEXT info = micromap_info(usage);
+    VkMicromapBuildSizesInfoEXT sizes{VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT};
+    vkGetMicromapBuildSizesEXT(state_->device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &info, &sizes);
+    return {sizes.micromapSize, sizes.buildScratchSize, 0u};
+}
+
+Structure Backend::make_micromap(const Range& range) {
+    VkMicromapCreateInfoEXT info{VK_STRUCTURE_TYPE_MICROMAP_CREATE_INFO_EXT};
+    info.buffer = state_->pages[range.page].buffer;
+    info.offset = range.offset;
+    info.size = range.size;
+    info.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
+    VkMicromapEXT handle = VK_NULL_HANDLE;
+    if (vkCreateMicromapEXT(state_->device, &info, nullptr, &handle) != VK_SUCCESS) {
+        return {};
+    }
+    Structure out;
+    out.range = range;
+    out.handle = reinterpret_cast<std::uint64_t>(handle);
+    out.name = out.handle;
+    return out;
+}
+
+void Backend::free_micromap(Structure& micromap) noexcept {
+    if (state_ != nullptr && micromap.handle != 0u) {
+        vkDestroyMicromapEXT(state_->device, reinterpret_cast<VkMicromapEXT>(micromap.handle), nullptr);
+    }
+    micromap = Structure{};
+}
+
+void Backend::build_micromap(const MicromapInput& input, const Structure& to, const Range& scratch) {
+    State& s = *state_;
+    const PFN_vkCmdPipelineBarrier2 barrier2 = vk::Context::get().pipeline_barrier2();
+    if (barrier2 == nullptr || input.buffer >= s.buffers.size()) {
+        return;
+    }
+    const std::uint64_t at = s.buffers[input.buffer].address;
+    // The pass's writes before this build and the structure's build read them (the indices), and the scratch's last
+    // use by a build before this one writes it.
+    VkMemoryBarrier2 before[2] = {{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2}, {VK_STRUCTURE_TYPE_MEMORY_BARRIER_2}};
+    before[0].srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    before[0].srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+    before[0].dstStageMask = VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
+    before[0].dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+    before[1].srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    before[1].srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+    before[1].dstStageMask = VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    before[1].dstAccessMask = VK_ACCESS_2_MICROMAP_READ_BIT_EXT | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+    VkDependencyInfo dependency{VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
+    dependency.memoryBarrierCount = 2u;
+    dependency.pMemoryBarriers = before;
+    barrier2(s.commands, &dependency);
+    const VkMicromapUsageEXT usage{input.triangles, input.level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
+    VkMicromapBuildInfoEXT info = micromap_info(usage);
+    info.dstMicromap = reinterpret_cast<VkMicromapEXT>(to.handle);
+    info.data.deviceAddress = at;
+    info.scratchData.deviceAddress = s.pages[scratch.page].address + scratch.offset;
+    info.triangleArray.deviceAddress = at + input.triangles_at;
+    vkCmdBuildMicromapsEXT(s.commands, 1u, &info);
+    // The micromap whole for the structure built over it next, and the scratch free for that build.
+    VkMemoryBarrier2 after{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
+    after.srcStageMask = VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    after.srcAccessMask = VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT;
+    after.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT;
+    after.dstAccessMask = VK_ACCESS_2_MICROMAP_READ_BIT_EXT | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT |
+                          VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+    dependency.memoryBarrierCount = 1u;
+    dependency.pMemoryBarriers = &after;
+    barrier2(s.commands, &dependency);
 }
 
 // What the passes wrote before a build reads it, and a build's reads before the passes write again.

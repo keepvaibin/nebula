@@ -25,69 +25,57 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_f1, "exeRunaway.f1", 1.3f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRunaway_checkPassBckFrame_1, "exeRunaway.checkPassBckFrame.1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCaught_addVelocityToGravity_1, "exeCaught.addVelocityToGravity.1", 2.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAppear_1, "exeAppear.1", 5);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeCaught_1, "exeCaught.1", 7);
-
 namespace {
-    NEBULA_TUNABLE(f32, sLightLength, 1500.0f);
-    NEBULA_TUNABLE(f32, sBodyRadius, 70.0f);
-    NEBULA_TUNABLE(f32, sCatchRadius, 30.0f);
-    NEBULA_TUNABLE(f32, sBindRadius, 60.0f);
-    NEBULA_TUNABLE(f32, sBindYOffset, 60.0f);
-    NEBULA_TUNABLE(f32, sShadowRadius, 45.0f);
-    NEBULA_TUNABLE(f32, sUpVecBlendRate, 0.1f);
-    NEBULA_TUNABLE(f32, sFrontVecBlendRate, 0.2f);
-    NEBULA_TUNABLE(f32, sAirFric, 0.99f);
-    NEBULA_TUNABLE(f32, sAirGravityAccel, 1.0f);
-    NEBULA_TUNABLE(f32, sPushAccel, 0.5f);
-    NEBULA_TUNABLE(f32, sWaitTurnLimit, 20.0f);
-    NEBULA_TUNABLE(f32, sHoleAppearPowerH, 19.0f);
-    NEBULA_TUNABLE(f32, sHoleAppearPowerV, 25.0f);
-    NEBULA_TUNABLE(f32, sGroundAppearPowerH, 16.0f);
-    NEBULA_TUNABLE(f32, sGroundAppearPowerV, 25.0f);
-    NEBULA_TUNABLE(f32, sRunawayAccelMax, 1.8f);
-    NEBULA_TUNABLE(f32, sRunawayAccelMin, 0.5f);
+    const f32 sLightLength = 1500.0f;
+    const f32 sBodyRadius = 70.0f;
+    const f32 sCatchRadius = 30.0f;
+    const f32 sBindRadius = 60.0f;
+    const f32 sBindYOffset = 60.0f;
+    const f32 sShadowRadius = 45.0f;
+    const f32 sUpVecBlendRate = 0.1f;
+    const f32 sFrontVecBlendRate = 0.2f;
+    const f32 sAirFric = 0.99f;
+    const f32 sAirGravityAccel = 1.0f;
+    const f32 sPushAccel = 0.5f;
+    const f32 sWaitTurnLimit = 20.0f;
+    const f32 sHoleAppearPowerH = 19.0f;
+    const f32 sHoleAppearPowerV = 25.0f;
+    const f32 sGroundAppearPowerH = 16.0f;
+    const f32 sGroundAppearPowerV = 25.0f;
+    const f32 sRunawayAccelMax = 1.8f;
+    const f32 sRunawayAccelMin = 0.5f;
     // bool sIsTireRunawayAccel;
-    NEBULA_TUNABLE(f32, sNoPressureAccel, 0.6f);
-    NEBULA_TUNABLE(f32, sPressureRange, 400.0f);
-    NEBULA_TUNABLE(s32, sPressureLimitTime, 2000);
-    NEBULA_TUNABLE(s32, sPressureDeccelStart, 200);
+    const f32 sNoPressureAccel = 0.6f;
+    const f32 sPressureRange = 400.0f;
+    const s32 sPressureLimitTime = 2000;
+    const s32 sPressureDeccelStart = 200;
     static const s32 sPressureDeccelTimeLv1 = NebulaFrameClock::stepsOfSeconds(4);
-    NEBULA_TUNABLE(s32, sPressureDeccelTimeLv2, 500);
-    NEBULA_TUNABLE(s32, sPressureDeccelTimeLv3, 800);
+    const s32 sPressureDeccelTimeLv2 = 500;
+    const s32 sPressureDeccelTimeLv3 = 800;
     // f32 sRunawayTurnStartLimit;
     // f32 sRunawayTurnLimit;
     // s32 sRunawayTurnDeccelTime;
-    NEBULA_TUNABLE(f32, sAwayTargetVelocityRate, 0.3f);
+    const f32 sAwayTargetVelocityRate = 0.3f;
     // f32 sRunAccelbyBckRate;
-    NEBULA_TUNABLE(f32, sMinRunBckRate, 0.9f);
-    NEBULA_TUNABLE(f32, sMaxRunBckRate, 1.4f);
-    NEBULA_TUNABLE(s32, sMarioPoseBlendTime, 5);
+    const f32 sMinRunBckRate = 0.9f;
+    const f32 sMaxRunBckRate = 1.4f;
+    const s32 sMarioPoseBlendTime = 5;
     // const f32 sCaughtJumpPower;
     // f32 sCaughtJumpFrontPower;
-    NEBULA_TUNABLE(f32, sDamageTurnLimit, 3.0f);
-    NEBULA_TUNABLE(f32, sBlowAccelH, 25.0f);
-    NEBULA_TUNABLE(f32, sBlowAccelV, 30.0f);
+    const f32 sDamageTurnLimit = 3.0f;
+    const f32 sBlowAccelH = 25.0f;
+    const f32 sBlowAccelV = 30.0f;
     // s32 sDamageLandTime;
-    NEBULA_TUNABLE(f32, sStarPieceHitAccelH, 20.0f);
-    NEBULA_TUNABLE(f32, sStarPieceHitAccelV, 20.0f);
-    NEBULA_TUNABLE(f32, sNearSoundRadiusDefault, 600.0f);
-    NEBULA_TUNABLE(f32, sNearSoundRadiusEdge, 250.0f);
-    NEBULA_TUNABLE(s32, sNearSoundFxSend, 60);
-    NEBULA_TUNABLE(f32, sNearSoundMinVolume, 35.0f);
-    NEBULA_TUNABLE(f32, sNearSoundMaxVolume, 100.0f);
-    NEBULA_TUNABLE(s32, sTossStep, 10);
+    const f32 sStarPieceHitAccelH = 20.0f;
+    const f32 sStarPieceHitAccelV = 20.0f;
+    const f32 sNearSoundRadiusDefault = 600.0f;
+    const f32 sNearSoundRadiusEdge = 250.0f;
+    const s32 sNearSoundFxSend = 60;
+    const f32 sNearSoundMinVolume = 35.0f;
+    const f32 sNearSoundMaxVolume = 100.0f;
+    const s32 sTossStep = 10;
 
     class RunawayRabbitParam : public WalkerStateRunawayParam {
     public:
@@ -145,7 +133,7 @@ void RunawayRabbit::init(const TableIter& rIter) {
         MR::declareCameraRegisterVec(this, cameraRegisterVec, &mPosition);
     }
 
-    mSpotMarkLight = new SpotMarkLight(this, cNum_init_f1, ::sLightLength, nullptr);
+    mSpotMarkLight = new SpotMarkLight(this, 100.0f, ::sLightLength, nullptr);
     mSpotMarkLight->initWithoutIter();
     initSensor();
     initBinder(::sBindRadius, ::sBindYOffset, 0);
@@ -368,7 +356,7 @@ void RunawayRabbit::exeAppear() {
     MR::turnDirectionDegree(this, &mFrontVec, mVelocity, ::sWaitTurnLimit);
     MR::addVelocityToGravity(this, ::sAirGravityAccel);
     MR::attenuateVelocity(this, ::sAirFric);
-    if (MR::isGreaterStep(this, cStep_exeAppear_1) && MR::isBindedGround(this)) {
+    if (MR::isGreaterStep(this, 5) && MR::isBindedGround(this)) {
         setNerve(GET_NERVE(RunawayRabbit, RunawayRabbitNrvRunaway));
         mPressureTimer = 0;
     }
@@ -379,7 +367,7 @@ void RunawayRabbit::exeRunaway() {
     if (!mStateRunaway->isRunning()) {
         return;
     }
-    if (MR::checkPassBckFrame(this, cNum_exeRunaway_checkPassBckFrame_1)) {
+    if (MR::checkPassBckFrame(this, 3.0f)) {
         startJumpSound();
     }
     f32 runawaySpeed = ::sNoPressureAccel;
@@ -408,7 +396,7 @@ void RunawayRabbit::exeRunaway() {
         f32 rate = MR::clamp(static_cast< f32 >(runawayTimer - ::sPressureDeccelStart) / deccelTime, 0.0f, 1.0f);
         runawaySpeed = MR::getLinerValue(rate, ::sRunawayAccelMax, ::sRunawayAccelMin, 1.0f);
 
-        if (runawaySpeed < cNum_exeRunaway_f1) {
+        if (runawaySpeed < 1.3f) {
             MR::startAction(this, "RunTired");
         } else {
             MR::startAction(this, "Run");
@@ -442,13 +430,13 @@ void RunawayRabbit::exeCaught() {
     MR::vecBlend(mPlayerBindPos, mPosition, &mPlayerBindPos, nerveRate);
 
     if (!MR::isBindedGround(this)) {
-        MR::addVelocityToGravity(this, cNum_exeCaught_addVelocityToGravity_1);
+        MR::addVelocityToGravity(this, 2.0f);
         MR::attenuateVelocity(this, ::sAirFric);
     } else {
         MR::zeroVelocity(this);
     }
     updateBindActorMatrix();
-    if (MR::isGreaterEqualStep(this, cStep_exeCaught_1) && MR::isBindedGround(this)) {
+    if (MR::isGreaterEqualStep(this, 7) && MR::isBindedGround(this)) {
         MR::zeroVelocity(this);
         setNerve(GET_NERVE(RunawayRabbit, RunawayRabbitNrvCaughtTalk));
     }

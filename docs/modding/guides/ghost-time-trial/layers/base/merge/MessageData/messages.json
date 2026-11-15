@@ -1,0 +1,8 @@
+{
+  "lines": {
+    "GhostTrial_Replays": { "default": "Replays", "fr": "Rediffusions", "es": "Repeticiones", "de": "Wiederholungen", "it": "Replay", "nl": "Herhalingen", "pt": "Replays", "ja": "リプレイ", "ko": "리플레이", "zh-Hans": "回放", "zh-Hant": "重播" },
+    "GhostTrial_Title": { "default": "Saved runs", "fr": "Parcours enregistrés", "es": "Recorridos guardados", "de": "Gespeicherte Läufe", "it": "Percorsi salvati", "nl": "Opgeslagen runs", "pt": "Percursos salvos", "ja": "保存した記録", "ko": "저장된 기록", "zh-Hans": "已保存的记录", "zh-Hant": "已儲存的紀錄" },
+    "GhostTrial_None": { "default": "No saved runs yet.", "fr": "Aucun parcours enregistré.", "es": "Aún no hay recorridos guardados.", "de": "Noch keine gespeicherten Läufe.", "it": "Nessun percorso salvato.", "nl": "Nog geen opgeslagen runs.", "pt": "Ainda não há percursos salvos.", "ja": "保存した記録はまだありません。", "ko": "저장된 기록이 아직 없습니다.", "zh-Hans": "还没有已保存的记录。", "zh-Hant": "還沒有已儲存的紀錄。" },
+    "GhostTrial_Unreadable": { "default": "This run cannot be read.", "fr": "Ce parcours est illisible.", "es": "No se puede leer este recorrido.", "de": "Dieser Lauf kann nicht gelesen werden.", "it": "Impossibile leggere questo percorso.", "nl": "Deze run kan niet worden gelezen.", "pt": "Não é possível ler este percurso.", "ja": "この記録は読み込めません。", "ko": "이 기록을 읽을 수 없습니다.", "zh-Hans": "无法读取此记录。", "zh-Hant": "無法讀取此紀錄。" }
+  }
+}

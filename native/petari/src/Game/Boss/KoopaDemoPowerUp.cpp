@@ -11,17 +11,12 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDemo_f1, "exeDemo.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDemo_f2, "exeDemo.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDemo_f3, "exeDemo.f3", 60.0f);
 
 namespace {
-    NEBULA_TUNABLE(s32, sStepToScreenBlur, 65);
-    NEBULA_TUNABLE(s32, sScreenBlurStep, 135);
-    NEBULA_TUNABLE(s32, sStepToScreenBlurFinal, 50);
-    NEBULA_TUNABLE(s32, sScreenBlurStepFinal, 140);
+    const s32 sStepToScreenBlur = 65;
+    const s32 sScreenBlurStep = 135;
+    const s32 sStepToScreenBlurFinal = 50;
+    const s32 sScreenBlurStepFinal = 140;
 };  // namespace
 
 namespace NrvKoopaDemoPowerUp {
@@ -101,7 +96,7 @@ void KoopaDemoPowerUp::exeWaitDemo() {
 void KoopaDemoPowerUp::exeDemo() {
     const bool isFinal = KoopaFunction::isKoopaLv3(mHost);
     if (MR::isStep(this, isFinal ? ::sStepToScreenBlurFinal : ::sStepToScreenBlur)) {
-        MR::startCenterScreenBlur(isFinal ? ::sScreenBlurStepFinal : ::sScreenBlurStep, cNum_exeDemo_f1, 80, 5, 30);
+        MR::startCenterScreenBlur(isFinal ? ::sScreenBlurStepFinal : ::sScreenBlurStep, 15.0f, 80, 5, 30);
     }
 
     if (!MR::isActionEnd(mHost)) {
@@ -118,7 +113,7 @@ void KoopaDemoPowerUp::exeDemo() {
 
     Vec3f gravity;
     gravity.negate(mHost->mGravity);
-    MR::appearStarPieceToDirection(mHost, mHost->mPosition, gravity, 10, cNum_exeDemo_f2, cNum_exeDemo_f3, false);
+    MR::appearStarPieceToDirection(mHost, mHost->mPosition, gravity, 10, 50.0f, 60.0f, false);
 
     MR::startSound(mHost, "SE_OJ_STAR_PIECE_BURST");
 

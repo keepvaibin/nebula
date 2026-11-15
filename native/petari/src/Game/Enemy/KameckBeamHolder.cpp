@@ -3,12 +3,11 @@
 #include "Game/Enemy/KameckFireBall.hpp"
 #include "Game/Enemy/KameckTurtle.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sMaxKameckBeam, 16);
-    NEBULA_TUNABLE(s32, sMaxKameckFireBall, 16);
-    NEBULA_TUNABLE(s32, sMaxKameckBeamTurtle, 16);
+    const s32 sMaxKameckBeam = 16;
+    const s32 sMaxKameckFireBall = 16;
+    const s32 sMaxKameckBeamTurtle = 16;
 };  // namespace
 
 KameckBeamHolder::KameckBeamHolder() : DeriveActorGroup< KameckBeam >("カメックビーム管理", ::sMaxKameckBeam) {

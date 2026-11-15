@@ -19,29 +19,22 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <algorithm>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeProvoke_isNearPlayer_1, "exeProvoke.isNearPlayer.1", 10000.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeCaught_1, "exeCaught.1", 20);
-
 namespace {
-    NEBULA_TUNABLE(f32, sProvokeRangeIn, 1000.0f);
-    NEBULA_TUNABLE(f32, sProvokeRangeOut, 2000.0f);
-    NEBULA_TUNABLE(f32, sSwitchRange, 3000.0f);
-    NEBULA_TUNABLE(f32, sAwaySpeed, 14.0f);
-    NEBULA_TUNABLE(f32, sSwitchSpeed, 10.0f);
-    NEBULA_TUNABLE(f32, sDemoSpeed, 18.0f);
-    NEBULA_TUNABLE(f32, sAwayAccele, 0.15f);
-    NEBULA_TUNABLE(f32, sAwayBrake, 0.2f);
-    NEBULA_TUNABLE(f32, sBlendRatio, 0.05f);
-    NEBULA_TUNABLE(f32, sSameDirection, 0.55f);
-    NEBULA_TUNABLE(f32, sSamePosition, 10.0f);
-    NEBULA_TUNABLE(s32, sMarioPoseBlendTime, 5);
-    NEBULA_TUNABLE(s32, sDemoSkateSeStartTiming, 33);
+    const f32 sProvokeRangeIn = 1000.0f;
+    const f32 sProvokeRangeOut = 2000.0f;
+    const f32 sSwitchRange = 3000.0f;
+    const f32 sAwaySpeed = 14.0f;
+    const f32 sSwitchSpeed = 10.0f;
+    const f32 sDemoSpeed = 18.0f;
+    const f32 sAwayAccele = 0.15f;
+    const f32 sAwayBrake = 0.2f;
+    const f32 sBlendRatio = 0.05f;
+    const f32 sSameDirection = 0.55f;
+    const f32 sSamePosition = 10.0f;
+    const s32 sMarioPoseBlendTime = 5;
+    const s32 sDemoSkateSeStartTiming = 33;
 };  // namespace
 
 namespace NrvPenguinSkater {
@@ -362,7 +355,7 @@ void PenguinSkater::exeProvoke() {
         stopRail(1.0f);
     } else {
         MR::tryStartBck(this, "Congratulate1");
-        if (MR::isNearPlayer(mMsgCtrl, cNum_exeProvoke_isNearPlayer_1)) {
+        if (MR::isNearPlayer(mMsgCtrl, 10000.0f)) {
             MR::tryTalkForce(mMsgCtrl);
             turnToPlayer();
         }
@@ -388,7 +381,7 @@ void PenguinSkater::exeCaught() {
         MR::zeroVelocity(this);
         setCaughtStartMarioPose();
     }
-    if (MR::isStep(this, cStep_exeCaught_1)) {
+    if (MR::isStep(this, 20)) {
         MR::startSound(this, "SE_SV_PENGUIN_S_CAUGHT");
         MR::startSystemSE("SE_SY_TOTAL_COMPLETE");
     }

@@ -6,31 +6,16 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWallJumpCode_f1, "checkWallJumpCode.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWallJumpCode_f2, "checkWallJumpCode.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkWallJumpCode_f3, "checkWallJumpCode.f3", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doSideStep_f1, "doSideStep.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doSideStep_f2, "doSideStep.f2", 91.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doSideStep_f3, "doSideStep.f3", 1.6534699f);
-NEBULA_TUNABLE_NAMED(f32, cNum_doSideStep_f4, "doSideStep.f4", 1.4959966f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.866f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.707f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f5, "update.f5", 6.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f6, "update.f6", 6.0f);
 
 bool Mario::checkWallJumpCode() {
     if (checkWallFloorCode(11) || checkWallFloorCode(6) || checkWallFloorCode(34) || checkWallFloorCode(7) || checkWallFloorCode(8)) {
         if (mMovementStates.onGround || isAnimationRun(mHipDropLandAnim)) {
             stopWalk();
-            push(getWallNorm() * cNum_checkWallJumpCode_f1);
+            push(getWallNorm() * 10.0f);
             tryPushToVelocity();
-            mJumpVec.set(-getPlayer()->getWallNorm() * cNum_checkWallJumpCode_f2);
+            mJumpVec.set(-getPlayer()->getWallNorm() * 10.0f);
             MR::vecKillElement(mJumpVec, getAirGravityVec(), &mJumpVec);
-            mJumpVec -= getAirGravityVec() * cNum_checkWallJumpCode_f3;
+            mJumpVec -= getAirGravityVec() * 10.0f;
         }
         mWall->initTriangleJump();
         u32 jumpType = -1;
@@ -69,17 +54,17 @@ bool Mario::doSideStep() {
     if (mHitStates.karikariClinging) {
         return false;
     }
-    if (mCeilDist < cNum_doSideStep_f1) {
+    if (mCeilDist < 200.0f) {
         return false;
     }
     if (getPlayerMode() == PlayerMode_Hopper) {
         return false;
     }
-    if (calcPolygonAngleD(mFrontWallTriangle) > cNum_doSideStep_f2) {
+    if (calcPolygonAngleD(mFrontWallTriangle) > 91.0f) {
         return false;
     }
     f32 angle = MR::diffAngleAbs(getFrontWallNorm(), mGroundNorm);
-    if (angle >= cNum_doSideStep_f3 || angle < cNum_doSideStep_f4) {
+    if (angle >= 1.6534699f || angle < 1.4959966f) {
         return false;
     }
     bool cannotSideStep = !isSlipFloorCode(mFloorCode);
@@ -144,7 +129,7 @@ bool MarioSideStep::update() {
     if (cannotSideStep) {
         return false;
     }
-    if (getStickP() < cNum_update_f1) {
+    if (getStickP() < 0.1f) {
         changeAnimation("壁ウエイト");
     } else {
         Vec3f direction(getWorldPadDir());
@@ -152,19 +137,19 @@ bool MarioSideStep::update() {
         MR::normalizeOrZero(&direction);
         Vec3f side;
         f32 forward = MR::vecKillElement(direction, getPlayer()->getWallNorm(), &side);
-        if (forward < -cNum_update_f2) {
+        if (forward < -0.866f) {
             if (!isAnimationRun("壁押し")) {
                 playSound("声壁押し");
             }
             changeAnimation("壁押し", MarioIndexedAnime_WallPush);
         } else if (forward > 0.0f) {
-            if (forward > cNum_update_f3) {
+            if (forward > 0.707f) {
                 getPlayer()->setFrontVecKeepUp(getPlayer()->getWallNorm());
             }
             getPlayer()->mMovementStates.frontWall = false;
             return false;
         } else {
-            side *= (1.0f + cNum_update_f4 * forward) * getStickP();
+            side *= (1.0f + 0.25f * forward) * getStickP();
             if (side.dot(getPlayer()->mSideVec) < 0.0f) {
                 if (!isAnimationRun("壁右歩き")) {
                     changeAnimation("壁右歩き");
@@ -172,7 +157,7 @@ bool MarioSideStep::update() {
             } else if (!isAnimationRun("壁左歩き")) {
                 changeAnimation("壁左歩き");
             }
-            addVelocity(side * cNum_update_f5 - getPlayer()->getWallNorm() * cNum_update_f6);
+            addVelocity(side * 6.0f - getPlayer()->getWallNorm() * 6.0f);
         }
     }
     if (checkTrgA()) {

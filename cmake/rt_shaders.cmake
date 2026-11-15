@@ -9,6 +9,11 @@
 # cmake/vulkan_deps.cmake's are) and tried once. It is a build tool only: nothing of it is in what players get. Where
 # there is none for the build machine, OUT_VAR is empty, and a Vulkan build holds no tracer shaders and reports ray
 # tracing as not available (rt_caps.h).
+#
+# NEBULA_RAY_TRACING off (the default): the build holds neither the tracer's shaders nor the programs' traced forms
+# (cmake/native_materials.cmake), downloads no dxc for them, and every device reports ray tracing as not available.
+
+option(NEBULA_RAY_TRACING "Build ray tracing: the tracer's shaders and the programs' traced forms" OFF)
 
 include(FetchContent)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)

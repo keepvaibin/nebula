@@ -14,58 +14,7 @@
 #include "Game/MapObj/CocoNut.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 3000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initModel_f1, "initModel.f1", 5000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initModel_f2, "initModel.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initModel_f3, "initModel.f3", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initModel_f4, "initModel.f4", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_dirToPlayer_f1, "dirToPlayer.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_dirToPlayer_f2, "dirToPlayer.f2", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_throwCocoNut_f1, "throwCocoNut.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_throwCocoNut_f2, "throwCocoNut.f2", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_throwFireBall_f1, "throwFireBall.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_throwFireBall_f2, "throwFireBall.f2", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appearBubble_f1, "appearBubble.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appearBubble_f2, "appearBubble.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f1, "initLongFoot.f1", 735.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f2, "initLongFoot.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f3, "initLongFoot.f3", 55.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f4, "initLongFoot.f4", 9.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f5, "initLongFoot.f5", 266.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f6, "initLongFoot.f6", 959.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f7, "initLongFoot.f7", 130.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f8, "initLongFoot.f8", 107.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f9, "initLongFoot.f9", 14.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f10, "initLongFoot.f10", 43.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f11, "initLongFoot.f11", 884.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f12, "initLongFoot.f12", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f13, "initLongFoot.f13", 159.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f14, "initLongFoot.f14", 55.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f15, "initLongFoot.f15", 55.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f16, "initLongFoot.f16", 896.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f17, "initLongFoot.f17", 9.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initLongFoot_f18, "initLongFoot.f18", 14.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWaitOnSwitch_f1, "exeWaitOnSwitch.f1", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePowerUp_f1, "exePowerUp.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearStar_f1, "exeAppearStar.f1", 0.001f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAppearDemo_1, "exeAppearDemo.1", 1);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeDamage_1, "exeDamage.1", 2);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeDamage_2, "exeDamage.2", 3);
-NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_1, "exePowerUp.1", 2);
-NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_2, "exePowerUp.2", 3);
-NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_3, "exePowerUp.3", 83);
-NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_4, "exePowerUp.4", 195);
-NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_5, "exePowerUp.5", 215);
-NEBULA_TUNABLE_NAMED(s32, cStep_exePowerUp_6, "exePowerUp.6", 215);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeDown_1, "exeDown.1", 2);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeDown_2, "exeDown.2", 3);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeDownDemo_1, "exeDownDemo.1", 1);
-
 
 namespace NrvOtaKing {
     NEW_NERVE(OtaKingNrvWaitOnSwitch, OtaKing, WaitOnSwitch);
@@ -107,69 +56,69 @@ namespace {
         pMtx->mMtx[2][3] = rTrans.z;
     }
 
-    NEBULA_TUNABLE(s32, cHP, 3);
+    const s32 cHP = 3;
     const s32 cCocoNutBallNum = 3;
     const s32 cFireBallNum = 6;
     const s32 cFireBubbleNum = 6;
-    NEBULA_TUNABLE(f32, cThrowDistance, 4000.0f);
-    NEBULA_TUNABLE(s32, cWaitFrame, 75);
-    NEBULA_TUNABLE(f32, cValidThrowCocoNutDistance, 500.0f);
-    NEBULA_TUNABLE(s32, cThrowCocoNutStep, 70);
-    NEBULA_TUNABLE(f32, cThrowAngleMin, 2.5f);
-    NEBULA_TUNABLE(f32, cThrowAngleMax, 5.0f);
-    NEBULA_TUNABLE(s32, cThrowCocoNutWaitFrame, 45);
-    NEBULA_TUNABLE(s32, cThrowFireBallStep, 94);
-    NEBULA_TUNABLE(f32, cFireBallThrowNum, 3);
-    NEBULA_TUNABLE(f32, cFireBallThrowSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, cFireBallThrowAngle, 30.0f);
+    const f32 cThrowDistance = 4000.0f;
+    const s32 cWaitFrame = 75;
+    const f32 cValidThrowCocoNutDistance = 500.0f;
+    const s32 cThrowCocoNutStep = 70;
+    const f32 cThrowAngleMin = 2.5f;
+    const f32 cThrowAngleMax = 5.0f;
+    const s32 cThrowCocoNutWaitFrame = 45;
+    const s32 cThrowFireBallStep = 94;
+    const f32 cFireBallThrowNum = 3;
+    const f32 cFireBallThrowSpeed = 15.0f;
+    const f32 cFireBallThrowAngle = 30.0f;
     const s32 cThrowFireBallWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, cBubbleAppearStep, 100);
-    NEBULA_TUNABLE(s32, cBubbleAppearNum, 6);
-    NEBULA_TUNABLE(f32, cBubbleAppearRandomAngle, 30.0f);
-    NEBULA_TUNABLE(s32, cAppearDemoRippleStepS, 40);
-    NEBULA_TUNABLE(s32, cAppearDemoRippleStepL, 190);
+    const s32 cBubbleAppearStep = 100;
+    const s32 cBubbleAppearNum = 6;
+    const f32 cBubbleAppearRandomAngle = 30.0f;
+    const s32 cAppearDemoRippleStepS = 40;
+    const s32 cAppearDemoRippleStepL = 190;
     const s32 cCocoNutRippleStep = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 cFireBallRippleStep = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 cDownRippleStep = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(s32, cNearAttackRippleStep, 20);
-    NEBULA_TUNABLE(s32, cBubbleAttackRippleStep, 85);
-    NEBULA_TUNABLE(s32, cDownSinkStartStep, 80);
-    NEBULA_TUNABLE(f32, cBodySensorRadius, 400.0f);
-    NEBULA_TUNABLE(f32, cEyeSensorRadius, 1500.0f);
-    NEBULA_TUNABLE(f32, cTurnSpeedMax, 1.0f);
-    NEBULA_TUNABLE(f32, cTurnSpeedAccel, 0.003f);
-    NEBULA_TUNABLE(f32, cPowerStarAppearOffsetY, 100.0f);
-    NEBULA_TUNABLE(f32, cStarPieceAppearOffsetY, 300.0f);
-    NEBULA_TUNABLE(s32, cStarPieceAppearNum, 8);
-    NEBULA_TUNABLE(f32, cStarPieceAppearRange, 60.0f);
-    NEBULA_TUNABLE(f32, cStarPieceAppearVelocity, 50.0f);
-    NEBULA_TUNABLE(s32, cDamageCrownFallFrame, 73);
+    const s32 cNearAttackRippleStep = 20;
+    const s32 cBubbleAttackRippleStep = 85;
+    const s32 cDownSinkStartStep = 80;
+    const f32 cBodySensorRadius = 400.0f;
+    const f32 cEyeSensorRadius = 1500.0f;
+    const f32 cTurnSpeedMax = 1.0f;
+    const f32 cTurnSpeedAccel = 0.003f;
+    const f32 cPowerStarAppearOffsetY = 100.0f;
+    const f32 cStarPieceAppearOffsetY = 300.0f;
+    const s32 cStarPieceAppearNum = 8;
+    const f32 cStarPieceAppearRange = 60.0f;
+    const f32 cStarPieceAppearVelocity = 50.0f;
+    const s32 cDamageCrownFallFrame = 73;
     // const s32 cDamageAngryRumbleFrame;
-    NEBULA_TUNABLE(f32, cDamageFrontFootClipingHeight, -600.0f);
-    NEBULA_TUNABLE(s32, cDownDemoFrame, 300);
-    NEBULA_TUNABLE(f32, cDownDemoCocoNutScale, 1.5f);
-    NEBULA_TUNABLE(s32, cDownDemoRumbleFrame1, 105);
-    NEBULA_TUNABLE(s32, cDownDemoRumbleFrame2, 150);
-    NEBULA_TUNABLE(s32, cPowerStarExistBgmStartStep, 200);
-    NEBULA_TUNABLE(s32, cAppearSeStep0, 10);
-    NEBULA_TUNABLE(s32, cAppearSeStep1, 205);
-    NEBULA_TUNABLE(s32, cAppearSeStep2, 230);
-    NEBULA_TUNABLE(s32, cAppearSeStep3, 100);
-    NEBULA_TUNABLE(s32, cAppearDemoRumblePad01, 50);
-    NEBULA_TUNABLE(s32, cAppearDemoRumblePad02, 130);
-    NEBULA_TUNABLE(s32, cAppearDemoRumblePad03, 160);
-    NEBULA_TUNABLE(s32, cAppearDemoRumblePad04, 200);
-    NEBULA_TUNABLE(s32, cAppearDemoRumblePad05, 250);
-    NEBULA_TUNABLE(s32, cAppearDemoRumblePad06, 310);
-    NEBULA_TUNABLE(s32, cBlurStartStep, 175);
-    NEBULA_TUNABLE(s32, cBlurTotalFrame, 70);
-    NEBULA_TUNABLE_RECORD(Vec, cLongFootScale, {1.0f, 0.9f, 0.8f});
-    NEBULA_TUNABLE_RECORD(Vec, cBubbleAppearVelocity, {0.0f, 37.5f, 15.0f});
-    NEBULA_TUNABLE_RECORD(Vec, cSensorOffset, {0.0f, 150.0f, 0.0f});
-    NEBULA_TUNABLE_LIST(u32, cLongFootDemoBckStep, , {3, 8, 14, 18});
-    NEBULA_TUNABLE_RECORD(Vec, cAppearDemoRotate, {0.0f, 30.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, cDownDemoRotate, {0.0f, 43.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, cDownDemoCocoNutPos, {0.0f, 630.0f, 250.0f});
+    const f32 cDamageFrontFootClipingHeight = -600.0f;
+    const s32 cDownDemoFrame = 300;
+    const f32 cDownDemoCocoNutScale = 1.5f;
+    const s32 cDownDemoRumbleFrame1 = 105;
+    const s32 cDownDemoRumbleFrame2 = 150;
+    const s32 cPowerStarExistBgmStartStep = 200;
+    const s32 cAppearSeStep0 = 10;
+    const s32 cAppearSeStep1 = 205;
+    const s32 cAppearSeStep2 = 230;
+    const s32 cAppearSeStep3 = 100;
+    const s32 cAppearDemoRumblePad01 = 50;
+    const s32 cAppearDemoRumblePad02 = 130;
+    const s32 cAppearDemoRumblePad03 = 160;
+    const s32 cAppearDemoRumblePad04 = 200;
+    const s32 cAppearDemoRumblePad05 = 250;
+    const s32 cAppearDemoRumblePad06 = 310;
+    const s32 cBlurStartStep = 175;
+    const s32 cBlurTotalFrame = 70;
+    const Vec cLongFootScale = {1.0f, 0.9f, 0.8f};
+    const Vec cBubbleAppearVelocity = {0.0f, 37.5f, 15.0f};
+    const Vec cSensorOffset = {0.0f, 150.0f, 0.0f};
+    const u32 cLongFootDemoBckStep[] = {3, 8, 14, 18};
+    const Vec cAppearDemoRotate = {0.0f, 30.0f, 0.0f};
+    const Vec cDownDemoRotate = {0.0f, 43.0f, 0.0f};
+    const Vec cDownDemoCocoNutPos = {0.0f, 630.0f, 250.0f};
 };  // namespace
 
 OtaKing::OtaKing(const char* pName)
@@ -188,7 +137,7 @@ void OtaKing::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     initSensor();
     initEffectKeeper(0, "OtaKing");
-    MR::setClippingTypeSphere(this, cNum_init_f1);
+    MR::setClippingTypeSphere(this, 3000.0f);
     initSound(8, false);
     mSoundObj = new AudAnmSoundObject(&mSoundObjPos, 4, NebulaArena::current());
     mAnimCamera = MR::createActorCameraInfo(rIter);
@@ -375,7 +324,7 @@ void OtaKing::initModel(const TableIter& rIter) {
         mCocoNutBallArray[i].mHost = this;
         mCocoNutBallArray[i].mIsHeightLimited = true;
         mCocoNutBallArray[i].mIsRallyBgm = true;
-        mCocoNutBallArray[i].mKillDistance = cNum_initModel_f1;
+        mCocoNutBallArray[i].mKillDistance = 5000.0f;
 
         float arg;
         if (MR::getPlacementArg0NoInit(rIter, &arg)) {
@@ -399,8 +348,8 @@ void OtaKing::initModel(const TableIter& rIter) {
         mFireBubbleArray[i].initWithoutIter();
     }
 
-    mThrowPos = new FixedPosition(this, "Lip", Vec3f(-cNum_initModel_f2, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
-    mBubbleAppearPos = new FixedPosition(this, Vec3f(0.0f, cNum_initModel_f3, cNum_initModel_f4), Vec3f(0.0f, 0.0f, 0.0f));
+    mThrowPos = new FixedPosition(this, "Lip", Vec3f(-50.0f, 0.0f, 0.0f), Vec3f(0.0f, 0.0f, 0.0f));
+    mBubbleAppearPos = new FixedPosition(this, Vec3f(0.0f, 10.0f, 500.0f), Vec3f(0.0f, 0.0f, 0.0f));
 
     mMagma = new OtaKingMagma(this, -1);
     mMagma->initWithoutIter();
@@ -420,7 +369,7 @@ void OtaKing::dirToPlayer() {
     Vec3f vec;
     vec.sub(*MR::getPlayerPos(), mPosition);
 
-    f32 angle = MR::repeat(MR::toDegree(MR::atan2(vec.x, vec.z)), mRotation.y - cNum_dirToPlayer_f1, cNum_dirToPlayer_f2);
+    f32 angle = MR::repeat(MR::toDegree(MR::atan2(vec.x, vec.z)), mRotation.y - 180.0f, 360.0f);
 
     f32 angleMinRotY = angle - mRotation.y;
 
@@ -600,7 +549,7 @@ void OtaKing::throwCocoNut() {
     Vec3f vec;
     vec.sub(*MR::getPlayerPos(), mPosition);
 
-    f32 angle = mRotation.y - MR::repeat(MR::toDegree(MR::atan2(vec.x, vec.z)), mRotation.y - cNum_throwCocoNut_f1, cNum_throwCocoNut_f2);
+    f32 angle = mRotation.y - MR::repeat(MR::toDegree(MR::atan2(vec.x, vec.z)), mRotation.y - 180.0f, 360.0f);
     f32 random = MR::getRandom(::cThrowAngleMin, ::cThrowAngleMax);
 
     cocoNut->appearAndThrow(trans, angle + (mThrowNum % 2 == mHits % 2 ? random : -random));
@@ -616,7 +565,7 @@ void OtaKing::throwFireBall() {
     Vec3f vec;
     vec.sub(*MR::getPlayerPos(), mPosition);
 
-    f32 angle = mRotation.y - MR::repeat(MR::toDegree(MR::atan2(vec.x, vec.z)), mRotation.y - cNum_throwFireBall_f1, cNum_throwFireBall_f2);
+    f32 angle = mRotation.y - MR::repeat(MR::toDegree(MR::atan2(vec.x, vec.z)), mRotation.y - 180.0f, 360.0f);
 
     for (int i = 0; i < ::cFireBallThrowNum; i++) {
         FireBall* currentFireBall = getDisappearedFireBall();
@@ -683,7 +632,7 @@ void OtaKing::appearBubble() {
             Pos3f rotate;
 
             rotate.makeRotate(Vec3f(0.0f, 1.0f, 0.0f),
-                              MR::toRadian(((i + cNum_appearBubble_f1) * cNum_appearBubble_f2) + MR::getRandom(-::cBubbleAppearRandomAngle, ::cBubbleAppearRandomAngle)));
+                              MR::toRadian(((i + 0.5f) * 60.0f) + MR::getRandom(-::cBubbleAppearRandomAngle, ::cBubbleAppearRandomAngle)));
 
             rotate.mult33(dir, dir);
             currentBubble->appear(trans, dir, ::cBubbleAppearVelocity);
@@ -722,10 +671,10 @@ void OtaKing::initLongFoot(const TableIter& rIter) {
         }
 
         makeTranslationMatrix(&mLongFootMtx, mPosition);
-        mLongFeet[0]->initFixedPosition(mLongFootMtx, Vec3f(cNum_initLongFoot_f1, cNum_initLongFoot_f2, -cNum_initLongFoot_f3), Vec3f(-cNum_initLongFoot_f4, cNum_initLongFoot_f5, 0.0f));
-        mLongFeet[1]->initFixedPosition(mLongFootMtx, Vec3f(-cNum_initLongFoot_f6, cNum_initLongFoot_f7, 0.0f), Vec3f(0.0f, cNum_initLongFoot_f8, cNum_initLongFoot_f9));
-        mLongFeet[2]->initFixedPosition(mLongFootMtx, Vec3f(0.0f, cNum_initLongFoot_f10, cNum_initLongFoot_f11), Vec3f(-cNum_initLongFoot_f12, cNum_initLongFoot_f13, 0.0f));
-        mLongFeet[3]->initFixedPosition(mLongFootMtx, Vec3f(cNum_initLongFoot_f14, cNum_initLongFoot_f15, -cNum_initLongFoot_f16), Vec3f(-cNum_initLongFoot_f17, -cNum_initLongFoot_f18, 0.0f));
+        mLongFeet[0]->initFixedPosition(mLongFootMtx, Vec3f(735.0f, 80.0f, -55.0f), Vec3f(-9.0f, 266.0f, 0.0f));
+        mLongFeet[1]->initFixedPosition(mLongFootMtx, Vec3f(-959.0f, 130.0f, 0.0f), Vec3f(0.0f, 107.0f, 14.0f));
+        mLongFeet[2]->initFixedPosition(mLongFootMtx, Vec3f(0.0f, 43.0f, 884.0f), Vec3f(-8.0f, 159.0f, 0.0f));
+        mLongFeet[3]->initFixedPosition(mLongFootMtx, Vec3f(55.0f, 55.0f, -896.0f), Vec3f(-9.0f, -14.0f, 0.0f));
     }
 }
 
@@ -750,7 +699,7 @@ void OtaKing::exeWaitOnSwitch() {
         startBckWithFrontFoot("Appear");
         MR::setBckFrameAndStop(this, 0.0f);
 
-        mScale.set(cNum_exeWaitOnSwitch_f1);
+        mScale.set(0.001f);
 
         MR::setBckFrameAndStop(mFeet[0], 0.0f);
         MR::hideModel(mFeet[0]);
@@ -791,7 +740,7 @@ void OtaKing::exeAppearDemo() {
         }
     }
 
-    if (MR::isStep(this, cStep_exeAppearDemo_1)) {
+    if (MR::isStep(this, 1)) {
         MR::hidePlayer();
     }
 
@@ -971,11 +920,11 @@ void OtaKing::exeDamage() {
         mMagma->damage();
     }
 
-    if (MR::isStep(this, cStep_exeDamage_1)) {
+    if (MR::isStep(this, 2)) {
         MR::stopScene(mIsLv2 ? 6 : 16);
     }
 
-    if (MR::isStep(this, cStep_exeDamage_2)) {
+    if (MR::isStep(this, 3)) {
         MR::shakeCameraNormalStrong();
     }
 
@@ -1000,11 +949,11 @@ void OtaKing::exePowerUp() {
         mMagma->damage();
     }
 
-    if (MR::isStep(this, cStep_exePowerUp_1)) {
+    if (MR::isStep(this, 2)) {
         MR::stopScene(mIsLv2 ? 6 : 16);
     }
 
-    if (MR::isStep(this, cStep_exePowerUp_2)) {
+    if (MR::isStep(this, 3)) {
         MR::shakeCameraNormalStrong();
     }
 
@@ -1019,7 +968,7 @@ void OtaKing::exePowerUp() {
         MR::tryRumblePadVeryWeak(this, PLAYER_1);
     }
 
-    if (MR::isStep(this, cStep_exePowerUp_3)) {
+    if (MR::isStep(this, 83)) {
         MR::hideMaterial(this, "lambert141_v");
         MR::hideMaterial(this, "Daiya_v");
     }
@@ -1029,20 +978,20 @@ void OtaKing::exePowerUp() {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isStep(this, cStep_exePowerUp_4)) {
+    if (MR::isStep(this, 195)) {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isStep(this, cStep_exePowerUp_5)) {
+    if (MR::isStep(this, 215)) {
         MR::shakeCameraNormal();
     }
 
-    if (MR::isGreaterStep(this, ::cBlurStartStep) && MR::isLessStep(this, cStep_exePowerUp_6)) {
+    if (MR::isGreaterStep(this, ::cBlurStartStep) && MR::isLessStep(this, 215)) {
         MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
     if (MR::isStep(this, ::cBlurStartStep)) {
-        MR::startCenterScreenBlur(::cBlurTotalFrame, cNum_exePowerUp_f1, 80, 5, 30);
+        MR::startCenterScreenBlur(::cBlurTotalFrame, 15.0f, 80, 5, 30);
     }
 
     if (MR::isBckStopped(this)) {
@@ -1114,11 +1063,11 @@ void OtaKing::exeDown() {
         }
     }
 
-    if (MR::isStep(this, cStep_exeDown_1)) {
+    if (MR::isStep(this, 2)) {
         MR::stopScene(20);
     }
 
-    if (MR::isStep(this, cStep_exeDown_2)) {
+    if (MR::isStep(this, 3)) {
         invalidateClippingAndStartDemo("ダウン", GET_NERVE(OtaKing, OtaKingNrvDownDemo), GET_NERVE(OtaKing, OtaKingNrvWaitStartDemo));
     }
 }
@@ -1143,7 +1092,7 @@ void OtaKing::exeDownDemo() {
         MR::requestAppearPowerStar(this, starAppearPos);
     }
 
-    if (MR::isStep(this, cStep_exeDownDemo_1)) {
+    if (MR::isStep(this, 1)) {
         MR::hidePlayer();
     }
 
@@ -1184,7 +1133,7 @@ void OtaKing::exeDownDemo() {
 
 void OtaKing::exeAppearStar() {
     if (MR::isFirstStep(this)) {
-        mScale.set(cNum_exeAppearStar_f1);
+        mScale.set(0.001f);
         for (int i = 0; i < ARRAY_SIZE(mFeet); i++) {
             mFeet[i]->kill();
         }

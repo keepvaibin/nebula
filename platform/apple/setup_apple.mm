@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The first start on a Mac (docs/APPLE.md, "Setting up"): the game needs the player's own copy of the disc, once. With
+// The first start on a Mac: the game needs the player's own copy of the disc, once. With
 // no game.pak where the game reads it, a small window asks for the disc image, has the importer (crates/nebula-import,
 // linked into the app: its C functions) check it and build game.pak from it, and shows how far that is. Nothing of
 // the disc image is changed, and nothing is fetched from anywhere.

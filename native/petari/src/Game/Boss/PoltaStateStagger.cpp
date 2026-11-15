@@ -10,17 +10,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 1800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 1800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f3, "exeWait.f3", 1500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f4, "exeWait.f4", 0.7f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f5, "exeWait.f5", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f6, "exeWait.f6", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f7, "exeWait.f7", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f8, "exeWait.f8", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f9, "exeWait.f9", 50.0f);
 
 namespace NrvPoltaStateStagger {
     NEW_NERVE(PoltaStateStaggerNrvWait, PoltaStateStagger, Wait);
@@ -49,18 +38,18 @@ void PoltaStateStagger::exeWait() {
     f32 distToStart;
     MR::separateScalarAndDirection(&distToStart, &toStart, getHost()->mStartPos - getHost()->mPosition);
 
-    if (distToStart >= cNum_exeWait_f1) {
-        MR::addVelocity(getHost(), toStart * (distToStart - cNum_exeWait_f2));
+    if (distToStart >= 1800.0f) {
+        MR::addVelocity(getHost(), toStart * (distToStart - 1800.0f));
         mIsClockwise = MR::isClockwiseToPlayer(getHost(), toStart);
     }
 
-    if (MR::isNearPlayerHorizontal(getHost(), cNum_exeWait_f3)) {
-        MR::addVelocityAwayFromTarget(getHost(), *MR::getPlayerPos(), cNum_exeWait_f4);
+    if (MR::isNearPlayerHorizontal(getHost(), 1500.0f)) {
+        MR::addVelocityAwayFromTarget(getHost(), *MR::getPlayerPos(), 0.7f);
     }
 
-    MR::addVelocityClockwiseToPlayer(getHost(), mIsClockwise ? cNum_exeWait_f5 : -cNum_exeWait_f6);
-    MR::attenuateVelocity(getHost(), cNum_exeWait_f7);
-    MR::addVelocityKeepHeight(getHost(), getHost()->mStartPos, cNum_exeWait_f8, cNum_exeWait_f9);
+    MR::addVelocityClockwiseToPlayer(getHost(), mIsClockwise ? 0.8f : -0.8f);
+    MR::attenuateVelocity(getHost(), 0.9f);
+    MR::addVelocityKeepHeight(getHost(), getHost()->mStartPos, 0.5f, 50.0f);
     getHost()->rotateToPlayer();
     if (MR::isIntervalStep(this, NebulaFrameClock::stepsOfMilliseconds(3500)) && PoltaFunction::appearBombTeresaFromRoot(getHost())) {
         MR::startSound(getHost(), "SE_BM_POLTA_GEN_BOMB_TERESA");

@@ -28,20 +28,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_processWait_f1, "processWait.f1", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearDemoRise_f1, "exeAppearDemoRise.f1", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearDemoMove_f1, "exeAppearDemoMove.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppearDemoMove_f2, "exeAppearDemoMove.f2", 360.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWeakToWait_setBrkRate_1, "exeWeakToWait.setBrkRate.1", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAppearDemoKoopa_1, "exeAppearDemoKoopa.1", 1);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeStageClearDemo_1, "exeStageClearDemo.1", 1);
 
 namespace {
     // Indexed by PowerStar::Color.
@@ -67,36 +54,36 @@ namespace {
 
     const char* const cAppearDemoName = "パワースター出現";
     const char* const cStageClearAnimNameKoopaVs3 = "GrandStarGetKoopaVs3";
-    NEBULA_TUNABLE(s32, cAppearPointGroupMax, 16);
-    NEBULA_TUNABLE(u16, cSensorGroupSize, 8);
-    NEBULA_TUNABLE(f32, cBodyRadius, 75.0f);
-    NEBULA_TUNABLE(f32, cClippingRadius, 5000.0f);
-    NEBULA_TUNABLE(f32, cCometClipDistance, 5000.0f);
-    NEBULA_TUNABLE(f32, cCometClipLeaveMargin, 500.0f);
-    NEBULA_TUNABLE(f32, cGrandStarNearClip, 250.0f);
-    NEBULA_TUNABLE(f32, cGrandStarNearClipMargin, 50.0f);
-    NEBULA_TUNABLE(f32, cPowerStarRotateSpeed, 3.0f);
-    NEBULA_TUNABLE(f32, cGrandStarRotateSpeed, 2.0f);
-    NEBULA_TUNABLE(f32, cWeakRotateSpeed, 0.3f);
-    NEBULA_TUNABLE(f32, cWeakNoRotateAngle, 45.0f);
+    const s32 cAppearPointGroupMax = 16;
+    const u16 cSensorGroupSize = 8;
+    const f32 cBodyRadius = 75.0f;
+    const f32 cClippingRadius = 5000.0f;
+    const f32 cCometClipDistance = 5000.0f;
+    const f32 cCometClipLeaveMargin = 500.0f;
+    const f32 cGrandStarNearClip = 250.0f;
+    const f32 cGrandStarNearClipMargin = 50.0f;
+    const f32 cPowerStarRotateSpeed = 3.0f;
+    const f32 cGrandStarRotateSpeed = 2.0f;
+    const f32 cWeakRotateSpeed = 0.3f;
+    const f32 cWeakNoRotateAngle = 45.0f;
     const s32 cWeakToWaitSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, cBgmFadeOutSteps, 5);
+    const s32 cBgmFadeOutSteps = 5;
     const s32 cBgmFadeInSteps = NebulaFrameClock::stepsOfSeconds(1);
     const s32 cRiseEaseSteps = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, cRiseHeight, 300.0f);
-    NEBULA_TUNABLE(f32, cRiseSpinSpeed, 10.0f);
-    NEBULA_TUNABLE(s32, cRiseSteps, 80);
+    const f32 cRiseHeight = 300.0f;
+    const f32 cRiseSpinSpeed = 10.0f;
+    const s32 cRiseSteps = 80;
     const s32 cMoveSteps = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, cMoveSpinSpeed, 20.0f);
-    NEBULA_TUNABLE(f32, cArcHeightMin, 300.0f);
-    NEBULA_TUNABLE(f32, cArcHeightMax, 5000.0f);
-    NEBULA_TUNABLE(f32, cSpinDownSteps, 90.0f);
+    const f32 cMoveSpinSpeed = 20.0f;
+    const f32 cArcHeightMin = 300.0f;
+    const f32 cArcHeightMax = 5000.0f;
+    const f32 cSpinDownSteps = 90.0f;
     const s32 cMoveEndStep = NebulaFrameClock::stepsOfMilliseconds(3500);
     const s32 cKoopaVs3LightDuration = NebulaFrameClock::stepsOfSeconds(2);
     const s32 cKoopaBgmStep = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(s32, cKoopaVs3BgmStep, 152);
+    const s32 cKoopaVs3BgmStep = 152;
     // Steps before the demo bck ends.
-    NEBULA_TUNABLE(s32, cKoopaVs3StageBgmLead, 30);
+    const s32 cKoopaVs3StageBgmLead = 30;
     const s32 cKoopaVs3ClearStep = NebulaFrameClock::stepsOfSeconds(10);
 
     const char* getKoopaDemoName() {
@@ -571,7 +558,7 @@ void PowerStar::calcAppearDemoRiseTrans(Vec3f* pOutTrans, f32 height) const {
 }
 
 void PowerStar::processWait(f32 rotateSpeed) {
-    mRotation.y = MR::repeat(mRotation.y + rotateSpeed, 0.0f, cNum_processWait_f1);
+    mRotation.y = MR::repeat(mRotation.y + rotateSpeed, 0.0f, 360.0f);
 
     if (mIsGrandStar) {
         // Hidden inside the near distance, shown only a margin beyond it, so a camera at the line does not toggle the model and its effects.
@@ -638,7 +625,7 @@ void PowerStar::exeAppearDemoRise() {
 
     f32 height = MR::calcNerveEaseOutValue(this, cRiseEaseSteps, 0.0f, cRiseHeight);
     calcAppearDemoRiseTrans(&mPosition, height);
-    mRotation.y = MR::repeat(mRotation.y + cRiseSpinSpeed, 0.0f, cNum_exeAppearDemoRise_f1);
+    mRotation.y = MR::repeat(mRotation.y + cRiseSpinSpeed, 0.0f, 360.0f);
 
     if (MR::isStep(this, cRiseSteps)) {
         setNerve(GET_NERVE(PowerStar, PowerStarNrvAppearDemoMove));
@@ -664,7 +651,7 @@ void PowerStar::exeAppearDemoMove() {
         Vec3f appearH;
         MR::vecKillElement(mAppearPosition, mGravity, &appearH);
 
-        f32 halfDistance = riseH.distance(appearH) * cNum_exeAppearDemoMove_f1;
+        f32 halfDistance = riseH.distance(appearH) * 0.5f;
         f32 arcHeight = MR::clamp(halfDistance, cArcHeightMin, cArcHeightMax);
 
         Vec3f arc(0.0f, 0.0f, 0.0f);
@@ -686,7 +673,7 @@ void PowerStar::exeAppearDemoMove() {
     }
 
     f32 spinSpeed = isMoving ? cMoveSpinSpeed : MR::getEaseOutValue(getNerveStep() - cMoveSteps, cMoveSpinSpeed, getWaitRotateSpeed(), cSpinDownSteps);
-    mRotation.y = MR::repeat(mRotation.y + spinSpeed, 0.0f, cNum_exeAppearDemoMove_f2);
+    mRotation.y = MR::repeat(mRotation.y + spinSpeed, 0.0f, 360.0f);
 
     if (MR::isStep(this, cMoveEndStep)) {
         MR::resetCameraLocalOffset();
@@ -716,7 +703,7 @@ void PowerStar::exeAppearDemoKoopa() {
         MR::setPlayerBaseMtx(mBaseMtx);
     }
 
-    if (MR::isStep(this, cStep_exeAppearDemoKoopa_1)) {
+    if (MR::isStep(this, 1)) {
         MR::startBckPlayer(pDemoName, 0);
     }
 
@@ -788,7 +775,7 @@ void PowerStar::exeWeakNoRotate() {
 
 void PowerStar::exeWeakToWait() {
     if (MR::isFirstStep(this) && mColor != Color_Collected) {
-        MR::setBrkRate(this, cNum_exeWeakToWait_setBrkRate_1);
+        MR::setBrkRate(this, 1.0f);
     }
 
     mIsWeak = false;
@@ -813,7 +800,7 @@ void PowerStar::exeStageClearDemo() {
         MR::startAnimCameraTargetSelf(mPowerStarModelObj, mCameraInfo, getGetDemoName(), 0, 1.0f);
     }
 
-    if (MR::isStep(this, cStep_exeStageClearDemo_1)) {
+    if (MR::isStep(this, 1)) {
         if (mIsCameraActorPose && mCameraActor != nullptr) {
             MR::makeMtxTR(mBaseMtx, mCameraActor);
             mBaseMtx.zeroTrans();

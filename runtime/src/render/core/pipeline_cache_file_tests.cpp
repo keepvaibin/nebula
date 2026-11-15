@@ -2,6 +2,7 @@
 // The pipeline cache files' headers (pipeline_cache_file.h): a good file is taken; a wrong revision, vendor, device, driver, UUID,
 // size, hash or magic, a truncated file and a longer one are refused.
 #include "render/core/pipeline_cache_file.h"
+#include "render/core/pipeline_workers.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -197,12 +198,25 @@ void hash_tests() {
     check(cache_bytes_hash(nullptr, 0u) == cache_bytes_hash(nullptr, 0u), "the empty hash is defined");
 }
 
+// The workers' rule (pipeline_workers.h): the game's and render thread's cores left, a quarter of the free memory at
+// 64 MB a compile, at least one.
+void worker_tests() {
+    constexpr std::uint64_t mb = 1ull << 20u;
+    check(pipeline_worker_count(32u, 0u) == 30u, "memory not known: the cores less two");
+    check(pipeline_worker_count(32u, 64000u * mb) == 30u, "a desktop with memory to spare: the cores less two");
+    check(pipeline_worker_count(32u, 2048u * mb) == 8u, "2 GB free: a quarter of it at 64 MB a compile");
+    check(pipeline_worker_count(4u, 8192u * mb) == 2u, "four cores: two workers");
+    check(pipeline_worker_count(2u, 8192u * mb) == 1u && pipeline_worker_count(1u, 0u) == 1u, "two cores or fewer: one");
+    check(pipeline_worker_count(16u, 100u * mb) == 1u, "almost no memory: still one");
+}
+
 }  // namespace
 
 int main() {
     hash_tests();
     vulkan_tests();
     d3d12_tests();
+    worker_tests();
     if (g_failures != 0) {
         std::fprintf(stderr, "%d checks failed\n", g_failures);
         return 1;

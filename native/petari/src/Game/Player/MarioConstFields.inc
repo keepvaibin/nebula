@@ -492,3 +492,5 @@
     {"mLookMaxAngleVM", offsetof(MarioConstTable, mLookMaxAngleVM), 'f', 1},
     {"mLookShoulderMoveMax", offsetof(MarioConstTable, mLookShoulderMoveMax), 'f', 1},
     {"mRushInBlendTimer", offsetof(MarioConstTable, mRushInBlendTimer), 'H', 1},
+    {"mBinderRadius", offsetof(MarioConstTable, mBinderRadius), 'f', 1},
+    {"mSensorRadius", offsetof(MarioConstTable, mSensorRadius), 'f', 1},

@@ -197,11 +197,11 @@ fn walk(bytes: &[u8], layout: &Layout, folder: usize, prefix: &str, depth: usize
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     // An archive: a.bin, then the folder sub with b.bin; a.bin's bytes lie after b.bin's.
-    fn small_archive() -> Vec<u8> {
+    pub(crate) fn small_archive() -> Vec<u8> {
         let names = b".\0..\0a.bin\0sub\0b.bin\0";
         let (folders_at, entries_at, strings_at, data_at) = (0x40usize, 0x60usize, 0xECusize, 0x120usize);
         let mut out = vec![0u8; data_at];

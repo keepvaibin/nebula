@@ -1,0 +1,78 @@
+{
+  "format": "1.0",
+  "id": "orb-galaxy",
+  "version": "0.1.0",
+  "name": "Orb King Galaxy",
+  "summary": "A new galaxy: a mossy planet, rolling Spikerolls and the Orb King, who guards its star.",
+  "text": {
+    "EuEnglish": {
+      "name": "Orb King Galaxy",
+      "summary": "A new galaxy: a mossy planet, rolling Spikerolls and the Orb King, who guards its star."
+    },
+    "UsFrench": {
+      "name": "Galaxie du Roi Orbe",
+      "summary": "Une nouvelle galaxie : une planète moussue, des Roulépines et le Roi Orbe, qui garde son étoile."
+    },
+    "EuFrench": {
+      "name": "Galaxie du Roi Orbe",
+      "summary": "Une nouvelle galaxie : une planète moussue, des Roulépines et le Roi Orbe, qui garde son étoile."
+    },
+    "UsSpanish": {
+      "name": "Galaxia del Rey Orbe",
+      "summary": "Una galaxia nueva: un planeta de musgo, Ruedapúas rodantes y el Rey Orbe, que guarda su estrella."
+    },
+    "EuSpanish": {
+      "name": "Galaxia del Rey Orbe",
+      "summary": "Una galaxia nueva: un planeta de musgo, Ruedapúas rodantes y el Rey Orbe, que guarda su estrella."
+    },
+    "EuGerman": {
+      "name": "Kugelkönig-Galaxie",
+      "summary": "Eine neue Galaxie: ein moosiger Planet, rollende Stachelroller und der Kugelkönig, der ihren Stern bewacht."
+    },
+    "EuItalian": {
+      "name": "Galassia del Re Sfera",
+      "summary": "Una nuova galassia: un pianeta di muschio, Rotolaspine e il Re Sfera, che custodisce la sua stella."
+    },
+    "EuDutch": {
+      "name": "Bolkoningsterrenstelsel",
+      "summary": "Een nieuw sterrenstelsel: een bemoste planeet, rollende Stekelrollers en de Bolkoning, die de ster bewaakt."
+    },
+    "UsPortuguese": {
+      "name": "Galáxia do Rei Orbe",
+      "summary": "Uma galáxia nova: um planeta de musgo, Rolespinhos e o Rei Orbe, que guarda a estrela."
+    },
+    "JpJapanese": {
+      "name": "オーブキングギャラクシー",
+      "summary": "新しいギャラクシー。コケの惑星、転がるトゲコロ、そしてスターを守るオーブキング。"
+    },
+    "KrKorean": {
+      "name": "오브 킹 갤럭시",
+      "summary": "새로운 갤럭시: 이끼 행성, 굴러다니는 가시구르와 별을 지키는 오브 킹."
+    },
+    "CnSimpChinese": {
+      "name": "球王银河",
+      "summary": "全新的银河：长满苔藓的星球、滚动的刺球和守护星星的球王。"
+    },
+    "TwTradChinese": {
+      "name": "球王銀河",
+      "summary": "全新的銀河：長滿苔蘚的星球、滾動的刺球和守護星星的球王。"
+    }
+  },
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  },
+  "needs": [
+    {
+      "id": "lumakit",
+      "version": "*"
+    }
+  ]
+}

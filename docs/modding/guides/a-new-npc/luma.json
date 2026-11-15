@@ -1,0 +1,28 @@
+{
+  "format": "1.0",
+  "id": "luma-keeper",
+  "version": "1.0.0",
+  "name": "The Keeper",
+  "summary": "A new character to talk to, with its own model, materials and lines.",
+  "text": {
+    "UsEnglish": {"name": "The Keeper", "summary": "A new character to talk to, with its own model, materials and lines."},
+    "EuEnglish": {"name": "The Keeper", "summary": "A new character to talk to, with its own model, materials and lines."},
+    "UsFrench": {"name": "Le Gardien", "summary": "Un nouveau personnage à qui parler, avec son modèle, ses matériaux et ses répliques."},
+    "EuFrench": {"name": "Le Gardien", "summary": "Un nouveau personnage à qui parler, avec son modèle, ses matériaux et ses répliques."},
+    "UsSpanish": {"name": "El Guardián", "summary": "Un personaje nuevo con quien hablar, con su propio modelo, materiales y frases."},
+    "EuSpanish": {"name": "El Guardián", "summary": "Un personaje nuevo con quien hablar, con su propio modelo, materiales y frases."},
+    "EuGerman": {"name": "Der Hüter", "summary": "Eine neue Figur zum Reden, mit eigenem Modell, eigenen Materialien und Sätzen."},
+    "EuItalian": {"name": "Il Custode", "summary": "Un nuovo personaggio con cui parlare, con modello, materiali e battute propri."},
+    "EuDutch": {"name": "De Hoeder", "summary": "Een nieuw personage om mee te praten, met een eigen model, materialen en zinnen."},
+    "UsPortuguese": {"name": "O Guardião", "summary": "Um novo personagem para conversar, com modelo, materiais e falas próprios."},
+    "JpJapanese": {"name": "キーパー", "summary": "話しかけられる新しいキャラクター。モデル、マテリアル、セリフはすべて独自です。"},
+    "KrKorean": {"name": "키퍼", "summary": "말을 걸 수 있는 새 캐릭터. 모델, 재질, 대사가 모두 새것입니다."},
+    "CnSimpChinese": {"name": "守护者", "summary": "可以交谈的新角色，拥有自己的模型、材质和台词。"},
+    "TwTradChinese": {"name": "守護者", "summary": "可以交談的新角色，擁有自己的模型、材質和台詞。"}
+  },
+  "authors": ["you"],
+  "game": { "id": "RMG" },
+  "needs": [{ "id": "lumakit", "version": ">=1.0.0" }],
+  "layers": [{ "name": "base" }],
+  "code": { "platforms": ["windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64", "ios-arm64"]}
+}

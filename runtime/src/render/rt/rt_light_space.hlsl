@@ -25,11 +25,66 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 Texture2D<float4> g_motion_map : register(t12);  // the last step's, for --diagnostics rt-motion
 Texture2D<float4> g_sun_out : register(t14);     // the last step's: the sun's V, filtered (rgb)
 Texture2D<float4> g_indirect : register(t13);    // the last step's: I (rt_indirect_up.hlsl), when bit 8 of g_more.z says
+// The last step's landing cue: the drops (48 bytes each from g_at.z: base, radius; direction, length; caster, the
+// cue bit, the body's half reach along, its radius across) by 16-pixel tiles (from g_at.w; entries from g_more.x).
+ByteAddressBuffer g_drops : register(t3);
+ByteAddressBuffer g_tiles : register(t4);
+RWStructuredBuffer<uint> g_counters : register(u8);  // 19: the pixels the landing cue darkens
+
+// What the cue takes at most of the light under the player: it reads in sun and in shade and is never a black blot.
+static const float kLandingCue = 0.30f;
+
+// The landing cue: a soft disc on what faces up under the player, as wide as the body across the drop, its edge
+// widening with the height as under a light 2 degrees across (g_stage.w), fading out to the drop's end. 1: none.
+float landing_cue(int2 pixel, float4 guide) {
+    const uint2 tile = uint2(pixel) / max(g_grid.z, 1u);
+    if (tile.x >= g_grid.x || tile.y >= g_grid.y) {
+        return 1.0f;
+    }
+    const float3 place = rt_eye_ray(g_ray, float2(pixel) + 0.5f) * guide.r;
+    const float3 normal = rt_unpack_normal(guide.a);
+    const uint2 run = g_tiles.Load2(g_at.w + (tile.y * g_grid.x + tile.x) * 8u);
+    float v = 1.0f;
+    for (uint k = 0u; k < min(run.y, 8u); ++k) {
+        const uint at = g_at.z + g_tiles.Load(g_more.x + (run.x + k) * 4u) * 48u;
+        const uint4 rest = g_drops.Load4(at + 32u);
+        if ((rest.y & 1u) == 0u) {
+            continue;
+        }
+        const float4 base = asfloat(g_drops.Load4(at));
+        const float4 way = asfloat(g_drops.Load4(at + 16u));
+        const float3 off = place - base.xyz;
+        const float along = dot(off, way.xyz);
+        // From halfway down the body (its own upward faces below that: the ground under the feet) to the drop's end,
+        // on what faces up against the drop.
+        const float start = 0.5f * asfloat(rest.z);
+        if (along <= start || along > way.w || dot(normal, way.xyz) >= 0.0f) {  // way.w: the drop's length
+            continue;
+        }
+        const float height = along - start;
+        const float aside = length(off - along * way.xyz);
+        const float radius = asfloat(rest.w);
+        const float wide = max(height * g_stage.w, 1.0f);
+        const float under = 1.0f - smoothstep(radius - wide, radius + wide, aside);
+        const float fade = 1.0f - saturate(height / max(way.w - start, 1.0f));
+        v = min(v, 1.0f - under * fade);
+    }
+    return lerp(1.0f, v, kLandingCue);
+}
 #endif
 #ifdef RT_LIGHTS
 Texture2D<float4> g_moments : register(t10);  // b: the variance of the average's luminance
 Texture2D<float4> g_body : register(t12);     // the second layer's last step: glass's and water's body, in a
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
+// The opaque layer's last step: the pixel's base colour (rt_surface's, display-encoded) and the counters, for the
+// added light's guard (the programs' traced_colour): counter 51 the pixels past it.
+Texture2D<float4> g_base_map : register(t13);
+RWStructuredBuffer<uint> g_counters : register(u8);
+static const float kAddedMost = 0.6f;  // the programs' guard on the largest channel (program.hlsli's)
+float3 base_lin(float3 c) {
+    c = saturate(c);
+    return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
+}
 #endif
 
 // The step (b1, rt_frame.hlsli): g_pass.y pixels between taps; g_pass.z 1 the last step.
@@ -42,8 +97,51 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     const int2 pixel = int2(id.xy);
-    const float4 centre = g_in.Load(int3(pixel, 0));
     const float4 guide = g_guide.Load(int3(pixel, 0));
+#ifndef RT_LIGHTS
+    // The light pass's shares are composed in one step: the host runs only the last, which reads no
+    // picture of the light pass (its sky share is the constant 1).
+    if (g_pass.z != 0u) {
+        if (guide.a == 0.0f) {
+            g_out[id.xy] = float4(1.0f, 1.0f, 1.0f, 1.0f);
+            return;
+        }
+        // What the programs read: V as a colour and the sky's share. O: the sky and bounce light's mean ratio where
+        // that pass runs (bit 8), else 1 (that part off).
+        float sky = 1.0f;
+        if ((g_more.z & 256u) != 0u) {
+            const float3 ratio = g_indirect.Load(int3(pixel, 0)).rgb;
+            sky = (ratio.r + ratio.g + ratio.b) * (1.0f / 3.0f);
+        }
+        float4 shares = float4(g_sun_out.Load(int3(pixel, 0)).rgb, sky);
+        if ((g_more.z & (1u | 256u)) == 256u) {
+            // No traced sun: the key's visibility is the point's O, at most 1 (a room's key is
+            // hidden by what hides its sky: under a table, in a corner, at Mario's feet).
+            // The occlusion alone, O over the room's open level (an open floor's O is about 0.6 in a room).
+            const float open_ = g_sky.w > 0.0f ? clamp(g_sky.w, 0.25f, 1.0f) : 1.0f;
+            shares.rgb = min(sky / open_, 1.0f).xxx;
+        }
+        if ((g_more.z & 8192u) != 0u) {
+            const float cue = landing_cue(pixel, guide);  // the landing cue under the player
+            if (cue < 1.0f) {
+                InterlockedAdd(g_counters[19], 1u);
+            }
+            shares *= cue;
+        }
+        if ((g_more.z & 128u) != 0u) {
+            shares = float4(0.0f, 0.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)
+        }
+        if ((g_more.z & 512u) != 0u) {
+            // --diagnostics rt-motion (shown as rt-light shows r, a, b): the move across in red, down in green, eight
+            // pixels a frame full; blue where where the point was is not known.
+            const float4 m = g_motion_map.Load(int3(pixel, 0));
+            shares = float4(saturate(abs(m.x) / 8.0f), 1.0f, m.z > 0.0f ? 0.0f : 1.0f, saturate(abs(m.y) / 8.0f));
+        }
+        g_out[id.xy] = shares;
+        return;
+    }
+#endif
+    const float4 centre = g_in.Load(int3(pixel, 0));
     const float frames = g_pass.z != 0u ? 1.0f : centre.g;
     if (guide.a == 0.0f) {
 #ifdef RT_LIGHTS
@@ -89,7 +187,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     float3 weight = float3(1.0f, 1.0f, 1.0f) * (kTap[0] * kTap[0]);
     for (int y = -2; y <= 2; ++y) {
         for (int x = -2; x <= 2; ++x) {
-            if ((x == 0 && y == 0) || (g_more.z & 2048u) != 0u) {  // raw signals (FB, 22.20): the centre tap alone
+            if ((x == 0 && y == 0) || (g_more.z & 2048u) != 0u) {  // raw signals: the centre tap alone
                 continue;
             }
             const int2 at = pixel + int2(x, y) * step_;
@@ -120,29 +218,14 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 now = sum / weight;
 #ifdef RT_LIGHTS
     const float body = g_pass.z != 0u && rt_second_layer() ? g_body.Load(int3(pixel, 0)).r : 1.0f;
+    if (g_pass.z != 0u && !rt_second_layer()) {
+        const float3 lit = now * base_lin(g_base_map.Load(int3(pixel, 0)).rgb);
+        if (max(lit.r, max(lit.g, lit.b)) > kAddedMost) {
+            InterlockedAdd(g_counters[51], 1u);  // past the programs' guard
+        }
+    }
     g_out[id.xy] = g_pass.z != 0u ? float4(now.x, now.y, now.z, body) : float4(now.x, frames, now.y, now.z);
 #else
-    if (g_pass.z == 0u) {
-        g_out[id.xy] = float4(centre.r, frames, centre.b, now.z);
-        return;
-    }
-    // What the programs read: V as a colour and the sky's share.
-    // O: the sky and bounce light's mean ratio where that pass runs (bit 8), else the sky rays' share.
-    float sky = now.z;
-    if ((g_more.z & 256u) != 0u) {
-        const float3 ratio = g_indirect.Load(int3(pixel, 0)).rgb;
-        sky = (ratio.r + ratio.g + ratio.b) * (1.0f / 3.0f);
-    }
-    float4 shares = float4(g_sun_out.Load(int3(pixel, 0)).rgb, sky);
-    if ((g_more.z & 128u) != 0u) {
-        shares = float4(0.0f, 0.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)
-    }
-    if ((g_more.z & 512u) != 0u) {
-        // --diagnostics rt-motion (shown as rt-light shows r, a, b): the move across in red, down in green, eight
-        // pixels a frame full; blue where where the point was is not known.
-        const float4 m = g_motion_map.Load(int3(pixel, 0));
-        shares = float4(saturate(abs(m.x) / 8.0f), 1.0f, m.z > 0.0f ? 0.0f : 1.0f, saturate(abs(m.y) / 8.0f));
-    }
-    g_out[id.xy] = shares;
+    g_out[id.xy] = float4(centre.r, frames, centre.b, now.z);  // a step before the last (none runs)
 #endif
 }

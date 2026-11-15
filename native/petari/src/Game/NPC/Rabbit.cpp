@@ -24,59 +24,19 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 160.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 450.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 5000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f2, "control.f2", 3000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f3, "exeWait.f3", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGoal_f1, "exeGoal.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGoal_f2, "exeGoal.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcRailPos_f1, "calcRailPos.f1", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcRailPos_f2, "calcRailPos.f2", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcRailPos_f3, "calcRailPos.f3", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isNeedTurn_f1, "isNeedTurn.f1", 0.78539819f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePreJump_f1, "exePreJump.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePreJump_f2, "exePreJump.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f2, "exeMove.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f3, "exeMove.f3", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f4, "exeMove.f4", 1.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f5, "exeMove.f5", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f6, "exeMove.f6", 1.6f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f7, "exeMove.f7", 250.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f8, "exeMove.f8", 1.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f9, "exeMove.f9", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f10, "exeMove.f10", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f11, "exeMove.f11", 350.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f12, "exeMove.f12", 1.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f13, "exeMove.f13", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNear_f1, "exeNear.f1", 10.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_moveCoord_1, "exeMove.moveCoord.1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNear_moveCoord_1, "exeNear.moveCoord.1", 20.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, cJumpSpeed, 20.0f);
-    NEBULA_TUNABLE(f32, cProgressSpeed, 18.0f);
-    NEBULA_TUNABLE(f32, cGravity, 3.0f);
-    NEBULA_TUNABLE(f32, cFinalDisappearRadius, 300.0f);
-    NEBULA_TUNABLE(f32, cDistEscape, 400.0f);
-    NEBULA_TUNABLE(f32, cDistWait, 500.0f);
-    NEBULA_TUNABLE(f32, cDistNear, 600.0f);
-    NEBULA_TUNABLE(f32, cAppearHeight, 150.0f);
-    NEBULA_TUNABLE(f32, cAppearHop, 10.0f);
-    NEBULA_TUNABLE(f32, cRegistNormal, 0.98f);
+    const f32 cJumpSpeed = 20.0f;
+    const f32 cProgressSpeed = 18.0f;
+    const f32 cGravity = 3.0f;
+    const f32 cFinalDisappearRadius = 300.0f;
+    const f32 cDistEscape = 400.0f;
+    const f32 cDistWait = 500.0f;
+    const f32 cDistNear = 600.0f;
+    const f32 cAppearHeight = 150.0f;
+    const f32 cAppearHop = 10.0f;
+    const f32 cRegistNormal = 0.98f;
 };  // namespace
 
 namespace NrvRabbit {
@@ -109,11 +69,11 @@ void Rabbit::init(const TableIter& rIter) {
     MR::connectToSceneNpc(this);
     MR::initLightCtrl(this);
     initSound(4, false);
-    initBinder(cNum_init_f1, cNum_init_f2, 0);
+    initBinder(10.0f, 10.0f, 0);
     MR::onCalcGravity(this);
     initHitSensor(1);
-    MR::addHitSensorMtxNpc(this, "body", 8, cNum_init_f3, MR::getJointMtx(this, "Spine"), Vec3f(0.0f, 0.0f, 0.0f));
-    MR::initStarPointerTargetAtJoint(this, "Spine", cNum_init_f4, Vec3f(0.0f, cNum_init_f5, 0.0f));
+    MR::addHitSensorMtxNpc(this, "body", 8, 60.0f, MR::getJointMtx(this, "Spine"), Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTargetAtJoint(this, "Spine", 60.0f, Vec3f(0.0f, 60.0f, 0.0f));
     initEffectKeeper(0, nullptr);
     MR::initShadowFromCSV(this, "Shadow");
     mLodCtrl = MR::createLodCtrlNPC(this, rIter);
@@ -125,7 +85,7 @@ void Rabbit::init(const TableIter& rIter) {
 
     s32 messageId;
     if (MR::getPlacementMessageID(rIter, &messageId)) {
-        mMsgCtrl = MR::createTalkCtrl(this, rIter, name, Vec3f(0.0f, cNum_init_f6, 0.0f), nullptr);
+        mMsgCtrl = MR::createTalkCtrl(this, rIter, name, Vec3f(0.0f, 160.0f, 0.0f), nullptr);
         MR::onRootNodeAutomatic(mMsgCtrl);
         MR::useStageSwitchReadA(this, rIter);
         MR::useStageSwitchReadB(this, rIter);
@@ -210,7 +170,7 @@ void Rabbit::init(const TableIter& rIter) {
     mParam.mTalkAction = talk;
     mParam.mTalkTurnAction = turn;
     setDefaults(reaction, pointing, press, spin);
-    mSwingReactDist = cNum_init_f7;
+    mSwingReactDist = 450.0f;
 
     if (mBehavior == Behavior_LongJump) {
         mParam.mTurnWhenNear = false;
@@ -227,9 +187,9 @@ void Rabbit::control() {
     NPCActor::control();
     updateJump();
 
-    if (MR::calcDistanceToPlayer(this) > cNum_control_f1) {
+    if (MR::calcDistanceToPlayer(this) > 5000.0f) {
         MR::validateClipping(this);
-    } else if (MR::calcDistanceToPlayer(this) < cNum_control_f2) {
+    } else if (MR::calcDistanceToPlayer(this) < 3000.0f) {
         MR::invalidateClipping(this);
     }
 }
@@ -275,7 +235,7 @@ void Rabbit::exeWait() {
                 MR::startBck(this, "Turn");
             }
 
-            MR::blendQuatUpFront(&mPoseQuat, -mGravity, playerPos, cNum_exeWait_f1, cNum_exeWait_f2);
+            MR::blendQuatUpFront(&mPoseQuat, -mGravity, playerPos, 0.5f, 0.5f);
         }
 
         if (MR::isBckOneTimeAndStopped(this)) {
@@ -289,7 +249,7 @@ void Rabbit::exeWait() {
         mWaitStep--;
     } else if (!MR::isNearPlayer(this, ::cDistNear)) {
         const f32 nearestCoord = MR::calcNearestRailCoord(this, *MR::getPlayerPos());
-        if (nearestCoord < MR::getRailCoord(this) && MR::getRailCoord(this) > cNum_exeWait_f3 * ::cProgressSpeed) {
+        if (nearestCoord < MR::getRailCoord(this) && MR::getRailCoord(this) > 3.0f * ::cProgressSpeed) {
             setNerve(GET_NERVE(Rabbit, RabbitNrvNear));
         }
     }
@@ -304,7 +264,7 @@ void Rabbit::exeGoal() {
         Vec3f playerPos = *MR::getPlayerPos() - mPosition;
         MR::normalizeOrZero(&playerPos);
         if (!MR::isNearZero(playerPos)) {
-            MR::blendQuatUpFront(&mPoseQuat, -mGravity, playerPos, cNum_exeGoal_f1, cNum_exeGoal_f2);
+            MR::blendQuatUpFront(&mPoseQuat, -mGravity, playerPos, 0.5f, 0.5f);
         }
     }
 
@@ -339,18 +299,18 @@ void Rabbit::calcAndSetBaseMtx() {
 void Rabbit::calcRailPos(Vec3f* pPos) {
     Triangle triangle = Triangle();
     Vec3f pos;
-    if (MR::getFirstPolyOnLineToMap(&pos, &triangle, *pPos + mGravity * -cNum_calcRailPos_f1, mGravity * cNum_calcRailPos_f2)) {
+    if (MR::getFirstPolyOnLineToMap(&pos, &triangle, *pPos + mGravity * -500.0f, mGravity * 1000.0f)) {
         *pPos = pos;
     }
 
-    mJumpScale = MR::sqrt(MR::max(1.0f, MR::abs((*pPos - mPosition).y / cNum_calcRailPos_f3)));
+    mJumpScale = MR::sqrt(MR::max(1.0f, MR::abs((*pPos - mPosition).y / 80.0f)));
 }
 
 // More than 45 degrees off the facing.
 bool Rabbit::isNeedTurn(const Vec3f& rDir) {
     Vec3f front;
     mPoseQuat.getZDir(front);
-    return MR::diffAngleAbs(rDir, front) > cNum_isNeedTurn_f1;
+    return MR::diffAngleAbs(rDir, front) > 0.78539819f;
 }
 
 void Rabbit::updateJump() {
@@ -413,7 +373,7 @@ void Rabbit::exePreJump() {
     }
 
     Vec3f railDir(MR::getRailDirection(this));
-    MR::blendQuatUpFront(&mPoseQuat, -mGravity, railDir, cNum_exePreJump_f1, cNum_exePreJump_f2);
+    MR::blendQuatUpFront(&mPoseQuat, -mGravity, railDir, 0.5f, 0.5f);
 
     if (MR::isBckStopped(this)) {
         setNerve(GET_NERVE(Rabbit, RabbitNrvMove));
@@ -430,23 +390,23 @@ void Rabbit::exeMove() {
         f32 distance = MR::getPlayerPos()->distance(mPosition);
         f32 hopStrengh = 1.0f;
 
-        if (distance < cNum_exeMove_f1) {
-            hopStrengh = cNum_exeMove_f2;
-        } else if (distance < cNum_exeMove_f3) {
-            hopStrengh = cNum_exeMove_f4;
-        } else if (distance < cNum_exeMove_f5) {
-            hopStrengh = cNum_exeMove_f6;
-        } else if (distance < cNum_exeMove_f7) {
-            hopStrengh = cNum_exeMove_f8;
-        } else if (distance < cNum_exeMove_f9) {
-            hopStrengh = cNum_exeMove_f10;
-        } else if (distance < cNum_exeMove_f11) {
-            hopStrengh = cNum_exeMove_f12;
+        if (distance < 100.0f) {
+            hopStrengh = 2.0f;
+        } else if (distance < 150.0f) {
+            hopStrengh = 1.8f;
+        } else if (distance < 200.0f) {
+            hopStrengh = 1.6f;
+        } else if (distance < 250.0f) {
+            hopStrengh = 1.4f;
+        } else if (distance < 300.0f) {
+            hopStrengh = 1.2f;
+        } else if (distance < 350.0f) {
+            hopStrengh = 1.1f;
         }
 
         mMoveSpeed *= hopStrengh;
         MR::moveCoordToNearestPos(this, mPosition);
-        MR::moveCoord(this, cNum_exeMove_moveCoord_1 * mMoveSpeed);
+        MR::moveCoord(this, 20.0f * mMoveSpeed);
         Vec3f railPos(MR::getRailPos(this));
         calcRailPos(&railPos);
         mMoveDir = railPos - mPosition;
@@ -456,7 +416,7 @@ void Rabbit::exeMove() {
     mPosition += mMoveDir * mMoveSpeed;
     mMoveSpeed *= ::cRegistNormal;
 
-    if (MR::isRailReachedGoal(this) && (mPosition - MR::getRailPos(this)).length() < cNum_exeMove_f13) {
+    if (MR::isRailReachedGoal(this) && (mPosition - MR::getRailPos(this)).length() < 10.0f) {
         setNerve(GET_NERVE(Rabbit, RabbitNrvGoal));
     } else if (mIsLanded) {
         setNerve(GET_NERVE(Rabbit, RabbitNrvForwardLand));
@@ -497,7 +457,7 @@ void Rabbit::exeNear() {
         MR::startSound(this, "SE_SM_RABBIT_JUMP");
         mMoveSpeed = ::cProgressSpeed;
         MR::moveCoordToNearestPos(this, mPosition);
-        MR::moveCoord(this, cNum_exeNear_moveCoord_1 * mMoveSpeed);
+        MR::moveCoord(this, 20.0f * mMoveSpeed);
         Vec3f railPos(MR::getRailPos(this));
         calcRailPos(&railPos);
         mMoveDir = railPos - mPosition;
@@ -509,7 +469,7 @@ void Rabbit::exeNear() {
 
     if (MR::isNearPlayer(this, ::cDistWait)) {
         setNerve(GET_NERVE(Rabbit, RabbitNrvWait));
-    } else if (MR::isRailReachedGoal(this) && (mPosition - MR::getRailPos(this)).length() < cNum_exeNear_f1) {
+    } else if (MR::isRailReachedGoal(this) && (mPosition - MR::getRailPos(this)).length() < 10.0f) {
         setNerve(GET_NERVE(Rabbit, RabbitNrvWait));
     } else {
         MR::calcNearestRailCoord(this, *MR::getPlayerPos());

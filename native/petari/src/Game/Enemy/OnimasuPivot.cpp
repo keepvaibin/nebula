@@ -1,10 +1,6 @@
 #include "Game/Enemy/OnimasuPivot.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_startMoveInner_f1, "startMoveInner.f1", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePoseInner_f1, "updatePoseInner.f1", 565.6854f);
 
 OnimasuPivot::OnimasuPivot(const char* pName) : Onimasu(pName), mCurNormal(), mNormals() {
     lumacore::setClass(this, lumacore::kClassId< OnimasuPivot >);
@@ -24,7 +20,7 @@ void OnimasuPivot::startMoveInner() {
     if (MR::isSameDirection(toLastPoint, toNextPoint)) {
         Pos3f mtx;
         mtx.identity();
-        mtx.setRotate(mRotateAxis, PI * cNum_startMoveInner_f1);
+        mtx.setRotate(mRotateAxis, PI * 0.001f);
         mtx.mult(toLastPoint, toLastPoint);
     }
 
@@ -70,7 +66,7 @@ void OnimasuPivot::updatePoseInner() {
 
     // This constant is 400.0f * sqrt(2.0f), which is hardcoded
     // for the distance between points in toy time galaxy.
-    fromPivotPoint.setLength(cNum_updatePoseInner_f1);
+    fromPivotPoint.setLength(565.6854f);
 
     fromPivotPoint.add(getPivotPointPos());
 

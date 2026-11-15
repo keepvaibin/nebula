@@ -4,22 +4,19 @@
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGuide0_f1, "exeGuide0.f1", 100.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sDemoCameraZoomOutStartFrame, 630);
-    NEBULA_TUNABLE(s32, sDemoCameraZoomOutEndFrame, 730);
-    NEBULA_TUNABLE(s32, sDemoCameraZoomOutBgmStartFrame, 617);
-    NEBULA_TUNABLE(s32, sDemoFadeOut, 90);
-    NEBULA_TUNABLE(s32, sDemoFadeIn, 75);
+    const s32 sDemoCameraZoomOutStartFrame = 630;
+    const s32 sDemoCameraZoomOutEndFrame = 730;
+    const s32 sDemoCameraZoomOutBgmStartFrame = 617;
+    const s32 sDemoFadeOut = 90;
+    const s32 sDemoFadeIn = 75;
     static const s32 sDemoFadeWait = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sAwayYOffset, -49.7357f);
+    const f32 sAwayYOffset = -49.7357f;
     static const s32 sWaitSeStartFrame = NebulaFrameClock::stepsOfMilliseconds(3500);
-    NEBULA_TUNABLE(s32, sFloatSeStartFrame, 560);
-    NEBULA_TUNABLE(s32, sAppearSeStep, 23);
+    const s32 sFloatSeStartFrame = 560;
+    const s32 sAppearSeStep = 23;
 };  // namespace
 
 namespace NrvRunawayTico {
@@ -170,7 +167,7 @@ void RunawayTico::exeGuide0() {
     }
 
     if (MR::isGreaterEqualStep(this, ::sFloatSeStartFrame)) {
-        MR::startLevelSound(this, "SE_SM_LV_TICO_FLOAT_DEMO", sFloatSeMinVolume * cNum_exeGuide0_f1);
+        MR::startLevelSound(this, "SE_SM_LV_TICO_FLOAT_DEMO", sFloatSeMinVolume * 100.0f);
     }
 
     if (MR::isStep(this, ::sDemoCameraZoomOutBgmStartFrame)) {

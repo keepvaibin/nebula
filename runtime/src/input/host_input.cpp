@@ -1210,6 +1210,7 @@ galaxy::input::PlayerInput build_live_input(
     frame.allow_absolute_pointer = allow_absolute_pointer;
     frame.drop_injected = drop_injected;
     frame.context = play_context;
+    frame.host_menu = galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible();
     frame.tilt_section = tilt_section;
     static LiveControlsEngine engine;
     WindowLiveControlsHost host(focused_window, window_focused);

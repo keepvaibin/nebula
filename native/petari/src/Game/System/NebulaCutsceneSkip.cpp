@@ -16,6 +16,7 @@
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
+#include "Game/System/LumaMovie.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/DemoUtil.hpp"
@@ -29,7 +30,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include "Game/System/NebulaClock.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     enum State {
@@ -39,11 +39,11 @@ namespace {
         State_Skipping,  // the cutscene runs on, unseen and unheard
     };
 
-    NEBULA_TUNABLE(s32, cEndQuietFrames, 2);        // frames with no cutscene before the picture returns
-    NEBULA_TUNABLE(u32, cStepBudgetMicros, 9000);   // the extra steps' share of a frame, in microseconds of wall time (not of play)
-    NEBULA_TUNABLE(s32, cStepsPerFrameMax, 40);
+    const s32 cEndQuietFrames = 2;        // frames with no cutscene before the picture returns
+    const u32 cStepBudgetMicros = 9000;   // the extra steps' share of a frame, in microseconds of wall time (not of play)
+    const s32 cStepsPerFrameMax = 40;
     const s32 cStallSteps = NebulaFrameClock::stepsOfSeconds(10);          // a demo's clock held this long waits on the player: the skip ends there
-    NEBULA_TUNABLE(u32, cSkipMaxMicros, 15000000);  // a skip that has not ended by then shows the game as it is
+    const u32 cSkipMaxMicros = 15000000;  // a skip that has not ended by then shows the game as it is
 
     // The demos + skips, by their time sheets; EscapeDriverApr only in the launch star lessons.
     const char* const cSkippableSheets[] = {
@@ -157,7 +157,11 @@ namespace {
         if (!isGameSceneRunning() || GameSequenceFunction::isActiveSaveDataHandleSequence()) {
             return false;
         }
-        if (MR::isActiveMoviePlayer() || GameSceneFunction::isExecScenarioOpeningCamera()) {
+        // A movie: the game's own always; a mod's when its cook says it may be skipped (luma::movie::isSkippable).
+        if (MR::isActiveMoviePlayer()) {
+            return luma::movie::isSkippable();
+        }
+        if (GameSceneFunction::isExecScenarioOpeningCamera()) {
             return true;
         }
         const DemoDirector* pDirector = getActiveDemo();

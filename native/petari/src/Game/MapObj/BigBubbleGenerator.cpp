@@ -9,16 +9,12 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_initFromPlacementParam_f1, "initFromPlacementParam.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initFromPlacementParam_f2, "initFromPlacementParam.f2", 100.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sActiveDistance, 1500.0f);
-    NEBULA_TUNABLE(f32, sNonActiveDistance, 2000.0f);
-    NEBULA_TUNABLE(f32, sGenerateOffsetY, 60.0f);
+    const f32 sActiveDistance = 1500.0f;
+    const f32 sNonActiveDistance = 2000.0f;
+    const f32 sGenerateOffsetY = 60.0f;
 };  // namespace
 
 namespace NrvBigBubbleGenerator {
@@ -51,10 +47,10 @@ void BigBubbleGenerator::init(const TableIter& rIter) {
 void BigBubbleGenerator::initFromPlacementParam(const TableIter& rIter) {
     MR::getPlacementArg0NoInit(rIter, &mSpawnTimer);
     if (MR::getPlacementArg1NoInit(rIter, &mMinSize)) {
-        mMinSize /= cNum_initFromPlacementParam_f1;
+        mMinSize /= 100.0f;
     }
     if (MR::getPlacementArg2NoInit(rIter, &mMaxSize)) {
-        mMaxSize /= cNum_initFromPlacementParam_f2;
+        mMaxSize /= 100.0f;
     }
     MR::getPlacementArg3WithInit(rIter, &mLimitterID);
     MR::getPlacementArg4WithInit(rIter, &mShape);

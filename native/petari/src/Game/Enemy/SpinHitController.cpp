@@ -4,21 +4,14 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_emitItem_f1, "emitItem.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_emitItem_f2, "emitItem.f2", 40.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_execute_1, "execute.1", 1);
 
 namespace {
-    NEBULA_TUNABLE(s32, cDefaultFlyStepMax, 15);
-    NEBULA_TUNABLE(s32, cDefaultFlyStepMin, 10);
-    NEBULA_TUNABLE(s32, cDefaultStopSceneFrames, 3);
-    NEBULA_TUNABLE(f32, cDefaultGravityAccel, 0.0f);
-    NEBULA_TUNABLE(f32, cDefaultHorizontalSpeed, 40.0f);
-    NEBULA_TUNABLE(f32, cDefaultVerticalSpeed, 20.0f);
+    const s32 cDefaultFlyStepMax = 15;
+    const s32 cDefaultFlyStepMin = 10;
+    const s32 cDefaultStopSceneFrames = 3;
+    const f32 cDefaultGravityAccel = 0.0f;
+    const f32 cDefaultHorizontalSpeed = 40.0f;
+    const f32 cDefaultVerticalSpeed = 20.0f;
 };  // namespace
 
 SpinHitController::SpinHitController(const NameObj* pObj, s32 itemNum, bool isCoin) {
@@ -83,7 +76,7 @@ bool SpinHitController::execute(LiveActor* pActor) {
         emitItem(pActor);
     }
 
-    if ((MR::isBinded(pActor) && MR::isGreaterStep(pActor, cStep_execute_1)) || MR::isGreaterStep(pActor, mFlyStepMax)) {
+    if ((MR::isBinded(pActor) && MR::isGreaterStep(pActor, 1)) || MR::isGreaterStep(pActor, mFlyStepMax)) {
         MR::validateClipping(pActor);
         pActor->kill();
 
@@ -106,7 +99,7 @@ void SpinHitController::emitItem(LiveActor* pActor) {
     if (mIsCoin) {
         MR::appearCoinPop(pActor, pActor->mPosition, mItemNum);
     } else {
-        MR::appearStarPiece(pActor, pActor->mPosition, mItemNum, cNum_emitItem_f1, cNum_emitItem_f2, false);
+        MR::appearStarPiece(pActor, pActor->mPosition, mItemNum, 10.0f, 40.0f, false);
         if (pActor->mSoundObject != nullptr) {
             MR::startSound(pActor, "SE_OJ_STAR_PIECE_BURST");
         }

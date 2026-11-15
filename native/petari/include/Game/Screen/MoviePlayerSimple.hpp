@@ -22,6 +22,8 @@ public:
     // The frame on the screen (-1 before the first), and the movie's frames.
     s32 getCurrentFrame() const;
     s32 getTotalFrame() const;
+    // The name startMovie was given (the caller's pointer), "" before any.
+    const char* getMovieName() const { return mMovieName; }
     void setVolume(f32, s32);
     void exeSimpleOff();
     void exeOpen();

@@ -23,16 +23,8 @@ public:
     SoundID(u32 id) : mValue(id) {
     }
 
-    SoundID(const SoundID& rOther) : mValue(rOther.mValue) {
-    }
-
     SoundID(u32 sectionID, u32 groupID, u32 waveID) {
         mValue = (u32)(u8)sectionID << 24 | (u32)(u8)groupID << 16 | (u16)waveID;
-    }
-
-    SoundID& operator=(const SoundID& rOther) {
-        mValue = rOther.mValue;
-        return *this;
     }
 
     operator u32() const {

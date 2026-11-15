@@ -1,0 +1,145 @@
+{
+  "format": "1.0",
+  "id": "hide-the-hud",
+  "version": "0.1.0",
+  "name": "Hide the HUD",
+  "summary": "Takes the counters and the life meter off the screen.",
+  "text": {
+    "EuEnglish": {
+      "name": "Hide the HUD",
+      "summary": "Takes the counters and the life meter off the screen.",
+      "options": {
+        "hide": {
+          "name": "Hide the HUD"
+        }
+      }
+    },
+    "UsFrench": {
+      "name": "Masquer l'interface",
+      "summary": "Retire les compteurs et la jauge de vie de l'écran.",
+      "options": {
+        "hide": {
+          "name": "Masquer l'interface"
+        }
+      }
+    },
+    "EuFrench": {
+      "name": "Masquer l'interface",
+      "summary": "Retire les compteurs et la jauge de vie de l'écran.",
+      "options": {
+        "hide": {
+          "name": "Masquer l'interface"
+        }
+      }
+    },
+    "UsSpanish": {
+      "name": "Ocultar la interfaz",
+      "summary": "Quita los contadores y el medidor de vida de la pantalla.",
+      "options": {
+        "hide": {
+          "name": "Ocultar la interfaz"
+        }
+      }
+    },
+    "EuSpanish": {
+      "name": "Ocultar la interfaz",
+      "summary": "Quita los contadores y el medidor de vida de la pantalla.",
+      "options": {
+        "hide": {
+          "name": "Ocultar la interfaz"
+        }
+      }
+    },
+    "EuGerman": {
+      "name": "HUD ausblenden",
+      "summary": "Nimmt die Zähler und die Lebensanzeige vom Bildschirm.",
+      "options": {
+        "hide": {
+          "name": "HUD ausblenden"
+        }
+      }
+    },
+    "EuItalian": {
+      "name": "Nascondi l'interfaccia",
+      "summary": "Toglie i contatori e l'indicatore di energia dallo schermo.",
+      "options": {
+        "hide": {
+          "name": "Nascondi l'interfaccia"
+        }
+      }
+    },
+    "EuDutch": {
+      "name": "HUD verbergen",
+      "summary": "Haalt de tellers en de levensmeter van het scherm.",
+      "options": {
+        "hide": {
+          "name": "HUD verbergen"
+        }
+      }
+    },
+    "UsPortuguese": {
+      "name": "Ocultar a interface",
+      "summary": "Tira os contadores e o medidor de vida da tela.",
+      "options": {
+        "hide": {
+          "name": "Ocultar a interface"
+        }
+      }
+    },
+    "JpJapanese": {
+      "name": "HUDを隠す",
+      "summary": "カウンターとライフメーターを画面から消します。",
+      "options": {
+        "hide": {
+          "name": "HUDを隠す"
+        }
+      }
+    },
+    "KrKorean": {
+      "name": "HUD 숨기기",
+      "summary": "카운터와 체력 게이지를 화면에서 없앱니다.",
+      "options": {
+        "hide": {
+          "name": "HUD 숨기기"
+        }
+      }
+    },
+    "CnSimpChinese": {
+      "name": "隐藏界面",
+      "summary": "从画面上去掉计数器和生命计。",
+      "options": {
+        "hide": {
+          "name": "隐藏界面"
+        }
+      }
+    },
+    "TwTradChinese": {
+      "name": "隱藏介面",
+      "summary": "從畫面上移除計數器和生命計。",
+      "options": {
+        "hide": {
+          "name": "隱藏介面"
+        }
+      }
+    }
+  },
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  },
+  "options": [
+    {
+      "default": true,
+      "key": "hide",
+      "kind": "toggle",
+      "name": "Hide the HUD"
+    }
+  ]
+}

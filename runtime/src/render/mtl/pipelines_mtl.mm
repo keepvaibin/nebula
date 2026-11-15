@@ -16,6 +16,7 @@
 #include <nebula_model.h>
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -77,6 +78,7 @@ std::uint32_t input_location(std::uint32_t semantic) noexcept {
     case NEBULA_INPUT_BINORMAL: return kBinormal;
     case NEBULA_INPUT_WIDEN: return kWiden;
     case NEBULA_INPUT_MATRIX: return kMatrix;
+    case NEBULA_INPUT_GAIN: return kWiden;  // a uint at the widened corner's place: only sites read that one
     default: return semantic >= NEBULA_INPUT_COORD0 ? kCoord0 + (semantic - NEBULA_INPUT_COORD0) : kNoLocation;
     }
 }
@@ -242,22 +244,28 @@ mtl::Object function_of(const ProgramBytes& program, bool pixel) {
         }
     }
     if (ProgramRecord record; record_of(program, record)) {
-        // Compiled when the app was built: the function is there to take.
-        const std::lock_guard<std::mutex> guard(gPrograms.lock);
-        const auto [at, inserted] = gPrograms.functions.emplace(program.data, nullptr);
-        if (inserted) {
-            @autoreleasepool {
-                const std::uint64_t began = now_us();
-                id<MTLFunction> const function = [program_library(record.library) newFunctionWithName:@(record.name)];
-                gFunctionUs.fetch_add(now_us() - began, std::memory_order_relaxed);
-                gFunctionCount.fetch_add(1u, std::memory_order_relaxed);
-                if (function == nil && gPrograms.failures_told.fetch_add(1u) < 8u) {
-                    std::fprintf(stderr, "[pipelines] the app's Metal library %u has no function %s\n", record.library, record.name);
-                }
-                at->second = function != nil ? (__bridge_retained void*)function : nullptr;
-            }
+        // Compiled when the app was built: the function is there to take. Taken outside the lock (a library makes
+        // functions on any thread), as a text is compiled; of two threads that take the same one, one result is kept.
+        id<MTLLibrary> library = nil;
+        {
+            const std::lock_guard<std::mutex> guard(gPrograms.lock);
+            library = program_library(record.library);
         }
-        return at->second;
+        @autoreleasepool {
+            const std::uint64_t began = now_us();
+            id<MTLFunction> const function = [library newFunctionWithName:@(record.name)];
+            gFunctionUs.fetch_add(now_us() - began, std::memory_order_relaxed);
+            gFunctionCount.fetch_add(1u, std::memory_order_relaxed);
+            if (function == nil && gPrograms.failures_told.fetch_add(1u) < 8u) {
+                std::fprintf(stderr, "[pipelines] the app's Metal library %u has no function %s\n", record.library, record.name);
+            }
+            const std::lock_guard<std::mutex> guard(gPrograms.lock);
+            const auto [at, inserted] = gPrograms.functions.emplace(program.data, nullptr);
+            if (inserted && function != nil) {
+                at->second = (__bridge_retained void*)function;
+            }
+            return at->second;
+        }
     }
     @autoreleasepool {
         MTLCompileOptions* const options = [MTLCompileOptions new];
@@ -509,6 +517,11 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         gPipelineUs.fetch_add(now_us() - began, std::memory_order_relaxed);
         gPipelineCount.fetch_add(1u, std::memory_order_relaxed);
         if (made == nil) {
+            // Metal names every fault of a descriptor or a program in its error: none at all, or the system's ENOMEM, is
+            // the device out of memory (pipeline_workers.h).
+            if (error == nil || ([error.domain isEqualToString:NSPOSIXErrorDomain] && error.code == ENOMEM)) {
+                note_pipeline_out_of_memory();
+            }
             std::fprintf(stderr, "[pipelines] create failed: %llx %llx state %08x variant %u aux %u: %s\n",
                          static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant,
                          aux, error != nil ? error.localizedDescription.UTF8String : "no reason given");
@@ -560,6 +573,15 @@ std::size_t Pipelines::save_cache() noexcept {
     // app's own (MTLBinaryArchive) holds the same code under the same conditions and was tried in its place: on an AMD
     // GPU, pipelines that share programs were refused once the file was read back ("Failed to find linking data"), and
     // threads adding to it together lost entries.
+    return 0u;
+}
+
+// No file of the renderer's own, so nothing says what the system's cache holds: every texture target form is prepared.
+bool Pipelines::cache_file_state(std::filesystem::path&, std::uint64_t&) {
+    return false;
+}
+
+std::uint64_t Pipelines::cache_file_hash() noexcept {
     return 0u;
 }
 

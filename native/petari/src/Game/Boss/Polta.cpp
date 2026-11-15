@@ -25,19 +25,14 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f1, "appearStarPiece.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_appearStarPiece_f2, "appearStarPiece.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcToPlayerRotateSpeed_f1, "calcToPlayerRotateSpeed.f1", 10.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sBombTeresaBufferSize, 6);
-    NEBULA_TUNABLE(f32, sTurnAccel, 0.1f);
-    NEBULA_TUNABLE(f32, sTurnFric, 0.998f);
-    NEBULA_TUNABLE(f32, sTurnBreakFric, 0.99f);
-    NEBULA_TUNABLE(f32, sTurnMaxSpeed, 1.1f);
+    const s32 sBombTeresaBufferSize = 6;
+    const f32 sTurnAccel = 0.1f;
+    const f32 sTurnFric = 0.998f;
+    const f32 sTurnBreakFric = 0.99f;
+    const f32 sTurnMaxSpeed = 1.1f;
 };  // namespace
 
 BombTeresaHolder::BombTeresaHolder() : DeriveActorGroup< BombTeresa >("ボムテレサ管理", ::sBombTeresaBufferSize) {
@@ -135,7 +130,7 @@ void Polta::appearBreakModelLast(const Vec3f& rVec) {
 void Polta::appearStarPiece(s32 appearNum) {
     Vec3f head3JointPos;
     MR::copyJointPos(this, "Head3", &head3JointPos);
-    MR::appearStarPieceToDirection(this, head3JointPos, -mGravity, appearNum, cNum_appearStarPiece_f1, cNum_appearStarPiece_f2, false);
+    MR::appearStarPieceToDirection(this, head3JointPos, -mGravity, appearNum, 50.0f, 60.0f, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
 }
 
@@ -188,7 +183,7 @@ void Polta::rotateToPlayer() {
 f32 Polta::calcToPlayerRotateSpeed() const {
     f32 speed = mRotateSpeed;
 
-    if (MR::isFaceToPlayerHorizontalDegree(this, mFront, cNum_calcToPlayerRotateSpeed_f1)) {
+    if (MR::isFaceToPlayerHorizontalDegree(this, mFront, 10.0f)) {
         speed *= ::sTurnBreakFric;
     } else {
         Vec3f sideVec;

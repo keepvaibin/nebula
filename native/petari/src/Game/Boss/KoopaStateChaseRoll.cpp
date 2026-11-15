@@ -13,22 +13,19 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 260.0f);
 
 namespace {
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sStartParam, {0.0f, 0.5f, 1.0f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sChaseRollParam, {1.1f, 2.0f, 0.95f, 1.5f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sChaseRollParamFast, {1.5f, 2.0f, 0.95f, 1.5f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, sEndParam, {0.0f, 1.0f, 0.98f, 1.0f});
+    const MR::ActorMoveParam sStartParam = {0.0f, 0.5f, 1.0f, 3.0f};
+    const MR::ActorMoveParam sChaseRollParam = {1.1f, 2.0f, 0.95f, 1.5f};
+    const MR::ActorMoveParam sChaseRollParamFast = {1.5f, 2.0f, 0.95f, 1.5f};
+    const MR::ActorMoveParam sEndParam = {0.0f, 1.0f, 0.98f, 1.0f};
     const s32 sWaitToStartStep = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sWaitToStartStepAngry = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, sStartStepToJump, 24);
-    NEBULA_TUNABLE(f32, sStartJumpSpeed, 30.0f);
-    NEBULA_TUNABLE(f32, sRotateSpeed, 5.0f);
+    const s32 sStartStepToJump = 24;
+    const f32 sStartJumpSpeed = 30.0f;
+    const f32 sRotateSpeed = 5.0f;
     const s32 sStepRollGround = NebulaFrameClock::stepsOfSeconds(15);
-    NEBULA_TUNABLE(f32, sEndJumpSpeed, 30.0f);
+    const f32 sEndJumpSpeed = 30.0f;
 
     // The break model follows its own matrix only while the break animation starts.
     void startRockBreak(Koopa* pKoopa, const char* pActionName) {
@@ -61,7 +58,7 @@ void KoopaStateChaseRoll::init() {
 
     KoopaFunction::createKoopaRock(mHost);
 
-    mFigureBall = new KoopaFigureBall("追跡ボール", mHost, cNum_init_f1, &::sChaseRollParam);
+    mFigureBall = new KoopaFigureBall("追跡ボール", mHost, 260.0f, &::sChaseRollParam);
     mFigureBall->initWithoutIter();
 
     kill();

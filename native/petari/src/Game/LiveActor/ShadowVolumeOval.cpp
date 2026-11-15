@@ -5,16 +5,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f1, "loadModelDrawMtx.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f2, "loadModelDrawMtx.f2", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f3, "loadModelDrawMtx.f3", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f4, "loadModelDrawMtx.f4", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f5, "loadModelDrawMtx.f5", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f6, "loadModelDrawMtx.f6", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_loadModelDrawMtx_f7, "loadModelDrawMtx.f7", 0.01f);
 
 ShadowVolumeOval::ShadowVolumeOval() : ShadowVolumeModel("影描画[ボリューム楕球]"), mSize(100.0f, 100.0f, 200.0f) {
     lumacore::setClass(this, lumacore::kClassId< ShadowVolumeOval >);
@@ -39,17 +30,17 @@ void ShadowVolumeOval::loadModelDrawMtx(TypedDraw& rDraw) const {
     Vec3f direction;
     controller->getDropDir(&direction);
 
-    Vec3f size(mSize / cNum_loadModelDrawMtx_f1);
-    if (size.x <= cNum_loadModelDrawMtx_f2) {
-        size.x = cNum_loadModelDrawMtx_f3;
+    Vec3f size(mSize / 100.0f);
+    if (size.x <= 0.01f) {
+        size.x = 0.01f;
     }
 
-    if (size.y <= cNum_loadModelDrawMtx_f4) {
-        size.y = cNum_loadModelDrawMtx_f5;
+    if (size.y <= 0.01f) {
+        size.y = 0.01f;
     }
 
-    if (size.z <= cNum_loadModelDrawMtx_f6) {
-        size.z = cNum_loadModelDrawMtx_f7;
+    if (size.z <= 0.01f) {
+        size.z = 0.01f;
     }
 
     if (controller->isFollowHostScale()) {

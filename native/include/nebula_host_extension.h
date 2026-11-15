@@ -90,6 +90,9 @@ enum {
     NEBULA_EXT_NO_SOUND_DEVICE = 1u << 1,
     /* A hidden start still shows the mods' preparing screen (and starts again after it) as a player's start does. */
     NEBULA_EXT_MODS_SCREEN = 1u << 2,
+    /* The extension's controls are a controller's: player 1 plays with a controller (input's LUMA_INPUT_DEVICE_PAD)
+       whose motor is the extension's (`motor`), whatever devices are attached. */
+    NEBULA_EXT_CONTROLS_PAD = 1u << 3,
 };
 
 /* What the host offers. Any thread unless said. */
@@ -106,6 +109,23 @@ typedef struct NebulaHostForExtension {
     /* The graphics device lost at the renderer's next frame, as a driver reset loses it; the renderer recovers as from
        any loss. */
     void (*lose_gpu_device)(void* host);
+    /* A running mod taken out at the next frame's start, with the mods that use it (reload.md 2; the game writes the
+       harness fact takeout.<id> once each one's library is closed). Null in a host without mods. */
+    void (*take_out_mod)(void* host, const char* mod_id);
+    /* UTF-8 typed into LumaCore's open text request (input.text_request) by the path the window's keyboard and input
+       method type through; nothing while none is open. While one is open, menu_key's enter, esc, backspace, left and
+       right edit it instead of reaching a menu. Null in a host without text entry. */
+    void (*type_text)(void* host, const char* utf8);
+    /* FORGET on the Mods page's REMOVED MODS line for `mod_id`, as the player chooses it: what the removed mod kept is
+       dropped and every running mod watching (mods.watch_mods) gets FORGOTTEN. An id the line does not list: nothing,
+       and one log line. Null in a host without mods. */
+    void (*forget_mod)(void* host, const char* mod_id);
+    /* The starts this run made again before this one (NebulaHostExtension.ending's `again`); 0 at its first start. */
+    uint32_t started_again;
+    /* A running mod's code reloaded from its installed folder at the next frames (reload.md 4, as a dev mode request
+       does): taken out with the mods that use it, loaded again, then they are; the harness fact reload.<id> once it
+       ends. Null in a host without mods. */
+    void (*reload_mod)(void* host, const char* mod_id);
 } NebulaHostForExtension;
 
 /* What the extension offers. Each function may be null. */
@@ -132,6 +152,28 @@ typedef struct NebulaHostExtension {
     uint32_t vram_budget_mb;
     /* Nonzero: each read of the game's files waits this long first, a slow drive (the longest of the extensions'). */
     uint32_t disc_read_delay_us;
+    /* Any thread: each line the host writes to its log, as its tag ("game:") and its text, whole (any length), without
+       the time or a line end; the line is "<tag> <text>". The extension must not log from here. */
+    void (*log_line)(void* user, const char* tag, const char* text);
+    /* Game thread: a service the extension offers to mods (LumaCore.service), or null. The first extension that gives
+       one is used. */
+    const void* (*service)(void* user, const char* name, uint32_t major, uint32_t minor);
+    /* Services the extension provides through LumaCore's registry (luma_service_provider.h; services-registry 14), each
+       named "test." something, registered by the host before the first mod loads: a test's own services, with versions
+       and permissions it controls. Any other name refuses the extension at attach. They stay valid for the run. */
+    const struct LumaServiceProvider* const* luma_providers;
+    uint32_t luma_provider_count;
+    /* Game thread, with NEBULA_EXT_CONTROLS_PAD: player 1's motor strength as the host drives it (0 still, 255 full; the
+       game's or a mod's, the stronger), at each change. */
+    void (*motor)(void* user, uint8_t strength);
+    /* Any thread, once, as the process ends (no frame or sound follows): what the extension writes is to be complete.
+       `again` nonzero: the game starts again after it, with the same arguments and environment (an exec in the same
+       process on Linux and macOS), its host's started_again one more. */
+    void (*ending)(void* user, uint32_t again);
+    /* Game thread, at each frame of a 3D scene while a menu waits: nonzero while the extension prepares the game unseen
+       (a test's setup, before the test's first frame). A menu the boot's close hid with its question standing opens
+       again at the first 3D scene that no extension holds, so what the extension prepares runs with the scene going. */
+    uint32_t (*holds_menus)(void* user);
 } NebulaHostExtension;
 
 typedef const NebulaHostExtension* (*NebulaExtensionAttach)(const NebulaHostForExtension* host);

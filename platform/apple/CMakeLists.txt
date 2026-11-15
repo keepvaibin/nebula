@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# Nebula on Apple's systems (docs/APPLE.md): macOS on Intel and Apple silicon, iOS and iPadOS. The host is the SDL
+# Nebula on Apple's systems: macOS on Intel and Apple silicon, iOS and iPadOS. The host is the SDL
 # host (platform/sdl), whose build this one wraps: the same sources, with the shader tools built here for the build
 # machine, Apple's own pieces added (this folder), and the program packed as an app.
 #
@@ -97,7 +97,7 @@ else()
     target_link_libraries(main PRIVATE "-framework UIKit")
 endif()
 
-# The Metal renderer's shaders (docs/APPLE.md, "Shaders"): the programs' SPIR-V turned to MSL by SPIRV-Cross at build.
+# The Metal renderer's shaders: the programs' SPIR-V turned to MSL by SPIRV-Cross at build.
 set(NEBULA_SPIRV_CROSS_DIR "${NEBULA_DEPS}/SPIRV-Cross-vulkan-sdk-1.4.350.1" CACHE PATH "SPIRV-Cross")
 set(SPIRV_CROSS_CLI OFF CACHE BOOL "" FORCE)
 set(SPIRV_CROSS_ENABLE_TESTS OFF CACHE BOOL "" FORCE)

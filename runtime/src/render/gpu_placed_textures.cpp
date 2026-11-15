@@ -3,6 +3,7 @@
 #include "galaxy/render/gpu_placed_textures.h"
 #include "barriers_d3d12.h"
 
+#include <algorithm>
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -30,6 +31,8 @@ struct PlacedTextureAllocator::State {
         std::map<std::uint64_t, std::uint64_t> free;
         // The bytes in `free` (a heap's fullness, for allocate).
         std::uint64_t free_bytes = 0;
+        // The heap's size.
+        std::uint64_t bytes = 0;
 
         // The smallest free range that holds `size` at `alignment`, or free.end().
         [[nodiscard]] std::map<std::uint64_t, std::uint64_t>::iterator best_fit(std::uint64_t size, std::uint64_t alignment) {
@@ -44,6 +47,8 @@ struct PlacedTextureAllocator::State {
     };
 
     D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE;
+    // The largest heap. The first is an eighth of it; each new one twice the largest held, so a device holds about what
+    // it places, not a whole large heap from the start.
     std::uint64_t heap_bytes = 0;
     D3D12_HEAP_PROPERTIES properties{D3D12_HEAP_TYPE_DEFAULT, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN, 0u, 0u};
     ComPtr<ID3D12Device> device;
@@ -53,17 +58,26 @@ struct PlacedTextureAllocator::State {
     std::uint64_t placed = 0;
     std::uint64_t committed = 0;
 
-    bool add_heap() {
+    // A new heap for a range of `need` bytes (at most heap_bytes / 2): twice the largest heap held (an eighth of
+    // heap_bytes when none is), at least twice `need`, at most heap_bytes.
+    bool add_heap(std::uint64_t need) {
         if (!device) return false;
+        std::uint64_t size = std::max<std::uint64_t>(heap_bytes / 8u, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
+        for (const Heap& held : heaps) {
+            if (held.heap) size = std::max(size, held.bytes * 2u);
+        }
+        while (size < need * 2u) size *= 2u;
+        size = std::min(size, heap_bytes);
         D3D12_HEAP_DESC desc{};
-        desc.SizeInBytes = heap_bytes;
+        desc.SizeInBytes = size;
         desc.Properties = properties;
         desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
         desc.Flags = flags;
         Heap heap;
         if (FAILED(device->CreateHeap(&desc, IID_PPV_ARGS(&heap.heap)))) return false;
-        heap.free.emplace(0u, heap_bytes);
-        heap.free_bytes = heap_bytes;
+        heap.free.emplace(0u, size);
+        heap.free_bytes = size;
+        heap.bytes = size;
         // A heap given back (release) leaves its place for the next one: the owners name heaps by index.
         for (Heap& slot : heaps) {
             if (!slot.heap) {
@@ -137,7 +151,7 @@ struct PlacedTextureAllocator::State {
         used -= std::min(used, size);
         // A heap with nothing placed in it gives its memory back to the adapter (the first stays: textures come back at once).
         // Every range was returned by a resource that is gone, which only happens once the GPU is past the frames that read it.
-        if (heap_index != 0u && length == heap_bytes && free.size() == 1u && heaps[heap_index].heap) {
+        if (heap_index != 0u && length == heaps[heap_index].bytes && free.size() == 1u && heaps[heap_index].heap) {
             heaps[heap_index].heap.Reset();
             free.clear();
             heaps[heap_index].free_bytes = 0u;
@@ -202,7 +216,7 @@ PlacedTextureAllocator::~PlacedTextureAllocator() { shutdown(); }
 void PlacedTextureAllocator::initialize(ID3D12Device* device) {
     std::lock_guard lock(state_->mutex);
     state_->device = device;
-    if (state_->heaps.empty()) (void)state_->add_heap();
+    if (state_->heaps.empty()) (void)state_->add_heap(0u);
 }
 
 void PlacedTextureAllocator::shutdown() noexcept {
@@ -250,7 +264,7 @@ HRESULT PlacedTextureAllocator::create(const D3D12_RESOURCE_DESC& desc,
         {
             std::lock_guard lock(state_->mutex);
             if (state_->allocate(info.SizeInBytes, info.Alignment, heap_index, offset) ||
-                (state_->add_heap() &&
+                (state_->add_heap(info.SizeInBytes) &&
                  state_->allocate(info.SizeInBytes, info.Alignment, heap_index, offset))) {
                 heap = state_->heaps[heap_index].heap;
             }
@@ -286,7 +300,9 @@ PlacedTextureAllocator::Stats PlacedTextureAllocator::stats() const {
     std::lock_guard lock(state_->mutex);
     Stats stats;
     stats.heaps = state_->live_heaps();
-    stats.heap_bytes = stats.heaps * state_->heap_bytes;
+    for (const State::Heap& heap : state_->heaps) {
+        if (heap.heap) stats.heap_bytes += heap.bytes;
+    }
     stats.used_bytes = state_->used;
     stats.placed = state_->placed;
     stats.committed_fallbacks = state_->committed;

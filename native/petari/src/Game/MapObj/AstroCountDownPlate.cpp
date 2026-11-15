@@ -10,14 +10,7 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCountToZero_f1, "exeCountToZero.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCountToZero_f2, "exeCountToZero.f2", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCountToZero_f3, "exeCountToZero.f3", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setNumLeftStar_f1, "setNumLeftStar.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setNumLeftStar_f2, "setNumLeftStar.f2", 0.1f);
 
 namespace NrvAstroCountDownPlate {
     NEW_NERVE(AstroCountDownPlateNrvDead, AstroCountDownPlate, Wait);
@@ -31,7 +24,7 @@ namespace {
     const char* cMaterialName10 = "StarNumber01_v_x(2)";
     const char* cLastBattleDemoName = "ロゼッタ最終決戦デモ";
     const char* cStartCountDownDemoName = "ロゼッタカウントダウン開始デモ";
-    NEBULA_TUNABLE(s32, sStepForCountToZero, 50);
+    const s32 sStepForCountToZero = 50;
 };  // namespace
 
 AstroCountDownPlate::AstroCountDownPlate(const char* pName) : LiveActor(pName), mIsLightOn() {
@@ -102,7 +95,7 @@ void AstroCountDownPlate::exeCountToZero() {
     }
 
     f32 rate = MR::calcNerveRate(this, ::sStepForCountToZero);
-    mOnesTexMtx.getInfo().mSRT.mTranslationY = MR::getConvergeVibrationValue(rate, cNum_exeCountToZero_f1, 0.0f, cNum_exeCountToZero_f2, cNum_exeCountToZero_f3);
+    mOnesTexMtx.getInfo().mSRT.mTranslationY = MR::getConvergeVibrationValue(rate, 0.1f, 0.0f, 0.3f, 4.0f);
 
     if (mIsLightOn) {
         MR::startLevelSound(this, "SE_OJ_LV_CDN_PLATE_LIGHT");
@@ -122,8 +115,8 @@ void AstroCountDownPlate::initTextureAtNumLeftStar() {
 void AstroCountDownPlate::setNumLeftStar() {
     s32 starLeft = MR::getPowerStarLeftToDisplayCountDownPlate();
     f32 mod = starLeft % 10;
-    mTensTexMtx.getInfo().mSRT.mTranslationY = cNum_setNumLeftStar_f1 * (starLeft / 10);
-    mOnesTexMtx.getInfo().mSRT.mTranslationY = cNum_setNumLeftStar_f2 * mod;
+    mTensTexMtx.getInfo().mSRT.mTranslationY = 0.1f * (starLeft / 10);
+    mOnesTexMtx.getInfo().mSRT.mTranslationY = 0.1f * mod;
 }
 
 void AstroCountDownPlate::selectNrvWait() {

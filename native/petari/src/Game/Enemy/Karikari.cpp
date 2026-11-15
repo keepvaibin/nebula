@@ -19,71 +19,54 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 25.0f);
-NEBULA_TUNABLE_NAMED(f64, cNum_setVelocityFromCursorMove_f1, "setVelocityFromCursorMove.f1", 40.0);
-NEBULA_TUNABLE_NAMED(f32, cNum_generateItem_f1, "generateItem.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_generateItem_f2, "generateItem.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_generateItem_f3, "generateItem.f3", 40.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_1, "applyEnvironmentInfluenceToVelocity.reboundVelocityFromCollision.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_2, "applyEnvironmentInfluenceToVelocity.reboundVelocityFromCollision.2", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_3, "applyEnvironmentInfluenceToVelocity.reboundVelocityFromCollision.3", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCling_setBckRate_1, "exeCling.setBckRate.1", 1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeInTornado_setBckRate_1, "exeInTornado.setBckRate.1", 2.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sSize, 30.0f);
+    const f32 sSize = 30.0f;
 
-    NEBULA_TUNABLE(f32, sGravity, 2.4f);
-    NEBULA_TUNABLE(f32, sTurnRatio, 0.25f);
-    NEBULA_TUNABLE(f32, sVelocityDampGround, 0.8f);
-    NEBULA_TUNABLE(f32, sVelocityDampAir, 0.98f);
-    NEBULA_TUNABLE(f32, sStopVelocitySquared, 100.0f);
-    NEBULA_TUNABLE(s32, sJumpAgainTime, 11);
-    NEBULA_TUNABLE(s32, sStopSceneTime, 5);
-    NEBULA_TUNABLE(f32, sScratchStrongVel, 18.0f);
-    NEBULA_TUNABLE(f32, sFromCursorVelScale, 5.0f);
-    NEBULA_TUNABLE(f32, sJumpToPrePursueVel, 50.0f);
-    NEBULA_TUNABLE(f32, sJumpToPursueVel, 33.0f);
-    NEBULA_TUNABLE(f32, sPursueVel, 10.0f);
-    NEBULA_TUNABLE(f32, sJumpAnimRate, 1.0f);
-    NEBULA_TUNABLE(f32, sDistToPursue, 1000.0f);
-    NEBULA_TUNABLE(f32, sWatchForGravity, 1.4f);
-    NEBULA_TUNABLE(f32, sWatchForJumpVel, 35.0f);
-    NEBULA_TUNABLE(f32, sWatchForDistance, 500.0f);
-    NEBULA_TUNABLE(s32, sWatchForJumpTime, 7);
-    NEBULA_TUNABLE(s32, sWatchForLoopInterval, 45);
-    NEBULA_TUNABLE(s32, sPreClingTime, 3);
-    NEBULA_TUNABLE(f32, sDistToCling, 80.0f);
-    NEBULA_TUNABLE(s32, sSpinAttackedTime, 8);
-    NEBULA_TUNABLE(f32, sVelocityDampSpinAttacked, 0.9f);
+    const f32 sGravity = 2.4f;
+    const f32 sTurnRatio = 0.25f;
+    const f32 sVelocityDampGround = 0.8f;
+    const f32 sVelocityDampAir = 0.98f;
+    const f32 sStopVelocitySquared = 100.0f;
+    const s32 sJumpAgainTime = 11;
+    const s32 sStopSceneTime = 5;
+    const f32 sScratchStrongVel = 18.0f;
+    const f32 sFromCursorVelScale = 5.0f;
+    const f32 sJumpToPrePursueVel = 50.0f;
+    const f32 sJumpToPursueVel = 33.0f;
+    const f32 sPursueVel = 10.0f;
+    const f32 sJumpAnimRate = 1.0f;
+    const f32 sDistToPursue = 1000.0f;
+    const f32 sWatchForGravity = 1.4f;
+    const f32 sWatchForJumpVel = 35.0f;
+    const f32 sWatchForDistance = 500.0f;
+    const s32 sWatchForJumpTime = 7;
+    const s32 sWatchForLoopInterval = 45;
+    const s32 sPreClingTime = 3;
+    const f32 sDistToCling = 80.0f;
+    const s32 sSpinAttackedTime = 8;
+    const f32 sVelocityDampSpinAttacked = 0.9f;
     static const s32 sBlowOutTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sBlowOutGravity, 1.3f);
-    NEBULA_TUNABLE(f32, sBlowOutVel, 10.0f);
-    NEBULA_TUNABLE(f32, sBlowOutVerticalVel, 38.0f);
-    NEBULA_TUNABLE(f32, sPointerAttackedGravity, 2.4f);
-    NEBULA_TUNABLE(f32, sVelocityDampAttacked, 0.9f);
-    NEBULA_TUNABLE(f32, sAttackedVel, 43.0f);
-    NEBULA_TUNABLE(f32, sAttackedVerticalVel, 33.0f);
+    const f32 sBlowOutGravity = 1.3f;
+    const f32 sBlowOutVel = 10.0f;
+    const f32 sBlowOutVerticalVel = 38.0f;
+    const f32 sPointerAttackedGravity = 2.4f;
+    const f32 sVelocityDampAttacked = 0.9f;
+    const f32 sAttackedVel = 43.0f;
+    const f32 sAttackedVerticalVel = 33.0f;
     static const s32 sFrozenLimitTime = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(f32, sFrozenRecoverGravity, 2.4f);
-    NEBULA_TUNABLE(f32, sJumpToFrozenRecoverVel, 40.0f);
+    const f32 sFrozenRecoverGravity = 2.4f;
+    const f32 sJumpToFrozenRecoverVel = 40.0f;
     static const s32 sPreWaitTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(s32, sBeginWaitMotionFrame, 20);
-    NEBULA_TUNABLE(s32, sPressTime, 40);
-    NEBULA_TUNABLE(f32, sExplosionBlowOutVel, 30.0f);
-    NEBULA_TUNABLE(f32, sEnemyAttackHitVel, 30.0f);
-    NEBULA_TUNABLE(f32, sSpinXAnimRate, 2.0f);
+    const s32 sBeginWaitMotionFrame = 20;
+    const s32 sPressTime = 40;
+    const f32 sExplosionBlowOutVel = 30.0f;
+    const f32 sEnemyAttackHitVel = 30.0f;
+    const f32 sSpinXAnimRate = 2.0f;
 
-    NEBULA_TUNABLE(f32, sGravitySpinAttacked, 0.0f);
-    NEBULA_TUNABLE(s32, sIceAppearTime, 0);
+    const f32 sGravitySpinAttacked = 0.0f;
+    const s32 sIceAppearTime = 0;
 
     KarikariDirector* getKarikariDirector() {
         return MR::getSceneObj< KarikariDirector >(SceneObj_KarikariDirector);
@@ -134,11 +117,11 @@ void Karikari::init(const TableIter& rIter) {
     initEffectKeeper(0, nullptr);
 
     initHitSensor(1);
-    MR::addHitSensor(this, "body", ATYPE_KARIKARI, 32, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
+    MR::addHitSensor(this, "body", ATYPE_KARIKARI, 32, 100.0f, Vec3f(0.0f, 30.0f, 0.0f));
     MR::initShadowVolumeSphere(this, ::sSize);
     MR::onCalcShadowOneTime(this, nullptr);
     initNerve(GET_NERVE(Karikari, HostTypeNrvFall));
-    MR::initStarPointerTarget(this, cNum_init_f3, Vec3f(0.0f, cNum_init_f4, 0.0f));
+    MR::initStarPointerTarget(this, 40.0f, Vec3f(0.0f, 25.0f, 0.0f));
 
     if (MR::isValidSwitchAppear(this)) {
         makeActorDead();
@@ -152,7 +135,7 @@ void Karikari::init(const TableIter& rIter) {
 
 void Karikari::applyEnvironmentInfluenceToVelocity() {
     if (MR::isOnGround(this)) {
-        MR::reboundVelocityFromCollision(this, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_1, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_2, cNum_applyEnvironmentInfluenceToVelocity_reboundVelocityFromCollision_3);
+        MR::reboundVelocityFromCollision(this, 0.0f, 0.0f, 1.0f);
         mVelocity.mult(::sVelocityDampGround);
         Vec3f norm(*MR::getGroundNormal(this));
         Vec3f velH(mVelocity);
@@ -488,7 +471,7 @@ void Karikari::exeCling() {
         MR::validateHitSensors(this);
         mCanAttack = false;
         mIsPushable = false;
-        MR::setBckRate(this, cNum_exeCling_setBckRate_1);
+        MR::setBckRate(this, 1.0f);
         MR::startBck(this, "Bite");
         MR::startBtp(this, "Bite");
         MR::startSound(this, "SE_EM_KARIKARI_TOUCH");
@@ -663,7 +646,7 @@ void Karikari::exeInTornado() {
         MR::onCalcGravity(this);
         MR::validateHitSensors(this);
         MR::startBck(this, "Wait");
-        MR::setBckRate(this, cNum_exeInTornado_setBckRate_1);
+        MR::setBckRate(this, 2.0f);
         MR::startBtp(this, "Bite");
         MR::setBtpFrameAndStop(this, 0.0f);
         mCanAttack = false;
@@ -802,7 +785,7 @@ void Karikari::setVelocityFromCursorMove(const Vec2f& rVel) {
         MR::vecKillElement(mVelocity, mGravity, &mVelocity);
     }
     mVelocity.setLength(::sScratchStrongVel);
-    mVelocity.sub(mGravity * cNum_setVelocityFromCursorMove_f1);
+    mVelocity.sub(mGravity * 40.0);
 }
 
 void Karikari::makeActorDead() {
@@ -824,10 +807,10 @@ void Karikari::kill() {
 
 void Karikari::generateItem(s32 numStarPieces) {
     Vec3f up = -mGravity;
-    Vec3f pos = up * cNum_generateItem_f1;
+    Vec3f pos = up * 80.0f;
     pos += mPosition;
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
-    MR::appearStarPiece(this, pos, numStarPieces, cNum_generateItem_f2, cNum_generateItem_f3, false);
+    MR::appearStarPiece(this, pos, numStarPieces, 10.0f, 40.0f, false);
 }
 
 void Karikari::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {

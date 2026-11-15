@@ -1,0 +1,35 @@
+use kit.actor
+use svc.movie
+
+var playing: movie.Movie? = none
+var ready = true   // false from the start of a movie until Mario steps away from the screen
+
+fn ended(e: movie.Event) {
+    playing = none
+    log fact "playing" false
+}
+
+fn near(screen: LiveActor) {
+    if not ready or playing != none { return }
+    ready = false
+    // Full screen with its sound; + skips it.
+    playing = movie.play((movie "movies/Trailer").name(), ended)
+    log fact "playing" playing != none
+}
+
+// Once Mario has stepped away from the screen, touching it plays the movie again.
+fn watch(screen: LiveActor) {
+    if not ready and playing == none and not actor.near_player(screen, 300.0) {
+        ready = true
+    }
+}
+
+on start {
+    actor.define(actor.Kind {
+        name: "LumaScreen"                     // placed in a stage as "galaxy-screen/LumaScreen"
+        look: model "Screen"
+        sensors: [actor.Sensor.Body(150.0)]
+        on_touch_player: near
+        on_frame: watch
+    })
+}

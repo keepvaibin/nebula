@@ -2,13 +2,12 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ShadowController.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
     // A step in which a shape's anchor moves farther than this is a jump (a ledge, a warp): nothing blends across it.
     // Below the host's teleport test for a model (200 units and half the eye distance), so the shadow gives up first.
-    NEBULA_TUNABLE(f32, cAnchorJumpDistance, 300.0f);
+    const f32 cAnchorJumpDistance = 300.0f;
 };  // namespace
 
 ShadowDrawer::ShadowDrawer(const char* pName) : NameObj(pName) {

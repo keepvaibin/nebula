@@ -13,6 +13,9 @@
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/luma_system_platform.h"
+#include "galaxy/luma_input_service.h"
+#include "galaxy/ui/launcher.h"
 #include <deque>
 #include "sdl_host.h"
 
@@ -86,6 +89,7 @@ std::mutex g_input_mutex;
 InputState g_input;                 // guarded by g_input_mutex
 SDL_Window* g_window = nullptr;
 std::atomic<bool> g_background{false};
+std::atomic<bool> g_low_memory{false};
 std::atomic<bool> g_menu_context{false};
 std::atomic<bool> g_title_screen{false};
 std::atomic<bool> g_direct_touch{false};
@@ -135,6 +139,7 @@ std::atomic<std::uint32_t> g_rumble_level{0};
 std::uint32_t g_rumble_sent_pad = 0;
 std::uint32_t g_rumble_sent_level = 0;
 std::uint64_t g_rumble_sent_ms = 0;
+bool g_imports_given = false;  // --import's files handed to the window (the pump's thread)
 
 // A finger's travel on a pointer screen, in pixels, not yet turned into the wheel's steps. Guarded by g_input_mutex.
 float g_menu_swipe_px = 0.0f;
@@ -163,6 +168,7 @@ std::atomic<float> g_touch_slop_px{0.0f};
 void forward_output_to_logcat() {
     static int pipe_fds[2];
     if (pipe(pipe_fds) != 0) {
+        install_crash_log(-1);
         return;
     }
     std::FILE* file = nullptr;
@@ -176,6 +182,8 @@ void forward_output_to_logcat() {
     setvbuf(stderr, nullptr, _IONBF, 0);
     dup2(pipe_fds[1], STDOUT_FILENO);
     dup2(pipe_fds[1], STDERR_FILENO);
+    // A crash's report goes to the file itself: the thread below stops with the rest when the system dumps the process.
+    install_crash_log(file != nullptr ? fileno(file) : -1);
     std::thread([file] {
         char line[1024];
         std::size_t used = 0;
@@ -983,6 +991,8 @@ bool start() noexcept {
     g_sdl_thread = std::this_thread::get_id();
 #if defined(__ANDROID__)
     forward_output_to_logcat();
+#else
+    install_crash_log(-1);
 #endif
     // Landscape either way up: the game lays out for shapes from 4:3 wide; taller ones come with Vert+ framing.
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
@@ -1022,7 +1032,12 @@ void run_requests() {
             key = g_menu_keys.front();
             g_menu_keys.pop_front();
         }
-        (void)galaxy::render::native_settings_pad_key(key);
+        if ((key & galaxy::render::kMenuKeyKeyboard) != 0u) {
+            const std::uintptr_t vk = key & ~galaxy::render::kMenuKeyKeyboard;
+            (void)galaxy::render::native_settings_handle_window_key(vk, false, static_cast<std::uint32_t>(vk));
+        } else {
+            (void)galaxy::render::native_settings_pad_key(key);
+        }
     }
 #if defined(__ANDROID__)
     run_activity_calls();
@@ -1062,6 +1077,14 @@ void run_requests() {
 
 void pump_events(int timeout_ms) noexcept {
     SDL_Event event;
+    // A mod's text option being typed in, or LumaCore's text request (input.text_request) open: SDL's text events, and
+    // the system's on-screen keyboard where there is one.
+    if (g_window != nullptr) {
+        const bool wanted = galaxy::render::native_settings_text_wanted() || galaxy::luma_input::text_open();
+        if (wanted != SDL_TextInputActive(g_window)) {
+            (void)(wanted ? SDL_StartTextInput(g_window) : SDL_StopTextInput(g_window));
+        }
+    }
     // Every 10 s: this thread's CPU time and how much SDL's event wait took (a wait that polls rather than sleeps).
     static std::int64_t report_cpu = 0;
     static std::int64_t wait_cpu = 0;
@@ -1105,13 +1128,33 @@ void pump_events(int timeout_ms) noexcept {
     std::vector<MenuKey> menu_keys;
     int menu_wheel = 0;
     std::vector<std::filesystem::path> dropped;
+#if !defined(__ANDROID__)
+    // What the system opened Nebula with (--import; the desktop entry's %u), at the first pump: a
+    // file goes where a drop goes, as on Windows (host_window_win32.cpp). A nebula:// link is 6.1's import by link,
+    // which waits on net.internet: said in the log, nothing else.
+    if (!g_imports_given) {
+        g_imports_given = true;
+        for (const std::filesystem::path& opened : galaxy::launch_args().imports) {
+            if (galaxy::path_text(opened).rfind("nebula:", 0) == 0) {
+                std::fprintf(stderr, "[open] a nebula:// link: links are not imported yet\n");
+            } else {
+                dropped.push_back(opened);
+            }
+        }
+    }
+#endif
+    bool luma_display = false;  // LumaCore's display snapshot changes (services-system 4), read after the events
     {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     while (any) {
+        luma_display = luma_display || galaxy::luma_system::sdl_display_event(event.type);
         switch (event.type) {
         case SDL_EVENT_QUIT:
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             galaxy::render::host_window::quit_request.store(true, std::memory_order_release);
+            break;
+        case SDL_EVENT_LOW_MEMORY:
+            g_low_memory.store(true, std::memory_order_release);
             break;
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             update_window_size();
@@ -1142,6 +1185,7 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_WINDOW_FOCUS_LOST:
             g_input.window_focused = false;
             g_input.keys = {};
+            galaxy::luma_input::text_focus_lost();
             break;
         case SDL_EVENT_FINGER_DOWN:
         case SDL_EVENT_FINGER_MOTION:
@@ -1191,8 +1235,35 @@ void pump_events(int timeout_ms) noexcept {
             g_input.mouse_inside = true;
             break;
         }
+        case SDL_EVENT_TEXT_INPUT:
+            // An open text request takes the text first (its keys too, below); otherwise a Settings text field.
+            if (event.text.text != nullptr) {
+                if (galaxy::luma_input::text_open()) {
+                    galaxy::luma_input::text_utf8(event.text.text);
+                } else {
+                    (void)galaxy::render::native_settings_handle_window_text(event.text.text);
+                }
+            }
+            break;
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP:
+            if (event.type == SDL_EVENT_KEY_DOWN && galaxy::luma_input::text_open()) {
+                using galaxy::luma_input::TextKey;
+                switch (event.key.scancode) {
+                case SDL_SCANCODE_RETURN:
+                case SDL_SCANCODE_KP_ENTER: galaxy::luma_input::text_key(TextKey::Enter); break;
+                case SDL_SCANCODE_ESCAPE:
+                case SDL_SCANCODE_AC_BACK: galaxy::luma_input::text_key(TextKey::Escape); break;
+                case SDL_SCANCODE_BACKSPACE: galaxy::luma_input::text_key(TextKey::Backspace); break;
+                case SDL_SCANCODE_DELETE: galaxy::luma_input::text_key(TextKey::Delete); break;
+                case SDL_SCANCODE_LEFT: galaxy::luma_input::text_key(TextKey::Left); break;
+                case SDL_SCANCODE_RIGHT: galaxy::luma_input::text_key(TextKey::Right); break;
+                case SDL_SCANCODE_HOME: galaxy::luma_input::text_key(TextKey::Home); break;
+                case SDL_SCANCODE_END: galaxy::luma_input::text_key(TextKey::End); break;
+                default: break;
+                }
+                break;
+            }
             if (event.key.scancode == SDL_SCANCODE_AC_BACK) {
                 // Android's back gesture: the HOME button, as the HOME Menu opens with it; in an open menu, back.
                 const bool down = event.type == SDL_EVENT_KEY_DOWN;
@@ -1237,6 +1308,9 @@ void pump_events(int timeout_ms) noexcept {
 #endif
     sample_gamepads();
     }
+    if (luma_display) {
+        galaxy::luma_system::sdl_window_changed(g_window);
+    }
     // Pad 0 of the connected ones drives the menu as a controller does on Windows.
     {
         const InputState state = input_state();
@@ -1247,7 +1321,9 @@ void pump_events(int timeout_ms) noexcept {
             // The unified buttons are the menu's, by their labels (Nintendo's A is the right face button), as on Windows.
             const std::uint16_t buttons = galaxy::input::settings_pad_buttons(sample.scheme, sample.buttons);
             const galaxy::input::NativeSettingsPadStep step = galaxy::input::native_settings_pad_step(
-                g_menu_pad, buttons, sample.axes[0], sample.axes[1], galaxy::render::native_settings_overlay_visible(), galaxy::steady_ms());
+                g_menu_pad, buttons, sample.axes[0], sample.axes[1],
+                galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
+                    galaxy::ui::launcher_visible(), galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
                 galaxy::render::native_settings_post_key(step.keys[i]);
             }
@@ -1307,6 +1383,10 @@ void set_direct_touch(bool direct) noexcept {
 
 bool in_background() noexcept {
     return g_background.load(std::memory_order_acquire);
+}
+
+bool take_low_memory() noexcept {
+    return g_low_memory.exchange(false, std::memory_order_acq_rel);
 }
 
 InputState input_state() noexcept {
@@ -1536,11 +1616,15 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     {
         std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
         galaxy::sdl::g_window = window;
+        galaxy::luma_input::set_text_entry_available(true);
         galaxy::sdl::update_window_size();
         backbuffer_width = static_cast<unsigned>(galaxy::sdl::g_input.window_width);
         backbuffer_height = static_cast<unsigned>(galaxy::sdl::g_input.window_height);
     }
     owner.window = window;
+    // LumaCore's clipboard and links on SDL, and the first display snapshot (services-system 4 to 6).
+    galaxy::luma_system::set_platform(galaxy::luma_system::sdl_platform());
+    galaxy::luma_system::sdl_window_changed(window);
     return {window, !hidden};
 }
 
@@ -1885,6 +1969,11 @@ host::HostPointerTransitionPoll poll_host_pointer_transition(std::uint64_t) noex
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
     const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
     galaxy::sdl::g_menu_keys.push_back(virtual_key);
+}
+
+void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept {
+    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
+    galaxy::sdl::g_menu_keys.push_back(virtual_key | kMenuKeyKeyboard);
 }
 
 }  // namespace galaxy::render

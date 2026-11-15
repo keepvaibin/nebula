@@ -7,11 +7,10 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Walks faster than this use the run animation's speed.
-    NEBULA_TUNABLE(f32, cRunSpeedMin, 1.2f);
+    const f32 cRunSpeedMin = 1.2f;
     const s32 cStartSteps = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace
 

@@ -3,11 +3,6 @@
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_createBlurTexture_f1, "createBlurTexture.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_createDOFTexture_f1, "createDOFTexture.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_createDOFTexture_f2, "createDOFTexture.f2", 0.5f);
 
 ImageEffectResource::ImageEffectResource()
     : mFullTexture(nullptr), mHalfTexture(nullptr), mQuarterTexture(nullptr) {
@@ -19,7 +14,7 @@ void ImageEffectResource::createBlurTexture() {
     }
 
     if (mHalfTexture == nullptr) {
-        mHalfTexture = createTexture(cNum_createBlurTexture_f1);
+        mHalfTexture = createTexture(0.5f);
     }
 }
 
@@ -29,11 +24,11 @@ void ImageEffectResource::createDOFTexture() {
     }
 
     if (mQuarterTexture == nullptr) {
-        mQuarterTexture = createTexture(cNum_createDOFTexture_f1);
+        mQuarterTexture = createTexture(0.25f);
     }
 
     if (mHalfTexture == nullptr) {
-        mHalfTexture = createTexture(cNum_createDOFTexture_f2);
+        mHalfTexture = createTexture(0.5f);
     }
 }
 

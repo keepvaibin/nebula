@@ -4,17 +4,16 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 
-NEBULA_TUNABLE(f32, sOne, 1.0f);
-NEBULA_TUNABLE(f32, sZero, 0.0f);
-NEBULA_TUNABLE(f32, sSameDirEpsilon, 0.01f);
-NEBULA_TUNABLE(f32, sNearZeroEpsilon, 0.001f);
-NEBULA_TUNABLE(f32, sHipDropSlideAngle, 0.7853982f);
-NEBULA_TUNABLE(f32, sHipDropSlideRot, 0.10471976f);
-NEBULA_TUNABLE(f32, sHipDropSlideLen, 10.0f);
-NEBULA_TUNABLE(f32, sJumpDropSlideDotMin, 0.1f);
-NEBULA_TUNABLE(f32, sHopperJumpSlideDotMin, 0.707f);
+const f32 sOne = 1.0f;
+const f32 sZero = 0.0f;
+const f32 sSameDirEpsilon = 0.01f;
+const f32 sNearZeroEpsilon = 0.001f;
+const f32 sHipDropSlideAngle = 0.7853982f;
+const f32 sHipDropSlideRot = 0.10471976f;
+const f32 sHipDropSlideLen = 10.0f;
+const f32 sJumpDropSlideDotMin = 0.1f;
+const f32 sHopperJumpSlideDotMin = 0.707f;
 
 void Mario::delTask(MarioModuleTask* pTask) {
     MarioModuleTask* next = pTask->mNext;

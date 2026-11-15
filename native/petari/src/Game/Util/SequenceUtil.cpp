@@ -12,11 +12,10 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Star bits given after a miss (0).
-    NEBULA_TUNABLE(s32, cMissStarPieceNum, 0);
+    const s32 cMissStarPieceNum = 0;
 };  // namespace
 
 namespace MR {

@@ -20,7 +20,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/System/GameRules.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace NrvBegomanSpike {
@@ -46,50 +45,50 @@ namespace NrvBegomanSpike {
 };  // namespace NrvBegomanSpike
 
 namespace {
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cWaitParam, {0.0f, 3.0f, 0.95f, 1.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cSignAttackParam, {0.0f, 3.0f, 0.8f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cPursueParam, {0.4f, 3.0f, 0.97f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cTurnParam, {0.4f, 3.0f, 0.95f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cStopParam, {0.0f, 3.0f, 0.95f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cHitReactionParam, {0.0f, 3.0f, 0.95f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cTiredParam, {0.2f, 1.0f, 0.95f, 3.0f});
+    const MR::ActorMoveParam cWaitParam = {0.0f, 3.0f, 0.95f, 1.0f};
+    const MR::ActorMoveParam cSignAttackParam = {0.0f, 3.0f, 0.8f, 3.0f};
+    const MR::ActorMoveParam cPursueParam = {0.4f, 3.0f, 0.97f, 3.0f};
+    const MR::ActorMoveParam cTurnParam = {0.4f, 3.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam cStopParam = {0.0f, 3.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam cHitReactionParam = {0.0f, 3.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam cTiredParam = {0.2f, 1.0f, 0.95f, 3.0f};
 
-    NEBULA_TUNABLE(f32, cBinderRadius, 100.0f);
-    NEBULA_TUNABLE(f32, cBodyRadius, 70.0f);
-    NEBULA_TUNABLE(f32, cBodyHeight, 140.0f);
-    NEBULA_TUNABLE(f32, cReboundEnemyAddVel, 8.0f);
-    NEBULA_TUNABLE(f32, cReboundPlayerAddVel, 2.0f);
-    NEBULA_TUNABLE(f32, cPreventSwingbyDamp, 0.7f);
+    const f32 cBinderRadius = 100.0f;
+    const f32 cBodyRadius = 70.0f;
+    const f32 cBodyHeight = 140.0f;
+    const f32 cReboundEnemyAddVel = 8.0f;
+    const f32 cReboundPlayerAddVel = 2.0f;
+    const f32 cPreventSwingbyDamp = 0.7f;
     // Spin speed: each state's rate, plus cCommonAddRotate.
-    NEBULA_TUNABLE(f32, cCommonAddRotate, 0.5f);
-    NEBULA_TUNABLE(f32, cNoCalcWaitRotate, 0.5f);
-    NEBULA_TUNABLE(f32, cWaitRotate, 0.15f);
-    NEBULA_TUNABLE(f32, cSignAttackRotate, 0.5f);
-    NEBULA_TUNABLE(f32, cPursueRotate, 0.5f);
-    NEBULA_TUNABLE(f32, cTurnRotate, 0.4f);
-    NEBULA_TUNABLE(f32, cBrakeRotate, 0.2f);
-    NEBULA_TUNABLE(f32, cProvokeRotate, 0.3f);
-    NEBULA_TUNABLE(f32, cTrampleReactionRotate, 0.25f);
-    NEBULA_TUNABLE(f32, cHitReactionRotate, 0.25f);
+    const f32 cCommonAddRotate = 0.5f;
+    const f32 cNoCalcWaitRotate = 0.5f;
+    const f32 cWaitRotate = 0.15f;
+    const f32 cSignAttackRotate = 0.5f;
+    const f32 cPursueRotate = 0.5f;
+    const f32 cTurnRotate = 0.4f;
+    const f32 cBrakeRotate = 0.2f;
+    const f32 cProvokeRotate = 0.3f;
+    const f32 cTrampleReactionRotate = 0.25f;
+    const f32 cHitReactionRotate = 0.25f;
     // Step back, return, tired and keep distance.
-    NEBULA_TUNABLE(f32, cSlowRotate, 0.2f);
-    NEBULA_TUNABLE(f32, cCoinTransY, 80.0f);
-    NEBULA_TUNABLE(s32, cCoinGenerateNum, 1);
+    const f32 cSlowRotate = 0.2f;
+    const f32 cCoinTransY = 80.0f;
+    const s32 cCoinGenerateNum = 1;
     const s32 cTrampleReactionTime = NebulaFrameClock::stepsOfSeconds(2);
     // A trample within this many steps of the last one does not restart the reaction.
     const s32 cTrampleRepeatTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, cStopSceneTime, 2);
-    NEBULA_TUNABLE(s32, cBlowFrame, 20);
-    NEBULA_TUNABLE(f32, cBlowVel, 40.0f);
-    NEBULA_TUNABLE(f32, cBlowVerticalVel, 10.0f);
-    NEBULA_TUNABLE(f32, cExplosionBlowVel, 35.0f);
-    NEBULA_TUNABLE(f32, cExplosionBlowVerticalVel, 15.0f);
-    NEBULA_TUNABLE(s32, cDeathStopSceneTime, 5);
-    NEBULA_TUNABLE(s32, cElectricDeathTime, 20);
-    NEBULA_TUNABLE(f32, cInWaterVel, 10.0f);
+    const s32 cStopSceneTime = 2;
+    const s32 cBlowFrame = 20;
+    const f32 cBlowVel = 40.0f;
+    const f32 cBlowVerticalVel = 10.0f;
+    const f32 cExplosionBlowVel = 35.0f;
+    const f32 cExplosionBlowVerticalVel = 15.0f;
+    const s32 cDeathStopSceneTime = 5;
+    const s32 cElectricDeathTime = 20;
+    const f32 cInWaterVel = 10.0f;
     const s32 cInWaterTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, cKeepDistFar, 800.0f);
-    NEBULA_TUNABLE(f32, cKeepDistNear, 600.0f);
+    const f32 cKeepDistFar = 800.0f;
+    const f32 cKeepDistNear = 600.0f;
 }  // namespace
 
 BegomanSpike::BegomanSpike(const char* pName) : BegomanBase(pName), mHead(nullptr), mBrokenModel(nullptr), mTurnAfterBlow(false) {

@@ -14,33 +14,28 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDown_reboundVelocityFromCollision_1, "exeDown.reboundVelocityFromCollision.1", 1.0f);
-
-
 namespace {
-    NEBULA_TUNABLE(f32, cBodySensorRadius, 75.0f);
-    NEBULA_TUNABLE(f32, cAttackSensorRadius, 60.0f);
-    NEBULA_TUNABLE(f32, cShadowRadius, 60.0f);
-    NEBULA_TUNABLE(f32, cBinderRadius, 75.0f);
-    NEBULA_TUNABLE(f32, cStarWandRadius, 150.0f);
+    const f32 cBodySensorRadius = 75.0f;
+    const f32 cAttackSensorRadius = 60.0f;
+    const f32 cShadowRadius = 60.0f;
+    const f32 cBinderRadius = 75.0f;
+    const f32 cStarWandRadius = 150.0f;
     const s32 cLifeTime = NebulaFrameClock::stepsOfSeconds(6);
-    NEBULA_TUNABLE(f32, cCameraShakeDistance, 1000.0f);
+    const f32 cCameraShakeDistance = 1000.0f;
     // Frames a stomped shell rolls before it misfires.
-    NEBULA_TUNABLE(s32, cDownTime, 45);
-    NEBULA_TUNABLE(f32, cGravity, 1.0f);
-    NEBULA_TUNABLE(f32, cReboundRate, 0.55f);
-    NEBULA_TUNABLE(f32, cReboundMinSpeed, 2.0f);
-    NEBULA_TUNABLE(f32, cAirFriction, 0.99f);
-    NEBULA_TUNABLE(f32, cGroundFriction, 0.95f);
-    NEBULA_TUNABLE(s32, cFreezeFrame, 20);
+    const s32 cDownTime = 45;
+    const f32 cGravity = 1.0f;
+    const f32 cReboundRate = 0.55f;
+    const f32 cReboundMinSpeed = 2.0f;
+    const f32 cAirFriction = 0.99f;
+    const f32 cGroundFriction = 0.95f;
+    const s32 cFreezeFrame = 20;
     // Degrees of the freeze wobble per frozen frame, and its width in units.
-    NEBULA_TUNABLE(f32, cFreezeRumbleSpeed, 75.0f);
-    NEBULA_TUNABLE(f32, cFreezeRumbleWidth, 5.0f);
-    NEBULA_TUNABLE(s32, cWallHitInvalidTime, 10);
+    const f32 cFreezeRumbleSpeed = 75.0f;
+    const f32 cFreezeRumbleWidth = 5.0f;
+    const s32 cWallHitInvalidTime = 10;
 }  // namespace
 
 namespace NrvKoopaJrShipCannonShell {
@@ -243,7 +238,7 @@ void KoopaJrShipCannonShell::exeDown() {
     }
 
     mVelocity.add(mGravity * ::cGravity);
-    if (MR::reboundVelocityFromCollision(this, ::cReboundRate, ::cReboundMinSpeed, cNum_exeDown_reboundVelocityFromCollision_1)) {
+    if (MR::reboundVelocityFromCollision(this, ::cReboundRate, ::cReboundMinSpeed, 1.0f)) {
         MR::deleteEffect(this, "LocusSmoke");
     }
 

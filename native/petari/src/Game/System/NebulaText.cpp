@@ -3,11 +3,13 @@
 
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/System/GameAssets.hpp"
+#include "Game/System/GameSystem.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/MessageTag.hpp"
+#include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include <Game/Ui/TextBox.hpp>
@@ -195,6 +197,27 @@ namespace {
         }
     }
 
+    // The texts are the played language's: until the game's objects exist, a lookup (a mod's report at its start)
+    // answers from the table in the language they will take (MR::getLanguage decides it from the settings and the
+    // disc's region, as GameSystemObjHolder will), loads no override file and expands no token; the first after loads
+    // once.
+    void load();
+
+    bool ready() {
+        if (sLoaded) {
+            return true;
+        }
+        const GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+        if (pSystem == nullptr || pSystem->mObjHolder == nullptr) {
+            const char* const pPrefix = MR::getCurrentLanguagePrefix();
+            const s32 column = findColumn(pPrefix, lengthOf(pPrefix));
+            sColumn = column >= 0 ? column : 0;
+            return false;
+        }
+        load();
+        return true;
+    }
+
     void load() {
         sLoaded = true;
         const char* pPrefix = MR::getCurrentLanguagePrefix();
@@ -283,13 +306,17 @@ namespace {
     };
 
     void expand(Sink* pSink, const char* pId) {
-        if (!sLoaded) {
-            load();
-        }
+        const bool loaded = ready();
         const char16_t* pText = find(pId);
         if (pText == nullptr) {
             for (s32 i = 0; pId[i] != 0 && pSink->fits(1); i++) {
                 pSink->put(static_cast< char16_t >(pId[i]));
+            }
+            return;
+        }
+        if (!loaded) {
+            for (; *pText != 0 && pSink->fits(1); pText++) {
+                pSink->put(*pText);
             }
             return;
         }
@@ -373,9 +400,7 @@ namespace {
 
 namespace NebulaText {
     bool has(const char* pId) {
-        if (!sLoaded) {
-            load();
-        }
+        (void)ready();
         return find(pId) != nullptr;
     }
 
@@ -391,6 +416,16 @@ namespace NebulaText {
 
     s32 length(const char* pId) {
         return measure(pId);
+    }
+
+    const char16_t* english(const char* pId) {
+        const s32 idLength = lengthOf(pId);
+        for (u32 i = 0; i < sizeof(cNebulaTextRows) / sizeof(cNebulaTextRows[0]); i++) {
+            if (sameTerminated(cNebulaTextRows[i].mId, pId, idLength)) {
+                return cNebulaTextRows[i].mText[0];
+            }
+        }
+        return nullptr;
     }
 
     const char16_t* get(MR::GrowBuffer< char16_t >* pText, const char* pId) {

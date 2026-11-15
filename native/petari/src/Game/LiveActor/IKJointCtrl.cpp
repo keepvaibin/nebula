@@ -2,9 +2,6 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util.hpp"
 #include "Game/Render/ModelData.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setEndDirection_f1, "setEndDirection.f1", 0.01f);
 
 namespace {
     const char* sTextOutFileName = "IKJointCtrl";
@@ -44,7 +41,7 @@ void IKJointCtrl::setEndPosition(const Vec3f& rPos, f32 rate) {
 
 void IKJointCtrl::setEndDirection(const Vec3f& rDirection, f32 rate) {
     if (!MR::vecBlendSphere(mEndDir, rDirection, &mEndDir, rate)) {
-        MR::turnRandomVector(&mEndDir, mEndDir, cNum_setEndDirection_f1);
+        MR::turnRandomVector(&mEndDir, mEndDir, 0.01f);
     }
 
     mEndDirRate = rate;

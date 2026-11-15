@@ -10,7 +10,36 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 
+namespace {
+    s32 sPlayerChannel = PLAYER_1;  // MR::getPlayerChannel
+    u32 sCoStarTaken = 0;  // extra players driven by the second controller
+}  // namespace
+
 namespace MR {
+    s32 getPlayerChannel() {
+        return sPlayerChannel;
+    }
+
+    PlayerChannelScope::PlayerChannelScope(s32 channel) : mBefore(sPlayerChannel) {
+        sPlayerChannel = channel;
+    }
+
+    PlayerChannelScope::~PlayerChannelScope() {
+        sPlayerChannel = mBefore;
+    }
+
+    bool isCoStarFree() {
+        return sCoStarTaken == 0;
+    }
+
+    void takeCoStar(bool take) {
+        if (take) {
+            sCoStarTaken++;
+        } else if (sCoStarTaken > 0) {
+            sCoStarTaken--;
+        }
+    }
+
     void getPointerPosOnScreen(Vec2f* pPos, s32 channel) {
         MR::getPlayerInput(channel)->mPointer->getPointingPosBasedOnScreen(pPos);
     }
@@ -214,7 +243,10 @@ namespace MR {
     }
 
     f32 getPlayerStickX() {
-        f32 stick = getMoveStickX(PLAYER_1);
+        if (sPlayerChannel < 0) {
+            return 0.0f;
+        }
+        f32 stick = getMoveStickX(sPlayerChannel);
         if (stick != 0.0f) {
             return stick;
         }
@@ -229,7 +261,10 @@ namespace MR {
     }
 
     f32 getPlayerStickY() {
-        f32 stick = getMoveStickY(PLAYER_1);
+        if (sPlayerChannel < 0) {
+            return 0.0f;
+        }
+        f32 stick = getMoveStickY(sPlayerChannel);
         if (stick != 0.0f) {
             return stick;
         }
@@ -244,35 +279,35 @@ namespace MR {
     }
 
     bool getPlayerPressedJump() {
-        return isPressedJump(PLAYER_1);
+        return sPlayerChannel >= 0 && isPressedJump(sPlayerChannel);
     }
 
     bool getPlayerPressedFire() {
-        return isPressedFire(PLAYER_1);
+        return sPlayerChannel >= 0 && isPressedFire(sPlayerChannel);
     }
 
     bool getPlayerPressedCrouch() {
-        return isPressedCrouch(PLAYER_1);
+        return sPlayerChannel >= 0 && isPressedCrouch(sPlayerChannel);
     }
 
     bool getPlayerPressedCamera() {
-        return isPressedCamera(PLAYER_1);
+        return sPlayerChannel >= 0 && isPressedCamera(sPlayerChannel);
     }
 
     bool getPlayerHeldJump() {
-        return isHeldJump(PLAYER_1);
+        return sPlayerChannel >= 0 && isHeldJump(sPlayerChannel);
     }
 
     bool getPlayerHeldFire() {
-        return isHeldFire(PLAYER_1);
+        return sPlayerChannel >= 0 && isHeldFire(sPlayerChannel);
     }
 
     bool getPlayerHeldCrouch() {
-        return isHeldCrouch(PLAYER_1);
+        return sPlayerChannel >= 0 && isHeldCrouch(sPlayerChannel);
     }
 
     bool getPlayerHeldCamera() {
-        return isHeldCamera(PLAYER_1);
+        return sPlayerChannel >= 0 && isHeldCamera(sPlayerChannel);
     }
 
     bool isMoveStickOperated(s32 channel) {

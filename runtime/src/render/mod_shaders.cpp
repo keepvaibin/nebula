@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/render/mod_shaders.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <string>
 #include <memory>
 #include <new>
 #include <unordered_map>
@@ -28,6 +30,7 @@ struct KeyHash {
 struct Registry {
     std::vector<std::unique_ptr<std::vector<std::uint64_t>>> files;  // words: SPIR-V and DXIL both align
     std::unordered_map<Key, ProgramBytes, KeyHash> programs;
+    std::unordered_map<Key, ModProgramFlags, KeyHash> flags;  // form: 1 a pixel stage, 0 a vertex stage
 };
 
 Registry& registry() {
@@ -104,6 +107,52 @@ ProgramBytes mod_program_bytes(std::uint64_t id, unsigned variant, bool pixel) n
     const Registry& r = registry();
     const auto it = r.programs.find(key_of(id, variant, pixel));
     return it != r.programs.end() ? it->second : ProgramBytes{};
+}
+
+bool load_mod_program_flags(const std::filesystem::path& file) {
+    std::ifstream in(file, std::ios::binary);
+    if (!in) {
+        return false;
+    }
+    Registry& r = registry();
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        // v0123456789abcdef<TAB>flags<TAB>coords
+        if (line.size() < 21u || (line[0] != 'v' && line[0] != 'p') || line[17] != '\t') {
+            continue;
+        }
+        bool hex = true;
+        for (std::size_t i = 1u; i < 17u; ++i) {
+            const char c = line[i];
+            hex = hex && ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'));
+        }
+        const char* const flags_text = line.c_str() + 18;
+        char* flags_end = nullptr;
+        const unsigned long flags = std::strtoul(flags_text, &flags_end, 10);
+        if (!hex || flags_end == flags_text || *flags_end != '\t' || flags > 7u) {
+            continue;
+        }
+        char* coords_end = nullptr;
+        const unsigned long coords = std::strtoul(flags_end + 1, &coords_end, 10);
+        if (coords_end == flags_end + 1 || *coords_end != '\0' || coords > 8u) {
+            continue;
+        }
+        const std::uint64_t id = std::strtoull(line.substr(1, 16).c_str(), nullptr, 16);
+        const bool pixel = line[0] == 'p';
+        // The same text in two cooks is the same program: the first stays.
+        r.flags.emplace(Key{id, pixel ? 1u : 0u},
+                        ModProgramFlags{true, static_cast<std::uint32_t>(flags), static_cast<std::uint32_t>(coords)});
+    }
+    return true;
+}
+
+ModProgramFlags mod_program_flags(std::uint64_t id, bool pixel) noexcept {
+    const Registry& r = registry();
+    const auto it = r.flags.find(Key{id, pixel ? 1u : 0u});
+    return it != r.flags.end() ? it->second : ModProgramFlags{};
 }
 
 }  // namespace galaxy::render

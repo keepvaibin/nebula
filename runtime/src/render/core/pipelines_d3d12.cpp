@@ -2,6 +2,7 @@
 #include "render/core/pipelines.h"
 
 #include "render/core/pipeline_cache_file.h"
+#include "render/core/present_gate.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -16,6 +17,7 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <shared_mutex>
 #include <system_error>
 #include <vector>
 
@@ -59,14 +61,23 @@ struct DriverCache {
     std::filesystem::path file;
     D3d12CacheIdentity identity;
     std::mutex lock;
+    // The library itself: loads hold it shared, so they run side by side; StorePipeline, GetSerializedSize, Serialize and
+    // the release hold it alone. Taken after a name's stripe and before `lock`.
+    std::shared_mutex use;
     bool opened = false;
     bool changed = false;
+    std::uint64_t accepted = 0u;  // the hash of the data the library was made from at the start (0: none, or refused)
+    std::uint64_t on_disk = 0u;   // the hash of the data the file holds; kept when the cache is released
+    bool stale = false;           // the last write failed: the file lacks pipelines the library has
 };
 DriverCache gCache;
 // The library synchronizes itself except when two threads load the same pipeline, which can change that pipeline's state
 // in it unsafely (CreatePipelineLibrary, Thread Safety). A draw can ask for a pipeline while a worker loads its prepared
 // job, and two ids with one description share a name, so a name's load and store hold its hash's stripe; other names
 // load side by side, and a miss compiles outside the stripe (a duplicate store of one name fails harmlessly).
+// A store or a serialization running beside other names' loads crashed inside one driver's library (an access violation
+// in StorePipeline while other workers loaded, on a cold start), so those take the library alone (DriverCache::use) and
+// loads share it.
 std::array<std::mutex, 256> gNameLocks;
 
 ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
@@ -81,29 +92,41 @@ ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
     }
     gCache.identity = adapter_identity(device);
     gCache.file = shader_cache_directory() / d3d12_cache_file_name(gCache.identity);
+    std::uint64_t file_hash = 0u;
     if (std::ifstream in(gCache.file, std::ios::binary | std::ios::ate); in) {
         std::vector<char> file(static_cast<std::size_t>(in.tellg()));
         in.seekg(0);
         in.read(file.data(), static_cast<std::streamsize>(file.size()));
         gCache.blob = unwrap_d3d12_cache(gCache.identity, file);
+        if (!gCache.blob.empty()) {
+            D3d12CacheHeader header{};  // unwrap checked it: its hash is the blob's
+            std::memcpy(&header, file.data(), sizeof(header));
+            file_hash = header.hash;
+        }
     }
+    gCache.on_disk = file_hash;
+    gCache.stale = false;
+    gCache.accepted = 0u;
     if (gCache.blob.empty() || FAILED(device1->CreatePipelineLibrary(gCache.blob.data(), gCache.blob.size(), IID_PPV_ARGS(&gCache.library)))) {
         gCache.blob.clear();
         if (FAILED(device1->CreatePipelineLibrary(nullptr, 0u, IID_PPV_ARGS(&gCache.library)))) {
             gCache.library.Reset();
         }
+    } else {
+        gCache.accepted = file_hash;
     }
     return gCache.library.Get();
 }
 
-// Serializing needs no name lock (only loads of one name do), so the workers and draws keep going while a copy goes out;
-// one writer at a time.
+// Serializing needs no name lock (only loads of one name do), but it takes the library alone: loads and stores wait for
+// the copy, and the file is written after; one writer at a time.
 std::size_t write_driver_cache() noexcept {
     static std::mutex writing;
     std::lock_guard one(writing);
     std::vector<char> bytes;
     std::filesystem::path file;
     {
+        const std::unique_lock alone(gCache.use);
         std::lock_guard guard(gCache.lock);
         if (gCache.library == nullptr || !gCache.changed) {
             return 0u;
@@ -111,6 +134,7 @@ std::size_t write_driver_cache() noexcept {
         const std::size_t blob_size = gCache.library->GetSerializedSize();
         std::vector<char> blob(blob_size);
         if (blob_size == 0u || FAILED(gCache.library->Serialize(blob.data(), blob_size))) {
+            gCache.stale = true;
             return 0u;
         }
         bytes = wrap_d3d12_cache(gCache.identity, blob.data(), blob.size());
@@ -120,13 +144,20 @@ std::size_t write_driver_cache() noexcept {
     if (!replace_file(file, bytes.data(), bytes.size())) {
         std::lock_guard guard(gCache.lock);
         gCache.changed = true;
+        gCache.stale = true;
         return 0u;
     }
+    D3d12CacheHeader header{};
+    std::memcpy(&header, bytes.data(), sizeof(header));
+    std::lock_guard guard(gCache.lock);
+    gCache.on_disk = header.hash;
+    gCache.stale = false;
     return bytes.size();
 }
 
 void release_driver_cache() noexcept {
     write_driver_cache();
+    const std::unique_lock alone(gCache.use);
     std::lock_guard guard(gCache.lock);
     gCache.library.Reset();
     gCache.blob.clear();
@@ -250,6 +281,7 @@ void fill_inputs(const PipelineEntry& entry, bool motion, InputList& list) {
         case NEBULA_INPUT_BINORMAL: list.add("BINORMAL", 0u, format, slot, input.offset); break;
         case NEBULA_INPUT_WIDEN: list.add("BLENDINDICES", 1u, format, slot, input.offset); break;
         case NEBULA_INPUT_MATRIX: list.add("BLENDINDICES", 0u, format, slot, input.offset); break;
+        case NEBULA_INPUT_GAIN: list.add("BLENDWEIGHT", 0u, format, slot, input.offset); break;
         default:
             if (input.semantic >= NEBULA_INPUT_COORD0) {
                 list.add("TEXCOORD", input.semantic - NEBULA_INPUT_COORD0, format, slot, input.offset);
@@ -344,6 +376,18 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         rt.SrcBlendAlpha = alpha_factor(rt.SrcBlend);
         rt.DestBlendAlpha = alpha_factor(rt.DestBlend);
         rt.BlendOpAlpha = rt.BlendOp;
+    }
+
+    // An added clear shell's traced form: an exchange, premultiplied: the program gives F R and
+    // F, what is behind keeps 1 - F.
+    if (aux >= kAuxTraced && (aux & kAuxExchange) != 0u) {
+        rt.BlendEnable = TRUE;
+        rt.SrcBlend = D3D12_BLEND_ONE;
+        rt.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+        rt.BlendOp = D3D12_BLEND_OP_ADD;
+        rt.SrcBlendAlpha = D3D12_BLEND_ONE;
+        rt.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+        rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
     }
 
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
@@ -442,20 +486,30 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         std::mutex& named = gNameLocks[hash % gNameLocks.size()];
         {
             const std::lock_guard held(named);
+            const std::shared_lock shared(gCache.use);
+            const CreationScope gate;
             hr = cache->LoadGraphicsPipeline(name.data(), &pd, IID_PPV_ARGS(&pipeline));
         }
         if (FAILED(hr)) {
-            hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
+            {
+                const CreationScope gate;
+                hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
+            }
             if (SUCCEEDED(hr)) {
                 const std::lock_guard held(named);
+                const std::unique_lock alone(gCache.use);
                 const std::lock_guard guard(gCache.lock);
                 gCache.changed = SUCCEEDED(cache->StorePipeline(name.data(), pipeline.Get())) || gCache.changed;
             }
         }
     } else {
+        const CreationScope gate;
         hr = device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline));
     }
     if (FAILED(hr)) {
+        if (hr == E_OUTOFMEMORY) {
+            note_pipeline_out_of_memory();
+        }
         std::fprintf(stderr, "[pipelines] create failed %08lx: %llx %llx state %08x variant %u aux %u\n", static_cast<unsigned long>(hr),
                      static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant, aux);
         return nullptr;
@@ -479,6 +533,21 @@ void Pipelines::destroy_all() noexcept {
 
 std::size_t Pipelines::save_cache() noexcept {
     return write_driver_cache();
+}
+
+bool Pipelines::cache_file_state(std::filesystem::path& file, std::uint64_t& accepted) {
+    if (driver_cache(device_) == nullptr) {
+        return false;
+    }
+    std::lock_guard guard(gCache.lock);
+    file = gCache.file;
+    accepted = gCache.accepted;
+    return true;
+}
+
+std::uint64_t Pipelines::cache_file_hash() noexcept {
+    std::lock_guard guard(gCache.lock);
+    return gCache.stale ? 0u : gCache.on_disk;
 }
 
 }  // namespace galaxy::render::core

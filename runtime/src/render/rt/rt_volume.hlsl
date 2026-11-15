@@ -124,10 +124,11 @@ void main(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID) {
             s = kSkyHidden;
         }
     }
-    const float3 a = g_shade.authored.rgb, k = g_shade.key.rgb;
-    float3 share = (a * s + k * v) / max(a + k, 1e-4f);
+    // The emitters alone (--diagnostics rt-added, g_more.z bit 7): no sun, no sky in the air either. Else the
+    // stage's light's share in linear light, the model's under the relight.
+    float3 share = (g_more.z & 128u) != 0u ? float3(0.0f, 0.0f, 0.0f) : rt_air_share(s, v);
     if (g_pass.y != 2u) {
-        share += air_lights(at, high, seed);  // Low: the sun and the sky alone (19.1)
+        share += air_lights(at, high, seed);  // Low: the sun and the sky alone
     }
     float4 now = float4(share, (v.r + v.g + v.b) * (1.0f / 3.0f));
 
@@ -145,7 +146,10 @@ void main(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID) {
                 const float3 inner = clamp(cell, 0.5f, float3(kCells) - 0.5f) / float3(kCells);
                 const float4 kept = g_before_volume.SampleLevel(g_wrap, inner, 0.0f);
                 if (all(kept == kept)) {
-                    now = lerp(now, kept, 1.0f - (1.0f - kKeep) / fb_history_scale());
+                    // Where V moved (a caster passed, the sun turned) the history gives way: kKeep to a move of 0.25,
+                    // 0.6 from 0.5 on.
+                    const float keep = lerp(kKeep, 0.6f, saturate((abs(now.a - kept.a) - 0.25f) / 0.25f));
+                    now = lerp(now, kept, 1.0f - (1.0f - keep) / fb_history_scale());
                 }
             }
         }

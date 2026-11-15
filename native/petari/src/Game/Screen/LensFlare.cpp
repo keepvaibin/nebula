@@ -14,22 +14,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/TriggerChecker.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_f1, "LensFlareRing.f1", 0.135f);
-NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_f2, "LensFlareRing.f2", 0.135f);
-NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_f3, "LensFlareRing.f3", 0.135f);
-NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_f4, "LensFlareRing.f4", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareGlow_f1, "LensFlareGlow.f1", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareLine_f1, "LensFlareLine.f1", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlFlare_f1, "controlFlare.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlFlare_f2, "controlFlare.f2", 2.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareRing_controlAnim_setBrkRate_1, "LensFlareRing_controlAnim.setBrkRate.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareGlow_controlAnim_setBrkRate_1, "LensFlareGlow_controlAnim.setBrkRate.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_LensFlareLine_controlAnim_setBrkRate_1, "LensFlareLine_controlAnim.setBrkRate.1", 0.0f);
 
 namespace {
     NEW_NERVE(LensFlareModelNrvKill, LensFlareModel, Kill);
@@ -145,10 +130,10 @@ void LensFlareModel::notifyInArea() {
 
 LensFlareRing::LensFlareRing() : LensFlareModel("レンズフレアリング", "LensFlare"), mRingFrame() {
     lumacore::setClass(this, lumacore::kClassId< LensFlareRing >);
-    mScale.x = cNum_LensFlareRing_f1;
-    mScale.y = cNum_LensFlareRing_f2;
-    mScale.z = cNum_LensFlareRing_f3;
-    mFadeStep = cNum_LensFlareRing_f4;
+    mScale.x = 0.135f;
+    mScale.y = 0.135f;
+    mScale.z = 0.135f;
+    mFadeStep = 0.05f;
 }
 
 void LensFlareRing::appearAnim() {
@@ -157,7 +142,7 @@ void LensFlareRing::appearAnim() {
 
 void LensFlareRing::controlAnim() {
     MR::startBrk(this, "LensFlare");
-    MR::setBrkRate(this, cNum_LensFlareRing_controlAnim_setBrkRate_1);
+    MR::setBrkRate(this, 0.0f);
     MR::setBrkFrame(this, (1.0f - mFlareStrength * mFadeLevel) * MR::getBrkCtrl(this)->getEnd());
 
     if (MR::isBckStopped(this)) {
@@ -170,7 +155,7 @@ void LensFlareRing::controlAnim() {
 
 LensFlareGlow::LensFlareGlow() : LensFlareModel("グレア（円形）", "GlareGlow") {
     lumacore::setClass(this, lumacore::kClassId< LensFlareGlow >);
-    mFadeStep = cNum_LensFlareGlow_f1;
+    mFadeStep = 0.05f;
 }
 
 void LensFlareGlow::appearAnim() {
@@ -179,13 +164,13 @@ void LensFlareGlow::appearAnim() {
 
 void LensFlareGlow::controlAnim() {
     MR::startBrk(this, "GlareGlow");
-    MR::setBrkRate(this, cNum_LensFlareGlow_controlAnim_setBrkRate_1);
+    MR::setBrkRate(this, 0.0f);
     MR::setBrkFrame(this, (1.0f - mFlareStrength * mFadeLevel) * MR::getBrkCtrl(this)->getEnd());
 }
 
 LensFlareLine::LensFlareLine() : LensFlareModel("グレア（ライン）", "GlareLine") {
     lumacore::setClass(this, lumacore::kClassId< LensFlareLine >);
-    mFadeStep = cNum_LensFlareLine_f1;
+    mFadeStep = 0.05f;
 }
 
 void LensFlareLine::appearAnim() {
@@ -193,7 +178,7 @@ void LensFlareLine::appearAnim() {
 
 void LensFlareLine::controlAnim() {
     MR::startBrk(this, "GlareLine");
-    MR::setBrkRate(this, cNum_LensFlareLine_controlAnim_setBrkRate_1);
+    MR::setBrkRate(this, 0.0f);
     MR::setBrkFrame(this, (1.0f - mFlareStrength * mFadeLevel) * MR::getBrkCtrl(this)->getEnd());
 }
 
@@ -319,7 +304,7 @@ void LensFlareDirector::controlFlare(s32 area, bool hasBrightObj) {
     mGlow->mPosition.set(flarePos);
     mLine->mPosition.set(flarePos);
 
-    Vec2f screenCenter(MR::getScreenWidth() / cNum_controlFlare_f1, static_cast< s32 >(NebulaFrameClock::cScreenLines) / cNum_controlFlare_f2);
+    Vec2f screenCenter(MR::getScreenWidth() / 2.0f, static_cast< s32 >(NebulaFrameClock::cScreenLines) / 2.0f);
 
     f32 screenRadius = screenCenter.length();
     Vec2f offset(screenCenter - position);

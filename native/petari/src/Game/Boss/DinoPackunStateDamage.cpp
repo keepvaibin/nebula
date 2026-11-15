@@ -7,23 +7,22 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Where the tail leaves the body, and the egg, in the boss's frame.
     const Vec3f cOutPosition(0.0f, 100.0f, -300.0f);
     const Vec3f cEggOutPosition(0.0f, 0.0f, -400.0f);
-    NEBULA_TUNABLE(f32, cTailRootAdjustRate, 0.1f);
+    const f32 cTailRootAdjustRate = 0.1f;
     // Pulled farther than this, the boss turns toward its tail.
-    NEBULA_TUNABLE(f32, cPullTurnDistance, 800.0f);
-    NEBULA_TUNABLE(f32, cPullTurnDegree, 6.0f);
-    NEBULA_TUNABLE(s32, cPullTurnNode, 3);
+    const f32 cPullTurnDistance = 800.0f;
+    const f32 cPullTurnDegree = 6.0f;
+    const s32 cPullTurnNode = 3;
     // The tail end this far toward the boss's up (cosine) is over its head.
-    NEBULA_TUNABLE(f32, cTailTopCos, 0.7f);
+    const f32 cTailTopCos = 0.7f;
     const s32 cEggBreakStep = NebulaFrameClock::stepsOfMilliseconds(500);
     const s32 cEggBrokenEndStep = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, cEggHitStopFrames, 5);
-    NEBULA_TUNABLE(s32, cDamageHitStopFrames, 15);
+    const s32 cEggHitStopFrames = 5;
+    const s32 cDamageHitStopFrames = 15;
     const char* const cDemoName = "ディノパックンダメージ";
 
     // By DinoPackunStateDamage::PunchedDir.

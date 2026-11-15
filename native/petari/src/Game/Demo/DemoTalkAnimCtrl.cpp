@@ -13,10 +13,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_updateDemo_1, "updateDemo.1", 1);
 
 DemoTalkAnimCtrl::DemoTalkAnimCtrl(LiveActor* pActor, const char* pExecutorName, const char* pStartPartName)
     : NerveExecutor(pExecutorName), mActor(pActor), mExecutorName(pExecutorName), mStartPartName(pStartPartName), mPartName(nullptr), mAnimName(""), mCameraName(""), mCameraInfo(nullptr), mAnimFrame(0),
@@ -125,7 +121,7 @@ bool DemoTalkAnimCtrl::updateDemo() {
 
     bool ok = MR::isDemoPartFirstStep(name);
     if (MR::isEqualStringCase(mPartName, "")) {
-        ok = MR::isDemoPartStep(name, cStep_updateDemo_1);
+        ok = MR::isDemoPartStep(name, 1);
     }
 
     if (ok) {

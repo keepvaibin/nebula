@@ -205,6 +205,11 @@ void NameObjExecuteHolder::registerActor(NameObj* pObj, int movementType, int ca
 
     mExecuteArray[mExecuteArraySize].setConnectInfo(pObj, movementType, calcAnimType, drawBufferType, drawType);
     pObj->mExecutorIdx = mExecuteArraySize;
+    // Made after the scene's connecting (CoinHolder::takeDeadCoin, a mod's attached model): the scene's one
+    // initConnectting is past, so the object takes its step now; its first connect request is then an ordinary one.
+    if (mConnectingDone) {
+        mExecuteArray[mExecuteArraySize].initConnectting();
+    }
     mExecuteArraySize++;
 }
 
@@ -212,6 +217,7 @@ void NameObjExecuteHolder::initConnectting() {
     for (s32 i = 0; i < mExecuteArraySize; i++) {
         mExecuteArray[i].initConnectting();
     }
+    mConnectingDone = true;
 }
 
 // The lists grow in the holder's arena: a request made in a frame (the permanent arena current) stays the scene's.
@@ -302,6 +308,15 @@ void NameObjExecuteHolder::disconnectToDraw(NameObj* pObj) {
     }
 }
 
+// Each acts only on a pending connect, so the pending run that comes later finds nothing for it.
+void NameObjExecuteHolder::connectNow(NameObj* pObj) {
+    NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
+    if (pInfo != nullptr) {
+        pInfo->executeRequirementConnectMovement();
+        pInfo->executeRequirementConnectDraw();
+    }
+}
+
 bool NameObjExecuteHolder::isConnectToDraw(const NameObj* pObj) const {
     const NameObjExecuteInfo* pInfo = getConnectToSceneInfo(pObj);
     return pInfo != nullptr && pInfo->mDrawState == NameObjConnect_Connected;
@@ -368,6 +383,10 @@ namespace MR {
         ::getNameObjExecuteHolder()->disconnectToDraw(pObj);
     }
 
+    void connectNow(NameObj* pObj) {
+        ::getNameObjExecuteHolder()->connectNow(pObj);
+    }
+
     bool isConnectToDrawTemporarily(const NameObj* pObj) {
         return ::getNameObjExecuteHolder()->isConnectToDraw(pObj);
     }
@@ -428,6 +447,6 @@ namespace MR {
 
 NameObjExecuteHolder::NameObjExecuteHolder(int size)
     : NameObj("connectToScene情報保持"), mExecuteArray(new NameObjExecuteInfo[size]), mExecuteArrayMaxSize(size), mExecuteArraySize(),
-      mConnectMovement(), mDisconnectMovement(), mConnectDraw(), mDisconnectDraw() {
+      mConnectMovement(), mDisconnectMovement(), mConnectDraw(), mDisconnectDraw(), mConnectingDone(false) {
     lumacore::setClass(this, lumacore::kClassId< NameObjExecuteHolder >);
 }

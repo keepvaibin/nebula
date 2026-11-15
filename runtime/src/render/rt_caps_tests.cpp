@@ -75,10 +75,18 @@ bool the_record_reads_back() {
     return expect(ok, "every record reads back as it was set");
 }
 
+// A build with ray tracing (NEBULA_RAY_TRACING) holds every tracer shader; one without holds none.
 bool the_build_holds_the_shaders() {
     const galaxy::render::RtShaderBytes probe = galaxy::render::rt_shader(galaxy::render::RtShader::Probe);
-    bool ok = expect(galaxy::render::rt_shaders_present(), "a Direct3D 12 build holds the tracer's shaders");
-    ok &= expect(probe.size > 4u && std::memcmp(probe.data, "DXBC", 4u) == 0, "the measuring shader is a DXIL container");
+    bool ok = true;
+    if (galaxy::render::rt_shaders_present()) {
+        ok &= expect(probe.size > 4u && std::memcmp(probe.data, "DXBC", 4u) == 0, "the measuring shader is a DXIL container");
+    } else {
+        ok &= expect(probe.size == 0u, "a build without ray tracing holds no tracer shader");
+        galaxy::render::RtCaps caps;
+        caps.ray_queries = caps.acceleration_structures = caps.bindless = caps.enabled = true;
+        ok &= expect(!galaxy::render::rt_capable(caps), "a build without ray tracing never traces");
+    }
     ok &= expect(galaxy::render::rt_shader(galaxy::render::RtShader::Count).size == 0u, "a number past the table is empty");
     return ok;
 }

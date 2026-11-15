@@ -1,0 +1,10 @@
+{
+  "format": "1.0",
+  "id": "leaderboard-server",
+  "version": "1.0.0",
+  "name": "Leaderboard server stand-in",
+  "summary": "Answers the Online Leaderboard's requests on this computer and writes each one as a fact.",
+  "authors": ["you"],
+  "game": { "id": "RMG" },
+  "permissions": [ { "name": "net.local", "why": "Listens on this computer for the Online Leaderboard mod." } ]
+}

@@ -18,49 +18,26 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f1, "updateRotate.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f2, "updateRotate.f2", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f3, "updateRotate.f3", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f4, "updateRotate.f4", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f5, "updateRotate.f5", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f6, "updateRotate.f6", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRotate_f7, "updateRotate.f7", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 44.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHopStart_f1, "exeHopStart.f1", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeHopEnd_f1, "exeHopEnd.f1", 145.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_f1, "exeOpen.f1", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_f2, "exeOpen.f2", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOpen_f3, "exeOpen.f3", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 145.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 145.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 35.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 4.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeHopStart_1, "exeHopStart.1", 10);
-
 namespace {
-    NEBULA_TUNABLE(f32, sRotateDegree, 3.0f);
+    const f32 sRotateDegree = 3.0f;
     static const s32 sHopStep = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(s32, sOpenInt, 74);
-    NEBULA_TUNABLE(s32, sAttack, 360);
-    NEBULA_TUNABLE(s32, sBabyNum, 4);
-    NEBULA_TUNABLE(f32, sAppearHeight, 500.0f);
-    NEBULA_TUNABLE(f32, sAppearDistance, 2000.0f);
-    NEBULA_TUNABLE(f32, sDisappearDistance, 2200.0f);
-    NEBULA_TUNABLE(f32, sHeadOffset, -100.0f);
-    NEBULA_TUNABLE(f32, sBabyVelocity, 16.0f);
-    NEBULA_TUNABLE(f32, sBabyOffset, 64.0f);
-    NEBULA_TUNABLE(f32, sShadowRadius, 140.0f);
-    NEBULA_TUNABLE(f32, sHideShadowRadius, 110.0f);
-    NEBULA_TUNABLE(s32, sHitInt, 60);
-    NEBULA_TUNABLE(s32, sCoinDefault, 4);
-    NEBULA_TUNABLE(f32, sCameraLimitLength, 6250000.0f);
-    NEBULA_TUNABLE(s32, sOpen, 70);
+    const s32 sOpenInt = 74;
+    const s32 sAttack = 360;
+    const s32 sBabyNum = 4;
+    const f32 sAppearHeight = 500.0f;
+    const f32 sAppearDistance = 2000.0f;
+    const f32 sDisappearDistance = 2200.0f;
+    const f32 sHeadOffset = -100.0f;
+    const f32 sBabyVelocity = 16.0f;
+    const f32 sBabyOffset = 64.0f;
+    const f32 sShadowRadius = 140.0f;
+    const f32 sHideShadowRadius = 110.0f;
+    const s32 sHitInt = 60;
+    const s32 sCoinDefault = 4;
+    const f32 sCameraLimitLength = 6250000.0f;
+    const s32 sOpen = 70;
 };  // namespace
 
 namespace NrvJumpGuarder {
@@ -157,17 +134,17 @@ void JumpEmitter::updateRotate() {
     f32 newAngle;
     if (playerPos.z == 0.0f) {
         if (playerPos.x >= 0.0f) {
-            newAngle = cNum_updateRotate_f1;
+            newAngle = 90.0f;
         } else {
-            newAngle = -cNum_updateRotate_f2;
+            newAngle = -90.0f;
         }
     } else if (playerPos.z >= 0.0f) {
         newAngle = MR::toDegree(MR::atan2(playerPos.x, playerPos.z));
     } else {
-        newAngle = cNum_updateRotate_f3 - MR::toDegree(MR::atan2(playerPos.x, -playerPos.z));
+        newAngle = 180.0f - MR::toDegree(MR::atan2(playerPos.x, -playerPos.z));
     }
 
-    f32 angleDiff = MR::repeat(newAngle - head->mRotation.y, -cNum_updateRotate_f4, cNum_updateRotate_f5);
+    f32 angleDiff = MR::repeat(newAngle - head->mRotation.y, -180.0f, 360.0f);
 
     if (MR::abs(angleDiff) < ::sRotateDegree) {
         head->mRotation.y = newAngle;
@@ -175,7 +152,7 @@ void JumpEmitter::updateRotate() {
         head->mRotation.y += ::sRotateDegree * MR::sign(angleDiff);
     }
 
-    head->mRotation.y = MR::repeat(head->mRotation.y, -cNum_updateRotate_f6, cNum_updateRotate_f7);
+    head->mRotation.y = MR::repeat(head->mRotation.y, -180.0f, 360.0f);
 }
 
 bool JumpGuarder::receiveMsgPlayerAttack(u32 msg, HitSensor* /*pSender*/, HitSensor* pReceiver) {
@@ -229,7 +206,7 @@ void JumpGuarder::control() {
     Mtx34f mtx;
     mtx.identity();
 
-    MR::makeMtxTRS(mtx.mMtx, Vec3f(0.0f, cNum_control_f1, 0.0f), head->mRotation, head->mScale);
+    MR::makeMtxTRS(mtx.mMtx, Vec3f(0.0f, 44.0f, 0.0f), head->mRotation, head->mScale);
 
     mHeadMtx.set(mBodyJointMtx);
 
@@ -305,12 +282,12 @@ void JumpGuarder::exeHopStart() {
         MR::startBck(this, "Damage");
         MR::startSound(this, "SE_EM_JGUARDER_HIT");
         HitSensor* body = getSensor("Body");
-        body->mRadius = cNum_exeHopStart_f1;
+        body->mRadius = 120.0f;
     }
 
     MR::startLevelSound(this, "SE_EM_LV_JGUARDER_SHAKE");
 
-    if (MR::isStep(this, cStep_exeHopStart_1)) {
+    if (MR::isStep(this, 10)) {
         for (u32 i = 0; i < mNumActiveBabies; i++) {
             mActiveBabies[i]->makeActorDead();
         }
@@ -358,7 +335,7 @@ void JumpGuarder::exeHopEnd() {
 
     if (MR::isBckStopped(this) && MR::isBckStopped(mHeadModel)) {
         HitSensor* body = getSensor("Body");
-        body->mRadius = cNum_exeHopEnd_f1;
+        body->mRadius = 145.0f;
         getSensor("Jump")->invalidate();
         setNerve(GET_NERVE(JumpGuarder, JumpGuarderNrvWait));
     }
@@ -402,7 +379,7 @@ void JumpGuarder::exeOpen() {
 
         for (u32 i = 0; i < mNumActiveBabies; i++) {
             JumpGuarderBaby* baby = mActiveBabies[i];
-            MR::rotateVecDegree(&zDir, yDir, cNum_exeOpen_f1 / mNumActiveBabies);
+            MR::rotateVecDegree(&zDir, yDir, 360.0f / mNumActiveBabies);
 
             baby->mPosition.set(mPosition + zDir * ::sBabyOffset);
             baby->mVelocity.set(Vec3f(0.0f, 0.0f, 0.0f));
@@ -424,7 +401,7 @@ void JumpGuarder::exeOpen() {
 
         for (u32 i = 0; i < mNumActiveBabies; i++) {
             JumpGuarderBaby* baby = mActiveBabies[i];
-            MR::rotateVecDegree(&zDir, yDir, cNum_exeOpen_f2 / mNumActiveBabies);
+            MR::rotateVecDegree(&zDir, yDir, 360.0f / mNumActiveBabies);
 
             baby->mPosition.set(mPosition + zDir * ::sBabyOffset);
             baby->mVelocity.set(Vec3f(0.0f, 0.0f, 0.0f));
@@ -439,7 +416,7 @@ void JumpGuarder::exeOpen() {
 
         for (u32 i = 0; i < mNumActiveBabies; i++) {
             JumpGuarderBaby* baby = mActiveBabies[i];
-            MR::rotateVecDegree(&zDir, yDir, cNum_exeOpen_f3 / mNumActiveBabies);
+            MR::rotateVecDegree(&zDir, yDir, 360.0f / mNumActiveBabies);
 
             baby->mVelocity.set(zDir * mBabyVelocity);
         }
@@ -495,10 +472,10 @@ void JumpGuarder::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     initHitSensor(2);
 
-    MR::addHitSensorMtx(this, "Jump", ATYPE_PLAYER_AUTO_JUMP, 8, cNum_init_f1, MR::getJointMtx(mHeadModel, "SpringJoint3"),
+    MR::addHitSensorMtx(this, "Jump", ATYPE_PLAYER_AUTO_JUMP, 8, 145.0f, MR::getJointMtx(mHeadModel, "SpringJoint3"),
                         Vec3f(0.0f, ::sHeadOffset, 0.0f));
 
-    MR::addHitSensorMtxEnemy(this, "Body", 8, cNum_init_f2, MR::getJointMtx(this, "Body"), Vec3f(0.0f, cNum_init_f3, 0.0f));
+    MR::addHitSensorMtxEnemy(this, "Body", 8, 145.0f, MR::getJointMtx(this, "Body"), Vec3f(0.0f, 35.0f, 0.0f));
     getSensor("Body")->setType(29);
     getSensor("Body")->validate();
     getSensor("Jump")->invalidate();
@@ -526,10 +503,10 @@ void JumpGuarder::init(const TableIter& rIter) {
         mBabyVelocity = ::sBabyVelocity;
         break;
     case 1:
-        mBabyVelocity = ::sBabyVelocity / cNum_init_f4;
+        mBabyVelocity = ::sBabyVelocity / 2.0f;
         break;
     case 2:
-        mBabyVelocity = ::sBabyVelocity / cNum_init_f5;
+        mBabyVelocity = ::sBabyVelocity / 4.0f;
         break;
     }
 

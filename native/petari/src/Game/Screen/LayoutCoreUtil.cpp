@@ -8,16 +8,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_convertScreenPosToLayoutPos_f1, "convertScreenPosToLayoutPos.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_convertScreenPosToLayoutPos_f2, "convertScreenPosToLayoutPos.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_convertScreenPosToLayoutPos_f3, "convertScreenPosToLayoutPos.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_convertScreenPosToLayoutPos_f4, "convertScreenPosToLayoutPos.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_convertLayoutPosToScreenPos_f1, "convertLayoutPosToScreenPos.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_convertLayoutPosToScreenPos_f2, "convertLayoutPosToScreenPos.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_convertLayoutPosToScreenPos_f3, "convertLayoutPosToScreenPos.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_convertLayoutPosToScreenPos_f4, "convertLayoutPosToScreenPos.f4", 0.5f);
 
 static const char16_t sDefaultMsg[] = u"XXXXXXXX";
 
@@ -44,7 +34,7 @@ namespace LayoutCoreUtil {
         return pTextBox->SetString(buffer, 0, length);
     }
 
-    void initTextBoxPane(Ui::TextBox* pTextBox, const char* pMessageId, u32 allocSize) {
+    void initTextBoxPane(Ui::TextBox* pTextBox, const char* pMessageId, u32 allocSize, bool keepLayoutText) {
         CustomTagProcessor* processor = new CustomTagProcessor(pTextBox);
 
         if (MR::isEqualStringPrefix(pTextBox->mName, "Sha")) {
@@ -75,6 +65,18 @@ namespace LayoutCoreUtil {
         if (message != nullptr) {
             reallocateTextBoxMessage(pTextBox, MR::getStringLengthWithMessageTag(message));
             setTextBoxMessage(pTextBox, message);
+        } else if (keepLayoutText) {
+            // A mod's own layout: the box as its layout made it (docs/modding/how-tos/adding-screens-and-fonts.md): its buffer, the
+            // pane's `length`, where ui.set_text cuts, and its words, set as the game sets text (copied first: setting
+            // writes the buffer it reads).
+            const u32 length = pTextBox->mTextLen;
+            if (pTextBox->mTextBuf != nullptr && length != 0) {
+                MR::Text16 layoutText;
+                char16_t* const copy = layoutText.room(length + 1);
+                memcpy(copy, pTextBox->mTextBuf, length * sizeof(char16_t));
+                copy[length] = u'\0';
+                setTextBoxMessage(pTextBox, copy);
+            }
         } else {
             reallocateTextBoxMessage(pTextBox, allocSize - 1);
             const char16_t* message = ::sDefaultMsg;
@@ -92,25 +94,25 @@ namespace MR {
         // The layout canvas setupDrawForLayout projects (pointer hit tests, panes following screen positions).
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             const NebulaDisplay& display = MR::getDisplay();
-            pLayoutPos->x = rScreenPos.x * display.layout_width / MR::getScreenWidth() - display.layout_width * cNum_convertScreenPosToLayoutPos_f1;
-            pLayoutPos->y = -(rScreenPos.y * MR::getScreenHeight() / MR::getScreenHeight() - (MR::getScreenHeight() * cNum_convertScreenPosToLayoutPos_f2)) *
+            pLayoutPos->x = rScreenPos.x * display.layout_width / MR::getScreenWidth() - display.layout_width * 0.5f;
+            pLayoutPos->y = -(rScreenPos.y * MR::getScreenHeight() / MR::getScreenHeight() - (MR::getScreenHeight() * 0.5f)) *
                             display.vertical_fit;
             return;
         }
-        pLayoutPos->x = rScreenPos.x * NebulaFrameClock::cLayoutWidth / MR::getScreenWidth() - NebulaFrameClock::cLayoutWidth * cNum_convertScreenPosToLayoutPos_f3;
-        pLayoutPos->y = -(rScreenPos.y * MR::getScreenHeight() / MR::getScreenHeight() - (MR::getScreenHeight() * cNum_convertScreenPosToLayoutPos_f4));
+        pLayoutPos->x = rScreenPos.x * NebulaFrameClock::cLayoutWidth / MR::getScreenWidth() - NebulaFrameClock::cLayoutWidth * 0.5f;
+        pLayoutPos->y = -(rScreenPos.y * MR::getScreenHeight() / MR::getScreenHeight() - (MR::getScreenHeight() * 0.5f));
     }
 
     void convertLayoutPosToScreenPos(Vec2f* pScreenPos, const Vec2f& rLayoutPos) {
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             const NebulaDisplay& display = MR::getDisplay();
-            pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / display.layout_width + MR::getScreenWidth() * cNum_convertLayoutPosToScreenPos_f1;
-            pScreenPos->y = MR::getScreenHeight() * cNum_convertLayoutPosToScreenPos_f2 +
+            pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / display.layout_width + MR::getScreenWidth() * 0.5f;
+            pScreenPos->y = MR::getScreenHeight() * 0.5f +
                             -(rLayoutPos.y / display.vertical_fit) * MR::getScreenHeight() / MR::getScreenHeight();
             return;
         }
-        pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth + MR::getScreenWidth() * cNum_convertLayoutPosToScreenPos_f3;
-        pScreenPos->y = MR::getScreenHeight() * cNum_convertLayoutPosToScreenPos_f4 + -rLayoutPos.y * MR::getScreenHeight() / MR::getScreenHeight();
+        pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth + MR::getScreenWidth() * 0.5f;
+        pScreenPos->y = MR::getScreenHeight() * 0.5f + -rLayoutPos.y * MR::getScreenHeight() / MR::getScreenHeight();
     }
 
     void convertPaneLocalPosToScreenPos(Vec2f* pScreenPos, const Ui::Pane* pPane, const Vec2f& rLocalPos) {

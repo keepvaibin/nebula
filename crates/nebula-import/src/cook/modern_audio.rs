@@ -287,7 +287,8 @@ fn read_nintendo_stream(bytes: &[u8]) -> Result<Audio> {
         bail!("a stream with no sound");
     }
     let frames = info.frames as usize;
-    let mut channels: Vec<Vec<i16>> = vec![Vec::with_capacity(frames); info.channels];
+    // A header may claim any count: no channel holds more samples than two a byte of the file (DSP ADPCM's 14 from 8).
+    let mut channels: Vec<Vec<i16>> = vec![Vec::with_capacity(frames.min(bytes.len() * 2)); info.channels];
     let mut history = vec![(0i32, 0i32); info.channels];
     for block in 0..info.blocks {
         let last = block + 1 == info.blocks;
@@ -313,6 +314,15 @@ fn read_nintendo_stream(bytes: &[u8]) -> Result<Audio> {
     }
     let loop_points = (info.looped && (info.loop_start as usize) < frames).then_some((info.loop_start, frames as u32));
     Ok(Audio { channels: info.channels, rate: info.rate, samples, loop_points })
+}
+
+/// Channels, rate, interleaved samples, the loop in frames.
+pub type Decoded = (usize, u32, Vec<i16>, Option<(u32, u32)>);
+
+/// A Nintendo stream (BRSTM, BCSTM, BFSTM) decoded: channels, rate, interleaved samples, its loop in frames.
+pub fn read_nintendo(bytes: &[u8]) -> Result<Decoded> {
+    let a = read_nintendo_stream(bytes)?;
+    Ok((a.channels, a.rate, a.samples, a.loop_points))
 }
 
 /// Whether a file name is one of the sound files `to_stream` reads.

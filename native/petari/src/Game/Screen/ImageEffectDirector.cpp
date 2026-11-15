@@ -12,14 +12,11 @@
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Screen/ImageEffectState.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_setBloomSimpleParams_f1, "setBloomSimpleParams.f1", 255.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sIntensityCountMax, 60);
-    NEBULA_TUNABLE(f32, sDOFIntensity, 1.0f);
+    const s32 sIntensityCountMax = 60;
+    const f32 sDOFIntensity = 1.0f;
 };  // namespace
 
 ImageEffectDirector::ImageEffectDirector(const char* pName)
@@ -181,7 +178,7 @@ void ImageEffectDirector::setBloomSimpleParams(ImageEffectArea* pArea) {
     }
 
     mStateBloomSimple->setThreshold(pSimpleBloomArea->mThreshold);
-    mStateBloomSimple->setIntensity(pSimpleBloomArea->mIntensity / cNum_setBloomSimpleParams_f1);
+    mStateBloomSimple->setIntensity(pSimpleBloomArea->mIntensity / 255.0f);
 }
 
 void ImageEffectDirector::setScreenBlurParams(ImageEffectArea* pArea) {

@@ -5,34 +5,26 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_setup_f1, "setup.f1", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePos_f1, "updatePos.f1", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePos_f2, "updatePos.f2", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePointing_f1, "exePointing.f1", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePointing_f2, "exePointing.f2", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeNotSelected_f1, "exeNotSelected.f1", 150.0f);
 
 namespace {
     static const s32 cAppearWaitFrame = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(s32, cAppearDelayFrame, 15);
-    NEBULA_TUNABLE(s32, cHideDelayFrame, 10);
-    NEBULA_TUNABLE(f32, cNotPointingRotateSpeedZ, 1.5f);
-    NEBULA_TUNABLE(f32, cPointingRotateSpeedZ, 3.0f);
-    NEBULA_TUNABLE(f32, cPointingScale, 1.5f);
-    NEBULA_TUNABLE(f32, cNotPointingScale, 0.9f);
+    const s32 cAppearDelayFrame = 15;
+    const s32 cHideDelayFrame = 10;
+    const f32 cNotPointingRotateSpeedZ = 1.5f;
+    const f32 cPointingRotateSpeedZ = 3.0f;
+    const f32 cPointingScale = 1.5f;
+    const f32 cNotPointingScale = 0.9f;
     static const s32 cMoveInterval = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(f32, cMoveDistance, 15.0f);
-    NEBULA_TUNABLE(s32, cAppearFrame, 60);
-    NEBULA_TUNABLE(s32, cStartPointingFrame, 20);
-    NEBULA_TUNABLE(s32, cEndPointingFrame, 10);
-    NEBULA_TUNABLE(s32, cSelectedWaitFrame, 40);
-    NEBULA_TUNABLE(s32, cSelectedMoveFrame, 60);
-    NEBULA_TUNABLE(f32, cSelectedRotateSpeedZ, 20.0f);
-    NEBULA_TUNABLE(f32, cSelectedRotateMoveRate, 6.0f);
-    NEBULA_TUNABLE(s32, cSelectedRotateAccelFrame, 180);
+    const f32 cMoveDistance = 15.0f;
+    const s32 cAppearFrame = 60;
+    const s32 cStartPointingFrame = 20;
+    const s32 cEndPointingFrame = 10;
+    const s32 cSelectedWaitFrame = 40;
+    const s32 cSelectedMoveFrame = 60;
+    const f32 cSelectedRotateSpeedZ = 20.0f;
+    const f32 cSelectedRotateMoveRate = 6.0f;
+    const s32 cSelectedRotateAccelFrame = 180;
 };  // namespace
 
 namespace NrvScenarioSelectStar {
@@ -107,7 +99,7 @@ void ScenarioSelectStar::setup(s32 scenarioNo, int starCollectedStatus, const Ve
     mBasePos.set(rPos);
     mStarId = starId;
 
-    mRotation.set< f32 >(0.0f, 0.0f, cNum_setup_f1 * mStarId);
+    mRotation.set< f32 >(0.0f, 0.0f, 150.0f * mStarId);
     mAppearFrame = mStarId * ::cAppearDelayFrame + ::cAppearWaitFrame;
     mRotateTime = mStarId * 15 + (mStarId % 2 ? 0 : 90);
 }
@@ -134,7 +126,7 @@ bool ScenarioSelectStar::tryEndPointing() {
 }
 
 void ScenarioSelectStar::updatePos() {
-    Vec3f offset(0.0f, MR::sinDegree(MR::repeat((mRotateTime * cNum_updatePos_f1) / ::cMoveInterval, 0.0f, cNum_updatePos_f2)) * ::cMoveDistance, 0.0f);
+    Vec3f offset(0.0f, MR::sinDegree(MR::repeat((mRotateTime * 360.0f) / ::cMoveInterval, 0.0f, 360.0f)) * ::cMoveDistance, 0.0f);
     mTranslation.add(mBasePos, offset);
 }
 
@@ -175,7 +167,7 @@ void ScenarioSelectStar::exePointing() {
 
     if (MultiScene::isLessStep(this, ::cStartPointingFrame)) {
         f32 t = MultiScene::calcNerveRate(this, ::cStartPointingFrame);
-        f32 reaction = MR::getScaleWithReactionValueZeroToOne(t, cNum_exePointing_f1, -cNum_exePointing_f2);
+        f32 reaction = MR::getScaleWithReactionValueZeroToOne(t, 1.5f, -0.25f);
         f32 linerVal = MR::getLinerValue(reaction, ::cNotPointingScale, ::cPointingScale, 1.0f);
         mScale.setAll< f32 >(linerVal);
     } else {
@@ -242,7 +234,7 @@ void ScenarioSelectStar::exeNotSelected() {
 
     if (MultiScene::isStep(this, hideDelay)) {
         mRotateSpeed = 0.0f;
-        mRotation.z = cNum_exeNotSelected_f1 * mStarId;
+        mRotation.z = 150.0f * mStarId;
         MultiScene::startBck(this, "ScenarioHide");
         MultiScene::deleteEffectAll(this);
     }

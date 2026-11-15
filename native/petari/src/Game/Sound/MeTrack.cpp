@@ -3,19 +3,6 @@
 #include "Game/Sound/RhythmSystem.hpp"
 #include "Game/Sound/SoundEngine.hpp"
 #include <new>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateChannelParams_f1, "updateChannelParams.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateChannelParams_f2, "updateChannelParams.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateChannelParams_f3, "updateChannelParams.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateChannelParams_f4, "updateChannelParams.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateChannelParams_f5, "updateChannelParams.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_parse_f1, "parse.f1", 127.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_parse_f2, "parse.f2", 127.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_parse_f3, "parse.f3", 32767.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_parse_f4, "parse.f4", 32767.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_parse_f5, "parse.f5", 32767.0f);
 
 namespace {
     const SeqPoint cAdsTable[4] = {{0, 0, 0x7fff}, {0, 0, 0x7fff}, {0, 0, 0}, {0xe, 0, 0}};
@@ -24,7 +11,7 @@ namespace {
 
     enum ModifyType : s32 { ModifyType_Chord, ModifyType_Scale, ModifyType_Steps, ModifyType_Octave };
     enum ModifyDir : s32 { ModifyDir_Up, ModifyDir_Down, ModifyDir_None, ModifyDir_Rand };
-    NEBULA_TUNABLE(u8, cNullNote, 0x7f);
+    const u8 cNullNote = 0x7f;
 
     u32 align16(u32 bytes) {
         return (bytes + 15) & ~15u;
@@ -126,7 +113,7 @@ void MeTrack::init() {
     mTrackInfo = TrackInfo();
     mVolume = 1.0f;
     mPitchBend = 0.0f;
-    mPan = cNum_init_f1;
+    mPan = 0.5f;
     mFxMix = 0.0f;
     mDolby = 0.0f;
     mBaseNote = 60;
@@ -399,14 +386,14 @@ void MeTrack::updateChannelParams() {
     f32 vol = mVolume;
     vol *= vol;
     f32 pitch = 1.0f;
-    const f32 bend = mPitchBend * mTrackInfo.mBendSense * (1.0f / cNum_updateChannelParams_f1);
-    f32 pan = mPan - cNum_updateChannelParams_f2;
+    const f32 bend = mPitchBend * mTrackInfo.mBendSense * (1.0f / 3.0f);
+    f32 pan = mPan - 0.5f;
     f32 dolby = mDolby;
     f32 fxmix = mFxMix;
     const SoundParams& rSound = mMgr.mSound;
     vol *= rSound.mVolume;
     pitch *= rSound.mPitch;
-    pan += rSound.mPan - cNum_updateChannelParams_f3;
+    pan += rSound.mPan - 0.5f;
     fxmix += rSound.mFxMix;
     dolby += rSound.mDolby;
     NoteParams& rParams = mMgr.mParams;
@@ -421,12 +408,12 @@ void MeTrack::updateChannelParams() {
         const NoteParams& rParent = mParent->mMgr.mParams;
         rParams.mVolume = rParent.mVolume * vol;
         rParams.mPitch = rParent.mPitch * pitch;
-        rParams.mPan = (rParent.mPan - cNum_updateChannelParams_f4) + pan;
+        rParams.mPan = (rParent.mPan - 0.5f) + pan;
         rParams.mFxMix = rParent.mFxMix + fxmix;
         rParams.mDolby = rParent.mDolby + dolby;
         rParams.mBend = rParent.mBend + bend;
     }
-    rParams.mPan += cNum_updateChannelParams_f5;
+    rParams.mPan += 0.5f;
 }
 
 void MeTrack::gframeProc() {
@@ -883,22 +870,22 @@ s32 MeTrack::parse() {
         mNoStartRange = true;
         return 0;
     case 0x58:
-        mPan = static_cast< u8 >(read8()) / cNum_parse_f1;
+        mPan = static_cast< u8 >(read8()) / 127.0f;
         return 0;
     case 0x59:
-        mDolby = static_cast< u8 >(read8()) / cNum_parse_f2;
+        mDolby = static_cast< u8 >(read8()) / 127.0f;
         return 0;
     case 0x5A:
-        mVolume = static_cast< u16 >(read16()) / cNum_parse_f3;
+        mVolume = static_cast< u16 >(read16()) / 32767.0f;
         return 0;
     case 0x5B:
-        mPitchBend = static_cast< s16 >(read16()) / cNum_parse_f4;
+        mPitchBend = static_cast< s16 >(read16()) / 32767.0f;
         return 0;
     case 0x5C:
         mTrackInfo.mBendSense = static_cast< u8 >(read8());
         return 0;
     case 0x5D:
-        mFxMix = static_cast< u16 >(read16()) / cNum_parse_f5;
+        mFxMix = static_cast< u16 >(read16()) / 32767.0f;
         return 0;
     case 0x60:  // the register the note goes to
         mTrackInfo.mNoteReg = read8();

@@ -1,13 +1,8 @@
 #include "Game/Camera/CameraShakePatternImpl.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f64, cNum_update_f3, "update.f3", 0.01);
 
 namespace {
-    NEBULA_TUNABLE(s32, sSinglyMaxFrame, 25);
+    const s32 sSinglyMaxFrame = 25;
 };  // namespace
 
 CameraShakePatternSingly::CameraShakePatternSingly(f32 intensity) : CameraShakePattern(), mIntensity(intensity), mDirection(0.0f, 1.0f) {
@@ -32,8 +27,8 @@ void CameraShakePatternSingly::update() {
         framesLeft = 0;
     }
 
-    f32 amount = mIntensity * MR::sin(MR::pi() * cNum_update_f1 * framesLeft / ::sSinglyMaxFrame);
-    amount *= MR::sin(MR::pi() * cNum_update_f2 * framesLeft / ::sSinglyMaxFrame);
+    f32 amount = mIntensity * MR::sin(MR::pi() * 4.0f * framesLeft / ::sSinglyMaxFrame);
+    amount *= MR::sin(MR::pi() * 0.5f * framesLeft / ::sSinglyMaxFrame);
 
     mOffset.set(mDirection * amount);
 }
@@ -59,7 +54,7 @@ void CameraShakePatternVerticalSin::start() {
 }
 
 void CameraShakePatternVerticalSin::update() {
-    if (mSpeed < cNum_update_f3) {
+    if (mSpeed < 0.01) {
         mOffset.zero();
         return;
     }

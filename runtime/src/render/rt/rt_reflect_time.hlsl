@@ -79,7 +79,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         g_moved[id.xy] = 0.0f;
         return;
     }
-    if ((g_more.z & 2048u) != 0u) {  // raw signals for an outside denoiser (22.20): this frame's as traced
+    if ((g_more.z & 2048u) != 0u) {  // raw signals for an outside denoiser: this frame's as traced
         g_out[id.xy] = raw;
         g_moved[id.xy] = 0.0f;
         return;

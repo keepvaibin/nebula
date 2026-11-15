@@ -12,12 +12,11 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE_LIST(f32, sSensorSizeTable, , {100.0f, 300.0f, 350.0f, 420.0f, 480.0f, 540.0f, 600.0f, 0.0f});
-    NEBULA_TUNABLE(s32, sGrowTimeLag, 40);
+    const f32 sSensorSizeTable[] = {100.0f, 300.0f, 350.0f, 420.0f, 480.0f, 540.0f, 600.0f, 0.0f};
+    const s32 sGrowTimeLag = 40;
 };  // namespace
 
 namespace NrvAstroCore {

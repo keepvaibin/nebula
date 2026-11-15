@@ -38,7 +38,8 @@ final class WiimoteUsb {
     private static final int VENDOR = 0x057e;
     private static final int PRODUCT = 0x0306;     // RVL-CNT-01, as the bar reports every slot
     private static final int PRODUCT_TR = 0x0330;  // RVL-CNT-01-TR
-    private static final String ACTION_PERMISSION = "dev.nebula.galaxy.WIIMOTE_USB_PERMISSION";
+    // The permission answer's action, under this install's own id (a test build beside the game has another).
+    private static final String PERMISSION_SUFFIX = ".WIIMOTE_USB_PERMISSION";
     private static final int READ_WAIT_MS = 250;
     private static final int WRITE_TIMEOUT_MS = 1000;
 
@@ -63,7 +64,7 @@ final class WiimoteUsb {
         IntentFilter filter = new IntentFilter();
         filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
         filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
-        filter.addAction(ACTION_PERMISSION);
+        filter.addAction(context.getPackageName() + PERMISSION_SUFFIX);
         BroadcastReceiver receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context c, Intent intent) {
@@ -141,7 +142,7 @@ final class WiimoteUsb {
             }
             if (!usb.hasPermission(device)) {
                 if (asked.add(device.getDeviceId())) {
-                    Intent intent = new Intent(ACTION_PERMISSION).setPackage(context.getPackageName());
+                    Intent intent = new Intent(context.getPackageName() + PERMISSION_SUFFIX).setPackage(context.getPackageName());
                     usb.requestPermission(device, PendingIntent.getBroadcast(context, device.getDeviceId(), intent,
                             PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
                 }

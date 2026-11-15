@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// HLSL to SPIR-V through glslang's HLSL front end (docs/VULKAN.md). The generated shaders and the renderer's own
+// HLSL to SPIR-V through glslang's HLSL front end. The generated shaders and the renderer's own
 // shaders keep their D3D12 register declarations; annotate() adds the Vulkan binding each register maps to, so the
 // D3D12 sources (and the hashes their caches use) stay as they are.
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <initializer_list>
 #include <span>
 #include <string>
@@ -33,6 +34,10 @@ inline constexpr std::uint32_t kBindlessTextureSlotsMin = 4096u;
 // The texture array's first size: it doubles as the views in use reach it.
 inline constexpr std::uint32_t kBindlessTextureSlotsFirst = 64u;
 inline constexpr std::uint32_t kBindlessTextureSlotsCap = 1u << 20u;
+// The layout's upper bound on a driver that sizes a variable-length set by that bound (Qualcomm's Adreno driver 512.676
+// answers VK_ERROR_OUT_OF_POOL_MEMORY for a set shorter than its layout from a pool sized for the set): every set is then
+// allocated whole, so the bound is what the views of a game with texture packs and mods need, not the device's limit.
+inline constexpr std::uint32_t kBindlessTextureSlotsWhole = 1u << 16u;
 // The sampler array: one slot per distinct sampler (SamplerSlotCache, which holds kSamplerHeapSlots = this), the default
 // sampler in slot 0. Its length is the cache's own number, so the set is fixed-size.
 inline constexpr std::uint32_t kBindlessSamplerSlots = 2048u;
@@ -63,7 +68,7 @@ struct CompileOptions {
 
 // Changes with anything that changes compile_hlsl's output for the same source: the shaders this device built for
 // mods are built again when it does (mod_shader_compiler_revision, the mods' cook signature).
-inline constexpr std::uint32_t kCompilerRevision = 9;
+inline constexpr std::uint32_t kCompilerRevision = 11;
 
 // SPIR-V for `entry` of `hlsl`; empty with `error` set when it does not compile. `defines` are NAME=VALUE. Stage
 // inputs and outputs sit at their semantics' locations, so stages and the vertex layout match as D3D12's do by name:
@@ -72,5 +77,13 @@ inline constexpr std::uint32_t kCompilerRevision = 9;
 [[nodiscard]] std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage, const char* entry,
                                                       std::initializer_list<const char*> defines, std::string& error,
                                                       CompileOptions options = {});
+
+// One stage of a mod's program (mod_shaders.h compile_mod_shader_stage) as SPIR-V: the cooker's text with its
+// `#include "x"` lines replaced by `includes`/x (each header once), `defines` as NAME 1, the entry `program_ps` or
+// `program_vs` named main, the draw bindings; the bound-table form when `bound_tables`. Vulkan uses it as it is;
+// Metal turns it to MSL (mod_shader_compile_mtl.cpp). Empty with `problem` set when it cannot be made.
+[[nodiscard]] std::vector<std::uint32_t> compile_mod_stage(const std::string& source, const std::filesystem::path& includes,
+                                                           bool pixel, const std::vector<const char*>& defines,
+                                                           std::string& problem, bool bound_tables);
 
 }  // namespace galaxy::render::vk

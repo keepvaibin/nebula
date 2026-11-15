@@ -22,16 +22,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/ValueControl.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updatePoseByJumpPath_f1, "updatePoseByJumpPath.f1", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f1, "kill.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_kill_f2, "kill.f2", 40.0f);
 
 namespace {
     NEW_NERVE(PukupukuStateLandingLandingMoveLand, PukupukuStateLanding, LandingMoveLand);
@@ -65,27 +56,27 @@ namespace {
         return nullptr;
     }
 
-    NEBULA_TUNABLE(s32, sJumpFrameMax, 30);
-    NEBULA_TUNABLE(f32, sHopHeight, 300.0f);
-    NEBULA_TUNABLE(f32, sJumpHeight, 500.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeed, 15.0f);
-    NEBULA_TUNABLE(f32, sJumpPoseRate, 0.15f);
-    NEBULA_TUNABLE(f32, sRailPoseRate, 0.08f);
-    NEBULA_TUNABLE(f32, sEndJumpOnGroundRate, 0.5f);
-    NEBULA_TUNABLE(f32, sSwimSpeed, 5.0f);
-    NEBULA_TUNABLE(f32, sBinderRadius, 70.0f);
-    NEBULA_TUNABLE(f32, sBodyRadius, 60.0f);
-    NEBULA_TUNABLE(f32, sBodyRadiusBound, 100.0f);
-    NEBULA_TUNABLE(f32, sGroundProbeLength, 100.0f);
-    NEBULA_TUNABLE(f32, sWaterColumnScale, 1.5f);
-    NEBULA_TUNABLE(f32, sTrampleFallSpeed, 10.0f);
-    NEBULA_TUNABLE(f32, sTrampleFriction, 0.89f);
+    const s32 sJumpFrameMax = 30;
+    const f32 sHopHeight = 300.0f;
+    const f32 sJumpHeight = 500.0f;
+    const f32 sJumpSpeed = 15.0f;
+    const f32 sJumpPoseRate = 0.15f;
+    const f32 sRailPoseRate = 0.08f;
+    const f32 sEndJumpOnGroundRate = 0.5f;
+    const f32 sSwimSpeed = 5.0f;
+    const f32 sBinderRadius = 70.0f;
+    const f32 sBodyRadius = 60.0f;
+    const f32 sBodyRadiusBound = 100.0f;
+    const f32 sGroundProbeLength = 100.0f;
+    const f32 sWaterColumnScale = 1.5f;
+    const f32 sTrampleFallSpeed = 10.0f;
+    const f32 sTrampleFriction = 0.89f;
     const s32 sTrampledSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, sBlownOffSteps, 15);
-    NEBULA_TUNABLE(f32, sBlowSpeed, 35.0f);
-    NEBULA_TUNABLE(f32, sBlowUpSpeed, 20.0f);
-    NEBULA_TUNABLE(f32, sBlowRateInWater, 0.6f);
-    NEBULA_TUNABLE(f32, sBlowRateOnLand, 1.0f);
+    const s32 sBlownOffSteps = 15;
+    const f32 sBlowSpeed = 35.0f;
+    const f32 sBlowUpSpeed = 20.0f;
+    const f32 sBlowRateInWater = 0.6f;
+    const f32 sBlowRateOnLand = 1.0f;
 };  // namespace
 
 PukupukuStateLanding::PukupukuStateLanding(Pukupuku* pParent)
@@ -163,7 +154,7 @@ void PukupukuStateLanding::tryEndJumpOnLand() {
 
 void PukupukuStateLanding::updatePoseByJumpPath(f32 rate) {
     Vec3f direction;
-    mPath->calcDirection(&direction, mValueCtrl->getValue(), cNum_updatePoseByJumpPath_f1);
+    mPath->calcDirection(&direction, mValueCtrl->getValue(), 0.01f);
     MR::normalize(&direction);
 
     Vec3f up = -mHost->mGravity;
@@ -275,15 +266,15 @@ void Pukupuku::init(const TableIter& rIter) {
     MR::makeMtxTR(mtx, this);
     mtx.getQuat(mPoseQuat);
     updatePoseByRail();
-    MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f1, cNum_init_f2);
+    MR::initAndSetRailClipping(&mClipCenter, this, 100.0f, 500.0f);
     initEffectKeeper(1, nullptr);
     MR::declareCoin(this, 1);
     MR::declareStarPiece(this, 3);
-    MR::initShadowVolumeSphere(this, cNum_init_f3);
+    MR::initShadowVolumeSphere(this, 50.0f);
     initSound(8, false);
     initNerve(GET_NERVE_ANON(PukupukuWait));
     mStateLanding = new PukupukuStateLanding(this);
-    MR::initStarPointerTarget(this, cNum_init_f4);
+    MR::initStarPointerTarget(this, 60.0f);
     mScaleCtrl = new AnimScaleController(nullptr);
     mStarPointer = new WalkerStateBindStarPointer(this, mScaleCtrl);
     MR::addToAttributeGroupSearchTurtle(this);
@@ -307,7 +298,7 @@ void Pukupuku::kill() {
     if (mIsTrampled) {
         MR::appearCoinPop(this, mPosition, 1);
     } else {
-        MR::appearStarPiece(this, mPosition, 3, cNum_kill_f1, cNum_kill_f2, false);
+        MR::appearStarPiece(this, mPosition, 3, 10.0f, 40.0f, false);
         if (isInWater()) {
             MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W");
         } else {

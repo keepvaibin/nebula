@@ -76,6 +76,9 @@ public:
         return texture != nullptr && (texture->usage & VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT) != 0u;
     }
     [[nodiscard]] static bool supports_bc1();
+    [[nodiscard]] static bool supports_astc4x4();
+    // R5G6B5 sampled with linear filtering and written by copies (Vulkan 1.0's mandatory formats hold it; asked anyway).
+    [[nodiscard]] static bool supports_rgb565();
     [[nodiscard]] static bool poolable(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);
     void record_upload(vk::Texture* texture, bool reused, const UploadChunk& staging, std::uint64_t offset,

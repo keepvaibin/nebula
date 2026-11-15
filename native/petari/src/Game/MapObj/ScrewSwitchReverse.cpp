@@ -11,20 +11,13 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 130.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAdjust_f1, "exeAdjust.f1", 3.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sDefaultShadowLength, 1000);
-    NEBULA_TUNABLE(s32, sStepForAdjust, 3);
-    NEBULA_TUNABLE(s32, sStepToRumbleCamera, 25);
-    NEBULA_TUNABLE(f32, sJumpPower, 28.0f);
+    const s32 sDefaultShadowLength = 1000;
+    const s32 sStepForAdjust = 3;
+    const s32 sStepToRumbleCamera = 25;
+    const f32 sJumpPower = 28.0f;
 };  // namespace
 
 namespace NrvScrewSwitchReverse {
@@ -52,8 +45,8 @@ void ScrewSwitchReverse::init(const TableIter& rIter) {
     initHitSensor(2);
     MR::addBodyMessageSensorMapObj(this);
     Vec3f offset;
-    offset.scale(-cNum_init_f1, mGravity);
-    MR::addHitSensorAtJoint(this, "binder", "Screw", ATYPE_BINDER, 8, cNum_init_f2, offset);
+    offset.scale(-130.0f, mGravity);
+    MR::addHitSensorAtJoint(this, "binder", "Screw", ATYPE_BINDER, 8, 120.0f, offset);
 
     MR::initCollisionParts(this, "ScrewReverseCol", getSensor("binder"), MR::getJointMtx(this, "Screw"));
     initEffectKeeper(0, nullptr);
@@ -65,8 +58,8 @@ void ScrewSwitchReverse::init(const TableIter& rIter) {
 
     if (dropLength > 0.0f) {
         Vec3f pos(mPosition);
-        pos.add(Vec3f(0.0f, cNum_init_f3, 0.0f));
-        MR::initShadowVolumeCylinder(this, cNum_init_f4);
+        pos.add(Vec3f(0.0f, 10.0f, 0.0f));
+        MR::initShadowVolumeCylinder(this, 100.0f);
         MR::setShadowDropPosition(this, nullptr, pos);
         MR::setShadowDropLength(this, nullptr, dropLength);
 
@@ -84,7 +77,7 @@ void ScrewSwitchReverse::exeWait() {
 }
 
 void ScrewSwitchReverse::exeAdjust() {
-    mHost->mPosition.lerp(mHost->mPosition, getSensor("binder")->mPosition, getNerveStep() / cNum_exeAdjust_f1);
+    mHost->mPosition.lerp(mHost->mPosition, getSensor("binder")->mPosition, getNerveStep() / 3.0f);
 
     if (MR::isStep(this, ::sStepForAdjust)) {
         setNerve(GET_NERVE(ScrewSwitchReverse, ScrewSwitchReverseNrvScrew));

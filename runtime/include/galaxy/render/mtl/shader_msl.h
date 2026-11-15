@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// SPIR-V to the Metal Shading Language, through SPIRV-Cross (docs/APPLE.md, "Shaders"). The Metal renderer's shaders
+// SPIR-V to the Metal Shading Language, through SPIRV-Cross. The Metal renderer's shaders
 // are the Vulkan renderer's: one HLSL source, compiled to SPIR-V by shader_compile_vk.cpp, then to MSL here, with
 // each Vulkan binding at the Metal index below. Built into the build's tools (the programs' file, the utility
 // shaders) and into the game for mods' materials.

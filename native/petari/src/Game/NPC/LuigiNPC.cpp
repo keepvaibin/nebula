@@ -18,25 +18,15 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setWaitAction_f1, "setWaitAction.f1", 1500.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_branchFunc_isNearPlayer_1, "branchFunc.isNearPlayer.1", -1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_trySetNerveAfraid_isNearPlayer_1, "trySetNerveAfraid.isNearPlayer.1", -1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_trySetNerveAfraid_isNearPlayer_2, "trySetNerveAfraid.isNearPlayer.2", -1.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeOnTreeFall_addVelocityToGravity_1, "exeOnTreeFall.addVelocityToGravity.1", 1.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sLiftUpSeTiming, 87);
-    NEBULA_TUNABLE(f32, sAfraidSeRange, 600.0f);
-    NEBULA_TUNABLE(f32, sTreeDist, 16.0f);
-    NEBULA_TUNABLE(f32, sShadowOffset, -25.0f);
-    NEBULA_TUNABLE(f32, sHitJump, 20.0f);
-    NEBULA_TUNABLE(f32, sHitMove, 4.0f);
+    const s32 sLiftUpSeTiming = 87;
+    const f32 sAfraidSeRange = 600.0f;
+    const f32 sTreeDist = 16.0f;
+    const f32 sShadowOffset = -25.0f;
+    const f32 sHitJump = 20.0f;
+    const f32 sHitMove = 4.0f;
 };  // namespace
 
 namespace NrvLuigiNPC {
@@ -59,7 +49,7 @@ LuigiNPC::LuigiNPC(const char* pName) : NPCActor(pName), mTakeOutStar(), mType(T
 }
 
 bool LuigiNPC::branchFunc(u32 /*msg*/) {
-    return !MR::isNearPlayer(mMsgCtrl, cNum_branchFunc_isNearPlayer_1) || MR::inMessageArea(mMsgCtrl);
+    return !MR::isNearPlayer(mMsgCtrl, -1.0f) || MR::inMessageArea(mMsgCtrl);
 }
 
 bool LuigiNPC::eventFunc(u32 msg) {
@@ -200,7 +190,7 @@ void LuigiNPC::initAfterPlacement() {
 
     MR::calcFrontVec(&front, this);
 
-    if (MR::getFirstPolyOnLineToMap(&result, &poly, mPosition, front * cNum_initAfterPlacement_f1)) {
+    if (MR::getFirstPolyOnLineToMap(&result, &poly, mPosition, front * 500.0f)) {
         mPosition.set(result - (front * ::sTreeDist));
         MR::onCalcShadow(this, nullptr);
         MR::offBind(this);
@@ -212,11 +202,11 @@ void LuigiNPC::control() {
 }
 
 bool LuigiNPC::trySetNerveAfraid() {
-    if (MR::isNearPlayer(mMsgCtrl, cNum_trySetNerveAfraid_isNearPlayer_1) && !MR::inMessageArea(mMsgCtrl) && !MR::isPlayerElementModeTeresa()) {
+    if (MR::isNearPlayer(mMsgCtrl, -1.0f) && !MR::inMessageArea(mMsgCtrl) && !MR::isPlayerElementModeTeresa()) {
         return MR::trySetNerve(this, GET_NERVE(LuigiNPC, LuigiNPCNrvAfraidWait));
     }
 
-    if (MR::isNearPlayer(mMsgCtrl, cNum_trySetNerveAfraid_isNearPlayer_2) && MR::isPlayerElementModeTeresa()) {
+    if (MR::isNearPlayer(mMsgCtrl, -1.0f) && MR::isPlayerElementModeTeresa()) {
         return MR::trySetNerve(this, GET_NERVE(LuigiNPC, LuigiNPCNrvAfraidSquat));
     }
 
@@ -230,7 +220,7 @@ void LuigiNPC::setWaitAction() {
     mParam.mTalkAction = "Talk";
     mParam.mTalkTurnAction = turn;
     setDefaults();
-    mSwingReactDist = cNum_setWaitAction_f1;
+    mSwingReactDist = 1500.0f;
     mUseReactionActions = true;
 }
 
@@ -402,7 +392,7 @@ void LuigiNPC::exeOnTreeFall() {
         MR::startSound(this, "SE_SV_LUIGI_FALL");
     }
 
-    MR::addVelocityToGravity(this, cNum_exeOnTreeFall_addVelocityToGravity_1);
+    MR::addVelocityToGravity(this, 1.0f);
 
     if (MR::isOnGround(this)) {
         mVelocity.zero();

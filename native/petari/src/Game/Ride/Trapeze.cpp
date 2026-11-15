@@ -21,55 +21,42 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 130.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryJump_f1, "tryJump.f1", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHangPoint_f1, "updateHangPoint.f1", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHangPoint_f2, "updateHangPoint.f2", 100.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sStickLength, 120.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthX, 12.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthZ, 12.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthLongOffsetX, 7.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthShortOffsetX, 0.0f);
-    NEBULA_TUNABLE(f32, sDrawWidthShortOffsetZ, 7.0f);
-    NEBULA_TUNABLE(f32, sTexRate, 0.003f);
-    NEBULA_TUNABLE(f32, sTexRateDiff1, 0.7f);
-    NEBULA_TUNABLE(f32, sTexRateDiff2, 0.5f);
-    NEBULA_TUNABLE(f32, sHangAccelRate, 5.0f);
-    NEBULA_TUNABLE(f32, sHangPointGravity, 0.8f);
-    NEBULA_TUNABLE(f32, sHangPointFrictionRate, 0.995f);
-    NEBULA_TUNABLE(f32, sHangCoordSpeed, 0.5f);
-    NEBULA_TUNABLE(f32, sSensorOffsetY, -70.0f);
-    NEBULA_TUNABLE(s32, sAnimInterpoleFrame, 12);
-    NEBULA_TUNABLE(f32, sSpeedToSwingWait, 10.0f);
-    NEBULA_TUNABLE(f32, sAxisToSwingWait, 0.99f);
-    NEBULA_TUNABLE(f32, sJumpSpeedRate, 1.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedMinXZ, 15.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedMaxXZ, 20.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedMinY, 20.0f);
-    NEBULA_TUNABLE(f32, sJumpSpeedMaxY, 50.0f);
-    NEBULA_TUNABLE(f32, sStickPointGravity, 1.0f);
-    NEBULA_TUNABLE(f32, sStickPointFrictionRate, 0.995f);
-    NEBULA_TUNABLE(f32, sPointSpeedMin, 1.0f);
-    NEBULA_TUNABLE(f32, sPointNormalMin, 0.001f);
-    NEBULA_TUNABLE(f32, sDistanceToValid, 500.0f);
-    NEBULA_TUNABLE(s32, sStepToValid, 40);
-    NEBULA_TUNABLE(f32, sDistanceStartBindZ, 80.0f);
-    NEBULA_TUNABLE(s32, sStepSlideToRumble, 20);
-    NEBULA_TUNABLE(f32, sSpeedMinToKeepFreeSwing, 80.0f);
-    NEBULA_TUNABLE(f32, sTransDiffMinY, 1.0f);
-    NEBULA_TUNABLE(f32, sTexRateDiff0, 0.0f);
+    const f32 sStickLength = 120.0f;
+    const f32 sDrawWidthX = 12.0f;
+    const f32 sDrawWidthZ = 12.0f;
+    const f32 sDrawWidthLongOffsetX = 7.0f;
+    const f32 sDrawWidthShortOffsetX = 0.0f;
+    const f32 sDrawWidthShortOffsetZ = 7.0f;
+    const f32 sTexRate = 0.003f;
+    const f32 sTexRateDiff1 = 0.7f;
+    const f32 sTexRateDiff2 = 0.5f;
+    const f32 sHangAccelRate = 5.0f;
+    const f32 sHangPointGravity = 0.8f;
+    const f32 sHangPointFrictionRate = 0.995f;
+    const f32 sHangCoordSpeed = 0.5f;
+    const f32 sSensorOffsetY = -70.0f;
+    const s32 sAnimInterpoleFrame = 12;
+    const f32 sSpeedToSwingWait = 10.0f;
+    const f32 sAxisToSwingWait = 0.99f;
+    const f32 sJumpSpeedRate = 1.0f;
+    const f32 sJumpSpeedMinXZ = 15.0f;
+    const f32 sJumpSpeedMaxXZ = 20.0f;
+    const f32 sJumpSpeedMinY = 20.0f;
+    const f32 sJumpSpeedMaxY = 50.0f;
+    const f32 sStickPointGravity = 1.0f;
+    const f32 sStickPointFrictionRate = 0.995f;
+    const f32 sPointSpeedMin = 1.0f;
+    const f32 sPointNormalMin = 0.001f;
+    const f32 sDistanceToValid = 500.0f;
+    const s32 sStepToValid = 40;
+    const f32 sDistanceStartBindZ = 80.0f;
+    const s32 sStepSlideToRumble = 20;
+    const f32 sSpeedMinToKeepFreeSwing = 80.0f;
+    const f32 sTransDiffMinY = 1.0f;
+    const f32 sTexRateDiff0 = 0.0f;
 
     static Color8 sColorPlusZ(0xFF, 0xFF, 0xFF, 0xFF);
     static Color8 sColorPlusX(0xB4, 0xB4, 0xB4, 0xFF);
@@ -96,7 +83,7 @@ void Trapeze::init(const TableIter& rIter) {
     mtx.getYDir(mUp);
     mtx.getZDir(mFront);
 
-    mRopeLength = mScale.y * cNum_init_f1;
+    mRopeLength = mScale.y * 100.0f;
     mScale.set(1.0f, 1.0f, 1.0f);
 
     Vec3f spawnPos(mPosition.x, mPosition.y - mRopeLength, mPosition.z);
@@ -109,8 +96,8 @@ void Trapeze::init(const TableIter& rIter) {
     initNerve(GET_NERVE(Trapeze, TrapezeNrvFree));
 
     initHitSensor(2);
-    MR::addHitSensorCallbackBinder(this, "bind", 8, cNum_init_f2);
-    MR::addHitSensorCallbackRide(this, "body", 8, cNum_init_f3);
+    MR::addHitSensorCallbackBinder(this, "bind", 8, 200.0f);
+    MR::addHitSensorCallbackRide(this, "body", 8, 130.0f);
 
     MR::calcGravity(this);
 
@@ -122,7 +109,7 @@ void Trapeze::init(const TableIter& rIter) {
     mTrapezeModel->initWithoutIter();
 
     MR::initShadowFromCSV(mTrapezeModel, "Shadow");
-    MR::setShadowDropLength(mTrapezeModel, nullptr, mRopeLength + cNum_init_f4);
+    MR::setShadowDropLength(mTrapezeModel, nullptr, mRopeLength + 1000.0f);
     MR::registerDemoSimpleCastAll(mTrapezeModel);
     MR::initActorCamera(this, rIter, &mCameraInfo);
     makeActorAppeared();
@@ -135,8 +122,8 @@ void Trapeze::draw() const {
 
     TypedDraw site(MR::getSceneObj< TrapezeRopeDrawInit >(SceneObj_TrapezeRopeDrawInit)->mMaterial, nullptr, MR::getCameraViewMtx());
 
-    Vec3f left = mSide * -(::sStickLength / cNum_draw_f1);
-    Vec3f right = mSide * (::sStickLength / cNum_draw_f2);
+    Vec3f left = mSide * -(::sStickLength / 2.0f);
+    Vec3f right = mSide * (::sStickLength / 2.0f);
 
     Vec3f grabLeft = left;
     Vec3f grabRight = right;
@@ -445,7 +432,7 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
         Vec3f swingVel = mFront;
         // A slow player takes the hang point's speed, but only when it swings forward (no abs on it).
-        if (MR::abs(vel) < cNum_receiveOtherMsg_f1 && cNum_receiveOtherMsg_f2 < projGrabPointVel) {
+        if (MR::abs(vel) < 3.0f && 3.0f < projGrabPointVel) {
             vel = projGrabPointVel;
         }
         swingVel.scale(vel);
@@ -503,7 +490,7 @@ bool Trapeze::tryJump() {
         jumpVel.y = MR::clamp(jumpVel.y, ::sJumpSpeedMinY, ::sJumpSpeedMaxY);
 
         Vec3f grabVel(jumpVel.x, 0.0f, jumpVel.z);
-        if (grabVel.squared() > cNum_tryJump_f1) {
+        if (grabVel.squared() > 300.0f) {
             MR::normalize(&grabVel);
             grabVel.scale(::sJumpSpeedMaxXZ);
             jumpVel.x = grabVel.x;
@@ -608,7 +595,7 @@ void Trapeze::updateHangPoint() {
         mSwingVel *= -1.0f;
     }
 
-    s32 soundLvl = (mHangPoint->mVelocity.length() / cNum_updateHangPoint_f1) * cNum_updateHangPoint_f2;
+    s32 soundLvl = (mHangPoint->mVelocity.length() / 40.0f) * 100.0f;
     if (soundLvl > 100) {
         soundLvl = 100;
     }

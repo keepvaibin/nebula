@@ -5,10 +5,7 @@
 #include "Game/Camera/CameraTargetMtx.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.98f);
 
 CameraFix::CameraFix(const char* pName)
     : Camera(pName), mWPoint(0.0f, 0.0f, 0.0f), mAxis(0.0f, 0.0f, -2500.0f), mUp(0.0f, 1.0f, 0.0f), mTarget(new CameraTargetMtx("カメラターゲットダミー")) {
@@ -41,7 +38,7 @@ CameraTargetObj* CameraFix::calc() {
     }
     MR::normalize(&front);
 
-    if (MR::abs(front.dot(up)) > cNum_calc_f1) {
+    if (MR::abs(front.dot(up)) > 0.98f) {
         up.set< f32 >(front.y, front.z, front.x);
     }
 

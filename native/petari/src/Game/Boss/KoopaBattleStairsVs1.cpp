@@ -16,22 +16,19 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeJumpToNextPosLoop_f1, "exeJumpToNextPosLoop.f1", 180.0f);
 
 namespace {
-    NEBULA_TUNABLE(s32, cAnimCameraInterpoleFrame, 60);
-    NEBULA_TUNABLE(s32, cBgmStopFrame, 60);
+    const s32 cAnimCameraInterpoleFrame = 60;
+    const s32 cBgmStopFrame = 60;
     // Demo frames at which the far and the near demo stair are set alight.
-    NEBULA_TUNABLE(s32, cDemoFarFireStep, 264);
-    NEBULA_TUNABLE(s32, cDemoNearFireStep, 292);
-    NEBULA_TUNABLE(s32, cStepToEmitFire, 15);
-    NEBULA_TUNABLE(f32, cFireSpeed, 20.0f);
-    NEBULA_TUNABLE(s32, cFireAttackStep, 33);
+    const s32 cDemoFarFireStep = 264;
+    const s32 cDemoNearFireStep = 292;
+    const s32 cStepToEmitFire = 15;
+    const f32 cFireSpeed = 20.0f;
+    const s32 cFireAttackStep = 33;
     const s32 cJumpTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, cJumpHeight, 1000.0f);
-    NEBULA_TUNABLE(f32, cTurnSpeed, 2.0f);
+    const f32 cJumpHeight = 1000.0f;
+    const f32 cTurnSpeed = 2.0f;
     const char* const cLandingPosName[KoopaBattleStairsVs1::cLandingNum] = {
         "階段の戦い０（クッパ）",
         "階段の戦い１（クッパ）",
@@ -230,7 +227,7 @@ void KoopaBattleStairsVs1::exeJumpToNextPosLoop() {
     f32 ease = MR::getEaseInOutValue(rate, 0.0f, 1.0f, 1.0f);
     mKoopa->mPosition.set(mOldPosition * (1.0f - ease) + mNewPosition * ease);
 
-    mKoopa->mPosition.y += ::cJumpHeight * MR::sinDegree(cNum_exeJumpToNextPosLoop_f1 * rate);
+    mKoopa->mPosition.y += ::cJumpHeight * MR::sinDegree(180.0f * rate);
     MR::turnDirectionDegree(mKoopa, &mKoopa->mFront, mNewDirection, ::cTurnSpeed);
 
     if (MR::isStep(this, ::cJumpTime)) {

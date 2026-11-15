@@ -5,23 +5,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f1, "WalkerStateRunawayParam.f1", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f2, "WalkerStateRunawayParam.f2", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f3, "WalkerStateRunawayParam.f3", 0.99f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f4, "WalkerStateRunawayParam.f4", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f5, "WalkerStateRunawayParam.f5", 1100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f6, "WalkerStateRunawayParam.f6", 1300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f7, "WalkerStateRunawayParam.f7", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f8, "WalkerStateRunawayParam.f8", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f9, "WalkerStateRunawayParam.f9", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f10, "WalkerStateRunawayParam.f10", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f11, "WalkerStateRunawayParam.f11", 1.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f12, "WalkerStateRunawayParam.f12", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f13, "WalkerStateRunawayParam.f13", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_WalkerStateRunawayParam_f14, "WalkerStateRunawayParam.f14", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWallJump_f1, "exeWallJump.f1", 45.0f);
 
 namespace {
     static WalkerStateRunawayParam sDefaultParam;
@@ -37,24 +20,24 @@ WalkerStateRunawayParam::WalkerStateRunawayParam() {
     mWaitAction = "FollowMe";
     mRunawayAction = "Run";
     mJumpAction = "Jump";
-    mGroundAccel = cNum_WalkerStateRunawayParam_f1;
+    mGroundAccel = 0.05f;
     mAirAccel = 1.0f;
-    mRunFriction = cNum_WalkerStateRunawayParam_f2;
-    mWallJumpFriction = cNum_WalkerStateRunawayParam_f3;
-    mTurnMaxRateDegree = cNum_WalkerStateRunawayParam_f4;
-    mRunawayDistance = cNum_WalkerStateRunawayParam_f5;
-    mWaitDistance = cNum_WalkerStateRunawayParam_f6;
-    mRunawayTurnRateMaxDegree = cNum_WalkerStateRunawayParam_f7;
-    mRunawayTurnRateMinDegree = cNum_WalkerStateRunawayParam_f8;
+    mRunFriction = 0.9f;
+    mWallJumpFriction = 0.99f;
+    mTurnMaxRateDegree = 3.0f;
+    mRunawayDistance = 1100.0f;
+    mWaitDistance = 1300.0f;
+    mRunawayTurnRateMaxDegree = 10.0f;
+    mRunawayTurnRateMinDegree = 3.0f;
     mRunawayTurnTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    mPlayerFrontLineLength = cNum_WalkerStateRunawayParam_f9;
+    mPlayerFrontLineLength = 25.0f;
     mRunawayBckRatio = 1.0f;
-    mMinRunawayBckRate = cNum_WalkerStateRunawayParam_f10;
-    mMaxRunawayBckRate = cNum_WalkerStateRunawayParam_f11;
+    mMinRunawayBckRate = 0.9f;
+    mMaxRunawayBckRate = 1.4f;
     mWallJumpTime = 6;
-    mWallReboundPower = cNum_WalkerStateRunawayParam_f12;
-    mWallJumpPowerH = cNum_WalkerStateRunawayParam_f13;
-    mWallJumpPowerV = cNum_WalkerStateRunawayParam_f14;
+    mWallReboundPower = 0.3f;
+    mWallJumpPowerH = 8.0f;
+    mWallJumpPowerV = 15.0f;
 }
 
 WalkerStateRunaway::WalkerStateRunaway(LiveActor* pHost, Vec3f* pDirection, WalkerStateRunawayParam* pRunawayParam)
@@ -160,7 +143,7 @@ void WalkerStateRunaway::exeWallJump() {
         MR::startAction(getHost(), mRunawayParam->mJumpAction);
     }
 
-    MR::turnDirectionDegree(getHost(), mDirection, getHost()->mVelocity, cNum_exeWallJump_f1);
+    MR::turnDirectionDegree(getHost(), mDirection, getHost()->mVelocity, 45.0f);
     MR::addVelocityToGravity(getHost(), mRunawayParam->mAirAccel);
     MR::attenuateVelocity(getHost(), mRunawayParam->mWallJumpFriction);
     MR::reboundVelocityFromEachCollision(getHost(), 0.0f, mRunawayParam->mWallReboundPower, 0.0f, 0.0f);

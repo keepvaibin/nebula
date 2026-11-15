@@ -4,7 +4,7 @@
 // Controller (USB) report decoding, calibration parsing, motion helpers.
 // Protocol facts follow dekuNukem/Nintendo_Switch_Reverse_Engineering and
 // SDL's zlib-licensed SDL_hidapi_switch.c / SDL_hidapi_switch2.c (see
-// docs/KEYBOARD_CONTROLS.md); this file is an independent implementation.
+// docs/using-nebula/keyboard-and-controller-controls.md); this file is an independent implementation.
 
 #include "galaxy/input_bindings.h"
 

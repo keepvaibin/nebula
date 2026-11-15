@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The game window and input on macOS, in the system's own terms (docs/APPLE.md, "Host"): an AppKit window whose view
+// The game window and input on macOS, in the system's own terms: an AppKit window whose view
 // is a Metal layer, its events (size, focus, quit, keys, the mouse as the pointer), controllers through the Game
 // Controller framework with their motion sensors, touch surface and haptics, the system's file panels. It gives the
 // host and the renderer what the SDL host gives on other systems (sdl_host.h, host_window.h and the window functions
@@ -10,6 +10,7 @@
 #import <AppKit/AppKit.h>
 #import <CoreHaptics/CoreHaptics.h>
 #import <GameController/GameController.h>
+#import <IOKit/pwr_mgt/IOPMLib.h>
 #import <QuartzCore/CAMetalLayer.h>
 
 #include "galaxy/content_viewport.h"
@@ -17,12 +18,14 @@
 #include "galaxy/game_paths.h"
 #include "galaxy/input/host_input.h"
 #include "galaxy/input_bindings.h"
+#include "galaxy/luma_system_platform.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/path_text.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/playstation_controller.h"
+#include "galaxy/power_policy.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/render_config.h"
@@ -30,6 +33,7 @@
 #include "galaxy/runtime_settings.h"
 #include "galaxy/steam_controller.h"
 #include "galaxy/switch_controller.h"
+#include "galaxy/ui/launcher.h"
 #include "galaxy/virtual_keys.h"
 #include "apple_host.h"
 #include "sdl_host.h"
@@ -81,6 +85,10 @@ std::atomic<bool> g_direct_touch{false};
 std::thread::id g_main_thread;
 // A system panel (the file picker, an alert) is up: the pointer is the system's meanwhile.
 std::atomic<int> g_panels{0};
+// When a controller last gave input (steady milliseconds; 0 never): the system does not count it as the user's activity.
+std::atomic<std::int64_t> g_pad_input_ms{0};
+// Held while someone plays with a controller in front (hold_display_for_pads; the main thread's).
+IOPMAssertionID g_display_assertion = kIOPMNullAssertionID;
 bool g_cursor_hidden = false;
 // The display mode the window was last put in (RenderConfig::display_mode; ~0: none yet).
 unsigned g_applied_mode = ~0u;
@@ -407,6 +415,7 @@ void sample_gamepads() {
             g_last_input.store(kLastPad + static_cast<std::uint32_t>(sample.scheme), std::memory_order_relaxed);
             g_last_pad_icons.store(static_cast<std::uint8_t>(g_input.pad_icons[i]), std::memory_order_relaxed);
             g_last_pad.store(pad.number, std::memory_order_relaxed);
+            g_pad_input_ms.store(galaxy::steady_ms(), std::memory_order_relaxed);
         }
         sample_pad_motion(i);
         if (g_capture_device.has_value() && g_capture_device->scheme == sample.scheme && !g_capture_result.has_value()) {
@@ -571,7 +580,12 @@ void run_requests() {
             key = g_menu_keys.front();
             g_menu_keys.pop_front();
         }
-        (void)galaxy::render::native_settings_pad_key(key);
+        if ((key & galaxy::render::kMenuKeyKeyboard) != 0u) {
+            const std::uintptr_t vk = key & ~galaxy::render::kMenuKeyKeyboard;
+            (void)galaxy::render::native_settings_handle_window_key(vk, false, static_cast<std::uint32_t>(vk));
+        } else {
+            (void)galaxy::render::native_settings_pad_key(key);
+        }
     }
     const std::uint32_t pad_id = g_rumble_pad.load(std::memory_order_relaxed);
     const std::uint32_t level = g_rumble_level.load(std::memory_order_relaxed);
@@ -713,6 +727,11 @@ void files_opened(NSArray<NSURL*>* urls) {
     galaxy::render::host_window::pending_resize_extent.store(
         (static_cast<std::uint64_t>(state.window_width) << 32u) | static_cast<std::uint32_t>(state.window_height),
         std::memory_order_release);
+    [self lumaDisplayChanged];
+}
+// LumaCore's display snapshot (services-system 4).
+- (void)lumaDisplayChanged {
+    galaxy::luma_system::apple_window_changed((__bridge void*)galaxy::sdl::g_window);
 }
 - (BOOL)windowShouldClose:(NSWindow*)sender {
     galaxy::render::host_window::quit_request.store(true, std::memory_order_release);
@@ -758,9 +777,11 @@ void files_opened(NSArray<NSURL*>* urls) {
 // A minimised window: the host stops the game's clocks and sound as for an app out of sight.
 - (void)windowDidMiniaturize:(NSNotification*)notification {
     galaxy::sdl::g_background.store(true, std::memory_order_release);
+    [self lumaDisplayChanged];
 }
 - (void)windowDidDeminiaturize:(NSNotification*)notification {
     galaxy::sdl::g_background.store(false, std::memory_order_release);
+    [self lumaDisplayChanged];
 }
 - (void)windowDidBecomeKey:(NSNotification*)notification {
     {
@@ -771,6 +792,7 @@ void files_opened(NSArray<NSURL*>* urls) {
         galaxy::sdl::g_applied_mode = ~0u;  // the next pump puts the display mode in again
     }
     galaxy::sdl::update_cursor();
+    [self lumaDisplayChanged];
 }
 - (void)windowDidResignKey:(NSNotification*)notification {
     {
@@ -779,6 +801,7 @@ void files_opened(NSArray<NSURL*>* urls) {
         galaxy::sdl::g_input.keys = {};
     }
     galaxy::sdl::update_cursor();
+    [self lumaDisplayChanged];
 }
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication*)sender {
     // Quit from the menu, the Dock or the system. While the first start's setup window is up it is that window's
@@ -937,6 +960,29 @@ void start_app() noexcept {
 
 namespace galaxy::sdl {
 
+namespace {
+// The keyboard and mouse are the system's user activity; a controller is not, and the display would dim and sleep
+// under a player. While a controller has given input within the playing window (power_policy.h) and the window is in
+// front and visible, the display is held on, as Windows' power policy holds it.
+void hold_display_for_pads() {
+    const std::int64_t last = g_pad_input_ms.load(std::memory_order_relaxed);
+    const bool front = g_window != nil && g_window.isKeyWindow && !g_window.isMiniaturized &&
+                       (g_window.occlusionState & NSWindowOcclusionStateVisible) != 0;
+    const bool hold = front && last != 0 && galaxy::steady_ms() - last < galaxy::host::kPowerPlayingMs;
+    if (hold == (g_display_assertion != kIOPMNullAssertionID)) {
+        return;
+    }
+    if (hold) {
+        if (IOPMAssertionCreateWithName(kIOPMAssertPreventUserIdleDisplaySleep, kIOPMAssertionLevelOn,
+                                        CFSTR("Playing with a controller"), &g_display_assertion) != kIOReturnSuccess) {
+            g_display_assertion = kIOPMNullAssertionID;
+        }
+    } else {
+        (void)IOPMAssertionRelease(g_display_assertion);
+        g_display_assertion = kIOPMNullAssertionID;
+    }
+}
+}  // namespace
 
 void pump_events(int timeout_ms) noexcept {
     std::vector<std::tuple<int, bool, bool, int>> menu_keys;  // key, down, repeat, the letter at its place
@@ -1011,7 +1057,9 @@ void pump_events(int timeout_ms) noexcept {
             // The unified buttons are the menu's, by their labels (Nintendo's A is the right face button).
             const std::uint16_t buttons = galaxy::input::settings_pad_buttons(sample.scheme, sample.buttons);
             const galaxy::input::NativeSettingsPadStep step = galaxy::input::native_settings_pad_step(
-                g_menu_pad, buttons, sample.axes[0], sample.axes[1], galaxy::render::native_settings_overlay_visible(),
+                g_menu_pad, buttons, sample.axes[0], sample.axes[1],
+                galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
+                    galaxy::ui::launcher_visible(),
                 galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
                 galaxy::render::native_settings_post_key(step.keys[i]);
@@ -1019,6 +1067,7 @@ void pump_events(int timeout_ms) noexcept {
             break;
         }
     }
+    hold_display_for_pads();
     if (menu_wheel != 0 && !galaxy::render::native_settings_wheel(menu_wheel)) {
         galaxy::render::host_window::pointer_wheel.fetch_add(menu_wheel, std::memory_order_relaxed);
     }
@@ -1151,6 +1200,9 @@ void make_window(int width, int height) {
     g_view = view;
     g_layer.store((__bridge void*)((NSView*)view).layer, std::memory_order_release);
     update_window_size();
+    // LumaCore's pasteboard and links on Apple's systems, and the first display snapshot (services-system 4 to 6).
+    galaxy::luma_system::set_platform(galaxy::luma_system::apple_platform());
+    galaxy::luma_system::apple_window_changed((__bridge void*)window);
     // Files opened before the window was up (Nebula started by opening a .luma): imported now.
     if (!g_opened_early.empty()) {
         galaxy::render::native_settings_files_dropped(std::move(g_opened_early));
@@ -1426,6 +1478,11 @@ host::HostPointerTransitionPoll poll_host_pointer_transition(std::uint64_t) noex
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
     const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
     galaxy::sdl::g_menu_keys.push_back(virtual_key);
+}
+
+void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept {
+    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
+    galaxy::sdl::g_menu_keys.push_back(virtual_key | kMenuKeyKeyboard);
 }
 
 }  // namespace galaxy::render

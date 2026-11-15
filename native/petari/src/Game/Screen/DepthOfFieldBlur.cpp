@@ -16,25 +16,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_game_api.h>
 #include <cstring>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_finalMaterial_f1, "finalMaterial.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_finalMaterial_f2, "finalMaterial.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_finalMaterial_f3, "finalMaterial.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_finalMaterial_f4, "finalMaterial.f4", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawZAlphaTex_f1, "drawZAlphaTex.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawZAlphaTex_f2, "drawZAlphaTex.f2", 128.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawZAlphaTex_f3, "drawZAlphaTex.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawZAlphaTex_f4, "drawZAlphaTex.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawZAlphaTex_f5, "drawZAlphaTex.f5", 128.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawZAlphaTex_f6, "drawZAlphaTex.f6", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawZAlphaTex_f7, "drawZAlphaTex.f7", 128.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawZAlphaTex_f8, "drawZAlphaTex.f8", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawZAlphaTex_f9, "drawZAlphaTex.f9", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawZAlphaTex_f10, "drawZAlphaTex.f10", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_createBlurTexture_f1, "createBlurTexture.f1", 0.005f);
-NEBULA_TUNABLE_NAMED(f32, cNum_drawFinal_f1, "drawFinal.f1", 255.0f);
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -42,8 +24,8 @@ namespace {
     // static const s32 sFirstBlurCount = _;
     // static const f32 sFirstBlurRadius = _;
     // static const f32 sBlendRate = _;
-    NEBULA_TUNABLE(f32, sViewDistance, 10000.0f);
-    NEBULA_TUNABLE(s8, sScaleExp, 1);
+    const f32 sViewDistance = 10000.0f;
+    const s8 sScaleExp = 1;
 
     // The depth-to-alpha pass (runtime/src/render/materials/vertex_color.hlsl): the ramp's vertex colours, no blending,
     // depth or culling.
@@ -62,14 +44,14 @@ namespace {
         SiteMaterial material;
         material.init(NEBULA_SHADER_DOF_FINAL, SiteMaterial::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        f32 scale = cNum_finalMaterial_f1;
+        f32 scale = 0.5f;
         for (s32 e = ::sScaleExp; e > 0; e--) {
-            scale *= cNum_finalMaterial_f2;
+            scale *= 2.0f;
         }
         for (s32 e = ::sScaleExp; e < 0; e++) {
-            scale *= cNum_finalMaterial_f3;
+            scale *= 0.5f;
         }
-        material.constants[0] = alpha / cNum_finalMaterial_f4;
+        material.constants[0] = alpha / 255.0f;
         material.constants[1] = scale;
         material.constants[2] = pTexture1->getWidth();
         material.constants[3] = pTexture1->getHeight();
@@ -116,7 +98,7 @@ void DepthOfFieldBlur::draw() const {
 
 void DepthOfFieldBlur::drawZAlphaTex() const {
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, cNum_drawZAlphaTex_f1, 0.0f, cNum_drawZAlphaTex_f2, -::sViewDistance, ::sViewDistance);
+    NebulaMtxOrtho(projectionMtx, 0.0f, 2.0f, 0.0f, 128.0f, -::sViewDistance, ::sViewDistance);
     Frame::setOrthographic(projectionMtx);
     MR::loadViewMtxFor2DModel();
 
@@ -142,17 +124,17 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
 
         if (blurMaxDist >= blurMinDist) {
             const u8 c[4] = {0, 0, 255, 255};
-            const f32 at[4] = {0.0f, blurMinDist * cNum_drawZAlphaTex_f3, blurMaxDist * cNum_drawZAlphaTex_f4, cNum_drawZAlphaTex_f5};
+            const f32 at[4] = {0.0f, blurMinDist * 0.5f, blurMaxDist * 0.5f, 128.0f};
             for (u32 i = 0; i < 4; i++) {
                 *vtx++ = {at[i], 0.0f, 0.0f, Rgba8(c[i], c[i], c[i], 0xFF)};
-                *vtx++ = {at[i], cNum_drawZAlphaTex_f6, 0.0f, Rgba8(c[i], c[i], c[i], 0xFF)};
+                *vtx++ = {at[i], 2.0f, 0.0f, Rgba8(c[i], c[i], c[i], 0xFF)};
             }
         } else {
             const u8 c[4] = {0, 0, 255, 255};
-            const f32 at[4] = {cNum_drawZAlphaTex_f7, blurMinDist * cNum_drawZAlphaTex_f8, blurMaxDist * cNum_drawZAlphaTex_f9, 0.0f};
+            const f32 at[4] = {128.0f, blurMinDist * 0.5f, blurMaxDist * 0.5f, 0.0f};
             for (u32 i = 0; i < 4; i++) {
                 *vtx++ = {at[i], 0.0f, 0.0f, Rgba8(c[i], c[i], c[i], 0xFF)};
-                *vtx++ = {at[i], cNum_drawZAlphaTex_f10, 0.0f, Rgba8(c[i], c[i], c[i], 0xFF)};
+                *vtx++ = {at[i], 2.0f, 0.0f, Rgba8(c[i], c[i], c[i], 0xFF)};
             }
         }
     }
@@ -166,10 +148,10 @@ void DepthOfFieldBlur::createBlurTexture() const {
     ImageEffectLocalUtil::drawTexture(mFrameKey, 255, ImageEffectLocalUtil::TexDrawType_0);
     ImageEffectLocalUtil::setupDrawTexture();
     Frame::targetEnd(mQuarter->image(), NEBULA_TARGET_RGB);
-    ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, mQuarterTexture, mIntensity * getFadeLevel() * cNum_createBlurTexture_f1, NEBULA_TARGET_RGB);
+    ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, mQuarterTexture, mIntensity * getFadeLevel() * 0.005f, NEBULA_TARGET_RGB);
 }
 
 void DepthOfFieldBlur::drawFinal() const {
-    ImageEffectLocalUtil::drawQuad(finalMaterial(mQuarterTexture, mDepthRampTexture, mHalfTexture, static_cast< u8 >((s32)(mIntensity * getFadeLevel() * cNum_drawFinal_f1))));
+    ImageEffectLocalUtil::drawQuad(finalMaterial(mQuarterTexture, mDepthRampTexture, mHalfTexture, static_cast< u8 >((s32)(mIntensity * getFadeLevel() * 255.0f))));
     ImageEffectLocalUtil::setupDrawTexture();
 }

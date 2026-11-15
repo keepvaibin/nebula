@@ -1,0 +1,3 @@
+on start {
+    set_number("Game/System/GameRules.cpp#cPlayerHealth", 6)
+}

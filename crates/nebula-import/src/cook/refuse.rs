@@ -1,0 +1,313 @@
+//! A cook's refusals and notes as the validator names them (docs/modding/how-tos/adding-models.md): L804 with a
+//! `why` phrase (`Cook.Model.<Kind>`, rows `Validator.Cook.*` in localization/NebulaText.tsv) and the phrase's
+//! arguments, so LumaLink and the Mods screen say them in the player's language. A refusal is an error that stops the
+//! file's cook (never a half model); a note is said and the cook goes on. Notes are gathered for the file being cooked,
+//! on its thread: a cook whose notes are read holds a `Reading` on that thread, and a note or fact said on a thread
+//! with none stops a test or a debug build.
+
+use super::patch::Refusal;
+use luma_validate::{Arg, Finding, Level};
+use std::cell::{Cell, RefCell};
+use std::marker::PhantomData;
+
+/// The validator's rule for a file the game expects to cook that did not cook.
+pub const COOK_FAILED: u16 = 804;
+
+fn finding(why: &'static str, level: Level, args: &[(&'static str, String)]) -> Finding {
+    let mut all = vec![("why", Arg::Phrase(why))];
+    all.extend(args.iter().map(|(name, value)| (*name, Arg::Text(value.clone()))));
+    Finding { code: COOK_FAILED, level, mod_id: None, file: String::new(), line: None, column: None, pointer: None, args: all }
+}
+
+/// The file is refused: `why` is the phrase (`Cook.Model.MissingJoint`), `args` its arguments by name.
+pub fn refuse(why: &'static str, args: &[(&'static str, String)]) -> anyhow::Error {
+    anyhow::Error::new(Refusal(finding(why, Level::Error, args)))
+}
+
+/// As `refuse`, with arguments that may be phrases of their own (`expected` = `Cook.Effect.Is.Number`).
+pub fn refuse_with(why: &'static str, args: Vec<(&'static str, Arg)>) -> anyhow::Error {
+    let mut all = vec![("why", Arg::Phrase(why))];
+    all.extend(args);
+    anyhow::Error::new(Refusal(Finding { code: COOK_FAILED, level: Level::Error, mod_id: None, file: String::new(), line: None, column: None, pointer: None, args: all }))
+}
+
+/// The file breaks glTF 2.0 at `pointer` (`/accessors/3/count`): missing, or not what glTF says it is.
+pub fn invalid(pointer: String) -> anyhow::Error {
+    refuse("Cook.Model.Invalid", &[("where", pointer)])
+}
+
+thread_local! {
+    static NOTES: RefCell<Vec<Finding>> = const { RefCell::new(Vec::new()) };
+    /// The `Reading`s standing on this thread.
+    static READ_HERE: Cell<u32> = const { Cell::new(0) };
+}
+
+/// This thread's notes and facts are taken by the cook that holds it (cook_plan per file, cook_source's and an
+/// effects cook's callers, cook_c): a note or fact is said only while one stands. A thread a cook starts for its work
+/// has none, so a note said there, which no take would read, is a fault found by the tests, never a note lost.
+#[must_use]
+pub struct Reading(PhantomData<*const ()>);
+
+/// Marks this thread as one whose notes and facts are taken, until the result is dropped.
+pub fn reading() -> Reading {
+    READ_HERE.with(|n| n.set(n.get() + 1));
+    Reading(PhantomData)
+}
+
+impl Drop for Reading {
+    fn drop(&mut self) {
+        READ_HERE.with(|n| n.set(n.get() - 1));
+    }
+}
+
+fn read_here(what: &str) {
+    if cfg!(any(test, debug_assertions)) {
+        let thread = std::thread::current();
+        assert!(READ_HERE.with(Cell::get) > 0, "a cook's {what} on a thread no take reads ({:?}): hold refuse::reading()", thread.name());
+    }
+}
+
+/// Said about the file, which still cooks.
+pub fn note(why: &'static str, args: &[(&'static str, String)]) {
+    read_here("note");
+    NOTES.with(|notes| notes.borrow_mut().push(finding(why, Level::Note, args)));
+}
+
+/// The notes said since the last take, in order.
+pub fn take_notes() -> Vec<Finding> {
+    NOTES.with(|notes| std::mem::take(&mut *notes.borrow_mut()))
+}
+
+/// The refusal an error is, when it is one (a cook's own or a patch's).
+pub fn refusal_of(error: &anyhow::Error) -> Option<&Finding> {
+    error.downcast_ref::<Refusal>().map(|r| &r.0)
+}
+
+/// An option as a refusal: `None` is `invalid(pointer)`.
+pub trait OrInvalid<T> {
+    fn or_invalid(self, pointer: impl FnOnce() -> String) -> anyhow::Result<T>;
+}
+
+impl<T> OrInvalid<T> for Option<T> {
+    fn or_invalid(self, pointer: impl FnOnce() -> String) -> anyhow::Result<T> {
+        self.ok_or_else(|| invalid(pointer()))
+    }
+}
+
+/// What the cook says about one file of a mod, for the facts file beside the store (mod-log.md 9: COOK entries).
+#[derive(Clone, Debug, PartialEq)]
+pub enum CookFact {
+    /// The file was refused: nothing of it is in the store.
+    Refused { path: String, source: String, finding: Finding },
+    /// Said about the file, which cooked.
+    Noted { path: String, source: String, finding: Finding },
+    /// A model cooked (models.md section 9's `cook.model`).
+    Model { path: String, source: String, facts: super::gltf::ModelFacts },
+    /// An effect of a mod cooked, or a game particle it replaced (effects.md section 7's `cook.effect`).
+    Effect { path: String, source: String, facts: EffectFacts },
+    /// A layout of a mod cooked (the fact `cook.layout`, docs/modding/how-tos/adding-screens-and-fonts.md).
+    Layout { path: String, source: String, facts: super::layout_json::LayoutFacts },
+    /// A sound effect of a mod cooked (the fact `cook.sound`, docs/modding/how-tos/adding-sounds-and-music.md).
+    Sound { path: String, source: String, facts: super::sound_effect::SoundFacts },
+    /// A clip's frame events cooked (the fact `cook.events`, docs/modding/how-tos/adding-animations.md).
+    Events { path: String, source: String, facts: super::clip_events::EventFacts },
+    /// A mod's font cooked (the fact `cook.font`, docs/modding/how-tos/adding-screens-and-fonts.md).
+    Font { path: String, source: String, facts: super::font_cook::FontFacts },
+    /// A mod's movie cooked (the fact `cook.movie`).
+    Movie { path: String, source: String, facts: super::movie_cook::MovieFacts },
+}
+
+/// What `cook.effect` says of one effect (`<id>:<name>`) or one replaced game particle (its name).
+#[derive(Clone, Debug, PartialEq)]
+pub struct EffectFacts {
+    pub name: String,
+    /// Its particles' numbers (ParticleNames' id).
+    pub particles: Vec<u32>,
+    /// Draw group, 0 to 5 (effects.md section 4).
+    pub group: u8,
+    /// The texture its first particle's sprite role names ("" for none).
+    pub sprite: String,
+    /// Textures the file adds to the game's particle file.
+    pub textures: usize,
+    pub replaced: bool,
+}
+
+thread_local! {
+    static FACTS: RefCell<Vec<CookFact>> = const { RefCell::new(Vec::new()) };
+}
+
+pub fn record(fact: CookFact) {
+    read_here("fact");
+    FACTS.with(|facts| facts.borrow_mut().push(fact));
+}
+
+/// The facts recorded since the last take, in order.
+pub fn take_facts() -> Vec<CookFact> {
+    FACTS.with(|facts| std::mem::take(&mut *facts.borrow_mut()))
+}
+
+fn field(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('\t', "\\t").replace('\n', "\\n").replace('\r', "\\r")
+}
+
+/// The facts as lines of the facts file, in its form (overlay_patches::facts_text): `kind table mod file other row
+/// column selector rows code why`, then parameters. `failed` (Error) and `noted` (Note) carry rule 804, the phrase's
+/// English for the log and its parameters (`why=P:Cook.Model.<Kind>`, then `name=T:<text>`); `cook.model` carries the
+/// replaced game model in `other`, then `name=<number>` for joints, extra_joints, meshes, vertices, materials,
+/// textures and clips; `cook.effect` carries the effect (`<id>:<name>`, or the replaced game particle) in `other`, then
+/// `particles=<numbers, comma between>`, `group`, `sprite`, `textures` and `replaced` (0 or 1); `cook.layout` carries the
+/// layout file it made in `other`, then `panes`, `pictures`, `texts`, `textures` and `groups`; `cook.events` carries the
+/// clip in `other`, then `rows` and `frames` (the game clip's frame count, `none` when the game has no such clip). `table` is the file's
+/// place in the game, `file` the mod's file it came from.
+pub fn cook_facts_text(facts: &[CookFact]) -> String {
+    let mut out = String::new();
+    for fact in facts {
+        let line: Vec<String> = match fact {
+            CookFact::Refused { path, source, finding } | CookFact::Noted { path, source, finding } => {
+                let kind = if matches!(fact, CookFact::Refused { .. }) { "failed" } else { "noted" };
+                let fixed = [kind, path, "", source, "", "", "", "", ""].map(str::to_string);
+                fixed
+                    .into_iter()
+                    .chain([finding.code.to_string(), luma_validate::reason(finding, "UsEnglish")])
+                    .chain(luma_validate::args_text(finding))
+                    .collect()
+            }
+            CookFact::Model { path, source, facts } => {
+                let fixed = ["cook.model", path, "", source, &facts.replaced, "", "", "", "", "", ""].map(str::to_string);
+                let counts = [
+                    ("joints", facts.joints),
+                    ("extra_joints", facts.extra_joints),
+                    ("meshes", facts.meshes),
+                    ("vertices", facts.vertices),
+                    ("materials", facts.materials),
+                    ("textures", facts.textures),
+                    ("clips", facts.clips),
+                ];
+                fixed.into_iter().chain(counts.iter().map(|(name, n)| format!("{name}={n}"))).collect()
+            }
+            CookFact::Effect { path, source, facts } => {
+                let fixed = ["cook.effect", path, "", source, &facts.name, "", "", "", "", "", ""].map(str::to_string);
+                let numbers = facts.particles.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
+                fixed
+                    .into_iter()
+                    .chain([
+                        format!("particles={numbers}"),
+                        format!("group={}", facts.group),
+                        format!("sprite={}", facts.sprite),
+                        format!("textures={}", facts.textures),
+                        format!("replaced={}", u8::from(facts.replaced)),
+                    ])
+                    .collect()
+            }
+            CookFact::Layout { path, source, facts } => {
+                let fixed = ["cook.layout", path, "", source, path, "", "", "", "", "", ""].map(str::to_string);
+                let counts = [("panes", facts.panes), ("pictures", facts.pictures), ("texts", facts.texts), ("textures", facts.textures), ("groups", facts.groups), ("windows", facts.windows), ("animations", facts.animations)];
+                fixed.into_iter().chain(counts.iter().map(|(name, n)| format!("{name}={n}"))).collect()
+            }
+            CookFact::Sound { path, source, facts } => {
+                let fixed = ["cook.sound", path, "", source, path, "", "", "", "", "", ""].map(str::to_string);
+                let level = |v: f32| if v.is_finite() { format!("{v:.1}") } else { "none".to_string() };
+                fixed
+                    .into_iter()
+                    .chain([
+                        format!("frames={}", facts.frames),
+                        format!("channels={}", facts.channels),
+                        format!("rate={}", facts.rate_in),
+                        format!("looped={}", u8::from(facts.looped)),
+                        format!("loudness={}", level(facts.loudness)),
+                        format!("peak={}", level(facts.peak)),
+                        format!("replaces={}", facts.replaces),
+                        format!("kind={}", facts.kind),
+                        format!("notes={}", facts.notes),
+                        format!("dropped={}", facts.dropped),
+                    ])
+                    .collect()
+            }
+            CookFact::Events { path, source, facts } => {
+                let fixed = ["cook.events", path, "", source, &facts.clip, "", "", "", "", "", ""].map(str::to_string);
+                let frames = facts.frames.map_or_else(|| "none".to_string(), |n| n.to_string());
+                fixed.into_iter().chain([format!("rows={}", facts.rows), format!("frames={frames}")]).collect()
+            }
+            CookFact::Movie { path, source, facts } => {
+                let fixed = ["cook.movie", path, "", source, &facts.replaces, "", "", "", "", "", ""].map(str::to_string);
+                fixed
+                    .into_iter()
+                    .chain([
+                        format!("frames={}", facts.frames),
+                        format!("width={}", facts.width),
+                        format!("height={}", facts.height),
+                        format!("rate={:.3}", facts.rate),
+                        format!("seconds={:.3}", facts.seconds),
+                        format!("audio_seconds={:.3}", facts.audio_seconds),
+                        format!("colour={}", facts.colour),
+                        format!("subtitles={}", facts.subtitles),
+                    ])
+                    .collect()
+            }
+            CookFact::Font { path, source, facts } => {
+                let fixed = ["cook.font", path, "", source, &facts.fallback, "", "", "", "", "", ""].map(str::to_string);
+                fixed
+                    .into_iter()
+                    .chain([
+                        format!("glyphs={}", facts.glyphs),
+                        format!("sheets={}", facts.sheets),
+                        format!("kern={}", facts.kern),
+                        format!("size={}", facts.size),
+                        format!("missing={}", facts.missing),
+                    ])
+                    .collect()
+            }
+        };
+        out.push_str(&line.iter().map(|f| field(f)).collect::<Vec<_>>().join("\t"));
+        out.push('\n');
+    }
+    out
+}
+
+/// A refusal's phrase and arguments, a phrase argument as `P:<id>`; every phrase has its row and every placeholder of
+/// its words is given, in four languages.
+#[cfg(test)]
+pub fn said(error: &anyhow::Error) -> (&'static str, Vec<(&'static str, String)>) {
+    let finding = refusal_of(error).unwrap_or_else(|| panic!("not a refusal: {error:#}"));
+    assert_eq!(finding.code, COOK_FAILED);
+    said_finding(finding)
+}
+
+#[cfg(test)]
+fn said_finding(finding: &Finding) -> (&'static str, Vec<(&'static str, String)>) {
+    let mut args = finding.args.iter();
+    let Some(("why", Arg::Phrase(why))) = args.next() else { panic!("no why: {finding:?}") };
+    for language in ["UsEnglish", "UsFrench", "JpJapanese", "KrKorean"] {
+        let words = luma_validate::reason(finding, language);
+        assert!(!words.contains('{') && !words.contains("Cook."), "{why} in {language}: {words}");
+    }
+    let rest = args
+        .map(|(name, value)| match value {
+            Arg::Text(text) => (*name, text.clone()),
+            Arg::Phrase(id) => (*name, format!("P:{id}")),
+        })
+        .collect();
+    (why, rest)
+}
+
+#[cfg(test)]
+mod tests {
+    /// A note on a thread a cook started, which no take reads, stops the test rather than being lost.
+    #[test]
+    fn a_note_on_a_thread_no_take_reads_stops_the_test() {
+        let reading = super::reading();
+        super::note("Cook.ToolFile", &[("file", "a".to_string())]);
+        assert_eq!(super::take_notes().len(), 1);
+        let worker = std::thread::spawn(|| super::note("Cook.ToolFile", &[("file", "b".to_string())]));
+        assert!(worker.join().is_err());
+        drop(reading);
+        assert!(std::panic::catch_unwind(|| super::note("Cook.ToolFile", &[("file", "c".to_string())])).is_err());
+        assert!(super::take_notes().is_empty());
+    }
+}
+
+/// The notes said so far on this thread, as `said` gives a refusal.
+#[cfg(test)]
+pub fn said_notes() -> Vec<(&'static str, Vec<(&'static str, String)>)> {
+    take_notes().iter().map(said_finding).collect()
+}

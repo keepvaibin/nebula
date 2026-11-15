@@ -1,5 +1,13 @@
-# Checks the tracked files: no game content, build outputs, oversized files or credentials, and no
-# C runtime fma call in the runtime.
+# Checks the tracked files. The repository holds source code, metadata, scripts, tests and documentation only;
+# the user's game content and everything derived from it stay on the user's computer, untracked. Refused:
+#   - Nintendo game files and containers (.dol, .arc, .rso, .iso, .rvz, .wbfs, .szs, .thp and the rest below);
+#   - build outputs: modules, programs, objects, libraries, debug databases;
+#   - diagnostics, frame dumps, shader caches, saves, build trees and launch logs (ignored, so tracked ones fail);
+#   - files over 5 MiB (the shader-cache seed, which Nebula generates, may be 16 MiB);
+#   - credentials;
+#   - a C runtime fma call in the runtime.
+# game.pak is packed from the user's own disc on the user's computer: never tracked, attached to a release or
+# downloaded by the updater. Nebula.exe and smg_game.dll ship in Setup, built only from this repository.
 [CmdletBinding()]
 param()
 
@@ -49,7 +57,7 @@ foreach ($RelativePath in $TrackedFiles) {
     }
 
     $File = Get-Item -LiteralPath $FullPath
-    # The shader-cache seed is Nebula-generated DXBC (docs/CONTENT_POLICY.md).
+    # The shader-cache seed is DXBC that Nebula generates.
     if ($RelativePath -like 'installer/shadercache-seed/*') {
         if ($File.Length -gt 16MB) { $Failures.Add("Shader-cache seed larger than 16 MiB: $($File.FullName)") }
         continue

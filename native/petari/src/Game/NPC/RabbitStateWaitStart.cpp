@@ -8,18 +8,15 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTalk_f1, "exeTalk.f1", 30.0f);
 
 namespace {
-    NEBULA_TUNABLE(f32, sGravityAccel, 0.1f);
+    const f32 sGravityAccel = 0.1f;
     static const s32 sSmallTurnTime = NebulaFrameClock::stepsOfMilliseconds(500);
     static const s32 sSmallTurnStopTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sSmallTurnDegree, 6.0f);
-    NEBULA_TUNABLE(f32, sSmallTurnStartDegree, 45.0f);
-    NEBULA_TUNABLE(f32, sSpinDegree, 2.0f);
-    NEBULA_TUNABLE(f32, sInStartTalkRange, 300.0f);
+    const f32 sSmallTurnDegree = 6.0f;
+    const f32 sSmallTurnStartDegree = 45.0f;
+    const f32 sSpinDegree = 2.0f;
+    const f32 sInStartTalkRange = 300.0f;
 };  // namespace
 
 namespace NrvRabbitStateWaitStart {
@@ -261,7 +258,7 @@ void RabbitStateWaitStart::exeTalk() {
         MR::zeroVelocity(mHost);
     }
 
-    MR::turnDirectionToPlayerDegreeHorizon(mHost, mHostFrontVec, cNum_exeTalk_f1);
+    MR::turnDirectionToPlayerDegreeHorizon(mHost, mHostFrontVec, 30.0f);
 
     if (MR::tryTalkNearPlayerAtEnd(mTalkCtrl)) {
         if (mIsKillAfterTalk) {

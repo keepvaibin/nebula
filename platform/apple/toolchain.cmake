@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-only
-# The toolchain of every Apple build (docs/APPLE.md, "Toolchain"): LLVM's clang (the game module needs clang 19, as on
+# The toolchain of every Apple build: LLVM's clang (the game module needs clang 19, as on
 # every platform), Apple's SDK and linker, and LLVM's libc++ built for the target (build_libcxx.sh), linked statically.
 #
 #   -DCMAKE_TOOLCHAIN_FILE=platform/apple/toolchain.cmake

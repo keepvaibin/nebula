@@ -1,6 +1,6 @@
 """Lists loops that may spin on another thread's work: empty bodies, and short loops whose condition polls state
 (a call or member read) with no wait in the body. Such a loop holds a core at full use until the other thread is done;
-each listed site waits on the event it polls instead, or is shown to end on its own thread's work (docs/NATIVE_PORT.md).
+each listed site waits on the event it polls instead, or is shown to end on its own thread's work.
     spin_audit.py [native dir]"""
 import os
 import re

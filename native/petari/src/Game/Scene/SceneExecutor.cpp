@@ -16,17 +16,10 @@
 #include "Game/Render/Model.hpp"
 
 void SceneFunction::movementStopSceneController() {
-    // A frame a plugin's slower scene skips counts for no stop either.
-    if (!NebulaMods::isSceneStep()) {
-        return;
-    }
     MR::getSceneObj< StopSceneController >(SceneObj_StopSceneController)->movement();
 }
 
 void SceneFunction::executeMovementList() {
-    if (!NebulaMods::isSceneStep()) {
-        return;
-    }
     StopSceneController* pStopScene = MR::getSceneObj< StopSceneController >(SceneObj_StopSceneController);
     if (pStopScene->isSceneStopped()) {
         return;

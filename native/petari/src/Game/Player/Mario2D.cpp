@@ -4,15 +4,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "math_types.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2DadjustGround_f1, "stick2DadjustGround.f1", 0.707f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2DadjustGround_f2, "stick2DadjustGround.f2", 0.707f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2DadjustGround_f3, "stick2DadjustGround.f3", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2DadjustGround_f4, "stick2DadjustGround.f4", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2DadjustGround_f5, "stick2DadjustGround.f5", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2DadjustGround_f6, "stick2DadjustGround.f6", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_stick2DadjustGround_f7, "stick2DadjustGround.f7", 180.0f);
 
 void Mario::stick2DadjustGround(f32& rX, f32& rY) {
     if (isStageCameraRotate2D()) {
@@ -43,7 +34,7 @@ void Mario::stick2DadjustGround(f32& rX, f32& rY) {
 
     f32 dot = m2DGroundNorm.dot(mUp2D);
 
-    if (!MR::isInRange(dot, -cNum_stick2DadjustGround_f1, cNum_stick2DadjustGround_f2)) {
+    if (!MR::isInRange(dot, -0.707f, 0.707f)) {
         set2Dmode(dot >= 0.0f);
     }
 
@@ -56,7 +47,7 @@ void Mario::stick2DadjustGround(f32& rX, f32& rY) {
             return;
         }
 
-        if (MR::diffAngleAbs(stickDir2D, m2DPrevStick) > cNum_stick2DadjustGround_f3) {
+        if (MR::diffAngleAbs(stickDir2D, m2DPrevStick) > 0.3f) {
             m2DStickHold = false;
             return;
         }
@@ -79,7 +70,7 @@ void Mario::stick2DadjustGround(f32& rX, f32& rY) {
     f32 diff = MR::diffAngleAbs(stickDir2D, vec2);
 
     // explicit conversions to radian instead of calling MR::toRadian()
-    if (diff < cNum_stick2DadjustGround_f4 * MR::pi() / cNum_stick2DadjustGround_f5 || diff > cNum_stick2DadjustGround_f6 * MR::pi() / cNum_stick2DadjustGround_f7) {
+    if (diff < 30.0f * MR::pi() / 180.0f || diff > 150.0f * MR::pi() / 180.0f) {
         rX = 0.0f;
         rY = 0.0f;
         mStickPos.z = 0.0f;

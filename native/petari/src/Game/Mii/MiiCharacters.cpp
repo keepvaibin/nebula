@@ -1,6 +1,5 @@
 #include "Game/Mii/Mii.hpp"
 #include <string.h>
-#include "Game/Util/Tunable.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -21,8 +20,8 @@ namespace {
     };
 
     // A create ID's first byte: "not special" clear for a special Mii, "temporary" set for one made on the spot.
-    NEBULA_TUNABLE(u8, cIdNotSpecial, 0x80);
-    NEBULA_TUNABLE(u8, cIdTemporary, 0x20);
+    const u8 cIdNotSpecial = 0x80;
+    const u8 cIdTemporary = 0x20;
 
     const NebulaColor8 cFavoriteColors[Mii::FavoriteColorCount] = {
         {184, 64, 48, 255},   {240, 120, 40, 255}, {248, 216, 32, 255}, {128, 200, 40, 255},

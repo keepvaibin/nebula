@@ -12,18 +12,15 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRotateDisappear_f1, "exeRotateDisappear.f1", 20.0f);
-
 namespace {
-    NEBULA_TUNABLE_RECORD(Vec, cJumpOutDemoRotate, {347.0f, 0.0f, 0.0f});
+    const Vec cJumpOutDemoRotate = {347.0f, 0.0f, 0.0f};
     const char* const cAstroDomeSkyTable[] = {"AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC", "AstroDomeSkyA", "AstroDomeSkyB", "AstroDomeSkyC"};
-    NEBULA_TUNABLE(s32, cAppearanceBrkTotalFrame, 200);
-    NEBULA_TUNABLE(s32, cRotateDisappearBrkFrame, 30);
-    NEBULA_TUNABLE(s32, cRotateAppearBrkFrame, 59);
-    NEBULA_TUNABLE(f32, cAppearanceRotateSpeed, 0.1f);
+    const s32 cAppearanceBrkTotalFrame = 200;
+    const s32 cRotateDisappearBrkFrame = 30;
+    const s32 cRotateAppearBrkFrame = 59;
+    const f32 cAppearanceRotateSpeed = 0.1f;
 
     const NebulaColor8 sColor1 = {0x00, 0x00, 0x00, 0xFF};
     const NebulaColor8 sColor2 = {0x00, 0x00, 0x00, 0xFF};
@@ -190,7 +187,7 @@ void AstroDomeSky::exeRotateDisappear() {
     if (MR::isFirstStep(this)) {
         MR::startBrk(this, "Disappear");
         MR::setBrkFrame(this, mBrkFrame);
-        MR::setBrkRate(this, (::cRotateDisappearBrkFrame - mBrkFrame) / cNum_exeRotateDisappear_f1);
+        MR::setBrkRate(this, (::cRotateDisappearBrkFrame - mBrkFrame) / 20.0f);
     }
 
     if (::cRotateDisappearBrkFrame <= MR::getBrkFrame(this)) {

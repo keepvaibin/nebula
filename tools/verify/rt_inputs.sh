@@ -1,6 +1,6 @@
 #!/bin/sh
 # rt_inputs.sh BIN TAG: what ray tracing reads of each frame list, over the 102-stop tour (--diagnostics rt-inputs,
-# docs/DIAGNOSTICS.md): the world's lights, checked against their rules and counted every 300 lists. Prints each
+# docs/using-nebula/diagnostics.md): the world's lights, checked against their rules and counted every 300 lists. Prints each
 # kind's range over the tour and the faults; the lines themselves stay in the run's log. Exit 1 when a rule was
 # broken or no list was checked.
 set -u

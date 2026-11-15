@@ -1,0 +1,67 @@
+{
+  "harness": 1,
+  "name": "taken-out",
+  "about": "The mod taken out while the game runs: the next galaxy starts Mario with three health again",
+  "proves": [
+    "kernel.numbers.taken_out"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "read": "MarioActor.mHealth",
+      "of": "player",
+      "type": "u32",
+      "fact": "health_with"
+    },
+    {
+      "at": 40,
+      "take_out": "six-health",
+      "wait": true
+    },
+    {
+      "at": 60,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 1
+      }
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "exists": true
+      },
+      "read": "MarioActor.mHealth",
+      "of": "player",
+      "type": "u32",
+      "fact": "health_without"
+    },
+    {
+      "after": {
+        "fact": "health_without",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "health_with",
+      "is": 6
+    },
+    {
+      "fact": "health_without",
+      "is": 3
+    },
+    {
+      "log": "six-health. its 1 numbers are the game's again"
+    }
+  ],
+  "limit_seconds": 240
+}

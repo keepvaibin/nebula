@@ -58,11 +58,23 @@ public:
     // does not fit), and its picture is the kept scene. The composite writes the kept scene's alpha with its colour.
     [[nodiscard]] std::shared_ptr<Texture> take_kept_image();
     void keep_picture(std::shared_ptr<Texture> picture);
+    // The simple bloom's source without a copy: the scene target continues on the image this returns (the hand-over makes
+    // one when it does not fit), and give_source takes the scene's picture as the source; prepare() copies nothing then.
+    // Only where the composite covers the whole target, which it then writes from the source.
+    [[nodiscard]] std::shared_ptr<Texture> take_source_image();
+    void give_source(VkCommandBuffer commands, std::shared_ptr<Texture> picture);
     // The chain before its composite, recorded with no render pass open; false when there is nothing to draw.
     bool prepare(VkCommandBuffer commands, const Inputs& in, const Params& params, const SetAllocator& allocate);
     // The composite prepare() set up, in the open scene target pass `pass` of 2^samples_log2 samples (RGB; the game's alpha
     // stays).
     void finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate);
+    // A picture of the scene target's own format drawn back over the frame, each pixel's channels as they were (the
+    // composite's kind 0, which loads the pixel): a capture that took the scene target's image continues the scene from
+    // it. prepare_draw_back with no render pass open (it may make the composite and the unused slot's image); false: the
+    // capture copies instead. draw_back in the open scene target pass `pass`, `picture` shader-readable.
+    [[nodiscard]] bool prepare_draw_back(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2);
+    void draw_back(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate,
+                   const Texture& picture, unsigned width, unsigned height);
     // Once a frame, outside a submission being recorded: hands back the images no pass has asked for in 600 frames (the
     // bloom switched off, a scene without one, the other bloom's kind); prepare() makes them again. The images go
     // through the context's deferred destruction, behind the fence of any submission naming them.
@@ -84,6 +96,8 @@ private:
     [[nodiscard]] VkPipeline composite_pipeline(VkRenderPass pass, unsigned samples_log2);
     bool ensure(std::shared_ptr<Texture>& target, unsigned width, unsigned height, VkFormat format, bool work,
                 const char* name);
+    // The unused slots' image, in GENERAL as their descriptors name it (no render pass open).
+    bool ensure_unused_slot(VkCommandBuffer commands);
     // The scene target colour's frame into `target` (its format), left shader-readable.
     bool copy_frame(VkCommandBuffer commands, const Inputs& in, std::shared_ptr<Texture>& target, const char* name);
     // Set 0 for a pass: t0-t2 and u0-u2 (null: the unused slot's image); `first_layout` the first's when given.
@@ -95,6 +109,7 @@ private:
 
     bool ready_ = false;
     bool kept_ = false;
+    bool source_given_ = false;  // give_source ran since the last prepare
     bool to_build_ = false;  // initialized: poll_ready makes the passes
 
     VkDescriptorSetLayout image_layout_ = VK_NULL_HANDLE;    // set 0: t0-t2 sampled, u0-u2 storage

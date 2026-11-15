@@ -4,11 +4,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHostRotateMtx_f1, "updateHostRotateMtx.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateInfo_f1, "updateInfo.f1", 0.01f);
 
 namespace NrvMapPartsRailRotator {
     NEW_NERVE(HostTypeWait, MapPartsRailRotator, Wait);
@@ -93,7 +89,7 @@ void MapPartsRailRotator::updateHostRotateMtx() {
         mBaseRotateMtx.set(mHost->getBaseMtx());
         mBaseRotateMtx.zeroTrans();
     } else {
-        mBaseRotateMtx.setEuler(mHost->mRotation * (PI / cNum_updateHostRotateMtx_f1));
+        mBaseRotateMtx.setEuler(mHost->mRotation * (PI / 180.0f));
     }
 }
 
@@ -111,7 +107,7 @@ void MapPartsRailRotator::updateInfo(s32 point) {
     } else {
         f32 speed = -1.0f;
         MR::getMapPartsArgRailRotateSpeed(&speed, mHost, point);
-        mRotateSpeed = cNum_updateInfo_f1 * speed;
+        mRotateSpeed = 0.01f * speed;
     }
 
     f32 angle = -1.0f;

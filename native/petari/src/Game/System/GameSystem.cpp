@@ -1,4 +1,13 @@
-#include "Game/System/LumaScript.hpp"
+#include "Game/System/LumaHook.hpp"
+#include "Game/System/LumaLoader.hpp"
+#include "Game/System/LumaContentFx.hpp"
+#include "Game/System/LumaContentModel.hpp"
+#include "Game/System/LumaAnim.hpp"
+#include "Game/System/LumaUi.hpp"
+#include "Game/System/LumaDraw.hpp"
+#include "Game/System/LumaMovie.hpp"
+#include "Game/System/LumaServices.hpp"
+#include "Game/System/LumaTime.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaMods.hpp"
@@ -63,6 +72,8 @@ namespace {
 
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
+    // Mods start here and hooks change only here (LumaCore.game_thread, docs/modding/concepts/how-nebula-loads-mods.md).
+    luma::markGameThread();
     NebulaArena::create(nullptr);
     Ui::LytInit();
     Arenas::create();
@@ -170,8 +181,18 @@ void GameSystem::frameLoop() {
     NebulaLoadTrace::frame();
     // The frame's wait comes before its update, so the input it reads is drawn at once, not a frame later.
     NebulaFrameClock::sleepUntilFrame();
+    // The world clock (services/time.md 3, 4): this frame's world steps; 1 with no mod using time.
+    const u32 worldSteps = luma::time::beginFrame();
     update();
     calcAnim();
+    // A rate above real time: more world steps, each with its own controls, scene update and animation; the frame's own
+    // parts ran once in update(). None once the game holds the scene itself (it decided so in the first update), a scene
+    // change or reset is asked, or a movie or the skip began.
+    for (u32 step = 1; step < worldSteps && luma::time::canStepAgain(); step++) {
+        mObjHolder->update();
+        updateNerve();
+        calcAnim();
+    }
     // A skipped cutscene runs on unseen: more of the game's steps while they fit in this frame.
     while (NebulaCutsceneSkip::tryExtraStep()) {
         update();
@@ -206,6 +227,10 @@ void GameSystem::draw() {
         drawOwn(Own_SystemWipe);
         mSystemWipeHolder->draw();
     }
+    // The mods' loading point: over the game's loading screen while it loads a scene.
+    if (luma::draw::isLoading()) {
+        luma::draw::point(LUMA_DRAW_LOADING);
+    }
 
     drawOwn(Own_ErrorWatcher);
     mErrorWatcher->draw();
@@ -213,6 +238,8 @@ void GameSystem::draw() {
     mSceneController->drawSceneOverlay();
     drawOwn(Own_Prepare);
     NebulaPrepare::draw();
+    // The mods' present point: every frame shown, over the game's screens and under Nebula's settings menu.
+    luma::draw::point(LUMA_DRAW_PRESENT);
     if (isSettingsShown) {
         drawOwn(Own_Settings);
         NebulaSettingsMenu::draw();
@@ -226,9 +253,21 @@ void GameSystem::update() {
     SingletonHolder< GameSystemRestartProcess >::get()->movement();
     mSceneController->checkRequestAndChangeScene();
     mObjHolder->update();
+    // A mod's menu on top (LumaUi) has the pad: the game's menus under it move no highlight (ui::frame takes the presses).
+    if (luma::ui::takesControls()) {
+        NebulaMenuFocus::cover();
+    }
     NebulaMenuFocus::update();
     NebulaPrepare::update();
-    lumascript::beginFrame();  // the scripts' step budgets; nothing when no mod has a script
+    luma::takeOutRequested();  // mods asked to be taken out (reload.md 2); one load when none is
+    luma::frame();             // replaced hook lists and taken-out mods no call holds; nothing when there are none
+    luma::services::frameStart();  // the services' events, then time's frame handlers; one load when nothing waits
+    luma::content::fx::frame();    // the mods' open effects: their actors' ends and clipping; one load when none is open
+    luma::content::model::frame(); // the mods' attached models: their actors' ends; one load when none is attached
+    luma::anim::frame();           // the mods' plays: ends, marks (animation.md 7); one load when none is going
+    luma::ui::frame();    // the mods' open screens' facts (harness); one load when none is open
+    luma::draw::frame();  // textures the mods freed leave the renderer; one load when none was
+    luma::movie::frame(); // the mods' movie ended (its end, the scene's, another movie); one load when none plays
     NebulaMods::fire(NEBULA_MOD_EVENT_FRAME);
     NebulaSettingsMenu::update();
     NebulaIcons::update();
@@ -268,6 +307,11 @@ void GameSystem::updateSceneController() {
     if (isSkipPrompt || isSettingsMenu) {
         isSceneUpdate = false;
     }
+    // A frame the world clock gives no step (a mod holds the world, or a rate below real time): the scene holds as under
+    // the HOME Menu, the system runs on (services/time.md 3).
+    if (!luma::time::isStepAllowed()) {
+        isSceneUpdate = false;
+    }
     const bool isSceneHeld = mHomeButtonLayout->isActive() || GameSystemFunction::isOccurredSystemWarning() || isSkipPrompt || isSettingsMenu;
     mIsSceneResumed = mWasSceneHeld && !isSceneHeld;
     mWasSceneHeld = isSceneHeld;
@@ -281,6 +325,7 @@ void GameSystem::updateSceneController() {
             mSystemWipeHolder->movement();
         }
 
+        luma::time::beginStep();  // the world step counted, the mods' step handlers
         mSceneController->updateScene();
     }
     else if (isSkipPrompt && !isSettingsMenu && mSystemWipeHolder != nullptr) {

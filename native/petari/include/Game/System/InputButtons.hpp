@@ -12,6 +12,10 @@ public:
     /// @brief Updates the state of the player's buttons.
     void update();
 
+    /// @brief This frame's presses and releases were taken (a mod's menu on top, LumaUi): nothing later this frame
+    /// reads them. Holds stay; a press withheld for a later step goes too.
+    void takePresses();
+
     /// @brief Determines if up on the +Control Pad is pressed.
     /// @return `true` if up is pressed, `false` otherwise.
     bool testButtonUp() const;
@@ -131,6 +135,10 @@ private:
 
     /// @brief The combination of buttons just released.
     u32 mRelease;
+    // Presses and releases in frames the world clock gave no step (a rate below real time), given with the next
+    // step's, so no tap is lost; the system's screens read each frame's own (services/time.md 4, J22-3).
+    u32 mCarriedTrigger;
+    u32 mCarriedRelease;
 
 
 

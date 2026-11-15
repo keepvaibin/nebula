@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
-# Builds Nebula for macOS and packs it as Nebula.app (docs/APPLE.md, "Build"): the Metal renderer and Apple's own
+# Builds Nebula for macOS and packs it as Nebula.app: the Metal renderer and Apple's own
 # host, the game module beside it. Nothing of another system's is in the app.
 #
 #   build_macos.sh -t <tools> -w <work folder> [-a "x86_64 arm64"] [-r] [-s <macOS SDK>] [-j <jobs>] [-x <Xcode>]
@@ -12,11 +12,13 @@
 #            shaders, which the other one takes.
 #   -j       how many compiles run at once (default: the build tool's own choice).
 #   -x       an Xcode's Contents/Developer folder, for its Metal compiler, when it is not the machine's selected one:
-#            the programs are then compiled into the app's Metal libraries (docs/APPLE.md, "Shaders").
+#            the programs are then compiled into the app's Metal libraries.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
+# Plan 2.9: every platform's release items (permissions, usage texts, file and link associations) are in the tree.
+python3 "$root/tools/check_platform_items.py" "$root"
 tools=
 work=
 archs=$(uname -m)
@@ -53,10 +55,12 @@ done
 host_tree=
 for arch in $ordered; do
     common="-G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=$here/toolchain.cmake -DNEBULA_APPLE_LLVM=$tools/toolchain/llvm -DNEBULA_APPLE_LIBCXX=$tools/toolchain/libcxx -DNEBULA_APPLE_PLATFORM=macos -DNEBULA_APPLE_ARCH=$arch -DNEBULA_APPLE_SDK=$sdk"
+    # The players' build: ThinLTO for the game module (native/CMakeLists.txt NEBULA_LTO; plain where the linker cannot).
     # shellcheck disable=SC2086
-    cmake -S "$root/native" -B "$work/macos-$arch/game" $common
+    cmake -S "$root/native" -B "$work/macos-$arch/game" $common -DNEBULA_LTO=ON
     # shellcheck disable=SC2086
-    cmake --build "$work/macos-$arch/game" --target smg_game $jobs
+    # Both game modules: the host loads libsmg_game_plain.dylib unless a mod's code needs the rows.
+    cmake --build "$work/macos-$arch/game" --target smg_game smg_game_plain $jobs
     tree="$work/macos-$arch/host"
     if [ "$arch" = "$host_arch" ]; then
         # shellcheck disable=SC2086
@@ -89,17 +93,22 @@ set -- $ordered
 if [ $# -gt 1 ]; then
     programs=
     modules=
+    plains=
     for arch in $ordered; do
         programs="$programs $work/macos-$arch/host/Nebula"
         modules="$modules $work/macos-$arch/game/libsmg_game.dylib"
+        plains="$plains $work/macos-$arch/game/libsmg_game_plain.dylib"
     done
     # shellcheck disable=SC2086
     lipo -create $programs -output "$app/Contents/MacOS/Nebula"
     # shellcheck disable=SC2086
     lipo -create $modules -output "$app/Contents/Frameworks/libsmg_game.dylib"
+    # shellcheck disable=SC2086
+    lipo -create $plains -output "$app/Contents/Frameworks/libsmg_game_plain.dylib"
 else
     cp "$work/macos-$1/host/Nebula" "$app/Contents/MacOS/Nebula"
     cp "$work/macos-$1/game/libsmg_game.dylib" "$app/Contents/Frameworks/libsmg_game.dylib"
+    cp "$work/macos-$1/game/libsmg_game_plain.dylib" "$app/Contents/Frameworks/libsmg_game_plain.dylib"
 fi
 
 # The programs' Metal libraries, when the build machine had Apple's compiler to make them (the same for every
@@ -112,6 +121,8 @@ done
 
 version=$(sed -n 's/^project(Nebula VERSION \([0-9.]*\).*/\1/p' "$root/CMakeLists.txt")
 sed "s/@NEBULA_VERSION@/$version/g" "$here/Info.macos.plist.in" > "$app/Contents/Info.plist"
+# The Info.plist's player texts in every language the game ships.
+python3 "$root/tools/package_text.py" apple "$app/Contents/Resources"
 
 # The icon, from the Windows one.
 iconset="$work/Nebula.iconset"
@@ -135,6 +146,7 @@ fi
 # name there, without the player being asked (the microphone above all, which macOS otherwise asks for whenever the
 # sound goes to a device that also has inputs).
 codesign --force --options runtime --sign - "$app/Contents/Frameworks/libsmg_game.dylib"
+codesign --force --options runtime --sign - "$app/Contents/Frameworks/libsmg_game_plain.dylib"
 codesign --force --options runtime --entitlements "$here/Nebula.entitlements" --sign - "$app"
 # A signature that does not hold over every file is what makes macOS call a downloaded app "damaged".
 codesign --verify --deep --strict "$app"

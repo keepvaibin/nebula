@@ -6,19 +6,16 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 350.0f);
 
 namespace NrvKabokuriFire {
     NEW_NERVE(KabokuriFireNrvWait, KabokuriFire, Wait);
 };  // namespace NrvKabokuriFire
 
 namespace {
-    NEBULA_TUNABLE(f32, sBodyHitSize, 40.0f);
-    NEBULA_TUNABLE(f32, sBodyHitYOffset, 90.0f);
-    NEBULA_TUNABLE(s32, sFireTime, 320);
+    const f32 sBodyHitSize = 40.0f;
+    const f32 sBodyHitYOffset = 90.0f;
+    const s32 sFireTime = 320;
 };  // namespace
 
 KabokuriFire::KabokuriFire(const char* pName) : LiveActor(pName) {
@@ -61,7 +58,7 @@ void KabokuriFire::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool KabokuriFire::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
-    if (MR::isInSpinStormRange(msg, pSender, pReceiver, cNum_receiveOtherMsg_f1)) {
+    if (MR::isInSpinStormRange(msg, pSender, pReceiver, 350.0f)) {
         MR::startSound(this, "SE_OJ_PHANTOM_TOACH_OFF");
         kill();
         return true;

@@ -1,11 +1,7 @@
 #include "Game/MapObj/RosettaChair.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 1.7f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 500.0f);
 
 RosettaChair::RosettaChair(const char* pName) : LiveActor(pName), mDefaultPosition(0.0f, 0.0f, 0.0f), mDefaultRotation(0.0f, 0.0f, 0.0f) {
     lumacore::setClass(this, lumacore::kClassId< RosettaChair >);
@@ -20,10 +16,10 @@ void RosettaChair::init(const TableIter& rIter) {
     MR::addBodyMessageSensorMapObj(this);
 
     mScaleMtx.set(getBaseMtx());
-    mScaleMtx.scaleXYZ(cNum_init_f1);
+    mScaleMtx.scaleXYZ(1.7f);
     MR::initCollisionPartsAutoEqualScale(this, "RosettaChair", getSensor("body"), mScaleMtx);
 
-    MR::setClippingTypeSphere(this, cNum_init_f2);
+    MR::setClippingTypeSphere(this, 500.0f);
     MR::tryRegisterDemoCast(this, rIter);
     MR::registerDemoActionFunctor(this, MR::Functor(this, &RosettaChair::startDemo), "朗読開始");
     MR::registerDemoActionFunctor(this, MR::Functor(this, &RosettaChair::setDefaultPose), "キャスト入れ換え");

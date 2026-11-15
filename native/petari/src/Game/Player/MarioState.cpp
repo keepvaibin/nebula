@@ -74,7 +74,9 @@ void Mario::changeStatus(MarioState* pState) {
         return;
     }
 
-    NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_ACTION, static_cast< s32 >(pState->mStatusId));
+    if (!mActor->isExtraPlayer()) {
+        NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_ACTION, static_cast< s32 >(pState->mStatusId));
+    }
 
     mNoticedState = pState;
 

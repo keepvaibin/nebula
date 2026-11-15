@@ -4,17 +4,16 @@
 #include "Game/Util.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/CollisionShapeUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sSensorRadius, 300.0f);
-    NEBULA_TUNABLE(f32, sSensorOffsetY, 300.0f);
-    NEBULA_TUNABLE(f32, sHitCylinderRange, 10.0f);
-    NEBULA_TUNABLE(f32, sHitSphereRadius, 70.0f);
-    NEBULA_TUNABLE(f32, sHitSphereOffsetY, 350.0f);
-    NEBULA_TUNABLE(f32, sClippingRadius, 3500.0f);
-    NEBULA_TUNABLE(f32, sHitCylinderHeight, 280.0f);
+    const f32 sSensorRadius = 300.0f;
+    const f32 sSensorOffsetY = 300.0f;
+    const f32 sHitCylinderRange = 10.0f;
+    const f32 sHitSphereRadius = 70.0f;
+    const f32 sHitSphereOffsetY = 350.0f;
+    const f32 sClippingRadius = 3500.0f;
+    const f32 sHitCylinderHeight = 280.0f;
 };  // namespace
 
 namespace NrvFountain {

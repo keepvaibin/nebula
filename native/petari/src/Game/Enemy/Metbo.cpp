@@ -24,57 +24,48 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startSwoon_f1, "startSwoon.f1", 180.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_startSwoon_turnDirectionToPlayerDegree_1, "startSwoon.turnDirectionToPlayerDegree.1", 180.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, cSpeedMax, 30.0f);
-    NEBULA_TUNABLE(f32, cReceivePushPower, 1.5f);
+    const f32 cSpeedMax = 30.0f;
+    const f32 cReceivePushPower = 1.5f;
     const s32 cStepForWait = NebulaFrameClock::stepsOfMilliseconds(2500);
-    NEBULA_TUNABLE(s32, cStepForWalkAround, 200);
+    const s32 cStepForWalkAround = 200;
     const s32 cStepForChaseMin = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, cStepForChaseMax, 220);
+    const s32 cStepForChaseMax = 220;
     const s32 cStepForSwoonWait = NebulaFrameClock::stepsOfMilliseconds(2500);
     const s32 cStepForRest = NebulaFrameClock::stepsOfSeconds(1);
     // Beyond this from the player Metbo goes inactive; within it it wakes.
-    NEBULA_TUNABLE(f32, cActiveRadius, 3000.0f);
-    NEBULA_TUNABLE(f32, cWalkAroundRadius, 300.0f);
-    NEBULA_TUNABLE(f32, cWalkAroundTurn, 20.0f);
+    const f32 cActiveRadius = 3000.0f;
+    const f32 cWalkAroundRadius = 300.0f;
+    const f32 cWalkAroundTurn = 20.0f;
     // Every this many steps the walk direction turns by cWalkAroundTurn either way.
-    NEBULA_TUNABLE(s32, cWalkAroundTurnInterval, 10);
+    const s32 cWalkAroundTurnInterval = 10;
     // One chance in this many per step of a chase ending early.
-    NEBULA_TUNABLE(s32, cChaseGiveUpChance, 50);
-    NEBULA_TUNABLE(f32, cFindRadiusIn, 800.0f);
-    NEBULA_TUNABLE(f32, cFindRadiusOut, 1200.0f);
-    NEBULA_TUNABLE(s32, cSpinHitStop, 3);
-    NEBULA_TUNABLE(f32, cSpinPower, 45.0f);
+    const s32 cChaseGiveUpChance = 50;
+    const f32 cFindRadiusIn = 800.0f;
+    const f32 cFindRadiusOut = 1200.0f;
+    const s32 cSpinHitStop = 3;
+    const f32 cSpinPower = 45.0f;
     // Horizontal share of the swoon launch before it is normalised with the up vector.
-    NEBULA_TUNABLE(f32, cSpinPowerHRate, 0.4f);
+    const f32 cSpinPowerHRate = 0.4f;
     // Ledge probe: distance ahead, drop height, ground search depth.
-    NEBULA_TUNABLE(f32, cFallCheckAhead, 200.0f);
-    NEBULA_TUNABLE(f32, cFallCheckHeight, 100.0f);
-    NEBULA_TUNABLE(f32, cFallCheckDepth, 300.0f);
-    NEBULA_TUNABLE(f32, cBaseMtxBlendRate, 0.3f);
-    NEBULA_TUNABLE(f32, cBodyRadius, 100.0f);
-    NEBULA_TUNABLE(f32, cAttackRadius, 80.0f);
-    NEBULA_TUNABLE(f32, cShadowRadius, 80.0f);
-    NEBULA_TUNABLE(s32, cGroupClippingNum, 32);
-    NEBULA_TUNABLE(s32, cStarPieceNum, 3);
+    const f32 cFallCheckAhead = 200.0f;
+    const f32 cFallCheckHeight = 100.0f;
+    const f32 cFallCheckDepth = 300.0f;
+    const f32 cBaseMtxBlendRate = 0.3f;
+    const f32 cBodyRadius = 100.0f;
+    const f32 cAttackRadius = 80.0f;
+    const f32 cShadowRadius = 80.0f;
+    const s32 cGroupClippingNum = 32;
+    const s32 cStarPieceNum = 3;
 
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cFallParam, {0.0f, 3.0f, 0.99f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cDontMoveParam, {0.0f, 2.0f, 0.5f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cSkateMoveParam, {0.0f, 2.0f, 0.98f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cWalkAroundParam, {0.25f, 2.0f, 0.92f, 2.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cSearchParam, {0.0f, 2.0f, 0.5f, 5.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, cChaseParam, {0.8f, 2.0f, 0.9f, 2.0f});
+    const MR::ActorMoveParam cFallParam = {0.0f, 3.0f, 0.99f, 0.0f};
+    const MR::ActorMoveParam cDontMoveParam = {0.0f, 2.0f, 0.5f, 0.0f};
+    const MR::ActorMoveParam cSkateMoveParam = {0.0f, 2.0f, 0.98f, 0.0f};
+    const MR::ActorMoveParam cWalkAroundParam = {0.25f, 2.0f, 0.92f, 2.0f};
+    const MR::ActorMoveParam cSearchParam = {0.0f, 2.0f, 0.5f, 5.0f};
+    const MR::ActorMoveParam cChaseParam = {0.8f, 2.0f, 0.9f, 2.0f};
 
     bool isFallNext(const Metbo* pMetbo, const Vec3f& rDir) {
         return MR::isFallNextMove(pMetbo->mPosition, rDir, pMetbo->mGravity, ::cFallCheckAhead, ::cFallCheckHeight, ::cFallCheckDepth, nullptr);
@@ -136,7 +127,7 @@ void Metbo::init(const TableIter& rIter) {
     mAnimScaleController->setParamTight();
     mStarPointerBind = new WalkerStateBindStarPointer(this, mAnimScaleController);
     MR::calcFrontVec(&mFront, this);
-    mSpinHitController = new SpinHitController(this, 20, 20, 4, cNum_init_f1, cNum_init_f2, cNum_init_f3, 3, false);
+    mSpinHitController = new SpinHitController(this, 20, 20, 4, 0.2f, 40.0f, 20.0f, 3, false);
     mWalkCenter.set(mPosition);
     initNerve(GET_NERVE(Metbo, MetboNrvWait));
     makeActorAppeared();
@@ -567,9 +558,9 @@ void Metbo::startSwoon(bool isFromPlayer) {
     mVelocity.scale(::cSpinPower, launch);
 
     if (isFromPlayer) {
-        MR::turnDirectionFromPlayerDegree(this, &mFront, cNum_startSwoon_f1);
+        MR::turnDirectionFromPlayerDegree(this, &mFront, 180.0f);
     } else {
-        MR::turnDirectionToPlayerDegree(this, &mFront, cNum_startSwoon_turnDirectionToPlayerDegree_1);
+        MR::turnDirectionToPlayerDegree(this, &mFront, 180.0f);
     }
     setNerve(GET_NERVE(Metbo, MetboNrvSwoonStart));
 }

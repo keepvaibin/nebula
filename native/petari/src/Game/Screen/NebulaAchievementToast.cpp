@@ -22,7 +22,6 @@
 #include <Game/Ui/TextBox.hpp>
 #include <Game/Ui/Window.hpp>
 #include <Game/Ui/Font.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
@@ -37,20 +36,20 @@ namespace {
     // icon and text, the icon's height, the space between the title line and the name, the longest the text may run
     // before it narrows, the window's scale, and its distance from the screen's right and bottom edges (the same on
     // screen for both).
-    NEBULA_TUNABLE(f32, cPadding, 16.0f);
-    NEBULA_TUNABLE(f32, cGap, 14.0f);
-    NEBULA_TUNABLE(f32, cIconSize, 60.0f);
-    NEBULA_TUNABLE(f32, cLineSpace, 8.0f);
-    NEBULA_TUNABLE(f32, cTextMax, 440.0f);
-    NEBULA_TUNABLE(f32, cScale, 0.65f);
-    NEBULA_TUNABLE(f32, cMargin, 8.0f);
+    const f32 cPadding = 16.0f;
+    const f32 cGap = 14.0f;
+    const f32 cIconSize = 60.0f;
+    const f32 cLineSpace = 8.0f;
+    const f32 cTextMax = 440.0f;
+    const f32 cScale = 0.65f;
+    const f32 cMargin = 8.0f;
 
-    NEBULA_TUNABLE(s32, cRiseFrames, 24);
-    NEBULA_TUNABLE(s32, cIconDelay, 8);   // the icon pops in once the window is mostly up
-    NEBULA_TUNABLE(s32, cIconFrames, 16);
-    NEBULA_TUNABLE(s32, cFallFrames, 16);
-    NEBULA_TUNABLE(s32, cHoldFrames, 270);
-    NEBULA_TUNABLE(s32, cHoldFramesQueued, 180);  // when another one waits
+    const s32 cRiseFrames = 24;
+    const s32 cIconDelay = 8;   // the icon pops in once the window is mostly up
+    const s32 cIconFrames = 16;
+    const s32 cFallFrames = 16;
+    const s32 cHoldFrames = 270;
+    const s32 cHoldFramesQueued = 180;  // when another one waits
 
     // The game's message tags, as MessageData holds them natively: 0x1A, the tag's byte length and group as two
     // bytes, the tag id, then 16-bit parameters (an 8-bit one in the high byte).

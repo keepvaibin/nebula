@@ -7,17 +7,16 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/GameRules.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, cCoinNumMin, 0);
+    const s32 cCoinNumMin = 0;
     // Coins for a 1-up (50); 0: none.
-    NEBULA_TUNABLE(s32, cCoinStepNum, 50);
+    const s32 cCoinStepNum = 50;
     // Purple coins that bring out the Power Star (100).
-    NEBULA_TUNABLE(s32, cPurpleCoinPowerStarAppearNum, 100);
+    const s32 cPurpleCoinPowerStarAppearNum = 100;
     // Star bits for a 1-up (50); 0: none.
-    NEBULA_TUNABLE(s32, cStarPieceStepNum, 50);
+    const s32 cStarPieceStepNum = 50;
 
     s32 getCoinNumMax() {
         return GameRules::maxCoins();
@@ -51,6 +50,17 @@ void ScenePlayingResult::incCoin(int num) {
     NebulaAchievements::countStat(NebulaStat_Coins, num);
 
     ::requestOneUpIfNeed(prevNum, currNum, ::getCoinStepNum());
+}
+
+// Coins spent (a shop, a toll): fewer than num held, or num below 0, pays nothing. No 1-up, no life, no coin stat
+// (those are for coins taken).
+bool ScenePlayingResult::payCoin(s32 num) {
+    const s32 held = getCoinNum();
+    if (num < 0 || num > held) {
+        return false;
+    }
+    mCoinNum = held - num;
+    return true;
 }
 
 s32 ScenePlayingResult::getCoinNum() const {

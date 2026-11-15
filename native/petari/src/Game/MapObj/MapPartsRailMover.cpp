@@ -4,19 +4,7 @@
 #include "Game/MapObj/MapPartsFunction.hpp"
 #include "Game/MapObj/MapPartsRailPointPassChecker.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcTimeToNextRailPoint_f1, "calcTimeToNextRailPoint.f1", 0.0001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcTimeToNextRailPoint_f2, "calcTimeToNextRailPoint.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcTimeToNextRailPoint_f3, "calcTimeToNextRailPoint.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcMoveSpeed_f1, "calcMoveSpeed.f1", 0.0001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 0.0001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveStart_f1, "exeMoveStart.f1", 7.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_setStateStopAtEndBeforeRotate_setRailCoordSpeed_1, "setStateStopAtEndBeforeRotate.setRailCoordSpeed.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStopAtPoint_setRailCoordSpeed_1, "exeStopAtPoint.setRailCoordSpeed.1", 0.0f);
 
 namespace NrvMapPartsRailMover {
     NEW_NERVE(HostTypeWait, MapPartsRailMover, Wait);
@@ -216,7 +204,7 @@ bool MapPartsRailMover::isDone() const {
 void MapPartsRailMover::setStateStopAtEndBeforeRotate() {
     mSpeed = 0.0f;
     mAcceleration = 0.0f;
-    MR::setRailCoordSpeed(mHost, cNum_setStateStopAtEndBeforeRotate_setRailCoordSpeed_1);
+    MR::setRailCoordSpeed(mHost, 0.0f);
     mStopTime = 0;
     MR::getMapPartsArgStopTime(&mStopTime, mHost);
 
@@ -235,17 +223,17 @@ void MapPartsRailMover::calcTimeToNextRailPoint(f32* pTime) const {
     f32 distance = 0.0f;
     MR::calcDistanceToNextRailPoint(mHost, &distance);
 
-    if (MR::isNearZero(mAcceleration, cNum_calcTimeToNextRailPoint_f1)) {
+    if (MR::isNearZero(mAcceleration, 0.0001f)) {
         *pTime = MR::abs(distance / mSpeed);
         return;
     }
 
-    f32 accelDistance = mSpeed * mAccelTime + cNum_calcTimeToNextRailPoint_f2 * mAcceleration * mAccelTime * mAccelTime;
+    f32 accelDistance = mSpeed * mAccelTime + 0.5f * mAcceleration * mAccelTime * mAccelTime;
 
     if (accelDistance < distance) {
         *pTime = mAccelTime + (distance - accelDistance) / (mAcceleration * mAccelTime);
     } else {
-        f32 sqrtDiscriminant = MR::sqrt(mSpeed * mSpeed + cNum_calcTimeToNextRailPoint_f3 * mAcceleration * distance);
+        f32 sqrtDiscriminant = MR::sqrt(mSpeed * mSpeed + 2.0f * mAcceleration * distance);
 
         f32 t0 = (-mSpeed + sqrtDiscriminant) / mAcceleration;
         f32 t1 = (-mSpeed - sqrtDiscriminant) / mAcceleration;
@@ -263,7 +251,7 @@ void MapPartsRailMover::endRotateAtPoint() {
 }
 
 void MapPartsRailMover::calcMoveSpeed(f32* pMoveSpeed) const {
-    if (!MR::isNearZero(mAcceleration, cNum_calcMoveSpeed_f1)) {
+    if (!MR::isNearZero(mAcceleration, 0.0001f)) {
         *pMoveSpeed = MR::getRailCoordSpeed(mHost);
     } else {
         s32 calcType = 0;
@@ -390,7 +378,7 @@ void MapPartsRailMover::exeMove() {
         sendMsgToHost(ACTMES_MAPPARTS_START_ROTATE_BETWEEN_POINTS);
     }
 
-    bool isNotNear = !MR::isNearZero(mAcceleration, cNum_exeMove_f1);
+    bool isNotNear = !MR::isNearZero(mAcceleration, 0.0001f);
 
     if (isNotNear && getStep() < mAccelTime) {
         mSpeed += mAcceleration;
@@ -422,7 +410,7 @@ void MapPartsRailMover::exeMoveStart() {
         shakeSign *= -1.0f;
     }
 
-    MR::setRailCoord(mHost, mSignCoord + (cNum_exeMoveStart_f1 * (shakeSign * ((getStep() % 3)))));
+    MR::setRailCoord(mHost, mSignCoord + (7.0f * (shakeSign * ((getStep() % 3)))));
     mStartPos.set(MR::getRailPos(mHost));
     if (isStep(MapParts::getMoveStartSignalTime())) {
         MR::setRailCoord(mHost, mSignCoord);
@@ -440,7 +428,7 @@ void MapPartsRailMover::exeStopAtPoint() {
     if (isFirstStep()) {
         mSpeed = 0.0f;
         mAcceleration = 0.0f;
-        MR::setRailCoordSpeed(mHost, cNum_exeStopAtPoint_setRailCoordSpeed_1);
+        MR::setRailCoordSpeed(mHost, 0.0f);
     }
 
     if (isStep(mStopTime)) {

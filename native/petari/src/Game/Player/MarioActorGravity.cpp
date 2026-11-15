@@ -8,37 +8,6 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_syncJumpBeeStickMode_f1, "syncJumpBeeStickMode.f1", 36.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_syncJumpBeeStickMode_f2, "syncJumpBeeStickMode.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBeeModeGravity_f1, "updateBeeModeGravity.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBeeModeGravity_f2, "updateBeeModeGravity.f2", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f1, "updateGravityVec.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f2, "updateGravityVec.f2", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f3, "updateGravityVec.f3", 6.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f4, "updateGravityVec.f4", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f5, "updateGravityVec.f5", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f6, "updateGravityVec.f6", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f7, "updateGravityVec.f7", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f8, "updateGravityVec.f8", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f9, "updateGravityVec.f9", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f10, "updateGravityVec.f10", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f11, "updateGravityVec.f11", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f12, "updateGravityVec.f12", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f13, "updateGravityVec.f13", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f14, "updateGravityVec.f14", 59.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f15, "updateGravityVec.f15", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f16, "updateGravityVec.f16", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f17, "updateGravityVec.f17", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f18, "updateGravityVec.f18", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f19, "updateGravityVec.f19", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f20, "updateGravityVec.f20", 160.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f21, "updateGravityVec.f21", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateGravityVec_f22, "updateGravityVec.f22", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkBeeCeilStick_f1, "checkBeeCeilStick.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBeeStickMode_f1, "updateBeeStickMode.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBeeStickMode_f2, "updateBeeStickMode.f2", 100.0f);
 
 const Vec3f& MarioActor::getGravityVec() const {
     return *mMario->getGravityVec();
@@ -115,11 +84,11 @@ void MarioActor::syncJumpBeeStickMode() {
         mBeeStickInhibit = 30;
     }
 
-    if (!(MR::diffAngleAbs(mBeePoseDir, getGravityVec()) < MR::pi() / cNum_syncJumpBeeStickMode_f1)) {
+    if (!(MR::diffAngleAbs(mBeePoseDir, getGravityVec()) < MR::pi() / 36.0f)) {
         return;
     }
 
-    mBeePoseHeadPos = mPosition - mMario->mFrontVec * cNum_syncJumpBeeStickMode_f2;
+    mBeePoseHeadPos = mPosition - mMario->mFrontVec * 2.0f;
     mBeePoseVelocity = mPosition - mBeePoseHeadPos;
     mBeePoseDir = mCenterPos - mBeePoseHeadPos;
     MR::normalize(&mBeePoseDir);
@@ -137,12 +106,12 @@ void MarioActor::updateBeeModeGravity(Vec3f& rVec) {
     }
 
     if (mBeeWallWalk == 5) {
-        MR::vecBlendSphere(mGravityVec, rVec, &rVec, cNum_updateBeeModeGravity_f1);
+        MR::vecBlendSphere(mGravityVec, rVec, &rVec, 0.1f);
         return;
     }
 
     if (mBeeWallWalk != 0) {
-        MR::vecBlendSphere(mGravityVec, rVec, &rVec, cNum_updateBeeModeGravity_f2);
+        MR::vecBlendSphere(mGravityVec, rVec, &rVec, 0.3f);
         return;
     }
 
@@ -169,7 +138,7 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
         gravity = positionGravity;
     }
 
-    MR::calcGravityVectorOrZero(this, mPosition + mMario->mFrontVec.multInLine(cNum_updateGravityVec_f1), &frontGravity, nullptr, 0);
+    MR::calcGravityVectorOrZero(this, mPosition + mMario->mFrontVec.multInLine(100.0f), &frontGravity, nullptr, 0);
 
     if (MR::isNearZero(positionGravity - frontGravity)) {
         mGravitySameAhead = true;
@@ -185,7 +154,7 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
 
     MR::normalizeOrZero(&gravity);
     MR::normalizeOrZero(&positionGravity);
-    if (gravity.dot(positionGravity) < cNum_updateGravityVec_f2) {
+    if (gravity.dot(positionGravity) < 0.9f) {
         f32 dot = mMario->getAirGravityVec().dot(gravity);
         if (mMario->getAirGravityVec().dot(positionGravity) > dot) {
             gravity = positionGravity;
@@ -201,14 +170,14 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
 
     if (!reset) {
         if (mMario->isPlayerModeBee()) {
-            if (angle >= MR::pi() / cNum_updateGravityVec_f3) {
+            if (angle >= MR::pi() / 6.0f) {
                 setBlendMtxTimer(8);
             }
         }
 
         if (mGravityJumpTimer) {
             gravity = mRawGravityVec;
-        } else if (angle >= MR::pi() * cNum_updateGravityVec_f4) {
+        } else if (angle >= MR::pi() * 0.4f) {
             if (!isJumping()) {
                 mMario->mActionStates.steepGravityStop = true;
             } else {
@@ -227,14 +196,14 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
             mGravityJumpTimer = 15;
             mPrevHeadVec = mMario->mHeadVec;
             if (!MR::isNearZero(gravity)) {
-                if (angle >= MR::pi() * (cNum_updateGravityVec_f5 / cNum_updateGravityVec_f6) || !mMario->mMovementStates.mode2D) {
+                if (angle >= MR::pi() * (2.0f / 3.0f) || !mMario->mMovementStates.mode2D) {
                     mMario->cutGravityElementFromJumpVec(false);
-                    mMario->mJumpVec.mult(cNum_updateGravityVec_f7);
+                    mMario->mJumpVec.mult(0.5f);
                 } else {
                     const Vec3f& previousGravity = *mMario->getGravityVec();
                     f32 speed = MR::vecKillElement(mMario->mJumpVec, previousGravity, &mMario->mJumpVec);
-                    mMario->mJumpVec.mult(cNum_updateGravityVec_f8);
-                    mMario->mJumpVec += *mMario->getGravityVec() * speed * cNum_updateGravityVec_f9;
+                    mMario->mJumpVec.mult(0.75f);
+                    mMario->mJumpVec += *mMario->getGravityVec() * speed * 0.75f;
                 }
             }
 
@@ -299,44 +268,44 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
     }
 
     calcCenterPos();
-    f32 height = cNum_updateGravityVec_f10;
+    f32 height = 70.0f;
     Vec3f up;
     if (getDrawStates().wallGravity) {
-        MR::vecBlendSphere(mMario->mHeadVec, mMario->mWallNorm, &up, cNum_updateGravityVec_f11 * mBindRatio);
+        MR::vecBlendSphere(mMario->mHeadVec, mMario->mWallNorm, &up, 0.5f * mBindRatio);
     } else {
         MR::vecBlendSphere(mMario->mHeadVec, mMario->mGroundNorm, &up, mBindRatio);
     }
 
     Vec3f oldOffset(mBinderOffset);
     if (mMario->mMovementStates.squat) {
-        height = cNum_updateGravityVec_f12;
+        height = 50.0f;
     }
 
     if (mMario->mMovementStates.onGround) {
         mBinderOffset = up * height;
     } else if (mMario->mActionStates.jumpTakeoff || mInRush) {
-        Vec3f offset = -mGravityVec * cNum_updateGravityVec_f13;
-        if (mGravityJumpTimer || mMario->calcPolygonAngleD(mMario->mGroundPolygon) >= cNum_updateGravityVec_f14) {
-            MR::vecBlend(mBinderOffset, offset, &mBinderOffset, cNum_updateGravityVec_f15);
+        Vec3f offset = -mGravityVec * 70.0f;
+        if (mGravityJumpTimer || mMario->calcPolygonAngleD(mMario->mGroundPolygon) >= 59.0f) {
+            MR::vecBlend(mBinderOffset, offset, &mBinderOffset, 0.1f);
         } else {
-            MR::vecBlend(mBinderOffset, offset, &mBinderOffset, cNum_updateGravityVec_f16);
+            MR::vecBlend(mBinderOffset, offset, &mBinderOffset, 0.5f);
         }
     } else {
-        Vec3f offset = -mGravityVec * cNum_updateGravityVec_f17;
-        MR::vecBlend(mBinderOffset, offset, &mBinderOffset, cNum_updateGravityVec_f18);
+        Vec3f offset = -mGravityVec * 70.0f;
+        MR::vecBlend(mBinderOffset, offset, &mBinderOffset, 0.1f);
     }
 
     if (mGravityBlendTimer) {
         mGravityBlendTimer--;
-        f32 rate = static_cast< f32 >(mGravityBlendTimer) / cNum_updateGravityVec_f19;
+        f32 rate = static_cast< f32 >(mGravityBlendTimer) / 15.0f;
         mBinderOffset = mBinderOffset * (1.0f - rate) + oldOffset * rate;
         mMario->mActionStates.gravityTurned = true;
     }
 
     if (mGravityJumpTimer) {
-        if (mMario->mVerticalSpeed > cNum_updateGravityVec_f20) {
-            Vec3f head = mMario->mHeadVec * cNum_updateGravityVec_f21;
-            Vec3f oldHead = mPrevHeadVec * cNum_updateGravityVec_f22;
+        if (mMario->mVerticalSpeed > 160.0f) {
+            Vec3f head = mMario->mHeadVec * 80.0f;
+            Vec3f oldHead = mPrevHeadVec * 80.0f;
             Vec3f displacement = oldHead - head;
             f32 distance = MR::vecKillElement(displacement, mGravityVec, &displacement);
             mMario->push2(mGravityVec * distance);
@@ -361,7 +330,7 @@ bool MarioActor::checkBeeCeilStick(Vec3f& rVec) {
         if (out) {
             Triangle triangle = Triangle();
             Vec3f vec;
-            if (MR::getFirstPolyOnLineToMap(&vec, &triangle, mPosition, (-mGravityVec * cNum_checkBeeCeilStick_f1))) {
+            if (MR::getFirstPolyOnLineToMap(&vec, &triangle, mPosition, (-mGravityVec * 200.0f))) {
                 entryWallWalkMode(vec, *(triangle.getNormal(0)));
             }
         }
@@ -398,7 +367,7 @@ void MarioActor::updateBeeStickMode(Vec3f& rGravity) {
                 mBeeWallWalk = 0;
             }
         } else if (isJumping()) {
-            if (mMario->mVerticalSpeed < cNum_updateBeeStickMode_f1) {
+            if (mMario->mVerticalSpeed < 100.0f) {
                 mBeeWallWalk--;
             }
 
@@ -433,7 +402,7 @@ void MarioActor::updateBeeStickMode(Vec3f& rGravity) {
             mMario->tryJump();
             mMario->mBeeGravityTimer = mConst->getTable()->mBeeGravityPowerTime;
             mMario->mAirTimer = mConst->getTable()->mBeeAirWalkInhibitTime - 5;
-            mMario->push(*mMario->mShadowPolygon->getNormal(0) * cNum_updateBeeStickMode_f2);
+            mMario->push(*mMario->mShadowPolygon->getNormal(0) * 100.0f);
             mMario->cutVecElementFromJumpVec(mRawGravityVec);
             return;
         }

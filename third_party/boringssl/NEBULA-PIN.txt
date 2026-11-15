@@ -1,0 +1,13 @@
+BoringSSL, Apache-2.0 (LICENSE here)
+release   0.20261020.0
+commit    d3bf4795ad5b79d646cddf2fec687da5b9b502db
+archive   https://github.com/google/boringssl/archive/refs/tags/0.20261020.0.tar.gz
+sha256    fb43aac7fbd323c9dfa1f45fe92a1c01142433c05b23fe34f61d6ba8b13b642e
+
+Kept: the files gen/sources.cmake lists for the library (BCM, CRYPTO and SSL sources, headers and assembly for every
+platform), every header or .inc they include, LICENSE, gen/sources.cmake and gen/README.md, unchanged. Left out:
+tests, test data, fuzzers, tools, bench, decrepit, pki, rust, util, the upstream CMakeLists.txt and build files.
+third_party/boringssl.cmake builds it (two static libraries); nothing here is edited by hand.
+
+To move to a newer release: download its archive, check its sha256 against the release page, run the same copy
+(the files gen/sources.cmake lists plus their includes) into an empty third_party/boringssl, and update this file.

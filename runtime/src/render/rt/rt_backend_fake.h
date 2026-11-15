@@ -14,6 +14,7 @@ struct Log {
     std::uint32_t images = 0u, passes = 0u, buffers = 0u;
     std::uint32_t scene_instances = 0u;  // of the last one
     std::uint32_t structures = 0u;  // alive now
+    std::uint32_t micromaps = 0u, micromap_builds = 0u;  // alive now; built
     std::uint32_t pages = 0u;       // alive now
     // What must stay zero: two builds between barriers sharing scratch, a build outside its pages, a refit or a copy of
     // a structure not finished by a barrier, a structure named after it was freed.

@@ -5,6 +5,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
+#include "Game/System/LumaMake.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/PlacementId.hpp"
@@ -50,6 +51,30 @@ namespace {
         }
     }
 
+    // Each placement table of a zone with its layer (cLayerDirName's index), in the order initLayerJmpInfo attached
+    // them; `each` returning true stops the walk (and the walk returns true).
+    template < class Each >
+    bool eachPlacementTable(AssetFolder* pArchive, const MR::AssignableArray< Table >& rArray, u32 layerMask, Each each) {
+        const char* const dirs[] = {"/jmp/Placement", "/jmp/MapParts"};
+        const Table* pTable = rArray.begin();
+        MR::FormattedName path;
+        for (u32 i = 0; i < ARRAY_SIZEU(::cLayerDirName); i++) {
+            if ((layerMask & (1u << i)) == 0) {
+                continue;
+            }
+            for (const char* const pDir : dirs) {
+                path.format("%s/%s", pDir, ::cLayerDirName[i]);
+                const s32 count = pArchive->countFile(path.c_str());
+                for (s32 k = 0; k < count && pTable != rArray.end(); k++, pTable++) {
+                    if (each(i, pTable)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     static void attachJmpInfoToPlacementInfoOrdered(PlacementInfoOrdered* pPriorityInfo, PlacementInfoOrdered* pNormalInfo,
                                                     PlacementInfoOrdered* pDeferredInfo, const MR::AssignableArray< Table >& rArray) {
         for (const Table* pInfo = rArray.begin(); pInfo != rArray.end(); pInfo++) {
@@ -76,6 +101,7 @@ void StageDataHolder::init(const TableIter& /*rIter*/) {
 
     if (mLoadCommon) {
         u32 commonLayer = ScenarioDataFunction::getCurrentCommonLayers(mStageName);
+        mCommonLayerMask = commonLayer;
         initLayerJmpInfo(&mCommonPlacements, "/jmp/Placement", "/jmp/MapParts", commonLayer);
     }
 
@@ -94,6 +120,7 @@ void StageDataHolder::initAfterScenarioSelected() {
         curLayers |= ScenarioDataFunction::getCurrentCommonLayers(mStageName);
     }
 
+    mScenarioLayerMask = curLayers;
     initLayerJmpInfo(&mScenarioPlacements, "/jmp/Placement", "/jmp/MapParts", curLayers);
     createLocalStageDataHolder(mScenarioPlacements, false);
 
@@ -142,13 +169,22 @@ bool StageDataHolder::initPlacementStep(uint64_t deadline) {
 }
 
 TableIter StageDataHolder::getCommonPathPointInfo(const Table** ppOut, int idx) const {
+    // A zone with no rail table, or no rail of that id: no points (*ppOut null), never a read through the table.
     const Table* pInfo = findJmpInfoFromArray(&mPathObjs, "CommonPathInfo");
+    if (pInfo == nullptr) {
+        *ppOut = nullptr;
+        return TableIter();
+    }
     TableIter pathIter = pInfo->findElement< s32 >("l_id", idx, 0);
     return getCommonPathPointInfoFromRailDataIndex(ppOut, pathIter.mIndex);
 }
 
 TableIter StageDataHolder::getCommonPathPointInfoFromRailDataIndex(const Table** ppInfo, int idx) const {
     const Table* pInfo = findJmpInfoFromArray(&mPathObjs, "CommonPathInfo");
+    if (pInfo == nullptr || idx < 0 || idx >= pInfo->getNumEntries()) {
+        *ppInfo = nullptr;
+        return TableIter();
+    }
     *ppInfo = findJmpInfoFromArray(&mPathObjs, MR::FormattedName("CommonPathPointInfo.%d", idx).c_str());
     return TableIter(pInfo, idx);
 }
@@ -304,6 +340,11 @@ const StageDataHolder* StageDataHolder::findPlacedStageDataHolder(const TableIte
         }
     }
 
+    // A row LumaCore.make wrote (LumaMake.cpp): its objects stand in the main stage.
+    if (mZoneID == 0 && luma::make::isMadeTable(pData)) {
+        return this;
+    }
+
     return nullptr;
 }
 
@@ -441,6 +482,56 @@ void StageDataHolder::initLayerJmpInfo(MR::AssignableArray< Table >* pInfo, cons
             }
         }
     }
+}
+
+bool StageDataHolder::findPlacementKey(const Table* pTable, s32 entry, const char** ppLayer, u32* pIndex) const {
+    const MR::AssignableArray< Table >* const arrays[] = {&mCommonPlacements, &mScenarioPlacements};
+    const u32 masks[] = {mCommonLayerMask, mScenarioLayerMask};
+    for (u32 a = 0; a < 2; a++) {
+        u32 layer = 0;
+        u32 before = 0;  // the layer's rows in its tables before pTable
+        const bool found = ::eachPlacementTable(mArchive, *arrays[a], masks[a], [&](u32 l, const Table* p) {
+            if (l != layer) {
+                layer = l;
+                before = 0;
+            }
+            if (p == pTable) {
+                return true;
+            }
+            before += static_cast< u32 >(p->getNumEntries());
+            return false;
+        });
+        if (found) {
+            *ppLayer = ::cLayerDirName[layer];
+            *pIndex = before + static_cast< u32 >(entry);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool StageDataHolder::findPlacementRow(const char* pLayer, u32 index, TableIter* pOut) const {
+    const MR::AssignableArray< Table >* const arrays[] = {&mCommonPlacements, &mScenarioPlacements};
+    const u32 masks[] = {mCommonLayerMask, mScenarioLayerMask};
+    for (u32 a = 0; a < 2; a++) {
+        u32 left = index;
+        const bool found = ::eachPlacementTable(mArchive, *arrays[a], masks[a], [&](u32 l, const Table* p) {
+            if (!MR::isEqualStringCase(::cLayerDirName[l], pLayer)) {
+                return false;
+            }
+            const u32 rows = static_cast< u32 >(p->getNumEntries());
+            if (left < rows) {
+                *pOut = TableIter(p, static_cast< s32 >(left));
+                return true;
+            }
+            left -= rows;
+            return false;
+        });
+        if (found) {
+            return true;
+        }
+    }
+    return false;
 }
 
 Table* StageDataHolder::attachJmpInfoToArray(Table* pInfo, const char* pDirectory) {

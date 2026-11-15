@@ -4,20 +4,17 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/CollisionShapeUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 180.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sSensorRadius, 300.0f);
-    NEBULA_TUNABLE(f32, sSensorOffsetY, 300.0f);
-    NEBULA_TUNABLE(f32, sHitCylinderRange, 10.0f);
-    NEBULA_TUNABLE(f32, sHitSphereRadius, 70.0f);
-    NEBULA_TUNABLE(f32, sHitSphereOffsetY, 350.0f);
-    NEBULA_TUNABLE(f32, sClippingRadius, 1000.0f);
+    const f32 sSensorRadius = 300.0f;
+    const f32 sSensorOffsetY = 300.0f;
+    const f32 sHitCylinderRange = 10.0f;
+    const f32 sHitSphereRadius = 70.0f;
+    const f32 sHitSphereOffsetY = 350.0f;
+    const f32 sClippingRadius = 1000.0f;
     static const s32 sEndTime = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sHitCylinderHeight, 280.0f);
+    const f32 sHitCylinderHeight = 280.0f;
 };  // namespace
 
 namespace NrvSpringJetWater {
@@ -34,7 +31,7 @@ void SpringJetWater::init(const TableIter& rIter) {
     MR::initDefaultPos(this, rIter);
     Pos3f mtx;
     mtx.identity();
-    mtx.setEuler(mRotation * (PI / cNum_init_f1));
+    mtx.setEuler(mRotation * (PI / 180.0f));
     mtx.getYDir(mUp);
     MR::normalize(&mUp);
     MR::getObjectName(&mObjName, rIter);

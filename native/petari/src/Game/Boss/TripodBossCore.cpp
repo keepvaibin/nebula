@@ -13,13 +13,12 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sHitSensorRadius, 300.0f);
-    NEBULA_TUNABLE(s32, sBreakStopStep, 2);
-    NEBULA_TUNABLE(s32, sBreakStopFrame, 16);
+    const f32 sHitSensorRadius = 300.0f;
+    const s32 sBreakStopStep = 2;
+    const s32 sBreakStopFrame = 16;
 };  // namespace
 
 namespace NrvTripodBossCore {

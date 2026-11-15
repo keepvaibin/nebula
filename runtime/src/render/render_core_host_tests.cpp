@@ -129,6 +129,52 @@ void test_compose_envelope_and_billboard() {
     check(close_to(board[0][3], 30.0f), "a billboard keeps its position");
 }
 
+// Envelopes sharing joints read each joint's product from the scratch: the same bits as making it at every mix, for the
+// eye rows and then the world rows on the same scratch (as the walker calls them).
+void test_compose_envelope_products_shared() {
+    const std::array<Rows, 3> joints{rotation_y(0.3f, 10.0f, -4.0f, 7.0f), rotation_y(-1.1f, 3.0f, 2.0f, -9.0f, 1.7f),
+                                     rotation_y(2.4f, -6.0f, 5.0f, 1.0f, 0.6f)};
+    const std::array<Rows, 3> inverse{rotation_y(-0.2f, 1.0f, 0.5f, -2.0f), rotation_y(0.9f, -3.0f, 0.0f, 4.0f, 0.8f),
+                                      rotation_y(-2.0f, 0.25f, -1.5f, 3.0f, 1.3f)};
+    const Rows view = rotation_y(0.7f, -40.0f, 12.0f, -300.0f);
+    const std::uint32_t scale_free = 1u;
+    const NebulaModelDrawMatrix matrices[4]{{1u, 0u}, {1u, 1u}, {0u, 2u}, {1u, 2u}};
+    const NebulaModelEnvelope envelopes[3]{{0u, 2u}, {2u, 3u}, {5u, 2u}};
+    const NebulaModelMix mixes[7]{{0u, 0.375f}, {1u, 0.625f}, {1u, 0.2f}, {2u, 0.3f}, {0u, 0.5f}, {2u, 0.9f}, {1u, 0.1f}};
+    std::array<NebulaModelJoint, 3> model_joints{};
+
+    ModelTables tables;
+    tables.joints = model_joints.data();
+    tables.draw_matrices = matrices;
+    tables.envelopes = envelopes;
+    tables.mixes = mixes;
+    tables.inverse_binds = reinterpret_cast<const float (*)[4]>(inverse.data());
+    tables.draw_matrix_count = 4u;
+    tables.joint_count = 3u;
+    tables.has_weighted = true;
+
+    ComposeInput plain;
+    plain.joints = reinterpret_cast<const float (*)[4]>(joints.data());
+    plain.scale_flags = &scale_free;
+    plain.model = &tables;
+    plain.joint_count = 3u;
+    plain.view = as_rows(view);
+    ComposeInput shared = plain;
+    std::array<float, 3u * 12u> skin{};
+    std::array<std::uint8_t, 3u> made{};
+    shared.skin = reinterpret_cast<float (*)[4]>(skin.data());
+    shared.skin_made = made.data();
+
+    std::array<std::array<float, 4>, 4u * kRowsPerMatrix> a{}, b{};
+    compose_rows(plain, reinterpret_cast<float (*)[4]>(a.data()));
+    compose_rows(shared, reinterpret_cast<float (*)[4]>(b.data()));
+    check(std::memcmp(a.data(), b.data(), sizeof(a)) == 0, "shared joint products give an envelope's eye rows bit for bit");
+    check(made[0] == 1u && made[1] == 1u && made[2] == 1u, "every mixed joint's product is made");
+    compose_world_rows(plain, reinterpret_cast<float (*)[4]>(a.data()));
+    compose_world_rows(shared, reinterpret_cast<float (*)[4]>(b.data()));
+    check(std::memcmp(a.data(), b.data(), sizeof(a)) == 0, "the world rows read the eye rows' products bit for bit");
+}
+
 struct ListStore {
     std::vector<Rows> joints;
     std::uint32_t scale_free = 0xFFFFFFFFu;
@@ -345,6 +391,7 @@ int main() {
     test_eye_space_world_rows();
     test_compose_joints_under_camera();
     test_compose_envelope_and_billboard();
+    test_compose_envelope_products_shared();
     test_pairing_by_identity();
     test_wide_identity_parts_do_not_alias_generations();
     test_joints_between_frames();

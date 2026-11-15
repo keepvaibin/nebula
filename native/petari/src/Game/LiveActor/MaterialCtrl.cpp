@@ -4,11 +4,6 @@
 #include "Game/Util.hpp"
 #include "Game/Render/Material.hpp"
 #include "Game/Util/MotionSignal.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 1000000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 1000000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 1000000.0f);
 
 char MirrorReflectionMtxSetter::sMirrorTextureName[] = "MirrorTex";
 
@@ -24,7 +19,7 @@ void MaterialCtrl::update() {
     }
 }
 
-FogCtrl::FogCtrl(Model* pModel, bool useAllMaterials) : MaterialCtrl(pModel, nullptr), mNumMaterials(), mMaterials() {
+FogCtrl::FogCtrl(Model* pModel, bool useAllMaterials) : MaterialCtrl(pModel, nullptr), mFogInfo(), mNumMaterials(), mMaterials() {
     ModelData* pModelData = pModel->getModelData();
     Material* firstMaterial = nullptr;
     for (u32 i = 0; i < pModelData->getMaterialCount(); i++) {
@@ -38,11 +33,15 @@ FogCtrl::FogCtrl(Model* pModel, bool useAllMaterials) : MaterialCtrl(pModel, nul
         }
     }
 
-    if (!firstMaterial) {
+    // A model with no materials (a hidden one: `{"hide": true}`, models.md section 2) has no fog to keep: none, and
+    // nothing for update() to touch.
+    if (!firstMaterial && pModelData->getMaterialCount() != 0) {
         firstMaterial = pModelData->getMaterialAt(0);
     }
 
-    mFogInfo = *firstMaterial->getFog();
+    if (firstMaterial) {
+        mFogInfo = *firstMaterial->getFog();
+    }
     if (mNumMaterials > 0) {
         mMaterials = new Material*[mNumMaterials];
         s32 materialCount = 0;
@@ -234,7 +233,7 @@ void MarioShadowProjmapMtxSetter::update() {
     if (height > 0.0f) {
         NebulaMtxTrans(translationMtx, -playerPos.x, -playerPos.y, -playerPos.z);
     } else {
-        NebulaMtxTrans(translationMtx, cNum_update_f1, cNum_update_f2, cNum_update_f3);
+        NebulaMtxTrans(translationMtx, 1000000.0f, 1000000.0f, 1000000.0f);
     }
 
     Pos3f rotationMtx;

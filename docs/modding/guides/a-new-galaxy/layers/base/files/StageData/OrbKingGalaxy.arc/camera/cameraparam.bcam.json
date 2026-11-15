@@ -1,0 +1,31 @@
+{
+  "columns": {
+    "0x002f0da6": "float",
+    "0x00300d4c": "float",
+    "0x0035807d": "float",
+    "0x0036d9c5": "float",
+    "0x0036d9c6": "float",
+    "0x0036d9c7": "float",
+    "0x06262b01": "float",
+    "0x062675a0": "float",
+    "0x06a54929": "float",
+    "0x06a558a2": "float",
+    "0x145863ff": "float",
+    "0x31cb1323": "float",
+    "0x31cb1324": "float",
+    "0x31cb1325": "float",
+    "0x3b5cb472": "float",
+    "0x3b5cb473": "float",
+    "0x3b5cb474": "float",
+    "0x76b41c57": "float",
+    "0xabc4a1ce": "float",
+    "0xabc4a1cf": "float",
+    "0xac52894b": "float",
+    "0xac52894c": "float",
+    "0xac52894d": "float",
+    "0xbec02b34": "float",
+    "0xbec02b35": "float",
+    "0xbec02b36": "float"
+  },
+  "rows": []
+}

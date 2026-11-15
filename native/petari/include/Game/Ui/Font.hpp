@@ -28,6 +28,12 @@ namespace Ui {
         u16 texHeight;
         u16 cellX;
         u16 cellY;
+        // A glyph another font lends (a mod font's fallback, LumaFont): its picture (glyphWidth by height in its own
+        // sheet's pixels) drawn `scale` times as large and `lift` of the font's pixels lower, so its baseline meets the
+        // font's; left and charWidth already in the font's pixels.
+        f32 scale = 1.0f;
+        f32 lift = 0.0f;
+        u8 fieldRange = 0;  // its sheet's distance range (Font::GetFieldRange)
     };
 
     class Font {
@@ -61,6 +67,13 @@ namespace Ui {
         virtual void GetGlyph(Glyph* pGlyph, u16 ch) const = 0;
         virtual bool HasGlyph(CharCode c) const = 0;
         virtual FontEncoding GetEncoding() const = 0;
+        // What is added between `left` and `right` written in a row, in the font's pixels (a mod font's .kern; the
+        // game's fonts have none).
+        virtual int GetKerning(CharCode left, CharCode right) const {
+            (void)left;
+            (void)right;
+            return 0;
+        }
 
         void InitReaderFunc(FontEncoding);
 

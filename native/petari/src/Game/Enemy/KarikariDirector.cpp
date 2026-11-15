@@ -5,10 +5,7 @@
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_clearScratchInfo_f1, "clearScratchInfo.f1", 100000000.0f);
 
 namespace {
 
@@ -19,7 +16,7 @@ namespace {
                                     {"ShoulderR", {19.04f, 0.0f, 0.0f}, {2.29f, -199.69f, 205.0f}}};
 
     static const s32 hKarikariHoldingMax = ARRAY_SIZE(cling_data);
-    NEBULA_TUNABLE(s32, sNoReleaseTime, 10);
+    const s32 sNoReleaseTime = 10;
     static const s32 sRumbleInterval = NebulaFrameClock::stepsOfSeconds(2);
 
     KarikariDirector* getKarikariDirector() {
@@ -108,7 +105,7 @@ void KarikariDirector::movement() {
 
 void KarikariDirector::clearScratchInfo() {
     mReleaseKarikari = nullptr;
-    mLowestReleaseDist = cNum_clearScratchInfo_f1;
+    mLowestReleaseDist = 100000000.0f;
     mReleaseVel.y = 0.0f;
     mReleaseVel.x = 0.0f;
     mNoReleaseTime = ::sNoReleaseTime;

@@ -106,7 +106,7 @@ $env:NEBULA_WORK = $base; $env:NEBULA_APPDATA = $appdata; $env:NEBULA_SAVES = Jo
 $env:LOCALAPPDATA = $appdata
 $env:GALAXY_AUDIO_WAV_DUMP_ONLY = '1'; $env:GALAXY_AUDIO_WAV_DUMP = Join-Path $base 'audio.wav'
 $log = Join-Path $base 'boot.log'
-$p = Start-Process -FilePath (Join-Path $bin 'NebulaNative.exe') -ArgumentList @('--pak', "`"$(Join-Path $root 'content\game.pak')`"", '--saves', "`"$(Join-Path $base 'saves')`"", '--settings', "`"$base`"", '--crash-dumps', "`"$base`"", '--seconds', '6') -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError (Join-Path $base 'boot-err.log')
+$p = Start-Process -FilePath (Join-Path $bin 'Nebula.exe') -ArgumentList @('--pak', "`"$(Join-Path $root 'content\game.pak')`"", '--saves', "`"$(Join-Path $base 'saves')`"", '--settings', "`"$base`"", '--crash-dumps', "`"$base`"", '--seconds', '6') -PassThru -WindowStyle Hidden -RedirectStandardOutput $log -RedirectStandardError (Join-Path $base 'boot-err.log')
 $p.WaitForExit()
 Check ((Select-String -LiteralPath $log -Pattern 'boot: title screen' -Quiet)) "the installed $New starts and reaches the title"
 

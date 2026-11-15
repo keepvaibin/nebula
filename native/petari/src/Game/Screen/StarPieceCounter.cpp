@@ -8,20 +8,17 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 30.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, cAppearOffsetCenterY, 30.0f);
-    NEBULA_TUNABLE(f32, cAppearOffsetRightX, 50.0f);
-    NEBULA_TUNABLE(s32, cInvalidCountUpInterval, 3);
-    NEBULA_TUNABLE(s32, cHideFrameMin, 3);
-    NEBULA_TUNABLE(s32, cDecCounterValueFast, 10);
-    NEBULA_TUNABLE(f32, cBaseOffsetEatTicoY, -120.0f);
-    NEBULA_TUNABLE(f32, cBaseOffsetTicoFatY, -94.0f);
-    NEBULA_TUNABLE(s32, cHideFrameMinTicoEat, 20);
+    const f32 cAppearOffsetCenterY = 30.0f;
+    const f32 cAppearOffsetRightX = 50.0f;
+    const s32 cInvalidCountUpInterval = 3;
+    const s32 cHideFrameMin = 3;
+    const s32 cDecCounterValueFast = 10;
+    const f32 cBaseOffsetEatTicoY = -120.0f;
+    const f32 cBaseOffsetTicoFatY = -94.0f;
+    const s32 cHideFrameMinTicoEat = 20;
 };  // namespace
 
 namespace NrvStarPieceCounter {
@@ -43,7 +40,7 @@ void StarPieceCounter::init(const TableIter& /*rIter*/) {
     MR::setFollowPos(&mFollowPos, this, "TSPieceCounter");
 
     mPaneRumbler = new CountUpPaneRumbler(this, "TCounter");
-    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(0.0f, cNum_init_f1));
+    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(0.0f, 30.0f));
 
     if (!MR::isStageAstroLocation()) {
         MR::createAndAddPaneCtrl(this, "StarPieceCounter", 1);

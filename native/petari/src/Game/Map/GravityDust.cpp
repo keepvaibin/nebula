@@ -2,11 +2,10 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sGravity, 1.0f);
-    NEBULA_TUNABLE(f32, sFrictionRate, 0.995f);
+    const f32 sGravity = 1.0f;
+    const f32 sFrictionRate = 0.995f;
 };  // namespace
 
 GravityDustParticleCallBack::GravityDustParticleCallBack(const LiveActor* pActor) : MultiEmitterParticleCallBack(), mActor(pActor) {

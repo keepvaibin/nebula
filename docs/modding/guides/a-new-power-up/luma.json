@@ -1,0 +1,32 @@
+{
+  "format": "1.0",
+  "id": "gold-flower",
+  "version": "1.0.0",
+  "name": "Gold Flower",
+  "summary": "A flower that turns Mario gold; a spin throws a gold ball.",
+  "text": {
+    "UsEnglish": {"name": "Gold Flower", "summary": "A flower that turns Mario gold; a spin throws a gold ball.", "options": {"balls_at_once": {"name": "Balls at once"}, "flash_frames": {"name": "Flash frames"}}},
+    "EuEnglish": {"name": "Gold Flower", "summary": "A flower that turns Mario gold; a spin throws a gold ball.", "options": {"balls_at_once": {"name": "Balls at once"}, "flash_frames": {"name": "Flash frames"}}},
+    "UsFrench": {"name": "Fleur d'or", "summary": "Une fleur qui rend Mario doré ; une toupie lance une boule d'or.", "options": {"balls_at_once": {"name": "Boules à la fois"}, "flash_frames": {"name": "Durée de l'éclat (images)"}}},
+    "EuFrench": {"name": "Fleur d'or", "summary": "Une fleur qui rend Mario doré ; une toupie lance une boule d'or.", "options": {"balls_at_once": {"name": "Boules à la fois"}, "flash_frames": {"name": "Durée de l'éclat (images)"}}},
+    "UsSpanish": {"name": "Flor dorada", "summary": "Una flor que vuelve dorado a Mario; un giro lanza una bola de oro.", "options": {"balls_at_once": {"name": "Bolas a la vez"}, "flash_frames": {"name": "Duración del destello (fotogramas)"}}},
+    "EuSpanish": {"name": "Flor dorada", "summary": "Una flor que vuelve dorado a Mario; un giro lanza una bola de oro.", "options": {"balls_at_once": {"name": "Bolas a la vez"}, "flash_frames": {"name": "Duración del destello (fotogramas)"}}},
+    "EuGerman": {"name": "Goldblume", "summary": "Eine Blume, die Mario golden macht; eine Drehung wirft eine Goldkugel.", "options": {"balls_at_once": {"name": "Kugeln gleichzeitig"}, "flash_frames": {"name": "Blitzdauer (Bilder)"}}},
+    "EuItalian": {"name": "Fiore d'oro", "summary": "Un fiore che rende Mario d'oro; una piroetta lancia una palla d'oro.", "options": {"balls_at_once": {"name": "Palle alla volta"}, "flash_frames": {"name": "Durata del lampo (fotogrammi)"}}},
+    "EuDutch": {"name": "Goudbloem", "summary": "Een bloem die Mario goud maakt; een draai gooit een gouden bal.", "options": {"balls_at_once": {"name": "Ballen tegelijk"}, "flash_frames": {"name": "Flitsduur (beelden)"}}},
+    "UsPortuguese": {"name": "Flor Dourada", "summary": "Uma flor que deixa Mario dourado; um giro lança uma bola de ouro.", "options": {"balls_at_once": {"name": "Bolas ao mesmo tempo"}, "flash_frames": {"name": "Duração do brilho (quadros)"}}},
+    "JpJapanese": {"name": "ゴールドフラワー", "summary": "マリオが金色になる花。スピンで金のボールを投げます。", "options": {"balls_at_once": {"name": "同時に出せるボール"}, "flash_frames": {"name": "光る長さ(フレーム)"}}},
+    "KrKorean": {"name": "골드 플라워", "summary": "마리오를 금색으로 바꾸는 꽃. 스핀으로 금 공을 던집니다.", "options": {"balls_at_once": {"name": "동시에 던지는 공"}, "flash_frames": {"name": "번쩍임 길이(프레임)"}}},
+    "CnSimpChinese": {"name": "黄金花", "summary": "让马力欧变成金色的花，旋转可投出金球。", "options": {"balls_at_once": {"name": "同时存在的球数"}, "flash_frames": {"name": "闪光时长（帧）"}}},
+    "TwTradChinese": {"name": "黃金花", "summary": "讓瑪利歐變成金色的花，旋轉可投出金球。", "options": {"balls_at_once": {"name": "同時存在的球數"}, "flash_frames": {"name": "閃光時長（格）"}}}
+  },
+  "authors": ["you"],
+  "game": { "id": "RMG" },
+  "options": [
+    {"key": "balls_at_once", "kind": "number", "name": "Balls at once", "min": 1, "max": 4, "step": 1, "default": 2},
+    {"key": "flash_frames", "kind": "number", "name": "Flash frames", "min": 5, "max": 60, "step": 5, "default": 20}
+  ],
+  "needs": [{ "id": "lumakit", "version": ">=1.0.0" }],
+  "layers": [{ "name": "base" }],
+  "code": { "platforms": ["windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64", "ios-arm64"]}
+}

@@ -37,6 +37,9 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_reservoirs : register(u1);
 // The kept light's highlight, rgb.
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_lights_spec : register(u2);
 
+// The candidates a reservoir carries at most, at 60 frames a second (times rt_history_scale).
+static const float kMostLightM = 20.0f;
+
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
     uint width, height;
@@ -162,7 +165,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                         continue;
                     }
                     const float4 theirs = g_reservoirs_before.Load(int3(from, 0));
-                    const float behind = min(theirs.a, 20.0f);
+                    const float behind = min(theirs.a, kMostLightM * rt_history_scale());
                     if (!(behind > 0.0f)) {
                         continue;
                     }
@@ -170,6 +173,11 @@ void main(uint3 id : SV_DispatchThreadID) {
                     others_count[j] = behind;
                     counted += behind;
                     const uint was_index = uint(theirs.r) + uint(theirs.g) * 1024u;
+                    if (was_index != 0u && !(theirs.b > 0.0f)) {
+                        // Its light was in shadow there: it could not have handed that light on, so it does not stand
+                        // among those that could choose it (Z below; else a lit pixel darkens at a shadow's edge).
+                        others_count[j] = 0.0f;
+                    }
                     if (was_index == 0u || was_index > g_kept.y || !(theirs.b > 0.0f)) {
                         continue;  // it kept none, or one found in shadow: its candidates count, its light is not handed on
                     }
@@ -222,19 +230,21 @@ void main(uint3 id : SV_DispatchThreadID) {
                 const float3 to = aim - s.at;
                 const float far_ = length(to);
                 const float short_of = far_ - min(max(kept_at.w, 10.0f), 60.0f);
-                uint met;
-                if (short_of > 1.0f && blocked(s.origin, to / max(far_, 1e-3f), short_of, kMaskSolid, false, met) &&
-                    g_items.Load(g_at.x + met * kItemBytes) != kept_slot) {
+                // Cutouts too: a railing, a card, leaves cast the lamp's shadow, their holes not.
+                if (short_of > 1.0f &&
+                    blocked_but(s.origin, to / max(far_, 1e-3f), short_of, kMaskSolid | kMaskCutout | kMaskShadowOnly, kept_slot)) {
                     weight = 0.0f;
                 }
                 // Far over what a picture shows is cut: the filter's moments stay finite.
                 added = min(kept_light * weight, float3(32.0f, 32.0f, 32.0f));
                 // Its highlight on gloss, metal and glass: D_ggx(n.h) F(v.h) / (4 n.v) of the light arriving (the kept
-                // light without its wrap of facing), by the same weight.
+                // light without its facing n.l), by the same weight. Not for a glowing mesh (RtEmitter kind 1): a
+                // mirror's ray meets it and shows it already.
                 const float4 material = g_material.Load(int3(pixel, 0));
                 const uint class_ = uint(material.b * 255.0f + 0.5f) & 15u;
-                if (weight > 0.0f && level >= 3u && (class_ == kClassGloss || class_ == kClassMetal || class_ == kClassGlass ||
-                                                        class_ == kClassWater)) {
+                const bool mesh_lamp = kept < g_glow.w && g_drops.Load(g_glow.x + kept * 48u + 36u) == 1u;
+                if (weight > 0.0f && level >= 3u && !mesh_lamp &&
+                    (class_ == kClassGloss || class_ == kClassMetal || class_ == kClassGlass || class_ == kClassWater)) {
                     const float3 l = (kept_at.xyz - s.at) / max(length(kept_at.xyz - s.at), 1e-3f);
                     const float3 v = -normalize(s.at);
                     const float nl = dot(s.smooth_, l), nv = dot(s.smooth_, v);
@@ -245,16 +255,21 @@ void main(uint3 id : SV_DispatchThreadID) {
                         const float a2 = a * a;
                         const float lobe = nh * nh * (a2 - 1.0f) + 1.0f;
                         const float d = a2 / (3.14159265f * lobe * lobe);
-                        const float f0 = class_ == kClassMetal ? 0.55f : class_ == kClassWater ? 0.02f : 0.04f;
+                        // Glass and water by the item's index, as the mirror's weight (rt_mirror.hlsli).
+                        const uint item_ = class_ == kClassGlass || class_ == kClassWater ? g_item_map.Load(int3(pixel, 0)).x : 0u;
+                        const uint ior_bits = item_ != 0u ? g_items.Load(g_at.x + (item_ - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
+                        const float ior_ = ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f : (class_ == kClassWater ? 1.33f : 1.5f);
+                        const float r0_ = (ior_ - 1.0f) / (ior_ + 1.0f);
+                        const float f0 = class_ == kClassMetal ? 0.55f : class_ == kClassGloss ? 0.04f : r0_ * r0_;
                         const float glance = 1.0f - vh;
                         const float f = f0 + (1.0f - f0) * glance * glance * glance * glance * glance;
-                        const float3 arriving = kept_light / (0.25f + 0.75f * saturate(nl));
+                        const float3 arriving = kept_light / max(nl, 1e-3f);
                         const float3 spec = arriving * (d * f * 0.25f / max(nv, 0.05f)) * weight;
                         g_lights_spec[id.xy] = float4(min(spec, float3(32.0f, 32.0f, 32.0f)), 0.0f);
                     }
                 }
             }
-            g_reservoirs[id.xy] = float4(float((kept + 1u) & 1023u), float((kept + 1u) >> 10u), weight, min(counted, 20.0f));
+            g_reservoirs[id.xy] = float4(float((kept + 1u) & 1023u), float((kept + 1u) >> 10u), weight, min(counted, kMostLightM * rt_history_scale()));
         }
     }
     g_lights[id.xy] = float4(added.r, 0.0f, added.g, added.b);

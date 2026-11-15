@@ -23,12 +23,29 @@ Texture2D<float4> g_material : register(t12);
 Texture2D<float4> g_indirect : register(t13);  // this frame's I (rt_indirect_up.hlsl): the screen's own at hits
 Texture2D<float4> g_lights_spec : register(t14);  // the local lights' highlights (rt_lights.hlsl), already weighed
 Texture2D<float4> g_base : register(t15);
+Texture2D<float4> g_added_before : register(t16);    // the walk before's D out: the screen's own lamps at hits
+Texture2D<float4> g_blended_before : register(t17);  // the walk before's blended guide (rt_screen_lights)
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_raw : register(u0);
 
 static const uint kRtWater = 9u;
 static const float kReflectReach = 4000000.0f;
 
-// Whether a surface of class `klass` reflects under the preset (12.1, 19.1).
+// The pixel's index for its mirror's F0 (rt_mirror.hlsli mirror_f0; item word 15 bits 12-19): glass and water only,
+// as rt_reflect_out.hlsl reads it, so the highlights over the weight come back whole.
+uint mirror_ior_bits(int3 here, uint klass) {
+    const uint item = klass == kRtGlass || klass == kRtWater || klass == kRtMetal ? g_item_map.Load(here).x : 0u;  // metal's kind
+    return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
+}
+
+// The pixel's item word 15 for its mirror: bits 0-11 what the art's material returns of a white environment
+// (4 bits a channel; 0: no painted map), bits 12-19 its index or a metal's kind; 0 for a class that mirrors nothing.
+uint mirror_word(int3 here, uint klass) {
+    const bool mirrors = klass == kRtGlass || klass == kRtWater || klass == kRtMetal || klass == kRtGloss;
+    const uint item = mirrors ? g_item_map.Load(here).x : 0u;
+    return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) : 0u;
+}
+
+// Whether a surface of class `klass` reflects under the preset.
 bool reflects(uint klass, float roughness, float share, bool high) {
     if (klass == kRtGlass || klass == kRtWater) {
         return true;
@@ -58,7 +75,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     // Medium traces a quarter of the pixels a frame (12.2 item 6: the rays of half resolution, the picture's edges
     // kept at full): one of each 2 x 2 block, the one the frame's turn picks (as the sky and bounce light's), so four
     // frames visit every pixel. The others say so (a -1): the filter over time keeps their history.
-    if (!high && (g_more.z & 2048u) == 0u) {  // raw signals for an outside denoiser (22.20): every pixel
+    if (!high && (g_more.z & 2048u) == 0u) {  // raw signals for an outside denoiser: every pixel
         static const uint2 kVisit[4] = {uint2(0u, 0u), uint2(1u, 1u), uint2(1u, 0u), uint2(0u, 1u)};
         if (any((id.xy & 1u) != kVisit[g_more.y & 3u])) {
             g_raw[id.xy] = float4(0.0f, 0.0f, 0.0f, -1.0f);
@@ -69,7 +86,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const RtSurface s = rt_surface(int2(id.xy), guide, g_normals.Load(here), g_motion.Load(here).w);
     const float3 look = normalize(s.at);
     const float3 n = dot(s.smooth_, look) < 0.0f ? s.smooth_ : s.normal;
-    const float roughness = klass == kRtWater ? 0.0f : material.r;
+    const float roughness = material.r;  // water's: its waves' (rt_surface.hlsl; was 0)
     float3 dir = roughness < 0.03f ? reflect(look, n) : rt_ggx_reflect(n, -look, roughness * roughness, rt_sample(id.xy, g_more.y, kSampleReflect));
     if (dot(dir, s.normal) <= 0.0f) {
         dir = reflect(dir, s.normal);
@@ -82,13 +99,13 @@ void main(uint3 id : SV_DispatchThreadID) {
     float3 seen;
     bool open_sky = true;  // the ray meets the sky (the dome or nothing)
     if (!rt_closest(from, dir, kReflectReach, kMaskSolid | kMaskCutout | kMaskSky, item, triangle_, where_, far_)) {
-        seen = g_sky.rgb;
+        seen = rt_lin(g_sky.rgb);  // linear
         far_ = kReflectReach;
     } else {
         RtHit h;
         rt_hit_read(item, triangle_, where_, far_, from, dir, abs(g_ray.x) + 0.5f * roughness, h);
         if ((h.item_flags & kItemSky) != 0u) {
-            seen = rt_dome(h);
+            seen = rt_shown(rt_dome(h));  // linear
         } else {
             open_sky = false;
             float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
@@ -96,15 +113,19 @@ void main(uint3 id : SV_DispatchThreadID) {
             if ((g_pass.z & 1u) != 0u && rt_screen_cache(g_guide, g_indirect, h.at, known)) {
                 o = known;
             }
-            seen = rt_hit_radiance(h, kRtShadeSunRay | (high ? kRtShadeLightRay : 0u), o, seed);
+            // The lamps on a hit the screen shows, as the screen has them (g_pass.z bit 1: the walk
+            // before's), else the grid's.
+            float3 d_seen;
+            const bool d_known = (g_pass.z & 2u) != 0u && rt_screen_lights(g_guide, g_added_before, g_blended_before, h.at, d_seen);
+            seen = rt_hit_radiance_with(h, kRtShadeSunRay | (high ? kRtShadeLightRay : 0u), o, d_known, d_seen, seed);
         }
     }
-    // The sun itself on the reflected ray, where nothing hides it (12.2 item 4): far brighter than white, it blooms.
-    if (open_sky && rt_sun_traced() && dot(dir, g_sun.xyz) > cos(atan(3.0f * g_sun.w))) {
-        seen += g_shade.key.rgb * g_shade.look.w;
+    // The sun itself on the reflected ray, where nothing hides it: far brighter than white, it blooms.
+    if (open_sky && rt_sees_sun(dir)) {
+        seen += rt_sun_glint();  // linear, the model's by kForm
     }
-    const float4 weight = mirror_weight(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,
-                                        1.0f - saturate(-dot(n, look)));
+    const float4 weight = mirror_weight_word(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,
+                                             1.0f - saturate(-dot(n, look)), mirror_word(here, klass));
     seen += g_lights_spec.Load(here).rgb / max(weight.rgb, 0.02f);
     g_raw[id.xy] = float4(min(seen, 64.0f), max(far_, 1.0f));
 }

@@ -6,11 +6,6 @@
 #include <string.h>
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/Array.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_specularDirHA_f1, "specularDirHA.f1", 1.0e18f);
-NEBULA_TUNABLE_NAMED(f32, cNum_distAttn_f1, "distAttn.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_distAttn_f2, "distAttn.f2", 0.5f);
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -59,7 +54,7 @@ namespace LightValues {
     }
 
     void specularDirHA(NebulaLight* pLight, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz) {
-        const f32 cInfiniteLightDistance = cNum_specularDirHA_f1;
+        const f32 cInfiniteLightDistance = 1.0e18f;
         pLight->direction[0] = hx;
         pLight->direction[1] = hy;
         pLight->direction[2] = hz;
@@ -94,8 +89,8 @@ namespace LightValues {
             k1 = (1.0f - refBrightness) / (refBrightness * refDistance);
             break;
         case LIGHT_FALLOFF_MEDIUM:
-            k1 = cNum_distAttn_f1 * (1.0f - refBrightness) / (refBrightness * refDistance);
-            k2 = cNum_distAttn_f2 * (1.0f - refBrightness) / (refBrightness * refDistance * refDistance);
+            k1 = 0.5f * (1.0f - refBrightness) / (refBrightness * refDistance);
+            k2 = 0.5f * (1.0f - refBrightness) / (refBrightness * refDistance * refDistance);
             break;
         case LIGHT_FALLOFF_STEEP:
             k2 = (1.0f - refBrightness) / (refBrightness * refDistance * refDistance);
@@ -240,11 +235,14 @@ namespace {
         Grown< NebulaFrameWorldLight > mWorldLights;
         Grown< NebulaFrameShadowDrop > mShadowDrops;
         Grown< NebulaFramePointLight > mPointLights;
+        Grown< NebulaFrameClipVolume > mClipVolumes;
+        u32 mClipRule;
         Grown< u32 > mCategories;  // pairs: the first item of a run of draws, and the category they are drawn as
         Grown< NebulaFrameConstants > mConstants;
         Grown< NebulaScreenProbe > mProbes;
         Grown< u32 > mRingIndices;
         Grown< InstanceRow > mInstanceRows;
+        Grown< NebulaCall > mNativeCalls;
         u8* mRingVertices;
         u32 mRingBytes;
         u32 mRingRoom;
@@ -256,6 +254,7 @@ namespace {
     Store* sCurrent;
     u32 sNumber;
     s32 sOpenDraw = -1;
+    bool sTracedOnly = false;  // Frame::tracedOnly: new draws open NEBULA_PASS_TRACED_DRAW passes
 
     bool sPixelLit;
 
@@ -329,11 +328,14 @@ namespace {
         pStore->mWorldLights.mCount = 0;
         pStore->mShadowDrops.mCount = 0;
         pStore->mPointLights.mCount = 0;
+        pStore->mClipVolumes.mCount = 0;
+        pStore->mClipRule = NEBULA_CLIP_RULE_NONE;
         pStore->mCategories.mCount = 0;
         pStore->mConstants.mCount = 0;
         pStore->mProbes.mCount = 0;
         pStore->mRingIndices.mCount = 0;
         pStore->mInstanceRows.mCount = 0;
+        pStore->mNativeCalls.mCount = 0;
         pStore->mRingBytes = 0;
         pStore->mPage = pStore->mFirstPage;
         if (pStore->mPage != nullptr) {
@@ -364,6 +366,7 @@ namespace {
         resetStore(pFree);
         sCurrent = pFree;
         sOpenDraw = -1;
+        sTracedOnly = false;
         sViewDirty = true;
         sLightsDirty = true;
         sLightSet = NEBULA_NONE32;
@@ -480,6 +483,9 @@ namespace Frame {
         rList.shadow_drop_count = pStore->mShadowDrops.mCount;
         rList.point_lights = pStore->mPointLights.mData;
         rList.point_light_count = pStore->mPointLights.mCount;
+        rList.clip_volumes = pStore->mClipVolumes.mData;
+        rList.clip_volume_count = pStore->mClipVolumes.mCount;
+        rList.clip_rule = pStore->mClipRule;
         // Each item's category, by the runs the draws were made in: a draw writes its item's flags whole when it is
         // made, so they are set now.
         for (u32 run = 0; run + 1 < pStore->mCategories.mCount; run += 2) {
@@ -504,6 +510,8 @@ namespace Frame {
         rList.probes = pStore->mProbes.mData;
         rList.instance_rows = pStore->mInstanceRows.mData;
         rList.instance_row_count = pStore->mInstanceRows.mCount;
+        rList.native_calls = pStore->mNativeCalls.mData;
+        rList.native_call_count = pStore->mNativeCalls.mCount;
         rList.pass_count = pStore->mPasses.mCount;
         rList.item_count = pStore->mItems.mCount;
         rList.view_count = pStore->mViews.mCount;
@@ -560,7 +568,7 @@ namespace Frame {
     NebulaFrameItem& addItem() {
         Store* pStore = store();
         if (sOpenDraw < 0) {
-            NebulaFramePass& rPass = addPass(NEBULA_PASS_DRAW);
+            NebulaFramePass& rPass = addPass(sTracedOnly ? NEBULA_PASS_TRACED_DRAW : NEBULA_PASS_DRAW);
             rPass.first_item = pStore->mItems.mCount;
             sOpenDraw = static_cast< s32 >(pStore->mPasses.mCount - 1);
         }
@@ -804,9 +812,20 @@ namespace Frame {
         rLights.mData[rLights.mCount - 1] = rLight;
     }
 
-    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient) {
+    void clipVolume(const NebulaFrameClipVolume& rVolume) {
+        Grown< NebulaFrameClipVolume >& rVolumes = store()->mClipVolumes;
+        rVolumes.add();
+        rVolumes.mData[rVolumes.mCount - 1] = rVolume;
+    }
+
+    void clipRule(u32 rule) {
+        store()->mClipRule = rule;
+    }
+
+    void setLightOwner(const NebulaFrameWorldLight* pKey, const NebulaFrameWorldLight* pFill, const f32* pAmbient, u32 kind) {
         NebulaFrameLightOwner owner = sLightOwner;
         owner.actor_light = pKey != nullptr ? pKey->id : 0;
+        owner.kind = kind;
         for (u32 c = 0; c < 3; c++) {
             owner.ambient[c] = pAmbient != nullptr ? pAmbient[c] : 0.0f;
         }
@@ -1287,6 +1306,13 @@ namespace Frame {
         setObject(0, 0);
     }
 
+    void tracedOnly(bool on) {
+        if (sTracedOnly != on) {
+            sTracedOnly = on;
+            sOpenDraw = -1;  // the next draw opens a pass of the other kind
+        }
+    }
+
     void category(u8 category) {
         Store* pStore = store();
         Grown< u32 >& rRuns = pStore->mCategories;
@@ -1305,6 +1331,28 @@ namespace Frame {
         NebulaFramePass& rPass = addPass(static_cast< u8 >(kind));
         rPass.arg0 = arg0;
         rPass.arg1 = arg1;
+    }
+
+    void post(u32 program, const f32 (*pRows)[4]) {
+        Grown< InstanceRow >& rRows = store()->mInstanceRows;
+        const u32 first = rRows.mCount;
+        memcpy(rRows.addRun(4), pRows, 4 * sizeof(InstanceRow));
+        NebulaFramePass& rPass = addPass(NEBULA_PASS_POST);
+        rPass.arg0 = program;
+        rPass.first_item = first;
+        rPass.item_count = 4;
+    }
+
+    void native(u32 point, void (*fn)(void*, const NebulaFrame*), void* pUser) {
+        Grown< NebulaCall >& rCalls = store()->mNativeCalls;
+        const u32 index = rCalls.mCount;
+        NebulaCall& rCall = rCalls.add();
+        rCall.fn = fn;
+        rCall.user = pUser;
+        NebulaFramePass& rPass = addPass(NEBULA_PASS_NATIVE);
+        rPass.arg0 = point;
+        rPass.first_item = index;
+        rPass.item_count = 1;
     }
 
     void cameraCut(u32 cuts) {

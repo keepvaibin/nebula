@@ -182,7 +182,8 @@ void SceneCamera::meter(Object commands, const Texture& wide, const Texture& dep
         [compute setTexture:metal(*exposure_) atIndex:2];
         [compute setTexture:metal(depth) atIndex:3];
         [compute setBytes:&constants length:sizeof(constants) atIndex:kUtilityPushBuffer];
-        [compute dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(1, 1, 1)];
+        // One group of MeterCS's 16 x 9 threads (scene_camera.hlsl).
+        [compute dispatchThreadgroups:MTLSizeMake(1, 1, 1) threadsPerThreadgroup:MTLSizeMake(8, 9, 1)];
         [compute endEncoding];
     }
 }

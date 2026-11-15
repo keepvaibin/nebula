@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Starts the installed Nebula (install.sh put this script in the install folder): the version current.json names,
+# with the game and the saves folder. Arguments go to the game (the menu entry's --import <file or link>).
+set -eu
+self=$(readlink -f "$0" 2>/dev/null || printf '%s' "$0")
+root=$(cd "$(dirname "$self")" && pwd)
+version=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$root/current.json")
+program=$root/versions/$version/nebula
+[ -x "$program" ] || { echo "nebula-launch: $program is missing: run install.sh again" >&2; exit 1; }
+# A portable folder keeps its data beside it (the game finds portable.txt itself); otherwise the data folder is this one.
+data=$root
+[ -f "$root/portable.txt" ] && data=$root/data
+# The menu entry started with no file or link: no --import.
+[ "$#" = 1 ] && [ "$1" = "--import" ] && shift
+export LD_LIBRARY_PATH="$root/versions/$version${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$program" --pak "$root/content/game.pak" --saves "$data/saves" "$@"

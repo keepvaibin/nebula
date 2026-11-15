@@ -27,73 +27,62 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_initEffectAndStarPointerBind_f1, "initEffectAndStarPointerBind.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f1, "initSensor.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f2, "initSensor.f2", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f3, "initSensor.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initSensor_f4, "initSensor.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isFallNextMove_f1, "isFallNextMove.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcDirectionAwayFromRail_f1, "calcDirectionAwayFromRail.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_preventSwingby_f1, "preventSwingby.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_preventSlopeBlow_f1, "preventSlopeBlow.f1", 0.5f);
-
 namespace {
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hReturnWaitParam, {0.0f, 1.0f, 0.95f, 0.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hReturnMoveParam, {0.2f, 1.0f, 0.95f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hBrakeParam, {0.0f, 1.0f, 0.7f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hBrakeOnAirParam, {0.0f, 1.0f, 0.95f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hKeepDistanceFarParam, {0.35f, 1.0f, 0.95f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hKeepDistanceNearParam, {-0.22f, 1.0f, 0.95f, 3.0f});
-    NEBULA_TUNABLE_RECORD(MR::ActorMoveParam, hKeepDistanceWaitParam, {0.0f, 1.0f, 0.95f, 3.0f});
+    const MR::ActorMoveParam hReturnWaitParam = {0.0f, 1.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam hReturnMoveParam = {0.2f, 1.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hBrakeParam = {0.0f, 1.0f, 0.7f, 3.0f};
+    const MR::ActorMoveParam hBrakeOnAirParam = {0.0f, 1.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hKeepDistanceFarParam = {0.35f, 1.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hKeepDistanceNearParam = {-0.22f, 1.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hKeepDistanceWaitParam = {0.0f, 1.0f, 0.95f, 3.0f};
     // Rail contact must last longer than this before it knocks the begoman away.
-    NEBULA_TUNABLE(s32, hElectricTouchTime, 40);
-    NEBULA_TUNABLE(f32, hReboundWallAddVel, 5.0f);
-    NEBULA_TUNABLE(f32, hNoCalcWaitRotate, 0.15f);
-    NEBULA_TUNABLE(f32, hBlendGravityRate, 0.1f);
-    NEBULA_TUNABLE(f32, hRailPushH, 10.0f);
-    NEBULA_TUNABLE(f32, hRailPushJump, 20.0f);
-    NEBULA_TUNABLE(f32, hRailPushHBoss, 30.0f);
-    NEBULA_TUNABLE(f32, hRailPushJumpBoss, 30.0f);
+    const s32 hElectricTouchTime = 40;
+    const f32 hReboundWallAddVel = 5.0f;
+    const f32 hNoCalcWaitRotate = 0.15f;
+    const f32 hBlendGravityRate = 0.1f;
+    const f32 hRailPushH = 10.0f;
+    const f32 hRailPushJump = 20.0f;
+    const f32 hRailPushHBoss = 30.0f;
+    const f32 hRailPushJumpBoss = 30.0f;
     // Light pushes: the side rail sensor, and body contact before the knock.
-    NEBULA_TUNABLE(f32, hPushedRailPush, 0.5f);
-    NEBULA_TUNABLE(f32, hBodyRailPush, 8.0f);
-    NEBULA_TUNABLE(f32, hTurnStartDegree, 3);
-    NEBULA_TUNABLE(f32, hTurnEndDegree, 10);
-    NEBULA_TUNABLE(f32, hIsFaceToPlayerDegree, 30);
-    NEBULA_TUNABLE(f32, hPursueLimitTurnDegree, 3.0f);
-    NEBULA_TUNABLE(f32, hPursueRange, 2000.0f);
+    const f32 hPushedRailPush = 0.5f;
+    const f32 hBodyRailPush = 8.0f;
+    const f32 hTurnStartDegree = 3;
+    const f32 hTurnEndDegree = 10;
+    const f32 hIsFaceToPlayerDegree = 30;
+    const f32 hPursueLimitTurnDegree = 3.0f;
+    const f32 hPursueRange = 2000.0f;
     const s32 hPursueLimitTime = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(s32, hPursueAnimFrame, 10);
-    NEBULA_TUNABLE(s32, hPursueDashFrame, 18);
-    NEBULA_TUNABLE(f32, hPursueDashVelocity, 15.0f);
+    const s32 hPursueAnimFrame = 10;
+    const s32 hPursueDashFrame = 18;
+    const f32 hPursueDashVelocity = 15.0f;
     const s32 hTurnTime = NebulaFrameClock::stepsOfSeconds(1);
     const s32 hTurnTimeCanNotAttack = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, hBrakeTime, 50);
+    const s32 hBrakeTime = 50;
     const s32 hProvokeTime = NebulaFrameClock::stepsOfSeconds(2);
     const s32 hTiredTime = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, hTiredCount, 180);
+    const s32 hTiredCount = 180;
     const s32 hReturnWaitTime = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(f32, hKeepDistanceToWaitDist, 1200.0f);
-    NEBULA_TUNABLE(f32, hKeepDistSideVel, 0.6f);
-    NEBULA_TUNABLE(s32, hReceiveLimitTime, 2);
+    const f32 hKeepDistanceToWaitDist = 1200.0f;
+    const f32 hKeepDistSideVel = 0.6f;
+    const s32 hReceiveLimitTime = 2;
     const s32 hPermitLimitTime = NebulaFrameClock::stepsOfMilliseconds(500);
     // Closer than this the player wakes a waiting begoman.
-    NEBULA_TUNABLE(f32, hWakeDist, 1000.0f);
+    const f32 hWakeDist = 1000.0f;
     // A rail ahead within this cosine of the face keeps a waiting begoman from attacking.
-    NEBULA_TUNABLE(f32, hWaitRailAheadDot, 0.5f);
-    NEBULA_TUNABLE(f32, hFallCheckDist, 150.0f);
-    NEBULA_TUNABLE(f32, hFallCheckDepth, 150.0f);
+    const f32 hWaitRailAheadDot = 0.5f;
+    const f32 hFallCheckDist = 150.0f;
+    const f32 hFallCheckDepth = 150.0f;
     const f32 hInitPosNearDistSq = 200.0f * 200.0f;
-    NEBULA_TUNABLE(f32, hStarPointerRadiusRate, 0.75f);
-    NEBULA_TUNABLE(f32, hLaunchDamp, 0.98f);
-    NEBULA_TUNABLE(f32, hLaunchGravity, 1.0f);
-    NEBULA_TUNABLE(f32, hGroundReboundRate, 0.5f);
-    NEBULA_TUNABLE(f32, hGroundReboundCosMin, 100.0f);
-    NEBULA_TUNABLE(s32, hGroupClippingNum, 16);
-    NEBULA_TUNABLE(f32, hPermitterNoDist, 99999.0f);
+    const f32 hStarPointerRadiusRate = 0.75f;
+    const f32 hLaunchDamp = 0.98f;
+    const f32 hLaunchGravity = 1.0f;
+    const f32 hGroundReboundRate = 0.5f;
+    const f32 hGroundReboundCosMin = 100.0f;
+    const s32 hGroupClippingNum = 16;
+    const f32 hPermitterNoDist = 99999.0f;
     const BegomanSound sound_normal = {"SE_EM_LV_BEGOMAN_DASH"};
     const BegomanSound sound_boss = {"SE_BM_LV_BBEGO_DASH"};
 
@@ -190,7 +179,7 @@ void BegomanBase::initEffectAndStarPointerBind() {
     MR::calcModelBoundingRadius(&pointerRadius, this);
 
     pointerRadius *= ::hStarPointerRadiusRate;
-    MR::initStarPointerTarget(this, pointerRadius, Vec3f(0.0f, cNum_initEffectAndStarPointerBind_f1 * pointerRadius, 0.0f));
+    MR::initStarPointerTarget(this, pointerRadius, Vec3f(0.0f, 0.5f * pointerRadius, 0.0f));
 
     mScaleControler = new AnimScaleController(nullptr);
     mScaleControler->setParamTight();
@@ -226,10 +215,10 @@ void BegomanBase::initSensor(s32 extraSensorNum, f32 radius, f32 pushedRailRadiu
     f32 yScale = mScale.y;
     initHitSensor(extraSensorNum + 3);
 
-    MR::addHitSensor(this, "check", ATYPE_EYE, 1, radius * yScale, Vec3f(0.0f, cNum_initSensor_f1 * radius * yScale, cNum_initSensor_f2 * radius * yScale));
-    MR::addHitSensorAtJoint(this, "body", pSensorJointName, ATYPE_BEGOMAN, 32, radius * yScale, Vec3f(0.0f, cNum_initSensor_f3 * radius * yScale, 0.0f));
+    MR::addHitSensor(this, "check", ATYPE_EYE, 1, radius * yScale, Vec3f(0.0f, 0.5f * radius * yScale, 1.5f * radius * yScale));
+    MR::addHitSensorAtJoint(this, "body", pSensorJointName, ATYPE_BEGOMAN, 32, radius * yScale, Vec3f(0.0f, 0.5f * radius * yScale, 0.0f));
     MR::addHitSensorAtJoint(this, "pushed_rail", pSensorJointName, ATYPE_EYE, 32, pushedRailRadius * yScale,
-                            Vec3f(0.0f, cNum_initSensor_f4 * pushedRailRadius * yScale, 0.0f));
+                            Vec3f(0.0f, 0.5f * pushedRailRadius * yScale, 0.0f));
 }
 
 void BegomanBase::initUseSwitchB(const TableIter& rIter, const MR::FunctorBase& rFunctor) {
@@ -749,7 +738,7 @@ void BegomanBase::reboundWallAndGround(Vec3f* pFront, bool emitGroundSpark) {
 
 bool BegomanBase::isFallNextMove(f32 dist, f32 depth) {
     f32 scaledBinderRadius = MR::getBinderRadius(this);
-    scaledBinderRadius = scaledBinderRadius * mScale.y * cNum_isFallNextMove_f1;
+    scaledBinderRadius = scaledBinderRadius * mScale.y * 2.0f;
 
     // Standing still, the check runs along the face.
     if (MR::isNearZero(MR::getVelocityHorizon(this))) {
@@ -774,7 +763,7 @@ void BegomanBase::calcDirectionAwayFromRail(Vec3f* pOut, const Vec3f& rRailPos, 
     if (MR::isNearZero(away)) {
         away.set(-mFaceVec);
     } else {
-        MR::rotateVecDegree(&away, mGravity, cNum_calcDirectionAwayFromRail_f1);
+        MR::rotateVecDegree(&away, mGravity, 90.0f);
     }
 
     Vec3f toRail(rRailPos);
@@ -870,7 +859,7 @@ void BegomanBase::preventSwingby(f32 damp) {
     if (!MR::isOnGround(this)) {
         // Damped by how much gravity turned since the last frame.
         f32 rate = (mGravity - mLastGravity).length();
-        rate *= cNum_preventSwingby_f1;
+        rate *= 0.5f;
         dampingVerticalAndParallelVelocity(damp, rate);
     }
 }
@@ -882,7 +871,7 @@ void BegomanBase::preventSlopeBlow(f32 damp) {
         gravityMinusNormal.sub(-*MR::getGroundNormal(this));
 
         f32 rate = gravityMinusNormal.length();
-        rate *= cNum_preventSlopeBlow_f1;
+        rate *= 0.5f;
         dampingVerticalAndParallelVelocity(damp, rate);
     }
 }

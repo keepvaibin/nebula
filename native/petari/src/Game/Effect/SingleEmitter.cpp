@@ -21,7 +21,7 @@ void SingleEmitter::deleteEmitter() {
 
 void SingleEmitter::scanParticleEmitter(EffectSystem* pSystem) {
     ParticleEmitter* emitter;
-    if (mSpawn == SINGLE_EMITTER_UNDEF_SPAWN) {
+    if (mSpawn == SINGLE_EMITTER_UNDEF_SPAWN && mResourceId != cNoResource) {
         emitter = pSystem->createEmitter(mResourceId, mGroupId, 0);
         if (emitter == nullptr) {
             return;

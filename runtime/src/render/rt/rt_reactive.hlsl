@@ -7,7 +7,7 @@
 #include "rt_frame.hlsli"
 
 Texture2D<float4> g_lights_moments : register(t9);  // this frame's moments of the added light: a, the change
-Texture2D<float> g_reflect_moved : register(t10);    // FB: 1 where the reflections changed (rt_reflect_time.hlsl); g_pass.w 1
+Texture2D<float> g_reflect_moved : register(t10);    // 1 where the reflections changed (rt_reflect_time.hlsl); g_pass.w 1
 RT_FORMAT(r8) RWTexture2D<unorm float> g_reactive : register(u7);  // the renderer's reactive mask
 
 [numthreads(8, 8, 1)]

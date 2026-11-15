@@ -7,23 +7,7 @@
 #include "Game/NPC/NPCActorItem.hpp"
 #include "Game/NPC/TalkMessageFunc.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_Param_f1, "Param.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Param_f2, "Param.f2", 1.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_Param_f3, "Param.f3", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 122.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 400.0f);
 
 namespace NrvKinopio {
     NEW_NERVE(KinopioNrvReaction, Kinopio, Reaction);
@@ -51,27 +35,27 @@ namespace {
     };
 
     Param::Param() {
-        mPointerTime = cNum_Param_f1;
-        mPointerBase = cNum_Param_f2;
-        mHitReactionVelocity = cNum_Param_f3;
+        mPointerTime = 15.0f;
+        mPointerBase = 1.4f;
+        mHitReactionVelocity = 0.3f;
     }
 
     static Param sParam;
 
-    NEBULA_TUNABLE(f32, sDistancePlayerIsNear, 200.0f);
-    NEBULA_TUNABLE(f32, sDistancePlayerIsFar, 300.0f);
-    NEBULA_TUNABLE(f32, sDistancePlayerIsEvent, 450.0f);
-    NEBULA_TUNABLE(f32, sTurnLimit, 0.997f);
-    NEBULA_TUNABLE(f32, sUpVecBlendRate, 1.0f);
-    NEBULA_TUNABLE(f32, sDistanceEventPlayerIsNear, 600.0f);
+    const f32 sDistancePlayerIsNear = 200.0f;
+    const f32 sDistancePlayerIsFar = 300.0f;
+    const f32 sDistancePlayerIsEvent = 450.0f;
+    const f32 sTurnLimit = 0.997f;
+    const f32 sUpVecBlendRate = 1.0f;
+    const f32 sDistanceEventPlayerIsNear = 600.0f;
     static const s32 sTimeToCancelEvent = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(f32, sFallGravity, 0.6f);
-    NEBULA_TUNABLE(f32, sFallFrictionRate, 0.98f);
-    NEBULA_TUNABLE(s32, sLandingTime, 3);
-    NEBULA_TUNABLE(s32, sPickelIndex, 2);
-    NEBULA_TUNABLE(f32, sDefaultScale, 1.2f);
-    NEBULA_TUNABLE(f32, sWalkSpeed, 0.83f);
-    NEBULA_TUNABLE(f32, sRunSpeed, 3.32f);
+    const f32 sFallGravity = 0.6f;
+    const f32 sFallFrictionRate = 0.98f;
+    const s32 sLandingTime = 3;
+    const s32 sPickelIndex = 2;
+    const f32 sDefaultScale = 1.2f;
+    const f32 sWalkSpeed = 0.83f;
+    const f32 sRunSpeed = 3.32f;
 };  // namespace
 
 Kinopio::Kinopio(const char* pName)
@@ -98,8 +82,8 @@ void Kinopio::init(const TableIter& rIter) {
     MR::initLightCtrl(this);
     initSound(4, false);
     initHitSensor(2);
-    MR::addHitSensorNpc(this, "body", 8, cNum_init_f1 * ::sDefaultScale, Vec3f(0.0f, cNum_init_f2 * ::sDefaultScale, 0.0f));
-    MR::addHitSensorNpc(this, "Pickel", 8, cNum_init_f3 * ::sDefaultScale, Vec3f(0.0f, cNum_init_f4 * ::sDefaultScale, cNum_init_f5 * ::sDefaultScale));
+    MR::addHitSensorNpc(this, "body", 8, 50.0f * ::sDefaultScale, Vec3f(0.0f, 50.0f * ::sDefaultScale, 0.0f));
+    MR::addHitSensorNpc(this, "Pickel", 8, 50.0f * ::sDefaultScale, Vec3f(0.0f, 50.0f * ::sDefaultScale, 40.0f * ::sDefaultScale));
     MR::invalidateHitSensor(this, "Pickel");
     s32 isInvalidateSensor = -1;
     MR::getPlacementArg6NoInit(rIter, &isInvalidateSensor);
@@ -107,13 +91,13 @@ void Kinopio::init(const TableIter& rIter) {
         MR::invalidateHitSensor(this, "body");
     }
 
-    initBinder(cNum_init_f6 * ::sDefaultScale, cNum_init_f7 * ::sDefaultScale, 0);
+    initBinder(50.0f * ::sDefaultScale, 50.0f * ::sDefaultScale, 0);
     MR::offBind(this);
-    MR::initShadowVolumeSphere(this, cNum_init_f8 * ::sDefaultScale);
+    MR::initShadowVolumeSphere(this, 30.0f * ::sDefaultScale);
     MR::onCalcShadowOneTime(this, nullptr);
     initEffectKeeper(0, nullptr);
     initNerve(GET_NERVE(Kinopio, KinopioNrvWait));
-    mMsgCtrl = MR::createTalkCtrl(this, rIter, "Kinopio", Vec3f(0.0f, cNum_init_f9 * ::sDefaultScale, 0.0f), nullptr);
+    mMsgCtrl = MR::createTalkCtrl(this, rIter, "Kinopio", Vec3f(0.0f, 122.0f * ::sDefaultScale, 0.0f), nullptr);
     MR::setDistanceToTalk(mMsgCtrl, ::sDistancePlayerIsNear);
     MR::onRootNodeAutomatic(mMsgCtrl);
     MR::registerEventFunc(mMsgCtrl, TalkMessageFuncM< Kinopio*, bool (Kinopio::*)(u32) >(this, &Kinopio::eventFunc));
@@ -123,7 +107,7 @@ void Kinopio::init(const TableIter& rIter) {
         MR::onCalcShadow(this, nullptr);
     }
 
-    MR::initStarPointerTarget(this, cNum_init_f10, Vec3f(0.0f));
+    MR::initStarPointerTarget(this, 100.0f, Vec3f(0.0f));
     MR::addToAttributeGroupSearchTurtle(this);
     mLodCtrl = MR::createLodCtrlNPC(this, rIter);
 
@@ -168,7 +152,7 @@ void Kinopio::init(const TableIter& rIter) {
         break;
     case 3:
         mUseReactionActions = false;
-        MR::setDistanceToTalk(mMsgCtrl, cNum_init_f11);
+        MR::setDistanceToTalk(mMsgCtrl, 400.0f);
         break;
     case 5:
         mUseReactionActions = false;

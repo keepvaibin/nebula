@@ -10,6 +10,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace galaxy::mods {
@@ -20,6 +21,15 @@ struct PluginFile {
     std::string version;
     std::map<std::string, std::string> options;  // option id -> choice id
     std::string code;  // code_hash taken at start; a library that changed before it loads is not run
+    std::vector<std::string> needs;  // the ids of the mods its manifest needs (those start before it)
+    // The permissions the player granted it, for its declarations as they are now (mod_consent.h granted_permissions):
+    // what luma_load_mod is given. Filled once when the start's plan is made.
+    std::vector<std::string> granted;
+    // The ones the player declined (mod_consent.h declined_permissions): an L506 for one of them is their choice, logged
+    // as that and not as a fault (consent 2.3).
+    std::vector<std::string> declined;
+    // Its layers with `"code": true`, by name, in the manifest's order: what its layers call may choose.
+    std::vector<std::string> code_layers;
 };
 
 // A hex hash of every file in a plugin library's folder (names and contents), so the files it ships with count too.
@@ -115,16 +125,13 @@ struct PlayerAnimationToAdd {
 };
 struct ObjectClassToSet {
     std::string mod_id;
-    std::string mod_version;
     std::string name;
-    std::string like;    // empty: one of the game's classes
-    std::string script;  // empty: none
+    std::string like;
 };
 
 // A power-up from data (luma::Form), for the mod that adds it.
 struct FormToAdd {
     std::string mod_id;
-    std::string mod_version;
     std::string name;
     int acts_like = 0;
     int looks_like = 0;
@@ -132,33 +139,11 @@ struct FormToAdd {
     int frames = 0;
     std::string model;
     std::string music;
-    std::string script;
-};
-
-// A mod-wide script (luma.json "scripts"), for the mod that runs it.
-struct ModScriptToAdd {
-    std::string mod_id;
-    std::string mod_version;
-    std::string script;
-};
-
-// An object a script runs (luma::ScriptObject), for the mod that adds it.
-struct ScriptObjectToAdd {
-    std::string mod_id;
-    std::string mod_version;
-    std::string name;
-    std::string script;
-    std::string archive;
-    double radius = 60.0;
-    int kind = 0;
-    bool collision = false;
-    double shadow_radius = 0.0;
-    double clip_radius = 0.0;
 };
 
 // A mod's achievement for this run (luma::Achievement), with text in the language played.
 struct AchievementToAdd {
-    std::string mod_id;  // the mod's folder name, which is also its plugin's NebulaPlugin id
+    std::string mod_id;  // the mod's folder name
     std::string key;     // "mod:<.luma id>/<id>", the key in achievements.ini
     std::string name;
     std::string description;
@@ -189,24 +174,42 @@ struct ModRows {
     std::vector<TunableToSet> tunables;
     std::vector<ObjectClassToSet> object_classes;
     std::vector<FormToAdd> forms;
-    std::vector<ScriptObjectToAdd> script_objects;
-    std::vector<ModScriptToAdd> mod_scripts;
     std::vector<SoundEffectToAdd> sound_effects;
     std::vector<PlayerAnimationToAdd> player_animations;
     std::vector<AchievementToAdd> achievements;
     std::map<std::string, std::string> story;
 
-    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && forms.empty() && script_objects.empty() && mod_scripts.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return achievements.empty() && story.empty() && sound_effects.empty() && player_animations.empty() && stage_rules.empty() && player_constants.empty() && tunables.empty() && object_classes.empty() && forms.empty() && object_changes.empty() && comet_limits.empty() && galaxies.empty() && music.empty() && texts.empty() && event_flags.empty() && comets.empty(); }
 };
 
+// The language refusals are said in: the played language's folder name, as language_folder gives
+// it ("EuGerman"); empty or unknown to the validator: UsEnglish. Set before start_plugins.
+void set_message_language(std::string folder);
+// What one begun mod's layers call answered, every name as it gave it (unknown ones included), in its order.
+struct ChosenLayers {
+    const PluginFile* plugin;
+    std::vector<std::string> names;
+};
 // Starts the plugins and returns how many started. `game_api` is the game module's nebula_game_mod_api(); `find_symbol`
 // looks up a name in the game module (null when absent). A plugin that can't start is logged and skipped.
+// In two steps: every mod is bound and begun and its layers call asked (luma_begin_mod), then `choose` is given each
+// begun mod's answer (it may start the game again and not return), then the rows are applied, then each begun mod
+// starts (luma_start_begun) in the same order; one whose needed mod did not start is dropped (luma_drop_begun).
 std::size_t start_plugins(const std::vector<PluginFile>& plugins, const ModRows& rows, const NebulaModApi* game_api,
                           void* (*find_symbol)(const char*),
-                          void (*log)(const char*));
-// Writes every tunable mods can set to `list_file` (--dump-tunables), one "<key>\t<kind>\t<default>" line each (list
-// entries as <key>[i]). Returns false when the game module has no list or the file can't be written.
-bool dump_tunables(const NebulaModApi* game_api, const std::filesystem::path& list_file);
+                          void (*log)(const char*), void (*choose)(const std::vector<ChosenLayers>& chosen) = nullptr);
+// Takes a running LumaCore mod out while the game runs (reload.md 2), from any thread: the game module takes out the
+// mods that use it, then it, at the next frame's start; each one's Mods page then reads on and not running, "Taken out
+// while the game runs". False: not queued (no game module with the call, or it refused the id; said in the log).
+bool take_out(std::string_view mod_id);
+
+// Dev mode (docs/modding/how-tos/reloading-a-mod-while-playing.md 4; the dev mods, mods.h dev_mods). Where requests and results are: <mods>/.reload (the scan passes folders whose name starts with a dot).
+[[nodiscard]] std::filesystem::path reload_folder();
+// A reload of a mod with code from its installed folder, as a request does (the harness's reload step). Game thread.
+void reload(std::string_view mod_id);
+// Game thread, once a frame at its start: every 30 frames each dev mod's request (<id>.request) is looked for, and a
+// reload under way takes its next step. Without dev mods and with no reload, one test.
+void dev_frame();
 // Sets where unlocked mod achievements are saved (galaxy::achievements::unlock_mod, which returns true when new). When
 // unset (the headless host), unlocks last only for the run.
 void set_achievement_store(bool (*unlock)(std::string_view key)) noexcept;
@@ -217,6 +220,38 @@ void set_achievement_store(bool (*unlock)(std::string_view key)) noexcept;
 [[nodiscard]] std::int32_t next_mod_achievement_unlocked() noexcept;
 // The NEBULA_MOD_EVENT_* value for an event name ("star_get"), or -1.
 [[nodiscard]] int mod_event_by_name(std::string_view name) noexcept;
+
+// Why a mod's code did not start (said once, translated): one record per mod, kept from
+// start_plugins for the Mods page and the mod log. Either the loader's or the order's refusal (a LumaRefusal copied,
+// its values owned) or a host sentence: capitals in English, which the menu translates as every host text.
+struct NotStarted {
+    std::string mod_id;
+    std::string library;  // the code's file name
+    std::uint32_t code = 0;  // the refusal's code (L5xx, L800); 0: a host sentence
+    std::vector<std::pair<std::string, std::string>> values;  // the refusal's names and values, in order
+    std::string sentence;  // when code is 0
+};
+// A copy of the records (any thread).
+[[nodiscard]] std::vector<NotStarted> plugins_not_started();
+// What the Mods page shows for a mod whose code did not start, and whether it is already in the played language (a
+// refusal, as the validator words it: shown as is) or a host sentence the menu translates. Empty: its code started, or
+// it has none.
+struct NotStartedText {
+    std::string text;
+    bool as_is = false;
+};
+[[nodiscard]] NotStartedText plugin_not_started_text(std::string_view mod_id);
+
+// A validator code (L203 is 203) and its parameters (names and values, "T:"/"P:" values as the validator gives them)
+// as luma_validate_message words them in `language` (a language folder, "UsEnglish"; empty: the played language). When
+// the importer's library has no words (missing or old), the code and every parameter as given, and `worded` false.
+// The mod log's host entries (J's mod_log.cpp).
+struct ValidatorText {
+    std::string text;
+    bool worded = false;
+};
+[[nodiscard]] ValidatorText validator_text(std::uint32_t code, const std::vector<std::pair<std::string, std::string>>& values,
+                                           std::string_view language = {});
 
 // The mod id of the plugin containing `address`, or null.
 [[nodiscard]] const char* plugin_at(const void* address) noexcept;

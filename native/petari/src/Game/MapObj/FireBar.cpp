@@ -4,41 +4,11 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 55.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_FireBar_f1, "FireBar.f1", 140.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 55.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f11, "init.f11", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f12, "init.f12", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f13, "init.f13", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f14, "init.f14", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f1, "updateHitSensor.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f2, "updateHitSensor.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f3, "updateHitSensor.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f4, "updateHitSensor.f4", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHitSensor_f5, "updateHitSensor.f5", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initFireBarBall_f1, "initFireBarBall.f1", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixFireBarBall_f1, "fixFireBarBall.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixFireBarBall_f2, "fixFireBarBall.f2", 360.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_fixFireBarBall_f3, "fixFireBarBall.f3", 50.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_controlEmitEffect_isNearPlayerAnyTime_1, "controlEmitEffect.isNearPlayerAnyTime.1", 5000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_controlEmitEffect_isNearPlayerAnyTime_2, "controlEmitEffect.isNearPlayerAnyTime.2", 5000.0f);
 
 namespace {
     // Distance the player must pass beyond the 5000 range before the ball's flame is deleted.
-    NEBULA_TUNABLE(f32, sEffectLeaveMargin, 500.0f);
+    const f32 sEffectLeaveMargin = 500.0f;
 };  // namespace
 
 namespace NrvFireBar {
@@ -51,11 +21,11 @@ FireBarBall::FireBarBall(LiveActor* pParent) : ModelObj("ファイアバー玉",
 }
 
 void FireBarBall::init(const TableIter& rIter) {
-    f32 shadowDropDist = cNum_init_f1;
+    f32 shadowDropDist = 100.0f;
     MR::getPlacementArg6NoInit(rIter, &shadowDropDist);
 
     if (0.0f != shadowDropDist) {
-        MR::initShadowVolumeCylinder(this, cNum_init_f2);
+        MR::initShadowVolumeCylinder(this, 55.0f);
         MR::setShadowDropLength(this, 0, shadowDropDist);
         s32 shadowDropRotate = -1;
         MR::getPlacementArg4NoInit(rIter, &shadowDropRotate);
@@ -71,13 +41,13 @@ void FireBarBall::init(const TableIter& rIter) {
         MR::getPlacementArg2NoInit(rIter, &cutShadows);
 
         if (cutShadows == 0) {
-            MR::setShadowVolumeEndDropOffset(this, 0, cNum_init_f3);
+            MR::setShadowVolumeEndDropOffset(this, 0, 20.0f);
             MR::onShadowVolumeCutDropLength(this, 0);
             MR::onCalcShadow(this, 0);
         }
     }
 
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f4);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     makeActorAppeared();
 }
 
@@ -102,7 +72,7 @@ void FireBarBall::endClipped() {
 void FireBarBall::controlEmitEffect() {
     // Emit inside 5000, delete only past 5000 plus a margin: a player walking back and forth over the line deleted and
     // made the flame again every few steps, restarting its particles each time.
-    mIsEffectNear = MR::isNearPlayerAnyTime(this, mIsEffectNear ? cNum_controlEmitEffect_isNearPlayerAnyTime_1 + ::sEffectLeaveMargin : cNum_controlEmitEffect_isNearPlayerAnyTime_2);
+    mIsEffectNear = MR::isNearPlayerAnyTime(this, mIsEffectNear ? 5000.0f + ::sEffectLeaveMargin : 5000.0f);
     if (mIsEffectNear) {
         MR::emitEffect(this, "FireBarBall");
     } else {
@@ -119,7 +89,7 @@ FireBar::FireBar(const char* pName) : LiveActor(pName) {
     mFront.z = 0.0f;
     mFireBarSpeed = -1.0f;
     mStickCount = 1;
-    mStickDistance = cNum_FireBar_f1;
+    mStickDistance = 140.0f;
 }
 
 void FireBar::init(const TableIter& rIter) {
@@ -128,30 +98,30 @@ void FireBar::init(const TableIter& rIter) {
     MR::connectToSceneMapObj(this);
     initHitSensor(2);
     MR::addBodyMessageSensorMapObj(this);
-    MR::addHitSensorCallbackEnemyAttack(this, "fire", 8, cNum_init_f5);
+    MR::addHitSensorCallbackEnemyAttack(this, "fire", 8, 30.0f);
     MR::initCollisionParts(this, "FireBarCore", getSensor("body"), 0);
     initEffectKeeper(0, 0);
     initSound(3, false);
     MR::calcGravity(this);
 
-    f32 shadowDropDist = cNum_init_f6;
+    f32 shadowDropDist = 100.0f;
     MR::getPlacementArg6NoInit(rIter, &shadowDropDist);
     MR::getPlacementArg3NoInit(rIter, &shadowDropDist);
-    shadowDropDist -= cNum_init_f7;
+    shadowDropDist -= 55.0f;
 
     if (shadowDropDist > 0.0f) {
         Vec3f up_vec;
         Vec3f scaled_vec;
         Vec3f drop_direction;
         Vec3f shadow_box;
-        shadow_box.x = cNum_init_f8;
-        shadow_box.y = cNum_init_f9;
-        shadow_box.z = cNum_init_f10;
+        shadow_box.x = 100.0f;
+        shadow_box.y = 100.0f;
+        shadow_box.z = 100.0f;
         MR::initShadowVolumeBox(this, shadow_box);
         MR::calcUpVec(&up_vec, this);
-        scaled_vec.scaleAdd(cNum_init_f11, up_vec, mPosition);
+        scaled_vec.scaleAdd(50.0f, up_vec, mPosition);
         MR::setShadowDropPosition(this, 0, scaled_vec);
-        MR::setShadowVolumeStartDropOffset(this, 0, cNum_init_f12);
+        MR::setShadowVolumeStartDropOffset(this, 0, 100.0f);
         MR::setShadowDropLength(this, 0, shadowDropDist);
 
         s32 rotateShadow = -1;
@@ -180,12 +150,12 @@ void FireBar::init(const TableIter& rIter) {
         mStickCount = 0;
     }
 
-    mFireBarSpeed = cNum_init_f13 * fireBallSpeed;
+    mFireBarSpeed = 0.1f * fireBallSpeed;
     mFireBallCount = mStickCount * numFireBalls;
     MR::calcFrontVec(&mFront, this);
     initFireBarBall(rIter);
     MR::setGroupClipping(this, rIter, 0x20);
-    MR::setClippingTypeSphere(this, (mFireBallCount + 1) * cNum_init_f14);
+    MR::setClippingTypeSphere(this, (mFireBallCount + 1) * 100.0f);
     MR::useStageSwitchSleep(this, rIter);
     initNerve(GET_NERVE(FireBar, FireBarNrvWait));
     makeActorAppeared();
@@ -233,11 +203,11 @@ void FireBar::updateHitSensor(HitSensor* pSensor) {
 
     Vec3f start;
     start.scale(mStickDistance, mFront);
-    start.scaleAdd(cNum_updateHitSensor_f1, up, start);
+    start.scaleAdd(50.0f, up, start);
 
     Vec3f end;
-    end.scale(mStickDistance + cNum_updateHitSensor_f2 * (fireBallCount - 1), mFront);
-    end.scaleAdd(cNum_updateHitSensor_f3, up, end);
+    end.scale(mStickDistance + 100.0f * (fireBallCount - 1), mFront);
+    end.scaleAdd(50.0f, up, end);
 
     for (s32 i = 0; i < mStickCount; i++) {
         Vec3f startWorld;
@@ -258,8 +228,8 @@ void FireBar::updateHitSensor(HitSensor* pSensor) {
         if (i + 1 != mStickCount) {
             Vec3f up;
             MR::calcUpVec(&up, this);
-            MR::rotateVecDegree(&start, up, cNum_updateHitSensor_f4 / mStickCount);
-            MR::rotateVecDegree(&end, up, cNum_updateHitSensor_f5 / mStickCount);
+            MR::rotateVecDegree(&start, up, 360.0f / mStickCount);
+            MR::rotateVecDegree(&end, up, 360.0f / mStickCount);
         }
     }
 
@@ -278,7 +248,7 @@ void FireBar::initFireBarBall(const TableIter& rIter) {
         s32 div = totalNum != 0 ? i / totalNum : 0;
         div *= totalNum;
 
-        startVal = !(i - div) ? 0.0f : cNum_initFireBarBall_f1 + startVal;
+        startVal = !(i - div) ? 0.0f : 25.0f + startVal;
         const s32 frameMax = MR::getBtkFrameMax(mFireBalls[i]);
         startVal = frameMax != 0 ? static_cast< s32 >(startVal) % frameMax : static_cast< s32 >(startVal);
         MR::setBtkFrame(mFireBalls[i], startVal);
@@ -289,7 +259,7 @@ void FireBar::initFireBarBall(const TableIter& rIter) {
 
 void FireBar::fixFireBarBall() {
     Vec3f scaled;
-    scaled.scale(cNum_fixFireBarBall_f1, mFront);
+    scaled.scale(100.0f, mFront);
 
     Vec3f final_pos;
     final_pos.zero();
@@ -303,11 +273,11 @@ void FireBar::fixFireBarBall() {
         if (i - div == 0) {
             Vec3f up_vec;
             MR::calcUpVec(&up_vec, this);
-            MR::rotateVecDegree(&scaled, up_vec, cNum_fixFireBarBall_f2 / mStickCount);
+            MR::rotateVecDegree(&scaled, up_vec, 360.0f / mStickCount);
             Vec3f norm;
             MR::normalize(scaled, &norm);
             final_pos.scaleAdd(mStickDistance, norm, mPosition);
-            final_pos.scaleAdd(cNum_fixFireBarBall_f3, up_vec, final_pos);
+            final_pos.scaleAdd(50.0f, up_vec, final_pos);
         } else {
             final_pos.add(scaled);
         }

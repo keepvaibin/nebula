@@ -9,6 +9,7 @@
 
 #include "galaxy/luma.h"
 #include "galaxy/mods.h"
+#include "galaxy/mod_consent.h"
 #include "galaxy/dolphin_pack.h"
 #include "galaxy/texture_categories.h"
 
@@ -465,7 +466,8 @@ bool is_mod_archive(const fs::path& path) {
 }
 
 ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
-                        const std::function<void(const ImportProgress&)>& progress, const std::atomic<bool>* cancel) {
+                        const std::function<void(const ImportProgress&)>& progress, const std::atomic<bool>* cancel,
+                        const ImportCheck& check) {
     ImportResult result;
     std::error_code error;
     const bool folder = fs::is_directory(source, error);
@@ -505,7 +507,8 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
         return result;
     }
     if (!folder) lift_top_folder(writer.staging);
-    if (const std::optional<galaxy::luma::Manifest> manifest = galaxy::luma::read_manifest(writer.staging); manifest && !manifest->id.empty()) {
+    const std::optional<galaxy::luma::Manifest> manifest = galaxy::luma::read_manifest(writer.staging);
+    if (manifest && !manifest->id.empty()) {
         // A .luma is its id: the folder holding that id is the one updated, whatever its name (copied in by hand, or
         // renamed). A folder of its name holding another mod is left alone: this one takes a name of its own.
         result.new_version = manifest->version;
@@ -548,6 +551,15 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
         result.ok = true;
         describe(result);
         result.message = "ALREADY IN YOUR MODS: " + result.title;
+        return result;
+    }
+    // A package passes the check before anything is placed (validator.md 2 "at import"): refused, nothing is added.
+    if (manifest && check && !check(writer.staging, result.id, result) && result.refused) {
+        fs::remove_all(writer.staging, error);
+        result.ok = false;
+        const std::string name = manifest->name.fallback.empty() ? manifest->id : manifest->name.fallback;
+        result.title = name;
+        result.message = "NOT IMPORTED: " + name;  // the result page lists the findings under it
         return result;
     }
     // In place: an existing mod of that name is replaced (its settings, kept by name, stay).
@@ -602,6 +614,123 @@ ImportResult import_mod(const fs::path& source, const fs::path& mods_folder,
         }
     }
     return result;
+}
+
+ImportPeek peek_import(const fs::path& source, const fs::path& mods_folder) {
+    ImportPeek peek;
+    std::error_code error;
+    std::optional<galaxy::luma::Manifest> manifest;
+    if (fs::is_directory(source, error)) {
+        manifest = galaxy::luma::read_manifest(source);
+    } else {
+        archive* reader = archive_read_new();
+        archive_read_support_filter_all(reader);
+        archive_read_support_format_all(reader);
+        struct Close {
+            archive* a;
+            ~Close() { archive_read_free(a); }
+        } close{reader};
+#if defined(_WIN32)
+        const int opened = archive_read_open_filename_w(reader, source.c_str(), 1u << 16);
+#else
+        const int opened = archive_read_open_filename(reader, source.c_str(), 1u << 16);
+#endif
+        if (opened != ARCHIVE_OK) return peek;
+        archive_entry* entry = nullptr;
+        for (std::uint64_t entries = 0; entries < kImportEntryLimit && archive_read_next_header(reader, &entry) == ARCHIVE_OK;
+             ++entries) {
+            const char* const raw = archive_entry_pathname_utf8(entry);
+            std::string name = raw != nullptr ? raw : (archive_entry_pathname(entry) ? archive_entry_pathname(entry) : "");
+            std::replace(name.begin(), name.end(), '\\', '/');
+            if (name.starts_with("./")) name.erase(0, 2u);
+            const std::size_t slash = name.find('/');
+            const bool top = name == "luma.json" ||
+                             (slash != std::string::npos && name.compare(slash + 1u, std::string::npos, "luma.json") == 0);
+            if (!top || archive_entry_filetype(entry) != AE_IFREG) continue;
+            const la_int64_t size = archive_entry_size(entry);
+            if (size <= 0 || size > (1 << 20)) break;
+            std::string text(static_cast<std::size_t>(size), '\0');
+            if (archive_read_data(reader, text.data(), text.size()) != static_cast<la_ssize_t>(text.size())) break;
+            manifest = galaxy::luma::parse_manifest(text);
+            break;
+        }
+    }
+    if (!manifest || manifest->id.empty()) return peek;
+    peek.id = manifest->id;
+    peek.version = manifest->version;
+    // The installed one: the folder of its id first, else any folder whose manifest has it (as import_mod finds it).
+    const auto version_in = [&](const fs::path& folder) {
+        const std::optional<galaxy::luma::Manifest> there = galaxy::luma::read_manifest(folder);
+        return there && there->id == manifest->id ? std::optional<std::string>(there->version) : std::nullopt;
+    };
+    std::optional<std::string> found;
+    if (fs::is_directory(mods_folder / from_utf8(folder_name(manifest->id)), error)) {
+        found = version_in(mods_folder / from_utf8(folder_name(manifest->id)));
+    }
+    std::error_code walk_error;
+    for (auto it = fs::directory_iterator(mods_folder, walk_error); !found && !walk_error && it != fs::directory_iterator();
+         it.increment(walk_error)) {
+        const std::string name = utf8(it->path().filename());
+        if (name.empty() || name.front() == '.' || !it->is_directory(error)) continue;
+        found = version_in(it->path());
+    }
+    if (found) peek.installed = *found;
+    return peek;
+}
+
+std::vector<ShippedMod> install_shipped_mods(const fs::path& shipped, const fs::path& mods_folder) {
+    std::vector<ShippedMod> done;
+    std::error_code error;
+    if (shipped.empty() || mods_folder.empty() || !fs::is_directory(shipped, error)) return done;
+    std::vector<fs::path> files;
+    for (fs::directory_iterator it(shipped, error), end; !error && it != end; it.increment(error)) {
+        std::error_code kind;
+        if (it->is_regular_file(kind) && lower(it->path().extension().string()) == ".luma") files.push_back(it->path());
+    }
+    std::sort(files.begin(), files.end());
+    std::vector<std::string> installed;
+    std::set<std::string> shipped_ids;
+    for (const fs::path& file : files) {
+        const ImportPeek peek = peek_import(file, mods_folder);
+        if (!peek.id.empty()) shipped_ids.insert(peek.id);
+        if (!peek.id.empty() && !peek.installed.empty() && galaxy::luma::compare_versions(peek.installed, peek.version) >= 0) {
+            continue;  // the player has this version or a later one
+        }
+        ShippedMod mod{file.filename().string(), peek.id, peek.version, false, {}};
+        const ImportResult result = import_mod(file, mods_folder);
+        mod.ok = result.ok;
+        if (result.ok) {
+            mod.id = result.id;
+            installed.push_back(result.id);
+            shipped_ids.insert(result.id);
+        } else {
+            mod.message = result.message;
+        }
+        done.push_back(std::move(mod));
+    }
+    if (!installed.empty()) {
+        std::vector<ModInfo> mods = scan_mods();
+        for (ModInfo& mod : mods) {
+            if (std::find(installed.begin(), installed.end(), mod.id) != installed.end()) record_code_answer(mod, true);
+        }
+        (void)save_mod_settings(mods);
+    }
+    set_shipped_mods(std::move(shipped_ids));
+    return done;
+}
+
+void note_shipped_mods(const fs::path& shipped, const fs::path& mods_folder) {
+    std::set<std::string> shipped_ids;
+    std::error_code error;
+    if (!shipped.empty() && fs::is_directory(shipped, error)) {
+        for (fs::directory_iterator it(shipped, error), end; !error && it != end; it.increment(error)) {
+            std::error_code kind;
+            if (!it->is_regular_file(kind) || lower(it->path().extension().string()) != ".luma") continue;
+            const ImportPeek peek = peek_import(it->path(), mods_folder);
+            if (!peek.id.empty()) shipped_ids.insert(peek.id);
+        }
+    }
+    set_shipped_mods(std::move(shipped_ids));
 }
 
 bool remove_mod(const fs::path& mods_folder, const std::string& id, std::string* message) {

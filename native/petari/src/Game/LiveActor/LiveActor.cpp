@@ -28,13 +28,14 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/Model.hpp"
-#include "Game/System/LumaClass.hpp"
+#include "Game/Util/StringUtil.hpp"
+#include <nebula_module.h>
 #include "Game/System/LumaCore.hpp"
 
 LiveActor::LiveActor(const char* pName)
     : NameObj(pName), mPosition(0.0f, 0.0f, 0.0f), mRotation(0.0f, 0.0f, 0.0f), mScale(1.0f, 1.0f, 1.0f), mVelocity(0.0f, 0.0f, 0.0f),
       mGravity(0.0f, -1.0f, 0.0f), mModelManager(), mAnimKeeper(), mSpine(), mSensorKeeper(), mBinder(), mRailRider(), mEffectKeeper(),
-      mSoundObject(), mShadowControllerList(), mCollisionParts(), mStageSwitchCtrl(), mStarPointerTarget(), mActorLightCtrl(), mCameraCtrl(), mModActor() {
+      mSoundObject(), mShadowControllerList(), mCollisionParts(), mStageSwitchCtrl(), mStarPointerTarget(), mActorLightCtrl(), mCameraCtrl() {
     lumacore::setClass(this, lumacore::kClassId< LiveActor >);
     MR::getAllLiveActorGroup()->registerActor(this);
     MR::getClippingDirector()->registerActor(this);
@@ -76,10 +77,6 @@ void LiveActor::makeActorAppeared() {
     if (!MR::isNoEntryDrawBuffer(this)) {
         MR::connectToDrawTemporarily(this);
     }
-
-    if (mModActor != nullptr) [[unlikely]] {
-        lumacore::classAppear(this);
-    }
 }
 
 void LiveActor::kill() {
@@ -88,9 +85,6 @@ void LiveActor::kill() {
 
 void LiveActor::makeActorDead() {
     NebulaMods::fire(NEBULA_MOD_EVENT_ACTOR_KILL, 0, this, mName);
-    if (mModActor != nullptr) [[unlikely]] {
-        lumacore::classKill(this);
-    }
     MotionSignal::died(this);
     mVelocity.zero();
 
@@ -141,24 +135,15 @@ void LiveActor::movement() {
         return;
     }
 
-    // A mod class (LumaClass.hpp) runs first and may take the class's place this frame: its nerve and control.
-    const bool classRuns = mModActor == nullptr || !lumacore::classControl(this);
+    if (mSpine != nullptr) {
+        mSpine->update();
+    }
 
     if (mFlag.mIsDead) {
         return;
     }
 
-    if (classRuns) [[likely]] {
-        if (mSpine != nullptr) {
-            mSpine->update();
-        }
-
-        if (mFlag.mIsDead) {
-            return;
-        }
-
-        control();
-    }
+    control();
 
     if (mFlag.mIsDead) {
         return;
@@ -456,6 +441,22 @@ void LiveActor::initActorCollisionParts(const char* pName, HitSensor* pSensor, R
         scaleType = MR::CollisionScaleType_AutoEqualScale;
     } else {
         scaleType = MR::CollisionScaleType_Default;
+    }
+
+    // The collision is the archive's <name>.kcl, a member named by the file alone: a mod's model is named by its
+    // archive's path ("Luma/<mod>/Name", as a mod's code names it), whose archive holds Name.kcl beside Name.bmd. An
+    // archive without it (a mod's model with no collision beside it) gives the actor no collision, said once here, and
+    // the game runs on: the file is never read through.
+    for (const char* pAt = pName; pAt != nullptr && *pAt != '\0'; pAt++) {
+        if (*pAt == '/') {
+            pName = pAt + 1;
+        }
+    }
+    const ResourceHolder* const pFrom = pResHolder != nullptr ? pResHolder : MR::getResourceHolder(this);
+    if (pName == nullptr || pFrom == nullptr || !pFrom->mFileInfoTable->isExistRes(MR::FormattedName("%s.kcl", pName).c_str())) {
+        nebula_log("actor %s: its collision %s.kcl is not in its archive; it has no collision\n", mName != nullptr ? mName : "",
+                   pName != nullptr ? pName : "");
+        return;
     }
 
     if (pResHolder != nullptr) {

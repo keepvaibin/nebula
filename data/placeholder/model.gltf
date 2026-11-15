@@ -1,0 +1,135 @@
+{
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 24,
+   "max": [
+    50.0,
+    100.0,
+    50.0
+   ],
+   "min": [
+    -50.0,
+    0.0,
+    -50.0
+   ],
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 24,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5123,
+   "count": 36,
+   "type": "SCALAR"
+  }
+ ],
+ "asset": {
+  "generator": "Nebula make_placeholder.py",
+  "version": "2.0"
+ },
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteLength": 288,
+   "byteOffset": 0,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteLength": 288,
+   "byteOffset": 288,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteLength": 192,
+   "byteOffset": 576,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteLength": 72,
+   "byteOffset": 768,
+   "target": 34963
+  }
+ ],
+ "buffers": [
+  {
+   "byteLength": 840,
+   "uri": "data:application/octet-stream;base64,AABIQgAAAAAAAEhCAABIQgAAAAAAAEjCAABIQgAAyEIAAEjCAABIQgAAyEIAAEhCAABIwgAAAAAAAEjCAABIwgAAAAAAAEhCAABIwgAAyEIAAEhCAABIwgAAyEIAAEjCAABIwgAAyEIAAEhCAABIQgAAyEIAAEhCAABIQgAAyEIAAEjCAABIwgAAyEIAAEjCAABIwgAAAAAAAEjCAABIQgAAAAAAAEjCAABIQgAAAAAAAEhCAABIwgAAAAAAAEhCAABIwgAAAAAAAEhCAABIQgAAAAAAAEhCAABIQgAAyEIAAEhCAABIwgAAyEIAAEhCAABIQgAAAAAAAEjCAABIwgAAAAAAAEjCAABIwgAAyEIAAEjCAABIQgAAyEIAAEjCAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAPwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAACAvwAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAgL8AAAAAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAAAAAAIC/AAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAAAAAAAgD8AAIA/AACAPwAAgD8AAAAAAAAAAAAAAAAAAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAAAAAIA/AACAPwAAgD8AAIA/AAAAAAAAAAAAAAAAAAABAAIAAAACAAMABAAFAAYABAAGAAcACAAJAAoACAAKAAsADAANAA4ADAAOAA8AEAARABIAEAASABMAFAAVABYAFAAWABcA"
+  }
+ ],
+ "images": [
+  {
+   "uri": "face.png"
+  }
+ ],
+ "materials": [
+  {
+   "name": "NebulaPlaceholder",
+   "pbrMetallicRoughness": {
+    "baseColorTexture": {
+     "index": 0
+    },
+    "metallicFactor": 0.0,
+    "roughnessFactor": 1.0
+   }
+  }
+ ],
+ "meshes": [
+  {
+   "name": "NebulaPlaceholder",
+   "primitives": [
+    {
+     "attributes": {
+      "NORMAL": 1,
+      "POSITION": 0,
+      "TEXCOORD_0": 2
+     },
+     "indices": 3,
+     "material": 0
+    }
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "mesh": 0,
+   "name": "NebulaPlaceholder"
+  }
+ ],
+ "samplers": [
+  {
+   "magFilter": 9728,
+   "minFilter": 9728,
+   "wrapS": 33071,
+   "wrapT": 33071
+  }
+ ],
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "textures": [
+  {
+   "sampler": 0,
+   "source": 0
+  }
+ ]
+}

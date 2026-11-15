@@ -8,10 +8,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_appearPiece_f1, "appearPiece.f1", 2.0f);
 
 namespace {
     const char* const sPieceModelTable[] = {
@@ -19,10 +16,10 @@ namespace {
         "MogucchiHillB",
         "MogucchiHillC",
     };
-    NEBULA_TUNABLE(f32, sPieceSensorRadius, 120.0f);
-    NEBULA_TUNABLE(f32, sMinScale, 0.6f);
-    NEBULA_TUNABLE(s32, sCrumbleFrame, 40);
-    NEBULA_TUNABLE(f32, sAppearDist, 300.0f);
+    const f32 sPieceSensorRadius = 120.0f;
+    const f32 sMinScale = 0.6f;
+    const s32 sCrumbleFrame = 40;
+    const f32 sAppearDist = 300.0f;
 };  // namespace
 
 namespace {
@@ -427,7 +424,7 @@ void MogucchiHill::appearPiece() {
     }
 
     if (mSizeStep != 0) {
-        mPieces[mPieceIndex].setSize(mScale.x * (::sMinScale + (1.0f - ::sMinScale) * (mSizeStep - 1) / cNum_appearPiece_f1));
+        mPieces[mPieceIndex].setSize(mScale.x * (::sMinScale + (1.0f - ::sMinScale) * (mSizeStep - 1) / 2.0f));
         MogucchiHillPiece* pPiece = &mPieces[mPieceIndex];
         pPiece->mMtx.setInline(mReserveMtx);
         pPiece->mMtx.getTrans(pPiece->mPosition);

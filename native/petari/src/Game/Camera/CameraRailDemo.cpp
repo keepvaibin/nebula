@@ -4,10 +4,7 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraRailHolder.hpp"
 #include "Game/LiveActor/RailRider.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_placeOnRail_f1, "placeOnRail.f1", 1000.0f);
 
 CameraRailDemo::CameraRailDemo(const char* pName)
     : Camera(pName), mRailRider(), mCalcType(), mDemoTime(), mDemoTimer(), mDampRatio(), mCoord() {
@@ -95,7 +92,7 @@ void CameraRailDemo::placeOnRail(f32 coord) {
     mRailRider->setCoord(coord);
     CameraLocalUtil::setPos(this, mRailRider->mCurPos);
 
-    mRailRider->setCoord(coord + cNum_placeOnRail_f1);
+    mRailRider->setCoord(coord + 1000.0f);
     CameraLocalUtil::setWatchPos(this, mRailRider->mCurPos);
     CameraLocalUtil::setUpVecAndWatchUpVec(this, Vec3f(0.0f, 1.0f, 0.0f));
 }

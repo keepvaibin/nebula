@@ -1,6 +1,6 @@
 #pragma once
 
-// The game's frames (B-10): the main loop sleeps until the host says the next is due and does the frame's work itself: the
+// The game's frames: the main loop sleeps until the host says the next is due and does the frame's work itself: the
 // frame count, what to show (the game's picture or black, committed by show() and taking effect at the next frame), the
 // host told.
 

@@ -26,6 +26,8 @@ cbuffer PostConstants : register(b0) {
     // (dithered), 2 the last write as HDR10 (FinalWriteHdr). w: with z = 2, the paper white (bits 0-9) and the display's
     // peak (bits 10-23), both in nits (post_process_settings.h post_output_word).
     int4 g_origin;
+    // x: the target turned by 0-3 quarter turns clockwise; yz: the picture's width and height (PostConstants.turn).
+    int4 g_turn;
 };
 
 SamplerState LinearSampler : register(s0);
@@ -43,21 +45,38 @@ FullscreenOut FullscreenTriangle(uint id) {
     return o;
 }
 
-// Integer pixel inside the pass viewport.
+// The picture's integer pixel: the one inside the pass viewport, turned back where the target is turned.
 int2 ViewportPixel(float4 pos) {
-    return int2(pos.xy) - g_origin.xy;
+    const int2 p = int2(pos.xy) - g_origin.xy;
+    if (g_turn.x == 1) {
+        return int2(p.y, g_turn.z - 1 - p.x);
+    }
+    if (g_turn.x == 2) {
+        return int2(g_turn.y - 1 - p.x, g_turn.z - 1 - p.y);
+    }
+    if (g_turn.x == 3) {
+        return int2(g_turn.y - 1 - p.y, p.x);
+    }
+    return p;
 }
 
 // The last write to the window, 8 bits a channel from the scene's 10: a pixel between two levels takes one of them by a
 // triangular noise of a level either way, so a gradient has no steps. Pixels on a level stay. g_origin.z: this is that write.
+// PCG's hash (Jarzynski and Olano, "Hash Functions for GPU Rendering", 2020): one word to another, no two alike.
 uint NoiseHash(uint v) {
     const uint state = v * 747796405u + 2891336453u;
     const uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
     return (word >> 22u) ^ word;
 }
-float NoiseRandom(inout uint seed) {
-    seed = NoiseHash(seed);
-    return float(seed >> 8u) * (1.0 / 16777216.0);
+// The pixel's three noises, one a channel: each the sum of two uniform values less one (triangular, -1 to 1, mean 0).
+// The six values are 10-bit fields of two hashes (the pixel's place, a word each way, then that hash again), where
+// eight hashes once gave 24 bits each: a level split 1024 ways is far finer than the noise needs.
+float3 TriangularNoise(int2 p) {
+    const uint first = NoiseHash(uint(p.x) | (uint(p.y) << 16u));
+    const uint second = NoiseHash(first);
+    const float3 a = float3(uint3(first >> 22u, (first >> 12u) & 1023u, (first >> 2u) & 1023u));
+    const float3 b = float3(uint3(second >> 22u, (second >> 12u) & 1023u, (second >> 2u) & 1023u));
+    return (a + b + 1.0) * (1.0 / 1024.0) - 1.0;
 }
 // HDR10 (SMPTE ST 2084 PQ, BT.2020) for a display in HDR mode; the CPU twin is hdr10_encode in post_process_settings.cpp.
 float PqEncode(float nits) {
@@ -109,10 +128,7 @@ float3 FinalWriteHdr(float3 color, int2 p) {
     }
     const float3 code = float3(PqEncode(nits.r), PqEncode(nits.g), PqEncode(nits.b));
     const float3 level = code * 1023.0;
-    uint seed = NoiseHash(uint(p.x) ^ NoiseHash(uint(p.y) + 0x9E3779B9u));
-    const float3 noise = float3(NoiseRandom(seed) + NoiseRandom(seed), NoiseRandom(seed) + NoiseRandom(seed),
-                                NoiseRandom(seed) + NoiseRandom(seed)) - 1.0;
-    return saturate((level + noise) / 1023.0);
+    return saturate((level + TriangularNoise(p)) / 1023.0);
 }
 float3 FinalWrite(float3 color, int2 p) {
     if (g_origin.z == 0) {
@@ -123,13 +139,12 @@ float3 FinalWrite(float3 color, int2 p) {
     }
     const float3 level = color * 255.0;
     const float3 between = step(0.02, abs(level - round(level)));
-    if (max(between.r, max(between.g, between.b)) == 0.0) {
-        return color;
+    // A real branch, not a select: a group of pixels all on levels (black, flat 8-bit colours) skips the two hashes.
+    float3 written = color;
+    [branch] if (max(between.r, max(between.g, between.b)) != 0.0) {
+        written = saturate((level + TriangularNoise(p) * between) / 255.0);
     }
-    uint seed = NoiseHash(uint(p.x) ^ NoiseHash(uint(p.y) + 0x9E3779B9u));
-    const float3 noise = float3(NoiseRandom(seed) + NoiseRandom(seed), NoiseRandom(seed) + NoiseRandom(seed),
-                                NoiseRandom(seed) + NoiseRandom(seed)) - 1.0;
-    return saturate((level + noise * between) / 255.0);
+    return written;
 }
 
 #if defined(PASS_SMAA_EDGES) || defined(PASS_SMAA_WEIGHTS) || defined(PASS_SMAA_BLEND) || defined(PASS_SMAA_BLEND_KEEP)
@@ -148,9 +163,15 @@ float3 FinalWrite(float3 color, int2 p) {
 #define SMAAGather(tex, coord) tex.Gather(LinearSampler, coord)
 #endif
 
-#if defined(PASS_FSR_EASU) || defined(PASS_FSR_RCAS) || defined(PASS_FSR_RCAS_SCALED)
+#if defined(PASS_FSR_EASU) || defined(PASS_FSR_EASU_HALF) || defined(PASS_FSR_RCAS) || defined(PASS_FSR_RCAS_SCALED)
 #define A_GPU 1
 #define A_HLSL 1
+#endif
+// EASU's packed 16-bit form: min16float, for a Direct3D device that reports 16-bit minimum precision (its taps then run
+// two to a 32-bit lane where the GPU packs them) and for Vulkan, where the SPIR-V marks it RelaxedPrecision (a GPU with
+// fast 16-bit arithmetic runs it so, one without at 32 bits).
+#if defined(PASS_FSR_EASU_HALF)
+#define A_HALF 1
 #endif
 
 #elif POST_SECTION == 2
@@ -168,6 +189,13 @@ AF4 FsrEasuRF(AF2 p) { return SourceGather(p, 0u); }
 AF4 FsrEasuGF(AF2 p) { return SourceGather(p, 1u); }
 AF4 FsrEasuBF(AF2 p) { return SourceGather(p, 2u); }
 #define FSR_EASU_F 1
+#endif
+
+#if defined(PASS_FSR_EASU_HALF)
+AH4 FsrEasuRH(AF2 p) { return AH4(inputTex.GatherRed(LinearSampler, p)); }
+AH4 FsrEasuGH(AF2 p) { return AH4(inputTex.GatherGreen(LinearSampler, p)); }
+AH4 FsrEasuBH(AF2 p) { return AH4(inputTex.GatherBlue(LinearSampler, p)); }
+#define FSR_EASU_H 1
 #endif
 
 #if defined(PASS_FSR_RCAS)
@@ -266,7 +294,13 @@ float4 PSMain(BlendOut i) : SV_Target {
         discard;
     }
 #endif
-    return float4(SMAANeighborhoodBlendingPS(i.uv, i.offset, colorTex, blendTex).rgb, 1.0);
+#if defined(PASS_SMAA_BLEND)
+    // Every pixel, the centre's alpha unchanged: it can write a target that does not hold the scene (a traded one).
+    const float alpha = colorTex.Load(int3(i.pos.xy, 0)).a;
+#else
+    const float alpha = 1.0;
+#endif
+    return float4(SMAANeighborhoodBlendingPS(i.uv, i.offset, colorTex, blendTex).rgb, alpha);
 }
 #endif
 
@@ -276,6 +310,15 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     AF3 color;
     FsrEasuF(color, AU2(ViewportPixel(i.pos)), g_con0, g_con1, g_con2, g_con3);
     return float4(FinalWrite(color, ViewportPixel(i.pos)), 1.0);
+}
+#endif
+
+#if defined(PASS_FSR_EASU_HALF)
+FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
+float4 PSMain(FullscreenOut i) : SV_Target {
+    AH3 color;
+    FsrEasuH(color, AU2(ViewportPixel(i.pos)), g_con0, g_con1, g_con2, g_con3);
+    return float4(FinalWrite(AF3(color), ViewportPixel(i.pos)), 1.0);
 }
 #endif
 
@@ -297,28 +340,32 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 Texture2D inputTex : register(t0);
 float FxaaLuma(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
 float FxaaLumaAt(float2 uv) { return FxaaLuma(inputTex.SampleLevel(LinearSampler, uv, 0).rgb); }
-float FxaaLumaOff(float2 uv, int2 o) { return FxaaLuma(inputTex.SampleLevel(PointSampler, uv, 0, o).rgb); }
+// The neighbour (x, y) texels away: literal offsets at each use, so the SPIR-V carries ConstOffset (a variable offset is
+// an Offset operand, which needs shaderImageGatherExtended).
+#define FxaaLumaOff(uv, x, y) FxaaLuma(inputTex.SampleLevel(PointSampler, uv, 0, int2(x, y)).rgb)
 FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
 float4 PSMain(FullscreenOut i) : SV_Target {
     const float2 texel = g_rt_metrics.xy;
     const float2 uv = (float2(ViewportPixel(i.pos)) + 0.5) * texel;
-    const float3 center = inputTex.SampleLevel(PointSampler, uv, 0).rgb;
+    // The centre's alpha goes out unchanged: a target that does not hold the scene (a traded one) takes it too.
+    const float4 centre = inputTex.SampleLevel(PointSampler, uv, 0);
+    const float3 center = centre.rgb;
     const float lc = FxaaLuma(center);
-    const float ln = FxaaLumaOff(uv, int2(0, -1));
-    const float ls = FxaaLumaOff(uv, int2(0, 1));
-    const float lw = FxaaLumaOff(uv, int2(-1, 0));
-    const float le = FxaaLumaOff(uv, int2(1, 0));
+    const float ln = FxaaLumaOff(uv, 0, -1);
+    const float ls = FxaaLumaOff(uv, 0, 1);
+    const float lw = FxaaLumaOff(uv, -1, 0);
+    const float le = FxaaLumaOff(uv, 1, 0);
     const float lmax = max(lc, max(max(ln, ls), max(lw, le)));
     const float lmin = min(lc, min(min(ln, ls), min(lw, le)));
     const float range = lmax - lmin;
-    if (range < max(0.0312, lmax * 0.125)) return float4(center, 1.0);
-    const float lnw = FxaaLumaOff(uv, int2(-1, -1));
-    const float lne = FxaaLumaOff(uv, int2(1, -1));
-    const float lsw = FxaaLumaOff(uv, int2(-1, 1));
-    const float lse = FxaaLumaOff(uv, int2(1, 1));
-    // Edge orientation from second differences of the 3x3 block.
-    const float horizontal = abs(lnw + lne - 2.0 * ln) + 2.0 * abs(lw + le - 2.0 * lc) + abs(lsw + lse - 2.0 * ls);
-    const float vertical = abs(lnw + lsw - 2.0 * lw) + 2.0 * abs(ln + ls - 2.0 * lc) + abs(lne + lse - 2.0 * le);
+    if (range < max(0.0312, lmax * 0.125)) return centre;
+    const float lnw = FxaaLumaOff(uv, -1, -1);
+    const float lne = FxaaLumaOff(uv, 1, -1);
+    const float lsw = FxaaLumaOff(uv, -1, 1);
+    const float lse = FxaaLumaOff(uv, 1, 1);
+    // Edge orientation from second differences of the 3x3 block: a horizontal edge changes down the columns.
+    const float horizontal = abs(lnw + lsw - 2.0 * lw) + 2.0 * abs(ln + ls - 2.0 * lc) + abs(lne + lse - 2.0 * le);
+    const float vertical = abs(lnw + lne - 2.0 * ln) + 2.0 * abs(lw + le - 2.0 * lc) + abs(lsw + lse - 2.0 * ls);
     const bool horz = horizontal >= vertical;
     // The neighbour across the edge with the larger contrast.
     float l1 = horz ? ln : lw;
@@ -362,7 +409,7 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     offset = max(offset, sub2 * sub2 * 0.75);
     float2 final_uv = uv;
     if (horz) final_uv.y += offset * across; else final_uv.x += offset * across;
-    return float4(inputTex.SampleLevel(LinearSampler, final_uv, 0).rgb, 1.0);
+    return float4(inputTex.SampleLevel(LinearSampler, final_uv, 0).rgb, centre.a);
 }
 #endif
 
@@ -388,6 +435,16 @@ float4 PSMain(FullscreenOut i) : SV_Target {
         }
     }
     return float4(FinalWrite(sum / float(taps.x * taps.y), ViewportPixel(i.pos)), 1.0);
+}
+#endif
+
+#if defined(PASS_COPY)
+// The resample at the picture's own size: its one bilinear tap falls on the texel's centre and returns that texel.
+Texture2D inputTex : register(t0);
+FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
+float4 PSMain(FullscreenOut i) : SV_Target {
+    const int2 p = ViewportPixel(i.pos);
+    return float4(FinalWrite(inputTex.Load(int3(p, 0)).rgb, p), 1.0);
 }
 #endif
 

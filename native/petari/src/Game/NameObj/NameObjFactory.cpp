@@ -4772,6 +4772,27 @@ namespace {
             "FileSelector",
             createNameObj< FileSelector >,
         },
+        // LumaCore's row: a plain LiveActor for a mod's own class (`class X : LiveActor made by LumaObj`), so no mod
+        // depends on a game object's name. LiveActor's init does nothing; the mod's class overrides it.
+        {
+            "LumaObj",
+            createNameObj< LiveActor >,
+        },
+        // And plain areas of each shape for a mod's own area class (`class X : AreaObj made by LumaAreaCube`): their
+        // manager is AreaObjContainer's LumaArea, which no game code reads, unlike a game area's maker (PullBackCube's
+        // objects pull Mario back).
+        {
+            "LumaAreaCube",
+            createBaseOriginCube< AreaObj >,
+        },
+        {
+            "LumaAreaSphere",
+            createSphere< AreaObj >,
+        },
+        {
+            "LumaAreaCylinder",
+            createBaseOriginCylinder< AreaObj >,
+        },
     };
 
     const char* const cPlayerArchiveLoaderObjTable[] = {
@@ -4819,20 +4840,10 @@ namespace {
 
 namespace NameObjFactory {
     CreatorFuncPtr getCreator(const char* pName) {
-        // First: a plugin may also take the place of one of the game's own.
-        if (const CreatorFuncPtr pPlugin = NebulaMods::findCreator(pName)) {
-            return pPlugin;
-        }
-
         pName = NebulaMods::objectBecomes(NEBULA_OBJECTS_PLACED, NebulaMods::objectLike(pName));
         if (pName == nullptr) {
             return nullptr;
         }
-        // A change into a mod's own object (luma.json "objects", a plugin's class).
-        if (const CreatorFuncPtr pPlugin = NebulaMods::findCreator(pName)) {
-            return pPlugin;
-        }
-
         if (PlanetMapCreatorFunction::isRegisteredObj(pName)) {
             return PlanetMapCreatorFunction::getPlanetMapCreator(pName);
         }

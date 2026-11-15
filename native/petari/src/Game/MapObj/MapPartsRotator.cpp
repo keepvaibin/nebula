@@ -6,15 +6,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updateBaseHostMtx_f1, "updateBaseHostMtx.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f1, "updateVelocity.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateVelocity_f2, "updateVelocity.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initRotateSpeed_f1, "initRotateSpeed.f1", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRotate_f1, "exeRotate.f1", 0.00001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeRotateStart_f1, "exeRotateStart.f1", 0.5f);
 
 namespace NrvMapPartsRotator {
     NEW_NERVE(HostTypeNeverMove, MapPartsRotator, NeverMove);
@@ -101,7 +93,7 @@ void MapPartsRotator::cancelSignalMotion() {
 }
 
 void MapPartsRotator::updateBaseHostMtx() {
-    mBaseHostMtx.setEuler(mHost->mRotation * (PI / cNum_updateBaseHostMtx_f1));
+    mBaseHostMtx.setEuler(mHost->mRotation * (PI / 180.0f));
 }
 
 bool MapPartsRotator::isMoving() const {
@@ -123,9 +115,9 @@ void MapPartsRotator::updateVelocity() {
     bool invert;
 
     if (isRotateClockwise()) {
-        invert = mTargetAngle - (mRotateAngle * cNum_updateVelocity_f1) <= mAngle;
+        invert = mTargetAngle - (mRotateAngle * 0.5f) <= mAngle;
     } else {
-        invert = mAngle <= mTargetAngle + (mRotateAngle * cNum_updateVelocity_f2);
+        invert = mAngle <= mTargetAngle + (mRotateAngle * 0.5f);
     }
 
     if (invert) {
@@ -186,7 +178,7 @@ void MapPartsRotator::initRotateSpeed(const TableIter& rIter) {
         mTargetRotateSpeed = rotate_time > 0 ? mRotateAngle / rotate_time : mRotateAngle;
     } else {
         MR::getMapPartsArgRotateSpeed(&mTargetRotateSpeed, rIter);
-        mTargetRotateSpeed *= cNum_initRotateSpeed_f1;
+        mTargetRotateSpeed *= 0.01f;
     }
 
     if (mRotateAngle < 0.0f) {
@@ -251,7 +243,7 @@ void MapPartsRotator::exeRotate() {
         return;
     }
 
-    if (mRotateAccelType == 1 && MR::isNearZero(mRotateSpeed, cNum_exeRotate_f1)) {
+    if (mRotateAccelType == 1 && MR::isNearZero(mRotateSpeed, 0.00001f)) {
         setNerve(GET_NERVE(MapPartsRotator, HostTypeStopAtEnd));
         return;
     }
@@ -264,7 +256,7 @@ void MapPartsRotator::exeRotateStart() {
         mSignAngle = mAngle;
     }
 
-    mAngle += cNum_exeRotateStart_f1 * (getStep() / 3 % 2 == 0 ? 1.0f : -1.0f);
+    mAngle += 0.5f * (getStep() / 3 % 2 == 0 ? 1.0f : -1.0f);
     updateRotateMtx((AxisType)mRotateAxis, mAngle);
 
     if (isStep(MapParts::getMoveStartSignalTime())) {

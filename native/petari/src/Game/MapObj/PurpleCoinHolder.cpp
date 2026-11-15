@@ -4,10 +4,9 @@
 #include "Game/MapObj/PurpleCoinStarter.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sMaxPurpleCoin, 256);
+    const s32 sMaxPurpleCoin = 256;
 };  // namespace
 
 PurpleCoinHolder::PurpleCoinHolder() : DeriveActorGroup< Coin >("パープルコイン管理", ::sMaxPurpleCoin), mStarter() {

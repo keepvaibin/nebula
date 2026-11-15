@@ -21,9 +21,7 @@ namespace galaxy::render {
 namespace {
 
 // The light model's tunables.
-constexpr float kAmbientGain = 1.10f;  // 10 % light back
 constexpr float kShadowTint = 0.2f;    // how much of the per-channel ratio a painted surface's P takes
-constexpr float kWrap = 0.25f;         // the wrap of a local light's facing
 constexpr float kSkyGain = 1.0f;       // the dome as light
 constexpr float kAreaEmission = 3.0f;  // an emissive surface as a ray sees it, in shares
 constexpr float kHitSky = 0.7f;        // a hit's own indirect when no screen knows it
@@ -44,8 +42,8 @@ constexpr std::uint32_t kRefMostSamples = 4096u;
 // The walks a kept picture is held for (the same list walked again): enough for 1,024 samples of the reference, and
 // for the real-time filters to settle when only the signals are taken.
 constexpr unsigned kRefHoldWalks = 256u;
-constexpr unsigned kSignalHoldWalks = 40u;
-// The dome's mean (11.1) is measured over the first walks of a hold, then kept while the reference adds up.
+constexpr unsigned kSignalHoldWalks = 60u;  // the signals from 20 walks in (A), the kept picture 35 walks after S
+// The dome's mean is measured over the first walks of a hold, then kept while the reference adds up.
 constexpr unsigned kDomeWalks = 16u;
 
 // A pass's own constants (rt_frame.hlsli PassConstants, as rt_walk.cpp RtPassConstants).
@@ -56,7 +54,7 @@ struct BouncePassConstants {
 
 // The signals a kept picture is given: which signal, its channels (0 r, 1 rgb, 2 a), and 1
 // when it goes over 1 (written as x / (1 + x)).
-enum class SignalOf : std::uint8_t { Light, Added, Mirror, Indirect };
+enum class SignalOf : std::uint8_t { Light, Added, Mirror, Indirect, LightsSpec, Share, Air, Fog };
 struct Signal {
     const char* name;
     SignalOf of;
@@ -66,8 +64,13 @@ constexpr Signal kSignals[] = {{"V", SignalOf::Light, 0u, 0u},
                                {"G", SignalOf::Light, 2u, 0u},
                                {"D", SignalOf::Added, 1u, 1u},
                                {"R", SignalOf::Mirror, 1u, 1u},
-                               {"I", SignalOf::Indirect, 1u, 1u}};
+                               {"I", SignalOf::Indirect, 1u, 1u},
+                               {"H", SignalOf::LightsSpec, 1u, 1u},  // the local lights' highlight alone
+                               {"S", SignalOf::Share, 1u, 1u},       // the programs' share (rt_program_signal)
+                               {"A", SignalOf::Air, 1u, 1u},         // the air's own light (rt_program_signal)
+                               {"F", SignalOf::Fog, 1u, 1u}};        // the fog's lit share (rt_program_signal)
 constexpr unsigned kSignalApart = 5u;  // walks between two signals (a readback is one at a time)
+static_assert(std::size(kSignals) * kSignalApart <= kSignalHoldWalks, "every signal inside the hold");
 
 }  // namespace
 
@@ -76,42 +79,45 @@ void RenderCore::rt_shade_frame(RtShadeFrame& frame) const {
     static_assert(sizeof(RtShadeFrame) == 256u);
     const NebulaFrameList& list = *walk_.now->list;
     frame = RtShadeFrame{};
-    // The stage: its ambient, its key and fill (the world lights stage_light and stage_light + 1); a stage that names
-    // none an even grey, as the light pass takes it.
-    float ambient[3] = {0.5f, 0.5f, 0.5f}, key[3] = {0.5f, 0.5f, 0.5f}, fill[3] = {0.0f, 0.0f, 0.0f};
+    // The stage: its ambient and key as the programs take them (rt_stage_a_, rt_stage_k_ from rt_tables: the row's
+    // gains, an even grey where the stage names no light; one stage light), its fill the world light
+    // stage_light + 1.
+    float fill[3] = {0.0f, 0.0f, 0.0f};
     if (list.stage_light_known != 0u) {
-        if (const NebulaFrameWorldLight* light = core::find_world_light(list, list.stage_light); light != nullptr) {
-            std::copy_n(list.stage_ambient, 3u, ambient);
-            std::copy_n(light->color, 3u, key);
-        }
         if (const NebulaFrameWorldLight* light = core::find_world_light(list, list.stage_light + 1u); light != nullptr) {
             std::copy_n(light->color, 3u, fill);
         }
     }
-    const float ambient_lum = 0.2126f * ambient[0] + 0.7152f * ambient[1] + 0.0722f * ambient[2];
-    const float key_lum = 0.2126f * key[0] + 0.7152f * key[1] + 0.0722f * key[2];
-    if (!(ambient_lum > 0.02f) || !(key_lum > 0.02f)) {
-        std::fill_n(ambient, 3u, 0.5f);
-        std::fill_n(key, 3u, 0.5f);
-    }
     for (unsigned c = 0; c < 3u; ++c) {
-        frame.ambient[c] = ambient[c] * kAmbientGain;
-        frame.authored[c] = ambient[c];
-        frame.key[c] = key[c];
+        frame.ambient[c] = rt_stage_a_[c];
+        frame.authored[c] = rt_stage_a_[c];
+        frame.key[c] = rt_stage_k_[c];
         frame.fill[c] = fill[c];
     }
-    frame.key[3] = kShadowTint;
-    frame.fill[3] = kWrap;
-    frame.sky[3] = kSkyGain;
-    frame.gains[0] = kAreaEmission;
-    frame.gains[1] = kHitSky;
-    frame.gains[2] = kBounce;
-    frame.gains[3] = kBounceMax;
+    frame.key[3] = rt_dev(RtDev::ShadowTint, kShadowTint);  // rt_dev.h: one key with the programs' view_stage_a.w
+    frame.sky[3] = rt_dev(RtDev::SkyGain, kSkyGain);
+    frame.gains[0] = rt_dev(RtDev::AreaEmission, kAreaEmission);
+    frame.gains[1] = rt_dev(RtDev::HitSky, kHitSky);
+    frame.gains[2] = rt_dev(RtDev::Bounce, kBounce);
+    frame.gains[3] = rt_dev(RtDev::BounceMax, kBounceMax);
     std::memcpy(frame.axis, rt_grid_axis_, sizeof(frame.axis));
-    frame.look[0] = kSkyMin;
-    frame.look[1] = kHitDark;
+    frame.look[0] = rt_dev(RtDev::SkyMin, kSkyMin);
+    frame.look[1] = rt_dev(RtDev::HitDark, kHitDark);
     frame.look[2] = rt_dome_mean_ > 1e-3f ? 1.0f / rt_dome_mean_ : 0.0f;
-    frame.look[3] = kSunGlint;
+    // The sky against its own mean colour: a channel's mean at least a tenth of the mean luminance.
+    if (rt_dome_mean_ > 1e-3f && rt_dome_colour_[0] + rt_dome_colour_[1] + rt_dome_colour_[2] > 0.0f) {
+        for (unsigned c = 0; c < 3u; ++c) {
+            frame.dome[c] = 1.0f / std::max(rt_dome_colour_[c], 0.1f * rt_dome_mean_);
+        }
+        frame.dome[3] = 1.0f;
+    }
+    // A surface met counts as it is (the gain against the running mean of such hits is held at 1; the mean
+    // is still measured, for the sheet).
+    // rt_dev.h hit_gain 1: the gain against that mean again, for the sheet's comparison.
+    frame.authored[3] = rt_dev(RtDev::HitGain, 0.0f) > 0.5f && rt_hit_mean_ > 1.0f ? 1.0f / rt_hit_mean_ : 1.0f;
+    frame.look[3] = rt_dev(RtDev::SunGlint, kSunGlint);
+    // The painted composite's look as the programs take it (hit shading follows it).
+    std::memcpy(frame.form, rt_look_, sizeof(frame.form));
     frame.grid[3] = rt_light_frame_.turn;
 }
 
@@ -278,18 +284,30 @@ std::uint32_t RenderCore::rt_bounce_image(std::uint32_t& image, rt::ImageFormat 
     return image;
 }
 
-// The dome's mean luminance as the bounce rays see it (11.1): what they added to the counters 44 and 45 (the frame
-// slot's last frame), a running mean (0.05 a frame), kept still once a hold has measured it over its first walks so
-// the reference adds up under one light. False when it is kept.
+// The dome's mean luminance as the bounce rays see it: what they added to the counters 44 and 45 (the frame
+// slot's last frame), a running mean (0.05 a frame at 60 a second, as many seconds at any rate), kept still once a hold has measured it over its first walks so
+// the reference adds up under one light. False when it is kept. Beside it the mean ratio of the surfaces they meet
+// (counters 46 and 47, rt_count_hit), kept the same way.
 bool RenderCore::rt_dome_read() {
     if (rt_hold_left_ != 0u && rt_hold_walks_ - rt_hold_left_ > kDomeWalks) {
         return false;
     }
     std::uint32_t counted[rt::kCounters];
     rt_backend_.read_counters(renderer_.frame_slot(), counted);
+    // A walk's step, by the rate as the filters' histories take it (rt_history_scale).
+    const float step = 0.05f / std::clamp(rt_frame_rate_ / 60.0f, 0.5f, 2.0f);
     if (counted[45] != 0u) {
-        const float mean = static_cast<float>(counted[44]) / 256.0f / static_cast<float>(counted[45]);
-        rt_dome_mean_ = rt_dome_mean_ > 0.0f ? rt_dome_mean_ + (mean - rt_dome_mean_) * 0.05f : mean;
+        constexpr float kDomeUnit = 65536.0f;  // rt_shade.hlsli rt_count_dome
+        const float mean = static_cast<float>(counted[44]) / kDomeUnit / static_cast<float>(counted[45]);
+        rt_dome_mean_ = rt_dome_mean_ > 0.0f ? rt_dome_mean_ + (mean - rt_dome_mean_) * step : mean;
+        for (unsigned c = 0; c < 3u; ++c) {  // its colour
+            const float channel = static_cast<float>(counted[48u + c]) / kDomeUnit / static_cast<float>(counted[45]);
+            rt_dome_colour_[c] = rt_dome_colour_[c] > 0.0f ? rt_dome_colour_[c] + (channel - rt_dome_colour_[c]) * step : channel;
+        }
+    }
+    if (counted[47] != 0u) {
+        const float hits = static_cast<float>(counted[46]) / 256.0f / static_cast<float>(counted[47]);
+        rt_hit_mean_ = rt_hit_mean_ > 0.0f ? rt_hit_mean_ + (hits - rt_hit_mean_) * step : hits;
     }
     return true;
 }
@@ -303,10 +321,7 @@ bool RenderCore::rt_fb_reference() const noexcept {
 
 void RenderCore::rt_pass_reference() {
     rt_ref_ready_ = false;
-    if (!rt_fb_reference() || rt_light_frame_.layer != 0u) {
-        return;
-    }
-    const unsigned width = rt_light_frame_.width, height = rt_light_frame_.height;
+    // What was retired goes once no frame in flight reads it, whether the reference runs or not.
     std::erase_if(rt_bounce_retired_, [&](const std::pair<std::uint64_t, std::uint32_t>& retired) {
         if (retired.first + rt::kFramesToRelease > frame_index_) {
             return false;
@@ -314,6 +329,29 @@ void RenderCore::rt_pass_reference() {
         rt_backend_.free_image(retired.second);
         return true;
     });
+    if (!rt_fb_reference()) {
+        // Off: its sums go (8 Rgba32f images at the light pass's size); the next time it is on they are made again and
+        // it starts again.
+        for (std::uint32_t& image : rt_ref_images_) {
+            if (image != rt::kNoImage) {
+                rt_bounce_retired_.emplace_back(frame_index_, image);
+                image = rt::kNoImage;
+            }
+        }
+        rt_bounce_width_ = rt_bounce_height_ = 0u;
+        for (std::uint32_t& image : rt_ref_t_images_) {  // and what it sees through glass and water
+            if (image != rt::kNoImage) {
+                rt_bounce_retired_.emplace_back(frame_index_, image);
+                image = rt::kNoImage;
+            }
+        }
+        rt_ref_t_width_ = rt_ref_t_height_ = 0u;
+        return;
+    }
+    if (rt_light_frame_.layer != 0u) {
+        return;
+    }
+    const unsigned width = rt_light_frame_.width, height = rt_light_frame_.height;
     static constexpr const char* kNames[8] = {"Nebula RT Reference V A", "Nebula RT Reference D A", "Nebula RT Reference I A",
                                               "Nebula RT Reference R A", "Nebula RT Reference V B", "Nebula RT Reference D B",
                                               "Nebula RT Reference I B", "Nebula RT Reference R B"};
@@ -341,6 +379,7 @@ void RenderCore::rt_pass_reference() {
     rt_ref_list_ = now.list;
     rt_ref_camera_ = camera;
     rt_ref_time_ = walk_.time.t;
+    rt_ref_restart_ = restart;
     rt::PassBinds binds;
     std::uint32_t shade_at = 0u;
     if (!rt_shade_binds(binds, shade_at)) {
@@ -362,12 +401,59 @@ void RenderCore::rt_pass_reference() {
     rt_ref_ready_ = true;
 }
 
+// The reference's T: the transmit pass's paths with the light where they land by path tracing
+// (rt_transmit_ref.hlsl), summed while the reference's own sums are (rt_ref_restart_ starts both again), written to T
+// as the pass writes it; the second layer's walk, after the opaque layer's reference.
+void RenderCore::rt_pass_transmit_reference() {
+    const RtFrame& frame = rt_light_frame_;
+    const std::uint32_t out = rt_image(RtImage::Transmit);
+    if (!rt_ref_ready_ || out == rt::kNoImage) {
+        return;
+    }
+    bool restart = rt_ref_restart_;
+    if (rt_ref_t_width_ != frame.width || rt_ref_t_height_ != frame.height) {
+        for (std::uint32_t& image : rt_ref_t_images_) {
+            if (image != rt::kNoImage) {
+                rt_bounce_retired_.emplace_back(frame_index_, image);
+                image = rt::kNoImage;
+            }
+        }
+        rt_ref_t_width_ = frame.width;
+        rt_ref_t_height_ = frame.height;
+    }
+    static constexpr const char* kNames[2] = {"Nebula RT Reference T A", "Nebula RT Reference T B"};
+    bool images = true;
+    for (unsigned i = 0; i < 2u; ++i) {
+        restart = restart || rt_ref_t_images_[i] == rt::kNoImage;  // new sums hold nothing yet
+        images = rt_bounce_image(rt_ref_t_images_[i], rt::ImageFormat::Rgba32f, frame.width, frame.height, kNames[i]) != rt::kNoImage && images;
+    }
+    if (!images) {
+        return;
+    }
+    rt::PassBinds binds;
+    std::uint32_t shade_at = 0u;
+    if (!rt_shade_binds(binds, shade_at)) {
+        return;
+    }
+    const unsigned now = rt_ref_now_ != 0u ? 1u : 0u;  // by the reference's own turns
+    const float values[3][4] = {{rt_hold_left_ != 0u ? static_cast<float>(kRefPaths) : 1.0f, static_cast<float>(kRefMostSamples), 0.0f, 0.0f}};
+    binds.pass_constants = rt_bounce_constants(0u, restart ? 1u : 0u, shade_at, values);
+    binds.reads[0] = rt_layer_guide();  // the second layer's, as the pass reads it
+    binds.reads[1] = rt_image(RtImage::Normal);
+    binds.reads[2] = rt_image(RtImage::Motion);
+    binds.reads[3] = rt_ref_t_images_[1u - now];
+    binds.writes[0] = out;
+    binds.writes[1] = rt_ref_t_images_[now];
+    rt_backend_.dispatch(RtShader::TransmitReference, binds, frame.across, frame.down);
+    rt_transmit_drawn_ = true;
+}
+
 // The reference's means as the programs read them, over the pictures the filters made (rt_reference_out.hlsl).
 void RenderCore::rt_reference_publish() {
     if (!rt_ref_ready_ || rt_light_frame_.layer != 0u) {
         return;
     }
-    const float values[3][4] = {{kSkyMin, kBounceMax, 0.0f, 0.0f}};
+    const float values[3][4] = {{rt_dev(RtDev::SkyMin, kSkyMin), rt_dev(RtDev::BounceMax, kBounceMax), 0.0f, 0.0f}};
     rt::PassBinds means;
     means.constants = rt_light_frame_.binds.constants;
     means.pass_constants = rt_bounce_constants(0u, 0u, 0u, values);
@@ -377,7 +463,24 @@ void RenderCore::rt_reference_publish() {
     means.writes[0] = rt_image(RtImage::Light);
     means.writes[1] = rt_image(RtImage::Added);
     means.writes[2] = rt_image(RtImage::Mirror);
+    means.writes[3] = rt_image(RtImage::Indirect);  // its rgb O, as the step up writes the real-time one
     rt_backend_.dispatch(RtShader::ReferenceOut, means, rt_light_frame_.across, rt_light_frame_.down);
+    // The reference's R through the reflections' own composite where they are on (rt_reflect_out.hlsl, g_pass.w bit 0:
+    // the mean, the local lights' highlights added there): the Mirror picture in a preset's encoding, so the two
+    // differ by the signal alone.
+    if (rt_levels_[kFbReflect] >= 2u) {
+        rt::PassBinds into = rt_pass_binds();
+        into.constants = rt_light_frame_.binds.constants;
+        into.pass_constants = rt_pass_constants(0u, 0u, 0u, 1u);
+        into.reads[0] = rt_ref_images_[rt_ref_now_ + 3u];
+        into.reads[1] = rt_now(RtImage::GuideA);
+        into.reads[2] = rt_image(RtImage::Normal);
+        into.reads[3] = rt_image(RtImage::Material);
+        into.reads[4] = rt_image(RtImage::Base);
+        into.reads[5] = rt_image(RtImage::LightsSpec);
+        into.writes[0] = rt_image(RtImage::Mirror);
+        rt_backend_.dispatch(RtShader::ReflectOut, into, rt_light_frame_.across, rt_light_frame_.down);
+    }
 }
 
 // The signals as pictures (--diagnostics rt-signals), on the walks of a hold kSignalApart apart, the last ones: each
@@ -400,6 +503,10 @@ void RenderCore::rt_signals() {
     case SignalOf::Light: source = rt_image(RtImage::Light); break;
     case SignalOf::Added: source = rt_image(RtImage::Added); break;
     case SignalOf::Mirror: source = rt_image(RtImage::Mirror); break;
+    case SignalOf::LightsSpec: source = rt_image(RtImage::LightsSpec); break;
+    case SignalOf::Share:
+    case SignalOf::Air:
+    case SignalOf::Fog: return;  // the programs draw them (rt_program_signal)
     case SignalOf::Indirect:
         // The reference's mean, or the preset's own (the sky and bounce light pass, when it runs).
         if (rt_fb_reference()) {
@@ -447,6 +554,39 @@ void RenderCore::rt_signals() {
     }
 }
 
+// Signals the programs draw: S, the share traced_painted gives (program.hlsli traced_colour, view_flags 64),
+// and A, the air's own light (traced_scatter, view_flags 128). Its walk of the hold draws the scene with the
+// signal in place of the colour, read back at the scene's end (walk_scene_end), before anything drawn after the
+// scene. The scene's later walks draw as ever; the kept picture is 35 walks or more on.
+std::uint32_t RenderCore::rt_program_signal_due() const noexcept {
+    if (!::galaxy::diagnosing(::galaxy::kDiagnoseRtSignals) || rt_hold_left_ == 0u || rt_hold_left_ % kSignalApart != 0u) {
+        return 0u;
+    }
+    const unsigned which = rt_hold_left_ / kSignalApart - 1u;
+    if (which >= std::size(kSignals)) {
+        return 0u;
+    }
+    return kSignals[which].of == SignalOf::Share ? 64u
+           : kSignals[which].of == SignalOf::Air ? 128u
+           : kSignals[which].of == SignalOf::Fog ? 256u
+                                                 : 0u;
+}
+
+void RenderCore::rt_program_signal() {
+    if (rt_program_signal_ == 0u) {
+        return;
+    }
+    const char* const name = rt_program_signal_ == 64u ? "S" : rt_program_signal_ == 128u ? "A" : "F";
+    rt_program_signal_ = 0u;
+    renderer_.set_debug_capture_paths(rt_hold_folder_ + "signal_" + name + "_" + rt_hold_number_ + ".ppm", {});
+    if (!renderer_.debug_copy_scene_to_readback()) {
+        std::fprintf(stderr, "[rt-signals] %s of picture %s not taken (the scene's colour cannot be read now)\n", name,
+                     rt_hold_number_.c_str());
+    }
+    renderer_.set_debug_capture_paths({}, {});
+    rt_signal_waiting_ = true;
+}
+
 // Whether a kept picture is held (rt_hold) before it is shown.
 bool RenderCore::rt_holds() const noexcept {
     return rt_backend_.started() && ::galaxy::diagnosing(::galaxy::kDiagnoseRtReference | ::galaxy::kDiagnoseRtSignals);
@@ -486,9 +626,16 @@ void RenderCore::rt_bounce_stop() noexcept {
     for (std::uint32_t& image : rt_ref_images_) {
         image = rt::kNoImage;
     }
+    for (std::uint32_t& image : rt_ref_t_images_) {
+        image = rt::kNoImage;
+    }
+    rt_ref_t_width_ = rt_ref_t_height_ = 0u;
+    rt_ref_restart_ = false;
     rt_bounce_retired_.clear();
     rt_bounce_width_ = rt_bounce_height_ = 0u;
     rt_dome_mean_ = 0.0f;
+    rt_hit_mean_ = 0.0f;
+    std::fill_n(rt_dome_colour_, 3u, 0.0f);
     rt_ref_list_ = nullptr;
     rt_ref_ready_ = false;
     rt_ref_now_ = 0u;

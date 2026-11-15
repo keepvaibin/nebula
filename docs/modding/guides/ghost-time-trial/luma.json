@@ -1,0 +1,28 @@
+{
+  "format": "1.0",
+  "id": "ghost-time-trial",
+  "version": "1.0.0",
+  "name": "Ghost Time Trial",
+  "summary": "Times each star; a ghost runs your best time beside you. Replays in the pause menu.",
+  "text": {
+    "UsEnglish": {"name": "Ghost Time Trial", "summary": "Times each star; a ghost runs your best time beside you. Replays in the pause menu."},
+    "EuEnglish": {"name": "Ghost Time Trial", "summary": "Times each star; a ghost runs your best time beside you. Replays in the pause menu."},
+    "UsFrench": {"name": "Contre-la-montre fantôme", "summary": "Chronomètre chaque étoile ; un fantôme refait votre meilleur temps à vos côtés. Rediffusions dans le menu de pause."},
+    "EuFrench": {"name": "Contre-la-montre fantôme", "summary": "Chronomètre chaque étoile ; un fantôme refait votre meilleur temps à vos côtés. Rediffusions dans le menu de pause."},
+    "UsSpanish": {"name": "Contrarreloj fantasma", "summary": "Cronometra cada estrella; un fantasma repite tu mejor tiempo a tu lado. Repeticiones en el menú de pausa."},
+    "EuSpanish": {"name": "Contrarreloj fantasma", "summary": "Cronometra cada estrella; un fantasma repite tu mejor tiempo a tu lado. Repeticiones en el menú de pausa."},
+    "EuGerman": {"name": "Geister-Zeitrennen", "summary": "Misst die Zeit jedes Sterns; ein Geist läuft deine Bestzeit neben dir. Wiederholungen im Pausemenü."},
+    "EuItalian": {"name": "Cronometro fantasma", "summary": "Cronometra ogni stella; un fantasma ripete il tuo tempo migliore accanto a te. Replay nel menu di pausa."},
+    "EuDutch": {"name": "Spooktijdrit", "summary": "Klokt elke ster; een spook loopt je beste tijd naast je. Herhalingen in het pauzemenu."},
+    "UsPortuguese": {"name": "Contra o relógio fantasma", "summary": "Cronometra cada estrela; um fantasma refaz seu melhor tempo ao seu lado. Replays no menu de pausa."},
+    "JpJapanese": {"name": "ゴーストタイムアタック", "summary": "スターごとにタイムを計り、ベストタイムのゴーストがとなりを走ります。リプレイはポーズメニューから。"},
+    "KrKorean": {"name": "고스트 타임 어택", "summary": "스타마다 시간을 재고, 최고 기록의 고스트가 옆에서 달립니다. 리플레이는 일시 정지 메뉴에서."},
+    "CnSimpChinese": {"name": "幽灵计时赛", "summary": "为每颗星计时，最佳纪录的幽灵在你身旁奔跑。回放在暂停菜单中。"},
+    "TwTradChinese": {"name": "幽靈計時賽", "summary": "為每顆星計時，最佳紀錄的幽靈在你身旁奔跑。重播在暫停選單中。"}
+  },
+  "authors": ["you"],
+  "game": { "id": "RMG", "regions": ["RMGE01", "RMGP01", "RMGJ01"] },
+  "needs": [{ "id": "lumakit", "version": ">=1.0.0" }],
+  "layers": [{ "name": "base" }],
+  "code": { "platforms": ["windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64", "ios-arm64"] }
+}

@@ -2,14 +2,10 @@
 #include "Game/LiveActor/RailRider.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ParabolicPath.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPosition_f1, "calcPosition.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcClippingInfo_f1, "calcClippingInfo.f1", 0.5f);
 
 namespace {
-    NEBULA_TUNABLE(f32, cInitDirectionStep, 0.01f);
-    NEBULA_TUNABLE(s32, cParabolicLengthSamples, 32);
+    const f32 cInitDirectionStep = 0.01f;
+    const s32 cParabolicLengthSamples = 32;
 };  // namespace
 
 SpinDriverShootPath::SpinDriverShootPath() : mRailRider(nullptr), mPath(nullptr), mStartPosition(0.0f, 0.0f, 0.0f), mUsesParabolic(false) {
@@ -53,7 +49,7 @@ void SpinDriverShootPath::calcPosition(Vec3f* pOutPosition, f32 rate) const {
     }
 
     mRailRider->calcPosAtCoord(pOutPosition, rate * mRailRider->getTotalLength());
-    pOutPosition->add(mStartPosition * MR::getEaseOutValue(MR::normalize(rate, 0.0f, cNum_calcPosition_f1), 1.0f, 0.0f, 1.0f));
+    pOutPosition->add(mStartPosition * MR::getEaseOutValue(MR::normalize(rate, 0.0f, 0.5f), 1.0f, 0.0f, 1.0f));
 }
 
 // The chord from `rate` over `step`, kept inside the path.
@@ -159,5 +155,5 @@ void SpinDriverShootPath::calcClippingInfo(Vec3f* pCenter, f32* pRadius, f32 sam
     Vec3f size;
     size.sub(box.f, box.i);
 
-    *pRadius = cNum_calcClippingInfo_f1 * size.length();
+    *pRadius = 0.5f * size.length();
 }

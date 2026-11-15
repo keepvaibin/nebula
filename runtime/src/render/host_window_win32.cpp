@@ -3,6 +3,7 @@
 // settings menu asks of its platform (host_window.h).
 
 #include "galaxy/achievements.h"
+#include "galaxy/luma_input_service.h"
 #include "galaxy/stats.h"
 #include "galaxy/vendor_download.h"
 #include "galaxy/render/host_window_win32.h"
@@ -23,7 +24,9 @@
 #include "galaxy/render_api.h"
 #include "galaxy/mii_import.h"
 #include "galaxy/mod_import.h"
+#include "galaxy/launch_args.h"
 #include "galaxy/mods.h"
+#include "galaxy/luma_system_platform.h"
 #include "galaxy/game_paths.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/platform_time.h"
@@ -125,7 +128,7 @@ void set_instance_key(std::uint64_t key) noexcept {
     s_instance_key.store(key, std::memory_order_relaxed);
 }
 
-bool show_existing_instance(std::uint64_t key, unsigned wait_ms) noexcept {
+bool show_existing_instance(std::uint64_t key, unsigned wait_ms, const std::vector<std::filesystem::path>& imports) noexcept {
     if (key == 0u) {
         return false;
     }
@@ -140,6 +143,27 @@ bool show_existing_instance(std::uint64_t key, unsigned wait_ms) noexcept {
             GetWindowThreadProcessId(search.found, &process);
             if (process != 0u) {
                 (void)AllowSetForegroundWindow(process);
+            }
+            if (!imports.empty()) {
+                // Copied by the system into the running game before SendMessage returns; a game that hangs is left.
+                std::wstring paths;
+                try {
+                    for (const std::filesystem::path& path : imports) {
+                        paths += std::filesystem::absolute(path).wstring();
+                        paths.push_back(L'\0');
+                    }
+                } catch (...) {
+                    paths.clear();
+                }
+                COPYDATASTRUCT data{};
+                data.dwData = kImportCopyData;
+                data.cbData = static_cast<DWORD>(paths.size() * sizeof(wchar_t));
+                data.lpData = paths.data();
+                DWORD_PTR answer = 0u;
+                if (!paths.empty() && SendMessageTimeoutW(search.found, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&data),
+                                                          SMTO_ABORTIFHUNG, 5000u, &answer) == 0) {
+                    std::cerr << "[host] the running game did not take the files to import\n";
+                }
             }
             return PostMessageW(search.found, kShowInstanceMessage, 0, 0) != FALSE;
         }
@@ -439,7 +463,7 @@ std::wstring launcher_path() {
         return {};
     }
     launcher.resize(slash + 1u);
-    launcher += L"Nebula.exe";
+    launcher += L"NebulaLauncher.exe";
     return GetFileAttributesW(launcher.c_str()) == INVALID_FILE_ATTRIBUTES ? std::wstring{} : launcher;
 }
 
@@ -454,7 +478,7 @@ bool start_launcher(const std::wstring& arguments, HANDLE* process_out) {
     PROCESS_INFORMATION process{};
     if (!CreateProcessW(launcher.c_str(), command.data(), nullptr, nullptr, FALSE, 0u, nullptr, nullptr,
                         &startup, &process)) {
-        std::cerr << "[launcher] could not start Nebula.exe: win32=" << GetLastError() << '\n';
+        std::cerr << "[launcher] could not start NebulaLauncher.exe: win32=" << GetLastError() << '\n';
         return false;
     }
     // Its window comes to the front over the game.
@@ -596,6 +620,15 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         }
         settings_window.store(
             reinterpret_cast<std::uintptr_t>(opened.window), std::memory_order_release);
+        // Files the game was started to import (Open with, --import): as a drop on the window.
+        if (!::galaxy::launch_args().imports.empty()) {
+            native_settings_files_dropped(::galaxy::launch_args().imports);
+        }
+        // LumaCore's clipboard and links on Windows (services-system 5, 6).
+        galaxy::luma_system::set_platform(galaxy::luma_system::win32_platform());
+        // The display's first snapshot (services-system 4) from the window as made: a window made hidden (a test run,
+        // a start behind another window) gets no WM_SIZE until it is shown, and changes 0 would read as no window.
+        galaxy::luma_system::win32_window_changed(opened.window, -1, true);
         if (const std::uint64_t key = s_instance_key.load(std::memory_order_relaxed); key != 0u) {
             (void)SetPropW(opened.window, kInstanceProperty, reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(key)));
         }
@@ -655,10 +688,34 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_NCDESTROY) {
         (void)RemovePropW(hwnd, kInstanceProperty);
     }
+    if (msg == WM_SIZE || msg == WM_MOVE || msg == WM_WINDOWPOSCHANGED || msg == WM_DPICHANGED || msg == WM_DISPLAYCHANGE ||
+        msg == WM_ACTIVATE || msg == WM_SETFOCUS || msg == WM_KILLFOCUS) {
+        // LumaCore's display snapshot (services-system 4), where the window's changes arrive.
+        galaxy::luma_system::win32_window_changed(hwnd, msg == WM_ACTIVATE ? (LOWORD(wp) != WA_INACTIVE ? 1 : 0) : -1,
+                                                  msg == WM_DISPLAYCHANGE || msg == WM_DPICHANGED);
+    }
     if (msg == kShowInstanceMessage) {
         ShowWindow(hwnd, IsIconic(hwnd) ? SW_RESTORE : SW_SHOW);
         (void)SetForegroundWindow(hwnd);
         return 0;
+    }
+    if (msg == WM_COPYDATA) {
+        // Files a second start was asked to import (show_existing_instance): imported as dropped files.
+        const auto* const data = reinterpret_cast<const COPYDATASTRUCT*>(lp);
+        if (data == nullptr || data->dwData != kImportCopyData || data->lpData == nullptr) {
+            return FALSE;
+        }
+        const auto* const text = static_cast<const wchar_t*>(data->lpData);
+        const std::size_t count = data->cbData / sizeof(wchar_t);
+        std::vector<std::filesystem::path> files;
+        for (std::size_t at = 0; at < count;) {
+            std::size_t end = at;
+            while (end < count && text[end] != L'\0') ++end;
+            if (end > at) files.emplace_back(std::wstring(text + at, end - at));
+            at = end + 1u;
+        }
+        if (!files.empty()) native_settings_files_dropped(std::move(files));
+        return TRUE;
     }
     if (msg == WM_DROPFILES) {
         // Dropped files: mod archives and folders into the mods folder (the MODS page opens on the import),
@@ -678,7 +735,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == kSettingsKeyMessage) {
-        (void)native_settings_pad_key(wp);
+        if (lp != 0) {
+            (void)native_settings_handle_window_key(wp, false, static_cast<std::uint32_t>(wp));
+        } else {
+            (void)native_settings_pad_key(wp);
+        }
         return 0;
     }
     if (msg == WM_DISPLAYCHANGE) {
@@ -723,6 +784,8 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == WM_CREATE) {
+        // The window types text for LumaCore's text requests (above).
+        galaxy::luma_input::set_text_entry_available(true);
         host_window::pointer_hwnd.store(reinterpret_cast<std::uintptr_t>(hwnd),
                              std::memory_order_release);
         raw_mouse_attach(hwnd);
@@ -753,6 +816,73 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         s_pointer_focus_valid.store(GetForegroundWindow() == hwnd,
                                     std::memory_order_release);
         seed_pointer_from_client(hwnd, false);
+    }
+    // LumaCore's text entry (input.text_request): while a request is open the keyboard types into it, not into the game.
+    // The system's input method composes in its own window and hands each result here as WM_CHAR (TranslateMessage
+    // makes the plain keys' WM_CHAR too); Enter, Escape and the editing keys arrive as WM_KEYDOWN. Key releases still
+    // reach the game below, so a key held when the request opened is not left down.
+    if (galaxy::luma_input::text_open()) {
+        if (msg == WM_KEYDOWN) {
+            using galaxy::luma_input::TextKey;
+            switch (wp) {
+            case VK_RETURN: galaxy::luma_input::text_key(TextKey::Enter); break;
+            case VK_ESCAPE: galaxy::luma_input::text_key(TextKey::Escape); break;
+            case VK_BACK: galaxy::luma_input::text_key(TextKey::Backspace); break;
+            case VK_DELETE: galaxy::luma_input::text_key(TextKey::Delete); break;
+            case VK_LEFT: galaxy::luma_input::text_key(TextKey::Left); break;
+            case VK_RIGHT: galaxy::luma_input::text_key(TextKey::Right); break;
+            case VK_HOME: galaxy::luma_input::text_key(TextKey::Home); break;
+            case VK_END: galaxy::luma_input::text_key(TextKey::End); break;
+            default: break;
+            }
+            return 0;
+        }
+        if (msg == WM_CHAR) {
+            // UTF-16: a high surrogate waits for its low one.
+            static wchar_t high = 0;
+            const auto unit = static_cast<wchar_t>(wp);
+            if (unit >= 0xD800 && unit <= 0xDBFF) {
+                high = unit;
+                return 0;
+            }
+            if (unit >= 0xDC00 && unit <= 0xDFFF) {
+                if (high != 0) {
+                    galaxy::luma_input::text_char(0x10000u + ((static_cast<char32_t>(high) - 0xD800u) << 10u) +
+                                                  (static_cast<char32_t>(unit) - 0xDC00u));
+                }
+                high = 0;
+                return 0;
+            }
+            high = 0;
+            galaxy::luma_input::text_char(static_cast<char32_t>(unit));
+            return 0;
+        }
+        if (msg == WM_KILLFOCUS) {
+            galaxy::luma_input::text_focus_lost();
+        }
+    }
+    if (msg == WM_CHAR) {
+        // A mod's text option being typed in (services-mods 8.4): UTF-16 units, a surrogate pair in two messages.
+        static wchar_t high = 0;
+        const auto unit = static_cast<wchar_t>(wp);
+        if (unit >= 0xD800 && unit <= 0xDBFF) {
+            high = unit;
+            return 0;
+        }
+        wchar_t units[2] = {unit, 0};
+        int count = 1;
+        if (unit >= 0xDC00 && unit <= 0xDFFF) {
+            if (high == 0) return 0;
+            units[0] = high;
+            units[1] = unit;
+            count = 2;
+        }
+        high = 0;
+        char utf8[8]{};
+        const int bytes = WideCharToMultiByte(CP_UTF8, 0, units, count, utf8, sizeof(utf8), nullptr, nullptr);
+        if (bytes > 0 && native_settings_handle_window_text(std::string_view(utf8, static_cast<std::size_t>(bytes)))) {
+            return 0;
+        }
     }
     if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) {
         // Alt+Space belongs to the native system menu, not the game's A key.
@@ -1351,6 +1481,14 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
     }
 }
 
+void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept {
+    const HWND window = reinterpret_cast<HWND>(
+        host_window::settings_window.load(std::memory_order_acquire));
+    if (window != nullptr) {
+        (void)PostMessageW(window, kSettingsKeyMessage, static_cast<WPARAM>(virtual_key), 1);
+    }
+}
+
 namespace host_window {
 
 std::vector<SettingsMonitor> settings_monitors() {
@@ -1465,6 +1603,10 @@ bool folders_open() noexcept {
 
 UpscalerCaps upscaler_caps() noexcept {
     UpscalerCaps caps;
+#if defined(NEBULA_GPU_D3D11)
+    // The Direct3D 11 renderer runs no temporal upscaler and no frame generation (renderer_d3d11.cpp report_adapter):
+    // none is offered, even with a vendor's library installed for the Direct3D 12 renderer.
+#else
     caps.xess = xess_library::available();
     caps.dlss = streamline::dlss_supported();
     caps.frame_generation = streamline::frame_generation_supported();
@@ -1475,6 +1617,7 @@ UpscalerCaps upscaler_caps() noexcept {
     if (get_render_config().frame_generation == 2u) {
         caps.frames_presented = frame_generation_running() && frame_generation_allowed() ? 2u : 1u;
     }
+#endif
     return caps;
 }
 
@@ -1514,7 +1657,13 @@ vendor_download::Package vendor_package(unsigned upscaler) {
 }  // namespace
 
 unsigned vendor_megabytes(unsigned upscaler) {
+#if defined(NEBULA_GPU_D3D11)
+    // Nothing a vendor's download brings runs on the Direct3D 11 renderer: no download is offered.
+    (void)upscaler;
+    return 0u;
+#else
     return vendor_download::download_megabytes(vendor_package(upscaler));
+#endif
 }
 
 bool start_vendor_install(unsigned upscaler) {

@@ -5,10 +5,7 @@
 #include "Game/Map/KCollision.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_createCollision_f1, "createCollision.f1", 40.f);
 
 DynamicCollisionObj::DynamicCollisionObj(const char* pName) : LiveActor(pName) {
     lumacore::setClass(this, lumacore::kClassId< DynamicCollisionObj >);
@@ -167,7 +164,7 @@ void DynamicCollisionObj::createCollision() {
     mKCLFile->mLists = list;
 
     mKCLFile->mTriangleNum = triangleNum;
-    mKCLFile->mThickness = cNum_createCollision_f1;
+    mKCLFile->mThickness = 40.f;
     mKCLFile->mBlockXShift = -1;
     mKCLFile->mBlockXYShift = -1;
     updateCollisionHeader();

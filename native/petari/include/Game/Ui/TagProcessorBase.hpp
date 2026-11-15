@@ -36,6 +36,11 @@ namespace Ui {
         virtual ~TagProcessorBase();
         virtual Operation Process(u16, ContextType*);
         virtual Operation CalcRect(Rect*, u16, ContextType*);
+        // A print starts over `str` (TextWriterBase::PrintImpl): a processor that fades characters in starts its count.
+        virtual void BeginPrint(const CharType*) {}
+        // The alpha of the next character printed, when this processor sets one (and counts the character); false: the
+        // writer's own alpha.
+        virtual bool NextCharAlpha(u8*) { return false; }
 
         void ProcessLinefeed(ContextType*);
         void ProcessTab(ContextType*);

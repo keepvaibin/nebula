@@ -21,13 +21,12 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Dodoryu's one-hit run in CosmosGardenGalaxy scenario 4.
-    NEBULA_TUNABLE(bool, cSuddenDeathDodoryu, true);
+    const bool cSuddenDeathDodoryu = true;
     // Hidden stars take their scenario from the game's table.
-    NEBULA_TUNABLE(bool, cHiddenStarTable, true);
+    const bool cHiddenStarTable = true;
     const PlacementId cInitializeStartIdInfo(0, 0);
 
     void getRailInfoFromRailId(TableIter* pIter, const Table** ppInfo, const StageDataHolder* pHolder, int railId) {
@@ -361,6 +360,10 @@ namespace MR {
         term = NebulaMods::fire(NEBULA_MOD_EVENT_COIN, term);
         ::getScenePlayingResult()->incCoin(term);
         incPlayerLife(term);
+    }
+
+    bool payCoin(s32 num) {
+        return ::getScenePlayingResult()->payCoin(num);
     }
 
     void incPurpleCoin() {

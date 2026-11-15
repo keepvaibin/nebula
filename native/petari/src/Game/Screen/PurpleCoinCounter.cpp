@@ -5,13 +5,10 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, cInvalidCountUpInterval, 3);
+    const s32 cInvalidCountUpInterval = 3;
 };  // namespace
 
 namespace NrvPurpleCoinCounter {
@@ -30,7 +27,7 @@ void PurpleCoinCounter::init(const TableIter& /*rIter*/) {
     MR::createAndAddPaneCtrl(this, "Counter", 1);
     initEffectKeeper(0, nullptr, nullptr);
 
-    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(-cNum_init_f1, 0.0f));
+    mLayoutAppearer = new CounterLayoutAppearer(this, Vec2f(-50.0f, 0.0f));
     mPaneRumbler = new CountUpPaneRumbler(this, "Counter");
 
     initNerve(GET_NERVE(PurpleCoinCounter, PurpleCoinCounterNrvAppear));

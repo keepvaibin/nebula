@@ -12,6 +12,10 @@ enum SingleEmitterSpawn {
 
 class SingleEmitter {
 public:
+    // The resource id of a particle name the resources lack (ParticleResourceHolder::getUserIndex's miss): the slot keeps
+    // its place in the effect's emitter list and is never created.
+    static const u16 cNoResource = 0xFFFF;
+
     SingleEmitter();
 
     void init(u16);

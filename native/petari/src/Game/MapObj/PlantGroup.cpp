@@ -5,41 +5,25 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_initMember_f1, "initMember.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_placeOnCollisionFormCircle_f1, "placeOnCollisionFormCircle.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_placeOnCollisionFormCircle_f2, "placeOnCollisionFormCircle.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_placeOnCollisionFormCircle_f3, "placeOnCollisionFormCircle.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_placeOnCollisionFormCircle_f4, "placeOnCollisionFormCircle.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBoundingSphereRadius_f1, "calcBoundingSphereRadius.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBoundingSphereRadius_f2, "calcBoundingSphereRadius.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBoundingSphereRadius_f3, "calcBoundingSphereRadius.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBoundingSphereRadius_f4, "calcBoundingSphereRadius.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBoundingSphereRadius_f5, "calcBoundingSphereRadius.f5", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_attackSensor_f1, "attackSensor.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_generateItem_f1, "generateItem.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_generateItem_f2, "generateItem.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initPosture_f1, "initPosture.f1", 0.01f);
-
 namespace {
-    NEBULA_TUNABLE(s32, hIsShakableStep, 20);
-    NEBULA_TUNABLE(f32, sSize, 160.0f);
-    NEBULA_TUNABLE(f32, sCollisionRadius, 50.0f);
-    NEBULA_TUNABLE(f32, sCheckLineLength, 1000.0f);
-    NEBULA_TUNABLE(f32, sCoinVel, 30.0f);
-    NEBULA_TUNABLE(f32, sPointerTouchRadius, 100.0f);
-    NEBULA_TUNABLE(f32, sScratchVel, 6.0f);
-    NEBULA_TUNABLE(s32, hGenerateItemTouch, 1);
+    const s32 hIsShakableStep = 20;
+    const f32 sSize = 160.0f;
+    const f32 sCollisionRadius = 50.0f;
+    const f32 sCheckLineLength = 1000.0f;
+    const f32 sCoinVel = 30.0f;
+    const f32 sPointerTouchRadius = 100.0f;
+    const f32 sScratchVel = 6.0f;
+    const s32 hGenerateItemTouch = 1;
     const s32 sHintEffectEmitInterval = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(f32, hShakeStartFrame, 3.0f);
-    NEBULA_TUNABLE(f32, hWeakRate, 0.5f);
-    NEBULA_TUNABLE(f32, hMiddleRate, 1.0f);
-    NEBULA_TUNABLE(f32, hStrongRate, 1.5f);
-    NEBULA_TUNABLE(f32, hStrongDist, 100.0f);
-    NEBULA_TUNABLE(f32, hMiddleDist, 300.0f);
-    NEBULA_TUNABLE(f32, hWeakDist, 500.0f);
+    const f32 hShakeStartFrame = 3.0f;
+    const f32 hWeakRate = 0.5f;
+    const f32 hMiddleRate = 1.0f;
+    const f32 hStrongRate = 1.5f;
+    const f32 hStrongDist = 100.0f;
+    const f32 hMiddleDist = 300.0f;
+    const f32 hWeakDist = 500.0f;
 };  // namespace
 
 namespace NrvPlantMember {
@@ -162,14 +146,14 @@ void PlantGroup::initMember(s32 itemCount, const TableIter&) {
     }
 
     initHitSensor(1);
-    MR::addHitSensorMapObj(this, "境界球", 16, cNum_initMember_f1, Vec3f(gZeroVec));
+    MR::addHitSensorMapObj(this, "境界球", 16, 100.0f, Vec3f(gZeroVec));
 }
 
 s32 PlantGroup::placeOnCollisionFormCircle(Vec3f* pCenter, const Vec3f& rGravity, const Vec3f& rAxisX, const Vec3f& rAxisY) {
     pCenter->set(0, 0, 0);
     s32 ring = 0;
     f32 angle = 0.0f;
-    f32 angleStep = cNum_placeOnCollisionFormCircle_f1 * PI;
+    f32 angleStep = 2.0f * PI;
     f32 radius = ::sSize * (s16)ring;
     s32 placedCount = 0;
 
@@ -180,7 +164,7 @@ s32 PlantGroup::placeOnCollisionFormCircle(Vec3f* pCenter, const Vec3f& rGravity
         offset.scale(radius);
         Vec3f start(mPosition);
         start += offset;
-        const Vec3f up = rGravity * cNum_placeOnCollisionFormCircle_f2;
+        const Vec3f up = rGravity * 100.0f;
         const Vec3f* pUp = &up;
         start -= *pUp;
 
@@ -197,10 +181,10 @@ s32 PlantGroup::placeOnCollisionFormCircle(Vec3f* pCenter, const Vec3f& rGravity
         mMembers[i]->initPosture();
         angle += angleStep;
 
-        if (angle >= cNum_placeOnCollisionFormCircle_f3 * PI) {
+        if (angle >= 2.0f * PI) {
             ring++;
             angle = 0.0f;
-            angleStep = cNum_placeOnCollisionFormCircle_f4 * PI / (ring * 6);
+            angleStep = 2.0f * PI / (ring * 6);
             radius = ::sSize * ring;
         }
     }
@@ -246,22 +230,22 @@ f32 PlantGroup::calcBoundingSphereRadius(const Vec3f& rCenter) {
         }
     }
 
-    mPosition.set((max + min) / cNum_calcBoundingSphereRadius_f1);
+    mPosition.set((max + min) / 2.0f);
     Vec3f size(max - min);
 
     if (size.x < size.y) {
         if (size.y < size.z) {
-            return size.z / cNum_calcBoundingSphereRadius_f2;
+            return size.z / 2.0f;
         }
 
-        return size.y / cNum_calcBoundingSphereRadius_f3;
+        return size.y / 2.0f;
     }
 
     if (size.x < size.z) {
-        return size.z / cNum_calcBoundingSphereRadius_f4;
+        return size.z / 2.0f;
     }
 
-    return size.x / cNum_calcBoundingSphereRadius_f5;
+    return size.x / 2.0f;
 }
 
 void PlantGroup::initAfterPlacement() {
@@ -341,7 +325,7 @@ void PlantGroup::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         Vec3f velocity(pReceiver->mHost->mVelocity);
         MR::vecKillElement(velocity, pReceiver->mHost->mGravity, &velocity);
 
-        if (velocity.squared() < cNum_attackSensor_f1) {
+        if (velocity.squared() < 2.0f) {
             return;
         }
 
@@ -454,7 +438,7 @@ bool PlantMember::generateItem(PlantGroup* pGroup) {
 
         if (pGroup->mIsStarPiece) {
             MR::startSound(pGroup, "SE_OJ_STAR_PIECE_BURST");
-            MR::appearStarPiece(pGroup, mPosition, 1, cNum_generateItem_f1, cNum_generateItem_f2, false);
+            MR::appearStarPiece(pGroup, mPosition, 1, 10.0f, 40.0f, false);
         } else {
             MR::appearCoinPop(pGroup, mPosition, 1);
         }
@@ -471,7 +455,7 @@ void PlantMember::initPosture() {
     Vec3f axis;
     axis.set(1, 0, 0);
 
-    if (MR::isSameDirection(mGravity, axis, cNum_initPosture_f1)) {
+    if (MR::isSameDirection(mGravity, axis, 0.01f)) {
         axis.set(0, 1, 0);
     }
 

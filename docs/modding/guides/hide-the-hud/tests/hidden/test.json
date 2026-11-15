@@ -1,0 +1,67 @@
+{
+  "harness": 1,
+  "name": "hud-hidden",
+  "about": "With Hide the HUD on, a galaxy starts with no counters and no life meter",
+  "proves": [
+    "kernel.hook.before"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::isActiveDefaultGameLayout",
+      "signature": "bool()",
+      "fact": "hud_active"
+    },
+    {
+      "at": 60,
+      "picture": "hidden"
+    },
+    {
+      "at": 70,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "hud_active",
+      "is": false
+    },
+    {
+      "picture": "hidden",
+      "box": [
+        1050,
+        100,
+        60,
+        60
+      ],
+      "mean_rgb": [
+        18,
+        39,
+        97
+      ],
+      "within": 30
+    },
+    {
+      "picture": "hidden",
+      "box": [
+        1085,
+        550,
+        130,
+        90
+      ],
+      "mean_rgb": [
+        252,
+        243,
+        99
+      ],
+      "within": 25
+    }
+  ]
+}

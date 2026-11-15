@@ -17,14 +17,11 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initVs3_f1, "initVs3.f1", 40000.0f);
 
 namespace {
-    NEBULA_TUNABLE(s32, sFireStairsNum, 16);
-    NEBULA_TUNABLE(s32, sFireShortNum, 32);
-    NEBULA_TUNABLE(s32, sShockWaveNum, 8);
+    const s32 sFireStairsNum = 16;
+    const s32 sFireShortNum = 32;
+    const s32 sShockWaveNum = 8;
 };  // namespace
 
 KoopaParts::KoopaParts(Koopa* pKoopa, const TableIter& rIter)
@@ -218,7 +215,7 @@ void KoopaParts::initVs3() {
     createPlanetShadow();
 
     mHoleSunPlanetOutside = MR::createModelObjMapObj("穴あき太陽（外側）", "KoopaVS3HoleSunPlanet", nullptr);
-    MR::setClippingTypeSphere(mHoleSunPlanetOutside, cNum_initVs3_f1);
+    MR::setClippingTypeSphere(mHoleSunPlanetOutside, 40000.0f);
     MR::setClippingFarMax(mHoleSunPlanetOutside);
     MR::resetPosition(mHoleSunPlanetOutside, "惑星Ｌｖ３");
     MR::tryStartAllAnim(mHoleSunPlanetOutside, "KoopaVS3HoleSunPlanet");

@@ -23,12 +23,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "math_types.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeScatter_f1, "exeScatter.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_makeEulerRotation_f1, "makeEulerRotation.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateReferenceMtx_f1, "updateReferenceMtx.f1", 180.0f);
 
 namespace {
     NEW_NERVE_ONEND(MogucchiNrvStroll, Mogucchi, Stroll, Stroll);
@@ -38,31 +33,31 @@ namespace {
     NEW_NERVE(MogucchiNrvScatter, Mogucchi, Scatter);
     NEW_NERVE(MogucchiNrvDie, Mogucchi, Die);
 
-    NEBULA_TUNABLE_RECORD(Vec, cHeadOffset, {40.0f, 0.0f, -8.0f});
-    NEBULA_TUNABLE(f32, cHeadRadius, 83.0f);
-    NEBULA_TUNABLE(f32, cBodyRadius, 120.0f);
-    NEBULA_TUNABLE(f32, cSpinRadius, 180.0f);
-    NEBULA_TUNABLE(f32, cDefaultMaxStrollSpeed, 5.0f);
-    NEBULA_TUNABLE(f32, cStrollAccel, 0.1f);
+    const Vec cHeadOffset = {40.0f, 0.0f, -8.0f};
+    const f32 cHeadRadius = 83.0f;
+    const f32 cBodyRadius = 120.0f;
+    const f32 cSpinRadius = 180.0f;
+    const f32 cDefaultMaxStrollSpeed = 5.0f;
+    const f32 cStrollAccel = 0.1f;
     // A hip drop landing this close knocks it out of the ground.
-    NEBULA_TUNABLE(f32, cHipDropReach, 800.0f);
+    const f32 cHipDropReach = 800.0f;
     const s32 cDownTime = NebulaFrameClock::stepsOfMilliseconds(500);
     // Hits are ignored for the first frames of being knocked up.
-    NEBULA_TUNABLE(s32, cAppearDownGuardTime, 10);
-    NEBULA_TUNABLE(s32, cHitStopFrame, 8);
-    NEBULA_TUNABLE(f32, cScatterUpSpeed, 50.0f);
-    NEBULA_TUNABLE(f32, cScatterUpDecel, 1.2f);
-    NEBULA_TUNABLE(f32, cScatterSideSpeed, 23.0f);
-    NEBULA_TUNABLE(s32, cScatterTime, 15);
+    const s32 cAppearDownGuardTime = 10;
+    const s32 cHitStopFrame = 8;
+    const f32 cScatterUpSpeed = 50.0f;
+    const f32 cScatterUpDecel = 1.2f;
+    const f32 cScatterSideSpeed = 23.0f;
+    const s32 cScatterTime = 15;
     const s32 cDieTime = NebulaFrameClock::stepsOfSeconds(1);
     // The hill gets one piece per cHillPieceLength of rail, up to cHillPieceMax; the last cHillHiddenPieces stay hidden.
-    NEBULA_TUNABLE(f32, cHillPieceLength, 150.0f);
-    NEBULA_TUNABLE(s32, cHillPieceMax, 20);
-    NEBULA_TUNABLE(s32, cHillHiddenPieces, 5);
-    NEBULA_TUNABLE(f32, cHillAppearDistance, 80.0f);
-    NEBULA_TUNABLE(f32, cHillAppearDistanceMax, 100.0f);
-    NEBULA_TUNABLE(f32, cPointerEffectScale, 1.4f);
-    NEBULA_TUNABLE(f32, cGroundCheckLength, 1000.0f);
+    const f32 cHillPieceLength = 150.0f;
+    const s32 cHillPieceMax = 20;
+    const s32 cHillHiddenPieces = 5;
+    const f32 cHillAppearDistance = 80.0f;
+    const f32 cHillAppearDistanceMax = 100.0f;
+    const f32 cPointerEffectScale = 1.4f;
+    const f32 cGroundCheckLength = 1000.0f;
 }  // namespace
 
 Mogucchi::Mogucchi(const char* pName)
@@ -223,7 +218,7 @@ void Mogucchi::exeScatter() {
         mtx.setYDir(-mRailGravity);
         mtx.setZDir(-mScatterDir);
         mtx.getEulerXYZ(mRotation);
-        mRotation.mult(cNum_exeScatter_f1 / PI);
+        mRotation.mult(180.0f / PI);
     }
 
     mPosition.add(mRailGravity.scaleInline(-mScatterUpSpeed) + mScatterDir.multInLine(::cScatterSideSpeed));
@@ -368,7 +363,7 @@ void Mogucchi::makeEulerRotation() {
     Pos3f mtx;
     MR::makeMtxUpFront(&mtx, -mRailGravity, MR::getRailDirection(this));
     mtx.getEulerXYZ(mRotation);
-    mRotation.mult(cNum_makeEulerRotation_f1 / PI);
+    mRotation.mult(180.0f / PI);
 }
 
 void Mogucchi::calcScatterVec(const Vec3f& rStart, const Vec3f& rEnd) {
@@ -455,7 +450,7 @@ bool Mogucchi::receiveAttackByBodySensor(u32 msg, HitSensor* pSender, HitSensor*
 
 // The hole model follows Mogucchi through mHoleMtx.
 void Mogucchi::updateReferenceMtx() {
-    Vec3f rotate = mRotation * (PI / cNum_updateReferenceMtx_f1);
+    Vec3f rotate = mRotation * (PI / 180.0f);
 
     mHoleMtx.setRT(rotate, mPosition);
 

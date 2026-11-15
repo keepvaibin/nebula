@@ -5,16 +5,13 @@
 #include "Game/MapObj/AirBubbleHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sShakeDistance, 800.0f);
+    const f32 sShakeDistance = 800.0f;
     static const s32 sGenerateInterval = NebulaFrameClock::stepsOfSeconds(6);
-    NEBULA_TUNABLE(s32, sGenerateLife, 360);
-    NEBULA_TUNABLE(f32, sGenerateOffsetY, 1250.0f);
+    const s32 sGenerateLife = 360;
+    const f32 sGenerateOffsetY = 1250.0f;
 };  // namespace
 
 namespace NrvSubmarineVolcanoBigColumn {
@@ -41,7 +38,7 @@ void SubmarineVolcanoBigColumn::init(const TableIter& rIter) {
     MR::initCollisionParts(this, objName, getSensor("body"), nullptr);
     initEffectKeeper(0, nullptr);
     initSound(2, false);
-    MR::setClippingTypeSphereContainsModelBoundingBox(this, cNum_init_f1);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::joinToGroupArray(this, rIter, nullptr, 32);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {

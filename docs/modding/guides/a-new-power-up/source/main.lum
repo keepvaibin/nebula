@@ -1,0 +1,89 @@
+use kit.player.form
+use kit.item
+use kit.projectile
+use svc.draw.inst as inst
+
+option balls_at_once: int
+option flash_frames: int
+
+let BALL_SPEED: f32 = 35.0          // game units per frame
+let BALL_LIFE: u32 = 180            // frames
+let BALL_RADIUS: f32 = 20.0         // the ball model is 40 units across
+
+var balls: list<ref<LiveActor>> = []
+
+fn became_gold(player: MarioActor) {
+    log fact "gold" true
+}
+
+fn ended(player: MarioActor, why: form.Ended) {
+    log fact "gold" false
+}
+
+fn throw_ball(player: MarioActor) {
+    balls = balls.filter(fn(b: ref<LiveActor>) -> bool { return b.get() != none })
+    if balls.len() >= balls_at_once { return }
+    var front = vec3(0.0, 0.0, 0.0)
+    MR::getPlayerFrontVec(var front)
+    let up = player.mGravity * -1.0
+    let ball = projectile.throw(projectile.Shot {
+        look: model "GoldBall"
+        from: player.mPosition + front * 80.0 + up * 60.0
+        velocity: front * BALL_SPEED
+        falls: true                              // it bounces along the ground, as a fireball does
+        bounces: 3
+        life_frames: BALL_LIFE
+        radius: BALL_RADIUS
+        trail: effect "gold_ball_trail"
+        burst: effect "gold_ball_burst"
+        sound_throw: sound "ThrowGold"
+        on_hit: hit
+    })
+    if let b = ball { balls.push(b) }
+    log fact "balls_out" balls.len()
+}
+
+fn hit(h: projectile.Hit, mine: HitSensor, other: HitSensor) -> projectile.Then {
+    if h.map { return projectile.Then.Bounce }
+    if MR::isSensorPlayer(other) { return projectile.Then.Pass }   // the ball starts beside the player: pass by
+    if not MR::sendArbitraryMsg(ACTMES_FIREBALL_ATTACK as u32, other, mine) {   // what Fire Mario's ball sends
+        return projectile.Then.Pass                       // what a fireball does not hurt: flies on through
+    }
+    if let enemy = other.mHost {
+        start flash(ref(enemy))
+        MR::appearCoinPop(enemy, enemy.mPosition, 3)
+        log fact "defeated" true
+    }
+    return projectile.Then.Burst
+}
+
+task flash(e: ref<LiveActor>) {
+    for f in 0..flash_frames {
+        let fade = 1.0 - f as f32 / flash_frames as f32
+        if let a = e.get() {
+            let i = inst.of(a)
+            inst.set_colour(i, color(1.0, 1.0 - 0.16 * fade, 1.0 - fade, 1.0))
+            inst.release(i)
+        } else { return }
+        wait 1 frames
+    }
+}
+
+on start {
+    let gold = form.define(form.Form {
+        id: "gold"
+        look: model "GoldMario"                  // drawn on Mario's skeleton
+        aura: effect "gold_aura"
+        ends_on_damage: true
+        on_spin: throw_ball
+        on_start: became_gold
+        on_end: ended
+    })
+    item.define(item.Item {
+        id: "GoldFlower"                         // placed in a stage as "gold-flower/GoldFlower"
+        look: model "GoldFlower"
+        shine: effect "gold_flower_shine"
+        sound_get: sound "GetGold"
+        gives: item.Gives.Form(gold)
+    })
+}

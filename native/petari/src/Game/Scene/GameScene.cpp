@@ -56,6 +56,7 @@
 #include "Game/Screen/GameStageClearSequence.hpp"
 #include "Game/Screen/LensFlare.hpp"
 #include "Game/Screen/MoviePlayingSequence.hpp"
+#include "Game/System/LumaMovie.hpp"
 #include "Game/System/GalaxyMapController.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -72,7 +73,7 @@
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
-#include "Game/Screen/NebulaModText.hpp"
+#include "Game/Screen/NebulaModLogNotice.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
@@ -81,6 +82,11 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/Render/Model.hpp"
 #include "Game/System/NebulaHost.hpp"
+#include "Game/System/LumaDraw.hpp"
+#include "Game/System/LumaDrawInst.hpp"
+#include "Game/System/LumaDrawPost.hpp"
+#include <luma_draw_post.h>
+#include "Game/System/LumaDrawView.hpp"
 
 namespace {
     CometRetryButton* getCometRetryButton() {
@@ -110,7 +116,6 @@ GameScene::GameScene()
 
 GameScene::~GameScene() {
     NebulaMods::fire(NEBULA_MOD_EVENT_STAGE_END, 0, nullptr, MR::getCurrentStageName());
-    NebulaMods::sceneEnded();
     MR::destroySceneMessage();
     NPCFunction::deleteNPCData();
     MR::onStarPointerSceneOut();
@@ -258,7 +263,7 @@ void GameScene::start() {
 }
 
 void GameScene::update() {
-    NebulaMods::StageFrame stageFrame;
+    NebulaMods::stageFrame();
     mPauseCtrl->updateNerve();
     updateNerve();
     NebulaLoadTrace::gameScene();
@@ -274,8 +279,9 @@ void GameScene::update() {
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
         MR::getGameSceneLayoutHolder()->mAchievementToast->update();
     }
-    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mModText != nullptr) {
-        MR::getGameSceneLayoutHolder()->mModText->update();
+    // The mod log's notice runs as the pop-up does: in play, cutscenes and menus alike.
+    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder)) {
+        NebulaModLogNotice::update();
     }
 }
 
@@ -334,7 +340,9 @@ void GameScene::calcAnim() {
     }
 
     CategoryList::execute(MR::CalcAnimType_AnimParticleIgnorePause);
+    luma::draw::view::mainCamera();  // a mod's main camera (draw.view main_eye) before the poses take it (one load with none)
     SceneFunction::executeCalcViewAndEntryList();
+    luma::draw::inst::frame();  // the mods' overrides onto this frame's materials and draw poses (one load with none)
 }
 
 void GameScene::notifyEndScenarioStarter() {
@@ -382,6 +390,10 @@ bool GameScene::isExecScenarioOpeningCamera() const {
 
 bool GameScene::isExecScenarioStarter() const {
     return isNerve(GET_NERVE(GameScene, GameSceneScenarioStarter));
+}
+
+bool GameScene::isExecPauseMenuOrGalaxyMap() const {
+    return isNerve(GET_NERVE(GameScene, GameScenePauseMenu)) || isNerve(GET_NERVE(GameScene, GameSceneGalaxyMap));
 }
 
 bool GameScene::isExecStageClearDemo() const {
@@ -508,6 +520,7 @@ void GameScene::draw3D() const {
         return;
     }
 
+    luma::draw::view::render();  // the mods' views (draw.view) into their textures, before the scene (one load with none)
     f32 sceneCamera[4][4];
     MotionSignal::sceneCamera(sceneCamera);
     NebulaHost::gameStage(MR::getCurrentStageName());
@@ -518,6 +531,7 @@ void GameScene::draw3D() const {
     MR::loadProjectionMtx();
     MR::setDefaultViewportAndScissor();
     Frame::setPassAlpha(true);
+    luma::draw::point(LUMA_DRAW_WORLD_BEFORE);  // the mods' world.before (one load with none)
     CategoryList::drawOpa(MR::DrawBufferType_ClippedMapParts);
     CategoryList::execute(MR::DrawType_ClipArea);
     CategoryList::execute(MR::DrawType_FallOutFieldDraw);
@@ -535,6 +549,7 @@ void GameScene::draw3D() const {
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
     MR::sceneOpaqueEnd();
+    luma::draw::point(LUMA_DRAW_WORLD_OPAQUE_AFTER);
     SceneFunction::executeDrawBufferListNormalXlu();
     SceneFunction::executeDrawListXlu();
     CategoryList::execute(MR::DrawType_ShadowSurface);
@@ -554,19 +569,31 @@ void GameScene::draw3D() const {
     MR::loadProjectionMtx();
     MR::loadLightPlayer();
     CategoryList::execute(MR::DrawType_PlayerIndirect);
+    luma::draw::point(LUMA_DRAW_WORLD_AFTER);
     Frame::sceneEnd();
+    luma::draw::post::stage(LUMA_DRAW_POST_WORLD);  // the mods' post programs over the scene (one load with none)
     MR::clearZBuffer();
 }
 
 void GameScene::draw2D() const {
     Frame::scene2D(true);
+    luma::draw::point(LUMA_DRAW_HUD_BEFORE);  // the mods' hud.before, under the game's HUD (one load with none)
     if (isPlayMovie()) {
         SceneFunction::executeDrawList2DMovie();
+        luma::movie::drawSubtitles();  // a mod's lines (<movie>.subs) over the movie
     } else {
         SceneFunction::executeDrawList2DNormal();
     }
 
     CategoryList::execute(MR::DrawType_CameraCover);
+    // The mods' hud.after: over the HUD, under the mod log's notice and the pause screens.
+    luma::draw::point(LUMA_DRAW_HUD_AFTER);
+    luma::draw::post::stage(LUMA_DRAW_POST_FRAME);  // over the HUD, under the notice and the pause screens
+    // The mod log's notice over the game and under the pause screens (and the settings menu, drawn later), so it never
+    // covers a choice the player must read.
+    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder)) {
+        NebulaModLogNotice::draw();
+    }
     CategoryList::execute(MR::DrawType_LayoutOnPause);
     mPauseSeq->draw();
     MR::drawInitFor2DModel();
@@ -579,9 +606,6 @@ void GameScene::draw2D() const {
 }
 
 void GameScene::drawOverlay() const {
-    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mModText != nullptr) {
-        MR::getGameSceneLayoutHolder()->mModText->drawOnTop();
-    }
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
         MR::getGameSceneLayoutHolder()->mAchievementToast->drawOnTop();
     }
@@ -683,6 +707,11 @@ bool GameScene::isDrawMirror() const {
     }
 
     if (isPlayMovie()) {
+        return false;
+    }
+
+    // Reflections traced at High: the mirror's surface takes the traced reflection in its capture's place (12.5).
+    if ((NebulaHost::option(NEBULA_OPTION_RAY_TRACING) & static_cast< u32 >(NEBULA_RAY_TRACING_MIRROR)) != 0) {
         return false;
     }
 

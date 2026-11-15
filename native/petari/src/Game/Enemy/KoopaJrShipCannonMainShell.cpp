@@ -10,16 +10,15 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, cBaseScale, 1.2f);
-    NEBULA_TUNABLE(f32, cAttackSensorRadius, 75.0f);
-    NEBULA_TUNABLE(f32, cShadowRadius, 60.0f);
-    NEBULA_TUNABLE(f32, cBinderRadius, 75.0f);
+    const f32 cBaseScale = 1.2f;
+    const f32 cAttackSensorRadius = 75.0f;
+    const f32 cShadowRadius = 60.0f;
+    const f32 cBinderRadius = 75.0f;
     const s32 cLifeTime = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(f32, cCameraShakeDistance, 1000.0f);
+    const f32 cCameraShakeDistance = 1000.0f;
     // Wall hits are ignored this long after launch (the shell leaves the barrel).
     const s32 cWallHitInvalidTime = NebulaFrameClock::stepsOfSeconds(1);
 }  // namespace

@@ -12,7 +12,7 @@ public:
     s32 getNum() const;
     s32 getIndexOf(const char*) const;
     const char* getNameStrOf(s32) const;
-    // The game's camera types (its table), for the camera registry (LumaRegistry).
+    // The game's camera types (its table): its size, and a row's name.
     static u32 getTypeNum();
     static const char* getTypeName(u32 index);
     Camera* getDefaultCamera();

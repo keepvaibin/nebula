@@ -9,16 +9,15 @@
 #include <Game/Ui/Pane.hpp>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Util/Array.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     using NebulaMenuFocus::Direction;
 
-    NEBULA_TUNABLE(s32, cRepeatDelay, 18);         // frames a direction is held before it repeats
-    NEBULA_TUNABLE(s32, cRepeatInterval, 5);       // then a step every this many frames
-    NEBULA_TUNABLE(f32, cStickHold, 0.6f);         // the stick's deflection that counts as a press
-    NEBULA_TUNABLE(f32, cPointerHandBack, 12.0f);  // screen units the pointer moves to take the menu back
-    NEBULA_TUNABLE(s32, cGapFrames, 90);           // frames without a menu that the pad keeps the menus (a question closing)
+    const s32 cRepeatDelay = 18;         // frames a direction is held before it repeats
+    const s32 cRepeatInterval = 5;       // then a step every this many frames
+    const f32 cStickHold = 0.6f;         // the stick's deflection that counts as a press
+    const f32 cPointerHandBack = 12.0f;  // screen units the pointer moves to take the menu back
+    const s32 cGapFrames = 90;           // frames without a menu that the pad keeps the menus (a question closing)
 
     // A place the highlight can rest: a game button, or another target (a key) at a centre given with it.
     struct Entry {
@@ -41,6 +40,7 @@ namespace {
     s32 sGapFrames = 0;
     Direction sPress = NebulaMenuFocus::Direction_None;    // this frame's
     Direction sUnmoved = NebulaMenuFocus::Direction_None;  // this frame's, with nothing that way
+    bool sCovered = false;  // this frame's pad is a mod's menu's (cover)
 
     f32 absolute(f32 value) {
         return value < 0.0f ? -value : value;
@@ -58,17 +58,8 @@ namespace {
         return pButton->mIsNebulaFocusable && (pButton->isWait() || pButton->isPointing() || pButton->isNotPointing());
     }
 
-    // The centre in layout space (y up): a button's bounding pane from its last calculated matrix, or the target's own.
-    bool getCentre(const Entry& rEntry, Vec2f* pCentre) {
-        if (rEntry.mButton == nullptr) {
-            *pCentre = rEntry.mCentre;
-            return true;
-        }
-        const ButtonPaneController* pButton = rEntry.mButton;
-        const Ui::Pane* pPane = pButton->mBoundingPane;
-        if (pPane == nullptr) {
-            return false;
-        }
+    // A pane's centre in layout space (y up), from its last calculated matrix and where its origin sits in its box.
+    void getPaneCentre(const Ui::Pane* pPane, Vec2f* pCentre) {
         f32 x = 0.0f;
         f32 y = 0.0f;
         switch (pPane->mBasePosition % 3) {
@@ -90,6 +81,19 @@ namespace {
         const Mtx34f& rMtx = pPane->mGlbMtx;
         pCentre->x = rMtx.mMtx[0][0] * x + rMtx.mMtx[0][1] * y + rMtx.mMtx[0][3];
         pCentre->y = rMtx.mMtx[1][0] * x + rMtx.mMtx[1][1] * y + rMtx.mMtx[1][3];
+    }
+
+    // The centre in layout space: a button's bounding pane's, or the target's own.
+    bool getCentre(const Entry& rEntry, Vec2f* pCentre) {
+        if (rEntry.mButton == nullptr) {
+            *pCentre = rEntry.mCentre;
+            return true;
+        }
+        const Ui::Pane* pPane = rEntry.mButton->mBoundingPane;
+        if (pPane == nullptr) {
+            return false;
+        }
+        getPaneCentre(pPane, pCentre);
         return true;
     }
 
@@ -216,9 +220,15 @@ namespace NebulaMenuFocus {
         pRepeat->mHeldFrames = 0;
     }
 
+    void cover() {
+        sCovered = true;
+    }
+
     void update() {
         sPress = Direction_None;
         sUnmoved = Direction_None;
+        const bool covered = sCovered;
+        sCovered = false;
         sEntryCount = 0;
         Entry* const pEntries = sEntries.room(sOfferedCount);
         for (s32 i = 0; i < sOfferedCount; i++) {
@@ -263,6 +273,11 @@ namespace NebulaMenuFocus {
             return;
         }
 
+        // A mod's menu over these takes the pad (LumaUi): no move here, and what it holds is no press once it closes.
+        if (covered) {
+            holdCurrent(&sRepeat);
+            return;
+        }
         const Direction press = readPress(&sRepeat);
         if (press == Direction_None) {
             return;
@@ -287,6 +302,12 @@ namespace NebulaMenuFocus {
     void offerTarget(const void* pKey, const Vec2f& rScreenPos) {
         Entry entry = {nullptr, pKey, Vec2f(0.0f, 0.0f)};
         MR::convertScreenPosToLayoutPos(&entry.mCentre, rScreenPos);
+        addOffered(entry);
+    }
+
+    void offerPane(const void* pKey, const Ui::Pane* pPane) {
+        Entry entry = {nullptr, pKey, Vec2f(0.0f, 0.0f)};
+        getPaneCentre(pPane, &entry.mCentre);
         addOffered(entry);
     }
 

@@ -72,12 +72,13 @@ public:
     enum {
         Flag_Hidden = 0x10,
         Flag_PluginHidden = 0x20,  // a plugin hid its joint (show_joint)
+        Flag_ModHidden = 0x40,     // a mod's override hid it (draw.inst set_visible)
     };
     bool checkFlag(u32 flag) const {
         return (mFlags & flag) != 0;
     }
     bool isHidden() const {
-        return checkFlag(Flag_Hidden | Flag_PluginHidden);
+        return checkFlag(Flag_Hidden | Flag_PluginHidden | Flag_ModHidden);
     }
     void onFlag(u32 flag) {
         mFlags |= flag;
@@ -193,6 +194,9 @@ namespace ModelSys {
         return mViewMtx;
     }
     extern u32 mEntryNum;
+    // draw.view (draw.md 14): while not null, a camera (eye from world) the scene's poses draw under in
+    // place of their own, in blocks never kept: the scene seen from another camera. Mirror and shadow poses keep theirs.
+    extern const f32 (*mViewOverride)[4];
 }  // namespace ModelSys
 
 enum ModelFlag {

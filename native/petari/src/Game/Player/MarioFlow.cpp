@@ -2,11 +2,6 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.95f);
 
 bool Mario::doFlow() {
     if (isStatusActive(MarioStatus_Flow)) {
@@ -85,9 +80,9 @@ bool MarioFlow::update() {
         } else {
             addVelocity(mVelocity);
 
-            mVelocity.x *= cNum_update_f1;
-            mVelocity.y *= cNum_update_f2;
-            mVelocity.z *= cNum_update_f3;
+            mVelocity.x *= 0.95f;
+            mVelocity.y *= 0.95f;
+            mVelocity.z *= 0.95f;
 
             if (!isAnimationRun("中ダメージ着地")) {
                 return false;

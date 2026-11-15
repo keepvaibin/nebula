@@ -1,0 +1,660 @@
+use super::*;
+use crate::cook::refuse::said;
+
+const STRIPES: &str = "// Animated stripes (plan 3.4's test shader).\nvoid surface(in SurfaceIn i, inout Surface s) {\n    const float band = frac(i.uv0.x * 8.0 + i.time * speed);\n    s.base = band < 0.5 ? tint.rgb : s.base * paint(i.uv0).rgb;\n    s.roughness = 0.3;\n    s.emission = glow * s.base;\n}\n";
+
+fn stripes_json() -> Value {
+    serde_json::json!({
+        "stage": "material",
+        "params": [
+            {"name": "speed", "type": "float", "default": 0.5},
+            {"name": "tint", "type": "float4", "default": [1.0, 0.2, 0.1, 1.0]},
+            {"name": "glow", "type": "float", "default": 0.0}
+        ],
+        "textures": [{"slot": 0, "name": "paint"}],
+        "reads": ["time"]
+    })
+}
+
+fn read_json(json: &Value, code: &str) -> Result<Source> {
+    read("shaders/Stripes", "assets/shaders/Stripes.hlsl", json.to_string().as_bytes(), code.as_bytes())
+}
+
+fn refusal(r: Result<impl std::fmt::Debug>) -> (String, Vec<(&'static str, String)>) {
+    let error = r.unwrap_err();
+    let (why, args) = said(&error);
+    (why.to_string(), args)
+}
+
+#[test]
+fn a_shader_is_its_json_and_its_surface() {
+    let s = read_json(&stripes_json(), STRIPES).unwrap();
+    assert_eq!(s.params.iter().map(|p| (p.name.as_str(), p.four)).collect::<Vec<_>>(), [("speed", false), ("tint", true), ("glow", false)]);
+    assert_eq!(s.params[1].default, [1.0, 0.2, 0.1, 1.0]);
+    assert_eq!(s.textures, [(0, "paint".to_string())]);
+    assert_eq!(s.reads, READ_TIME);
+    assert_eq!(s.file, "assets/shaders/Stripes.hlsl");
+}
+
+#[test]
+fn a_shader_outside_the_interface_is_refused_by_name_and_line() {
+    let forbidden = |code: &str| refusal(read_json(&stripes_json(), code));
+    for (code, word, line) in [
+        ("void surface(in SurfaceIn i, inout Surface s) {}\nTexture2D extra : register(t9);\n", "Texture2D", "2"),
+        ("void surface(in SurfaceIn i, inout Surface s) {}\n\n\ncbuffer X { float4 y; };\n", "cbuffer", "4"),
+        ("#include \"other.hlsl\"\nvoid surface(in SurfaceIn i, inout Surface s) {}\n", "#include", "1"),
+        ("  #  pragma once\nvoid surface(in SurfaceIn i, inout Surface s) {}\n", "#pragma", "1"),
+        ("void surface(in SurfaceIn i, inout Surface s) {}\nRWStructuredBuffer<float> out;\n", "RWStructuredBuffer", "2"),
+        ("void surface(in SurfaceIn i, inout Surface s) {}\nSamplerState mine;\n", "SamplerState", "2"),
+        ("[[vk::binding(0)]] float x;\nvoid surface(in SurfaceIn i, inout Surface s) {}\n", "[[", "1"),
+        ("/* a\nb */ float y : register(c0);\nvoid surface(in SurfaceIn i, inout Surface s) {}\n", "register", "2"),
+    ] {
+        let (why, args) = forbidden(code);
+        assert_eq!(why, "Cook.Shader.Forbidden", "{code}");
+        assert!(args.contains(&("word", word.to_string())) && args.contains(&("line", line.to_string())), "{code}: {args:?}");
+    }
+    // Words in comments and strings are not code; a shader with no surface says so.
+    let (why, _) = forbidden("// register cbuffer Texture2D\nvoid surface_x() {}\n");
+    assert_eq!(why, "Cook.Shader.NoSurface");
+    assert!(read_json(&stripes_json(), &format!("/* register */\n{STRIPES}")).is_ok());
+    let (why, args) = refusal(read_json(&stripes_json(), &" ".repeat(MOST_BYTES + 1)));
+    assert_eq!(why, "Cook.Shader.TooLarge");
+    assert!(args.contains(&("max", MOST_BYTES.to_string())));
+}
+
+#[test]
+fn a_shaders_json_is_its_interface_and_nothing_else() {
+    let json_fault = |edit: &dyn Fn(&mut Value)| {
+        let mut j = stripes_json();
+        edit(&mut j);
+        refusal(read_json(&j, STRIPES))
+    };
+    let cases: [(&dyn Fn(&mut Value), &str, &str); 8] = [
+        (&|j| j["stage"] = "post".into(), "Cook.Shader.Json", "/stage"),
+        (&|j| j["extra"] = 1.into(), "Cook.Shader.Json", "/extra"),
+        (&|j| j["params"][0]["type"] = "int".into(), "Cook.Shader.Json", "/params/0/type"),
+        (&|j| j["params"][1]["default"] = serde_json::json!([1.0, 2.0]), "Cook.Shader.Json", "/params/1/default"),
+        (&|j| j["params"][0]["name"] = "prev".into(), "Cook.Shader.Json", "/params/0/name"),
+        (&|j| j["params"][0]["name"] = "pbr_x".into(), "Cook.Shader.Json", "/params/0/name"),
+        (&|j| j["textures"][0]["slot"] = 8.into(), "Cook.Shader.Json", "/textures/0/slot"),
+        (&|j| j["reads"] = serde_json::json!(["normal", "colour"]), "Cook.Shader.Json", "/reads/1"),
+    ];
+    for (edit, why, key) in cases {
+        let (got, args) = json_fault(edit);
+        assert_eq!((got.as_str(), args.iter().find(|a| a.0 == "key").map(|a| a.1.as_str())), (why, Some(key)));
+    }
+    let (why, args) = json_fault(&|j| j["textures"][0]["name"] = "speed".into());
+    assert_eq!(why, "Cook.Shader.Twice");
+    assert!(args.contains(&("name", "speed".to_string())));
+    let (why, _) = json_fault(&|j| j["params"][2]["name"] = "speed".into());
+    assert_eq!(why, "Cook.Shader.Twice");
+}
+
+#[test]
+fn a_material_gives_its_values_and_every_texture() {
+    let s = read_json(&stripes_json(), STRIPES).unwrap();
+    let extras = serde_json::json!({"shader": "shaders/Stripes", "params": {"speed": 2.0}, "textures": {"paint": 3}});
+    let u = use_of(&s, "Cube", &extras).unwrap();
+    assert_eq!(u.values, [[2.0, 0.0, 0.0, 0.0], [1.0, 0.2, 0.1, 1.0], [0.0; 4]]);
+    assert_eq!(u.textures, [3]);
+    let fault = |extras: Value| refusal(use_of(&s, "Cube", &extras));
+    let (why, args) = fault(serde_json::json!({"params": {"sped": 2.0}, "textures": {"paint": 3}}));
+    assert_eq!(why, "Cook.Shader.UnknownParam");
+    assert!(args.contains(&("param", "sped".to_string())) && args.contains(&("shader", "shaders/Stripes".to_string())));
+    let (why, args) = fault(serde_json::json!({"params": {"tint": 1.0}, "textures": {"paint": 3}}));
+    assert_eq!(why, "Cook.Shader.ParamType");
+    assert!(args.contains(&("expected", "float4".to_string())));
+    let (why, args) = fault(serde_json::json!({}));
+    assert_eq!(why, "Cook.Shader.NoTexture");
+    assert!(args.contains(&("texture", "paint".to_string())) && args.contains(&("material", "Cube".to_string())));
+    let (why, args) = fault(serde_json::json!({"textures": {"paint": 3, "other": 1}}));
+    assert_eq!(why, "Cook.Shader.UnknownTexture");
+    assert!(args.contains(&("texture", "other".to_string())));
+}
+
+#[test]
+fn parameters_take_the_free_places_in_order_and_their_range() {
+    let s = read_json(&stripes_json(), STRIPES).unwrap();
+    let values = [[0.5, 0.0, 0.0, 0.0], [1.0, 0.2, 0.1, 1.0], [0.0; 4]];
+    // Register 1 and constant colour 0 are the material's own: speed takes register 2, tint register 3, glow constant 1.
+    let mut used = [false; PLACES];
+    used[0] = true;
+    used[3] = true;
+    assert_eq!(places(&s, "Cube", &values, used).unwrap(), [1, 2, 4]);
+    // A register holds -4 to 4, a constant colour 0 to 1.
+    assert_eq!(places(&s, "Cube", &[[-3.5, 0.0, 0.0, 0.0], values[1], values[2]], [false; PLACES]).unwrap(), [0, 1, 2]);
+    // Registers taken, tint lands on a constant colour, which holds 0 to 1.
+    let (why, args) = refusal(places(&s, "Cube", &[values[0], [2.0, 0.0, 0.0, 1.0], values[2]], [true, true, true, false, false, false, false]));
+    assert_eq!(why, "Cook.Shader.ParamRange");
+    assert!(args.contains(&("param", "tint".to_string())) && args.contains(&("max", "1".to_string())), "{args:?}");
+    let (why, args) = refusal(places(&s, "Cube", &values, [true, true, true, true, true, true, false]));
+    assert_eq!(why, "Cook.Shader.TooManyParams");
+    assert!(args.contains(&("count", "3".to_string())) && args.contains(&("max", "1".to_string())));
+    let (why, args) = refusal(places(&s, "Cube", &[[5.0, 0.0, 0.0, 0.0], values[1], values[2]], [false; PLACES]));
+    assert_eq!(why, "Cook.Shader.ParamRange");
+    assert!(args.contains(&("param", "speed".to_string())) && args.contains(&("max", "4".to_string())));
+}
+
+// ---------------------------------------------------------------- a mod's cube with the shader, through the cook
+
+fn encode(data: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in data.chunks(3) {
+        let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+        let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
+        for k in 0..4 {
+            if k <= chunk.len() {
+                out.push(T[((n >> (18 - 6 * k)) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
+/// A one-triangle glTF with normals and TEXCOORD_0 whose material uses the stripes shader, and a 1 x 1 image.
+pub(crate) fn shader_document(extras: Value) -> Value {
+    let floats: Vec<f32> = [
+        [0.0f32, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+    ]
+    .concat()
+    .into_iter()
+    .chain([0.0f32, 0.0, 1.0, 0.0, 0.0, 1.0])
+    .collect();
+    let mut bytes: Vec<u8> = floats.iter().flat_map(|f| f.to_le_bytes()).collect();
+    bytes.extend([0u8, 0, 1, 0, 2, 0]);
+    // A 1 x 1 RGBA PNG.
+    let png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    serde_json::json!({
+        "asset": {"version": "2.0"}, "scene": 0, "scenes": [{"nodes": [0]}], "nodes": [{"name": "body", "mesh": 0}],
+        "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2}, "indices": 3, "material": 0}]}],
+        "materials": [{"name": "Cube", "pbrMetallicRoughness": {"baseColorFactor": [1.0, 1.0, 1.0, 1.0], "metallicFactor": 0.0, "roughnessFactor": 0.5},
+                       "extras": {"nebula": extras}}],
+        "textures": [{"source": 0}],
+        "images": [{"uri": format!("data:image/png;base64,{png}")}],
+        "accessors": [
+            {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3", "min": [0.0, 0.0, 0.0], "max": [1.0, 1.0, 0.0]},
+            {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3"},
+            {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC2"},
+            {"bufferView": 3, "componentType": 5123, "count": 3, "type": "SCALAR"}
+        ],
+        "bufferViews": [
+            {"buffer": 0, "byteLength": 36}, {"buffer": 0, "byteOffset": 36, "byteLength": 36},
+            {"buffer": 0, "byteOffset": 72, "byteLength": 24}, {"buffer": 0, "byteOffset": 96, "byteLength": 6}
+        ],
+        "buffers": [{"byteLength": bytes.len(), "uri": format!("data:application/octet-stream;base64,{}", encode(&bytes))}]
+    })
+}
+
+/// A mod folder holding the stripes shader; the glTF's folder inside it.
+pub(crate) fn shader_mod(json: &Value, code: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("stripes-mod");
+    let shaders = root.join("layers/base/assets/shaders");
+    std::fs::create_dir_all(&shaders).unwrap();
+    std::fs::write(root.join("luma.json"), br#"{"id": "stripes.mod"}"#).unwrap();
+    std::fs::write(shaders.join("Stripes.shader.json"), json.to_string()).unwrap();
+    std::fs::write(shaders.join("Stripes.hlsl"), code).unwrap();
+    let models = root.join("layers/base/assets/models");
+    std::fs::create_dir_all(&models).unwrap();
+    (dir, models)
+}
+
+#[test]
+fn a_material_naming_a_shader_is_lit_through_its_surface() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
+    use crate::cook::programs::{forms_of, generate, Registers};
+    let (_dir, folder) = shader_mod(&stripes_json(), STRIPES);
+    let doc = shader_document(serde_json::json!({"shader": "shaders/Stripes", "params": {"speed": 2.0}, "textures": {"paint": 0}}));
+    let bytes = serde_json::to_vec(&doc).unwrap();
+    let (ir, _, _) = crate::cook::gltf::to_ir_for(&bytes, Some(&folder), None).unwrap();
+    let m = &ir.materials[0];
+    let sf = m.surface.as_ref().expect("the material's surface");
+    assert_eq!(sf.file, "assets/shaders/Stripes.hlsl");
+    assert_eq!(sf.uv, [true, false]);
+    // The stages read none of the places: speed register 1, tint register 2, glow register 3 (its values in 255ths).
+    assert_eq!(sf.params, [("speed".into(), false, 0), ("tint".into(), true, 1), ("glow".into(), false, 2)]);
+    // Register n is registers[n - 1], as Material::fillRow and set_param read it (place 0 is registers[0]).
+    assert_eq!(m.registers[0][0], 510);
+    assert_eq!(m.registers[1], [255, 51, 26, 255]);
+    assert_eq!(m.registers[3], [0; 4]);
+    assert_eq!(sf.textures.len(), 1);
+    // `<model>.params` beside the model, as content.model set_param reads it.
+    let (_, files, _) = crate::cook::gltf::to_files_for(&bytes, Some(&folder), "Cube", None).unwrap();
+    let (name, table) = files.iter().find(|(n, _)| n.ends_with(".params")).expect("Cube.params");
+    assert_eq!(name, "Cube.params");
+    let t = crate::cook::table::TableIr::from_ntbl(table).unwrap();
+    assert_eq!(t.rows.len(), 3);
+    // Every form: the plain one calls surface under the shader's own lines; a replacing pass keeps the stages.
+    let mut called = 0;
+    for form in forms_of("Cube", m, 0).unwrap() {
+        let t = generate(m, form, false, &Registers::of(m)).unwrap();
+        if form.replace != 0 {
+            assert!(!t.pixel.contains("surface(si, s);"));
+            continue;
+        }
+        called += 1;
+        assert!(t.pixel.contains("surface(si, s);"), "{}", t.pixel);
+        assert!(t.pixel.contains("#line 1 \"assets/shaders/Stripes.hlsl\""));
+        let surface_in = &t.pixel[t.pixel.find("struct SurfaceIn").unwrap()..];
+        let surface_in = &surface_in[..surface_in.find("};").unwrap()];
+        assert!(surface_in.contains("float time;") && !surface_in.contains("normal"), "only what it reads: {surface_in}");
+        assert!(t.pixel.contains("float4 paint(float2 uv)"));
+        assert!(t.pixel.contains("    speed = m[") && t.pixel.contains("    tint = m["));
+        assert!(t.vertex.contains("o.surf_uv0 = v.uv"));
+        assert!(t.pixel.find("surface(si, s);").unwrap() < t.pixel.find("g_enh = enh_begin").unwrap(), "the normal is turned before the light");
+    }
+    assert!(called > 0);
+}
+
+#[test]
+fn a_material_and_its_shader_must_agree() {
+    let doc = |extras: Value| serde_json::to_vec(&shader_document(extras)).unwrap();
+    let (_dir, folder) = shader_mod(&stripes_json(), STRIPES);
+    let cook = |bytes: &[u8], folder: Option<&std::path::Path>| refusal(crate::cook::gltf::to_ir_for(bytes, folder, None).map(|_| ()));
+    let (why, args) = cook(&doc(serde_json::json!({"shader": "shaders/Other", "textures": {"paint": 0}})), Some(&folder));
+    assert_eq!(why, "Cook.Shader.Missing");
+    assert!(args.contains(&("file", "assets/shaders/Other.shader.json".into())));
+    let (why, _) = cook(&doc(serde_json::json!({"shader": "../x", "textures": {"paint": 0}})), Some(&folder));
+    assert_eq!(why, "Cook.Shader.Name");
+    // A glTF read from no folder has no mod to hold the shader.
+    let (why, _) = cook(&doc(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}})), None);
+    assert_eq!(why, "Cook.Shader.Missing");
+    let (why, args) = cook(&doc(serde_json::json!({"shader": "shaders/Stripes"})), Some(&folder));
+    assert_eq!((why.as_str(), args.contains(&("texture", "paint".into()))), ("Cook.Shader.NoTexture", true));
+    // An unlit material has no light to give a surface.
+    let mut unlit = shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}));
+    unlit["materials"][0]["extensions"] = serde_json::json!({"KHR_materials_unlit": {}});
+    let (why, _) = cook(&serde_json::to_vec(&unlit).unwrap(), Some(&folder));
+    assert_eq!(why, "Cook.Shader.Unlit");
+}
+
+/// LumaLink's check with no compiler says, by material, that its shader was not compiled; the game's own cook says
+/// nothing (it builds the programs itself).
+#[test]
+fn a_check_without_a_compiler_says_the_shader_was_not_compiled() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
+    let (_dir, folder) = shader_mod(&stripes_json(), STRIPES);
+    let bytes = serde_json::to_vec(&shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}))).unwrap();
+    let mut ir = crate::cook::gltf::to_ir_for(&bytes, Some(&folder), None).unwrap().0;
+    // Two meshes of one material: said once.
+    ir.materials.push(ir.materials[0].clone());
+    crate::cook::refuse::take_notes();
+    check_compile(&ir).unwrap();
+    assert!(crate::cook::refuse::said_notes().is_empty());
+    let was = CHECK_COMPILER.lock().unwrap().replace(None);
+    let was_glslang = CHECK_GLSLANG.lock().unwrap().replace(None);
+    let got = check_compile(&ir);
+    *CHECK_COMPILER.lock().unwrap() = was;
+    *CHECK_GLSLANG.lock().unwrap() = was_glslang;
+    got.unwrap();
+    // One note for each renderer's compiler that is not there, naming it.
+    let notes = crate::cook::refuse::said_notes();
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    for (note, backend, tool) in [(&notes[0], D3D12, "dxc"), (&notes[1], VULKAN, "glslang")] {
+        assert_eq!(note.0, "Cook.Shader.NotCompiled");
+        assert!(note.1.contains(&("file", "assets/shaders/Stripes.hlsl".to_string())), "{note:?}");
+        assert!(note.1.contains(&("target", backend.to_string())) && note.1.contains(&("name", tool.to_string())), "{note:?}");
+    }
+}
+
+#[test]
+fn a_shaders_ray_rows_are_checked_and_replace_its_factors() {
+    let with_ray = |ray: Value| {
+        let mut j = stripes_json();
+        j["ray"] = ray;
+        read_json(&j, STRIPES)
+    };
+    let s = with_ray(serde_json::json!({"class": "metal", "base": [0.9, 0.8, 0.2], "roughness": 0.1, "through": 0.0})).unwrap();
+    assert_eq!(s.ray.class.as_deref(), Some("metal"));
+    assert_eq!(s.ray.base, Some([0.9, 0.8, 0.2]));
+    assert_eq!((s.ray.roughness, s.ray.metal, s.ray.emission, s.ray.through), (Some(0.1), None, None, Some(0.0)));
+    assert_eq!(read_json(&stripes_json(), STRIPES).unwrap().ray, crate::cook::model_ir::RayRows::default());
+    for (ray, key) in [
+        (serde_json::json!({"class": "water"}), "/ray/class"),
+        (serde_json::json!({"class": "ramp"}), "/ray/class"),
+        (serde_json::json!({"base": [1.0, 0.5]}), "/ray/base"),
+        (serde_json::json!({"base": [1.0, 0.5, 2.0]}), "/ray/base/2"),
+        (serde_json::json!({"emission": [-1.0, 0.0, 0.0]}), "/ray/emission/0"),
+        (serde_json::json!({"roughness": 1.5}), "/ray/roughness"),
+        (serde_json::json!({"sheen": 1.0}), "/ray/sheen"),
+        (serde_json::json!({"colour": "albedo"}), "/ray/colour"),
+        (serde_json::json!(3), "/ray"),
+    ] {
+        let (why, args) = refusal(with_ray(ray.clone()));
+        assert_eq!(why, "Cook.Shader.Json", "{ray}");
+        assert!(args.contains(&("key", key.to_string())), "{ray}: {args:?}");
+    }
+    // Over the reading of a rough white glTF material: the rows given, the rest as read.
+    use crate::cook::hit_record::{apply_ray_rows, pbr_reading, Class, PbrMeans};
+    let p = crate::cook::model_ir::PbrMaterial { base_color: [1.0, 1.0, 1.0, 1.0], metal: 0.0, roughness: 0.8, ..Default::default() };
+    let mut r = pbr_reading(&p, &PbrMeans::default());
+    assert_eq!(r.class, Class::Dielectric);
+    apply_ray_rows(&mut r, &s.ray);
+    assert_eq!((r.class, r.base, r.roughness, r.metal, r.transmission), (Class::Metal, [0.9, 0.8, 0.2], 0.1, 0.0, 0.0));
+}
+
+#[test]
+fn a_shaders_ray_placeholders_are_checked_and_set_its_record() {
+    use crate::cook::hit_record::{finish_with, pbr_reading, ray_glow, PbrMeans};
+    use crate::cook::model_ir::{RayGlow, RayRows};
+    let with_ray = |ray: Value| {
+        let mut j = stripes_json();
+        j["ray"] = ray;
+        read_json(&j, STRIPES)
+    };
+    let one = |key: &str, v: Value| Value::Object([(key.to_string(), v)].into_iter().collect());
+    // Each key: a good value, one out of range, one of the wrong type.
+    for (key, good, out, wrong) in [
+        ("ior", serde_json::json!(1.33), serde_json::json!(0.9), serde_json::json!("glass")),
+        ("thickness", serde_json::json!(40.0), serde_json::json!(-1.0), serde_json::json!([1.0])),
+        ("body", serde_json::json!(0.5), serde_json::json!(1.1), serde_json::json!(true)),
+        ("shine", serde_json::json!(16.0), serde_json::json!(16.5), serde_json::json!("bright")),
+        ("tint_keep", serde_json::json!(0.0), serde_json::json!(-0.1), serde_json::json!({})),
+        ("traced", serde_json::json!("hidden"), serde_json::json!("gone"), serde_json::json!(1)),
+        ("sun_through", serde_json::json!(0.6), serde_json::json!(2.0), serde_json::json!("half")),
+        ("metal_kind", serde_json::json!("brass"), serde_json::json!("tin"), serde_json::json!(3)),
+        ("glow", serde_json::json!({"color": "own", "candela": 120.0}), serde_json::json!({"candela": -1.0}), serde_json::json!(5)),
+        ("vertex_colour", serde_json::json!("albedo"), serde_json::json!("paint"), serde_json::json!(1)),
+    ] {
+        assert!(with_ray(one(key, good.clone())).is_ok(), "{key} {good}");
+        for bad in [out, wrong] {
+            let (why, args) = refusal(with_ray(one(key, bad.clone())));
+            assert_eq!(why, "Cook.Shader.Json", "{key} {bad}");
+            let at = args.iter().find(|(k, _)| *k == "key").map(|(_, v)| v.clone()).unwrap_or_default();
+            assert!(at.starts_with(&format!("/ray/{key}")), "{key} {bad}: {at}");
+        }
+    }
+    for (glow, at) in [
+        (serde_json::json!({"color": [1.0, 0.5, 2.0], "candela": 1.0}), "/ray/glow/color/2"),
+        (serde_json::json!({"color": "white", "candela": 1.0}), "/ray/glow/color"),
+        (serde_json::json!({"candela": 1.0, "luminance": 1.0}), "/ray/glow"),
+        (serde_json::json!({"color": "own"}), "/ray/glow"),
+        (serde_json::json!({"candela": 1.0, "cone": 30.0}), "/ray/glow/cone"),
+        (serde_json::json!({"luminance": "high"}), "/ray/glow/luminance"),
+    ] {
+        let (_, args) = refusal(with_ray(serde_json::json!({ "glow": glow })));
+        assert!(args.contains(&("key", at.to_string())), "{at}: {args:?}");
+    }
+    let s = with_ray(serde_json::json!({"class": "metal", "ior": 1.33, "thickness": 40.0, "body": 0.5, "shine": 2.0,
+        "tint_keep": 0.25, "traced": "hidden", "sun_through": 0.6, "metal_kind": "art",
+        "glow": {"color": [1.0, 0.5, 0.0], "luminance": 300.0}}))
+    .unwrap();
+    assert_eq!((s.ray.ior, s.ray.thickness, s.ray.body, s.ray.shine, s.ray.tint_keep), (Some(1.33), Some(40.0), Some(0.5), Some(2.0), Some(0.25)));
+    assert_eq!((s.ray.traced_hidden, s.ray.sun_through, s.ray.metal_kind), (Some(true), Some(0.6), Some(255)));
+    assert_eq!(s.ray.glow, Some(RayGlow { colour: Some([1.0, 0.5, 0.0]), strength: -300.0 }));
+    assert_eq!(with_ray(serde_json::json!({"metal_kind": "gold"})).unwrap().ray.metal_kind, Some(1));
+    assert_eq!(with_ray(serde_json::json!({"traced": "seen"})).unwrap().ray.traced_hidden, Some(false));
+    use crate::cook::model_ir::VertexColour;
+    for (word, kind) in [("auto", VertexColour::Auto), ("albedo", VertexColour::Albedo), ("light", VertexColour::Light)] {
+        let rows = with_ray(serde_json::json!({ "vertex_colour": word })).unwrap().ray;
+        assert_eq!((rows.vertex_colour, rows.vertex_albedo()), (Some(kind), kind == VertexColour::Albedo));
+    }
+    // The record: the numbers over the cook's own measure; none given, the same record as before.
+    let p = crate::cook::model_ir::PbrMaterial { base_color: [1.0, 1.0, 1.0, 1.0], roughness: 0.8, ..Default::default() };
+    let mut r = pbr_reading(&p, &PbrMeans::default());
+    finish_with("raytest", "Stripes", 12.0, &s.ray, &mut r);
+    assert_eq!((r.ior, r.thickness, r.body, r.shine, r.tint_keep), (1.33, 40.0, 0.5, 2.0, 0.25));
+    assert_eq!((r.traced_hidden, r.through, r.metal_kind), (true, 0.6, 255));
+    assert_eq!(ray_glow(&r, s.ray.glow.as_ref().unwrap()), [1.0, 0.5, 0.0, -300.0]);
+    let own = RayGlow { colour: None, strength: 50.0 };
+    assert_eq!(ray_glow(&r, &own), [1.0, 1.0, 1.0, 50.0]);
+    let (mut plain, mut rowless) = (pbr_reading(&p, &PbrMeans::default()), pbr_reading(&p, &PbrMeans::default()));
+    crate::cook::hit_record::finish("raytest", "Stripes", 12.0, &mut plain);
+    finish_with("raytest", "Stripes", 12.0, &RayRows::default(), &mut rowless);
+    assert_eq!(format!("{plain:?}"), format!("{rowless:?}"));
+    assert_eq!((plain.thickness, plain.ior, plain.body, plain.through, plain.traced_hidden), (12.0, p.ior, -1.0, 0.0, false));
+}
+
+/// A material's own `ray` (glTF extras.nebula.ray) over its shader's: each value it gives, else the shader's.
+#[test]
+fn a_materials_ray_is_over_its_shaders() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
+    let mut json = stripes_json();
+    json["ray"] = serde_json::json!({"class": "gloss", "ior": 1.2, "body": 0.3, "vertex_colour": "light"});
+    let (_dir, folder) = shader_mod(&json, STRIPES);
+    let doc = shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}, "ray": {"ior": 1.4, "vertex_colour": "albedo"}}));
+    let (ir, _, _) = crate::cook::gltf::to_ir_for(&serde_json::to_vec(&doc).unwrap(), Some(&folder), None).unwrap();
+    let ray = &ir.materials[0].ray;
+    assert_eq!((ray.class.as_deref(), ray.ior, ray.body, ray.thickness), (Some("gloss"), Some(1.4), Some(0.3), None));
+    assert!(ray.vertex_albedo());
+    // The shader's rows stay its own.
+    assert_eq!(ir.materials[0].surface.as_ref().unwrap().ray.ior, Some(1.2));
+    // `over` takes each row given, else under's.
+    use crate::cook::model_ir::RayRows;
+    let under = RayRows { ior: Some(1.2), shine: Some(4.0), ..Default::default() };
+    let given = RayRows { ior: Some(1.5), ..Default::default() };
+    assert_eq!(given.over(&under), RayRows { ior: Some(1.5), shine: Some(4.0), ..Default::default() });
+    assert_eq!(RayRows::default().over(&RayRows::default()), RayRows::default());
+}
+
+/// A model holds at most 255 materials with a shader: the tracer numbers the `.rayhit` rows in a byte.
+#[test]
+fn more_than_255_shader_materials_are_refused() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
+    let (_dir, folder) = shader_mod(&stripes_json(), STRIPES);
+    let doc = shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}));
+    let (mut ir, _, _) = crate::cook::gltf::to_ir_for(&serde_json::to_vec(&doc).unwrap(), Some(&folder), None).unwrap();
+    let one = ir.materials[0].clone();
+    ir.materials = (0..crate::cook::gltf::MOST_SHADER_MATERIALS).map(|k| crate::cook::model_ir::MaterialIr { name: format!("m{k}"), ..one.clone() }).collect();
+    // A name met twice keeps its first row.
+    ir.materials.push(crate::cook::model_ir::MaterialIr { name: "m0".to_string(), ..one.clone() });
+    let table = crate::cook::gltf::ray_hit_table(&ir).unwrap().unwrap();
+    assert_eq!(crate::cook::table::TableIr::from_ntbl(&table).unwrap().rows.len(), 255);
+    ir.materials.push(crate::cook::model_ir::MaterialIr { name: "m255".to_string(), ..one });
+    let (why, args) = refusal(crate::cook::gltf::ray_hit_table(&ir));
+    assert_eq!((why.as_str(), args), ("Cook.Shader.Materials", vec![("count", "256".to_string()), ("max", "255".to_string())]));
+}
+
+#[test]
+fn a_shader_material_has_a_ray_hit_form_beside_its_model() {
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
+    let mut json = stripes_json();
+    json["reads"] = serde_json::json!(["time", "normal", "view"]);
+    json["ray"] = serde_json::json!({"class": "gloss"});
+    let code = "void surface(in SurfaceIn i, inout Surface s) {\n    if (paint(i.uv0).a < 0.5) discard;\n    s.base = tint.rgb * speed + fwidth(i.uv0).x;\n    s.emission = glow * s.base * (1.0 - dot(i.normal, i.view));\n}\n";
+    let (_dir, folder) = shader_mod(&json, code);
+    let doc = shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}));
+    let bytes = serde_json::to_vec(&doc).unwrap();
+    let (ir, _, _) = crate::cook::gltf::to_ir_for(&bytes, Some(&folder), None).unwrap();
+    let sf = ir.materials[0].surface.as_ref().unwrap();
+    assert_eq!(sf.ray.class.as_deref(), Some("gloss"));
+    let text = crate::cook::programs::ray_hit_form(sf);
+    // Its own namespace, the shader under its own lines, every parameter from its place, a texture at the cone's level.
+    assert!(text.starts_with("#ifndef RT_MOD_SURFACE_NS"), "{text}");
+    assert!(text.contains("namespace RT_MOD_SURFACE_NS {"));
+    assert!(text.contains("#line 1 \"assets/shaders/Stripes.hlsl\""));
+    assert!(text.contains("    speed = rt_mod_place(0u).x;") && text.contains("    tint = rt_mod_place(1u);") && text.contains("    glow = rt_mod_place(2u).x;"), "{text}");
+    let slot = sf.textures[0].1;
+    assert!(text.contains(&format!("float4 paint(float2 uv) {{ return rt_mod_map({slot}u, uv, rt_mod_lod_); }}")), "{text}");
+    // What the shader reads, from the hit; no uv1 (the mesh has none); the ends a hit lacks are defined, then undone.
+    let surface_in = &text[text.find("struct SurfaceIn").unwrap()..];
+    let surface_in = &surface_in[..surface_in.find("};").unwrap()];
+    assert!(surface_in.contains("float3 normal;") && surface_in.contains("float3 view;") && !surface_in.contains("world_position"));
+    assert!(text.contains("    si.uv0 = h.uv;") && !text.contains("si.uv1 ="));
+    assert!(text.contains("#define discard rt_mod_cut_ = true") && text.contains("#undef discard"));
+    assert!(text.find("#define fwidth").unwrap() < text.find("#line 1 \"assets").unwrap());
+    assert!(text.contains("    surface(si, s);") && text.contains("o.alpha = rt_mod_cut_ ? 0.0 : saturate(s.alpha);"));
+    assert!(text.trim_end().ends_with("}\n}") || text.ends_with("}\n}\n"));
+    // `<model>.rayhit` beside the model: one row, the material and its text.
+    let (_, files, _) = crate::cook::gltf::to_files_for(&bytes, Some(&folder), "Cube", None).unwrap();
+    let (name, table) = files.iter().find(|(n, _)| n.ends_with(".rayhit")).expect("Cube.rayhit");
+    assert_eq!(name, "Cube.rayhit");
+    let t = crate::cook::table::TableIr::from_ntbl(table).unwrap();
+    assert_eq!(t.rows.len(), 1);
+    // A parameter may not take a name the form uses.
+    let mut taken = stripes_json();
+    taken["params"][0]["name"] = serde_json::json!("rt_speed");
+    let (why, _) = refusal(read_json(&taken, STRIPES));
+    assert_eq!(why, "Cook.Shader.Json");
+}
+
+#[test]
+fn a_compilers_first_error_names_the_shaders_line() {
+    let said = "C:/t/surface.ps.hlsl:40:5: warning: x\nassets/shaders/Stripes.hlsl:3:22: error: use of undeclared identifier 'spee'\n";
+    assert_eq!(first_error(said, "assets/shaders/Stripes.hlsl"), (Some(3), "use of undeclared identifier 'spee'".to_string()));
+    let generated = "program:12:1: error: redefinition of 'm'\n";
+    assert_eq!(first_error(generated, "assets/shaders/Stripes.hlsl"), (None, "redefinition of 'm'".to_string()));
+    // glslang's: the file it compiled first, then its errors; a header's path with a drive's colon.
+    let vulkan = "C:/t/surface.vk.hlsl\nERROR: assets/shaders/Stripes.hlsl:1: 'template' : Reserved word. \nERROR: 1 compilation errors.  No code generated.\n";
+    assert_eq!(first_error(vulkan, "assets/shaders/Stripes.hlsl"), (Some(1), "'template' : Reserved word.".to_string()));
+    let header = "C:/t/surface.vk.hlsl\nERROR: D:/t/program.hlsli:81: '#error' : NEBULA_BOUND_TABLES needs NEBULA_TABLE_SLOTS\n";
+    assert_eq!(
+        first_error(header, "assets/shaders/Stripes.hlsl"),
+        (None, "'#error' : NEBULA_BOUND_TABLES needs NEBULA_TABLE_SLOTS".to_string())
+    );
+    let linked = "C:/t/surface.vk.hlsl\nERROR: Linking fragment stage: Missing entry point\n";
+    assert_eq!(first_error(linked, "x"), (None, "ERROR: Linking fragment stage: Missing entry point".to_string()));
+}
+
+/// The stripes shader through glslang, the front end of the game's Vulkan and Metal renderers, in both table forms; an
+/// HLSL 2021 template dxc takes is refused for them at its line:
+/// NEBULA_GLSLANG=<glslang.exe> [NEBULA_DXC=<dxc.exe>] cargo test -p nebula-import --lib -- --ignored a_shader_compiles_for_vulkan
+#[test]
+#[ignore]
+fn a_shader_compiles_for_vulkan_and_metal_or_names_its_line() {
+    let Some(glslang) = std::env::var_os("NEBULA_GLSLANG").map(std::path::PathBuf::from) else { return };
+    let dxc = std::env::var_os("NEBULA_DXC").map(std::path::PathBuf::from);
+    let cook = |code: &str| {
+        let (_dir, folder) = shader_mod(&stripes_json(), code);
+        let bytes = serde_json::to_vec(&shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}))).unwrap();
+        let was = CHECK_COMPILER.lock().unwrap().replace(dxc.clone());
+        let was_glslang = CHECK_GLSLANG.lock().unwrap().replace(Some(glslang.clone()));
+        let got = crate::cook::gltf::to_files_for(&bytes, Some(&folder), "Cube", None).map(|_| ());
+        *CHECK_COMPILER.lock().unwrap() = was;
+        *CHECK_GLSLANG.lock().unwrap() = was_glslang;
+        got
+    };
+    cook(STRIPES).unwrap();
+    let broken = STRIPES.replace("i.time * speed", "i.time * sped");
+    let (why, args) = refusal(cook(&broken));
+    assert_eq!(why, "Cook.Shader.Compile", "{args:?}");
+    assert!(args.contains(&("line", "3".to_string())) && args.contains(&("file", "assets/shaders/Stripes.hlsl".to_string())), "{args:?}");
+    // A template: dxc's HLSL 2021 takes it, glslang's front end does not, so the refusal names Vulkan and Metal.
+    let template = STRIPES
+        .replace("// Animated stripes (plan 3.4's test shader).", "template<typename T> T twice(T x) { return x + x; }")
+        .replace("s.roughness = 0.3;", "s.roughness = twice(0.15);");
+    let (why, args) = refusal(cook(&template));
+    assert_eq!(why, "Cook.Shader.Compile", "{args:?}");
+    assert!(args.contains(&("target", VULKAN.to_string())) && args.contains(&("line", "1".to_string())), "{args:?}");
+}
+
+/// The stripes shader compiled by dxc, and one with a mistake on its third line refused at that line:
+/// NEBULA_DXC=<dxc.exe> cargo test -p nebula-import --lib -- --ignored a_shader_compiles_or_names_its_line
+#[test]
+#[ignore]
+fn a_shader_compiles_or_names_its_line() {
+    let Some(dxc) = std::env::var_os("NEBULA_DXC").map(std::path::PathBuf::from) else { return };
+    // The test takes what the cook notes (refuse::reading).
+    let _reading = crate::cook::refuse::reading();
+    let cook = |code: &str| {
+        let (_dir, folder) = shader_mod(&stripes_json(), code);
+        let bytes = serde_json::to_vec(&shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}))).unwrap();
+        let was = CHECK_COMPILER.lock().unwrap().replace(Some(dxc.clone()));
+        let got = crate::cook::gltf::to_files_for(&bytes, Some(&folder), "Cube", None).map(|_| ());
+        *CHECK_COMPILER.lock().unwrap() = was;
+        got
+    };
+    cook(STRIPES).unwrap();
+    let broken = STRIPES.replace("i.time * speed", "i.time * sped");
+    let (why, args) = refusal(cook(&broken));
+    assert_eq!(why, "Cook.Shader.Compile", "{args:?}");
+    assert!(args.contains(&("line", "3".to_string())) && args.contains(&("file", "assets/shaders/Stripes.hlsl".to_string())), "{args:?}");
+    // An input it did not declare in `reads` is not there.
+    let undeclared = STRIPES.replace("s.roughness = 0.3;", "s.roughness = i.normal.z;");
+    let (why, args) = refusal(cook(&undeclared));
+    assert_eq!(why, "Cook.Shader.Compile", "{args:?}");
+    assert!(args.contains(&("line", "5".to_string())), "{args:?}");
+    // The ray-hit form compiles too: a pixel's discard and derivatives are the form's own words there.
+    let pixel_only = STRIPES.replace("s.roughness = 0.3;", "if (fwidth(i.uv0.x) > 1.0) discard; s.roughness = ddx(i.uv0.y);");
+    cook(&pixel_only).unwrap();
+}
+
+/// program_table's flags for a mod's texts (flags.tsv): the stripes cube's plain pixel program is lit and sums the key
+/// light through pbr_add_light; a vertex text reads the world by its world_ values; a written program by NATIVE_LIT and
+/// NATIVE_COORDS.
+#[test]
+fn a_mod_programs_flags_are_the_tables() {
+    use crate::cook::programs::{finish_text, forms_of, generate, text_coords, text_flags, Registers, FLAG_LIT, FLAG_READS_WORLD, FLAG_SUMS_KEY};
+    let (_dir, folder) = shader_mod(&stripes_json(), STRIPES);
+    let doc = shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}));
+    let (ir, _, _) = crate::cook::gltf::to_ir_for(&serde_json::to_vec(&doc).unwrap(), Some(&folder), None).unwrap();
+    let m = &ir.materials[0];
+    let form = forms_of("Cube", m, 0).unwrap()[0];
+    let mut t = generate(m, form, false, &Registers::of(m)).unwrap();
+    finish_text(&m.name, form, &mut t);
+    assert!(t.pixel.contains("pbr_add_light(i.lit_light, 0u"));
+    assert_eq!(text_flags(true, &t.pixel), FLAG_LIT | FLAG_SUMS_KEY);
+    assert_eq!(text_flags(false, &t.vertex) & !FLAG_READS_WORLD, 0);
+    assert_eq!(text_flags(false, "float3 p = world_pos;"), FLAG_READS_WORLD);
+    assert_eq!(text_flags(false, "float3 p = pos;"), 0);
+    assert_eq!(text_flags(true, "#include \"program_lit.hlsli\"\n  # define NATIVE_LIT 1\n"), FLAG_LIT | FLAG_SUMS_KEY);
+    assert_eq!(text_flags(true, "#include \"program_lit.hlsli\"\nx = light_term(i.lit_light, 0u, 1u);\nTRACED_UNKEYED;\n"), FLAG_LIT);
+    assert_eq!(text_coords("#define NATIVE_COORDS 2\n"), 2);
+    assert_eq!(text_coords(&t.vertex), 0);
+}
+
+/// Every form's texts of the stripes cube, for a compile on both back ends:
+/// NEBULA_SURFACE_DUMP=<folder> cargo test -p nebula-import --lib -- --ignored dump_the_surface_shader
+#[test]
+#[ignore]
+fn dump_the_surface_shader() {
+    use crate::cook::programs::{finish_text, forms_of, generate, Registers};
+    let Ok(out) = std::env::var("NEBULA_SURFACE_DUMP") else { return };
+    let out = std::path::PathBuf::from(out);
+    std::fs::create_dir_all(&out).unwrap();
+    let mut all_reads = stripes_json();
+    all_reads["reads"] = serde_json::json!(["normal", "world_position", "view", "time"]);
+    let turning = format!("{STRIPES}\n// reads the rest\nvoid unused_reads(SurfaceIn i) {{ float3 x = i.normal + i.world_position + i.view; }}\n");
+    for (name, json, code) in [("stripes", stripes_json(), STRIPES.to_string()), ("all", all_reads, turning)] {
+        let (_dir, folder) = shader_mod(&json, &code);
+        let doc = shader_document(serde_json::json!({"shader": "shaders/Stripes", "textures": {"paint": 0}}));
+        let (ir, _, _) = crate::cook::gltf::to_ir_for(&serde_json::to_vec(&doc).unwrap(), Some(&folder), None).unwrap();
+        let m = &ir.materials[0];
+        for (k, form) in forms_of("Cube", m, 0).unwrap().into_iter().enumerate() {
+            for skinned in [false, true] {
+                let mut t = generate(m, form, skinned, &Registers::of(m)).unwrap();
+                finish_text(&m.name, form, &mut t);
+                let stem = format!("{name}-{k}{}", if skinned { "s" } else { "" });
+                std::fs::write(out.join(format!("{stem}.vs.hlsl")), &t.vertex).unwrap();
+                std::fs::write(out.join(format!("{stem}.ps.hlsl")), &t.pixel).unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn a_packed_mod_finds_its_shader_by_its_luma_json() {
+    // A .luma read in place (beside::packed) is a mod folder only with its luma.json among the entries: the shader is
+    // looked up from the mod's folder, which is the one holding luma.json.
+    let (dir, _) = shader_mod(&stripes_json(), STRIPES);
+    let on_disk = dir.path().join("stripes-mod");
+    let names = ["luma.json", "layers/base/assets/shaders/Stripes.shader.json", "layers/base/assets/shaders/Stripes.hlsl", "layers/base/assets/models/Ball.gltf"];
+    let empty = tempfile::tempdir().unwrap();
+    let models = empty.path().join("layers/base/assets/models");
+    for with_manifest in [true, false] {
+        let from = on_disk.clone();
+        let entries = names.iter().filter(|n| with_manifest || **n != "luma.json").map(|n| n.to_string());
+        let _packed = crate::cook::beside::packed(empty.path(), entries, move |name| std::fs::read(from.join(name)).ok());
+        let found = find(Some(&models), "Ball", "shaders/Stripes");
+        if with_manifest {
+            let (file, json, hlsl) = found.unwrap();
+            assert_eq!((file.as_str(), hlsl.as_slice()), ("assets/shaders/Stripes.hlsl", STRIPES.as_bytes()));
+            assert_eq!(json, stripes_json().to_string().into_bytes());
+        } else {
+            assert_eq!(refusal(found).0, "Cook.Shader.Missing");
+        }
+    }
+}

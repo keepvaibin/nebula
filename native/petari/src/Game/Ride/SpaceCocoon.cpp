@@ -27,62 +27,46 @@
 #include "Game/Render/GameTexture.hpp"
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeBindAim_f1, "exeBindAim.f1", 100.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_addVelocitySeparateHV_1, "receiveMsgPlayerAttack.addVelocitySeparateHV.1", 0.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sAimAnimInterpole, 10);
-    NEBULA_TUNABLE(f32, sAimDistanceToStretch, 300.0f);
-    NEBULA_TUNABLE(f32, sAimDistanceToWait, 200.0f);
-    NEBULA_TUNABLE(f32, sAccelRate, 0.02f);
-    NEBULA_TUNABLE(f32, sFrictionRate, 0.95f);
-    NEBULA_TUNABLE(f32, sDistanceToStop, 1.0f);
-    NEBULA_TUNABLE(f32, sSpeedMinToStop, 0.1f);
-    NEBULA_TUNABLE(f32, sPointerSpeedMin, 5.0f);
-    NEBULA_TUNABLE(f32, sPointerSpeedAccelRate, 5.0f);
-    NEBULA_TUNABLE(f32, sDistanceBindInvalid, 300.0f);
-    NEBULA_TUNABLE(s32, sTouchTimerMax, 20);
-    NEBULA_TUNABLE(s32, sStepFreeInvalidMin, 5);
-    NEBULA_TUNABLE(f32, sDistanceMax, 500.0f);
-    NEBULA_TUNABLE(f32, sFollowRate, 0.03f);
-    NEBULA_TUNABLE(f32, sAimDistanceMin, 100.0f);
-    NEBULA_TUNABLE(f32, sAimRumbleDistanceWeak, 100.0f);
-    NEBULA_TUNABLE(f32, sAimRumbleDistanceStrong, 500.0f);
-    NEBULA_TUNABLE(f32, sBindAttackSpeed, 60.0f);
-    NEBULA_TUNABLE(f32, sBindAttackFrictionRate, 0.98f);
-    NEBULA_TUNABLE(s32, sDefaultStepBindAttack, 60);
-    NEBULA_TUNABLE(s32, sStepFriction, 90);
-    NEBULA_TUNABLE(s32, sBindAttackInvalidTime, 20);
-    NEBULA_TUNABLE(s32, sStepToStopScene, 1);
-    NEBULA_TUNABLE(s32, sStepStopScene, 8);
-    NEBULA_TUNABLE(f32, sDistanceBindCancel, 3000.0f);
-    NEBULA_TUNABLE(f32, sCancelJumpSpeedXZ, 0.0f);
-    NEBULA_TUNABLE(f32, sCancelJumpSpeedY, 0.0f);
-    NEBULA_TUNABLE(s32, sWidthBottomPointNum, 3);
-    NEBULA_TUNABLE(f32, sWidthTop, 2.0f);
-    NEBULA_TUNABLE(f32, sWidthBottom, 1.0f);
-    NEBULA_TUNABLE(f32, sStarPieceAccel, 5.0f);
-    NEBULA_TUNABLE(f32, sDefaultHeight, 100.0f);
-    NEBULA_TUNABLE(f32, sPointInterval, 10.0f);
-    NEBULA_TUNABLE(f32, sDrawScaleX, 25.0f);
-    NEBULA_TUNABLE(f32, sDrawScaleZ0, 10.0f);
-    NEBULA_TUNABLE(f32, sDrawScaleZ1, 25.0f);
-    NEBULA_TUNABLE(f32, sTexDiffU, -0.5f);
+    const s32 sAimAnimInterpole = 10;
+    const f32 sAimDistanceToStretch = 300.0f;
+    const f32 sAimDistanceToWait = 200.0f;
+    const f32 sAccelRate = 0.02f;
+    const f32 sFrictionRate = 0.95f;
+    const f32 sDistanceToStop = 1.0f;
+    const f32 sSpeedMinToStop = 0.1f;
+    const f32 sPointerSpeedMin = 5.0f;
+    const f32 sPointerSpeedAccelRate = 5.0f;
+    const f32 sDistanceBindInvalid = 300.0f;
+    const s32 sTouchTimerMax = 20;
+    const s32 sStepFreeInvalidMin = 5;
+    const f32 sDistanceMax = 500.0f;
+    const f32 sFollowRate = 0.03f;
+    const f32 sAimDistanceMin = 100.0f;
+    const f32 sAimRumbleDistanceWeak = 100.0f;
+    const f32 sAimRumbleDistanceStrong = 500.0f;
+    const f32 sBindAttackSpeed = 60.0f;
+    const f32 sBindAttackFrictionRate = 0.98f;
+    const s32 sDefaultStepBindAttack = 60;
+    const s32 sStepFriction = 90;
+    const s32 sBindAttackInvalidTime = 20;
+    const s32 sStepToStopScene = 1;
+    const s32 sStepStopScene = 8;
+    const f32 sDistanceBindCancel = 3000.0f;
+    const f32 sCancelJumpSpeedXZ = 0.0f;
+    const f32 sCancelJumpSpeedY = 0.0f;
+    const s32 sWidthBottomPointNum = 3;
+    const f32 sWidthTop = 2.0f;
+    const f32 sWidthBottom = 1.0f;
+    const f32 sStarPieceAccel = 5.0f;
+    const f32 sDefaultHeight = 100.0f;
+    const f32 sPointInterval = 10.0f;
+    const f32 sDrawScaleX = 25.0f;
+    const f32 sDrawScaleZ0 = 10.0f;
+    const f32 sDrawScaleZ1 = 25.0f;
+    const f32 sTexDiffU = -0.5f;
 
 };  // namespace
 
@@ -104,7 +88,7 @@ namespace NrvSpaceCocoon {
 };  // namespace NrvSpaceCocoon
 
 namespace {
-    NEBULA_TUNABLE(f32, sTexStartU, 0.0f);
+    const f32 sTexStartU = 0.0f;
     static Color8 sColor(0xC8, 0xC8, 0xD7, 0xFF);
 };  // namespace
 
@@ -139,10 +123,10 @@ void SpaceCocoon::init(const TableIter& rIter) {
     mPointerPos.set(mNeutralPos);
 
     initHitSensor(3);
-    MR::addHitSensorTransferableBinder(this, "Bind", 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
-    MR::addHitSensorMapObj(this, "Push", 8, cNum_init_f3, Vec3f(0.0f, -cNum_init_f4, 0.0f));
-    MR::addHitSensor(this, "Attack", ATYPE_SPRING_ATTACKER, 8, cNum_init_f5, Vec3f(0.0f, 0.0f, 0.0f));
-    initBinder(cNum_init_f6, cNum_init_f7, 8);
+    MR::addHitSensorTransferableBinder(this, "Bind", 8, 200.0f, Vec3f(0.0f, 100.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "Push", 8, 50.0f, Vec3f(0.0f, -50.0f, 0.0f));
+    MR::addHitSensor(this, "Attack", ATYPE_SPRING_ATTACKER, 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    initBinder(50.0f, 50.0f, 8);
     MR::offBind(this);
 
     initSound(6, false);
@@ -183,11 +167,11 @@ void SpaceCocoon::init(const TableIter& rIter) {
     mCocoonModel->initWithoutIter();
 
     updateDrawPoints();
-    MR::initStarPointerTarget(this, cNum_init_f8, Vec3f(0.0f, cNum_init_f9, 0.0f));
+    MR::initStarPointerTarget(this, 300.0f, Vec3f(0.0f, 50.0f, 0.0f));
 
     MR::calcGravity(this);
 
-    MR::initShadowVolumeSphere(this, cNum_init_f10);
+    MR::initShadowVolumeSphere(this, 100.0f);
     MR::setClippingFar200m(this);
 
     mCameraTargetMtx = new CameraTargetMtx("カメラターゲットダミー");
@@ -319,7 +303,7 @@ void SpaceCocoon::exeBindAim() {
 
     f32 dist = mPosition.distance(mNeutralPos);
     if (dist >= ::sAimDistanceMin) {
-        MR::startLevelSound(this, "SE_OJ_LV_SPACE_COCOON_DRAG", ((dist - ::sAimDistanceMin) / (::sDistanceMax - ::sAimDistanceMin)) * cNum_exeBindAim_f1);
+        MR::startLevelSound(this, "SE_OJ_LV_SPACE_COCOON_DRAG", ((dist - ::sAimDistanceMin) / (::sDistanceMax - ::sAimDistanceMin)) * 100.0f);
     }
 
     if (!tryRelease()) {
@@ -412,7 +396,7 @@ bool SpaceCocoon::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor*
     }
 
     if (isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvFree)) || isNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvFreeInvalid))) {
-        MR::addVelocitySeparateHV(this, pSender, pReceiver, ::sStarPieceAccel, cNum_receiveMsgPlayerAttack_addVelocitySeparateHV_1);
+        MR::addVelocitySeparateHV(this, pSender, pReceiver, ::sStarPieceAccel, 0.0f);
         mSpringVel.add(mVelocity);
         MR::zeroVelocity(this);
     }

@@ -12,6 +12,8 @@
 #include "galaxy/render/vk/renderer_vk.h"
 #elif defined(NEBULA_GPU_METAL)
 #include "galaxy/render/mtl/renderer_mtl.h"
+#elif defined(NEBULA_GPU_D3D11)
+#include "galaxy/render/d3d11/renderer_d3d11.h"
 #else
 #include "galaxy/render/renderer_d3d12.h"
 #endif
@@ -24,6 +26,7 @@
 #include "galaxy/frame_telemetry.h"
 #include "render/core/draw_record.h"
 #include "render/core/frame_core.h"
+#include "render/core/rt_dev.h"
 #include "render/core/pipelines.h"
 #include "render/core/world_lights.h"
 #include "render/rt/rt_geometry.h"
@@ -67,6 +70,10 @@ public:
         bool black,
         bool present_swap_chain = true);
     void wait_for_render_idle();
+    // At a host's exit, which ends the process without the renderer's shutdown: every picture handed to an extension
+    // (present_snapshot_path) taken from the GPU and written, on the render thread. False when it did not answer
+    // within `limit` (stopped, or its device gone).
+    bool finish_pictures(std::chrono::milliseconds limit);
     void set_frame_end_presents(bool enabled) noexcept {
         frame_end_presents_.store(enabled, std::memory_order_relaxed);
     }
@@ -125,6 +132,9 @@ public:
         return renderer_.gpu_pass_times(out, capacity);
     }
     [[nodiscard]] std::uint64_t pictures_made() const noexcept;
+    [[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
+        return renderer_.video_memory(usage, budget);
+    }
     [[nodiscard]] DisplayPresentStats display_present_stats() const noexcept;
 
 private:
@@ -252,7 +262,7 @@ private:
     void walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first);
     std::vector<TextureHandle> walk_handles_;
     std::vector<std::uint32_t> walk_pairs_;
-#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL)
+#if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
     // Vulkan without descriptor indexing: the table's descriptor sets, as many maps as a bound table holds.
     void walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::Table& samplers);
     std::vector<SamplerKey> walk_keys_;
@@ -266,6 +276,10 @@ private:
     void walk_target_begin(const NebulaFramePass& pass);
     void walk_target_end(std::uint32_t channels);
     void walk_show();
+    // draw.post (docs/modding/reference/services/draw.md): a mod's post program full screen into a new picture, the frame from there.
+    void walk_post(const NebulaFrameList& list, const NebulaFramePass& pass);
+    // draw.native (docs/modding/reference/services/draw.md): a mod's own GPU commands at a draw point, on this thread.
+    void walk_native(const NebulaFrameList& list, const NebulaFramePass& pass);
     [[nodiscard]] bool generated_written(std::uint32_t texture) const noexcept;
     void note_generated_written(std::uint32_t texture);
 
@@ -296,14 +310,17 @@ private:
     rt::Geometry rt_geometry_{rt_backend_};
     std::uint64_t rt_log_at_ = 0u;
     bool rt_building_ = false;  // meshes wait for their structures
-    double rt_build_rate_ = 0.0;      // triangles a GPU millisecond of the timed builds (5.3 G-3; 0: none timed yet)
+    double rt_build_rate_ = 0.0;      // triangles a GPU millisecond of the timed builds (0: none timed yet)
     std::uint64_t rt_budget_ = 0u;    // this frame's build budget, in triangles
     void rt_start();
     void rt_stop() noexcept;
     // The setting changed while the game runs: the tracer starts or stops at the start of a walk.
     void rt_follow_setting(const RenderConfig& render);
     int rt_setting_ = -1;  // what the tracer last followed (-1: the device's start)
+    std::uint32_t rt_image_failures_ = 0u;  // walks running whose light images could not be made
+    bool rt_gave_up_ = false;               // stopped for want of memory, until the setting is turned on again
     std::uint32_t rt_toggle_walks_ = 0u;
+    std::uint32_t rt_levels_waits_ = 0u;  // walks the tracer's start has waited for the textures' generated levels
     void rt_want(std::uint32_t id, const core::GpuMesh& mesh);
     void rt_want_form(std::uint32_t id, const core::GpuMesh& mesh, bool refined);
     void rt_frame(const NebulaFrameList& list);
@@ -321,7 +338,23 @@ private:
         }
     };
     std::unordered_map<RtPlace, std::uint32_t, RtPlaceHash> rt_seen_;  // a place's instance in this frame's scene
+    // The alpha-tested meshes that stand still and asked this frame for an opacity micromap (each mesh once),
+    // made after the frame's tables by a pass over the item that asked (rt_micromaps).
+    struct RtMicromapWant {
+        std::uint64_t key = 0u;
+        std::uint32_t item = 0u, tag = 0u, triangles = 0u;
+    };
+    std::vector<RtMicromapWant> rt_micromap_wants_;
+    std::unordered_set<std::uint64_t> rt_micromap_asked_;
+    [[nodiscard]] rt::Micromapped rt_micromap_for(std::uint64_t key, const NebulaFrameItem& item, std::uint32_t i, std::uint32_t kind,
+                                                  std::uint32_t mask, std::uint32_t triangles);
+    void rt_micromaps();
     void rt_scene(const NebulaFramePass& begin);
+    // The walk's one traced scene: its begin pass (rt_pick_scene), NEBULA_NONE32 when none; a scene pass not picked
+    // draws untraced (rt_untraced).
+    [[nodiscard]] std::uint32_t rt_pick_scene() const;
+    void rt_untraced();
+    std::uint32_t rt_traced_begin_ = NEBULA_NONE32;
     // A draw whose vertices carry their own matrices: skinned by a pass into the tracer's vertex buffer each frame.
     struct RtSkin {
         std::uint64_t key = 0u;
@@ -347,12 +380,16 @@ private:
         std::uint32_t item = 0u;
         bool regenerated = false;      // a draw whose vertices are not last frame's moved
     };
-    RtRing rt_rings_[4];  // early, opaque, blended; and the game's code-drawn water (c10)
+    RtRing rt_rings_[4];  // early, opaque, blended; and the game's code-drawn water
     std::uint32_t rt_water_ring_item_ = ~0u;  // the water ring's first item this frame: its words are water's
     // The game's drop shadows, traced in place of their stencil volumes (the light pass, rt_light.hlsl). A drop is
     // traced when the scene holds its caster's draws; its volume's draws are then left out of the walk.
     struct RtCaster {
         float low[3], high[3];  // the eye-space box of a slot's instances
+        // The landing cue's: the body itself (a skinned mesh's joints and a skin, a one-matrix mesh's box), and
+        // whether the slot is the player's.
+        float body_low[3]{}, body_high[3]{};
+        bool body = false, player = false;
     };
     struct RtDrop {
         float base[3], radius;
@@ -368,17 +405,16 @@ private:
     std::vector<std::uint32_t> rt_tile_counts_;
     std::uint32_t rt_tiles_across_ = 0u, rt_tiles_down_ = 0u;
     void rt_caster(std::uint32_t slot, const float centre[3], float radius);
+    void rt_caster_body(std::uint32_t slot, const float low[3], const float high[3], float skin, bool player);
     void rt_drops_collect(const NebulaFramePass& begin);
     // The drops by the 16-pixel screen tiles their reach covers: rt_tiles_ (two words a tile: its first entry, how
     // many) and rt_tile_entries_ (a drop each).
     void rt_drop_bins(unsigned width, unsigned height, const float ray[4]);
     // The stage's shadow sun: one direction every sun shadow of the scene comes from, in the
     // scene camera's eye space; false: the scene has none. The stage's row (rt_stages.tsv `sun`) decides; by default
-    // the visible sun where the stage draws one, else its key light, none where the key is off (under 0.05). A key
-    // the game moves with the camera is latched in the world when the zone's light changes (and at a cut) and held,
-    // so shadows do not swing as the player looks around; a change of source or zone eases over 30 frames. It stands
-    // at least 30 degrees above the player's horizon (decision D2), the player's up easing where it turns faster than
-    // a degree a frame (a jump between planets).
+    // the visible sun where the stage draws one, else its key light, none where the key is off (under 0.05). One
+    // fixed sun a stage: taken in the world the first frame the stage shows one, lifted once to at least 30
+    // degrees above the player's horizon as he stands then, and held until the stage changes.
     [[nodiscard]] bool rt_sun(float eye_direction[3]);
     // The lit programs' key light from the sun's direction: light 0 of every light set an area lights (in the scene
     // camera's space) is placed far along it, in this walk's rows, before the scene's first draw. Lit faces and the
@@ -388,13 +424,12 @@ private:
     bool rt_sun_now_ = false;  // this walk's scene has its sun
     float rt_sun_world_[3]{};
     bool rt_sun_known_ = false;
-    float rt_sun_from_[3]{};            // an ease's start, in the world
-    float rt_sun_to_[3]{};              // the direction it eases to (a latched key's, held)
-    std::uint32_t rt_sun_ease_ = 0u;    // frames of the ease left
     std::uint64_t rt_sun_light_ = 0u;   // the key latched (its world light's id), 0: none
     std::uint8_t rt_sun_source_ = 0u;   // 0 none, 1 the visible sun, 2 the key, 3 the row's direction, 4 overhead
-    float rt_sun_up_[3]{};              // the player's up as the lift uses it, in the world
-    bool rt_sun_up_known_ = false;
+    bool rt_sun_fixed_known_ = false;        // one fixed sun a stage: rt_sun_world_ was taken for the stage below
+    bool rt_sun_fixed_final_ = false;        // taken with the player's up known (the one lift made), or from a row
+    std::uint32_t rt_sun_fixed_stage_ = 0u;  // the stage (its hash) it was taken for
+    std::uint8_t rt_sun_fixed_source_ = 0u;  // what it was taken from (rt_sun_source_'s numbers): 1 is never taken again
     [[nodiscard]] std::uint32_t rt_scene_image(rt::ImageFormat format, unsigned width, unsigned height);
     // The traced light. Before the scene's draws, its opaque surfaces go into depth and the item target (the prepass:
     // every scene item that core::prepass_draws takes, under the scene's camera); the frame's passes give each pixel
@@ -403,7 +438,14 @@ private:
     void rt_prepass(const NebulaFramePass& begin);
     void rt_light();
     void rt_light_end() noexcept;
+    void rt_dev_read();                         // rt_dev.h: the run's tunables, as ray tracing starts
+    // Signals S and A (rt_bounce.cpp): the view flag (64 the share, 128 the air's light) this walk of a hold draws
+    // with, 0 none; and at the scene's end the scene read back.
+    [[nodiscard]] std::uint32_t rt_program_signal_due() const noexcept;
+    void rt_program_signal();
     void rt_reactive();  // the reactive mask where the added light changed
+    bool rt_sunless_ = false;    // the relight on and no traced sun this walk (the camera's finish 2)
+    bool rt_physical_ = false;   // the relight (the setting's "physical"): rt_look_'s kForm and gains
     bool rt_lamps_own_ = false;  // local lights off: the programs light by their own lamp (view_flags bit 32)
     // The second layer, at the opaque phases' end: the scene's blended surfaces (water, glass, crystal) drawn into the
     // item target and the light pass run over them, into the picture the opaque draws are done reading.
@@ -449,9 +491,17 @@ private:
     // The passes of their own files (rt_pass_indirect.cpp, rt_pass_reflect.cpp, rt_pass_volume.cpp): whether each runs
     // this frame (its images are made while it does), and the pass.
     [[nodiscard]] bool rt_pass_indirect_on() const;
+    [[nodiscard]] bool rt_pass_near_on() const;  // the near field of the sky and bounce light (High)
+    bool rt_near_before_ = false;                // it ran the frame before: its history images hold it
     void rt_pass_indirect();
     [[nodiscard]] bool rt_pass_reflect_on() const;
     void rt_pass_reflect();
+    // What is seen through glass and water, bent (rt_pass_transmit.cpp): picture 6.
+    [[nodiscard]] bool rt_pass_transmit_on() const;
+    void rt_pass_transmit();
+    // T is wanted (its image kept): High, not under rt-added or rt-motion; under the reference its own.
+    [[nodiscard]] bool rt_transmit_wanted() const;
+    void rt_pass_transmit_reference();
     [[nodiscard]] bool rt_pass_volume_on() const;
     void rt_pass_volume();
     bool rt_light_on_ = false;                // this walk's scene has its traced light: its views carry it
@@ -463,18 +513,19 @@ private:
     // the one the programs read; Added: the local lights' (what glows near each pixel), the same way; Mirror: what
     // each pixel mirrors.
     enum class RtImage : std::uint8_t {
-        GuideA, GuideB, Normal, Motion, Material, Base, SunRaw, Light, LightStep, LightAverageA, LightAverageB, Lights,
+        GuideA, GuideB, Normal, Motion, Material, Base, SunRaw, Light, Lights,
         LightsAverageA, LightsAverageB, LightsMomentsA, LightsMomentsB, Added, ReservoirsA, ReservoirsB, Mirror,
         BlueNoise, SunTiles, SunAverageA, SunAverageB, SunDistanceA, SunDistanceB, SunBlur, SunOut, LightsSpec,
         BlendGuideA, BlendGuideB, BlendReservoirsA, BlendReservoirsB, BlendSunA, BlendSunB, BlendDistanceA, BlendDistanceB,
         BlendLightsA, BlendLightsB, BlendMomentsA, BlendMomentsB, Facing, BlendBody,
         IndirectRaw, IndirectAverageA, IndirectAverageB, IndirectMomentsA, IndirectMomentsB, Indirect, GiReservoirsA,
         GiReservoirsB, GiWeightsA, GiWeightsB, IndirectGuideA, IndirectGuideB, IndirectMotion, IndirectStep, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
-        VolumeB, Scatter, ReflectMoved, RrDiffuse, RrSpecular, RrNormalRoughness, RrHit, Count
+        VolumeB, Scatter, ReflectMoved, RrDiffuse, RrSpecular, RrNormalRoughness, RrHit, NearRaw, NearA, NearB, Count
     };
     // The passes an image is made for.
     static constexpr std::uint32_t kRtPassLight = 1u, kRtPassIndirect = 2u, kRtPassReflect = 4u, kRtPassVolume = 8u,
-                                   kRtPassTransmit = 16u, kRtPassBlend = 32u, kRtPassGuides = 64u;
+                                   kRtPassTransmit = 16u, kRtPassBlend = 32u, kRtPassGuides = 64u,
+                                   kRtPassNear = 128u;  // the near field (High)
     // The second layer's history images are made once a frame has had blended things to trace (rt_blended).
     std::uint32_t rt_light_wanted_ = 0u;
     bool rt_blend_seen_ = false;
@@ -504,6 +555,30 @@ private:
     // The stage's ambient (A) and key (K) colours the programs' painted composite takes (ViewRows::stage_a/k);
     // rt_stage_a_[3] is kShadowTint.
     float rt_stage_a_[4]{}, rt_stage_k_[4]{};
+    // The painted composite's look (program.hlsli traced_painted, view row `look`): kForm, the sun's height over the
+    // player's up (at least 0.5), kDebake, kAmbientLook. Set every walk from the style (rt_walk.cpp); the development
+    // tunables set them by name.
+    float rt_look_[4]{0.0f, 1.0f, 0.0f, 1.0f};
+    // rt_look_[1]'s sun height, eased: the value, the game frame it last stepped on, the stage it is for.
+    float rt_look_up_ = 1.0f;
+    std::uint32_t rt_look_up_frame_ = 0u;
+    std::uint32_t rt_look_up_stage_ = 0u;
+    bool rt_look_up_known_ = false;
+    // The share of a lit surface's light the frame's lamps give where the eye is (target from
+    // rt_emitters_finish), eased; kDebake's in a frame with no traced sun.
+    float rt_supplied_ = 0.0f, rt_supplied_target_ = 0.0f;
+    std::uint32_t rt_supplied_frame_ = 0u, rt_supplied_stage_ = 0u;
+    bool rt_supplied_known_ = false;
+    // The development tunables (rt_dev.h): the values a run gave, a bit each in rt_dev_set_.
+    float rt_dev_[kRtDevCount]{};
+    std::uint64_t rt_dev_set_ = 0u;
+    std::uint32_t rt_program_signal_ = 0u;  // this walk's scene shows a signal: view_flags 64 (S) or 128 (A)
+    std::uint32_t rt_stage_logged_ = 0u;    // the stage whose [rt-stage] line was written (rt-inputs)
+    [[nodiscard]] float rt_dev(RtDev which, float otherwise) const noexcept {
+        const unsigned i = static_cast<unsigned>(which);
+        return (rt_dev_set_ >> i & 1u) != 0u ? rt_dev_[i] : otherwise;
+    }
+    float rt_stage_air_ = 0.0f;  // the stage row's air (rt_stages.tsv), per unit; 0: none (rt_air_density)
     // What glows in the scene: a draw of a mesh whose material glows (nebula_model.h NebulaModelHit.glow, from the
     // cooker's table of glowing models and from surfaces added to what is behind them). One a block; the light pass
     // adds each one's light to the surfaces within its reach, less what stands between.
@@ -513,27 +588,42 @@ private:
         float centre[3], radius;  // in the scene camera's eye space; the source's own radius
         float colour[3], reach;   // collected: colour x candela; finished: the share of a surface's colour at the source. Where its light ends
         std::uint32_t slot, kind, reserved[2];  // kind: 0 a point light the game asked, 1 a glowing mesh, 2 a particle;
-                                                // reserved[1]: what it is from one frame to the next (rt_emitter_id)
+                                                // reserved[1]: what it is from one frame to the next (rt_emitter_id);
+                                                // a particle's reserved[0]: what it was the frame before
     };
     bool rt_emitters_finished_ = false;
     float rt_exposure_ = 150.0f;  // the stage's exposure the emitters were finished by (lux)
     void rt_emitters_finish(float exposure_lux);
     std::vector<RtEmitter> rt_emitters_;
+    // The particle lights' places in rt_emitters_, a min-heap by what each gives at the eye (candela over
+    // distance^2 + radius^2): past the frame's bound a new particle takes the weakest one's place, never the nearest's.
+    std::vector<std::uint32_t> rt_particle_heap_;
     // For the reservoirs: the frame before's emitters by what they are, where each is in this frame's list, and this
     // frame's list by what they are; the frame before's emitters' centres and reaches (4 floats each, as ids_before).
     std::vector<std::uint32_t> rt_emitter_ids_before_, rt_emitter_remap_;
     std::vector<float> rt_emitter_places_before_;
     std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_now_;
     std::unordered_map<std::uint32_t, std::uint32_t> rt_emitter_blocks_;
-    // A byte an item of this walk's list: 1 for a glowing mesh too large to be one light (over 6 m in two axes, L-3):
+    // The glowing meshes whose cooked shapes are in the list this frame (block << 32 | mesh).
+    std::unordered_map<std::uint64_t, std::uint32_t> rt_emitter_meshes_;
+    // A byte an item of this walk's list: 1 for a glowing mesh too large to be one light (over 6 m in two axes):
     // the item table flags it (word 1, kItemEmissiveArea) and the indirect pass lights by its emission.
     std::vector<std::uint8_t> rt_emissive_areas_;
+    // A byte an item: 1 for a glowing mesh that is a light this frame (rt_tables): draw flag 256, never
+    // duller than its own colour (program.hlsli traced_colour).
+    std::vector<std::uint8_t> rt_glow_bodies_;
     // --diagnostics rt-inputs: the lights' sources over a report's frames (kind << 32 | name hash: 1 a glowing mesh's
-    // material, 2 a particle light's effect), and how many lights each gave (c11, the emitter census a stop).
+    // material, 2 a particle light's effect), and how many lights each gave (the emitter census a stop).
     std::unordered_map<std::uint64_t, std::uint32_t> rt_emitter_sources_;
+    // Per material name hash, its cooked base and its base by the live colour, where they differ (rt-inputs).
+    std::unordered_map<std::uint32_t, std::array<float, 6>> rt_live_tints_;
     std::vector<std::uint32_t> rt_glow_tiles_, rt_glow_entries_, rt_glow_counts_;
     void rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& mesh, const float centre[3], float radius,
                     const float (*place)[4] = nullptr);
+    // A rigid glowing mesh's light by its cooked shapes; false: it has none usable, the box path
+    // lights it.
+    bool rt_emitter_shapes(const NebulaFrameItem& item, const core::GpuMesh& mesh, const float glow[4],
+                           const float (*place)[4]);
     // A particle draw as a light: every effect that is added to the picture and is a light by its kind
     // (render/rt/rt_effect_lights.inc, from the census of the game's effects), with the particles' own place, size and
     // colour this frame. `state`: its pipeline's; `camera`: the scene's.
@@ -547,7 +637,7 @@ private:
     std::uint64_t rt_light_walk_before_ = 0u;
     std::int64_t rt_light_ticks_before_ = 0;  // when the light pass ran last (qpc)
     float rt_frame_rate_ = 60.0f;             // the rate it runs at, smoothed: the filters' histories follow it
-    // The measure (rt_measure): settled frames in a row, the sun pass's times taken, done (measured, or not to be).
+    // Plan 19.2 (rt_measure): settled frames in a row, the sun pass's times taken, done (measured, or not to be).
     static constexpr unsigned kRtMeasureFrames = 31u;
     unsigned rt_measure_settled_ = 0u;
     unsigned rt_measure_count_ = 0u;
@@ -556,10 +646,13 @@ private:
     bool rt_light_history_ = false;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_light_retired_;  // frame, image
     std::vector<std::uint32_t> rt_item_words_;
+    std::vector<std::uint32_t> rt_item_coords_;  // water's first map's coordinate rows, uploaded after the items
     std::vector<float> rt_set_words_;
-    std::uint64_t rt_light_sum_[9]{};  // [6] cutout tests, [7] cutouts the pass could not read, [8] mirror rays
+    std::uint64_t rt_light_sum_[11]{};  // [6] cutout tests, [7] cutouts the pass could not read, [8] mirror rays,
+                                        // [9] refracted pixels, [10] added light over the guard
     std::uint32_t rt_light_arenas_ = 0u, rt_light_unplaced_ = 0u;  // this walk: mesh arenas bound, items left without
     std::uint32_t rt_light_skinned_ = 0u;  // this walk: mesh items whose vertices name their own matrices (no mesh words)
+    std::uint32_t rt_clip_dropped_ = 0u;   // the most clip volumes a frame left out since the last report
     std::uint32_t rt_light_frames_ = 0u;
     std::uint32_t rt_light_number_ = 0u;      // the noise's turn: counts the light passes
     // The tracer's views (--diagnostics rt-view, rt-check): the scene drawn by rays over the game's opaque scene.
@@ -572,7 +665,10 @@ private:
     // and the signals as pictures (rt-signals).
     struct RtShadeFrame {
         float ambient[4], key[4], fill[4], sky[4], gains[4], axis[3][4], look[4], authored[4];
-        std::uint32_t grid[4], spare[5][4];
+        std::uint32_t grid[4];
+        float dome[4];  // rgb 1 / the dome's mean colour, w 1 when known (rt_shade.hlsli rt_sky_ratio)
+        float form[4];  // the painted composite's look, rt_look_ (rt_shade.hlsli rt_share_terms)
+        std::uint32_t spare[3][4];
     };
     void rt_shade_frame(RtShadeFrame& frame) const;
     void rt_world_grid();
@@ -606,7 +702,9 @@ private:
     float rt_grid_axis_[3][4]{};
     unsigned rt_bounce_width_ = 0u, rt_bounce_height_ = 0u;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_bounce_retired_;  // frame, image
-    float rt_dome_mean_ = 0.0f;  // the sky dome's mean luminance as the bounce rays see it (11.1); 0 not yet known
+    float rt_dome_mean_ = 0.0f;  // the sky dome's mean luminance as the bounce rays see it; 0 not yet known
+    float rt_hit_mean_ = 0.0f;   // the mean ratio of the surfaces they meet (rt_count_hit); 0 not yet known
+    float rt_dome_colour_[3] = {0.0f, 0.0f, 0.0f};  // the dome's mean colour as they see it; 0 not yet known
     // The reference's sums, V D I R this walk's and the walk before's by turns (rt_ref_now_: this walk's first), and
     // what starts them again.
     std::uint32_t rt_ref_images_[8] = {rt::kNoImage, rt::kNoImage, rt::kNoImage, rt::kNoImage,
@@ -617,6 +715,10 @@ private:
     const NebulaFrameList* rt_ref_list_ = nullptr;
     Affine34 rt_ref_camera_{};
     float rt_ref_time_ = 0.0f;
+    bool rt_ref_restart_ = false;  // this walk's reference started its sums again (its T follows)
+    // The reference's T sums by turns (rt_pass_transmit_reference), and the size they were made at.
+    std::uint32_t rt_ref_t_images_[2] = {rt::kNoImage, rt::kNoImage};
+    unsigned rt_ref_t_width_ = 0u, rt_ref_t_height_ = 0u;
     // A kept picture held (rt_hold): the walks left (0: none), of how many, and its folder and number.
     unsigned rt_hold_left_ = 0u, rt_hold_walks_ = 0u;
     std::string rt_hold_folder_, rt_hold_number_;
@@ -627,8 +729,15 @@ private:
     [[nodiscard]] bool rt_volume_reads(const NebulaFrameItem& item, std::uint32_t state) const;
     [[nodiscard]] float rt_air_density() const;
     bool rt_volume_drawn_ = false, rt_scatter_drawn_ = false;
+    bool rt_indirect_shown_ = false;     // the indirect ratio is picture 7 this frame
+    std::uint32_t rt_indirect_slot_ = 0u;
     // The reflections' change was written this frame (rt_pass_reflect.cpp): the reactive mask reads it (rt_reactive).
     bool rt_reflect_moved_ = false;
+    bool rt_transmit_drawn_ = false;        // the transmit pass wrote T this walk (ViewRows::transmit)
+    std::uint32_t rt_transmit_slot_ = 0u;   // T's place among the textures (picture 6)
+    // The guide blended draws compare with (15.2; ViewRows::blend_guide): 0 none this walk, 1 the second layer's
+    // (picture 9), 2 the opaque layer's (picture 8).
+    std::uint32_t rt_blend_guide_mode_ = 0u, rt_blend_guide_slot_ = 0u, rt_opaque_guide_slot_ = 0u;
     // An outside denoiser (rt_denoiser.h; rt_pass_reflect.cpp): the signals go to it raw this frame (g_more.z bit
     // 2048); its guides were written this frame.
     bool rt_raw_ = false, rt_guides_drawn_ = false;
@@ -649,11 +758,17 @@ private:
 
     WalkState walk_{};
     std::uint64_t walk_serial_ = 0u;
+    // Counts the frame captures and takes that published a target's picture in another image (a new view): a table naming
+    // a target, written earlier in the walk, names it again after one.
+    std::uint64_t pictures_moved_ = 0u;
     std::vector<Affine34> walk_cameras_;
     std::vector<std::uint32_t> walk_block_rows_, walk_block_world_, walk_previous_;
     std::vector<std::uint32_t> walk_light_rows_;  // per light set: its header row in this walk's rows
     std::vector<float> walk_rows_, walk_joints_, walk_lerped_;
+    std::vector<float> walk_skin_;            // a weighted block's joint products (core::ComposeInput::skin)
+    std::vector<std::uint8_t> walk_skin_made_;
     std::vector<std::array<float, 6>> walk_view_terms_, walk_view_previous_;
+    std::vector<std::array<float, 16>> walk_view_planes_;  // item_culled's four side planes a view: normal, length
     std::vector<WalkView> walk_views_;
     std::vector<core::StaticSlot> walk_constants_;
     std::vector<std::uint8_t> walk_constants_known_;
@@ -759,6 +874,29 @@ private:
     // ticks: the generated frames' share of it tells their misses from the game's own.
     std::atomic<std::uint64_t> game_wait_qpc_{0};
     std::uint64_t interp_cadence_wait_seen_ = 0;
+    // The first start's resolution calibration (render_core.cpp calibrate_first_start): the GPU's time at two internal
+    // heights in the first 3D scene, fitted and turned into the height kept in config.ini.
+    struct FirstStartCalibration {
+        unsigned stage = 0u;          // 0 off, 1 waiting for a scene with the start's pipelines made, 2 and 3 timing heights[0], [1]
+        unsigned heights[2]{};
+        unsigned start = 0u;          // the table's height, kept when nothing can be measured or the CPU is the limit
+        unsigned frames = 0u;         // frames of the current height
+        unsigned width = 0u, lines = 0u;
+        bool timing_was_on = false;
+        std::vector<double> pixels, ms;
+        double cpu_over = 0.0;        // samples with the walk near the frame time or the game late on its own
+        std::int64_t list_qpc = 0;
+        std::uint64_t list_wait = 0u;
+        // The chosen settings as the calibration last saw them. It owns internal_height alone: a change there or to the
+        // upscaler ends it with nothing set; a change to any other field is taken in and the heights timed again.
+        RenderConfig armed{};
+        bool changed = false;         // a field changed since arming: no PERFORMANCE preset at the end, only the height
+        bool first_height = true;     // heights[0] is the height set (a restart sets it again before the timing)
+        unsigned restarts = 0u;       // timings started again for a changed setting
+    };
+    FirstStartCalibration calibration_;
+    void calibrate_first_start(bool scene, double walk_ms);
+    void end_first_start_calibration(unsigned height, const char* why, bool performance = false);
     std::uint64_t interp_cadence_wait_qpc_ = 0;   // in the window
     // The render thread's time rendering generated frames (advance_interp_sequence), in QPC ticks.
     std::uint64_t interp_generated_qpc_ = 0;
@@ -795,6 +933,18 @@ private:
     [[nodiscard]] double interp_slot_t() const;
     static void interp_sleep_us(std::int64_t us);
     float scene_jitter_px_[2]{};
+    // The walked list's scene camera, kept at its scene's end for the passes after it (draw.post's depth, draw.native's
+    // matrices): the view (3x4 rows, the game's), its projection terms and viewport; `post_scene_known_` false before a
+    // scene in this list.
+    bool post_scene_known_ = false;
+    RtView post_scene_view_{};
+    std::array<float, 12> post_scene_camera_{};
+    bool post_scene_ortho_ = false;
+    float post_scene_target_[2]{};  // the scene target's pixels the viewport was placed in
+    // draw.native's `picture`: which picture of the list this walk draws (0 the first, interpolated ones after).
+    const NebulaFrameList* walk_picture_list_ = nullptr;
+    std::uint32_t walk_picture_frame_ = 0u;
+    std::uint32_t walk_picture_ = 0u;
     bool producer_movie_content_{},render_movie_content_{};
     MovieFrameMark producer_movie_frame_{}, render_movie_frame_{};
     // The game's movies: the cooked movie's decoder (a worker), HD replacements (render thread), the folders last applied.
@@ -875,6 +1025,11 @@ private:
     ao::ObjectCollector ao_objects_;
     bool collect_ao_objects_ = false;
     bool stop_render_thread_ = false;
+    // finish_pictures: asked (the render thread's next turn writes them), answered under queue_mutex_.
+    std::atomic<bool> pictures_finish_asked_{false};
+    void finish_pictures_here();  // the render thread's turn: the renderer's finish_pictures, then the answer
+    bool pictures_finished_ = false;
+    std::condition_variable pictures_finished_cv_;
     std::exception_ptr render_thread_error_;
     MonotonicCadenceAccumulator picture_made_cadence_{};
     MonotonicCadenceAccumulator new_picture_shown_cadence_{};
@@ -895,9 +1050,15 @@ private:
     // RenderConfig::enhanced_lighting, sampled at each frame start; the last draw's eligibility and
     // material word (enhanced_lighting.h), kept until its keys or eligibility change.
     bool enhanced_lighting_ = false;
+    // scene_wide (render_config.h) for this frame, sampled at each frame start: the scene's target and pipelines.
+    bool wide_scene_ = false;
     // Texture-pack settings last applied (render config and the mods' folders, polled at frame begin).
     TexturePackSettings texture_pack_settings_{};
     bool texture_pack_settings_applied_ = false;
+    // The most a texture pack's replacements may hold on this device (0: no limit known): a share of the memory budget its
+    // back end reports, taken at start and after a device change (cap_texture_packs). texture_pack_budget_mb applies below it.
+    std::uint64_t texture_pack_cap_bytes_ = 0u;
+    void cap_texture_packs();
     std::uint64_t texture_pack_mods_generation_ = ~0ull;
     std::vector<std::filesystem::path> texture_pack_mod_folders_;
     std::vector<std::uint32_t> texture_pack_mod_categories_off_;

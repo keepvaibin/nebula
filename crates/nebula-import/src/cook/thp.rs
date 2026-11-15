@@ -1,4 +1,4 @@
-//! Movies (B-60): a THP file rewritten for the native game, in host order. The video stays JPEG (the decoder's input);
+//! Movies: a THP file rewritten for the native game, in host order. The video stays JPEG (the decoder's input);
 //! the sound becomes PCM16; the frame sizes and the file header become plain numbers.
 //!
 //! The file: `NMOV`, the frame count, frame rate, largest frame, first frame's size, width, height, audio tracks, the

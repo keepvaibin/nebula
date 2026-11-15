@@ -2,15 +2,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 77.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 150.0f);
 
 namespace NrvSwitchBox {
     NEW_NERVE(SwitchBoxNrvWait, SwitchBox, Wait);
@@ -28,7 +20,7 @@ void SwitchBox::init(const TableIter& rIter) {
     initSound(2, false);
     initNerve(GET_NERVE(SwitchBox, SwitchBoxNrvWait));
     initEffectKeeper(3, nullptr);
-    f32 newScale = mScale.x * cNum_init_f1;
+    f32 newScale = mScale.x * 90.0f;
     initHitSensor(2);
     MR::addHitSensorMapObj(this, "body", 8, newScale, Vec3f(0.0f, newScale, 0.0f));
 
@@ -43,9 +35,9 @@ void SwitchBox::init(const TableIter& rIter) {
     MR::validateClipping(this);
 
     if (hasShadow) {
-        MR::initShadowVolumeBox(this, Vec3f(cNum_init_f2, cNum_init_f3, cNum_init_f4));
-        MR::setShadowVolumeStartDropOffset(this, nullptr, cNum_init_f5);
-        MR::setShadowVolumeEndDropOffset(this, nullptr, cNum_init_f6);
+        MR::initShadowVolumeBox(this, Vec3f(150.0f, 150.0f, 150.0f));
+        MR::setShadowVolumeStartDropOffset(this, nullptr, 77.0f);
+        MR::setShadowVolumeEndDropOffset(this, nullptr, 150.0f);
         MR::onShadowVolumeCutDropLength(this, nullptr);
         MR::excludeCalcShadowToMyCollision(this, nullptr);
         MR::onCalcGravity(this);

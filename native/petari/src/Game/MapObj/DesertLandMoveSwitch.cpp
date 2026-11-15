@@ -21,17 +21,13 @@
 #include <nebula_geometry.hpp>
 
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_DesertLandMoveSwitch_f1, "DesertLandMoveSwitch.f1", 0.35f);
-NEBULA_TUNABLE_NAMED(f32, cNum_DesertLandMoveSwitch_f2, "DesertLandMoveSwitch.f2", 0.75f);
 
 namespace {
     // The press animation starts after this many steps, and the switch turns on when it ends.
-    NEBULA_TUNABLE(s32, cSwitchDownSteps, 6);
+    const s32 cSwitchDownSteps = 6;
     // Stepping on gives the top this push down.
-    NEBULA_TUNABLE(f32, cStepOnVelocity, -10.0f);
+    const f32 cStepOnVelocity = -10.0f;
     const s32 cTimerTickSteps = NebulaFrameClock::stepsOfSeconds(1);
     // SandClockGalaxy's down switch ticks as if 180 steps further on.
     const s32 cSandClockTimerLead = NebulaFrameClock::stepsOfSeconds(3);
@@ -50,7 +46,7 @@ DesertLandMoveSwitch::DesertLandMoveSwitch(const char* pName)
     : LiveActor(pName), mCollisionParts(nullptr), mSpringValue(new SpringValue()), mMapObjConnector(new MapObjConnector(this)), mIsHipDropped(false),
       mWasOnPlayer(false), mIsOnPlayer(false), mTimer(0), mObjName(nullptr), mTimerLead(0) {
     lumacore::setClass(this, lumacore::kClassId< DesertLandMoveSwitch >);
-    mSpringValue->setParam(0.0f, 0.0f, cNum_DesertLandMoveSwitch_f1, cNum_DesertLandMoveSwitch_f2, 0.0f);
+    mSpringValue->setParam(0.0f, 0.0f, 0.35f, 0.75f, 0.0f);
 }
 
 void DesertLandMoveSwitch::init(const TableIter& rIter) {

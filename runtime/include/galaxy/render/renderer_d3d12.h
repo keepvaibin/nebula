@@ -41,6 +41,8 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
+#include "galaxy/render/mod_post.h"
+#include <nebula_frame_list.h>
 
 #include <array>
 #include <bit>
@@ -273,6 +275,9 @@ public:
         same_card_only_ = same_card;
     }
     void shutdown();                // full GPU drain, then release
+    // The pictures handed to an extension, taken from the GPU and written (render thread; RenderCore::finish_pictures,
+    // at a host's exit that skips shutdown).
+    void finish_pictures();
     // A persistently mapped upload buffer; empty when it cannot be created.
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
     // A texture's place in the draws' texture array: its view's index; the null view's place for an empty handle.
@@ -373,7 +378,7 @@ public:
     void record_scene_aa();
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (scene_camera.h).
     bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
-    void end_wide_scene();
+    void end_wide_scene(unsigned finish = 0u);  // finish: the traced relight's camera (scene_camera.hlsl g_finish)
     // Ambient occlusion (ambient_occlusion.h) of the scene drawn so far, from the view `set_scene_ao_view` gave:
     // after the opaque phases, before the translucent ones.
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ambient_occlusion_.ready(); }
@@ -419,6 +424,13 @@ public:
     // The game's bloom (game_bloom.h): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return game_bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
+    // draw.post (mod_post.h, mod_post_d3d12.cpp): `program` full screen over `picture` (the frame so far, from
+    // take_frame_picture) into the scene target; `depth_known` the walker could give the depth terms.
+    void record_mod_post(const ModPostProgram& program, ModPostConstants constants, const gpu::TextureRef& picture,
+                         bool depth_known);
+    // draw.native (luma_draw_native.h): `call` with the device, the open list and the scene target (with its depth at
+    // a scene point); the scene's state is set again after it.
+    void record_native_call(const NebulaCall& call, LumaDrawNativeFrame& frame, bool scene_point);
     [[nodiscard]] bool output_scene_active() const noexcept { return output_scene_active_; }
     // Whether the targets for `scale` fit the adapter's video-memory budget
     // next to everything already resident.
@@ -439,7 +451,7 @@ public:
     [[nodiscard]] double gpu_ms_per_tick() const noexcept {
         return timestamp_frequency_ != 0u ? 1000.0 / static_cast<double>(timestamp_frequency_) : 0.0;
     }
-    // Smoothed GPU time of a frame that drew the scene (0 until measured): the tracer's build budget (5.3 G-3).
+    // Smoothed GPU time of a frame that drew the scene (0 until measured): the tracer's build budget.
     [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return native_scene_gpu_ema_ms_; }
     // After scene_temporal_begin, in a temporal scene or one the ray tracing
     // engine lights (its histories follow moving surfaces by the motion; no
@@ -636,7 +648,7 @@ private:
     // one refresh.
     [[nodiscard]] UINT present_sync_interval(unsigned configured, float max_fps);
     void refresh_display_rate();
-    void wait_for_gpu();            // shutdown/resize only
+    void wait_for_gpu();            // shutdown, resize and finish_pictures only
     // Applies a pending window resize (the extent mailbox in renderer_d3d12.cpp).
     // Called only from begin_frame(), between command-list recordings.
     void apply_pending_resize();
@@ -709,7 +721,10 @@ private:
         std::uint64_t free_from = 0u;
     };
     std::vector<ConvSceneTable> conv_scene_tables_;
+    // The live set's entry (each set keeps its own: swap_scene_with and the other set swaps trade it); an entry a set
+    // holds is never free.
     std::size_t conv_scene_table_ = ~std::size_t{0};
+    void release_conv_table(std::size_t& entry);
     // Presents so far.
     std::uint64_t presented_frames_ = 0;
     bool create_root_signature();
@@ -842,6 +857,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> item_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE item_rtv_{};
     static constexpr std::uint64_t kRtLightPicture = 1ull << 62u | 1u;  // the traced light's key among the pictures
+    static constexpr unsigned kRtLightPictures = 10u;  // its pictures, kRtLightPicture + 0 to 9 (rt_publish_light's which)
     bool pass_list_open_ = false;
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_, on for the frames begun while it is (or the diagnostics
@@ -900,6 +916,7 @@ private:
         // The conversion views' persistent indices (srv_ring_.gpu_at turns one into a handle of the current heap).
         std::uint32_t conv_color_index = DescriptorRing::kNoPersistent;
         std::uint32_t conv_depth_index = DescriptorRing::kNoPersistent;
+        std::size_t conv_ring = ~std::size_t{0};  // the conv_scene_tables_ entry its views are in after a swap_scene_color
     };
     SceneTargetSet alt_scene_;
     // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes
@@ -990,6 +1007,26 @@ private:
     std::array<float, 12> scene_view_{};
     bool scene_view_known_ = false;
     Microsoft::WRL::ComPtr<ID3D12Resource> motion_target_;
+    // draw.post's root signature and pipelines (a program's for a target format and samples), and those of programs
+    // freed, kept until the frames in flight end.
+    struct ModPostPipeline {
+        std::uint32_t program = 0u;
+        DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+        UINT samples = 1u;
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;  // null: the device refused it
+    };
+    struct RetiredPipeline {
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;
+        std::uint64_t free_from = 0u;
+    };
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> mod_post_root_;
+    bool mod_post_root_failed_ = false;
+    std::vector<ModPostPipeline> mod_post_pipelines_;
+    std::vector<RetiredPipeline> mod_post_retired_;
+    std::uint64_t mod_post_epoch_ = 0u;
+    bool ensure_mod_post_root();
+    [[nodiscard]] ID3D12PipelineState* mod_post_pipeline(const ModPostProgram& program, DXGI_FORMAT format, UINT samples);
+    void release_mod_post();
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> motion_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE motion_rtv_{};
     FrameMap motion_target_map_{};
@@ -1004,7 +1041,7 @@ private:
     bool scene_hdr_ = false;
     bool ensure_wide_set(SceneTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap);
     void record_hdr_begin();
-    void record_hdr_end();
+    void record_hdr_end(unsigned finish = 0u);
     SceneCamera camera_pass_;
     std::chrono::steady_clock::time_point camera_metered_{};
     // persistent_views: the conversion-source views live in the descriptor
@@ -1141,6 +1178,7 @@ private:
     // Debug scene target readback (debug_copy_scene_to_readback / debug_log_readback).
     Microsoft::WRL::ComPtr<ID3D12Resource> readback_buf_;
     bool readback_pending_ = false;
+    bool readback_wide_ = false;  // the copy is of the wide (RGBA16F) scene target: 8 bytes a pixel
     std::uint64_t readback_fence_value_ = 0;
     std::string next_scene_capture_path_;
     std::string readback_capture_path_;

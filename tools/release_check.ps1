@@ -40,17 +40,20 @@ $repo = Split-Path -Parent $PSScriptRoot
 foreach ($folder in @("native", "runtime", "platform")) {
     $root = Join-Path $repo $folder
     if (-not (Test-Path -LiteralPath $root)) { $failures.Add("$folder is missing"); continue }
-    foreach ($source in Get-ChildItem -LiteralPath $root -Recurse -File -Include "*.cpp", "*.h", "*.hpp", "*.c", "*.inc", "*.mm", "*.kt", "*.java") {
+    # Filtered by Where-Object: Windows PowerShell 5.1 ignores -Include together with -LiteralPath and lists every file.
+    foreach ($source in Get-ChildItem -LiteralPath $root -Recurse -File |
+                        Where-Object { $_.Extension -in ".cpp", ".h", ".hpp", ".c", ".inc", ".mm", ".kt", ".java" }) {
         if ($source.BaseName -like "*_tests" -or $source.FullName -like "*\third_party\*") { continue }
         $text = [IO.File]::ReadAllText($source.FullName)
         $relative = $source.FullName.Substring($repo.Length + 1)
         foreach ($name in @("NEBULA_DEV", "NEBULA_RELEASE", "NEBULA_OPTION_TEST_", "tools/test_driver")) {
-            if ($text.Contains($name)) { $failures.Add("$relative names $name: a release and a test run use the same source") }
+            if ($text.Contains($name)) { $failures.Add("$relative names ${name}: a release and a test run use the same source") }
         }
     }
 }
-foreach ($cmake in Get-ChildItem -LiteralPath $repo -Recurse -File -Include "CMakeLists.txt", "*.cmake" |
-                   Where-Object { $_.FullName -notlike "*\third_party\*" -and $_.FullName -notlike "*\build*" }) {
+foreach ($cmake in Get-ChildItem -LiteralPath $repo -Recurse -File |
+                   Where-Object { ($_.Name -eq "CMakeLists.txt" -or $_.Extension -eq ".cmake") -and
+                                  $_.FullName -notlike "*\third_party\*" -and $_.FullName -notlike "*\build*" }) {
     $text = [IO.File]::ReadAllText($cmake.FullName)
     if ($text -match 'NEBULA_DEV|NEBULA_RELEASE') {
         $failures.Add("$($cmake.FullName.Substring($repo.Length + 1)) defines a build kind: there is one build")

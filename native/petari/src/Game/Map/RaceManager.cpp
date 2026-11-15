@@ -18,18 +18,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_playGo_f1, "playGo.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isPlayCountAnim_f1, "isPlayCountAnim.f1", 180.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeIntro_1, "exeIntro.1", 110);
-
-
 namespace {
-    NEBULA_TUNABLE(s32, sBgmStartStep, 166);
+    const s32 sBgmStartStep = 166;
 };  // namespace
 
 namespace {
@@ -90,7 +82,7 @@ void RaceManagerLayout::playCountAndGo() {
 void RaceManagerLayout::playGo() {
     MR::showPane(this, "Go");
     MR::startPaneAnim(this, "Go", "Count", 0);
-    MR::setPaneAnimFrame(this, "Go", cNum_playGo_f1, 0);
+    MR::setPaneAnimFrame(this, "Go", 180.0f, 0);
     MR::emitEffect(this, "RaceStart");
 }
 
@@ -143,7 +135,7 @@ void RaceManagerLayout::hideAllPane() {
 }
 
 bool RaceManagerLayout::isPlayCountAnim() const {
-    return MR::getPaneAnimFrame(this, "Go", 0) < cNum_isPlayCountAnim_f1;
+    return MR::getPaneAnimFrame(this, "Go", 0) < 180.0f;
 }
 
 bool RaceManagerLayout::isPlayCountAndGoAnim() const {
@@ -283,7 +275,7 @@ void RaceManager::exeIntro() {
         }
     }
 
-    if (MR::isStep(this, cStep_exeIntro_1)) {
+    if (MR::isStep(this, 110)) {
         setNerve(GET_NERVE(RaceManager, RaceManagerNrvCount));
     }
 }

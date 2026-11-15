@@ -77,6 +77,10 @@ void render_frame(bool present_swap_chain = true, bool black = false);
 // Blocks until the render queue and every in-flight render chunk are idle.
 void wait_for_render_idle();
 
+// At a host's exit that ends the process without the renderer's shutdown: the pictures handed to an extension are
+// taken from the GPU and written first. False when the render thread did not answer within `limit_ms`.
+bool finish_pictures(std::uint32_t limit_ms);
+
 
 // The services' registries and texture store; any thread.
 [[nodiscard]] core::Registries& registries() noexcept;
@@ -183,12 +187,21 @@ bool native_settings_pad_key(std::uintptr_t virtual_key);
 [[nodiscard]] bool native_settings_capture_mouse(galaxy::input::MouseButton button);
 // The wheel's turn in 120ths of a notch; false while the menu is closed.
 [[nodiscard]] bool native_settings_wheel(int delta);
+// Text typed while a mod's text option is being typed in (UTF-8: WM_CHAR, SDL's text input). False: none is.
+[[nodiscard]] bool native_settings_handle_window_text(std::string_view utf8);
+// A text option is being typed in: the host shows its on-screen keyboard (SDL_StartTextInput).
+[[nodiscard]] bool native_settings_text_wanted() noexcept;
 void native_settings_files_dropped(std::vector<std::filesystem::path> files);
 void native_settings_window_resized(unsigned width, unsigned height);
 // The graphics device lost at the renderer's next frame, as a driver reset loses it (an extension's lose_gpu_device).
 void lose_gpu_device() noexcept;
 // Delivers an overlay key to the window thread (controller navigation).
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
+// Delivers a keyboard key to the window thread, as the keyboard gives it (a harness's `key` step): a keyboard binding
+// waiting for its key takes it, which a controller's key never does.
+void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept;
+// The bit the SDL and Apple hosts' menu-key queues mark a keyboard key with (above every key code).
+inline constexpr std::uintptr_t kMenuKeyKeyboard = std::uintptr_t{1} << 30;
 // The mods saved differ from the ones this run started with.
 [[nodiscard]] bool native_settings_mods_changed();
 
@@ -244,6 +257,7 @@ enum class NativeSettingsStatus : unsigned {
                       // page's from 1, or -(page * 4 + 1 loading, 2 unreadable, 3 missing) for a picture not shown
                       // (next: Apply, before: Revert, back: Close)
     ModRemoveAsk,     // remove the mod whose page is open? status_number 1: to the recycle bin (yes: Apply, no: Close)
+    ModForgetAsk,     // forget what a removed mod kept? (status_text: its id; yes: Apply, no: Close)
 };
 // A picture the menu shows (a mod's icon or one of its pictures): RGBA8 rows, tightly packed, straight alpha.
 struct NativeSettingsPicture {
@@ -269,6 +283,7 @@ struct NativeSettingsView {
     unsigned selected = 0u;
     unsigned selected_button = 0u;  // the selected row's, when it has buttons
     std::string help;
+    bool help_as_is = false;  // the help is already in the played language (a mod's refusal): not translated
     NativeSettingsStatus status = NativeSettingsStatus::Help;
     int status_number = 0;
     std::string status_text;
@@ -278,8 +293,13 @@ struct NativeSettingsView {
 // The menu as it stands. The first call hands the drawing to the game: the overlay draws nothing of its own after.
 [[nodiscard]] NativeSettingsView native_settings_view();
 // The pointer's input to the menu (the game's own menu takes the pointer; the window thread the keyboard and pads).
-enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert, Press, MoveMod, SetValue };
+// CloseUnseen is the host's own: the game's close where it shows no menu (before its first 3D scene, the boot). It
+// closes a menu that asks nothing; one that asks is hidden as it stands, nothing answered, until
+// native_settings_reopen_held at the game's first 3D scene opens it again (asked at each scene frame: the first one no
+// host extension holds, galaxy::extensions::holds_menus).
+enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert, Press, MoveMod, SetValue, CloseUnseen };
 void native_settings_input(NativeSettingsInput input, int arg);
+void native_settings_reopen_held();
 
 // GPU time by pass (the settings overlay's SYSTEM page): off at every start; while it is on, the renderer writes a timestamp at
 // each pass boundary of every frame and reads them back a frame later; while it is off it records and reads nothing. A pass's
@@ -292,6 +312,10 @@ void set_gpu_timing(bool on) noexcept;
 [[nodiscard]] bool gpu_timing_on() noexcept;
 // The passes that have a time, at most `capacity`; how many.
 [[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) noexcept;
+
+// The process's use of the GPU's memory and the system's budget for it, in bytes (false before the renderer starts or where
+// the device cannot say). The render thread: the renderer keeps its last reading unguarded.
+[[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) noexcept;
 
 // The frames the game has shown (display copies) and how the presents met them.
 [[nodiscard]] std::uint64_t pictures_made() noexcept;

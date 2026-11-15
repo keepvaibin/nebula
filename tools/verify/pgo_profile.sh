@@ -1,6 +1,6 @@
 #!/bin/sh
 # pgo_profile.sh SOURCE_TREE WORK HOST_BIN PAK: the game's profile from the 102-stop tour, into SOURCE_TREE/native/pgo/game.profdata: the game built with
-# -fprofile-instr-generate (WORK/build), each stop 300 frames, llvm-profdata merge. HOST_BIN holds a host of the same API (NebulaNative.exe, tables).
+# -fprofile-instr-generate (WORK/build), each stop 300 frames, llvm-profdata merge. HOST_BIN holds a host of the same API (Nebula.exe, tables).
 # Run before a release when much of the game has changed; the next -Pgo build takes it.
 T=$1
 W=$2
@@ -12,8 +12,8 @@ B="$W/bin"
 mkdir -p "$B/tables" "$W/raw"
 rm -f "$W"/raw/*.profraw
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$T/native/build.ps1" -Petari "$T/native/petari" -Build "$W/build" \
-    -ProfileFlags -fprofile-instr-generate || exit 1
-cp "$H/NebulaNative.exe" "$B/"
+    -ProfileFlags -fprofile-instr-generate -NoBaseline || exit 1
+cp "$H/Nebula.exe" "$B/"
 cp "$H"/tables/* "$B/tables/"
 cp "$W/build/smg_game.dll" "$B/"
 printf '%s' "$P" > "$B/pak.path"

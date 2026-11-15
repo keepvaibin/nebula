@@ -34,7 +34,13 @@ namespace Nebula
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path)));
             string temp = path + ".tmp-" + Guid.NewGuid().ToString("N");
-            File.WriteAllText(temp, text, new UTF8Encoding(false));
+            // Flushed to the disk before the rename: a power cut leaves the old file or the new one, never an empty one.
+            byte[] bytes = new UTF8Encoding(false).GetBytes(text);
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                stream.Write(bytes, 0, bytes.Length);
+                stream.Flush(true);
+            }
             if (File.Exists(path)) File.Replace(temp, path, null, true);
             else File.Move(temp, path);
         }
@@ -367,6 +373,10 @@ namespace Nebula
 
     internal static class NativeMethods
     {
+        [DllImport("kernel32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool IsProcessorFeaturePresent(uint feature);
+
         // Restart Manager (FileUtil.Holders).
         [StructLayout(LayoutKind.Sequential)]
         internal struct RmUniqueProcess

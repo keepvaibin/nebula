@@ -5,11 +5,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 300.0f);
 
 namespace NrvSideSpikeMoveStep {
     NEW_NERVE(SideSpikeMoveStepNrvWait, SideSpikeMoveStep, Wait);
@@ -37,9 +33,9 @@ void SideSpikeMoveStep::init(const TableIter& rIter) {
     initEffectKeeper(1, mObjectName);
     f32 radius = 0.0f;
     MR::calcModelBoundingRadius(&radius, this);
-    MR::initAndSetRailClipping(&mRailClipping, this, cNum_init_f1, radius);
+    MR::initAndSetRailClipping(&mRailClipping, this, 100.0f, radius);
     MR::joinToGroupArray(this, rIter, nullptr, 32);
-    MR::initStarPointerTarget(this, cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::initStarPointerTarget(this, 300.0f, Vec3f(0.0f, 0.0f, 0.0f));
     mScaleController = new AnimScaleController(nullptr);
     mScaleController->setParamTight();
     mStateBindStarPointer = new WalkerStateBindStarPointer(this, mScaleController);

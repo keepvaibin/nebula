@@ -7,9 +7,8 @@ Nebula runs **Super Mario Galaxy** natively on Windows. You need your own copy o
 > [what is coming in 2.0](#in-development-for-20-not-released) are listed separately below.
 
 [Download](https://github.com/keepvaibin/nebula/releases/latest) ·
-[Controls](docs/KEYBOARD_CONTROLS.md) ·
-[Building from source](docs/BUILDING.md) ·
-[Architecture](docs/ARCHITECTURE.md)
+[Controls](docs/using-nebula/keyboard-and-controller-controls.md) ·
+[Building from source](#building-from-source)
 
 Not affiliated with or endorsed by Nintendo.
 
@@ -33,11 +32,11 @@ Nebula 2 (this branch; 1.0.2 works differently, see [Project status](#project-st
 
 1. **Game module** (`native/`). Petari's game code and the engine code under it (layouts, sound, models, Miis), compiled with clang into
    `smg_game.dll`.
-2. **Host** (`runtime/`, `native/host`). `NebulaNative.exe` loads the module and gives it its services:
+2. **Host** (`runtime/`, `native/host`). `Nebula.exe` loads the module and gives it its services:
    typed records drawn with Direct3D 12 or Vulkan, voices mixed and played, controllers and a real Wii Remote, the
    game's files from the store, saves, and the frame clock.
 3. **Setup and launcher** (`installer/`, C#; `crates/nebula-import`, Rust). `Nebula-Setup.exe` reads your disc
-   image, checks that it is the supported release and packs its files for Nebula; `Nebula.exe` starts the game.
+   image, checks that it is the supported release and packs its files for Nebula; `NebulaLauncher.exe` opens the launcher and `Nebula.exe` is the game.
 
 ## Features
 
@@ -71,10 +70,13 @@ None of these are in 1.0.2. They are in this branch and change until 2.0 is rele
 - Mii import for the file icons from a Wii, DS, 3DS, Wii U, Switch, Mii Studio or Mii Creator. Settings > GENERAL
   > IMPORT MIIS, or put the files in the `miis` folder next to the settings; imported files are kept there and read
   at every start.
-- Mods: one `.luma` file for a mod, on every version of the game. [LumaLink](https://github.com/keepvaibin/lumalink) converts Riivolution mods and texture packs to it, and its guide shows how to make one: models, textures, levels, music, cutscenes, galaxies, and native plugins with hooks. Import from Settings > MODS or drop a file on the game window. Among enabled mods the higher one wins a file or texture. Raw mods, disc files and texture packs in the `mods` folder still work.
+- Mods: one `.luma` file for a mod, on every version of the game. A mod brings files, table patches, models, textures,
+  sound, stages and code (LumaScript or C, built to native code). [LumaLink](https://github.com/keepvaibin/lumalink)
+  makes, checks, packs and runs mods and converts Riivolution mods and texture packs; the modding documentation starts
+  at [docs/modding/index.md](docs/modding/index.md). Import from Settings > MODS or drop a file on the game window. Among enabled mods the higher one wins a file or texture. Raw mods, disc files and texture packs in the `mods` folder still work.
 - Nebula's own text (its buttons, questions and achievements) in all 14 of the game's languages, changeable or
-  translatable by a mod: [docs/MODDING_NEBULA_TEXT.md](docs/MODDING_NEBULA_TEXT.md).
-- When Nebula stops, an error code ([docs/ERROR_CODES.md](docs/ERROR_CODES.md)) naming the cause and a report in
+  translatable by a mod: [docs/modding/how-tos/changing-nebulas-text.md](docs/modding/how-tos/changing-nebulas-text.md).
+- When Nebula stops, an error code ([docs/using-nebula/error-codes.md](docs/using-nebula/error-codes.md)) naming the cause and a report in
   `%LOCALAPPDATA%\Nebula\crashes`.
 
 ## Requirements
@@ -83,7 +85,7 @@ None of these are in 1.0.2. They are in this branch and change until 2.0 is rele
   (RMGP01) and Japan (RMGJ01) too in 2.0 (in development)
 - Windows 10 (version 1803 or newer) or Windows 11, 64-bit
 - A GPU with Direct3D 12 support
-- A CPU with AVX2 (2.0)
+- A CPU with SSE4.2 (2.0; AVX2 CPUs run a build for them)
 - 8 GB of RAM; for 1.0.2, 16 GB of free disk space and an internet connection during installation, about 5.5 GB
   afterwards
 
@@ -134,8 +136,83 @@ installed disc's release; Nebula and Dolphin use the same save format.
 
 ## Building from source
 
-[docs/BUILDING.md](docs/BUILDING.md) covers the tools, building the game module, the host and Setup, and running
-the tests.
+You need these tools:
+
+* CMake 3.24 or later, and Ninja
+* LLVM 21 or later, for the game module
+* Rust stable with the MSVC target, for the disc importer and LumaLink
+* The .NET 8 SDK, for Setup and the launcher
+* Visual Studio 2022 C++ tools and the Windows SDK, for the Windows host
+
+In PowerShell, run `. .\tools\enter_msvc_environment.ps1` first. CMake downloads the other dependencies when it
+configures, from pinned archives it checks by SHA-256.
+
+### Importing the game
+
+```powershell
+cargo build --release --locked -p nebula-import
+.\target\release\nebula-import.exe --key common.key identify D:\Games\SMG.rvz
+.\target\release\nebula-import.exe --key common.key import D:\Games\SMG.rvz --output D:\nebula\content
+```
+
+`identify` must report RMGE01, RMGP01 or RMGJ01. An extracted game folder works in place of the disc image. The
+content folder then holds `game.pak`.
+
+### Building the host
+
+```powershell
+cmake -S . -B build\host -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build\host --target Nebula
+```
+
+`-DNEBULA_VULKAN=ON` also builds `NebulaVk.exe`. The host is built for AVX2. For processors without AVX2,
+configure a second folder with `-DNEBULA_HOST_BASELINE=ON`: it builds `Nebula-x86-64-v2.exe`, which goes
+beside `Nebula.exe` and is started in its place on those processors.
+
+### Building the game module
+
+```powershell
+.\native\build.ps1 -Petari native\petari -Build build\game
+```
+
+This builds `build\game\smg_game.dll`, and `build\game\x86-64-v2\smg_game.dll` for processors without AVX2. Add
+`-Pgo` for a player build: it links with ThinLTO and the profile in `native/pgo`.
+
+On Linux, configure `native` with clang from LLVM 21 or later. It builds `libsmg_game.so` and
+`libsmg_game_plain.so`.
+
+### Running
+
+Put `Nebula.exe` and `smg_game.dll` in one folder, then run:
+
+```powershell
+.\Nebula.exe --pak D:\nebula\content\game.pak --saves "$env:LOCALAPPDATA\Nebula\saves"
+```
+
+### Running the tests
+
+The test runs' parts (the test extension and its tests) are built only when the configure asks for them:
+
+```powershell
+cmake -S . -B build\host -DNEBULA_EXTRA_CMAKE=tools/test_driver/test_driver.cmake
+cmake --build build\host
+ctest --test-dir build\host --output-on-failure
+cargo test -p nebula-import
+sh native/tests/run_tests.sh
+.\tools\audit_repo.ps1
+```
+
+### Building Setup and the Android app
+
+`installer\build-native-setup.ps1` builds the launcher and Setup and writes `Nebula-Setup.exe`.
+`platform\android\build_apk.ps1` builds the Android app. Each script lists its arguments at the top. Both take
+`-ShippedMods`, a folder holding `lumakit.luma`, which LumaLink builds and packs from its `lumakit` folder.
+
+### Packaging for Linux and macOS
+
+`installer/package-linux.sh --bin <build folder> --version <version> --shipped <folder>` packs a Linux build as
+`Nebula-<version>-linux-<arch>.tar.gz`. Players unpack it and run `./install.sh`, which reads their disc image and
+installs Nebula for the user or as a portable folder. `platform/apple/build_macos.sh` builds `Nebula.app` for macOS.
 
 ## Known issues
 
@@ -150,7 +227,7 @@ attach its crash report from `%LOCALAPPDATA%\Nebula\crashes`.
 ## License
 
 Nebula is licensed under the GNU General Public License v3.0 only ([LICENSE](LICENSE)). Third-party code and its
-licenses are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and [docs/PROVENANCE.md](docs/PROVENANCE.md).
+licenses are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 Nebula builds on the Petari decompilation (SMGCommunity), Aurora, Dusklight, SMAA, AMD FidelityFX, NVIDIA
 Streamline and the `nod` disc library.

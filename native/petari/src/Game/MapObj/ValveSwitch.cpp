@@ -4,16 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 75.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAdjust_f1, "exeAdjust.f1", 3.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeAdjust_1, "exeAdjust.1", 3);
 
 namespace NrvValveSwitch {
     NEW_NERVE(ValveSwitchNrvWait, ValveSwitch, Wait);
@@ -39,10 +30,10 @@ void ValveSwitch::init(const TableIter& rIter) {
     MR::connectToSceneMapObjDecorationStrongLight(this);
     MR::initLightCtrl(this);
     initHitSensor(2);
-    MR::addHitSensorMapObj(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObj(this, "body", 8, 100.0f, Vec3f(0.0f, 0.0f, 0.0f));
     Vec3f binder;
-    binder.scale(-cNum_init_f2, mGravity);
-    MR::addHitSensorAtJoint(this, "binder", "Valve", ATYPE_BINDER, 8, cNum_init_f3, binder);
+    binder.scale(-75.0f, mGravity);
+    MR::addHitSensorAtJoint(this, "binder", "Valve", ATYPE_BINDER, 8, 150.0f, binder);
     mValveMtx.set(MR::getJointMtx(this, "Valve"));
     MR::initCollisionParts(this, "ValveCol", getSensor("binder"), mValveMtx.toMtxPtr());
     initEffectKeeper(0, nullptr);
@@ -87,9 +78,9 @@ void ValveSwitch::exeAdjust() {
         MR::setBrkFrameAndStop(this, 0.0f);
     }
 
-    mBindActor->mPosition.lerp(mBindActor->mPosition, getSensor("binder")->mPosition, getNerveStep() / cNum_exeAdjust_f1);
+    mBindActor->mPosition.lerp(mBindActor->mPosition, getSensor("binder")->mPosition, getNerveStep() / 3.0f);
 
-    if (MR::isStep(this, cStep_exeAdjust_1)) {
+    if (MR::isStep(this, 3)) {
         setNerve(GET_NERVE(ValveSwitch, ValveSwitchNrvValve));
     }
 }

@@ -1,19 +1,25 @@
-//! The cooker (D-01): the game's files converted once, at import or on update, into what the native game reads.
+//! The cooker: the game's files converted once, at import or on update, into what the native game reads.
 //! Compressed files and archives are expanded, and every texture is a texture record (texture.rs, formats.rs). The
 //! result is written as game.pak again: the partition's system files at their places, the file table with the cooked
 //! files' new places and sizes, the files after it.
 
 pub mod archive;
 pub mod audio_data;
+pub mod beside;
 pub mod distance;
 pub mod dol;
 pub mod ghost;
 pub mod gltf;
 pub mod modern_audio;
 pub mod formats;
+pub mod flac;
 pub mod fur;
 pub mod material;
 pub mod kcl;
+pub mod layout_anim;
+pub mod layout_json;
+pub mod layout_patch;
+pub mod post_shader;
 pub mod camera;
 pub mod message;
 pub mod message_merge;
@@ -33,13 +39,28 @@ pub mod limits;
 pub mod model_write;
 pub mod pipeline_list;
 pub mod native_data;
+pub mod effects;
 pub mod overlay;
+pub mod overlay_patches;
+pub mod pack_texture;
 pub mod particle_json;
 pub mod particles;
+pub mod placement_args;
+pub mod clip_events;
+pub mod font_cook;
 pub mod ui_layout;
 pub mod sound;
+pub mod movie_cook;
+pub mod sound_effect;
+pub mod sound_sequence;
+pub mod sound_stream;
 pub mod store;
 pub mod table;
+pub mod table_keys;
+pub mod patch;
+pub mod refuse;
+pub mod surface_shader;
+pub mod table_columns;
 pub mod texture;
 pub mod thp;
 
@@ -58,7 +79,9 @@ pub struct Stats {
     pub bytes_in: u64,
     pub bytes_out: u64,
     /// Disc files and archive members the store leaves out: only a console or the game's tools read them.
-    pub left_out: u64,
+    pub left_out: Vec<LeftOut>,
+    /// The pipelines the files cooked draw with (NebulaData/Pipelines.bin).
+    pub pipelines: pipeline_list::Pipelines,
 }
 
 impl Stats {
@@ -75,7 +98,8 @@ impl Stats {
         self.expanded_files += other.expanded_files;
         self.bytes_in += other.bytes_in;
         self.bytes_out += other.bytes_out;
-        self.left_out += other.left_out;
+        self.left_out.extend(other.left_out);
+        self.pipelines.merge(other.pipelines);
     }
 
     pub fn summary(&self) -> String {
@@ -85,7 +109,7 @@ impl Stats {
             "{} files cooked, {} expanded, {} left out, {} -> {} bytes; images: {}",
             self.cooked_files,
             self.expanded_files,
-            self.left_out,
+            self.left_out.len(),
             self.bytes_in,
             self.bytes_out,
             images.join(", ")
@@ -171,6 +195,18 @@ pub fn console_only(path: &str) -> bool {
         || path == "ObjectData/SaveIconBanner.arc"
 }
 
+/// A file the store leaves out, and why (a phrase of the validator's text, `Validator.<why>`).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LeftOut {
+    pub path: String,
+    pub why: &'static str,
+}
+
+/// Why a disc file is left out (`console_only`).
+pub const CONSOLE_ONLY: &str = "Cook.LeftOut.Console";
+/// Why an archive member is left out (`tool_leftover`).
+pub const TOOL_LEFTOVER: &str = "Cook.LeftOut.Tool";
+
 /// An archive member left behind by the tools that made the game; no code opens one.
 fn tool_leftover(file: &str) -> bool {
     matches!(extension(file).as_str(), "ini" | "prj" | "xnim" | "dvw" | "dvmat" | "dck" | "dtp" | "backup" | "csv#")
@@ -211,7 +247,7 @@ fn cook_entry_at(name: &str, bytes: Vec<u8>, depth: usize, stats: &mut Stats) ->
     for member in archive::members(&bytes).with_context(|| format!("{name}: archive"))? {
         let file = member.path.rsplit('/').next().unwrap_or(&member.path);
         if tool_leftover(file) {
-            stats.left_out += 1;
+            stats.left_out.push(LeftOut { path: format!("{name}/{file}"), why: TOOL_LEFTOVER });
             continue;
         }
         for item in cook_entry_at(&format!("{name}/{file}"), member.bytes, depth + 1, stats)? {
@@ -280,13 +316,13 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     let cooked = if native_data::is_model_file(&bytes) {
         let source = model_ir::Source::of(&bytes);
         let ir = model_ir::read_file(&bytes, source, stats).with_context(|| format!("{name}: model"))?;
-        Some(model_write::write(&ir, stem, &programs::written_or_unknown()).with_context(|| format!("{name}: native model"))?)
+        Some(model_write::write(&ir, stem, &programs::written_or_unknown(), &mut stats.pipelines).with_context(|| format!("{name}: native model"))?)
     } else if native_data::is_animation_file(&bytes) {
         Some(clip::write(&clip::read(&bytes).with_context(|| format!("{name}: animation"))?))
     } else if bytes.starts_with(b"JPAC2-10") {
         let mut ir = particles::read_jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?;
         particles::name_textures(&mut ir, stem);
-        pipeline_list::add_particles(&ir);
+        stats.pipelines.add_particles(&ir);
         Some(particles::write(&ir))
     } else if bytes.starts_with(&[0x00, 0x20, 0xAF, 0x30]) {
         let textured = formats::tpl(&bytes, stem, stats).with_context(|| format!("{name}: layout textures"))?;
@@ -414,6 +450,10 @@ fn be32(bytes: &[u8], at: usize) -> u32 {
 
 const ALIGN: u64 = 32;
 
+/// Held by every cook that fills the shared lists (pipeline_list, texture::NAMES): the store's, the mods' store and the
+/// run time's one file (cook_c), so none meets another's half-written.
+pub static COOK_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Writes a cooked game.pak at `output` from a system area and a reader of the files' bytes. `progress(done, total)`
 /// reports the files' bytes read and returns false to stop.
 pub fn write_cooked_pak(
@@ -423,16 +463,17 @@ pub fn write_cooked_pak(
     progress: &mut dyn FnMut(u64, u64) -> bool,
     stats: &mut Stats,
 ) -> Result<u64> {
-    static COOK_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _cook = COOK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let files = pak_files(system.fst())?;
     programs::prepare_written_files(&files, read)?;
-    pipeline_list::reset();
+    // This cook's list, from none: each file's is merged into it as the file is written.
+    stats.pipelines = pipeline_list::Pipelines::default();
     // Every named texture's row, for NebulaData/TextureNames.tsv; collecting ends with this cook, however it ends.
     struct Collecting;
     impl Drop for Collecting {
         fn drop(&mut self) {
             *texture::NAMES.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            hit_record::twins_clear();
         }
     }
     let _collecting = Collecting;
@@ -505,7 +546,8 @@ pub fn write_cooked_pak(
             while next_read < order.len() && (next_read == next_write || in_flight < IN_FLIGHT_BYTES) {
                 let file = order[next_read];
                 if console_only(&file.path) {
-                    ready.insert(next_read, (Ok((Vec::new(), 0)), Stats { left_out: 1, ..Stats::default() }));
+                    let left_out = vec![LeftOut { path: file.path.clone(), why: CONSOLE_ONLY }];
+                    ready.insert(next_read, (Ok((Vec::new(), 0)), Stats { left_out, ..Stats::default() }));
                 } else {
                     let bytes = read(file)?;
                     if bytes.len() as u64 != file.length {
@@ -550,7 +592,7 @@ pub fn write_cooked_pak(
     // A folder lists its files in the file table's order, whatever order their bytes are in.
     placed.sort_by_key(|(node, _)| *node);
     let mut placed: Vec<store::Placed> = placed.into_iter().map(|(_, file)| file).collect();
-    // The tables main.dol holds, as files of their own folder (B-05).
+    // The tables main.dol holds, as files of their own folder.
     let dol = system_dol(system)?;
     disc_rows.push(("sys/main.dol".to_string(), dol.len() as u64, texture::xxh64(dol)));
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(disc_files_table(&disc_rows)) };
@@ -564,7 +606,7 @@ pub fn write_cooked_pak(
     let layout = audio_data::layout_text(&waves).into_bytes();
     let item = StoreItem { path: String::new(), order: 0, bytes: Some(layout) };
     placed.extend(place(&mut pak, &mut at, overlay::WAVE_LAYOUT, vec![item], stats)?);
-    let item = StoreItem { path: String::new(), order: 0, bytes: Some(pipeline_list::checked_bytes()?) };
+    let item = StoreItem { path: String::new(), order: 0, bytes: Some(stats.pipelines.checked_bytes()?) };
     placed.extend(place(&mut pak, &mut at, pipeline_list::PATH, vec![item], stats)?);
     // The textures' names: what mod import turns a Dolphin pack's files into, and what the dump names files by.
     let mut rows = texture::NAMES.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default();
@@ -575,6 +617,13 @@ pub fn write_cooked_pak(
         let item = StoreItem { path: String::new(), order: 0, bytes: Some(text.as_bytes().to_vec()) };
         placed.extend(place(&mut pak, &mut at, path, vec![item], stats)?);
     }
+    // Nebula's placeholder model, the object archive a mod's missing class draws (docs/modding/reference/lumascript/references.md
+    // section 4).
+    let item = StoreItem { path: PLACEHOLDER_MODEL.to_string(), order: 0, bytes: Some(placeholder_model()?) };
+    placed.extend(place(&mut pak, &mut at, PLACEHOLDER_ARCHIVE, vec![item], stats)?);
+    // And its chime, which a mod's sound name no file has plays (references.md sections 4 and 5.1).
+    let item = StoreItem { path: String::new(), order: 0, bytes: Some(placeholder_sound()?) };
+    placed.extend(place(&mut pak, &mut at, PLACEHOLDER_SOUND, vec![item], stats)?);
     let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
     pak.set_len(at)?;
     pak.sync_all().context("game.pak cannot be flushed to storage")?;
@@ -587,6 +636,45 @@ const RT_STAGES_PATH: &str = "NebulaData/RtStages.tsv";
 const RT_EFFECTS_PATH: &str = "NebulaData/RtEffects.tsv";
 const RT_STAGES: &str = include_str!("../../data/rt_stages.tsv");
 const RT_EFFECTS: &str = include_str!("../../data/rt_effects.tsv");
+
+/// Nebula's placeholder archive in the store (references.md section 4): the game draws its model for a mod's missing
+/// class (LumaRefs.cpp), and the start check (3.13, mod_start_check.cpp) turns mods off when a store lacks it.
+pub const PLACEHOLDER_ARCHIVE: &str = "ObjectData/NebulaPlaceholder.arc";
+/// The model in it, as the game's model manager finds an archive's model by the archive's name.
+pub const PLACEHOLDER_MODEL: &str = "NebulaPlaceholder.bmd";
+
+/// Nebula's placeholder sound in the store (references.md section 4, `nebula:placeholder/sound`): the audio service
+/// plays it for a mod's sound name no file has (runtime/src/luma_audio.cpp kPlaceholderSound), and the start check
+/// turns mods off when a store lacks it.
+pub const PLACEHOLDER_SOUND: &str = "NebulaData/PlaceholderSound.nsfx";
+
+/// The placeholder's chime as the mixer plays a mod's effect (NSFX), from data/placeholder/sound.wav (make_placeholder.py
+/// writes it: 120 ms, two soft notes), cooked as a mod's `.sound.json` naming it is, carried in the importer so every
+/// import cooks the same bytes.
+pub fn placeholder_sound() -> Result<Vec<u8>> {
+    let wav = include_bytes!("../../../../data/placeholder/sound.wav");
+    let file = |name: &str| (name == "sound.wav").then(|| wav.to_vec());
+    let none = |_: &str| None;
+    let around = sound_effect::Around { file: &file, game_sound: &none, game_stream: &none, game_sequence: &none };
+    let (nsfx, _) = sound_effect::cook(br#"{"kind": "effect", "file": "sound.wav"}"#, &around).context("the placeholder's sound")?;
+    Ok(nsfx)
+}
+
+/// The placeholder's cooked model, from data/placeholder/model.gltf and its face.png (make_placeholder.py writes both),
+/// carried in the importer so every import cooks the same bytes.
+pub fn placeholder_model() -> Result<Vec<u8>> {
+    let mut source: serde_json::Value =
+        serde_json::from_slice(include_bytes!("../../../../data/placeholder/model.gltf")).context("the placeholder's model.gltf")?;
+    let face = include_bytes!("../../../../data/placeholder/face.png");
+    for image in source["images"].as_array_mut().context("the placeholder's model.gltf has no images")? {
+        if image["uri"] != "face.png" {
+            bail!("the placeholder's model.gltf names an image other than face.png");
+        }
+        image["uri"] = serde_json::Value::String(format!("data:image/png;base64,{}", gltf::base64_text(face)));
+    }
+    let (model, _) = gltf::to_files(&serde_json::to_vec(&source)?, None, "NebulaPlaceholder").context("the placeholder's model")?;
+    Ok(model)
+}
 
 /// main.dol in a system area (its header's sections give its length).
 fn system_dol(system: &SystemArea) -> Result<&[u8]> {
@@ -668,6 +756,26 @@ pub fn cook_content(input: &Path, output: &Path, progress: &mut dyn FnMut(u64, u
 
 #[cfg(test)]
 mod disc_record_tests {
+    #[test]
+    fn the_placeholder_sound_cooks_from_nebulas_data() {
+        let nsfx = super::placeholder_sound().unwrap();
+        assert_eq!(&nsfx[..4], super::sound_effect::MAGIC);
+        let word = |at: usize| u32::from_le_bytes(nsfx[at..at + 4].try_into().unwrap());
+        // 48 kHz mono, 120 ms (5760 frames), no loop: one chime, then it ends.
+        assert_eq!((word(8), word(12), word(16), word(20), word(24)), (48_000, 1, 5_760, u32::MAX, 0));
+        // The same bytes each time: every import cooks the same placeholder.
+        assert_eq!(nsfx, super::placeholder_sound().unwrap());
+    }
+
+    #[test]
+    fn the_placeholder_model_cooks_from_nebulas_data() {
+        assert_eq!([&b"Man"[..], b"Ma", b"M", b""].map(super::gltf::base64_text), ["TWFu", "TWE=", "TQ==", ""]);
+        let model = super::placeholder_model().unwrap();
+        assert!(model.len() > 1024, "{} bytes", model.len());
+        // The same bytes each time: every import cooks the same placeholder.
+        assert_eq!(model, super::placeholder_model().unwrap());
+    }
+
     #[test]
     fn the_disc_record_reads_back_by_path() {
         let rows = vec![("StageData/A.arc".to_string(), 12u64, 0x0123_4567_89ab_cdefu64), ("sys/main.dol".to_string(), 4, 7)];

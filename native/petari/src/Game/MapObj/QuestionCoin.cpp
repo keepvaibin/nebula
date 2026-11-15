@@ -5,23 +5,16 @@
 #include "Game/MapObj/SpinDriverUtil.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f1, "initAfterPlacement.f1", 180.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f2, "initAfterPlacement.f2", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f3, "initAfterPlacement.f3", 1500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_initAfterPlacement_f4, "initAfterPlacement.f4", 2000.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sHitRadius, 150.0f);
-    NEBULA_TUNABLE(f32, sOffsetY, 210.0f);
-    NEBULA_TUNABLE(f32, sInWaterScale, 2.0f);
-    NEBULA_TUNABLE(f32, sShadowRadius, 120.0f);
-    NEBULA_TUNABLE(f32, sShadowHeightMargin, 300.0f);
-    NEBULA_TUNABLE(s32, sBindAnimFrame, 3);
-    NEBULA_TUNABLE(s32, sBindStartBlendFrame, 0);
+    const f32 sHitRadius = 150.0f;
+    const f32 sOffsetY = 210.0f;
+    const f32 sInWaterScale = 2.0f;
+    const f32 sShadowRadius = 120.0f;
+    const f32 sShadowHeightMargin = 300.0f;
+    const s32 sBindAnimFrame = 3;
+    const s32 sBindStartBlendFrame = 0;
 };  // namespace
 
 namespace NrvQuestionCoin {
@@ -62,7 +55,7 @@ void QuestionCoin::init(const TableIter& rIter) {
     initHitSensor(1);
     f32 radius = ::sHitRadius * mScale.x;
     HitSensor* sensor = MR::addHitSensor(this, "binder", ATYPE_QUESTION_COIN_BIND, 16, radius, Vec3f(0.0f, ::sOffsetY * mScale.y, 0.0f));
-    MR::setClippingTypeSphere(this, cNum_init_f1 * radius, &sensor->mPosition);
+    MR::setClippingTypeSphere(this, 2.0f * radius, &sensor->mPosition);
     initShadow();
     MR::initActorCamera(this, rIter, &mCameraInfo);
     initNerve(GET_NERVE(QuestionCoin, HostTypeWait));
@@ -82,7 +75,7 @@ void QuestionCoin::initAfterPlacement() {
     }
 
     Pos3f rotation;
-    rotation.setEuler(mRotation * (MR::pi() / cNum_initAfterPlacement_f1));
+    rotation.setEuler(mRotation * (MR::pi() / 180.0f));
     Vec3f up;
     rotation.getYDir(up);
     Vec3f side;
@@ -92,12 +85,12 @@ void QuestionCoin::initAfterPlacement() {
     MR::makeMtxUpSide(&launchMtx, up, side);
     launchMtx.getQuat(mLaunchQuat);
 
-    f32 dropLength = cNum_initAfterPlacement_f2;
+    f32 dropLength = 1000.0f;
 
     if (mShadowDropLengthType == 1) {
-        dropLength = cNum_initAfterPlacement_f3;
+        dropLength = 1500.0f;
     } else if (mShadowDropLengthType == 2) {
-        dropLength = cNum_initAfterPlacement_f4;
+        dropLength = 2000.0f;
     }
 
     Vec3f gravity(gZeroVec);

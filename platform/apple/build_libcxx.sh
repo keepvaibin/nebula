@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
-# The C++ library the Apple builds link (docs/APPLE.md, "Toolchain"): LLVM's libc++ and libc++abi as one static,
+# The C++ library the Apple builds link: LLVM's libc++ and libc++abi as one static,
 # hermetic archive for one platform and architecture, built with the same clang that builds Nebula. The system's
 # libc++ follows the OS (a build for macOS 12 or iOS 15 would lose what a later one added) and the one in LLVM's
 # macOS package is built for the packager's OS; this one has the deployment target Nebula has, and both modules

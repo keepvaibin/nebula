@@ -6,27 +6,13 @@
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_geometry.hpp>
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcRailDirection_f1, "calcRailDirection.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPos_f1, "calcPos.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPos_f2, "calcPos.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcVelocity_f1, "calcVelocity.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcVelocity_f2, "calcVelocity.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getLength_f1, "getLength.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f64, cNum_getLength_f2, "getLength.f2", 2.0);
-NEBULA_TUNABLE_NAMED(f32, cNum_getLength_f3, "getLength.f3", 1024.0f);
-NEBULA_TUNABLE_NAMED(f64, cNum_getLength_f4, "getLength.f4", 3.0);
-NEBULA_TUNABLE_NAMED(f32, cNum_getLength_f5, "getLength.f5", 4.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getLength_f6, "getLength.f6", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_getLength_f7, "getLength.f7", 1024.0f);
 
 namespace {
-    NEBULA_TUNABLE(s32, cLengthSegments, 10);        // Simpson pairs per length integral
-    NEBULA_TUNABLE(f32, cParamTolerance, 0.01f);     // getParam stops within this length
-    NEBULA_TUNABLE(s32, cParamIterations, 5);
-    NEBULA_TUNABLE(f32, cDirectionStep, 0.01f);      // param step for a zero-velocity direction
-    NEBULA_TUNABLE(f32, cNearestSampleStep, 100.0f); // length between getNearestParam samples
+    const s32 cLengthSegments = 10;        // Simpson pairs per length integral
+    const f32 cParamTolerance = 0.01f;     // getParam stops within this length
+    const s32 cParamIterations = 5;
+    const f32 cDirectionStep = 0.01f;      // param step for a zero-velocity direction
+    const f32 cNearestSampleStep = 100.0f; // length between getNearestParam samples
 
     int getNextIndex(int index, int pointNum) {
         return pointNum > 0 ? (index + 1) % pointNum : 0;
@@ -38,7 +24,7 @@ namespace {
         if (MR::isNearZero(*pOut)) {
             f32 tStart = t;
             f32 tEnd;
-            if (t < cNum_calcRailDirection_f1) {
+            if (t < 0.5f) {
                 tEnd = cDirectionStep + t;
             } else {
                 tEnd = t;
@@ -74,8 +60,8 @@ void BezierRailPart::set(const Vec3f& rPoint1, const Vec3f& rPoint1Ctrl, const V
 }
 
 void BezierRailPart::calcPos(Vec3f* pOut, f32 t) const {
-    f32 w1 = cNum_calcPos_f1 * t;
-    f32 w2 = cNum_calcPos_f2 * t * t;
+    f32 w1 = 3.0f * t;
+    f32 w2 = 3.0f * t * t;
     f32 w3 = t * t * t;
 
     Vec3f term1(mCtrlDegree1);
@@ -94,7 +80,7 @@ void BezierRailPart::calcPos(Vec3f* pOut, f32 t) const {
 
 void BezierRailPart::calcVelocity(Vec3f* pOut, f32 t) const {
     f32 w3 = t * t;
-    f32 w2 = cNum_calcVelocity_f1 * t;
+    f32 w2 = 2.0f * t;
 
     Vec3f term3(mCtrlDegree3);
     Vec3f term2(mCtrlDegree2);
@@ -104,16 +90,16 @@ void BezierRailPart::calcVelocity(Vec3f* pOut, f32 t) const {
     pOut->set(mCtrlDegree1);
     pOut->add(term2);
     pOut->add(term3);
-    pOut->scale(cNum_calcVelocity_f2);
+    pOut->scale(3.0f);
 }
 
 // Simpson's rule over 2 * segments steps with the end samples at half weight, floored to 1/1024.
 // Rail coordinates are measured in these lengths, so the weights stay as they are.
 f32 BezierRailPart::getLength(f32 t1, f32 t2, int segments) const {
-    f32 endsHalf = (1.0f / cNum_getLength_f1) * (getVelocityLength(t1) + getVelocityLength(t2));
+    f32 endsHalf = (1.0f / 2.0f) * (getVelocityLength(t1) + getVelocityLength(t2));
 
     f32 tDiff = (t2 - t1);
-    f32 stepRate = (1.0f / (segments * cNum_getLength_f2));
+    f32 stepRate = (1.0f / (segments * 2.0));
     f32 step = tDiff * stepRate;
 
     f32 oddSum = 0.0f;
@@ -133,8 +119,8 @@ f32 BezierRailPart::getLength(f32 t1, f32 t2, int segments) const {
         }
     }
 
-    f32 len = floor(cNum_getLength_f3 * static_cast< f32 >((1.0 / cNum_getLength_f4) * step * ((oddSum * cNum_getLength_f5) + (endsHalf + (evenSum * cNum_getLength_f6)))));
-    f32 rescale = 1.0f / cNum_getLength_f7;
+    f32 len = floor(1024.0f * static_cast< f32 >((1.0 / 3.0) * step * ((oddSum * 4.0f) + (endsHalf + (evenSum * 2.0f)))));
+    f32 rescale = 1.0f / 1024.0f;
     len *= rescale;
     return len;
 }

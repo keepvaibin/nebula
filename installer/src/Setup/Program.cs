@@ -12,7 +12,8 @@ namespace Nebula.Setup
     {
         /// <summary>
         /// Nebula-Setup.exe [--update | --apply-update [--launch] | --uninstall | --rollback]
-        ///   [--input PATH] [--root PATH] [--desktop-shortcut] [--unattended] [--remove-user-data]
+        ///   [--input PATH] [--root PATH] [--portable] [--desktop-shortcut] [--unattended] [--remove-user-data]
+        /// --portable makes the install at --root a portable copy (everything in that folder, nothing registered).
         /// --launch starts the game once the update is installed (the launcher's update offer).
         /// </summary>
         [STAThread]
@@ -38,20 +39,24 @@ namespace Nebula.Setup
         /// <summary>Scripted runs for testing; progress goes to the setup log.</summary>
         private static int Unattended(Dictionary<string, string> options)
         {
-            string root = options.ContainsKey("root") ? options["root"] : (NebulaPaths.RegisteredInstallRoot ?? NebulaPaths.DefaultInstallRoot);
+            string root = options.ContainsKey("root") ? options["root"] : (NebulaPaths.PortableRoot ?? NebulaPaths.RegisteredInstallRoot ?? NebulaPaths.DefaultInstallRoot);
             var layout = new InstallLayout(root);
+            if (NebulaPaths.IsPortableRoot(layout.Root)) NebulaPaths.UsePortableRoot(layout.Root);
             try
             {
                 if (options.ContainsKey("uninstall")) { Integration.Uninstall(layout, options.ContainsKey("remove-user-data")); return 0; }
                 if (options.ContainsKey("rollback")) { Integration.Rollback(layout); return 0; }
                 var current = InstalledInfo.Read(layout);
+                if (options.ContainsKey("apply-update") && current != null &&
+                    InstallIntent.ForPackage(current.Version, BuildInfo.Version) != InstallMode.Update)
+                    throw new InvalidOperationException("Nebula " + BuildInfo.Version + " is not newer than the installed " + current.Version + ".");
                 var request = new InstallRequest
                 {
-                    Mode = current == null ? InstallMode.Install :
-                        (options.ContainsKey("apply-update") ? InstallMode.Update : InstallIntent.ForPackage(current.Version, BuildInfo.Version)),
+                    Mode = current == null ? InstallMode.Install : InstallIntent.ForPackage(current.Version, BuildInfo.Version),
                     GameInput = options.ContainsKey("input") ? options["input"] : null,
                     InstallRoot = root,
-                    DesktopShortcut = options.ContainsKey("desktop-shortcut")
+                    DesktopShortcut = options.ContainsKey("desktop-shortcut"),
+                    Portable = options.ContainsKey("portable")
                 };
                 var engine = new InstallEngine(request, new SilentProgress(), CancellationToken.None);
                 engine.Run();

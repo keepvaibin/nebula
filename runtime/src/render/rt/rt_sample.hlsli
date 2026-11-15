@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Where every random number of the tracer comes from (plan section 6.3): a 128 x 128 blue-noise texture of four
+// Where every random number of the tracer comes from: a 128 x 128 blue-noise texture of four
 // independent channels (void and cluster, Ulichney 1993: tools/dev/make_blue_noise.py), so a pass's error is spread
 // as fine grain the filters take out, shifted each frame by the R2 sequence (Roberts 2018), so the frames' errors
 // differ and an average over time converges. A use takes its own place in the texture (a fixed offset) so two uses
@@ -15,7 +15,7 @@ Texture2D<float4> g_blue_noise : register(t20);  // bound by every pass that sam
 // pair (zw) at the same place as use - 16.
 static const uint kSampleSun = 0u;          // a point of the sun's disc
 static const uint kSampleSunPixel = 1u;     // the place within the pixel a sun ray leaves from
-static const uint kSampleSky = 2u;          // the sky ray's direction (zw: which of the two rays)
+// 2: retired (the light pass's sky rays, 22.10)
 static const uint kSampleLightTry = 3u;     // the local lights' candidates (x) and the neighbours' turn (y)
 static const uint kSampleLightNear = 4u;    // the frame before's neighbour reservoirs (xy one, zw the other)
 static const uint kSampleBlur = 5u;         // the turn of the sun filter's disc
@@ -23,6 +23,7 @@ static const uint kSampleIndirect = 6u;     // the sky and bounce light's direct
 static const uint kSampleReflect = 7u;      // a reflection's lobe
 static const uint kSampleVolume = 8u;       // the light volume's place along a ray
 static const uint kSampleLightDisc = 9u;    // the point of a large light's disc its shadow ray aims at
+static const uint kSampleNear = 10u;        // the near field's directions (rt_near.hlsl)
 static const uint kSampleSecond = 16u;      // added to a use: the second pair
 static const uint2 kSampleOffsets[16] = {
     uint2(0u, 0u), uint2(61u, 37u), uint2(23u, 101u), uint2(89u, 13u), uint2(47u, 71u), uint2(113u, 59u),
@@ -33,7 +34,7 @@ static const uint2 kSampleOffsets[16] = {
 float2 rt_sample(uint2 pixel, uint frame, uint use) {
     const float4 texel = g_blue_noise.Load(int3((pixel + kSampleOffsets[use & 15u]) & 127u, 0));
     const float2 base = ((use & kSampleSecond) != 0u ? texel.zw : texel.xy) * (255.0f / 256.0f) + 0.5f / 256.0f;
-    // R2: frame * (0.7548776662, 0.5698402910) in 32-bit fixed point, exact for any frame number.
+    // Frame * (0.7548776662, 0.5698402910) in 32-bit fixed point, exact for any frame number.
     const uint2 shift = uint2(frame * 3242174889u, frame * 2447445414u) >> 8u;
     return frac(base + float2(shift) * (1.0f / 16777216.0f));
 }

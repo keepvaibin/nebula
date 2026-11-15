@@ -2,15 +2,12 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 50.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sStepToOnSwitch, 15);
-    NEBULA_TUNABLE(s32, sStepOnSE, 8);
-    NEBULA_TUNABLE(s32, sStepForHitStop, 8);
+    const s32 sStepToOnSwitch = 15;
+    const s32 sStepOnSE = 8;
+    const s32 sStepForHitStop = 8;
 };  // namespace
 
 namespace NrvSpinLeverSwitch {
@@ -30,7 +27,7 @@ void SpinLeverSwitch::init(const TableIter& rIter) {
     MR::connectToSceneMapObj(this);
     initHitSensor(2);
     MR::addBodyMessageSensorMapObj(this);
-    MR::addHitSensorAtJointMapObj(this, "spin", "Spin", 4, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointMapObj(this, "spin", "Spin", 4, 50.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::initCollisionParts(this, "SpinLeverSwitch", getSensor("body"), nullptr);
     initEffectKeeper(0, 0);
     initSound(4, false);

@@ -9,11 +9,10 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sFlySoundStartStep1, 155);
-    NEBULA_TUNABLE(s32, sFlySoundStartStep2, 200);
+    const s32 sFlySoundStartStep1 = 155;
+    const s32 sFlySoundStartStep2 = 200;
 };  // namespace
 
 namespace NrvBossStinkBugAngryDemo {

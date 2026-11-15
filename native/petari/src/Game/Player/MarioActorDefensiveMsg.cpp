@@ -12,19 +12,6 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgEnemyAttack_f1, "receiveMsgEnemyAttack.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgEnemyAttack_f2, "receiveMsgEnemyAttack.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryVectorAttackMsg_f1, "tryVectorAttackMsg.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryVectorAttackMsg_f2, "tryVectorAttackMsg.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryVectorAttackMsg_f3, "tryVectorAttackMsg.f3", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryVectorAttackMsg_f4, "tryVectorAttackMsg.f4", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPush_f1, "receiveMsgPush.f1", 1.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f1, "receiveOtherMsg.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f2, "receiveOtherMsg.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveOtherMsg_f3, "receiveOtherMsg.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_cylinderHitCheck_f1, "cylinderHitCheck.f1", 100.0f);
 
 bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     bool carrying = getCarrySensor() != nullptr;
@@ -75,7 +62,7 @@ bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* p
                     getFrontVec(&direction);
                 }
 
-                direction.setLength(cNum_receiveMsgEnemyAttack_f1);
+                direction.setLength(15.0f);
                 return mMario->doFlipRot(direction);
             }
 
@@ -116,7 +103,7 @@ bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* p
         getFrontVec(&direction);
     }
 
-    direction.setLength(cNum_receiveMsgEnemyAttack_f2);
+    direction.setLength(30.0f);
     result = tryVectorAttackMsg(msg, direction);
     if (!result) {
         MR::sendArbitraryMsg(ACTMES_INVALID_HIT, pSender, getSensor("body"));
@@ -198,13 +185,13 @@ bool MarioActor::tryVectorAttackMsg(u32 msg, const Vec3f& rVec) {
 
     case ACTMES_ENEMY_ATTACK_FLIP_MAXIMUM:
         newVec = rVec;
-        newVec.setLength(cNum_tryVectorAttackMsg_f1);
+        newVec.setLength(15.0f);
         out = mMario->doFlipLarge(newVec);
         break;
 
     case ACTMES_ENEMY_ATTACK_FLIP:
         newVec = rVec;
-        newVec.setLength(cNum_tryVectorAttackMsg_f2);
+        newVec.setLength(10.0f);
         out = mMario->doFlipLarge(newVec);
         break;
 
@@ -228,7 +215,7 @@ bool MarioActor::tryVectorAttackMsg(u32 msg, const Vec3f& rVec) {
 
     case ACTMES_ENEMY_ATTACK_FLIP_JUMP:
         newVec = rVec;
-        newVec.setLength(cNum_tryVectorAttackMsg_f3);
+        newVec.setLength(15.0f);
         out = mMario->doFlipBackRoll(newVec);
         break;
 
@@ -238,7 +225,7 @@ bool MarioActor::tryVectorAttackMsg(u32 msg, const Vec3f& rVec) {
         } else {
             mMario->stopWalk();
             newVec = rVec;
-            newVec.setLength(cNum_tryVectorAttackMsg_f4);
+            newVec.setLength(20.0f);
             mMario->addReaction(newVec);
         }
 
@@ -319,7 +306,7 @@ bool MarioActor::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
             return false;
         }
 
-        mMario->push(push * cNum_receiveMsgPush_f1);
+        mMario->push(push * 1.1f);
         if (mMario->isStatusActive(MarioStatus_Foo)) {
             Vec3f direction(pReceiver->mPosition);
             direction -= pSender->mPosition;
@@ -468,15 +455,15 @@ bool MarioActor::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
     case ACTMES_AWAYJUMP:
         doTrampleJump(pSender);
         mMario->startPadVib(3);
-        mMario->mJumpVec -= mMario->mFrontVec * cNum_receiveOtherMsg_f1;
+        mMario->mJumpVec -= mMario->mFrontVec * 10.0f;
         changeAnimation("飛びすさりジャンプ");
         break;
     case ACTMES_REFLECT: {
         Vec3f normal;
         MR::calcDistance(pSender, pReceiver, &normal);
         mMario->reflectWallOnSpinning(normal, 5);
-        if (mMario->mWalkSpeed > cNum_receiveOtherMsg_f2) {
-            mMario->mWalkSpeed = cNum_receiveOtherMsg_f3;
+        if (mMario->mWalkSpeed > 0.5f) {
+            mMario->mWalkSpeed = 0.5f;
         }
 
         return true;
@@ -572,7 +559,7 @@ bool MarioActor::cylinderHitCheck(const HitSensor* pSensor, Vec3f* pPush) {
     Vec3f delta = pSensor->mPosition - (mCenterPos + pMario->mPushVec + pMario->mPushVelocity + mVelocity);
     Vec3f radial;
     f32 axial = MR::vecKillElement(delta, mBodyDown, &radial);
-    f32 spherePenetration = cNum_cylinderHitCheck_f1 + radius - delta.length();
+    f32 spherePenetration = 100.0f + radius - delta.length();
     if (spherePenetration < 0.0f) {
         return false;
     }

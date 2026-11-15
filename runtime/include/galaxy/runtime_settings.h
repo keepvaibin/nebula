@@ -16,7 +16,7 @@ enum class RuntimeInputMode : std::uint32_t {
     Controller = 2,
     RealWiimote = 3,  // a real Wii Remote, pointing at the sensor bar
     Phone = 4,  // the on-screen controls alone (phones and tablets)
-    WiimoteMotion = 5,  // a real Wii Remote, pointing by its MotionPlus (docs/WII_REMOTE.md)
+    WiimoteMotion = 5,  // a real Wii Remote, pointing by its MotionPlus (docs/using-nebula/using-a-wii-remote.md)
 };
 
 // Either real Wii Remote mode: the remote alone is read.

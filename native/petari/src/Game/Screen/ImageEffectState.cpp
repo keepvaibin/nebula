@@ -6,23 +6,6 @@
 #include "Game/Screen/ImageEffectBase.hpp"
 #include "Game/Screen/ImageEffectDirector.hpp"
 #include "Game/Screen/ScreenBlurEffect.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f5, "update.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f6, "update.f6", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f7, "update.f7", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f8, "update.f8", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f9, "update.f9", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f10, "update.f10", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f11, "update.f11", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f12, "update.f12", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f13, "update.f13", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f14, "update.f14", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f15, "update.f15", 255.0f);
 
 void ImageEffectState::update() {
     ImageEffectBase* pCurrent = mHost->mCurrentEffect;
@@ -94,26 +77,26 @@ namespace ImageEffectStateImpl {
             mIntensity2Now = mIntensity2;
             mIsSnap = false;
         } else {
-            f32 rate = cNum_update_f1;
-            mBloomIntensityNow += ((mBloomIntensity + cNum_update_f2) - mBloomIntensityNow) * rate;
-            mThresholdNow += ((mThreshold + cNum_update_f3) - mThresholdNow) * rate;
-            mIntensity1Now += ((mIntensity1 + cNum_update_f4) - mIntensity1Now) * rate;
-            mIntensity2Now += ((mIntensity2 + cNum_update_f5) - mIntensity2Now) * rate;
+            f32 rate = 0.1f;
+            mBloomIntensityNow += ((mBloomIntensity + 0.5f) - mBloomIntensityNow) * rate;
+            mThresholdNow += ((mThreshold + 0.5f) - mThresholdNow) * rate;
+            mIntensity1Now += ((mIntensity1 + 0.5f) - mIntensity1Now) * rate;
+            mIntensity2Now += ((mIntensity2 + 0.5f) - mIntensity2Now) * rate;
 
-            if (mBloomIntensityNow > cNum_update_f6) {
-                mBloomIntensityNow = cNum_update_f7;
+            if (mBloomIntensityNow > 255.0f) {
+                mBloomIntensityNow = 255.0f;
             }
 
-            if (mThresholdNow > cNum_update_f8) {
-                mThresholdNow = cNum_update_f9;
+            if (mThresholdNow > 255.0f) {
+                mThresholdNow = 255.0f;
             }
 
-            if (mIntensity1Now > cNum_update_f10) {
-                mIntensity1Now = cNum_update_f11;
+            if (mIntensity1Now > 255.0f) {
+                mIntensity1Now = 255.0f;
             }
 
-            if (mIntensity2Now > cNum_update_f12) {
-                mIntensity2Now = cNum_update_f13;
+            if (mIntensity2Now > 255.0f) {
+                mIntensity2Now = 255.0f;
             }
         }
 
@@ -124,10 +107,10 @@ namespace ImageEffectStateImpl {
         static_cast< BloomEffect* >(StateBloomNormal::getEffect())->mThreshold = threshold;
 
         u8 intensity1 = (s32)(mIntensity1Now);
-        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->mIntensity1 = intensity1 / cNum_update_f14;
+        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->mIntensity1 = intensity1 / 255.0f;
 
         u8 intensity2 = (s32)(mIntensity2Now);
-        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->mIntensity2 = intensity2 / cNum_update_f15;
+        static_cast< BloomEffect* >(StateBloomNormal::getEffect())->mIntensity2 = intensity2 / 255.0f;
 
         ImageEffectState::update();
     }

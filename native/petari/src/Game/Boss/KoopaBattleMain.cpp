@@ -17,7 +17,6 @@
 #include "Game/Util/ActorStateUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     static MR::ActorMoveParam sChasePlayerParam = {1.5f, 1.0f, 0.9f, 3.0f};
@@ -25,10 +24,10 @@ namespace {
     static MR::ActorSightParam sChasePlayerStartSight = {1800.0f, 120.0f, 50.0f};
     static MR::ActorSightParam sChasePlayerKeepSight = {2200.0f, 125.0f, 50.0f};
     static MR::ActorSightParam sAttackHipDropSight = {1000.0f, 90.0f, 30.0f};
-    NEBULA_TUNABLE(f32, sDistanceMaxToJumpAway, 1500.0f);
-    NEBULA_TUNABLE(f32, sSearchDistance, 2000.0f);
+    const f32 sDistanceMaxToJumpAway = 1500.0f;
+    const f32 sSearchDistance = 2000.0f;
     static const s32 sSearchStepToFind = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sChasePlayerDistanceNearAttack, 500.0f);
+    const f32 sChasePlayerDistanceNearAttack = 500.0f;
     static const s32 sChasePlayerStepToAttackFireShort = NebulaFrameClock::stepsOfMilliseconds(1500);
     static const s32 sChasePlayerStepToAttackHipDrop = NebulaFrameClock::stepsOfSeconds(1);
 };  // namespace

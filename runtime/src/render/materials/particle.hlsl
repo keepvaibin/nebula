@@ -88,8 +88,8 @@ float4 material_color(NativeVaryings i) {
     const bool p0 = particle_compare(uint(material.test.x), a8, round(material.alpha_ref.x * 255.0));
     const bool p1 = particle_compare(uint(material.test.y), a8, round(material.alpha_ref.y * 255.0));
     const uint logic = uint(material.test.z);
-    const bool pass = logic == 0u ? (p0 && p1) : logic == 1u ? (p0 || p1) : logic == 2u ? (p0 != p1) : (p0 == p1);
-    if (!pass) {
+    const bool passed = logic == 0u ? (p0 && p1) : logic == 1u ? (p0 || p1) : logic == 2u ? (p0 != p1) : (p0 == p1);
+    if (!passed) {
         discard;
     }
     c = native_fog(c, i.pos, material.fog, material.fog_color);

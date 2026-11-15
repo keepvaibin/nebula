@@ -13,11 +13,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 120.0f);
 
 WarpCube* WarpCubeMgr::getPairCube(const AreaObj* pObj) {
     const PlacementId* pId = static_cast< const WarpCube* >(pObj)->mMapIdInfo;
@@ -72,7 +67,7 @@ void WarpCube::movement() {
         Vec3f pos;
         MR::calcCubePos(this, &pos);
 
-        if (MR::calcDistanceToPlayer(pos) < cNum_movement_f1) {
+        if (MR::calcDistanceToPlayer(pos) < 300.0f) {
             return;
         }
     }
@@ -106,7 +101,7 @@ void WarpCube::draw() const {
     }
 
     TypedDraw site = TDDraw::site(material, 0);
-    TDDraw::drawSphere(site, cubePos + up * cNum_draw_f1, cNum_draw_f2, flags, 16);
+    TDDraw::drawSphere(site, cubePos + up * 120.0f, 120.0f, flags, 16);
 }
 
 void WarpCube::init(const TableIter& rIter) {

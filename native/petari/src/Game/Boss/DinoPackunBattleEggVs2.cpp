@@ -14,25 +14,24 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Where the tail leaves the egg, in the boss's frame.
     const Vec3f cEggOutPosition(0.0f, 60.0f, -320.0f);
     const s32 cTurnSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, cTurnDegree, 1.5f);
+    const f32 cTurnDegree = 1.5f;
     const s32 cWalkSteps = NebulaFrameClock::stepsOfMilliseconds(12500);
-    NEBULA_TUNABLE(f32, cWalkSpeed, 0.9f);
-    NEBULA_TUNABLE(s32, cWalkFootPrintPeriod, 40);
-    NEBULA_TUNABLE(f32, cWalkTailBendRate, 1.5f);
+    const f32 cWalkSpeed = 0.9f;
+    const s32 cWalkFootPrintPeriod = 40;
+    const f32 cWalkTailBendRate = 1.5f;
     // The walk weaves, turning the other way every period.
-    NEBULA_TUNABLE(s32, cWeavePeriod, 100);
-    NEBULA_TUNABLE(f32, cWeaveDegree, 0.75f);
+    const s32 cWeavePeriod = 100;
+    const f32 cWeaveDegree = 0.75f;
     // Each cycle the tail burns, cools, then warns before burning again. All three are plain step counts, so the
     // sign window is the cycle's last 20 steps at any step rate.
-    NEBULA_TUNABLE(s32, cFireCycle, 200);
-    NEBULA_TUNABLE(s32, cFireSteps, 80);
-    NEBULA_TUNABLE(s32, cFireSignStep, 180);
+    const s32 cFireCycle = 200;
+    const s32 cFireSteps = 80;
+    const s32 cFireSignStep = 180;
 };  // namespace
 
 namespace NrvDinoPackunBattleEggVs2 {

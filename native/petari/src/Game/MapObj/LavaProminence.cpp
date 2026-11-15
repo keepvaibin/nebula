@@ -18,24 +18,14 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveStartExtra_f1, "exeMoveStartExtra.f1", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveStartExtra_f2, "exeMoveStartExtra.f2", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveStart_f1, "exeMoveStart.f1", 300.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMoveEndExtra_f1, "exeMoveEndExtra.f1", 90000.0f);
 
 namespace {
     static const s32 sDefaultTimeWait = NebulaFrameClock::stepsOfSeconds(3);
     static const s32 sTimeSign = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(f32, sDefaultMoveSpeed, 20.0f);
+    const f32 sDefaultMoveSpeed = 20.0f;
     // Distance the body's sphere must pass beyond the view before the drop effect is deleted (it is made at the view's edge).
-    NEBULA_TUNABLE(f32, sDropClipLeaveMargin, 150.0f);
+    const f32 sDropClipLeaveMargin = 150.0f;
 };  // namespace
 
 namespace NrvLavaProminence {
@@ -80,7 +70,7 @@ void LavaProminence::init(const TableIter& rIter) {
     initHitSensor(1);
     Vec3f offset;
     offset.set(0.0f);
-    MR::addHitSensorMapObjSimple(this, "body", 8, cNum_init_f1, offset);
+    MR::addHitSensorMapObjSimple(this, "body", 8, 120.0f, offset);
     initRailRider(rIter);
     MR::calcRailPosAtCoord(&mRailStartPos, this, 0.0f);
     MR::calcRailPosAtCoord(&mRailEndPos, this, MR::getRailTotalLength(this));
@@ -88,7 +78,7 @@ void LavaProminence::init(const TableIter& rIter) {
     MR::calcRailDirectionAtCoord(&mRailEndDir, this, MR::getRailTotalLength(this));
     initSound(6, false);
     MR::setGroupClipping(this, rIter, 16);
-    MR::initAndSetRailClipping(&mClipCenter, this, cNum_init_f2, cNum_init_f3);
+    MR::initAndSetRailClipping(&mClipCenter, this, 300.0f, 300.0f);
 
     if (MR::isValidSwitchA(this)) {
         initNerve(GET_NERVE(LavaProminence, HostTypeNrvWaitSwitch));
@@ -103,7 +93,7 @@ void LavaProminence::init(const TableIter& rIter) {
     MR::setEffectName(this, "Drop", "DropEffect");
 
     if (!isWithoutShadow) {
-        MR::initShadowVolumeSphere(this, cNum_init_f4);
+        MR::initShadowVolumeSphere(this, 100.0f);
     }
 
     mBloomModel = MR::createBloomModel(this, mBloomModelMtx);
@@ -230,7 +220,7 @@ void LavaProminence::exeMoveStartExtra() {
         MR::startSound(this, "SE_OJ_PROMINENCE_START");
         mMoveRailCoord = 0.0f;
         MR::setRailCoord(this, 0.0f);
-        mPosition.set(mRailStartPos - mRailStartDir * cNum_exeMoveStartExtra_f1);
+        mPosition.set(mRailStartPos - mRailStartDir * 300.0f);
         mRailDir.set(mRailStartDir);
         MR::showModel(this);
         MR::emitEffect(this, "DropEffect");
@@ -242,7 +232,7 @@ void LavaProminence::exeMoveStartExtra() {
     mPosition.add(mRailStartDir * mMoveSpeed);
     MR::calcGravity(this);
     // A speed of 0 or less (placement arg 1) ends the start at once, not at 300 / 0.
-    s32 endStartStep = mMoveSpeed > 0.0f ? static_cast< s32 >(cNum_exeMoveStartExtra_f2 / mMoveSpeed) : 0;
+    s32 endStartStep = mMoveSpeed > 0.0f ? static_cast< s32 >(300.0f / mMoveSpeed) : 0;
 
     if (MR::isGreaterStep(this, endStartStep - 1)) {
         MR::deleteEffect(this, "Start");
@@ -266,7 +256,7 @@ void LavaProminence::exeMoveStart() {
     MR::startLevelSound(this, "SE_OJ_LV_PROMINENCE_MOVE");
     moveOnRail();
 
-    if (mMoveRailCoord >= cNum_exeMoveStart_f1) {
+    if (mMoveRailCoord >= 300.0f) {
         MR::deleteEffect(this, "Start");
         setNerve(GET_NERVE(LavaProminence, HostTypeNrvMoveLoop));
     }
@@ -305,7 +295,7 @@ void LavaProminence::exeMoveEndExtra() {
     MR::startLevelSound(this, "SE_OJ_LV_PROMINENCE_END");
     mPosition.add(mRailEndDir * mMoveSpeed);
 
-    if (cNum_exeMoveEndExtra_f1 < mRailEndPos.squared(mPosition)) {
+    if (90000.0f < mRailEndPos.squared(mPosition)) {
         MR::hideModel(this);
         MR::deleteEffect(this, "DropEffect");
         mEmitDropEffect = true;

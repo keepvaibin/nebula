@@ -6,7 +6,6 @@
 #include "Game/Util/ValueControl.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaMods.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
@@ -14,10 +13,10 @@ namespace {
         {NebulaFrameClock::stepsOfSeconds(300), 100, true, true, true}, {NebulaFrameClock::stepsOfSeconds(180), 100, true, true, true},  {NebulaFrameClock::stepsOfSeconds(60), 100, true, true, true},
         {NebulaFrameClock::stepsOfSeconds(30), 100, true, true, false}, {NebulaFrameClock::stepsOfSeconds(10), NebulaFrameClock::stepsOfSeconds(10), false, false, false},
     };
-    NEBULA_TUNABLE(s32, sScaleUpDownFrame, 8);
-    NEBULA_TUNABLE(f32, sScaleMaxAdd, 0.5f);
-    NEBULA_TUNABLE(s32, sFadeoutBeforeFrame, 90);
-    NEBULA_TUNABLE(s32, sFadeinoutFrame, 60);
+    const s32 sScaleUpDownFrame = 8;
+    const f32 sScaleMaxAdd = 0.5f;
+    const s32 sFadeoutBeforeFrame = 90;
+    const s32 sFadeinoutFrame = 60;
 };  // namespace
 
 void TimeUpLayout::init(const TableIter& /*rIter*/) {
@@ -37,7 +36,6 @@ namespace NrvTimeLimitLayout {
 TimeLimitLayout::TimeLimitLayout(u32 timeLimit)
     : LayoutActor("タイムリミット", true), mTime(), mTimeLimit(timeLimit), mScaleControl(), mFadeControl(), mCurrentTiming(), mIsSuspend(), mIsNormalDisplay() {
     lumacore::setClass(this, lumacore::kClassId< TimeLimitLayout >);
-    mFlag.mHudPart = NEBULA_HUD_TIMER;
 }
 
 void TimeLimitLayout::init(const TableIter& /*rIter*/) {
@@ -57,13 +55,11 @@ void TimeLimitLayout::init(const TableIter& /*rIter*/) {
 void TimeLimitLayout::appear() {
     resetFrame();
     LayoutActor::appear();
-    NebulaMods::setCountdown(this, true);
     setNerve(GET_NERVE(TimeLimitLayout, TimeLimitLayoutAppear));
 }
 
 void TimeLimitLayout::kill() {
     LayoutActor::kill();
-    NebulaMods::setCountdown(this, false);
 }
 
 void TimeLimitLayout::setTimeLimit(u32 timeLimit) {
@@ -238,7 +234,7 @@ const Timing* TimeLimitLayout::getCurrentTiming() const {
 }
 
 bool TimeLimitLayout::updateNormal() {
-    if (mIsSuspend || NebulaMods::sCountdownHeld) {
+    if (mIsSuspend) {
         return false;
     }
 

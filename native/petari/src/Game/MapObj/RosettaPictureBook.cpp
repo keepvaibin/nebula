@@ -12,14 +12,11 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 150.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sFadeOutFrame, 60);
-    NEBULA_TUNABLE(s32, sFadeInFrame, 60);
+    const s32 sFadeOutFrame = 60;
+    const s32 sFadeInFrame = 60;
 };  // namespace
 
 namespace NrvRosettaPictureBook {
@@ -39,7 +36,7 @@ void RosettaPictureBook::init(const TableIter& rIter) {
     initModelManagerWithAnm("RosettaPictureBook", nullptr, false);
     MR::connectToSceneMapObj(this);
     initHitSensor(1);
-    MR::addHitSensorMapObjSimple(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorMapObjSimple(this, "body", 8, 150.0f, Vec3f(0.0f, 0.0f, 0.0f));
 
     mLayout = new PictureBookLayout(1, MR::getPictureBookChapterCanRead(), false);
     mLayout->initWithoutIter();

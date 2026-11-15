@@ -4,6 +4,12 @@ param([string]$Setup = '')
 # (-Setup adds a built Setup). Writes PNGs to the scratch folder.
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+# The one list of settings (runtime/src/ui/settings_table.tsv) against the launchers, the game's menu and the engine.
+& python (Join-Path $repo 'tools\settings_table.py') --check
+if ($LASTEXITCODE -ne 0) { throw 'settings_table.py: the settings table and the code disagree.' }
+# The Android launcher's text from the same table as these launchers', and its updates' release key.
+& python (Join-Path $repo 'tools\android_text.py') --check
+if ($LASTEXITCODE -ne 0) { throw 'android_text.py: the Android text or release key is out of date.' }
 $scratch = Join-Path $env:TEMP ('nebula-launcher-tests-' + [guid]::NewGuid().ToString('N'))
 $app = Join-Path $scratch 'root\versions\test'
 $localAppData = Join-Path $scratch 'localappdata'
@@ -30,8 +36,8 @@ $icon = Join-Path $repo 'installer\assets\nebula.ico'
 $manifest = Join-Path $repo 'installer\app.manifest'
 
 # The two shipped launchers, built as build-native-setup.ps1 builds them.
-& $csc /nologo /target:winexe /platform:x64 /optimize+ "/win32manifest:$manifest" "/win32icon:$icon" "/out:$app\Nebula.exe" @refs @common @launcher
-if ($LASTEXITCODE -ne 0) { throw 'Nebula.exe compilation failed.' }
+& $csc /nologo /target:winexe /platform:x64 /optimize+ "/win32manifest:$manifest" "/win32icon:$icon" "/out:$app\NebulaLauncher.exe" @refs @common @launcher
+if ($LASTEXITCODE -ne 0) { throw 'NebulaLauncher.exe compilation failed.' }
 & $csc /nologo /target:winexe /platform:x64 /optimize+ /define:NEBULA_SETTINGS_APP "/win32manifest:$manifest" "/win32icon:$icon" "/out:$app\NebulaSettings.exe" @refs @common @launcher
 if ($LASTEXITCODE -ne 0) { throw 'NebulaSettings.exe compilation failed.' }
 & $csc /nologo /target:exe /platform:x64 "/win32manifest:$manifest" "/win32icon:$icon" /main:Nebula.Launcher.LauncherTests "/out:$app\LauncherTests.exe" @refs @common @launcher (Join-Path $PSScriptRoot 'LauncherTests.cs')
@@ -41,10 +47,11 @@ $gameStub = Join-Path $scratch 'GameStub.cs'
 @'
 using System; using System.IO;
 static class GameStub { static void Main(string[] a) {
+ if (a.Length > 0 && a[0] == "--wait") { System.Threading.Thread.Sleep(30000); return; }
  if (a.Length > 0 && a[0] == "--list-mods") { Console.WriteLine("{\"ok\":true,\"folder\":\"\",\"mods\":[]}"); return; }
  File.WriteAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "stub-launch.txt"), a); } }
 '@ | Set-Content -LiteralPath $gameStub
-& $csc /nologo /target:exe /platform:x64 "/out:$app\NebulaNative.exe" $gameStub
+& $csc /nologo /target:exe /platform:x64 "/out:$app\Nebula.exe" $gameStub
 if ($LASTEXITCODE -ne 0) { throw 'Game stub compilation failed.' }
 
 $userLocalAppData = $env:LOCALAPPDATA
@@ -73,7 +80,7 @@ function Pixels([System.Drawing.Icon]$i) {
 # The frames are PNG-compressed, which System.Drawing.Icon cannot decode: load through USER32.
 Add-Type -Namespace NebulaTest -Name User32 -MemberDefinition '[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr LoadImageW(IntPtr h, string name, uint type, int cx, int cy, uint flags);'
 $expected = Pixels ([System.Drawing.Icon]::FromHandle([NebulaTest.User32]::LoadImageW([IntPtr]::Zero, $icon, 1, 32, 32, 0x10)))
-$exes = @("$app\Nebula.exe", "$app\NebulaSettings.exe")
+$exes = @("$app\NebulaLauncher.exe", "$app\NebulaSettings.exe")
 if ($Setup -ne '') { $exes += $Setup }
 foreach ($exe in $exes) {
     $got = Pixels ([System.Drawing.Icon]::ExtractAssociatedIcon($exe))

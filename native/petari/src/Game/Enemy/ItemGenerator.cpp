@@ -3,11 +3,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, cStarPieceSpeedH, 10.0f);
-    NEBULA_TUNABLE(f32, cStarPieceSpeedV, 40.0f);
+    const f32 cStarPieceSpeedH = 10.0f;
+    const f32 cStarPieceSpeedV = 40.0f;
 }  // namespace
 
 ItemGenerator::ItemGenerator() : mNum(1), mType(Type_Coin) {

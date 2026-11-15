@@ -5,16 +5,10 @@
 #include "Game/Camera/CameraRailHolder.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f1, "calc.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calc_f2, "calc.f2", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcNearestCoord_f1, "calcNearestCoord.f1", 110.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcNearestCoord_f2, "calcNearestCoord.f2", 110.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sUpVecBlend, 0.97f);
+    const f32 sUpVecBlend = 0.97f;
 };  // namespace
 
 CameraTwistedPassage::CameraTwistedPassage(const char* pName) : Camera(pName), mRailRider(), mDistMin(500.0f), mDistMax(1300.0f), mIsReversed() {
@@ -38,7 +32,7 @@ CameraTargetObj* CameraTwistedPassage::calc() {
 
     CameraTargetObj* target = CameraLocalUtil::getTarget(this);
     Vec3f watchPos;
-    CameraLocalUtil::makeWatchPoint(&watchPos, this, target, cNum_calc_f1 / cNum_calc_f2);
+    CameraLocalUtil::makeWatchPoint(&watchPos, this, target, 0.1f / 15.0f);
     CameraLocalUtil::setWatchPos(this, watchPos);
 
     f32 nearCoord = calcNearestCoord(target->getPosition());
@@ -112,14 +106,14 @@ f32 CameraTwistedPassage::calcNearestCoord(const Vec3f& rPos) const {
     f32 nearCoord = mRailRider->calcNearestPos(rPos);
 
     f32 coordHi1 = nearCoord;
-    f32 coordLo1 = nearCoord - cNum_calcNearestCoord_f1;
+    f32 coordLo1 = nearCoord - 110.0f;
     f32 coord = calcNearestCoordBetweenTwoRailCoord(coordHi1, coordLo1, rPos);
     if (coord >= coordLo1 || coord <= coordHi1) {
         return coord;
     }
 
     f32 coordHi2 = nearCoord;
-    f32 coordLo2 = nearCoord + cNum_calcNearestCoord_f2;
+    f32 coordLo2 = nearCoord + 110.0f;
     coord = calcNearestCoordBetweenTwoRailCoord(coordHi2, coordLo2, rPos);
     if (coord >= coordHi2 || coord <= coordLo2) {
         return coord;

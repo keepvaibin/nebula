@@ -9,25 +9,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_movement_f1, "movement.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_hitCheck_f1, "hitCheck.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_hitCheck_f2, "hitCheck.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_hitCheck_f3, "hitCheck.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f1, "setSurface.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f2, "setSurface.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f3, "setSurface.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f4, "setSurface.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f5, "setSurface.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f6, "setSurface.f6", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f7, "setSurface.f7", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f8, "setSurface.f8", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f9, "setSurface.f9", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f10, "setSurface.f10", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f11, "setSurface.f11", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_setSurface_f12, "setSurface.f12", 10.0f);
 
 CollisionArea::CollisionArea(int formType, const char* pName) : AreaObj(formType, pName) {
     lumacore::setClass(this, lumacore::kClassId< CollisionArea >);
@@ -110,7 +92,7 @@ void CollisionArea::movement() {
             }
 
             if (mIsTeresaPass) {
-                radius += cNum_movement_f1;
+                radius += 5.0f;
             }
 
             Vec3f hitPos;
@@ -165,9 +147,9 @@ bool CollisionArea::hitCheck(const Vec3f& rPos, f32 radius, Vec3f* pPoint, Vec3f
     MR::normalizeOrZero(&axisY);
     f32 sizeZ = axisZ.length();
     MR::normalizeOrZero(&axisZ);
-    sizeX *= cNum_hitCheck_f1 * (pCube->mScale.x * pCube->getBaseSize());
-    sizeY *= cNum_hitCheck_f2 * (pCube->mScale.y * pCube->getBaseSize());
-    sizeZ *= cNum_hitCheck_f3 * (pCube->mScale.z * pCube->getBaseSize());
+    sizeX *= 0.5f * (pCube->mScale.x * pCube->getBaseSize());
+    sizeY *= 0.5f * (pCube->mScale.y * pCube->getBaseSize());
+    sizeZ *= 0.5f * (pCube->mScale.z * pCube->getBaseSize());
     Vec3f expanded(sizeX + radius, sizeY + radius, sizeZ + radius);
     Vec3f relative(rPos);
     relative.sub(mCenter);
@@ -374,32 +356,32 @@ void AreaPolygon::setSurface(s32 surface) {
     f32 sizeZ = axisZ.length();
     MR::normalizeOrZero(&axisZ);
     if (mForm != nullptr) {
-        sizeX *= cNum_setSurface_f1 * (static_cast< AreaFormCube* >(mForm)->getSizeX());
-        sizeY *= cNum_setSurface_f2 * (static_cast< AreaFormCube* >(mForm)->getSizeY());
-        sizeZ *= cNum_setSurface_f3 * (static_cast< AreaFormCube* >(mForm)->getSizeZ());
+        sizeX *= 0.5f * (static_cast< AreaFormCube* >(mForm)->getSizeX());
+        sizeY *= 0.5f * (static_cast< AreaFormCube* >(mForm)->getSizeY());
+        sizeZ *= 0.5f * (static_cast< AreaFormCube* >(mForm)->getSizeZ());
     } else {
-        sizeX *= cNum_setSurface_f4 * mSize.x;
-        sizeY *= cNum_setSurface_f5 * mSize.y;
-        sizeZ *= cNum_setSurface_f6 * mSize.z;
+        sizeX *= 0.5f * mSize.x;
+        sizeY *= 0.5f * mSize.y;
+        sizeZ *= 0.5f * mSize.z;
     }
 
     if (!MR::isPlayerElementModeTeresa()) {
         if (sizeX < 0.0f) {
-            sizeX -= cNum_setSurface_f7;
+            sizeX -= 10.0f;
         } else {
-            sizeX += cNum_setSurface_f8;
+            sizeX += 10.0f;
         }
 
         if (sizeY < 0.0f) {
-            sizeY -= cNum_setSurface_f9;
+            sizeY -= 10.0f;
         } else {
-            sizeY += cNum_setSurface_f10;
+            sizeY += 10.0f;
         }
 
         if (sizeZ < 0.0f) {
-            sizeZ -= cNum_setSurface_f11;
+            sizeZ -= 10.0f;
         } else {
-            sizeZ += cNum_setSurface_f12;
+            sizeZ += 10.0f;
         }
     }
 

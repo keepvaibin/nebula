@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <initializer_list>
 #include <fstream>
 #include <iterator>
@@ -246,26 +247,30 @@ private:
     std::size_t at_ = 0;
 };
 
-// A script's name: letters, digits, _ and -, in folders split by /; never empty, absolute or climbing out.
-bool script_name_ok(std::string_view name) {
-    if (name.empty() || name.size() > 128 || name.front() == '/' || name.back() == '/') return false;
-    char last = '/';
-    for (const char c : name) {
-        const bool plain = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-';
-        if (!plain && !(c == '/' && last != '/')) return false;
-        last = c;
-    }
-    return true;
-}
-
 std::string text_field(const Value& value, std::string_view key) {
     const Value* field = value.get(key);
     const std::string* text = field != nullptr ? field->string() : nullptr;
     return text != nullptr ? *text : std::string();
 }
 
-// Lower-case letters, digits and dashes, and none of the names Windows keeps for itself: it names a folder on every device.
+// The validator's id (id_ok, luma.md 4): 3 to 64 of a-z 0-9 - ., a letter first, no "..", no "." at the end. It
+// names a folder on every device, so neither may its first part be a name Windows keeps for itself (con, com1...): a
+// gap the validator does not check yet (named to G).
 bool valid_id(std::string_view id) {
+    if (id.size() < 3u || id.size() > 64u || !(id.front() >= 'a' && id.front() <= 'z') || id.back() == '.') return false;
+    for (const char c : id) {
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.')) return false;
+    }
+    if (id.find("..") != std::string_view::npos) return false;
+    const std::string_view first = id.substr(0, id.find('.'));
+    if (first == "con" || first == "prn" || first == "aux" || first == "nul") return false;
+    if (first.size() == 4u && (first.starts_with("com") || first.starts_with("lpt")) && first[3] >= '0' && first[3] <= '9') return false;
+    return true;
+}
+
+// pre_standard's ids (an achievement's, a save tag): lower-case letters, digits and dashes, 1 to 64, and none of the
+// names Windows keeps for itself, as the previous engine read them.
+bool old_id(std::string_view id) {
     if (id.empty() || id.size() > 64u || id.front() == '-' || id.back() == '-') return false;
     for (const char c : id) {
         if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) return false;
@@ -373,14 +378,6 @@ int whole_int(double value) {
     if (value >= 2147483647.0) return std::numeric_limits<int>::max();
     if (value <= -2147483648.0) return std::numeric_limits<int>::min();
     return static_cast<int>(value);
-}
-
-// The same as 32 bits that wrap: a negative number counts back from 2^32.
-std::uint32_t whole_u32(double value) {
-    if (!(value == value)) return 0u;
-    if (value >= 4294967295.0) return 0xFFFFFFFFu;
-    if (value >= 0.0) return static_cast<std::uint32_t>(value);
-    return static_cast<std::uint32_t>(whole_int(value));
 }
 
 bool read_rows(const Value& from, Rows& out) {
@@ -494,59 +491,197 @@ bool read_rows(const Value& from, Rows& out) {
     return true;
 }
 
-}  // namespace
+// ---- pre_standard: the previous engine's rows ----
+// Each key here is read as before until its general replacement is proven; then it leaves this reader, and at the v1
+// gate the reader is gone. Not part of luma.md: the validator only notes each key a mod still uses.
 
-const std::string& Text::in(std::string_view language) const {
-    if (const auto it = languages.find(std::string(language)); it != languages.end()) return it->second;
-    const std::size_t dash = language.find('-');
-    if (dash != std::string_view::npos) {
-        if (const auto it = languages.find(std::string(language.substr(0, dash))); it != languages.end()) return it->second;
+// A layer's old keys: pre_standard.layers.<name>.
+bool read_old_layer(const Value& entry, Layer& layer) {
+    if (const Value* changes = entry.get("object_changes"); changes != nullptr && changes->array() != nullptr) {
+        for (const Value& row : *changes->array()) {
+            ObjectChange change;
+            change.object = text_field(row, "object");
+            if (change.object.empty()) return false;
+            change.becomes = text_field(row, "becomes");
+            const std::string where = text_field(row, "in");
+            if (where == "display_models") change.where = 1;
+            else if (where == "treasure_boxes") change.where = 2;
+            else if (!where.empty() && where != "placed") return false;
+            layer.object_changes.push_back(std::move(change));
+        }
     }
-    return fallback;
-}
-
-std::optional<Manifest> parse_manifest(std::string_view text) {
-    const std::optional<Value> root = Parser(text).whole();
-    if (!root || root->object() == nullptr) return std::nullopt;
-    Manifest out;
-    const Value* format = root->get("format");
-    if (format == nullptr || format->number() == nullptr || *format->number() < 1.0) return std::nullopt;
-    out.format = whole_u32(*format->number());
-    // A newer format's other fields may mean anything: the number is all a reader can say of it.
-    if (out.format > kFormat) return out;
-    out.id = text_field(*root, "id");
-    if (!valid_id(out.id)) return std::nullopt;
-    out.name = read_text(root->get("name"));
-    out.version = text_field(*root, "version");
-    out.game = text_field(*root, "game");
-    if (out.id.empty() || out.name.fallback.empty() || out.game.empty()) return std::nullopt;
-    out.versions = string_list(root->get("versions"));
-    // "regions": "any", or the discs it is made for. A name Nebula doesn't know refuses the file (LumaLink's check
-    // names it first).
-    if (const Value* regions = root->get("regions"); regions != nullptr) {
-        const std::string* any = std::get_if<std::string>(&regions->data);
-        if (any != nullptr) {
-            if (*any != "any") return std::nullopt;
-        } else {
-            out.regions = string_list(regions);
-            if (out.regions.empty()) return std::nullopt;
-            for (const std::string& region : out.regions) {
-                if (region != "US" && region != "PAL" && region != "JP" && region != "KR") return std::nullopt;
+    if (const Value* limits = entry.get("comet_time_limits"); limits != nullptr && limits->array() != nullptr) {
+        for (const Value& row : *limits->array()) {
+            CometLimit limit;
+            limit.galaxy = text_field(row, "galaxy");
+            if (limit.galaxy.empty()) return false;
+            const Value* mission = row.get("mission");
+            const Value* seconds = row.get("seconds");
+            if (mission == nullptr || mission->number() == nullptr || seconds == nullptr || seconds->number() == nullptr) return false;
+            limit.mission = whole_int(*mission->number());
+            limit.seconds = whole_int(*seconds->number());
+            layer.comet_time_limits.push_back(std::move(limit));
+        }
+    }
+    if (const Value* stages = entry.get("stages"); stages != nullptr && stages->array() != nullptr) {
+        for (const Value& row : *stages->array()) {
+            StageRule rule;
+            rule.stage = text_field(row, "stage");
+            if (rule.stage.empty()) return false;
+            if (const Value* scenario = row.get("scenario"); scenario != nullptr && scenario->number() != nullptr) rule.scenario = whole_int(*scenario->number());
+            rule.acts_as = string_list(row.get("acts_as"));
+            if (const Value* own = row.get("own_rules"); own != nullptr) {
+                if (const bool* flag = std::get_if<bool>(&own->data)) rule.own_rules = *flag;
+            }
+            layer.stages.push_back(std::move(rule));
+        }
+    }
+    if (const Value* constants = entry.get("player_constants"); constants != nullptr && constants->object() != nullptr) {
+        // { "mario": {...}, "luigi": {...}, "both": {...} }, each a name with a number or a list of numbers.
+        for (const auto& [who, fields] : *constants->object()) {
+            if (fields.object() == nullptr || (who != "mario" && who != "luigi" && who != "both")) return false;
+            for (const auto& [name, value] : *fields.object()) {
+                const auto add = [&, name = name](int index, double number) {
+                    // Past a float's range is infinite (a cast would be undefined): the start names it and sets nothing.
+                    const float held = std::fabs(number) <= static_cast<double>(std::numeric_limits<float>::max())
+                                           ? static_cast<float>(number)
+                                           : (number > 0.0 ? 1.0f : -1.0f) * std::numeric_limits<float>::infinity();
+                    if (who != "luigi") layer.player_constants.push_back({0, name, index, held, {}});
+                    if (who != "mario") layer.player_constants.push_back({1, name, index, held, {}});
+                };
+                if (const double* number = value.number()) {
+                    add(0, *number);
+                } else if (const Value* option = value.get("option"); option != nullptr && option->string() != nullptr) {
+                    if (who != "luigi") layer.player_constants.push_back({0, name, 0, 0.0f, *option->string()});
+                    if (who != "mario") layer.player_constants.push_back({1, name, 0, 0.0f, *option->string()});
+                } else if (const Array* list = value.array()) {
+                    for (std::size_t i = 0; i < list->size(); ++i) {
+                        // A null keeps the game's number at that place.
+                        if (const double* item = (*list)[i].number()) add(static_cast<int>(i), *item);
+                    }
+                }
             }
         }
     }
-    out.nebula = text_field(*root, "nebula");
-    out.requires_features = string_list(root->get("requires"));
-    out.authors = string_list(root->get("authors"));
-    out.description = read_text(root->get("description"));
-    out.license = text_field(*root, "license");
-    out.homepage = text_field(*root, "homepage");
-    out.icon = text_field(*root, "icon");
-    if (!out.icon.empty() && !path_stays_inside(out.icon)) out.icon.clear();
-    for (std::string& picture : string_list(root->get("pictures"))) {
-        if (out.pictures.size() < kMaxPictures && !picture.empty() && path_stays_inside(picture)) out.pictures.push_back(std::move(picture));
+    if (const Value* tunables = entry.get("tunables"); tunables != nullptr) {
+        // { "GameRules.cPlayerHealth": 6, "GameRules.cDodoryuShellOnly": true, "GameRules.cMaxCoins": {"option": "coins"}, "JetTurtle.sGravityLevel": [0.02, null, 0.01] }
+        if (tunables->object() == nullptr) return false;
+        for (const auto& [key, value] : *tunables->object()) {
+            if (key.find('.') == std::string::npos) return false;
+            if (const double* number = value.number()) {
+                layer.tunables.push_back({key, *number, {}});
+            } else if (const bool* flag = std::get_if<bool>(&value.data)) {
+                layer.tunables.push_back({key, *flag ? 1.0 : 0.0, {}});
+            } else if (const Value* option = value.get("option"); option != nullptr && option->string() != nullptr) {
+                layer.tunables.push_back({key, 0.0, *option->string()});
+            } else if (const Array* list = value.array()) {
+                // A list's places; a null keeps the game's number there.
+                for (std::size_t i = 0; i < list->size(); ++i) {
+                    if (const double* item = (*list)[i].number()) {
+                        layer.tunables.push_back({key + "[" + std::to_string(i) + "]", *item, {}});
+                    } else if (const bool* item_flag = std::get_if<bool>(&(*list)[i].data)) {
+                        layer.tunables.push_back({key + "[" + std::to_string(i) + "]", *item_flag ? 1.0 : 0.0, {}});
+                    } else if (!std::holds_alternative<std::monostate>((*list)[i].data)) {
+                        return false;
+                    }
+                }
+            } else {
+                return false;
+            }
+        }
     }
-    if (const Value* list = root->get("achievements"); list != nullptr && list->array() != nullptr) {
+    if (const Value* sounds = entry.get("sound_effects"); sounds != nullptr && sounds->array() != nullptr) {
+        for (const Value& row : *sounds->array()) {
+            SoundEffect sound{text_field(row, "name"), text_field(row, "file")};
+            if (sound.name.empty() || sound.file.empty()) return false;
+            layer.sound_effects.push_back(std::move(sound));
+        }
+    }
+    if (const Value* animations = entry.get("player_animations"); animations != nullptr) {
+        if (animations->array() == nullptr) return false;
+        for (const Value& row : *animations->array()) {
+            PlayerAnimation animation{text_field(row, "name"), text_field(row, "file")};
+            if (animation.name.empty() || animation.file.empty()) return false;
+            if (const Value* rate = row.get("rate"); rate != nullptr) {
+                const double* number = rate->number();
+                if (number == nullptr || !(*number > 0.0 && *number <= 100.0)) return false;
+                animation.rate = *number;
+            }
+            if (const Value* blend = row.get("blend_frames"); blend != nullptr) {
+                const double* number = blend->number();
+                if (number == nullptr || !(*number >= 0.0 && *number <= 600.0) || *number != static_cast<double>(static_cast<int>(*number))) {
+                    return false;
+                }
+                animation.blend_frames = static_cast<int>(*number);
+            }
+            layer.player_animations.push_back(std::move(animation));
+        }
+    }
+    if (const Value* classes = entry.get("object_classes"); classes != nullptr && classes->array() != nullptr) {
+        for (const Value& row : *classes->array()) {
+            if (row.get("script") != nullptr) {
+                layer.old_scripts = true;
+                continue;
+            }
+            // A new name made like a game class.
+            ObjectClass object{text_field(row, "name"), text_field(row, "like")};
+            if (object.name.empty() || object.like.empty()) return false;
+            layer.object_classes.push_back(std::move(object));
+        }
+    }
+    if (const Value* forms = entry.get("forms"); forms != nullptr) {
+        if (forms->array() == nullptr) return false;
+        for (const Value& row : *forms->array()) {
+            Form form;
+            form.name = text_field(row, "name");
+            form.model = text_field(row, "model");
+            form.music = text_field(row, "music");
+            if (row.get("script") != nullptr) layer.old_scripts = true;
+            if (form.name.empty()) return false;
+            // The game's forms by name (NEBULA_POWER_UP_*).
+            const auto game_form = [&row](std::string_view key, int& out) {
+                const std::string name = text_field(row, key);
+                if (name.empty()) return true;
+                static constexpr std::pair<std::string_view, int> names[] = {
+                    {"normal", 0}, {"invincible", 1}, {"fire", 2}, {"ice", 3}, {"bee", 4},
+                    {"spring", 5}, {"boo", 6},        {"flying", 7}, {"tornado", 9}};
+                for (const auto& [known, number] : names) {
+                    if (name == known) {
+                        out = number;
+                        return true;
+                    }
+                }
+                return false;
+            };
+            const auto whole = [&row](std::string_view key, int& out, int most) {
+                const Value* value = row.get(key);
+                if (value == nullptr) return true;
+                const double* number = value->number();
+                if (number == nullptr || !(*number >= 0.0 && *number <= most) || *number != static_cast<double>(static_cast<int>(*number))) return false;
+                out = static_cast<int>(*number);
+                return true;
+            };
+            if (!game_form("acts_like", form.acts_like) || !game_form("looks_like", form.looks_like) ||
+                !whole("color_frame", form.color_frame, 255) || !whole("frames", form.frames, 65535)) {
+                return false;
+            }
+            layer.forms.push_back(std::move(form));
+        }
+    }
+    if (entry.get("objects") != nullptr || entry.get("scripts") != nullptr) layer.old_scripts = true;
+    if (const Value* materials = entry.get("materials"); materials != nullptr && materials->object() != nullptr) {
+        for (const auto& [name, file] : *materials->object()) {
+            if (file.string() == nullptr || !path_stays_inside(*file.string())) return false;
+            layer.materials[name] = *file.string();
+        }
+    }
+    if (!read_rows(entry, layer.rows)) return false;
+    return true;
+}
+
+// The old keys of the whole mod: pre_standard's top (achievements, save, rows).
+bool read_old_top(const Value& pre, Manifest& out) {
+    if (const Value* list = pre.get("achievements"); list != nullptr && list->array() != nullptr) {
         for (const Value& entry : *list->array()) {
             Achievement achievement;
             achievement.id = text_field(entry, "id");
@@ -565,303 +700,12 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
             }
             const bool taken = std::any_of(out.achievements.begin(), out.achievements.end(),
                                            [&](const Achievement& other) { return other.id == achievement.id; });
-            if (valid_id(achievement.id) && !achievement.name.fallback.empty() && !taken && out.achievements.size() < kMaxAchievements) {
+            if (old_id(achievement.id) && !achievement.name.fallback.empty() && !taken && out.achievements.size() < kMaxAchievements) {
                 out.achievements.push_back(std::move(achievement));
             }
         }
     }
-    out.needs = dependency_list(root->get("needs"), "version");
-    out.conflicts = dependency_list(root->get("conflicts"), "below");
-    out.load_after = string_list(root->get("load_after"));
-    out.load_before = string_list(root->get("load_before"));
-    if (const Value* options = root->get("options"); options != nullptr && options->array() != nullptr) {
-        for (const Value& entry : *options->array()) {
-            Option option;
-            option.id = text_field(entry, "id");
-            option.name = read_text(entry.get("name"));
-            option.description = read_text(entry.get("description"));
-            option.fallback = text_field(entry, "default");
-            if (const Value* choices = entry.get("choices"); choices != nullptr && choices->array() != nullptr) {
-                for (const Value& choice : *choices->array()) {
-                    Choice read{text_field(choice, "id"), read_text(choice.get("name"))};
-                    if (!read.id.empty()) option.choices.push_back(std::move(read));
-                }
-            }
-            // A choice for each number of a range: { "from": 1, "to": 20, "step": 1 }. Its id is the number; a range from
-            // a larger number to a smaller one counts down.
-            if (const Value* range = entry.get("range"); range != nullptr && range->object() != nullptr) {
-                const auto number = [range](const char* key, double missing) {
-                    const Value* value = range->get(key);
-                    return value != nullptr && value->number() != nullptr ? *value->number() : missing;
-                };
-                const double from = number("from", 0.0);
-                const double to = number("to", from);
-                const double step = number("step", 1.0);
-                const double span = to >= from ? to - from : from - to;
-                const double toward = to >= from ? step : -step;
-                if (step > 0.0 && span / step <= 10000.0) {
-                    // Counted, so that a step too small for the numbers' size (1e300 + 1) cannot loop for ever.
-                    const std::size_t count = static_cast<std::size_t>(span / step + 0.001) + 1u;
-                    for (std::size_t i = 0; i < count; ++i) {
-                        const double at = from + static_cast<double>(i) * toward;
-                        char id[32];
-                        std::snprintf(id, sizeof(id), "%g", at);
-                        Choice choice;
-                        choice.id = id;
-                        choice.name.fallback = id;
-                        option.choices.push_back(std::move(choice));
-                    }
-                }
-                if (const Value* start = entry.get("default"); start != nullptr && start->number() != nullptr) {
-                    char id[32];
-                    std::snprintf(id, sizeof(id), "%g", *start->number());
-                    option.fallback = id;
-                }
-            }
-            if (option.id.empty() || option.choices.empty()) continue;
-            const bool known = std::any_of(option.choices.begin(), option.choices.end(), [&](const Choice& c) { return c.id == option.fallback; });
-            if (!known) option.fallback = option.choices.front().id;
-            out.options.push_back(std::move(option));
-        }
-    }
-    const Value* layers = root->get("layers");
-    if (layers == nullptr || layers->array() == nullptr) return std::nullopt;
-    for (const Value& entry : *layers->array()) {
-        Layer layer;
-        layer.path = text_field(entry, "path");
-        if (!layer.path.empty() && !path_stays_inside(layer.path)) return std::nullopt;
-        if (const Value* changes = entry.get("object_changes"); changes != nullptr && changes->array() != nullptr) {
-            for (const Value& row : *changes->array()) {
-                ObjectChange change;
-                change.object = text_field(row, "object");
-                if (change.object.empty()) return std::nullopt;
-                change.becomes = text_field(row, "becomes");
-                const std::string where = text_field(row, "in");
-                if (where == "display_models") change.where = 1;
-                else if (where == "treasure_boxes") change.where = 2;
-                else if (!where.empty() && where != "placed") return std::nullopt;
-                layer.object_changes.push_back(std::move(change));
-            }
-        }
-        if (const Value* limits = entry.get("comet_time_limits"); limits != nullptr && limits->array() != nullptr) {
-            for (const Value& row : *limits->array()) {
-                CometLimit limit;
-                limit.galaxy = text_field(row, "galaxy");
-                if (limit.galaxy.empty()) return std::nullopt;
-                const Value* mission = row.get("mission");
-                const Value* seconds = row.get("seconds");
-                if (mission == nullptr || mission->number() == nullptr || seconds == nullptr || seconds->number() == nullptr) return std::nullopt;
-                limit.mission = whole_int(*mission->number());
-                limit.seconds = whole_int(*seconds->number());
-                layer.comet_time_limits.push_back(std::move(limit));
-            }
-        }
-        if (const Value* stages = entry.get("stages"); stages != nullptr && stages->array() != nullptr) {
-            for (const Value& row : *stages->array()) {
-                StageRule rule;
-                rule.stage = text_field(row, "stage");
-                if (rule.stage.empty()) return std::nullopt;
-                if (const Value* scenario = row.get("scenario"); scenario != nullptr && scenario->number() != nullptr) rule.scenario = whole_int(*scenario->number());
-                rule.acts_as = string_list(row.get("acts_as"));
-                if (const Value* own = row.get("own_rules"); own != nullptr) {
-                    if (const bool* flag = std::get_if<bool>(&own->data)) rule.own_rules = *flag;
-                }
-                layer.stages.push_back(std::move(rule));
-            }
-        }
-        if (const Value* constants = entry.get("player_constants"); constants != nullptr && constants->object() != nullptr) {
-            // { "mario": {...}, "luigi": {...}, "both": {...} }, each a name with a number or a list of numbers.
-            for (const auto& [who, fields] : *constants->object()) {
-                if (fields.object() == nullptr || (who != "mario" && who != "luigi" && who != "both")) return std::nullopt;
-                for (const auto& [name, value] : *fields.object()) {
-                    const auto add = [&, name = name](int index, double number) {
-                        // Past a float's range is infinite (a cast would be undefined): the start names it and sets nothing.
-                        const float held = std::fabs(number) <= static_cast<double>(std::numeric_limits<float>::max())
-                                               ? static_cast<float>(number)
-                                               : (number > 0.0 ? 1.0f : -1.0f) * std::numeric_limits<float>::infinity();
-                        if (who != "luigi") layer.player_constants.push_back({0, name, index, held, {}});
-                        if (who != "mario") layer.player_constants.push_back({1, name, index, held, {}});
-                    };
-                    if (const double* number = value.number()) {
-                        add(0, *number);
-                    } else if (const Value* option = value.get("option"); option != nullptr && option->string() != nullptr) {
-                        if (who != "luigi") layer.player_constants.push_back({0, name, 0, 0.0f, *option->string()});
-                        if (who != "mario") layer.player_constants.push_back({1, name, 0, 0.0f, *option->string()});
-                    } else if (const Array* list = value.array()) {
-                        for (std::size_t i = 0; i < list->size(); ++i) {
-                            // A null keeps the game's number at that place.
-                            if (const double* item = (*list)[i].number()) add(static_cast<int>(i), *item);
-                        }
-                    }
-                }
-            }
-        }
-        if (const Value* tunables = entry.get("tunables"); tunables != nullptr) {
-            // { "GameRules.cPlayerHealth": 6, "GameRules.cDodoryuShellOnly": true, "GameRules.cMaxCoins": {"option": "coins"}, "JetTurtle.sGravityLevel": [0.02, null, 0.01] }
-            if (tunables->object() == nullptr) return std::nullopt;
-            for (const auto& [key, value] : *tunables->object()) {
-                if (key.find('.') == std::string::npos) return std::nullopt;
-                if (const double* number = value.number()) {
-                    layer.tunables.push_back({key, *number, {}});
-                } else if (const bool* flag = std::get_if<bool>(&value.data)) {
-                    layer.tunables.push_back({key, *flag ? 1.0 : 0.0, {}});
-                } else if (const Value* option = value.get("option"); option != nullptr && option->string() != nullptr) {
-                    layer.tunables.push_back({key, 0.0, *option->string()});
-                } else if (const Array* list = value.array()) {
-                    // A list's places; a null keeps the game's number there.
-                    for (std::size_t i = 0; i < list->size(); ++i) {
-                        if (const double* item = (*list)[i].number()) {
-                            layer.tunables.push_back({key + "[" + std::to_string(i) + "]", *item, {}});
-                        } else if (const bool* item_flag = std::get_if<bool>(&(*list)[i].data)) {
-                            layer.tunables.push_back({key + "[" + std::to_string(i) + "]", *item_flag ? 1.0 : 0.0, {}});
-                        } else if (!std::holds_alternative<std::monostate>((*list)[i].data)) {
-                            return std::nullopt;
-                        }
-                    }
-                } else {
-                    return std::nullopt;
-                }
-            }
-        }
-        if (const Value* sounds = entry.get("sound_effects"); sounds != nullptr && sounds->array() != nullptr) {
-            for (const Value& row : *sounds->array()) {
-                SoundEffect sound{text_field(row, "name"), text_field(row, "file")};
-                if (sound.name.empty() || sound.file.empty()) return std::nullopt;
-                layer.sound_effects.push_back(std::move(sound));
-            }
-        }
-        if (const Value* animations = entry.get("player_animations"); animations != nullptr) {
-            if (animations->array() == nullptr) return std::nullopt;
-            for (const Value& row : *animations->array()) {
-                PlayerAnimation animation{text_field(row, "name"), text_field(row, "file")};
-                if (animation.name.empty() || animation.file.empty()) return std::nullopt;
-                if (const Value* rate = row.get("rate"); rate != nullptr) {
-                    const double* number = rate->number();
-                    if (number == nullptr || !(*number > 0.0 && *number <= 100.0)) return std::nullopt;
-                    animation.rate = *number;
-                }
-                if (const Value* blend = row.get("blend_frames"); blend != nullptr) {
-                    const double* number = blend->number();
-                    if (number == nullptr || !(*number >= 0.0 && *number <= 600.0) || *number != static_cast<double>(static_cast<int>(*number))) {
-                        return std::nullopt;
-                    }
-                    animation.blend_frames = static_cast<int>(*number);
-                }
-                layer.player_animations.push_back(std::move(animation));
-            }
-        }
-        if (const Value* classes = entry.get("object_classes"); classes != nullptr && classes->array() != nullptr) {
-            for (const Value& row : *classes->array()) {
-                ObjectClass object{text_field(row, "name"), text_field(row, "like"), text_field(row, "script")};
-                // A new name made like a game class, or a script on a class (the game's own name, no "like").
-                if (object.name.empty() || (object.like.empty() && object.script.empty())) return std::nullopt;
-                if (!object.script.empty() && !script_name_ok(object.script)) return std::nullopt;
-                layer.object_classes.push_back(std::move(object));
-            }
-        }
-        if (const Value* forms = entry.get("forms"); forms != nullptr) {
-            if (forms->array() == nullptr) return std::nullopt;
-            for (const Value& row : *forms->array()) {
-                Form form;
-                form.name = text_field(row, "name");
-                form.model = text_field(row, "model");
-                form.music = text_field(row, "music");
-                form.script = text_field(row, "script");
-                if (form.name.empty() || (!form.script.empty() && !script_name_ok(form.script))) return std::nullopt;
-                // The game's forms by name (NEBULA_POWER_UP_*).
-                const auto game_form = [&row](std::string_view key, int& out) {
-                    const std::string name = text_field(row, key);
-                    if (name.empty()) return true;
-                    static constexpr std::pair<std::string_view, int> names[] = {
-                        {"normal", 0}, {"invincible", 1}, {"fire", 2}, {"ice", 3}, {"bee", 4},
-                        {"spring", 5}, {"boo", 6},        {"flying", 7}, {"tornado", 9}};
-                    for (const auto& [known, number] : names) {
-                        if (name == known) {
-                            out = number;
-                            return true;
-                        }
-                    }
-                    return false;
-                };
-                const auto whole = [&row](std::string_view key, int& out, int most) {
-                    const Value* value = row.get(key);
-                    if (value == nullptr) return true;
-                    const double* number = value->number();
-                    if (number == nullptr || !(*number >= 0.0 && *number <= most) || *number != static_cast<double>(static_cast<int>(*number))) return false;
-                    out = static_cast<int>(*number);
-                    return true;
-                };
-                if (!game_form("acts_like", form.acts_like) || !game_form("looks_like", form.looks_like) ||
-                    !whole("color_frame", form.color_frame, 255) || !whole("frames", form.frames, 65535)) {
-                    return std::nullopt;
-                }
-                layer.forms.push_back(std::move(form));
-            }
-        }
-        if (const Value* objects = entry.get("objects"); objects != nullptr) {
-            if (objects->array() == nullptr) return std::nullopt;
-            for (const Value& row : *objects->array()) {
-                ScriptObject object;
-                object.name = text_field(row, "name");
-                object.script = text_field(row, "script");
-                object.archive = text_field(row, "archive");
-                if (object.name.empty() || !script_name_ok(object.script)) return std::nullopt;
-                const std::string kind = text_field(row, "kind");
-                static constexpr std::string_view kinds[] = {"enemy", "map", "npc", "ride", "decoration"};
-                object.kind = -1;
-                for (int k = 0; k < 5; ++k) {
-                    if (kind.empty() ? k == 0 : kind == kinds[k]) object.kind = k;
-                }
-                if (object.kind < 0) return std::nullopt;
-                const auto distance = [&row](std::string_view key, double& out) {
-                    const Value* value = row.get(key);
-                    if (value == nullptr) return true;
-                    const double* number = value->number();
-                    if (number == nullptr || !(*number >= 0.0 && *number <= 100000.0)) return false;
-                    out = *number;
-                    return true;
-                };
-                if (!distance("radius", object.radius) || !distance("shadow_radius", object.shadow_radius) ||
-                    !distance("clip_radius", object.clip_radius)) {
-                    return std::nullopt;
-                }
-                if (const Value* collision = row.get("collision"); collision != nullptr) {
-                    const bool* solid = std::get_if<bool>(&collision->data);
-                    if (solid == nullptr) return std::nullopt;
-                    object.collision = *solid;
-                }
-                layer.objects.push_back(std::move(object));
-            }
-        }
-        if (const Value* scripts = entry.get("scripts"); scripts != nullptr) {
-            if (scripts->array() == nullptr) return std::nullopt;
-            for (const Value& row : *scripts->array()) {
-                const std::string* name = std::get_if<std::string>(&row.data);
-                if (name == nullptr || !script_name_ok(*name)) return std::nullopt;
-                layer.scripts.push_back(*name);
-            }
-        }
-        // "switches" gave way to "tunables": the mod is refused, naming the tunable for its first switch.
-        if (const Value* switches = entry.get("switches"); switches != nullptr && out.retired.empty()) {
-            out.retired = "\"SWITCHES\" ARE NOW \"TUNABLES\"";
-            if (switches->object() != nullptr && !switches->object()->empty()) {
-                const std::string& name = switches->object()->begin()->first;
-                if (const SwitchTunable tunable = switch_tunable(name); !tunable.key.empty()) {
-                    out.retired += ": " + name + " IS " + std::string(tunable.key) + (tunable.opposite ? " (THE OPPOSITE SENSE)" : "");
-                }
-            }
-        }
-        if (const Value* materials = entry.get("materials"); materials != nullptr && materials->object() != nullptr) {
-            for (const auto& [name, file] : *materials->object()) {
-                if (file.string() == nullptr || !path_stays_inside(*file.string())) return std::nullopt;
-                layer.materials[name] = *file.string();
-            }
-        }
-        if (!read_rows(entry, layer.rows)) return std::nullopt;
-        layer.when = read_when(entry.get("when"));
-        out.layers.push_back(std::move(layer));
-    }
-    if (const Value* save = root->get("save"); save != nullptr && save->object() != nullptr) {
+    if (const Value* save = pre.get("save"); save != nullptr && save->object() != nullptr) {
         out.save_path = text_field(*save, "path");
         if (!path_stays_inside(out.save_path)) out.save_path.clear();
         const std::string mode = text_field(*save, "mode");
@@ -873,21 +717,377 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     }
     if (out.save_tag.empty()) out.save_tag = out.id;
     // The tag names a folder of saves: an id's letters keep it in mods/.saves.
-    if (!valid_id(out.save_tag)) return std::nullopt;
-    if (!read_rows(*root, out)) return std::nullopt;
-    if (const Value* plugins = root->get("plugins"); plugins != nullptr && plugins->array() != nullptr) {
-        for (const Value& entry : *plugins->array()) {
-            Plugin plugin;
-            if (const Value* binaries = entry.get("binaries"); binaries != nullptr && binaries->object() != nullptr) {
-                for (const auto& [target, file] : *binaries->object()) {
-                    if (file.string() == nullptr || !path_stays_inside(*file.string())) return std::nullopt;
-                    plugin.binaries[target] = *file.string();
+    if (!old_id(out.save_tag) && out.save_tag != out.id) return false;
+    if (!read_rows(pre, out)) return false;
+    return true;
+}
+
+// The form's "format": "<major>.<minor>", each a number without leading zeros.
+bool read_format(const Value* value, std::uint32_t& major, std::uint32_t& minor) {
+    const std::string* text = value != nullptr ? value->string() : nullptr;
+    if (text == nullptr) return false;
+    const std::size_t dot = text->find('.');
+    if (dot == std::string::npos) return false;
+    const auto number = [](std::string_view part, std::uint32_t& out) {
+        if (part.empty() || part.size() > 9u || (part.size() > 1u && part.front() == '0')) return false;
+        out = 0;
+        for (const char c : part) {
+            if (c < '0' || c > '9') return false;
+            out = out * 10u + static_cast<std::uint32_t>(c - '0');
+        }
+        return true;
+    };
+    return number(std::string_view(*text).substr(0, dot), major) && number(std::string_view(*text).substr(dot + 1u), minor);
+}
+
+// The language code Text keys a game language folder by; a folder of an installed language mod is its own key.
+std::string text_language(std::string_view folder) {
+    static constexpr std::string_view kKnown[] = {"UsEnglish", "EuEnglish", "UsFrench", "EuFrench", "UsSpanish",
+                                                  "EuSpanish", "EuGerman", "EuItalian", "EuDutch", "UsPortuguese",
+                                                  "JpJapanese", "KrKorean", "CnSimpChinese", "TwTradChinese"};
+    for (const std::string_view known : kKnown) {
+        if (known == folder) return language_code(folder);
+    }
+    return std::string(folder);
+}
+
+// A text the form gives once at its place and per language under "text" (text.<folder>.<path...>).
+Text form_text(const Value* fallback, const Value* text, std::initializer_list<std::string_view> path) {
+    Text out;
+    if (const std::string* plain = fallback != nullptr ? fallback->string() : nullptr) out.fallback = *plain;
+    const Object* languages = text != nullptr ? text->object() : nullptr;
+    if (languages == nullptr) return out;
+    for (const auto& [folder, entry] : *languages) {
+        const Value* at = &entry;
+        for (const std::string_view key : path) {
+            at = at != nullptr ? at->get(key) : nullptr;
+        }
+        if (const std::string* words = at != nullptr ? at->string() : nullptr) out.languages[text_language(folder)] = *words;
+    }
+    return out;
+}
+
+// A `when` value as the situation names it: a toggle's true and false are "on" and "off", a number as %g.
+std::string when_value(const Value& value) {
+    if (const std::string* text = value.string()) return *text;
+    if (const bool* flag = std::get_if<bool>(&value.data)) return *flag ? "on" : "off";
+    if (const double* number = value.number()) return number_text(*number);
+    return {};
+}
+
+// The form's layer `when`: option, region, language, platform, code.
+When read_form_when(const Value* value) {
+    When when;
+    const Object* fields = value != nullptr ? value->object() : nullptr;
+    if (fields == nullptr) return when;
+    for (const auto& [key, field] : *fields) {
+        if (key == "region") {
+            when.regions = string_list(&field);
+        } else if (key == "language") {
+            when.languages = string_list(&field);
+        } else if (key == "platform") {
+            when.platforms = string_list(&field);
+        } else if (key == "code") {
+            const bool* flag = std::get_if<bool>(&field.data);
+            when.code = flag != nullptr && *flag;
+            when.unknown = when.unknown || flag == nullptr || !*flag;
+        } else if (key == "option") {
+            if (const Object* options = field.object()) {
+                for (const auto& [option, wanted] : *options) {
+                    std::vector<std::string>& values = when.options[option];
+                    if (const Array* list = wanted.array()) {
+                        for (const Value& one : *list) values.push_back(when_value(one));
+                    } else {
+                        values.push_back(when_value(wanted));
+                    }
                 }
             }
-            const Value* api = entry.get("api");
-            plugin.api = api != nullptr && api->number() != nullptr ? whole_u32(*api->number()) : 0u;
-            plugin.when = read_when(entry.get("when"));
-            out.plugins.push_back(std::move(plugin));
+        } else {
+            when.unknown = true;
+        }
+    }
+    return when;
+}
+
+// The form's options: choice (values, value_names) and toggle (on, off) have choices; number is a range (min, max,
+// step), however many values it holds, and nothing lists them; text (max_length, its default text) has no choices: the
+// player types it on the Mods page and a mod reads it as text. Key options are the mod's input actions
+// (Manifest.keys), bound in Controls, not on the Mods page; they are options too, which a mod reads as its default
+// control's name.
+void read_options(const Value& root, Manifest& out) {
+    const Value* options = root.get("options");
+    const Value* text = root.get("text");
+    if (options == nullptr || options->array() == nullptr) return;
+    for (const Value& entry : *options->array()) {
+        Option option;
+        option.id = text_field(entry, "key");
+        const std::string kind = text_field(entry, "kind");
+        option.kind = kind;
+        option.name = form_text(entry.get("name"), text, {"options", option.id, "name"});
+        const Value* start = entry.get("default");
+        if (kind == "choice") {
+            const Value* names = entry.get("value_names");
+            for (const std::string& value : string_list(entry.get("values"))) {
+                Choice choice{value, form_text(names != nullptr ? names->get(value) : nullptr, text, {"options", option.id, "value_names", value})};
+                option.choices.push_back(std::move(choice));
+            }
+            option.fallback = start != nullptr ? when_value(*start) : std::string();
+        } else if (kind == "number") {
+            const auto number = [&entry](const char* key, double missing) {
+                const Value* value = entry.get(key);
+                return value != nullptr && value->number() != nullptr ? *value->number() : missing;
+            };
+            option.min = number("min", 0.0);
+            option.max = number("max", option.min);
+            option.step = number("step", 1.0);
+            // A range with no values (a step not above 0, max below min) is the validator's error: no option.
+            if (option.id.empty() || !(option.step > 0.0) || !(option.max >= option.min) || !std::isfinite(option.max - option.min)) {
+                continue;
+            }
+            // A default that is not one of its values (the validator's error too) starts on min.
+            const std::optional<std::string> fallback =
+                start != nullptr && start->number() != nullptr ? number_value(option, number_text(*start->number())) : std::nullopt;
+            option.fallback = fallback ? *fallback : number_text(option.min);
+            out.options.push_back(std::move(option));
+            continue;
+        } else if (kind == "key") {
+            // An input action (services/input.md 2): in keys for Controls and the input service, and an option too, so
+            // that mods.option reads its default control's name as text (services/mods.md 8). The validator keeps the
+            // default one of kTargetIds (L210 Option.KeyDefaultUnknown); the input service checks it again.
+            option.fallback = start != nullptr ? when_value(*start) : std::string();
+            if (!option.id.empty()) {
+                out.keys.push_back({option.id, option.name, option.fallback});
+                out.options.push_back(std::move(option));
+            }
+            continue;
+        } else if (kind == "toggle") {
+            // The Mods page's "off" is the toggle's false; its one choice is "on".
+            option.choices.push_back({"off", {}});
+            option.choices.push_back({"on", {}});
+            option.fallback = start != nullptr ? when_value(*start) : std::string("off");
+        } else if (kind == "text") {
+            // The validator refuses a text default over max_length (L210).
+            option.fallback = text_field(entry, "default");
+            const Value* most = entry.get("max_length");
+            const double length = most != nullptr && most->number() != nullptr ? *most->number() : 256.0;
+            option.max_length = length >= 1.0 && length <= 256.0 ? static_cast<std::uint32_t>(length) : 256u;
+            if (!option.id.empty()) out.options.push_back(std::move(option));
+            continue;
+        } else {
+            continue;
+        }
+        if (option.id.empty() || option.choices.empty()) continue;
+        const bool known = std::any_of(option.choices.begin(), option.choices.end(), [&](const Choice& c) { return c.id == option.fallback; });
+        if (!known) option.fallback = option.choices.front().id;
+        out.options.push_back(std::move(option));
+    }
+}
+
+}  // namespace
+
+const std::string& Text::in(std::string_view language) const {
+    if (const auto it = languages.find(std::string(language)); it != languages.end()) return it->second;
+    const std::size_t dash = language.find('-');
+    const std::string_view base = language.substr(0, dash);
+    if (dash != std::string_view::npos) {
+        if (const auto it = languages.find(std::string(base)); it != languages.end()) return it->second;
+    }
+    // Then the same language of another region (fr-CA for fr, es for es-MX), as the game's own text falls back.
+    for (const auto& [key, text] : languages) {
+        if (std::string_view(key).substr(0, key.find('-')) == base) return text;
+    }
+    return fallback;
+}
+
+std::string number_text(double value) {
+    if (!std::isfinite(value)) return "0";
+    if (value == 0.0) return "0";  // never "-0"
+    char text[48];
+    for (int digits = 1; digits <= 17; ++digits) {
+        std::snprintf(text, sizeof(text), "%.*g", digits, value);
+        if (std::strtod(text, nullptr) == value) break;
+    }
+    // Plain digits where a person writes them (20000, not 2e+04): the fewest decimals that read back.
+    if (std::strchr(text, 'e') != nullptr && std::fabs(value) >= 1e-4 && std::fabs(value) < 1e15) {
+        for (int decimals = 0; decimals <= 17; ++decimals) {
+            std::snprintf(text, sizeof(text), "%.*f", decimals, value);
+            if (std::strtod(text, nullptr) == value) break;
+        }
+    }
+    return text;
+}
+
+namespace {
+
+// The whole steps from min to max (k from 0 to this one are the option's values).
+double last_step(const Option& option) {
+    return std::floor((option.max - option.min) / option.step + 1e-9);
+}
+
+// Step k as number_text writes the shortest decimal that is nearest to step k of all the option's values: 0.1 + 2 * 0.1
+// is written 0.3, not 0.30000000000000004.
+std::string step_text(const Option& option, double k) {
+    const double exact = option.min + k * option.step;
+    char text[32];
+    for (int digits = 1; digits <= 17; ++digits) {
+        std::snprintf(text, sizeof(text), "%.*g", digits, exact);
+        const double back = std::strtod(text, nullptr);
+        if (std::fabs((back - option.min) / option.step - k) < 1e-6) return number_text(back);
+    }
+    return number_text(exact);
+}
+
+// The step a value is on, or nothing: within the range, at most a millionth of a step off a whole one (decimals are
+// not exact in binary).
+std::optional<double> step_of(const Option& option, double value) {
+    if (!std::isfinite(value)) return std::nullopt;
+    const double k = (value - option.min) / option.step;
+    const double whole = std::round(k);
+    if (std::fabs(k - whole) > 1e-6 || whole < 0.0 || whole > last_step(option)) return std::nullopt;
+    return whole;
+}
+
+}  // namespace
+
+std::optional<std::string> number_value(const Option& option, std::string_view text) {
+    // A decimal number as a person writes it: an optional minus, digits with at most one point, an optional exponent.
+    // No spaces, no plus, no hexadecimal, infinity or not-a-number, which strtod alone would take.
+    if (text.empty() || text.size() > 64u) return std::nullopt;
+    std::size_t at = text[0] == '-' ? 1u : 0u;
+    std::size_t digits = 0u;
+    bool point = false;
+    for (; at < text.size(); ++at) {
+        const char c = text[at];
+        if (c >= '0' && c <= '9') {
+            ++digits;
+        } else if (c == '.' && !point) {
+            point = true;
+        } else {
+            break;
+        }
+    }
+    if (digits == 0u) return std::nullopt;
+    if (at < text.size() && (text[at] == 'e' || text[at] == 'E')) {
+        ++at;
+        if (at < text.size() && (text[at] == '+' || text[at] == '-')) ++at;
+        const std::size_t power = at;
+        while (at < text.size() && text[at] >= '0' && text[at] <= '9') ++at;
+        if (at == power) return std::nullopt;
+    }
+    if (at != text.size()) return std::nullopt;
+    const std::string copy(text);
+    const double value = std::strtod(copy.c_str(), nullptr);
+    if (!step_of(option, value)) return std::nullopt;
+    return number_text(value);
+}
+
+std::string number_stepped(const Option& option, std::string_view text, double steps) {
+    std::optional<double> k;
+    if (const std::optional<std::string> now = number_value(option, text)) k = step_of(option, std::strtod(now->c_str(), nullptr));
+    if (!k) k = step_of(option, std::strtod(option.fallback.c_str(), nullptr));
+    const double next = std::clamp(std::round(k.value_or(0.0) + steps), 0.0, last_step(option));
+    return step_text(option, next);
+}
+
+std::optional<Manifest> parse_manifest(std::string_view text) {
+    const std::optional<Value> root = Parser(text).whole();
+    if (!root || root->object() == nullptr) return std::nullopt;
+    Manifest out;
+    if (!read_format(root->get("format"), out.format, out.format_minor)) return std::nullopt;
+    out.id = text_field(*root, "id");
+    if (!valid_id(out.id)) return std::nullopt;
+    // A newer format's other fields may mean anything: its format and id are all a reader can say of it (L205).
+    if (out.format > kFormat || (out.format == kFormat && out.format_minor > kFormatMinor)) return out;
+    const Value* words = root->get("text");
+    out.name = form_text(root->get("name"), words, {"name"});
+    out.description = form_text(root->get("summary"), words, {"summary"});
+    out.version = text_field(*root, "version");
+    if (const Value* game = root->get("game"); game != nullptr) {
+        out.game = text_field(*game, "id");
+        out.regions = string_list(game->get("regions"));
+    }
+    out.authors = string_list(root->get("authors"));
+    out.license = text_field(*root, "license");
+    if (const Value* links = root->get("links"); links != nullptr) out.homepage = text_field(*links, "home");
+    out.icon = text_field(*root, "icon");
+    if (!out.icon.empty() && !path_stays_inside(out.icon)) out.icon.clear();
+    for (std::string& picture : string_list(root->get("pictures"))) {
+        if (out.pictures.size() < kMaxPictures && !picture.empty() && path_stays_inside(picture)) out.pictures.push_back(std::move(picture));
+    }
+    out.needs = dependency_list(root->get("needs"), "version");
+    out.conflicts = dependency_list(root->get("conflicts"), "");
+    if (const Value* library = root->get("library"); library != nullptr) {
+        const bool* is = std::get_if<bool>(&library->data);
+        out.library = is != nullptr && *is;
+    }
+    if (const Value* load = root->get("load"); load != nullptr) {
+        out.load_after = string_list(load->get("after"));
+        out.load_before = string_list(load->get("before"));
+    }
+    out.takes_over = string_list(root->get("takes_over"));
+    read_options(*root, out);
+
+    // pre_standard: the previous engine's rows, read as before from this one key (OLD-ROWS.md).
+    const Value* pre = root->get("pre_standard");
+    const Value* pre_layers = pre != nullptr ? pre->get("layers") : nullptr;
+    if (pre != nullptr && !read_old_top(*pre, out)) return std::nullopt;
+    if (const Value* layers = root->get("layers"); layers != nullptr && layers->array() != nullptr) {
+        out.layers_listed = true;
+        for (const Value& entry : *layers->array()) {
+            Layer layer;
+            const std::string name = text_field(entry, "name");
+            if (name.empty() || name.find_first_of("/\\") != std::string::npos || !path_stays_inside(name)) return std::nullopt;
+            layer.path = "layers/" + name;
+            layer.when = read_form_when(entry.get("when"));
+            if (const Value* old = pre_layers != nullptr ? pre_layers->get(name) : nullptr) {
+                if (!read_old_layer(*old, layer)) return std::nullopt;
+                // The old `when` (mods, version, not, any) and-ed with the form's: one any_of entry.
+                if (const Value* old_when = old->get("when"); old_when != nullptr) {
+                    layer.when.any_of.push_back(read_when(old_when));
+                    layer.when.unknown = layer.when.unknown || layer.when.any_of.back().unknown;
+                }
+            }
+            out.layers.push_back(std::move(layer));
+        }
+    }
+    if (out.save_tag.empty()) out.save_tag = out.id;
+
+    // luma.md 6: code/<platform>/mod.<ending>, found by that path alone (the one route for a mod's code).
+    if (const Value* code = root->get("code"); code != nullptr) {
+        if (code->object() == nullptr) return std::nullopt;
+        Plugin plugin;
+        for (const std::string& platform : string_list(code->get("platforms"))) {
+            const std::string entry = code_entry(platform);
+            if (entry.empty() || plugin.binaries.count(platform) != 0u) return std::nullopt;
+            plugin.binaries[platform] = entry;
+        }
+        if (const Value* libraries = code->get("libraries"); libraries != nullptr) {
+            if (libraries->object() == nullptr) return std::nullopt;
+            for (const auto& [platform, files] : *libraries->object()) {
+                if (plugin.binaries.count(platform) == 0u || files.array() == nullptr) return std::nullopt;
+                std::vector<std::string>& list = out.code_libraries[platform];
+                for (const Value& file : *files.array()) {
+                    // A file name in code/<platform>/: no folder part, not the entry library itself.
+                    const std::string* name = file.string();
+                    if (name == nullptr || name->find_first_of("/\\") != std::string::npos || !path_stays_inside(*name) ||
+                        "code/" + platform + "/" + *name == plugin.binaries[platform]) {
+                        return std::nullopt;
+                    }
+                    list.push_back(*name);
+                }
+            }
+        }
+        if (!plugin.binaries.empty()) out.plugins.push_back(std::move(plugin));
+    }
+    // The validator has refused a bad list (L211); a permission without its name here is not read, never half-read.
+    if (const Value* permissions = root->get("permissions"); permissions != nullptr && permissions->array() != nullptr) {
+        for (const Value& entry : *permissions->array()) {
+            Permission permission{text_field(entry, "name"), text_field(entry, "why"), string_list(entry.get("hosts")),
+                                  string_list(entry.get("roots"))};
+            if (permission.name.empty()) return std::nullopt;
+            // Its reason per language, keyed by its name in the text block's own `permissions` (never an option's).
+            permission.why_text = form_text(entry.get("why"), words, {"permissions", permission.name});
+            out.permissions.push_back(std::move(permission));
         }
     }
     return out;
@@ -903,7 +1103,15 @@ std::optional<Manifest> read_manifest(const std::filesystem::path& folder) {
     std::ifstream in(folder / "luma.json", std::ios::binary);
     if (!in) return std::nullopt;
     const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    return parse_manifest(text);
+    std::optional<Manifest> manifest = parse_manifest(text);
+    // No "layers": the one layer "base" when layers/base is there (luma.md 4).
+    std::error_code base_error;
+    if (manifest && !manifest->layers_listed && std::filesystem::is_directory(folder / "layers" / "base", base_error)) {
+        Layer base;
+        base.path = "layers/base";
+        manifest->layers.push_back(std::move(base));
+    }
+    return manifest;
 }
 
 int compare_versions(std::string_view a, std::string_view b) {
@@ -923,44 +1131,121 @@ int compare_versions(std::string_view a, std::string_view b) {
     return 0;
 }
 
-std::string refusal(const Manifest& manifest, const std::string& game_id, std::string_view nebula_version, std::string_view) {
-    if (manifest.format > kFormat) return "THIS MOD NEEDS A NEWER NEBULA";
-    if (!manifest.retired.empty()) return manifest.retired;
-    // The features this Nebula has; any other is one it lacks. "tunables": the game's tuning numbers by "<file>.<name>";
-    // "player-animations": a layer's player_animations.
-    for (const std::string& feature : manifest.requires_features) {
-        if (feature != "custom-shaders" && feature != "tunables" && feature != "player-animations") return "THIS MOD NEEDS A NEWER NEBULA";
+namespace {
+
+// The dotted version `text` bumped at part `part` (0 major, 1 minor), the later parts dropped: "1.4.2", 1 -> "1.5".
+std::string bumped(std::string_view text, std::size_t part) {
+    std::vector<unsigned long> parts;
+    while (!text.empty()) {
+        unsigned long value = 0;
+        std::size_t i = 0;
+        for (; i < text.size() && text[i] >= '0' && text[i] <= '9'; ++i) value = value * 10u + static_cast<unsigned long>(text[i] - '0');
+        parts.push_back(value);
+        while (i < text.size() && text[i] != '.') ++i;
+        text.remove_prefix(i < text.size() ? i + 1u : i);
     }
-    if (!manifest.nebula.empty() && compare_versions(nebula_version, manifest.nebula) < 0) return "THIS MOD NEEDS A NEWER NEBULA";
-    if (manifest.game.starts_with("SB4") || manifest.game.starts_with("SB5")) return "THIS MOD IS FOR SUPER MARIO GALAXY 2";
-    if (!manifest.game.starts_with("RMG")) return "THIS MOD IS FOR ANOTHER GAME";
-    if (!manifest.versions.empty() && game_id.size() >= 4u && !contains(manifest.versions, game_id.substr(3, 1))) {
-        return "THIS MOD DOESN'T WORK ON THIS VERSION OF THE GAME";
-    }
-    // Made for other discs: the reason names the ones it is for (the game's menu translates the words; the region
-    // names stay as written).
-    if (!manifest.regions.empty() && game_id.size() >= 4u) {
-        const char letter = game_id[3];
-        const std::string_view here = letter == 'E' ? "US" : letter == 'P' ? "PAL" : letter == 'J' ? "JP" : letter == 'K' ? "KR" : "";
-        if (!contains(manifest.regions, std::string(here))) {
-            std::string reason = "THIS MOD IS ONLY FOR: ";
-            for (std::size_t i = 0; i < manifest.regions.size(); ++i) reason += (i != 0u ? ", " : "") + manifest.regions[i];
-            return reason;
+    parts.resize(part + 1u, 0u);
+    ++parts[part];
+    std::string out;
+    for (std::size_t i = 0; i < parts.size(); ++i) out += (i == 0 ? "" : ".") + std::to_string(parts[i]);
+    return out;
+}
+
+}  // namespace
+
+int version_in_range(std::string_view version, std::string_view range) {
+    // One alternative: 0 inside, -1 below a floor, 1 above a ceiling or off an exact version; 2 when it cannot be read.
+    const auto alternative = [version](std::string_view text) {
+        int result = 0;
+        bool read = false;
+        while (!text.empty()) {
+            const std::size_t start = text.find_first_not_of(" ,\t");
+            if (start == std::string_view::npos) break;
+            text.remove_prefix(start);
+            std::size_t end = text.find_first_of(" ,\t");
+            std::string_view item = text.substr(0, end);
+            text.remove_prefix(end == std::string_view::npos ? text.size() : end);
+            std::string_view op;
+            for (std::string_view candidate : {">=", "<=", ">", "<", "=", "^", "~"}) {
+                if (item.starts_with(candidate)) {
+                    op = candidate;
+                    item.remove_prefix(candidate.size());
+                    break;
+                }
+            }
+            // A comparator written with a space after it (">= 1.2") takes the next word.
+            if (item.empty() && !op.empty()) {
+                const std::size_t next = text.find_first_not_of(" ,\t");
+                if (next == std::string_view::npos) return 2;
+                text.remove_prefix(next);
+                end = text.find_first_of(" ,\t");
+                item = text.substr(0, end);
+                text.remove_prefix(end == std::string_view::npos ? text.size() : end);
+            }
+            if (item.starts_with('v')) item.remove_prefix(1u);
+            if (const std::size_t tag = item.find_first_of("-+"); tag != std::string_view::npos) item = item.substr(0, tag);
+            if (item == "*" || item == "x" || item == "X") {
+                read = true;
+                continue;
+            }
+            if (item.empty() || item[0] < '0' || item[0] > '9') return 2;
+            // A part written x or * ("1.x") is a ~ or ^ on what comes before it.
+            std::string bound(item);
+            std::size_t wild = bound.find_first_of("xX*");
+            if (wild != std::string::npos && (op.empty() || op == "=")) {
+                bound = bound.substr(0, wild > 0 ? wild - 1u : 0u);
+                op = std::count(bound.begin(), bound.end(), '.') == 0 ? "^" : "~";
+            } else if (wild != std::string::npos) {
+                return 2;
+            }
+            read = true;
+            const int against = compare_versions(version, bound);
+            if (op == ">=") {
+                if (against < 0 && result == 0) result = -1;
+            } else if (op == ">") {
+                if (against <= 0 && result == 0) result = -1;
+            } else if (op == "<=") {
+                if (against > 0 && result == 0) result = 1;
+            } else if (op == "<") {
+                if (against >= 0 && result == 0) result = 1;
+            } else if (op == "^" || op == "~") {
+                // ^: up to the next major (the next minor for 0.x); ~: up to the next minor.
+                const bool zero_major = compare_versions(bound, "1") < 0;
+                const std::string ceiling = bumped(bound, op == "~" || zero_major ? 1u : 0u);
+                if (against < 0 && result == 0) result = -1;
+                if (compare_versions(version, ceiling) >= 0 && result == 0) result = 1;
+            } else if (against != 0 && result == 0) {
+                result = against;
+            }
         }
+        return read ? result : 2;
+    };
+    int first = 2;
+    while (true) {
+        const std::size_t bar = range.find("||");
+        const int result = alternative(range.substr(0, bar));
+        if (result == 0) return 0;
+        if (first == 2) first = result;
+        if (bar == std::string_view::npos) break;
+        range.remove_prefix(bar + 2u);
     }
-    for (const Plugin& plugin : manifest.plugins) {
-        if (plugin.api > kPluginApi) return "THIS MOD NEEDS A NEWER NEBULA";
-        if (plugin.api != 0u && plugin.api < kOldestPluginApi) return "THIS MOD'S CODE IS FOR AN OLDER NEBULA: REBUILD IT WITH THIS NEBULA'S NEBULA_MOD_API.H";
-        if (plugin.binaries.find(std::string(plugin_target())) == plugin.binaries.end()) return "THIS MOD HAS NO VERSION FOR THIS DEVICE";
-    }
-    return {};
+    return first == 2 ? 0 : first;
 }
 
 bool when_holds(const When& when, const Situation& situation) {
     if (when.unknown) return false;
+    if (!when.regions.empty() && !contains(when.regions, situation.region)) return false;
     if (!when.versions.empty() && !contains(when.versions, situation.version)) return false;
     if (!when.languages.empty() && !contains(when.languages, situation.language)) return false;
-    if (!when.platforms.empty() && !contains(when.platforms, situation.platform)) return false;
+    // A platform as luma.md names it (windows-x64), or an operating system's name alone for each of its machines.
+    if (!when.platforms.empty() && std::none_of(when.platforms.begin(), when.platforms.end(), [&](const std::string& platform) {
+            return platform == situation.platform || (situation.platform.size() > platform.size() &&
+                                                      situation.platform.compare(0, platform.size(), platform) == 0 &&
+                                                      situation.platform[platform.size()] == '-');
+        })) {
+        return false;
+    }
+    if (when.code && !situation.code) return false;
     for (const auto& [option, choices] : when.options) {
         const auto it = situation.options.find(option);
         if (it == situation.options.end() || !contains(choices, it->second)) return false;
@@ -976,7 +1261,15 @@ bool when_holds(const When& when, const Situation& situation) {
 }
 
 bool layer_used(const Layer& layer, const Situation& situation) {
+    if (layer.when.code && !contains(situation.code_layers, layer_name(layer))) return false;
     return when_holds(layer.when, situation);
+}
+
+std::string layer_name(const Layer& layer) {
+    constexpr std::string_view kFolder = "layers/";
+    std::string_view path = layer.path;
+    if (path.starts_with(kFolder)) path.remove_prefix(kFolder.size());
+    return std::string(path);
 }
 
 std::string_view plugin_target() noexcept {
@@ -989,12 +1282,26 @@ std::string_view plugin_target() noexcept {
     return "windows-" NEBULA_PLUGIN_ARCH;
 #elif defined(__ANDROID__)
     return "android-" NEBULA_PLUGIN_ARCH;
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+    return "ios-arm64";
 #elif defined(__APPLE__)
     return "macos-" NEBULA_PLUGIN_ARCH;
 #else
     return "linux-" NEBULA_PLUGIN_ARCH;
 #endif
 #undef NEBULA_PLUGIN_ARCH
+}
+
+std::string code_entry(std::string_view platform) {
+    static constexpr std::pair<std::string_view, std::string_view> kEndings[] = {
+        {"windows-x64", "dll"},   {"windows-arm64", "dll"}, {"linux-x64", "so"},     {"linux-arm64", "so"},
+        {"macos-arm64", "dylib"}, {"macos-x64", "dylib"},   {"android-arm64", "so"}, {"android-x64", "so"},
+        {"ios-arm64", "dylib"},
+    };
+    for (const auto& [name, ending] : kEndings) {
+        if (name == platform) return "code/" + std::string(platform) + "/mod." + std::string(ending);
+    }
+    return {};
 }
 
 std::string language_code(std::string_view folder) {
@@ -1008,56 +1315,6 @@ std::string language_code(std::string_view folder) {
         if (name == folder) return std::string(code);
     }
     return "en";
-}
-
-std::string_view this_platform() noexcept {
-#if defined(_WIN32)
-    return "windows";
-#elif defined(__ANDROID__)
-    return "android";
-#elif defined(__APPLE__) && TARGET_OS_IPHONE
-    return "ios";
-#elif defined(__APPLE__)
-    return "macos";
-#else
-    return "linux";
-#endif
-}
-
-SwitchTunable switch_tunable(std::string_view name) noexcept {
-    static constexpr std::pair<std::string_view, SwitchTunable> kSwitches[] = {
-        {"flip_panel_group", {"FlipPanel.cPanelGroupSize"}},
-        {"flip_panel_observer_group", {"FlipPanel.cObserverGroupSize"}},
-        {"water_bazooka_shot_flag", {"WaterBazooka.cShotInvalidSpinKill"}},
-        {"kamek_barrier_offset_y", {"BossKameckBarrier.cOffsetY"}},
-        {"skeletal_fish_baby_no_bubble", {"SkeletalFishBaby.cBreakAirBubble", true}},
-        {"dodoryu_shell_only", {"GameRules.cDodoryuShellOnly"}},
-        {"miss_star_pieces", {"SequenceUtil.cMissStarPieceNum"}},
-        {"no_hidden_star_table", {"SceneUtil.cHiddenStarTable", true}},
-        {"no_sudden_death_dodoryu", {"SceneUtil.cSuddenDeathDodoryu", true}},
-        {"begoman_fire_proof", {"GameRules.cBegomanFireProof"}},
-        {"messenger_always_ex", {"KinopioAstro.cMessangerAlwaysEx"}},
-        {"messenger_ex_one_ups", {"KinopioAstro.sMessangerOneUpExNum"}},
-        {"player_health", {"GameRules.cPlayerHealth"}},
-        {"player_health_fixed", {"MarioActor.cDarkCometOneHealth", true}},
-        {"hit_takes_all", {"MarioActor.cHitTakesAll"}},
-        {"life_up_health", {"GameRules.cLifeUpHealth"}},
-        {"no_low_health_warning", {"MarioEffect.cLowHealthWarning", true}},
-        {"no_dark_comet_rules", {"EventUtil.cDarkCometRules", true}},
-        {"max_lives", {"GameDataPlayerStatus.cMaxPlayerLeft"}},
-        {"max_star_bits", {"GameRules.cMaxStarBits"}},
-        {"max_carried_star_bits", {"GameDataTemporaryInGalaxy.cMaxCarriedStarPieceNum"}},
-        {"max_coins", {"GameRules.cMaxCoins"}},
-        {"coins_per_one_up", {"ScenePlayingResult.cCoinStepNum"}},
-        {"star_bits_per_one_up", {"ScenePlayingResult.cStarPieceStepNum"}},
-        {"starting_lives", {"GameDataPlayerStatus.cStartingPlayerLeft"}},
-        {"purple_coins_for_star", {"ScenePlayingResult.cPurpleCoinPowerStarAppearNum"}},
-        {"water_air", {"MarioActor.cWaterAir"}},
-    };
-    for (const auto& [known, tunable] : kSwitches) {
-        if (known == name) return tunable;
-    }
-    return {};
 }
 
 namespace {
@@ -1125,7 +1382,7 @@ bool rows_set_game(const Rows& rows) noexcept {
 bool layer_sets_game(const Layer& layer) noexcept {
     return rows_set_game(layer.rows) || !layer.materials.empty() || !layer.object_changes.empty() || !layer.comet_time_limits.empty() ||
            !layer.stages.empty() || !layer.player_constants.empty() || !layer.tunables.empty() || !layer.object_classes.empty() || !layer.forms.empty() ||
-           !layer.objects.empty() || !layer.scripts.empty() || !layer.sound_effects.empty() || !layer.player_animations.empty();
+           !layer.sound_effects.empty() || !layer.player_animations.empty();
 }
 
 bool manifest_sets_game(const Manifest& manifest) noexcept {
@@ -1162,8 +1419,6 @@ std::vector<std::string> setting_keys(const Layer& layer) {
     for (const Tunable& tunable : layer.tunables) keys.push_back(key_of({"tunable", tunable.key}));
     for (const ObjectClass& object : layer.object_classes) keys.push_back(key_of({"class", object.name}));
     for (const Form& form : layer.forms) keys.push_back(key_of({"form", form.name}));
-    for (const ScriptObject& object : layer.objects) keys.push_back(key_of({"class", object.name}));
-    for (const std::string& script : layer.scripts) keys.push_back(key_of({"script", script}));
     for (const SoundEffect& sound : layer.sound_effects) keys.push_back(key_of({"sound", sound.name}));
     for (const PlayerAnimation& animation : layer.player_animations) keys.push_back(key_of({"animation", animation.name}));
     return keys;

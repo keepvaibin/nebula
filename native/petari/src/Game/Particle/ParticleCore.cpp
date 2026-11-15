@@ -50,7 +50,9 @@ void ParticleCore::init_p(EmitterWork* pWork) {
 
     if (emtr->mDirSpeed) {
         Mtx mtx;
-        ParticleMath::yzRotateMtx((s32)(emtr->get_r_zp() * 0x8000 * emtr->mSpread), emtr->mRndm.get_rndm_ss(), mtx);
+        // The second angle drawn first: the console's right-to-left order of the arguments, on every platform.
+        const s16 angleZ = emtr->mRndm.get_rndm_ss();
+        ParticleMath::yzRotateMtx((s32)(emtr->get_r_zp() * 0x8000 * emtr->mSpread), angleZ, mtx);
         NebulaMtxConcat(pWork->mDirectionMtx, mtx, mtx);
         velDir.set< f32 >(emtr->mDirSpeed * mtx[0][2], emtr->mDirSpeed * mtx[1][2], emtr->mDirSpeed * mtx[2][2]);
     } else {
@@ -134,7 +136,11 @@ void ParticleCore::init_c(EmitterWork* pWork, ParticleCore* pParent) {
     f32 pos_rndm = csp->getPosRndm();
 
     if (pos_rndm != 0.0f) {
-        Vec3f rnd(emtr->mRndm.get_rndm_zh(), emtr->mRndm.get_rndm_zh(), emtr->mRndm.get_rndm_zh());
+        // Drawn z, y, x: the console's right-to-left order of the arguments, on every platform.
+        const f32 rndZ = emtr->mRndm.get_rndm_zh();
+        const f32 rndY = emtr->mRndm.get_rndm_zh();
+        const f32 rndX = emtr->mRndm.get_rndm_zh();
+        Vec3f rnd(rndX, rndY, rndZ);
         rnd.setLength(pos_rndm * emtr->get_r_f());
         mLocalPosition.add(rnd);
     }
@@ -146,7 +152,11 @@ void ParticleCore::init_c(EmitterWork* pWork, ParticleCore* pParent) {
     mOffsetPosition.set(pParent->mOffsetPosition);
 
     f32 base_speed = csp->getBaseVel() * (csp->getBaseVelRndm() * emtr->get_r_zp() + 1.0f);
-    Vec3f base_vel(emtr->get_r_zp(), emtr->get_r_zp(), emtr->get_r_zp());
+    // Drawn z, y, x: the console's right-to-left order of the arguments, on every platform.
+    const f32 velZ = emtr->get_r_zp();
+    const f32 velY = emtr->get_r_zp();
+    const f32 velX = emtr->get_r_zp();
+    Vec3f base_vel(velX, velY, velZ);
     base_vel.setLength(base_speed);
     mVelType1.scaleAdd(csp->getVelInhRate(), pParent->mVelType1, base_vel);
     mVelType0.scale(csp->getVelInhRate(), pParent->mVelType2);

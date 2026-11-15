@@ -10,35 +10,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 280.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f1, "exeWait.f1", 9.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f2, "exeWait.f2", 10.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f3, "exeWait.f3", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f4, "exeWait.f4", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f5, "exeWait.f5", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f6, "exeWait.f6", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f7, "exeWait.f7", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_f8, "exeWait.f8", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeExplosion_f1, "exeExplosion.f1", 800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeExplosion_f2, "exeExplosion.f2", 1200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeExplosion_f3, "exeExplosion.f3", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeExplosion_f4, "exeExplosion.f4", 280.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_addVelocityToGravity_1, "exeWait.addVelocityToGravity.1", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_1, "exeWait.reboundVelocityFromCollision.1", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_2, "exeWait.reboundVelocityFromCollision.2", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_reboundVelocityFromCollision_3, "exeWait.reboundVelocityFromCollision.3", 1.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeWait_1, "exeWait.1", 112);
-NEBULA_TUNABLE_NAMED(s32, cStep_exeExplosion_1, "exeExplosion.1", 20);
 
 namespace NrvBossStinkBugBomb {
     NEW_NERVE(BossStinkBugBombNrvWait, BossStinkBugBomb, Wait);
@@ -55,14 +27,14 @@ void BossStinkBugBomb::init(const TableIter& /*rIter*/) {
     MR::onCalcGravity(this);
     initHitSensor(2);
 
-    MR::addHitSensorEnemy(this, "body", 8, cNum_init_f1, Vec3f(0.0f, 0.0f, 0.0f));
-    MR::addHitSensorEnemyAttack(this, "bomb", 8, cNum_init_f2, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "body", 8, 60.0f, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemyAttack(this, "bomb", 8, 280.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::invalidateHitSensor(this, "bomb");
 
-    initBinder(cNum_init_f3, 0.0f, 0);
+    initBinder(60.0f, 0.0f, 0);
     initEffectKeeper(0, nullptr);
     initSound(5, false);
-    MR::initShadowVolumeSphere(this, cNum_init_f4);
+    MR::initShadowVolumeSphere(this, 60.0f);
 
     initNerve(GET_NERVE(BossStinkBugBomb, BossStinkBugBombNrvWait));
     MR::invalidateClipping(this);
@@ -121,24 +93,24 @@ void BossStinkBugBomb::exeWait() {
         MR::startBrk(this, "Signal");
     }
 
-    MR::addVelocityToGravity(this, cNum_exeWait_addVelocityToGravity_1);
+    MR::addVelocityToGravity(this, 1.2f);
     f32 dot = mGravity.dot(mVelocity);
 
-    if (MR::reboundVelocityFromCollision(this, cNum_exeWait_reboundVelocityFromCollision_1, cNum_exeWait_reboundVelocityFromCollision_2, cNum_exeWait_reboundVelocityFromCollision_3) && dot >= cNum_exeWait_f1) {
-        f32 liner = MR::getLinerValueFromMinMax(dot, cNum_exeWait_f2, cNum_exeWait_f3, cNum_exeWait_f4, 1.0f);
-        MR::startSound(this, "SE_BM_BOSS_BUG_BOMB_GROUND", cNum_exeWait_f5 * liner);
+    if (MR::reboundVelocityFromCollision(this, 0.8f, 5.0f, 1.0f) && dot >= 9.5f) {
+        f32 liner = MR::getLinerValueFromMinMax(dot, 10.5f, 30.0f, 0.3f, 1.0f);
+        MR::startSound(this, "SE_BM_BOSS_BUG_BOMB_GROUND", 100.0f * liner);
         if (MR::isBindedGroundWater(this)) {
-            MR::startSound(this, "SE_BM_BOSS_BUG_BOMB_GROUND_WATER", cNum_exeWait_f6 * liner);
+            MR::startSound(this, "SE_BM_BOSS_BUG_BOMB_GROUND_WATER", 100.0f * liner);
         }
     }
 
-    if (MR::isLessStep(this, cStep_exeWait_1)) {
+    if (MR::isLessStep(this, 112)) {
         MR::startLevelSound(this, "SE_BM_BOSS_BUG_BOMB_COUNT1");
     } else {
         MR::startLevelSound(this, "SE_BM_BOSS_BUG_BOMB_COUNT2");
     }
 
-    MR::attenuateVelocity(this, MR::isBinded(this) ? cNum_exeWait_f7 : cNum_exeWait_f8);
+    MR::attenuateVelocity(this, MR::isBinded(this) ? 0.9f : 0.98f);
 
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(2500))) {
         setNerve(GET_NERVE(BossStinkBugBomb, BossStinkBugBombNrvExplosion));
@@ -159,13 +131,13 @@ void BossStinkBugBomb::exeExplosion() {
             MR::startSound(this, "SE_BM_BOSS_BUG_BOMB_BANG_WATER");
         }
 
-        MR::tryRumblePadAndCameraDistanceStrong(this, cNum_exeExplosion_f1, cNum_exeExplosion_f2, cNum_exeExplosion_f3);
+        MR::tryRumblePadAndCameraDistanceStrong(this, 800.0f, 1200.0f, 2000.0f);
         MR::zeroVelocity(this);
     }
 
-    MR::setSensorRadius(this, "bomb", MR::calcNerveEaseOutValue(this, 10, 0.0f, cNum_exeExplosion_f4));
+    MR::setSensorRadius(this, "bomb", MR::calcNerveEaseOutValue(this, 10, 0.0f, 280.0f));
 
-    if (MR::isGreaterStep(this, cStep_exeExplosion_1)) {
+    if (MR::isGreaterStep(this, 20)) {
         kill();
     }
 }

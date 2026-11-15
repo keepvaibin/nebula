@@ -3,26 +3,21 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_exeSetCenter_f1, "exeSetCenter.f1", 0.0001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_bindHole_f1, "bindHole.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_bindHole_f2, "bindHole.f2", 0.1f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sGravityAcc, 1.2f);
-    NEBULA_TUNABLE(f32, sHoleRadius, 200.0f);
-    NEBULA_TUNABLE(f32, sHoleDepth, 400.0f);
-    NEBULA_TUNABLE(f32, sHoleRefrecRate, 0.9f);
-    NEBULA_TUNABLE(s32, sForceSetStartTime, 40);
+    const f32 sGravityAcc = 1.2f;
+    const f32 sHoleRadius = 200.0f;
+    const f32 sHoleDepth = 400.0f;
+    const f32 sHoleRefrecRate = 0.9f;
+    const s32 sForceSetStartTime = 40;
     const s32 sForceSetEndTime = NebulaFrameClock::stepsOfMilliseconds(1500);
-    NEBULA_TUNABLE(f32, sBallToCenterFreq, 0.98f);
-    NEBULA_TUNABLE(f32, sBallToCenterEndFreq, 0.7f);
+    const f32 sBallToCenterFreq = 0.98f;
+    const f32 sBallToCenterEndFreq = 0.7f;
     const s32 sForceSetCenterTime = NebulaFrameClock::stepsOfSeconds(3);
-    NEBULA_TUNABLE(s32, sLaunchFixTime, 20);
-    NEBULA_TUNABLE(s32, sSetUpTime, 45);
-    NEBULA_TUNABLE(f32, sLaunchValidHeight, 160.0f);
+    const s32 sLaunchFixTime = 20;
+    const s32 sSetUpTime = 45;
+    const f32 sLaunchValidHeight = 160.0f;
 };  // namespace
 
 namespace NrvBallOpener {
@@ -99,7 +94,7 @@ void BallOpener::exeSetCenter() {
 
     bindHole();
 
-    if (mBindVelocity.squared() < cNum_exeSetCenter_f1) {
+    if (mBindVelocity.squared() < 0.0001f) {
         mSettledFrames++;
     } else {
         mSettledFrames = 0;
@@ -173,7 +168,7 @@ void BallOpener::bindHole() {
     mBindVelocity *= MR::calcNerveValue(this, ::sForceSetStartTime, ::sForceSetEndTime, ::sBallToCenterFreq, ::sBallToCenterEndFreq);
     mBoundSensor->mHost->mVelocity.set(position - previous);
 
-    if (position.squared(previous) < cNum_bindHole_f1 * cNum_bindHole_f2) {
+    if (position.squared(previous) < 0.1f * 0.1f) {
         mBindVelocity.zero();
     }
 }

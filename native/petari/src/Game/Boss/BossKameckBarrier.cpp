@@ -3,12 +3,11 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
     // Added to the barrier's height where it is placed (0).
-    NEBULA_TUNABLE(f32, cOffsetY, 0.0f);
+    const f32 cOffsetY = 0.0f;
 };  // namespace
 
 namespace NrvBossKameckBarrier {

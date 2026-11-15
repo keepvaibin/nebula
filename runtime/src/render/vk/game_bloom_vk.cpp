@@ -141,7 +141,7 @@ bool GameBloomVk::build() {
         info.stage.module = shader;
         info.stage.pName = entries[i];
         info.layout = layout_;
-        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &compute_[i]);
+        const VkResult result = vkCreateComputePipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &compute_[i]);
         vkDestroyShaderModule(device, shader, nullptr);
         if (result != VK_SUCCESS) {
             compute_[i] = VK_NULL_HANDLE;
@@ -238,7 +238,7 @@ VkPipeline GameBloomVk::composite_pipeline(VkRenderPass pass, unsigned samples_l
         info.pDynamicState = &dynamic;
         info.layout = layout_;
         info.renderPass = pass;
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
+        if (vkCreateGraphicsPipelines(device, shared_pipeline_cache(), 1, &info, nullptr, &pipeline) != VK_SUCCESS) {
             pipeline = VK_NULL_HANDLE;
             std::cerr << "[bloom] composite pipeline failed for " << (1u << samples_log2) << " samples\n";
         }
@@ -299,6 +299,24 @@ void GameBloomVk::keep_picture(std::shared_ptr<Texture> picture) {
     keep_ = std::move(picture);
     keep_used_ = clock_;
     kept_ = true;
+}
+
+std::shared_ptr<Texture> GameBloomVk::take_source_image() {
+    return std::move(source_);
+}
+
+void GameBloomVk::give_source(VkCommandBuffer commands, std::shared_ptr<Texture> picture) {
+    source_ = std::move(picture);
+    simple_used_ = clock_;
+    source_given_ = true;
+    // The hand-over left it shader-readable for the fragment stage; the selection reads it in a compute pass.
+    BarriersVk read(commands);
+    read.image_scoped(source_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                      VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, 1u);
+    read.issue();
 }
 
 void GameBloomVk::trim_idle() {
@@ -363,6 +381,7 @@ void GameBloomVk::dispatch(VkCommandBuffer commands, Program program, const Cons
 bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Params& p, const SetAllocator& allocate) {
     pending_ = false;
     const bool kept = std::exchange(kept_, false);
+    const bool given = std::exchange(source_given_, false);
     const bool restore = p.kind == Kind::Restore;
     const bool normal = p.kind == Kind::Normal;
     if (!ready_ || in.color == nullptr || in.frame_width == 0u || in.frame_height == 0u || ((normal || restore) && !kept)) {
@@ -379,6 +398,20 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     if (restore) {
         // Kind 0: the scene alone, the levels unread.
         composite_inputs_[0] = composite_inputs_[1] = composite_inputs_[2] = keep_.get();
+        pending_ = true;
+        return true;
+    }
+    if (bloom::adds_nothing(p.threshold, normal ? 0u : p.channel, p.tap1, p.intensity, p.strength)) {
+        // The scene alone (kind 0), no level made: the kept scene, or a copy of the frame (multisampled, where the
+        // composite writes every sample from the resolved frame). A given source is drawn back by the caller.
+        if (!normal && (given || !copy_frame(commands, in, source_, "bloom source"))) {
+            return false;
+        }
+        if (!ensure_unused_slot(commands)) {
+            return false;
+        }
+        const Texture* const scene = normal ? keep_.get() : source_.get();
+        composite_inputs_[0] = composite_inputs_[1] = composite_inputs_[2] = scene;
         pending_ = true;
         return true;
     }
@@ -399,7 +432,7 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
             made = ensure(blur2_h_[i], s.w2, s.h2, kWorkFormat, true, "bloom level 2 blur");
         }
     }
-    if (!made || (!normal && !copy_frame(commands, in, source_, "bloom source"))) {
+    if (!made || (!normal && !given && !copy_frame(commands, in, source_, "bloom source"))) {
         return false;
     }
     // The work images live in GENERAL (written as storage, read as sampled images); the earlier frame's reads of them
@@ -527,6 +560,43 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     composite_inputs_[2] = normal ? level2_.get() : level1_.get();
     pending_ = true;
     return true;
+}
+
+bool GameBloomVk::prepare_draw_back(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2) {
+    return ready_ && composite_pipeline(pass, samples_log2) != VK_NULL_HANDLE && ensure_unused_slot(commands);
+}
+
+bool GameBloomVk::ensure_unused_slot(VkCommandBuffer commands) {
+    if (dummy_ && dummy_->layout == VK_IMAGE_LAYOUT_GENERAL) {
+        return true;
+    }
+    if (!ensure(dummy_, 1u, 1u, kWorkFormat, true, "bloom unused slot")) {
+        return false;
+    }
+    // The unused slot is never read; its descriptor names it in GENERAL, as prepare() leaves it.
+    BarriersVk slot(commands);
+    slot.image_scoped(dummy_->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+                      VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                      VK_ACCESS_2_NONE, 1u);
+    slot.issue();
+    dummy_->layout = VK_IMAGE_LAYOUT_GENERAL;
+    return true;
+}
+
+void GameBloomVk::draw_back(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2,
+                            const SetAllocator& allocate, const Texture& picture, unsigned width, unsigned height) {
+    const VkPipeline pipeline = composite_pipeline(pass, samples_log2);  // made by prepare_draw_back
+    const VkDescriptorSet set = set_of(allocate, {&picture, &picture, &picture}, {nullptr, nullptr, nullptr});
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+    const VkDescriptorSet sets[2] = {set, sampler_set_};
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, layout_, 0, 2, sets, 0, nullptr);
+    const Constants constants{};  // kind 0: the picture alone
+    vkCmdPushConstants(commands, layout_, kStages, 0, sizeof(Constants), &constants);
+    const VkViewport viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const VkRect2D scissor{{0, 0}, {width, height}};
+    vkCmdSetViewport(commands, 0, 1, &viewport);
+    vkCmdSetScissor(commands, 0, 1, &scissor);
+    vkCmdDraw(commands, 3, 1, 0, 0);
 }
 
 void GameBloomVk::finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2,

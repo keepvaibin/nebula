@@ -3,8 +3,37 @@
 Nebula is licensed as a whole under the GNU General Public License, version 3 only
 (`GPL-3.0-only`); see [LICENSE](LICENSE). It includes or adapts work from the projects below.
 That work remains subject to its own license, copyright notices and disclaimers, and the
-upstream projects do not endorse Nebula. [docs/PROVENANCE.md](docs/PROVENANCE.md) lists which
-Nebula files each project contributed to.
+upstream projects do not endorse Nebula. [Adapted code](#adapted-code) lists the Nebula files
+each project contributed to.
+
+## dav1d (BSD-2-Clause)
+
+- Upstream: <https://code.videolan.org/videolan/dav1d>, version 1.5.1, in `third_party/dav1d` (its C sources and
+  headers; built by `cmake/dav1d.cmake`). Decodes AV1 movies.
+
+> Copyright © 2018-2019, VideoLAN and dav1d authors
+> All rights reserved.
+>
+> Redistribution and use in source and binary forms, with or without
+> modification, are permitted provided that the following conditions are met:
+>
+> 1. Redistributions of source code must retain the above copyright notice, this
+>    list of conditions and the following disclaimer.
+>
+> 2. Redistributions in binary form must reproduce the above copyright notice,
+>    this list of conditions and the following disclaimer in the documentation
+>    and/or other materials provided with the distribution.
+>
+> THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+> ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+> WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+> DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+> ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+> (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+> LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+> ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+> (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+> SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ## Aurora (MIT)
 
@@ -113,10 +142,26 @@ Windows installs carry `dxc\dxc.exe`, `dxc\dxcompiler.dll` and `dxc\dxil.dll` fr
 <https://github.com/microsoft/DirectXShaderCompiler>, unchanged, with their license files beside them. The game starts them to
 build a mod's shaders on the player's PC.
 
-## MinHook (BSD 2-clause)
+## DirectX 12 Agility SDK 1.620.2 (headers MIT; runtime under Microsoft's terms)
 
-`third_party/minhook` (1.3.4) from <https://github.com/TsudaKageyu/minhook>, unchanged, is how a mod's plugin replaces a
-game function on Windows. Copyright (C) 2009-2017 Tsuda Kageyu: `third_party/minhook/LICENSE.txt`.
+Built with the headers of Microsoft's NuGet package Microsoft.Direct3D.D3D12 1.620.2
+(<https://devblogs.microsoft.com/directx/directx12agility/>). Windows installs carry its `D3D12Core.dll` in `D3D12\`,
+unchanged, with the package's license beside it; the game asks Windows to load it from there.
+
+## BoringSSL 0.20261020.0 (Apache-2.0 and others)
+
+`third_party/boringssl` holds the library files of BoringSSL release `0.20261020.0` from <https://github.com/google/boringssl>
+(commit `d3bf4795ad5b79d646cddf2fec687da5b9b502db`, archive SHA-256 in `third_party/boringssl/NEBULA-PIN.txt`), unchanged:
+the net services' TLS and the loader's mod signatures. Its tests, tools and build files are left out;
+`third_party/boringssl.cmake` builds it. License: `third_party/boringssl/LICENSE` (Apache-2.0, with the OpenSSL, SSLeay,
+ISC and MIT terms of the parts it names).
+
+## Mozilla's root certificates (MPL-2.0)
+
+`third_party/mozilla-roots/cacert.pem` is Mozilla's list of root certificate authorities as of 2026-10-20, as curl
+extracts it (<https://curl.se/ca/cacert-2026-10-20.pem>, SHA-256 `796f1389bfea13c0ed78f663b765baaff54a508e5483786bd6ece73c5e3e3cbe`),
+unchanged. The net services trust these roots for TLS; the list is built into the program and changes with the game.
+License: Mozilla Public License 2.0 (<https://mozilla.org/MPL/2.0/>).
 
 ## MiiPort (ISC)
 
@@ -148,7 +193,7 @@ Setup's game importer, `nebula-import.exe` (`crates/nebula-import`), reads disc 
 `nod` crate 1.4.4 by Luke Street (<https://github.com/encounter/nod>, MIT OR Apache-2.0). `nod`
 contains the Wii common keys needed to read a Wii disc partition.
 
-`nebula-import.exe` links 64 crates (`Cargo.lock`) under MIT, Apache-2.0, BSD-2-Clause,
+`nebula-import.exe` links 66 crates (`Cargo.lock`) under MIT, Apache-2.0, BSD-2-Clause,
 BSD-3-Clause, Zlib or 0BSD terms, and the C libraries zstd (BSD-3-Clause), liblzma (0BSD) and
 bzip2 (bzip2 license). Their license texts are in
 [docs/licenses/rust-dependencies.txt](docs/licenses/rust-dependencies.txt). The `nod` crate ships
@@ -192,6 +237,10 @@ game activity. Copyright (C) 1997-2026 Sam Lantinga. License: Zlib, its `LICENSE
   and 60 other crates; their license texts are in
   [docs/licenses/rust-dependencies-android.txt](docs/licenses/rust-dependencies-android.txt)
   (`tools/rust_licenses.py`), which the app shows under Open source licenses.
+- libadrenotools, revision `8fae8ce254dfc1344527e05301e43f37dea2df80`, with liblinkernsbypass,
+  revision `aa3975893d83ef1bc84c321ec60c65fbf1287887`, <https://github.com/bylaws/libadrenotools>:
+  BSD-2-Clause. Copyright (c) 2021, Billy Laws. Unmodified, compiled from source; on arm64 it
+  loads a Vulkan driver the player imports.
 
 ## Earlier MIT license
 
@@ -220,9 +269,28 @@ Nebula was developed under the name GalaxyRecomp. Revisions before the change to
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
+## Adapted code
+
+| Project | License | Adapted for | Nebula files |
+|---|---|---|---|
+| Aurora | MIT | THP movie decoding (parser, Huffman tables, IDCT) | `runtime/src/movie_video.cpp`, `runtime/include/galaxy/movie_video.h` |
+| Aurora | MIT | Blend and pipeline state canonicalization | `runtime/src/render/shader_keys.cpp` |
+| Aurora | MIT | Indirect texture stage sampling, indirect matrix scale decoding | `runtime/include/galaxy/render/texture_sampling.h`, `runtime/src/render/render_core.cpp` |
+| Aurora | MIT | Content-keyed texture cache | `runtime/src/render/texture_cache.cpp` |
+| Aurora | MIT | Presentation viewport, logical-to-physical viewport and scissor mapping | `runtime/include/galaxy/content_viewport.h`, `runtime/src/render/render_config.cpp`, `runtime/src/render/renderer_d3d12.cpp` |
+| Dusklight | CC0 1.0 | Layout fitting and pointer focus handling | `runtime/include/galaxy/content_viewport.h`, `runtime/include/galaxy/native_input.h`, `runtime/include/galaxy/host_pointer_events.h` |
+| Dusklight | CC0 1.0 | Widescreen camera and HUD scaling | `runtime/include/galaxy/experimental_ultrawide_aspect.h` |
+| Petari | CC0 1.0 | Audio engine behaviour and command formats for the native audio host | `native/petari/src/Game/Sound`, `runtime/include/galaxy/native_audio_bus.h` |
+
+GPL-2.0-or-later code is used under version 3 of the license in this GPL-3.0-only work.
+
+Design references, with no code copied: Dolphin's native-resolution bloom graphics mod for Super Mario Galaxy
+(low-resolution bloom copies) and Dolphin's scaled EFB copy filtering.
+
 ## Nintendo content
 
 None of the licenses above apply to Nintendo software, game code, game assets, disc images or
 trademarks. Nebula is not affiliated with or endorsed by Nintendo. It distributes no Nintendo
 binaries, assets, disc images or data taken from them: the game's files, and the data tables
-in its `main.dol`, are read from the user's own disc.
+in its `main.dol`, are read from the user's own disc. Setup installs the program and game module built
+from this repository and packs the game's files from that disc on the user's computer.

@@ -11,14 +11,13 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sDefaultMoveSpeed, 10.0f);
+    const f32 sDefaultMoveSpeed = 10.0f;
     const s32 sDefaultWaitTime = NebulaFrameClock::stepsOfSeconds(2);
     const s32 sStepForSign = NebulaFrameClock::stepsOfSeconds(1);
-    NEBULA_TUNABLE(f32, sRumblePadLength, 700.0f);
+    const f32 sRumblePadLength = 700.0f;
 };  // namespace
 
 namespace NrvTsukidashikun {

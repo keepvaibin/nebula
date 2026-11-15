@@ -495,7 +495,9 @@ static MarioConstTable gMarioConstDefault = {
     /* mLookMaxAngleVP */ 0.5f,
     /* mLookMaxAngleVM */ 0.1f,
     /* mLookShoulderMoveMax */ 8.0f,
-    /* mRushInBlendTimer */ 4};
+    /* mRushInBlendTimer */ 4,
+    /* mBinderRadius */ 60.0f,
+    /* mSensorRadius */ 100.0f};
 
 static MarioConstTable gMarioConstDefault2 = {
     /* mJumpHeight */ {22.0f, 26.0f, 34.71f, 24.0f, 32.0f, 15.0f, 32.0f, 22.0f, 1.0f},
@@ -990,7 +992,9 @@ static MarioConstTable gMarioConstDefault2 = {
     /* mLookMaxAngleVP */ 0.5f,
     /* mLookMaxAngleVM */ 0.1f,
     /* mLookShoulderMoveMax */ 8.0f,
-    /* mRushInBlendTimer */ 4};
+    /* mRushInBlendTimer */ 4,
+    /* mBinderRadius */ 60.0f,
+    /* mSensorRadius */ 100.0f};
 
 namespace {
     struct ConstField {
@@ -1017,8 +1021,7 @@ namespace {
         return character == 1 ? &gMarioConstDefault2 : &gMarioConstDefault;
     }
 
-    // A whole number of the field's kind: held at its ends (a cast past them is undefined), halves away from zero, as
-    // tunables store (Tunable.cpp).
+    // A whole number of the field's kind: held at its ends (a cast past them is undefined), halves away from zero.
     template < typename T >
     T clampTo(f32 value, f64 low, f64 high) {
         const f64 wide = value;

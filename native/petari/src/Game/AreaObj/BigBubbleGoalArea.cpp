@@ -8,14 +8,10 @@
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f1, "draw.f1", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw_f2, "draw.f2", 150.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sMeterUpSpeed, 0.05f);
+    const f32 sMeterUpSpeed = 0.05f;
 };  // namespace
 
 BigBubbleGoalArea::BigBubbleGoalArea(int formType, const char* pName)
@@ -78,8 +74,8 @@ void BigBubbleGoalArea::draw() const {
     f32 f = TWO_PI * (mMeterDisplayAmount / mMeterCapacity);
 
     TypedDraw site = TDDraw::site(material, 0);
-    TDDraw::drawFillFan(site, mTrans, MR::getCamZdir(), MR::getCamYdir() * cNum_draw_f1, 0xFFFF00FF, 0.0f, f, 16);
-    TDDraw::drawFillFan(site, mTrans, MR::getCamZdir(), MR::getCamYdir() * cNum_draw_f2, 0x80FF, f, TWO_PI, 16);
+    TDDraw::drawFillFan(site, mTrans, MR::getCamZdir(), MR::getCamYdir() * 150.0f, 0xFFFF00FF, 0.0f, f, 16);
+    TDDraw::drawFillFan(site, mTrans, MR::getCamZdir(), MR::getCamYdir() * 150.0f, 0x80FF, f, TWO_PI, 16);
 }
 
 namespace MR {

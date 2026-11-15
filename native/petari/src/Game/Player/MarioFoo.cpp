@@ -16,86 +16,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 0.5235988f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f5, "update.f5", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f6, "update.f6", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f7, "update.f7", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f8, "update.f8", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f9, "update.f9", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f10, "update.f10", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f11, "update.f11", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f12, "update.f12", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f13, "update.f13", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f14, "update.f14", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f15, "update.f15", 1.0471976f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f16, "update.f16", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f17, "update.f17", 1.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f18, "update.f18", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f19, "update.f19", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f20, "update.f20", 1.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f21, "update.f21", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f22, "update.f22", 0.01f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f23, "update.f23", 3.1415927f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f24, "update.f24", 0.5235988f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f25, "update.f25", 0.5235988f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f26, "update.f26", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f27, "update.f27", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f28, "update.f28", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f29, "update.f29", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f30, "update.f30", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f31, "update.f31", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_jet_f1, "jet.f1", 1.02f);
-NEBULA_TUNABLE_NAMED(f32, cNum_jet_f2, "jet.f2", 0.98f);
-NEBULA_TUNABLE_NAMED(f32, cNum_jet_f3, "jet.f3", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_jet_f4, "jet.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_jet_f5, "jet.f5", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_jet_f6, "jet.f6", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_jet_f7, "jet.f7", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f1, "updateTilt.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f2, "updateTilt.f2", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f3, "updateTilt.f3", 12.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f4, "updateTilt.f4", 2.0943952f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f5, "updateTilt.f5", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f6, "updateTilt.f6", 120.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f7, "updateTilt.f7", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f8, "updateTilt.f8", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateTilt_f9, "updateTilt.f9", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f1, "hitWall.f1", 0.7853982f);
-NEBULA_TUNABLE_NAMED(f32, cNum_hitWall_f2, "hitWall.f2", 0.7853982f);
-NEBULA_TUNABLE_NAMED(f32, cNum_passRing_f1, "passRing.f1", 0.25f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcRingAcc_f1, "calcRingAcc.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcRingAcc_f2, "calcRingAcc.f2", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcRingAcc_f3, "calcRingAcc.f3", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcRingAcc_f4, "calcRingAcc.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f1, "draw3D.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f2, "draw3D.f2", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f3, "draw3D.f3", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f4, "draw3D.f4", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f5, "draw3D.f5", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f6, "draw3D.f6", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f7, "draw3D.f7", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f8, "draw3D.f8", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f9, "draw3D.f9", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f10, "draw3D.f10", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f11, "draw3D.f11", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f12, "draw3D.f12", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f13, "draw3D.f13", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f14, "draw3D.f14", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f15, "draw3D.f15", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f16, "draw3D.f16", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f17, "draw3D.f17", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f18, "draw3D.f18", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f19, "draw3D.f19", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f20, "draw3D.f20", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f21, "draw3D.f21", 255.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f22, "draw3D.f22", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_draw3D_f23, "draw3D.f23", 10.0f);
 
 namespace {
     f32 cTurnMotionSpeed = 5.0f;
@@ -174,7 +94,7 @@ bool MarioFoo::start() {
     mSideTilt = 0.0f;
     mFrontTilt = 0.0f;
     mFrameCount = 0;
-    mPitch = cNum_start_f1;
+    mPitch = 0.5235988f;
     mFrontVec = getFrontVec();
     MR::normalize(&mFrontVec);
 
@@ -255,8 +175,8 @@ bool MarioFoo::update() {
 
     f32 blend;
     f32 targetAngle = 0.0f;
-    if (MR::isNearZero(getStickY(), cNum_update_f1)) {
-        f32 ratio = mIdleTimer / cNum_update_f2;
+    if (MR::isNearZero(getStickY(), 0.1f)) {
+        f32 ratio = mIdleTimer / 120.0f;
         if (ratio > 1.0f) {
             ratio = 1.0f;
         }
@@ -265,13 +185,13 @@ bool MarioFoo::update() {
     } else {
         if (getStickY() > 0.0f) {
             f32 slowRatio = 0.0f;
-            f32 ratio = mIdleTimer / cNum_update_f3;
-            if (mSpeed < cNum_update_f4) {
+            f32 ratio = mIdleTimer / 120.0f;
+            if (mSpeed < 2.0f) {
                 slowRatio = 1.0f;
-            } else if (mSpeed > cNum_update_f5) {
+            } else if (mSpeed > 10.0f) {
                 slowRatio = 0.0f;
             } else {
-                slowRatio = 1.0f - (mSpeed - cNum_update_f6) / cNum_update_f7;
+                slowRatio = 1.0f - (mSpeed - 2.0f) / 8.0f;
             }
 
             if (ratio < slowRatio) {
@@ -280,7 +200,7 @@ bool MarioFoo::update() {
 
             ratio = MR::clamp(ratio, 0.0f, 1.0f);
             f32 limit = ratio * ::cLimitAngleWait + (1.0f - ratio) * ::cLimitAngleSink;
-            if (getPlayer()->mVerticalSpeed < cNum_update_f8) {
+            if (getPlayer()->mVerticalSpeed < 100.0f) {
                 limit = ::cNeutralAngleWait;
             }
 
@@ -290,9 +210,9 @@ bool MarioFoo::update() {
         }
     }
 
-    blend = cNum_update_f9;
-    if (mSpeed > cNum_update_f10) {
-        blend = cNum_update_f11 - cNum_update_f12 * (cNum_update_f13 / mSpeed);
+    blend = 0.05f;
+    if (mSpeed > 5.0f) {
+        blend = 0.05f - 0.05f * (5.0f / mSpeed);
         if (blend < 0.0f) {
             blend = 0.0f;
         }
@@ -301,28 +221,28 @@ bool MarioFoo::update() {
     blend *= mActor->getConst().getTable()->mSwimXJetRotRatio;
     if (getStickP() == 0.0f) {
         targetAngle = ::cLimitAngleSink;
-        blend *= cNum_update_f14;
+        blend *= 0.5f;
     }
 
     if (getPlayer()->mHitStates.jet) {
-        targetAngle = cNum_update_f15;
-        if (getStickY() > cNum_update_f16) {
-            f32 ratio = cNum_update_f17 * (getStickY() - cNum_update_f18);
+        targetAngle = 1.0471976f;
+        if (getStickY() > 0.1f) {
+            f32 ratio = 1.1f * (getStickY() - 0.1f);
             targetAngle = ::cLimitAngleSink * ratio + targetAngle * (1.0f - ratio);
-        } else if (getStickY() < -cNum_update_f19) {
-            f32 ratio = cNum_update_f20 * (-getStickY() - cNum_update_f21);
+        } else if (getStickY() < -0.1f) {
+            f32 ratio = 1.1f * (-getStickY() - 0.1f);
             targetAngle = ::cUpperAngleWait * ratio + targetAngle * (1.0f - ratio);
         }
 
-        blend = cNum_update_f22;
+        blend = 0.01f;
     }
 
     mPitch = mPitch * (1.0f - blend) + targetAngle * blend;
     bool stopTurn = true;
     if (mIdleTimer && !mPushTimer && getStickY() > 0.0f) {
-        f32 angle = cNum_update_f23 / mActor->getConst().getTable()->mSwimTiltReal;
+        f32 angle = 3.1415927f / mActor->getConst().getTable()->mSwimTiltReal;
         f32 stick = getStickY();
-        targetAngle = cNum_update_f24 + stick * (angle - cNum_update_f25);
+        targetAngle = 0.5235988f + stick * (angle - 0.5235988f);
         if (mPitch < targetAngle) {
             f32 ratio = mActor->getConst().getTable()->mSwimTiltSpd;
             mPitch = mPitch * ratio + targetAngle * (1.0f - ratio);
@@ -351,7 +271,7 @@ bool MarioFoo::update() {
     Vec3f head(getPlayer()->mHeadVec);
     Vec3f oldFront(getFrontVec());
     Vec3f blendedFront;
-    MR::vecBlendSphere(oldFront, front, &blendedFront, cNum_update_f26);
+    MR::vecBlendSphere(oldFront, front, &blendedFront, 0.1f);
     getPlayer()->setFrontVecKeepSide(blendedFront);
     spin();
 
@@ -361,9 +281,9 @@ bool MarioFoo::update() {
     f32 vertical = MR::vecKillElement(velocity, mUpVec, &velocity);
     f32 ratio;
     if (mVerticalTimer > 25) {
-        ratio = (50 - mVerticalTimer) / cNum_update_f27;
+        ratio = (50 - mVerticalTimer) / 25.0f;
     } else {
-        ratio = mVerticalTimer / cNum_update_f28;
+        ratio = mVerticalTimer / 25.0f;
     }
 
     f32 verticalRatio = ratio + (1.0f - ratio) * mActor->getConst().getTable()->mSwimSpdYratio;
@@ -373,9 +293,9 @@ bool MarioFoo::update() {
         mPushTimer--;
         addVelocity(mPushVelocity);
         if (mPushTimer < 120) {
-            mPushVelocity.x *= cNum_update_f29;
-            mPushVelocity.y *= cNum_update_f30;
-            mPushVelocity.z *= cNum_update_f31;
+            mPushVelocity.x *= 0.98f;
+            mPushVelocity.y *= 0.98f;
+            mPushVelocity.z *= 0.98f;
         }
     }
 
@@ -474,11 +394,11 @@ void MarioFoo::jet() {
         speed = mActor->getConst().getTable()->mSwimFrontJetSpeed;
     }
 
-    f32 speedUp = cNum_jet_f1;
-    f32 slowDown = cNum_jet_f2;
+    f32 speedUp = 1.02f;
+    f32 slowDown = 0.98f;
     if (checkLvlA() && !mJetHeldFromStart) {
         speed = 0.0f;
-        slowDown = cNum_jet_f3;
+        slowDown = 0.9f;
         mBrakeTimer++;
         if (!isAnimationRun("フーファイタースピン")) {
             changeAnimation("フーファイター静止");
@@ -517,8 +437,8 @@ void MarioFoo::jet() {
             }
 
             mBrakeTimer--;
-            speed *= cNum_jet_f4;
-            speedUp = cNum_jet_f5;
+            speed *= 2.0f;
+            speedUp = 1.2f;
         }
 
         stopAnimation("フーファイター静止");
@@ -528,7 +448,7 @@ void MarioFoo::jet() {
         stopEffect("フーマリオブレーキ右");
     }
 
-    f32 soundSpeed = cNum_jet_f6 * (1.0f + getStickY());
+    f32 soundSpeed = 50.0f * (1.0f + getStickY());
     if (!mBraking) {
         playSound("フー飛行中", soundSpeed);
     }
@@ -541,7 +461,7 @@ void MarioFoo::jet() {
 
         mSpeed *= speedUp;
         if (mRingBoostTimer) {
-            mSpeed *= cNum_jet_f7;
+            mSpeed *= 1.5f;
         }
     } else if (mSpeed > speed) {
         mSpeed *= slowDown;
@@ -552,31 +472,31 @@ void MarioFoo::jet() {
 
 void MarioFoo::updateTilt() {
     f32 sideTilt;
-    f32 blend = cNum_updateTilt_f1;
-    sideTilt = getStickX() * FloatUtil::PI() / cNum_updateTilt_f2;
+    f32 blend = 0.1f;
+    sideTilt = getStickX() * FloatUtil::PI() / 5.0f;
     f32 frontTilt = 0.0f;
     if (!mIdleTimer) {
-        frontTilt = getStickY() * FloatUtil::PI() / cNum_updateTilt_f3;
-        if (getStickY() > 0.0f && mPitch <= cNum_updateTilt_f4) {
-            frontTilt = getStickY() * FloatUtil::PI() / cNum_updateTilt_f5;
+        frontTilt = getStickY() * FloatUtil::PI() / 12.0f;
+        if (getStickY() > 0.0f && mPitch <= 2.0943952f) {
+            frontTilt = getStickY() * FloatUtil::PI() / 8.0f;
         }
     } else if (getStickY() < 0.0f) {
         frontTilt = getStickY() * FloatUtil::PI() / mActor->getConst().getTable()->mSwimTiltZup;
     } else if (getStickY() > 0.0f) {
         frontTilt = getStickY() * FloatUtil::PI() / mActor->getConst().getTable()->mSwimTiltZdown;
     } else if (mIdleTimer) {
-        f32 ratio = mIdleTimer / cNum_updateTilt_f6;
+        f32 ratio = mIdleTimer / 120.0f;
         if (ratio > 1.0f) {
             ratio = 1.0f;
         }
 
-        frontTilt -= (FloatUtil::PI() / cNum_updateTilt_f7) * ratio;
+        frontTilt -= (FloatUtil::PI() / 10.0f) * ratio;
     } else {
         frontTilt = 0.0f;
     }
 
     mSideTilt = blend * sideTilt + (1.0f - blend) * mSideTilt;
-    mFrontTilt = cNum_updateTilt_f8 * frontTilt + cNum_updateTilt_f9 * mFrontTilt;
+    mFrontTilt = 0.1f * frontTilt + 0.9f * mFrontTilt;
     Mtx34f sideMtx;
     Mtx34f frontMtx;
     NebulaMtxRotRad(sideMtx, 'X', mSideTilt);
@@ -589,8 +509,8 @@ void MarioFoo::updateTilt() {
 void MarioFoo::hitWall(const Vec3f& rNormal, HitSensor* pSensor) {
     if (sendPunch(pSensor, false) != true) {
         mBraked = 1;
-        if (MR::diffAngleAbs(rNormal, -getGravityVec()) <= cNum_hitWall_f1) {
-            if (MR::diffAngleAbs(rNormal, -getPlayer()->mPostureUpVec) <= cNum_hitWall_f2) {
+        if (MR::diffAngleAbs(rNormal, -getGravityVec()) <= 0.7853982f) {
+            if (MR::diffAngleAbs(rNormal, -getPlayer()->mPostureUpVec) <= 0.7853982f) {
                 mEndKind = 0;
             } else {
                 mEndKind = 1;
@@ -641,7 +561,7 @@ bool MarioFoo::passRing(const HitSensor* pSensor) {
     }
 
     if (mRingChargeTimer) {
-        getPlayer()->push((center - getTrans()) * cNum_passRing_f1);
+        getPlayer()->push((center - getTrans()) * 0.25f);
     }
 
     const DashRing* ring = static_cast< const DashRing* >(pSensor->mHost);
@@ -671,9 +591,9 @@ f32 MarioFoo::calcRingAcc() {
             return 1.0f;
         }
 
-        mBlurOffset += cNum_calcRingAcc_f1;
-        if (mBlurOffset > cNum_calcRingAcc_f2) {
-            mBlurOffset = cNum_calcRingAcc_f3;
+        mBlurOffset += 0.5f;
+        if (mBlurOffset > 30.0f) {
+            mBlurOffset = 30.0f;
         }
 
         u16 duration = mRingBoostLength;
@@ -689,7 +609,7 @@ f32 MarioFoo::calcRingAcc() {
     }
 
     if (mBlurOffset > 0.0f) {
-        mBlurOffset -= cNum_calcRingAcc_f4;
+        mBlurOffset -= 0.5f;
     } else {
         mBlurOffset = 0.0f;
     }
@@ -714,14 +634,14 @@ void MarioFoo::draw3D() const {
         SiteMaterial material;
         TDDraw::setupNative(&material, 1, 2, 0);
         material.setShader(NEBULA_SHADER_TEX_ALPHA_LERP);
-        material.constants[9] = cNum_draw3D_f1;
+        material.constants[9] = 2.0f;
         material.setTexture(0, mTrailTexture);
         const Color8 color0(255, 32, 32, 128);
         material.setColor(0, color0.r, color0.g, color0.b, color0.a);
         const Color8 color1(255, 64, 64, 255);
         material.setColor(4, color1.r, color1.g, color1.b, color1.a);
 
-        Vec3f center = mActor->mCenterPos + getPlayer()->getUpVec() * cNum_draw3D_f2;
+        Vec3f center = mActor->mCenterPos + getPlayer()->getUpVec() * 50.0f;
         Vec3f back = -getPlayer()->getUpVec();
         Vec3f side(getPlayer()->mSideVec);
         Vec3f up;
@@ -730,25 +650,25 @@ void MarioFoo::draw3D() const {
         Vec3f front = -back;
         f32 length = (cTrailNum - mTrailLength) / static_cast< f32 >(cTrailNum);
 
-        beamVertices[0] = center - side * cNum_draw3D_f3;
-        beamVertices[1] = center - side * cNum_draw3D_f4 + front * cNum_draw3D_f5 * length;
-        beamVertices[2] = center - side * cNum_draw3D_f6 + front * cNum_draw3D_f7 * length;
-        beamVertices[3] = center - side * cNum_draw3D_f8;
+        beamVertices[0] = center - side * 70.0f;
+        beamVertices[1] = center - side * 70.0f + front * 2000.0f * length;
+        beamVertices[2] = center - side * 50.0f + front * 2000.0f * length;
+        beamVertices[3] = center - side * 50.0f;
         TypedDraw site(material, nullptr, MR::getCameraViewMtx());
         VertexPT* vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
         sendVertex(vtx, beamVertices[0], Vec2f(0.0f, 0.0f));
-        sendVertex(vtx, beamVertices[1], Vec2f(cNum_draw3D_f9, 0.0f));
-        sendVertex(vtx, beamVertices[2], Vec2f(cNum_draw3D_f10, 1.0f));
+        sendVertex(vtx, beamVertices[1], Vec2f(0.5f, 0.0f));
+        sendVertex(vtx, beamVertices[2], Vec2f(0.5f, 1.0f));
         sendVertex(vtx, beamVertices[3], Vec2f(0.0f, 1.0f));
 
-        beamVertices[0] = center + side * cNum_draw3D_f11;
-        beamVertices[1] = center + side * cNum_draw3D_f12 + front * cNum_draw3D_f13 * length;
-        beamVertices[2] = center + side * cNum_draw3D_f14 + front * cNum_draw3D_f15 * length;
-        beamVertices[3] = center + side * cNum_draw3D_f16;
+        beamVertices[0] = center + side * 70.0f;
+        beamVertices[1] = center + side * 70.0f + front * 2000.0f * length;
+        beamVertices[2] = center + side * 50.0f + front * 2000.0f * length;
+        beamVertices[3] = center + side * 50.0f;
         vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);
         sendVertex(vtx, beamVertices[0], Vec2f(0.0f, 0.0f));
-        sendVertex(vtx, beamVertices[1], Vec2f(cNum_draw3D_f17, 0.0f));
-        sendVertex(vtx, beamVertices[2], Vec2f(cNum_draw3D_f18, 1.0f));
+        sendVertex(vtx, beamVertices[1], Vec2f(0.5f, 0.0f));
+        sendVertex(vtx, beamVertices[2], Vec2f(0.5f, 1.0f));
         sendVertex(vtx, beamVertices[3], Vec2f(0.0f, 1.0f));
     }
 
@@ -757,7 +677,7 @@ void MarioFoo::draw3D() const {
         SiteMaterial material;
         TDDraw::setupNative(&material, 1, 2, 0);
         material.setShader(NEBULA_SHADER_TEX_ALPHA_LERP);
-        material.constants[9] = cNum_draw3D_f19;
+        material.constants[9] = 2.0f;
         material.setTexture(0, mTrailTexture);
 
         u32 midpoint;
@@ -769,9 +689,9 @@ void MarioFoo::draw3D() const {
         for (u32 i = 0; i < count; i++) {
             u8 alpha;
             if (i > midpoint) {
-                alpha = (s32)(cNum_draw3D_f20 * (static_cast< f32 >(count - i) / static_cast< f32 >(count)));
+                alpha = (s32)(255.0f * (static_cast< f32 >(count - i) / static_cast< f32 >(count)));
             } else {
-                alpha = (s32)(cNum_draw3D_f21 * (static_cast< f32 >(i) / static_cast< f32 >(count)));
+                alpha = (s32)(255.0f * (static_cast< f32 >(i) / static_cast< f32 >(count)));
             }
 
             const Color8 color3(255, 0, 0, alpha);
@@ -789,7 +709,7 @@ void MarioFoo::draw3D() const {
                     if (!MR::normalizeOrZero(&horizontal)) {
                         Vec3f width;
                         width.cross(horizontal, MR::getCamZdir());
-                        width.scale(cNum_draw3D_f22);
+                        width.scale(10.0f);
                         leftEdge[0] = mTrailPos[index] + width - mTrailSide[index] * ::cWidth;
                         leftEdge[1] = mTrailPos[index] - width - mTrailSide[index] * ::cWidth;
                         rightEdge[0] = mTrailPos[index] + width + mTrailSide[index] * ::cWidth;
@@ -811,7 +731,7 @@ void MarioFoo::draw3D() const {
                 nextTexCoords[1].set(1.0f, textureY);
                 const Vec3f& rPosition = mTrailPos[index];
                 Vec3f width(mTrailSide[index]);
-                width.setLength(cNum_draw3D_f23);
+                width.setLength(10.0f);
                 nextLeftEdge[0] = rPosition + width - mTrailSide[index] * ::cWidth;
                 nextLeftEdge[1] = rPosition - width - mTrailSide[index] * ::cWidth;
                 vtx = site.vertices< VertexPT >(NEBULA_PRIMITIVE_QUADS, 4);

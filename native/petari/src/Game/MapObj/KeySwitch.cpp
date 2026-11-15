@@ -4,25 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 105.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 105.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 105.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 105.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 90.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f1, "exeAppear.f1", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f2, "exeAppear.f2", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f3, "exeAppear.f3", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f4, "exeAppear.f4", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f5, "exeAppear.f5", 0.60f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_f6, "exeAppear.f6", 0.7f);
-NEBULA_TUNABLE_NAMED(f32, cNum_tryAvoid_f1, "tryAvoid.f1", 10.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeAppear_addVelocityToGravity_1, "exeAppear.addVelocityToGravity.1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_setBckRate_1, "exeWait.setBckRate.1", 1.0f);
 
 namespace {
     static const char* const cDemoName = "カギ出現";
@@ -47,13 +29,13 @@ void KeySwitch::init(const TableIter& rIter) {
     initHitSensor(1);
     Vec3f box;
     box.x = 0.0f;
-    box.y = cNum_init_f1;
+    box.y = 105.0f;
     box.z = 0.0f;
-    MR::addHitSensorMapObjSimple(this, "body", 8, cNum_init_f2, box);
-    initBinder(cNum_init_f3, cNum_init_f4, 0);
+    MR::addHitSensorMapObjSimple(this, "body", 8, 105.0f, box);
+    initBinder(105.0f, 105.0f, 0);
     initEffectKeeper(0, 0);
     initSound(4, false);
-    MR::initShadowVolumeCylinder(this, cNum_init_f5);
+    MR::initShadowVolumeCylinder(this, 90.0f);
 
     if (MR::isValidInfo(rIter)) {
         MR::initActorCamera(this, rIter, &mCameraInfo);
@@ -114,18 +96,18 @@ void KeySwitch::exeDemoStart() {
 void KeySwitch::exeAppear() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Rotation");
-        mVelocity.scale(-cNum_exeAppear_f1, mGravity);
+        mVelocity.scale(-40.0f, mGravity);
         MR::invalidateClipping(this);
         MR::startSound(this, "SE_OJ_KEY_SWITCH_APPEAR");
     }
 
-    MR::setBckRate(this, MR::calcNerveValue(this, 0xB4, cNum_exeAppear_f2, cNum_exeAppear_f3));
-    MR::addVelocityToGravity(this, cNum_exeAppear_addVelocityToGravity_1);
+    MR::setBckRate(this, MR::calcNerveValue(this, 0xB4, 3.0f, 1.5f));
+    MR::addVelocityToGravity(this, 2.0f);
 
     bool isSettled = false;
 
     if (MR::isBindedGround(this)) {
-        if (mVelocity.length() >= cNum_exeAppear_f4) {
+        if (mVelocity.length() >= 10.0f) {
             s32 mag = mVelocity.length();
             mag *= 2;
             if (mag > 0x64) {
@@ -135,7 +117,7 @@ void KeySwitch::exeAppear() {
             MR::startSound(this, "SE_OJ_KEY_SWITCH_BOUND", mag);
             Vec3f neg;
             neg.negate(mGravity);
-            MR::calcReboundVelocity(&mVelocity, neg, cNum_exeAppear_f5, cNum_exeAppear_f6);
+            MR::calcReboundVelocity(&mVelocity, neg, 0.60f, 0.7f);
         } else {
             isSettled = true;
         }
@@ -152,7 +134,7 @@ void KeySwitch::exeAppear() {
 void KeySwitch::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::tryStartBck(this, "Rotation");
-        MR::setBckRate(this, cNum_exeWait_setBckRate_1);
+        MR::setBckRate(this, 1.0f);
         mVelocity.zero();
         MR::offCalcGravity(this);
     }
@@ -242,6 +224,6 @@ bool KeySwitch::tryAvoid() {
         MR::calcFrontVec(&awayOnPlane, sensorActor);
     }
 
-    mVelocity.scale(cNum_tryAvoid_f1, awayOnPlane);
+    mVelocity.scale(10.0f, awayOnPlane);
     return true;
 }

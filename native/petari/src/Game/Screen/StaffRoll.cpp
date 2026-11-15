@@ -22,10 +22,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TextString.hpp"
 #include <cstdio>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTitleLogoScroll_f1, "exeTitleLogoScroll.f1", 210.0f);
 
 #define PICTURE_TEXTURE_NUM 20
 #define LINE_NUM 64
@@ -93,14 +90,14 @@ namespace {
         "FrameOut",
     };
     // static const s32 sStepForStartMargin = _;
-    NEBULA_TUNABLE(s32, sStepForPrepareInfo, 100);
+    const s32 sStepForPrepareInfo = 100;
     static const s32 sStepForTitleLogoAppear = NebulaFrameClock::stepsOfSeconds(1);
     // static const s32 sStepToEndLogoStop = _;
-    NEBULA_TUNABLE(s32, sStepToThankYouVoice, 190);
+    const s32 sStepToThankYouVoice = 190;
     // static const _ sTitleLogoHeight = _;
-    NEBULA_TUNABLE(f32, sDoubleInterval, 60.0f);
-    NEBULA_TUNABLE(f32, sTripleInterval, 200.0f);
-    NEBULA_TUNABLE(f32, sEndLogoPosY, 220.0f);
+    const f32 sDoubleInterval = 60.0f;
+    const f32 sTripleInterval = 200.0f;
+    const f32 sEndLogoPosY = 220.0f;
 };  // namespace
 
 namespace {
@@ -381,7 +378,7 @@ void StaffRoll::exeTitleLogoScroll() {
 
     mTitleLogoPos.y -= ::getStaffRollParam()->mScrollSpeed;
 
-    if (mTitleLogoPos.y < -cNum_exeTitleLogoScroll_f1) {
+    if (mTitleLogoPos.y < -210.0f) {
         MR::hidePane(this, ::cPaneNameTitleLogo);
         setNerve(GET_NERVE(StaffRoll, StaffRollNrvLineScroll));
     }

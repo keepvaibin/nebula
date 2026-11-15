@@ -27,30 +27,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_initLegIKPlacement_f1, "initLegIKPlacement.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_requestEndDamageDemo_f1, "requestEndDamageDemo.f1", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_requestEndDamageDemo_f2, "requestEndDamageDemo.f2", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_f1, "exeDamage.f1", 79.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeDamage_f2, "exeDamage.f2", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePainDemo_f1, "exePainDemo.f1", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePainDemo_f2, "exePainDemo.f2", 3200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePainDemo_f3, "exePainDemo.f3", 3400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePainDemo_f4, "exePainDemo.f4", 3400.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePainDemo_f5, "exePainDemo.f5", 5000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcDemoMovement_f1, "calcDemoMovement.f1", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBodyMovement_f1, "calcBodyMovement.f1", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBodyMovement_f2, "calcBodyMovement.f2", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcBodyMovement_f3, "calcBodyMovement.f3", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addAccelToWeightPosition_f1, "addAccelToWeightPosition.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addAccelToWeightPosition_f2, "addAccelToWeightPosition.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addAccelToWeightPosition_f3, "addAccelToWeightPosition.f3", 0.3f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addAccelToWeightPosition_f4, "addAccelToWeightPosition.f4", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addAccelToWeightPosition_f5, "addAccelToWeightPosition.f5", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_addAccelToWeightPosition_f6, "addAccelToWeightPosition.f6", 0.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcClippingSphere_f1, "calcClippingSphere.f1", 0.5f);
 
 namespace {
     // Leg i follows this joint of the boss model in demos.
@@ -59,13 +36,13 @@ namespace {
     const Vec3f sEndMarioPosition(0.0f, 2160.0f, 1260.0f);
     const s32 sBreakDownTime = NebulaFrameClock::stepsOfSeconds(4);
     const s32 sExplosionTime = NebulaFrameClock::stepsOfMilliseconds(2500);
-    NEBULA_TUNABLE(s32, sKillerGeneraterIncreaseSeTiming, 90);
-    NEBULA_TUNABLE(s32, sHeadExplodeSeTiming, 0);
-    NEBULA_TUNABLE(s32, sDamageTime, 129);
+    const s32 sKillerGeneraterIncreaseSeTiming = 90;
+    const s32 sHeadExplodeSeTiming = 0;
+    const s32 sDamageTime = 129;
     const s32 sRideMarioKeepTime = NebulaFrameClock::stepsOfSeconds(2);  // steps "riding" lasts after the player leaves the boss's gravity
-    NEBULA_TUNABLE(s32, sBgmStateNormal, 1);
-    NEBULA_TUNABLE(s32, sBgmStateRide, 3);
-    NEBULA_TUNABLE(f32, sLegAngleStep, 2.0943952f);  // 2 pi / 3
+    const s32 sBgmStateNormal = 1;
+    const s32 sBgmStateRide = 3;
+    const f32 sLegAngleStep = 2.0943952f;  // 2 pi / 3
     const s32 sBonesPerLeg = 7;
     // The demo blends the legs in over half a second.
     const s32 sDemoBlendSteps = NebulaFrameClock::stepsOfSeconds(1) / 2;
@@ -207,7 +184,7 @@ void TripodBoss::initLegIKPlacement() {
     side *= widthRate * mMovableArea->mRadius;
 
     for (u32 i = 0; i < ARRAY_SIZE(mLegs); i++) {
-        f32 angle = cNum_initLegIKPlacement_f1 * sLegAngleStep + -(f32)i * sLegAngleStep;
+        f32 angle = 0.5f * sLegAngleStep + -(f32)i * sLegAngleStep;
         f32 x = MR::sin(angle);
         f32 z = MR::cos(angle);
 
@@ -536,7 +513,7 @@ void TripodBoss::requestEndDamageDemo() {
     Vec3f yDir;
     mBodyMtx.getYDir(yDir);
 
-    MR::appearStarPieceToDirection(this, starPiecePos, yDir, 24, cNum_requestEndDamageDemo_f1, cNum_requestEndDamageDemo_f2, false);
+    MR::appearStarPieceToDirection(this, starPiecePos, yDir, 24, 50.0f, 60.0f, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_F");
 }
 
@@ -615,9 +592,9 @@ void TripodBoss::exeDamage() {
         MR::normalizeOrZero(&outward);
 
         if (getNerveStep() % 6 < 3) {
-            mBodyVelocity -= outward * cNum_exeDamage_f1;
+            mBodyVelocity -= outward * 79.5f;
         } else {
-            mBodyVelocity += outward * cNum_exeDamage_f2;
+            mBodyVelocity += outward * 80.0f;
         }
     }
 
@@ -691,7 +668,7 @@ void TripodBoss::exePainDemo() {
             MR::startBrk(mDummyModel, "Recover");
         }
 
-        mDummyModelSpinSpeed = cNum_exePainDemo_f1;
+        mDummyModelSpinSpeed = 5.0f;
         mDemoBlendRate = 0.0f;
     }
 
@@ -708,9 +685,9 @@ void TripodBoss::exePainDemo() {
     }
 
     if (MR::isLessStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
-        mDummyModelOffset.y = MR::calcNerveEaseInOutValue(this, 70, cNum_exePainDemo_f2, cNum_exePainDemo_f3);
+        mDummyModelOffset.y = MR::calcNerveEaseInOutValue(this, 70, 3200.0f, 3400.0f);
     } else {
-        mDummyModelOffset.y = MR::calcNerveEaseInValue(this, NebulaFrameClock::stepsOfMilliseconds(1500), NebulaFrameClock::stepsOfMilliseconds(2500), cNum_exePainDemo_f4, cNum_exePainDemo_f5);
+        mDummyModelOffset.y = MR::calcNerveEaseInValue(this, NebulaFrameClock::stepsOfMilliseconds(1500), NebulaFrameClock::stepsOfMilliseconds(2500), 3400.0f, 5000.0f);
     }
 
     if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfMilliseconds(1500))) {
@@ -929,7 +906,7 @@ void TripodBoss::calcDemoMovement() {
         Vec3f legScale;
         legMtx.getScale(legScale);
         mLegs[i]->setForceEndPoint(footPos);
-        mLegs[i]->setDemoEffectTiming(legScale.x > cNum_calcDemoMovement_f1);
+        mLegs[i]->setDemoEffectTiming(legScale.x > 1.5f);
     }
 
     calcLegMovement();
@@ -938,9 +915,9 @@ void TripodBoss::calcDemoMovement() {
 void TripodBoss::calcBodyMovement() {
     addAccelToWeightPosition();
     mBodyPos += mBodyVelocity;
-    mBodyVelocity.x *= cNum_calcBodyMovement_f1;
-    mBodyVelocity.y *= cNum_calcBodyMovement_f2;
-    mBodyVelocity.z *= cNum_calcBodyMovement_f3;
+    mBodyVelocity.x *= 0.95f;
+    mBodyVelocity.y *= 0.95f;
+    mBodyVelocity.z *= 0.95f;
     MR::makeMtxTR(mBodyMtx, mBodyPos, mRotation);
 }
 
@@ -971,11 +948,11 @@ void TripodBoss::addAccelToWeightPosition() {
         allBounds.extend(getLeg(i)->mForceEndPoint);
     }
 
-    weightCenter.lerp(weightBounds.f, weightBounds.i, cNum_addAccelToWeightPosition_f1);
-    allCenter.lerp(allBounds.f, allBounds.i, cNum_addAccelToWeightPosition_f2);
+    weightCenter.lerp(weightBounds.f, weightBounds.i, 0.5f);
+    allCenter.lerp(allBounds.f, allBounds.i, 0.5f);
 
     Vec3f footCenter;
-    MR::vecBlend(allCenter, weightCenter, &footCenter, cNum_addAccelToWeightPosition_f3);
+    MR::vecBlend(allCenter, weightCenter, &footCenter, 0.3f);
 
     footCenter.killElement(footCenter - mMovableArea->mCenter, mMovableArea->mBaseAxis);
     f32 height = mMovableArea->mRadius;
@@ -986,12 +963,12 @@ void TripodBoss::addAccelToWeightPosition() {
     Vec3f weightPosition = mMovableArea->mCenter + dir * height;
     Vec3f toWeight = weightPosition - mBodyPos;
     f32 dist = toWeight.length();
-    if (dist < cNum_addAccelToWeightPosition_f4) {
-        dist = cNum_addAccelToWeightPosition_f5;
+    if (dist < 500.0f) {
+        dist = 500.0f;
     }
 
     toWeight *= (1.0f / dist);
-    mBodyVelocity += toWeight * cNum_addAccelToWeightPosition_f6;
+    mBodyVelocity += toWeight * 0.8f;
 }
 
 void TripodBoss::calcClippingSphere() {
@@ -1003,7 +980,7 @@ void TripodBoss::calcClippingSphere() {
         bounds.extend(mLegs[i]->mForceEndPoint);
     }
 
-    mClipCenter.lerp(bounds.f, bounds.i, cNum_calcClippingSphere_f1);
+    mClipCenter.lerp(bounds.f, bounds.i, 0.5f);
 }
 
 void TripodBoss::clippingModel() {

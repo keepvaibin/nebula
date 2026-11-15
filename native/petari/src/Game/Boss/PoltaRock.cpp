@@ -15,27 +15,26 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, cRadius, 120.0f);
+    const f32 cRadius = 120.0f;
     // Follow speed and distance band while floating beside the owner.
-    NEBULA_TUNABLE(f32, cFollowSpeedMin, 0.0f);
-    NEBULA_TUNABLE(f32, cFollowSpeedMax, 1.2f);
-    NEBULA_TUNABLE(f32, cFollowLengthMin, 0.0f);
-    NEBULA_TUNABLE(f32, cFollowLengthMax, 200.0f);
-    NEBULA_TUNABLE(f32, cFloatHeight, 800.0f);
-    NEBULA_TUNABLE(f32, cFloatHeightSpeed, 1.5f);
-    NEBULA_TUNABLE(f32, cFloatHeightRange, 300.0f);
-    NEBULA_TUNABLE(f32, cFloatFriction, 0.92f);
+    const f32 cFollowSpeedMin = 0.0f;
+    const f32 cFollowSpeedMax = 1.2f;
+    const f32 cFollowLengthMin = 0.0f;
+    const f32 cFollowLengthMax = 200.0f;
+    const f32 cFloatHeight = 800.0f;
+    const f32 cFloatHeightSpeed = 1.5f;
+    const f32 cFloatHeightRange = 300.0f;
+    const f32 cFloatFriction = 0.92f;
     const s32 cFloatTime = NebulaFrameClock::stepsOfMilliseconds(1500);
     const s32 cSignTime = NebulaFrameClock::stepsOfSeconds(1);
     // The throw speeds up over cThrowAccelTime frames, then the rock drifts up against gravity until it hits or times out.
     const s32 cThrowAccelTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, cThrowAccel, 3.0f);
-    NEBULA_TUNABLE(f32, cFlyGravity, -0.02f);
-    NEBULA_TUNABLE(f32, cFlyFriction, 0.999f);
+    const f32 cThrowAccel = 3.0f;
+    const f32 cFlyGravity = -0.02f;
+    const f32 cFlyFriction = 0.999f;
     const s32 cFlyTime = NebulaFrameClock::stepsOfSeconds(5);
 }  // namespace
 

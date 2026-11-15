@@ -14,26 +14,22 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPlayerCoord_f1, "calcPlayerCoord.f1", 100000000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPlayerCoord_f2, "calcPlayerCoord.f2", 15.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sGrowSpeedMin, 15.0f);
-    NEBULA_TUNABLE(f32, sGrowSpeedMax, 100.0f);
-    NEBULA_TUNABLE(f32, sGrowSpeedFriction, 0.95f);
-    NEBULA_TUNABLE(f32, sGrowAccelMin, 15.0f);
-    NEBULA_TUNABLE(f32, sGrowAccelMax, 30.0f);
-    NEBULA_TUNABLE(s32, sGrowAccelTimeMin, 5);
+    const f32 sGrowSpeedMin = 15.0f;
+    const f32 sGrowSpeedMax = 100.0f;
+    const f32 sGrowSpeedFriction = 0.95f;
+    const f32 sGrowAccelMin = 15.0f;
+    const f32 sGrowAccelMax = 30.0f;
+    const s32 sGrowAccelTimeMin = 5;
     static const s32 sGrowAccelTimeMax = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(s32, sOffsetPointNum, 3);
-    NEBULA_TUNABLE(f32, sInterval, 30.0f);
-    NEBULA_TUNABLE(f32, sWidthRateMin, 0.45f);
+    const s32 sOffsetPointNum = 3;
+    const f32 sInterval = 30.0f;
+    const f32 sWidthRateMin = 0.45f;
     static const f32 sDrawWidthX = 10.0f;
     static const f32 sDrawWidthZ = 10.0f;
-    NEBULA_TUNABLE(f32, sTexRate, 1.0f);
+    const f32 sTexRate = 1.0f;
     static const f32 sDrawWidthLongOffsetX = ::sDrawWidthX;
     static const f32 sDrawWidthShortOffsetX = ::sDrawWidthX;
     static const f32 sDrawWidthShortOffsetZ = ::sDrawWidthZ;
@@ -144,7 +140,7 @@ void PlantStalk::calcNearestPos(Vec3f* pRailPos, const Vec3f& rSrcPos) const {
 
 f32 PlantStalk::calcPlayerCoord() const {
     Vec3f playerPos = *MR::getPlayerCenterPos();
-    f32 closestMag = cNum_calcPlayerCoord_f1;
+    f32 closestMag = 100000000.0f;
     s32 closestPoint = 0;
 
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
@@ -156,7 +152,7 @@ f32 PlantStalk::calcPlayerCoord() const {
         }
     }
 
-    if (mStalkLength > cNum_calcPlayerCoord_f2) {
+    if (mStalkLength > 15.0f) {
         f32 maxLength = MR::getRailTotalLength(this);
         return MR::clamp(((static_cast< f32 >(mGrownPlantPoints - closestPoint) * ::sInterval) / mStalkLength) * MR::getRailTotalLength(this), 0.0f, maxLength);
     } else {

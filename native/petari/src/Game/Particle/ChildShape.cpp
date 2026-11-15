@@ -3,9 +3,6 @@
 #include "Game/Render/FrameList.hpp"
 #include "Game/Particle/EmitterCore.hpp"
 #include "Game/Particle/ParticleCore.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_ParticleCalcChildAlphaOut_f1, "ParticleCalcChildAlphaOut.f1", 255.0f);
 
 void ParticleRegistChildPrmEnv(EmitterWork* work) {
     ChildShape* csp = work->mpRes->getCsp();
@@ -24,7 +21,7 @@ void ParticleRegistChildPrmEnv(EmitterWork* work) {
 }
 
 void ParticleCalcChildAlphaOut(EmitterWork* /*work*/, ParticleCore* ptcl) {
-    f32 anm = (1.0f - ptcl->mTime) * cNum_ParticleCalcChildAlphaOut_f1;
+    f32 anm = (1.0f - ptcl->mTime) * 255.0f;
     ptcl->mPrmColorAlphaAnm = nebula_f32_to_u8(anm);
 }
 

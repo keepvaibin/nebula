@@ -9,14 +9,13 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nebula_math.h>
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sDecayHeld, 0.98f);
-    NEBULA_TUNABLE(f32, sDecay, 0.9f);
-    NEBULA_TUNABLE(f32, sStrokeRate, 0.04f);
-    NEBULA_TUNABLE(f32, sMomentMax, 0.15f);
+    const f32 sDecayHeld = 0.98f;
+    const f32 sDecay = 0.9f;
+    const f32 sStrokeRate = 0.04f;
+    const f32 sMomentMax = 0.15f;
 };  // namespace
 
 namespace NrvRevolvingWay {

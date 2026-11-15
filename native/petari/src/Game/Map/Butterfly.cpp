@@ -16,15 +16,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_tryAppearStarPeace_f1, "tryAppearStarPeace.f1", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGotoSleepingMario_f1, "exeGotoSleepingMario.f1", 0.05f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeGotoSleepingMario_checkPassBckFrame_1, "exeGotoSleepingMario.checkPassBckFrame.1", 0.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeReadyToPerchOnSleepingMario_checkPassBckFrame_1, "exeReadyToPerchOnSleepingMario.checkPassBckFrame.1", 0.0f);
 
 namespace NrvButterfly {
     NEW_NERVE(HostTypeWait, Butterfly, Wait);
@@ -37,37 +29,37 @@ namespace NrvButterfly {
 };  // namespace NrvButterfly
 
 namespace {
-    NEBULA_TUNABLE(f32, sRadius, 30.0f);
-    NEBULA_TUNABLE(f32, sPointerRadius, 200.0f);
-    NEBULA_TUNABLE(f32, sPointerRadiusFast, 100.0f);
-    NEBULA_TUNABLE(f32, sPointerSpeedFast, 3.0f);
-    NEBULA_TUNABLE(f32, sAppearStarPeaceScreenRadius, 10.0f);
-    NEBULA_TUNABLE(f32, sWaitAnimRate, 1.0f);
-    NEBULA_TUNABLE(f32, sHomeRadius, 200.0f);
-    NEBULA_TUNABLE(f32, sRunAwayVel, 12.0f);
-    NEBULA_TUNABLE(f32, sRunAwayTime, 30.0f);
-    NEBULA_TUNABLE(f32, sRunAwayAttenVel, 0.97f);
-    NEBULA_TUNABLE(f32, sRunAwayAnimRate, 3.0f);
-    NEBULA_TUNABLE(f32, sBackToHomeAccel, 0.01f);
-    NEBULA_TUNABLE(f32, sBackToHomeVelMax, 2.0f);
-    NEBULA_TUNABLE(f32, sBackToHomeAttenVel, 0.99f);
-    NEBULA_TUNABLE(f32, sMoveDistanceMax, 500.0f);
-    NEBULA_TUNABLE(f32, sHiveRadius, 100.0f);
-    NEBULA_TUNABLE(f32, sHiveAccel, 0.05f);
-    NEBULA_TUNABLE(f32, sHiveVelMax, 2.5f);
-    NEBULA_TUNABLE(f32, sHiveAnimRate, 1.2f);
-    NEBULA_TUNABLE(f32, sPerchOnAnimRate, 0.7f);
-    NEBULA_TUNABLE(f32, sAnimInterpolateRate, 0.02f);
-    NEBULA_TUNABLE(f32, sSleepingMarioNearDistance, 500.0f);
-    NEBULA_TUNABLE(f32, sPerchOnNearDistance, 10.0f);
-    NEBULA_TUNABLE(f32, sGotoSleepingMarioWaitTime, 300.0f);
-    NEBULA_TUNABLE(f32, sGotoSleepingMarioSpeedMax, 2.0f);
-    NEBULA_TUNABLE(f32, sReadyToPerchOnAnimRate, 0.5f);
-    NEBULA_TUNABLE(f32, sTransBlendRatio, 0.7f);
-    NEBULA_TUNABLE(f32, sTurnLimit, 0.997f);  // ~4.44 degrees
-    NEBULA_TUNABLE(f32, sUpdatePostureMinVel, 0.5f);
+    const f32 sRadius = 30.0f;
+    const f32 sPointerRadius = 200.0f;
+    const f32 sPointerRadiusFast = 100.0f;
+    const f32 sPointerSpeedFast = 3.0f;
+    const f32 sAppearStarPeaceScreenRadius = 10.0f;
+    const f32 sWaitAnimRate = 1.0f;
+    const f32 sHomeRadius = 200.0f;
+    const f32 sRunAwayVel = 12.0f;
+    const f32 sRunAwayTime = 30.0f;
+    const f32 sRunAwayAttenVel = 0.97f;
+    const f32 sRunAwayAnimRate = 3.0f;
+    const f32 sBackToHomeAccel = 0.01f;
+    const f32 sBackToHomeVelMax = 2.0f;
+    const f32 sBackToHomeAttenVel = 0.99f;
+    const f32 sMoveDistanceMax = 500.0f;
+    const f32 sHiveRadius = 100.0f;
+    const f32 sHiveAccel = 0.05f;
+    const f32 sHiveVelMax = 2.5f;
+    const f32 sHiveAnimRate = 1.2f;
+    const f32 sPerchOnAnimRate = 0.7f;
+    const f32 sAnimInterpolateRate = 0.02f;
+    const f32 sSleepingMarioNearDistance = 500.0f;
+    const f32 sPerchOnNearDistance = 10.0f;
+    const f32 sGotoSleepingMarioWaitTime = 300.0f;
+    const f32 sGotoSleepingMarioSpeedMax = 2.0f;
+    const f32 sReadyToPerchOnAnimRate = 0.5f;
+    const f32 sTransBlendRatio = 0.7f;
+    const f32 sTurnLimit = 0.997f;  // ~4.44 degrees
+    const f32 sUpdatePostureMinVel = 0.5f;
 
-    NEBULA_TUNABLE_RECORD(Vec, sMarioCapPosOffset, {0.0f, 50.2f, 24.9f});
+    const Vec sMarioCapPosOffset = {0.0f, 50.2f, 24.9f};
 
 };  // namespace
 
@@ -305,7 +297,7 @@ bool Butterfly::tryAppearStarPeace(s32 port) {
         return false;
     }
 
-    if (!MR::appearStarPiece(this, mPosition, 1, ::sAppearStarPeaceScreenRadius, cNum_tryAppearStarPeace_f1, false)) {
+    if (!MR::appearStarPiece(this, mPosition, 1, ::sAppearStarPeaceScreenRadius, 40.0f, false)) {
         return false;
     }
 
@@ -430,14 +422,14 @@ void Butterfly::exeGotoSleepingMario() {
 
     Vec3f vel = posOffset - mPosition;
     // This can really only be ::sHiveAccel, but this nerve is only accessible by Wait
-    vel.setLength(cNum_exeGotoSleepingMario_f1);
+    vel.setLength(0.05f);
     mVelocity += vel;
 
     if (::sGotoSleepingMarioSpeedMax < mVelocity.length()) {
         mVelocity.setLength(::sGotoSleepingMarioSpeedMax);
     }
 
-    if (mPosition.distance(posOffset) < ::sPerchOnNearDistance && MR::checkPassBckFrame(this, cNum_exeGotoSleepingMario_checkPassBckFrame_1)) {
+    if (mPosition.distance(posOffset) < ::sPerchOnNearDistance && MR::checkPassBckFrame(this, 0.0f)) {
         mVelocity.zero();
         setNerve(GET_NERVE(Butterfly, HostTypeReadyToPerchOnSleepingMario));
     }
@@ -452,7 +444,7 @@ void Butterfly::exeReadyToPerchOnSleepingMario() {
     MR::vecBlend(mPosition, posOffset, &mPosition, ::sTransBlendRatio);
 
     MR::setBckRate(this, MR::converge(MR::getBckRate(this), ::sReadyToPerchOnAnimRate, ::sAnimInterpolateRate));
-    if (MR::checkPassBckFrame(this, cNum_exeReadyToPerchOnSleepingMario_checkPassBckFrame_1)) {
+    if (MR::checkPassBckFrame(this, 0.0f)) {
         setNerve(GET_NERVE(Butterfly, HostTypePerchOnSleepingMario));
     }
 }

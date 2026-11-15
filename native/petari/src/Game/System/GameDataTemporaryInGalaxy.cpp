@@ -4,11 +4,10 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // The most star bits carried in a stage (999).
-    NEBULA_TUNABLE(s32, cMaxCarriedStarPieceNum, 999);
+    const s32 cMaxCarriedStarPieceNum = 999;
 };  // namespace
 
 GameDataTemporaryInGalaxy::GameDataTemporaryInGalaxy() : mPlayerRestartIdInfo(nullptr), mAlreadyDoneFlag(nullptr) {

@@ -1,0 +1,42 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+/* The proof harness's service (contract `harness`, revision 1): what the harness's game half (luma_test.c, a
+   LumaCore mod built from LumaLink's test kit) asks of the host half (the test extension) through
+   LumaCore.service("harness", 1, 0). It exists only in a harness run; in any other run the service is absent.
+
+   The host half reads the test (the plan the runner wrote), keeps the test clock, drives the controls, keeps pictures,
+   writes facts.jsonl and decides when the test ends. The game half does what needs the game: the save, the stage, the
+   player, calls and reads by name; each one read back and reported as facts. */
+#ifndef LUMA_HARNESS_H
+#define LUMA_HARNESS_H
+#include <stdint.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define LUMA_HARNESS_NAME "harness"
+#define LUMA_HARNESS_MAJOR 1u
+#define LUMA_HARNESS_MINOR 1u /* a mod asking for a later minor is not given the service */
+
+typedef struct LumaHarness {
+    uint32_t size;
+    /* The next thing the game half is to do now, as one line of the plan ("setup save.spin 1", "call player.pos
+       MR::getPlayerPos\tVec3f *()\t", ...), or null when there is nothing more this frame. The text stays valid until
+       the next call. The game half calls it once a game frame (and again after each line it finished) and answers each
+       line with `done` before asking again. */
+    const char* (*next)(void);
+    /* The answer to the line `next` gave: 1 done, 0 failed (`why` names what, in a few words), -1 not set up (revision
+       7: a step whose player or named live object is not there; the test did not reach what it checks). A setup line
+       that fails ends the test as setup-failed; a step that fails ends it as fail, one not set up as setup-failed. */
+    void (*done)(int32_t ok, const char* why);
+    /* A fact: `key` and its value as JSON text, on the test clock's current frame. */
+    void (*fact)(const char* key, const char* json);
+    /* Revision 1.1. Runs fn(user) on a thread of its own and returns when it has ended (the game thread waits): 1, or
+       0 when no thread could be made. For a test of what a hook sees off the game thread, which a harness run
+       otherwise never has (its sound ticks on the game thread). */
+    int32_t (*other_thread)(void (*fn)(void* user), void* user);
+} LumaHarness;
+
+#ifdef __cplusplus
+}
+#endif
+#endif

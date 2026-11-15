@@ -4,9 +4,12 @@
 #include "render/core/frame_core.h"
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cstring>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <iterator>
 #include <stdexcept>
 #include <unordered_set>
@@ -16,6 +19,8 @@ namespace galaxy::render::core {
 
 namespace {
 
+// Mesh pages: the first 8 MB, each further one twice the largest held, up to 64 MB.
+constexpr std::size_t kFirstArenaPage = 8ull << 20u;
 constexpr std::size_t kArenaPage = 64ull << 20u;
 constexpr std::size_t kSlotPage = 1ull << 20u;
 constexpr std::size_t kSlotAlign = 256u;
@@ -32,6 +37,37 @@ std::uint64_t hash_bytes(const void* data, std::size_t size, std::uint64_t hash 
     }
     return hash;
 }
+
+// A texture list's hash, eight bytes a step (three a texture), the bits mixed at the end so the low ones index a table.
+std::uint64_t hash_textures(const NebulaFrameTexture* list, std::uint32_t count) noexcept {
+    static_assert(sizeof(NebulaFrameTexture) == 24u);
+    std::uint64_t hash = 14695981039346656037ull ^ count;
+    const auto* p = reinterpret_cast<const std::byte*>(list);
+    for (std::size_t i = 0; i < std::size_t{count} * 3u; ++i) {
+        std::uint64_t word;
+        std::memcpy(&word, p + i * 8u, 8u);
+        hash = (hash ^ word) * 0x9E3779B97F4A7C15ull;
+    }
+    hash ^= hash >> 32u;
+    hash *= 0xD6E8FEB86659FD93ull;
+    return hash ^ (hash >> 32u);
+}
+
+// texture_table's last answers on this thread, by the list's hash: one stands while its registries are the same and
+// none of their lists has been dropped since (Registries::tables_dropped_). Lists of more textures are not kept.
+constexpr std::uint32_t kTableMemos = 64u;
+constexpr std::uint32_t kTableMemoTextures = 8u;
+struct TableMemo {
+    std::uint64_t hash = 0u;
+    std::uint64_t owner = 0u;
+    std::uint64_t dropped = 0u;
+    std::uint32_t id = 0u, count = 0u;
+    NebulaFrameTexture list[kTableMemoTextures];
+};
+// Made by a thread's first texture_table: the threads that never ask hold nothing.
+thread_local std::unique_ptr<std::array<TableMemo, kTableMemos>> t_table_memos;
+
+std::atomic<std::uint64_t> s_registries_made{0u};
 
 // A mesh's bounds under each of its draw matrices, for the occluders.
 void object_slots_of(const NebulaModelMesh& mesh, const std::byte* positions, const std::byte* matrices,
@@ -181,7 +217,14 @@ Registries::Placed Registries::place(std::size_t bytes) {
             break;
         }
     }
-    const std::size_t page = std::max(bytes, kArenaPage);
+    // Twice the largest page held (kFirstArenaPage when none), as large as the range needs, at most kArenaPage; a range
+    // larger than that has a page of its own size.
+    std::size_t page = kFirstArenaPage;
+    for (const Arena& held : arenas_) {
+        if (held.memory) page = std::max(page, held.bytes * 2u);
+    }
+    while (page < bytes && page < kArenaPage) page *= 2u;
+    page = std::max(std::min(page, kArenaPage), bytes);
     // Geometry is written once, in order, and read by the GPU every frame it draws: video memory where the device maps it.
     gpu::UploadMemory memory = gpu::create_upload_memory(device_, page, "Nebula Meshes", gpu::UploadPlace::GpuLocal);
     if (!memory) {
@@ -235,9 +278,9 @@ void Registries::give_back(std::uint32_t index, std::size_t offset, std::size_t 
     if (arena.live != 0u) {
         return;
     }
-    // The page is empty (the GPU is past everything that read it: reclaim runs after the retiring fence). A page of an
-    // unusual size, or a second empty one, gives its memory back; one empty page stays for the next scene.
-    bool release = arena.bytes != kArenaPage;
+    // The page is empty (the GPU is past everything that read it: reclaim runs after the retiring fence). A page of its own
+    // for one large range, or a second empty one, gives its memory back; one empty page stays for the next scene.
+    bool release = arena.bytes > kArenaPage;
     for (std::uint32_t other = 0; other < arenas_.size() && !release; ++other) {
         release = other != index && arenas_[other].memory && arenas_[other].live == 0u;
     }
@@ -331,11 +374,29 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
     model.tables.draw_matrix_count = header.draw_matrix_count;
     model.tables.joint_count = header.joint_count;
     model.tables.has_billboard = (header.flags & NEBULA_MODEL_HAS_BILLBOARD) != 0u;
+    model.tables.has_weighted = std::any_of(model.draw_matrices.begin(), model.draw_matrices.end(),
+                                            [](const NebulaModelDrawMatrix& matrix) { return matrix.weighted != 0u; });
     model.mesh_count = header.mesh_count;
 
     meshes.resize(header.mesh_count);
+    // Each glowing mesh's light shapes (version 10 on; the lights pass shades them).
+    model.glow_shapes.clear();
+    if (header.version >= 10u && header.glow_shapes_at != 0u) {
+        const auto* spans = at<NebulaModelGlowSpan>(file, header.glow_shapes_at);
+        const auto* shapes = reinterpret_cast<const NebulaModelGlowShape*>(spans + header.mesh_count);
+        std::uint32_t total = 0u;
+        for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
+            total = std::max(total, spans[m].first + spans[m].count);
+        }
+        model.glow_shapes.assign(shapes, shapes + total);
+        for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
+            meshes[m].glow_shape_first = spans[m].first;
+            meshes[m].glow_shape_count = spans[m].count;
+        }
+    }
     const auto* file_meshes = at<NebulaModelMesh>(file, header.meshes_at);
     const auto* hits = header.hits_at != 0u ? at<NebulaModelHit>(file, header.hits_at) : nullptr;
+    const auto* paint_lights = header.paint_lights_at != 0u ? at<NebulaModelPaintLight>(file, header.paint_lights_at) : nullptr;
     for (std::uint32_t m = 0; m < header.mesh_count; ++m) {
         const NebulaModelMesh& mesh = file_meshes[m];
         GpuMesh& gpu_mesh = meshes[m];
@@ -351,7 +412,8 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
             gpu_mesh.hit_transmission = hit.transmission;
             gpu_mesh.hit_environment = hit.environment_share;
             std::copy_n(hit.glow, 4u, gpu_mesh.glow);
-            gpu_mesh.glow_source = hit.glow_source;
+            gpu_mesh.glow_source = static_cast<std::uint8_t>(hit.glow_source & 31u);  // bits 5-7: why it glows
+            gpu_mesh.glow_rule = static_cast<std::uint8_t>(hit.glow_source >> 5u);
             gpu_mesh.hit_ior = hit.ior;
             gpu_mesh.hit_thickness = hit.thickness;
             std::copy_n(hit.env_tint, 3u, gpu_mesh.hit_env_tint);
@@ -359,11 +421,12 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
             gpu_mesh.hit_body = hit.body;
             gpu_mesh.hit_shine = hit.shine;
             gpu_mesh.hit_tint_keep = hit.tint_keep;
+            gpu_mesh.hit_through = static_cast<float>(hit.through) / 255.0f;
             // Where glow_source's colour sits among the rows of the material's own stages (the first form that
             // replaces nothing), and its cooked value: registers r (code r) are signed, the others bytes, all /255
             // as Material::fillRow fills them.
-            const std::uint32_t code = hit.glow_source - 1u;
-            if (hit.glow_source >= 1u && hit.glow_source <= 9u && material.forms_at != 0u) {
+            const std::uint32_t code = gpu_mesh.glow_source - 1u;
+            if (gpu_mesh.glow_source >= 1u && gpu_mesh.glow_source <= 9u && material.forms_at != 0u) {
                 const auto* forms = at<NebulaModelForm>(file, material.forms_at);
                 for (std::uint32_t f = 0; f < material.form_count; ++f) {
                     const NebulaModelForm& form = forms[f];
@@ -389,10 +452,68 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
                     gpu_mesh.glow_cooked[c] = value / 255.0f;
                 }
             }
+            // Map 0's coordinate: the form's texture table's first map, the first stage that samples it,
+            // its coordinate when made from a uv set by a matrix (type 1, sources 4 to 19; not the form's normal
+            // coordinate), and that coordinate's u and v rows among the form's vertex rows.
+            if (material.forms_at != 0u && material.coords_at != 0u && hit.stages_at != 0u) {
+                const auto* forms = at<NebulaModelForm>(file, material.forms_at);
+                for (std::uint32_t f = 0; f < material.form_count; ++f) {
+                    const NebulaModelForm& form = forms[f];
+                    if (form.replace != 0u) {
+                        continue;
+                    }
+                    if (form.texture_count != 0u && form.vertex_row_count + form.pixel_row_count < 0xFFFFu) {
+                        // A map's coordinate rows: the first of its u and v rows among the form's vertex rows and the
+                        // uv set it reads, or none (map 0's and map 1's alike).
+                        const auto map_rows = [&](std::uint8_t map, std::uint16_t& row, std::uint8_t& uv) {
+                            const auto* stages = at<NebulaModelStage>(file, hit.stages_at);
+                            std::uint32_t coord = 0xFFu;
+                            for (std::uint32_t s = 0; s < hit.stage_count && coord == 0xFFu; ++s) {
+                                if (stages[s].map == map) {
+                                    coord = stages[s].coord;
+                                }
+                            }
+                            const bool normal_coord = (form.flags & 1u) != 0u && coord == 0u;
+                            if (coord >= material.coord_count || normal_coord) {
+                                return;
+                            }
+                            const NebulaModelCoord& c = at<NebulaModelCoord>(file, material.coords_at)[coord];
+                            if (c.type != 1u || c.source < 4u || c.source > 19u) {
+                                return;
+                            }
+                            const auto* codes = at<std::uint32_t>(file, form.vertex_rows_at);
+                            const std::uint32_t coord_code = NEBULA_ROW_COORD + 3u * coord;
+                            for (std::uint32_t r = 0; r + 1u < form.vertex_row_count; ++r) {
+                                if (codes[r] == coord_code && codes[r + 1u] == coord_code + 1u) {
+                                    row = static_cast<std::uint16_t>(r);
+                                    uv = static_cast<std::uint8_t>(c.source - 4u);
+                                    return;
+                                }
+                            }
+                        };
+                        const auto* maps = at<std::uint8_t>(file, form.textures_at);
+                        map_rows(maps[0], gpu_mesh.map0_row, gpu_mesh.map0_uv);
+                        if (gpu_mesh.map0_row != 0xFFFFu) {
+                            gpu_mesh.map0_form_rows = static_cast<std::uint16_t>(form.vertex_row_count + form.pixel_row_count);
+                        }
+                        if (form.texture_count >= 2u && maps[1] != maps[0]) {
+                            map_rows(maps[1], gpu_mesh.map1_row, gpu_mesh.map1_uv);
+                            if (gpu_mesh.map1_row != 0xFFFFu) {
+                                gpu_mesh.map1_slot = 1u;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
             // The alpha test's first comparison, where it is "greater" or "greater or equal" (4, 6): its reference.
             if (material.alpha_comp0 == 4u || material.alpha_comp0 == 6u) {
                 gpu_mesh.hit_alpha = std::max(static_cast<float>(material.alpha_ref0) / 255.0f, 1.0f / 255.0f);
             }
+        }
+        if (paint_lights != nullptr) {
+            gpu_mesh.paint_share = paint_lights[m].share;
+            std::copy_n(paint_lights[m].direction, 2u, gpu_mesh.paint_direction);
         }
         gpu_mesh.vertex_count = mesh.vertex_count;
         gpu_mesh.refined_vertex_count = mesh.refined_vertex_count;
@@ -425,11 +546,16 @@ void Registries::place_model(std::uint32_t id, const LiveModel& live, GpuModel m
         const NebulaModelMesh& mesh = file_meshes[m];
         GpuMesh& gpu_mesh = meshes[m];
         gpu_mesh.positions = stream(mesh.positions_at);
+        gpu_mesh.billboard = mesh.billboard;
         gpu_mesh.attributes = stream(mesh.attributes_at);
         gpu_mesh.matrices = stream(mesh.matrices_at);
         gpu_mesh.further = stream(mesh.further_at);
         gpu_mesh.indices = stream(mesh.indices_at);
         gpu_mesh.refined_indices = stream(mesh.refined_indices_at);
+        // Each vertex's last word of stream 3 is its de-light gain; a ray's hit reads it.
+        gpu_mesh.gains = (mesh.attributes & NEBULA_MESH_GAIN) != 0u && mesh.further_at != 0u && mesh.further_stride >= 4u
+                             ? stream(mesh.further_at) + (mesh.further_stride - 4u)
+                             : gpu::Address{0u};
         gpu_mesh.arena = placed.arena;
         gpu_mesh.model = id;
         incoming_.meshes.emplace_back(live.first_mesh + m, gpu_mesh);
@@ -545,6 +671,7 @@ void Registries::place_slot(const float (*rows)[4], std::uint32_t vertex_rows, s
     StaticSlot slot;
     slot.vertex_rows = vertex_page.gpu + vertex_at;
     slot.pixel_rows = slot_page_.gpu + pixel_at;
+    slot.cpu = &rows[0][0];  // the record's copy (material_register_locked, restart): kept for the registries' life
     incoming_.slots.push_back(slot);
 }
 
@@ -632,15 +759,16 @@ std::uint32_t Registries::material_register_locked(const float (*rows)[4], std::
             return record.id;
         }
     }
-    place_slot(rows, vertex_rows, pixel_rows);
     const std::uint32_t id = next_slot_++;
-    // Compares read the rows back from the mapped page's copy kept here: the page is write-combined.
+    // Compares read the rows back from the mapped page's copy kept here: the page is write-combined. The slot points
+    // at this copy too (StaticSlot::cpu): it lives as long as the registries.
     SlotRecord record;
     record.vertex_rows = vertex_rows;
     record.pixel_rows = pixel_rows;
     record.id = id;
-    record.cpu = std::make_unique<float[]>(count * 4u);
+    record.cpu = std::make_unique<float[]>(std::max<std::size_t>(count, 1u) * 4u);
     std::memcpy(record.cpu.get(), rows, count * 16u);
+    place_slot(reinterpret_cast<const float (*)[4]>(record.cpu.get()), vertex_rows, pixel_rows);
     bucket.push_back(std::move(record));
     return id;
 }
@@ -683,23 +811,53 @@ void Registries::write_pipeline_list(const std::filesystem::path& path) {
     }
 }
 
+std::uint64_t Registries::make_serial() noexcept {
+    return s_registries_made.fetch_add(1u, std::memory_order_relaxed) + 1u;
+}
+
 std::uint32_t Registries::texture_table(const NebulaFrameTexture* list, std::uint32_t count) {
-    const std::uint64_t hash = hash_bytes(list, count * sizeof(NebulaFrameTexture), count);
-    const std::lock_guard guard(lock_);
-    auto& bucket = table_by_hash_[hash];
-    for (const TableKey& key : bucket) {
-        if (key.count == count && std::memcmp(key.list.data(), list, count * sizeof(NebulaFrameTexture)) == 0) {
-            return key.id;
+    const std::size_t bytes = std::size_t{count} * sizeof(NebulaFrameTexture);
+    const std::uint64_t hash = hash_textures(list, count);
+    // Read before the lookup: a drop after it leaves this answer's memo unused, never wrong.
+    const std::uint64_t dropped = tables_dropped_.load(std::memory_order_acquire);
+    if (t_table_memos == nullptr) {
+        t_table_memos = std::make_unique<std::array<TableMemo, kTableMemos>>();
+    }
+    TableMemo& memo = (*t_table_memos)[hash % kTableMemos];
+    if (memo.hash == hash && memo.owner == serial_ && memo.dropped == dropped && memo.count == count &&
+        (bytes == 0u || std::memcmp(memo.list, list, bytes) == 0)) {
+        return memo.id;
+    }
+    std::uint32_t id = 0u;
+    {
+        const std::lock_guard guard(lock_);
+        auto& bucket = table_by_hash_[hash];
+        const auto found = std::find_if(bucket.begin(), bucket.end(), [&](const TableKey& key) {
+            return key.count == count && std::memcmp(key.list.data(), list, bytes) == 0;
+        });
+        if (found != bucket.end()) {
+            id = found->id;
+        } else {
+            id = next_table_++;
+            TableKey& key = bucket.emplace_back();
+            key.id = id;
+            key.count = count;
+            key.list.assign(list, list + count);
+            TextureTable& table = incoming_.tables.emplace_back();
+            table.count = count;
+            table.list = key.list;
         }
     }
-    const std::uint32_t id = next_table_++;
-    TableKey& key = bucket.emplace_back();
-    key.id = id;
-    key.count = count;
-    key.list.assign(list, list + count);
-    TextureTable& table = incoming_.tables.emplace_back();
-    table.count = count;
-    table.list = key.list;
+    if (count <= kTableMemoTextures) {
+        memo.hash = hash;
+        memo.owner = serial_;
+        memo.dropped = dropped;
+        memo.id = id;
+        memo.count = count;
+        if (bytes != 0u) {
+            std::memcpy(memo.list, list, bytes);
+        }
+    }
     return id;
 }
 
@@ -798,6 +956,9 @@ void Registries::forget_textures(std::span<const std::uint32_t> freed, std::vect
                 return false;
             });
             it = it->second.empty() ? table_by_hash_.erase(it) : std::next(it);
+        }
+        if (!dropped.empty()) {
+            tables_dropped_.fetch_add(1u, std::memory_order_release);
         }
     }
     for (const std::uint32_t id : dropped) {

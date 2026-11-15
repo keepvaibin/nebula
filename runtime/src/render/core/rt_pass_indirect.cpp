@@ -37,6 +37,11 @@ bool RenderCore::rt_pass_indirect_on() const {
     return rt_levels_[kFbIndirect] != 0u && !rt_fb_reference() && !::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded);
 }
 
+// The near field (rt_near.hlsl): High alone, where the gather sees the far field only.
+bool RenderCore::rt_pass_near_on() const {
+    return rt_pass_indirect_on() && rt_levels_[kFbIndirect] >= 3u && rt_dev(RtDev::NearField, 1.0f) > 0.5f;
+}
+
 void RenderCore::rt_pass_indirect() {
     const RtFrame& frame = rt_light_frame_;
     if (!rt_pass_indirect_on() || frame.layer != 0u) {
@@ -63,7 +68,9 @@ void RenderCore::rt_pass_indirect() {
     }
     // The part's level: 1 low, 2 medium, 3 high.
     const std::uint32_t mode = rt_levels_[kFbIndirect] <= 1u ? kIndirectSky : rt_levels_[kFbIndirect] == 2u ? kIndirectMedium : kIndirectHigh;
-    binds.pass_constants = rt_bounce_constants(mode, history ? 1u : 0u, shade_at, rows);
+    // g_pass.z bit 1: the near field runs this frame, the gather sees the far field only.
+    const bool near_ready = rt_pass_near_on() && rt_image(RtImage::NearRaw) != rt::kNoImage && rt_now(RtImage::NearA) != rt::kNoImage;
+    binds.pass_constants = rt_bounce_constants(mode, (history ? 1u : 0u) | (near_ready ? 2u : 0u), shade_at, rows);
     binds.reads[0] = rt_now(RtImage::GuideA);
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);
@@ -72,6 +79,10 @@ void RenderCore::rt_pass_indirect() {
     binds.reads[5] = rt_before(RtImage::GiWeightsA);
     binds.reads[6] = rt_before(RtImage::IndirectGuideA);
     binds.reads[7] = rt_image(RtImage::Indirect);  // the frame before's, until rt_indirect_up writes this frame's
+    // The walk before's local lights at its pixels, and where its blended layer had them instead (rt_screen_lights):
+    // this walk's filters write Added after this pass.
+    binds.reads[8] = rt_image(RtImage::Added);
+    binds.reads[9] = rt_before(RtImage::BlendGuideA);
     const std::uint32_t raw = rt_image(RtImage::IndirectRaw), step_image = rt_image(RtImage::IndirectStep);
     const std::uint32_t half_guide = rt_now(RtImage::IndirectGuideA), half_motion = rt_image(RtImage::IndirectMotion);
     binds.writes[0] = rt_now(RtImage::GiReservoirsA);
@@ -88,6 +99,9 @@ void RenderCore::rt_pass_indirect() {
     half.ray[2] = frame.ray[2] * 2.0f;
     half.ray[3] = frame.ray[3];
     half.kept[2] = history ? 1u : 0u;
+    // The history scale, the frame's own (rt_walk.cpp: clamp(rate / 60, 0.5, 2)).
+    const float scale = rt_frame_rate_ / 60.0f < 0.5f ? 0.5f : rt_frame_rate_ / 60.0f > 2.0f ? 2.0f : rt_frame_rate_ / 60.0f;
+    std::memcpy(&half.kept[3], &scale, sizeof(scale));
     const UploadRing::Allocation half_at = renderer_.constant_ring().allocate(512u, 256u);
     std::memset(half_at.cpu, 0, 512u);
     std::memcpy(half_at.cpu, &half, sizeof(half));
@@ -115,14 +129,41 @@ void RenderCore::rt_pass_indirect() {
         over_space.writes[0] = step == 1u ? raw : step_image;
         rt_backend_.dispatch(RtShader::LightsSpace, over_space, half_across, half_down);
     }
+    // The near field at full size (High): its rays, then over time; the step up multiplies it in.
+    const std::uint32_t near_raw = rt_image(RtImage::NearRaw), near_now = rt_now(RtImage::NearA);
+    const bool near_on = near_ready;
+    if (near_on) {
+        rt::PassBinds rays = rt_pass_binds();  // the scene, the items, the depth, the blue noise
+        rays.constants = frame.binds.constants;
+        rays.pass_constants = frame.pass;
+        rays.reads[0] = rt_now(RtImage::GuideA);
+        rays.reads[1] = rt_image(RtImage::Normal);
+        rays.reads[2] = rt_image(RtImage::Motion);
+        rays.reads[3] = rt_image(RtImage::Material);
+        rays.writes[0] = near_raw;
+        rt_backend_.dispatch(RtShader::NearRays, rays, frame.across, frame.down);
+        rt::PassBinds near_time;
+        near_time.constants = frame.binds.constants;
+        near_time.pass_constants = rt_pass_constants(0u, 0u, 0u, rt_near_before_ ? 1u : 0u);  // its history is there
+        near_time.reads[0] = near_raw;
+        near_time.reads[1] = rt_before(RtImage::NearA);
+        near_time.reads[2] = rt_now(RtImage::GuideA);
+        near_time.reads[3] = rt_before(RtImage::GuideA);
+        near_time.reads[4] = rt_image(RtImage::Motion);
+        near_time.writes[0] = near_now;
+        rt_backend_.dispatch(RtShader::NearTime, near_time, frame.across, frame.down);
+    }
+    rt_near_before_ = near_on;
     // To full resolution by the picture's edges.
-    const float values[3][4] = {{kIndirectSkyMin, kIndirectBounceMax, 0.0f, 0.0f}};
+    const float values[3][4] = {{rt_dev(RtDev::SkyMin, kIndirectSkyMin), rt_dev(RtDev::BounceMax, kIndirectBounceMax),
+                                 near_on ? 1.0f : 0.0f, 0.0f}};
     rt::PassBinds up;
     up.constants = frame.binds.constants;
     up.pass_constants = rt_bounce_constants(0u, 0u, 0u, values);
     up.reads[0] = step_image;
     up.reads[1] = half_guide;
     up.reads[2] = rt_now(RtImage::GuideA);
+    up.reads[3] = near_on ? near_now : rt::kNoImage;
     up.writes[0] = rt_image(RtImage::Indirect);
     rt_backend_.dispatch(RtShader::IndirectUp, up, frame.across, frame.down);
 }

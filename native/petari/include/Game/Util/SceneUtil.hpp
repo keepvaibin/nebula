@@ -69,6 +69,8 @@ namespace MR {
     void getStageCameraData(void**, s32*, s32);
     void getCurrentScenarioStartAnimCameraData(void**, s32*);
     void incCoin(int);
+    // Spends num coins: false (nothing spent) with fewer held or num below 0. No 1-up, life or coin stat.
+    bool payCoin(s32 num);
     void incPurpleCoin();
     s32 getCoinNum();
     s32 getPurpleCoinNum();

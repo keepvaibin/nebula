@@ -29,34 +29,13 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Render/Clip.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_turnPlayerToActor_f1, "turnPlayerToActor.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnPlayerToActor_f2, "turnPlayerToActor.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnPlayerToActor_f3, "turnPlayerToActor.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_turnPlayerToActor_f4, "turnPlayerToActor.f4", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_followRailPoseOnGround_f1, "followRailPoseOnGround.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_followRailPoseOnGround_f2, "followRailPoseOnGround.f2", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startNPCTalkCamera_f1, "startNPCTalkCamera.f1", 67.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startNPCTalkCamera_f2, "startNPCTalkCamera.f2", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startNPCTalkCamera_f3, "startNPCTalkCamera.f3", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startNPCTalkCamera_f4, "startNPCTalkCamera.f4", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startNPCTalkCamera_f5, "startNPCTalkCamera.f5", 6.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startNPCTalkCamera_f6, "startNPCTalkCamera.f6", 450.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startNPCTalkCamera_f7, "startNPCTalkCamera.f7", 450.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcPlayerFaceStareVector_f1, "calcPlayerFaceStareVector.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFloatOffset_f1, "calcFloatOffset.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFloatOffset_f2, "calcFloatOffset.f2", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFloatOffset_f3, "calcFloatOffset.f3", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFloatOffset_f4, "calcFloatOffset.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcFloatOffset_f5, "calcFloatOffset.f5", 5.0f);
 
 namespace {
-    NEBULA_TUNABLE(s32, sStarAppearSeStep, 103);
-    NEBULA_TUNABLE(s32, sStarAppearSeStepCaretaker, 32);
-    NEBULA_TUNABLE(s32, sStarAppearSeStepPenguinCoach, 95);
-    NEBULA_TUNABLE(s32, sStarAppearSeStepTeresaRacer, 89);
-    NEBULA_TUNABLE(s32, sStarAppearSeStepTrickRabbit, 22);
+    const s32 sStarAppearSeStep = 103;
+    const s32 sStarAppearSeStepCaretaker = 32;
+    const s32 sStarAppearSeStepPenguinCoach = 95;
+    const s32 sStarAppearSeStepTeresaRacer = 89;
+    const s32 sStarAppearSeStepTrickRabbit = 22;
 };  // namespace
 
 namespace NrvTakeOutStar {
@@ -97,7 +76,7 @@ namespace MR {
         Pos3f playerMtx;
         playerMtx.set(getPlayerBaseMtx());
         if (isPlayerInWaterMode()) {
-            if (isNearPlayer(pActor, cNum_turnPlayerToActor_f1)) {
+            if (isNearPlayer(pActor, 10.0f)) {
                 if (!isBckPlaying(pPlayer, "SwimWait")) {
                     startBckPlayer("SwimWait");
                 }
@@ -117,7 +96,7 @@ namespace MR {
                 setPlayerBaseMtx(playerMtx);
             }
         } else if (isOnGroundPlayer()) {
-            if (isNearPlayer(pActor, cNum_turnPlayerToActor_f2)) {
+            if (isNearPlayer(pActor, 10.0f)) {
                 if (!isBckPlaying(pPlayer, "Watch")) {
                     startBckPlayer("Watch");
                 }
@@ -139,10 +118,10 @@ namespace MR {
         }
 
         Vec3f separation(*getPlayerCenterPos() - pActor->mPosition);
-        if (separation.length() < cNum_turnPlayerToActor_f3 && isOnGroundPlayer()) {
+        if (separation.length() < 100.0f && isOnGroundPlayer()) {
             vecKillElement(separation, *getPlayerGroundNormal(), &separation);
             if (!normalizeOrZero(&separation)) {
-                pushPlayer(separation * cNum_turnPlayerToActor_f4);
+                pushPlayer(separation * 10.0f);
             }
         }
     }
@@ -192,7 +171,7 @@ namespace MR {
     void followRailPoseOnGround(NPCActor* pActor, const LiveActor* pRailActor, f32 blend) {
         Vec3f pos(getRailPos(pRailActor));
         Vec3f gravity(pActor->mGravity);
-        getFirstPolyOnLineToMap(&pos, nullptr, getRailPos(pRailActor) - gravity * cNum_followRailPoseOnGround_f1, gravity * cNum_followRailPoseOnGround_f2);
+        getFirstPolyOnLineToMap(&pos, nullptr, getRailPos(pRailActor) - gravity * 10.0f, gravity * 1000.0f);
         const Vec3f& rDirection = getRailDirection(pRailActor);
         decidePose(pActor, -gravity, rDirection, pos, 1.0f, blend, 1.0f);
     }
@@ -242,17 +221,17 @@ namespace MR {
         }
 
         f32 distance = playerPos.distance(actorPos);
-        f32 angle = MR::atan2(1.0f, cosDegree(cNum_startNPCTalkCamera_f1));
+        f32 angle = MR::atan2(1.0f, cosDegree(67.5f));
         f32 height = vecKillElement(actorPos - playerPos, up, &side);
         // Player and NPC on one spot: no direction to scale, the nearest the camera goes is used.
-        f32 scale = distance > cNum_startNPCTalkCamera_f2 ? (height + offset.y) / distance / cNum_startNPCTalkCamera_f3 : 1.0f;
+        f32 scale = distance > 0.001f ? (height + offset.y) / distance / 0.75f : 1.0f;
         scale = scale >= 1.0f ? scale : 1.0f;
         distance *= angle;
         distance *= scale;
-        f32 cameraDistance = cNum_startNPCTalkCamera_f4 * distance;
-        f32 cameraHeight = height / cNum_startNPCTalkCamera_f5 + offset.y;
+        f32 cameraDistance = 2.0f * distance;
+        f32 cameraHeight = height / 6.0f + offset.y;
         cameraDistance *= distanceScale;
-        cameraDistance = cameraDistance >= cNum_startNPCTalkCamera_f6 ? cameraDistance : cNum_startNPCTalkCamera_f7;
+        cameraDistance = cameraDistance >= 450.0f ? cameraDistance : 450.0f;
         startTalkCamera(actorPos, up, cameraHeight, cameraDistance, frames);
     }
 
@@ -312,7 +291,7 @@ namespace MR {
         direction.set(facePos - actorPos);
         if (front.dot(direction) < 0.0f) {
             f32 projection = vecKillElement(direction, front, &direction);
-            direction = direction - (front * cNum_calcPlayerFaceStareVector_f1) * projection;
+            direction = direction - (front * 2.0f) * projection;
             facing = false;
         }
 
@@ -610,15 +589,15 @@ namespace MR {
 
     f32 calcFloatOffset(const NPCActor* pActor, f32 currentOffset, f32 maxOffset) {
         TalkMessageCtrl* pTalk = pActor->mMsgCtrl;
-        currentOffset -= cNum_calcFloatOffset_f1;
+        currentOffset -= 0.5f;
         currentOffset = currentOffset >= 0.0f ? currentOffset : 0.0f;
         if (pTalk && isTalkTalking(pTalk) && !isShortTalk(pTalk)) {
             Vec3f up;
             Vec3f direction(pActor->mPosition - *getPlayerPos());
             getPlayerUpVec(&up);
-            if (direction.dot(up) > 0.0f && direction.length() < cNum_calcFloatOffset_f2) {
-                f32 target = getLinerValueFromMinMax(direction.length(), 0.0f, cNum_calcFloatOffset_f3, maxOffset, 0.0f);
-                f32 limit = cNum_calcFloatOffset_f4 + (cNum_calcFloatOffset_f5 + currentOffset);
+            if (direction.dot(up) > 0.0f && direction.length() < 200.0f) {
+                f32 target = getLinerValueFromMinMax(direction.length(), 0.0f, 200.0f, maxOffset, 0.0f);
+                f32 limit = 0.5f + (5.0f + currentOffset);
                 currentOffset = limit >= target ? target : limit;
             }
         }

@@ -11,20 +11,19 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sShadowRadius, 300.0f);
-    NEBULA_TUNABLE(f32, sShakeInitSpeed, 1.5f);
-    NEBULA_TUNABLE(f32, sShakeSpeedAtten, 0.95f);
-    NEBULA_TUNABLE(f32, sShakeSpeedMin, 0.005f);
-    NEBULA_TUNABLE(f32, sShakeAccelMin, 0.0001f);
-    NEBULA_TUNABLE(f32, sAfloatSpeed, 0.1f);
-    NEBULA_TUNABLE(f32, sAfloatAccel, 0.04f);
-    NEBULA_TUNABLE(f32, sShakePeriodStart, 17.0f);
-    NEBULA_TUNABLE(f32, sShakePeriodSlowPitch, 0.65f);
-    NEBULA_TUNABLE(f32, sSinkDepthMax, 25.0f);
+    const f32 sShadowRadius = 300.0f;
+    const f32 sShakeInitSpeed = 1.5f;
+    const f32 sShakeSpeedAtten = 0.95f;
+    const f32 sShakeSpeedMin = 0.005f;
+    const f32 sShakeAccelMin = 0.0001f;
+    const f32 sAfloatSpeed = 0.1f;
+    const f32 sAfloatAccel = 0.04f;
+    const f32 sShakePeriodStart = 17.0f;
+    const f32 sShakePeriodSlowPitch = 0.65f;
+    const f32 sSinkDepthMax = 25.0f;
 };  // namespace
 
 namespace NrvLotusLeaf {

@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace galaxy::render {
 
@@ -41,6 +42,9 @@ inline constexpr unsigned kAuxPrepass = 5u;        // the prepass: depth and the
 inline constexpr unsigned kAuxPrepassMotion = 6u;  // the same through the vertex stage's motion form (a draw whose own
                                                    // aux is 1: one vertex stage, so one depth, in both passes)
 inline constexpr unsigned kAuxTraced = 8u;         // + 0 to 4: that aux's targets, the pixel program's traced form
+// With kAuxTraced: an added clear shell's traced form, drawn premultiplied (the exchange; the
+// pipelines' third page set).
+inline constexpr unsigned kAuxExchange = 16u;
 // The vertex stage's motion form (and its stream of last frame's positions).
 [[nodiscard]] constexpr bool aux_motion_form(unsigned aux) noexcept {
     return aux == 1u || aux == kAuxPrepassMotion || aux == (kAuxTraced | 1u);
@@ -55,7 +59,7 @@ inline constexpr unsigned kAuxTraced = 8u;         // + 0 to 4: that aux's targe
 void program_use_bound_tables(bool bound) noexcept;
 [[nodiscard]] bool program_bound_tables() noexcept;
 // The prepass reads its triangle's number (true: Direct3D 12, and Vulkan with geometry shaders); false, the prepass
-// takes the form that names its item only and the surface pass finds the triangle by a ray (D11).
+// takes the form that names its item only and the surface pass finds the triangle by a ray.
 void program_use_triangle_ids(bool ids) noexcept;
 
 // The pixel program's form for a draw of `aux`.
@@ -78,5 +82,9 @@ void program_use_triangle_ids(bool ids) noexcept;
 [[nodiscard]] const char* program_file_name() noexcept;
 // SHA-1 of the programs' headers.
 [[nodiscard]] const char* program_interface() noexcept;
+
+// A dev run's file: with --diagnostics, dev/<name> beside the program, whole, into `into`; false (and `into`
+// empty) without --diagnostics or the file. Used for dev/programs.bin and dev/rt_shaders.bin (tools/f_stage.sh).
+[[nodiscard]] bool dev_shader_file(const char* name, std::vector<unsigned char>& into);
 
 }  // namespace galaxy::render

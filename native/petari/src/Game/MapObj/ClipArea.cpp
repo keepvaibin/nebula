@@ -44,6 +44,11 @@ void ClipArea::draw() const {
     material.mState.cull = NEBULA_CULL_BACK;
     site.setMaterial(material);
     mShape->drawVolumeShape(site, mBaseMtx, mScale);
+    // The volume, for the ray tracer: the clipped map parts stand where FallOutFieldDraw's rule shows them alone.
+    NebulaFrameClipVolume volume;
+    if (mShape->frameVolume(&volume, mBaseMtx, mScale)) {
+        Frame::clipVolume(volume);
+    }
 }
 
 void ClipArea::setShape(ClipAreaShape* pShape) {

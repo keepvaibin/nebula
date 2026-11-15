@@ -37,79 +37,74 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_DodoryuRabbit_f1, "DodoryuRabbit.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_DodoryuRabbit_f2, "DodoryuRabbit.f2", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_DodoryuRabbit_f3, "DodoryuRabbit.f3", 100.0f);
-
 namespace {
-    NEBULA_TUNABLE_RECORD(Vec, sHeadOffset, {50.0f, 30.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sBodyOffset, {0.0f, 0.0f, 30.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sLegOffset, {40.0f, 0.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sArmOffset, {0.0f, 0.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sTailOffset, {50.0f, 0.0f, 0.0f});
-    NEBULA_TUNABLE_RECORD(Vec, sStarPieceSensorOffset, {-150.0f, 0.0f, 0.0f});
+    const Vec sHeadOffset = {50.0f, 30.0f, 0.0f};
+    const Vec sBodyOffset = {0.0f, 0.0f, 30.0f};
+    const Vec sLegOffset = {40.0f, 0.0f, 0.0f};
+    const Vec sArmOffset = {0.0f, 0.0f, 0.0f};
+    const Vec sTailOffset = {50.0f, 0.0f, 0.0f};
+    const Vec sStarPieceSensorOffset = {-150.0f, 0.0f, 0.0f};
     const char* const sHeadSensorName = "head";
     const char* const sHeadJointName = "Head";
-    NEBULA_TUNABLE(f32, sHeadRadius, 210.0f);
+    const f32 sHeadRadius = 210.0f;
     const char* const sBodySensorName = "body";
-    NEBULA_TUNABLE(f32, sBodyRadius, 250.0f);
+    const f32 sBodyRadius = 250.0f;
     const char* const sLegLSensorName = "leg_left";
     const char* const sLegRSensorName = "leg_right";
-    NEBULA_TUNABLE(f32, sLegRadius, 110.0f);
+    const f32 sLegRadius = 110.0f;
     const char* const sArmLSensorName = "arm_left";
     const char* const sArmRSensorName = "arm_right";
-    NEBULA_TUNABLE(f32, sArmRadius, 50.0f);
+    const f32 sArmRadius = 50.0f;
     const char* const sTailSensorName = "tail";
-    NEBULA_TUNABLE(f32, sTailRadius, 120.0f);
+    const f32 sTailRadius = 120.0f;
     const char* const sMapObjSensorName = "eye";
-    NEBULA_TUNABLE(f32, sMapObjSensorRadius, 100.0f);
+    const f32 sMapObjSensorRadius = 100.0f;
     const char* const sStarPieceSensorName = "star";
-    NEBULA_TUNABLE(f32, sStarPieceSensorRadius, 400.0f);
-    NEBULA_TUNABLE(s32, sSensorCount, 9);
-    NEBULA_TUNABLE(u16, sEnemySensorGroupSize, 8);
-    NEBULA_TUNABLE(u16, sMapObjSensorGroupSize, 16);
+    const f32 sStarPieceSensorRadius = 400.0f;
+    const s32 sSensorCount = 9;
+    const u16 sEnemySensorGroupSize = 8;
+    const u16 sMapObjSensorGroupSize = 16;
     // Along the head joint's x axis: a reflect from further out hit the needle.
-    NEBULA_TUNABLE(f32, sHeadNeedleReach, 105.0f);
-    NEBULA_TUNABLE(s32, sJumpOutStopSceneFrame, 8);
+    const f32 sHeadNeedleReach = 105.0f;
+    const s32 sJumpOutStopSceneFrame = 8;
     const char* const sSpinOutCamera = "ドドリュウ吹っ飛び";
     const s32 sSpinOutCameraSteps = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(f32, sRumblePadNearDist, 500.0f);
-    NEBULA_TUNABLE(f32, sRumblePadFarDist, 1000.0f);
-    NEBULA_TUNABLE(f32, sCameraRegisterHeight, 150.0f);
-    NEBULA_TUNABLE(f32, sCameraHipWeight, 0.7f);
-    NEBULA_TUNABLE(f32, sCameraPlayerWeight, 0.3f);
-    NEBULA_TUNABLE(f32, sGroundProbeRise, 200.0f);
-    NEBULA_TUNABLE(f32, sGroundProbeLength, 1200.0f);
-    NEBULA_TUNABLE(f32, sStateStartBlur, 0.75f);
-    NEBULA_TUNABLE(s32, sStarPieceCount, 24);
-    NEBULA_TUNABLE(s32, sSoundCount, 8);
-    NEBULA_TUNABLE(s32, sHillStartPieces, 5);
+    const f32 sRumblePadNearDist = 500.0f;
+    const f32 sRumblePadFarDist = 1000.0f;
+    const f32 sCameraRegisterHeight = 150.0f;
+    const f32 sCameraHipWeight = 0.7f;
+    const f32 sCameraPlayerWeight = 0.3f;
+    const f32 sGroundProbeRise = 200.0f;
+    const f32 sGroundProbeLength = 1200.0f;
+    const f32 sStateStartBlur = 0.75f;
+    const s32 sStarPieceCount = 24;
+    const s32 sSoundCount = 8;
+    const s32 sHillStartPieces = 5;
     // Pieces left off the hill at its fullest.
-    NEBULA_TUNABLE(s32, sHillMaxSpare, 10);
-    NEBULA_TUNABLE(f32, sRabbitDistMax, 1500.0f);
-    NEBULA_TUNABLE(f32, sRabbitDistMin, 650.0f);
-    NEBULA_TUNABLE(f32, sRabbitRestDist, 2000.0f);
-    NEBULA_TUNABLE(f32, sRabbitFastSpeed, 8.0f);
-    NEBULA_TUNABLE(f32, sRabbitSlowSpeed, 4.0f);
+    const s32 sHillMaxSpare = 10;
+    const f32 sRabbitDistMax = 1500.0f;
+    const f32 sRabbitDistMin = 650.0f;
+    const f32 sRabbitRestDist = 2000.0f;
+    const f32 sRabbitFastSpeed = 8.0f;
+    const f32 sRabbitSlowSpeed = 4.0f;
     // Rail distance the rabbit starts ahead of Dodoryu.
-    NEBULA_TUNABLE(f32, sRabbitLead, 1075.0f);
-    NEBULA_TUNABLE(f32, sRabbitHopSoundFrame, 3.0f);
+    const f32 sRabbitLead = 1075.0f;
+    const f32 sRabbitHopSoundFrame = 3.0f;
     const s32 sRabbitTalkSwitchSteps = NebulaFrameClock::stepsOfSeconds(5);
-    NEBULA_TUNABLE(s32, sRabbitTalkNodeCount, 2);
-    NEBULA_TUNABLE(s32, sRabbitPleasureTalkNode, 2);
-    NEBULA_TUNABLE(f32, sRabbitTalkDistance, 1500.0f);
-    NEBULA_TUNABLE(f32, sRabbitPleasureTalkDistance, 350.0f);
+    const s32 sRabbitTalkNodeCount = 2;
+    const s32 sRabbitPleasureTalkNode = 2;
+    const f32 sRabbitTalkDistance = 1500.0f;
+    const f32 sRabbitPleasureTalkDistance = 350.0f;
     // Pleasure stops following the spine joint after this step.
     const s32 sRabbitPleasureTalkFollowSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sRabbitBodyRadius, 50.0f);
-    NEBULA_TUNABLE(f32, sRabbitRumbleRadius, 4.0f);
-    NEBULA_TUNABLE(f32, sRabbitRumbleSpeed, 0.2f);
+    const f32 sRabbitBodyRadius = 50.0f;
+    const f32 sRabbitRumbleRadius = 4.0f;
+    const f32 sRabbitRumbleSpeed = 0.2f;
     const s32 sRabbitTrampleRumbleSteps = NebulaFrameClock::stepsOfSeconds(1);
     const s32 sRabbitStarPieceRumbleSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sLeadHillSpinSpeed, 0.07f);
+    const f32 sLeadHillSpinSpeed = 0.07f;
 
     const DodoryuChaseParam sDodoryuChaseDataLv2 = {
         .mReadyChaseStep = NebulaFrameClock::stepsOfSeconds(1),
@@ -830,7 +825,7 @@ DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const TableIter& rIter)
     mTalkMtx.identity();
     mTalkMtx.setTrans(mPosition);
 
-    mTalkCtrl = MR::createTalkCtrl(this, rIter, "DodoryuRabbit", Vec3f(cNum_DodoryuRabbit_f1, cNum_DodoryuRabbit_f2, cNum_DodoryuRabbit_f3), mTalkMtx);
+    mTalkCtrl = MR::createTalkCtrl(this, rIter, "DodoryuRabbit", Vec3f(100.0f, 150.0f, 100.0f), mTalkMtx);
     MR::setDistanceToTalk(mTalkCtrl, ::sRabbitTalkDistance);
 }
 

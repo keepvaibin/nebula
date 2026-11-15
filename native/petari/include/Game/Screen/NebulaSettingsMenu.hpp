@@ -12,4 +12,7 @@ namespace NebulaSettingsMenu {
     bool isFreezingScene();  // open or opening or closing: the scene waits
     bool isShown();          // drawn this frame (the pointer is drawn over it)
     void requestOpen();      // the pause menu's Settings
+    // A host text (English capitals, as the host's rows give it) in the played language as the menu shows it, into pDst
+    // (at most `capacity` units with the terminator); its length. The mod log's host sentences (LumaModLog).
+    s32 translateHost(char16_t* pDst, s32 capacity, const char* pText);
 };  // namespace NebulaSettingsMenu

@@ -14,23 +14,20 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_exeThrow_f1, "exeThrow.f1", 200.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, cSensorRadius, 40.0f);
-    NEBULA_TUNABLE(f32, cBinderRadius, 60.0f);
-    NEBULA_TUNABLE(f32, cForceKillDistance, 5000.0f);
-    NEBULA_TUNABLE(f32, cStarWandRadius3d, 150.0f);
-    NEBULA_TUNABLE(f32, cThrowOffsetY, 120.0f);
-    NEBULA_TUNABLE(f32, cReflectSpeed, 100.0f);
-    NEBULA_TUNABLE(f32, cReflectReduceRate, 0.96f);
-    NEBULA_TUNABLE(s32, cReflectFrame, 30);
-    NEBULA_TUNABLE(s32, cReflectInvalidFrame, 60);
-    NEBULA_TUNABLE(f32, cReflectCursorSpeed, 30.0f);
-    NEBULA_TUNABLE(f32, cReflectRandomVelocityY, 1.0f);
+    const f32 cSensorRadius = 40.0f;
+    const f32 cBinderRadius = 60.0f;
+    const f32 cForceKillDistance = 5000.0f;
+    const f32 cStarWandRadius3d = 150.0f;
+    const f32 cThrowOffsetY = 120.0f;
+    const f32 cReflectSpeed = 100.0f;
+    const f32 cReflectReduceRate = 0.96f;
+    const s32 cReflectFrame = 30;
+    const s32 cReflectInvalidFrame = 60;
+    const f32 cReflectCursorSpeed = 30.0f;
+    const f32 cReflectRandomVelocityY = 1.0f;
     static const NebulaColor8 color = {255, 192, 0, 255};
 };  // namespace
 
@@ -219,7 +216,7 @@ void FireBall::exeThrow() {
         MR::startBck(this, "Spin");
     }
 
-    if (MR::changeShowModelFlagSyncNearClipping(this, cNum_exeThrow_f1)) {
+    if (MR::changeShowModelFlagSyncNearClipping(this, 200.0f)) {
         MR::emitEffect(this, "FireBall");
     } else {
         MR::deleteEffect(this, "FireBall");

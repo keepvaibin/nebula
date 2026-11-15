@@ -4,24 +4,17 @@
 #include "Game/Map/LightFunction.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_requestPointLight_f1, "requestPointLight.f1", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_requestPointLight_f2, "requestPointLight.f2", 0.999999f);
-NEBULA_TUNABLE_NAMED(f32, cNum_clearPointLight_f1, "clearPointLight.f1", 0.001f);
-NEBULA_TUNABLE_NAMED(f32, cNum_blendPointLight_f1, "blendPointLight.f1", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_blendPointLight_f2, "blendPointLight.f2", 0.95f);
-
 namespace {
     const s32 sDefaultBlendTime = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sDefaultDistRef, 15.0f);
+    const f32 sDefaultDistRef = 15.0f;
 };  // namespace
 
 LightPointCtrl::LightPointCtrl()
-    : mStep(-1), mBlendTime(::sDefaultBlendTime), mCurrentActor(), mPreviousActor(), mCandidateActor(), mCurrentInfo(), mTargetInfo(),
-      mPreviousInfo() {
+    : mStep(-1), mBlendTime(::sDefaultBlendTime), mCurrentActor(), mPreviousActor(), mCandidateActor(), mCandidateDistance(0.0f),
+      mCurrentInfo(), mTargetInfo(), mPreviousInfo() {
     mCurrentInfo = new PointLightInfo();
     mTargetInfo = new PointLightInfo();
     mPreviousInfo = new PointLightInfo();
@@ -52,6 +45,16 @@ void LightPointCtrl::update() {
 
 void LightPointCtrl::requestPointLight(const LiveActor* pActor, Vec3f pos, Color8 color, f32 intensity, s32 duration) {
     {
+        requestPointLightBy(pActor, MR::calcDistanceToPlayer(pActor), pos, color, intensity, duration,
+                            pActor != nullptr && pActor->getBinder() != nullptr ? MR::getBinderRadius(pActor) : 0.0f);
+    }
+}
+
+// The nearest to the player of those asking since the last choice (the distance each had when it asked: an actor's
+// from its place, a mod's light's from its centre).
+void LightPointCtrl::requestPointLightBy(const void* pKey, f32 distance, Vec3f pos, Color8 color, f32 intensity, s32 duration,
+                                         f32 radius) {
+    {
         // Every request, for a renderer that lights from each source (the game keeps one, below). Its reach as the
         // game's own falloff gives it: half the light at the reference distance times sqrt(b / (1 - b)).
         const f32 brightness = MR::clamp(intensity, 0.95f, 0.999999f);
@@ -63,15 +66,15 @@ void LightPointCtrl::requestPointLight(const LiveActor* pActor, Vec3f pos, Color
         light.color[0] = static_cast< f32 >(color.r) / 255.0f;
         light.color[1] = static_cast< f32 >(color.g) / 255.0f;
         light.color[2] = static_cast< f32 >(color.b) / 255.0f;
-        // The glowing body's size: the actor's own (its binder's sphere) where it has one.
-        light.radius = pActor != nullptr && pActor->getBinder() != nullptr ? MR::getBinderRadius(pActor) : 0.0f;
+        light.radius = radius;  // the glowing body's size (an actor's binder sphere; 0: a point)
         Frame::pointLight(light);
     }
-    if (mStep == -1 && isUpdateCandidateActor(pActor)) {
-        mCandidateActor = pActor;
+    if (mStep == -1 && (mCandidateActor == nullptr || distance < mCandidateDistance)) {
+        mCandidateActor = pKey;
+        mCandidateDistance = distance;
         mTargetInfo->mPos = pos;
         mTargetInfo->mColor = color.mRGBA;
-        mTargetInfo->mRefBrightness = MR::clamp(intensity, cNum_requestPointLight_f1, cNum_requestPointLight_f2);
+        mTargetInfo->mRefBrightness = MR::clamp(intensity, 0.95f, 0.999999f);
         mTargetInfo->mRefDistance = ::sDefaultDistRef;
         mTargetInfo->mDistAttnFn = LIGHT_FALLOFF_STEEP;
         mBlendTime = duration >= 0 ? duration : ::sDefaultBlendTime;
@@ -118,7 +121,7 @@ void LightPointCtrl::clearPointLight(PointLightInfo* pInfo) {
     color.a = 255;
     pInfo->mColor = color;
 
-    pInfo->mRefBrightness = cNum_clearPointLight_f1;
+    pInfo->mRefBrightness = 0.001f;
     pInfo->mRefDistance = ::sDefaultDistRef;
     pInfo->mDistAttnFn = LIGHT_FALLOFF_STEEP;
     mBlendTime = ::sDefaultBlendTime;
@@ -133,8 +136,8 @@ void LightPointCtrl::blendPointLight(PointLightInfo* pDst, const PointLightInfo&
         MR::blendVec(&pDst->mPos, rStart.mPos, rEnd.mPos, t);
     }
 
-    f32 start = mPreviousActor == nullptr ? cNum_blendPointLight_f1 : rStart.mRefBrightness;
-    f32 end = mCurrentActor == nullptr ? cNum_blendPointLight_f2 : rEnd.mRefBrightness;
+    f32 start = mPreviousActor == nullptr ? 0.95f : rStart.mRefBrightness;
+    f32 end = mCurrentActor == nullptr ? 0.95f : rEnd.mRefBrightness;
     pDst->mRefBrightness = MR::getLinerValue(t, start, end, 1.0f);
     MR::blendColor(&pDst->mColor, rStart.mColor, rEnd.mColor, t);
     pDst->mRefDistance = MR::getLinerValue(t, rStart.mRefDistance, rEnd.mRefDistance, 1.0f);
@@ -149,11 +152,3 @@ bool LightPointCtrl::tryBlendStart() {
     return true;
 }
 
-bool LightPointCtrl::isUpdateCandidateActor(const LiveActor* pActor) const {
-    if (mCandidateActor == nullptr) {
-        return true;
-    }
-
-    f32 dist = MR::calcDistanceToPlayer(mCandidateActor);
-    return MR::calcDistanceToPlayer(pActor) < dist;
-}

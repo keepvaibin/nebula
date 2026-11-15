@@ -9,13 +9,12 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Render/GameTexture.hpp"
 #include <NebulaGpuTypes.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE(f32, sBeginThick, 10.0f);
+    const f32 sBeginThick = 10.0f;
     static const s32 BLUR_POINT_NUM = 20;
-    NEBULA_TUNABLE(f32, sEndThick, 0.0f);
+    const f32 sEndThick = 0.0f;
 };  // namespace
 
 StarPointerBlur::~StarPointerBlur() {

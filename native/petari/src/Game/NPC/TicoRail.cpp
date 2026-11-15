@@ -13,28 +13,27 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
     const s32 cStepForWait = NebulaFrameClock::stepsOfSeconds(1);
     // Look around: turn one way until L, back until LR, then forward again until LRL.
-    NEBULA_TUNABLE(s32, cStepForLookAroundL, 40);
+    const s32 cStepForLookAroundL = 40;
     const s32 cStepForLookAroundLR = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, cStepForLookAroundLRL, 160);
-    NEBULA_TUNABLE(s32, cStepForMove, 500);
-    NEBULA_TUNABLE(s32, cStepForTalk, 320);
+    const s32 cStepForLookAroundLRL = 160;
+    const s32 cStepForMove = 500;
+    const s32 cStepForTalk = 320;
     // Past its minimum step a nerve ends with one chance in this many per step, and surely this many steps later.
     const s32 cStepRandomRange = NebulaFrameClock::stepsOfSeconds(5);
     // One chance in this many per step of a reaction while talking.
-    NEBULA_TUNABLE(s32, cTalkReactionChance, 60);
-    NEBULA_TUNABLE(s32, cTalkReactionInterpole, 5);
-    NEBULA_TUNABLE(f32, cRailSpeedMove, 15.0f);
-    NEBULA_TUNABLE(f32, cRailSpeedTalkStart, 2.0f);
-    NEBULA_TUNABLE(f32, cRailSpeedGoodBye, 1.5f);
-    NEBULA_TUNABLE(f32, cTurnRate, 1.2f);
-    NEBULA_TUNABLE(f32, cTalkTerritoryY, 30.0f);
-    NEBULA_TUNABLE(f32, cBodyRadius, 50.0f);
+    const s32 cTalkReactionChance = 60;
+    const s32 cTalkReactionInterpole = 5;
+    const f32 cRailSpeedMove = 15.0f;
+    const f32 cRailSpeedTalkStart = 2.0f;
+    const f32 cRailSpeedGoodBye = 1.5f;
+    const f32 cTurnRate = 1.2f;
+    const f32 cTalkTerritoryY = 30.0f;
+    const f32 cBodyRadius = 50.0f;
 }  // namespace
 
 namespace NrvTicoRail {

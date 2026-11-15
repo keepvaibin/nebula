@@ -1,7 +1,9 @@
 #include "galaxy/portable.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/atomic_file.h"
+#include "galaxy/benchmark.h"
 #include "galaxy/input_bindings.h"
+#include "galaxy/input/mod_actions.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/c_locale_number.h"
@@ -280,7 +282,8 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
         const std::string value_text(trim(record.substr(equals + 1u)));
         if (key_text == "controls_version") {
             controls_version = static_cast<unsigned>(std::strtoul(value_text.c_str(), nullptr, 10));
-        } else if (!input::apply_controls_setting(controls, key_text, value_text)) {
+        } else if (!input::mod_actions::apply_setting(key_text, value_text) &&
+                   !input::apply_controls_setting(controls, key_text, value_text)) {
             apply_kv(settings, key_text.c_str(), value_text.c_str());
         }
     }
@@ -517,6 +520,9 @@ void load_runtime_settings_from_file() {
 }
 
 bool save_runtime_settings_to_file() {
+    if (galaxy::bench::running()) {
+        return false;  // a benchmark's settings are its own, never the player's file
+    }
     try {
         const RuntimeSettings settings = get_runtime_settings();
         const std::filesystem::path path = settings_path();
@@ -549,7 +555,8 @@ bool save_runtime_settings_to_file() {
                  << "menu_text_size=" << settings.menu_text_size << '\n'
                  << "focus_loss=" << focus_loss_key(settings.focus_loss) << '\n'
                  << "co_star=" << (settings.co_star ? 1 : 0) << '\n'
-                 << input::format_controls_settings(input::get_controls_config());
+                 << input::format_controls_settings(input::get_controls_config())
+                 << input::mod_actions::format_settings();
         if (!contents) {
             return false;
         }

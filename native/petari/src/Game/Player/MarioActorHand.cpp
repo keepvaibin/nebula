@@ -7,12 +7,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHand_f1, "updateHand.f1", 0.49f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHand_f2, "updateHand.f2", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHand_f3, "updateHand.f3", 0.49f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateHand_f4, "updateHand.f4", 10.0f);
 
 void MarioActor::initHand() {
     MR::hideJoint(mModels[0], "HandR0");
@@ -113,8 +107,8 @@ void MarioActor::updateHand() {
     mMarioAnim->getXanimePlayer()->getMainAnimationTrans(MR::getJointIndex(this, "PartsControl"), &control);
     f32 leftControl = control.y;
     f32 rightControl = control.z;
-    s32 leftPose = cNum_updateHand_f1 + leftControl / cNum_updateHand_f2;
-    s32 rightPose = cNum_updateHand_f3 + rightControl / cNum_updateHand_f4;
+    s32 leftPose = 0.49f + leftControl / 10.0f;
+    s32 rightPose = 0.49f + rightControl / 10.0f;
     s32 left = static_cast< u8 >(MR::clamp(leftPose, 0, 7));
     s32 right = static_cast< u8 >(MR::clamp(rightPose, 0, 7));
 

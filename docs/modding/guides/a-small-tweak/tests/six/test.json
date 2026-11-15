@@ -1,0 +1,64 @@
+{
+  "harness": 1,
+  "name": "six-health",
+  "about": "With the mod on, Mario enters a galaxy with six health and the life meter shows the green six",
+  "proves": [
+    "kernel.numbers.set"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "read": "MarioActor.mHealth",
+      "of": "player",
+      "type": "u32",
+      "fact": "health"
+    },
+    {
+      "at": 30,
+      "read": "MarioActor.mMaxHealth",
+      "of": "player",
+      "type": "u32",
+      "fact": "max_health"
+    },
+    {
+      "at": 40,
+      "picture": "life"
+    },
+    {
+      "at": 50,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "health",
+      "is": 6
+    },
+    {
+      "fact": "max_health",
+      "is": 6
+    },
+    {
+      "picture": "life",
+      "box": [
+        1050,
+        100,
+        60,
+        60
+      ],
+      "mean_rgb": [
+        109,
+        193,
+        56
+      ],
+      "within": 40
+    }
+  ]
+}

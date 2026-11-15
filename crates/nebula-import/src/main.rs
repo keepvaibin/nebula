@@ -95,6 +95,12 @@ fn run(arguments: &[OsString]) -> Result<ExitCode> {
                 }
                 true
             })?;
+            // Each file the store leaves out, named with why, so each can be checked against what the game opens.
+            let mut left_out = stats.left_out.clone();
+            left_out.sort();
+            for item in &left_out {
+                println!("LEFT OUT {}: {}", item.path, luma_validate::phrase(item.why, "UsEnglish"));
+            }
             println!("{}", stats.summary());
             Ok(ExitCode::SUCCESS)
         }

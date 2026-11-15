@@ -19,24 +19,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_TicoEatParam_f1, "TicoEatParam.f1", 0.12f);
-NEBULA_TUNABLE_NAMED(f32, cNum_TicoEatParam_f2, "TicoEatParam.f2", 0.12f);
-NEBULA_TUNABLE_NAMED(f32, cNum_TicoEatParam_f3, "TicoEatParam.f3", 0.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 3000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f1, "receiveMsgPlayerAttack.f1", 0.66f);
-NEBULA_TUNABLE_NAMED(f32, cNum_receiveMsgPlayerAttack_f2, "receiveMsgPlayerAttack.f2", 0.33f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeEatPre_f1, "exeEatPre.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 30.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 350.0f);
-
-// The step counts of this file's functions, as tunables: "<file>.<function>.<k>".
-NEBULA_TUNABLE_NAMED(s32, cStep_exeEatPst_1, "exeEatPst.1", 4);
 
 namespace NrvTicoEat {
     NEW_NERVE(TicoEatNrvEatPre, TicoEat, EatPre);
@@ -59,9 +42,9 @@ namespace {
     };
 
     TicoEatParam::TicoEatParam() : AnimScaleParam() {
-        mHitReactionVelocity = cNum_TicoEatParam_f1;
-        mHitReactionSpring = cNum_TicoEatParam_f2;
-        mHitReactionDamping = cNum_TicoEatParam_f3;
+        mHitReactionVelocity = 0.12f;
+        mHitReactionSpring = 0.12f;
+        mHitReactionDamping = 0.9f;
     }
 
     static TicoEatParam sParam;
@@ -80,9 +63,9 @@ void TicoEat::init(const TableIter& /*rIter*/) {
     mLightJointMtx = MR::getJointMtx(this, "Center");
     mParam.setMoveAction("Wait", "Wait");
     mParam.setTalkAction("Talk", "Talk");
-    mParam.mNearDistance = cNum_init_f1;
+    mParam.mNearDistance = 3000.0f;
     setDefaults();
-    mSwingReactDist = cNum_init_f2;
+    mSwingReactDist = 1000.0f;
 }
 
 void TicoEat::control() {
@@ -110,8 +93,8 @@ bool TicoEat::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
                 mScaleController->startHitReaction();
             }
         };
-        growAt(cNum_receiveMsgPlayerAttack_f1, "Eat1", "Big1");
-        growAt(cNum_receiveMsgPlayerAttack_f2, "Eat2", "Big2");
+        growAt(0.66f, "Eat1", "Big1");
+        growAt(0.33f, "Eat2", "Big2");
 
         mStarPieceLeft--;
         return true;
@@ -177,7 +160,7 @@ void TicoEat::exeEatPre() {
         MR::startBva(this, "Big0");
     }
 
-    if (MR::turnQuatZDirRad(&mPoseQuat, mPoseQuat, -MR::getCamZdir(), MR::toRadian(cNum_exeEatPre_f1))) {
+    if (MR::turnQuatZDirRad(&mPoseQuat, mPoseQuat, -MR::getCamZdir(), MR::toRadian(2.0f))) {
         popAndPushNerve(GET_NERVE(TicoEat, TicoEatNrvEatNow));
     }
 }
@@ -198,7 +181,7 @@ void TicoEat::exeEatNow() {
 }
 
 void TicoEat::exeEatPst() {
-    if (MR::isGreaterEqualStep(this, cStep_exeEatPst_1)) {
+    if (MR::isGreaterEqualStep(this, 4)) {
         mParam.mTalkAction = "Joy2";
         mParam.mTalkTurnAction = "Joy2";
         popAndPushNerve(GET_NERVE(TicoEat, TicoEatNrvEatEnd));
@@ -216,8 +199,8 @@ void TicoComet::init(const TableIter& rIter) {
     NPCActorCaps caps("TicoComet");
     NPCActorItem item("TicoComet");
     caps.setDefault();
-    caps.mSensorSize = cNum_init_f3;
-    caps.mSensorOffset.y = cNum_init_f4;
+    caps.mSensorSize = 100.0f;
+    caps.mSensorOffset.y = 100.0f;
     caps.mUseShadow = true;
     caps.mSoundSize = 6;
     caps.mSensorMax = 2;
@@ -225,7 +208,7 @@ void TicoComet::init(const TableIter& rIter) {
     caps.mPointerJoint = "Center";
     caps.mBinder = 0;
     initialize(rIter, caps);
-    MR::addHitSensorAtJointEye(this, "Mouth", "Mouth", 8, cNum_init_f5, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorAtJointEye(this, "Mouth", "Mouth", 8, 30.0f, Vec3f(0.0f, 0.0f, 0.0f));
     MR::getNPCItemData(&item, 0);
     equipment(item, true);
     MR::startAction(mGoods0, "LeftRotate");
@@ -237,7 +220,7 @@ void TicoComet::init(const TableIter& rIter) {
     MR::setMessageArg(mMsgCtrl, mStarPieceNeed);
     MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoComet::branchFunc));
     MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoComet::eventFunc));
-    MR::setDistanceToTalk(mMsgCtrl, cNum_init_f6);
+    MR::setDistanceToTalk(mMsgCtrl, 350.0f);
     if (!MR::isRosettaTalkTrickComet()) {
         makeActorDead();
     }

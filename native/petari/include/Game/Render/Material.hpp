@@ -280,6 +280,7 @@ public:
         u32 mConstantsFrame;
         u32 mConstantsStamp;
         u32 mConstantsIndex;
+        u32 mConstantsAmbient;  // MaterialAmbient::generation() when the frame's rows were filled
         u32* mCoordRows;
         u32 mCoordRowCount;
         bool mAnalysed;
@@ -297,6 +298,8 @@ public:
 namespace MaterialAmbient {
     void set(u32 channel, NebulaColor8 color);
     const f32* get(u32 channel);
+    // Moves whenever a colour takes another value.
+    u32 generation();
 }  // namespace MaterialAmbient
 
 // Where a mesh keeps a vertex input, or the zero stream: appended to `pInputs` at pDesc->input_count, which counts it.

@@ -6,11 +6,6 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStart_f1, "exeStart.f1", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStart_f2, "exeStart.f2", 150.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeStart_f3, "exeStart.f3", 150.0f);
 
 namespace {
     WalkerStateChaseParam sDefaultParam;
@@ -52,7 +47,7 @@ void WalkerStateChase::exeStart() {
     MR::addVelocityMoveToDirection(getHost(), *mDirection, mChaseParam->mChaseSpeed);
     WalkerStateFunction::calcPassiveMovement(getHost(), mStateParam);
 
-    if (MR::isFallNextMove(getHost(), cNum_exeStart_f1, cNum_exeStart_f2, cNum_exeStart_f3, nullptr)) {
+    if (MR::isFallNextMove(getHost(), 150.0f, 150.0f, 150.0f, nullptr)) {
         MR::zeroVelocity(getHost());
         setNerve(GET_NERVE(WalkerStateChase, WalkerStateChaseNrvEnd));
     } else if (MR::isGreaterStep(this, mChaseParam->mForceChaseEndTime) || (MR::isGreaterStep(this, mChaseParam->mChaseTime) && !isInSight)) {

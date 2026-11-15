@@ -4,18 +4,6 @@
 #include "Game/Render/TypedDraw.hpp"
 #include <ModelFileNumbers.h>
 #include <string.h>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_build_f1, "build.f1", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_build_f2, "build.f2", 0.175f);
-NEBULA_TUNABLE_NAMED(f32, cNum_build_f3, "build.f3", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_build_f4, "build.f4", 8.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_build_f5, "build.f5", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_build_f6, "build.f6", 0.15f);
-NEBULA_TUNABLE_NAMED(f32, cNum_build_f7, "build.f7", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_build_f8, "build.f8", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_build_f9, "build.f9", 11.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_build_f10, "build.f10", 2.0f);
 
 namespace {
     Mii::Parts sParts;
@@ -121,10 +109,10 @@ namespace Mii {
         const bool flip = rMii.hair_flip != 0;
         const NebulaColor8 skin = skinColor(rMii);
 
-        const f32 noseScale = cNum_build_f1 + cNum_build_f2 * rMii.nose_scale;
-        const f32 nosePlace[3] = {pNose[0], pNose[1] - cNum_build_f3 * (static_cast< f32 >(rMii.nose_y) - cNum_build_f4), pNose[2]};
-        const f32 glassScale = cNum_build_f5 + cNum_build_f6 * rMii.glass_scale;
-        const f32 glassPlace[3] = {pNose[0], cNum_build_f7 + pNose[1] - cNum_build_f8 * (static_cast< f32 >(rMii.glass_y) - cNum_build_f9), cNum_build_f10 + pNose[2]};
+        const f32 noseScale = 0.4f + 0.175f * rMii.nose_scale;
+        const f32 nosePlace[3] = {pNose[0], pNose[1] - 1.5f * (static_cast< f32 >(rMii.nose_y) - 8.0f), pNose[2]};
+        const f32 glassScale = 0.4f + 0.15f * rMii.glass_scale;
+        const f32 glassPlace[3] = {pNose[0], 5.0f + pNose[1] - 1.5f * (static_cast< f32 >(rMii.glass_y) - 11.0f), 2.0f + pNose[2]};
 
         // A flipped hairstyle draws its forehead, hair and cap with the other side culled.
         const u8 front = MODEL_FILE_CULL_BACK;

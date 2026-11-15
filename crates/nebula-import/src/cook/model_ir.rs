@@ -194,6 +194,150 @@ pub struct MaterialIr {
     pub pixel_stage_count: u32,
     /// The map each coordinate's scale comes from (255 none), by coordinate number.
     pub coordinate_maps: Vec<u8>,
+    /// The maps read through a normal-made coordinate that hold a colour ramp, not a reflection
+    /// (hit_record.rs mark_ramps): they keep their own fetch.
+    pub ramp_maps: Vec<u8>,
+    /// The maps read through a normal-made coordinate that are painted highlight sprites (hit_record.rs
+    /// mark_highlights), and the first one's roughness and peak as the enhanced highlight takes them.
+    pub highlight_maps: Vec<u8>,
+    pub highlight_rough: f32,
+    pub highlight_gain: f32,
+    /// Drawn blended by alpha for a fade of the whole material: its alpha 0.9 or more over its maps' texels and its
+    /// vertices (hit_record.rs mark_fades). The class rules take it as opaque.
+    pub fade_opaque: bool,
+    /// The alpha's low and high ends over those (the census); -1 for a material not blended by alpha.
+    pub fade_alpha: [f32; 2],
+    /// A tangent-space normal map (glTF normalTexture; MOD-MATERIALS-FC.md 1: inside generate(), behind this): its slot
+    /// (map n through coordinate n, which no stage reads) and its scale. The lit form turns its pixel normal by it
+    /// before any light is summed; the mesh holds tangents and bitangents (ATTR_NBT, ATTR_NBT_THREE).
+    pub normal_map: Option<(u8, f32)>,
+    /// A glTF material's light (program_pbr.hlsli): its lit form lights the stages' result as metal and
+    /// roughness say, with the stage's reflection. None for the game's materials and an unlit glTF material.
+    pub pbr: Option<PbrShading>,
+    /// A mod's hand-written surface shader (materials.md section 3.4; surface_shader.rs): its lit forms call its
+    /// `surface` in place of the stages and light what it fills as `pbr` says. Only with `pbr`.
+    pub surface: Option<SurfaceIr>,
+    /// What a ray takes of it beyond the cook's reading: a glTF material's `extras.nebula.ray` over its shader's
+    /// shader.json `ray` (RayRows::over). None given: the record is the cook's, byte for byte.
+    pub ray: RayRows,
+}
+
+/// A material's hand-written shader as the generator writes it in (MaterialIr surface).
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct SurfaceIr {
+    /// The shader's file as the mod has it (`assets/shaders/Stripes.hlsl`): the compiler's lines name it.
+    pub file: String,
+    pub code: String,
+    /// Each parameter: its name, float4 or float, its place (0 to 2: registers 1 to 3; 3 to 6: constant colours 0 to 3).
+    pub params: Vec<(String, bool, u8)>,
+    /// Each texture: its name and the material's map slot (map n through coordinate n).
+    pub textures: Vec<(String, u8)>,
+    /// Whether the mesh has TEXCOORD_0 and TEXCOORD_1: SurfaceIn uv0 and uv1 read them, else 0.
+    pub uv: [bool; 2],
+    /// surface_shader::READ_*.
+    pub reads: u8,
+    /// The emission it starts from: the glTF emissive factor, display-encoded.
+    pub emission: [f32; 3],
+    /// What its shader.json `ray` gives a ray in place of the reading of its factors (materials.md section 3.4, layer
+    /// 3).
+    pub ray: RayRows,
+}
+
+/// A material's rows for a ray (shader.json `ray`, a glTF material's `extras.nebula.ray`): each one given replaces what
+/// the cook reads of the material in its hit record (nebula_model.h NebulaModelHit); none given, the record is the
+/// cook's. Colours display-encoded, 0 to 1; emission 0 or more.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct RayRows {
+    /// hit_record::Class by name: dielectric, gloss, metal, glass, cutout, translucent, emissive or painted.
+    pub class: Option<String>,
+    pub base: Option<[f32; 3]>,
+    pub roughness: Option<f32>,
+    pub metal: Option<f32>,
+    pub emission: Option<[f32; 3]>,
+    /// The share of light that goes through it (the record's transmission).
+    pub through: Option<f32>,
+    /// The index of refraction, 1 to 3 (the record's ior; a metal with a kind keeps its kind's code there).
+    pub ior: Option<f32>,
+    /// Units light crosses inside it, 0 or more, in place of what its meshes measure.
+    pub thickness: Option<f32>,
+    /// A see-through body's coverage 0 to 1, the reflection's gain 0 to 16, how much of its tint stays 0 to 1.
+    pub body: Option<f32>,
+    pub shine: Option<f32>,
+    pub tint_keep: Option<f32>,
+    /// `traced`: true for "hidden" (a stand-in a ray never meets), false for "seen".
+    pub traced_hidden: Option<bool>,
+    /// The share of the sun its far side takes, 0 to 1 (the record's `through` byte, not transmission).
+    pub sun_through: Option<f32>,
+    /// A metal's kind: hit_record::METAL_KINDS' place + 1, or 255 for `art` (its colour as it is).
+    pub metal_kind: Option<u8>,
+    /// The light it gives (the record's glow).
+    pub glow: Option<RayGlow>,
+    /// What its vertex colour is (None: `auto`, the cook's rule, which reads it as painted light).
+    pub vertex_colour: Option<VertexColour>,
+}
+
+impl RayRows {
+    /// These rows over `under`: each row given here, else under's.
+    pub fn over(&self, under: &RayRows) -> RayRows {
+        RayRows {
+            class: self.class.clone().or_else(|| under.class.clone()),
+            base: self.base.or(under.base),
+            roughness: self.roughness.or(under.roughness),
+            metal: self.metal.or(under.metal),
+            emission: self.emission.or(under.emission),
+            through: self.through.or(under.through),
+            ior: self.ior.or(under.ior),
+            thickness: self.thickness.or(under.thickness),
+            body: self.body.or(under.body),
+            shine: self.shine.or(under.shine),
+            tint_keep: self.tint_keep.or(under.tint_keep),
+            traced_hidden: self.traced_hidden.or(under.traced_hidden),
+            sun_through: self.sun_through.or(under.sun_through),
+            metal_kind: self.metal_kind.or(under.metal_kind),
+            glow: self.glow.or(under.glow),
+            vertex_colour: self.vertex_colour.or(under.vertex_colour),
+        }
+    }
+
+    /// `vertex_colour` is `albedo`: the vertex colour is the surface's own colour, not painted light.
+    pub fn vertex_albedo(&self) -> bool {
+        self.vertex_colour == Some(VertexColour::Albedo)
+    }
+}
+
+/// A material's vertex colour for a ray (`ray.vertex_colour`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VertexColour {
+    /// The cook's rule (`auto`): painted light, de-lit by the cooker's gain where the material reads it.
+    Auto,
+    /// The surface's own colour (glTF's COLOR_0 by its specification): no environment share, no gain stream, no
+    /// painted-shadow bit.
+    Albedo,
+    /// Painted light, as the game's own models hold it: the cook's rule, said.
+    Light,
+}
+
+/// A material's light for a ray: its colour (None: the material's own, as the cook finds it) and its strength, above 0
+/// candela, below 0 a luminance in candela a square metre, 0 no light.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RayGlow {
+    pub colour: Option<[f32; 3]>,
+    pub strength: f32,
+}
+
+/// What a glTF material's lit template reads beyond its stages (MaterialIr pbr). Its maps are slots of their own (map n
+/// through coordinate n, which no stage reads), sampled as data, not as sRGB colour.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct PbrShading {
+    /// metallicFactor and roughnessFactor (0 to 1).
+    pub metal: f32,
+    pub roughness: f32,
+    /// metallicRoughnessTexture's slot: its blue scales the metal, its green the roughness.
+    pub metal_rough: Option<u8>,
+    /// occlusionTexture's slot (its red) and strength: it darkens the indirect light only.
+    pub occlusion: Option<(u8, f32)>,
+    /// The material's last stage is its glow (gltf.rs Glow), added after the light: the light goes before it.
+    pub glow_last: bool,
 }
 
 impl GroupIr {
@@ -260,6 +404,65 @@ pub struct ModelIr {
     /// By record of a disc model: its source's palette hash (texture::source_palette_hash), for its name. Empty for a
     /// model never on the disc (a mod's glTF).
     pub record_palettes: Vec<u64>,
+    /// A glTF model's materials as glTF says them, one per material (material n's at n); none for a game model. The
+    /// cook reads them for what a ray meets (hit_record::pbr_reading); the block holds no table of them.
+    pub pbr: Vec<PbrMaterial>,
+}
+
+/// A glTF material's alpha modes and flags.
+pub const PBR_OPAQUE: u8 = 0;
+pub const PBR_MASK: u8 = 1;
+pub const PBR_BLEND: u8 = 2;
+pub const PBR_DOUBLE_SIDED: u8 = 1 << 0;
+pub const PBR_UNLIT: u8 = 1 << 1;
+/// The maps of a glTF material, in PBR_MAPS' order (gltf.rs).
+pub const PBR_BASE: usize = 0;
+pub const PBR_METAL_ROUGH: usize = 1;
+pub const PBR_NORMAL: usize = 2;
+pub const PBR_EMISSIVE: usize = 3;
+pub const PBR_OCCLUSION: usize = 4;
+
+/// A glTF material (glTF 2.0's metallic-roughness model and the KHR_materials extensions the cook takes) as the cook
+/// read it. Colours linear; `maps` model texture numbers (NONE: none), each read through `coords`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PbrMaterial {
+    pub base_color: [f32; 4],
+    pub emissive: [f32; 3],
+    pub metal: f32,
+    pub roughness: f32,
+    pub normal_scale: f32,
+    pub occlusion_strength: f32,
+    pub alpha_cutoff: f32,
+    /// KHR_materials_ior's index (1.5 without it).
+    pub ior: f32,
+    /// KHR_materials_transmission's factor, if the material has the extension.
+    pub transmission: Option<f32>,
+    /// PBR_BASE, PBR_METAL_ROUGH, PBR_NORMAL, PBR_EMISSIVE, PBR_OCCLUSION.
+    pub maps: [u32; 5],
+    pub coords: [u8; 5],
+    pub alpha_mode: u8,
+    pub flags: u8,
+}
+
+impl Default for PbrMaterial {
+    /// glTF 2.0's default material: white, fully metal and rough, no maps.
+    fn default() -> PbrMaterial {
+        PbrMaterial {
+            base_color: [1.0; 4],
+            emissive: [0.0; 3],
+            metal: 1.0,
+            roughness: 1.0,
+            normal_scale: 1.0,
+            occlusion_strength: 1.0,
+            alpha_cutoff: 0.0,
+            ior: 1.5,
+            transmission: None,
+            maps: [NONE; 5],
+            coords: [0; 5],
+            alpha_mode: PBR_OPAQUE,
+            flags: 0,
+        }
+    }
 }
 
 fn be16(b: &[u8], at: usize) -> Result<u32> {
@@ -1296,7 +1499,13 @@ pub fn read_file(bytes: &[u8], source: Source, stats: &mut Stats) -> Result<Mode
             ir.materials.push(read_material(&m, i, &label, source).with_context(|| format!("material {i}"))?);
         }
     }
+    // A normal-indexed map that holds a colour ramp, not a reflection, by its content.
+    super::hit_record::mark_ramps(&mut ir);
+    // And one that is a painted highlight sprite.
+    super::hit_record::mark_highlights(&mut ir);
     if source == Source::Table {
+        // A table's fades too (no vertices: their alpha counts 1); a model's are marked at the end, after VTX1.
+        super::hit_record::mark_fades(&mut ir);
         return Ok(ir);
     }
     let inf = parts.get(b"INF1").context("a model without its information block")?;
@@ -1358,5 +1567,7 @@ pub fn read_file(bytes: &[u8], source: Source, stats: &mut Stats) -> Result<Mode
             }
         }
     }
+    // A material blended only for a fade (its alpha high over its texels and vertices) is opaque to the classes.
+    super::hit_record::mark_fades(&mut ir);
     Ok(ir)
 }

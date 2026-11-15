@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -183,5 +184,11 @@ private:
     // Sleeps until a target `remaining_ms` away.
     void sleep_before(double remaining_ms);
 };
+
+// A test capture's pixels (RGB rows, top first) as a binary PPM at `path`, written off the render thread (the Vulkan
+// and Metal renderers; Direct3D 12 keeps its own writers). wait_picture_files returns once every one asked is written:
+// the renderers' finish_pictures, before a process that ends without their shutdown.
+void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned width, unsigned height);
+void wait_picture_files();
 
 }  // namespace galaxy::render

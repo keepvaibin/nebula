@@ -7,11 +7,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Render/Clip.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    NEBULA_TUNABLE_LIST(s32, sBookPageInfo, , {0, 350, 700, 1050, 1400, 1748, -1});
+    const s32 sBookPageInfo[] = {0, 350, 700, 1050, 1400, 1748, -1};
 };  // namespace
 
 namespace NrvProloguePictureBook {

@@ -18,10 +18,14 @@ namespace Nebula.Setup
         private readonly TextBox input = new TextBox(), root = new TextBox(), log = new TextBox();
         private readonly CheckBox desktop = new CheckBox(), dlss = new CheckBox(), dlssLicense = new CheckBox(),
             prepareRayTracing = new CheckBox();
-        private readonly RadioButton modeRepair = new RadioButton(), modeRestore = new RadioButton(), modeUninstall = new RadioButton(), modeInstall = new RadioButton();
-        private readonly Label summary = new Label(), step = new Label(), elapsed = new Label();
+        private readonly RadioButton modeRepair = new RadioButton(), modeRestore = new RadioButton(), modeUninstall = new RadioButton(), modeInstall = new RadioButton(),
+            modePortable = new RadioButton();
+        private readonly Label summary = new Label(), step = new Label(), elapsed = new Label(), folderLabel = new Label();
+        private string installFolder, portableFolder;
+        // The install in hand is a portable copy (this Setup is its own, or --root named one).
+        private bool portableInstalled;
         private readonly ProgressBar overall = new ProgressBar(), stepBar = new ProgressBar();
-        private readonly Button start = new Button(), cancelButton = new Button(), launch = new Button(), openLog = new Button();
+        private readonly Button start = new Button(), cancelButton = new Button(), launch = new Button(), openLog = new Button(), openFolder = new Button();
         private CancellationTokenSource cancel;
         private InstallEngine engine;
         private readonly System.Windows.Forms.Timer clockTimer = new System.Windows.Forms.Timer();
@@ -30,7 +34,7 @@ namespace Nebula.Setup
         public SetupForm(Dictionary<string, string> options)
         {
             this.options = options;
-            Text = NebulaText.Of("Nebula Setup") + " " + BuildInfo.Version;
+            Text = NebulaText.Of("Nebula Setup");
             Font = new Font("Segoe UI", 9.5f);
 
             AutoScaleMode = AutoScaleMode.None;
@@ -38,8 +42,10 @@ namespace Nebula.Setup
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            string rootPath = options.ContainsKey("root") ? options["root"] : (NebulaPaths.RegisteredInstallRoot ?? NebulaPaths.DefaultInstallRoot);
+            string rootPath = options.ContainsKey("root") ? options["root"] : (NebulaPaths.PortableRoot ?? NebulaPaths.RegisteredInstallRoot ?? NebulaPaths.DefaultInstallRoot);
             layout = new InstallLayout(rootPath);
+            portableInstalled = NebulaPaths.IsPortableRoot(layout.Root);
+            if (portableInstalled) NebulaPaths.UsePortableRoot(layout.Root);
             installed = InstalledInfo.Read(layout);
             BuildChoosePage();
             BuildWorkPage();
@@ -54,8 +60,10 @@ namespace Nebula.Setup
             {
                 if (options.ContainsKey("uninstall")) { modeUninstall.Checked = true; }
                 if (options.ContainsKey("update")) CheckForUpdate();
-                // An update that needs the disc stays on this page, which asks for it.
-                else if (options.ContainsKey("apply-update") && installed != null && InstallEngine.RetainedGameValid(layout)) { modeRepair.Checked = true; StartWork(InstallMode.Update); }
+                // An update that needs the disc stays on this page, which asks for it; a package no newer than the
+                // installed version is never applied as an update (no downgrade by --apply-update).
+                else if (options.ContainsKey("apply-update") && installed != null && InstallEngine.RetainedGameValid(layout) &&
+                         InstallIntent.ForPackage(installed.Version, BuildInfo.Version) == InstallMode.Update) { modeRepair.Checked = true; StartWork(InstallMode.Update); }
             };
         }
 
@@ -63,8 +71,20 @@ namespace Nebula.Setup
         private void UpdateChoices()
         {
             InstallMode mode = installed == null ? InstallMode.Install : InstallIntent.ForPackage(installed.Version, BuildInfo.Version);
-            start.Text = installed == null ? NebulaText.Of("Install") : modeRestore.Checked ? NebulaText.Of("Restore") : modeUninstall.Checked ? NebulaText.Of("Uninstall") :
+            start.Text = installed == null ? NebulaText.Of("Install") : modeRestore.Checked ? NebulaText.Of("Restore") :
+                modeUninstall.Checked ? (portableInstalled ? NebulaText.Of("Remove") : NebulaText.Of("Uninstall")) :
                 mode == InstallMode.Update ? NebulaText.Of("Update") : NebulaText.Of("Repair");
+        }
+
+        /// <summary>On this PC or portable: the folder, its label and the desktop shortcut follow the choice. A folder the
+        /// player typed or chose is kept when the choice changes back.</summary>
+        private void UpdateKind()
+        {
+            bool portable = modePortable.Checked;
+            if (portable) { installFolder = root.Text; root.Text = portableFolder; }
+            else { portableFolder = root.Text; root.Text = installFolder; }
+            folderLabel.Text = portable ? NebulaText.Of("Portable folder (the game, saves and settings all go here):") : NebulaText.Of("Install folder:");
+            desktop.Visible = !portable;
         }
 
         private Label AddLabel(Control parent, string text, int x, int y, int width, int height)
@@ -84,14 +104,15 @@ namespace Nebula.Setup
             int y = 98;
             if (installed != null)
             {
-                AddLabel(choose, NebulaText.Of("Installed: Nebula {0}", installed.Version) + (installed.Previous != null ? NebulaText.Of(" (previous {0} kept)", installed.Previous) : ""), 20, y, 720, 22);
+                AddLabel(choose, (portableInstalled ? NebulaText.Of("Portable Nebula {0}", installed.Version) : NebulaText.Of("Installed: Nebula {0}", installed.Version)) +
+                    (installed.Previous != null ? NebulaText.Of(" (previous {0} kept)", installed.Previous) : ""), 20, y, 720, 22);
                 y += 26;
                 modeRepair.Text = InstallIntent.ForPackage(installed.Version, BuildInfo.Version) == InstallMode.Update
                     ? NebulaText.Of("Update to Nebula {0} (keeps saves and settings)", BuildInfo.Version)
                     : NebulaText.Of("Install or repair Nebula {0}", BuildInfo.Version);
                 modeRepair.Checked = true;
                 modeRestore.Text = NebulaText.Of("Restore the previous version ({0})", installed.Previous);
-                modeUninstall.Text = NebulaText.Of("Uninstall (keeps saves and settings)");
+                modeUninstall.Text = portableInstalled ? NebulaText.Of("Remove this portable copy (keeps saves and settings)") : NebulaText.Of("Uninstall (keeps saves and settings)");
                 foreach (var radio in new[] { modeRepair, modeRestore, modeUninstall })
                 {
                     if (radio == modeRestore && installed.Previous == null) continue;
@@ -107,7 +128,19 @@ namespace Nebula.Setup
             }
             else
             {
+                // On this PC (Start menu, Windows' list of apps) or portable (one folder, nothing else on the PC changes).
+                modeInstall.Text = NebulaText.Of("Install on this PC (Start menu, and uninstall from Windows Settings)");
+                modePortable.Text = NebulaText.Of("Portable: everything in one folder you choose, nothing else on this PC changes");
                 modeInstall.Checked = true;
+                foreach (var radio in new[] { modeInstall, modePortable })
+                {
+                    radio.Location = new Point(20, y);
+                    radio.Size = new Size(720, 24);
+                    choose.Controls.Add(radio);
+                    y += 26;
+                }
+                modePortable.CheckedChanged += delegate { UpdateKind(); };
+                y += 8;
             }
 
             // An install keeps its packed game; the game is asked for only when that is gone.
@@ -138,9 +171,15 @@ namespace Nebula.Setup
             }
 
             root.Text = layout.Root;
+            installFolder = layout.Root;
+            // A portable copy goes beside this Setup unless the player chooses another folder.
+            portableFolder = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(System.Reflection.Assembly.GetExecutingAssembly().Location)), "Nebula");
             if (installed == null)
             {
-                AddLabel(choose, NebulaText.Of("Install folder:"), 20, y, 720, 22);
+                folderLabel.Text = NebulaText.Of("Install folder:");
+                folderLabel.Location = new Point(20, y);
+                folderLabel.Size = new Size(720, 22);
+                choose.Controls.Add(folderLabel);
                 y += 24;
                 root.Location = new Point(20, y);
                 root.Size = new Size(594, 26);
@@ -148,7 +187,7 @@ namespace Nebula.Setup
                 var browse = new Button { Text = NebulaText.Of("Browse…"), Location = new Point(620, y - 1), Size = new Size(116, 28) };
                 browse.Click += delegate
                 {
-                    using (var dialog = new FolderBrowserDialog { Description = NebulaText.Of("Choose where to install Nebula") })
+                    using (var dialog = new FolderBrowserDialog { Description = modePortable.Checked ? NebulaText.Of("Choose where to put portable Nebula") : NebulaText.Of("Choose where to install Nebula") })
                         if (dialog.ShowDialog(this) == DialogResult.OK) root.Text = Path.Combine(dialog.SelectedPath, "Nebula");
                 };
                 choose.Controls.Add(browse);
@@ -160,11 +199,15 @@ namespace Nebula.Setup
                 y += 32;
             }
 
-            desktop.Text = NebulaText.Of("Create a desktop shortcut");
-            desktop.Location = new Point(20, y);
-            desktop.Size = new Size(700, 24);
-            choose.Controls.Add(desktop);
-            y += 28;
+            // A portable copy makes no shortcut (it would point at one place; the folder may move).
+            if (!portableInstalled)
+            {
+                desktop.Text = NebulaText.Of("Create a desktop shortcut");
+                desktop.Location = new Point(20, y);
+                desktop.Size = new Size(700, 24);
+                choose.Controls.Add(desktop);
+                y += 28;
+            }
 
             if (RayTracingPreparation.Offered())
             {
@@ -200,7 +243,7 @@ namespace Nebula.Setup
             }
 
             summary.Location = new Point(20, y);
-            summary.Size = new Size(720, 170);
+            summary.Size = new Size(720, Math.Max(40, 590 - y));
             summary.Text = NebulaText.Of("Requires Windows 10 or 11 (64-bit), 8 GB of RAM, {0} of free disk space and a DirectX 12 GPU.", FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes));
             choose.Controls.Add(summary);
             foreach (var radio in new[] { modeRepair, modeRestore, modeUninstall })
@@ -255,9 +298,16 @@ namespace Nebula.Setup
             launch.Click += delegate
             {
                 if (engine != null && engine.InstalledVersionDir != null)
-                    Process.Start(new ProcessStartInfo(Path.Combine(engine.InstalledVersionDir, "Nebula.exe")) { WorkingDirectory = engine.InstalledVersionDir });
+                    Process.Start(new ProcessStartInfo(Path.Combine(engine.InstalledVersionDir, "NebulaLauncher.exe")) { WorkingDirectory = engine.InstalledVersionDir });
                 Close();
             };
+            // A portable copy's folder, where its launcher is.
+            openFolder.Text = NebulaText.Of("Open folder");
+            openFolder.Location = new Point(410, 596);
+            openFolder.Size = new Size(110, 32);
+            openFolder.Visible = false;
+            openFolder.Click += delegate { Process.Start("explorer.exe", "\"" + layout.Root + "\""); };
+            work.Controls.Add(openFolder);
             openLog.Text = NebulaText.Of("Open log");
             openLog.Location = new Point(20, 596);
             openLog.Size = new Size(100, 32);
@@ -271,10 +321,12 @@ namespace Nebula.Setup
             {
                 if (installed != null && modeUninstall.Checked)
                 {
-                    var answer = MessageBox.Show(this, NebulaText.Of("Uninstall Nebula?") + "\r\n\r\n" + NebulaText.Of("Your saves, settings and shader cache in {0} are kept. Choose No to also delete them.", NebulaPaths.DataRoot), NebulaText.Of("Uninstall Nebula"), MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                    var answer = MessageBox.Show(this, (portableInstalled ? NebulaText.Of("Remove this portable copy of Nebula?") : NebulaText.Of("Uninstall Nebula?")) + "\r\n\r\n" +
+                        NebulaText.Of("Your saves, settings and shader cache in {0} are kept. Choose No to also delete them.", NebulaPaths.DataRoot),
+                        portableInstalled ? NebulaText.Of("Remove portable Nebula") : NebulaText.Of("Uninstall Nebula"), MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
                     if (answer == DialogResult.Cancel) return;
                     Integration.Uninstall(layout, answer == DialogResult.No);
-                    MessageBox.Show(this, NebulaText.Of("Nebula was uninstalled."), NebulaText.Of("Nebula Setup"));
+                    MessageBox.Show(this, portableInstalled ? NebulaText.Of("The portable copy was removed.") : NebulaText.Of("Nebula was uninstalled."), NebulaText.Of("Nebula Setup"));
                     Close();
                     return;
                 }
@@ -285,7 +337,23 @@ namespace Nebula.Setup
                     Close();
                     return;
                 }
+                if (root.Text.Trim().Length == 0) { Fail(NebulaText.Of("Choose a folder for Nebula.")); return; }
                 layout = new InstallLayout(root.Text.Trim());
+                if (installed == null && modePortable.Checked)
+                {
+                    // A portable copy goes into an empty folder, or updates the portable copy already there; never into an
+                    // installed Nebula or a folder of other files.
+                    if (Directory.Exists(layout.Root) && !NebulaPaths.IsPortableRoot(layout.Root) &&
+                        Directory.GetFileSystemEntries(layout.Root).Length != 0)
+                    {
+                        Fail(NebulaText.Of("Choose an empty folder for portable Nebula. {0} already holds other files.", layout.Root)); return;
+                    }
+                    portableInstalled = true;
+                }
+                else if (installed == null && NebulaPaths.IsPortableRoot(layout.Root))
+                {
+                    Fail(NebulaText.Of("{0} holds portable Nebula. Choose Portable to update it, or another folder to install on this PC.", layout.Root)); return;
+                }
                 installed = InstalledInfo.Read(layout);
                 StartWork(InstallIntent.ForPackage(installed == null ? null : installed.Version, BuildInfo.Version));
             }
@@ -309,7 +377,8 @@ namespace Nebula.Setup
 
             var request = new InstallRequest
             {
-                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked, InstallDlss = dlss.Checked
+                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked && !portableInstalled,
+                InstallDlss = dlss.Checked, Portable = portableInstalled
             };
             choose.Visible = false;
             work.Visible = true;
@@ -340,7 +409,9 @@ namespace Nebula.Setup
             cancelButton.Click += delegate { Close(); };
             if (failure == null)
             {
-                step.Text = NebulaText.Of("Nebula {0} is installed.", BuildInfo.Version);
+                step.Text = portableInstalled ? NebulaText.Of("Portable Nebula {0} is ready. To play, open NebulaLauncher.exe in {1}.", BuildInfo.Version, layout.Root)
+                                              : NebulaText.Of("Nebula {0} is installed.", BuildInfo.Version);
+                if (portableInstalled) openFolder.Visible = true;
                 if (prepareRayTracing.Checked) RayTracingPreparation.Request();
                 if (engine.DlssFailure != null)
                     MessageBox.Show(this, NebulaText.Of("NVIDIA DLSS was not installed: {0}", engine.DlssFailure) + "\r\n\r\n" + NebulaText.Of("You can install it later from the game's graphics settings."),
@@ -349,7 +420,7 @@ namespace Nebula.Setup
                 launch.Visible = true;
                 if (options.ContainsKey("launch") && engine.InstalledVersionDir != null)
                 {
-                    Process.Start(new ProcessStartInfo(Path.Combine(engine.InstalledVersionDir, "Nebula.exe")) { WorkingDirectory = engine.InstalledVersionDir });
+                    Process.Start(new ProcessStartInfo(Path.Combine(engine.InstalledVersionDir, "NebulaLauncher.exe")) { WorkingDirectory = engine.InstalledVersionDir });
                     Close();
                 }
                 return;

@@ -28,13 +28,6 @@
 #include <Game/Ui/Rect.hpp>
 #include <nebula_math.h>
 #include <nebula_format.h>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_calcAnim_f1, "calcAnim.f1", 0.75f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isPointing_f1, "isPointing.f1", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isPointing_f2, "isPointing.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isPointing_f3, "isPointing.f3", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_isPointing_f4, "isPointing.f4", 2.0f);
 
 namespace {
     namespace Local {
@@ -144,7 +137,8 @@ namespace {
     };  // namespace Local
 };  // namespace
 
-LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix, u32 rootPaneAnimLayerNum, u32 textBoxBufferLength)
+LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix, u32 rootPaneAnimLayerNum, u32 textBoxBufferLength,
+                             bool keepLayoutText)
     : mLayoutHolder(), mLayout(), mAnimTransList(), mDrawInfo(), mIsScreenHidden(), mParentAnimValid(true), mIndDummyTexMap(), mGroupCtrlCount(),
       mGroupCtrlList(), mLayoutName() {
     // pLayoutName points into fileNameWithoutExtension below, so it lives as long as the constructor
@@ -176,7 +170,7 @@ LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix,
     initArc(archiveName.c_str(), pLayoutName);
     initGroupCtrlList();
     initDrawInfo();
-    initTextBoxRecursive(mLayout->mpRootPane, nullptr, mLayoutName, textBoxBufferLength);
+    initTextBoxRecursive(mLayout->mpRootPane, nullptr, mLayoutName, textBoxBufferLength, keepLayoutText);
     replaceIndDummyTexture();
 
     if (rootPaneAnimLayerNum != 0) {
@@ -206,7 +200,7 @@ void LayoutManager::movement() {
 void LayoutManager::calcAnim() {
     if (MR::isScreen16Per9()) {
         Vec2f scale;
-        scale.x = cNum_calcAnim_f1;
+        scale.x = 0.75f;
         scale.y = 1.0f;
         mDrawInfo.SetLocationAdjustScale(scale);
     } else {
@@ -341,7 +335,7 @@ bool LayoutManager::isPointing(const Ui::Pane* pPane, const Vec2f& rPos) const {
 
         break;
     case 1:
-        if (pos.x < -pPane->GetDrawSize().width / cNum_isPointing_f1 || pPane->GetDrawSize().width / cNum_isPointing_f2 < pos.x) {
+        if (pos.x < -pPane->GetDrawSize().width / 2.0f || pPane->GetDrawSize().width / 2.0f < pos.x) {
             return false;
         }
 
@@ -362,7 +356,7 @@ bool LayoutManager::isPointing(const Ui::Pane* pPane, const Vec2f& rPos) const {
 
         break;
     case 1:
-        if (pos.y < -pPane->GetDrawSize().height / cNum_isPointing_f3 || pPane->GetDrawSize().height / cNum_isPointing_f4 < pos.y) {
+        if (pos.y < -pPane->GetDrawSize().height / 2.0f || pPane->GetDrawSize().height / 2.0f < pos.y) {
             return false;
         }
 
@@ -547,7 +541,8 @@ void LayoutManager::initGroupCtrlList() {
     }
 }
 
-void LayoutManager::initTextBoxRecursive(Ui::Pane* pPane, Ui::Pane* pUserDataPane, const char* pLayoutName, u32 textBoxBufferLength) {
+void LayoutManager::initTextBoxRecursive(Ui::Pane* pPane, Ui::Pane* pUserDataPane, const char* pLayoutName, u32 textBoxBufferLength,
+                                         bool keepLayoutText) {
     Ui::TextBox* pTextBox = Ui::PaneCast< Ui::TextBox >(pPane);
 
     char userData[9];  // the layout file's 8-byte user data field and the terminator
@@ -564,13 +559,13 @@ void LayoutManager::initTextBoxRecursive(Ui::Pane* pPane, Ui::Pane* pUserDataPan
             MR::getLayoutMessageID(messageID, pLayoutName, userData);
             LayoutCoreUtil::initTextBoxPane(pTextBox, messageID.c_str(), 0x100);
         } else {
-            LayoutCoreUtil::initTextBoxPane(pTextBox, nullptr, textBoxBufferLength);
+            LayoutCoreUtil::initTextBoxPane(pTextBox, nullptr, textBoxBufferLength, keepLayoutText);
         }
     }
 
     Ui::PaneList& rPaneList = pPane->mChildList;
     for (Ui::Pane* pChild : rPaneList) {
-        initTextBoxRecursive(pChild, pUserDataPane, pLayoutName, textBoxBufferLength);
+        initTextBoxRecursive(pChild, pUserDataPane, pLayoutName, textBoxBufferLength, keepLayoutText);
     }
 }
 

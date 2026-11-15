@@ -9,23 +9,19 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_control_f1, "control.f1", 20.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sMarioWorldOffset, 120.0f);
-    NEBULA_TUNABLE(f32, sMarioScreenOffsetX, 32.0f);
-    NEBULA_TUNABLE(f32, sMarioScreenOffsetY, -38.0f);
-    NEBULA_TUNABLE(s32, sMoveToBasePositionTime, 25);
-    NEBULA_TUNABLE(f32, sMinAlpha, 0.3f);
-    NEBULA_TUNABLE(f32, sMaxAlpha, 1.2f);
+    const f32 sMarioWorldOffset = 120.0f;
+    const f32 sMarioScreenOffsetX = 32.0f;
+    const f32 sMarioScreenOffsetY = -38.0f;
+    const s32 sMoveToBasePositionTime = 25;
+    const f32 sMinAlpha = 0.3f;
+    const f32 sMaxAlpha = 1.2f;
     // static const f32 sHideSpeed = _;
     // static const f32 sShowSpeed = _;
     static const s32 sAppearTime = NebulaFrameClock::stepsOfSeconds(2);
-    NEBULA_TUNABLE(s32, sBreakDelayTime, 40);
+    const s32 sBreakDelayTime = 40;
     static const s32 sPowerUpWaitTime = NebulaFrameClock::stepsOfSeconds(1);
     // static const s32 sRecoveryCountInterval = _;
     // static const s32 sRecoveryCountStartTime = _;
@@ -58,7 +54,7 @@ void SuddenDeathMeter::init(const TableIter& /*rIter*/) {
     MR::setFollowTypeAdd(this, "HitPointW");
     MR::startAnim(this, "FontPosition2to1", 1);
     MR::startAnim(this, "ShowHide", 2);
-    MR::setAnimFrameAndStop(this, cNum_init_f1, 2);
+    MR::setAnimFrameAndStop(this, 20.0f, 2);
     setCountAnimFrame();
     mCountUpPaneRumbler = new CountUpPaneRumbler(this, "HitPointNumber");
     initNerve(GET_NERVE(SuddenDeathMeter, SuddenDeathMeterNrvWait));
@@ -73,7 +69,7 @@ void SuddenDeathMeter::control() {
 
     mAlpha = MR::clamp(mAlpha, ::sMinAlpha, ::sMaxAlpha);
 
-    MR::setAnimFrameAndStop(this, MR::normalize(mAlpha, 0.0f, 1.0f) * mShowHideRate * cNum_control_f1, 2);
+    MR::setAnimFrameAndStop(this, MR::normalize(mAlpha, 0.0f, 1.0f) * mShowHideRate * 20.0f, 2);
     mCountUpPaneRumbler->update();
 }
 

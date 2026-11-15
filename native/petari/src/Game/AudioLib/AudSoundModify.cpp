@@ -3,41 +3,40 @@
 #include "Game/AudioLib/AudUtil.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 // Per-sound responses to the caller's level: one table for every sound that takes one.
 
 namespace {
-    NEBULA_TUNABLE(s32, cMagicPntGVolMinPrm, 100);
-    NEBULA_TUNABLE(s32, cMagicPntGVolMaxPrm, 1500);
-    NEBULA_TUNABLE(f32, cMagicPntGVolMin, 0.8f);
-    NEBULA_TUNABLE(f32, cMagicPntGVolMax, 1.0f);
-    NEBULA_TUNABLE(s32, cMagicPntGPitMinPrm, 100);
-    NEBULA_TUNABLE(s32, cMagicPntGPitMaxPrm, 2000);
-    NEBULA_TUNABLE(f32, cMagicPntGPitMin, 0.5f);
-    NEBULA_TUNABLE(f32, cMagicPntGPitMax, 2.0f);
-    NEBULA_TUNABLE(s32, cUnizoRollVolMinPrm, 200);
-    NEBULA_TUNABLE(s32, cUnizoRollVolMaxPrm, 700);
-    NEBULA_TUNABLE(f32, cUnizoRollVolMin, 0.1f);
-    NEBULA_TUNABLE(f32, cUnizoRollVolMax, 1.0f);
-    NEBULA_TUNABLE(s32, cUnizoRollPitMinPrm, 50);
-    NEBULA_TUNABLE(s32, cUnizoRollPitMaxPrm, 1000);
-    NEBULA_TUNABLE(f32, cUnizoRollPitMin, 0.8f);
-    NEBULA_TUNABLE(f32, cUnizoRollPitMax, 1.0f);
-    NEBULA_TUNABLE(s32, cUnizoRollGroundVolMinPrm, 200);
-    NEBULA_TUNABLE(s32, cUnizoRollGroundVolMaxPrm, 700);
-    NEBULA_TUNABLE(f32, cUnizoRollGroundPitMin, 0.9f);
-    NEBULA_TUNABLE(f32, cUnizoRollGroundPitMax, 1.0f);
-    NEBULA_TUNABLE(s32, cTorpedoPitMinPrm, 300);
-    NEBULA_TUNABLE(s32, cTorpedoPitMaxPrm, 2000);
-    NEBULA_TUNABLE(f32, cTorpedoPitMin, 1.27f);
-    NEBULA_TUNABLE(f32, cTorpedoPitMax, 1.2f);
-    NEBULA_TUNABLE(s32, cTorpedoWaitMinPrm, 200);
-    NEBULA_TUNABLE(s32, cTorpedoWaitMaxPrm, 3000);
-    NEBULA_TUNABLE(f32, cTorpedoWaitMin, 4.0f);
-    NEBULA_TUNABLE(f32, cTorpedoWaitMax, 24.0f);
-    NEBULA_TUNABLE(s32, cBombBoundVolMinPrm, 100);
-    NEBULA_TUNABLE(s32, cBombBoundVolMaxPrm, 1000);
+    const s32 cMagicPntGVolMinPrm = 100;
+    const s32 cMagicPntGVolMaxPrm = 1500;
+    const f32 cMagicPntGVolMin = 0.8f;
+    const f32 cMagicPntGVolMax = 1.0f;
+    const s32 cMagicPntGPitMinPrm = 100;
+    const s32 cMagicPntGPitMaxPrm = 2000;
+    const f32 cMagicPntGPitMin = 0.5f;
+    const f32 cMagicPntGPitMax = 2.0f;
+    const s32 cUnizoRollVolMinPrm = 200;
+    const s32 cUnizoRollVolMaxPrm = 700;
+    const f32 cUnizoRollVolMin = 0.1f;
+    const f32 cUnizoRollVolMax = 1.0f;
+    const s32 cUnizoRollPitMinPrm = 50;
+    const s32 cUnizoRollPitMaxPrm = 1000;
+    const f32 cUnizoRollPitMin = 0.8f;
+    const f32 cUnizoRollPitMax = 1.0f;
+    const s32 cUnizoRollGroundVolMinPrm = 200;
+    const s32 cUnizoRollGroundVolMaxPrm = 700;
+    const f32 cUnizoRollGroundPitMin = 0.9f;
+    const f32 cUnizoRollGroundPitMax = 1.0f;
+    const s32 cTorpedoPitMinPrm = 300;
+    const s32 cTorpedoPitMaxPrm = 2000;
+    const f32 cTorpedoPitMin = 1.27f;
+    const f32 cTorpedoPitMax = 1.2f;
+    const s32 cTorpedoWaitMinPrm = 200;
+    const s32 cTorpedoWaitMaxPrm = 3000;
+    const f32 cTorpedoWaitMin = 4.0f;
+    const f32 cTorpedoWaitMax = 24.0f;
+    const s32 cBombBoundVolMinPrm = 100;
+    const s32 cBombBoundVolMaxPrm = 1000;
 
     inline s32 clampLevel(s32 level, s32 max) {
         return MR::min(MR::max(level, 0), max);

@@ -1,4 +1,4 @@
-// The Android app (docs/ANDROID.md): the launcher and setup, and SDL's activity running the native game.
+// The Android app: the launcher and setup, and SDL's activity running the native game.
 pluginManagement {
     repositories {
         google()

@@ -1,32 +1,22 @@
 #include "Game/Particle/EmitterDynamics.hpp"
 #include <nebula_geometry.hpp>
 #include "Game/Particle/EmitterCore.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_volumePoint_f1, "volumePoint.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_volumePoint_f2, "volumePoint.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_volumePoint_f3, "volumePoint.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_volumeLine_f1, "volumeLine.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_volumeLine_f2, "volumeLine.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_volumeCube_f1, "volumeCube.f1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_volumeCube_f2, "volumeCube.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_volumeCube_f3, "volumeCube.f3", 0.5f);
 
 void volumePoint(EmitterWork* work) {
     work->mVolumeCalcData.mVolumePos.zero();
-    f32 z = work->mpEmtr->mRndm.get_rndm_f() - cNum_volumePoint_f1;
-    f32 y = work->mpEmtr->mRndm.get_rndm_f() - cNum_volumePoint_f2;
-    f32 x = work->mpEmtr->mRndm.get_rndm_f() - cNum_volumePoint_f3;
+    f32 z = work->mpEmtr->mRndm.get_rndm_f() - 0.5f;
+    f32 y = work->mpEmtr->mRndm.get_rndm_f() - 0.5f;
+    f32 x = work->mpEmtr->mRndm.get_rndm_f() - 0.5f;
     work->mVolumeCalcData.mVelOmni.set< f32 >(x, y, z);
     work->mVolumeCalcData.mVelAxis.set< f32 >(work->mVolumeCalcData.mVelOmni.x, 0.0f, work->mVolumeCalcData.mVelOmni.z);
 }
 
 void volumeLine(EmitterWork* work) {
     if (work->mpEmtr->checkFlag(DynamicsFlag_FixedInterval)) {
-        work->mVolumeCalcData.mVolumePos.set< f32 >(0.0f, 0.0f, work->mVolumeSize * ((work->mVolumeEmitIdx / (work->mEmitCount - 1.0f) - cNum_volumeLine_f1)));
+        work->mVolumeCalcData.mVolumePos.set< f32 >(0.0f, 0.0f, work->mVolumeSize * ((work->mVolumeEmitIdx / (work->mEmitCount - 1.0f) - 0.5f)));
         work->mVolumeEmitIdx++;
     } else {
-        work->mVolumeCalcData.mVolumePos.set< f32 >(0.0f, 0.0f, work->mVolumeSize * (work->mpEmtr->mRndm.get_rndm_f() - cNum_volumeLine_f2));
+        work->mVolumeCalcData.mVolumePos.set< f32 >(0.0f, 0.0f, work->mVolumeSize * (work->mpEmtr->mRndm.get_rndm_f() - 0.5f));
     }
 
     work->mVolumeCalcData.mVelOmni.set< f32 >(0.0f, 0.0f, work->mVolumeCalcData.mVolumePos.z * work->mGlobalScl.z);
@@ -57,9 +47,9 @@ void volumeCircle(EmitterWork* work) {
 }
 
 void volumeCube(EmitterWork* work) {
-    f32 z = work->mpEmtr->mRndm.get_rndm_f() - cNum_volumeCube_f1;
-    f32 y = work->mpEmtr->mRndm.get_rndm_f() - cNum_volumeCube_f2;
-    f32 x = work->mpEmtr->mRndm.get_rndm_f() - cNum_volumeCube_f3;
+    f32 z = work->mpEmtr->mRndm.get_rndm_f() - 0.5f;
+    f32 y = work->mpEmtr->mRndm.get_rndm_f() - 0.5f;
+    f32 x = work->mpEmtr->mRndm.get_rndm_f() - 0.5f;
     work->mVolumeCalcData.mVolumePos.set< f32 >(work->mVolumeSize * x, work->mVolumeSize * y, work->mVolumeSize * z);
     work->mVolumeCalcData.mVelOmni.mul(work->mVolumeCalcData.mVolumePos, work->mGlobalScl);
     work->mVolumeCalcData.mVelAxis.set< f32 >(work->mVolumeCalcData.mVolumePos.x, 0.0f, work->mVolumeCalcData.mVolumePos.z);

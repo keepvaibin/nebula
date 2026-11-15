@@ -6,16 +6,9 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_clear_f1, "clear.f1", 99999.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_clear_f2, "clear.f2", 99999.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_clear_f3, "clear.f3", 99999.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_findBindedPos_f1, "findBindedPos.f1", 35000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_findBindedPos_f2, "findBindedPos.f2", 35.0f);
 
 namespace {
-    NEBULA_TUNABLE(f32, hOverlapAddValue, 1.2f);
+    const f32 hOverlapAddValue = 1.2f;
 };  // namespace
 
 Binder::Binder(MtxPtr pHostMtx, const Vec3f* pHostPos, const Vec3f* pGravity, f32 radius, f32 offsetY, u32 planeCapacity)
@@ -36,9 +29,9 @@ void Binder::setCollisionPartsFilter(CollisionPartsFilterBase* pFilter) {
 
 void Binder::clear() {
     mPlaneNum = 0;
-    mGroundDepth = -cNum_clear_f1;
-    mWallDepth = -cNum_clear_f2;
-    mRoofDepth = -cNum_clear_f3;
+    mGroundDepth = -99999.0f;
+    mWallDepth = -99999.0f;
+    mRoofDepth = -99999.0f;
     mFixReactionVector.zero();
 }
 
@@ -205,7 +198,7 @@ void Binder::moveAlongHittedPlanes(Vec3f* pMovement, Vec3f* pPosition, Vec3f* pR
 u32 Binder::findBindedPos(Vec3f* pPosition, Vec3f* pMovement, bool* pHasRemainingMovement, bool skipInitial, bool stopAtFirstHit) {
     // One check per 35 units of movement; a movement of 35000 or more, or not a number, takes 1000 (it would not end).
     const f32 movementLength = pMovement->length();
-    s32 steps = movementLength < cNum_findBindedPos_f1 ? static_cast< s32 >((1.0f / cNum_findBindedPos_f2) * movementLength) + 1 : 1000;
+    s32 steps = movementLength < 35000.0f ? static_cast< s32 >((1.0f / 35.0f) * movementLength) + 1 : 1000;
     Vec3f step(*pMovement);
     if (steps > 1) {
         step /= steps;

@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The test runs' host extension (nebula_host_extension.h): run.sh loads it with --extension. It reads the run's
-// GALAXY_* environment once, when attached (docs/DIAGNOSTICS.md lists the names), and gives the host the scripted
+// GALAXY_* environment once, when attached (docs/using-nebula/diagnostics.md lists the names), and gives the host the scripted
 // controls, the pictures and sound to keep, menu keys, window sizes, device losses and the fixed-step clock.
 #include <nebula_host_extension.h>
+
+#include "harness.h"
+#include "test_services.h"
 
 #include <algorithm>
 #include <atomic>
@@ -17,6 +20,7 @@
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -33,13 +37,16 @@
 #include <windows.h>
 #include <shellapi.h>
 
-#include "data_guard.h"
-#include "galaxy/hidden_start.h"
 #define NEBULA_EXTENSION_EXPORT extern "C" __declspec(dllexport)
 #else
 #include <time.h>
+#if defined(__APPLE__)
+#include <crt_externs.h>
+#endif
 #define NEBULA_EXTENSION_EXPORT extern "C" __attribute__((visibility("default")))
 #endif
+#include "data_guard.h"
+#include "galaxy/hidden_start.h"
 
 namespace {
 
@@ -117,6 +124,34 @@ const char* guard() {
     const char* const refusal = test_guard::error(count, args, wide_env, galaxy::host::player_data_folder().wstring());
     LocalFree(args);
     return refusal;
+}
+#elif !defined(__ANDROID__)
+std::string text_env(const char* name) {
+    const char* const value = std::getenv(name);
+    return value != nullptr ? std::string(value) : std::string();
+}
+
+// The work-folder policy (data_guard.h) over this process's arguments; null when the run may go on.
+const char* guard() {
+    std::vector<std::string> words;
+#if defined(__APPLE__)
+    for (int i = 0; i < *_NSGetArgc(); ++i) {
+        words.emplace_back((*_NSGetArgv())[i]);
+    }
+#else
+    std::ifstream in("/proc/self/cmdline", std::ios::binary);
+    for (std::string word; std::getline(in, word, '\0');) {
+        words.push_back(word);
+    }
+#endif
+    if (words.empty()) {
+        return "cannot read the command line";
+    }
+    std::vector<const char*> args;
+    for (const std::string& word : words) {
+        args.push_back(word.c_str());
+    }
+    return test_guard::error(static_cast<int>(args.size()), args.data(), text_env, galaxy::host::player_data_folder().string());
 }
 #endif
 
@@ -341,6 +376,10 @@ void read_script() {
 }
 
 void controls(void*, const NebulaExtensionFrame* frame, NebulaExtensionControls* out) {
+    if (harness::on()) {
+        harness::controls(frame->game_frames, out);
+        return;
+    }
     std::uint64_t now = frame->game_frames;
     if (g_script.clock == ScriptClock::Scene) {
         now = g_scene_frames.load(std::memory_order_relaxed);
@@ -443,6 +482,10 @@ void read_menus() {
 void frame(void*, const NebulaExtensionFrame* frame) {
     const std::uint64_t now = frame->game_frames;
     g_game_frames.store(now, std::memory_order_relaxed);
+    if (harness::on()) {
+        harness::frame(now);
+        return;
+    }
     if (g_menus.open.has_value() && now >= g_menus.open->second && HOST_HAS(open_settings)) {
         g_host->open_settings(g_host->host, g_menus.open->first);
         g_menus.open.reset();
@@ -525,6 +568,9 @@ void read_pictures() {
 }
 
 const char* picture_path(void*, std::uint64_t game_frame, std::uint32_t kind) {
+    if (harness::on()) {
+        return harness::picture_path(game_frame, kind);
+    }
     Pictures& p = g_pictures;
     if (p.game_only && kind == NEBULA_EXT_PICTURE_GENERATED) {
         if (++p.left_out % 300u == 0u) {
@@ -559,21 +605,27 @@ const char* picture_path(void*, std::uint64_t game_frame, std::uint32_t kind) {
 // --- Sound ---------------------------------------------------------------------------------------------------------
 
 // GALAXY_AUDIO_WAV_DUMP=<file>: the mix as a 16-bit stereo WAV file, 15 s or GALAXY_AUDIO_WAV_DUMP_SECONDS (up to an
-// hour). A rate change starts a new file beside it (<name>.rate-<hz>.part-<n>.wav).
+// hour). A rate change starts a new file beside it (<name>.rate-<hz>.part-<n>.wav). The run's end ends the dump for
+// good: the mixes of the shutdown after it are not written (opening the file again would empty it). The mix calls
+// add on the audio thread and the end comes on another, so both take the dump's lock. A start-again ends it the same
+// way (the host's `ending`), and the start that takes over (the host's started_again) goes on in the same file when its
+// first mix has the file's rate, so a run keeps one dump; the seconds count over every start.
 class WavDump {
 public:
-    void start(std::filesystem::path base, std::uint32_t seconds) {
+    void start(std::filesystem::path base, std::uint32_t seconds, bool again) {
         base_ = std::move(base);
         seconds_ = seconds;
+        again_ = again;
     }
     [[nodiscard]] bool on() const { return !base_.empty() && !failed_; }
 
     void add(const float* samples, std::uint32_t frames, std::uint32_t channels, std::uint32_t rate) {
-        if (!on() || channels != 2u) {
+        const std::lock_guard<std::mutex> hold(lock_);
+        if (!on() || ended_ || channels != 2u) {
             return;
         }
         if (out_.is_open() && rate != rate_) {
-            finish();
+            close();
             ++part_;
         }
         if (!out_.is_open() && !open(rate)) {
@@ -596,7 +648,15 @@ public:
         }
     }
 
-    void finish() {
+    // The run's end: the file is complete and nothing opens it again.
+    void end() {
+        const std::lock_guard<std::mutex> hold(lock_);
+        close();
+        ended_ = true;
+    }
+
+private:
+    void close() {
         if (!out_.is_open()) {
             return;
         }
@@ -609,12 +669,17 @@ public:
         bytes_ = 0u;
     }
 
-private:
     bool open(std::uint32_t rate) {
         path_ = base_;
         if (part_ != 0u) {
             path_ = base_.parent_path() / (base_.stem().string() + ".rate-" + std::to_string(rate) + ".part-" +
                                            std::to_string(part_) + base_.extension().string());
+        }
+        if (again_ && part_ == 0u) {
+            again_ = false;
+            if (resume(rate)) {
+                return true;
+            }
         }
         std::error_code error;
         if (!path_.parent_path().empty()) {
@@ -643,6 +708,39 @@ private:
         log("[audio] WAV dump enabled: " + path_.string() + " qpc=" + std::to_string(clock_ticks()));
         return true;
     }
+    // The dump the start before this one ended (its header complete), opened to go on after its last sample.
+    bool resume(std::uint32_t rate) {
+        unsigned char head[44]{};
+        {
+            std::ifstream in(path_, std::ios::binary);
+            if (!in.read(reinterpret_cast<char*>(head), sizeof(head))) {
+                return false;
+            }
+        }
+        const auto at = [&head](std::size_t i) {
+            return std::uint32_t{head[i]} | (std::uint32_t{head[i + 1u]} << 8u) | (std::uint32_t{head[i + 2u]} << 16u) |
+                   (std::uint32_t{head[i + 3u]} << 24u);
+        };
+        if (std::memcmp(head, "RIFF", 4) != 0 || std::memcmp(head + 8, "WAVEfmt ", 8) != 0 ||
+            std::memcmp(head + 36, "data", 4) != 0 || at(24u) != rate) {
+            return false;
+        }
+        const std::uint32_t had = at(40u);
+        if (std::uint64_t{had} > std::uint64_t{rate} * 4u * seconds_) {
+            return false;
+        }
+        out_.open(path_, std::ios::binary | std::ios::in | std::ios::out);
+        if (!out_) {
+            out_.clear();
+            return false;
+        }
+        out_.seekp(static_cast<std::streamoff>(44u + had), std::ios::beg);
+        rate_ = rate;
+        bytes_ = had;
+        log("[audio] WAV dump goes on after a start-again: " + path_.string() + " at " + std::to_string(had) + " bytes qpc=" +
+            std::to_string(clock_ticks()));
+        return true;
+    }
     void u16(std::uint16_t value) {
         const char bytes[2] = {static_cast<char>(value & 0xFFu), static_cast<char>(value >> 8u)};
         out_.write(bytes, 2);
@@ -657,11 +755,17 @@ private:
     std::ofstream out_;
     std::vector<char> block_;
     std::uint32_t seconds_ = 15u, rate_ = 0u, bytes_ = 0u, part_ = 0u;
-    bool failed_ = false;
+    bool failed_ = false, ended_ = false, again_ = false;
+    std::mutex lock_;
 } g_wav;
 
 void sound(void*, const float* samples, std::uint32_t frames, std::uint32_t channels, std::uint32_t rate) {
     g_wav.add(samples, frames, channels, rate);
+}
+
+// The host's process end, a start-again's too: the dump complete.
+void process_ending(void*, std::uint32_t) {
+    g_wav.end();
 }
 
 bool g_mods_changed = false;
@@ -670,6 +774,14 @@ std::uint32_t mods_changed(void*) {
 }
 
 NebulaHostExtension g_extension{};
+
+// The harness's end: the sound file closed, then the run ends as closing the window ends it.
+void harness_quit() {
+    g_wav.end();
+    if (HOST_HAS(quit)) {
+        g_host->quit(g_host->host);
+    }
+}
 
 }  // namespace
 
@@ -689,7 +801,7 @@ NEBULA_EXTENSION_EXPORT void nebula_test_scene_frame(std::uint64_t scene_frames,
 
 // The tour's end: the run ends as closing the window ends it.
 NEBULA_EXTENSION_EXPORT void nebula_test_done() {
-    g_wav.finish();
+    g_wav.end();
     if (HOST_HAS(quit)) {
         g_host->quit(g_host->host);
     }
@@ -700,33 +812,54 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
         return nullptr;
     }
     g_host = host;
-#if defined(_WIN32)
-    // Before anything is read or written: a test run keeps to its work folder, or the host stops.
+#if !defined(__ANDROID__)
+    // Before anything is read or written: a test run keeps to its work folder, or the host stops. (An Android app's
+    // data is its own private folder, which no player's folder can be.)
     if (const char* const refusal = guard()) {
         log(std::string("test extension: ") + refusal);
         return nullptr;
     }
 #endif
-    read_script();
-    read_menus();
-    read_pictures();
+    // A harness run (LUMA_HARNESS_PLAN): the plan drives the controls, menu keys and pictures; the GALAXY_* scripts
+    // below are not read.
+    const std::optional<std::string> plan = env("LUMA_HARNESS_PLAN");
+    const bool in_harness = plan.has_value();
+    if (in_harness) {
+        harness::start(host, *plan, log, harness_quit);
+    } else {
+        read_script();
+        read_menus();
+        read_pictures();
+    }
     if (const std::optional<std::string> wav = env("GALAXY_AUDIO_WAV_DUMP")) {
-        g_wav.start(*wav, static_cast<std::uint32_t>(std::clamp<std::uint64_t>(env_u64("GALAXY_AUDIO_WAV_DUMP_SECONDS", 15u), 1u, 3600u)));
+        g_wav.start(*wav, static_cast<std::uint32_t>(std::clamp<std::uint64_t>(env_u64("GALAXY_AUDIO_WAV_DUMP_SECONDS", 15u), 1u, 3600u)),
+                    host->size >= offsetof(NebulaHostForExtension, started_again) + sizeof(host->started_again) &&
+                        host->started_again != 0u);
     }
     g_mods_changed = env("GALAXY_TEST_MODS_CHANGED").has_value();
     NebulaHostExtension& e = g_extension;
     e.version = NEBULA_HOST_EXTENSION_VERSION;
     e.size = sizeof(e);
-    e.flags = (env_flag("GALAXY_TEST_DETERMINISTIC") ? NEBULA_EXT_FIXED_STEPS : 0u) |
+    e.flags = (in_harness || env_flag("GALAXY_TEST_DETERMINISTIC") ? NEBULA_EXT_FIXED_STEPS : 0u) |
               (env_flag("GALAXY_AUDIO_WAV_DUMP_ONLY") ? NEBULA_EXT_NO_SOUND_DEVICE : 0u) |
-              (env("GALAXY_TEST_MODS_SCREEN").has_value() ? NEBULA_EXT_MODS_SCREEN : 0u);
+              (env("GALAXY_TEST_MODS_SCREEN").has_value() ? NEBULA_EXT_MODS_SCREEN : 0u) |
+              (in_harness && harness::as_pad() ? NEBULA_EXT_CONTROLS_PAD : 0u);
     e.controls = controls;
     e.frame = frame;
     e.picture_path = picture_path;
     e.sound = g_wav.on() ? sound : nullptr;
     e.mods_changed = mods_changed;
+    e.ending = process_ending;
     e.vram_budget_mb = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_VRAM_BUDGET_MB", 0u));
     e.disc_read_delay_us = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_DISC_DELAY_US", 0u));
+    if (in_harness) {
+        e.log_line = [](void*, const char* tag, const char* text) { harness::log_line(tag, text); };
+        e.service = [](void*, const char* name, std::uint32_t major, std::uint32_t minor) { return harness::service(name, major, minor); };
+        // The registry's test services (services/registry.md 14): only in a harness run.
+        e.luma_providers = test_services::providers(&e.luma_provider_count);
+        e.motor = [](void*, std::uint8_t strength) { harness::motor(strength); };
+        e.holds_menus = [](void*) -> std::uint32_t { return harness::holds_menus() ? 1u : 0u; };
+    }
     log("test extension attached");
     return &e;
 }

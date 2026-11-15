@@ -10,14 +10,13 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 
 namespace {
-    NEBULA_TUNABLE(s32, sMarioPoseBlendTime, 5);
-    NEBULA_TUNABLE(s32, sCaughtLandStartTime, 20);
-    NEBULA_TUNABLE(f32, sCaughtJumpPower, 20.0f);
-    NEBULA_TUNABLE(f32, sCaughtGravityAccel, 1.0f);
-    NEBULA_TUNABLE(f32, sCaughtAirFreq, 0.99f);
+    const s32 sMarioPoseBlendTime = 5;
+    const s32 sCaughtLandStartTime = 20;
+    const f32 sCaughtJumpPower = 20.0f;
+    const f32 sCaughtGravityAccel = 1.0f;
+    const f32 sCaughtAirFreq = 0.99f;
 };  // namespace
 
 namespace NrvRabbitStateCaught {

@@ -9,16 +9,10 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.95f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 1.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 0.60f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 0.8f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sStepForMelt, 20);
+    const s32 sStepForMelt = 20;
 };  // namespace
 
 namespace NrvSnowMan {
@@ -49,10 +43,10 @@ void SnowMan::init(const TableIter& rrIter) {
     MR::validateCollisionParts(mHeadCollisionParts);
     MR::validateCollisionParts(mBodyCollisionParts);
     mAnimScaleParam = new AnimScaleParam();
-    mAnimScaleParam->mScaleMin = cNum_init_f1;
-    mAnimScaleParam->mScaleMax = cNum_init_f2;
-    mAnimScaleParam->mHitReactionSpring = cNum_init_f3;
-    mAnimScaleParam->mHitReactionDamping = cNum_init_f4;
+    mAnimScaleParam->mScaleMin = 0.95f;
+    mAnimScaleParam->mScaleMax = 1.05f;
+    mAnimScaleParam->mHitReactionSpring = 0.60f;
+    mAnimScaleParam->mHitReactionDamping = 0.8f;
     mAnimScaleCtrl = new AnimScaleController(mAnimScaleParam);
     initEffectKeeper(0, nullptr);
     initSound(4, false);

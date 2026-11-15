@@ -9,20 +9,7 @@
 #include "Game/NPC/TalkMessageFunc.hpp"
 #include "Game/NPC/TurnJointCtrl.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 70.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 160.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 5.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 0.6f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f8, "init.f8", 0.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f9, "init.f9", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f10, "init.f10", 1500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_canUpdateStarePos_f1, "canUpdateStarePos.f1", 0.95f);
 
 namespace {
     static const s32 sWaitActionInterval = NebulaFrameClock::stepsOfSeconds(5);
@@ -53,8 +40,8 @@ void Rosetta::init(const TableIter& rIter) {
     NPCActor::initialize(rIter, caps);
 
     initHitSensor(2);
-    MR::addHitSensorNpc(this, "Head", 8, cNum_init_f1, Vec3f(0.0f, cNum_init_f2, 0.0f));
-    MR::addHitSensorNpc(this, "Body", 8, cNum_init_f3, Vec3f(0.0f, cNum_init_f4, 0.0f));
+    MR::addHitSensorNpc(this, "Head", 8, 70.0f, Vec3f(0.0f, 160.0f, 0.0f));
+    MR::addHitSensorNpc(this, "Body", 8, 80.0f, Vec3f(0.0f, 50.0f, 0.0f));
 
     if (mMsgCtrl != nullptr) {
         MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &Rosetta::branchFunc));
@@ -71,9 +58,9 @@ void Rosetta::init(const TableIter& rIter) {
     AstroDemoFunction::tryRegisterSimpleCastIfAstroGalaxy(this);
 
     mTurnJointCtrl = new TurnJointCtrl(this);
-    mTurnJointCtrl->init(cNum_init_f5, 0.0f, cNum_init_f6);
-    mTurnJointCtrl->addFace("Head", cNum_init_f7, TurnJointCtrl::Z, TurnJointCtrl::Y, TurnJointCtrl::X);
-    mTurnJointCtrl->addWaist("Spine2", cNum_init_f8, TurnJointCtrl::Z, TurnJointCtrl::X, TurnJointCtrl::Y);
+    mTurnJointCtrl->init(40.0f, 0.0f, 5.0f);
+    mTurnJointCtrl->addFace("Head", 0.6f, TurnJointCtrl::Z, TurnJointCtrl::Y, TurnJointCtrl::X);
+    mTurnJointCtrl->addWaist("Spine2", 0.4f, TurnJointCtrl::Z, TurnJointCtrl::X, TurnJointCtrl::Y);
     makeActorAppeared();
 
     if (MR::isDemoCast(this, "チコガイドデモ")) {
@@ -93,13 +80,13 @@ void Rosetta::init(const TableIter& rIter) {
     MR::calcAnimDirect(this);
 
     if (mMsgCtrl != nullptr) {
-        MR::setDistanceToTalk(mMsgCtrl, cNum_init_f9);
+        MR::setDistanceToTalk(mMsgCtrl, 200.0f);
     }
 
     MR::useStageSwitchWriteB(this, rIter);
     mParam.setMoveTalkNoTurnAction("WaitA", "TalkA");
     setDefaults();
-    mSwingReactDist = cNum_init_f10;
+    mSwingReactDist = 1500.0f;
 }
 
 bool Rosetta::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -217,7 +204,7 @@ bool Rosetta::canUpdateStarePos() const {
         return false;
     }
 
-    return !(MR::vecKillElement(dir, yDir, &dir) > cNum_canUpdateStarePos_f1);
+    return !(MR::vecKillElement(dir, yDir, &dir) > 0.95f);
 }
 
 void Rosetta::exeReaction() {

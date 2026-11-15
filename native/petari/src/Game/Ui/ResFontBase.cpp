@@ -191,6 +191,9 @@ namespace Ui {
             pGlyph->texHeight = mFile->sheetHeight;
             pGlyph->cellX = rGlyph.cellX;
             pGlyph->cellY = rGlyph.cellY;
+            pGlyph->scale = 1.0f;
+            pGlyph->lift = 0.0f;
+            pGlyph->fieldRange = mFile->fieldRange;
         }
     };  // namespace detail
 }  // namespace Ui

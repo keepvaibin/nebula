@@ -39,8 +39,13 @@ FetchContent_Declare(spirv_headers
     SOURCE_DIR "${glslang_SOURCE_DIR}/External/spirv-tools/external/spirv-headers")
 FetchContent_MakeAvailable(spirv_headers)
 
-# glslang with its HLSL front end and the SPIR-V optimizer; no tools, tests or install rules.
-set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+# glslang with its HLSL front end and the SPIR-V optimizer; no tests or install rules. Its command-line compiler is
+# built only for `nebula_glslang` (below), on a desktop system.
+if(ANDROID OR IOS)
+    set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+else()
+    set(ENABLE_GLSLANG_BINARIES ON CACHE BOOL "" FORCE)
+endif()
 set(ENABLE_HLSL ON CACHE BOOL "" FORCE)
 set(ENABLE_OPT ON CACHE BOOL "" FORCE)
 set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
@@ -65,6 +70,21 @@ if(MSVC)
             endif()
         endif()
     endforeach()
+endif()
+# `nebula_glslang`: glslang's command-line compiler with its licence, in glslang-tool/. Setup installs them as
+# glslang\ beside the dxc folder, where LumaLink checks a mod's shaders for Vulkan and Metal with the same glslang the
+# game compiles them with (crates/nebula-import cook/surface_shader.rs find_glslang).
+if(TARGET glslang-standalone)
+    # Its file details (version, Khronos as its maker): every program a release holds carries them.
+    if(WIN32)
+        target_sources(glslang-standalone PRIVATE "${CMAKE_CURRENT_LIST_DIR}/glslang_details.rc")
+    endif()
+    add_custom_target(nebula_glslang
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/glslang-tool"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:glslang-standalone>"
+                "${glslang_SOURCE_DIR}/LICENSE.txt" "${CMAKE_BINARY_DIR}/glslang-tool/"
+        DEPENDS glslang-standalone
+        VERBATIM)
 endif()
 # The renderer includes glslang's SPIR-V headers in their installed layout (glslang/SPIRV/...).
 file(GLOB nebula_glslang_spirv_headers "${glslang_SOURCE_DIR}/SPIRV/*.h" "${glslang_SOURCE_DIR}/SPIRV/*.hpp")

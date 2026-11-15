@@ -5,6 +5,7 @@
 #include "Game/System/GameEventFlagStorage.hpp"
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/System/GameEventValueChecker.hpp"
+#include "Game/System/LumaSaveChunk.hpp"
 #include "Game/System/SpinDriverPathStorage.hpp"
 #include "Game/System/StarPieceAlmsStorage.hpp"
 #include "Game/System/StoryProgressTable.hpp"
@@ -19,7 +20,7 @@ namespace {
 
 GameDataHolder::GameDataHolder(const UserFile* pUserFile)
     : mEventFlagChecker(), mEventValueChecker(), mPlayerStatus(), mAllGalaxyStorage(), mSpinDriverPathStorage(), mStarPieceAlmsStorage(),
-      mMapInfo(), mChunkHolder(), mUserFile(pUserFile) {
+      mMapInfo(), mChunkHolder(), mUserFile(pUserFile), mLumaChunk() {
     mAllGalaxyStorage = new GameDataAllGalaxyStorage();
     mEventFlagChecker = new GameEventFlagChecker(this);
     mEventValueChecker = new GameEventValueChecker();
@@ -37,6 +38,9 @@ GameDataHolder::GameDataHolder(const UserFile* pUserFile)
     mChunkHolder->addChunk(mSpinDriverPathStorage);
     mChunkHolder->addChunk(mEventValueChecker);
     mChunkHolder->addChunk(mAllGalaxyStorage);
+    // Last: a file of a build without it reads as before, and its signature is skipped there.
+    mLumaChunk = new LumaSaveChunk(this);
+    mChunkHolder->addChunk(mLumaChunk);
 
     resetAllData();
 
@@ -298,6 +302,7 @@ void GameDataHolder::resetAllData() {
     mPlayerStatus->initializeData();
     mSpinDriverPathStorage->initializeData();
     mStarPieceAlmsStorage->initializeData();
+    mLumaChunk->initializeData();
 }
 
 u32 GameDataHolder::makeFileBinary(u8* pData, u32 capacity) {
@@ -307,5 +312,11 @@ u32 GameDataHolder::makeFileBinary(u8* pData, u32 capacity) {
 bool GameDataHolder::loadFromFileBinary(SaveFileId file, const u8* pData, u32 dataSize) {
     mIsMario = file.mKind == SaveFileId::Kind_Mario;
     mUser = file.mUser;
+    // A file without the chunk (saved before mods had values) must not keep the last file's.
+    mLumaChunk->initializeData();
     return mChunkHolder->loadFromFileBinary(pData, dataSize);
+}
+
+u32 GameDataHolder::getLumaChunkRoom() const {
+    return BinaryDataChunk::cDataOffset + mLumaChunk->getDataSize();
 }

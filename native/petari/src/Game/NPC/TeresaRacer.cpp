@@ -17,40 +17,21 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 220.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 25.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f3, "init.f3", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f4, "init.f4", 500.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f5, "init.f5", 1.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f6, "init.f6", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f7, "init.f7", 3000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f1, "exeMove.f1", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f2, "exeMove.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f3, "exeMove.f3", 0.05f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeMove_f4, "exeMove.f4", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRacer_f1, "updateRacer.f1", 2000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_updateRacer_f2, "updateRacer.f2", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_resetRacer_f1, "resetRacer.f1", 180.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_prepRacer_setRailCoordSpeed_1, "prepRacer.setRailCoordSpeed.1", 0.0f);
-
 namespace {
-    NEBULA_TUNABLE(f32, sSpeed, 20.0f);
-    NEBULA_TUNABLE(f32, sAccele, 0.1f);
-    NEBULA_TUNABLE(f32, sCameraDirScale, 0.4f);
+    const f32 sSpeed = 20.0f;
+    const f32 sAccele = 0.1f;
+    const f32 sCameraDirScale = 0.4f;
     static const s32 sBgmChangeStep = NebulaFrameClock::stepsOfSeconds(8);
-    NEBULA_TUNABLE(s32, sNearBgm_Fadetime, 90);
-    NEBULA_TUNABLE(s32, sFarBgm_Fadetime, 150);
-    NEBULA_TUNABLE(f32, sNearBgmDist, 3000.0f);
-    NEBULA_TUNABLE(f32, sNearGoalDist, 500.0f);
-    NEBULA_TUNABLE(f32, sRasterParamMax, 2500.0f);
-    NEBULA_TUNABLE(s32, sRasterParamX, 300);
-    NEBULA_TUNABLE(s32, sRasterParamTime, 16);
-    NEBULA_TUNABLE(s32, sRasterParamY, 1000);
+    const s32 sNearBgm_Fadetime = 90;
+    const s32 sFarBgm_Fadetime = 150;
+    const f32 sNearBgmDist = 3000.0f;
+    const f32 sNearGoalDist = 500.0f;
+    const f32 sRasterParamMax = 2500.0f;
+    const s32 sRasterParamX = 300;
+    const s32 sRasterParamTime = 16;
+    const s32 sRasterParamY = 1000;
 };  // namespace
 
 namespace NrvTeresaRacer {
@@ -74,10 +55,10 @@ void TeresaRacer::init(const TableIter& rIter) {
     caps.setIndirect();
     caps.mLodCtrl = false;
     caps.mUseShadow = true;
-    caps.mSensorSize = cNum_init_f1;
+    caps.mSensorSize = 220.0f;
     caps.mSensorOffset.x = 0.0f;
-    caps.mSensorOffset.y = cNum_init_f2;
-    caps.mSensorOffset.z = cNum_init_f3;
+    caps.mSensorOffset.y = 25.0f;
+    caps.mSensorOffset.z = 40.0f;
     caps.mWaitNerve = GET_NERVE(TeresaRacer, TeresaRacerNrvWait);
 
     initialize(rIter, caps);
@@ -94,18 +75,18 @@ void TeresaRacer::init(const TableIter& rIter) {
         MR::registerAnimeFunc(getMsgCtrl(), TalkMessageFunc(this, &TeresaRacer::animeFunc));
         MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &TeresaRacer::eventFunc));
 
-        MR::setDistanceToTalk(getMsgCtrl(), cNum_init_f4);
+        MR::setDistanceToTalk(getMsgCtrl(), 500.0f);
         RaceManagerFunction::entryRacerOthers(this);
         MR::initMultiActorCamera(this, rIter, &mCameraInfo, "会話");  // conversation
 
         mParam.setMoveAction("WaitOpen", "WaitOpen");
         mParam.setTalkAction("WaitOpenTalk", "WaitOpenTalk");
         setTalkAction("Chase");
-        mParam.mTurnSpeed = cNum_init_f5;
+        mParam.mTurnSpeed = 1.5f;
         mRailSpeed = ::sSpeed;
         mRailAccel = ::sAccele;
-        mRailPoseRate = cNum_init_f6;
-        mParam.mNearDistance = cNum_init_f7;
+        mRailPoseRate = 0.05f;
+        mParam.mNearDistance = 3000.0f;
 
         mTakeOutStar = new TakeOutStar(this, "TakeOutStarTeresaRacer", "TakeOutStarTeresaRacer", GET_NERVE(TeresaRacer, TeresaRacerNrvTakeOutStar));
     }
@@ -217,12 +198,12 @@ void TeresaRacer::exeMove() {
         MR::adjustmentRailCoordSpeed(this, mRailSpeed, mRailAccel);
         MR::moveRailRider(this);
         if (mRacerId == -1) {
-            MR::decidePose(this, up, MR::getRailDirection(this), MR::getRailPos(this), 1.0f, cNum_exeMove_f1, cNum_exeMove_f2);
+            MR::decidePose(this, up, MR::getRailDirection(this), MR::getRailPos(this), 1.0f, 0.05f, 0.1f);
         } else {
             Vec3f dir = MR::getRailDirection(this) + -MR::getCamZdir() * ::sCameraDirScale;
 
             if (!MR::normalizeOrZero(&dir)) {
-                MR::decidePose(this, up, dir, MR::getRailPos(this), 1.0f, cNum_exeMove_f3, cNum_exeMove_f4);
+                MR::decidePose(this, up, dir, MR::getRailPos(this), 1.0f, 0.05f, 0.1f);
             }
         }
     }
@@ -268,7 +249,7 @@ void TeresaRacer::initRacer() {
 void TeresaRacer::prepRacer(const RaceManager* /*pRaceManager*/) {
     MR::invalidateClipping(this);
     MR::moveCoordToStartPos(this);
-    MR::setRailCoordSpeed(this, cNum_prepRacer_setRailCoordSpeed_1);
+    MR::setRailCoordSpeed(this, 0.0f);
     MR::followRailPose(this, 1.0f, 1.0f);
     MR::requestMovementOn(this);
     MR::startAction(this, "Chase");
@@ -287,11 +268,11 @@ bool TeresaRacer::updateRacer(const RaceManager* pRaceManager) {
     f32 length = MR::getRailTotalLength(pRaceManager->mPlayerRacer);
     mPrevPosition.set(mCurrPosition);
     mCurrPosition.set(mPosition);
-    if (MR::fabs(mRailCoord - coord) < cNum_updateRacer_f1) {
+    if (MR::fabs(mRailCoord - coord) < 2000.0f) {
         mRailCoord = coord;
     }
 
-    if (MR::fabs(mRailCoord - length) < cNum_updateRacer_f2) {
+    if (MR::fabs(mRailCoord - length) < 100.0f) {
         mIsGoal = pRaceManager->isGoal(this);
         return mIsGoal;
     }
@@ -314,7 +295,7 @@ void TeresaRacer::resetRacer(const RaceManager* pRaceManager) {
         setInitPose();
     }
 
-    turnToPlayer(cNum_resetRacer_f1);
+    turnToPlayer(180.0f);
     setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvPost));
     MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "会話");
     mParam.mTurnWhenNear = true;

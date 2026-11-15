@@ -15,7 +15,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include <cstring>
-#include "Game/Util/Tunable.hpp"
 
 namespace {
     // Glyphs of the picture font (MR::addPictureFontTag's codes).
@@ -108,7 +107,7 @@ namespace {
     };
     const s32 cEntryNum = sizeof(cEntries) / sizeof(cEntries[0]);
 
-    NEBULA_TUNABLE(s32, cBatchMin, 3);  // this many unlocked together show as one pop-up
+    const s32 cBatchMin = 3;  // this many unlocked together show as one pop-up
 
     struct Waiting {
         char16_t* mName;  // in the root arena: it waits across scenes
@@ -133,7 +132,7 @@ namespace {
     u32 sStatWaiting[NebulaStat_Num];
     bool sFileInPlay = false;  // the stage is not the title and file select
     s32 sPlayFrames = 0;
-    NEBULA_TUNABLE(s32, cStatFlushFrames, 60);
+    const s32 cStatFlushFrames = 60;
     s32 sStatFlushFrames = 0;
 
     // The star collected in this galaxy (sent with its get sequence) while the save does not hold it yet: the hub's

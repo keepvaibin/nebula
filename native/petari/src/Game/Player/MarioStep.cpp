@@ -9,21 +9,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <nebula_math.h>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStep_f1, "checkStep.f1", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStep_f2, "checkStep.f2", 0.3926991f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStep_f3, "checkStep.f3", 1.0471976f);
-NEBULA_TUNABLE_NAMED(f32, cNum_checkStep_f4, "checkStep.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startStep_f1, "startStep.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startStep_f2, "startStep.f2", 20.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startStep_f3, "startStep.f3", 50.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startStep_f4, "startStep.f4", 200.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_start_f1, "start.f1", 16.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f1, "update.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f2, "update.f2", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f3, "update.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_update_f4, "update.f4", 0.5f);
 
 void Mario::checkStep() {
     if (mMovementStates.jumping) {
@@ -88,12 +73,12 @@ void Mario::checkStep() {
         Vec3f horizontal;
         MR::vecKillElement(mStepHitPos - mPosition, -*getGravityVec(), &horizontal);
 
-        if (horizontal.length() < cNum_checkStep_f1 && MR::abs(frontDot) < cNum_checkStep_f2) {
+        if (horizontal.length() < 20.0f && MR::abs(frontDot) < 0.3926991f) {
             f32 stepHeight = (mStepHitPos - mPosition).dot(-*getGravityVec());
             if (stepHeight < mActor->getConst().getTable()->mWalkStepHeight) {
                 startStep(mStepHitPos);
             }
-        } else if (MR::abs(frontDot) < cNum_checkStep_f3) {
+        } else if (MR::abs(frontDot) < 1.0471976f) {
             Mtx rotMtx;
             NebulaMtxRotAxisRad(rotMtx, &mSideVec, frontDot);
             NebulaMtxMultVec(rotMtx, &mVelocity, &mVelocity);
@@ -111,7 +96,7 @@ void Mario::checkStep() {
     }
 
     const Vec3f* worldPadDir = &getWorldPadDir();
-    if (!(worldPadDir->dot(*mFrontWallTriangle->getNormal(0)) < -cNum_checkStep_f4)) {
+    if (!(worldPadDir->dot(*mFrontWallTriangle->getNormal(0)) < -0.5f)) {
         return;
     }
 
@@ -126,19 +111,19 @@ void Mario::startStep(const Vec3f& rVec) {
         return;
     }
 
-    Vec3f checkPos = rVec - *getGravityVec() * cNum_startStep_f1;
+    Vec3f checkPos = rVec - *getGravityVec() * 80.0f;
     HitInfo hitInfo;
 
     if (MR::checkStrikePointToMap(checkPos, &hitInfo)) {
         return;
     }
 
-    const bool hitNear = Collision::checkStrikeBallToMap(checkPos, cNum_startStep_f2, nullptr, nullptr);
+    const bool hitNear = Collision::checkStrikeBallToMap(checkPos, 20.0f, nullptr, nullptr);
     if (hitNear) {
         return;
     }
 
-    const bool hitFar = Collision::checkStrikeBallToMap(checkPos, cNum_startStep_f3, nullptr, nullptr);
+    const bool hitFar = Collision::checkStrikeBallToMap(checkPos, 50.0f, nullptr, nullptr);
     if (hitFar) {
         return;
     }
@@ -148,7 +133,7 @@ void Mario::startStep(const Vec3f& rVec) {
     const f32 ceilDist = calcDistToCeil(false);
     mPosition = oldPos;
 
-    if (ceilDist < cNum_startStep_f4) {
+    if (ceilDist < 200.0f) {
         return;
     }
 
@@ -188,7 +173,7 @@ bool MarioStep::start() {
     mStartSpeed = getPlayer()->mWalkSpeed;
     MR::clamp(mStartSpeed, 0.0f, 1.0f);
 
-    s32 v2 = 20 - static_cast< s32 >(cNum_start_f1 * mStartSpeed);
+    s32 v2 = 20 - static_cast< s32 >(16.0f * mStartSpeed);
 
     if (v2 < 4) {
         v2 = 4;
@@ -216,15 +201,15 @@ bool MarioStep::update() {
     clearVelocity();
 
     f32 walkSpeed = getPlayer()->mWalkSpeed;
-    if (walkSpeed < cNum_update_f1) {
-        walkSpeed = cNum_update_f2;
+    if (walkSpeed < 0.1f) {
+        walkSpeed = 0.1f;
     }
 
     getPlayer()->mWalkSpeed = walkSpeed;
     getPlayer()->updateWalkSpeed();
 
-    if (walkSpeed < cNum_update_f3) {
-        walkSpeed = cNum_update_f4;
+    if (walkSpeed < 0.5f) {
+        walkSpeed = 0.5f;
     }
 
     f32 framesLeft = mBlendFrames - walkSpeed;

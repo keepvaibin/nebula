@@ -5,7 +5,7 @@
 // and feature reports that switch off its keyboard/mouse emulation, start the
 // sensors and drive the haptic motors. Layouts follow SDL's zlib-licensed
 // SDL_hidapi_steam_triton.c with Valve's controller_structs.h, cross-checked
-// against the Linux hid-steam driver's tables (see docs/KEYBOARD_CONTROLS.md);
+// against the Linux hid-steam driver's tables (see docs/using-nebula/keyboard-and-controller-controls.md);
 // this file is an independent implementation.
 
 #include "galaxy/switch_controller.h"

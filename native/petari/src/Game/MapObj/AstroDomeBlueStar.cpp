@@ -18,22 +18,14 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 200.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWait_setBckRate_1, "exeWait.setBckRate.1", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePointing_setBckRate_1, "exePointing.setBckRate.1", 1.0f);
-
 namespace {
-    NEBULA_TUNABLE_RECORD(Vec, cZoomInOffset, {400.0f, 2550.0f, -7600.0f});
-    NEBULA_TUNABLE(s32, cTryStartBindFrame, 30);
-    NEBULA_TUNABLE(s32, cBindTractionFrame, 90);
-    NEBULA_TUNABLE(s32, cBubbleGrowFrame, 30);
-    NEBULA_TUNABLE(f32, cBubbleMaxRadius, 150.0f);
+    const Vec cZoomInOffset = {400.0f, 2550.0f, -7600.0f};
+    const s32 cTryStartBindFrame = 30;
+    const s32 cBindTractionFrame = 90;
+    const s32 cBubbleGrowFrame = 30;
+    const f32 cBubbleMaxRadius = 150.0f;
 };  // namespace
 
 AstroDomeBlueStar::CaptureActor::CaptureActor() : LiveActor("キャプチャ用アクター") {
@@ -120,13 +112,13 @@ void AstroDomeBlueStar::init(const TableIter& rIter) {
     initHitSensor(1);
 
     Vec3f& vec = mCaptureActor->mPosition;
-    MR::addHitSensorPosBinder(this, "bind", 16, cNum_init_f1, &vec, Vec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorPosBinder(this, "bind", 16, 80.0f, &vec, Vec3f(0.0f, 0.0f, 0.0f));
     getSensor("bind")->invalidate();
 
     initEffectKeeper(0, nullptr);
     MR::initActorCamera(this, rIter, &mCameraInfo);
     initSound(6, false);
-    MR::initStarPointerTarget(this, cNum_init_f2);
+    MR::initStarPointerTarget(this, 200.0f);
 
     mCaptureRibbon = new GCaptureRibbon("Gキャプチャーリボン");
     mCaptureRibbon->initWithoutIter();
@@ -291,7 +283,7 @@ void AstroDomeBlueStar::exeWait() {
         MR::showModel(this);
 
         MR::tryStartBck(this, "Wait");
-        MR::setBckRate(this, cNum_exeWait_setBckRate_1);
+        MR::setBckRate(this, 0.5f);
 
         MR::deleteEffect(this, "Target");
         MR::deleteEffect(this, "Active");
@@ -323,7 +315,7 @@ void AstroDomeBlueStar::exeWait() {
 
 void AstroDomeBlueStar::exePointing() {
     if (MR::isFirstStep(this)) {
-        MR::setBckRate(this, cNum_exePointing_setBckRate_1);
+        MR::setBckRate(this, 1.0f);
 
         MR::emitEffect(this, "Target");
 

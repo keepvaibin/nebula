@@ -1,4 +1,4 @@
-//! The data the game keeps in its executable rather than in disc files (B-05), cooked into files of the cooked disc's
+//! The data the game keeps in its executable rather than in disc files, cooked into files of the cooked disc's
 //! NebulaData folder: the story-progress and galaxy-information tables (BCSV) and the error-message archive as main.dol
 //! holds them (the archive cooked like any other). The game reads them as files (Game/System/NebulaDiscTables.cpp).
 

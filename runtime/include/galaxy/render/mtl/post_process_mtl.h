@@ -15,6 +15,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <future>
 #include <memory>
 #include <unordered_map>
@@ -46,10 +47,15 @@ public:
     // parts around the renderer beginning its scene pass again: prepare_scene_aa records the passes before (a copy of
     // the scene, SMAA's edges and weights) and returns the pass to finish with; finish_scene_aa draws the result into
     // the open scene pass `encoder` (an id<MTLRenderCommandEncoder> over `samples` samples a pixel), RGB only (the
-    // alpha the game left there stays).
+    // alpha the game left there stays). With `trade` (a single-sample scene) a pass that runs reads the scene's own
+    // image instead of a copy (scene_traded), and finish_scene_aa writes every pixel and channel of the image that took
+    // its place (the alpha the scene's): the scene pass may open without loading it.
+    using SceneTrade = std::function<std::shared_ptr<Texture>(std::shared_ptr<Texture> spare)>;
     AaRun prepare_scene_aa(Object commands, const Texture& color, unsigned width, unsigned height, unsigned picture_width,
-                           unsigned picture_height, unsigned display_width, unsigned display_height);
+                           unsigned picture_height, unsigned display_width, unsigned display_height,
+                           const SceneTrade& trade = {});
     void finish_scene_aa(Object encoder, AaRun pass, unsigned width, unsigned height, unsigned samples);
+    [[nodiscard]] bool scene_traded() const noexcept { return scene_traded_; }
 
     // The scaling chain from `source` to a `target_width` x `target_height` picture: prepare records the passes
     // before the target's own pass (into the window-sized intermediate); finish draws the last one in the target's
@@ -134,6 +140,10 @@ private:
     Target stencil_;  // shared by edges and weights
     Target antialiased_;
     Target scaled_;
+    // The scene's image traded out (prepare_scene_aa with a trade): the passes' source, the next trade's spare.
+    std::shared_ptr<Texture> traded_;
+    std::uint64_t traded_used_ = 0;  // clock_ at the last trade
+    bool scene_traded_ = false;  // this frame's passes read traded_
     // MetalFX's spatial scaler (settings upscaler kMetalFx) and the picture it writes; the sizes it could not be made
     // for are not tried again each frame.
     std::unique_ptr<SpatialScaler> spatial_;

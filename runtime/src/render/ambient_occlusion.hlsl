@@ -13,8 +13,11 @@
 // SsaoCS: the same by Scalable Ambient Obscurance (McGuire, Mara and Luebke, HPG 2012), instead of AoCS: a spiral of
 // samples, each darkening by how far it stands above the surface's plane, falling off to nothing at the radius.
 // DenoiseCS: the depth-weighted tent of t1 into u0.
-// UpsampleCS: per scene target pixel the denoised occlusion (depth-weighted bilinear) as the colour multiplier, into u0.
-// ApplyVS/ApplyPS: that multiplier in a multiplicative blend; it reads no depth, so it can draw in the scene's own pass.
+// UpsampleCS (Metal), UpsamplePS (Vulkan): per scene target pixel the denoised occlusion (depth-weighted bilinear) as the
+// colour multiplier, into an 8-bit image (Vulkan and Metal at more than one scene target pixel per occlusion pixel).
+// ApplyVS/ApplyPS: that multiplier in a multiplicative blend; it reads no depth, so it can draw in the scene's own pass
+// (Direct3D 12 and 11, and Vulkan and Metal at one occlusion pixel per scene target pixel: it makes the multiplier itself,
+// below).
 
 cbuffer AoConstants : register(b0) {
     float4 g_ray;         // an scene target pixel's eye ray at distance 1: x = px * x + y, y = py * z + w (z = -1)
@@ -23,6 +26,26 @@ cbuffer AoConstants : register(b0) {
     float4 g_params;      // radius (eye units), visibility exponent, display exponent, largest radius in occlusion pixels
     uint4 g_size;         // occlusion target width, height; scene target pixels per occlusion pixel; 1: show the occlusion
 };
+
+// The occlusion passes writing a two-channel (R16G16 float) target where a storage image of that format is allowed
+// (Vulkan: shaderStorageImageExtendedFormats; the others always). The denoise writing one channel (R16 float): at one
+// occlusion pixel per scene target pixel only the multiply reads its output, and only the occlusion.
+#if defined(AO_PASS_occlusion_rg_cs) || defined(AO_PASS_ssao_rg_cs) || defined(AO_PASS_denoise_rg_cs)
+#define AO_OCCLUSION_RG16F 1
+#endif
+#ifdef AO_PASS_denoise_r_cs
+#define AO_OCCLUSION_R16F 1
+#define AO_PASS_denoise_cs 1
+#endif
+#ifdef AO_PASS_occlusion_rg_cs
+#define AO_PASS_occlusion_cs 1
+#endif
+#ifdef AO_PASS_ssao_rg_cs
+#define AO_PASS_ssao_cs 1
+#endif
+#ifdef AO_PASS_denoise_rg_cs
+#define AO_PASS_denoise_cs 1
+#endif
 
 #if defined(AO_PASS_distance_cs) || defined(AO_PASS_occlusion_cs) || defined(AO_PASS_ssao_cs) || defined(AO_PASS_denoise_cs) || defined(AO_PASS_upsample_cs)
 #ifndef AO_COMPUTE
@@ -43,6 +66,10 @@ Texture2D<float> t_distance : register(t2);    // DepthCS's eye distance
 AO_FORMAT(r32f) RWTexture2D<float> u_distance : register(u0);
 #elif defined(AO_PASS_upsample_cs)
 AO_FORMAT(rgba8) RWTexture2D<float4> u_scale : register(u0);
+#elif defined(AO_COMPUTE) && defined(AO_OCCLUSION_RG16F)
+AO_FORMAT(rg16f) RWTexture2D<float4> u_occlusion : register(u0);
+#elif defined(AO_COMPUTE) && defined(AO_OCCLUSION_R16F)
+AO_FORMAT(r16f) RWTexture2D<float4> u_occlusion : register(u0);
 #elif defined(AO_COMPUTE)
 AO_FORMAT(rgba16f) RWTexture2D<float4> u_occlusion : register(u0);
 #endif
@@ -430,53 +457,82 @@ float ao_scale(float visibility) {
     return scale;
 }
 
+// The colour multiplier at scene target pixel q: the denoised occlusion there (depth-weighted bilinear between occlusion
+// pixels); 1 outside the viewport (nothing outside it is read) and on the far plane.
+float ao_multiplier(int2 q) {
+    float scale = 1.0f;
+    if (g_size.z <= 1u) {
+        // One occlusion pixel per scene target pixel, the same size: the denoised occlusion is already 1 outside the
+        // viewport and on the far plane (DepthCS wrote no distance there, the occlusion passes 1, the denoise kept it),
+        // so the depth is not read.
+        scale = ao_scale(t_occlusion.Load(int3(q, 0)).x);
+    } else {
+        const float2 pixel = float2(q) + 0.5f;
+        float depth = g_depth.z;  // the far plane: nothing outside the viewport is read
+        if (inside(pixel)) {
+            depth = t_depth.Load(int3(q, 0));
+        }
+        if (!far_plane(depth)) {
+            const float z = -depth_to_eye_z(depth);
+            // The four nearest occlusion pixels, bilinear and weighted by their distance's agreement with this pixel's.
+            const float2 f = (pixel - float(g_size.z / 2u) - 0.5f) / float(g_size.z);
+            const int2 base = int2(floor(f));
+            const float2 w = f - float2(base);
+            const float tolerance = 1.0f / (0.03f * z + 1.0f);
+            float sum = 0.0f;
+            float weight = 0.0f;
+            [unroll]
+            for (int k = 0; k < 4; ++k) {
+                const int2 o = int2(k & 1, k >> 1);
+                const float2 s = t_occlusion.Load(int3(clamp(base + o, int2(0, 0), int2(g_size.xy) - 1), 0)).xy;
+                const float bilinear = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
+                const float agree = s.y > 0.0f ? saturate(1.0f - abs(s.y - z) * tolerance) : 0.0f;
+                sum += s.x * bilinear * agree;
+                weight += bilinear * agree;
+            }
+            scale = ao_scale(weight > 1e-4f ? sum / weight : 1.0f);
+        }
+    }
+    return scale;
+}
+
 #ifdef AO_PASS_upsample_cs
 [numthreads(8, 8, 1)]
 void UpsampleCS(uint3 id : SV_DispatchThreadID) {
-    const int2 q = int2(id.xy);
-    const float2 pixel = float2(q) + 0.5f;
-    // The viewport lies inside the target: nothing outside it is read.
-    if (!inside(pixel)) {
-        u_scale[id.xy] = 1.0f;
+    // Whole groups cover the target: the threads past its edge read and write nothing.
+    uint width, height;
+    u_scale.GetDimensions(width, height);
+    if (id.x >= width || id.y >= height) {
         return;
     }
-    const float depth = t_depth.Load(int3(q, 0));
-    if (far_plane(depth)) {
-        u_scale[id.xy] = 1.0f;
-        return;
-    }
-    const float z = -depth_to_eye_z(depth);
-    float visibility;
-    if (g_size.z <= 1u) {
-        visibility = t_occlusion.Load(int3(q, 0)).x;
-    } else {
-        // The four nearest occlusion pixels, bilinear and weighted by their distance's agreement with this pixel's.
-        const float2 f = (pixel - float(g_size.z / 2u) - 0.5f) / float(g_size.z);
-        const int2 base = int2(floor(f));
-        const float2 w = f - float2(base);
-        const float tolerance = 1.0f / (0.03f * z + 1.0f);
-        float sum = 0.0f;
-        float weight = 0.0f;
-        [unroll]
-        for (int k = 0; k < 4; ++k) {
-            const int2 o = int2(k & 1, k >> 1);
-            const float2 s = t_occlusion.Load(int3(clamp(base + o, int2(0, 0), int2(g_size.xy) - 1), 0)).xy;
-            const float bilinear = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
-            const float agree = s.y > 0.0f ? saturate(1.0f - abs(s.y - z) * tolerance) : 0.0f;
-            sum += s.x * bilinear * agree;
-            weight += bilinear * agree;
-        }
-        visibility = weight > 1e-4f ? sum / weight : 1.0f;
-    }
-    u_scale[id.xy] = ao_scale(visibility);
+    u_scale[id.xy] = ao_multiplier(int2(id.xy));
 }
 #endif
 
 // A pixel the occlusion would change by less than half a level (8-bit) keeps its colour without a write.
-float4 ApplyPS(ApplyOut i) : SV_Target {
-    const float scale = t_occlusion.Load(int3(int2(i.position.xy), 0)).x;
+float4 multiply(float scale) {
     if (scale > 1.0f - 0.5f / 255.0f) {
         discard;
     }
     return float4(scale, scale, scale, 1.0f);
 }
+
+#ifdef AO_PASS_apply_ps
+// Direct3D 12 and 11 (their fxc build defines AO_PASS_apply_ps): the multiply reads the depth and the denoised occlusion
+// itself, as no pass holds the depth as an attachment there, so no full-size multiplier image is written and read.
+// Vulkan and Metal (AoApplyFusedPs) at one occlusion pixel per scene target pixel, where ao_multiplier reads no depth: the
+// same, inside the scene pass. Its value is the 8-bit level that image held (round to nearest, as the UNORM store converts).
+float4 ApplyPS(ApplyOut i) : SV_Target {
+    return multiply(round(ao_multiplier(int2(i.position.xy)) * 255.0f) / 255.0f);
+}
+#else
+float4 ApplyPS(ApplyOut i) : SV_Target {
+    return multiply(t_occlusion.Load(int3(int2(i.position.xy), 0)).x);
+}
+
+// Vulkan: the multiplier image drawn as a colour target (8-bit, one channel; a tile GPU stores it compressed), in a
+// pass of its own before the scene's resumes.
+float4 UpsamplePS(ApplyOut i) : SV_Target {
+    return ao_multiplier(int2(i.position.xy));
+}
+#endif

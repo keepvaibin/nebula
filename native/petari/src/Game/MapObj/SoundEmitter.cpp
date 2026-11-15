@@ -11,11 +11,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Sound/Sound.hpp"
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 20000.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exePlaySound_f1, "exePlaySound.f1", 1000.0f);
 
 namespace {
     const u32 sSeTable[33] = {0x60000, 0x6000e, 0x6000f, 0x60010, 0x60011, 0x60014, 0x501a6, 0x501a7, 0x60015, 0x60016, 0x60017,
@@ -47,7 +43,7 @@ void SoundEmitter::init(const TableIter& rIter) {
     }
 
     initSound(8, false);
-    MR::setClippingTypeSphere(this, cNum_init_f1);
+    MR::setClippingTypeSphere(this, 20000.0f);
     MR::useStageSwitchReadAppear(this, rIter);
     MR::useStageSwitchReadA(this, rIter);
 
@@ -93,7 +89,7 @@ void SoundEmitter::exePlaySound() {
     case 9:
     case 0xA:
     case 0xB: {
-        if (MR::calcDistanceToPlayer(this) < cNum_exePlaySound_f1) {
+        if (MR::calcDistanceToPlayer(this) < 1000.0f) {
             return;
         }
     } break;

@@ -18,43 +18,20 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_tryAwake_f1, "tryAwake.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f1, "exeWalk.f1", 1.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeWalk_f2, "exeWalk.f2", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f1, "exeTurn.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f2, "exeTurn.f2", 40.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeTurn_f3, "exeTurn.f3", 80.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeFindCrazy_f1, "exeFindCrazy.f1", 3.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCrazy_f1, "exeCrazy.f1", 45.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCrazy_f2, "exeCrazy.f2", 1.2f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCrazy_f3, "exeCrazy.f3", 1.4f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCrazy_f4, "exeCrazy.f4", 1.9f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCrazy_f5, "exeCrazy.f5", 1600.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeCrazy_f6, "exeCrazy.f6", 45.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeChase_f1, "exeChase.f1", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeChase_f2, "exeChase.f2", 2.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeChase_f3, "exeChase.f3", 1.8f);
-NEBULA_TUNABLE_NAMED(f32, cNum_exeChase_f4, "exeChase.f4", 60.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_emitFireMouth_f1, "emitFireMouth.f1", 50.0f);
-
-// The numbers this file's functions give the game's motion and animation calls, as tunables: "<file>.<function>.<call>.<k>".
-NEBULA_TUNABLE_NAMED(f32, cNum_emitFireMouth_addVelocityJump_1, "emitFireMouth.addVelocityJump.1", 30.0f);
 
 namespace {
     const Vec3f sShotMouthFireOffset = Vec3f(150.0f, 150.0f, 0.0f);
 
     // While moving the tail bends up to sMovingBendRate over sBendEaseSteps.
     const s32 sBendEaseSteps = NebulaFrameClock::stepsOfMilliseconds(500);
-    NEBULA_TUNABLE(f32, sMovingBendRate, 1.5f);
+    const f32 sMovingBendRate = 1.5f;
     // The mouth fires on these frames of the chase animation.
-    NEBULA_TUNABLE(f32, sMouthFireFrame0, 32.0f);
-    NEBULA_TUNABLE(f32, sMouthFireFrame1, 132.0f);
+    const f32 sMouthFireFrame0 = 32.0f;
+    const f32 sMouthFireFrame1 = 132.0f;
     // Tail fire leaves a trail point every this far.
-    NEBULA_TUNABLE(f32, sTailFireSpacing, 120.0f);
-    NEBULA_TUNABLE(f32, sSightDistance, 1050.0f);
-    NEBULA_TUNABLE(f32, sChaseSightDistance, 2000.0f);
+    const f32 sTailFireSpacing = 120.0f;
+    const f32 sSightDistance = 1050.0f;
+    const f32 sChaseSightDistance = 2000.0f;
 };  // namespace
 
 namespace NrvDinoPackunBattleVs2Lv1 {
@@ -203,7 +180,7 @@ bool DinoPackunBattleVs2Lv1::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSen
 }
 
 bool DinoPackunBattleVs2Lv1::tryAwake() {
-    if (MR::isInSightConePlayer(getHost(), getHost()->mFront, sSightDistance, cNum_tryAwake_f1)) {
+    if (MR::isInSightConePlayer(getHost(), getHost()->mFront, sSightDistance, 60.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
         return true;
     }
@@ -231,7 +208,7 @@ void DinoPackunBattleVs2Lv1::exeWalk() {
 
     s32 weavePeriod = mIsAngry ? 75 : 100;
     s32 coolSteps = mIsAngry ? 15 : 20;
-    f32 turnDegree = mIsAngry ? cNum_exeWalk_f1 : cNum_exeWalk_f2;
+    f32 turnDegree = mIsAngry ? 1.1f : 1.2f;
 
     MR::rotateDirectionGravityDegree(getHost(), &getHost()->mFront,
                                      (turnDegree * ((getNerveStep() / weavePeriod) % 2 == mWalkTurnSide ? -1.0f : 1.0f)));
@@ -256,9 +233,9 @@ void DinoPackunBattleVs2Lv1::exeTurn() {
 
     emitFireTail();
 
-    if (updateTurn(60, cNum_exeTurn_f1)) {
+    if (updateTurn(60, 3.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvWalk));
-    } else if (MR::isInSightFanPlayer(getHost(), getHost()->mFront, sSightDistance, cNum_exeTurn_f2, cNum_exeTurn_f3)) {
+    } else if (MR::isInSightFanPlayer(getHost(), getHost()->mFront, sSightDistance, 40.0f, 80.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
     }
 }
@@ -271,7 +248,7 @@ void DinoPackunBattleVs2Lv1::exeFindCrazy() {
         mStateFire->requestFire();
     }
 
-    MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, cNum_exeFindCrazy_f1);
+    MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, 3.0f);
     MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, 0.0f);
     getHost()->updateNormalVelocity();
     if (MR::isActionEnd(getHost())) {
@@ -302,19 +279,19 @@ void DinoPackunBattleVs2Lv1::exeCrazy() {
 
     updateChaseMouthFire();
 
-    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1)) || MR::isInSightConePlayer(getHost(), getHost()->mFront, sChaseSightDistance, cNum_exeCrazy_f1)) {
-        MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, cNum_exeCrazy_f2);
+    if (MR::isLessStep(this, NebulaFrameClock::stepsOfSeconds(1)) || MR::isInSightConePlayer(getHost(), getHost()->mFront, sChaseSightDistance, 45.0f)) {
+        MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, 1.2f);
     } else {
-        MR::rotateDirectionGravityDegree(getHost(), &getHost()->mFront, (cNum_exeCrazy_f3 * calcWiggleSign(60)));
+        MR::rotateDirectionGravityDegree(getHost(), &getHost()->mFront, (1.4f * calcWiggleSign(60)));
     }
 
     getHost()->updateFootPrintNerve(getNerveStep(), 46);
     updateOnOffFireTail(60, 10, 15);
     f32 rate = MR::calcNerveRate(this, NebulaFrameClock::stepsOfMilliseconds(500));
-    MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, (cNum_exeCrazy_f4 * rate));
+    MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, (1.9f * rate));
     getHost()->updateRunVelocity();
 
-    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(4)) && MR::isInSightConePlayer(getHost(), getHost()->mFront, cNum_exeCrazy_f5, cNum_exeCrazy_f6)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(4)) && MR::isInSightConePlayer(getHost(), getHost()->mFront, 1600.0f, 45.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvFindCrazy));
     }
 }
@@ -331,19 +308,19 @@ void DinoPackunBattleVs2Lv1::exeChase() {
 
     updateChaseMouthFire();
 
-    if (MR::isInSightConePlayer(getHost(), getHost()->mFront, sChaseSightDistance, cNum_exeChase_f1)) {
+    if (MR::isInSightConePlayer(getHost(), getHost()->mFront, sChaseSightDistance, 60.0f)) {
         MR::turnDirectionToPlayerDegree(getHost(), &getHost()->mFront, 1.0f);
     } else {
-        MR::rotateDirectionGravityDegree(getHost(), &getHost()->mFront, (cNum_exeChase_f2 * calcWiggleSign(60)));
+        MR::rotateDirectionGravityDegree(getHost(), &getHost()->mFront, (2.0f * calcWiggleSign(60)));
     }
 
     getHost()->updateFootPrintNerve(getNerveStep(), 46);
     emitFireTail();
     f32 rate = MR::calcNerveRate(this, 45);
-    MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, (cNum_exeChase_f3 * rate));
+    MR::addVelocityMoveToDirection(getHost(), getHost()->mFront, (1.8f * rate));
     getHost()->updateRunVelocity();
 
-    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2)) && !MR::isInSightConePlayer(getHost(), getHost()->mFront, sChaseSightDistance, cNum_exeChase_f4)) {
+    if (MR::isGreaterStep(this, NebulaFrameClock::stepsOfSeconds(2)) && !MR::isInSightConePlayer(getHost(), getHost()->mFront, sChaseSightDistance, 60.0f)) {
         setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvWalk));
     }
 }
@@ -398,8 +375,8 @@ bool DinoPackunBattleVs2Lv1::emitFireMouth() {
     Vec3f shotDir;
     mouthMtx.getXDir(shotDir);
     MR::normalizeOrZero(&shotDir);
-    pFire->appearShot(shotPos, shotDir * cNum_emitFireMouth_f1);
-    MR::addVelocityJump(pFire, cNum_emitFireMouth_addVelocityJump_1);
+    pFire->appearShot(shotPos, shotDir * 50.0f);
+    MR::addVelocityJump(pFire, 30.0f);
     MR::addVelocity(pFire, getHost()->mVelocity);
     return true;
 }

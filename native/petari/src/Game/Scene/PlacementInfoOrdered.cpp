@@ -2,7 +2,8 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/System/NebulaLoadTrace.hpp"
 #include "Game/System/NebulaMods.hpp"
-#include "Game/System/LumaClass.hpp"
+#include "Game/System/LumaClasses.hpp"
+#include "Game/System/LumaRefs.hpp"
 #include "Game/Scene/PlacementInfoOrdered.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/Map/PlanetMapCreator.hpp"
@@ -17,7 +18,11 @@ namespace {
             return MR::getModelChangableObjCreator(rIdentifier.mName);
         }
 
-        return NameObjFactory::getCreator(rIdentifier.mName);
+        if (const CreationFuncPtr creator = NameObjFactory::getCreator(rIdentifier.mName)) {
+            return creator;
+        }
+        // A class a mod places that no mod made (references.md 3, after start): the placeholder object stands there.
+        return luma::refs::placeholderFor(rIdentifier.mName);
     }
 
     PlacementInfoOrdered::Identifier readIdentifier(const TableIter& rIter) {
@@ -106,12 +111,11 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
             MR::setCurrentPlacementZoneId(MR::getPlacedZoneId(iter));
             if (mInitializing == nullptr) {
                 NebulaLoadTrace::placed(set->mName, MR::getPlacedZoneId(iter));
-                // A mod's object (placed by its name, or what a change turns the placed one into) is made by its own
-                // name; the game's by their Japanese names, as the game's creators take them.
-                const char* const pModObject = set->mShapeId == -1 ? NebulaMods::modObjectName(set->mName) : nullptr;
-                mInitializing = creator(pModObject != nullptr ? pModObject : MR::getJapaneseObjectName(set->mName));
+                // The game's creators take the Japanese names.
+                mInitializing = creator(MR::getJapaneseObjectName(set->mName));
+                mPlacementLink->getObject()->mMade = mInitializing;
                 if (mInitializing == nullptr) {
-                    // Nothing made (a mod's object it could not make): this placement is left out.
+                    // Nothing made (a mod's change removed it): this placement is left out.
                     MR::clearCurrentPlacementZoneId();
                     mPlacementLink = mPlacementLink->getNext();
                     if (mPlacementLink == nullptr) ++mPlacementSet;
@@ -119,14 +123,15 @@ bool PlacementInfoOrdered::initPlacementStep(uint64_t deadline) {
                 }
             }
             MR::initLiveActorSystemInfo(iter);
-            const bool ready = mInitializing->initStep(iter, deadline);
+            bool ready;
+            {
+                // A name a mod aliased (classes.md, "alias"): its arguments while the object initialises.
+                const luma::classes::AliasPlacing alias(set->mName, iter.mInfo, iter.mIndex);
+                ready = mInitializing->initStep(iter, deadline);
+            }
             MR::initLiveActorSystemInfo(iter);
             MR::clearCurrentPlacementZoneId();
             if (!ready) return false;
-            // The mods' classes on what this placement made (luma.json "object_classes" with a script, plugins' hooks).
-            if (lumacore::sClassRowCount != 0) [[unlikely]] {
-                lumacore::attachClass(mInitializing, set->mName);
-            }
             mInitializing = nullptr;
         }
         mPlacementLink = mPlacementLink->getNext();
@@ -176,6 +181,25 @@ PlacementInfoOrdered::Index* PlacementInfoOrdered::createIndex(const TableIter& 
 }
 
 PlacementInfoOrdered::Index::Index() : mInfoIter() {
+}
+
+NameObj* PlacementInfoOrdered::findMade(const Table* pTable, s32 entry) const {
+    for (u32 i = 0; i < mIndexCount; i++) {
+        if (mIndexArray[i].mInfoIter.mInfo == pTable && mIndexArray[i].mInfoIter.mIndex == entry) {
+            return mIndexArray[i].mMade;
+        }
+    }
+    return nullptr;
+}
+
+bool PlacementInfoOrdered::findPlaced(const void* pObject, TableIter* pOut) const {
+    for (u32 i = 0; pObject != nullptr && i < mIndexCount; i++) {
+        if (mIndexArray[i].mMade == pObject) {
+            *pOut = mIndexArray[i].mInfoIter;
+            return true;
+        }
+    }
+    return false;
 }
 
 PlacementInfoOrdered::SameIdSet::SameIdSet() : Identifier(), mList() {

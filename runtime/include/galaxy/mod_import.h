@@ -9,6 +9,8 @@
 //   folder can't be moved (on Windows, a program has one of its files open), the update waits as .update-<name> and is
 //   applied at the next start (apply_pending_updates).
 // - Absolute, drive and `..` paths, device names, links, and archives that unpack past the size limits are refused.
+// - A package (a luma.json) passes the caller's check before it is placed (the validator, as at each start);
+//   refused, nothing is added and the findings say why.
 #pragma once
 
 #include <atomic>
@@ -44,16 +46,62 @@ struct ImportResult {
     std::uint64_t dolphin_files = 0;
     std::uint64_t dolphin_textures = 0;
     std::uint64_t dolphin_unmatched = 0;
+    // A package's check (ImportCheck): whether it ran, refused it, and what it found, in the played language.
+    struct Finding {
+        bool error = false;
+        std::uint32_t code = 0;  // 509 is L509
+        std::string file;
+        std::string text;
+        std::uint32_t line = 0;  // the place in `file` (0: none)
+        std::uint32_t column = 0;
+    };
+    bool checked = false;
+    bool refused = false;
+    std::vector<Finding> findings;
 };
+
+// Checks a package staged for import (`staged`, laid out as a placed mod) under the folder name `id` it will take
+// (an update's: the mod it replaces). Sets result.checked, refused and findings; true lets the import go on.
+using ImportCheck = std::function<bool(const std::filesystem::path& staged, const std::string& id, ImportResult& result)>;
 
 // True when `path` is an archive the importer can read. Checked by content, so a fake .zip is refused.
 [[nodiscard]] bool is_mod_archive(const std::filesystem::path& path);
 
 // Imports `source` (a folder or an archive) into `mods_folder` on the calling thread. `progress` (optional) is called
 // as files are written. Setting `cancel` stops the import and removes the staging folder.
+// `check` (optional) is asked about a package before it is placed.
 [[nodiscard]] ImportResult import_mod(const std::filesystem::path& source, const std::filesystem::path& mods_folder,
                                       const std::function<void(const ImportProgress&)>& progress = {},
-                                      const std::atomic<bool>* cancel = nullptr);
+                                      const std::atomic<bool>* cancel = nullptr, const ImportCheck& check = {});
+
+// The mod a folder or archive holds, read before importing it (services-mods 9: the install screen's UPDATE): its
+// manifest's id and version, and the version of the installed mod of that id in `mods_folder` (empty: none installed,
+// or no manifest). Reads the archive's luma.json only (at its top or in its one top folder, at most 1 MiB). Any thread.
+struct ImportPeek {
+    std::string id;
+    std::string version;
+    std::string installed;
+};
+[[nodiscard]] ImportPeek peek_import(const std::filesystem::path& source, const std::filesystem::path& mods_folder);
+
+// The mods that come with the game: each .luma file in `shipped` is imported into the mods folder set_mods_folder
+// named when the player has no mod of its id or an older version of it, and its code is allowed there (it is the
+// game's own; a later change to that code asks again, as for any mod). A library among them loads only while a mod
+// that is on needs it (libraries_of). Call at start, after set_mods_folder and before the first scan. Says each one
+// installed or refused.
+struct ShippedMod {
+    std::string file;     // the .luma's file name
+    std::string id;
+    std::string version;
+    bool ok = false;
+    std::string message;  // the import's, when it failed
+};
+[[nodiscard]] std::vector<ShippedMod> install_shipped_mods(const std::filesystem::path& shipped,
+                                                           const std::filesystem::path& mods_folder);
+// The ids of the .luma files in `shipped` named as the mods that come with the game (set_shipped_mods), installing
+// nothing: for the mods tool (--list-mods), so the launcher's Mods page leaves out a library that comes with the game
+// as the game's own page does.
+void note_shipped_mods(const std::filesystem::path& shipped, const std::filesystem::path& mods_folder);
 
 // Removes a mod's folder, to the recycle bin where there is one. Its settings stay until the next save. A folder in
 // use is left untouched (IN USE); a mod is never half removed.

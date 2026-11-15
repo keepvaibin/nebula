@@ -37,26 +37,13 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <nebula_format.h>
-#include "Game/Util/Tunable.hpp"
 #include "Game/System/LumaCore.hpp"
 
-NEBULA_TUNABLE_NAMED(f32, cNum_CameraDirector_f1, "CameraDirector.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcSubjective_f1, "calcSubjective.f1", 100.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcSubjective_f2, "calcSubjective.f2", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcSubjective_f3, "calcSubjective.f3", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcSubjective_f4, "calcSubjective.f4", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_calcSubjective_f5, "calcSubjective.f5", 0.5f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startSubjectiveCamera_f1, "startSubjectiveCamera.f1", 10.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_startSubjectiveCamera_f2, "startSubjectiveCamera.f2", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_endSubjectiveCamera_f1, "endSubjectiveCamera.f1", 15.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_resetCameraMan_f1, "resetCameraMan.f1", 800.0f);
-NEBULA_TUNABLE_NAMED(f32, cNum_resetCameraMan_f2, "resetCameraMan.f2", 300.0f);
-
 namespace {
-    NEBULA_TUNABLE(s32, sSubjectivePosInterpolateFrame, 0);
-    NEBULA_TUNABLE(s32, sSubjectiveRotInterpolateFrame, 10);
-    NEBULA_TUNABLE(s32, sSubjectiveInterpolateFrame, 20);
-    NEBULA_TUNABLE(f32, sDefaultFovy, 45.0f);
+    const s32 sSubjectivePosInterpolateFrame = 0;
+    const s32 sSubjectiveRotInterpolateFrame = 10;
+    const s32 sSubjectiveInterpolateFrame = 20;
+    const f32 sDefaultFovy = 45.0f;
     static const char* sTalkCameraName = "共通会話カメラ";
     static const char* sStartAnimCameraName = "スタートアニメカメラ";
     static const char* sSubjectiveCameraName = "主観カメラ";
@@ -92,7 +79,7 @@ CameraDirector::CameraDirector(const char* pName) : NameObj(pName) {
     mIsSubjectiveCamera = false;
     mIsStartSubjectiveCamera = false;
     mSubjectiveFrame = 0;
-    mNearZ = -cNum_CameraDirector_f1;
+    mNearZ = -100.0f;
     mIsSubjectiveCalced = false;
     mIsCameraNG = false;
 
@@ -204,21 +191,6 @@ void CameraDirector::calcPose() {
 
     mOnlyCamera->calcPose(getCurrentCameraMan());
     mPoseParam1->copyFrom(*mOnlyCamera->mPoseParam);
-
-    // The game's own pose, for game_camera; then a plugin's camera (set_camera): where it says at once, through walls.
-    NebulaMods::recordGameCamera(mPoseParam1->mPos.x, mPoseParam1->mPos.y, mPoseParam1->mPos.z, mPoseParam1->mWatchPos.x,
-                                 mPoseParam1->mWatchPos.y, mPoseParam1->mWatchPos.z);
-    f32 position[3];
-    f32 target[3];
-    const u32 given = NebulaMods::cameraPose(position, target);
-    if ((given & 1u) != 0u) {
-        mPoseParam1->mPos.set(position[0], position[1], position[2]);
-        mViewInterpolator->mIsCollisionOff = true;
-        mViewInterpolator->mIsForceCameraChange = true;
-    }
-    if ((given & 2u) != 0u) {
-        mPoseParam1->mWatchPos.set(target[0], target[1], target[2]);
-    }
 }
 
 void CameraDirector::calcSubjective() {
@@ -243,7 +215,7 @@ void CameraDirector::calcSubjective() {
                     MR::setNearZ(mNearZ);
                 }
 
-                mNearZ = -cNum_calcSubjective_f1;
+                mNearZ = -100.0f;
                 MR::turnOnDOFInSubjective();
                 mIsStartSubjectiveCamera = false;
             }
@@ -270,7 +242,7 @@ void CameraDirector::calcSubjective() {
     if (mSubjectiveFrame >= ::sSubjectiveInterpolateFrame - ::sSubjectivePosInterpolateFrame) {
         posRate = 1.0f;
     } else {
-        posRate = MR::cos(MR::pi() + posFrame * MR::pi() / (::sSubjectiveInterpolateFrame - ::sSubjectivePosInterpolateFrame)) * cNum_calcSubjective_f2 + cNum_calcSubjective_f3;
+        posRate = MR::cos(MR::pi() + posFrame * MR::pi() / (::sSubjectiveInterpolateFrame - ::sSubjectivePosInterpolateFrame)) * 0.5f + 0.5f;
     }
 
     const CameraPoseParam* param = mCameraManSubjective->mPoseParam;
@@ -284,7 +256,7 @@ void CameraDirector::calcSubjective() {
         rotFrame = 0;
     }
 
-    f32 rotRate = MR::cos(MR::pi() + rotFrame * MR::pi() / (::sSubjectiveInterpolateFrame - ::sSubjectiveRotInterpolateFrame)) * cNum_calcSubjective_f4 + cNum_calcSubjective_f5;
+    f32 rotRate = MR::cos(MR::pi() + rotFrame * MR::pi() / (::sSubjectiveInterpolateFrame - ::sSubjectiveRotInterpolateFrame)) * 0.5f + 0.5f;
 
     Quat4f invRot;
     inv.getQuat(invRot);
@@ -320,7 +292,7 @@ void CameraDirector::createViewMtx() {
     Pos3f view;
     calcViewMtxFromPoseParam(&view, mPoseParam1);
 
-    mViewInterpolator->updateCameraMtx(view, mPoseParam1->getWatchPos(), getTargetObj(), NebulaMods::cameraFov(CameraLocalUtil::getFovy(getCurrentCameraMan())));
+    mViewInterpolator->updateCameraMtx(view, mPoseParam1->getWatchPos(), getTargetObj(), CameraLocalUtil::getFovy(getCurrentCameraMan()));
 }
 
 void CameraDirector::checkStartCondition() {
@@ -587,12 +559,12 @@ void CameraDirector::startSubjectiveCamera(s32 /*camType*/) {
         mCameraManSubjective->activate();
         mNearZ = MR::getNearZ();
 
-        MR::setNearZ(cNum_startSubjectiveCamera_f1);
+        MR::setNearZ(10.0f);
         MR::turnOffDOFInSubjective();
     }
 
     if (mSubjectiveFrame < ::sSubjectiveInterpolateFrame) {
-        MR::startCenterScreenBlur(::sSubjectiveInterpolateFrame, cNum_startSubjectiveCamera_f2, 80, 5, 10);
+        MR::startCenterScreenBlur(::sSubjectiveInterpolateFrame, 15.0f, 80, 5, 10);
     }
 }
 
@@ -604,7 +576,7 @@ void CameraDirector::endSubjectiveCamera(s32 endType) {
         mIsSubjectiveCamera = false;
 
         if (!forceEnd) {
-            MR::startCenterScreenBlur(mSubjectiveFrame, cNum_endSubjectiveCamera_f1, 80, 5, 10);
+            MR::startCenterScreenBlur(mSubjectiveFrame, 15.0f, 80, 5, 10);
         }
     }
 
@@ -833,7 +805,7 @@ void CameraDirector::resetCameraMan() {
     target2 = mTargetHolder->get();
     target3 = mTargetHolder->get();
 
-    Vec3f newPos = target3->getPosition() - target2->getFrontVec() * cNum_resetCameraMan_f1 + target1->getUpVec() * cNum_resetCameraMan_f2;
+    Vec3f newPos = target3->getPosition() - target2->getFrontVec() * 800.0f + target1->getUpVec() * 300.0f;
 
     CameraLocalUtil::setPos(man, newPos);
     CameraLocalUtil::setWatchPos(man, mTargetHolder->get()->getPosition());

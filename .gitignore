@@ -7,7 +7,7 @@
 /.vs/
 *.user
 
-# Anything derived from a game dump stays local (see docs/CONTENT_POLICY.md)
+# Anything derived from a game dump stays local (tools/audit_repo.ps1)
 /generated/
 
 # Local scratch and editor state

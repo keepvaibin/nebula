@@ -1,16 +1,12 @@
 #include "Game/Map/RailPart.hpp"
 #include "Game/Map/BezierRail.hpp"
 #include <nebula_geometry.hpp>
-#include "Game/Util/Tunable.hpp"
-
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f1, "init.f1", 0.1f);
-NEBULA_TUNABLE_NAMED(f32, cNum_init_f2, "init.f2", 0.1f);
 
 RailPart::RailPart() : mRailPartLinear(nullptr), mRailPartBezier(nullptr) {
 }
 
 void RailPart::init(const Vec3f& rPoint1, const Vec3f& rPoint1Ctrl, const Vec3f& rPoint2Ctrl, const Vec3f& rPoint2) {
-    if ((rPoint1.epsilonEquals(rPoint1Ctrl, cNum_init_f1)) && (rPoint2.epsilonEquals(rPoint2Ctrl, cNum_init_f2))) {
+    if ((rPoint1.epsilonEquals(rPoint1Ctrl, 0.1f)) && (rPoint2.epsilonEquals(rPoint2Ctrl, 0.1f))) {
         mRailPartLinear = new LinearRailPart();
         mRailPartLinear->set(rPoint1, rPoint2);
     } else {
