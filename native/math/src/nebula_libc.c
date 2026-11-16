@@ -5,6 +5,13 @@
 #include <stdint.h>
 #include <wchar.h>
 
+/* glibc 2.40+ rewrites strchr/strrchr/strstr into _Generic macro stubs under
+   _GNU_SOURCE; the module defines its own (see strchr below), so the names
+   must be plain identifiers before the definitions. */
+#undef strchr
+#undef strrchr
+#undef strstr
+
 typedef uint64_t __attribute__((may_alias, aligned(1))) Word;
 
 void* memcpy(void* pDst, const void* pSrc, size_t size) {
