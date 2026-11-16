@@ -8,6 +8,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
+#include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -650,11 +651,18 @@ void OceanSphere::draw() const {
         return;
     }
 
-    if (mIsStartPosCamera && !mIsCameraInside) {
+    // While the host traces, the sphere is its two blended walls drawn each frame, whatever the camera and the distance
+    // (as TearDropGalaxy draws it): the painted inside (the environment back) stands for the water's depth, which the
+    // traced way through the water shows, and the tracer reads a sea from the frame's own draws, not a stored mesh.
+    const bool traced = GameLightSignal::tracing();
+    const bool startPosCamera = mIsStartPosCamera && !traced;
+    const bool useMesh = mUseMesh && !traced;
+
+    if (startPosCamera && !mIsCameraInside) {
         const SiteMaterial back = loadMaterialBack();
         TypedDraw site(back, nullptr, MR::getCameraViewMtx());
 
-        if (mUseMesh) {
+        if (useMesh) {
             mMeshBack.draw(site);
         } else {
             drawBack(site);
@@ -664,13 +672,13 @@ void OceanSphere::draw() const {
     const SiteMaterial face = loadMaterialFace();
     TypedDraw site(face, nullptr, MR::getCameraViewMtx());
 
-    if (mIsStartPosCamera) {
+    if (startPosCamera) {
         if (mIsCameraInside) {
             site.setMaterial(faceMaterial(mWaterTex, sOceanSphereStageColor0Face, mStageColor1Front, sOceanSphereStageColor2Face,
                                           sOceanSphereKColor0Face, NEBULA_CULL_FRONT));
         }
 
-        if (mUseMesh) {
+        if (useMesh) {
             mMeshFace.draw(site);
         } else {
             drawFace(site);

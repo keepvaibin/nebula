@@ -48,6 +48,8 @@ enum Diagnostic : unsigned {
                                            // every step, on a GPU that never needs one)
     kDiagnoseHdrHighlights = 1u << 30u,  // hdr-highlights: with HDR output, captures show the light past the paper white
                                          // (HdrPattern::Highlights) in place of the SDR picture
+    kDiagnoseRtSky = 1u << 31u,          // rt-sky: each surface shows the tracer's sky picture along its eye ray (the sky
+                                         // behind it, if the picture is right: no edge where a surface meets the sky)
 };
 
 // The names --diagnostics takes, each one item or a set. "1" is the launcher's recording.
@@ -89,6 +91,7 @@ inline constexpr DiagnosticName kDiagnosticNames[] = {
     {"ring-stress", kDiagnoseRingStress},
     {"resolution-steps", kDiagnoseResolutionSteps},
     {"hdr-highlights", kDiagnoseHdrHighlights},
+    {"rt-sky", kDiagnoseRtSky},
     {"frames", kDiagnoseFrames},
     {"gpu", kDiagnoseGpuPasses},
     {"threads", kDiagnoseThreadCpu | kDiagnoseProfile},

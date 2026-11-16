@@ -61,7 +61,7 @@ namespace rt {
 namespace {
 
 constexpr unsigned kShaderCount = static_cast<unsigned>(RtShader::Count);
-constexpr std::uint64_t kCountersBytes = std::uint64_t{kCounters} * 4u;
+constexpr std::uint64_t kCountersBytes = std::uint64_t{kCounterWords} * 4u;  // the occluder bins after the counters
 // Bytes a buffer slot the pass leaves empty reads (zeros, as Direct3D 12's null descriptors and Vulkan's robust ones).
 constexpr std::uint64_t kNullBufferBytes = 4096u;
 
@@ -206,7 +206,8 @@ struct Backend::State {
     std::vector<id<MTLBuffer>> outgrown[kFramesInFlight];
     // The counters a frame slot's passes add to (shared memory), and what its last finished frame added.
     id<MTLBuffer> counters[kFramesInFlight]{};
-    std::uint32_t counted[kFramesInFlight][kCounters]{};
+    std::uint32_t counted[kFramesInFlight][kCounterWords]{};
+    unsigned counter_words = kCounters;  // kept and zeroed: kCounterWords while the occluder bins count
     // The renderer's texture table this frame (begin's TextureTable: the argument buffer the draws bind at
     // kBufferTextureArray, and what makes its textures resident on a compute encoder).
     id<MTLBuffer> table = nil;
@@ -550,8 +551,8 @@ void Backend::frame(unsigned frame_slot) noexcept {
     s.instances_at[frame_slot] = 0u;
     s.outgrown[frame_slot].clear();  // their frame has finished
     // The slot's last frame has finished: what its passes counted is kept for read_counters, then zeroed for this one.
-    std::memcpy(s.counted[frame_slot], s.counters[frame_slot].contents, kCountersBytes);
-    std::memset(s.counters[frame_slot].contents, 0, kCountersBytes);
+    std::memcpy(s.counted[frame_slot], s.counters[frame_slot].contents, std::size_t{s.counter_words} * 4u);
+    std::memset(s.counters[frame_slot].contents, 0, std::size_t{s.counter_words} * 4u);
 }
 
 void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noexcept {
@@ -1006,6 +1007,18 @@ void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) c
     }
 }
 
+void Backend::count_occluders(bool on) noexcept {
+    if (state_ != nullptr) {
+        state_->counter_words = on ? kCounterWords : kCounters;
+    }
+}
+
+void Backend::read_occluders(unsigned frame_slot, std::uint32_t out[2u * kOccluderBins]) const {
+    for (unsigned i = 0; i < 2u * kOccluderBins; ++i) {
+        out[i] = state_ != nullptr ? state_->counted[frame_slot % kFramesInFlight][kCounters + i] : 0u;
+    }
+}
+
 // No GPU times on Metal yet: Apple GPUs sample counters at stage boundaries only, not between two dispatches of one
 // encoder (MTLCounterSamplingPoint); timed_ticks reports "the device has no timestamps".
 void Backend::time_mark(unsigned, bool) {}
@@ -1056,6 +1069,12 @@ void* Backend::image_to_sample(std::uint32_t) { return nullptr; }
 void Backend::end_counters() {}
 void Backend::read_counters(unsigned, std::uint32_t out[kCounters]) const {
     for (unsigned i = 0; i < kCounters; ++i) {
+        out[i] = 0u;
+    }
+}
+void Backend::count_occluders(bool) noexcept {}
+void Backend::read_occluders(unsigned, std::uint32_t out[2u * kOccluderBins]) const {
+    for (unsigned i = 0; i < 2u * kOccluderBins; ++i) {
         out[i] = 0u;
     }
 }

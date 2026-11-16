@@ -4,6 +4,8 @@
 #include "renderer_mtl_internal.h"
 
 #include "galaxy/platform_time.h"
+#include "galaxy/render/program_table.h"
+#include "galaxy/render/rt_caps.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/idle_clock.h"
 #include "render/core/frame_core.h"
@@ -879,7 +881,10 @@ bool RendererMtl::ensure_motion_targets() {
     const std::uint32_t height = scene_.color->height;
     const std::uint32_t use = mtl::kUseTarget | mtl::kUseSample;
     gpu::TextureRef motion = context.create_texture(width, height, 1u, draw_layout_.motion, use, mtl::Storage::Private, "motion vectors");
-    gpu::TextureRef reactive = context.create_texture(width, height, 1u, draw_layout_.reactive, use, mtl::Storage::Private, "reactive mask");
+    // The tracer writes into the reactive mask too where the device traces (where the added light changed).
+    const std::uint32_t reactive_use = use | (rt_capable(rt_caps()) ? mtl::kUseWrite : 0u);
+    gpu::TextureRef reactive =
+        context.create_texture(width, height, 1u, draw_layout_.reactive, reactive_use, mtl::Storage::Private, "reactive mask");
     if (!motion || !reactive) {
         std::cerr << "[Renderer] motion targets " << width << 'x' << height << " allocation failed\n";
         return false;

@@ -1045,8 +1045,8 @@ void RendererVk::destroy_motion_framebuffers() {
             framebuffer = VK_NULL_HANDLE;
         }
     }
-    motion_.framebuffer_color = VK_NULL_HANDLE;
-    motion_.framebuffer_depth = VK_NULL_HANDLE;
+    motion_.framebuffer_color = 0u;
+    motion_.framebuffer_depth = 0u;
 }
 
 void RendererVk::trim_idle_effect_targets() {
@@ -1176,10 +1176,10 @@ bool RendererVk::ensure_motion_targets() {
 VkFramebuffer RendererVk::motion_framebuffer(unsigned aux) {
     const VkImageView color = scene_.color->target_view;
     const VkImageView depth = scene_.depth->target_view;
-    if (motion_.framebuffer_color != color || motion_.framebuffer_depth != depth) {
+    if (motion_.framebuffer_color != scene_.color->serial || motion_.framebuffer_depth != scene_.depth->serial) {
         destroy_motion_framebuffers();
-        motion_.framebuffer_color = color;
-        motion_.framebuffer_depth = depth;
+        motion_.framebuffer_color = scene_.color->serial;
+        motion_.framebuffer_depth = scene_.depth->serial;
     }
     VkFramebuffer& framebuffer = motion_.framebuffers[aux - 1u];
     if (framebuffer == VK_NULL_HANDLE) {
@@ -1399,7 +1399,8 @@ bool RendererVk::ensure_output_set(const FrameMap& output, bool storage) {
 vk::TemporalUpscaleInputs RendererVk::temporal_inputs(const vk::Texture& color, const vk::Texture& depth, const vk::Texture& motion,
                                                        const vk::Texture& reactive, const vk::Texture& output) const {
     const auto image = [](const vk::Texture& texture, VkFormat format, VkImageUsageFlags usage) {
-        return vk::TemporalImage{texture.image, texture.view, VK_IMAGE_ASPECT_COLOR_BIT, format, texture.width, texture.height, usage};
+        return vk::TemporalImage{texture.image, texture.view, VK_IMAGE_ASPECT_COLOR_BIT, format, texture.width, texture.height, usage,
+                                 texture.serial};
     };
     constexpr VkImageUsageFlags kColor = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     vk::TemporalUpscaleInputs in{};
@@ -1608,7 +1609,8 @@ void RendererVk::present_fg_hudless(const DisplayTexture& source, const galaxy::
     vkCmdEndRenderPass(commands);
     fg_hudless_target_->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     reset_draw_bindings();
-    vk::TemporalImage picture{fg_hudless_target_->image, fg_hudless_target_->view, VK_IMAGE_ASPECT_COLOR_BIT, VK_FORMAT_R8G8B8A8_UNORM, width, height, kUsage};
+    vk::TemporalImage picture{fg_hudless_target_->image, fg_hudless_target_->view, VK_IMAGE_ASPECT_COLOR_BIT, VK_FORMAT_R8G8B8A8_UNORM, width, height, kUsage,
+                             fg_hudless_target_->serial};
     vk::streamline_vk::tag_hudless(commands, &picture);
     fg_hudless_ready_ = true;
 }
@@ -1903,12 +1905,12 @@ void RendererVk::destroy_item_framebuffer() {
         vk::Context::get().defer([device, retired] { vkDestroyFramebuffer(device, retired, nullptr); });
         item_framebuffer_ = VK_NULL_HANDLE;
     }
-    item_framebuffer_depth_ = VK_NULL_HANDLE;
+    item_framebuffer_depth_ = 0u;
 }
 
 VkFramebuffer RendererVk::item_framebuffer() {
     const VkImageView depth = scene_.depth->target_view;
-    if (item_framebuffer_ != VK_NULL_HANDLE && item_framebuffer_depth_ != depth) {
+    if (item_framebuffer_ != VK_NULL_HANDLE && item_framebuffer_depth_ != scene_.depth->serial) {
         destroy_item_framebuffer();
     }
     if (item_framebuffer_ == VK_NULL_HANDLE) {
@@ -1921,7 +1923,7 @@ VkFramebuffer RendererVk::item_framebuffer() {
         info.height = item_target_->height;
         info.layers = 1;
         vk::check(vkCreateFramebuffer(vk::Context::get().device(), &info, nullptr, &item_framebuffer_), "ray tracing prepass framebuffer");
-        item_framebuffer_depth_ = depth;
+        item_framebuffer_depth_ = scene_.depth->serial;
     }
     return item_framebuffer_;
 }
@@ -1987,9 +1989,36 @@ void RendererVk::rt_reactive_end() {
     image_barrier(commands_, motion_.reactive->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ComputeWrite, gpu::Use::ColorWrite);
 }
 
+bool RendererVk::rt_target_read_begin(std::uint64_t key, rt::TextureView& view) {
+    const auto found = target_slots_.find(key);
+    if (found == target_slots_.end() || !found->second.set.color || (target_pass_active_ && target_key_ == key)) {
+        return false;
+    }
+    end_scene_pass();
+    // end_target_pass left it read-only for the fragment stage: the compute stage reads it after its writes as well.
+    const vk::Texture& color = *found->second.set.color;
+    image_barrier(commands_, color.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    view = {color.view, static_cast<std::uint32_t>(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)};
+    return true;
+}
+
+void RendererVk::rt_target_read_end(std::uint64_t key) noexcept {
+    const auto found = target_slots_.find(key);
+    if (found == target_slots_.end() || !found->second.set.color) {
+        return;
+    }
+    // Its next pass waits for the fragment stage's reads alone (begin_target_pass): the compute reads go first.
+    end_scene_pass();
+    image_barrier(commands_, found->second.set.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE,
+                  VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_NONE);
+}
+
 void RendererVk::rt_unpublish_lights(TextureStore& textures) {
     const VkDevice device = vk::Context::get().device();
-    for (unsigned which = 0u; which < kRtLightPictures; ++which) {  // light, added, mirror, facing, volume, scatter, transmit, indirect, two guides
+    for (unsigned which = 0u; which < kRtLightPictures; ++which) {  // light, added, mirror, facing, volume, scatter, transmit, indirect, two guides, the layer's items
         const auto found = pictures_.find(kRtLightPicture + which);
         if (found == pictures_.end()) {
             continue;

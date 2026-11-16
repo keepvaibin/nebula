@@ -184,6 +184,31 @@ int main() {
         const auto ops = regs.take_ops();
         passed &= expect(ops.tables.size() == 6u, "every new table reaches the render thread once");
     }
+    {
+        // A lost card: pipelines and tables registered while it is away (no device gate) are queued once, in id order.
+        core::Registries regs;
+        NebulaPipelineDesc before_loss{}, during_loss{};
+        before_loss.vertex = 0x1001u;
+        during_loss.vertex = 0x1002u;
+        NebulaFrameTexture la[1]{}, lb[1]{};
+        la[0].texture = 3u;
+        lb[0].texture = 4u;
+        const std::uint32_t p0 = regs.pipeline_register(before_loss, nullptr);
+        const std::uint32_t t0 = regs.texture_table(la, 1u);
+        static_cast<void>(regs.take_ops());
+        regs.lose_device();
+        const std::uint32_t p1 = regs.pipeline_register(during_loss, nullptr);
+        const std::uint32_t t1 = regs.texture_table(lb, 1u);
+        regs.restart(nullptr);
+        const auto ops = regs.take_ops();
+        passed &= expect(p0 == 0u && p1 == 1u && t0 == 1u && t1 == 2u, "ids in registration order");
+        passed &= expect(ops.pipelines.size() == 2u && ops.pipelines[0].desc.vertex == before_loss.vertex &&
+                             ops.pipelines[1].desc.vertex == during_loss.vertex,
+                         "after a lost card each pipeline is queued once, at its id");
+        passed &= expect(ops.tables.size() == 2u && ops.tables[0].count == 1u && ops.tables[0].list[0].texture == 3u &&
+                             ops.tables[1].list[0].texture == 4u,
+                         "after a lost card each table is queued once, at its id");
+    }
     if (device) {
         TextureBackend backend;
         passed &= expect(backend.initialize(device.Get(), 65536u), "texture view page setup");

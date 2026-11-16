@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Compiled twice.
-// As rt_light_space.hlsl: the light pass's shares composed in one step (the host runs it once a frame,
-// as the last step, g_pass.z 1): what the programs read, rgb V (the sun's filtered V, t14), a the sky's share (the
-// sky and bounce light's mean ratio where that pass runs, else 1), with the landing cue; with --diagnostics
-// rt-motion the point's motion instead (S.motion at t12). It reads no picture of the light pass (whose own sky share is
-// the constant 1), so that picture needs no filter.
-// As rt_lights_space.hlsl (RT_LIGHTS): the local lights' share (red, green, blue in r, b, a; g the frames averaged) over
+// As rt_light_space.hlsl: the opaque layer's Light picture, composed once a frame as the last step
+// (g_pass.z 1) from the pictures the filters left: rgb the diffuse light in light units, the sun's light by its
+// filtered visibility V and the surface's facing (the light pass's Facing), and I, the sky and bounce light (the
+// lighting sky's mean where that pass is off); a keep, what of the base the diffuse body shows,
+// (1 - metal)(1 - lobes.mirror) in luminance (rt_mirror.hlsli: the pixel's material at its n.v). A surface that shows
+// itself (emissive, painted) takes 1 and keep 1: its colour as drawn. The local lights' D is the Added picture (the
+// RT_LIGHTS variant's last step). With --diagnostics rt-motion the point's motion instead, with rt-sky the sky picture.
+// As rt_lights_space.hlsl (RT_LIGHTS): the local lights' light (red, green, blue in r, b, a; g the frames averaged) over
 // space, after the average over time (rt_light_time.hlsl): an a-trous step, 5 by 5 taps `step` pixels apart, run with
 // steps 1, 2 and 4. A neighbour counts by how surely it is the same surface and the same light: the same object; in
 // the pixel's own plane (its place against the pixel's normal); facing the same way; and a luminance no farther from
@@ -18,11 +20,23 @@
 Texture2D<float4> g_guide : register(t11);  // eye distance, the object's slot in two parts, the normal packed (0: no surface)
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 #ifndef RT_LIGHTS
+#include "rt_mirror.hlsli"
+Texture2D<float4> g_facing : register(t9);       // r: how the surface faces the sun (rt_light.hlsl)
+Texture2D<float4> g_material : register(t10);
 Texture2D<float4> g_motion_map : register(t12);  // for --diagnostics rt-motion
-Texture2D<float4> g_sun_out : register(t14);     // the sun's V, filtered (rgb)
 Texture2D<float4> g_indirect : register(t13);    // I (rt_indirect_up.hlsl), when bit 8 of g_more.z says
-#include "rt_landing.hlsli"  // landing_cue, shared with the reference's rt_reference_out.hlsl
-RWStructuredBuffer<uint> g_counters : register(u8);  // 19: the pixels the landing cue darkens (l80b)
+Texture2D<float4> g_sun_out : register(t14);     // the sun's V, filtered (rgb)
+Texture2D<float4> g_base : register(t15);
+Texture2D<float4> g_normals : register(t16);
+#include "rt_sky.hlsli"  // for --diagnostics rt-sky
+SamplerState g_wrap : register(s0);
+
+float3 unoct(float2 o) {
+    float3 n = float3(o, 1.0f - abs(o.x) - abs(o.y));
+    const float t = saturate(-n.z);
+    n.xy += float2(n.x >= 0.0f ? -t : t, n.y >= 0.0f ? -t : t);
+    return normalize(n);
+}
 
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
@@ -32,58 +46,43 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     const int2 pixel = int2(id.xy);
-    const float4 guide = g_guide.Load(int3(pixel, 0));
-    if (guide.a == 0.0f) {
+    const int3 here = int3(pixel, 0);
+    const float4 guide = g_guide.Load(here);
+    const float4 material = g_material.Load(here);
+    const uint bits = uint(material.b * 255.0f + 0.5f);
+    if (guide.a == 0.0f || !mirror_lit(bits)) {
         g_out[id.xy] = float4(1.0f, 1.0f, 1.0f, 1.0f);
         return;
     }
-    // What the programs read: V as a colour and the sky's share. O: the sky and bounce light's mean ratio where that
-    // pass runs (bit 8), else 1 (that part off).
-    float sky = 1.0f;
-    if ((g_more.z & 256u) != 0u) {
-        const float3 ratio = g_indirect.Load(int3(pixel, 0)).rgb;
-        sky = (ratio.r + ratio.g + ratio.b) * (1.0f / 3.0f);
-    }
-    float4 shares = float4(g_sun_out.Load(int3(pixel, 0)).rgb, sky);
-    if ((g_more.z & (1u | 256u)) == 256u) {
-        // No traced sun: the key's visibility is the point's O, at most 1 (a room's key is
-        // hidden by what hides its sky: under a table, in a corner, at Mario's feet).
-        // The occlusion alone, O over the room's open level (an open floor's O is about 0.6 in a room).
-        const float open_ = g_sky.w > 0.0f ? clamp(g_sky.w, 0.25f, 1.0f) : 1.0f;
-        shares.rgb = min(sky / open_, 1.0f).xxx;
-    }
-    if ((g_more.z & 8192u) != 0u) {
-        const float cue = landing_cue(pixel, guide);  // the landing cue under the player
-        if (cue < 1.0f) {
-            InterlockedAdd(g_counters[19], 1u);
-        }
-        shares *= cue;
-    }
+    const float3 i = (g_more.z & 256u) != 0u ? max(g_indirect.Load(here).rgb, 0.0f) : g_sky_light.rgb;
+    const float3 v = (g_more.z & 1u) != 0u ? g_sun_out.Load(here).rgb : rt_untraced_v(i);
+    float3 light = g_sun_light.rgb * v * g_facing.Load(here).r + i;
+    const float4 normals = g_normals.Load(here);
+    const float3 look = normalize(rt_eye_ray(g_ray, float2(pixel) + 0.5f));
+    const float3 smooth_ = unoct(normals.rg);
+    const float3 n = dot(smooth_, look) < 0.0f ? smooth_ : unoct(normals.ba);
+    const ShadeMaterial m = mirror_material(bits, material.r, material.g, g_base.Load(here).rgb, 0u);
+    const ShadeLobes lobes = shade_lobes(m, max(-dot(n, look), kShadeNvLeast));
+    float4 out_ = float4(light, (1.0f - m.metal) * (1.0f - dot(lobes.mirror, float3(0.2126f, 0.7152f, 0.0722f))));
     if ((g_more.z & 128u) != 0u) {
-        shares = float4(0.0f, 0.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)
+        out_.rgb = float3(0.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)
     }
     if ((g_more.z & 512u) != 0u) {
-        // --diagnostics rt-motion (shown as rt-light shows r, a, b): the move across in red, down in green, eight
-        // pixels a frame full; blue where where the point was is not known.
-        const float4 m = g_motion_map.Load(int3(pixel, 0));
-        shares = float4(saturate(abs(m.x) / 8.0f), 1.0f, m.z > 0.0f ? 0.0f : 1.0f, saturate(abs(m.y) / 8.0f));
+        // --diagnostics rt-motion: the move across in red, down in green, eight pixels a frame full; blue where where
+        // the point was is not known.
+        const float4 motion = g_motion_map.Load(here);
+        out_ = float4(saturate(abs(motion.x) / 8.0f), saturate(abs(motion.y) / 8.0f), motion.z > 0.0f ? 0.0f : 1.0f, 1.0f);
     }
-    g_out[id.xy] = shares;
+    if ((g_more.z & 16384u) != 0u) {
+        // --diagnostics rt-sky: the sky picture along the pixel's eye ray.
+        out_ = float4(rt_sky_picture_by(g_wrap, look), 1.0f);
+    }
+    g_out[id.xy] = out_;
 }
 #else
 Texture2D<float4> g_in : register(t9);
 Texture2D<float4> g_moments : register(t10);  // b: the variance of the average's luminance
-Texture2D<float4> g_body : register(t12);     // the second layer's last step: glass's and water's body, in a
 static const float3 kLuminance = float3(0.2126f, 0.7152f, 0.0722f);
-// The opaque layer's last step: the pixel's base colour (rt_surface's, display-encoded) and the counters, for the
-// added light's guard (the programs' traced_colour): counter 51 the pixels past it.
-Texture2D<float4> g_base_map : register(t13);
-RWStructuredBuffer<uint> g_counters : register(u8);
-static const float kAddedMost = 0.6f;  // the programs' guard on the largest channel (program.hlsli's)
-float3 base_lin(float3 c) {
-    c = saturate(c);
-    return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
-}
 
 // The step (b1, rt_frame.hlsli): g_pass.y pixels between taps; g_pass.z 1 the last step.
 
@@ -157,13 +156,6 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
     }
     const float3 now = sum / weight;
-    const float body = g_pass.z != 0u && rt_second_layer() ? g_body.Load(int3(pixel, 0)).r : 1.0f;
-    if (g_pass.z != 0u && !rt_second_layer()) {
-        const float3 lit = now * base_lin(g_base_map.Load(int3(pixel, 0)).rgb);
-        if (max(lit.r, max(lit.g, lit.b)) > kAddedMost) {
-            InterlockedAdd(g_counters[51], 1u);  // past the programs' guard
-        }
-    }
-    g_out[id.xy] = g_pass.z != 0u ? float4(now.x, now.y, now.z, body) : float4(now.x, frames, now.y, now.z);
+    g_out[id.xy] = g_pass.z != 0u ? float4(now.x, now.y, now.z, 1.0f) : float4(now.x, frames, now.y, now.z);
 }
 #endif

@@ -144,14 +144,11 @@ struct RenderConfig {
     // low) unless the player chose one: rt_chosen, set by the Settings rows.
     float    rt_probe_ms         = 0.0f;
     bool     rt_chosen           = false;
-    // The lighting style: 0 painted (the art's own light, relit by the tracer's ratios), 1 physical (where
-    // a painted mesh's paint is one light, the real sun takes its place).
-    unsigned rt_style            = 1;
     // Light the lens scatters around every bright surface.
     bool     rt_lens_bloom       = true;
-    // A soft shadow under the player while ray tracing, to judge a landing (the game's own drop shadow is left out
-    // then).
-    bool     rt_landing_shadow   = true;
+    // A soft disc under the player while ray tracing, to judge a landing (the game's own drop shadow is left out
+    // then). Off by default: the traced sun's shadow is the player's shadow; the disc is a choice for those who want it.
+    bool     rt_landing_shadow   = false;
 
     // Texture packs (texture_pack.h): replacements from the mods'
     // textures/ folders. preload loads the whole pack at start instead of each texture at its first

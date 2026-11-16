@@ -425,10 +425,12 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes,
             gpu_mesh.hit_tint_keep = hit.tint_keep;
             gpu_mesh.hit_through = static_cast<float>(hit.through) / 255.0f;
             // glow_source's cooked value: registers r (code r) are signed, the others bytes, all /255 as
-            // Material::fillRow fills them.
+            // Material::fillRow fills them; white where the record was read with it white (glow_white).
             const std::uint32_t code = gpu_mesh.glow_source - 1u;
             const bool coded = gpu_mesh.glow_source >= 1u && gpu_mesh.glow_source <= 9u;
-            if (coded) {
+            if (coded && hit.glow_white != 0u) {
+                std::fill_n(gpu_mesh.glow_cooked, 3u, 1.0f);
+            } else if (coded) {
                 for (unsigned c = 0; c < 3u; ++c) {
                     const float value = code <= NEBULA_ROW_REGISTER + 2u ? static_cast<float>(material.registers[code][c])
                                         : code < NEBULA_ROW_MATERIAL_COLOR
@@ -437,10 +439,9 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes,
                     gpu_mesh.glow_cooked[c] = value / 255.0f;
                 }
             }
-            // In every form that draws the material's own stages, the row of glow_source and map 0's and map 1's
-            // coordinate rows (the first stage that samples the map, its coordinate when made from a uv set
-            // by a matrix, type 1, sources 4 to 19, not the form's normal coordinate). A mod's file is read only
-            // within its own size: each span below lies inside it, else that part is left unread.
+            // In every form that draws the material's own stages, the row of glow_source and the place of the map
+            // whose colour it shows. A mod's file is read only within its own size: each span below lies inside it,
+            // else that part is left unread.
             const auto fits = [&](std::uint32_t offset, std::uint64_t count, std::uint64_t each) {
                 return offset != 0u && offset <= header.size && count * each <= header.size - offset;
             };
@@ -461,45 +462,18 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes,
                             }
                         }
                     }
-                    if (form.texture_count != 0u && fits(material.coords_at, material.coord_count, sizeof(NebulaModelCoord)) &&
-                        fits(hit.stages_at, hit.stage_count, sizeof(NebulaModelStage)) && fits(form.textures_at, form.texture_count, 1u)) {
-                        const auto map_rows = [&](std::uint8_t map, std::uint16_t& row, std::uint8_t& uv) {
-                            const auto* stages = at<NebulaModelStage>(file, hit.stages_at);
-                            std::uint32_t coord = 0xFFu;
-                            for (std::uint32_t s = 0; s < hit.stage_count && coord == 0xFFu; ++s) {
-                                if (stages[s].map == map) {
-                                    coord = stages[s].coord;
-                                }
-                            }
-                            const bool normal_coord = (form.flags & 1u) != 0u && coord == 0u;
-                            if (coord >= material.coord_count || normal_coord) {
-                                return;
-                            }
-                            const NebulaModelCoord& c = at<NebulaModelCoord>(file, material.coords_at)[coord];
-                            if (c.type != 1u || c.source < 4u || c.source > 19u ||
-                                !fits(form.vertex_rows_at, form.vertex_row_count, sizeof(std::uint32_t))) {
-                                return;
-                            }
-                            const auto* codes = at<std::uint32_t>(file, form.vertex_rows_at);
-                            const std::uint32_t coord_code = NEBULA_ROW_COORD + 3u * coord;
-                            for (std::uint32_t r = 0; r + 1u < form.vertex_row_count; ++r) {
-                                if (codes[r] == coord_code && codes[r + 1u] == coord_code + 1u) {
-                                    row = static_cast<std::uint16_t>(r);
-                                    uv = static_cast<std::uint8_t>(c.source - 4u);
-                                    return;
-                                }
-                            }
-                        };
+                    // Where the form lists the map whose colour the material shows: a ray's hit samples it (the form
+                    // lists its maps in the order its program first reads them, which need not start with it).
+                    if (hit.colour_map != 0u && fits(form.textures_at, form.texture_count, 1u)) {
                         const auto* maps = at<std::uint8_t>(file, form.textures_at);
-                        map_rows(maps[0], rows.map0_row, gpu_mesh.map0_uv);
-                        if (form.texture_count >= 2u && maps[1] != maps[0]) {
-                            map_rows(maps[1], rows.map1_row, gpu_mesh.map1_uv);
-                            if (rows.map1_row != 0xFFFFu) {
-                                gpu_mesh.map1_slot = 1u;
+                        for (std::uint32_t p = 1u; p < form.texture_count && p < 0xFFu; ++p) {
+                            if (maps[p] == hit.colour_map - 1u && maps[0] != maps[p]) {
+                                rows.colour_slot = static_cast<std::uint8_t>(p);
+                                break;
                             }
                         }
                     }
-                    if (rows.glow_row != 0xFFFFu || rows.map0_row != 0xFFFFu) {
+                    if (rows.glow_row != 0xFFFFu || rows.colour_slot != 0xFFu) {
                         gpu_mesh.form_rows.push_back(rows);
                     }
                 }
@@ -692,6 +666,10 @@ void Registries::lose_device() noexcept {
 
 void Registries::restart(gpu::Device* device) {
     const std::lock_guard guard(lock_);
+    // Everything live is queued below from the records, in id order. Pipelines and tables registered while the card was
+    // away (they take no device gate) are among the records already: their own ops go, or the next list would apply them
+    // twice and every later id would land one place on (each draw with its neighbour's pipeline or textures).
+    incoming_ = RegistryOps{};
     device_ = device;
     meshes_.assign(1u, GpuMesh{});
     models_.assign(1u, GpuModel{});

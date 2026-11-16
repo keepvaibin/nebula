@@ -425,6 +425,10 @@ public:
     // the device cannot. Until rt_reactive_end.
     [[nodiscard]] bool rt_reactive_begin(rt::TextureView& reactive);
     void rt_reactive_end();
+    // A target pass's colour (begin_target_pass under `key`, ended) as the tracer's passes read it, until
+    // rt_target_read_end (the tracer's sky picture). False without that target.
+    [[nodiscard]] bool rt_target_read_begin(std::uint64_t key, rt::TextureView& view);
+    void rt_target_read_end(std::uint64_t key) noexcept;
     // The tracer's outside denoiser this frame (rt_denoiser.h: DLSS Ray Reconstruction), null for the built-in filters.
     [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return temporal_ ? temporal_->denoiser() : nullptr; }
     // An image of the tracer's (Backend::image_to_sample) as a texture the draws' programs read: its place among the
@@ -890,7 +894,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> item_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE item_rtv_{};
     static constexpr std::uint64_t kRtLightPicture = 1ull << 62u | 1u;  // the traced light's key among the pictures
-    static constexpr unsigned kRtLightPictures = 10u;  // its pictures, kRtLightPicture + 0 to 9 (rt_publish_light's which)
+    static constexpr unsigned kRtLightPictures = 11u;  // its pictures, kRtLightPicture + 0 to 10 (rt_publish_light's which)
     bool pass_list_open_ = false;
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_, on for the frames begun while it is (or the diagnostics

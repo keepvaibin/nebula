@@ -494,7 +494,7 @@ sl::Resource resource(const TemporalImage& image, VkImageLayout layout) {
 // One of the tracer's images (Backend::image_to_sample: a vk::Texture in the shader-read layout) as Streamline takes it.
 sl::Resource traced(void* texture) {
     const auto& t = *static_cast<const vk::Texture*>(texture);
-    return resource(TemporalImage{t.image, t.view, VK_IMAGE_ASPECT_COLOR_BIT, t.format, t.width, t.height, t.usage},
+    return resource(TemporalImage{t.image, t.view, VK_IMAGE_ASPECT_COLOR_BIT, t.format, t.width, t.height, t.usage, t.serial},
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 

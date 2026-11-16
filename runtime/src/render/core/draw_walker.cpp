@@ -527,8 +527,32 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
         rows.projection[2][3] = -f * kFarEps;
         rows.projection[3][2] = -1.0f;
     }
-    const float width = std::fabs(view.viewport[2]) * map.sx;
-    const float height = std::fabs(view.viewport[3]) * map.sy;
+    float width = std::fabs(view.viewport[2]) * map.sx;
+    float height = std::fabs(view.viewport[3]) * map.sy;
+    if (rt_sky_face_ >= 0 && view.orthographic == 0u) {
+        // A face of the tracer's sky picture (rt_sky_capture): the view's own depth terms, a square 90-degree frustum
+        // turned to the face (clip = P R x, R's rows the face's right, up and back), its square of the picture.
+        const auto face = static_cast<unsigned>(rt_sky_face_);
+        const float* forward = kRtSkyFaces[face][0];
+        const float* up = kRtSkyFaces[face][1];
+        const float right[3] = {forward[1] * up[2] - forward[2] * up[1], forward[2] * up[0] - forward[0] * up[2],
+                                forward[0] * up[1] - forward[1] * up[0]};
+        std::memset(rows.projection, 0, sizeof(rows.projection));
+        for (unsigned k = 0; k < 3u; ++k) {
+            rows.projection[0][k] = right[k];
+            rows.projection[1][k] = up[k];
+            rows.projection[2][k] = e * kFarEps * forward[k];
+            rows.projection[3][k] = forward[k];
+        }
+        rows.projection[2][3] = -f * kFarEps;
+        const auto size = static_cast<float>(kRtSkyFace);
+        const float x = static_cast<float>(face % 3u) * size, y = static_cast<float>(face / 3u) * size;
+        entry.viewport = gpu::ViewportRect{x, y, size, size, scaled.min_depth, scaled.max_depth};
+        entry.scissor = gpu::rect(static_cast<std::int32_t>(x), static_cast<std::int32_t>(y), static_cast<std::int32_t>(x + size),
+                                  static_cast<std::int32_t>(y + size));
+        entry.empty = false;
+        width = height = size;
+    }
     float jitter_x = 0.0f, jitter_y = 0.0f;
     if (temporal_scene_ && pass.layer == NEBULA_LAYER_SCENE && view.orthographic == 0u && width > 0.0f && height > 0.0f) {
         jitter_x = 2.0f * scene_jitter_px_[0] / width;
@@ -553,11 +577,13 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
     rows.raster[0] = width;
     rows.raster[1] = height;
     std::memcpy(rows.sky_up, sky_up_, sizeof(rows.sky_up));
-    rows.view_flags = view_flags_;
-    rows.traced[0] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_light_slot_) : 0.0f;
-    rows.traced[1] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_added_slot_) : 0.0f;
-    rows.traced[2] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_mirror_slot_) : 0.0f;
-    if ((view_flags_ & 8u) != 0u && rt_volume_drawn_ && index == rt_scene_view_) {
+    // A face of the sky picture is drawn as the screen's sky, untraced (the tracer reads it).
+    const std::uint32_t flags = rt_sky_face_ >= 0 ? view_flags_ & ~8u : view_flags_;
+    rows.view_flags = flags;
+    rows.traced[0] = (flags & 8u) != 0u ? static_cast<float>(rt_light_slot_) : 0.0f;
+    rows.traced[1] = (flags & 8u) != 0u ? static_cast<float>(rt_added_slot_) : 0.0f;
+    rows.traced[2] = (flags & 8u) != 0u ? static_cast<float>(rt_mirror_slot_) : 0.0f;
+    if ((flags & 8u) != 0u && rt_volume_drawn_ && index == rt_scene_view_) {
         // The light volume over the scene camera's view (program.hlsli traced_air): the depth's eye terms and the
         // viewport the volume spans (rt_light_frame_'s), its picture's place + 1 and its sampler.
         std::memcpy(rows.volume[0], rt_light_frame_.depth, sizeof(rows.volume[0]));
@@ -566,64 +592,18 @@ const RenderCore::WalkView& RenderCore::walk_view(std::uint32_t index, const Neb
         rows.volume[2][1] = static_cast<float>(rt_volume_sampler_);
         rows.volume[2][3] = rt_scatter_drawn_ ? static_cast<float>(rt_scatter_slot_) + 1.0f : 0.0f;
     }
-    // The indirect ratio's place + 1 (program.hlsli traced_o): the scene view's, where the pass ran.
-    rows.volume[2][2] = (view_flags_ & 8u) != 0u && rt_indirect_shown_ && index == rt_scene_view_
-                            ? static_cast<float>(rt_indirect_slot_) + 1.0f : 0.0f;
-    rows.traced[3] = (view_flags_ & 8u) != 0u ? static_cast<float>(rt_facing_slot_) : 0.0f;
-    if ((view_flags_ & 8u) != 0u && rt_transmit_drawn_ && index == rt_scene_view_) {
-        rows.transmit[0] = static_cast<float>(rt_transmit_slot_);  // program.hlsli traced_mirror: glass and water, High
+    rows.traced[3] = (flags & 8u) != 0u ? static_cast<float>(rt_facing_slot_) : 0.0f;
+    if ((flags & 8u) != 0u && rt_transmit_drawn_ && index == rt_scene_view_) {
+        rows.transmit[0] = static_cast<float>(rt_transmit_slot_);  // program.hlsli traced_colour: glass and water, High
         rows.transmit[1] = 1.0f;
     }
-    if ((view_flags_ & 8u) != 0u && rt_blend_guide_mode_ != 0u && index == rt_scene_view_) {
+    if ((flags & 8u) != 0u && rt_blend_guide_mode_ != 0u && index == rt_scene_view_) {
         // The guide blended draws compare with (program.hlsli traced_by_air, traced_mirror_own): the second
         // layer's, else the opaque layer's; and the depth's eye terms for the compare (with the volume or without).
         rows.blend_guide[0] = static_cast<float>(rt_blend_guide_mode_ == 1u ? rt_blend_guide_slot_ : rt_opaque_guide_slot_);
         rows.blend_guide[1] = static_cast<float>(rt_blend_guide_mode_);
+        rows.blend_guide[2] = rt_blend_guide_mode_ == 1u ? static_cast<float>(rt_blend_item_place_) : 0.0f;
         std::memcpy(rows.volume[0], rt_light_frame_.depth, sizeof(rows.volume[0]));
-    }
-    if ((view_flags_ & 8u) != 0u) {
-        std::memcpy(rows.stage_a, rt_stage_a_, sizeof(rows.stage_a));
-        std::memcpy(rows.stage_k, rt_stage_k_, sizeof(rows.stage_k));
-        std::memcpy(rows.look, rt_look_, sizeof(rows.look));
-        for (unsigned i = 0; i < kRtDevProgramSlots; ++i) {  // rt_dev.h: program.hlsli view_dev
-            const unsigned which = kRtDevProgramFirst + i;
-            const bool given = (rt_dev_set_ >> which & 1u) != 0u;
-            rows.dev[0][i] = given ? rt_dev_[which] : 0.0f;
-            rows.dev[1][i] = given ? 1.0f : 0.0f;
-        }
-        // The relight's view constants (program.hlsli traced_painted, view_relight): the program's formulas
-        // on the rows above, once a view, not a pixel. sRGB decoded as traced_lin; dev y, z, w as the program reads them.
-        const auto lin = [](float v) {
-            v = std::max(v, 0.0f);
-            return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
-        };
-        const auto luma = [](const float* v) { return 0.2126f * v[0] + 0.7152f * v[1] + 0.0722f * v[2]; };
-        const float sun_strength = rows.dev[1][1] > 0.5f ? rows.dev[0][1] : 1.25f;  // October's kSun
-        const float sky_chroma = rows.dev[1][2] > 0.5f ? rows.dev[0][2] : 0.4f;
-        const float stage_light = rows.dev[1][3] > 0.5f ? rows.dev[0][3] : 0.0f;
-        float sky[3], full[3], key[3], held[3];
-        for (unsigned ch = 0; ch < 3u; ++ch) {
-            sky[ch] = lin(rows.stage_a[ch]);
-            full[ch] = lin(std::clamp(rows.stage_a[ch] + rows.stage_k[ch], 0.0f, 1.0f));
-            key[ch] = std::max(full[ch] - sky[ch], 0.0f);
-            held[ch] = full[ch] + (1.0f - full[ch]) * stage_light;
-        }
-        const float exposure = luma(full) / std::max(luma(sky) + luma(key) * rows.look[1], 1e-4f);
-        const float sky_l = luma(sky), held_l = luma(held);
-        for (unsigned ch = 0; ch < 3u; ++ch) {
-            rows.relight[0][ch] = sky[ch];
-            rows.relight[1][ch] = rows.look[3] * (sky_l + (sky[ch] - sky_l) * sky_chroma) * exposure;
-            rows.relight[2][ch] = key[ch] * sun_strength * exposure;
-            rows.relight[3][ch] = held_l > 1e-4f ? held[ch] / held_l : 1.0f;
-        }
-        rows.relight[0][3] = held_l;
-        // The sun's direction in the eye's space for a lit program's key highlight: the scene's view under the
-        // relight with a traced sun this walk (its Facing picture is the scene's; without one its r is 1), else none:
-        // the programs read the Facing picture only where it is given.
-        const bool sun_known = rows.look[0] > 0.0f && rt_sun_now_ && index == rt_scene_view_;
-        for (unsigned ch = 0; ch < 3u; ++ch) {
-            rows.relight[ch + 1u][3] = sun_known ? rt_sun_eye_[ch] : 0.0f;
-        }
     }
     rows.scale[1] = walk_.time.t;
     rows.scale[2] = walk_.time.t_prev;
@@ -1211,6 +1191,11 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             ++i;
             continue;
         }
+        // The tracer's sky picture: the sky's items alone (rt_sky_capture).
+        if (rt_sky_walk_ && !core::item_draws_sky_picture(item)) {
+            ++i;
+            continue;
+        }
 
         if (collect_ao && (item.flags & NEBULA_ITEM_REFLECT_AO) != 0u && mesh != nullptr) {
             const float (*block_rows)[4] = walk_rows_cpu_ + walk_block_rows_[item.block];
@@ -1364,6 +1349,16 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         // A metal (draw flag 128): no body, all its light its mirror's: share 1, no added light.
         const bool metal = rt_light_on_ && scene_layer && (item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u &&
                            registries_.mesh(item.mesh).hit_class == NEBULA_HIT_METAL;
+        // Water (draw flag 65536): a model's water class, falling water (a clear sheet at water's index and roughness,
+        // hit_record.rs CLEAR_FALL) or a code-drawn sea (program.hlsli traced_second_sheet: one body of water drawn as
+        // several sheets shows once).
+        const bool water = rt_light_on_ && scene_layer &&
+                           ((item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u
+                                ? registries_.mesh(item.mesh).hit_class == NEBULA_HIT_WATER ||
+                                      (registries_.mesh(item.mesh).hit_class == NEBULA_HIT_GLASS &&
+                                       std::fabs(registries_.mesh(item.mesh).hit_ior - 1.33f) < 0.005f &&
+                                       std::fabs(registries_.mesh(item.mesh).hit_roughness - 0.03f) < 0.005f)
+                                : core::category_is_water((item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT));
         root.first_instance = i;
         // Shown as it is (program.hlsli draw flag 64): the sky and what is drawn with it, and a
         // surface the cooker classed glowing: no share, no added light, no mirror. The sky takes no air in front (8).
@@ -1386,7 +1381,7 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         root.flags = ((item.flags & NEBULA_ITEM_SPREAD_LINES) != 0u ? 1u : 0u) |
                      (shown ? 64u : 0u) |
                      (character ? 2048u : 0u) | (environment ? 4096u : 0u) |
-                     (metal ? 128u : 0u) |
+                     (metal ? 128u : 0u) | (water ? 65536u : 0u) |
                      // A glowing mesh that is a light this frame: 16384, a being's 32768 too
                      // (program.hlsli traced_colour). Not 256: that is the added shells' exchange, and
                      // 256 drew every glowing body flat.
@@ -1669,10 +1664,9 @@ void RenderCore::walk_scene_end() {
     rt_program_signal();  // signals S and A: the scene as the programs drew it, before anything after the scene
     pipelines_.scene_drawn();
     rt_reactive();
-    // The camera's finish (scene_camera.hlsl g_finish): 1 traced with the relight in the sun (form above 0,
-    // rt_look_[0]; 0 is Painted), 2 traced with the relight and no sun (the eye may open), 0 none.
-    const unsigned traced_finish =
-        !(rt_light_on_ && rt_physical_) ? 0u : rt_look_[0] > 0.0f ? 1u : rt_sunless_ ? 2u : 0u;
+    // The camera's finish (scene_camera.hlsl g_finish): 1 traced in a traced sun, 2 traced with no sun (the eye may
+    // open), 0 none.
+    const unsigned traced_finish = !rt_light_on_ ? 0u : rt_sun_lit_ ? 1u : 2u;
     rt_light_end();
     scene_phase_ = false;
     temporal_scene_ = false;

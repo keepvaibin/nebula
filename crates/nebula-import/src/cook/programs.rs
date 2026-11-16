@@ -1708,10 +1708,6 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
             pixel.push('\n');
         }
         pixel.push_str("    g_enh = enh_begin(i.lit_eye, i.lit_nrm);\n");
-        if !m.highlight_maps.is_empty() {
-            // The enhanced highlight as the sprite painted it (its roughness and peak), under the relight.
-            pixel.push_str(&format!("    enh_sprite({:.3}, {:.3});\n", m.highlight_rough, m.highlight_gain));
-        }
     }
     if lit_rows_used {
         for l in &lit_body {

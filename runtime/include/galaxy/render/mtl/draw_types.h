@@ -35,6 +35,7 @@ struct RenderLayout {
     Format motion = Format::Rg16f;          // aux 1 (and 4): the motion vectors
     Format reactive = Format::R8;           // aux 2 and 3: the reactive mask
     Format layer = Format::Rgba16f;         // aux 3: the effects layer's colour and its transmittance
+    Format items = Format::Rg32u;           // kAuxPrepass: the ray tracer's item target
     bool texture_arrays = false;            // the programs' array form (else their bound-table form)
     bool layer_targets = false;             // aux 3 can be made
     unsigned max_samples = 1u;

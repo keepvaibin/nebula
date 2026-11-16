@@ -80,6 +80,9 @@ public:
     // `targets`: the textures the pass draws into, which are left out (a target's own picture may hold a slot while
     // the next pass draws into it again).
     void use_textures(mtl::Object render_encoder, const mtl::Object* targets = nullptr, std::size_t target_count = 0u) const;
+    // The same for `compute_encoder` (an id<MTLComputeCommandEncoder>): the ray tracer's passes, which reach every
+    // slot through the array. Render thread.
+    void use_textures_compute(mtl::Object compute_encoder) const;
     // The render pass that is open and draws with the game's programs (null: none): a heap made, and a picture given
     // a slot, while it is open are named to it at once. Render thread.
     void set_open_pass(mtl::Object render_encoder) noexcept { open_pass_ = render_encoder; }

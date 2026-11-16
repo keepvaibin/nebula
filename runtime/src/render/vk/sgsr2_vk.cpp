@@ -129,7 +129,7 @@ public:
         }
         const VkCommandBuffer commands = in.commands;
         const unsigned write = history_index_ ^ 1u;
-        const VkFramebuffer upscale_framebuffer = upscale_framebuffer_for(in.output.view, write);
+        const VkFramebuffer upscale_framebuffer = upscale_framebuffer_for(in.output, write);
         if (upscale_framebuffer == VK_NULL_HANDLE) {
             return false;
         }
@@ -410,9 +410,10 @@ private:
         return convert_pipeline_ != VK_NULL_HANDLE && upscale_pipeline_ != VK_NULL_HANDLE;
     }
 
-    // The output's framebuffer with history `write`, made again when the renderer replaces its output image.
-    VkFramebuffer upscale_framebuffer_for(VkImageView output, unsigned write) {
-        if (framebuffer_output_ != output) {
+    // The output's framebuffer with history `write`, made again when the renderer replaces its output image (its serial:
+    // a new image's view may have the old one's handle).
+    VkFramebuffer upscale_framebuffer_for(const TemporalImage& output, unsigned write) {
+        if (framebuffer_output_ != output.serial || output.serial == 0u) {
             for (VkFramebuffer& framebuffer : upscale_framebuffers_) {
                 if (framebuffer != VK_NULL_HANDLE) {
                     const VkDevice device = device_;
@@ -421,11 +422,11 @@ private:
                     framebuffer = VK_NULL_HANDLE;
                 }
             }
-            framebuffer_output_ = output;
+            framebuffer_output_ = output.serial;
         }
         VkFramebuffer& framebuffer = upscale_framebuffers_[write];
         if (framebuffer == VK_NULL_HANDLE) {
-            const VkImageView views[2] = {output, history_[write]->target_view};
+            const VkImageView views[2] = {output.view, history_[write]->target_view};
             VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
             info.renderPass = upscale_pass_;
             info.attachmentCount = 2u;
@@ -440,9 +441,11 @@ private:
         return framebuffer;
     }
 
+    // The sets stand while the inputs are the same images: by serial, as a new image's view may have the old one's
+    // handle (the sets would still read the old image's memory). An image without a serial is never taken as the same.
     bool sets_match(const TemporalUpscaleInputs& in) const {
-        return convert_set_ != VK_NULL_HANDLE && set_color_ == in.color.view && set_depth_ == in.depth.view &&
-               set_motion_ == in.motion.view;
+        return convert_set_ != VK_NULL_HANDLE && in.color.serial != 0u && in.depth.serial != 0u && in.motion.serial != 0u &&
+               set_color_ == in.color.serial && set_depth_ == in.depth.serial && set_motion_ == in.motion.serial;
     }
 
     // Upscale set i reads history i (and the pass writes the other).
@@ -467,9 +470,9 @@ private:
         convert_set_ = sets[0];
         upscale_sets_[0] = sets[1];
         upscale_sets_[1] = sets[2];
-        set_color_ = in.color.view;
-        set_depth_ = in.depth.view;
-        set_motion_ = in.motion.view;
+        set_color_ = in.color.serial;
+        set_depth_ = in.depth.serial;
+        set_motion_ = in.motion.serial;
         constexpr VkImageLayout kRead = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         const VkDescriptorImageInfo depth{VK_NULL_HANDLE, in.depth.view, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL};
         const VkDescriptorImageInfo clip{VK_NULL_HANDLE, depthclip_->view, kRead};
@@ -568,10 +571,10 @@ private:
     std::array<std::shared_ptr<Texture>, 2> history_{};
     VkFramebuffer convert_framebuffer_ = VK_NULL_HANDLE;
     std::array<VkFramebuffer, 2> upscale_framebuffers_{};
-    VkImageView framebuffer_output_ = VK_NULL_HANDLE;
+    std::uint64_t framebuffer_output_ = 0u;  // the output's serial the framebuffers were made for
     VkDescriptorSet convert_set_ = VK_NULL_HANDLE;
     std::array<VkDescriptorSet, 2> upscale_sets_{};
-    VkImageView set_color_ = VK_NULL_HANDLE, set_depth_ = VK_NULL_HANDLE, set_motion_ = VK_NULL_HANDLE;
+    std::uint64_t set_color_ = 0u, set_depth_ = 0u, set_motion_ = 0u;  // the serials the sets were written for
     unsigned history_index_ = 0u;  // the history read next
     bool history_ready_ = false;
     std::array<float, 12> view_{};

@@ -1,176 +1,60 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// How much of what a surface mirrors reaches the picture, shared by the reflections pass
-// (which carries the local lights' highlights through the filter as radiance: highlight / weight) and its composite.
-//   ADD (water; glass, metal and gloss with no painted environment map): F = F0 * A + B, the split sum's environment
-//     term over the surface's lobe (mirror_terms: Schlick's rise where it is smooth, far less at a glance where it is
-//     rough; at roughness 0 Schlick's own rise, the fit's error fading out to 1); F0 = ((ior - 1) / (ior + 1))^2 exactly, the
-//     index the item's (word 15 bits 12-19), else the class's (glass 0.04, water 0.0201),
-//     a metal's own colour, gloss 0.04; F never over 1. The colour under
-//     it keeps 1 - F; under a metal none (a metal has no body).
-//   SUBSTITUTE (a painted environment map): until the programs fetch R in place of the painted map,
-//     the first cut's multiply: tint * (the head-on share * A + B), the colour under it 1 - 0.6 * the painted share
-//     (rt_light.hlsl's numbers, so only R itself changes).
+// The specular side of a pixel's material, from the surface images (S.material, S.base) and its item's word 15, on the
+// shared model (shade_core.hlsli): what the reflections pass weighs its R by (lobes.mirror, so the local lights'
+// highlights ride through the filter demodulated: highlight / lobes.mirror), the compose steps' sun highlight, and the
+// denoiser's specular albedo. The programs take the same lobes from their own colour (program.hlsli).
+//   metal (class 2)  its colour is its F0: its kind's (item word 15 bits 12-19, 1 to 7) tinted by the art's hue, else the
+//                    art's hue at no less than half (shade_metal_colour); no diffuse body;
+//   glass, water     dielectrics of the item's index (word 15 bits 12-19 as (n - 1) x 100), else the class's: 1.5, 1.33;
+//   any other class  a dielectric of index 1.5 (F0 0.04): every surface has its GGX lobe at its roughness.
 #ifndef NEBULA_RT_MIRROR_HLSLI
 #define NEBULA_RT_MIRROR_HLSLI
 
-#include "rt_frame.hlsli"  // rt_dev_or
+#include "rt_frame.hlsli"
+#include "shade_core.hlsli"
 
-static const uint kMirrorGloss = 1u, kMirrorMetal = 2u, kMirrorGlass = 3u, kMirrorWater = 9u;
-static const uint kMirrorPainted = 64u;  // S.material: a painted reflection (NEBULA_HIT_ENVIRONMENT)
+static const uint kMirrorGloss = 1u, kMirrorMetal = 2u, kMirrorGlass = 3u, kMirrorEmissive = 6u, kMirrorPainted = 7u,
+                  kMirrorWater = 9u;
 
-// The split sum's environment term (A, B: what a surface mirrors over its lobe is F0 * A + B) by roughness and n.v,
-// Karis's analytic fit ("Physically Based Shading on Mobile", 2014): Schlick's rise where the surface is smooth, far
-// less at a glance where it is rough (0.45: about 0.2 at a grazing look). The same fit rt_rr_guides.hlsl gives the
-// denoiser as the specular albedo.
-float2 mirror_terms_fit(float rough, float facing) {
-    const float4 r = rough * float4(-1.0f, -0.0275f, -0.572f, 0.022f) + float4(1.0f, 0.0425f, 1.04f, -0.04f);
-    const float a004 = min(r.x * r.x, exp2(-9.28f * facing)) * r.x + r.y;
-    return float2(-1.04f, 1.04f) * a004 + r.zw;
-}
-// A mirror (roughness 0) is Schlick's F0 + (1 - F0) (1 - n.v)^5 exactly (the fit is 14 to 29 % over it there); the
-// fit's own error at 0 fades out as the roughness rises to 1, so the terms are continuous in roughness
-// (a switch at one roughness put a step of a quarter of F where water's filtered roughness crosses it).
-float2 mirror_terms(float rough, float facing) {
-    const float g = 1.0f - saturate(facing);
-    const float p = g * g * g * g * g;
-    return mirror_terms_fit(rough, facing) + (float2(1.0f - p, p) - mirror_terms_fit(0.0f, facing)) * (1.0f - saturate(rough));
-}
-
-// sRGB's decode for a metal's colour: its own name, this header stands without rt_common.hlsli.
+// sRGB's decode: its own name, this header stands without rt_common.hlsli.
 float3 mirror_lin(float3 c) {
     c = max(c, 0.0f);
     return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
 }
 
-// A metal's F0 by its kind (hit_record.rs METAL_KINDS, the same numbers): gold, silver, copper, iron, chrome,
-// brass, platinum; linear.
-float3 mirror_metal_f0(uint kind) {
-    switch (kind) {
-    case 1u: return float3(1.000f, 0.766f, 0.336f);
-    case 2u: return float3(0.972f, 0.960f, 0.915f);
-    case 3u: return float3(0.955f, 0.638f, 0.538f);
-    case 4u: return float3(0.562f, 0.565f, 0.578f);
-    case 5u: return float3(0.550f, 0.556f, 0.554f);
-    case 6u: return float3(0.910f, 0.778f, 0.423f);
-    default: return float3(0.673f, 0.637f, 0.585f);
-    }
-}
-static const float kMetalTint = 0.25f;  // hit_record.rs METAL_TINT: how far the art's hue tints a kind's F0
-
-// Schlick's F0 of a surface of class `klass`: glass and water ((n - 1) / (n + 1))^2 by the item's index (`ior_bits`:
-// item word 15 bits 12-19, (n - 1) x 100; 0: the class's own, 1.5 and 1.33), gloss 0.04; a metal its
-// kind's (the same bits on a metal, 1 to 7) times lerp(1, its colour's hue, kMetalTint), else its colour.
-float3 mirror_f0(uint klass, float3 colour, uint ior_bits) {
-    if (klass == kMirrorMetal) {
-        const uint kind = ior_bits & 255u;
-        const float3 art = mirror_lin(colour);
-        if (kind == 0u || kind > 7u) {
-            return art;
-        }
-        const float top = max(max(art.r, art.g), art.b);
-        const float3 hue = top > 1e-4f ? art / top : float3(1.0f, 1.0f, 1.0f);
-        return mirror_metal_f0(kind) * lerp(float3(1.0f, 1.0f, 1.0f), hue, kMetalTint);
-    }
-    if (klass != kMirrorGlass && klass != kMirrorWater) {
-        return float3(0.04f, 0.04f, 0.04f);
-    }
-    const float n = ior_bits != 0u ? 1.0f + float(ior_bits & 255u) / 100.0f : (klass == kMirrorWater ? 1.33f : 1.5f);
-    const float r = (n - 1.0f) / (n + 1.0f);
-    return float3(r * r, r * r, r * r);
-}
-
-// The first cut's head-on share and tint of a painted surface's SUBSTITUTE (mirror_weight's painted branch).
-float mirror_painted_head_on(uint klass, float rough, float3 colour, uint ior_bits, out float3 tint) {
-    tint = float3(1.0f, 1.0f, 1.0f);
-    if (klass == kMirrorGlass) {
-        // Its own index's F0 where the item has one (the crystal pillar's 0.082), else the first cut's.
-        return ior_bits != 0u ? mirror_f0(klass, colour, ior_bits).x : rt_dev_or(kDevPaintedGlass, 0.1f);
-    }
-    if (klass == kMirrorMetal) {
-        tint = lerp(float3(1.0f, 1.0f, 1.0f), mirror_lin(colour), 0.5f);
-        return rt_dev_or(kDevPaintedMetal, 0.55f);
-    }
-    return klass == kMirrorGloss ? rt_dev_or(kDevPaintedGloss, 0.05f) * (1.0f - rough) : 0.0f;
-}
-
-// rgb what of R reaches the picture, a what stays of the colour under it. `bits` S.material.b as a byte, `rough` its
-// roughness, `share` its painted share, `colour` S.base, `glance` 1 - n.v, `ior_bits` the item's index (mirror_f0;
-// 0 where the class is not glass or water, or none is written).
-float4 mirror_weight(uint bits, float rough, float share, float3 colour, float glance, uint ior_bits) {
-    const uint klass = bits & 15u;
-    const float2 terms = mirror_terms(saturate(rough), saturate(1.0f - glance));
-    if ((bits & kMirrorPainted) != 0u && klass != kMirrorWater) {
-        float3 tint;
-        const float head_on = mirror_painted_head_on(klass, rough, colour, ior_bits, tint);
-        return float4(tint * saturate(head_on * terms.x + terms.y), 1.0f - rt_dev_or(kDevPaintedMirror, 0.6f) * share);
-    }
-    const float3 f = saturate(mirror_f0(klass, colour, ior_bits) * terms.x + terms.y);
-    // What stays of the colour under it: 1 - F; a metal none, all its light is the mirror's.
-    return float4(f, klass == kMirrorMetal ? 0.0f : 1.0f - dot(f, float3(0.2126f, 0.7152f, 0.0722f)));
-}
-
-// mirror_weight for a pixel with its item's word 15 (mirror_word). A gloss or a metal the art painted with an
-// environment map is ADDED like an unpainted one, its F0 from the art: the painted share in linear light, in the
-// response's hue: a gloss max(that, 0.04); a metal its kind's where it has one, else the hue at no less than 0.5,
-// and no base. Painted glass, every unpainted surface and a run with rt_dev painted_mirror: mirror_weight.
-bool mirror_painted_added(uint bits) {
-    const uint klass = bits & 15u;
-    return (bits & kMirrorPainted) != 0u && (klass == kMirrorGloss || klass == kMirrorMetal) &&
-           rt_dev_or(kDevPaintedMirror, -1.0f) < 0.0f;
-}
-// The F0 of a painted gloss or metal that is ADDED (mirror_painted_added).
-float3 mirror_added_f0(uint klass, float share, float3 colour, uint word) {
-    const uint ior_bits = word >> 12u & 255u;
-    // The strength: the painted share (how much of the pixel the art's reflection is, S.material.a), in linear light.
-    // The hue: the response's (word bits 0-11; the cook softens its strength by the tint keep, so only its hue is
-    // read), white where none.
-    const float3 tint = (word & 0xFFFu) != 0u
-                            ? mirror_lin(float3(float(word & 15u), float(word >> 4u & 15u), float(word >> 8u & 15u)) / 15.0f)
-                            : float3(1.0f, 1.0f, 1.0f);
-    const float top = max(tint.r, max(tint.g, tint.b));
-    const float3 hue = top > 1e-4f ? tint / top : float3(1.0f, 1.0f, 1.0f);
-    const float strength = mirror_lin(float3(share, share, share)).x;
-    float3 f0;
-    if (klass == kMirrorMetal) {
-        if (ior_bits >= 1u && ior_bits <= 7u) {
-            f0 = mirror_f0(klass, colour, ior_bits);
-        } else if (ior_bits == 255u) {
-            // A row's kind `art`: the metal in its own colour (a blue metal mirrors blue): the base's hue.
-            const float3 art = mirror_lin(colour);
-            const float art_top = max(art.r, max(art.g, art.b));
-            f0 = (art_top > 0.05f ? art / art_top : float3(1.0f, 1.0f, 1.0f)) * max(strength, 0.5f);
-        } else {
-            f0 = hue * max(strength, 0.5f);
-        }
-    } else {
-        f0 = max(hue * strength, 0.04f);
-    }
-    return f0;
-}
-float4 mirror_weight_word(uint bits, float rough, float share, float3 colour, float glance, uint word) {
-    const uint klass = bits & 15u;
-    if (!mirror_painted_added(bits)) {
-        return mirror_weight(bits, rough, share, colour, glance, word >> 12u & 255u);
-    }
-    const float2 terms = mirror_terms(saturate(rough), saturate(1.0f - glance));
-    const float3 f = saturate(mirror_added_f0(klass, share, colour, word) * terms.x + terms.y);
-    return float4(f, klass == kMirrorMetal ? 0.0f : 1.0f - dot(f, float3(0.2126f, 0.7152f, 0.0722f)));
-}
-
-// The head-on reflectance (F0) mirror_weight_word weighs a pixel by: an added painted surface's, a SUBSTITUTE's
-// head-on share in its tint, else mirror_f0.
-float3 mirror_f0_word(uint bits, float rough, float share, float3 colour, uint word) {
+// The material at a pixel: `bits` S.material.b as a byte (class in the low four bits), `rough` S.material.r, `metal`
+// S.material.g, `colour` S.base (sRGB), `word` the item's word 15 (0 where none).
+ShadeMaterial mirror_material(uint bits, float rough, float metal, float3 colour, uint word) {
     const uint klass = bits & 15u;
     const uint ior_bits = word >> 12u & 255u;
-    if (mirror_painted_added(bits)) {
-        return mirror_added_f0(klass, share, colour, word);
+    const float3 art = mirror_lin(colour);
+    if (klass == kMirrorMetal) {
+        return shade_material(shade_metal_colour(ior_bits, art), rough, 1.0f, kShadeIorDefault, float3(0.0f, 0.0f, 0.0f),
+                              kShadeBehindOpaque);
     }
-    if ((bits & kMirrorPainted) != 0u && klass != kMirrorWater) {
-        float3 tint;
-        const float head_on = mirror_painted_head_on(klass, saturate(rough), colour, ior_bits, tint);
-        return tint * head_on;
-    }
-    return mirror_f0(klass, colour, ior_bits);
+    const bool clear = klass == kMirrorGlass || klass == kMirrorWater;
+    const float ior = clear && ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f
+                      : klass == kMirrorWater ? kShadeIorWater
+                                              : kShadeIorDefault;
+    const uint behind = klass == kMirrorWater ? kShadeBehindWater : klass == kMirrorGlass ? kShadeBehindSheet : kShadeBehindOpaque;
+    return shade_material(art, rough, saturate(metal), ior, float3(0.0f, 0.0f, 0.0f), behind);
+}
+
+// The roughness up to which the reflections pass traces a lobe (rt_reflect.hlsl): past it the lobe is so wide that
+// the sky and bounce light I stands for what it mirrors (Lumen's cut).
+static const float kTracedRoughHigh = 0.6f, kTracedRoughMedium = 0.25f;
+
+// Whether a pixel's class takes light at all (an emissive or painted surface shows itself: no lobe).
+bool mirror_lit(uint bits) {
+    const uint klass = bits & 15u;
+    return klass != kMirrorEmissive && klass != kMirrorPainted;
+}
+
+// The sun's highlight on a pixel, demodulated (over lobes.mirror) as the specular picture holds it, per unit of the
+// sun's light on a face square to it: `n` the shading normal toward the eye, `v` toward the eye, `sun` toward the sun,
+// `spread` the sun disc's radius over its distance (g_sun.w).
+float3 mirror_sun_spec(ShadeMaterial m, ShadeLobes lobes, float3 n, float3 v, float3 sun, float spread) {
+    return shade_highlight(m, lobes, n, v, sun, spread) / max(lobes.mirror, float3(1e-3f, 1e-3f, 1e-3f));
 }
 
 #endif

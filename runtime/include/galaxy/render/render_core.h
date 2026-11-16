@@ -511,6 +511,24 @@ private:
     // what light reaches it (rt_light: the surfaces, the sun, the local lights, the shares the programs read, the
     // filters); the scene pass then draws those items over their own depth, the lit programs in their traced form.
     void rt_prepass(const NebulaFramePass& begin);
+    // The sky as the screen draws it, into six faces about the eye (a cube's, side by side in one picture: three
+    // across, two down): the scene's sky items under each face's view, before the prepass. What a ray that leaves the
+    // scene shows is read from it along the ray's direction (rt_shade.hlsli rt_sky_picture), every program and map of
+    // the sky's as drawn, not its dome's first map alone. The passes read it at t7 until rt_light_end.
+    void rt_sky_capture(const NebulaFramePass& begin);
+    void rt_sky_release() noexcept;
+    static constexpr std::uint64_t kRtSkyPicture = 1ull << 62u | 1ull << 32u;  // its target's key (no game target's)
+    static constexpr std::uint32_t kRtSkyFace = 512u;  // a face's size in pixels
+    // Each face's forward and up in the eye's space (its right is forward x up), in the picture's order: +x, -x, +y,
+    // -y, +z, -z; face n at column n % 3, row n / 3. rt_shade.hlsli rt_sky_picture reads them the same way.
+    static constexpr float kRtSkyFaces[6][2][3] = {
+        {{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},  {{-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+        {{0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}},  {{0.0f, -1.0f, 0.0f}, {0.0f, 0.0f, -1.0f}},
+        {{0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f}},  {{0.0f, 0.0f, -1.0f}, {0.0f, 1.0f, 0.0f}}};
+    rt::TextureView rt_sky_view_{};  // the picture as the passes read it (texture null: none this walk)
+    bool rt_sky_reading_ = false;    // the renderer holds it for the passes (rt_target_read_begin)
+    int rt_sky_face_ = -1;           // walk_view: the face being drawn, -1 none
+    bool rt_sky_walk_ = false;       // walk_draw_items draws the sky's items alone
     void rt_light();
     void rt_light_end() noexcept;
     void rt_dev_read();                         // rt_dev.h: the run's tunables, as ray tracing starts
@@ -519,8 +537,7 @@ private:
     [[nodiscard]] std::uint32_t rt_program_signal_due() const noexcept;
     void rt_program_signal();
     void rt_reactive();  // the reactive mask where the added light changed
-    bool rt_sunless_ = false;    // the relight on and no traced sun this walk (the camera's finish 2)
-    bool rt_physical_ = false;   // the relight (the setting's "physical"): rt_look_'s kForm and gains
+    bool rt_sun_lit_ = false;    // a traced sun lights this walk (the camera's finish 1; else 2)
     bool rt_lamps_own_ = false;  // local lights off: the programs light by their own lamp (view_flags bit 32)
     // The second layer, at the opaque phases' end: the scene's blended surfaces (water, glass, crystal) drawn into the
     // item target and the light pass run over them, into the picture the opaque draws are done reading.
@@ -563,6 +580,9 @@ private:
     void rt_pass_light();
     void rt_filters();
     void rt_report();
+    // rt_dev sun_occluders: the bins of this frame slot's last frame summed by what each item was (its material or
+    // effect name's hash and mesh), logged every 300 frames; then this frame's items kept for the slot.
+    void rt_occluders(const NebulaFrameList& list);
     [[nodiscard]] bool rt_measure(unsigned width);
     // The passes of their own files (rt_pass_indirect.cpp, rt_pass_reflect.cpp, rt_pass_volume.cpp): whether each runs
     // this frame (its images are made while it does), and the pass.
@@ -593,7 +613,7 @@ private:
         LightsAverageA, LightsAverageB, LightsMomentsA, LightsMomentsB, Added, ReservoirsA, ReservoirsB, Mirror,
         BlueNoise, SunTiles, SunAverageA, SunAverageB, SunDistanceA, SunDistanceB, SunBlur, SunOut, LightsSpec,
         BlendGuideA, BlendGuideB, BlendReservoirsA, BlendReservoirsB, BlendSunA, BlendSunB, BlendDistanceA, BlendDistanceB,
-        BlendLightsA, BlendLightsB, BlendMomentsA, BlendMomentsB, Facing, BlendBody,
+        BlendLightsA, BlendLightsB, BlendMomentsA, BlendMomentsB, Facing, BlendItem,
         IndirectRaw, IndirectAverageA, IndirectAverageB, IndirectMomentsA, IndirectMomentsB, Indirect, GiReservoirsA,
         GiReservoirsB, GiWeightsA, GiWeightsB, IndirectGuideA, IndirectGuideB, IndirectMotion, IndirectStep, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
         VolumeB, Scatter, ReflectMoved, RrDiffuse, RrSpecular, RrNormalRoughness, RrHit, NearRaw, NearA, NearB,
@@ -629,23 +649,9 @@ private:
     std::uint32_t rt_mirror_slot_ = 0u;  // the mirror picture's place among the textures
     std::uint32_t rt_added_slot_ = 0u;  // the added light's place among the textures
     std::uint32_t rt_facing_slot_ = 0u;  // the facing picture's (how a painted surface faces the sun)
-    // The stage's ambient (A) and key (K) colours the programs' painted composite takes (ViewRows::stage_a/k);
-    // rt_stage_a_[3] is kShadowTint.
+    // The stage's ambient (A) and key (K) colours by the row's gains: the lighting sky lin(A) and the sun
+    // lin(sat(A + K)) - lin(A) (rt_walk.cpp, g_sky_light and g_sun_light).
     float rt_stage_a_[4]{}, rt_stage_k_[4]{};
-    // The painted composite's look (program.hlsli traced_painted, view row `look`): kForm, the sun's height over the
-    // player's up (at least 0.5), kDebake, kAmbientLook. Set every walk from the style (rt_walk.cpp); the development
-    // tunables set them by name.
-    float rt_look_[4]{0.0f, 1.0f, 0.0f, 1.0f};
-    // rt_look_[1]'s sun height, eased: the value, the game frame it last stepped on, the stage it is for.
-    float rt_look_up_ = 1.0f;
-    std::uint32_t rt_look_up_frame_ = 0u;
-    std::uint32_t rt_look_up_stage_ = 0u;
-    bool rt_look_up_known_ = false;
-    // The share of a lit surface's light the frame's lamps give where the eye is (target from
-    // rt_emitters_finish), eased; kDebake's in a frame with no traced sun.
-    float rt_supplied_ = 0.0f, rt_supplied_target_ = 0.0f;
-    std::uint32_t rt_supplied_frame_ = 0u, rt_supplied_stage_ = 0u;
-    bool rt_supplied_known_ = false;
     // The development tunables (rt_dev.h): the values a run gave, a bit each in rt_dev_set_.
     float rt_dev_[kRtDevCount]{};
     std::uint64_t rt_dev_set_ = 0u;
@@ -726,7 +732,15 @@ private:
     bool rt_light_history_ = false;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_light_retired_;  // frame, image
     std::vector<std::uint32_t> rt_item_words_;
-    std::vector<std::uint32_t> rt_item_coords_;  // water's first map's coordinate rows, uploaded after the items
+    struct RtOccluderItem {
+        std::uint32_t source_hash = 0u, mesh = 0u, category = 0u;
+    };
+    std::vector<RtOccluderItem> rt_occluder_items_[kFramesInFlight];
+    std::vector<std::uint32_t> rt_occluder_bins_;
+    std::unordered_map<std::uint64_t, std::uint64_t> rt_occluder_sums_[2];  // water, the rest: (hash << 32 | mesh) -> rays
+    std::unordered_map<std::uint64_t, std::uint32_t> rt_occluder_category_;
+    std::uint64_t rt_occluder_special_[2][6]{};  // layer two, no surface, reached the sun, turned, blended, past the bins
+    unsigned rt_occluder_frames_ = 0u;
     std::vector<float> rt_set_words_;
     std::uint64_t rt_light_sum_[11]{};  // [6] cutout tests, [7] cutouts the pass could not read, [8] mirror rays,
                                         // [9] refracted pixels, [10] added light over the guard
@@ -747,7 +761,7 @@ private:
         float ambient[4], key[4], fill[4], sky[4], gains[4], axis[3][4], look[4], authored[4];
         std::uint32_t grid[4];
         float dome[4];  // rgb 1 / the dome's mean colour, w 1 when known (rt_shade.hlsli rt_sky_ratio)
-        float form[4];  // the painted composite's look, rt_look_ (rt_shade.hlsli rt_share_terms)
+        float form[4];  // free
         std::uint32_t spare[3][4];
     };
     void rt_shade_frame(RtShadeFrame& frame) const;
@@ -783,7 +797,6 @@ private:
     unsigned rt_bounce_width_ = 0u, rt_bounce_height_ = 0u;
     std::vector<std::pair<std::uint64_t, std::uint32_t>> rt_bounce_retired_;  // frame, image
     float rt_dome_mean_ = 0.0f;  // the sky dome's mean luminance as the bounce rays see it; 0 not yet known
-    float rt_hit_mean_ = 0.0f;   // the mean ratio of the surfaces they meet (rt_count_hit); 0 not yet known
     float rt_dome_colour_[3] = {0.0f, 0.0f, 0.0f};  // the dome's mean colour as they see it; 0 not yet known
     // The reference's sums, V D I R this walk's and the walk before's by turns (rt_ref_now_: this walk's first), and
     // what starts them again.
@@ -823,6 +836,9 @@ private:
     // The guide blended draws compare with (15.2; ViewRows::blend_guide): 0 none this walk, 1 the second layer's
     // (picture 9), 2 the opaque layer's (picture 8).
     std::uint32_t rt_blend_guide_mode_ = 0u, rt_blend_guide_slot_ = 0u, rt_opaque_guide_slot_ = 0u;
+    // The second layer's item at each pixel (picture 10; rt_surface.hlsl g_layer_item), its place + 1 (0: none): a
+    // blended draw owns the layer's traced light where that item is its own (program.hlsli traced_mirror_own).
+    std::uint32_t rt_blend_item_place_ = 0u;
     // An outside denoiser (rt_denoiser.h; rt_pass_reflect.cpp): the signals go to it raw this frame (g_more.z bit
     // 2048); its guides were written this frame.
     bool rt_raw_ = false, rt_guides_drawn_ = false;

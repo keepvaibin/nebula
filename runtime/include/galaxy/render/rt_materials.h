@@ -33,7 +33,7 @@ struct RtStage {
     float exposure_low = 40.0f;               // the stage's exposure's limits, lux
     float exposure_high = 150.0f;
     float air = 0.0f;                         // the air's density, per unit; 0: none (space, no row)
-    float water_clear = 600.0f;               // units of water to mostly opaque (kWaterClear)
+    float water_clear = 1770.0f;              // green's 1/e way under water, units (pure water at 1 unit a cm)
     bool shadow_sets_kept = false;
 };
 inline constexpr RtStage kRtStageDefaults{};

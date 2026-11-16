@@ -88,6 +88,7 @@ struct Backend::State {
     ComPtr<ID3D12Resource> counters_read[kFramesInFlight];
     const std::uint32_t* counters_mapped[kFramesInFlight]{};
     bool counters_bound = false;
+    unsigned counter_words = kCounters;  // cleared and copied: kCounterWords while the occluder bins count
     // The timed stretch (time_mark): two timestamps a frame slot, resolved into `times_read` (none: no measure).
     ComPtr<ID3D12QueryHeap> times;
     ComPtr<ID3D12Resource> times_read;
@@ -394,7 +395,7 @@ bool Backend::State::make_passes() {
         FAILED(device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&pass_root)))) {
         return false;
     }
-    const std::uint64_t bytes = std::uint64_t{kCounters} * 4u;
+    const std::uint64_t bytes = std::uint64_t{kCounterWords} * 4u;  // the occluder bins after the counters
     counters = buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
                       L"Nebula RT Counters");
     counters_zero = buffer(bytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, L"Nebula RT Zeros");
@@ -725,7 +726,7 @@ bool Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     }
     if (binds.counters && !s.counters_bound) {
         s.transition(s.counters.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
-        list->CopyBufferRegion(s.counters.Get(), 0u, s.counters_zero.Get(), 0u, std::uint64_t{kCounters} * 4u);
+        list->CopyBufferRegion(s.counters.Get(), 0u, s.counters_zero.Get(), 0u, std::uint64_t{s.counter_words} * 4u);
         s.transition(s.counters.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         s.counters_bound = true;
     } else if (binds.counters) {
@@ -848,12 +849,20 @@ void Backend::end_counters() {
         return;
     }
     s.transition(s.counters.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
-    s.commands->CopyResource(s.counters_read[s.frame_slot].Get(), s.counters.Get());
+    s.commands->CopyBufferRegion(s.counters_read[s.frame_slot].Get(), 0u, s.counters.Get(), 0u, std::uint64_t{s.counter_words} * 4u);
     s.transition(s.counters.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 }
 
 void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const {
     std::memcpy(out, state_->counters_mapped[frame_slot % kFramesInFlight], std::size_t{kCounters} * 4u);
+}
+
+void Backend::count_occluders(bool on) noexcept {
+    state_->counter_words = on ? kCounterWords : kCounters;
+}
+
+void Backend::read_occluders(unsigned frame_slot, std::uint32_t out[2u * kOccluderBins]) const {
+    std::memcpy(out, state_->counters_mapped[frame_slot % kFramesInFlight] + kCounters, std::size_t{2u * kOccluderBins} * 4u);
 }
 
 void Backend::time_mark(unsigned stretch, bool end) {

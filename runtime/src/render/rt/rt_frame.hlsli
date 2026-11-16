@@ -15,28 +15,20 @@ cbuffer FrameConstants : register(b0) {
                         // light set's own lamp is put out), bit 7 the emitters alone (--diagnostics rt-added: no sun, no
                         // sky), bit 9 the point's motion shown (--diagnostics rt-motion), bit 12 the camera under water
                         // (the game's report: water is seen from inside), bit 13 the landing cue under the player
-                        // (rt_light_space.hlsl). Bits 1, 2 and 4 are retired
+                        // (rt_light_space.hlsl), bit 14 the sky picture shown (--diagnostics rt-sky). Bits 1, 2 and 4 are retired
                         // (the set's lamp, the drops, the second layer: g_pass.x). w: ray tracing's parts as the
                         // player set them (rt_part), bit 12 the reference preset.
     uint4 g_grid;       // tiles across, tiles down, pixels a tile
     float4 g_sun;       // xyz: the direction to the shadow sun; w: the tangent of its half angle
-    float4 g_stage;     // x: the stage's ambient, y: its key light, as brightness: a painted surface in the key's
-                        // shadow keeps x / (x + y * n.l) of its colour; z: the game's time at the frame in seconds,
-                        // wrapped at an hour (the caustics' drift); w: the drop light's tangent (kDropTan 0.035,
-                        // 2 degrees): the landing cue's edge
-    float4 g_look;      // x: what a surface in the sun's shadow keeps of the sky's light (the sky turned down so the
-                        // sun's shadows read); y 1: a painted surface whose model's paint holds its shadows (hit
-                        // flag NEBULA_HIT_PAINTED_SHADOW) is shadowed by lit things only (the painted style, 14.6),
-                        // 0: every painted surface by everything solid; z: the facing (n.l) from which a painted surface keeps
-                        // its authored brightness; w: the stage's water clear (units of water to mostly its colour; rt_stages.tsv,
-                        // 600 by default)
+    float4 g_stage;     // x y free; z: the game's time at the frame in seconds, wrapped at an hour (the caustics'
+                        // drift); w: the drop light's tangent (kDropTan 0.035, 2 degrees): the landing cue's edge
+    float4 g_look;      // x y z free; w: the stage's water clear (green's 1/e way under water, units; rt_stages.tsv,
+                        // 1770 by default)
     uint4 g_glow;       // the emitters (48 bytes each: centre, radius; colour, reach; slot): x their first byte in the
                         // drops' buffer, y their tiles' and z their entries' first byte in the tiles' buffer, w how many
     uint4 g_mesh_at[3]; // where each arena's first byte is in its buffer (eight of them), then the rows'
     float4 g_sky;       // rgb: what a ray shows where it meets nothing, not even the dome read from the eye
-                        // (rt_shade.hlsli rt_look, the miss rule); w: a room's open O (the
-                        // gathered hits' running mean, rt_hit_mean_; 0 not yet measured): V's unit with no traced
-                        // sun
+                        // (rt_shade.hlsli rt_look, the miss rule); w free
     float4 g_up;        // xyz: the player's up in the eye's space (where the sky is)
     float4 g_ray_before;   // rt_eye_ray of the frame before
     float4 g_before[3];    // the frame before's eye space from this frame's (rows of a 3x4 matrix): for a pixel whose
@@ -50,20 +42,19 @@ cbuffer FrameConstants : register(b0) {
     uint4 g_clip;          // the clip areas' volumes (clip_shows): x their first byte in the items' buffer
                            // (after the items; 64 each: the rows from the eye to the unit shape, then the shape), y how
                            // many, z where the clipped map parts show: 1 inside a volume, 2 outside every one, 0 whole
-    float4 g_dev[8];       // the tracer's development tunables (rt_dev.h from painted_glass, kDev* below; rt_dev_or)
-    uint4 g_dev_set;       // x: a bit a g_dev slot, set where the run gave it
+    float4 g_sun_light;    // rgb: the stage's sun light on a face square to it, light units: lin(sat(A + K)) - lin(A)
+                           // (rt_shade.hlsli rt_sun_light)
+    float4 g_sky_light;    // rgb: the lighting sky's mean, light units: lin(A) (rt_shade.hlsli rt_sky_mean)
+    float4 g_sky_faces;    // x 1: the sky picture is drawn this frame (g_sky_picture, rt_shade.hlsli rt_sky_picture)
 };
 
-// A development tunable (rt_dev.h): the run's value where it gave one, else the code's own number.
-static const uint kDevPaintedGlass = 0u, kDevPaintedMetal = 1u, kDevPaintedGloss = 2u, kDevPaintedMirror = 3u,
-                  kDevKeepMetal = 4u, kDevKeepGloss = 5u;
-// The programs' keys, copied into the tail by the host (rt_walk.cpp): sun_strength, sky_chroma, stage_light.
-static const uint kDevSunStrength = 6u, kDevSkyChroma = 7u, kDevStageLight = 8u;
-// The share of the dome's chroma O keeps under the relight (rt_sky_ratio): the next slot after the shared
-// three, the host's dome_chroma once it fills it (t4); unset, kSkyChroma 0.4.
-static const uint kDevDomeChroma = 9u;
-float rt_dev_or(uint slot, float otherwise) {
-    return ((g_dev_set.x >> slot) & 1u) != 0u ? g_dev[slot >> 2u][slot & 3u] : otherwise;
+// The sun's visibility where it is not traced (a stage without a sun, the sun part off): the share of the lighting
+// sky the point's I holds, at most 1 (a room's key is hidden by what hides its sky: under a table, in a corner).
+float3 rt_untraced_v(float3 i) {
+    const float3 kLum = float3(0.2126f, 0.7152f, 0.0722f);
+    const float sky = dot(g_sky_light.rgb, kLum);
+    const float v = sky > 1e-5f ? saturate(dot(i, kLum) / sky) : 1.0f;
+    return float3(v, v, v);
 }
 
 cbuffer PassConstants : register(b1) {
@@ -76,7 +67,7 @@ cbuffer PassConstants : register(b1) {
 // The item table (rt_walk.cpp rt_tables: twenty uints an item, kItemBytes). Flags (word 1): bit 0 lit (its program sums the key
 // at the pixel), 1 takes the game's drop shadows, 2 a surface of the scene, 3 a sheet drawn from both sides, 4 the sky
 // (shown as it is); bits 8 up its light set from 1.
-static const uint kItemBytes = 80u;  // rt_walk.cpp kRtItemWords
+static const uint kItemBytes = 84u;  // rt_walk.cpp kRtItemWords
 static const uint kItemLit = 1u, kItemGround = 2u, kItemSurface = 4u, kItemThin = 8u, kItemSky = 16u;
 // Bit 6: a map part its clip areas show (g_clip): a ray meets it where it shows alone. Bit 7: its program alpha-tests
 // (can discard): a clipped part without it is whole where it shows.

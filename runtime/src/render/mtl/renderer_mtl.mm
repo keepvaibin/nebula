@@ -9,6 +9,8 @@
 #include "galaxy/launch_args.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/render/program_table.h"
+#include "galaxy/render/rt_caps.h"
+#include "galaxy/render/rt/rt_shaders.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/idle_clock.h"
 
@@ -151,6 +153,21 @@ bool RendererMtl::create_layouts() {
     bindless_ = caps.texture_arrays && caps.sampler_array_max >= 512u;
     program_use_bound_tables(!bindless_);
     std::cout << "[metal] draws read their textures from " << (bindless_ ? "one array" : "bound tables") << '\n';
+    // Ray tracing, from what the device reports (rt_caps.h): the tracer reaches every texture through the array.
+    RtCaps rt{};
+    rt.ray_queries = caps.ray_tracing && !::galaxy::diagnosing(::galaxy::kDiagnoseRtAbsent);
+    rt.acceleration_structures = rt.ray_queries;
+    rt.bindless = bindless_;
+    rt.shaders = rt_shaders_present();
+    rt.unified_memory = caps.unified_memory;
+    rt.enabled = true;  // Metal enables nothing per device
+    rt.triangle_ids = caps.primitive_ids;
+    set_rt_caps(rt);
+    program_use_triangle_ids(rt.triangle_ids);
+    log_rt_caps("metal", rt, get_render_config().ray_tracing_enabled);
+    if (get_render_config().ray_tracing_enabled && rt_capable(rt)) {
+        (void)rt::shaders_load(nullptr);
+    }
     draw_layout_ = mtl::RenderLayout{};
     draw_layout_.texture_arrays = bindless_;
     draw_layout_.layer_targets = true;  // four colour targets and blended RGBA16F: every Metal device
@@ -209,7 +226,11 @@ void RendererMtl::report_adapter() {
                                            msaa ? "the scene target is multisampled"
                                                 : "the GPU has no multisampled scene target formats");
     caps.taa = make_render_feature_status(false, false, false, false, "motion vectors, jitter, and history resources are not built");
-    caps.dxr = make_render_feature_status(false, false, false, false, "ray tracing runs on Direct3D 12");
+    const RtCaps rt = rt_caps();
+    caps.dxr = make_render_feature_status(true, rt.ray_queries && rt.acceleration_structures, rt_capable(rt),
+                                          kRayTracingRowOffered && rt_capable(rt),
+                                          rt_refusal(rt) != nullptr ? rt_refusal(rt) : "ray tracing is not offered yet");
+    host_window::ray_tracing_offered.store(kRayTracingRowOffered && rt_capable(rt), std::memory_order_relaxed);
     caps.streamline_bridge_built = false;
     caps.streamline = make_render_feature_status(false, false, false, false, "NVIDIA Streamline is not running");
     caps.reflex = make_render_feature_status(false, false, false, false, "Streamline Reflex integration is not built");

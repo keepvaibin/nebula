@@ -98,7 +98,7 @@ bool broken_tables() {
                  "three named rows");
     const RtStage* a = odd.find(galaxy::render::rt_stage_hash("A"));
     ok &= expect(a != nullptr && a->sun == RtStage::Sun::Auto && near(a->sun_gain, 1.0f) && a->air == 0.0f &&
-                     near(a->exposure_low, 40.0f) && near(a->exposure_high, 10000.0f) && near(a->water_clear, 600.0f),
+                     near(a->exposure_low, 40.0f) && near(a->exposure_high, 10000.0f) && near(a->water_clear, 1770.0f),
                  "non-finite numbers are not taken; a huge one is held");
     const RtStage* b = odd.find(galaxy::render::rt_stage_hash("B"));
     ok &= expect(b != nullptr && b->sun == RtStage::Sun::Auto &&

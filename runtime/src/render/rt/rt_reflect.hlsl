@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The reflections: what glass, water, metal and glossy things mirror.
-// Per pixel of the opaque layer whose class reflects (and, on Medium, metal and gloss only up to roughness 0.15 with
-// a painted share of 0.5 or more): one ray along the view turned at the smooth normal, a mirror's own under roughness
-// 0.03, else about a normal of the GGX distribution as the view sees it (Heitz 2018), from the frame's blue noise,
-// drawn again where it falls under the smooth or the geometric surface. Where it lands: that surface's light by the
-// shared model (rt_hit_radiance: its sun traced, the grid's lights, the screen's own I where the screen shows that
-// very surface), a glowing thing as it shines, a clear thing seen through (rt_seen_past_clear); where it meets
-// nothing, the sky's dome along it as the eye sees it (rt_look: the miss rule); the sun's own glint (K * kSunGlint) where the
-// ray runs at the sun unhindered.
-// Writes R raw: rgb the radiance seen (Fresnel is the composite's, rt_reflect_out.hlsl), a the ray's length (0: the
-// pixel does not reflect), which the filter over time reprojects the mirror image by. The local lights' highlights
-// (rt_lights.hlsl LightsSpec, already weighed by their Fresnel) ride along as radiance, over the composite's weight,
-// so the filter takes their noise out with the rest.
+// The reflections: the specular lobe of every lit surface of the opaque layer, traced up to a roughness (High 0.6,
+// Medium 0.25: Lumen's cut, past which the lobe is so wide that the sky and bounce light I stands for it; glass and
+// water at any). One ray along the view turned at the smooth normal, a mirror's own under roughness 0.03, else about
+// a normal of the GGX distribution as the view sees it (Heitz 2018), from the frame's blue noise, drawn again where it
+// falls under the smooth or the geometric surface. Where it lands: that surface's radiance by the shared model
+// (rt_hit_radiance: its sun traced, the grid's lights, the screen's own I where the screen shows that very surface),
+// a glowing thing as it shines, a clear thing seen through (rt_look); where it meets nothing, the sky's dome along it
+// as the eye sees it (the miss rule). The sun's mirror image is its highlight (rt_reflect_out.hlsl), never a ray's.
+// Writes R raw: rgb the radiance seen, demodulated (the specular albedo lobes.mirror is the composite's,
+// rt_reflect_out.hlsl), a the ray's length (0: the pixel does not reflect), which the filter over time reprojects the
+// mirror image by (NRD's in-lobe hit distance). The local lights' highlights (rt_lights.hlsl LightsSpec) ride along
+// over the specular albedo, so the filter takes their noise out with the rest.
 // Pass constants: g_pass.y 2 High (every reflecting class, the lights shadowed at hits), 1 Medium; g_pass.z bit 0 the
 // sky and bounce light's I is there to read, bit 1 the walk before's local lights (Added, t16), bit 3 the walk before's
 // blended guide (t17) is bound (rt_screen_lights); g_pass.w the shading frame's first byte in t4.
@@ -23,33 +22,29 @@ Texture2D<float4> g_normals : register(t10);
 Texture2D<float4> g_motion : register(t11);
 Texture2D<float4> g_material : register(t12);
 Texture2D<float4> g_indirect : register(t13);  // this frame's I (rt_indirect_up.hlsl): the screen's own at hits
-Texture2D<float4> g_lights_spec : register(t14);  // the local lights' highlights (rt_lights.hlsl), already weighed
+Texture2D<float4> g_lights_spec : register(t14);  // the local lights' highlights (rt_lights.hlsl), with their albedo
 Texture2D<float4> g_base : register(t15);
 Texture2D<float4> g_added_before : register(t16);    // the walk before's D out: the screen's own lamps at hits
 Texture2D<float4> g_blended_before : register(t17);  // the walk before's blended guide (rt_screen_lights)
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_raw : register(u0);
 
-static const uint kRtWater = 9u;
 static const float kReflectReach = 4000000.0f;
 static const uint kLobeDraws = 4u;  // draws of the lobe before the mirror's own direction
 
-// The pixel's item word 15 for its mirror: bits 0-11 what the art's material returns of a white environment
-// (4 bits a channel; 0: no painted map), bits 12-19 its index or a metal's kind; 0 for a class that mirrors nothing.
-uint mirror_word(int3 here, uint klass) {
-    const bool mirrors = klass == kRtGlass || klass == kRtWater || klass == kRtMetal || klass == kRtGloss;
-    const uint item = mirrors ? g_item_map.Load(here).x : 0u;
+// The pixel's item word 15 (bits 12-19 its index or a metal's kind); 0 where no item is known.
+uint mirror_word(int3 here) {
+    const uint item = g_item_map.Load(here).x;
     return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) : 0u;
 }
 
-// Whether a surface of class `klass` reflects under the preset.
-bool reflects(uint klass, float roughness, float share, bool high) {
+// Whether a surface reflects by a traced ray under the preset: glass and water always, any other lit class up to the
+// preset's roughness (rt_mirror.hlsli kTracedRough*).
+bool reflects(uint bits, float roughness, bool high) {
+    const uint klass = bits & 15u;
     if (klass == kRtGlass || klass == kRtWater) {
         return true;
     }
-    if (klass != kRtMetal && klass != kRtGloss) {
-        return false;
-    }
-    return high || (roughness <= 0.15f && share >= 0.5f);
+    return mirror_lit(bits) && roughness <= (high ? kTracedRoughHigh : kTracedRoughMedium);
 }
 
 [numthreads(8, 8, 1)]
@@ -62,9 +57,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     const int3 here = int3(id.xy, 0);
     const float4 guide = g_guide.Load(here);
     const float4 material = g_material.Load(here);
-    const uint klass = uint(material.b * 255.0f + 0.5f) & 15u;
+    const uint bits = uint(material.b * 255.0f + 0.5f);
     const bool high = g_pass.y >= 2u;
-    if (guide.a == 0.0f || !reflects(klass, material.r, material.a, high)) {
+    if (guide.a == 0.0f || !reflects(bits, material.r, high)) {
         g_raw[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
         return;
     }
@@ -105,17 +100,14 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     const float3 from = rt_ray_origin(s, dir);
     const float cone = abs(g_ray.x) + 0.5f * roughness;
-    // One walk (rt_look): a clear thing met is seen through, as every other looking ray sees it (as
-    // the second layer's mirror, rt_light.hlsl rt_mirror_seen); a miss reads the dome along the ray's direction from
-    // the eye, never met from the ray's start (it is drawn around the eye: a mirror far from the eye, or past the dome's
-    // shell, met it nowhere, g_sky: black chrome on a space stage); the sun itself on the ray where nothing hides it
-    // (far brighter than white, it blooms; the model's by kForm). far_ is the way to the
-    // first thing met (kReflectReach where none).
-    const RtLook look_ = rt_look(from, dir, kReflectReach, cone, true, kClearFaces, true);
+    // One walk (rt_look): a clear thing met is seen through, as every other looking ray sees it (as the second layer's
+    // mirror, rt_light.hlsl); a miss reads the dome along the ray's direction from the eye (the miss rule). far_ is the
+    // way to the first thing met (kReflectReach where none).
+    const RtLook look_ = rt_look(from, dir, kReflectReach, cone, kClearFaces, true);
     const float far_ = look_.far_;
-    float3 end = look_.shown;  // linear, the gain on the light
+    float3 end = look_.shown;
     if (look_.hit) {
-        float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
+        float3 o = rt_sky_mean();
         float3 d_seen = float3(0.0f, 0.0f, 0.0f);
         bool d_known = false;
         if (look_.faces == 0u) {
@@ -131,9 +123,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         end = rt_hit_radiance_with(look_.h, kRtShadeSunRay | (high ? kRtShadeLightRay : 0u), o, d_known, d_seen, seed);
     }
     float3 seen = look_.added + look_.tint * end;
-    const float4 weight = mirror_weight_word(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,
-                                             1.0f - saturate(-dot(n, look)), mirror_word(here, klass));
-    seen += g_lights_spec.Load(here).rgb / max(weight.rgb, 0.02f);
+    const ShadeMaterial m = mirror_material(bits, material.r, material.g, g_base.Load(here).rgb, mirror_word(here));
+    const ShadeLobes lobes = shade_lobes(m, max(-dot(n, look), kShadeNvLeast));
+    seen += g_lights_spec.Load(here).rgb / max(lobes.mirror, 0.02f);
     // The length within half precision's finite range (kNoOccluder: nothing met): a value over it converts to the
     // largest finite one on D3D12 but may be Inf on Vulkan, and Inf - Inf in the filters' weights is NaN.
     g_raw[id.xy] = float4(min(seen, 64.0f), clamp(far_, 1.0f, kNoOccluder));

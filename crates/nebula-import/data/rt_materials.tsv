@@ -174,6 +174,7 @@ hatchwaterplanetlow	redmetalLod_v	gloss	0.25	0							painted metal: was dielectr
 hatchwaterplanetlow	redmetalLod_v(2)	gloss	0.25	0							painted metal: was dielectric; a coloured coat over metal: a glossy dielectric
 hatchwaterplanetlow	silvermetalLod_v	metal	0.30	1							metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light
 heavenlybeachplanetwater	ExFallMatSplash_v	translucent	1.0	0			0				falling water: was painted; white water scatters: no tint, no mirror
+driftwood	wood011_v	gloss	0.30	0							a wet log: was metal (unlit, a painted reflection); wood, gloss
 heavensdoorinsideplanet	metalwall_v	metal	0.30	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
 heavensdoormiddleplanet	chain3_v	metal	0.30	1							metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light
 heavensdoormiddleplanet	sibumetal_v	metal	0.28	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
@@ -252,7 +253,7 @@ karikarifreeze	Karikari1_v	glass	0.08	0	1.31		0.7	0.5			ice being: was gloss; lo
 karikariice	OmoteMat_v	glass	0.08	0	1.31		0.7	0.5			ice being: was glass; loses a little tint, half clear, glows (rt_glow row)
 karikariice	OmoteMat_v(2)	glass	0.08	0	1.31		0.7	0.5			ice being: was translucent; loses a little tint, half clear, glows (rt_glow row)
 karikariice	UraMat_v	glass	0.08	0	1.31		0.7	0.5			ice being: was painted; loses a little tint, half clear, glows (rt_glow row)
-kinopiogoodsstarpiece	StarPiece1_v	glass	0.02	0	1.8		0	0			crystal: was metal; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
+kinopiogoodsstarpiece	StarPiece1_v	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
 kirairachain	KirairaChain_Mat_v	metal	0.30	1							metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light
 koopabattlemapplanet	MetalRingMat_v	metal	0.28	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
 koopafire	fire	emissive								1.000 1.000 1.000	fire: was painted; named fire or flame: shown as is and a light; emission = its base colour
@@ -412,21 +413,21 @@ spinleverswitch	Bolt03_v(3)	metal	0.30	1							metal: was gloss; named as a meta
 starduststartplanet	MetalC_v	metal	0.26	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
 starduststartplanet	MetalE_v	metal	0.26	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
 starmanfort	Window_v	gloss	0.05	0							window: was painted; a window painted on a building: opaque and reflective, never see-through
-starpiece	StarPiece1_v	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiececluster	StarPieceClusterMat_v	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiececluster	StarPieceClusterMat_v(2)	glass	0.02	0	1.8		0	0			crystal: was glass; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
+starpiece	StarPiece1_v	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiececluster	StarPieceClusterMat_v	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiececluster	StarPieceClusterMat_v(2)	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
 starpiececluster	StarPieceClusterMat_v(3)	painted				0					a star bit cluster's glow layer, an added overlay, not a glass body (the transmit pass bent rays through it)			
-starpiecedummy	StarPiece1_v	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiecedummy	StarPiece1_v(10)	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiecedummy	StarPiece1_v(2)	glass	0.02	0	1.8		0	0			crystal: was metal; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiecedummy	StarPiece1_v(3)	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiecedummy	StarPiece1_v(4)	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiecedummy	StarPiece1_v(5)	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiecedummy	StarPiece1_v(6)	glass	0.02	0	1.8		0	0			crystal: was metal; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiecedummy	StarPiece1_v(7)	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiecedummy	StarPiece1_v(8)	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiecedummy	StarPiece1_v(9)	glass	0.02	0	1.8		0	0			crystal: was metal; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiecemother	StarPiece1_v	glass	0.02	0	1.8		0	0			crystal: was metal; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
+starpiecedummy	StarPiece1_v	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiecedummy	StarPiece1_v(10)	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiecedummy	StarPiece1_v(2)	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiecedummy	StarPiece1_v(3)	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiecedummy	StarPiece1_v(4)	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiecedummy	StarPiece1_v(5)	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiecedummy	StarPiece1_v(6)	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiecedummy	StarPiece1_v(7)	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiecedummy	StarPiece1_v(8)	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiecedummy	StarPiece1_v(9)	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
+starpiecemother	StarPiece1_v	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
 stringspiderarmor	ArmorMat_v	metal	0.30	1							metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light
 surfingracevictorystand	Metal_v	metal	0.30	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
 takobarrela	Iron_v	metal	0.22	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
@@ -437,7 +438,7 @@ teresamansionplaneta	soto_013_mado_v	gloss	0.05	0							window: was dielectric; 
 teresamansionplaneta	soto_08_mado_v	gloss	0.05	0							window: was dielectric; a window painted on a building: opaque and reflective, never see-through
 teresamansionplanetc	soto_013_mado_v	gloss	0.05	0							window: was dielectric; a window painted on a building: opaque and reflective, never see-through
 teresaroomplanet	gold_v	metal	0.30	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
-ticofatgoodsstarpiece	StarPiece1_v	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
+ticofatgoodsstarpiece	StarPiece1_v	emissive									a star bit: shown shining as the game draws it, its own colour to every ray (was crystal glass: it showed what lay behind it, dull)
 toyfactorydecoratepartsgeara	Metal_v	metal	0.29	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
 treasureboxgold	TreasureBoxGoldIn_Mat_v	metal	0.30	1							metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light
 treasureboxgold	TreasureBoxGoldIn_Mat_v(2)	metal	0.30	1							metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light
@@ -539,6 +540,8 @@ yellowchip	lambert60	glass	0.02	0	1.8		0	0			crystal: was metal; crystal, ior 1.
 # Water, ice, steam and rain.
 twinfalllakeplanet	kori_v	glass	0.05	0	1.31						ice: a frozen lake read as metal; glass, ior 1.31 (F0 0.018)
 twinfalllakeplanetlow	kori_v	glass	0.05	0	1.31						ice: a frozen lake read as metal; glass, ior 1.31 (F0 0.018)
+iceball	UraMat_v	glass	0.05	0	1.31						ice: an ice ball read as metal; glass, ior 1.31 (F0 0.018)
+iceringfireplanet	MeltIce_v	glass	0.05	0	1.31						ice: melting ice read as metal; glass, ior 1.31 (F0 0.018)
 mirrormodeltwinfalllake	kori_v	glass	0.05	0	1.31						ice: a frozen lake read as metal; glass, ior 1.31 (F0 0.018)
 twinfalllakeplanetlow	mizu_shita_v_x	dielectric		0							bed: the far stand-in is opaque; its near's water row would make it water by the twin rule
 lavasteam	lambert5_v	translucent	1	0							the lava stages' steam column: dims the sun, no hard shadow
@@ -604,13 +607,14 @@ foresthomeplanetindirect	FallBackFaceMat_v										a screen-warp layer (IndDumm
 peachcastlegardenplanetindirect	lambert119_v_x										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing	hidden
 reversekingdomplanetindirect	FallBackFaceMat_v										a screen-warp layer (IndDummy, the fake refraction): hidden while tracing	hidden
 # Cages' bars and panes, the Goombeetle's helmet.
-breakablecage	sabi_v*	metal	0.6	1							a cage's rusted bars (sabi), was gloss: iron		iron	
-breakablecage	tethu_v*	metal	0.3	1							a cage's bars (tetsu), was gloss: iron		iron	
-breakablecagel	sabi_v*	metal	0.6	1							a cage's rusted bars (sabi), was painted: iron		iron	
-breakablecagel	tethu_v*	metal	0.3	1							a cage's bars (tetsu), was painted: iron		iron	
-breakablecagebreak	sabi_v*	metal	0.6	1							a cage's rusted bars (sabi), was gloss: iron		iron	
-breakablecagebreak	tethu_v*	metal	0.3	1							a cage's bars (tetsu), was gloss: iron		iron	
-breakablecage	gaeasu_v	glass	0.02	0	1.5						a cage's panes (garasu), was gloss: glass			
+breakablecage	sabi_v*	metal	0.35	1							a cage's rusted bars (sabi), was gloss: iron; 0.35 so its sheen shows (was 0.6: matte)		iron	
+breakablecage	tethu_v*	metal	0.15	1							a cage's bars (tetsu), was gloss: iron; 0.15 so its sheen shows (was 0.3: matte)		iron	
+breakablecagel	sabi_v*	metal	0.35	1							a cage's rusted bars (sabi), was painted: iron; 0.35 so its sheen shows (was 0.6: matte)		iron	
+breakablecagel	tethu_v*	metal	0.15	1							a cage's bars (tetsu), was painted: iron; 0.15 so its sheen shows (was 0.3: matte)		iron	
+breakablecagebreak	sabi_v*	metal	0.35	1							a cage's rusted bars (sabi), was gloss: iron; 0.35 so its sheen shows (was 0.6: matte)		iron	
+breakablecagebreak	tethu_v*	metal	0.15	1							a cage's bars (tetsu), was gloss: iron; 0.15 so its sheen shows (was 0.3: matte)		iron	
+breakablecage	gaeasu_v	glass	0.02	0	1.5				2		a cage's panes (garasu), was gloss: glass; shine 2, its sheen shows against dark space as its painted map's did			
+breakablecagel	gaeasu_v	glass	0.02	0	1.5				2		a cage's panes (garasu), was glass: shine 2, its sheen shows against dark space as its painted map's did			
 metbo	MetMat_v	metal	0.25	1							the Goombeetle's helmet, was gloss (a highlight sprite): metal, its own colour		art	
 # Shiny painted surfaces; the rooms' floors, wood, glass and metal fittings; the Starshroom; overlays that are not glass.
 assemblyblockpartsa	coreE_v	gloss	0.15	0							a painted reflection 0.60 of its colour, not named a metal: gloss kept, polished (roughness 0.15)			
@@ -691,7 +695,7 @@ darknessroomdoora	kin_m_v	metal	0.26	1							a painted reflection 0.98 of its co
 darknessroomdoora	tetu_m_v	metal	0.30	1							room surface: a metal fitting by its name, was dielectric		art	
 darknessroomplanet	mokume_v	gloss	0.40	0							room surface: varnished wood, was dielectric			
 deathpromenade2dplanet	lambert15_v	gloss	0.15	0							a painted reflection 0.50 of its colour, not named a metal: gloss kept, polished (roughness 0.15)			
-earthenpipe	EarthenPipeMat_v	gloss	0.15	0							a painted reflection 0.94 of its colour, not named a metal: gloss kept, polished (roughness 0.15)			
+earthenpipe	EarthenPipeMat_v	gloss	0.35	0							a painted reflection 0.94 of its colour, not named a metal: gloss kept, a painted pipe's satin coat (roughness 0.35; 0.15 mirrored the scene)			
 electricbazooka	WaterBazooka1_v	metal	0.16	1							a painted reflection 0.65 of its colour and named a metal, was gloss: a metal (art)		art	
 electricbazookabreak	WaterBazooka1_v	metal	0.16	1							a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art)		art	
 electricbazookabreak	WaterBazooka2_v	metal	0.45	1							a painted reflection 0.50 of its colour and named a metal, was gloss: a metal (art)		art	
@@ -850,3 +854,14 @@ icelavaislandicemovablestepa	Ice02_v	painted				0					an ice step's added layer,
 crystalcagelbreak	HiLightMat*	painted				0					a breaking crystal cage's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it)			
 crystalcagesbreak	HiLightMat*	painted				0					a breaking crystal cage's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it)			
 crystalboxbreak	HiLightMat*	painted				0					a breaking crystal box's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it)			
+coinblock	Question_Mat_v	emissive									the ? block: its ? pulses by C0, which the game animates; was painted (not lit), dimmed by the traced light where the game shows it shining
+cubebubbleexrotatewalll	PowerStarKeeperA_0406:metalami_v	metal	0.30	1							a wire grating (kanaami), named metal, was lit diffuse: iron wire in its own grey, 0.30 so a lamp near it (an electric rail) shows on it		art	
+cubebubbleexstartstep	PowerStarKeeperA_0406:metalami_v	metal	0.30	1							a wire grating (kanaami), named metal, was lit diffuse: iron wire in its own grey, 0.30 so a lamp near it (an electric rail) shows on it		art	
+powerstarkeepera	metalami_v	metal	0.30	1							a wire grating (kanaami), named metal, was lit diffuse: iron wire in its own grey, 0.30 so a lamp near it (an electric rail) shows on it		art	
+mariolauncherroomplanet	metalami_v	metal	0.30	1							a wire grating (kanaami), named metal, was lit diffuse: iron wire in its own grey, 0.30 so a lamp near it (an electric rail) shows on it		art	
+jumpbeamerroomplanet	metalami_v	metal	0.30	1							a wire grating (kanaami), named metal, was lit diffuse: iron wire in its own grey, 0.30 so a lamp near it (an electric rail) shows on it		art	
+beamgoroundplanet	metalamip_v*	metal	0.30	1							a wire grating (kanaami), named metal, was lit diffuse: iron wire in its own grey, 0.30 so a lamp near it (an electric rail) shows on it		art	
+cannonfortresscollapseplanet	metalamip_v	metal	0.30	1							a wire grating (kanaami), named metal, was lit diffuse: iron wire in its own grey, 0.30 so a lamp near it (an electric rail) shows on it		art	
+cannonfortressmovewall	metalamip_v	metal	0.30	1							a wire grating (kanaami), named metal, was lit diffuse: iron wire in its own grey, 0.30 so a lamp near it (an electric rail) shows on it		art	
+nutshipfleetbridge	metalamip_v	metal	0.30	1							a wire grating (kanaami), named metal, was lit diffuse: iron wire in its own grey, 0.30 so a lamp near it (an electric rail) shows on it		art	
+nutshipfleetplanet	metalamip_v	metal	0.30	1							a wire grating (kanaami), named metal, was lit diffuse: iron wire in its own grey, 0.30 so a lamp near it (an electric rail) shows on it		art	

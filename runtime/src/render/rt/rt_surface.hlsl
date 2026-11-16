@@ -11,6 +11,9 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_normals : register(u1);
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_motion : register(u2);
 RT_FORMAT(rgba8) RWTexture2D<float4> g_material : register(u3);
 RT_FORMAT(rgba8) RWTexture2D<float4> g_base : register(u4);
+// The second layer's item at the pixel, from 1 (0: none), as its low ten bits and the rest, each exact in a half: the
+// blended draws own this layer's light where it is theirs (program.hlsli traced_mirror_own). Bound on that layer only.
+RT_FORMAT(rg16f) RWTexture2D<float2> g_layer_item : register(u5);
 
 // The surface's own normal from the depth around the pixel: across and down, each from the neighbour nearer in
 // depth, so an edge takes its own side.
@@ -203,84 +206,165 @@ uint triangle_by_ray(uint item, float2 centre, float away) {
     return found;
 }
 
-// A water surface's normal bent by its own moving map: item word 18 names the two rows of its first
-// map's coordinate (0: none); the luminance's change a texel along u' and v', at the level the pixel covers, tilts the
-// smooth normal against the rise, kWave of it. `place`: the pixel's point on the triangle (eye space).
-static const float kWave = 0.15f;
-// One map's slope at the pixel (from water_ripple's first half): `t` the map's coordinate at the corners,
-// `along_u`/`along_v` out: the change of place a unit of u' and v' (unit-free directions found below), `place` the
-// pixel's point; the luminance's change a texel of the map's own size along u' and v', at the level the pixel
-// covers. false: no slope there.
-bool water_map_slope(uint map, float2 t[3], float3 e1, float3 e2, float v, float w, float3 place, float3 smooth_,
-                     out float3 along_u, out float3 along_v, out float2 slope, out float lost) {
-    along_u = float3(0.0f, 0.0f, 0.0f);
-    along_v = float3(0.0f, 0.0f, 0.0f);
-    slope = float2(0.0f, 0.0f);
-    lost = 0.0f;
-    const float2 m1 = t[1] - t[0], m2 = t[2] - t[0];
-    const float turn = m1.x * m2.y - m1.y * m2.x;
-    if (!(abs(turn) > 1e-12f)) {
-        return false;
+// The sea's waves under ray tracing, every body of water alike: a height field of kSeaWaves directional waves, a
+// wind sea's equilibrium range (elevation spectrum k^-3: each wave the same slope variance, its length a geometric step
+// below the last's and jittered inside its step, so no two are commensurate and the field never repeats as a grid),
+// spread wide about one wind (a short-crested sea: a far view keeps only the longest waves, and they cross), each its
+// own phase, moving by deep water's dispersion (omega^2 = g k, g kSeaGravity units a second squared: longer waves run faster) on the game's time.
+// Lengths 920 units (some six Marios) down to 35; the slopes sum to 0.30 root mean square, a lively wind sea's: the
+// mirror and the bed seen through the water bend as a real sea's do. Table: tools/wave_table.py's output, fixed seed.
+// `at`: the point on one of the mesh's three planes, in its units (sea_field), so the waves stand still on the water
+// as the eye moves. The slope (dh/da, dh/db). A wave shorter than kWaveFootprints pixels' footprints (`pixel`, units)
+// fades out over the next doubling, and the slope it no longer gives goes to `variance` (half its steepness squared a
+// sine: the roughness, Toksvig): no shimmer where a pixel holds many waves, and the far sea's mirror blurs as it does
+// in life.
+static const uint kSeaWaves = 32u;
+static const float kSeaGravity = 980.0f;  // a unit a centimetre: Mario stands some 160 units
+static const float kWaveFootprints = 3.0f;
+static const float4 kSeaWave[kSeaWaves] = {
+    // x, y: direction on the water's plane (the wind along x); z: length (units); w: steepness (a k)
+    float4(0.7490f, 0.6626f, 919.1f, 0.0750f),
+    float4(1.0000f, -0.0089f, 786.3f, 0.0750f),
+    float4(0.6915f, 0.7224f, 757.6f, 0.0750f),
+    float4(0.9588f, -0.2842f, 658.1f, 0.0750f),
+    float4(0.8090f, 0.5879f, 594.0f, 0.0750f),
+    float4(0.9923f, -0.1242f, 533.1f, 0.0750f),
+    float4(0.7700f, 0.6381f, 475.5f, 0.0750f),
+    float4(0.4911f, -0.8711f, 436.4f, 0.0750f),
+    float4(0.7772f, 0.6293f, 400.7f, 0.0750f),
+    float4(0.7470f, -0.6648f, 366.4f, 0.0750f),
+    float4(0.8573f, 0.5148f, 326.7f, 0.0750f),
+    float4(0.7934f, -0.6087f, 286.5f, 0.0750f),
+    float4(0.3147f, 0.9492f, 265.2f, 0.0750f),
+    float4(-0.3443f, -0.9389f, 233.4f, 0.0750f),
+    float4(0.9585f, 0.2850f, 204.0f, 0.0750f),
+    float4(0.6253f, -0.7804f, 187.9f, 0.0750f),
+    float4(0.9971f, 0.0763f, 167.7f, 0.0750f),
+    float4(0.9675f, -0.2528f, 158.4f, 0.0750f),
+    float4(0.7839f, 0.6209f, 137.6f, 0.0750f),
+    float4(0.1999f, -0.9798f, 120.7f, 0.0750f),
+    float4(-0.0029f, 1.0000f, 110.8f, 0.0750f),
+    float4(0.9069f, -0.4212f, 98.3f, 0.0750f),
+    float4(0.9532f, 0.3022f, 90.1f, 0.0750f),
+    float4(0.9738f, -0.2272f, 85.3f, 0.0750f),
+    float4(0.8827f, 0.4698f, 74.8f, 0.0750f),
+    float4(0.9783f, -0.2072f, 69.6f, 0.0750f),
+    float4(-0.0751f, 0.9972f, 58.7f, 0.0750f),
+    float4(0.9431f, -0.3325f, 54.5f, 0.0750f),
+    float4(0.9825f, 0.1860f, 50.7f, 0.0750f),
+    float4(0.5406f, -0.8413f, 45.6f, 0.0750f),
+    float4(0.9981f, 0.0610f, 39.2f, 0.0750f),
+    float4(0.0944f, -0.9955f, 35.5f, 0.0750f),
+};
+static const float kSeaPhase[kSeaWaves] = {
+    2.5417f, 2.0214f, 0.0412f, 6.2296f, 3.2735f, 5.2301f, 2.7313f, 2.9287f,
+    3.6394f, 3.0527f, 1.5669f, 2.4679f, 2.8295f, 5.1364f, 1.9897f, 2.4458f,
+    5.6042f, 4.6238f, 5.8538f, 0.4385f, 0.1526f, 4.3898f, 4.3694f, 1.9047f,
+    6.0301f, 0.0457f, 0.4596f, 3.1574f, 3.5181f, 4.1028f, 1.5276f, 4.1594f,
+};
+// Value noise on the plane, 0 to 1, smooth (a cell a unit; an integer hash a corner: no sine of large numbers).
+float sea_noise(float2 p) {
+    const float2 cell = floor(p);
+    float2 f = p - cell;
+    f = f * f * (3.0f - 2.0f * f);
+    const int2 c = int2(cell);
+    float corner[4];
+    [unroll] for (uint k = 0u; k < 4u; ++k) {
+        uint h = uint(c.x + int(k & 1u)) * 0x8DA6B343u ^ uint(c.y + int(k >> 1u)) * 0xD8163841u;
+        h ^= h >> 15u;
+        h *= 0x2C1B3C6Du;
+        h ^= h >> 12u;
+        corner[k] = float(h & 0xFFFFu) / 65535.0f;
     }
-    const float2 here = t[0] + m1 * v + m2 * w;
-    along_u = (e1 * m2.y - e2 * m1.y) / turn;
-    along_v = (e2 * m1.x - e1 * m2.x) / turn;
-    uint map_w, map_h;
-    g_textures[NonUniformResourceIndex(map)].GetDimensions(map_w, map_h);
-    const float pixel = -place.z * abs(g_ray.x) / max(abs(dot(smooth_, normalize(place))), 0.05f);
-    const float texels = pixel * float(max(map_w, map_h)) / max(min(length(along_u), length(along_v)), 1e-6f);
-    const float level = max(log2(max(texels, 1.0f)), 0.0f);
-    const float2 step_ = exp2(level) / float2(max(map_w, 1u), max(map_h, 1u));
-    const float3 luma = float3(0.2126f, 0.7152f, 0.0722f);
-    const float l0 = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here, level).rgb, luma);
-    const float lu = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here + float2(step_.x, 0.0f), level).rgb, luma);
-    const float lv = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, here + float2(0.0f, step_.y), level).rgb, luma);
-    slope = float2(lu - l0, lv - l0) * exp2(-level);  // a texel of the map's own size
-    // The slope variance the level's filter took away (Toksvig): the slopes two levels finer at the four
-    // quarters of the footprint (a texel of this level), their mean square less the filtered slope's square.
-    if (level >= 1.0f) {
-        const float fine = max(level - 2.0f, 0.0f);
-        const float2 fine_step = exp2(fine) / float2(max(map_w, 1u), max(map_h, 1u));
-        const float2 quarter = 0.25f * step_;
-        float square = 0.0f;
-        [unroll] for (uint q = 0u; q < 4u; ++q) {
-            const float2 at = here + float2((q & 1u) != 0u ? quarter.x : -quarter.x, (q & 2u) != 0u ? quarter.y : -quarter.y);
-            const float f0 = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, at, fine).rgb, luma);
-            const float fu = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, at + float2(fine_step.x, 0.0f), fine).rgb, luma);
-            const float fv = dot(g_textures[NonUniformResourceIndex(map)].SampleLevel(g_wrap, at + float2(0.0f, fine_step.y), fine).rgb, luma);
-            const float2 s = float2(fu - f0, fv - f0) * exp2(-fine);
-            square += dot(s, s);
-        }
-        lost = max(0.25f * square - dot(slope, slope), 0.0f);
-    }
-    return true;
+    return lerp(lerp(corner[0], corner[1], f.x), lerp(corner[2], corner[3], f.x), f.y);
 }
-float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint map, uint triangle_, float3 place, float3 smooth_,
+// A sea is never the same twice across it: gusts make calm and rough patches (each third of the bands, longest to
+// shortest, by its own noise kSeaPatch units across: 0.35 to 1.65 of its height, 1 on the mean, so the sea's slope
+// is kept), and the crests wander (the plane's coordinates bent kSeaBend units by a noise kSeaWander across, drifting
+// slowly on the game's time): the sum of fixed waves shows no repeat and no ruled line at any distance.
+static const float3 kSeaPatch = float3(6000.0f, 2400.0f, 900.0f);
+static const float kSeaWander = 3000.0f;
+static const float kSeaBend = 260.0f;
+float2 sea_waves(float2 at, float pixel, out float variance) {
+    variance = 0.0f;
+    const float seconds = g_stage.z;  // the game's time: the same waves at every rate
+    const float2 drift = seconds * float2(0.004f, 0.0027f);  // the patterns' slow drift, in their cells a second
+    const float2 bend = float2(sea_noise(at / kSeaWander + drift), sea_noise(at / kSeaWander + float2(37.2f, 11.9f) - drift)) - 0.5f;
+    const float2 place = at + 2.0f * kSeaBend * bend;
+    float patch_[3];
+    [unroll] for (uint b = 0u; b < 3u; ++b) {
+        patch_[b] = 0.35f + 1.3f * sea_noise(at / kSeaPatch[b] + float2(17.0f * float(b), 5.0f * float(b)) + drift);
+    }
+    float2 slope = float2(0.0f, 0.0f);
+    [unroll] for (uint i = 0u; i < kSeaWaves; ++i) {
+        const float4 wave = kSeaWave[i];
+        const float k = 6.2831853f / wave.z;
+        const float omega = sqrt(kSeaGravity * k);
+        const float kept = saturate(wave.z / (kWaveFootprints * max(pixel, 1e-3f)) - 1.0f);
+        const float steep = wave.w * patch_[min(i * 3u / kSeaWaves, 2u)];
+        if (kept > 0.0f) {
+            const float phase = k * dot(wave.xy, place) - omega * seconds + kSeaPhase[i];
+            slope += kept * steep * cos(phase) * wave.xy;
+        }
+        variance += (1.0f - kept * kept) * 0.5f * steep * steep;
+    }
+    return slope;
+}
+// The waves on any body of water, in its mesh's space, with no seam: the field on each of the mesh's three planes
+// (x = 0, y = 0, z = 0; the level sea is the y plane's, the wind along x), each a slope on its plane, blended by how
+// the surface faces them (the normal's components to the fourth power: triplanar, so a sphere, a ring or a wall of
+// water takes waves all round and a level sea one plane's alone). `at` the point, `n` the smooth normal, both in the
+// mesh's space; `pixel` the footprint in its units. The gradient (dh/dx, dh/dy, dh/dz); `variance` the slope the
+// filter took away (sea_waves).
+float3 sea_field(float3 at, float3 n, float pixel, out float variance) {
+    float3 w = n * n;
+    w *= w;
+    w = max(w / (w.x + w.y + w.z) - 0.02f, 0.0f);
+    w /= w.x + w.y + w.z;
+    float3 gradient = float3(0.0f, 0.0f, 0.0f);
+    variance = 0.0f;
+    float v;
+    if (w.y > 0.0f) {
+        const float2 s = sea_waves(at.xz, pixel, v);
+        gradient += w.y * float3(s.x, 0.0f, s.y);
+        variance += w.y * v;
+    }
+    if (w.x > 0.0f) {
+        const float2 s = sea_waves(at.zy + float2(3719.0f, 1931.0f), pixel, v);  // offset: the planes' waves unalike
+        gradient += w.x * float3(0.0f, s.y, s.x);
+        variance += w.x * v;
+    }
+    if (w.z > 0.0f) {
+        const float2 s = sea_waves(at.xy + float2(-2659.0f, 4421.0f), pixel, v);
+        gradient += w.z * float3(s.x, s.y, 0.0f);
+        variance += w.z * v;
+    }
+    return gradient;
+}
+// A water surface's normal at the pixel under ray tracing: bent by the sea's waves alone (sea_field, in the mesh's
+// space: a code-drawn sea as model water). The game's moving ripple maps are its colour, not its shape: their tiles,
+// added to the waves, repeated as a grid across a whole sea. `place`: the pixel's point on the triangle (eye space).
+float3 water_ripple(uint4 first, uint4 second, uint stream, uint triangle_, float3 place, float3 smooth_,
                     out float wave_variance) {
     wave_variance = 0.0f;
-    const uint rows_at = g_items.Load(item_at + 72u);
     const uint arena = first.z;
-    if (rows_at == 0u || arena >= 8u) {
+    if (arena >= 8u) {
         return smooth_;
     }
-    const float4 ra = asfloat(g_items.Load4(g_at.x + rows_at)), rb = asfloat(g_items.Load4(g_at.x + rows_at + 16u));
-    // Map 1's rows and slot after map 0's (slot NONE: none).
-    const float4 ra1 = asfloat(g_items.Load4(g_at.x + rows_at + 32u)), rb1 = asfloat(g_items.Load4(g_at.x + rows_at + 48u));
-    const uint map1 = g_items.Load(g_at.x + rows_at + 64u);
     const uint base = mesh_at(arena);
     const uint3 corner = triangle_corners(first, second, triangle_);
-    float3 p[3];
-    float2 t[3], t1[3];
+    float3 p[3], q[3];
+    float4 r0 = float4(0.0f, 0.0f, 0.0f, 0.0f), r1 = r0, r2 = r0;  // the mesh's matrix (the last corner's rows)
     for (uint c = 0u; c < 3u; ++c) {
         const uint row = vertex_rows(arena, base, second.w, stream, corner[c]);
-        const float4 r0 = asfloat(g_rows.Load4(row)), r1 = asfloat(g_rows.Load4(row + 16u)), r2 = asfloat(g_rows.Load4(row + 32u));
-        const float4 q = float4(asfloat(arena_words(arena, base + second.z + corner[c] * 12u)), 1.0f);
-        p[c] = float3(dot(r0, q), dot(r1, q), dot(r2, q));
-        const float4 uv = float4(asfloat(arena_words(arena, base + first.w + corner[c] * 24u + 12u).yz), 1.0f, 1.0f);
-        t[c] = float2(dot(uv, ra), dot(uv, rb));
-        t1[c] = float2(dot(uv, ra1), dot(uv, rb1));
+        r0 = asfloat(g_rows.Load4(row));
+        r1 = asfloat(g_rows.Load4(row + 16u));
+        r2 = asfloat(g_rows.Load4(row + 32u));
+        q[c] = asfloat(arena_words(arena, base + second.z + corner[c] * 12u));
+        const float4 h = float4(q[c], 1.0f);
+        p[c] = float3(dot(r0, h), dot(r1, h), dot(r2, h));
     }
-    // The point among the corners (the triangle's own, then each map's directions and slope).
+    // The point among the corners.
     const float3 e1 = p[1] - p[0], e2 = p[2] - p[0], e = place - p[0];
     const float d11 = dot(e1, e1), d12 = dot(e1, e2), d22 = dot(e2, e2), de1 = dot(e, e1), de2 = dot(e, e2);
     const float area = d11 * d22 - d12 * d12;
@@ -288,37 +372,21 @@ float3 water_ripple(uint item_at, uint4 first, uint4 second, uint stream, uint m
         return smooth_;
     }
     const float v = (d22 * de1 - d12 * de2) / area, w = (d11 * de2 - d12 * de1) / area;
-    // Each map's tilt in the surface's plane: its slope along its own u' and v' directions (unit), against the rise.
-    float3 tilt = float3(0.0f, 0.0f, 0.0f);
-    float maps = 0.0f;
-    for (uint k = 0u; k < 2u; ++k) {
-        if (k == 1u && map1 == 0xFFFFFFFFu) {
-            break;
-        }
-        float3 along_u, along_v;
-        float2 slope;
-        float lost;
-        float2 tk[3];  // this map's coordinate at the corners
-        for (uint c = 0u; c < 3u; ++c) {
-            tk[c] = k == 0u ? t[c] : t1[c];
-        }
-        if (!water_map_slope(k == 0u ? map : map1, tk, e1, e2, v, w, place, smooth_, along_u, along_v, slope, lost)) {
-            continue;
-        }
-        const float3 tu = along_u - smooth_ * dot(along_u, smooth_), tv = along_v - smooth_ * dot(along_v, smooth_);
-        const float su = dot(tu, tu), sv = dot(tv, tv);
-        if (!(su > 1e-12f) || !(sv > 1e-12f)) {
-            continue;
-        }
-        tilt += slope.x * tu * rsqrt(su) + slope.y * tv * rsqrt(sv);
-        wave_variance += kWave * kWave * lost;  // independent maps' variances add
-        maps += 1.0f;
-    }
-    if (!(maps > 0.0f)) {
+    const float3 at_mesh = q[0] + (q[1] - q[0]) * v + (q[2] - q[0]) * w;
+    // The mesh's scale (its matrix's columns' mean length) and the smooth normal in its space (the transpose: a
+    // rotation and a scale), so the field stands on the mesh and the normal is as continuous as the eye's.
+    const float scale = (length(float3(r0.x, r1.x, r2.x)) + length(float3(r0.y, r1.y, r2.y)) + length(float3(r0.z, r1.z, r2.z))) / 3.0f;
+    const float3 n_mesh = r0.xyz * smooth_.x + r1.xyz * smooth_.y + r2.xyz * smooth_.z;
+    if (!(scale > 1e-9f) || !(dot(n_mesh, n_mesh) > 1e-18f)) {
         return smooth_;
     }
-    // the normal tilted by both maps' slopes summed, as heights add (one map: its own, as before), kWave of it.
-    const float3 bent = normalize(smooth_ - kWave * tilt);
+    // The pixel's footprint on the surface, in the mesh's units.
+    const float pixel = -place.z * abs(g_ray.x) / max(abs(dot(smooth_, normalize(place))), 0.05f) / scale;
+    const float3 g = sea_field(at_mesh, normalize(n_mesh), pixel, wave_variance);
+    // The gradient in the eye's space (slopes keep under a scale), along the surface; the normal tilted against it.
+    float3 tilt = float3(dot(r0.xyz, g), dot(r1.xyz, g), dot(r2.xyz, g)) / scale;
+    tilt -= smooth_ * dot(tilt, smooth_);
+    const float3 bent = normalize(smooth_ - tilt);
     return dot(bent, smooth_) > 0.5f ? bent : smooth_;
 }
 
@@ -334,6 +402,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     const uint2 named = g_item_map.Load(int3(pixel, 0));
     const uint item = named.x;
     const bool second = rt_second_layer();
+    if (second) {
+        g_layer_item[id.xy] = float2(float(item & 1023u), float(item >> 10u));
+    }
     if (second && item == 0u) {
         g_guide[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);  // no blended surface here: its filters leave the pixel
         return;  // and the picture keeps the opaque layer's light
@@ -406,8 +477,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     // Water shades by its rippled normal; the guide keeps the smooth one for the filters. `shaded` and the
     // resolved `triangle_`: with no triangle found its arena is 8 and the ripple stays out.
     float wave_variance = 0.0f;  // the slope variance the waves' filter took away
-    const float3 shading = (third.w & 255u) == kClassWater && third.x != 0xFFFFFFFFu
-                               ? water_ripple(at_item, shaded, mesh, third.z, third.x, triangle_, at, smooth_, wave_variance)
+    const float3 shading = (third.w & 255u) == kClassWater
+                               ? water_ripple(shaded, mesh, third.z, triangle_, at, smooth_, wave_variance)
                                : smooth_;
     g_normals[id.xy] = float4(rt_oct(shading), rt_oct(normal));
     // The material: the hit record's numbers as the item table carries them.
@@ -427,7 +498,17 @@ void main(uint3 id : SV_DispatchThreadID) {
         uint map_width, map_height;
         g_textures[NonUniformResourceIndex(third.x)].GetDimensions(map_width, map_height);
         const float level = 0.5f * log2(max(map_per_pixel * float(map_width) * float(map_height), 1.0f));
-        base *= g_textures[NonUniformResourceIndex(third.x)].SampleLevel(g_wrap, coordinate, level);
+        float4 m = g_textures[NonUniformResourceIndex(third.x)].SampleLevel(g_wrap, coordinate, level);
+        // Its colour from the map whose colour it shows (item word 20; rt_shade.hlsli rt_hit_read), its alpha from
+        // the first.
+        const uint colour_map = g_items.Load(at_item + 80u);
+        if (colour_map != third.x && colour_map != 0xFFFFFFFFu) {
+            g_textures[NonUniformResourceIndex(colour_map)].GetDimensions(map_width, map_height);
+            m.rgb = g_textures[NonUniformResourceIndex(colour_map)]
+                        .SampleLevel(g_wrap, coordinate, 0.5f * log2(max(map_per_pixel * float(map_width) * float(map_height), 1.0f)))
+                        .rgb;
+        }
+        base *= m;
     }
     // The vertex colour as the hit record reads it (kVertexGrey: the cooker read it mid grey; rt_hit_read the same); its
     // alpha as it is.

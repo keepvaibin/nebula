@@ -29,28 +29,18 @@ cbuffer View : register(b0) {
     float4 line_point_raster;  // the viewport's width and height in pixels, the half line width and half point size
     float3 view_sky_up;        // the player's up in eye space, unit length
     uint view_flags;           // bit 0 view_sky_up known, bit 1 enhanced, bit 2 wide target, bit 3 traced light,
-                               // bit 4 the traced light shown in place of the colour (--diagnostics rt-light)
+                               // bit 4 the traced light shown in place of the colour (--diagnostics rt-light), bit 9
+                               // the camera under water with the traced light (traced_water_hue)
     float4 view_scale;         // x: the frame scale; y: particles' time in this frame; z: their time in the frame before
     float4 view_traced;        // with bit 3: x the traced light's place among the textures, y the added light's,
                                // z the mirror's, w the facing's
-    float4 view_stage_a;       // with bit 3: rgb the stage's ambient colour A, w kShadowTint
-    float4 view_stage_k;       // with bit 3: rgb the stage's key colour K
     float4 view_volume[3];     // with bit 3 in the scene's view: [0] the depth's eye terms, [1] the viewport; [2].x the
-                               // light volume's place + 1 (traced_air; 0 none), .y its sampler, .z the indirect ratio's
-                               // place + 1 (traced_o), .w the scattered light's place + 1 (traced_scatter)
+                               // light volume's place + 1 (traced_air; 0 none), .y its sampler, .z free, .w the
+                               // scattered light's place + 1 (traced_scatter)
     float4 view_transmit;      // with bit 3 in the scene's view: x T's place (glass and water seen through, bent;
                                // rt_transmit.hlsl), y 1 where drawn
     float4 view_blend_guide;   // with bit 3 in the scene's view: x the guide blended draws compare with
                                // (traced_by_air, traced_mirror_own), y 1 the second layer's, 2 the opaque layer's, 0 none
-    float4 view_look;          // with bit 3: the painted composite's look (traced_painted): x kForm, y the sun's
-                               // height over the player's up, at least 0.5 (the relight's exposure), z kDebake,
-                               // w kAmbientLook
-    float4 view_dev[2];        // with bit 3: the development tunables (rt_dev.h from base_floor): [0] the values, [1] 1
-                               // where the run gave one; x base_floor, y sun_strength, z sky_chroma, w stage_light (traced_painted)
-    float4 view_relight[4];    // with bit 3: the relight's view constants (traced_painted; the host's from the
-                               // rows above): [0] rgb lin(A), w luma(held); [1] rgb sky' E; [2] rgb key sun_strength E;
-                               // [3] rgb held / luma(held); [1..3].w the sun's direction in the eye's space,
-                               // the scene's view under the relight, else 0 (program_lit.hlsli traced_key_dir)
 };
 
 cbuffer Draw : register(b3) {
@@ -64,31 +54,31 @@ cbuffer Draw : register(b3) {
 StructuredBuffer<float4> rows : register(t16);
 StructuredBuffer<uint4> instances : register(t17);  // row base, last frame's row base, light base, world row base
 
-// The painted light taken out of a vertex colour (model_write.rs debake_gains): the cooker's gain a channel,
-// signed bytes of log2 x 42 (a mesh without gains reads 0: 1), by kDebake (view_look.z: 1 under the relight, else 0);
-// over 1, bounded by its largest channel (its hue kept).
+// The painted light taken out of a vertex colour (model_write.rs debake_gains) under the traced light (view bit 3): the
+// cooker's gain a channel, signed bytes of log2 x 42 (a mesh without gains reads 0: 1); over 1, bounded by its largest
+// channel (its hue kept). The tracer's hits take the same (rt_shade.hlsli rt_vertex_gain).
 float3 traced_vertex_gain(float3 c, uint gain) {
-    if (!(view_look.z > 0.0)) {
+    if ((view_flags & 8u) == 0u) {
         return c;
     }
     const int3 steps = int3(gain << 24u, gain << 16u, gain << 8u) >> 24;
-    const float3 g = max(c, 0.0) * lerp(float3(1.0, 1.0, 1.0), exp2(float3(steps) / 42.0), view_look.z);
+    const float3 g = max(c, 0.0) * exp2(float3(steps) / 42.0);
     return g / max(max(max(g.r, g.g), g.b), 1.0);
 }
 
 // The same gain as a multiplier, for a mesh painted by its map alone (programs.rs map_gained): its traced
 // vertex forms pass it, its traced pixel forms take what they show through traced_map_shown.
 float3 traced_map_gain(uint gain) {
-    if (!(view_look.z > 0.0)) {
+    if ((view_flags & 8u) == 0u) {
         return float3(1.0, 1.0, 1.0);
     }
     const int3 steps = int3(gain << 24u, gain << 16u, gain << 8u) >> 24;
-    return lerp(float3(1.0, 1.0, 1.0), exp2(float3(steps) / 42.0), view_look.z);
+    return exp2(float3(steps) / 42.0);
 }
 // What a map-painted pixel shows, de-lit: bounded by its largest channel as traced_vertex_gain. A zero multiplier
 // (a vertex form that did not pass it) leaves it.
 float3 traced_map_shown(float3 c, float3 gain) {
-    if (!(view_look.z > 0.0) || !(gain.r + gain.g + gain.b > 0.0)) {
+    if ((view_flags & 8u) == 0u || !(gain.r + gain.g + gain.b > 0.0)) {
         return c;
     }
     const float3 g = max(c, 0.0) * gain;
@@ -291,18 +281,16 @@ NativeOut native_out_of(float4 c) {
 }
 
 #if NATIVE_TRACED
-// The pixel's traced light (the light pass's): rgb V, the sun's share a channel; a O, the sky's share. All of every
-// light when the view carries none (view_flags bit 3). A lit program sets g_traced_lit (program_lit.hlsli).
-static bool g_traced_lit = false;
-// A lit program's channel 0 light level (the generator's TRACED_LEVEL), so the added light takes its colour before
-// lighting: c / level.
-static float3 g_traced_level = float3(1.0, 1.0, 1.0);
-// A lit matte dielectric's own reflection (program_lit.hlsli traced_sheen): rgb the light it mirrors on a
-// white surface, a 1 - F (what its colour keeps).
-static float4 g_traced_sheen = float4(0.0, 0.0, 0.0, 1.0);
+// Whether the traced light lights this draw: its program gives its base colour (a lit program's light set put out and
+// channel 0's level white, TRACED_LEVEL and program_lit.hlsli; a painted program's art with its painted light taken
+// out, traced_vertex_gain), and traced_colour or traced_air light it. A draw shown as it is (flag 64: the sky and what
+// is drawn with it, a glowing surface) keeps the game's own light.
+bool traced_lights_draw() {
+    return (view_flags & 8u) != 0u && (draw_flags & 64u) == 0u;
+}
+// Channel 0's light level of a lit program: white where the traced light lights the draw.
 float3 traced_level(float3 level) {
-    g_traced_level = level;
-    return level;
+    return traced_lights_draw() ? float3(1.0, 1.0, 1.0) : level;
 }
 #define TRACED_LEVEL(x) traced_level(x)
 // The light volume stands for the pixel's light (traced_air): a particle that is no light (draw
@@ -328,9 +316,10 @@ bool traced_by_air(float4 pixel) {
     }
     return guide.a == 0.0 || away < guide.r * 0.998 - 1.0;
 }
-// Whether the mirror picture at the pixel is this draw's own: never for a draw whose blend adds
-// (draw flag 32: a glow shows no reflection of its own); where the second layer's guide names a surface here, only for
-// the draw at that surface's depth; else it is the opaque layer's (opaque draws, decals on them): yes.
+// Whether the pictures at the pixel are this draw's own: never for a draw whose blend adds (draw flag 32: a glow shows
+// no reflection of its own); where the second layer's guide names a surface here, only for the draw that is that
+// surface's item (the layer's item picture, view_blend_guide.z: its place + 1), else by that surface's depth; where it
+// names none, the opaque layer's (opaque draws, decals on them): yes.
 bool traced_mirror_own(float4 pixel) {
     if ((draw_flags & (32u | 64u)) != 0u) {
         return false;  // a glow, or a draw shown as it is (flag 64)
@@ -342,6 +331,10 @@ bool traced_mirror_own(float4 pixel) {
     if (guide.a == 0.0) {
         return true;
     }
+    if (view_blend_guide.z > 0.5) {
+        const float2 named = gTextures[uint(view_blend_guide.z) - 1u].Load(int3(pixel.xy, 0)).rg;
+        return uint(named.r + 0.5) + uint(named.g + 0.5) * 1024u == draw_first_instance + 1u;
+    }
     const float4 d = view_volume[0];
     const float away = d.y / ((pixel.z - d.z) / max(d.w - d.z, 1e-7) + d.x);
     return abs(away - guide.r) <= guide.r * 0.002 + 1.0;
@@ -352,208 +345,73 @@ float3 traced_lin(float3 c) {
     c = max(c, 0.0);
     return lerp(pow((c + 0.055) / 1.055, 2.4), c / 12.92, step(c, 0.04045));
 }
-// No pigment is purer than this: no channel of a non-metal's colour under kPurity of its largest,
-// in linear light (the 0.002 blue of Good Egg's grass is paint, not a surface). rt_shade.hlsli rt_hit_albedo alike.
-static const float kPurity = 0.04;
-float3 traced_pure(float3 l, bool metal) {
-    return metal ? l : max(l, kPurity * max(max(l.r, l.g), l.b));
-}
 float3 traced_srgb(float3 l) {
     l = max(l, 0.0);
     return lerp(1.055 * pow(l, 1.0 / 2.4) - 0.055, l * 12.92, step(l, 0.0031308));
 }
-float4 traced_at(float4 pixel) {
-    if ((view_flags & 8u) == 0u || (draw_flags & 64u) != 0u || traced_by_air(pixel)) {
-        // The volume's share is all of its light (PROGRAM_LIGHT); a draw shown as it is (flag 64: the sky, a glow)
-        // takes all of every light: a lit program's sums are its own.
-        return float4(1.0, 1.0, 1.0, 1.0);
-    }
-    if ((draw_flags & 128u) != 0u) {
-        return float4(1.0, 1.0, 1.0, 1.0);  // a metal: its light is its mirror's; a lit metal's sums unshadowed
-    }
-    return gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
+// Water's hue under the traced light, every body of it alike (the fog under water): half its hue, its brightness
+// whole; display values.
+float3 traced_water_hue(float3 c) {
+    const float3 lin = traced_lin(c);
+    const float l = dot(lin, float3(0.2126, 0.7152, 0.0722));
+    return traced_srgb(lerp(float3(l, l, l), lin, 0.5));
 }
-// The colour under it: darkened by the ground's share, and lit again by what glows near the pixel (the added light:
-// each emitter's colour by how much of it reaches the surface, as a share of the surface's own colour). Then what the
-// surface mirrors, over it (rgb, already by how much the surface mirrors; a: how much of the colour under it stays,
-// plus 2 on a blended surface: there what stays is taken from its alpha, and the mirror is given back the share
-// the blend would take of it).
-// The local lights' light on the draw's own colour (traced_colour's lamps), for a clear surface's composite.
-static float3 g_traced_lamps = float3(0.0, 0.0, 0.0);
-static const float kClearLit = 0.5;  // of it a clear body scatters in its own colour
-float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
-    if (!traced_mirror_own(pixel)) {
-        return float4(colour, alpha);  // another surface's mirror, or a glow (traced_mirror_own)
-    }
-    const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
-    if (mirror.a < -10.0) {
-        // A painted gloss or metal, its traced mirror added by its Fresnel: rgb F R, a -(12 + what stays of the
-        // base); the painted map itself was fetched black (env_fetch), so the colour is the base alone, lit.
-        return float4(colour * saturate(-mirror.a - 12.0) + mirror.rgb, alpha);
-    }
-    if (mirror.a < -0.5) {
-        return float4(colour, alpha);  // a substitute: the environment fetch took the mirror in (env_fetch)
-    }
-    if (mirror.a > 3.5) {
-        // Glass and water: F = a - 4, the body's share of the alpha in the added
-        // picture's a, rgb F R.
-        const float f = saturate(mirror.a - 4.0);
-        const float body = (1.0 - f) * saturate(gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).a) * alpha;
-        const float covered = f + body;
-        // The local lights' light scattered inside it, in its own colour: on what its mirror and body leave.
-        const float3 within = (1.0 - covered) * kClearLit * g_traced_lamps;
-        if (view_transmit.y > 0.5) {
-            // High (rt_transmit.hlsl): what lies behind traced bent; the rest of the pixel is it, covered whole.
-            const float4 seen = gTextures[uint(view_transmit.x)].Load(int3(pixel.xy, 0));
-            if (seen.a > 0.5) {
-                return float4(body * colour + mirror.rgb + (1.0 - covered) * seen.rgb + within, 1.0);
-            }
-        }
-        // No T: the blend adds `within` by the alpha it raises.
-        const float cover = saturate(covered + max(within.r, max(within.g, within.b)));
-        return float4((body * colour + mirror.rgb + within) / max(cover, 1e-4), cover);
-    }
-    if (mirror.a > 1.5) {
-        // Blended: its alpha by what stays (glass clears where a real mirror stands for its painted one), and the
-        // mirror by that alpha's inverse, so the blend gives all of it.
-        const float stays = alpha * (mirror.a - 2.0);
-        return float4(colour + mirror.rgb / max(stays, 0.04), stays);
-    }
-    return float4(colour * mirror.a + mirror.rgb, alpha);
+// The same in linear light (a sea's own colour where no T is traced).
+float3 traced_water_tint(float3 lin) {
+    const float l = dot(lin, float3(0.2126, 0.7152, 0.0722));
+    return lerp(float3(l, l, l), lin, 0.5);
 }
-// A painted environment map's texel where the light pass traced what the surface mirrors (rt_mirror.hlsli
-// SUBSTITUTE): the mirror picture holds rgb R tinted by the map's own colour and the class's gain, a -(1 + keep), keep
-// how much of the painted shine comes back where R is dark. Elsewhere the texel as it is.
-// A glowing body this frame (draw flag 16384): its painted map is its own look (the sling
-// star's whole gold is one), kept as painted; traced_colour's body rule adds it to F R, held to 1.2 of it.
+// The colour every body of water scatters back where it is deep, one for all of them so no two waters meet at a seam:
+// the game's own water colour (OceanRing's cWaterColor, 0x76D7FF) in linear light at half its hue, at luminance 0.3.
+static const float3 kWaterBody = float3(0.1955, 0.3208, 0.4014);
+// Water (draw flag 65536: a sea, a lake, a fall's sheet) that is not the surface the light pass saw at the pixel, where
+// that surface's T is traced: nothing of its own (a fall's two faces drew its white art twice). The traced surface
+// covers the pixel whole (alpha 1), and the second layer names the last drawn blended surface, not the nearest:
+// Beach Bowl's lagoon and its code-drawn sea are one body drawn as two sheets, and the one not named drew the game's
+// whole cyan (a band with hard edges near the island).
+bool traced_second_sheet(float4 pixel) {
+    if ((draw_flags & 65536u) == 0u || view_transmit.y < 0.5 || view_blend_guide.y < 0.5 || view_blend_guide.y > 1.5) {
+        return false;
+    }
+    return gTextures[uint(view_transmit.x)].Load(int3(pixel.xy, 0)).a > 0.5;
+}
+// The pictures the light passes leave at the pixel (rt/rt_light.hlsl, rt_light_space.hlsl, rt_reflect_out.hlsl):
+//   Light (view_traced.x)  rgb the diffuse light in light units (irradiance / pi: what a white Lambert surface shows):
+//                          the sun's by its visibility and the surface's facing, the sky and bounce light I; a keep,
+//                          what of the base the diffuse body shows, (1 - metal)(1 - the specular albedo);
+//   Added (view_traced.y)  rgb the local lights' light D, the same units;
+//   Mirror (view_traced.z) rgb the specular radiance: the lobe's albedo times what it sees, and the highlights; a 1 a
+//                          surface's lobe, 4 + F glass and water (F R by the exact Fresnel).
+// A surface's colour: base keep (Light + D) + its specular radiance + what it emits.
+// The light a glowing body (draw flag 16384: its mesh a light this frame) sends of itself, over its lit colour, as a
+// share of its base: a hot body (flag 8192: lava, a sun) burns at twice it; any other glows at kGlowEmit. The emission
+// table gives each its own luminance in its place.
+static const float kGlowEmit = 0.35;
+float3 traced_emit(float3 base) {
+    if ((draw_flags & 16384u) == 0u) {
+        return float3(0.0, 0.0, 0.0);
+    }
+    return base * ((draw_flags & 8192u) != 0u ? 2.0 : kGlowEmit);
+}
+// A painted environment map's texel: where the traced light lights the pixel, none (the surface's own lobe mirrors the
+// traced scene, Mirror); a glowing body's (draw flag 16384) is its own look and stays. Elsewhere the texel as it is.
 float4 env_fetch(float4 painted, float4 pixel) {
-    if ((view_flags & 8u) == 0u || (draw_flags & 16384u) != 0u || !traced_mirror_own(pixel)) {
+    if (!traced_lights_draw() || (draw_flags & 16384u) != 0u || !traced_mirror_own(pixel)) {
         return painted;
     }
-    const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
-    // R is linear (the tracer's pictures); the program's stages are display-encoded: R encoded here, once.
-    if (mirror.a < -10.0) {
-        return float4(0.0, 0.0, 0.0, painted.a);  // the traced mirror is added by traced_mirror; no painted one
-    }
-    return mirror.a < -0.5 ? float4(traced_srgb(mirror.rgb) + painted.rgb * (-mirror.a - 1.0), painted.a) : painted;
+    return float4(0.0, 0.0, 0.0, painted.a);
 }
 // The program's fetch of a painted environment map (the generator wraps it); `i` holds the pixel.
 #define ENV_FETCH(t) env_fetch(t, i.pos)
-// The light under a painted surface: its art holds the stage's light, ambient A and key K by
-// how it faces the key (nl), in linear light lin(A + K nl); the traced light keeps the key's part by V and the
-// ambient's by O, a channel at a time (a shadow takes the sky's colour, and a coloured thing's shadow its colour)
-// and in luminance, mixed by kShadowTint: (lin(A) O + (lin(A + K nl) - lin(A)) V) / lin(A + K nl), affine in O and
-// V. In open sun with nothing near: 1.
-// The relight (October's engine v2): the stage's light in linear units from the game's own
-// lights (M2: sky = lin(A), full = lin(A + K), sun = (full - sky) kSunStrength), exposed so that a surface facing the
-// player's up in open sun shows the full light (M3: E = luma(full) / (luma(sky) + luma(full - sky) max(up.s, 0.5))):
-// lit = (sky' O + sun n.s V) E, sky' the sky at kSkyChroma of its chroma by kAmbientLook; the share is lit
-// over the full light in luminance, its colour over the full light's within a stop either way: a channel of
-// the stage's light near 0 does not blow up. kForm blends from the Painted form above to it.
-// O a channel at a time: the sky and bounce light's ratio (picture view_volume[2].z - 1, rt_indirect_up)
-// scaled to the light's O (the ratio itself where O is its mean; 0 with O), for an opaque draw of the scene view where
-// that pass ran; else O as it is. `coloured` says which.
-float3 traced_o(float4 light, float4 pixel, out bool coloured) {
-    coloured = false;
-    // Not draw flag 8: that is the air in front (traced_scatter), set on every opaque draw at High (it took
-    // O's hue from every surface there). Flag 64: a draw shown as it is.
-    if (view_volume[2].z == 0.0 || (draw_flags & 64u) != 0u || traced_by_air(pixel)) {
-        return light.aaa;
-    }
-    const float3 ratio = gTextures[uint(view_volume[2].z) - 1u].Load(int3(pixel.xy, 0)).rgb;
-    const float mean = (ratio.r + ratio.g + ratio.b) * (1.0 / 3.0);
-    coloured = mean > 1e-4;
-    return coloured ? ratio * (light.a / mean) : light.aaa;
-}
-// The sky's chroma kept in shade: the run's sky_chroma where it gives one, else October's 0.4 (the host's sky' in
-// view_relight[1], rt_shade.hlsli kSkyChroma).
-float traced_sky_chroma() { return view_dev[1].z > 0.5 ? view_dev[0].z : 0.4; }
-// A light over a reference light: their luminances' ratio, the light's colour over the reference's colour
-// (`held`: the reference over its luminance) held within [0.8, 1.25] a channel, so that a channel of either near 0 does
-// not blow up. 1 where the reference has no light. The one bound for the environment (traced_painted) and a lit
-// program's sky light (program_lit.hlsli).
-// The bound a channel is the caller's: the environment (0.5, 2)
-// (the target's sky-blue shade on Good Egg's white stone is B/R 1.83 times its lit side's); a lit program's sky light,
-// the characters', (0.8, 1.25) (Mario in shade is not blue).
-static const float kTintBoundEnvironment = 2.0;
-static const float kTintBoundCharacter = 1.25;
-// The draw's bound by its light set's kind, the art's own split: draw flag 2048 a
-// character's or object's set (player, strong, weak, coin; draw_walker, the game's GameLightSignal), 4096 the
-// planet set (the environment). Neither (an unknown set, none, an older exe): a lit program takes the character
-// bound (no blue Mario in shade), a painted one the environment's.
-float traced_tint_bound(bool lit) {
-    if ((draw_flags & 2048u) != 0u) {
-        return kTintBoundCharacter;
-    }
-    if ((draw_flags & 4096u) != 0u) {
-        return kTintBoundEnvironment;
-    }
-    return lit ? kTintBoundCharacter : kTintBoundEnvironment;
-}
-// O as it enters shade light (the sky term of a painted surface, a lit program's ambient and fill): its luminance
-// and kShadowTint (view_stage_a.w) of its own hue: the shade's hue is the art's ambient's, the bounce and the dome
-// colour it a little.
-float3 traced_o_shade(float3 o) {
-    const float l = dot(o, float3(0.2126, 0.7152, 0.0722));
-    return l > 1e-6 ? l * lerp(float3(1.0, 1.0, 1.0), o / l, saturate(view_stage_a.w)) : o;
-}
-float3 traced_bounded(float3 lit, float held_l, float3 held, float bound) {
-    const float lit_l = dot(lit, float3(0.2126, 0.7152, 0.0722));
-    const float3 tint = lit_l > 1e-6 && held_l > 1e-4 ? (lit / lit_l) / max(held, 1e-4) : float3(1.0, 1.0, 1.0);
-    return held_l > 1e-4 ? (lit_l / held_l) * clamp(tint, 1.0 / bound, bound) : float3(1.0, 1.0, 1.0);
-}
-float3 traced_painted(float4 light, float nl, float3 o3, bool coloured) {
-    const float3 v = light.rgb, a = view_stage_a.rgb, k = view_stage_k.rgb;
-    const float o = light.a;
-    const float3 luminance = float3(0.2126, 0.7152, 0.0722);
-    // Painted: the art's light lin(A + K nl) divided out, the traced light's put back, in linear light.
-    const float3 sk = view_relight[0].rgb, whole = traced_lin(saturate(a + k * nl));  // lin(A): the host's
-    const float3 keyed = max(whole - sk, 0.0);
-    const float3 channel = float3(whole.r > 1e-4 ? (sk.r * o3.r + keyed.r * v.r) / whole.r : 1.0,
-                                  whole.g > 1e-4 ? (sk.g * o3.g + keyed.g * v.g) / whole.g : 1.0,
-                                  whole.b > 1e-4 ? (sk.b * o3.b + keyed.b * v.b) / whole.b : 1.0);
-    const float al = dot(sk, luminance), kl = dot(keyed, luminance);
-    const float ao = coloured ? dot(sk * o3, luminance) : al * o;
-    const float mean = al + kl > 1e-4 ? (ao + dot(keyed * v, luminance)) / (al + kl) : 1.0;
-    const float3 painted = lerp(float3(mean, mean, mean), channel, view_stage_a.w);
-    if (view_look.x <= 0.0) {
-        return painted;
-    }
-    // The relight: rt_dev.h sun_strength and sky_chroma over 1.0 and October's 0.4; stage_light 1
-    // October's own (the stage's light as it is: a dim or coloured stage dims and tints the art), 0 the art's own
-    // brightness kept (divided by the full light). The view's part is the host's (view_relight): lit =
-    // (sky' O + key sun_strength nl V) E, held = lerp(full, 1, stage_light).
-    // Sky' a channel at a time, the authored ambient's hue (at kSkyChroma),
-    // by O's luminance and kShadowTint of its hue.
-    const float3 lit = view_relight[1].rgb * traced_o_shade(o3) + view_relight[2].rgb * (nl * v);
-    // Lit over held in luminance, its colour over held's within the draw's bound (the environment's or a
-    // character's).
-    const float3 relit = traced_bounded(lit, view_relight[0].w, view_relight[3].rgb, traced_tint_bound(false));
-    return lerp(painted, relit, view_look.x);
-}
-// The sheen where the pixel mirrors nothing else (its mirror picture a in [0.999, 1.5]: no class's own F), not a
-// metal, under the relight, by kForm; else none (rgb 0, a 1).
-float4 traced_sheen_here(float4 pixel, bool metal) {
-    if (!g_traced_lit || metal || !(view_look.x > 0.0) || !traced_mirror_own(pixel)) {
-        return float4(0.0, 0.0, 0.0, 1.0);
-    }
-    const float a = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0)).a;
-    if (a < 0.999 || a > 1.5) {
-        return float4(0.0, 0.0, 0.0, 1.0);
-    }
-    const float k = saturate(view_look.x);
-    return float4(g_traced_sheen.rgb * k, lerp(1.0, g_traced_sheen.a, k));
-}
 // The sea's own waves under the traced light (ocean_bowl, ocean_ring, water_road). The game adds
 // three things: `pattern` (its water texture at two scrolls, multiplied), `ring` (the highlight where that meets a
 // level) and `behind` (the screen behind looked up moved by its indirect texture, tinted; a painted reflection), and
-// blends by `alpha`. Where the pixel's mirror is a clear surface's own, R and T are read moved by the same wobble
-// (`warp`: the game's move in pixels) and the pattern and the ring are the surface's light, by the alpha and 1 - F;
-// g_sea_done then, and traced_colour returns g_sea_out. Elsewhere the game's colour, by the old path.
+// blends by `alpha`. Under the traced light the waves' painted highlight and reflection are the traced mirror's: F R'
+// + (1 - F) T', R and T read moved by the same wobble (`warp`: the game's move in pixels) where the pixel's mirror is
+// the sea's own; g_sea_done then, and traced_colour returns g_sea_out. Elsewhere the game's colour.
 static bool g_sea_done = false;
 static float4 g_sea_out = float4(0.0, 0.0, 0.0, 0.0);
-static const float kSeaPattern = 0.5;  // of the pattern's haze; the rest stood for the sky's reflection (R)
-static const float kSeaTint = 0.12;    // the water's own veil of the game's tint over the frame behind
+static const float kSeaTint = 0.12;  // where no T is traced: the water's own veil of its colour over the frame behind
 #if !NATIVE_PREPASS
 // Picture `place` about `at` (pixels): four taps by their bilinear weights, a tap whose a is not over `least` left out
 // (another surface's pixel); `unmoved` where less than a quarter is left.
@@ -579,54 +437,44 @@ float4 traced_moved(uint place, float2 at, float least, float4 unmoved) {
 float4 traced_sea(float3 pattern, float3 ring, float3 screen, float3 tint, float3 painted, float alpha, float2 warp,
                   float4 pixel) {
     const float4 game = float4(pattern + ring + screen * tint + painted, alpha);
-    if ((view_flags & 8u) == 0u || (view_flags & (16u | 64u)) != 0u || (draw_flags & (32u | 64u | 128u | 256u | 1024u)) != 0u ||
-        traced_by_air(pixel) || !traced_mirror_own(pixel)) {
+    if (!traced_lights_draw() || (view_flags & (16u | 64u)) != 0u || (draw_flags & (32u | 128u | 256u)) != 0u) {
         return game;
     }
-    const uint mirror_at = uint(view_traced.z);
-    const float4 mirror_here = gTextures[mirror_at].Load(int3(pixel.xy, 0));
-    if (mirror_here.a <= 3.5) {
-        return game;  // not a clear surface's mirror (F R, 4 + F): the old path
+    g_sea_done = true;
+    // A sheet the light pass did not see here (behind the nearest blended surface: the lagoon over Beach Bowl's sea):
+    // nothing of its own; the surface that is drawn covers it.
+    if (traced_by_air(pixel) || !traced_mirror_own(pixel)) {
+        g_sea_out = float4(0.0, 0.0, 0.0, 0.0);
+        return g_sea_out;
     }
     const float a = saturate(alpha);
-    const float4 mirror_moved = traced_moved(mirror_at, pixel.xy + warp * a, 3.5, mirror_here);
-    // The mirror fades with the game's alpha as the veil and the waves do (the shore's edge).
-    const float f = saturate(mirror_moved.a - 4.0) * a;
-    const float4 mirror = float4(mirror_moved.rgb * a, mirror_moved.a);
-    // The light on the surface's own colours, as a painted colour takes it (traced_colour).
+    const uint mirror_at = uint(view_traced.z);
+    const float4 mirror_here = gTextures[mirror_at].Load(int3(pixel.xy, 0));
     const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
-    const float3 added = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
-    const float nl = saturate(gTextures[uint(view_traced.w)].Load(int3(pixel.xy, 0)).r);
-    bool coloured = false;
-    const float3 o3 = traced_o(light, pixel, coloured);
-    const float3 share = traced_painted(light, nl, o3, coloured);
-    const float3 waves = traced_lin(saturate(pattern * kSeaPattern + ring));
-    const float3 lamps = waves * added;
-    const float3 waves_lit = a * (waves * share + lamps * min(1.0, 0.6 / max(max(lamps.r, max(lamps.g, lamps.b)), 1e-4)));
-    // One water model (model water's traced_mirror): where T is written (High), what lies under
-    // it is T, traced bent through the water and absorbed by its way, read moved by the same wobble; the water's
-    // colour is that absorption, no veil. F R' + (1 - F) waves + what they leave of T, the pixel covered whole.
+    const float3 d = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
+    // The water's own colour where no T is traced: its tint at half its hue, lit.
+    const float3 own = traced_water_tint(traced_lin(saturate(tint))) * light.a * (light.rgb + d);
+    if (mirror_here.a <= 3.5) {
+        // No clear surface's mirror here (the reflections part off): a lobe as any surface's, over the frame behind.
+        const float cover = kSeaTint * a;
+        g_sea_out = float4(traced_srgb((cover * own + a * mirror_here.rgb) / max(cover, 1e-4)), cover);
+        return g_sea_out;
+    }
+    // The mirror fades with the game's alpha as the waves do (the shore's edge).
+    const float4 mirror = traced_moved(mirror_at, pixel.xy + warp * a, 3.5, mirror_here);
+    const float f = saturate(mirror.a - 4.0) * a;
     if (view_transmit.y > 0.5) {
         const uint t_at = uint(view_transmit.x);
-        const float4 t_here = gTextures[t_at].Load(int3(pixel.xy, 0));
-        const float4 seen = traced_moved(t_at, pixel.xy + warp * a, 0.5, t_here);
+        const float4 seen = traced_moved(t_at, pixel.xy + warp * a, 0.5, gTextures[t_at].Load(int3(pixel.xy, 0)));
         if (seen.a > 0.5) {
-            const float wave_top = max(waves_lit.r, max(waves_lit.g, waves_lit.b));
-            const float covered = saturate(f + (1.0 - f) * wave_top);
-            g_sea_out = float4(traced_srgb(mirror.rgb + (1.0 - f) * waves_lit + (1.0 - covered) * seen.rgb), 1.0);
-            g_sea_done = true;
+            g_sea_out = float4(traced_srgb(mirror.rgb * a + (1.0 - f) * seen.rgb), 1.0);
             return g_sea_out;
         }
     }
-    // No T (Medium; or the refracted way left the water unmeasured: rt_transmit writes alpha 0, REFLECT's one miss
-    // rule): what lies under it is the frame behind, as it was drawn (every thing under the sea, under the traced light
-    // already): the blend lets it through. The water's own colour is a thin veil of the game's tint, lit.
+    // No T: F R' and the water's veil over the frame behind, which the blend lets through.
     const float veil = kSeaTint * a;
-    const float3 own = veil * traced_lin(tint) * share + waves_lit;
-    // F R' + (1 - F)(veil tint + waves); the frame behind keeps the rest. The alpha by what the surface itself shows.
-    const float cover = saturate(f + (1.0 - f) * (veil + max(waves_lit.r, max(waves_lit.g, waves_lit.b))));
-    g_sea_out = float4(traced_srgb((mirror.rgb + (1.0 - f) * own) / max(cover, 1e-4)), cover);
-    g_sea_done = true;
+    const float cover = saturate(f + (1.0 - f) * veil);
+    g_sea_out = float4(traced_srgb((mirror.rgb * a + (1.0 - f) * veil * own) / max(cover, 1e-4)), cover);
     return g_sea_out;
 }
 #else
@@ -641,83 +489,56 @@ static bool g_exchanged = false;
 float4 traced_added(float4 c) {
     return float4((draw_flags & 512u) != 0u ? c.rgb * c.a : c.rgb, 0.0);
 }
-// A material that keeps none of its art's tint (draw flag 1024: a fall, a splash): its colour's
-// brightest channel, in linear light (by luminance a cyan streak went grey); the light's colour goes on it.
-float4 traced_untinted(float4 c) {
-    if ((draw_flags & 1024u) == 0u) {
-        return c;
-    }
-    const float3 lin = traced_lin(c.rgb);
-    const float l = max(lin.r, max(lin.g, lin.b));
-    // kFallTint of its art's colour stays.
-    const float kFallTint = 0.35;
-    return float4(traced_srgb(lerp(float3(l, l, l), lin, kFallTint)), c.a);
-}
 float4 traced_colour(float4 c, float4 pixel) {
-    if ((view_flags & 8u) == 0u) {
-        return (draw_flags & 256u) != 0u ? traced_added(c) : c;
+    if (!traced_lights_draw()) {
+        return (view_flags & 8u) != 0u || (draw_flags & 256u) == 0u ? c : traced_added(c);
     }
     if (g_sea_done) {
         return g_sea_out;  // a sea's composite, made whole by traced_sea
     }
-    c = traced_untinted(c);
-    const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
-    const float3 added = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
-    if ((view_flags & 16u) != 0u) {
-        return float4(float3(light.r, light.a, light.b) * 0.7 + added, c.a);
-    }
-    // An added clear shell (draw flag 256), drawn premultiplied: where the mirror picture is
-    // its glass (a: 4 + F, rgb F R), F R and alpha F, so what is behind keeps 1 - F; elsewhere the game's added colour
-    // (by its alpha where the game's add takes it: flag 512) with alpha 0, an add as before.
+    const bool own = traced_mirror_own(pixel);
+    const float4 mirror = own ? gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0)) : float4(0.0, 0.0, 0.0, 1.0);
+    // An added clear shell (draw flag 256), drawn premultiplied: where the mirror picture is its glass (a: 4 + F, rgb
+    // F R), F R and alpha F, so what is behind keeps 1 - F; elsewhere the game's added colour (by its alpha where the
+    // game's add takes it: flag 512) with alpha 0, an add as before.
     if ((draw_flags & 256u) != 0u) {
-        if (traced_mirror_own(pixel)) {
-            const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
-            if (mirror.a > 3.5) {
-                g_exchanged = true;
-                return float4(traced_srgb(mirror.rgb), saturate(mirror.a - 4.0));
-            }
+        if (mirror.a > 3.5) {
+            g_exchanged = true;
+            return float4(traced_srgb(mirror.rgb), saturate(mirror.a - 4.0));
         }
         return traced_added(c);
     }
-    // A lit program took its key by V and its fill and ambient by O inside its light sums: nothing more here.
-    const float nl = g_traced_lit ? 1.0 : saturate(gTextures[uint(view_traced.w)].Load(int3(pixel.xy, 0)).r);
-    bool coloured = false;
-    const float3 o3 = g_traced_lit ? light.aaa : traced_o(light, pixel, coloured);
-    const bool metal = (draw_flags & 128u) != 0u;  // no body: share 1, no added light
-    const float3 share = g_traced_lit || metal ? float3(1.0, 1.0, 1.0) : traced_painted(light, nl, o3, !g_traced_lit && coloured);
-    if ((view_flags & 64u) != 0u) {
-        // The share alone (--diagnostics rt-signals, S; a lit program's is 1), as x / (1 + x): the scene target is unorm.
-        return float4(share / (1.0 + share), c.a);
+    const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
+    const float3 d = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
+    const float3 lit = light.a * (light.rgb + d);  // what the diffuse body shows of a white base
+    if ((view_flags & 16u) != 0u) {
+        return float4(lit / (1.0 + lit), c.a);  // --diagnostics rt-light: the diffuse light, x / (1 + x)
     }
-    // The added light by the surface's colour before lighting (a painted program's colour is that already).
-    const float kBaseFloor = view_dev[1].x > 0.5 ? view_dev[0].x : 0.2;  // rt_dev.h base_floor
-    const float4 sheen = traced_sheen_here(pixel, metal);
-    // An albedo: at most 1 a channel (a highlight in c over a small level is no colour).
-    const float3 base = g_traced_lit ? min(c.rgb / max(g_traced_level, kBaseFloor), 1.0) : c.rgb;
-    // In linear light: the colour and its base decoded, the share, the added light and the mirror's exchange on
-    // them (the tracer's pictures are linear), the result encoded. What the local lights add, rho x D, is held so its
-    // largest channel is at most kAddedMost in linear light, its hue kept (each channel at 1.5 turned a blue
-    // thing by a lamp white; counted by the tracer). A glowing body
-    // (draw flag 16384) takes none: its own light would flood it.
-    const float kAddedMost = 0.6;  // a lamp lights a thing, it does not show it at full colour
-    const bool body = (draw_flags & 16384u) != 0u;
-    const float3 added_lit = traced_pure(traced_lin(base), metal) * added;
-    const float added_top = max(added_lit.r, max(added_lit.g, added_lit.b));
-    const float3 lamps = metal || body ? float3(0.0, 0.0, 0.0) : added_lit * min(1.0, kAddedMost / max(added_top, 1e-6));
-    g_traced_lamps = lamps;
-    const float4 seen = traced_mirror((traced_pure(traced_lin(c.rgb), metal) * share * sheen.a + sheen.rgb) + lamps, c.a, pixel);
-    // A glowing body (draw flag
-    // 16384: its mesh a light this frame) is shaded as any surface (its lit side and its shade differ) and adds a share
-    // of its own colour, a being (32768) 0.35 and an object 0.6 of its lit value, at most 1.2 of it a channel.
-    // A hot body (draw flag 8192: lava, a sun) at 2 to 2.5 of it, over a
-    // sunlit surface's 1.25, so it burns.
-    const float3 lit_value = traced_lin(base);
-    const bool hot = (draw_flags & 8192u) != 0u;
-    const float self_lit = (draw_flags & 32768u) != 0u ? 0.35 : 0.8;  // an object 0.8 (a star bit as he knows it)
-    const float3 shown = !body ? seen.rgb
-                         : hot ? clamp(seen.rgb, 2.0 * lit_value, 2.5 * lit_value)
-                               : min(seen.rgb + self_lit * lit_value, 1.2 * lit_value);
-    return float4(traced_srgb(shown), seen.a);
+    if ((view_flags & 64u) != 0u) {
+        return float4(mirror.rgb / (1.0 + mirror.rgb), c.a);  // --diagnostics rt-signals S: the specular, x / (1 + x)
+    }
+    if (!own && traced_second_sheet(pixel)) {
+        return float4(0.0, 0.0, 0.0, 0.0);
+    }
+    // Water's own colour at half its hue, every body alike (traced_water_tint).
+    const float3 base = (draw_flags & 65536u) != 0u ? traced_water_tint(traced_lin(c.rgb)) : traced_lin(c.rgb);
+    const float3 diffuse = base * lit + traced_emit(base);
+    if (mirror.a > 3.5) {
+        // Glass and water: F R + (1 - F) T where T is traced (High: what lies behind, bent), the pixel covered whole;
+        // else F R and the surface's own colour over the frame behind, which the blend lets through:
+        // cover = F + (1 - F) alpha.
+        const float f = saturate(mirror.a - 4.0);
+        if (view_transmit.y > 0.5) {
+            const float4 seen = gTextures[uint(view_transmit.x)].Load(int3(pixel.xy, 0));
+            if (seen.a > 0.5) {
+                return float4(traced_srgb(mirror.rgb + (1.0 - f) * seen.rgb), 1.0);
+            }
+        }
+        const float a = saturate(c.a);
+        const float cover = f + (1.0 - f) * a;
+        return float4(traced_srgb((mirror.rgb + (1.0 - f) * a * diffuse) / max(cover, 1e-4)), cover);
+    }
+    return float4(traced_srgb(diffuse + mirror.rgb), c.a);
 }
 // The light in the air (rt/rt_volume.hlsl), for a draw that is lit and not a light (draw flag
 // 4: a particle that is no light): its colour times what of the stage's light and the local lights' reaches the air
@@ -729,7 +550,6 @@ float4 traced_air(float4 c, float4 pixel) {
     if ((view_flags & 8u) == 0u || view_volume[2].x == 0.0 || (view_flags & 16u) != 0u) {
         return traced_colour(c, pixel);
     }
-    c = traced_untinted(c);
     const float4 d = view_volume[0];
     const float away = d.y / ((pixel.z - d.z) / max(d.w - d.z, 1e-7) + d.x);
     const float3 cells = float3(96.0, 54.0, 48.0);
@@ -779,7 +599,8 @@ static float g_fog_amount = 0.0;
 // its type (GX: 2 linear, 4 exp, 5 exp2, 6 reverse exp, 7 reverse exp2; bit 3 orthographic); 0 none known.
 static float4 g_fog_curve = float4(0.0, 0.0, 0.0, 0.0);
 float3 program_fog(float3 c, float3 colour, float amount) {
-    g_fog_colour = colour;
+    // Under water (view bit 9) the fog is the water's: its hue as water's (traced_water_hue).
+    g_fog_colour = (view_flags & 512u) != 0u ? traced_water_hue(colour) : colour;
     g_fog_amount = amount;
     g_fog_step = true;
     // A fog line whose fog is off (amount 0, start = end) leaves the air to the tracer.
@@ -819,7 +640,25 @@ float3 fog_share(float4 pixel) {
     }
     return sum * 0.125;
 }
+// The camera under water with the traced light (view bits 3 and 9): the eye's way to the surface is water, one
+// medium with the water seen from above (rt_common.hlsli rt_water_absorb, rt_water_cover; program.hlsli
+// traced_mirror): what the way lets through of the surface, pure water's absorption at half its hue over the stage's
+// clear way (rt_stages.tsv's default, 1770 units), and the water's one colour (kWaterBody) by what it takes, lit as
+// the fog is. It stands in for the game's fog there: far things fade into the water's blue, near ones keep their own.
+static const float kUnderWaterClear = 1770.0;
+float4 traced_under_water(float4 c, float4 pixel) {
+    const float4 d = view_volume[0];
+    const float away = max(d.y / ((pixel.z - d.z) / max(d.w - d.z, 1e-7) + d.x), 0.0);
+    const float3 full = exp(-away / kUnderWaterClear * float3(0.340, 0.0565, 0.0092) / 0.0565);
+    const float l = dot(full, float3(0.2126, 0.7152, 0.0722));
+    const float3 through = lerp(float3(l, l, l), full, 0.5);
+    const float3 own = (1.0 - l) * kWaterBody * fog_share(pixel) * (g_exchanged ? c.a : 1.0);
+    return float4(traced_srgb(traced_lin(c.rgb) * through + own), c.a);
+}
 float4 program_fogged_at(float4 c, float4 pixel) {
+    if ((view_flags & (8u | 512u)) == (8u | 512u) && (view_flags & 256u) == 0u) {
+        return traced_under_water(c, pixel);
+    }
     if ((view_flags & 256u) != 0u) {
         // Signal F (--diagnostics rt-signals): the fog's lit share alone, x / (1 + x); 0 with no fog of the game's.
         const float3 f = g_fog_amount > 0.0 ? fog_share(pixel) : float3(0.0, 0.0, 0.0);

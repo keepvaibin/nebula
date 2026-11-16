@@ -51,23 +51,18 @@ void pbr_add_light(uint base, uint n, bool spot, uint diffuse, bool first, float
     float facing = diffuse == 1u ? dot(g_enh.N, ldir) : diffuse == 2u ? max(dot(g_enh.N, ldir), 0.0) : 1.0;
 #if NATIVE_TRACED
     lcol *= traced_light(n);
-    facing = traced_key_facing(n, diffuse, facing);
-    facing = traced_fill_facing(n, diffuse, facing, g_enh.N);
 #endif
     const float x = attn * facing;
     const float3 amb_lin = g_pbr.amb_lin;
     g_pbr.direct += lerp(enh_lin(amb + lcol * x) - amb_lin, (enh_lin(amb + lcol) - amb_lin) * x, kEnhRamp);
     if (first && diffuse != 0u && g_enh.valid) {
-#if NATIVE_TRACED
-        ldir = traced_key_dir(n, ldir);
-#endif
         g_pbr.key = enh_lin(lcol) * attn;
         g_pbr.key_dir = ldir;
         g_pbr.has_key = true;
     }
 }
 
-// The diffuse light level, display-encoded: the traced form takes the colour under it as c / level (TRACED_LEVEL).
+// The diffuse light level, display-encoded (the traced form's TRACED_LEVEL takes it white).
 float3 pbr_level() {
     return enh_srgb(enh_shoulder(max(g_pbr.ambient + g_pbr.direct, 0.0)));
 }
@@ -105,8 +100,8 @@ float4 pbr_reflection(float3 base_srgb, float metal, float rough, float ao) {
 // leaves.
 float3 pbr_finish(float3 base_srgb, float metal, float rough, float ao, float3 reflection_srgb) {
     const float3 base = enh_lin(saturate(base_srgb));
-    if (!g_enh.valid) {
-        return saturate(base_srgb);
+    if (!g_enh.valid || enh_traced()) {
+        return saturate(base_srgb);  // under the traced light the base colour: the traced composite lights it
     }
     const float r = max(rough, kPbrRoughMin);
     const float3 f0 = lerp(float3(0.04, 0.04, 0.04), base, metal);

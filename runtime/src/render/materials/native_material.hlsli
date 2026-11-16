@@ -15,8 +15,8 @@
 #include "program.hlsli"
 // NATIVE_LIT (set by a written material that sums the game's lights in its vertex stage: fur, the Mii face, the
 // trample star): its traced form (NATIVE_TRACED, a vertex form of its own) carries where the vertex is, its normal,
-// its light set and its colour 0 to the pixel stage, which sums the same lights again, each by its share
-// (program_lit.hlsli: light_term by traced_light, the ambient by AMBIENT_TERM), through material_relight
+// its light set and its colour 0 to the pixel stage, which sums the same lights again at white (program_lit.hlsli:
+// light_term by traced_light, the ambient by AMBIENT_TERM), through material_relight.
 // Its other forms are as they were.
 #if NATIVE_LIT
 #include "program_lit.hlsli"
@@ -252,14 +252,11 @@ bool material_relight(inout NativeVaryings i, float3 nrm);
 
 NativeOut native_ps(NativeVaryings i) {
 #if NATIVE_LIT && NATIVE_TRACED
-    // The material's lights summed again here, each by how much of it reaches the pixel (the light pass's shares).
-    if ((view_flags & 8u) != 0u) {
+    // The material's lights summed again here at white (program_lit.hlsli: its lit colours become its base colour, the
+    // traced composite lights it).
+    if (traced_lights_draw()) {
         g_light_base = i.lit_light;
-        g_traced = traced_at(i.pos);
-        bool coloured = false;
-        g_traced_o = traced_o(g_traced, i.pos, coloured);  // O a channel at a time, as enh_begin_traced
-        traced_o_held();
-        g_traced_lit = material_relight(i, dot(i.lit_nrm, i.lit_nrm) > 0.0 ? normalize(i.lit_nrm) : i.lit_nrm);
+        material_relight(i, dot(i.lit_nrm, i.lit_nrm) > 0.0 ? normalize(i.lit_nrm) : i.lit_nrm);
     }
 #endif
     // The material's colour as it is; the target rounds it once.

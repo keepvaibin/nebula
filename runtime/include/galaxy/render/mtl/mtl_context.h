@@ -41,6 +41,7 @@ enum class Format : std::uint32_t {
     Rgba16f = 115u,  // the effects layer; an extended-range (HDR) drawable
     R32f = 55u,
     R32u = 53u,
+    Rg32u = 103u,    // the ray tracer's item target (its item and triangle)
     Bc1 = 130u,
     Astc4x4 = 204u,  // LDR; every Apple GPU family
     Depth32fStencil8 = 260u,
@@ -119,6 +120,11 @@ struct DeviceCaps {
     bool metalfx_interpolation = false;  // MTLFXFrameInterpolator (OS 26)
     bool binary_archives = false;      // MTLBinaryArchive: compiled pipelines kept on disk
     bool edr = false;                  // the layer can show values past white (extended dynamic range)
+    // The ray tracer's needs (rt_backend_mtl.mm Backend::start checks them again): inline ray queries and acceleration
+    // structures (supportsRaytracing) with the instances and shading language of macOS 14 and iOS 17, read-write
+    // textures and argument buffers of tier 2, and on iOS an Apple7 GPU (SIMD-group reductions).
+    bool ray_tracing = false;
+    bool primitive_ids = false;        // a fragment function reads its triangle's number ([[primitive_id]]: Apple7, Mac2)
     std::uint64_t max_buffer_bytes = 0u;
     std::uint64_t recommended_memory = 0u;  // recommendedMaxWorkingSetSize: the video memory budget (0: not known)
     std::uint32_t max_texture_size = 0u;

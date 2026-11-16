@@ -31,7 +31,7 @@ RENDER = [
     ("GALAXY_RT_SUN", "rt_sun"), ("GALAXY_RT_LIGHTS", "rt_lights"), ("GALAXY_RT_INDIRECT", "rt_indirect"),
     ("GALAXY_RT_REFLECT", "rt_reflect"), ("GALAXY_RT_TRANSMIT", "rt_transmit"), ("GALAXY_RT_VOLUME", "rt_volume"),
     ("GALAXY_RT_LENS_BLOOM", "rt_lens_bloom"), ("GALAXY_RT_LANDING_SHADOW", "rt_landing_shadow"),
-    ("GALAXY_RT_PROBE_MS", "rt_probe_ms"), ("GALAXY_RT_CHOSEN", "rt_chosen"), ("GALAXY_RT_LIGHT_STYLE", "rt_light_style"),
+    ("GALAXY_RT_PROBE_MS", "rt_probe_ms"), ("GALAXY_RT_CHOSEN", "rt_chosen"),
     ("GALAXY_TEXTURE_PACKS", "texture_packs"),
     ("GALAXY_TEXTURE_PACK_PRELOAD", "texture_pack_preload"), ("GALAXY_TEXTURE_DUMP", "texture_dump"),
     ("GALAXY_TEXTURE_PACK_BUDGET_MB", "texture_pack_budget_mb"), ("GALAXY_WINDOW_WIDTH", "window_width"),

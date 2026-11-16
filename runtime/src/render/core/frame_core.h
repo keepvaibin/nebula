@@ -37,6 +37,20 @@ struct TextureHandle;
 
 namespace galaxy::render::core {
 
+// The draw types (MR::DrawType, SwingRope 0) whose code draws a water surface: OceanBowl 5, OceanRing 6, its pipe's
+// inside 7 and outside 8, OceanSphere 9, WaterRoad 10, WhirlPoolAccelerator 11 (SceneFunction.hpp; WaterPlant is
+// weed; ElectricRailHolder 12 is not water). The category is NEBULA_CATEGORY_DRAW + the enum's value.
+constexpr bool category_is_water(std::uint32_t category) noexcept {
+    return category >= NEBULA_CATEGORY_DRAW + 5u && category <= NEBULA_CATEGORY_DRAW + 11u;
+}
+
+// What the tracer's sky picture draws (RenderCore::rt_sky_capture): the sky and the air the game draws around the
+// scene, as the screen shows them; not the sun's sprite (the tracer adds the sun's own glint).
+constexpr bool item_draws_sky_picture(const NebulaFrameItem& item) noexcept {
+    const std::uint32_t category = (item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT;
+    return category == NEBULA_CATEGORY_SKY || category == NEBULA_CATEGORY_AIR || category == NEBULA_CATEGORY_ASTRO_DOME_SKY;
+}
+
 // A light set in the rows: one header row (x the light count, as a float; program.hlsli light_count), then four rows a light.
 // The rows before the sets hold an empty set, the one a draw without lights reads.
 inline constexpr std::uint32_t kLightSetHeaderRows = 1u;
@@ -93,22 +107,19 @@ struct GpuMesh {
     float hit_through = 0.0f;  // the share of the sun its far side takes (NebulaModelHit.through / 255)
     // The rows a ray reads live, in each form of the material that draws its own stages (replace 0): the form's
     // programs (as NebulaPipelineDesc names them: a draw's form is found by its pipeline), the row of glow_source
-    // among its rows (vertex rows first) and map 0's and map 1's coordinate rows among its vertex rows (0xFFFF
-    // none). A form numbers its rows by first use: the lit form's colour channels are pixel rows where
+    // among its rows (vertex rows first; 0xFFFF none). A form numbers its rows by first use: the lit form's colour channels are pixel rows where
     // the vertex-lit form's are vertex rows, so one row number names other rows in the two. Only forms with a
     // row to read are listed (registered once; a walk reads it by reference).
+    // colour_slot: the place in the form's texture list of the map whose colour the material shows
+    // (NebulaModelHit.colour_map), 0xFF the first.
     struct FormRows {
         std::uint64_t vertex = 0u, pixel = 0u;
-        std::uint16_t glow_row = 0xFFFFu, map0_row = 0xFFFFu, map1_row = 0xFFFFu;
+        std::uint16_t glow_row = 0xFFFFu;
+        std::uint8_t colour_slot = 0xFFu;
     };
     std::vector<FormRows> form_rows;
     // glow_source's cooked colour, which the live one is measured against.
     float glow_cooked[3]{};
-    // Map 0's (the water's ripple) and map 1's (water moves by both of its maps) uv sets; map1_slot map 1's
-    // place in the item's texture table (the form's second map).
-    std::uint8_t map0_uv = 0u;
-    std::uint8_t map1_uv = 0u;
-    std::uint8_t map1_slot = 0xFFu;
     float hit_alpha = 0.5f;  // an alpha-tested material: the alpha from which it is there
     // Its material's ray-hit form (a mod's surface shader, contract materials 3.4 layer 3; rt_ray_forms.h): 1 + its row
     // in the model's `.rayhit`, 0 none. Its record is what a ray sees, never by a map: the maps are the shader's own.
@@ -195,28 +206,19 @@ struct ViewRows {
     float scale[4];
     float traced[4];  // with view_flags bit 3: the light image's place among the textures, the added light's, the mirror's,
                       // the facing picture's
-    float stage_a[4]; // with view_flags bit 3: the stage's ambient colour A (rgb), w kShadowTint (program.hlsli)
-    float stage_k[4]; // with view_flags bit 3: the stage's key colour K (rgb)
     float volume[3][4];  // with view_flags bit 3, the scene's view (the light volume: program.hlsli traced_air): the
-                         // depth's eye terms (rt_eye_z), the viewport it spans, its picture's and sampler's places and 1
+                         // depth's eye terms (rt_eye_z), the viewport it spans, its picture's and sampler's places,
+                         // the scattered light's place + 1
     float transmit[4];  // with view_flags bit 3, the scene's view: x picture 6's place (T, rt_pass_transmit), y 1
                         // where the pass drew this walk
     float blend_guide[4];  // with view_flags bit 3, the scene's view (program.hlsli traced_by_air,
                            // traced_mirror_own): x the guide blended draws compare with, y 1 the second layer's
                            // (picture 9), 2 the opaque layer's (picture 8), 0 none
-    float look[4];  // with view_flags bit 3: the painted composite's look (program.hlsli traced_painted; RenderCore
-                    // rt_look_): kForm, the sun's height over the player's up (at least 0.5), kDebake, kAmbientLook
-    float dev[2][4];  // with view_flags bit 3: the programs' development tunables (rt_dev.h from BaseFloor): [0] the
-                      // values, [1] 1 where the run gave one
-    float relight[4][4];  // with view_flags bit 3: the relight's view constants (program.hlsli view_relight):
-                          // lin(A) and luma(held), sky' E, key sun_strength E, held / luma(held)
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
-              offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, stage_a) == 176 && offsetof(ViewRows, stage_k) == 192 &&
-              offsetof(ViewRows, volume) == 208 &&
-              offsetof(ViewRows, transmit) == 256 && offsetof(ViewRows, blend_guide) == 272 && offsetof(ViewRows, look) == 288 &&
-              offsetof(ViewRows, dev) == 304 && offsetof(ViewRows, relight) == 336 && sizeof(ViewRows) == 400);
+              offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, volume) == 176 &&
+              offsetof(ViewRows, transmit) == 224 && offsetof(ViewRows, blend_guide) == 240 && sizeof(ViewRows) == 256);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {

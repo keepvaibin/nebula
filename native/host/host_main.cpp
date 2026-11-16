@@ -2805,6 +2805,8 @@ int32_t svc_pointer_wheel(void*) {
 }
 
 std::atomic<uint32_t> gTiltSection{0};
+// The camera in water as the game last said (NEBULA_CONTEXT_CAMERA_WATER): logged as it goes in and out.
+std::atomic<bool> gCameraInWater{false};
 std::atomic<uint8_t> gMotor{0};
 
 // The game's thread only: the pointer mode the controls follow, held while a closed wipe covers the screen.
@@ -2839,6 +2841,14 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
         galaxy::render::note_frame_generation_allowed(value != 0);
 #endif
     } else if (what == NEBULA_CONTEXT_CAMERA_WATER) {
+        if (gCameraInWater.exchange(value > 0, std::memory_order_relaxed) != (value > 0)) {
+            if (value > 0) {
+                std::snprintf(text, sizeof(text), "camera in water, %d deep", static_cast<int>(value - 1));
+                log_line("context:", text);
+            } else {
+                log_line("context:", "camera out of water");
+            }
+        }
 #if defined(NEBULA_HOST_RENDERER)
         galaxy::render::note_camera_water(value > 0 ? static_cast<float>(value - 1) : -1.0f);
 #endif

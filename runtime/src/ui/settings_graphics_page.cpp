@@ -187,9 +187,6 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
         rows.push_back({"LANDING SHADOW", render.rt_landing_shadow ? "ON" : "OFF",
                         [](RenderConfig& draft, int) { draft.rt_landing_shadow = !draft.rt_landing_shadow; },
                         "A SOFT SHADOW UNDER THE PLAYER, TO JUDGE A LANDING"});
-        rows.push_back({"LIGHTING STYLE", render.rt_style == 1u ? "PHYSICAL" : "PAINTED",
-                        [](RenderConfig& draft, int) { draft.rt_style = draft.rt_style == 1u ? 0u : 1u; },
-                        "PAINTED: THE ART'S OWN LIGHT. PHYSICAL: THE REAL SUN ON SIMPLY PAINTED SURFACES"});
     }
 
     rows.push_back({"FRAME RATE", {}, nullptr, {}, true});

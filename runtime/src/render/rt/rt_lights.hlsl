@@ -14,20 +14,21 @@
 // whose surface it reaches: without that share a light's edge darkens). On average the sum of every light with its
 // shadow, at a cost that does not grow with the lights. A light found in shadow is kept with no weight, so it is not
 // handed on. The filter after the pass (rt_lights_time, rt_lights_space) takes what noise is left. Not on itself.
-// On gloss, metal and glass the kept light also gives its highlight (GGX, Schlick; the lobe widened by the source's
-// size as it is seen, Karis 2013), by the same weight: LightsSpec, which the reflection's raw image takes before its
-// filter.
+// The kept light also gives its highlight on every lit surface (the shared model's GGX lobe; widened by the source's
+// size as it is seen, Karis 2013), by the same weight: LightsSpec, which the reflection's raw image takes, over the
+// pixel's specular albedo, before its filter.
 // The second layer (g_pass.x 1: the nearest blended surface a pixel) is done the same way, with its own reservoirs; its
 // filter is the lights' time pass and one step over space.
 #include "rt_common.hlsli"
-#include "rt_mirror.hlsli"  // mirror_f0: the highlight's F0 as the reflection pass weighs R
+#include "rt_mirror.hlsli"  // mirror_material: the pixel's material on the shared model
 
 Texture2D<float4> g_guide : register(t9);
 Texture2D<float4> g_normals : register(t10);
 Texture2D<float4> g_motion : register(t11);
 Texture2D<float4> g_reservoirs_before : register(t12);  // the frame before's
 Texture2D<float4> g_guide_before : register(t13);       // and its guide: what surface each of those pixels was
-Texture2D<float4> g_material : register(t14);           // S.material: r roughness, b class and flags
+Texture2D<float4> g_material : register(t14);           // S.material: r roughness, g metal, b class and flags
+Texture2D<float4> g_base : register(t15);               // S.base: a metal's F0 colour
 // The opaque layer: red, green, blue in r, b, a (the channels the filter averages); the second layer: rgb as the
 // programs read them.
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_lights : register(u0);
@@ -259,42 +260,34 @@ void main(uint3 id : SV_DispatchThreadID) {
                                 kept_at)) {
                     weight = 0.0f;
                 }
+                // The camera under water (g_more.z bit 12): what it sees lies in the water, and a lamp's light reaches it
+                // through as much water as the way from the lamp (rt_water_absorb, as the sun's rays under water take).
+                if ((g_more.z & 4096u) != 0u) {
+                    kept_light *= rt_water_absorb(far_);
+                }
                 // Far over what a picture shows is cut: the filter's moments stay finite.
                 added = min(kept_light * weight, float3(32.0f, 32.0f, 32.0f));
-                // Its highlight on gloss, metal and glass: GGX D(n.h) F(v.h) Vis(n.l, n.v) of the kept light, by the same
-                // weight. Not for a glowing mesh (RtEmitter kind 1): a mirror's ray meets it and shows it already.
+                // Its highlight: the kept light's GGX lobe on the pixel's material (rt_mirror.hlsli mirror_material, the
+                // shared model's shade_highlight: every lit class has its lobe at its roughness, F0 0.04 for a plain
+                // dielectric), by the same weight; the lobe widened by the source's size as it is seen (Karis 2013).
+                // The light on a face square to it is kept_light over its facing. A glowing mesh (RtEmitter kind 1: a
+                // rail, a fence) a mirror's ray meets and shows sharp on a smooth surface; on a rough one that ray seldom
+                // finds a thin lamp, so the light's sample carries it, from none at roughness 0.05 to all at 0.2.
                 const float4 material = g_material.Load(int3(pixel, 0));
-                const uint class_ = uint(material.b * 255.0f + 0.5f) & 15u;
+                const uint bits = uint(material.b * 255.0f + 0.5f);
                 const bool mesh_lamp = kept < g_glow.w && g_drops.Load(g_glow.x + kept * 48u + 36u) == 1u;
-                if (weight > 0.0f && level >= 3u && !mesh_lamp &&
-                    (class_ == kClassGloss || class_ == kClassMetal || class_ == kClassGlass || class_ == kClassWater)) {
-                    const float3 l = (kept_at.xyz - s.at) / max(length(kept_at.xyz - s.at), 1e-3f);
+                const float lamp_share = mesh_lamp ? smoothstep(0.05f, 0.2f, material.r) : 1.0f;
+                const float3 l = (kept_at.xyz - s.at) / max(length(kept_at.xyz - s.at), 1e-3f);
+                const float facing_l = dot(s.smooth_, l);
+                if (weight > 0.0f && level >= 3u && lamp_share > 0.0f && mirror_lit(bits) && facing_l > 1e-3f) {
+                    const uint item_ = g_item_map.Load(int3(pixel, 0)).x;
+                    const uint word = item_ != 0u ? g_items.Load(g_at.x + (item_ - 1u) * kItemBytes + 60u) : 0u;
+                    const ShadeMaterial m = mirror_material(bits, material.r, material.g, g_base.Load(int3(pixel, 0)).rgb, word);
                     const float3 v = -normalize(s.at);
-                    const float nl = dot(s.smooth_, l), nv = dot(s.smooth_, v);
-                    if (nl > 0.0f && nv > 0.0f) {
-                        const float3 h = normalize(l + v);
-                        const float nh = saturate(dot(s.smooth_, h)), vh = saturate(dot(v, h));
-                        const float a = saturate(max(material.r * material.r, 0.002f) + kept_at.w / (2.0f * far_));
-                        const float a2 = a * a;
-                        const float lobe = nh * nh * (a2 - 1.0f) + 1.0f;
-                        const float d = a2 / (3.14159265f * lobe * lobe);
-                        // F0 by the function the reflection pass weighs R with (rt_mirror.hlsli mirror_f0: glass and
-                        // water by the item's index, gloss 0.04, a metal by its kind and the art's hue),
-                        // so that pass's highlight / weight is the lamp's radiance in the metal's own colour. The colour
-                        // is the item's record (S.base without its map: this pass binds no S.base).
-                        const uint item_ = g_item_map.Load(int3(pixel, 0)).x;
-                        const uint at_ = g_at.x + (item_ - 1u) * kItemBytes;
-                        const uint record = item_ != 0u ? g_items.Load(at_ + 48u) : 0xFFFFFFu;
-                        const uint ior_bits = item_ != 0u ? g_items.Load(at_ + 60u) >> 12u & 255u : 0u;
-                        const float3 f0 = mirror_f0(class_, float3(record & 255u, record >> 8u & 255u, record >> 16u & 255u) / 255.0f, ior_bits);
-                        const float glance = 1.0f - vh;
-                        const float3 f = f0 + (1.0f - f0) * (glance * glance * glance * glance * glance);
-                        // The height-correlated Smith visibility G2 / (4 n.l n.v) (Heitz 2014), so the highlight is
-                        // D F Vis times the light arriving times n.l: the kept light.
-                        const float vis = 0.5f / max(nl * sqrt(nv * nv * (1.0f - a2) + a2) + nv * sqrt(nl * nl * (1.0f - a2) + a2), 1e-5f);
-                        const float3 spec = kept_light * f * (d * vis * weight);
-                        g_lights_spec[id.xy] = float4(min(spec, float3(32.0f, 32.0f, 32.0f)), 0.0f);
-                    }
+                    const ShadeLobes lobes = shade_lobes(m, max(dot(s.smooth_, v), kShadeNvLeast));
+                    const float3 spec = shade_highlight(m, lobes, s.smooth_, v, l, kept_at.w / max(far_, 1e-3f)) *
+                                        (kept_light / facing_l) * (weight * lamp_share);
+                    g_lights_spec[id.xy] = float4(min(spec, float3(32.0f, 32.0f, 32.0f)), 0.0f);
                 }
             }
             g_reservoirs[id.xy] = float4(float((kept + 1u) & 1023u), float((kept + 1u) >> 10u), weight, min(counted, kMostLightM * rt_history_scale()));

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// What is seen through glass, crystal, ice and water, bent (rt_transmit.hlsl): one pass over the second layer, after its light pass, High only. Its picture (T) goes to the
-// programs as picture 6 (program.hlsli traced_mirror): where it holds a value the blended surface covers what lies
-// behind with T, Fresnel and its own body over it, instead of blending with it.
+// What is seen through glass, crystal, ice and water, bent (rt_transmit.hlsl): one pass over the second layer, after
+// its light pass, High only. Its picture (T) goes to the programs as picture 6 (program.hlsli traced_colour): where it
+// holds a value the blended surface covers what lies behind with F R + (1 - F) T instead of blending with it.
 #include "galaxy/render/render_core.h"
 
 #include "galaxy/launch_args.h"
@@ -41,6 +41,7 @@ void RenderCore::rt_pass_transmit() {
     binds.reads[0] = rt_layer_guide();  // the second layer's (its normals and motion are in the usual images now)
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);
+    binds.reads[4] = rt_image(RtImage::SunOut);  // the second layer's V, for the water's own light
     binds.writes[0] = out;
     rt_transmit_drawn_ = rt_backend_.dispatch(RtShader::Transmit, binds, frame.across, frame.down);
 }

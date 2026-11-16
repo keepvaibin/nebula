@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <utility>
 #include <vector>
 #include <cstdio>
@@ -85,8 +86,12 @@ void check(VkResult result, const char* what) {
 namespace {
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debug_message(VkDebugUtilsMessageSeverityFlagBitsEXT severity,
-                                             VkDebugUtilsMessageTypeFlagsEXT, const VkDebugUtilsMessengerCallbackDataEXT* data,
-                                             void*) {
+                                             VkDebugUtilsMessageTypeFlagsEXT types, const VkDebugUtilsMessengerCallbackDataEXT* data,
+                                             void* user) {
+    if ((types & VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT) != 0u && data != nullptr && user != nullptr) {
+        static_cast<Context*>(user)->note_address_binding(*data);
+        return VK_FALSE;
+    }
     if (severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT && data != nullptr && data->pMessage != nullptr) {
         std::fprintf(stderr, "[vulkan] %s\n", data->pMessage);
     }
@@ -315,8 +320,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         layers.push_back("VK_LAYER_KHRONOS_validation");
     }
     // Object names, pass labels and the validation messages only with the validation layer or RenderDoc's capture layer
-    // present: a name is a driver call per object, and the Android emulator's driver crashes on them.
-    const bool debug_utils = (!layers.empty() || has_layer("VK_LAYER_RENDERDOC_Capture")) &&
+    // present: a name is a driver call per object, and the Android emulator's driver crashes on them. --diagnostics
+    // device-faults asks for them too, with the driver's address-binding reports (note_address_binding).
+    const bool fault_map = ::galaxy::diagnosing(::galaxy::kDiagnoseDeviceFaults);
+    const bool debug_utils = (fault_map || !layers.empty() || has_layer("VK_LAYER_RENDERDOC_Capture")) &&
                              has_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     if (debug_utils) {
         instance_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -417,13 +424,19 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         return false;
     }
     volkLoadInstance(instance_);
-    if (debug_utils && !layers.empty()) {
+    if (debug_utils && (!layers.empty() || fault_map)) {
         VkDebugUtilsMessengerCreateInfoEXT messenger{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
         messenger.messageSeverity =
             VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         messenger.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        if (fault_map) {
+            // The binding reports come as information.
+            messenger.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+            messenger.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
+        }
         messenger.pfnUserCallback = debug_message;
+        messenger.pUserData = this;
         vkCreateDebugUtilsMessengerEXT(instance_, &messenger, nullptr, &messenger_);
     }
     debug_names_ = debug_utils;
@@ -860,6 +873,26 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             fault.deviceFaultVendorBinary = device_fault_binary_ ? VK_TRUE : VK_FALSE;
         }
     }
+    // --diagnostics device-faults: the driver reports each range it binds and unbinds to the messenger (note_address_binding).
+    VkPhysicalDeviceAddressBindingReportFeaturesEXT binding_report{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ADDRESS_BINDING_REPORT_FEATURES_EXT};
+    address_bindings_ = false;
+    if (messenger_ != VK_NULL_HANDLE && ::galaxy::diagnosing(::galaxy::kDiagnoseDeviceFaults) &&
+        has_device_extension(physical_, VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME)) {
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &binding_report;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        address_bindings_ = binding_report.reportAddressBinding == VK_TRUE;
+        binding_report.pNext = nullptr;
+        if (address_bindings_) {
+            device_extensions.push_back(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME);
+        }
+    }
+    {
+        const std::lock_guard<std::mutex> lock(binding_mutex_);
+        bound_.clear();
+        unbound_.clear();
+        object_names_.clear();
+    }
     // Writes to a texture from host memory (texture_backend_vk.cpp): the extension (core in 1.4; before 1.3 it needs two more),
     // its feature, and SHADER_READ_ONLY_OPTIMAL among the layouts it copies into, where the textures rest.
     VkPhysicalDeviceHostImageCopyFeaturesEXT host_copy{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES_EXT};
@@ -1090,6 +1123,10 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     if (device_fault_) {
         fault.pNext = const_cast<void*>(device_info.pNext);
         device_info.pNext = &fault;
+    }
+    if (address_bindings_) {
+        binding_report.pNext = const_cast<void*>(device_info.pNext);
+        device_info.pNext = &binding_report;
     }
     if (host_image_copy_) {
         host_copy.pNext = const_cast<void*>(device_info.pNext);
@@ -1762,6 +1799,11 @@ void Context::report_device_fault(const char* where) noexcept {
                          fault_address_type(address.addressType), static_cast<unsigned long long>(address.reportedAddress),
                          static_cast<unsigned long long>(low), static_cast<unsigned long long>(high),
                          static_cast<unsigned long long>(address.addressPrecision));
+            if (address.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT ||
+                address.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT ||
+                address.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT) {
+                name_fault_address(low, high);
+            }
         }
         for (std::uint32_t i = 0; i < sizes.vendorInfoCount && i < vendors.size(); ++i) {
             VkDeviceFaultVendorInfoEXT& vendor = vendors[i];
@@ -2102,7 +2144,128 @@ void Context::release_address(std::uint64_t address) noexcept {
     free_address_ids_.push_back(static_cast<std::uint32_t>(id));
 }
 
+void Context::note_address_binding(const VkDebugUtilsMessengerCallbackDataEXT& message) noexcept {
+    const VkDeviceAddressBindingCallbackDataEXT* binding = nullptr;
+    for (auto* next = static_cast<const VkBaseInStructure*>(message.pNext); next != nullptr; next = next->pNext) {
+        if (next->sType == VK_STRUCTURE_TYPE_DEVICE_ADDRESS_BINDING_CALLBACK_DATA_EXT) {
+            binding = reinterpret_cast<const VkDeviceAddressBindingCallbackDataEXT*>(next);
+            break;
+        }
+    }
+    if (binding == nullptr) {
+        return;
+    }
+    AddressBinding record;
+    record.base = binding->baseAddress;
+    record.size = binding->size;
+    record.submitted = submitted_.load(std::memory_order_relaxed);
+    record.internal = (binding->flags & VK_DEVICE_ADDRESS_BINDING_INTERNAL_OBJECT_BIT_EXT) != 0u;
+    if (message.objectCount != 0u && message.pObjects != nullptr) {
+        record.handle = message.pObjects[0].objectHandle;
+        record.type = message.pObjects[0].objectType;
+    }
+    try {
+        const std::lock_guard<std::mutex> lock(binding_mutex_);
+        if (binding->bindingType == VK_DEVICE_ADDRESS_BINDING_TYPE_BIND_EXT) {
+            bound_[record.base] = record;
+            return;
+        }
+        if (const auto found = bound_.find(record.base); found != bound_.end() && found->second.handle == record.handle) {
+            bound_.erase(found);
+        }
+        unbound_[record.base] = record;
+    } catch (...) {
+    }
+}
+
+void Context::name_fault_address(std::uint64_t low, std::uint64_t high) const noexcept {
+    if (!address_bindings_) {
+        return;
+    }
+    const auto type_name = [](VkObjectType type) {
+        switch (type) {
+        case VK_OBJECT_TYPE_BUFFER: return "buffer";
+        case VK_OBJECT_TYPE_IMAGE: return "image";
+        case VK_OBJECT_TYPE_DEVICE_MEMORY: return "memory";
+        case VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR: return "acceleration structure";
+        case VK_OBJECT_TYPE_MICROMAP_EXT: return "micromap";
+        default: return "object";
+        }
+    };
+    try {
+        const std::lock_guard<std::mutex> lock(binding_mutex_);
+        const auto overlaps = [&](const AddressBinding& b) { return b.base <= high && low < b.base + b.size; };
+        const auto line = [&](const char* state, const AddressBinding& b) {
+            const auto named = object_names_.find(b.handle);
+            std::fprintf(stderr, "[vulkan] fault range: %s %s 0x%llx \"%s\"%s at 0x%llx, %llu bytes (frame value %llu then, %llu completed now)\n",
+                         state, type_name(b.type), static_cast<unsigned long long>(b.handle),
+                         named != object_names_.end() ? named->second.c_str() : "", b.internal ? " (the driver's)" : "",
+                         static_cast<unsigned long long>(b.base), static_cast<unsigned long long>(b.size),
+                         static_cast<unsigned long long>(b.submitted), static_cast<unsigned long long>(completed_));
+        };
+        bool any = false;
+        // The ranges at or below the fault's top that reach into it: bound now, then the last unbound from each base,
+        // the newest first.
+        const auto reaching = [&](const std::map<std::uint64_t, AddressBinding>& ranges) {
+            std::vector<const AddressBinding*> found;
+            for (auto at = ranges.upper_bound(high); at != ranges.begin();) {
+                --at;
+                if (overlaps(at->second)) {
+                    found.push_back(&at->second);
+                } else if (at->second.base + (std::uint64_t{1} << 32u) < low) {
+                    break;  // nothing larger than 4 GB starts further down
+                }
+            }
+            std::sort(found.begin(), found.end(), [](const AddressBinding* a, const AddressBinding* b) { return a->submitted > b->submitted; });
+            return found;
+        };
+        for (const AddressBinding* b : reaching(bound_)) {
+            line("bound", *b);
+            any = true;
+        }
+        unsigned shown = 0u;
+        for (const AddressBinding* b : reaching(unbound_)) {
+            if (shown++ == 6u) {
+                break;
+            }
+            line("unbound", *b);
+        }
+        if (!any && shown == 0u) {
+            std::fprintf(stderr, "[vulkan] fault range: nothing was bound there in this device's life (%zu ranges bound, lowest at 0x%llx)\n",
+                         bound_.size(), bound_.empty() ? 0ull : static_cast<unsigned long long>(bound_.begin()->first));
+            // An address no range ever held: a pointer built wrong. One whose low 32 bits fall inside a range is that
+            // range's address cut to 32 bits; the nearest ranges either side show how far off it is otherwise.
+            const std::uint64_t cut = low & 0xFFFFFFFFull;
+            unsigned truncated = 0u;
+            for (const auto* ranges : {&bound_, &unbound_}) {
+                for (const auto& [base, b] : *ranges) {
+                    const std::uint64_t first = base & 0xFFFFFFFFull;
+                    if (truncated < 6u && b.size < (std::uint64_t{1} << 32u) && cut >= first && cut < first + b.size) {
+                        line(ranges == &bound_ ? "bound, its address cut to 32 bits:" : "unbound, its address cut to 32 bits:", b);
+                        ++truncated;
+                    }
+                }
+            }
+            const auto below = bound_.upper_bound(low);
+            if (below != bound_.begin()) {
+                line("nearest below: bound", std::prev(below)->second);
+            }
+            if (below != bound_.end()) {
+                line("nearest above: bound", below->second);
+            }
+        }
+    } catch (...) {
+    }
+}
+
 void Context::set_name(VkObjectType type, std::uint64_t handle, const char* name) const noexcept {
+    if (address_bindings_ && name != nullptr) {
+        try {
+            const std::lock_guard<std::mutex> lock(binding_mutex_);
+            object_names_[handle] = name;
+        } catch (...) {
+        }
+    }
     if (!debug_names_ || vkSetDebugUtilsObjectNameEXT == nullptr) {
         return;
     }

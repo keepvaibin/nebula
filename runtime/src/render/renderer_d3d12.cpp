@@ -6239,8 +6239,31 @@ void RendererD3D12::rt_reactive_end() {
     uses.issue();
 }
 
+bool RendererD3D12::rt_target_read_begin(std::uint64_t key, rt::TextureView& view) {
+    const auto found = target_slots_.find(key);
+    if (found == target_slots_.end() || !found->second.set.color || (target_pass_active_ && target_key_ == key)) {
+        return false;
+    }
+    ID3D12Resource* const color = found->second.set.color.Get();
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(color, gpu::Use::PixelRead, gpu::Use::ComputeRead);  // as end_target_pass left it
+    uses.issue();
+    view = {color, static_cast<std::uint32_t>(color->GetDesc().Format)};
+    return true;
+}
+
+void RendererD3D12::rt_target_read_end(std::uint64_t key) noexcept {
+    const auto found = target_slots_.find(key);
+    if (found == target_slots_.end() || !found->second.set.color) {
+        return;
+    }
+    BarriersD3D12 uses{command_list_.Get()};
+    uses.texture(found->second.set.color.Get(), gpu::Use::ComputeRead, gpu::Use::PixelRead);  // as its next pass takes it
+    uses.issue();
+}
+
 void RendererD3D12::rt_unpublish_lights(TextureStore& textures) {
-    for (unsigned which = 0u; which < kRtLightPictures; ++which) {  // light, added, mirror, facing, volume, scatter, transmit, indirect, two guides
+    for (unsigned which = 0u; which < kRtLightPictures; ++which) {  // light, added, mirror, facing, volume, scatter, transmit, indirect, two guides, the layer's items
         const auto found = pictures_.find(kRtLightPicture + which);
         if (found == pictures_.end()) {
             continue;

@@ -97,6 +97,11 @@ inline constexpr unsigned kPassBuffers = 4u, kPassTextures = 4u, kPassReads = 12
 inline constexpr unsigned kPassMeshArenas = 8u, kPassMeshBuffers = kPassMeshArenas + 1u;
 // The counters a pass may add to (u8), read back a frame later: numbers for proofs and diagnostics.
 inline constexpr unsigned kCounters = 64u;
+// After them, a diagnostic's bins (rt_dev sun_occluders): each sun ray's blocker counted by its item, the item's index
+// in the frame's list (kOccluderBins - 1: past the bins); first for the second layer's water surfaces, then for every
+// other surface. Cleared and read back only while the diagnostic counts (Backend::count_occluders).
+inline constexpr unsigned kOccluderBins = 4096u;
+inline constexpr unsigned kCounterWords = kCounters + 2u * kOccluderBins;
 
 // Bytes in a buffer of the renderer's (an upload ring's).
 struct BufferView {
@@ -242,6 +247,10 @@ public:
     // the frame slot's last finished frame (zero before one).
     void end_counters();
     void read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const;
+    // The occluder bins (kOccluderBins): counted from the next frame while `on`; read as the counters are (two runs of
+    // kOccluderBins: water, then the rest; zero where not counted).
+    void count_occluders(bool on) noexcept;
+    void read_occluders(unsigned frame_slot, std::uint32_t out[2u * kOccluderBins]) const;
     // The GPU's time over stretches of this frame's commands (kTimedStretches): time_mark(stretch, false) before one,
     // time_mark(stretch, true) after, each once a frame at most. timed_ticks: the stretch's time in the frame slot's
     // last finished frame in the GPU's ticks (the renderer's gpu_ms_per_tick converts), 0 when that frame timed none

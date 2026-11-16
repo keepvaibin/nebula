@@ -29,6 +29,7 @@ static_assert(static_cast<std::uint32_t>(Format::Rg16f) == MTLPixelFormatRG16Flo
 static_assert(static_cast<std::uint32_t>(Format::Rgba16f) == MTLPixelFormatRGBA16Float);
 static_assert(static_cast<std::uint32_t>(Format::R32f) == MTLPixelFormatR32Float);
 static_assert(static_cast<std::uint32_t>(Format::R32u) == MTLPixelFormatR32Uint);
+static_assert(static_cast<std::uint32_t>(Format::Rg32u) == MTLPixelFormatRG32Uint);
 static_assert(static_cast<std::uint32_t>(Format::Depth32fStencil8) == MTLPixelFormatDepth32Float_Stencil8);
 static_assert(static_cast<std::uint32_t>(Format::Depth32f) == MTLPixelFormatDepth32Float);
 static_assert(static_cast<std::uint32_t>(Format::Stencil8) == MTLPixelFormatStencil8);
@@ -132,6 +133,17 @@ DeviceCaps caps_of(id<MTLDevice> device) {
     caps.metalfx_interpolation = metalfx_supports("MTLFXFrameInterpolatorDescriptor", device);
     caps.binary_archives = true;  // macOS 11, iOS 14: every system this is built for
     caps.max_buffer_bytes = device.maxBufferLength;
+    // MTLGPUFamilyMac2 is 2002.
+    caps.primitive_ids = caps.apple_family >= 7u || [device supportsFamily:static_cast<MTLGPUFamily>(2002)];
+    if (@available(macOS 14.0, iOS 17.0, *)) {
+#if TARGET_OS_OSX
+        const bool reductions = true;
+#else
+        const bool reductions = caps.apple_family >= 7u;
+#endif
+        caps.ray_tracing = device.supportsRaytracing && reductions &&
+                           device.readWriteTextureSupport == MTLReadWriteTextureTier2 && tier2;
+    }
     // Metal's feature tables: 8192 on an A8, 32768 from the A19 and the M5, 16384 between and on an Intel Mac.
     caps.max_texture_size = caps.apple_gpu && caps.apple_family <= 2u ? 8192u : caps.apple_family >= 10u ? 32768u : 16384u;
     return caps;

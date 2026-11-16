@@ -172,8 +172,7 @@ void RenderCore::rt_pass_indirect() {
     }
     rt_near_before_ = near_on;
     // To full resolution by the picture's edges.
-    const float values[3][4] = {{rt_dev(RtDev::SkyMin, kSkyMin), rt_dev(RtDev::BounceMax, kBounceMax),
-                                 near_on ? 1.0f : 0.0f, 0.0f}};
+    const float values[3][4] = {{0.0f, 0.0f, near_on ? 1.0f : 0.0f, 0.0f}};
     rt::PassBinds up;
     up.constants = frame.binds.constants;
     up.pass_constants = rt_bounce_constants(0u, 0u, 0u, values);

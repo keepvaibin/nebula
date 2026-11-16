@@ -4,12 +4,11 @@
 // own surface: the same object, the same distance, facing the same way (joint bilateral upsampling, Kopf et al.
 // 2007), so I stays inside the edges the picture has. Where none of the four is its surface, any of them by where they
 // lie (bilinear over the taps that hold a surface).
-// Written with its luminance at least kSkyMin (its colour kept), a channel at most kBounceMax (the reference's
-// twin: rt_reference_out.hlsl o_held; change both): what the
-// light pass and, from 22.13, the programs read. Where the near
-// field ran (High; g_pass_value[0].z 1), times V_near over three by three pixels of the same object at the same
-// depth (rt_near_time.hlsl): O = O_far * V_near, the contact under the clamp.
-// Pass constants: g_pass_value[0].x kSkyMin, .y kBounceMax, .z 1: the near field ran.
+// I in light units (irradiance / pi: what a white Lambert surface shows), as the gather wrote it: what the compose
+// step, the reflections' fallback and the second layer read. Where the near field ran (High; g_pass_value[0].z 1),
+// times V_near over three by three pixels of the same object at the same depth (rt_near_time.hlsl): the contact
+// occlusion the half-size gather misses.
+// Pass constants: g_pass_value[0].z 1: the near field ran.
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"
 
@@ -46,7 +45,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     const float4 guide = g_guide.Load(int3(id.xy, 0));
     if (guide.a == 0.0f) {
-        g_out[id.xy] = float4(1.0f, 1.0f, 1.0f, 1.0f);
+        g_out[id.xy] = float4(g_sky_light.rgb, 1.0f);
         return;
     }
     const float3 normal = rt_unpack_normal(guide.a);
@@ -74,22 +73,10 @@ void main(uint3 id : SV_DispatchThreadID) {
         sum += value * w;
         weight += w;
     }
-    float3 ratio = weight > 1e-4f ? sum / weight : any_weight > 0.0f ? any_sum / any_weight : float3(1.0f, 1.0f, 1.0f);
-    // kSkyMin a floor on the luminance, the colour kept (a floor a channel greyed a dim coloured shade).
-    const float3 kLuma = float3(0.2126f, 0.7152f, 0.0722f);
-    ratio = max(ratio, 0.0f);
-    const float raw = dot(ratio, kLuma);
-    ratio = raw > 1e-4f ? ratio * max(g_pass_value[0].x / raw, 1.0f) : g_pass_value[0].xxx;
-    // Its colour bounded as a tint: a channel within 0.5 to 2 of the luminance,
-    // the luminance kept.
-    const float lum = dot(ratio, kLuma);
-    if (lum > 1e-4f) {
-        const float3 held = clamp(ratio, 0.5f * lum, 2.0f * lum);
-        ratio = held * (lum / max(dot(held, kLuma), 1e-6f));
-    }
-    ratio = min(ratio, g_pass_value[0].y);  // kBounceMax a channel
+    float3 light = weight > 1e-4f ? sum / weight : any_weight > 0.0f ? any_sum / any_weight : g_sky_light.rgb;
+    light = max(light, 0.0f);
     if (g_pass_value[0].z > 0.5f) {
-        ratio *= saturate(near_seen(int2(id.xy), guide, width, height));  // O = O_far * V_near
+        light *= saturate(near_seen(int2(id.xy), guide, width, height));  // I_far * V_near
     }
-    g_out[id.xy] = float4(ratio, 1.0f);
+    g_out[id.xy] = float4(light, 1.0f);
 }

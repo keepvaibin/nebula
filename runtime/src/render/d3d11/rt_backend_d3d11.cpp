@@ -57,6 +57,12 @@ void Backend::read_counters(unsigned, std::uint32_t out[kCounters]) const {
         out[i] = 0u;
     }
 }
+void Backend::count_occluders(bool) noexcept {}
+void Backend::read_occluders(unsigned, std::uint32_t out[2u * kOccluderBins]) const {
+    for (unsigned i = 0; i < 2u * kOccluderBins; ++i) {
+        out[i] = 0u;
+    }
+}
 void Backend::time_mark(unsigned, bool) {}
 std::uint64_t Backend::timed_ticks(unsigned, unsigned) const { return 0u; }
 Backend::Live Backend::live() const noexcept { return {}; }

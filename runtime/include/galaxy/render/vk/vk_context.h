@@ -18,10 +18,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <span>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 struct VmaAllocator_T;
@@ -42,9 +44,17 @@ inline constexpr std::uint64_t kMaterialConstantRange = 65536u;
 
 class Context;
 
+// A number no other texture of the process has had: what a cache of views keys on. Handle values are not that: a view
+// destroyed and another made often get the same one, and a descriptor written for the first still reads its memory.
+[[nodiscard]] inline std::uint64_t next_texture_serial() noexcept {
+    static std::atomic<std::uint64_t> serial{0};
+    return serial.fetch_add(1u, std::memory_order_relaxed) + 1u;
+}
+
 // An image with its views. The render thread tracks `layout`; the last reference hands the Vulkan objects to the
 // context, which destroys them after the GPU is done.
 struct Texture : std::enable_shared_from_this<Texture> {
+    const std::uint64_t serial = next_texture_serial();
     VkImage image = VK_NULL_HANDLE;
     VmaAllocation_T* allocation = nullptr;
     VkImageView view = VK_NULL_HANDLE;         // every level, sampled
@@ -214,6 +224,10 @@ public:
     // Test builds also write the vendor binary beside the run log (logs/device_fault_<vendor>_<device>.bin in the settings folder). Nothing without the
     // extension; never throws.
     void report_device_fault(const char* where) noexcept;
+    // --diagnostics device-faults: each address range the driver binds and unbinds (VK_EXT_device_address_binding_report,
+    // through the debug messenger), so report_device_fault names the buffer or image a faulting address lies in, or the
+    // one last unbound there. Any thread (the driver calls it from the one that binds).
+    void note_address_binding(const VkDebugUtilsMessengerCallbackDataEXT& message) noexcept;
     // vkCmdPipelineBarrier2: the core function on a Vulkan 1.3 device with the feature, the KHR one on a 1.2 device with
     // VK_KHR_synchronization2, else null (barriers_vk.h falls back to version-1 barriers).
     [[nodiscard]] PFN_vkCmdPipelineBarrier2 pipeline_barrier2() const noexcept { return pipeline_barrier2_; }
@@ -353,6 +367,21 @@ private:
     RtCaps rt_caps_{};
     bool device_fault_ = false;         // VK_EXT_device_fault, enabled
     bool device_fault_binary_ = false;  // and its vendor binary feature (--diagnostics device-faults)
+    // note_address_binding's record, by base address: what is bound now, and the last thing unbound from each base;
+    // object names by handle (set_name), for the report.
+    struct AddressBinding {
+        std::uint64_t base = 0, size = 0;
+        std::uint64_t handle = 0;
+        VkObjectType type = VK_OBJECT_TYPE_UNKNOWN;
+        std::uint64_t submitted = 0;  // the frame value submitted when it was bound, or unbound
+        bool internal = false;        // the driver's own (VK_DEVICE_ADDRESS_BINDING_INTERNAL_OBJECT_BIT_EXT)
+    };
+    bool address_bindings_ = false;  // the messenger reports bindings (device extension and feature enabled)
+    mutable std::mutex binding_mutex_;
+    std::map<std::uint64_t, AddressBinding> bound_;
+    std::map<std::uint64_t, AddressBinding> unbound_;
+    mutable std::unordered_map<std::uint64_t, std::string> object_names_;
+    void name_fault_address(std::uint64_t low, std::uint64_t high) const noexcept;
     std::atomic<bool> fault_reported_{false};
     std::atomic<bool> simulated_loss_{false};  // simulate_device_loss: asked, not yet submitted
     bool loss_was_simulated_ = false;          // the last loss was a simulated one: no fault to ask the driver for

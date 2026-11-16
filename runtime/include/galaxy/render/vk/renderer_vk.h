@@ -186,6 +186,10 @@ public:
     // the device cannot. Until rt_reactive_end.
     [[nodiscard]] bool rt_reactive_begin(rt::TextureView& reactive);
     void rt_reactive_end();
+    // A target pass's colour (begin_target_pass under `key`, ended) as the tracer's passes read it, until
+    // rt_target_read_end (the tracer's sky picture). False without that target.
+    [[nodiscard]] bool rt_target_read_begin(std::uint64_t key, rt::TextureView& view);
+    void rt_target_read_end(std::uint64_t key) noexcept;
     // The tracer's outside denoiser this frame (rt_denoiser.h: DLSS Ray Reconstruction), null for the built-in filters.
     [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return temporal_ ? temporal_->denoiser() : nullptr; }
     // An image of the tracer's (Backend::image_to_sample) as a texture the draws' programs read: its place among the
@@ -865,8 +869,10 @@ private:
         gpu::TextureRef layer_color;  // the effects layer: what its draws added, R16G16B16A16F
         gpu::TextureRef layer_trans;  // and the product of their destination factors
         std::array<VkFramebuffer, 3> framebuffers{};
-        VkImageView framebuffer_color = VK_NULL_HANDLE;
-        VkImageView framebuffer_depth = VK_NULL_HANDLE;
+        // The scene colour and depth the framebuffers were made over, by their textures' serials: a view's handle can
+        // come back for another image once its own is gone, and a framebuffer kept by handle would draw into freed memory.
+        std::uint64_t framebuffer_color = 0u;
+        std::uint64_t framebuffer_depth = 0u;
         FrameMap map{};
     };
     MotionTargets motion_;
@@ -1276,12 +1282,14 @@ private:
     // The tracer's item target (rt_items_begin) and its framebuffer with the scene's depth.
     gpu::TextureRef item_target_;
     VkFramebuffer item_framebuffer_ = VK_NULL_HANDLE;
-    VkImageView item_framebuffer_depth_ = VK_NULL_HANDLE;
+    // The depth target the framebuffer was made with, by serial: a new depth's view may have the old one's handle, and
+    // the framebuffer would test against the old image's memory.
+    std::uint64_t item_framebuffer_depth_ = 0u;
     bool item_clear_pending_ = false;  // the prepass's next pass clears the item target
     [[nodiscard]] VkFramebuffer item_framebuffer();
     void destroy_item_framebuffer();
     static constexpr std::uint64_t kRtLightPicture = 1ull << 62u | 1u;  // the traced light's key among the pictures
-    static constexpr unsigned kRtLightPictures = 10u;  // its pictures, kRtLightPicture + 0 to 9 (rt_publish_light's which)
+    static constexpr unsigned kRtLightPictures = 11u;  // its pictures, kRtLightPicture + 0 to 10 (rt_publish_light's which)
     bool pass_recording_ = false;  // between begin_frame and end_frame
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_ (every frame is profiled while it is), and each pass's running

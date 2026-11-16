@@ -187,6 +187,8 @@ public:
     void rt_light_end() {}
     [[nodiscard]] bool rt_reactive_begin(rt::TextureView&) { return false; }
     void rt_reactive_end() {}
+    [[nodiscard]] bool rt_target_read_begin(std::uint64_t, rt::TextureView&) { return false; }
+    void rt_target_read_end(std::uint64_t) noexcept {}
     [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return nullptr; }
     [[nodiscard]] std::uint32_t rt_publish_light(void*, TextureStore&, unsigned = 0u) { return 0u; }
     void rt_unpublish_lights(TextureStore&) {}

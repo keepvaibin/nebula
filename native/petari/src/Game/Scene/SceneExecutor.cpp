@@ -12,6 +12,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
+#include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Render/Model.hpp"
 
@@ -230,7 +231,11 @@ void SceneFunction::executeDrawListOpa() {
     MR::loadLightPlayer();
     CategoryList::execute(MR::DrawType_Player);
     CategoryList::execute(MR::DrawType_Fur);
-    CategoryList::execute(MR::DrawType_OceanSphere);
+    // While the host traces, the ocean spheres draw after the scene's opaque end (GameScene::draw3D): their walls are
+    // blended water, which the tracer composites over the opaque layer it has lit.
+    if (!GameLightSignal::tracing()) {
+        CategoryList::execute(MR::DrawType_OceanSphere);
+    }
     CategoryList::execute(MR::DrawType_Flag);
 }
 

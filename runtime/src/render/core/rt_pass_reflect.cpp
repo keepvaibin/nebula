@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The reflections (rt_reflect.hlsl): what glass, water, metal and glossy things mirror,
-// one ray a pixel of the opaque layer; over time by the mirror image's own point (rt_reflect_time), over space by the
-// reflection's lobe (rt_reflect_space, two steps; mirrors stay sharp); then into the mirror picture the programs read
-// (rt_reflect_out: ADD by Fresnel, or where a painted environment map is, R in its place: the SUBSTITUTE). The
-// light pass leaves the opaque layer's mirror to this pass (bit 10 of the frame's flags). Off at the part's levels
-// off and low (the painted maps stay), with the reference and with the emitters alone; high: every reflecting class.
+// The reflections (rt_reflect.hlsl): the specular lobe of every lit surface up to the preset's roughness, one ray a
+// pixel of the opaque layer; over time by the mirror image's own point (rt_reflect_time), over space by the
+// reflection's lobe (rt_reflect_space, two steps; mirrors stay sharp); then into the specular picture the programs
+// read (rt_reflect_out: lobes.mirror x Spec + the sun's highlight). The light pass leaves the opaque layer's specular
+// picture to this pass (bit 10 of the frame's flags); where it does not run, the light pass writes it from I alone.
+// Off at the part's levels off and low, with the reference and with the emitters alone.
 #include "galaxy/render/render_core.h"
 
 #include "galaxy/launch_args.h"
@@ -110,6 +110,8 @@ void RenderCore::rt_pass_reflect() {
     into.reads[3] = material;
     into.reads[4] = rt_image(RtImage::Base);
     into.reads[5] = rt_image(RtImage::LightsSpec);
+    into.reads[6] = rt_image(RtImage::SunOut);  // V for the sun's highlight
+    into.reads[7] = rt_pass_indirect_on() && rt_indirect_drawn_ ? rt_image(RtImage::Indirect) : rt::kNoImage;  // I: the fallback
     into.writes[0] = rt_image(RtImage::Mirror);
     rt_backend_.dispatch(RtShader::ReflectOut, into, frame.across, frame.down);
 }

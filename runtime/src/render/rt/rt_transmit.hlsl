@@ -1,16 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // What is seen through glass, crystal, ice and water, bent:
 // one pass over the second layer's pixels (the nearest blended surface a pixel) of class glass or water, High only.
-//   Water: the eye's ray refracted at the surface (index 1.33) on to the bed (the nearest solid or cut-out thing) or the
-//     body's own far face (an exit: refracted out there, then on into the scene), what that sends back by the shared
-//     model (rt_hit_radiance: its sun traced), times exp(-a d) over the way under water only: pure water's absorption
-//     at the clear-water scale (kWaterAbsorb over rt_water_clear). What the water scatters back toward the eye covers
-//     it by the way: the body's own colour lit by the sky's share (water_body, at the pixel's own face) by
-//     1 - exp(-d / kWaterSeen), so the bed fades into the body as the water deepens (clear shallows, the body's colour in
-//     the depths, no edge between). Where the ray leaves by the far face onto nothing solid, or meets neither bed nor
-//     far face (an open sheet over the void), T is that body alone, unabsorbed. Where even the surface's own face is
-//     not met again, no T: the programs composite the surface over the frame drawn behind it (program.hlsli
-//     traced_mirror, traced_sea).
+//   Water, one medium: the eye's ray refracted at the surface (index 1.33) on to the bed (the nearest solid or cut-out
+//     thing) or the body's own far face (an exit: refracted out there, then on into the scene), what that sends back by
+//     the shared model (rt_hit_radiance: its sun traced), times T = exp(-a d) over the way d under water (pure water's
+//     absorption at the stage's clear way, rt_water_absorb); plus the light the water itself scatters back over that
+//     way in its own colour (rt_water_scattered: the sky and the sun by its visibility at the surface). Deep water (the ray leaves by the far face onto nothing solid, or meets neither bed nor far face: an
+//     open sheet over the void) is the same at d infinite: nothing seen, the water's colour whole. Where even the
+//     surface's own face is not met again, no T: the programs composite the surface over the frame drawn behind it.
 //   Glass, crystal, ice that is a body (its thickness, item word 17, at least kThinGlass: crystal and ice as measured;
 //     clear glass only by a rt_materials.tsv row, the cook making it a shell): refracted in, traced inside against
 //     the same instance's faces (blended, no culling) to its exit, refracted out (total internal reflection: turned back
@@ -24,8 +21,9 @@
 //     power 1 / cos_t, cos_t the refracted angle's cosine inside the wall (Snell: a slab's way is its thickness over
 //     cos_t); the far wall (the instance's next face on the ray, before which a solid inside is seen) also 1 - F
 //     (Schlick).
-// Writes T: rgb what comes through (the absorption in it, no Fresnel of the first face: the programs weigh it,
-// program.hlsli traced_mirror), a 1 where traced, 0 elsewhere (the programs blend as on Medium there).
+// Writes T: rgb the radiance that comes out through the surface toward the eye (what is seen, through the medium's
+// absorption, and a water's own scattered light; no Fresnel of the first face: the programs weigh it, program.hlsli
+// traced_colour: F R + (1 - F) T), a 1 where traced, 0 elsewhere (the programs blend as on Medium there).
 // Pass constants: g_pass.x 1 (the second layer), g_pass.w the shading frame's first byte in t4.
 #include "rt_shade.hlsli"
 #if RT_TRANSMIT_REFERENCE
@@ -35,6 +33,7 @@
 Texture2D<float4> g_guide : register(t9);     // the second layer's guide (r its eye distance, a 0 where none)
 Texture2D<float4> g_normals : register(t10);  // the second layer's normals
 Texture2D<float4> g_motion : register(t11);   // the second layer's motion (w: the smooth surface's lift)
+Texture2D<float4> g_sun_seen : register(t13); // the second layer's sun visibility V (its filter's), where traced
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 #if RT_TRANSMIT_REFERENCE
 Texture2D<float4> g_t_before : register(t12);               // the reference's T sums, the walk before's
@@ -43,11 +42,10 @@ RT_FORMAT(rgba32f) RWTexture2D<float4> g_t_mean : register(u1);  // this walk's:
 
 static const float kThinGlass = 4.0f;      // units: thinner is a shell (a soap film, a dome's pane)
 static const float kGlassTint = 1.0f;      // 13.2: the art's whole tint at the thickness (was 0.5)
+// Falling water's sheet (rt_clear_fall), units at normal incidence: about a metre of water (100 units a metre at
+// the game's scale), over which it takes water's absorption and gives back water's colour as the sea does.
+static const float kFallSheet = 100.0f;
 static const float kSeenReach = 4000000.0f;
-// Water's in-scatter: the way under water (units, 1 cm) over which the bed fades to 1/e into the body's own light.
-// The beam attenuation of clear tropical sea, c ~ 1.7 / Secchi depth (Poole and Atkins) at a Secchi depth of 35 m:
-// 0.05 a metre, 1/e at 20 m. The shallows stay clear (2 m of water: 10 %), the depths take the body's colour.
-static const float kWaterSeen = 2000.0f;
 static const uint kInsideSegments = 2u;
 
 // Schlick's F of a face of index `ior` crossed at cosine `c`.
@@ -92,7 +90,7 @@ TransmitLook transmit_look(float3 from, float3 dir, float reach, float cone, boo
         k.far_ = kSeenReach;
     }
 #else
-    k.l = rt_look(from, dir, solid ? reach : kSeenReach, cone, false, solid ? 0u : kClearFaces, !solid);
+    k.l = rt_look(from, dir, solid ? reach : kSeenReach, cone, solid ? 0u : kClearFaces, !solid);
     k.met = k.l.met;
     k.far_ = k.l.far_;
 #endif
@@ -108,7 +106,7 @@ float3 transmit_shade(TransmitLook k, inout uint seed) {
     }
     return sum / float(paths);
 #else
-    return rt_look_shaded(k.l, kRtShadeSunRay | kRtShadeLightRay, float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y), seed);
+    return rt_look_shaded(k.l, kRtShadeSunRay | kRtShadeLightRay, rt_sky_mean(), seed);
 #endif
 }
 
@@ -138,28 +136,13 @@ bool own_face(uint self, float3 from, float3 dir, float reach, out uint triangle
     return true;
 }
 
-// A deep water body's own light (the water walk's): its colour as the art gives it (the hit's record by its map at
-// `h`, the shared albedo), lit as a diffuse body by the sky's share alone (rt_share at n.l 0: no sun through it), as a
-// ray that looks sees a lit program (rt_lit_seen_bound).
-float3 water_body(RtHit h) {
-    const float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
-    const float3 sunless = float3(1.0f, 1.0f, 1.0f);
-    const bool lit = (h.item_flags & kItemLit) != 0u;
-    float3 share_ = rt_share(lit, 0.0f, sunless, o, rt_tint_bound(h.item_flags));
-    if (lit) {
-        share_ = rt_lit_seen_bound(0.0f, sunless, o, share_);
-    }
-    return rt_hit_albedo(h) * share_;
-}
-
 // The walks (one a pixel; crystal one a colour), as steps: each step at most one query of the pixel's own instance
 // (own_face) and one look (transmit_look), then the walk's one shading of the look it ends on (transmit_shade). One
 // textual call of each, so the pass holds one copy of each walk's ray queries (each call of a function that traces is
 // inlined whole). kWalkSteps: the longest walk, a body's (kInsideSegments inside, then out).
 static const uint kWayWater = 0u, kWayWalls = 1u, kWayBody = 2u;
 static const uint kWalkSteps = kInsideSegments + 1u;
-// A step's phases: the first (an own face and a look), the water's fallback (the body met before the walk), the
-// last look alone.
+// A step's phases: the first (an own face and a look), the water's fallback (an own face alone), the last look alone.
 static const uint kStepFirst = 0u, kStepSheet = 1u, kStepLast = 2u;
 
 [numthreads(8, 8, 1)]
@@ -207,17 +190,24 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float cone = abs(g_ray.x);
     uint seed = rt_seed(id.xy, g_more.y, 47u);
     float3 t = float3(0.0f, 0.0f, 0.0f);
+    // The sun's visibility at the surface for the water's own light (g_more.z bit 0: the sun traced; else all of it,
+    // as the light pass takes a stage without one).
+    const float3 sun_v = (g_more.z & 1u) != 0u ? saturate(g_sun_seen.Load(here).rgb) : float3(1.0f, 1.0f, 1.0f);
+    // rt_dev transmit_why (g_more.z bit 16): water's way shown in place of T, by how its walk ended: green the bed met
+    // (darker by the way under water, e^(-way / the stage's water clear)), blue out through the body's own far face onto
+    // something, red out through it onto nothing (deep), yellow no face but the open sheet's own (deep), magenta no T.
+    const bool why = water && (g_more.z & 65536u) != 0u;
+    float3 why_colour = float3(1.0f, 0.0f, 1.0f);
     bool traced = true;
     const uint self = item - 1u;
     // Water: under the surface (the eye's ray refracted, at cosine cos_t to the normal), from `above` (a ray
     // from under the surface starts inside shallow ground) and `below` (the skin under it, for the body's own faces,
     // which a solid ray does not meet: the water is blended): the bed (the nearest solid or cut-out thing) before the
     // body's own far face, else that face refracted out (turned back inside past the critical angle, then on as
-    // reflected; the way inside after it is not counted) and on into the scene: onto nothing solid, deep water (clear
-    // shallows, dark depths; water_body, unabsorbed). Neither met (the water's body is not
-    // in the traced scene): an open sheet with nothing solid under it (a code-drawn sea over the void: OceanBowl is one
-    // grid, no floor) is deep water too, the body at the surface itself (its own face met along the eye's ray); not
-    // even that: no T. `way`: the way under water, from the surface (0 where deep).
+    // reflected; the way inside after it is not counted) and on into the scene: onto nothing solid, deep water.
+    // Neither met (the water's body is not in the traced scene): an open sheet with nothing solid under it (a
+    // code-drawn sea over the void: OceanBowl is one grid, no floor) is deep water too, where its own face is met along
+    // the eye's ray; not even that: no T. `way`: the way under water, from the surface (`deep`: no end).
     // Walls (clear glass, which the cook makes a shell; thin crystal or ice):
     // straight on from the lit side; each wall crossed takes sqrt(colour) ^ (1 / cos_t) (its own thickness over the
     // refracted slant); the far wall (the instance's next face; none on an open pane) also 1 - F; a solid inside before
@@ -228,22 +218,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     // segment does not meet it again), at most kInsideSegments; then on into the scene. Crystal (index
     // 1.7 and over): a walk a colour at ior - 0.02, ior, ior + 0.02.
     const uint way_kind = water ? kWayWater : thickness < kThinGlass ? kWayWalls : kWayBody;
-    // Water: its body's own light at the pixel's own face, met along the eye's ray through the surface (a short query
-    // of its own instance): the in-scatter over the bed, the whole of T where no bed is met.
-    bool body_known = false;
-    float3 body = float3(0.0f, 0.0f, 0.0f);
-    if (water) {
-        const float3 sheet_from = s.at - look * (2.0f * s.skin);
-        uint sheet_triangle = 0u;
-        float2 sheet_where = float2(0.0f, 0.0f);
-        float sheet_far = 0.0f;
-        if (own_face(self, sheet_from, look, 4.0f * s.skin, sheet_triangle, sheet_where, sheet_far)) {
-            RtHit surface;
-            rt_hit_read(self, sheet_triangle, sheet_where, sheet_far, sheet_from, look, cone, surface);
-            body = water_body(surface);
-            body_known = true;
-        }
-    }
+    const bool fall = way_kind == kWayWalls && rt_clear_fall(at);  // the art's tint none: water's medium instead
     const uint colours = way_kind == kWayBody && ior >= 1.7f ? 3u : 1u;
     [loop] for (uint c = 0u; c < colours; ++c) {
         const float c_ior = colours == 3u ? ior + 0.02f * (float(c) - 1.0f) : ior;
@@ -263,38 +238,39 @@ void main(uint3 id : SV_DispatchThreadID) {
             below = s.at - n * s.skin;
             to_surface = s.skin / -dot(dir, n);
         } else if (way_kind == kWayWalls) {
-            face = pow(colour, 0.5f * kGlassTint);
+            face = fall ? float3(1.0f, 1.0f, 1.0f) : pow(colour, 0.5f * kGlassTint);
             factor = pow(face, 1.0f / transmit_cos_inside(c_ior, saturate(-dot(n, look))));
         } else {
             dir = refract(look, n, 1.0f / c_ior);
             from = s.at - n * s.skin;
         }
         float3 seen = float3(0.0f, 0.0f, 0.0f);
-        RtHit exit_hit;          // water: the far face it leaves by
+        bool deep = false;       // water: no bed, the way endless
         bool deep_test = false;  // water: the last look meeting nothing is deep water
         bool shade = false;      // the walk ends on `last`
         TransmitLook last;
         uint phase = kStepFirst;
         [loop] for (uint step = 0u; step < kWalkSteps; ++step) {
-            // The step's own face: the first step's along the walk's ray (water's from under the surface); the sheet
-            // (water that meets neither bed nor far face) takes the body met before the walk; the last step has none.
+            // The step's own face: the first step's along the walk's ray (water's from under the surface), the
+            // sheet's along the eye's ray through the surface; the last step has none.
             const bool sheet = phase == kStepSheet;
+            const float3 own_from = sheet ? s.at - look * (2.0f * s.skin) : way_kind == kWayWater ? below : from;
+            const float own_reach = sheet ? 4.0f * s.skin : kSeenReach;
+            uint own_triangle = 0u;
+            float2 own_where = float2(0.0f, 0.0f);
+            float own_far = own_reach;
+            bool own_met = false;
+            if (phase != kStepLast) {
+                own_met = own_face(self, own_from, sheet ? look : dir, own_reach, own_triangle, own_where, own_far);
+            }
             if (sheet) {
-                if (body_known) {
-                    seen = body;
-                    way = 0.0f;
+                if (own_met) {
+                    deep = true;
+                    why_colour = float3(1.0f, 1.0f, 0.0f);
                 } else {
                     traced = false;
                 }
                 break;
-            }
-            const float3 own_from = way_kind == kWayWater ? below : from;
-            uint own_triangle = 0u;
-            float2 own_where = float2(0.0f, 0.0f);
-            float own_far = kSeenReach;
-            bool own_met = false;
-            if (phase != kStepLast) {
-                own_met = own_face(self, own_from, dir, kSeenReach, own_triangle, own_where, own_far);
             }
             // The step's look: the first step's for a solid thing before the face met (water's from above the
             // surface, to the face and back up to it; with no face, the bed anywhere along the ray), a body's out of
@@ -314,6 +290,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 shade = true;
                 if (way_kind == kWayWater && first) {
                     way = max(k.far_ - to_surface, 0.0f);
+                    why_colour = float3(0.0f, exp(-way / rt_water_clear()), 0.0f);
                 } else if (way_kind == kWayBody && solid) {
                     inside += k.far_;
                 }
@@ -327,7 +304,6 @@ void main(uint3 id : SV_DispatchThreadID) {
             RtHit h;
             rt_hit_read(self, own_triangle, own_where, own_far, own_from, dir, cone, h);
             if (way_kind == kWayWater) {
-                exit_hit = h;
                 way = own_far + to_surface;
                 const float3 bent = refract(dir, h.ns, c_ior);  // h.ns faces the ray: inside; water to air
                 const bool leaves = dot(bent, bent) > 0.0f;
@@ -362,22 +338,22 @@ void main(uint3 id : SV_DispatchThreadID) {
             seen = transmit_shade(last, seed);
         }
         if (way_kind == kWayWater) {
-            if (deep_test && !(last.far_ < kSeenReach)) {
-                // Out through its own far face onto no solid or cut-out thing: the body is no clear sheet; T is the
-                // body as the art colours it, unabsorbed.
-                way = 0.0f;
-                seen = water_body(exit_hit);
+            // Out through its own far face onto no solid or cut-out thing: deep water, as an open sheet.
+            deep = deep || (deep_test && !(last.far_ < kSeenReach));
+            if (deep_test) {
+                why_colour = deep ? float3(1.0f, 0.0f, 0.0f) : float3(0.0f, 0.0f, 1.0f);
             }
-            // Pure water's absorption by the way under it (Pope and Fry's ratios; kWaterAbsorb) at the
-            // clear-water scale: its colour is what it takes away. The map's colour is not a body colour (the
-            // owner's D3): nothing of it is sent back.
-            t = seen * exp(-(way / rt_water_clear()) * kWaterAbsorb);
-            if (body_known) {
-                const float kept = exp(-way / kWaterSeen);
-                t = t * kept + body * (1.0f - kept);
-            }
+            // What the way under it lets through of what is seen (Pope and Fry's ratios; rt_water_absorb), and what
+            // the water sends back in its own colour over that way.
+            t = deep ? rt_water_scattered(1e30f, sun_v) : seen * rt_water_absorb(way) + rt_water_scattered(way, sun_v);
         } else if (way_kind == kWayWalls) {
             t = factor * seen;
+            if (fall) {
+                // Falling water: the sheet's way through it (its thickness over the refracted slant) is water, one
+                // medium with the sea.
+                const float sheet = kFallSheet / transmit_cos_inside(c_ior, saturate(-dot(n, look)));
+                t = t * rt_water_absorb(sheet) + rt_water_scattered(sheet, sun_v);
+            }
         } else {
             const float3 sigma = -log(colour) / thickness * kGlassTint;
             if (colours == 3u) {
@@ -386,6 +362,26 @@ void main(uint3 id : SV_DispatchThreadID) {
                 t = seen * exp(-sigma * inside);
             }
         }
+    }
+    if (why) {
+        // Cyan: a water face stands on the eye's ray nearer than this layer's surface (another sheet is the one seen).
+        RayDesc eye;
+        eye.Origin = look * 1.0f;
+        eye.Direction = look;
+        eye.TMin = 0.0f;
+        eye.TMax = max(length(s.at) - 2.0f * s.skin - 1.0f, 0.0f);
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> nearer;
+        nearer.TraceRayInline(g_scene, RAY_FLAG_FORCE_NON_OPAQUE, kMaskBlended, eye);
+        bool sheet_in_front = false;
+        while (nearer.Proceed()) {
+            const uint other = rt_hit_item(nearer.CandidateInstanceID());
+            if ((g_items.Load(g_at.x + other * kItemBytes + 44u) & 255u) == kClassWater) {
+                sheet_in_front = true;
+                nearer.Abort();
+            }
+        }
+        g_out[id.xy] = float4((sheet_in_front ? float3(0.0f, 1.0f, 1.0f) : traced ? why_colour : float3(1.0f, 0.0f, 1.0f)) * 4.0f, 1.0f);
+        return;
     }
     if (!traced) {
         g_out[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);

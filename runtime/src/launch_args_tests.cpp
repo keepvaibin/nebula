@@ -47,7 +47,7 @@ int main() {
     for (const DiagnosticName& entry : kDiagnosticNames) {
         every |= entry.what;
     }
-    ok &= expect(every == (kDiagnoseHdrHighlights << 1u) - 1u, "every diagnostic has a name");
+    ok &= expect(every == ((kDiagnoseRtSky - 1u) | kDiagnoseRtSky), "every diagnostic has a name");  // rt-sky: the top bit
     std::cout << (ok ? "launch args tests passed\n" : "launch args tests failed\n");
     return ok ? 0 : 1;
 }

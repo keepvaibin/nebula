@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The sky and bounce light: I, the cosine-weighted mean of what a
-// surface sees over its half of the world, as a ratio to the stage's authored ambient. Open sky gives 1 (tinted where
-// the dome is brighter); a crevice sees dark surfaces and falls (contact shadow, grounding); a sunlit wall beside it
-// lifts it in the wall's colour (bounce light); a lava sea below lifts it in orange.
+// The sky and bounce light: I, the cosine-weighted mean of the radiance a surface sees over its half of the world, in
+// light units (irradiance / pi: what a white Lambert surface shows under it). Open sky gives the lighting sky's mean
+// (rt_sky_lighting: the stage's ambient by the dome's pattern); a crevice sees dark surfaces and falls (contact shadow,
+// grounding); a sunlit wall beside it lifts it in the wall's colour (bounce light); a lava sea below lifts it in orange.
+// What a hit sends is the shared model's (rt_hit_radiance: shade_core.hlsli), as on screen.
 //
 // Half resolution: each thread is one half-res pixel, its receiver the full-res pixel of its 2 x 2 block that the
 // frame's turn picks, so four frames visit every pixel. Modes (g_pass.y, from rt_quality):
-//   0 Low: sky only: one ray within kSkyReach; a hit is kHitDark, no texture read, no reservoir (traced ambient
-//     occlusion in the sky's colour);
+//   0 Low: sky only: one ray within kSkyReach; a hit sends nothing, no texture read, no reservoir (traced ambient
+//     occlusion in the sky's light, no bounce);
 //   1 Medium: one ray within kIndirectReach, the hit shaded (rt_hit_radiance: the sun traced from it), ReSTIR GI
 //     (Ouyang et al. 2021, "ReSTIR GI: Path Resampling for Real-Time Path Tracing"): the frame before's reservoir of
 //     the same surface (M up to 30) and one neighbour's within 16 half-res pixels, which joins only where a ray from
@@ -18,7 +19,7 @@
 //     hits it shows (more than one bounce over time).
 // Writes the half-res guide and motion the filters (rt_lights_time.hlsl, rt_lights_space.hlsl at half res) read, the
 // raw I in their channels (r, b, a), and the reservoirs: the sample's place (float bits, eye space of this frame) with
-// its normal and M in Rgba32ui, its light (ratio) and W in Rgba16f.
+// its normal and M in Rgba32ui, its radiance and W in Rgba16f.
 // Pass constants: g_pass.y the mode; g_pass.z bit 0 the frame before's reservoirs and I count, bit 1 the near field
 // runs (rt_near.hlsl: the gather from its reach on), bit 2 the host reads the dome's and the hits' counts
 // (rt_dome_read), bit 3 the walk before's blended guide (t18) is bound (rt_screen_lights); g_pass.w the shading
@@ -51,7 +52,7 @@ static const float kMostWeight = 60000.0f;  // W in a half float
 struct GiReservoir {
     float3 at;     // the sample's place (eye space of this frame)
     float3 n;      // its normal, toward where it was seen from
-    float3 light;  // what it sends, as a ratio to the stage's ambient
+    float3 light;  // the radiance it sends toward the receiver
     float sum;     // the resampling weights' sum
     float m;       // how many samples it stands for
     float w;       // its unbiased contribution weight, once finished
@@ -196,22 +197,21 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 origin = rt_ray_origin(s, dir);
 
     if (mode == kModeSky) {
-        // Traced ambient occlusion in the sky's colour: what stands within kSkyReach hides the sky. From the side the
+        // Traced ambient occlusion in the sky's light: what stands within kSkyReach hides the sky. From the side the
         // ray leaves by (rt_ray_origin, as the gather): from the lit side's point a ray under the geometric
-        // surface met the surface itself. Open sky is the open sky's O (rt_open_o: its luminance 1 and kSkyChroma of the
-        // dome's hue, what Medium's misses average to: what has no traced O takes the open sky's).
+        // surface met the surface itself. Open sky is the lighting sky's mean (no dome read).
         uint item, triangle_;
         float2 where_;
         float far_;
         const bool hit = rt_closest(origin, dir, kSkyReach, kMaskSolid | kMaskCutout, item, triangle_, where_, far_);
-        const float3 ratio = (hit ? g_shade.look.y : 1.0f) * rt_open_o();
+        const float3 light = hit ? float3(0.0f, 0.0f, 0.0f) : rt_sky_mean();
         g_reservoirs[id.xy] = uint4(0u, 0u, 0u, 0u);
         g_weights[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        g_raw[id.xy] = float4(ratio.r, 0.0f, ratio.g, ratio.b);
+        g_raw[id.xy] = float4(light.r, 0.0f, light.g, light.b);
         return;
     }
 
-    // The new sample: what the ray meets, and what it sends as a ratio to the stage's ambient.
+    // The new sample: what the ray meets, and the radiance it sends back along the ray.
     GiReservoir r;
     r.sum = 0.0f;
     r.m = 0.0f;
@@ -229,17 +229,19 @@ void main(uint3 id : SV_DispatchThreadID) {
         fresh.n = -dir;
         if (met == 0u) {
             fresh.at = from + dir * kIndirectReach;
-            fresh.light = float3(1.0f, 1.0f, 1.0f);  // nothing at all: the stage's ambient itself
+            fresh.light = rt_sky_mean();  // nothing at all, no dome: the lighting sky's mean
         } else {
             RtHit h;
             rt_hit_read(item, triangle_, where_, far_, from, dir, 0.05f, h);
             fresh.at = h.at;
             if (met == 1u || (h.item_flags & kItemSky) != 0u) {
-                fresh.light = rt_sky_ratio(rt_dome_light(h));  // the dome's mean: rt_count_dome_directions
+                fresh.light = rt_sky_lighting(rt_dome_light(h));  // against the dome's mean: rt_count_dome_directions
             } else {
                 fresh.n = h.ng;
                 const uint options = kRtShadeSunRay | kRtShadeLighting | (mode == kModeHigh ? kRtShadeLightRay : 0u);
-                float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
+                // The hit's own sky and bounce light: the screen's I where the screen shows that very surface (more than
+                // one bounce over time), else the open sky's.
+                float3 o = rt_sky_mean();
                 if (mode == kModeHigh && (g_pass.z & 1u) != 0u) {
                     float3 seen;
                     if (rt_screen_cache(g_guide, g_out_before, h, seen)) {
@@ -250,28 +252,10 @@ void main(uint3 id : SV_DispatchThreadID) {
                 float3 d_seen;
                 const bool d_known = (g_pass.z & 1u) != 0u &&
                                      rt_screen_lights(g_guide, g_added_before, g_blended_before, (g_pass.z & 8u) != 0u, h, d_seen);
-                const float3 bounce = g_shade.gains.z * rt_hit_radiance_with(h, options, o, d_known, d_seen, seed) /
-                                      rt_o_unit();  // O's unit (the model's under the relight)
-                if (h.glows && !h.listed) {
-                    fresh.light = bounce;  // it shines of itself: its light as it is
-                } else {
-                    // A surface lit by the scene: against the mean of such hits, as the sky against its own;
-                    // an area glow's emission over it as it is.
-                    if (counting && ((id.x | id.y) & 3u) == 0u) {
-                        rt_count_hit(bounce);
-                    }
-                    const float3 glow = g_shade.gains.z * rt_hit_area_glow(h, true) / rt_o_unit();
-                    fresh.light = bounce * g_shade.authored.w + glow;
-                    // In a room a near hit stands over the point: kRoomNearShare of its light.
-                    // Under open sky the line above's light, bit for bit.
-                    const float near_ = rt_room_near(s, n, skip + far_);
-                    if (near_ < 1.0f) {
-                        fresh.light = bounce * (g_shade.authored.w * near_) + glow;
-                    }
-                }
+                fresh.light = rt_hit_radiance_with(h, options, o, d_known, d_seen, seed);
             }
         }
-        // High: what the water on the way lets through, after the hits' mean is counted.
+        // High: what the water on the way lets through.
         if (mode == kModeHigh) {
             fresh.light *= rt_water_way(from, dir, met == 2u ? far_ : kIndirectReach);
         }

@@ -371,14 +371,18 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     const auto* layout = static_cast<const mtl::RenderLayout*>(root_);
     const unsigned samples_log2 = variant & kSceneVariantSamplesMask;
     const unsigned program = program_variant(desc.pixel, aux, (desc.state & NEBULA_STATE_PIXEL_SHADING) != 0u ? 0u : samples_log2);
-    const ProgramBytes vs = program_bytes(desc.vertex, program, false);
+    // The tracer's prepass of a motion draw goes through the vertex stage's motion form, as the draw itself will.
+    const ProgramBytes vs = program_bytes(desc.vertex, aux == kAuxPrepassMotion ? unsigned{kProgramTracedMotion} : program, false);
     const ProgramBytes ps = program_bytes(desc.pixel, program, true);
     if (vs.size == 0u || ps.size == 0u) {
         std::fprintf(stderr, "[pipelines] no program %llx %llx variant %u\n", static_cast<unsigned long long>(desc.vertex),
                      static_cast<unsigned long long>(desc.pixel), program);
         return nullptr;
     }
-    if (aux == 3u && !layout->layer_targets) {
+    // The targets: 0-4 (a traced form's are its own aux's), or the prepass's item target.
+    const unsigned targets = aux_targets(aux);
+    const bool prepass = targets == kAuxPrepass;
+    if (targets == 3u && !layout->layer_targets) {
         return nullptr;  // the device cannot draw the effects layer: the walker misses this draw
     }
     const mtl::Object vertex_function = function_of(vs, false);
@@ -424,7 +428,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         if (desc.position_stride == 0u) {
             add(kMatrix, MTLVertexFormatUInt, gpu::kStreamMatrix, 4u, 0u);
         }
-        if (aux == 1u) {
+        if (aux_motion_form(aux)) {
             add(kBefore, MTLVertexFormatFloat3, gpu::kStreamBefore, position_stride, 0u);
         }
         for (const NebulaLayoutInput& input : entry.inputs) {
@@ -471,16 +475,32 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
             color.destination_alpha = alpha_factor(color.destination);
             color.alpha_operation = color.operation;
         }
+        // An added clear shell's traced form: an exchange, premultiplied: the program gives F R and F, what is behind
+        // keeps 1 - F.
+        if (aux >= kAuxTraced && (aux & kAuxExchange) != 0u) {
+            color.enabled = true;
+            color.source = color.source_alpha = MTLBlendFactorOne;
+            color.destination = color.destination_alpha = MTLBlendFactorOneMinusSourceAlpha;
+            color.operation = color.alpha_operation = MTLBlendOperationAdd;
+        }
         const mtl::Format color_format = target                                  ? layout->target_color
                                          : (variant & kSceneVariantHdr) != 0u ? layout->wide_color
                                                                                 : layout->scene_color;
-        apply(descriptor.colorAttachments[0], color, static_cast<MTLPixelFormat>(color_format));
+        if (prepass) {
+            // The item target alone: the draw's item where it is nearest. A blended entry's item (the second layer)
+            // replaces like any other.
+            Blend items;
+            items.writes = MTLColorWriteMaskRed | MTLColorWriteMaskGreen;
+            apply(descriptor.colorAttachments[0], items, static_cast<MTLPixelFormat>(layout->items));
+        } else {
+            apply(descriptor.colorAttachments[0], color, static_cast<MTLPixelFormat>(color_format));
+        }
         // Aux 4: the motion pass's second target is there and left as it is.
-        if (aux == 1u || aux == 4u) {
+        if (targets == 1u || targets == 4u) {
             Blend motion;
-            motion.writes = aux == 1u ? MTLColorWriteMaskRed | MTLColorWriteMaskGreen : MTLColorWriteMaskNone;
+            motion.writes = targets == 1u ? MTLColorWriteMaskRed | MTLColorWriteMaskGreen : MTLColorWriteMaskNone;
             apply(descriptor.colorAttachments[1], motion, static_cast<MTLPixelFormat>(layout->motion));
-        } else if (aux == 2u || aux == 3u) {
+        } else if (targets == 2u || targets == 3u) {
             Blend reactive;
             reactive.enabled = true;
             reactive.source = reactive.destination = MTLBlendFactorOne;
@@ -490,7 +510,7 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
             reactive.writes = MTLColorWriteMaskRed;
             apply(descriptor.colorAttachments[1], reactive, static_cast<MTLPixelFormat>(layout->reactive));
         }
-        if (aux == 3u) {
+        if (targets == 3u) {
             // The effects layer: render target 2 takes the colour as the scene target blends it, 3 the product of the
             // destination factors (nothing from the source: it keeps what the destination factor lets through). Colour only.
             constexpr MTLColorWriteMask kRgb = MTLColorWriteMaskRed | MTLColorWriteMaskGreen | MTLColorWriteMaskBlue;
@@ -529,7 +549,8 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
         }
         auto* const pipeline = new gpu::Pipeline();
         pipeline->state = (__bridge_retained void*)made;
-        pipeline->depth_stencil = depth_state_of(state);
+        // The prepass leaves the stencil alone: a draw's marks are made once, by the scene pass.
+        pipeline->depth_stencil = depth_state_of(prepass ? state & ~(0xFu << 20u) : state);
         pipeline->primitive = static_cast<std::uint8_t>(MTLPrimitiveTypeTriangle);
         // Direct3D's winding, which the programs' clip space is written for: clockwise is front. Culling all has no state:
         // the walker draws nothing.

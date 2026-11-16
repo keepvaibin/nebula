@@ -121,6 +121,7 @@ struct Backend::State {
     VmaAllocation counters_allocation = nullptr;
     std::shared_ptr<vk::Buffer> counters_read[kFramesInFlight];
     bool counters_bound = false;
+    unsigned counter_words = kCounters;  // filled and copied: kCounterWords while the occluder bins count
     // The timed stretch (time_mark): two timestamps a frame slot (none: no measure).
     VkQueryPool times = VK_NULL_HANDLE;
     bool timed[kFramesInFlight][kTimedStretches]{};
@@ -166,7 +167,7 @@ constexpr std::uint32_t kMeshBinding = 1u + kPassBuffers + kPassTextures + kPass
 constexpr std::uint32_t kSamplerBinding = 100u;  // s0 (the shaders' samplers are shifted by 100)
 constexpr std::uint32_t kImageBinding = 200u, kCountersBinding = 200u + kPassWrites, kWriteBufferBinding = kCountersBinding + 1u,
                         kConstantsBinding = 300u, kPassConstantsBinding = 301u;
-constexpr VkDeviceSize kCountersBytes = VkDeviceSize{kCounters} * 4u;
+constexpr VkDeviceSize kCountersBytes = VkDeviceSize{kCounterWords} * 4u;  // the occluder bins after the counters
 
 constexpr VkFormat format_of(ImageFormat format) noexcept {
     switch (format) {
@@ -1094,7 +1095,7 @@ bool Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
         last.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                              0u, 1u, &last, 0u, nullptr, 0u, nullptr);
-        vkCmdFillBuffer(commands, s.counters, 0u, kCountersBytes, 0u);
+        vkCmdFillBuffer(commands, s.counters, 0u, VkDeviceSize{s.counter_words} * 4u, 0u);
         VkMemoryBarrier filled{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
         filled.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         filled.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
@@ -1216,7 +1217,7 @@ void Backend::end_counters() {
     added.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
     vkCmdPipelineBarrier(s.commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                          0u, 1u, &added, 0u, nullptr, 0u, nullptr);
-    const VkBufferCopy all{0u, 0u, kCountersBytes};
+    const VkBufferCopy all{0u, 0u, VkDeviceSize{s.counter_words} * 4u};
     vkCmdCopyBuffer(s.commands, s.counters, s.counters_read[s.frame_slot]->buffer, 1u, &all);
     s.counters_copied = true;
     // What the copy wrote, for the host's read once the frame's fence is signalled (a fence makes no device write
@@ -1231,7 +1232,17 @@ void Backend::end_counters() {
 void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const {
     const vk::Buffer& read = *state_->counters_read[frame_slot % kFramesInFlight];
     vk::Context::get().invalidate(read);
-    std::memcpy(out, read.mapped, kCountersBytes);
+    std::memcpy(out, read.mapped, std::size_t{kCounters} * 4u);
+}
+
+void Backend::count_occluders(bool on) noexcept {
+    state_->counter_words = on ? kCounterWords : kCounters;
+}
+
+void Backend::read_occluders(unsigned frame_slot, std::uint32_t out[2u * kOccluderBins]) const {
+    const vk::Buffer& read = *state_->counters_read[frame_slot % kFramesInFlight];
+    vk::Context::get().invalidate(read);
+    std::memcpy(out, read.mapped + std::size_t{kCounters} * 4u, std::size_t{2u * kOccluderBins} * 4u);
 }
 
 void Backend::time_mark(unsigned stretch, bool end) {

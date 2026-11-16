@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Hit shading: what every ray that meets a surface knows of it and what light it sends back.
-// One model for the real-time passes (the sky and bounce light, reflections, the light volume)
-// and for the reference path tracer, so a difference between them is a difference of sampling, never of the model.
+// One model for the real-time passes (the sky and bounce light, reflections, the light volume), the reference path
+// tracer and the programs on screen: shade_core.hlsli (materials/), so a surface shows the same on screen, in a mirror,
+// through water and in a bounce, and a difference between a pass and the reference is one of sampling, never of model.
 //
 // Built on rt_common.hlsli (the frame's bindings, b0, the mesh readers, the surface images). A pass that shades hits
 // binds the shading frame in t4 (rt_bounce.cpp rt_shade_binds): sixteen float4 of the stage and the model's tunables,
@@ -10,22 +11,21 @@
 #define NEBULA_RT_SHADE_HLSLI
 
 #include "rt_common.hlsli"
+#include "shade_core.hlsli"  // the shading model (materials/)
 
 // The shading frame (rt_bounce.cpp RtShadeFrame, field for field), at the head of t4.
 struct RtShadeFrame {
-    float4 ambient;   // rgb A: the stage's ambient colour as the programs take it (rt_stage_a_); w free
-    float4 key;       // rgb K: the stage key's colour; w kShadowTint
-    float4 fill;      // rgb Fl: the stage's fill colour; w free
-    float4 sky;       // rgb what a ray that meets nothing at all shows; w kSkyGain
-    float4 gains;     // x kAreaEmission, y kHitSky, z kBounce, w kBounceMax
+    float4 ambient;   // free
+    float4 key;       // free
+    float4 fill;      // free
+    float4 sky;       // free
+    float4 gains;     // free
     float4 axis[3];   // the world light grid: cell k along axis i = floor(dot(at, axis[i].xyz) + axis[i].w)
-    float4 look;      // x kSkyMin, y kHitDark, z 1 / the dome's mean luminance (0: not known yet), w kSunGlint
-    float4 authored;  // rgb the stage's ambient as the programs take it (rt_stage_a_): the indirect ratio's base;
-                      // w the gain of a surface met (1 / the running mean of such hits, at most 1: rt_count_hit)
+    float4 look;      // z 1 / the dome's mean luminance (0: not known yet); x y w free
+    float4 authored;  // free
     uint4 grid;       // x the grid's cells' first byte in t4, y its entries', z 1 when it holds any, w the frame's number
-    float4 dome;      // rgb 1 / the dome's mean colour as the bounce rays see it, w 1 when known (rt_sky_ratio)
-    float4 form;      // the painted composite's look: x kForm, y the stage's m,
-                      // z kDebake, w kAmbientLook (rt_share_terms)
+    float4 dome;      // rgb 1 / the dome's mean colour as the bounce rays see it, w 1 when known
+    float4 form;      // free
     uint4 spare[3];
 };
 static RtShadeFrame g_shade;
@@ -53,7 +53,7 @@ void rt_shade_begin(uint at) {
 
 // nebula_model.h NEBULA_HIT_* (the item table's word 11, low byte) and its flags (the next byte).
 static const uint kRtDielectric = 0u, kRtGloss = 1u, kRtMetal = 2u, kRtGlass = 3u, kRtCutoutClass = 4u, kRtRamp = 5u,
-                  kRtEmissive = 6u, kRtPainted = 7u, kRtTranslucent = 8u;
+                  kRtEmissive = 6u, kRtPainted = 7u, kRtTranslucent = 8u, kRtWater = 9u;
 static const uint kRtHitVertexColour = 8u, kRtHitEnvironment = 16u;
 // Item word 1: an area light (a glowing mesh too big to be a point of the emitter list).
 static const uint kRtItemArea = 32u;
@@ -162,10 +162,10 @@ float3 rt_through(float3 origin, float3 direction, float reach, uint self, float
     return shut ? float3(0.0f, 0.0f, 0.0f) : float3(1.0f, 1.0f, 1.0f);
 }
 
-// What stands in the sun's way of a surface (as the sun pass): everything solid for a lit one; for a painted one
-// lit things only when the painted style asks (g_look.y), what the painting could not know.
+// What stands in the sun's way of a surface met by a ray: everything solid for a lit one; for a painted one lit things
+// only, what its paint could not know.
 uint rt_sun_mask(bool lit) {
-    return (lit || g_look.y == 0.0f ? kMaskSolid | kMaskCutout : kMaskLit) | kMaskShadowOnly;
+    return (lit ? kMaskSolid | kMaskCutout : kMaskLit) | kMaskShadowOnly;
 }
 
 bool rt_sun_traced() {
@@ -214,7 +214,6 @@ uint rt_gather(float3 origin, float3 direction, out uint item, out uint triangle
 // toward the sun.
 static const float kRoomNear = 100.0f;       // a gathered hit nearer than this stands over the point (a metre; 250 dimmed whole rooms)
 static const float kRoomProbe = 250.0f;      // where a sunned frame's room probes start: past a body
-static const float kRoomNearShare = 0.25f;   // what such a hit sends of its light in a room; full again by 2 kRoomNear
 bool rt_room_point(RtSurface s, float3 n) {
     if (!rt_sun_traced()) {
         return true;
@@ -229,16 +228,8 @@ bool rt_room_point(RtSurface s, float3 n) {
     }
     return true;
 }
-// The share a gathered hit at `away` from the point sends in a room (1 past 2 kRoomNear or under open sky).
-float rt_room_near(RtSurface s, float3 n, float away) {
-    if (!(away < 2.0f * kRoomNear) || !rt_room_point(s, n)) {
-        return 1.0f;
-    }
-    return lerp(kRoomNearShare, 1.0f, smoothstep(kRoomNear, 2.0f * kRoomNear, away));
-}
-
-// The water a gathered ray crosses within `reach`: sheets within kWaterLayer are one layer,
-// absorbed by the way under water (kWaterAbsorb, the stage's clear), 1 - F head on once. Two layers or more:
+// The water a gathered ray crosses within `reach`: sheets within kWaterLayer are one layer, the
+// medium's extinction over the way under water (shade_core.hlsli shade_water), 1 - F head on once. Two layers or more:
 // the ray crosses a body, the way between the outer two; one: it starts under it going up (the player's up: out, the
 // way to it) or ends under it going down (from the bank to the bed, the way past it). 1 where it meets no water.
 float3 rt_water_way(float3 origin, float3 dir, float reach) {
@@ -266,7 +257,7 @@ float3 rt_water_way(float3 origin, float3 dir, float reach) {
         return float3(1.0f, 1.0f, 1.0f);
     }
     const float way = waters >= 2u ? farthest - nearest : (dot(dir, g_up.xyz) > 0.0f ? nearest : max(reach - nearest, 0.0f));
-    return 0.98f * exp(-way / rt_water_clear() * kWaterAbsorb);
+    return (1.0f - shade_f0_of_ior(kShadeIorWater)) * shade_beer(shade_extinction(shade_water(rt_water_clear())), way);
 }
 
 // ---- What a hit knows.
@@ -282,6 +273,7 @@ struct RtHit {
     float3 emission;       // what it shows with no light
     float roughness, metal, share, ior, thickness;
     float far;             // the ray's length to it
+    float3 view;           // toward where the ray came from
     bool glows;            // it shows itself and takes no light: an emissive-class surface alone (a ray sees what the
                            // screen shows)
     bool listed;           // its light is one of the frame's emitter list: a ray that lights something shades it instead
@@ -299,33 +291,32 @@ float3 rt_bytes3(uint w) {
 // Everything a hit knows, from its item's words (kItemBytes) and its triangle; the first map at a level of detail by the
 // ray cone (Akenine-Moller et al. 2021, "Improved Shader and Texture Level of Detail Using Ray Cones"): `cone` is the
 // spread of the ray (radians a unit of way), so its width at the hit is far * cone.
-// A vertex colour de-lit by its cooked gain (traced_vertex_gain): r g b signed bytes of log2 x 42,
-// by kDebake (the shading frame's form.z), bounded by its largest channel as the raster's vertex stage.
+// A vertex colour de-lit by its cooked gain (program.hlsli traced_vertex_gain): r g b signed bytes of log2 x 42,
+// bounded by its largest channel as the raster's vertex stage.
 float3 rt_vertex_gain(float3 c, uint gain) {
-    const float debake = g_shade.form.z;
-    if (!(debake > 0.0f) || gain == 0u) {
+    if (gain == 0u) {
         return c;
     }
     const int3 steps = int3(gain << 24u, gain << 16u, gain << 8u) >> 24;
-    const float3 g = max(c, 0.0f) * lerp(float3(1.0f, 1.0f, 1.0f), exp2(float3(steps) / 42.0f), debake);
+    const float3 g = max(c, 0.0f) * exp2(float3(steps) / 42.0f);
     return g / max(max(max(g.r, g.g), g.b), 1.0f);
 }
 
 // The same gain as a multiplier, for a mesh painted by its map alone (no vertex colour; programs.rs
 // map_gained): 1 without it.
 float3 rt_map_gain(uint gain) {
-    const float debake = g_shade.form.z;
-    if (!(debake > 0.0f) || gain == 0u) {
+    if (gain == 0u) {
         return float3(1.0f, 1.0f, 1.0f);
     }
     const int3 steps = int3(gain << 24u, gain << 16u, gain << 8u) >> 24;
-    return lerp(float3(1.0f, 1.0f, 1.0f), exp2(float3(steps) / 42.0f), debake);
+    return exp2(float3(steps) / 42.0f);
 }
 
 void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 origin, float3 direction, float cone, out RtHit h) {
     const uint at = g_at.x + item * kItemBytes;
     const uint4 w0 = g_items.Load4(at), w1 = g_items.Load4(at + 16u), w2 = g_items.Load4(at + 32u), w3 = g_items.Load4(at + 48u);
     h.at = origin + direction * far_;
+    h.view = -direction;
     h.ng = -direction;
     h.ns = -direction;
     h.uv = float2(0.0f, 0.0f);
@@ -343,7 +334,7 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
     h.emission = float3(0.0f, 0.0f, 0.0f);
     // Its index (item word 15 bits 12-19, (ior - 1) x 100; 0: the class's own) and thickness (word 17, units).
     const uint ior_bits = w3.w >> 12u & 255u;
-    h.ior = ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f : (h.klass == kRtGlass ? 1.5f : 1.33f);
+    h.ior = ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f : (h.klass == kRtWater ? kShadeIorWater : kShadeIorDefault);
     h.thickness = asfloat(g_items.Load(at + 68u));
     h.far = far_;
     float3 map = float3(1.0f, 1.0f, 1.0f);
@@ -396,16 +387,28 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
             }
             h.vertex = vc * kVertexGrey;
         }
+        // Its colour from the map whose colour it shows (item word 20), its alpha from its first map (word 8), one
+        // map where they are the same.
+        const uint colour_map = g_items.Load(at + 80u);
         if (w2.x != 0xFFFFFFFFu && area > 1e-9f) {
+            const float2 e1 = coordinate[1] - coordinate[0], e2 = coordinate[2] - coordinate[0];
+            const float wide = rt_cone_width(origin, far_, cone) / max(abs(dot(h.ng, direction)), 0.05f);
             uint map_width, map_height;
             g_textures[NonUniformResourceIndex(w2.x)].GetDimensions(map_width, map_height);
-            const float2 e1 = coordinate[1] - coordinate[0], e2 = coordinate[2] - coordinate[0];
-            const float texels = abs(e1.x * e2.y - e1.y * e2.x) * float(map_width) * float(map_height);
-            const float wide = rt_cone_width(origin, far_, cone) / max(abs(dot(h.ng, direction)), 0.05f);
-            const float level = max(0.5f * log2(max(texels / area, 1e-12f)) + log2(wide), 0.0f);
+            const float level = max(0.5f * log2(max(abs(e1.x * e2.y - e1.y * e2.x) * float(map_width) * float(map_height) / area, 1e-12f)) +
+                                        log2(wide),
+                                    0.0f);
             const float4 m = g_textures[NonUniformResourceIndex(w2.x)].SampleLevel(g_wrap, h.uv, level);
             map = m.rgb;
             h.alpha = m.a;
+            if (colour_map != w2.x && colour_map != 0xFFFFFFFFu) {
+                g_textures[NonUniformResourceIndex(colour_map)].GetDimensions(map_width, map_height);
+                const float colour_level =
+                    max(0.5f * log2(max(abs(e1.x * e2.y - e1.y * e2.x) * float(map_width) * float(map_height) / area, 1e-12f)) +
+                            log2(wide),
+                        0.0f);
+                map = g_textures[NonUniformResourceIndex(colour_map)].SampleLevel(g_wrap, h.uv, colour_level).rgb;
+            }
         }
         // A mesh painted by its map alone (gains, no vertex colour): its map de-lit as the raster's traced form,
         // bounded by its largest channel (traced_map_shown).
@@ -438,59 +441,48 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
     }
 }
 
-// The sky's dome where a ray meets it: its first map, nothing else, in linear light, the gain on the light.
-float3 rt_dome_light(RtHit h) {
-    return rt_lin(h.base) * g_shade.sky.w;
+// Whether the sky picture is drawn this frame (rt_walk.cpp rt_sky_capture).
+bool rt_sky_drawn() {
+    return g_sky_faces.x > 0.0f;
+}
+// The sky as the screen draws it along `dir` (rt_sky.hlsli), by the passes' linear sampler.
+float3 rt_sky_picture(float3 dir) {
+    return rt_sky_picture_by(g_wrap, dir);
 }
 
-// What the dome shows along a direction, as a ratio to the stage's authored ambient (11.1: S).
-// Against the dome's mean colour, a channel at a time, once it is known: open sky averages 1, its colour
-// included (the art's ambient already is the sky's colour); before that against the mean luminance as at first.
-// Whole: a reservoir's light and p_hat take the sample as it is; the guard is the mean's clamp after the filters
-// A floor so p_hat stays positive.
-// Under the relight (kForm > 0): against the dome's mean LUMINANCE, at kSkyChroma of its
-// chroma, lerp(luma(L), L, kSkyChroma) / mean: the sky's hue enters O, once (sky' takes luminance only); a uniform dome
-// gives luminance 1 (the furnace). Painted (kForm 0) as before, to the bit.
-static const float kSkyChroma = 0.4f;     // the sky's colour in shade at this share of its chroma (October's)
-float rt_sky_chroma() {
-    return rt_dev_or(kDevDomeChroma, kSkyChroma);
+// The sky's dome where a ray meets it, in linear light, the gain on the light: the sky picture along the dome's point
+// from the eye (the dome is drawn about the eye: the screen shows that point there), every program and map of the
+// sky's as drawn; with no picture, the dome's first map alone.
+float3 rt_sky_light(float3 dir) {
+    return rt_lin(rt_sky_picture(dir));
 }
-// The dome's mean luminance as rt_sky_ratio divides by it (the mean colour's luminance once known: luminance is linear).
-float rt_dome_mean_lum(float3 dome) {
+float3 rt_dome_light(RtHit h) {
+    if (rt_sky_drawn() && dot(h.at, h.at) > 0.0f) {
+        return rt_sky_light(normalize(h.at));
+    }
+    return rt_lin(h.base);
+}
+
+// The two skies. What a ray that looks sees where it meets nothing is the dome as the screen draws it
+// (rt_sky_light, rt_dome_light). What lights a surface is the lighting sky: the stage's ambient A, the art's chosen
+// sky light, by the drawn dome's luminance along the direction over its cosine mean, so a brighter part of the dome
+// lights more and the open sky's mean is lin(A) whatever the picture's own level (a starfield lights nothing). Unity
+// HDRP's static lighting sky and Unreal's sky light beside the visual sky are the same split.
+// The lighting sky's mean radiance: what a white surface open to the whole sky shows.
+float3 rt_sky_mean() {
+    return g_sky_light.rgb;  // lin(A), the host's (rt_frame.hlsli)
+}
+// The dome's mean luminance as the bounce rays see it (0 until the host has measured it).
+float rt_dome_mean_lum() {
     if (g_shade.dome.w > 0.0f) {
-        return max(rt_lum(1.0f / max(g_shade.dome.rgb, 1e-6f)), 1e-3f);
+        return max(rt_lum(1.0f / max(g_shade.dome.rgb, 1e-6f)), 1e-4f);
     }
-    return g_shade.look.z > 0.0f ? 1.0f / g_shade.look.z : max(rt_lum(dome), 1e-3f);
+    return g_shade.look.z > 0.0f ? 1.0f / g_shade.look.z : 0.0f;
 }
-float3 rt_sky_ratio(float3 dome) {
-    float3 art;
-    if (g_shade.dome.w > 0.0f) {
-        art = max(dome * g_shade.dome.rgb, 1e-3f);
-    } else {
-        const float scale = g_shade.look.z > 0.0f ? g_shade.look.z : 1.0f / max(rt_lum(dome), 1e-3f);
-        art = max(dome * scale, 1e-3f);
-    }
-    const float t = saturate(g_shade.form.x);
-    if (!(t > 0.0f)) {
-        return art;
-    }
-    const float3 model = max(lerp(rt_lum(dome).xxx, dome, rt_sky_chroma()) / rt_dome_mean_lum(dome), 1e-3f);
-    return lerp(art, model, t);
-}
-// The open sky's hue, its mean colour over its luminance (1 until the mean is known).
-float3 rt_sky_hue() {
-    if (!(g_shade.dome.w > 0.0f)) {
-        return float3(1.0f, 1.0f, 1.0f);
-    }
-    const float3 mean = 1.0f / max(g_shade.dome.rgb, 1e-6f);
-    return mean / max(rt_lum(mean), 1e-3f);
-}
-// The O an open, unshadowed surface takes under the relight: the cosine mean of rt_sky_ratio's model; 1
-// Painted.
-float3 rt_open_o() {
-    const float t = saturate(g_shade.form.x);
-    return t > 0.0f ? lerp(float3(1.0f, 1.0f, 1.0f), lerp(float3(1.0f, 1.0f, 1.0f), rt_sky_hue(), rt_sky_chroma()), t)
-                    : float3(1.0f, 1.0f, 1.0f);
+// The lighting sky along a direction where the dome there shows `dome` (linear, as drawn).
+float3 rt_sky_lighting(float3 dome) {
+    const float mean = rt_dome_mean_lum();
+    return mean > 0.0f ? rt_sky_mean() * (rt_lum(dome) / mean) : rt_sky_mean();
 }
 
 // The dome's luminance into the counters (fixed point, kDomeUnit a unit, each direction held to 8: the 4096 directions
@@ -530,13 +522,6 @@ void rt_count_dome_directions(uint2 id) {
     rt_count_dome(rt_dome_light(h));  // the mean in linear light, as every ratio to it
 }
 
-// A surface met (not shining of itself) as a ratio before the gain, kBounce * L / A, into the counters 46 and 47 for the
-// host's running mean of such hits: a surface met counts against it, as the sky against the dome's mean. Held
-// to 16 so a 4K frame's sum stays inside 32 bits with the reference counting too.
-void rt_count_hit(float3 ratio) {
-    rt_count_sum(46u, uint(clamp(rt_lum(ratio), 0.0f, 16.0f) * 256.0f));
-    rt_count(47u);
-}
 
 // ---- Light.
 // Emitter `index` of the frame's list at a surface, unshadowed, as a share of the surface's own colour
@@ -555,242 +540,40 @@ float3 rt_toward_light(float4 place, float3 from, float2 u, out float reach) {
     return aim;
 }
 
-// ---- October's light model: linear light in the stage's own units.
-static const float kSunStrength = 1.25f;  // October's 1.25 (was 1)
-// O as the model takes it: its luminance and kShadowTint of its hue,
-// (1 - t) lum(O) + t O; linear in O (rt_o_prime_m is its matrix).
-float3 rt_o_prime(float3 o) {
-    const float t = g_shade.key.w;
-    return (1.0f - t) * rt_lum(o) + t * o;
+// ---- The stage's light, in light units (what a white Lambert surface shows).
+// The sun's light on a face square to it: what the game's lit programs show of a white surface square to their key
+// over what they show in shade, in linear light, lin(sat(A + K)) - lin(A); so a face square to the sun under open sky
+// shows the game's own full light, and no exposure factor is needed.
+float3 rt_sun_light() {
+    return g_sun_light.rgb;  // the host's (rt_frame.hlsli)
 }
-float3x3 rt_o_prime_m() {
-    const float t = g_shade.key.w;
-    const float3 l = (1.0f - t) * float3(0.2126f, 0.7152f, 0.0722f);
-    return float3x3(l.x + t, l.y, l.z, l.x, l.y + t, l.z, l.x, l.y, l.z + t);
-}
-// The relight's share of the model: 0 the art's share (Painted), 1 the model.
-float rt_form() {
-    return saturate(g_shade.form.x);
-}
-// What is drawn and seen as it is (the dome, the empty sky, a glow's colour) in the unit hits are in: linear.
-float3 rt_shown(float3 c) {
-    return rt_lin(c);
-}
-// The stage's light in the picture's linear units (a white surface facing up under the full light shows 1):
-// sky = lin(A) E / full, sun = (full - sky) kSunStrength E / full, E the exposure that pins that white surface to the
-// game's own full light, the sun at no less than 30 degrees up (October's physical_exposure).
-// `lit_sky`, `lit_sun`, `held`: the same before the division by the held light, for the bounded share
-// (rt_relit_share).
-struct RtStageLight {
-    float3 sky, sun, unit;
-    float3 lit_sky, lit_sun, held;
-};
-RtStageLight rt_stage_light() {
-    const float3 a = g_shade.ambient.rgb, k = g_shade.key.rgb;
-    const float3 sky = rt_lin(a);
-    const float3 full = rt_lin(saturate(a + k));
-    const float3 rest = max(full - sky, 0.0f);
-    // up.s as the programs take it: view_look.y (the shading frame's form.y, the same rt_look_).
-    const float up = g_shade.form.y;
-    const float e = rt_lum(full) / max(rt_lum(sky) + rt_lum(rest) * up, 1e-4f);
-    // The sky in shade by kAmbientLook, a channel at a time at kSkyChroma of its chroma (the
-    // shade's hue is the authored ambient's; O enters as O', rt_o_prime); a channel with no full
-    // light: share 1. The run's keys where it gives them, as the programs': sun_strength, sky_chroma,
-    // stage_light (1: the stage's light as it is, 0: divided by the full light).
-    const float sun_strength = rt_dev_or(kDevSunStrength, kSunStrength);
-    const float3 held = lerp(full, float3(1.0f, 1.0f, 1.0f), rt_dev_or(kDevStageLight, 0.0f));
-    const float3 sky_look = g_shade.form.w * lerp(rt_lum(sky).xxx, sky, rt_dev_or(kDevSkyChroma, 0.4f));
-    const float3 ok = float3(held >= 1e-4f);
-    RtStageLight s;
-    s.sky = ok * (sky_look * e / max(held, 1e-4f)) + (1.0f - ok);
-    s.sun = ok * (rest * sun_strength * e / max(held, 1e-4f));
-    // O's unit: the plain sky's light (no kAmbientLook), its luminance (a white hit under open sky returns its
-    // O, hue and all), so the dials move the shade and not O; at least the shade's sky a channel at a time, so the
-    // loop's gain stays under the albedo.
-    s.unit = ok * max(max(rt_lum(sky) * e / max(held, 1e-4f), s.sky), 1e-3f) + (1.0f - ok);
-    s.lit_sky = sky_look * e;
-    s.lit_sun = rest * sun_strength * e;
-    s.held = held;
-    return s;
-}
-// The relit share as the programs take it (program.hlsli traced_bounded,
-// view_relight): lit = sky' O' + kSun key max(n.s, 0) V (times E), its luminance over the held light's, its colour
-// over the held light's colour within [1 / bound, bound] a channel (a channel of the stage's light near 0 does
-// not blow up). `bound`: the draw's (rt_tint_bound). 1 where the held light is nothing.
-static const float kTintBoundEnvironment = 2.0f, kTintBoundCharacter = 1.25f;
-// A hit's bound by the kind of its light set (item word 1 bits 28, 29: the raster's draw flags 2048, 4096; program.hlsli
-// traced_tint_bound), and with neither the model's rule: a lit program a character's, a painted surface the
-// environment's.
-float rt_tint_bound(uint item_flags) {
-    if ((item_flags & kItemSetCharacter) != 0u) {
-        return kTintBoundCharacter;
-    }
-    if ((item_flags & kItemSetPlanet) != 0u) {
-        return kTintBoundEnvironment;
-    }
-    return (item_flags & kItemLit) != 0u ? kTintBoundCharacter : kTintBoundEnvironment;
-}
-float3 rt_relit_share(RtStageLight st, float3 o, float nl, float3 v, float bound) {
-    const float held_l = rt_lum(st.held);
-    if (!(held_l > 1e-4f)) {
-        return float3(1.0f, 1.0f, 1.0f);
-    }
-    const float3 lit = st.lit_sky * rt_o_prime(o) + st.lit_sun * (max(nl, 0.0f) * v);
-    const float lit_l = rt_lum(lit);
-    const float3 tint = lit_l > 1e-6f ? (lit / lit_l) / max(st.held / held_l, 1e-4f) : float3(1.0f, 1.0f, 1.0f);
-    return (lit_l / held_l) * clamp(tint, 1.0f / bound, bound);
-}
-// O's unit (C4: the one divisor of every gather return): what O = 1 gives a white surface. The art's: the authored
-// ambient; the model's: the sky's light.
-float3 rt_o_unit() {
-    const float t = rt_form();
-    // The art's: 1, a painted hit's O-part is in the art's own units (O = 1: as painted), so one trip round the bounce's
-    // loop multiplies O by lin(base), the albedo.
-    const float3 art = float3(1.0f, 1.0f, 1.0f);
-    return t > 0.0f ? lerp(art, rt_stage_light().unit, t) : art;
-}
-// A hit's colour as it takes light: the art's, or (the model) its linear colour, a metal's diffuse gone. It is
-// rho * full, the reflectance against the stage's full light, at most kAlbedoMost a channel: the
-// bounce's loop gain per trip is under it.
-static const float kAlbedoMost = 0.9f;  // CHOSEN: fresh snow's albedo
-float3 rt_hit_albedo(RtHit h) {
-    const float t = rt_form();
-    float3 base = min(rt_lin(h.base), kAlbedoMost);  // linear always
-    // A non-metal's purity bound, as program.hlsli traced_pure.
-    if (h.klass != kRtMetal) {
-        base = max(base, 0.04f * max(max(base.r, base.g), base.b));
-    }
-    return t > 0.0f ? base * (1.0f - t * h.metal) : base;
-}
-// What a hit RETURNS to a ray that lights something (the gather): under the model
-// its colour at kBounceAlbedo, real ground's range (sand 0.35-0.45, grass 0.2-0.25, white paint 0.8: the art's 0.9
-// white at 0.45); on screen, in a mirror, through water: rt_hit_albedo, the display's anchor. The art's form keeps
-// its own (by kForm).
-static const float kBounceAlbedo = 0.5f;  // CHOSEN: the art's white at 0.45, its grass at 0.3
-float3 rt_return_albedo(RtHit h, bool lighting) {
-    return lighting ? rt_hit_albedo(h) * lerp(1.0f, kBounceAlbedo, rt_form()) : rt_hit_albedo(h);
-}
-// A metal or glass hit's reflection, which hits do not trace again: the stage's ambient by its painted share (the
-// art's), or the sky's light by its F0 (the model: lerp(0.04, lin(base), metallic); glass by its index).
-float3 rt_hit_mirror_stand_in(RtHit h) {
-    const float t = rt_form();
-    const float3 art = rt_lin(g_shade.ambient.rgb) * h.share;
-    if (!(t > 0.0f)) {
-        return art;
-    }
-    const float r = (h.ior - 1.0f) / (h.ior + 1.0f);
-    const float3 f0 = h.klass == kRtMetal ? lerp(float3(0.04f, 0.04f, 0.04f), rt_lin(h.base), h.metal) : float3(r * r, r * r, r * r);
-    // What a mirror sees is the plain sky, no shade dial, at its whole hue.
-    return lerp(art, rt_stage_light().unit * rt_sky_hue() * f0, t);
-}
-
-// A surface's share of light as an affine function of what the sky and the bounce give it (O, rgb): share = s0 +
-// Mo * O. Painted surfaces: P_c = (A_c O_c + K_c nl V_c) / (A_c + K_c nl), its luminance form likewise with
-// the channel means, P = lerp(P_lum, P_c, kShadowTint). Lit surfaces: A O + K nl V + Fl 0.5 O. `nl`
-// from the smooth normal. Linear in O and V, so a mean over samples of the share is the share of the means. All in
-// linear light: one trip round the bounce's loop multiplies O by at most the hit's albedo.
-void rt_share_terms_art(bool lit, float nl, float3 v, out float3 s0, out float3x3 mo) {
-    const float3 a = g_shade.ambient.rgb, k = g_shade.key.rgb;
-    if (lit) {
-        // Linear light: lin(D) O + (lin(D + K nl) - lin(D)) V, D = A + Fl / 2; the loop's gain lin(D) lin(base).
-        const float3 d = rt_lin(saturate(a + 0.5f * g_shade.fill.rgb));
-        s0 = max(rt_lin(saturate(a + 0.5f * g_shade.fill.rgb + k * max(nl, 0.0f))) - d, 0.0f) * v;
-        mo = float3x3(d.x, 0.0f, 0.0f, 0.0f, d.y, 0.0f, 0.0f, 0.0f, d.z);
-        return;
-    }
-    // The painted composite's share: the art is taken to hold
-    // A + K f, f the sun's facing as the light pass gives a painted surface, in LINEAR light (O and V are ratios of
-    // linear light): share = (lin(A) O + (lin(A + K f) - lin(A)) V) / lin(A + K f), lerp(mean, a channel at a time,
-    // kShadowTint). Linear in O: s0 + M O; O in shade, 1 at O = V = 1.
-    const float t = g_shade.key.w;
-    const float f = rt_sun_traced() ? saturate(nl / max(g_look.z, 1e-3f)) : 1.0f;
-    const float ga = 1.0f;
-    const float3 a_lin = rt_lin(a);
-    const float3 held = rt_lin(saturate(a + k * f));
-    const float3 key_lin = max(held - a_lin, 0.0f);
-    const float lum_held = rt_lum(held);
-    const float3 ok = float3(held > 1e-4f);  // a channel the art holds nothing of: 1
-    const float3 own_s0 = ok * (key_lin * v / max(held, 1e-4f)) + (1.0f - ok);
-    const float3 own = ok * (ga * a_lin / max(held, 1e-4f));
-    const bool whole = lum_held > 1e-4f;
-    const float mean_s0 = whole ? rt_lum(key_lin * v) / lum_held : 1.0f;
-    const float3 shared_ = whole ? ga * float3(0.2126f, 0.7152f, 0.0722f) * a_lin / lum_held : float3(0.0f, 0.0f, 0.0f);
-    s0 = (1.0f - t) * mean_s0 + t * own_s0;
-    const float3 row = (1.0f - t) * shared_;  // every channel takes lum(A O) alike: the same row of columns
-    mo = float3x3(row.x + t * own.x, row.y, row.z, row.x, row.y + t * own.y, row.z, row.x, row.y, row.z + t * own.z);
-}
-
-// The share in linear light, affine in O for the reference (ref_surface: c + M O; the art's share is linear light
-// already), then the model mixed in by kForm, a lit surface's as a painted one's (s0 = sun
-// max(n.s, 0) V, M = the sky's light). The model's part here is UNBOUNDED: rt_share bounds its tint (rt_relit_share),
-// which is not affine in O, so the two agree only where the bound does not bind (the
-// reference keeps this affine form for gathered hits).
-void rt_share_terms(bool lit, float nl, float3 v, out float3 s0, out float3x3 mo) {
-    rt_share_terms_art(lit, nl, v, s0, mo);
-    const float t = rt_form();
-    if (t > 0.0f) {
-        const RtStageLight st = rt_stage_light();
-        s0 = lerp(s0, st.sun * max(nl, 0.0f) * v, t);
-        mo = mo * (1.0f - t) + mul(float3x3(st.sky.x, 0.0f, 0.0f, 0.0f, st.sky.y, 0.0f, 0.0f, 0.0f, st.sky.z), rt_o_prime_m()) * t;
-    }
-}
-
-// The air's share of the stage's light: the sun's part a unit of V gives (rt_air_sun) and the whole with
-// the sky's part by s (rt_air_share). The art's a channel at a time in linear light, the model's under the
-// relight: the sun on a white surface square to it (E_perp / pi; no n.s, no u).
+// The air's light (rt_volume.hlsl, rt_scatter.hlsl): the sun's light a unit of V gives, and the whole with the sky's
+// open share s.
 float3 rt_air_sun() {
-    const float3 sky = rt_lin(g_shade.authored.rgb);
-    const float3 full = rt_lin(saturate(g_shade.authored.rgb + g_shade.key.rgb));
-    const float3 ok = float3(full >= 1e-4f);
-    const float3 art = ok * max(full - sky, 0.0f) / max(full, 1e-4f);
-    const float t = rt_form();
-    return t > 0.0f ? lerp(art, rt_stage_light().sun, t) : art;
+    return rt_sun_light();
 }
 float3 rt_air_share(float s, float3 v) {
-    const float3 sky = rt_lin(g_shade.authored.rgb);
-    const float3 full = rt_lin(saturate(g_shade.authored.rgb + g_shade.key.rgb));
-    const float3 ok = float3(full >= 1e-4f);
-    float3 sky_part = ok * sky / max(full, 1e-4f);
-    const float t = rt_form();
-    if (t > 0.0f) {
-        sky_part = lerp(sky_part, rt_stage_light().sky * rt_o_prime(rt_open_o()), t);  // the open sky's O
-    }
-    return sky_part * s + rt_air_sun() * v;
+    return rt_sky_mean() * s + rt_sun_light() * v;
 }
 
-// The share a hit takes: the art's in linear light, lerped to the model by kForm (lit or painted
-// alike); the model's bounded as the programs bound it (rt_relit_share, `bound` the draw's).
-float3 rt_share(bool lit, float nl, float3 v, float3 o, float bound) {
-    float3 s0;
-    float3x3 mo;
-    rt_share_terms_art(lit, nl, v, s0, mo);
-    const float t = rt_form();
-    const float3 art = max(s0 + mul(mo, o), 0.0f);
-    if (!(t > 0.0f)) {
-        return art;
+// What a hit is. Its linear colour, at most kShadeBaseMost; its roughness, metalness and index from its
+// record; what lies behind it by its class. What it shows of itself: an emissive-class surface its emission, a painted
+// one (its colours are its light) its colour; a glowing body its emitted radiance (rt_hit_emission). A ray that lights
+// something takes a listed glow's light through the emitter list alone, never again by meeting it.
+float3 rt_hit_emission(RtHit h, bool lighting) {
+    if (lighting && h.listed) {
+        return float3(0.0f, 0.0f, 0.0f);
     }
-    return lerp(art, rt_relit_share(rt_stage_light(), o, nl, v, bound), t);
+    if (h.glows || h.glow_body || (h.item_flags & kRtItemArea) != 0u) {
+        return rt_lin(h.emission);
+    }
+    return h.klass == kRtPainted ? rt_lin(h.base) : float3(0.0f, 0.0f, 0.0f);
 }
-
-// (Without it, Freezeflame's ice showed Mario 6.81 times as bright as
-// the screen does). A ray that only looks at a lit program's surface sees it within kLitSeenLow..kLitSeenHigh of its
-// light set's own level, in luminance: the art's share (the shading frame's set: lin(A + Fl/2) O + (lin(A + Fl/2 + K nl)
-// - lin(A + Fl/2)) V), as the screen draws it by its set (program_lit.hlsli traced_set_level, program.hlsli's
-// character bound 0.8 .. 1.25); its hue the model's. Painted (kForm 0): the art's share already, as it was.
-static const float kLitSeenLow = 0.8f, kLitSeenHigh = 1.25f;
-float3 rt_lit_seen_bound(float nl, float3 v, float3 o, float3 share_) {
-    if (!(rt_form() > 0.0f)) {
-        return share_;
-    }
-    float3 s0;
-    float3x3 mo;
-    rt_share_terms_art(true, nl, v, s0, mo);
-    const float art_l = rt_lum(max(s0 + mul(mo, o), 0.0f));
-    const float l = rt_lum(share_);
-    if (!(art_l > 1e-4f) || !(l > 1e-6f)) {
-        return share_;
-    }
-    return share_ * (clamp(l, kLitSeenLow * art_l, kLitSeenHigh * art_l) / l);
+ShadeMaterial rt_hit_material(RtHit h, bool lighting) {
+    const uint behind = h.klass == kRtWater ? kShadeBehindWater : h.klass == kRtGlass ? kShadeBehindSheet : kShadeBehindOpaque;
+    // A surface that shows itself takes no light (emissive class, painted): black under its emission.
+    const bool own = h.glows || h.klass == kRtPainted;
+    return shade_material(own ? float3(0.0f, 0.0f, 0.0f) : rt_lin(h.base), h.roughness, h.metal, h.ior, rt_hit_emission(h, lighting), behind);
 }
 
 // From just off a surface: along its geometric normal, more the farther from the eye (depth's steps grow).
@@ -961,105 +744,55 @@ bool rt_screen_lights(Texture2D<float4> guide, Texture2D<float4> added, Texture2
     return true;
 }
 
-// What an area glow of a class other than emissive (item word 1: 32; never a light of the list) gives a ray that
-// lights something, over its shaded body: its emission as it is, in the picture's units. 0 for any other hit
-// and for a ray that only looks (a mirror's sees the body, as the screen shows it).
-float3 rt_hit_area_glow(RtHit h, bool lighting) {
-    return lighting && !h.glows && (h.item_flags & kRtItemArea) != 0u ? rt_shown(h.emission) * g_shade.gains.x
-                                                                        : float3(0.0f, 0.0f, 0.0f);
-}
-
-// What a hit sends back toward the ray, in the picture's units (a share of white). `o`: the hit's own indirect
-// ratio (kHitSky, or what the screen knows of it). An area glow's emission is not in it (rt_hit_area_glow).
+// What a hit sends back toward the ray, radiance: shade_surface with its material, the sun by its
+// visibility (one ray from the hit, kRtShadeSunRay; else unshadowed where it faces the sun) and the sun's highlight, the
+// local lights (the screen's filtered light where the screen shows the hit, `d_known`: `d_seen`; else the world grid),
+// and `o`: the sky's and the bounce's light at the hit (the screen's I where it shows the hit, else the open sky,
+// rt_sky_mean). A hit does not trace again for its mirror: what it mirrors is taken as `o`, the mean radiance over its
+// half of the world, the limit of a rough mirror (the radiance cache refines both). Sky-only (Low): no hit is shaded,
+// the gather is occlusion in the sky's light.
 float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float3 d_seen, inout uint seed);
 float3 rt_hit_radiance(RtHit h, uint options, float3 o, inout uint seed) {
     return rt_hit_radiance_with(h, options, o, false, float3(0.0f, 0.0f, 0.0f), seed);
 }
-// The same with the hit's local lights known from the screen (`d_known`: `d_seen`, rt_screen_lights), else from the
-// world light grid.
 float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float3 d_seen, inout uint seed) {
     if ((h.item_flags & kItemSky) != 0u) {
         return rt_dome_light(h);
     }
-    if (h.glows && !(h.listed && (options & kRtShadeLighting) != 0u)) {
-        return rt_shown(h.emission) * g_shade.gains.x;
-    }
-    const bool lighting = (options & kRtShadeLighting) != 0u;  // what it returns at kBounceAlbedo
     if ((options & kRtShadeSkyOnly) != 0u) {
-        const float t = rt_form();
-        // What the sky gives it: the art's, a painted hit 1 (O = 1 of its own look), a lit one its share's
-        // lin(D); the model's sky' by kForm, both alike.
-        const float3 art = rt_return_albedo(h, lighting) * g_shade.look.y *
-                           ((h.item_flags & kItemLit) != 0u ? rt_lin(saturate(g_shade.ambient.rgb + 0.5f * g_shade.fill.rgb))
-                                                            : float3(1.0f, 1.0f, 1.0f));
-        if (!(t > 0.0f)) {
-            return art;
-        }
-        const float3 sky = rt_relit_share(rt_stage_light(), rt_open_o(), 0.0f, float3(0.0f, 0.0f, 0.0f), rt_tint_bound(h.item_flags));
-        return lerp(art, rt_return_albedo(h, lighting) * g_shade.look.y * sky, t);
+        return float3(0.0f, 0.0f, 0.0f);
     }
-    const bool lit = (h.item_flags & kItemLit) != 0u;
-    const float nl = rt_hit_facing(h);
+    const bool lighting = (options & kRtShadeLighting) != 0u;
+    const ShadeMaterial m = rt_hit_material(h, lighting);
+    if (h.glows || h.klass == kRtPainted) {
+        return m.emit;
+    }
+    const float facing = rt_hit_facing(h);
     float3 v = float3(1.0f, 1.0f, 1.0f);
-    if (nl > 0.0f && (options & kRtShadeSunRay) != 0u) {
+    if (facing > 0.0f && (options & kRtShadeSunRay) != 0u) {
         v = rt_hit_sun(h, false, float2(0.0f, 0.0f));
     }
-    // A glowing body seen takes no lamp light (program.hlsli traced_colour: its lamps are 0 for draw flag 16384, its own
-    // light would flood it); below it is its shade plus its own colour's share.
-    const bool body_seen = h.glow_body && !lighting;
-    const float3 d = body_seen ? float3(0.0f, 0.0f, 0.0f)
-                     : d_known ? d_seen
-                               : rt_grid_light(h.at, h.ns, h.glow_body ? h.slot : 0xFFFFFFFFu, (options & kRtShadeLightRay) != 0u, seed);
-    float3 share_ = rt_share(lit, nl, v, o, rt_tint_bound(h.item_flags));
-    if (lit && !lighting) {
-        share_ = rt_lit_seen_bound(nl, v, o, share_);  // a ray that looks sees a lit program as the screen does
-    }
-    float3 out_ = rt_return_albedo(h, lighting) * (share_ + d);
-    // Mirror-like hits do not trace again: the stage's ambient stands for their reflection (the model:
-    // the sky's light by F0). The exchange: glass's body gives up what its mirror takes,
-    // (1 - F0) under the model (a metal's body is gone already: rt_hit_albedo).
-    if (h.klass == kRtGlass) {
-        const float r = (h.ior - 1.0f) / (h.ior + 1.0f);
-        out_ *= 1.0f - rt_form() * r * r;
-    }
-    if (h.klass == kRtMetal || h.klass == kRtGlass) {
-        out_ += rt_hit_mirror_stand_in(h);
-    }
-    // A glowing body seen (a mirror's ray, not one that lights: that light
-    // comes through the list once) is shaded as any surface and adds a share of its own colour, a being 0.35 and an
-    // object 0.8 of its lit value, at most 1.2 of it a channel: program.hlsli traced_colour's rule, on the same
-    // linear value (traced_lin(base)). A hot body (item word 1 bit 31, the
-    // raster's draw flag 8192: lava, a sun) at 2 to 2.5 of it, traced_colour's clamp.
-    if (body_seen) {
-        const float3 lit_value = rt_lin(h.base);
-        out_ = (h.item_flags & kRtItemHot) != 0u ? clamp(out_, 2.0f * lit_value, 2.5f * lit_value)
-                                                  : min(out_ + (h.being ? 0.35f : 0.8f) * lit_value, 1.2f * lit_value);
-    }
-    return out_;
+    const float3 sun = rt_sun_light() * v;
+    const float3 d = d_known ? d_seen : rt_grid_light(h.at, h.ns, h.glow_body ? h.slot : 0xFFFFFFFFu, (options & kRtShadeLightRay) != 0u, seed);
+    const ShadeLobes lobes = shade_lobes(m, dot(h.ns, h.view));
+    const float3 highlight = facing > 0.0f ? shade_highlight(m, lobes, h.ns, h.view, g_sun.xyz, g_sun.w) * sun : float3(0.0f, 0.0f, 0.0f);
+    return shade_surface(m, lobes, sun * facing + d + o, o, highlight);
 }
 
 // ---- What a mirrored ray sees: one function for every mirror the passes trace.
-// Whether the sun's own disc lies along `dir`: within the bloom's reach, tan kSunSeenTan (three radii
-// of the 0.8 degree disc it was set for), or the disc itself where a stage's is wider.
-static const float kSunSeenTan = 0.042f;
-bool rt_sees_sun(float3 dir) {
-    return rt_sun_traced() && dot(dir, g_sun.xyz) > cos(atan(max(kSunSeenTan, g_sun.w)));
-}
-// The sun's glint, linear: the stage's key decoded, the model's sun by kForm, times kSunGlint (far over white).
-float3 rt_sun_glint() {
-    return lerp(rt_lin(g_shade.key.rgb), rt_stage_light().sun, rt_form()) * g_shade.look.w;
-}
+// The sun's own disc is never added by a ray that meets it: the sun's mirror image is its highlight (shade_highlight,
+// GGX widened by the disc), so it is counted once whatever the roughness, and a mirror ray never makes a firefly of it.
 // The miss rule (rt_look's last leg): what a ray shows where it meets nothing within its reach is the sky's dome along
 // its direction, read from the eye (rt_dome_ray) as the screen draws it and decoded once; where no dome stands on that
 // line, the stage's ambient (g_sky). Never the dome as met from the ray's own start (it is drawn around the eye: a
 // mirror far from the eye, or one past the dome's shell, met it nowhere and showed g_sky, black on a space stage).
 // Along a mirrored ray from `from`: the solid thing met by the shared hit shading (`options`: kRtShade*), else what a
-// miss shows (the miss rule); the sun's glint where the ray runs at it unhindered.
+// miss shows (the miss rule).
 // What a ray that only looks meets, a clear thing seen THROUGH: a glass-class hit that does not
-// glow passes the ray on (a shell is one face, a body two; at most kClearFaces), each face giving its stand-in mirror
-// and taking the square root of its body's through-colour (rt_clear_through; half a body a face, as let_through) times
-// 1 - F head on. `far_`: the way to the first thing met (`reach` where none). `glint`: the sun's own glint where the
-// ray runs at it unhindered (a mirror's ray).
+// glow passes the ray on (a shell is one face, a body two; at most kClearFaces), each face mirroring the dome as seen
+// along its mirror direction by its exact Fresnel (the walk traces no further mirror) and taking the square root of
+// its body's through-colour (rt_clear_face; half a body a face, as let_through) times 1 - F.
+// `far_`: the way to the first thing met (`reach` where none).
 static const uint kClearFaces = 3u;
 // The walk alone, its end unshaded, so that a pass shades the one hit a walk ends on by one call of the hit shading
 // (each textual call of a function that traces is another copy of its ray queries in the compiled pass). One ray
@@ -1070,18 +803,14 @@ static const uint kClearFaces = 3u;
 struct RtLook {
     float3 added;  // the stand-in mirrors of the clear faces passed, each by the tint before it
     float3 tint;   // what the clear faces passed let through
-    float3 shown;  // where it ended on the sky (a dome item met, the dome along it, or g_sky): that light and the glint
+    float3 shown;  // where it ended on the sky (a dome item met, the dome along it, or g_sky): that light
     bool hit;      // it ended on `h`, to be shaded
     bool met;      // the solid walk met something (a dome item, a face, the hit)
     uint faces;    // clear faces passed
     float far_;    // the way to the first thing met (`reach` where none)
     RtHit h;
 };
-// The sun's glint along a looking ray where it asks for one and runs at the sun (rt_sees_sun; 0 else).
-float3 rt_look_glint(bool glint, float3 dir) {
-    return glint && rt_sees_sun(dir) ? rt_sun_glint() : float3(0.0f, 0.0f, 0.0f);
-}
-RtLook rt_look(float3 from, float3 dir, float reach, float cone, bool glint, uint clear_faces, bool sky) {
+RtLook rt_look(float3 from, float3 dir, float reach, float cone, uint clear_faces, bool sky) {
     RtLook l;
     l.added = float3(0.0f, 0.0f, 0.0f);
     l.tint = float3(1.0f, 1.0f, 1.0f);
@@ -1106,23 +835,29 @@ RtLook rt_look(float3 from, float3 dir, float reach, float cone, bool glint, uin
             if (!sky) {
                 break;
             }
+            if (rt_sky_drawn()) {
+                // The sky picture along the ray: what the screen shows that way past the scene (the dome as met from
+                // the eye, and what is drawn about it), with no ray of its own.
+                l.shown = rt_sky_light(dir);
+                break;
+            }
             dome = true;
             continue;
         }
         if (!met) {
-            l.shown = rt_lin(g_sky.rgb) + rt_look_glint(glint, dir);  // no dome on that line
+            l.shown = rt_lin(g_sky.rgb);  // no dome on that line
             break;
         }
         RtHit h;
         rt_hit_read(item, triangle_, where_, t, origin, dir, cone, h);
         if (dome) {
-            l.shown = rt_dome_light(h) + rt_look_glint(glint, dir);
+            l.shown = rt_dome_light(h);
             break;
         }
         l.met = true;
         l.far_ = l.far_ < 0.0f ? run + t : l.far_;
         if ((h.item_flags & kItemSky) != 0u) {
-            l.shown = rt_dome_light(h) + rt_look_glint(glint, dir);
+            l.shown = rt_dome_light(h);
             break;
         }
         if (h.klass != kRtGlass || h.glows || h.glow_body || leg == clear_faces) {
@@ -1130,8 +865,9 @@ RtLook rt_look(float3 from, float3 dir, float reach, float cone, bool glint, uin
             l.h = h;
             break;
         }
-        l.added += l.tint * rt_hit_mirror_stand_in(h);
-        l.tint *= rt_clear_face(g_at.x + item * kItemBytes);
+        const float f = shade_fresnel_exact(abs(dot(h.ns, dir)), h.ior);
+        l.added += l.tint * f * rt_sky_light(reflect(dir, h.ns));
+        l.tint *= rt_clear_face(g_at.x + item * kItemBytes) * (1.0f - f);
         const float skin = max(0.003f * (run + t), 0.5f);
         at_ = h.at + dir * skin;
         run += t + skin;
@@ -1139,7 +875,7 @@ RtLook rt_look(float3 from, float3 dir, float reach, float cone, bool glint, uin
     }
     return l;
 }
-// What a looking ray shows at the end of its walk, `o` the hit's indirect ratio.
+// What a looking ray shows at the end of its walk, `o` the hit's sky and bounce light.
 float3 rt_look_shaded(RtLook l, uint options, float3 o, inout uint seed) {
     float3 end = l.shown;
     if (l.hit) {
@@ -1147,16 +883,15 @@ float3 rt_look_shaded(RtLook l, uint options, float3 o, inout uint seed) {
     }
     return l.added + l.tint * end;
 }
-float3 rt_seen_past_clear(float3 from, float3 dir, float reach, float cone, uint options, bool glint, inout uint seed,
-                          out float far_) {
-    const RtLook l = rt_look(from, dir, reach, cone, glint, kClearFaces, true);
+float3 rt_seen_past_clear(float3 from, float3 dir, float reach, float cone, uint options, inout uint seed, out float far_) {
+    const RtLook l = rt_look(from, dir, reach, cone, kClearFaces, true);
     far_ = l.far_;
-    return rt_look_shaded(l, options, float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y), seed);
+    return rt_look_shaded(l, options, rt_sky_mean(), seed);
 }
 
 float3 rt_mirror_seen(float3 from, float3 dir, float cone, uint options, inout uint seed) {
     float far_;
-    return rt_seen_past_clear(from, dir, kRtFarAway, cone, options, true, seed, far_);
+    return rt_seen_past_clear(from, dir, kRtFarAway, cone, options, seed, far_);
 }
 
 #endif

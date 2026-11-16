@@ -140,6 +140,12 @@ pub struct Reading {
     /// Its painted reflection's sharpness as roughness (roughness_of_map; finish_reading), below 0 none: a metal's and
     /// a gloss's roughness, whichever rule or row makes it one.
     pub map_roughness: f32,
+    /// The map whose colour it shows (colour_map), 255 none or not known: a ray's hit samples this one, not the first
+    /// map its program happens to read.
+    pub colour_map: u8,
+    /// Its base and emission read with its glow source white (a register, constant or material colour the game
+    /// animates: glow_white): the live colour multiplies them a channel at a time.
+    pub glow_white: bool,
 }
 
 /// Reading::rule of a material a review row classes.
@@ -1572,6 +1578,9 @@ pub struct ClearKind {
 }
 pub const CLEAR_GLASS: ClearKind = ClearKind { ior: 1.5, roughness: 0.02 };
 pub const CLEAR_BUBBLE: ClearKind = ClearKind { ior: 1.33, roughness: 0.02 };
+/// Falling water: water's own index and roughness (Class::Water's, code-drawn water's), a thin sheet; the tracer tells
+/// it from a bubble's film by these numbers (rt_common.hlsli rt_clear_fall) and gives it water's medium.
+pub const CLEAR_FALL: ClearKind = ClearKind { ior: 1.33, roughness: 0.03 };
 pub const CLEAR_CRYSTAL: ClearKind = ClearKind { ior: 1.8, roughness: 0.02 };
 pub const CLEAR_ICE: ClearKind = ClearKind { ior: 1.31, roughness: 0.05 };
 pub const CLEAR_ICE_BEING: ClearKind = ClearKind { ior: 1.31, roughness: 0.08 };
@@ -1584,8 +1593,10 @@ fn clear_kind(stem: &str, name: &str) -> ClearKind {
         CLEAR_CRYSTAL
     } else if name.starts_with("ice") || stem.starts_with("ice") || stem.ends_with("ice") {
         CLEAR_ICE
+    } else if falling_water(name) {
+        CLEAR_FALL
     } else if name.contains("bubble") || name.starts_with("awa") {
-        CLEAR_BUBBLE
+        CLEAR_BUBBLE  // water's index: a bubble's film
     } else {
         CLEAR_GLASS
     }
@@ -1670,6 +1681,8 @@ pub fn pbr_reading(p: &PbrMaterial, means: &PbrMeans) -> Reading {
         metal_kind: 255, // its colour as the file gives it
         through: 0.0,
         map_roughness: -1.0, // no painted reflection's map: its roughness is the file's
+        colour_map: 0xFF,    // its own maps' order: the first is its colour
+        glow_white: false,
     }
 }
 
@@ -1780,6 +1793,8 @@ pub fn read(m: &MaterialIr) -> Reading {
         metal_kind: 0,
         through: 0.0,
         map_roughness: -1.0,
+        colour_map: colour_map(m),
+        glow_white: false,
     };
     let metal_hue = s.environment_saturation < 0.15 || (8.0..=60.0).contains(&s.environment_hue);
     if s.blend == 2 {
@@ -1789,12 +1804,17 @@ pub fn read(m: &MaterialIr) -> Reading {
         r.class = Class::Emissive;
         r.emission = s.unlit.map(|v| (v * under_white).min(4.0));
         r.rule = "added to what is behind it";
-    } else if s.blend != 0 && (s.environment || s.warp) && falling_water(&m.name) {
-        // A waterfall's sheet is drawn as glass is (warped or reflecting, blended), but its colour is the white water
-        // (translucent, lit; not glass, whose colour gives way to what is behind it).
-        r.class = Class::Translucent;
-        r.transmission = 0.5;
-        r.rule = "falling water (named so), blended";
+    } else if s.blend != 0 && falling_water(&m.name) && !m.name.to_ascii_lowercase().contains("splash") {
+        // A waterfall's sheet, either face (a fall's back face, as Beach Bowl's cup fall's AxCupFallMatBackFace, is the
+        // same sheet seen from its other side; the splash at its foot is foam): the water it falls from (CLEAR_FALL: a
+        // thin sheet the scene is seen through, bent and
+        // mirrored, that takes water's absorption and gives back water's colour over its way, rt_transmit.hlsl), and
+        // its white water a quarter of the art's colour that covers it, the streaks (body 0.25: rt_light.hlsl
+        // clear_surface keeps a thin clear sheet's body under the traced see-through, program.hlsli traced_mirror lays
+        // it over).
+        r.class = Class::Glass;
+        (r.ior, r.roughness, r.transmission, r.thickness, r.body) = (CLEAR_FALL.ior, CLEAR_FALL.roughness, 1.0, 0.0, 0.25);
+        r.rule = "falling water (named so), a clear sheet";
     } else if s.blend != 0 && (s.environment || (s.warp && s.lit)) {
         // A warp moves the material's own maps (census warp_maps.tsv: highlights, environment pictures, a swirl; no
         // scene copy among them): glass when lit, as the bubbles and panes are. Unlit, its art is all there is to it
@@ -1858,7 +1878,87 @@ pub fn read(m: &MaterialIr) -> Reading {
             r.glow_lit = lit.map(|v| (v * under_white).min(4.0));  // under a white map, as the emission and the base
         }
     }
+    glow_white(m, &mut r, under_white);
     r
+}
+
+/// A glow whose colour the game sets (an emissive material, glow_source a register, a constant or a material colour)
+/// and whose file colour has a channel black: its base and emission read with that colour white, so the game's colour
+/// of the moment multiplies them a channel at a time (rt_walk.cpp live_tint, live_glow; NebulaModelHit.glow_white).
+/// Read with the file's colour, the channel it leaves black stays black whatever the game sets (the live colour over
+/// the file's has nothing to scale there): an electric rail's file colour is red, the game's yellow green, and its hit
+/// was red and its light cyan. Every other material keeps its file colour's reading, the live ratio exact for it.
+fn glow_white(m: &MaterialIr, r: &mut Reading, under_white: f32) {
+    if r.class != Class::Emissive {
+        return;
+    }
+    let Some(t) = with_glow_row_white(m, r.glow_source) else { return };
+    let s = signals(&t);
+    let full = [s.unlit[0] + s.lit_gain[0], s.unlit[1] + s.lit_gain[1], s.unlit[2] + s.lit_gain[2]];
+    r.base = full.map(|v| (v * under_white).clamp(0.0, 1.0));
+    r.emission = s.unlit.map(|v| (v * under_white).min(4.0));
+    r.glow_white = true;
+}
+
+/// The material with its glow-carrying row (`code`, glow_source 1 to 9) white, where that row's file colour has a
+/// channel black (glow_white); None elsewhere. What it shows read so (the light's own colour: model_write's
+/// shown, glow_with_rule's `own`) is the colour the game's live row multiplies, as its base and emission are.
+pub fn with_glow_row_white(m: &MaterialIr, code: u8) -> Option<MaterialIr> {
+    if !(1..=9).contains(&code) {
+        return None;
+    }
+    let k = usize::from(code - 1);
+    let file: [f32; 3] = match k {
+        0..=2 => [0, 1, 2].map(|c| f32::from(m.registers[k][c])),
+        3..=6 => [0, 1, 2].map(|c| f32::from(m.constants[k - 3][c])),
+        _ => [0, 1, 2].map(|c| f32::from(m.material_color[k - 7][c])),
+    };
+    if !file.iter().any(|&v| v < 1.0) {
+        return None;
+    }
+    let mut t = m.clone();
+    match k {
+        0..=2 => t.registers[k][..3].copy_from_slice(&[255, 255, 255]),
+        3..=6 => t.constants[k - 3][..3].copy_from_slice(&[255, 255, 255]),
+        _ => t.material_color[k - 7][..3].copy_from_slice(&[255, 255, 255]),
+    }
+    Some(t)
+}
+
+/// The map whose colour the material shows: of the maps its stages read (no painted reflection's), the one whose
+/// colour taken from black to white moves the result under full light the most, the others mid grey; 255 none. A
+/// program may read another map first (Mario's body reads a noise map in its first stage and his clothes' map in its
+/// last), so the first map read is no colour map.
+pub fn colour_map(m: &MaterialIr) -> u8 {
+    let environment = environment_maps(m);
+    let count = (m.pixel_stage_count as usize).min(m.stages.len());
+    let mut best = (0xFFu8, 0.0f32);
+    let mut tried: Vec<u8> = Vec::new();
+    for stage in &m.stages[..count] {
+        let n = stage.map;
+        if n == 0xFF || environment.contains(&n) || tried.contains(&n) {
+            continue;
+        }
+        tried.push(n);
+        let shown = |v: f32| {
+            let map = |k: u8| -> [f32; 4] {
+                if k == n {
+                    [v, v, v, 1.0]
+                } else if environment.contains(&k) {
+                    [0.0, 0.0, 0.0, 1.0]
+                } else {
+                    [0.5, 0.5, 0.5, 1.0]
+                }
+            };
+            evaluate(m, &map, &|code| raster_colour(m, code, 1.0))
+        };
+        let (white, black) = (shown(1.0), shown(0.0));
+        let moved = luminance([(white[0] - black[0]).abs(), (white[1] - black[1]).abs(), (white[2] - black[2]).abs()]);
+        if moved > best.1 {
+            best = (n, moved);
+        }
+    }
+    best.0
 }
 
 /// A colour with its largest channel at 1 (black stays black).
@@ -2711,6 +2811,7 @@ mod tests {
         assert_eq!(clear_kind("icecube", "lambert2(2)"), CLEAR_ICE);
         assert_eq!(clear_kind("karikariice", "omotemat_v"), CLEAR_ICE);
         assert_eq!(clear_kind("bathtubplanet", "glass_v"), CLEAR_GLASS);
+        assert_eq!(clear_kind("heavenlybeachplanetwater", "dxfallmat_v_x"), CLEAR_FALL);
     }
 
     // The shadow models by name, with their materials and classes as the cook reads them
@@ -2804,6 +2905,43 @@ mod tests {
         assert!(near(read(&added).emission, [0.4, 0.2, 0.8]), "an untextured glow: {:?}", read(&added).emission);
         (mapped.blend_type, mapped.blend_src, mapped.blend_dst) = (1, 4, 1);
         assert!(near(read(&mapped).emission, [0.4, 0.2, 0.8]), "a textured glow under a white map");
+    }
+
+    #[test]
+    fn a_glow_the_game_colours_reads_its_colour_white() {
+        // An added glow whose material colour the game sets, red in the file: read with it white (the live colour
+        // multiplies it a channel at a time), its green and blue kept; one with every channel lit keeps the file's.
+        let mut red = painted();
+        red.material_color = [[255, 0, 0, 255]; 2];
+        (red.blend_type, red.blend_src, red.blend_dst) = (1, 4, 1);
+        let r = read(&red);
+        assert_eq!((r.class, r.glow_source), (Class::Emissive, 8));
+        assert!(r.glow_white);
+        assert!((0..3).all(|c| (r.emission[c] - 1.0).abs() < 2e-3), "{:?}", r.emission);
+        let mut lit = red.clone();
+        lit.material_color = [[102, 51, 204, 255]; 2];
+        assert!(!read(&lit).glow_white);
+        let mut opaque = painted();
+        opaque.material_color = [[255, 0, 0, 255]; 2];
+        assert!(!read(&opaque).glow_white, "not a glow: its file colour stays");
+    }
+
+    #[test]
+    fn the_colour_map_is_the_one_the_colour_comes_from() {
+        // Stage 0 reads map 1 for its alpha alone; stage 1 multiplies the colour so far by map 0: map 0 is the colour
+        // (Mario's body: a noise map first, his clothes' map last). No map read: none.
+        let mut m = painted();
+        m.pixel_stage_count = 2;
+        m.stages[0].map = 1;
+        m.stages[0].coord = 0;
+        m.stages[0].alpha_in = [7, 4, 5, 7];
+        let mut s = stage([15, 8, 0, 15], [7, 7, 7, 0]);
+        s.map = 0;
+        s.coord = 0;
+        m.stages.push(s);
+        assert_eq!(colour_map(&m), 0);
+        assert_eq!(read(&m).colour_map, 0);
+        assert_eq!(colour_map(&painted()), 0xFF);
     }
 
     #[test]
@@ -3306,7 +3444,8 @@ mod tests {
 
     #[test]
     fn the_clear_classes_are_the_owners_table() {
-        // Glass 1.5 (a bubble 1.33), crystal 1.8, ice 1.31, all at most 0.02 rough but ice 0.05.
+        // Glass 1.5 (a bubble 1.33), crystal 1.8, ice 1.31, all at most 0.02 rough but ice 0.05; falling water
+        // water's own numbers.
         assert_eq!(clear_kind("bathtubplanet", "glass_v"), CLEAR_GLASS);
         assert_eq!(clear_kind("anything", "soapbubble_v"), CLEAR_BUBBLE);
         assert_eq!(clear_kind("crystalbox", "indtex"), CLEAR_CRYSTAL);
@@ -3315,6 +3454,8 @@ mod tests {
             assert!(k.roughness <= 0.02);
         }
         assert_eq!((CLEAR_ICE.ior, CLEAR_ICE.roughness, CLEAR_ICE_BEING.roughness), (1.31, 0.05, 0.08));
+        assert_eq!((CLEAR_FALL.ior, CLEAR_FALL.roughness), (1.33, 0.03));
+        assert_eq!(clear_kind("anything", "taki_v"), CLEAR_FALL);
         // A sheen's ice body is ice, not an ice being.
         let mut body = read(&painted());
         promote_sheen_body(SheenKind::Ice, &mut body);
@@ -3327,7 +3468,9 @@ mod tests {
             let number = |c: usize| row.get(c).and_then(|v| v.trim().parse::<f32>().ok());
             if row.get(class).is_some_and(|c| c.trim() == "glass") {
                 let (n, g) = (number(ior).unwrap_or(1.5), number(rough).unwrap_or(0.02));
-                let kind = [CLEAR_GLASS, CLEAR_BUBBLE, CLEAR_CRYSTAL, CLEAR_ICE, CLEAR_ICE_BEING].into_iter().find(|k| k.ior == n && k.roughness == g);
+                let kind = [CLEAR_GLASS, CLEAR_BUBBLE, CLEAR_FALL, CLEAR_CRYSTAL, CLEAR_ICE, CLEAR_ICE_BEING]
+                    .into_iter()
+                    .find(|k| k.ior == n && k.roughness == g);
                 assert!(kind.is_some(), "{row:?}: index {n}, roughness {g} is no kind of the clear classes' table");
             } else if let Some(n) = number(ior) {
                 assert!(n == CLEAR_CRYSTAL.ior || row.get(class).is_some_and(|c| !c.trim().is_empty()), "{row:?}: an index without a class");

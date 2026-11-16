@@ -134,19 +134,12 @@ inline std::uint32_t rt_particle_id(float x, float y, float z) {
 }
 
 // The words of an item in the light pass's table (rt_light).
-constexpr std::size_t kRtItemWords = 20u;  // rt_frame.hlsli kItemBytes
+constexpr std::size_t kRtItemWords = 21u;  // rt_frame.hlsli kItemBytes
 
 // The sky's dome among the sky's draws: what a mirror shows where nothing of the scene stands.
 constexpr bool item_is_sky_dome(const NebulaFrameItem& item) noexcept {
     const std::uint32_t category = (item.flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT;
     return category == NEBULA_CATEGORY_SKY || category == NEBULA_CATEGORY_ASTRO_DOME_SKY;
-}
-
-// The draw types (MR::DrawType, SwingRope 0) whose code draws a water surface: OceanBowl 5, OceanRing 6, its pipe's
-// inside 7 and outside 8, OceanSphere 9, WaterRoad 10, WhirlPoolAccelerator 11 (SceneFunction.hpp; WaterPlant is
-// weed; ElectricRailHolder 12 is not water). The category is NEBULA_CATEGORY_DRAW + the enum's value.
-constexpr bool category_is_water(std::uint32_t category) noexcept {
-    return category >= NEBULA_CATEGORY_DRAW + 5u && category <= NEBULA_CATEGORY_DRAW + 11u;
 }
 
 // A billboard mesh's rows turned to face the sun: `rows` as drawn (turned to the eye), `kind` 1 a full
@@ -313,6 +306,7 @@ void RenderCore::rt_start() {
     }
     registries_.tell_retired_meshes(true);
     rt_dev_read();
+    rt_backend_.count_occluders(rt_dev(RtDev::SunOccluders, 0.0f) > 0.5f);
     rt_log_at_ = 0u;
     rt_building_ = false;
     // Single-sampled, anti-aliased temporally (plan 16.3): by FSR 3 where it runs here, else SGSR 2 (every Vulkan and
@@ -393,12 +387,14 @@ void RenderCore::rt_stop() noexcept {
     // (set at once on the first traced walk, not eased from where the tracer stopped).
     rt_emitter_ids_before_.clear();
     rt_emitter_places_before_.clear();
-    rt_look_up_known_ = false;
-    rt_supplied_known_ = false;
     rt_ring_left_ = 0u;  // rt_frame gives each walk its share again
     rt_bounce_stop();
     rt_light_on_ = false;
     rt_prepass_walk_ = false;
+    rt_sky_reading_ = false;  // the device's targets go with it
+    rt_sky_view_ = rt::TextureView{};
+    rt_sky_walk_ = false;
+    rt_sky_face_ = -1;
     rt_skin_buffer_ = rt::kNoBuffer;
     rt_skin_bytes_ = 0u;
     rt_skin_retired_.clear();
@@ -693,8 +689,12 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
             }
             // An opaque draw whose material's row says translucent (steam, a cloud's body):
             // it dims the sun by its alpha (let_through, as a blended translucent thing), it stops no light.
+            // So does an opaque draw of water (Beach Bowl's cup, GxCupMat: the outer wall of its body of water): it bounds
+            // the water a ray crosses, which let_through weighs by the way inside it; as a solid it stopped every sun ray
+            // that crossed it.
             const bool dims = (item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u &&
-                              registries_.mesh(item.mesh).hit_class == NEBULA_HIT_TRANSLUCENT;
+                              (registries_.mesh(item.mesh).hit_class == NEBULA_HIT_TRANSLUCENT ||
+                               registries_.mesh(item.mesh).hit_class == NEBULA_HIT_WATER);
             const std::uint32_t mask =
                 sky ? rt::kMaskSky
                 // Seen by no view, mirror, bounce or probe: the sun's and the local lights' shadow rays alone meet it.
@@ -732,7 +732,7 @@ void RenderCore::rt_scene(const NebulaFramePass& begin) {
                     (list.ring_indices == nullptr || std::uint64_t{item.first} + item.count > list.ring_index_count)) {
                     continue;
                 }
-                const bool water = category_is_water(item_category(item));
+                const bool water = core::category_is_water(item_category(item));
                 const bool regenerated = (item.flags & NEBULA_ITEM_DISCRETE_VERTICES) != 0u;
                 // The vertices as this walk draws them (moved at t where the walk moved them: draw_walker.cpp), so the
                 // traced triangles are the drawn ones (the second layer's surface test compares the two depths).
@@ -1461,6 +1461,9 @@ void RenderCore::rt_blended(const NebulaFramePass& end) {
             rt_pass_light();
             rt_pass_transmit();
             rt_blend_filters();
+            // The counters again, with this layer's added to the opaque layer's (zeroed once a frame): the copy the
+            // opaque layer's list took was before this layer ran.
+            rt_backend_.end_counters();
             frame.layer = 0u;
             frame.pass = opaque_pass;  // what reads the frame after this layer reads the opaque layer's b1
             rt_blend_walk_before_ = walk_.serial;
@@ -1472,6 +1475,8 @@ void RenderCore::rt_blended(const NebulaFramePass& end) {
                 if (guide != nullptr) {
                     rt_blend_guide_slot_ = renderer_.rt_publish_light(guide, texture_store_, 9u);
                 }
+                void* const layer_items = guide != nullptr ? rt_backend_.image_to_sample(rt_image(RtImage::BlendItem)) : nullptr;
+                rt_blend_item_place_ = layer_items != nullptr ? renderer_.rt_publish_light(layer_items, texture_store_, 10u) + 1u : 0u;
                 ++walk_view_stamp_;  // the blended draws' views carry it
             }
         }
@@ -1541,6 +1546,68 @@ void RenderCore::rt_untraced() {
 
 // The prepass and the light pass, before the scene's first draw. Without them (no scene this walk, a multisampled
 // target, no memory) the scene draws as ever and no light is traced.
+void RenderCore::rt_sky_capture(const NebulaFramePass& begin) {
+    rt_sky_release();
+    const NebulaFrameList& list = *walk_.now->list;
+    const auto at = static_cast<std::uint32_t>(&begin - list.passes);
+    const auto scene_draw = [&](const NebulaFramePass& pass) {
+        return pass.kind == NEBULA_PASS_DRAW && pass.layer == NEBULA_LAYER_SCENE && pass.target == 0u;
+    };
+    std::uint32_t end = at + 1u;
+    bool any = false;
+    for (; end < list.pass_count && list.passes[end].kind != NEBULA_PASS_SCENE_END; ++end) {
+        const NebulaFramePass& pass = list.passes[end];
+        for (std::uint32_t i = pass.first_item; scene_draw(pass) && !any && i < pass.first_item + pass.item_count; ++i) {
+            any = core::item_draws_sky_picture(list.items[i]);
+        }
+    }
+    if (!any) {
+        return;  // no sky drawn: a ray that leaves the scene shows the stage's own (g_sky)
+    }
+    // Behind the sky, what the screen has there: the frame's last clear before the scene.
+    std::uint32_t clear = 0u;
+    for (std::uint32_t q = at; q-- > 0u;) {
+        const NebulaFramePass& pass = list.passes[q];
+        if (pass.kind == NEBULA_PASS_CLEAR && pass.layer != NEBULA_LAYER_TARGET && (pass.clear_channels & 1u) != 0u) {
+            clear = pass.clear_rgba;
+            break;
+        }
+    }
+    if (!renderer_.begin_target_pass(kRtSkyPicture, 3u * kRtSkyFace, 2u * kRtSkyFace)) {
+        return;
+    }
+    ++walk_view_stamp_;
+    renderer_.clear_scene(clear, true, true, true, 0u, 0u, kFrameUnits, kFrameUnits, 1u);
+    rt_sky_walk_ = true;
+    for (int face = 0; face < 6; ++face) {
+        rt_sky_face_ = face;
+        ++walk_view_stamp_;  // each view's rows again, for this face
+        for (std::uint32_t p = at + 1u; p < end; ++p) {
+            if (scene_draw(list.passes[p])) {
+                NebulaFramePass pass = list.passes[p];
+                pass.layer = NEBULA_LAYER_TARGET;  // no jitter, no culling by the screen's frustum, no motion
+                walk_draw_pass_direct(pass);
+            }
+        }
+    }
+    rt_sky_walk_ = false;
+    rt_sky_face_ = -1;
+    renderer_.end_target_pass(0u, texture_store_);
+    ++walk_view_stamp_;
+    rt_sky_reading_ = renderer_.rt_target_read_begin(kRtSkyPicture, rt_sky_view_);
+    if (!rt_sky_reading_) {
+        rt_sky_view_ = rt::TextureView{};
+    }
+}
+
+void RenderCore::rt_sky_release() noexcept {
+    if (rt_sky_reading_) {
+        renderer_.rt_target_read_end(kRtSkyPicture);
+        rt_sky_reading_ = false;
+    }
+    rt_sky_view_ = rt::TextureView{};
+}
+
 void RenderCore::rt_prepass(const NebulaFramePass& begin) {
     const NebulaFrameList& list = *walk_.now->list;
     rt_light_on_ = false;
@@ -1548,6 +1615,9 @@ void RenderCore::rt_prepass(const NebulaFramePass& begin) {
     rt_blend_guide_mode_ = 0u;
     rt_prepassed_.assign(list.item_count, 0u);
     rt_light_frame_.across = 0u;  // no light pass yet this walk: no second layer either
+    if (rt_scene_view_ != NEBULA_NONE32 && rt_scene_.name() != 0u) {
+        rt_sky_capture(begin);
+    }
     if (rt_scene_view_ == NEBULA_NONE32 || rt_scene_.name() == 0u || !renderer_.rt_items_begin()) {
         rt_drop_volumes_.clear();  // no light pass this walk: the game's own drop shadows draw
         rt_drops_.clear();
@@ -1637,7 +1707,7 @@ constexpr RtImageKind kRtImageKinds[] = {
     {"Nebula RT Blend Moments A", kHalf4, kRtFull, kForBlend},
     {"Nebula RT Blend Moments B", kHalf4, kRtFull, kForBlend},
     {"Nebula RT Facing", rt::ImageFormat::Rgba8, kRtFull, kForLight},
-    {"Nebula RT Blend Body", rt::ImageFormat::R8, kRtFull, kForBlend},
+    {"Nebula RT Blend Item", rt::ImageFormat::Rg16f, kRtFull, kForBlend},
     {"Nebula RT Indirect Raw", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average A", kHalf4, kRtHalf, kForIndirect},
     {"Nebula RT Indirect Average B", kHalf4, kRtHalf, kForIndirect},
@@ -1689,8 +1759,9 @@ struct RtFrameConstants {
     float before[3][4];         // the frame before's eye space from this frame's
     std::uint32_t kept[4];      // the reservoirs' way from the frame before's emitters to this frame's
     std::uint32_t clip[4];      // the clip areas' volumes: first byte in the items' buffer, how many, the rule
-    float dev[8][4];            // the tracer's development tunables (rt_dev.h from PaintedGlass; rt_frame.hlsli rt_dev_or)
-    std::uint32_t dev_set[4];   // [0]: a bit a dev slot the run gave
+    float sun_light[4];         // the stage's sun light on a face square to it, light units (rt_frame.hlsli g_sun_light)
+    float sky_light[4];         // the lighting sky's mean, light units (g_sky_light)
+    float sky_faces[4];         // x 1: the sky picture is drawn this walk (t7, rt_sky_capture)
 };
 // A pass's own (rt_frame.hlsli PassConstants): b1.
 struct RtPassConstants {
@@ -1887,7 +1958,6 @@ void RenderCore::rt_blend_filters() {
     over_space.reads[0] = average;
     over_space.reads[1] = moments;
     over_space.reads[2] = guide;
-    over_space.reads[3] = rt_image(RtImage::BlendBody);  // glass's and water's body into the added light's a
     over_space.writes[0] = rt_image(RtImage::Added);
     rt_backend_.dispatch(RtShader::LightsSpace, over_space, frame.across, frame.down);
 }
@@ -1900,6 +1970,7 @@ void RenderCore::rt_pass_surface() {
     binds.writes[2] = rt_image(RtImage::Motion);
     binds.writes[3] = rt_image(RtImage::Material);
     binds.writes[4] = rt_image(RtImage::Base);
+    binds.writes[5] = rt_light_frame_.layer != 0u ? rt_image(RtImage::BlendItem) : rt::kNoImage;
     rt_backend_.dispatch(RtShader::Surface, binds, rt_light_frame_.across, rt_light_frame_.down);
 }
 
@@ -1925,16 +1996,18 @@ void RenderCore::rt_pass_lights() {
     binds.reads[3] = rt_before(second ? RtImage::BlendReservoirsA : RtImage::ReservoirsA);
     binds.reads[4] = rt_before(second ? RtImage::BlendGuideA : RtImage::GuideA);
     binds.reads[5] = rt_image(RtImage::Material);
+    binds.reads[6] = rt_image(RtImage::Base);  // a metal's F0 colour for the highlight
     binds.writes[0] = rt_image(RtImage::Lights);
     binds.writes[1] = rt_now(second ? RtImage::BlendReservoirsA : RtImage::ReservoirsA);
     binds.writes[2] = rt_image(RtImage::LightsSpec);
     rt_backend_.dispatch(RtShader::Lights, binds, rt_light_frame_.across, rt_light_frame_.down);
 }
 
-// The shares the programs read, with the sky's light near the surface and what the surface mirrors (rt_light.hlsl).
+// The light pass (rt_light.hlsl): the facing for the compose step, the second layer's Light and specular picture,
+// and the opaque layer's specular picture where the reflections pass does not run.
 void RenderCore::rt_pass_light() {
-    // The shading frame too (t4): what glass, water and the other mirrors here show is the shared hit shading;
-    // g_pass.y 1 where it is bound, g_pass.w its first byte.
+    // The shading frame too (t4): what glass and water mirror is the shared hit shading; g_pass.y 1 where it is
+    // bound, g_pass.w its first byte.
     rt::PassBinds binds;
     std::uint32_t shade_at = 0u;
     const bool shaded = rt_shade_binds(binds, shade_at);
@@ -1942,8 +2015,8 @@ void RenderCore::rt_pass_light() {
         binds = rt_pass_binds();
     }
     const float none[3][4] = {};
-    // The point's O: the sky and bounce light's picture, written before this pass, for the dielectric
-    // sheen's sky part (rt_light.hlsl); g_pass.z 1 where it is bound.
+    // The opaque layer's I: the sky and bounce light's picture, written before this pass (the specular fallback, the
+    // second layer's light in a room); g_pass.z 1 where it is bound.
     const std::uint32_t point_o = rt_pass_indirect_on() && rt_indirect_drawn_ ? rt_image(RtImage::Indirect) : rt::kNoImage;
     binds.pass_constants = rt_bounce_constants(shaded ? 1u : 0u, point_o != rt::kNoImage ? 1u : 0u, shade_at, none);
     binds.reads[7] = point_o;
@@ -1953,11 +2026,10 @@ void RenderCore::rt_pass_light() {
     binds.reads[3] = rt_image(RtImage::SunOut);
     binds.reads[4] = rt_image(RtImage::Material);
     binds.reads[5] = rt_image(RtImage::LightsSpec);
+    binds.reads[8] = rt_image(RtImage::Base);
     binds.writes[0] = rt_image(RtImage::Light);
     binds.writes[1] = rt_image(RtImage::Mirror);
     binds.writes[2] = rt_image(RtImage::Facing);
-    binds.writes[3] = rt_image(RtImage::BlendBody);         // the second layer's glass and water (kNoImage before one)
-    binds.reads[6] = rt_now(RtImage::GuideA);               // the opaque layer's, for the water's depth
     rt_backend_.dispatch(RtShader::Light, binds, rt_light_frame_.across, rt_light_frame_.down);
 }
 
@@ -1972,23 +2044,23 @@ void RenderCore::rt_filters() {
     for (std::uint32_t step = 0u; step < 3u; ++step) {
         steps[step] = rt_pass_constants(0u, 1u << step, step == 2u ? 1u : 0u);
     }
-    // The sun's and the sky's shares as the programs read them, in one step (rt_light_space.hlsl's last): the
-    // sun's V as its own filter left it (SunOut) and the sky and bounce light's mean ratio, else 1. The light pass's own
-    // sky share is the constant 1, so nothing of the Light picture needs a filter over time or space.
-    const std::uint32_t light = rt_image(RtImage::Light);
+    // The opaque layer's Light picture as the programs read it, in one step (rt_light_space.hlsl's last): the sun's
+    // light by V as its own filter left it (SunOut) and the light pass's facing, and I (the lighting sky's mean where
+    // that pass is off); a the diffuse keep from the surface images.
     rt::PassBinds compose;
     compose.constants = frame.binds.constants;
     compose.pass_constants = steps[2];
+    compose.reads[0] = rt_image(RtImage::Facing);
+    compose.reads[1] = rt_image(RtImage::Material);
     compose.reads[2] = guide;
     compose.reads[3] = motion;  // for --diagnostics rt-motion
-    compose.reads[4] = rt_pass_indirect_on() && rt_indirect_drawn_ ? rt_image(RtImage::Indirect) : rt::kNoImage;  // the sky's share
+    compose.textures[2] = frame.binds.textures[2];  // the sky picture, for --diagnostics rt-sky
+    compose.reads[4] = rt_pass_indirect_on() && rt_indirect_drawn_ ? rt_image(RtImage::Indirect) : rt::kNoImage;  // I
     compose.reads[5] = rt_image(RtImage::SunOut);  // V (rgb)
-    compose.buffers[2] = frame.binds.buffers[2];   // the drops and their tiles: the landing cue
-    compose.buffers[3] = frame.binds.buffers[3];
-    compose.writes[0] = light;
-    compose.counters = true;  // 19: the pixels under the landing cue
+    compose.reads[6] = rt_image(RtImage::Base);
+    compose.reads[7] = rt_image(RtImage::Normal);
+    compose.writes[0] = rt_image(RtImage::Light);
     rt_backend_.dispatch(RtShader::LightSpace, compose, frame.across, frame.down);
-    rt_backend_.end_counters();
     // The local lights' share: over time (its averages and the moments of its noise), then three steps over space
     // weighed by that noise, the last into the added light the programs read.
     const std::uint32_t lights = rt_image(RtImage::Lights), added = rt_image(RtImage::Added);
@@ -2014,14 +2086,8 @@ void RenderCore::rt_filters() {
         over_space.reads[1] = moments;
         over_space.reads[2] = guide;
         over_space.writes[0] = step == 1u ? lights : added;
-        if (step == 2u) {
-            // The added light's guard, counted: the pixel's base colour, counter 51.
-            over_space.reads[4] = rt_image(RtImage::Base);
-            over_space.counters = true;
-        }
         rt_backend_.dispatch(RtShader::LightsSpace, over_space, frame.across, frame.down);
     }
-    rt_backend_.end_counters();
 }
 
 // The most the tracer takes from the matrix ring in a walk of `list`: every allocation it makes there (rt_scene's ring
@@ -2045,7 +2111,7 @@ std::size_t RenderCore::rt_ring_need(const NebulaFrameList& list) const {
         for (std::uint32_t i = pass.first_item; i < pass.first_item + pass.item_count && i < list.item_count; ++i) {
             const NebulaFrameItem& item = list.items[i];
             const bool ring = (item.flags & NEBULA_ITEM_RING) != 0u;
-            const bool water = ring && category_is_water(item_category(item));
+            const bool water = ring && core::category_is_water(item_category(item));
             corners += ring ? item.count : 0u;
             water_corners += water ? item.count : 0u;
             waters += water ? 1u : 0u;
@@ -2056,8 +2122,8 @@ std::size_t RenderCore::rt_ring_need(const NebulaFrameList& list) const {
     bytes += (std::size_t{list.item_count} * 2u + 4u) * sizeof(rt::Instance) + 16u;
     // The blue noise, the walks its image is made in (rt_noise_fill).
     bytes += sizeof(kRtBlueNoise) + kAlign;
-    // rt_tables: the item words with water's coordinate rows (20 words each at most) and the clip volumes (128 of 16 words).
-    bytes += std::size_t{list.item_count} * (kRtItemWords + 20u) * sizeof(std::uint32_t) + 128u * 16u * sizeof(std::uint32_t) + kAlign;
+    // rt_tables: the item words and the clip volumes (128 of 16 words).
+    bytes += std::size_t{list.item_count} * kRtItemWords * sizeof(std::uint32_t) + 128u * 16u * sizeof(std::uint32_t) + kAlign;
     // Each light set's lamp (4 floats).
     bytes += std::max<std::size_t>(std::size_t{list.light_set_count} * 4u, 4u) * sizeof(float) + kAlign;
     // The drops (one at most a shadow drop of the list), the emitters, the remap from the walk before's, their places.
@@ -2133,14 +2199,17 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
     // which it is there; the mesh's matrix stream from 1 (0: the one row). Then what a ray that meets it shows
     // (nebula_model.h NebulaModelHit): its class, its flags, its roughness and metal as bytes; its colour under
     // full light and the share of its look a painted reflection carries, as bytes; then the first row its matrix had
-    // the frame before; two words spare.
+    // the frame before; and so on to word 19 (word 18 free). Word 20: the map whose colour it shows, among the textures.
     constexpr std::size_t kItemWords = kRtItemWords;
     rt_item_words_.assign(std::size_t{list.item_count} * kItemWords, 0u);
-    rt_item_coords_.clear();
     for (std::uint32_t i = 0; i < list.item_count; ++i) {
         rt_item_words_[i * kItemWords] = list.items[i].slot;
         rt_item_words_[i * kItemWords + 2u] = NEBULA_NONE32;
         rt_item_words_[i * kItemWords + 8u] = NEBULA_NONE32;
+        rt_item_words_[i * kItemWords + 20u] = NEBULA_NONE32;
+    }
+    if (rt_dev(RtDev::SunOccluders, 0.0f) > 0.5f) {
+        rt_occluders(list);
     }
     struct BoundArena {
         std::uint32_t arena = NEBULA_NONE32;
@@ -2234,7 +2303,7 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
                 const bool clear = (item.flags & (NEBULA_ITEM_RING | NEBULA_ITEM_INSTANCES)) == 0u
                                        ? registries_.mesh(item.mesh).hit_class == NEBULA_HIT_GLASS ||
                                              registries_.mesh(item.mesh).hit_class == NEBULA_HIT_WATER
-                                       : category_is_water(item_category(item));
+                                       : core::category_is_water(item_category(item));
                 const bool adds = (state & 3u) == NEBULA_BLEND_ADD && (state >> 6u & 15u) == NEBULA_FACTOR_ONE && !clear;
                 rt_item_words_[i * kItemWords + 1u] = (program_sums_key(pipeline.desc.pixel) ? 1u : 0u) |
                                                       (pass.phase != kPhaseNoShadow ? 2u : 0u) | 4u | (thin ? 8u : 0u) |
@@ -2247,7 +2316,7 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
                 // Code-drawn water: water to a ray (class, and water's roughness 0.03), a white record under its
                 // first map, and its mesh as rt_scene made it (a sea is many strips, each an item with its own), so
                 // that it is in the second layer and its own hits read as model water's.
-                if ((item.flags & NEBULA_ITEM_RING) != 0u && category_is_water(item_category(item))) {
+                if ((item.flags & NEBULA_ITEM_RING) != 0u && core::category_is_water(item_category(item))) {
                     std::uint32_t* words = rt_item_words_.data() + i * kItemWords;
                     words[11] = std::uint32_t{NEBULA_HIT_WATER} | 8u << 16u;
                     words[12] = 0x00FFFFFFu;
@@ -2266,6 +2335,7 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
                                 table.count != 0u && !table.list.empty() && table.list[0].texture != 0u &&
                                 !TextureStore::is_target(table.list[0].texture)) {
                                 words[8] = renderer_.texture_slot(texture_store_.handle(table.list[0].texture));
+                                words[20] = words[8];
                             }
                         }
                     }
@@ -2322,6 +2392,18 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
                 words[8] = renderer_.texture_slot(texture_store_.handle(table.list[0].texture));
                 std::memcpy(&words[9], &mesh.hit_alpha, sizeof(float));
             }
+            // Word 20: the map whose colour it shows (the form's colour_slot), what a ray's hit samples for its
+            // colour; the first map (word 8: its alpha, its cutout, its water's ripple) where that is the one.
+            words[20] = words[8];
+            if (const core::GpuMesh::FormRows* const shown = form_rows_of(mesh, registries_.pipeline(item.pipeline).desc);
+                mesh.ray_form == 0u && shown != nullptr && shown->colour_slot != 0xFFu) {
+                const core::TextureTable& table = registries_.table(item.textures);
+                const std::size_t listed = std::min<std::size_t>(table.count, table.list.size());
+                if (shown->colour_slot < listed && table.list[shown->colour_slot].texture != 0u &&
+                    !TextureStore::is_target(table.list[shown->colour_slot].texture)) {
+                    words[20] = renderer_.texture_slot(texture_store_.handle(table.list[shown->colour_slot].texture));
+                }
+            }
             const auto byte_of = [](float v) { return static_cast<std::uint32_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
             // Its maps include a picture the renderer made (a capture of the scene, as the frozen lake's mirror):
             // hit flag 128 (the cooker's flags 0-6 pass; its bit 7, a drawn sheen, is read on the CPU alone, such a draw
@@ -2349,34 +2431,6 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
             }
             words[12] = byte_of(mesh.hit_base[0] * tint[0]) | byte_of(mesh.hit_base[1] * tint[1]) << 8u |
                         byte_of(mesh.hit_base[2] * tint[2]) << 16u | byte_of(mesh.hit_environment) << 24u;
-            // Water's first map's coordinate rows (its surface ripples as the map moves): the two rows
-            // the program's coordinate takes, the walk's own at t for a listed material, after the items; word 18
-            // their first byte from the items' first. Only a map read from uv set 0 (the tracer's vertices carry no
-            // other), and only rows of this form's layout (as live_glow checks).
-            const core::GpuMesh::FormRows* const form = mesh.hit_class == NEBULA_HIT_WATER ? form_rows_of(mesh, registries_.pipeline(item.pipeline).desc) : nullptr;
-            // Once an item (a pass that names it again leaves its rows as they are: rt_ring_need counts one set an item).
-            if (words[18] == 0u && form != nullptr && form->map0_row != 0xFFFFu && mesh.map0_uv == 0u && words[8] != NEBULA_NONE32 &&
-                list.constants != nullptr && item.constants < list.constants_count) {
-                const NebulaFrameConstants& constants = list.constants[item.constants];
-                const float* rows = constants.rows != nullptr          ? walk_material_rows(item.constants)
-                                    : constants.slot != NEBULA_NONE32 ? registries_.slot(constants.slot).cpu
-                                                                      : nullptr;
-                if (rows != nullptr && std::uint32_t{form->map0_row} + 2u <= constants.vertex_rows) {
-                    words[18] = static_cast<std::uint32_t>((rt_item_words_.size() + rt_item_coords_.size()) * 4u);
-                    const std::size_t at = rt_item_coords_.size();
-                    // Map 0's two rows, map 1's two rows, map 1's texture slot (NONE: none), three words free.
-                    rt_item_coords_.resize(at + 20u, 0u);
-                    std::memcpy(rt_item_coords_.data() + at, rows + std::size_t{form->map0_row} * 4u, 8u * sizeof(float));
-                    rt_item_coords_[at + 16u] = NEBULA_NONE32;
-                    const core::TextureTable& maps = registries_.table(item.textures);
-                    if (form->map1_row != 0xFFFFu && mesh.map1_uv == 0u && std::uint32_t{form->map1_row} + 2u <= constants.vertex_rows &&
-                        mesh.map1_slot < std::min<std::size_t>(maps.count, maps.list.size()) && maps.list[mesh.map1_slot].texture != 0u &&
-                        !TextureStore::is_target(maps.list[mesh.map1_slot].texture)) {
-                        std::memcpy(rt_item_coords_.data() + at + 8u, rows + std::size_t{form->map1_row} * 4u, 8u * sizeof(float));
-                        rt_item_coords_[at + 16u] = renderer_.texture_slot(texture_store_.handle(maps.list[mesh.map1_slot].texture));
-                    }
-                }
-            }
             // What it shows with no light, and whether its light is in the list (rt_shade.hlsli rt_hit_read). Listed
             // only where rt_emitter kept its block's light (not a glowing surface too large to be one light, not one
             // past the list's room; a point light the game asked at its place stands for it too); its glow turned
@@ -2408,9 +2462,10 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
                 words[1] |= 1u << 30u;
             }
             // Bits 26-31 the share of the sun its far side takes x 63 (a crown of leaves, a cloud), whatever its glow.
+            // Its emission by the colour the game gives it now, as its base (live_tint).
             words[14] = (glow_off ? 0u
-                                  : byte_of(mesh.hit_emission[0]) | byte_of(mesh.hit_emission[1]) << 8u |
-                                        byte_of(mesh.hit_emission[2]) << 16u | (glow_listed ? 1u << 24u : 0u) |
+                                  : byte_of(mesh.hit_emission[0] * tint[0]) | byte_of(mesh.hit_emission[1] * tint[1]) << 8u |
+                                        byte_of(mesh.hit_emission[2] * tint[2]) << 16u | (glow_listed ? 1u << 24u : 0u) |
                                         (glow_now[3] != 0.0f ? 1u << 25u : 0u)) |
                         static_cast<std::uint32_t>(std::clamp(mesh.hit_through, 0.0f, 1.0f) * 63.0f + 0.5f) << 26u;
             // Its paint as one light (the Physical style): the share in bits 0-7, the direction in the
@@ -2464,11 +2519,6 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
     // edge 2 tan d wide, d its caster's distance, crisp at contact and soft far off; a stage row's sun_size over it.
     constexpr float kSunTan = 0.00698f;
     constexpr float kDropTan = 0.035f;   // the drop light's 2 degrees: the landing cue's edge
-    constexpr float kSkyInShadow = 0.5f;  // what the sun's shadow keeps of the sky's light: the sky turned down (the
-                                          // view's tint gives back up to 0.3 of the rest in the sky's colour)
-    constexpr float kFullFacing = 0.6f;  // a painted surface keeps its authored brightness from this n.l up
-    constexpr float kPaintedStyle = 1.0f;  // a painted surface whose model's paint holds its shadows
-                                           // (NEBULA_HIT_PAINTED_SHADOW) is shadowed by lit things only
     const float* const sun = rt_sun_eye_;
     const bool sunned = rt_sun_now_;
     float ambient = 0.0f, key = 0.0f;
@@ -2490,11 +2540,9 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
     key *= sun_gain;
     rt_stage_air_ = stage_row.air > 0.0f ? stage_row.air * std::max(rt_dev(RtDev::AirScale, 1.0f), 0.0f) : 0.0f;  // the light in the air's density
     ambient *= ambient_gain / kRtStageDefaults.ambient_gain;
-    // The stage's ambient and key colours for the programs' painted composite: a shadow takes
-    // the sky's colour, a channel at a time, by kShadowTint. By the row's gains; an even grey where the stage names
-    // no light of its own.
+    // The stage's ambient and key colours (the lighting sky and the sun: g_sky_light, g_sun_light below), by the row's
+    // gains; an even grey where the stage names no light of its own.
     {
-        constexpr float kShadowTint = 0.2f;
         const NebulaFrameWorldLight* const key_light = stage_named ? core::find_world_light(list, list.stage_light) : nullptr;
         for (unsigned c = 0; c < 3u; ++c) {
             const float a = key_light != nullptr ? list.stage_ambient[c] : 0.5f;
@@ -2502,7 +2550,7 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
             rt_stage_a_[c] = a * ambient_gain / kRtStageDefaults.ambient_gain;
             rt_stage_k_[c] = k * sun_gain;
         }
-        rt_stage_a_[3] = rt_dev(RtDev::ShadowTint, kShadowTint);
+        rt_stage_a_[3] = 0.0f;
         rt_stage_k_[3] = 0.0f;
     }
     if (!rt_drops_.empty()) {
@@ -2513,7 +2561,7 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
         rt_tile_entries_.assign(1u, 0u);
     }
     RtFrameConstants constants{};
-    const std::size_t item_bytes = (rt_item_words_.size() + rt_item_coords_.size()) * sizeof(std::uint32_t);  // + water's rows
+    const std::size_t item_bytes = rt_item_words_.size() * sizeof(std::uint32_t);
     const std::size_t set_bytes = rt_set_words_.size() * sizeof(float);
     static_assert(sizeof(RtDrop) == 48u && sizeof(RtEmitter) == 48u);
     // The stage's exposure: the light a fully lit surface of it stands in, from its own key and ambient: 40 lux
@@ -2588,10 +2636,6 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
         return false;  // the frame before's emitters stay as they were: the next walk reads no history (rt_light)
     }
     std::memcpy(items_at.cpu, rt_item_words_.data(), rt_item_words_.size() * sizeof(std::uint32_t));
-    if (!rt_item_coords_.empty()) {
-        std::memcpy(items_at.cpu + rt_item_words_.size() * sizeof(std::uint32_t), rt_item_coords_.data(),
-                    rt_item_coords_.size() * sizeof(std::uint32_t));
-    }
     if (clip_count != 0u) {
         std::memcpy(items_at.cpu + item_bytes, clip_words, clip_bytes);
     }
@@ -2671,15 +2715,10 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
     constants.sun[1] = sun[1];
     constants.sun[2] = sun[2];
     constants.sun[3] = std::clamp(rt_dev(RtDev::SunSize, stage_row.sun_size > 0.0f ? stage_row.sun_size : kSunTan), 0.0f, 0.2f);
-    constants.stage[0] = ambient;
-    constants.stage[1] = key;
     // The game's time at the frame in seconds, wrapped at an hour (the caustics' drift keeps the game's pace at
     // any display rate).
     constants.stage[2] = static_cast<float>(std::fmod((static_cast<double>(list.game_frame) - 1.0 + static_cast<double>(walk_.time.t)) / 60.0, 3600.0));
     constants.stage[3] = kDropTan;
-    constants.look[0] = kSkyInShadow;
-    constants.look[1] = kPaintedStyle;
-    constants.look[2] = rt_dev(RtDev::FullFacing, kFullFacing);
     constants.look[3] = stage_row.water_clear;  // the water's clear way (rt_stages.tsv)
     // The mesh memory: the arenas the items named, and the frame's rows. A slot no arena fills reads the
     // first (a bound buffer the pass never indexes).
@@ -2717,83 +2756,24 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
     }
     constants.more[3] |= rt_quality_ == kRtPresetReference ? 4096u : 0u;
     rt_lamps_own_ = rt_levels_[static_cast<unsigned>(RtPart::Lights)] == 0u;
-    rt_physical_ = render.rt_style == 1u;
-    {
-        // The painted composite's look (program.hlsli traced_painted). kForm: 1 the
-        // relight (October's engine v2: every painted mesh by the traced sun in the stage's linear units), 0 Painted
-        // (the art's own facing). y: the sun's height over the player's up, at least 0.5 (M3's exposure: a sun below
-        // the horizon does not leave the reference to the sky). kDebake: D2's per-vertex gain (the cooker's), all
-        // of it under the relight. kAmbientLook: the share of the stage's sky the relight keeps. Painted: (0, -, 0, 1).
-        constexpr float kForm = 1.0f, kDebake = 1.0f, kAmbientLook = 1.0f;
-        // No traced sun (a stage without one, the sun part off): the facing is 1 everywhere and the art keeps its own.
-        const bool relit = rt_physical_ && sunned && rt_levels_[static_cast<unsigned>(RtPart::Sun)] != 0u;
-        rt_sunless_ = rt_physical_ && !relit;  // the camera's finish 2 (the eye may open)
-        const float up_sun = list.sky_up_known != 0u ? sky_up_[0] * sun[0] + sky_up_[1] * sun[1] + sky_up_[2] * sun[2] : 1.0f;
-        rt_look_[0] = relit ? kForm : 0.0f;
-        // The sun's height eased: a gravity flip under the fixed sun does not pop the
-        // exposure; set at once on the first frame, a stage change, a cut, a time reset. 0 steps between walks.
-        const float up_target = std::max(up_sun, 0.5f);
-        if (!rt_look_up_known_ || rt_look_up_stage_ != list.stage_hash || now.cut || walk_.time.reset) {
-            rt_look_up_ = up_target;
-            rt_look_up_known_ = true;
-            rt_look_up_stage_ = list.stage_hash;
-        } else {
-            const std::uint32_t steps = walk_.between ? 0u : std::min(list.game_frame - rt_look_up_frame_, 4u);
-            rt_look_up_ += (up_target - rt_look_up_) * (1.0f - std::pow(0.98f, static_cast<float>(steps)));
+    // A traced sun lights this walk (the camera's finish 1; without one, 2: the eye may open).
+    rt_sun_lit_ = sunned && rt_levels_[static_cast<unsigned>(RtPart::Sun)] != 0u;
+    // The stage's light once a stage (rt-inputs): the lighting sky and the sun in light units (g_sky_light,
+    // g_sun_light below).
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs) && list.stage_hash != rt_stage_logged_) {
+        rt_stage_logged_ = list.stage_hash;
+        const auto lin = [](float x) {
+            x = std::clamp(x, 0.0f, 1.0f);
+            return x <= 0.04045f ? x / 12.92f : std::pow((x + 0.055f) / 1.055f, 2.4f);
+        };
+        float sky[3], sun_light[3];
+        for (unsigned c = 0; c < 3u; ++c) {
+            sky[c] = lin(rt_stage_a_[c]);
+            sun_light[c] = std::max(lin(rt_stage_a_[c] + rt_stage_k_[c]) - sky[c], 0.0f);
         }
-        if (!walk_.between) {
-            rt_look_up_frame_ = list.game_frame;
-        }
-        rt_look_[1] = rt_look_up_;
-        // With no traced sun the art's painted light is the room's light, taken
-        // out only as far as the lamps supply it (rt_emitters_finish), eased over about a second.
-        if (!rt_supplied_known_ || rt_supplied_stage_ != list.stage_hash || now.cut || walk_.time.reset) {
-            rt_supplied_ = rt_supplied_target_;
-            rt_supplied_known_ = true;
-            rt_supplied_stage_ = list.stage_hash;
-        } else {
-            const std::uint32_t steps = walk_.between ? 0u : std::min(list.game_frame - rt_supplied_frame_, 4u);
-            rt_supplied_ += (rt_supplied_target_ - rt_supplied_) * (1.0f - std::pow(0.95f, static_cast<float>(steps)));
-        }
-        if (!walk_.between) {
-            rt_supplied_frame_ = list.game_frame;
-        }
-        const bool lamps_light = rt_physical_ && rt_levels_[static_cast<unsigned>(RtPart::Lights)] != 0u;
-        rt_look_[2] = relit ? kDebake : lamps_light ? kDebake * rt_supplied_ : 0.0f;
-        rt_look_[3] = rt_physical_ ? kAmbientLook : 1.0f;
-        // A run's own (rt_dev.h form, art_facing, debake, ambient_look), over the style's.
-        rt_look_[0] = rt_dev(RtDev::Form, rt_look_[0]);
-        rt_look_[1] = rt_dev(RtDev::ArtFacing, rt_look_[1]);
-        rt_look_[2] = rt_dev(RtDev::Debake, rt_look_[2]);
-        rt_look_[3] = rt_dev(RtDev::AmbientLook, rt_look_[3]);
-        // The relight takes the facing as it is (max(n.s, 0)); Painted from kFullFacing up (the light pass, g_look.z).
-        if (rt_look_[0] > 0.0f) {
-            constants.look[2] = rt_dev(RtDev::FullFacing, 1.0f);
-            constants.look[0] = 1.0f;  // the relight keeps all of the sky in the sun's shadow (October had no cut)
-        }
-        constants.look[0] = rt_dev(RtDev::SkyInShadow, constants.look[0]);
-        // The model's numbers once a stage (rt-inputs: the sky, sun and E from the programs' A and K).
-        if (::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs) && list.stage_hash != rt_stage_logged_) {
-            rt_stage_logged_ = list.stage_hash;
-            const auto lin = [](float x) {
-                x = std::clamp(x, 0.0f, 1.0f);
-                return x <= 0.04045f ? x / 12.92f : std::pow((x + 0.055f) / 1.055f, 2.4f);
-            };
-            const auto luma = [](const float v[3]) { return 0.2126f * v[0] + 0.7152f * v[1] + 0.0722f * v[2]; };
-            float sky[3], full[3], rest[3];
-            for (unsigned c = 0; c < 3u; ++c) {
-                sky[c] = lin(rt_stage_a_[c]);
-                full[c] = std::max(lin(std::min(rt_stage_a_[c] + rt_stage_k_[c], 1.0f)), 1e-4f);
-                rest[c] = std::max(full[c] - sky[c], 0.0f);
-            }
-            const float e = luma(full) / std::max(luma(sky) + luma(rest) * rt_look_[1], 1e-4f);
-            const float strength = rt_dev(RtDev::SunStrength, 1.25f);  // October's kSun
-            std::fprintf(stderr, "[rt-stage] %08x E %.3f sky %.3f %.3f %.3f sun %.3f %.3f %.3f up %.3f\n", list.stage_hash,
-                         static_cast<double>(e), static_cast<double>(sky[0] * e / full[0]), static_cast<double>(sky[1] * e / full[1]),
-                         static_cast<double>(sky[2] * e / full[2]), static_cast<double>(rest[0] * strength * e / full[0]),
-                         static_cast<double>(rest[1] * strength * e / full[1]), static_cast<double>(rest[2] * strength * e / full[2]),
-                         static_cast<double>(rt_look_[1]));
-        }
+        std::fprintf(stderr, "[rt-stage] %08x sky %.3f %.3f %.3f sun %.3f %.3f %.3f\n", list.stage_hash,
+                     static_cast<double>(sky[0]), static_cast<double>(sky[1]), static_cast<double>(sky[2]),
+                     static_cast<double>(sun_light[0]), static_cast<double>(sun_light[1]), static_cast<double>(sun_light[2]));
     }
     constants.more[2] = (sunned && rt_levels_[static_cast<unsigned>(RtPart::Sun)] != 0u ? 1u : 0u) |
                         (rt_levels_[static_cast<unsigned>(RtPart::Reflect)] >= 2u ? 32u : 0u) | 64u;  // low: the painted maps stay, as off
@@ -2801,10 +2781,15 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
     constants.more[2] |= camera_water_depth() >= 0.0f ? 4096u : 0u;
     // Bit 13: the landing cue under the player (the setting, rt_light_space.hlsl).
     constants.more[2] |= render.rt_landing_shadow ? 8192u : 0u;
+    // Bit 15: the sun's occluders counted (rt_dev sun_occluders; rt_common.hlsli rt_count_occluder).
+    constants.more[2] |= rt_dev(RtDev::SunOccluders, 0.0f) > 0.5f && rt_dev(RtDev::SunOccluders, 0.0f) < 1.5f ? 32768u : 0u;
+    // Bit 17: the second layer's pixels counted by their own item in the same bins (rt_dev sun_occluders 2).
+    constants.more[2] |= rt_dev(RtDev::SunOccluders, 0.0f) > 1.5f ? 131072u : 0u;
+    // Bit 16: water's T shows how its walk ended (rt_dev transmit_why; rt_transmit.hlsl).
+    constants.more[2] |= rt_dev(RtDev::TransmitWhy, 0.0f) > 0.5f ? 65536u : 0u;
     std::memcpy(constants.up, sky_up_, sizeof(sky_up_));
     if (rt_pass_indirect_on()) {
-        // The sky and bounce light pass gives the sky's share (bit 8; the light pass traces none). A painted
-        // surface keeps kShadowTint of its colour from it (traced_painted: a faint cast).
+        // The sky and bounce light pass gives I (bit 8; the light pass traces none).
         constants.more[2] |= 256u;
     }
     if (rt_pass_reflect_on()) {
@@ -2844,34 +2829,29 @@ bool RenderCore::rt_tables(const Affine34& world_from_now) {
         constants.more[2] |= 512u;
         constants.glow[3] = 0u;
     }
+    if (::galaxy::diagnosing(::galaxy::kDiagnoseRtSky) && rt_sky_view_.texture != nullptr) {
+        // The sky picture along each surface's eye ray in place of the light (shown the way rt-light shows it).
+        constants.more[2] |= 16384u;
+        constants.glow[3] = 0u;
+    }
     // A ray that leaves the scene and meets no sky (a stage without a dome): the stage's ambient colour.
     for (unsigned c = 0; c < 3u; ++c) {
         constants.sky[c] = list.stage_light_known != 0u ? list.stage_ambient[c] : 0.25f;
     }
-    // A room's open O: the gathered hits' running mean (rt_dome_read), where an open floor's O lies when
-    // every ray meets a surface; V's unit with no traced sun (rt_light_space.hlsl).
-    constants.sky[3] = rt_hit_mean_;
-    for (unsigned i = 0; i < kRtDevTracerSlots; ++i) {
-        const unsigned which = kRtDevTracerFirst + i;
-        if ((rt_dev_set_ >> which & 1u) != 0u) {
-            constants.dev[i / 4u][i % 4u] = rt_dev_[which];
-            constants.dev_set[0] |= 1u << i;
+    constants.sky_faces[0] = rt_sky_view_.texture != nullptr ? 1.0f : 0.0f;
+    // The stage's light in light units (rt_shade.hlsli rt_sun_light, rt_sky_mean): the lighting sky lin(A), the sun
+    // on a face square to it lin(sat(A + K)) - lin(A).
+    {
+        const auto lin = [](float x) {
+            x = std::clamp(x, 0.0f, 1.0f);
+            return x <= 0.04045f ? x / 12.92f : std::pow((x + 0.055f) / 1.055f, 2.4f);
+        };
+        for (unsigned c = 0; c < 3u; ++c) {
+            constants.sky_light[c] = lin(rt_stage_a_[c]);
+            constants.sun_light[c] = std::max(lin(rt_stage_a_[c] + rt_stage_k_[c]) - constants.sky_light[c], 0.0f);
         }
     }
-    // The programs' sun_strength, sky_chroma and stage_light again in the tracer's tail (g_dev 6, 7, 8): hits light a
-    // surface as the programs do under the same keys.
-    constexpr RtDev kShared[3] = {RtDev::SunStrength, RtDev::SkyChroma, RtDev::StageLight};
-    for (unsigned j = 0; j < 3u; ++j) {
-        const unsigned which = static_cast<unsigned>(kShared[j]);
-        const unsigned i = kRtDevTracerSlots + j;
-        if ((rt_dev_set_ >> which & 1u) != 0u) {
-            constants.dev[i / 4u][i % 4u] = rt_dev_[which];
-            constants.dev_set[0] |= 1u << i;
-        }
-    }
-    static_assert(kRtDevTracerSlots + 3u <= 32u, "g_dev holds 32 slots");
-    static_assert(kRtDevTracerSlots == 6u, "rt_frame.hlsli names each tracer slot (kDev*)");
-    static_assert(offsetof(RtFrameConstants, dev) == 336u && offsetof(RtFrameConstants, dev_set) == 464u);
+    static_assert(offsetof(RtFrameConstants, sun_light) == 336u && offsetof(RtFrameConstants, sky_faces) == 368u);
     static_assert(sizeof(RtFrameConstants) <= 512u && offsetof(RtFrameConstants, more) == 64u);
     static_assert(offsetof(RtFrameConstants, kept) == 304u);  // rt_pass_indirect.cpp HalfFrameConstants
     const UploadRing::Allocation at = renderer_.constant_ring().allocate(512u, 256u);
@@ -2925,6 +2905,7 @@ void RenderCore::rt_light() {
             frame.binds.scene = scene;
             frame.binds.textures[0] = depth;
             frame.binds.textures[1] = items;
+            frame.binds.textures[2] = rt_sky_view_;  // the sky picture (texture null: none)
             frame.width = width;
             frame.height = height;
             frame.across = (width + 7u) / 8u;
@@ -3023,9 +3004,14 @@ void RenderCore::rt_light() {
                 rt_light_on_ = true;
                 rt_guides_publish();
                 rt_program_signal_ = rt_program_signal_due();
-                view_flags_ |= 8u | (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion) ? 16u : 0u) |
+                view_flags_ |= 8u |
+                               (::galaxy::diagnosing(::galaxy::kDiagnoseRtLight | ::galaxy::kDiagnoseRtMotion | ::galaxy::kDiagnoseRtSky)
+                                    ? 16u : 0u) |
                                (rt_lamps_own_ ? 32u : 0u) |  // local lights off: the programs' own lamp
-                               rt_program_signal_;  // signals S (64), A (128), F (256): drawn in place of the colour
+                               rt_program_signal_ |  // signals S (64), A (128), F (256): drawn in place of the colour
+                               // The camera under water: the game's water fog and camera filter take water's hue
+                               // (program.hlsli traced_water_hue); kept to the walk's end, for the filter after the scene.
+                               (camera_water_depth() >= 0.0f ? 512u : 0u);
                 ++walk_view_stamp_;  // the scene's views are written again, with the light
             }
         } else {
@@ -3084,6 +3070,65 @@ bool RenderCore::rt_measure(unsigned width) {
     const bool sun_traced = rt_sun_now_ && rt_levels_[static_cast<unsigned>(RtPart::Sun)] != 0u;
     rt_measure_settled_ = sun_traced && rt_light_frame_.history ? rt_measure_settled_ + 1u : 0u;
     return rt_measure_settled_ > 60u;
+}
+
+// rt_dev sun_occluders (rt_common.hlsli rt_count_occluder): the slot's last frame's bins by the items that frame had.
+void RenderCore::rt_occluders(const NebulaFrameList& list) {
+    const unsigned slot = renderer_.frame_slot() % kFramesInFlight;
+    std::vector<RtOccluderItem>& items = rt_occluder_items_[slot];
+    if (!items.empty()) {
+        rt_occluder_bins_.resize(2u * rt::kOccluderBins);
+        rt_backend_.read_occluders(slot, rt_occluder_bins_.data());
+        for (unsigned run = 0; run < 2u; ++run) {
+            for (unsigned bin = 0; bin < rt::kOccluderBins; ++bin) {
+                const std::uint32_t rays = rt_occluder_bins_[run * rt::kOccluderBins + bin];
+                if (rays == 0u) {
+                    continue;
+                }
+                if (bin >= rt::kOccluderBins - 6u) {
+                    rt_occluder_special_[run][bin - (rt::kOccluderBins - 6u)] += rays;
+                } else if (bin < items.size()) {
+                    const std::uint64_t key = std::uint64_t{items[bin].source_hash} << 32u | items[bin].mesh;
+                    rt_occluder_sums_[run][key] += rays;
+                    rt_occluder_category_[key] = items[bin].category;
+                }
+            }
+        }
+        ++rt_occluder_frames_;
+    }
+    items.resize(list.item_count);
+    for (std::uint32_t i = 0; i < list.item_count; ++i) {
+        items[i] = {list.items[i].source_hash, list.items[i].mesh,
+                    (list.items[i].flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT};
+    }
+    if (rt_occluder_frames_ < 300u) {
+        return;
+    }
+    // Rays a frame: the most each run, by m<material hash> (the census's FNV-1a of "model/material"), the mesh and its
+    // category.
+    const double n = static_cast<double>(rt_occluder_frames_);
+    for (unsigned run = 0; run < 2u; ++run) {
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> top(rt_occluder_sums_[run].begin(), rt_occluder_sums_[run].end());
+        std::sort(top.begin(), top.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+        std::fprintf(stderr,
+                     "[rt-occluders] %s, a frame: second layer pixels %.0f, of them no surface %.0f; rays reached the sun "
+                     "%.0f, turned from the sun %.0f, blended under 5%% %.0f, past the bins %.0f\n",
+                     run == 0u ? "water surfaces" : "other surfaces", static_cast<double>(rt_occluder_special_[run][0]) / n,
+                     static_cast<double>(rt_occluder_special_[run][1]) / n, static_cast<double>(rt_occluder_special_[run][2]) / n,
+                     static_cast<double>(rt_occluder_special_[run][3]) / n, static_cast<double>(rt_occluder_special_[run][4]) / n,
+                     static_cast<double>(rt_occluder_special_[run][5]) / n);
+        for (std::size_t k = 0; k < top.size() && k < 16u; ++k) {
+            std::fprintf(stderr, "[rt-occluders]   m%08x mesh %u category %u: %.0f\n", static_cast<unsigned>(top[k].first >> 32u),
+                         static_cast<unsigned>(top[k].first & 0xFFFFFFFFu), rt_occluder_category_[top[k].first],
+                         static_cast<double>(top[k].second) / n);
+        }
+        rt_occluder_sums_[run].clear();
+        for (std::uint64_t& rays : rt_occluder_special_[run]) {
+            rays = 0u;
+        }
+    }
+    rt_occluder_category_.clear();
+    rt_occluder_frames_ = 0u;
 }
 
 // --diagnostics rt-inputs: what the passes counted, every 300 frames.
@@ -3217,6 +3262,7 @@ void RenderCore::rt_reactive() {
 
 // The scene is over: what is drawn after it reads no traced light.
 void RenderCore::rt_light_end() noexcept {
+    rt_sky_release();
     if (rt_light_on_) {
         rt_light_on_ = false;
         view_flags_ &= ~504u;  // bits 3 to 8 (the light, motion, own lamp, S, A, F)
@@ -3352,11 +3398,10 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
     // degrees over the horizon of the player as he stands then, so the place a stage starts in has the sun (taken once
     // more when his up first becomes known, for that lift); a stage row's own direction is taken as written. Ray
     // tracing switched off and on again keeps it; a frame with no sun (an interior zone) leaves it waiting.
-    // With rt_dev sun_visible 1 only (measured first, to be decided stage by stage):
-    // the sun the sky shows is the sun that casts. Its direction is taken as it is, with no lift (a low sun in
+    // Where the sky shows a sun (rt_dev sun_visible, 1 the default), the sun the sky shows is the sun that casts. Its direction is taken as it is, with no lift (a low sun in
     // the sky casts long shadows: the dusk look), and where it first shows after another source was taken for the
     // stage (a sun that appears on a switch), it is taken once more, then held.
-    const bool sky_sun_casts = source == 1u && rt_dev(RtDev::SunVisible, 0.0f) >= 0.5f;
+    const bool sky_sun_casts = source == 1u && rt_dev(RtDev::SunVisible, 1.0f) >= 0.5f;
     bool lifted = false;
     // An overhead sun (source 4: no stage light in the list yet, as on the first lists after tracing is turned on
     // mid-stage) gives way once to the stage's own light.
@@ -3398,6 +3443,26 @@ bool RenderCore::rt_sun(float eye_direction[3]) {
                      follows ? " (latched)" : "", static_cast<double>(sun[0]), static_cast<double>(sun[1]), static_cast<double>(sun[2]),
                      lifted ? " lifted" : "", list.stage_hash, row != nullptr ? "row" : "default",
                      static_cast<double>(key_brightness));
+        if (source == 2u) {
+            if (const NebulaFrameWorldLight* key = core::find_world_light(list, list.stage_light); key != nullptr) {
+                const float offset[3] = {view[3], view[7], view[11]};
+                float camera[3];
+                to_world(offset, camera);
+                std::fprintf(stderr, "[rt-inputs] sun: the key stands at %.1f %.1f %.1f%s, the camera at %.1f %.1f %.1f\n",
+                             static_cast<double>(key->position[0]), static_cast<double>(key->position[1]),
+                             static_cast<double>(key->position[2]), follows ? " (eye space)" : "", -static_cast<double>(camera[0]),
+                             -static_cast<double>(camera[1]), -static_cast<double>(camera[2]));
+            }
+        }
+        for (std::uint32_t i = 0; i < list.world_light_count; ++i) {
+            const NebulaFrameWorldLight& light = list.world_lights[i];
+            if (light.kind == NEBULA_WORLD_LIGHT_KEY || light.kind == NEBULA_WORLD_LIGHT_FILL) {
+                std::fprintf(stderr, "[rt-inputs]   world light %016llx kind %u flags %u at %.1f %.1f %.1f colour %.3f %.3f %.3f\n",
+                             static_cast<unsigned long long>(light.id), light.kind, light.flags, static_cast<double>(light.position[0]),
+                             static_cast<double>(light.position[1]), static_cast<double>(light.position[2]),
+                             static_cast<double>(light.color[0]), static_cast<double>(light.color[1]), static_cast<double>(light.color[2]));
+            }
+        }
         // Measured: where the stage has a sun in its sky (BrightSun), the angle from the traced sun to
         // it and from the key to it, so the bench's table shows where they disagree (over 10 degrees: by picture).
         for (std::uint32_t i = 0; i < list.world_light_count; ++i) {
@@ -3830,7 +3895,6 @@ void RenderCore::rt_emitters_finish(float exposure_lux) {
             return false;
         });
     }
-    float lamps = 0.0f;  // lux where the eye is (the emitters' centres are in its space)
     for (RtEmitter& e : rt_emitters_) {
         const float metres = e.radius / kUnitsPerMetre;
         // A glowing mesh's light at three times its radius adds at least half a lit surface's colour at the
@@ -3845,9 +3909,6 @@ void RenderCore::rt_emitters_finish(float exposure_lux) {
             }
         }
         const float candela = std::max({e.colour[0], e.colour[1], e.colour[2], 0.0f});
-        const float far2 = (e.centre[0] * e.centre[0] + e.centre[1] * e.centre[1] + e.centre[2] * e.centre[2]) /
-                           (kUnitsPerMetre * kUnitsPerMetre);
-        lamps += candela / std::max(far2 + metres * metres, 1e-4f);
         const float at_source = 1.0f / (exposure_lux * metres * metres);
         for (float& c : e.colour) {
             c *= at_source;
@@ -3857,8 +3918,6 @@ void RenderCore::rt_emitters_finish(float exposure_lux) {
             e.reach += e.radius;  // a disc: its reach from its edge; the bins and the pass count from the centre
         }
     }
-    // The share of a fully lit surface's light the lamps give where the eye is.
-    rt_supplied_target_ = std::isfinite(lamps) ? std::clamp(lamps / std::max(exposure_lux, 1.0f), 0.0f, 1.0f) : 0.0f;
 }
 
 // A particle draw as a light. Its kind gives its luminance (render/rt/rt_effect_lights.inc: an arc or a blast far

@@ -28,6 +28,11 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     const RtSurface s = rt_surface(int2(id.xy), guide, g_normals.Load(here), g_motion.Load(here).w);
     const float reach = rt_near_reach(s.away);
+    // A character's rays pass over its own body at their start, as its sun's (rt_common.hlsli g_ray_own_slot).
+    const uint own_item = g_item_map.Load(here).x;
+    const uint own_at = g_at.x + (max(own_item, 1u) - 1u) * kItemBytes;
+    g_ray_own_slot = own_item != 0u && (g_items.Load(own_at + 4u) & kItemSetCharacter) != 0u ? g_items.Load(own_at) : 0xFFFFFFFFu;
+    g_ray_own_reach = kCharacterSkin;
     float open_ = 0.0f;
     for (uint k = 0u; k < 2u; ++k) {
         float3 dir = rt_cosine(s.smooth_, rt_sample(id.xy, g_more.y, kSampleNear + (k != 0u ? kSampleSecond : 0u)));

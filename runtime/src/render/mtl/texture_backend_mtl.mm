@@ -238,6 +238,25 @@ void TextureBackend::use_textures(mtl::Object render_encoder, const mtl::Object*
     }
 }
 
+void TextureBackend::use_textures_compute(mtl::Object compute_encoder) const {
+    if (compute_encoder == nullptr) {
+        return;
+    }
+    id<MTLComputeCommandEncoder> const encoder = (__bridge id<MTLComputeCommandEncoder>)compute_encoder;
+    {
+        const std::lock_guard<std::mutex> lock(heaps_mutex_);
+        if (!heap_list_.empty()) {
+            [encoder useHeaps:(__unsafe_unretained id<MTLHeap> const*)(void*)heap_list_.data() count:heap_list_.size()];
+        }
+    }
+    if (null_view_ != nullptr) {
+        [encoder useResource:(__bridge id<MTLTexture>)null_view_ usage:MTLResourceUsageRead];
+    }
+    for (const auto& [slot, texture] : loose_) {
+        [encoder useResource:(__bridge id<MTLTexture>)texture usage:MTLResourceUsageRead];
+    }
+}
+
 TextureBackend::UploadChunk TextureBackend::create_upload_chunk(std::uint64_t size) {
     UploadChunk chunk{};
     chunk.resource = mtl::Context::get().create_buffer(size, mtl::Storage::Shared, "texture upload arena");

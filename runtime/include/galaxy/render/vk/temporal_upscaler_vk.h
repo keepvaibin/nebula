@@ -21,6 +21,7 @@ struct TemporalImage {
     std::uint32_t width = 0u;
     std::uint32_t height = 0u;
     VkImageUsageFlags usage = 0u;
+    std::uint64_t serial = 0u;  // the texture's (vk::Texture::serial): what a cache of its views keys on
 };
 
 // Scene inputs for one temporal upscale, recorded outside a render pass. Every image is in its steady attachment layout

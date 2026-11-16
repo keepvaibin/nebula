@@ -776,6 +776,9 @@ target_include_directories(galaxy_rt_geometry_tests PRIVATE runtime/src)
 target_include_directories(galaxy_core_world_lights_tests PRIVATE runtime/src native/include)
 galaxy_test(galaxy_core_rt_ray_forms_tests SOURCES ${render_src}/core/rt_ray_forms_tests.cpp)
 target_include_directories(galaxy_core_rt_ray_forms_tests PRIVATE runtime/src native/include)
+# The shading model the programs and the tracer share (materials/shade_core.hlsli, compiled as C++).
+galaxy_test(galaxy_shade_core_tests SOURCES ${render_src}/shade_core_tests.cpp)
+target_include_directories(galaxy_shade_core_tests PRIVATE ${render_src}/materials)
 # The pipeline cache files' headers (header-only; both backends' caches).
 galaxy_test(galaxy_pipeline_cache_file_tests SOURCES ${render_src}/core/pipeline_cache_file_tests.cpp)
 target_include_directories(galaxy_pipeline_cache_file_tests PRIVATE runtime/src)

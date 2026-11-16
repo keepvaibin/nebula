@@ -60,6 +60,8 @@
 #include "Game/System/GalaxyMapController.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Map/WaterInfo.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
@@ -297,9 +299,19 @@ void GameScene::draw() const {
     // The scene shows play, whatever is over it: the HDR calibration's reference stage is ready once it does.
     NebulaHost::gameContext(NEBULA_CONTEXT_SCENE_PLAY,
                             !MR::isActiveMoviePlayer() && isNerve(GET_NERVE(GameScene, GameSceneAction)) ? 1 : 0);
-    // Where the camera is in water, how deep: ray tracing lights the water it looks through.
+    // Where the camera is in water, how deep: ray tracing lights the water it looks through. The camera's place asked
+    // of the water areas here, every frame (the holder's own answer is its movement's, which a scenario's opening
+    // camera holds still: under water in Beach Bowl's flyover it said air), as the holder asks (WaterAreaHolder
+    // movement); the depth straight up, 0 where it reads below (a sphere's surface above the eye is a cosine under
+    // its real one).
     {
-        const f32 depth = MR::isCameraInWater() ? WaterAreaFunction::getCameraWaterDepth() : -1.0f;
+        WaterInfo info;
+        const Vec3f& rCamera = MR::getCamPos();
+        const bool inWater = MR::getWaterAreaObj(&info, rCamera);
+        if (inWater) {
+            MR::getWaterAreaInfo(&info, rCamera, Vec3f(0.0f, -1.0f, 0.0f), false);
+        }
+        const f32 depth = inWater ? MR::max(info.mCamWaterDepth, 0.0f) : -1.0f;
         NebulaHost::gameContext(NEBULA_CONTEXT_CAMERA_WATER, depth < 0.0f ? 0 : static_cast< s32 >(depth) + 1);
     }
     // The settings' galaxy select (its ADVANCED page) names its galaxies and stars in the game's own words, asked once.
@@ -552,6 +564,11 @@ void GameScene::draw3D() const {
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
     MR::sceneOpaqueEnd();
+    if (GameLightSignal::tracing()) {
+        // The ocean spheres' blended walls after the opaque layer (SceneFunction::executeDrawListOpa draws them before
+        // it otherwise, as the game does).
+        CategoryList::execute(MR::DrawType_OceanSphere);
+    }
     luma::draw::point(LUMA_DRAW_WORLD_OPAQUE_AFTER);
     SceneFunction::executeDrawBufferListNormalXlu();
     SceneFunction::executeDrawListXlu();

@@ -1464,8 +1464,9 @@ fn write_hit(b: &mut Blob, r: &super::hit_record::Reading, flags: u8, stages: us
     b.fs(&glow);
     b.fs(&r.env_tint);
     b.u8(r.env_map);
-    b.u8(0);
-    b.u8(0);
+    // 1 + the map whose colour it shows (hit_record::colour_map), 0 none or not known.
+    b.u8(if r.colour_map == 0xFF { 0 } else { r.colour_map + 1 });
+    b.u8(u8::from(r.glow_white));
     b.u8(0);
     b.f32(r.body);
     b.f32(r.shine);
@@ -1558,7 +1559,10 @@ pub fn finish_reading_named(ir: &ModelIr, stem: &str, material: usize, thickness
             Some(sum.map(|v| (v / n) as f32))
         })
         .collect();
-    r.shown = super::hit_record::shown_with_maps(m, &|n| means.get(usize::from(n)).copied().flatten());
+    // A glow the game colours (glow_white) shows its maps with its row white: the live colour multiplies that, so the
+    // light is the game's colour (an electric rail's file colour is red, the game's green: its light was red).
+    let white = if r.glow_white { super::hit_record::with_glow_row_white(m, r.glow_source) } else { None };
+    r.shown = super::hit_record::shown_with_maps(white.as_ref().unwrap_or(m), &|n| means.get(usize::from(n)).copied().flatten());
     let ray = &m.ray;
     super::hit_record::finish_with(stem, &m.name, thickness, ray, r);
     // A far twin looks as its near model does.

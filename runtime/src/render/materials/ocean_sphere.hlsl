@@ -2,7 +2,8 @@
 // OceanSphere's surface (Game/Map/OceanSphere.cpp loadMaterialFace): the water texture (0) at the first coordinate
 // tinted by a colour, times the same texture at the second coordinate, doubled; where its red equals the highlight
 // level, the highlight colour added (unclamped, as eight-bit hardware keeps it); then from the deep colour toward the
-// shallow one by that result's low eight bits; alpha the deep colour's.
+// shallow one by that result's low eight bits; alpha the deep colour's. Under the traced light the water model of the
+// other seas (program.hlsli traced_sea).
 struct MaterialConstants {
     float4 highlight;  // rgb added where the red equals a (the level)
     float4 deep;       // rgb, and the surface's alpha
@@ -26,5 +27,12 @@ float4 material_color(NativeVaryings i) {
     float3 c8 = c * 255.0;
     c8 += material.highlight.rgb * 255.0 * level_line(c8.r, material.highlight.a * 255.0);
     const float3 mix8 = c8 - 256.0 * floor(c8 / 256.0);
-    return float4(saturate(lerp(material.deep.rgb, material.shallow.rgb, mix8 / 255.0)), material.deep.a);
+    const float3 water = saturate(lerp(material.deep.rgb, material.shallow.rgb, mix8 / 255.0));
+    if ((view_flags & 512u) != 0u) {
+        return float4(water, material.deep.a);  // seen from under water: the traced medium's (program.hlsli)
+    }
+    // Under the traced light one water model with the other seas (program.hlsli traced_sea): the game's colour is the
+    // waves it draws, its deep colour the water's tint; it moves no screen behind it.
+    return traced_sea(water, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), material.deep.rgb, float3(0.0, 0.0, 0.0),
+                      material.deep.a, float2(0.0, 0.0), i.pos);
 }

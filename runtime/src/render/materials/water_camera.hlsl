@@ -20,7 +20,10 @@ float4 material_color(NativeVaryings i) {
     const float4 frame = TEX(1).Sample(SAMP(1), i.uv[0].zw);
     const float2 step = round(TEX(0).Sample(SAMP(0), i.uv[0].xy).ab * 255.0) - 128.0;
     const float3 screen = TEX(1).Sample(SAMP(1), i.uv[0].zw + step * material.warp.xy).rgb;
-    // Opaque over the taken frame: its own blend by the filter's alpha, the frame's alpha kept.
+    // Opaque over the taken frame: its own blend by the filter's alpha, the frame's alpha kept. Under the traced
+    // light (view bit 9) the warp alone: the water's colour is the traced medium's, laid on every draw by its way
+    // (program.hlsli traced_under_water), not a colour taken from the whole screen.
     const float a = round(material.water.a * 255.0) <= 0.0 ? 0.0 : material.water.a;
-    return float4(lerp(frame.rgb, saturate(screen - material.water.rgb), a), frame.a);
+    const float3 water = (view_flags & 512u) != 0u ? float3(0.0, 0.0, 0.0) : material.water.rgb;
+    return float4(lerp(frame.rgb, saturate(screen - water), a), frame.a);
 }

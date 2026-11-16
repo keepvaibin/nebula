@@ -51,6 +51,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -181,26 +182,44 @@ public:
     // GPU time by pass (render_api.h GpuPassTime): any thread.
     void set_gpu_timing(bool on) noexcept { gpu_timing_wanted_.store(on, std::memory_order_relaxed); }
     [[nodiscard]] bool gpu_timing_on() const noexcept { return gpu_timing_wanted_.load(std::memory_order_relaxed); }
-    // What the ray tracer records through on the other renderers (renderer_vk.h). There is no tracer on Metal yet
-    // (mtl/rt_backend_mtl.cpp: it never starts), so the render core never comes here; they say there is nothing.
+    // What the ray tracer records through (rt_backend.h Backend::begin): the frame's command buffer (an
+    // id<MTLCommandBuffer>) with no encoder open, and the texture table (Backend::TextureTable: `set` the texture
+    // array's id<MTLBuffer>, `layout` a std::function<void(void*)> naming every texture a slot holds to the
+    // id<MTLComputeCommandEncoder> given). Timed as the ray tracing pass until rt_commands_end. Metal tracks what each
+    // pass reads and writes of the renderer's textures (none is untracked), so the hand-overs below end the open
+    // encoder and need no barriers.
     struct RtCommands {
         void* commands = nullptr;
         void* descriptors = nullptr;
     };
-    [[nodiscard]] RtCommands rt_commands_begin() { return {}; }
-    [[nodiscard]] void* rt_texture_layout() const noexcept { return nullptr; }
-    void rt_commands_end() {}
-    [[nodiscard]] bool rt_depth_begin(rt::TextureView&, unsigned&, unsigned&, rt::ImageFormat&) { return false; }
+    [[nodiscard]] RtCommands rt_commands_begin();
+    [[nodiscard]] void* rt_texture_layout() const noexcept { return nullptr; }  // (Vulkan's alone)
+    void rt_commands_end();
+    // The scene's depth as a pass reads it, until rt_depth_end, with its size and the format an image must have to be
+    // copied over the scene's colour (rt_copy_to_scene). With `color_view`, the scene's colour as drawn so far too.
+    [[nodiscard]] bool rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color,
+                                      rt::TextureView* color_view = nullptr);
     void rt_depth_end() {}
-    void rt_copy_to_scene(void*) {}
-    [[nodiscard]] bool rt_items_begin() { return false; }
-    [[nodiscard]] bool rt_light_begin(rt::TextureView&, rt::TextureView&, unsigned&, unsigned&) { return false; }
+    // The tracer's image (an mtl::Texture* of the scene's size and format) over the scene's colour.
+    void rt_copy_to_scene(void* image);
+    // The prepass: the item target made at the scene's size and cleared by the prepass's first pass. Draws of aux
+    // kAuxPrepass write it. False when there can be none (a multisampled scene, a target pass open).
+    [[nodiscard]] bool rt_items_begin();
+    // The scene's depth and the item target as a pass reads them, until rt_light_end.
+    [[nodiscard]] bool rt_light_begin(rt::TextureView& depth, rt::TextureView& items, unsigned& width, unsigned& height);
     void rt_light_end() {}
-    [[nodiscard]] bool rt_reactive_begin(rt::TextureView&) { return false; }
+    // The reactive mask as a pass writes it (where the added light changed), until rt_reactive_end.
+    [[nodiscard]] bool rt_reactive_begin(rt::TextureView& reactive);
     void rt_reactive_end() {}
-    [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return nullptr; }
-    [[nodiscard]] std::uint32_t rt_publish_light(void*, TextureStore&, unsigned = 0u) { return 0u; }
-    void rt_unpublish_lights(TextureStore&) {}
+    // The colour of the target `key` drew (the tracer's sky picture) as a pass reads it, until rt_target_read_end. False
+    // without that target, or while its pass is open.
+    [[nodiscard]] bool rt_target_read_begin(std::uint64_t key, rt::TextureView& view);
+    void rt_target_read_end(std::uint64_t) noexcept {}
+    [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return nullptr; }  // no outside denoiser on Metal
+    // The tracer's light picture `which` (an mtl::Texture*) as a slot the draws' traced forms sample; the slots go with
+    // rt_unpublish_lights.
+    [[nodiscard]] std::uint32_t rt_publish_light(void* image, TextureStore& textures, unsigned which = 0u);
+    void rt_unpublish_lights(TextureStore& textures);
     void rt_wait_idle() { wait_for_gpu_idle(); }
     [[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept;
     void scene_jitter_info(unsigned& index, unsigned& phases) const noexcept {
@@ -579,6 +598,16 @@ private:
     bool publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureStore& textures);
     void drop_picture(Picture& picture, TextureStore& textures);
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
+    // The ray tracer's hand-overs (rt_commands_begin): the pass to time again at rt_commands_end, the texture table
+    // and the function that names its textures to a compute encoder.
+    GpuPass rt_outer_pass_ = GpuPass::Scene;
+    rt::Backend::TextureTable rt_textures_{};
+    std::function<void(void*)> rt_table_resident_;
+    // The tracer's item target (rt_items_begin): RG32Uint at the scene's size; the prepass's next pass clears it.
+    gpu::TextureRef item_target_;
+    bool item_clear_pending_ = false;
+    static constexpr std::uint64_t kRtLightPicture = 1ull << 62u | 1u;  // the traced light's key among the pictures
+    static constexpr unsigned kRtLightPictures = 11u;  // its pictures, kRtLightPicture + 0 to 10 (rt_publish_light's which)
     static constexpr std::uint64_t kTargetSweepSteps = 60u;  // begin_frame's sweep: once a second of the game
     std::uint64_t target_swept_step_ = 0u;                    // idle_clock() at the last sweep
     void retire_target_slot(TargetSlot& slot);

@@ -9,6 +9,7 @@
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"
 #include "rt_sample.hlsli"
+#include "rt_sky.hlsli"
 
 RaytracingAccelerationStructure g_scene : register(t0);
 // Twenty uints an item (rt_walk.cpp rt_tables, kItemBytes; words 14-19 rt_frame.hlsli and rt_shade.hlsli read): its slot; its flags and light set; its mesh for a pixel that wants its
@@ -39,6 +40,27 @@ ByteAddressBuffer g_rows : register(t29);
 Texture2D<float4> g_textures[] : register(t0, space1);
 SamplerState g_wrap : register(s0);
 RWStructuredBuffer<uint> g_counters : register(u8);
+// The sun's occluder bins after the counters (rt_backend.h kOccluderBins; g_more.z bit 15, rt_dev sun_occluders): a sun
+// ray's blocker by its item's index, the second layer's water first, then every other surface. The last six bins of
+// each run: kOccluderLayerTwo a second layer pixel the pass takes, kOccluderNoSurface one of them it leaves at 1 (no
+// surface in the guide, or no traced sun), kOccluderReached the ray reached the sun (blended things on it letting 5% or more through),
+// kOccluderTurned the surface turned from the sun (no ray), kOccluderBlended no solid blocker but the blended things on
+// the ray let through under 5%, kOccluderPast an item past the bins.
+static const uint kOccluderFirst = 64u, kOccluderBins = 4096u;
+static const uint kOccluderLayerTwo = kOccluderBins - 6u, kOccluderNoSurface = kOccluderBins - 5u;
+static const uint kOccluderReached = kOccluderBins - 4u, kOccluderTurned = kOccluderBins - 3u;
+static const uint kOccluderBlended = kOccluderBins - 2u, kOccluderPast = kOccluderBins - 1u;
+// rt_dev sun_occluders 2 (g_more.z bit 17): the second layer's pixels binned by their own item instead.
+void rt_count_layer_item(bool water, uint item) {
+    if ((g_more.z & 131072u) != 0u) {
+        InterlockedAdd(g_counters[kOccluderFirst + (water ? 0u : kOccluderBins) + min(item, kOccluderPast)], 1u);
+    }
+}
+void rt_count_occluder(bool water, uint bin) {
+    if ((g_more.z & 32768u) != 0u) {
+        InterlockedAdd(g_counters[kOccluderFirst + (water ? 0u : kOccluderBins) + min(bin, kOccluderPast)], 1u);
+    }
+}
 
 // A count into the counters: one atomic a wave, not one a thread (the same sums; every lane of a wave would otherwise
 // queue on the one address).
@@ -237,6 +259,14 @@ bool cutout_there(uint item, uint triangle_, float2 where_, float3 at_eye) {
     return g_textures[NonUniformResourceIndex(map.x)].SampleLevel(g_wrap, coordinate, 0.0f).a >= asfloat(map.y);
 }
 
+// A character's own body near the ray's start (set by the caller for one ray, then cleared): a skinned body is traced
+// in one pose and form while the draw shows it in its own (the curved or the plain mesh, a pass's pose), a few units
+// apart, so a ray leaving the drawn skin starts inside the traced one and meets it at once (Mario read as in shadow
+// whole, his cap's top too). Hits on that slot nearer than g_ray_own_reach are passed over; past it the body shadows
+// itself (an arm over the chest).
+static uint g_ray_own_slot = 0xFFFFFFFFu;
+static float g_ray_own_reach = 0.0f;
+static const float kCharacterSkin = 12.0f;
 // The one walk of every ray that wants what it meets (occluder_at_but here, rt_closest in rt_shade.hlsli): the item,
 // triangle, the weights of its second and third corners and the distance of the hit it keeps; false where none.
 bool nearest_on_ray(float3 origin, float3 direction, float reach, uint mask, bool any, uint own, out uint item, out uint triangle_,
@@ -246,7 +276,7 @@ bool nearest_on_ray(float3 origin, float3 direction, float reach, uint mask, boo
     ray.Direction = direction;
     ray.TMin = 0.0f;
     ray.TMax = reach;
-    const bool own_whole = own != 0xFFFFFFFFu && (own & kOwnWhole) != 0u;
+    const bool own_whole = (own != 0xFFFFFFFFu && (own & kOwnWhole) != 0u) || g_ray_own_slot != 0xFFFFFFFFu;
     const uint own_id = own & ~kOwnWhole;
     const uint flags = (own_whole ? RAY_FLAG_FORCE_NON_OPAQUE
                         : (mask & kMaskCutout) != 0u || own != 0xFFFFFFFFu ? RAY_FLAG_NONE : RAY_FLAG_FORCE_OPAQUE) |
@@ -259,8 +289,12 @@ bool nearest_on_ray(float3 origin, float3 direction, float reach, uint mask, boo
         }
         const uint id = query.CandidateInstanceID();
         const uint kind = rt_hit_kind(id);
-        if (own != 0xFFFFFFFFu && rt_hit_item(id) == own_id && (own_whole || (kind & kKindCard) != 0u)) {
+        if (own != 0xFFFFFFFFu && rt_hit_item(id) == own_id && ((own & kOwnWhole) != 0u || (kind & kKindCard) != 0u)) {
             continue;  // the billboard's own sun card; its own clump
+        }
+        if (g_ray_own_slot != 0xFFFFFFFFu && query.CandidateTriangleRayT() < g_ray_own_reach &&
+            g_items.Load(g_at.x + rt_hit_item(id) * kItemBytes) == g_ray_own_slot) {
+            continue;  // a character's own body at the ray's start
         }
         if ((kind & kKindCutout) == 0u ||
             cutout_there(rt_hit_item(id), query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(),
@@ -326,26 +360,57 @@ float caustic_there(uint item, uint triangle_, float2 where_) {
     return clamp(1.0f + kCaustic * (a * b / (mean * mean) - 1.0f), 0.5f, 1.8f);
 }
 
-// Water's clear way, one for every stage: green's 1/e way in units, so that red loses 10 % in
-// 600 units (red's absorption kWaterAbsorb.r / 34270 = 1.756e-4 a unit): this art's lakes are swimming pools, clear
-// and colourless; the stage's own (g_look.w) is not read.
-static const float kWaterClear = 34270.0f;
+// Water's clear way: green's 1/e way in units, the stage's (rt_stages.tsv water clear, g_look.w; default 1770:
+// pure water's 0.0565 per metre at 550 nm with a unit a centimetre, Mario 160 units tall).
 float rt_water_clear() {
-    return kWaterClear;
+    return g_look.w > 0.0f ? g_look.w : 1770.0f;
 }
 static const float kWaterLayer = 2.0f;  // water hits this near one another are one sheet of it drawn twice
 // Pure water's absorption against green's (Pope and Fry 1997: 0.340, 0.0565, 0.0092 per metre at 650, 550, 450 nm):
 // the way is in units of the stage's water clear, green's 1/e way.
 static const float3 kWaterAbsorb = float3(0.340f, 0.0565f, 0.0092f) / 0.0565f;
+// Water's colour, every body of it alike: kWaterHue of its hue (what its way absorbs, the view from under it) with
+// its brightness whole: water reads as water, a slight blue, never the game's full cyan (program.hlsli
+// traced_water_tint, traced_water_hue, water_camera.hlsl alike).
+static const float kWaterHue = 0.5f;
+float3 rt_water_hue(float3 c) {
+    const float l = dot(c, float3(0.2126f, 0.7152f, 0.0722f));
+    return lerp(float3(l, l, l), c, kWaterHue);
+}
+// What `way` units under water let through.
+float3 rt_water_absorb(float way) {
+    return rt_water_hue(exp(-way / rt_water_clear() * kWaterAbsorb));
+}
+// What the water itself scatters back over `way` units of it (what it takes from the light that passes is what it sends
+// back in its own colour), as a share of its own colour: 1 - luminance(T); 1 where it has no bed (way infinite).
+float rt_water_cover(float way) {
+    return 1.0f - dot(rt_water_absorb(way), float3(0.2126f, 0.7152f, 0.0722f));
+}
+// The colour every body of water scatters back where it is deep (its scattering colour, as HDRP's water and Unreal's
+// single layer water take one with an absorption distance), one for all of them so no two waters meet at a seam: the
+// game's own water colour (OceanRing's cWaterColor, 0x76D7FF) in linear light at kWaterHue of its hue, at luminance
+// 0.3. program.hlsli kWaterBody is the same (the camera under water).
+static const float3 kWaterBody = float3(0.1955f, 0.3208f, 0.4014f);
+// The light a body of water scatters at the place `at` of its surface, in light units: the lighting sky and the sun by
+// its visibility there `v`, with no facing (water scatters what enters it the same every way: by the surface's n.l a
+// ball of water showed its facets), over `way` units of it.
+float3 rt_water_scattered(float way, float3 v) {
+    return rt_water_cover(way) * kWaterBody * (g_sky_light.rgb + g_sun_light.rgb * v);
+}
 
 // What a clear thing lets through at its own thickness ("everything clear"),
 // linear: lerp(white, its art's colour, k), k by its class as its own numbers say (item word 15's index, word
-// 11's roughness): crystal (index 1.7 and over) 0.25; ice (1.30 to 1.32) 0.35, an ice being (rougher, 0.07 and over)
-// 0.7; other glass 0.2 and never under 0.75 luminance. `at`: the item's first byte in g_items.
+// 11's roughness): crystal (index 1.7 and over) 0.12; ice (1.30 to 1.32) 0.15, an ice being (rougher, 0.07 and over)
+// 0.35; other glass 0.1 and never under 0.85 luminance. `at`: the item's first byte in g_items.
 // A clear thing's index (item word 15 bits 12-19, (ior - 1) x 100; 0: glass's 1.5).
 float rt_clear_ior(uint at) {
     const uint ior_bits = g_items.Load(at + 60u) >> 12u & 255u;
     return ior_bits != 0u ? 1.0f + float(ior_bits) / 100.0f : 1.5f;
+}
+// Falling water (hit_record.rs CLEAR_FALL): a clear sheet at water's own index and roughness, 1.33 and 0.03 (item
+// word 15's index bits 33, word 11's roughness byte 8, as code-drawn water's); a bubble's film is 0.02.
+bool rt_clear_fall(uint at) {
+    return (g_items.Load(at + 60u) >> 12u & 255u) == 33u && (g_items.Load(at + 44u) >> 16u & 255u) == 8u;
 }
 float3 rt_clear_through(uint at) {
     const uint colour = g_items.Load(at + 48u);
@@ -354,12 +419,12 @@ float3 rt_clear_through(uint at) {
     const float ior = rt_clear_ior(at);
     const float roughness = float(g_items.Load(at + 44u) >> 16u & 255u) / 255.0f;
     const bool ice = ior >= 1.295f && ior <= 1.325f;
-    const float k = ior >= 1.7f ? 0.25f : ice ? (roughness >= 0.07f ? 0.7f : 0.35f) : 0.2f;
+    const float k = ior >= 1.7f ? 0.12f : ice ? (roughness >= 0.07f ? 0.35f : 0.15f) : 0.1f;
     float3 through = lerp(float3(1.0f, 1.0f, 1.0f), art, k);
     if (!ice && ior < 1.7f) {
-        // Clear glass keeps at least 0.75 of white's luminance: what it takes, scaled down to that.
+        // Clear glass keeps at least 0.85 of white's luminance: what it takes, scaled down to that.
         const float lum = dot(through, float3(0.2126f, 0.7152f, 0.0722f));
-        through = lum < 0.75f ? 1.0f - (1.0f - through) * (0.25f / max(1.0f - lum, 1e-4f)) : through;
+        through = lum < 0.85f ? 1.0f - (1.0f - through) * (0.15f / max(1.0f - lum, 1e-4f)) : through;
     }
     return through;
 }
@@ -380,7 +445,10 @@ float3 rt_clear_face(uint at) {
 // what glows, what is painted and the rest nothing. A draw that only
 // adds light to the frame (item word 1 kItemAdds: a drawn light cone, a beam) takes nothing from the ray.
 static const uint kItemAdds = 1u << 27u;  // rt_walk.cpp rt_tables: blend add, destination factor one, not a clear class
-float3 let_through(float3 origin, float3 direction, float reach, out float first) {
+// `on_water`: the ray leaves from a water surface (the second layer's water): the point is on the water, never under
+// it, so a layer the ray meets (the next crest of its own waves, the sheet it is drawn twice as) is a face crossed
+// and no way under water.
+float3 let_through_from(float3 origin, float3 direction, float reach, bool on_water, out float first) {
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
@@ -436,11 +504,14 @@ float3 let_through(float3 origin, float3 direction, float reach, out float first
         }
     }
     // One layer: the point is under that water, the way is to it; two or more: the ray crosses a body of water.
-    if (waters != 0u) {
+    if (waters != 0u && !on_water) {
         const float way = waters == 1u ? water_near : water_far - water_near;
-        tint *= exp(-way / rt_water_clear() * kWaterAbsorb);
+        tint *= rt_water_absorb(way);
     }
     return tint;
+}
+float3 let_through(float3 origin, float3 direction, float reach, out float first) {
+    return let_through_from(origin, direction, reach, false, first);
 }
 
 // Whether anything of `mask` stands on the ray (occluder_at).

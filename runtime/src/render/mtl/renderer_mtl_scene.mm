@@ -5,6 +5,8 @@
 
 #include "galaxy/display_aspect.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/render/program_table.h"
+#include "galaxy/render/rt_caps.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/idle_clock.h"
 #include "render/core/frame_core.h"
@@ -99,7 +101,7 @@ mtl::Object RendererMtl::scene_pass_pipeline(mtl::UtilityShader fragment, std::u
     key.fragment = fragment;
     key.colors[0] = target_pass_active_ ? draw_layout_.target_color : scene_.wide ? draw_layout_.wide_color : draw_layout_.scene_color;
     key.color_count = 1u;
-    const unsigned aux = scene_pass_aux_;
+    const unsigned aux = aux_targets(scene_pass_aux_) == 4u ? 1u : aux_targets(scene_pass_aux_);
     if (aux == 1u) {
         key.colors[key.color_count++] = draw_layout_.motion;
     } else if (aux == 2u || aux == 3u) {
@@ -374,6 +376,26 @@ void RendererMtl::apply_window_size() {
 mtl::Object RendererMtl::scene_pass_descriptor(unsigned aux, const SceneClearValues* clear, bool discard_color,
                                                unsigned clear_depth, mtl::Object visibility) {
     MTLRenderPassDescriptor* const descriptor = [MTLRenderPassDescriptor renderPassDescriptor];
+    if (aux == kAuxPrepass) {
+        // The tracer's prepass: the item target with the scene's depth, which it tests and leaves as the scene drew it
+        // (one vertex stage, so one depth); its first pass clears the item target to no item.
+        MTLRenderPassColorAttachmentDescriptor* const items = descriptor.colorAttachments[0];
+        items.texture = texture_of(item_target_);
+        items.loadAction = item_clear_pending_ ? MTLLoadActionClear : MTLLoadActionLoad;
+        items.clearColor = MTLClearColorMake(0.0, 0.0, 0.0, 0.0);
+        items.storeAction = MTLStoreActionStore;
+        item_clear_pending_ = false;
+        id<MTLTexture> const scene_depth = texture_of(scene_.depth);
+        descriptor.depthAttachment.texture = scene_depth;
+        descriptor.depthAttachment.loadAction = MTLLoadActionLoad;
+        descriptor.depthAttachment.storeAction = MTLStoreActionStore;
+        descriptor.stencilAttachment.texture = scene_depth;
+        descriptor.stencilAttachment.loadAction = MTLLoadActionLoad;
+        descriptor.stencilAttachment.storeAction = MTLStoreActionStore;
+        return (__bridge_retained void*)descriptor;
+    }
+    // A traced form draws into its own aux's targets; 4 is the motion pass's (bound and left as it is).
+    aux = aux_targets(aux) == 4u ? 1u : aux_targets(aux);
     const bool multisampled = scene_.samples > 1u && aux == 0u;
     // Which of the pass's targets begin cleared: everything (a whole clear), the depth alone (`clear_depth`: the
     // colour loads, the stencil is kept), or nothing. A colour that is about to be replaced whole is not loaded.
@@ -471,8 +493,8 @@ void RendererMtl::begin_scene_pass_with(unsigned aux, const SceneClearValues* cl
     } else if (scene_.samples != 1u) {
         pass_visibility_.reset();
     }
-    pass_width_ = scene_.color->width;
-    pass_height_ = scene_.color->height;
+    pass_width_ = aux == kAuxPrepass ? item_target_->width : scene_.color->width;
+    pass_height_ = aux == kAuxPrepass ? item_target_->height : scene_.color->height;
     @autoreleasepool {
         MTLRenderPassDescriptor* const descriptor = (__bridge_transfer MTLRenderPassDescriptor*)scene_pass_descriptor(
             aux, clear, discard_color, clear_depth, pass_visibility_ ? pass_visibility_->buffer : nullptr);
@@ -511,7 +533,9 @@ void RendererMtl::begin_scene_pass_with(unsigned aux, const SceneClearValues* cl
 }
 
 void RendererMtl::attach_scene_encoder() {
-    const unsigned aux = scene_pass_aux_;
+    const unsigned aux = scene_pass_aux_ == kAuxPrepass ? 0u
+                         : aux_targets(scene_pass_aux_) == 4u ? 1u
+                                                              : aux_targets(scene_pass_aux_);
     if (bindless_ && mirrored_store_ != nullptr) {
         // Every texture a draw may read through the array is named to the pass, but those it draws into.
         const mtl::Object targets[] = {scene_.color->texture,
