@@ -1,0 +1,77 @@
+{
+  "groups": [
+    { "id": "learn", "title": "Learn" },
+    { "id": "reference", "title": "Reference", "landing": "reference/index.md" }
+  ],
+  "sections": [
+    { "id": "get-started", "group": "learn", "dir": "get-started", "icon": "✦" },
+    { "id": "concepts", "group": "learn", "dir": "concepts", "icon": "◎" },
+    { "id": "how-tos", "group": "learn", "dir": "how-tos", "icon": "✓" },
+    { "id": "tutorials", "group": "learn", "dir": "tutorials", "icon": "★" },
+    {
+      "id": "lumascript",
+      "group": "reference",
+      "dir": "reference/lumascript",
+      "shortTitle": "LumaScript",
+      "icon": "{ }"
+    },
+    {
+      "id": "lumakit",
+      "group": "reference",
+      "dir": "reference/lumakit",
+      "shortTitle": "LumaKit",
+      "icon": "◆"
+    },
+    {
+      "id": "services",
+      "group": "reference",
+      "dir": "reference/services",
+      "shortTitle": "Services",
+      "icon": "⚙"
+    },
+    {
+      "id": "lumalink",
+      "group": "reference",
+      "dir": "reference/lumalink-commands",
+      "shortTitle": "LumaLink commands",
+      "icon": ">_"
+    },
+    {
+      "id": "mod-files",
+      "group": "reference",
+      "dir": "reference",
+      "title": "Mod files reference",
+      "shortTitle": "Mod files",
+      "intro": "Look up the manifest, the packed file format, table patches, test files, validator codes and the C API of a mod.",
+      "about": "## About the mod files reference\n\nThese pages describe the files a mod is made of and the rules LumaLink and Nebula check them against. For an introduction, see [About mod files and layers](../concepts/mod-files-and-layers.md).",
+      "icon": "≡",
+      "pages": [
+        "luma-json.md",
+        "luma-file-format.md",
+        "table-keys.md",
+        "test-files.md",
+        "validator-rules.md",
+        "lumacore-c-api.md"
+      ]
+    },
+    {
+      "id": "game-data",
+      "group": "reference",
+      "dir": "reference",
+      "title": "Game data reference",
+      "shortTitle": "Game data",
+      "intro": "Look up the game's classes, events, nerves and tables by name.",
+      "about": "## About the game data reference\n\nThese pages list the names in the game that a mod can use. LumaLink checks every name your mod uses against the game description when it builds. For more information, see [About the game description](../concepts/the-game-description.md).",
+      "icon": "▦",
+      "pages": [
+        "classes.md",
+        "events.md",
+        "nerves.md",
+        "nerves-a-f.md",
+        "nerves-g-m.md",
+        "nerves-n-z.md",
+        "tables.md"
+      ]
+    }
+  ]
+}

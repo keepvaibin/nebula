@@ -1,20 +1,33 @@
 ---
-title: A new power-up: the Gold Flower
+title: Adding a new power-up
 shortTitle: A new power-up
-intro: Add a flower that turns Mario gold and lets him throw gold balls.
+intro: Add a Gold Flower that turns Mario gold and lets him throw bouncing gold balls.
 contentType: tutorials
+example: a-new-power-up
 ---
 
-## About this tutorial
+## Introduction
 
-A flower stands in front of the start of Good Egg. Walk into it and Mario turns gold, with a glow around him. Spin
-and he throws a gold ball that bounces along the ground; an enemy it hits flashes, drops three coins and is gone.
-Taking damage ends the form.
+In this tutorial, you add a power-up called the Gold Flower in front of the starting point of Good Egg Galaxy. When Mario touches it, he turns gold and glows. When the player spins, Mario throws a gold ball that bounces along the ground. An enemy that the ball hits flashes, drops three coins and disappears. Taking damage ends the form.
 
-The whole mod is in the folder [`a-new-power-up`](../guides/a-new-power-up/) in the documentation. Its models are plain shapes made by a script; put your
-own `.glb` files in their place under the same names.
+You learn how to:
 
-## The folder
+* Add a character model that uses Mario's skeleton.
+* Add particle effects and sounds.
+* Define a new form for Mario with LumaKit's `player.form` module, and the item that gives it with the `item` module.
+* Throw projectiles and decide what happens when they hit something.
+
+The finished mod uses simple placeholder models. To use your own, replace the `.glb` files with models of the same names.
+
+## Prerequisites
+
+* Nebula, installed with Nebula Setup.
+* LumaLink. For more information, see [Installing LumaLink](../get-started/installing-lumalink.md).
+* A character model in glTF format (`.glb`) for Gold Mario, or the placeholder model from the finished mod.
+
+## Mod folder layout
+
+When you finish, the mod folder contains these files:
 
 ```text
 a-new-power-up/
@@ -30,69 +43,69 @@ a-new-power-up/
   tests/gold/test.json
 ```
 
-## Step 1: Start the folder
+## Creating the mod
 
-```sh
-lumalink new a-new-power-up --id gold-flower --name "Gold Flower" --summary "A flower that turns Mario gold; a spin throws a gold ball." --author you
-lumalink add need lumakit a-new-power-up
-lumalink add option balls_at_once a-new-power-up --kind number --default 2 --min 1 --max 4 --step 1 --name "Balls at once"
-lumalink add option flash_frames a-new-power-up --kind number --default 20 --min 5 --max 60 --step 5 --name "Flash frames"
-```
+1. Create the mod folder, add LumaKit to the mod's needs, and add the mod's options.
 
-`luma.json` then holds the mod's name, its two options and its need of LumaKit. The `text` block gives the name,
-summary and option names in each of the game's 14 languages (`lumalink add text JpJapanese a-new-power-up --name ...
---summary ...` writes one language's name and summary; the option names are typed in):
+   ```sh
+   lumalink new a-new-power-up --id gold-flower --name "Gold Flower" --summary "A flower that turns Mario gold; a spin throws a gold ball." --author YOUR-NAME
+   lumalink add need lumakit a-new-power-up
+   lumalink add option balls_at_once a-new-power-up --kind number --default 2 --min 1 --max 4 --step 1 --name "Balls at once"
+   lumalink add option flash_frames a-new-power-up --kind number --default 20 --min 5 --max 60 --step 5 --name "Flash frames"
+   ```
 
-```json luma.json
-{
-  "format": "1.0",
-  "id": "gold-flower",
-  "version": "1.0.0",
-  "name": "Gold Flower",
-  "summary": "A flower that turns Mario gold; a spin throws a gold ball.",
-  "text": {
-    "UsEnglish": {"name": "Gold Flower", "summary": "A flower that turns Mario gold; a spin throws a gold ball.", "options": {"balls_at_once": {"name": "Balls at once"}, "flash_frames": {"name": "Flash frames"}}},
-    "EuEnglish": {"name": "Gold Flower", "summary": "A flower that turns Mario gold; a spin throws a gold ball.", "options": {"balls_at_once": {"name": "Balls at once"}, "flash_frames": {"name": "Flash frames"}}},
-    "UsFrench": {"name": "Fleur d'or", "summary": "Une fleur qui rend Mario doré ; une toupie lance une boule d'or.", "options": {"balls_at_once": {"name": "Boules à la fois"}, "flash_frames": {"name": "Durée de l'éclat (images)"}}},
-    "EuFrench": {"name": "Fleur d'or", "summary": "Une fleur qui rend Mario doré ; une toupie lance une boule d'or.", "options": {"balls_at_once": {"name": "Boules à la fois"}, "flash_frames": {"name": "Durée de l'éclat (images)"}}},
-    "UsSpanish": {"name": "Flor dorada", "summary": "Una flor que vuelve dorado a Mario; un giro lanza una bola de oro.", "options": {"balls_at_once": {"name": "Bolas a la vez"}, "flash_frames": {"name": "Duración del destello (fotogramas)"}}},
-    "EuSpanish": {"name": "Flor dorada", "summary": "Una flor que vuelve dorado a Mario; un giro lanza una bola de oro.", "options": {"balls_at_once": {"name": "Bolas a la vez"}, "flash_frames": {"name": "Duración del destello (fotogramas)"}}},
-    "EuGerman": {"name": "Goldblume", "summary": "Eine Blume, die Mario golden macht; eine Drehung wirft eine Goldkugel.", "options": {"balls_at_once": {"name": "Kugeln gleichzeitig"}, "flash_frames": {"name": "Blitzdauer (Bilder)"}}},
-    "EuItalian": {"name": "Fiore d'oro", "summary": "Un fiore che rende Mario d'oro; una piroetta lancia una palla d'oro.", "options": {"balls_at_once": {"name": "Palle alla volta"}, "flash_frames": {"name": "Durata del lampo (fotogrammi)"}}},
-    "EuDutch": {"name": "Goudbloem", "summary": "Een bloem die Mario goud maakt; een draai gooit een gouden bal.", "options": {"balls_at_once": {"name": "Ballen tegelijk"}, "flash_frames": {"name": "Flitsduur (beelden)"}}},
-    "UsPortuguese": {"name": "Flor Dourada", "summary": "Uma flor que deixa Mario dourado; um giro lança uma bola de ouro.", "options": {"balls_at_once": {"name": "Bolas ao mesmo tempo"}, "flash_frames": {"name": "Duração do brilho (quadros)"}}},
-    "JpJapanese": {"name": "ゴールドフラワー", "summary": "マリオが金色になる花。スピンで金のボールを投げます。", "options": {"balls_at_once": {"name": "同時に出せるボール"}, "flash_frames": {"name": "光る長さ(フレーム)"}}},
-    "KrKorean": {"name": "골드 플라워", "summary": "마리오를 금색으로 바꾸는 꽃. 스핀으로 금 공을 던집니다.", "options": {"balls_at_once": {"name": "동시에 던지는 공"}, "flash_frames": {"name": "번쩍임 길이(프레임)"}}},
-    "CnSimpChinese": {"name": "黄金花", "summary": "让马力欧变成金色的花，旋转可投出金球。", "options": {"balls_at_once": {"name": "同时存在的球数"}, "flash_frames": {"name": "闪光时长（帧）"}}},
-    "TwTradChinese": {"name": "黃金花", "summary": "讓瑪利歐變成金色的花，旋轉可投出金球。", "options": {"balls_at_once": {"name": "同時存在的球數"}, "flash_frames": {"name": "閃光時長（格）"}}}
-  },
-  "authors": ["you"],
-  "game": { "id": "RMG" },
-  "options": [
-    {"key": "balls_at_once", "kind": "number", "name": "Balls at once", "min": 1, "max": 4, "step": 1, "default": 2},
-    {"key": "flash_frames", "kind": "number", "name": "Flash frames", "min": 5, "max": 60, "step": 5, "default": 20}
-  ],
-  "needs": [{ "id": "lumakit", "version": ">=1.0.0" }],
-  "layers": [{ "name": "base" }],
-  "code": { "platforms": ["windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64", "ios-arm64"]}
-}
-```
+1. Optionally, add the mod's name, summary and option names in each of the game's languages. To add the name and summary for one language, run `lumalink add text LANGUAGE a-new-power-up --name NAME --summary SUMMARY`. Add the option names to the `text` block by hand. The finished `luma.json` looks like this:
 
-## Step 2: The models
+   ```json luma.json
+   {
+     "format": "1.0",
+     "id": "gold-flower",
+     "version": "1.0.0",
+     "name": "Gold Flower",
+     "summary": "A flower that turns Mario gold; a spin throws a gold ball.",
+     "text": {
+       "UsEnglish": {"name": "Gold Flower", "summary": "A flower that turns Mario gold; a spin throws a gold ball.", "options": {"balls_at_once": {"name": "Balls at once"}, "flash_frames": {"name": "Flash frames"}}},
+       "EuEnglish": {"name": "Gold Flower", "summary": "A flower that turns Mario gold; a spin throws a gold ball.", "options": {"balls_at_once": {"name": "Balls at once"}, "flash_frames": {"name": "Flash frames"}}},
+       "UsFrench": {"name": "Fleur d'or", "summary": "Une fleur qui rend Mario doré ; une toupie lance une boule d'or.", "options": {"balls_at_once": {"name": "Boules à la fois"}, "flash_frames": {"name": "Durée de l'éclat (images)"}}},
+       "EuFrench": {"name": "Fleur d'or", "summary": "Une fleur qui rend Mario doré ; une toupie lance une boule d'or.", "options": {"balls_at_once": {"name": "Boules à la fois"}, "flash_frames": {"name": "Durée de l'éclat (images)"}}},
+       "UsSpanish": {"name": "Flor dorada", "summary": "Una flor que vuelve dorado a Mario; un giro lanza una bola de oro.", "options": {"balls_at_once": {"name": "Bolas a la vez"}, "flash_frames": {"name": "Duración del destello (fotogramas)"}}},
+       "EuSpanish": {"name": "Flor dorada", "summary": "Una flor que vuelve dorado a Mario; un giro lanza una bola de oro.", "options": {"balls_at_once": {"name": "Bolas a la vez"}, "flash_frames": {"name": "Duración del destello (fotogramas)"}}},
+       "EuGerman": {"name": "Goldblume", "summary": "Eine Blume, die Mario golden macht; eine Drehung wirft eine Goldkugel.", "options": {"balls_at_once": {"name": "Kugeln gleichzeitig"}, "flash_frames": {"name": "Blitzdauer (Bilder)"}}},
+       "EuItalian": {"name": "Fiore d'oro", "summary": "Un fiore che rende Mario d'oro; una piroetta lancia una palla d'oro.", "options": {"balls_at_once": {"name": "Palle alla volta"}, "flash_frames": {"name": "Durata del lampo (fotogrammi)"}}},
+       "EuDutch": {"name": "Goudbloem", "summary": "Een bloem die Mario goud maakt; een draai gooit een gouden bal.", "options": {"balls_at_once": {"name": "Ballen tegelijk"}, "flash_frames": {"name": "Flitsduur (beelden)"}}},
+       "UsPortuguese": {"name": "Flor Dourada", "summary": "Uma flor que deixa Mario dourado; um giro lança uma bola de ouro.", "options": {"balls_at_once": {"name": "Bolas ao mesmo tempo"}, "flash_frames": {"name": "Duração do brilho (quadros)"}}},
+       "JpJapanese": {"name": "ゴールドフラワー", "summary": "マリオが金色になる花。スピンで金のボールを投げます。", "options": {"balls_at_once": {"name": "同時に出せるボール"}, "flash_frames": {"name": "光る長さ(フレーム)"}}},
+       "KrKorean": {"name": "골드 플라워", "summary": "마리오를 금색으로 바꾸는 꽃. 스핀으로 금 공을 던집니다.", "options": {"balls_at_once": {"name": "동시에 던지는 공"}, "flash_frames": {"name": "번쩍임 길이(프레임)"}}},
+       "CnSimpChinese": {"name": "黄金花", "summary": "让马力欧变成金色的花，旋转可投出金球。", "options": {"balls_at_once": {"name": "同时存在的球数"}, "flash_frames": {"name": "闪光时长（帧）"}}},
+       "TwTradChinese": {"name": "黃金花", "summary": "讓瑪利歐變成金色的花，旋轉可投出金球。", "options": {"balls_at_once": {"name": "同時存在的球數"}, "flash_frames": {"name": "閃光時長（格）"}}}
+     },
+     "authors": ["you"],
+     "game": { "id": "RMG" },
+     "options": [
+       {"key": "balls_at_once", "kind": "number", "name": "Balls at once", "min": 1, "max": 4, "step": 1, "default": 2},
+       {"key": "flash_frames", "kind": "number", "name": "Flash frames", "min": 5, "max": 60, "step": 5, "default": 20}
+     ],
+     "needs": [{ "id": "lumakit", "version": ">=1.0.0" }],
+     "layers": [{ "name": "base" }],
+     "code": { "platforms": ["windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64", "ios-arm64"]}
+   }
+   ```
 
-Gold Mario is a figure bound to Mario's skeleton. Give LumaLink your model and the name to keep it under:
+## Adding the models
+
+Gold Mario is a figure bound to Mario's skeleton. Give LumaLink your model and the name to store it under:
 
 ```sh
 lumalink add character figure.glb a-new-power-up --as GoldMario
 ```
 
-It matches the figure's joints to Mario's, scales it to his height (a glTF metre is 100 game units) and writes
-`layers/base/assets/GoldMario.glb`. The game's Mario stays as he is; the mod's code draws the figure on his skeleton
-while the form lasts. `GoldFlower.glb` and `GoldBall.glb` are plain models copied into `layers/base/assets/`.
+LumaLink matches the figure's joints to Mario's, scales it to his height, and writes `layers/base/assets/GoldMario.glb`. A glTF meter is 100 game units. The game's own Mario model does not change: while the form lasts, the mod's code draws the figure on Mario's skeleton.
 
-## Step 3: Effects and sounds
+`GoldFlower.glb` and `GoldBall.glb` are ordinary models. Copy them to `layers/base/assets/`.
 
-Each effect starts from one of the game's particles (`like`) with its own color (`primary`, RRGGBBAA):
+## Adding effects and sounds
+
+Each effect starts from one of the game's particle effects (`like`) and changes its color (`primary`, as RRGGBBAA):
 
 ```json
 {
@@ -105,20 +118,23 @@ Each effect starts from one of the game's particles (`like`) with its own color 
 }
 ```
 
-A sound is a `.wav` with a `.sound.json` beside it. The flower's sound plays at full volume wherever Mario is; the
-throw is heard from where the ball starts, with a little change of pitch each time:
+A sound is a `.wav` file with a `.sound.json` file beside it. The flower's sound plays at full volume wherever Mario is:
 
 ```json
 { "kind": "effect", "file": "GetGold.wav", "volume": 0.9, "positioned": false }
 ```
 
+The throw sound plays from the position where the ball starts, with a small random change of pitch each time:
+
 ```json
 { "kind": "effect", "file": "ThrowGold.wav", "volume": 0.8, "pitch": [0.95, 1.05], "distance": [300, 3000] }
 ```
 
-## Step 4: The flower in the stage
+For more information, see [Adding particle effects](../how-tos/adding-particle-effects.md) and [Adding sounds and music](../how-tos/adding-sounds-and-music.md).
 
-A patch adds one row to Good Egg's object table: the flower, under its mod's name, a few steps in front of the start.
+## Placing the flower
+
+Create `layers/base/patches/StageData/EggStarGalaxy.arc/jmp/placement/common/objinfo.json`. This patch adds the flower to Good Egg Galaxy's object table, under the mod's ID, a few steps in front of the starting point.
 
 ```json
 {
@@ -138,9 +154,9 @@ A patch adds one row to Good Egg's object table: the flower, under its mod's nam
 }
 ```
 
-## Step 5: The code
+## Writing the code
 
-`source/main.lum`:
+Create `source/main.lum` with this code:
 
 ```lumascript
 use kit.player.form
@@ -234,19 +250,13 @@ on start {
 }
 ```
 
-What each part does:
+* `form.define` defines the gold form: the figure drawn on Mario's skeleton, the glow, what a spin does (`throw_ball`), and two functions that log when the form starts and ends. `ends_on_damage` ends the form when Mario is hurt.
+* `item.define` defines the flower. Touching it gives Mario the form.
+* `throw_ball` keeps at most `balls_at_once` balls out at a time. Each ball starts in front of Mario, a little above him, and `falls: true` makes it drop and bounce along the ground.
+* `hit` runs each time a ball touches something. The ball bounces off the map and passes through the player. Anything else receives the same message that Fire Mario's fireball sends. An enemy that the ball hurts flashes gold for `flash_frames` frames and drops three coins. The ball continues through anything it does not hurt.
+* `log fact` writes values that the mod's test reads.
 
-- `form.define` makes the gold form: the figure drawn on Mario's skeleton, the glow, what a spin does
-  (`throw_ball`), and the two functions that log when it starts and ends. `ends_on_damage` ends it when Mario is hurt.
-- `item.define` makes the flower; walking into it gives the form.
-- `throw_ball` keeps at most `balls_at_once` balls out. Each starts in front of Mario, a little above him, and
-  `falls: true` makes it drop and bounce along the ground.
-- `hit` is asked each time a ball touches something. Map: bounce. The player: pass by. Anything else gets the message
-  Fire Mario's ball sends; what it hurts flashes gold for `flash_frames` frames and drops three coins, and the ball
-  flies on through anything it does not hurt.
-- `log fact` lines are what the test reads.
-
-## Step 6: Check, build, test, pack
+## Building, testing and packing the mod
 
 ```sh
 lumalink check a-new-power-up
@@ -255,18 +265,15 @@ lumalink test a-new-power-up
 lumalink pack a-new-power-up
 ```
 
-`build` writes the code for every platform `luma.json` lists. `test` starts the game hidden with the mod and LumaKit,
-runs `tests/gold/test.json` and prints `pass` or what failed. The test walks Mario into the flower, puts a Goomba
-ahead of him and spins at it: a ball hits it. Three more spins throw more balls, never more than two out at once.
-Then a second Goomba walks into him and ends the form. `pack`
-writes `gold-flower-1.0.0.luma` beside the folder: drop it on the game's window and switch it on in the mods screen.
+* `lumalink build` builds the code for every platform listed in `luma.json`.
+* `lumalink test` starts the game hidden with your mod and LumaKit, and runs `tests/gold/test.json`. The test walks Mario into the flower, places a Goomba ahead of him, and spins so that a ball hits it. Three more spins throw more balls, never more than two at once. Then a second Goomba walks into Mario and ends the form. The command prints `pass` or the check that failed.
+* `lumalink pack` writes `gold-flower-1.0.0.luma` beside the mod folder.
 
-## See also
+To play the mod, drag the `.luma` file onto the game's window, turn the mod on in the **Mods** page, and enter Good Egg Galaxy.
 
-`lumakit/player-form.md`, `lumakit/item.md`, `lumakit/projectile.md`, `lumalink/cmd-add.md`, `lumalink/cmd-test.md`.
+## Next steps
 
-## Further reading
-
-* [Tutorials](index.md)
-* [LumaScript reference](../reference/lumascript/index.md)
-* [Testing a mod](../how-tos/testing-a-mod.md)
+* [Making a game mode: Balloon World](balloon-world.md)
+* [LumaKit: player.form](../reference/lumakit/player-form.md)
+* [LumaKit: item](../reference/lumakit/item.md)
+* [LumaKit: projectile](../reference/lumakit/projectile.md)

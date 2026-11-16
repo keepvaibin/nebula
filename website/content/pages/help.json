@@ -1,0 +1,121 @@
+{
+  "page": "/help/",
+  "metadata": {
+    "title": "Help & bug reports — Nebula",
+    "description": "Common problems, error codes and bug reports."
+  },
+  "text": {
+    "general": {
+      "link_1": "Skip to content"
+    },
+    "header": {
+      "aria_label_1": "Nebula home",
+      "link_1": "nebula",
+      "button_1": "Menu",
+      "label_2": "☰",
+      "aria_label_2": "Main navigation",
+      "link_2": "v2",
+      "link_3": "Setup",
+      "link_4": "Player guide",
+      "link_5": "Modding",
+      "link_6": "Help",
+      "link_8": "Blog",
+      "link_7": "Download"
+    },
+    "page": {
+      "link_1": "Nebula /",
+      "paragraph_1": "PLAYER INFORMATION",
+      "title_1": "Help & bug reports",
+      "paragraph_2": "Common problems, error codes and bug reports."
+    },
+    "contents": {
+      "aria_label_1": "On this page",
+      "link_1": "COMMON PROBLEMS",
+      "link_2": "ERROR CODES",
+      "link_3": "REPORT A BUG"
+    },
+    "troubleshooting": {
+      "div_1": "COMMON PROBLEMS",
+      "heading_1": "Common problems",
+      "label_1": "Search help topics",
+      "placeholder_1": "Try controller, ray tracing or saves",
+      "paragraph_1": "No matching topics. Try another word or report the problem below.",
+      "question_1": "Setup rejects my game",
+      "paragraph_2": "Nebula needs the North American release, RMGE01, revision 0. Modified or patched disc images fail the check. Support for PAL and JP will come in v2.",
+      "question_2": "The game is slow",
+      "paragraph_3": "Lower the internal resolution, the ray tracing quality or the interpolation target, use an upscaler, or choose the Performance preset.",
+      "link_1": "See performance settings",
+      "paragraph_4": ".",
+      "question_3": "My controller is not detected",
+      "paragraph_5": "Reconnect the controller and set Input to Auto on the CONTROLS page. The Switch 2 Pro Controller needs the WinUSB driver on Windows.",
+      "link_2": "Check your controller",
+      "paragraph_6": ".",
+      "question_4": "DLSS or ray tracing is missing",
+      "paragraph_7": "DLSS needs an NVIDIA RTX GPU and a one-time download from NVIDIA, then a restart. Ray tracing needs a GPU with hardware ray tracing and a current driver. The SYSTEM page shows what this computer supports.",
+      "question_5": "The game crashes with mods",
+      "paragraph_8": "Turn the mods off on the MODS page (on Windows, you can also hold Shift while Nebula starts), then turn them on one at a time.",
+      "link_3": "Read the mod guide",
+      "paragraph_9": ".",
+      "question_6": "The game will not start",
+      "paragraph_10": "Update your graphics driver. On a PC with two graphics cards, choose the other one under Graphics card on the SYSTEM page. If an error code appears, look it up below.",
+      "question_7": "A replacement movie stutters",
+      "paragraph_11": "4K movies need hardware video decoding. Use a lower-resolution video.",
+      "question_8": "Audio skips during play",
+      "paragraph_12": "Close programs using a lot of CPU time and try again. Include your hardware and background programs if the issue continues.",
+      "question_9": "My save is missing",
+      "paragraph_13": "Check the dated saves-backup folders beside your saves folder. To bring a save back, use Import saves on the GENERAL page instead of copying files.",
+      "link_4": "Save backup and import guide",
+      "paragraph_14": ".",
+      "question_10": "Security warning on download",
+      "paragraph_15": "Download Nebula only from its GitHub releases. If Windows shows “Windows protected your PC”, choose More info, then Run anyway. If an antivirus flags a file, ask in Discord before you run it."
+    },
+    "error-codes": {
+      "div_1": "ERROR CODES",
+      "heading_1": "Error codes",
+      "paragraph_1": "When Nebula stops, it shows an error code and saves a report.",
+      "link_1": "Look up an error code"
+    },
+    "report": {
+      "div_1": "REPORT A BUG",
+      "heading_1": "Report a bug",
+      "paragraph_1": "Search the existing issues first. For a new problem, include the steps that cause it and what you expected.",
+      "item_1": "Nebula version, for example 1.0.2.",
+      "item_2": "Operating system, CPU, GPU and graphics driver version.",
+      "item_3": "Galaxy and mission, plus the exact steps to reproduce the problem.",
+      "item_4": "Graphics settings you changed and all enabled mods.",
+      "item_5": "A screenshot or video for visual problems.",
+      "paragraph_2": "For a crash, attach the newest .txt and .dmp files from",
+      "code_1": "%LOCALAPPDATA%\\Nebula\\crashes",
+      "paragraph_3": "on Windows, or the crashes folder in Nebula’s data folder elsewhere.",
+      "paragraph_4": "For a visual or timing problem, choose Record next to Diagnostics on the SYSTEM page, play until it happens, then attach the files from the diagnostics folder.",
+      "link_1": "Submit a bug ↗",
+      "link_2": "Check existing issues ↗",
+      "link_3": "Ask in Discord ↗"
+    },
+    "footer": {
+      "link_1": "nebula",
+      "paragraph_1": "A little closer to the stars.",
+      "subheading_1": "Explore",
+      "link_2": "Nebula v2",
+      "link_3": "Player guide",
+      "subheading_2": "Start playing",
+      "link_4": "Modding docs",
+      "link_15": "Developer Blog",
+      "link_5": "Download",
+      "link_6": "Setup & requirements",
+      "link_7": "Controls",
+      "subheading_3": "Get help",
+      "link_8": "Troubleshooting",
+      "link_9": "Report a bug",
+      "link_10": "Join Discord ↗",
+      "subheading_4": "Nebula",
+      "link_12": "Credits",
+      "link_13": "Legal & privacy",
+      "link_14": "GitHub ↗",
+      "paragraph_2": "© 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo."
+    }
+  },
+  "messages": {
+    "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+  }
+}

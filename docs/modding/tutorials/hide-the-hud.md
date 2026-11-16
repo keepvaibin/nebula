@@ -1,27 +1,42 @@
 ---
-title: Hide the HUD
+title: Hiding the HUD
 shortTitle: Hide the HUD
-intro: Take the counters and the life meter off the screen, with an option to bring them back.
+intro: Remove the star, coin and life counters and the life meter from the screen, with an option to show them again.
 contentType: tutorials
+example: hide-the-hud
 ---
 
-## About this tutorial
+## Introduction
 
-The star, coin and life counters and the life meter taken off the screen, with an option on the Mods screen to bring
-them back. The whole mod is the folder [`hide-the-hud`](../guides/hide-the-hud/) in the documentation.
+In this tutorial, you make a mod that hides the game's HUD: the star, coin and life counters and the life meter. The mod adds an option to the **Mods** page, so players can show the HUD again without restarting the game.
 
-## Step 1: Make the folder
+You learn how to:
+
+* Add an option to a mod and read it from code.
+* Run code every frame with `on frame`.
+* Stop one of the game's functions with a `hook before` and `skip`.
+* React when the player changes an option with `on option`.
+
+## Prerequisites
+
+* Nebula, installed with Nebula Setup.
+* LumaLink. For more information, see [Installing LumaLink](../get-started/installing-lumalink.md).
+* We recommend that you complete the [Quickstart for Nebula mods](../get-started/quickstart.md) first.
+
+## Creating the mod
+
+Create the mod folder, and add an option named `hide`.
 
 ```sh
-lumalink new hide-the-hud --id hide-the-hud --name "Hide the HUD" --summary "Takes the counters and the life meter off the screen." --author you
+lumalink new hide-the-hud --id hide-the-hud --name "Hide the HUD" --summary "Takes the counters and the life meter off the screen." --author YOUR-NAME
 lumalink add option hide hide-the-hud --kind toggle --default true --name "Hide the HUD"
 ```
 
-`add option` puts a switch named "Hide the HUD" on the mod's line in the Mods screen, on at first.
+`lumalink add option` adds a toggle named **Hide the HUD** to the mod's entry on the **Mods** page. It is on by default.
 
-## Step 2: Write the code
+## Writing the code
 
-Put this in `hide-the-hud/source/main.lum`:
+Create `hide-the-hud/source/main.lum` with this code:
 
 ```lumascript
 option hide: bool
@@ -48,48 +63,49 @@ on option hide {
 }
 ```
 
-- `option hide: bool` is the switch; the code reads it as a variable.
-- `on frame` runs every frame. In a level (the HUD's holder exists) with the HUD up, it calls the game's own
-  `MR::deactivateDefaultGameLayout`, which puts every counter and the meter away.
-- `hook before ... activateDefaultGameLayout()` with `skip` stops the game's own call that brings the HUD back.
-- `on option hide` runs when the player flips the switch; turned off outside a cutscene, the HUD comes back at once.
+* `option hide: bool` declares the option. Your code reads it like a variable.
+* `on frame` runs every frame. When a level is loaded (the HUD's holder exists) and the HUD is showing, it calls the game's own `MR::deactivateDefaultGameLayout`, which hides every counter and the meter.
+* `hook before GameSceneLayoutHolder::activateDefaultGameLayout()` runs before the game shows the HUD again, for example after a cutscene. `skip` stops the game's call.
+* `on option hide` runs when the player changes the option. When the player turns it off outside a cutscene, the HUD appears again immediately.
 
-## Step 3: Build and check
+## Building and checking the mod
 
 ```sh
 lumalink build hide-the-hud
 lumalink check hide-the-hud
 ```
 
-`check` ends `Errors: 0`.
+The last line of the `check` output is `Errors: 0`.
 
-## Step 4: Test it
+## Testing the mod
 
-- `tests/hidden`: enters Good Egg Galaxy, asks the game `MR::isActiveDefaultGameLayout` and takes a picture. It
-  passes when the answer is false and the corners where the life meter and the coin counter stand show the sky.
-- `tests/shown`: the same with the option off. It passes when the HUD is up and the meter is drawn.
+The finished mod includes two tests:
+
+* `tests/hidden` enters Good Egg Galaxy, calls `MR::isActiveDefaultGameLayout`, and takes a picture. The test passes when the function returns `false` and the corners where the life meter and the coin counter would be show the sky.
+* `tests/shown` does the same with the option turned off. The test passes when the HUD is showing and the life meter is drawn.
+
+To run the tests, copy the `tests` folder from the finished mod into `hide-the-hud`, then run:
 
 ```sh
 lumalink test hide-the-hud
 ```
 
-Not yet: the test harness does not yet start a mod with an option set, so `tests/shown` ends `harness-error`.
+> [!NOTE]
+> In the current version, the test harness cannot start a mod with an option set, so `tests/shown` ends with `harness-error`.
 
-## Step 5: Play it
+## Playing the mod
 
-```sh
-lumalink pack hide-the-hud
-```
+1. Pack the mod.
 
-Drop `hide-the-hud.luma` on the game's window and switch it on. In the Mods screen, "Hide the HUD" turned off brings
-the HUD back without a restart.
+   ```sh
+   lumalink pack hide-the-hud
+   ```
 
-## See also
+1. Drag the `.luma` file onto the game's window, and turn the mod on in the **Mods** page.
+1. Enter a level. The HUD is hidden. To show it again, turn off **Hide the HUD** on the **Mods** page. You do not need to restart the game.
 
-`language/language.md` (options, hooks, `skip`), `format/luma.md` (options), `lumalink/test-harness.md`.
+## Next steps
 
-## Further reading
-
-* [Tutorials](index.md)
-* [LumaScript reference](../reference/lumascript/index.md)
-* [Testing a mod](../how-tos/testing-a-mod.md)
+* [Adding a new character to talk to](a-new-npc.md)
+* [Hooks](../reference/lumascript/hooks.md)
+* [Lifecycle, options, frames and content](../reference/lumascript/lifecycle.md)

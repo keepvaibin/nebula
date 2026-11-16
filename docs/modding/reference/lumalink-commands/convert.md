@@ -5,8 +5,6 @@ intro: Convert a published mod (Riivolution pack, disc-layout folder, loose file
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink convert
 
 Convert a published mod (Riivolution pack, disc-layout folder, loose files, texture pack, Gecko list) to a mod folder, each file cooked as the game cooks it.

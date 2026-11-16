@@ -1,20 +1,33 @@
 ---
-title: A new character to talk to
+title: Adding a new character to talk to
 shortTitle: A new character to talk to
-intro: Add a character with its own model, materials and dialogue.
+intro: Add a character with its own model, materials and dialogue, and place it in Good Egg Galaxy.
 contentType: tutorials
+example: a-new-npc
 ---
 
-## About this tutorial
+## Introduction
 
-The Keeper stands in front of the start of Good Egg. Walk up to him and the game's A prompt shows; press A and he
-greets Mario and asks a question with two answers. He says one line for Yes and another for No.
+In this tutorial, you add a character named the Keeper in front of the starting point of Good Egg Galaxy. When Mario walks up to the Keeper, the game shows its <kbd>A</kbd> prompt. When the player presses <kbd>A</kbd>, the Keeper greets Mario and asks a question with two answers, then replies with a different line for each answer.
 
-The whole mod is in the folder [`a-new-npc`](../guides/a-new-npc/) in the documentation. Its model is a plain
-shape made by a script, with its own materials, a cloth texture and a `Wait` clip; put your own `.glb` in its place
-under the same name.
+You learn how to:
 
-## The folder
+* Add a model of your own to a mod.
+* Add lines of text in every language the game supports.
+* Place a new object in one of the game's stages with a table patch.
+* Define a new kind of object with LumaKit's `actor` module, and run a conversation with the `talk` module.
+
+The finished mod uses a simple placeholder model with its own materials, a cloth texture and a `Wait` animation. To use your own model, replace `Keeper.glb` with a model of the same name.
+
+## Prerequisites
+
+* Nebula, installed with Nebula Setup.
+* LumaLink. For more information, see [Installing LumaLink](../get-started/installing-lumalink.md).
+* A model in glTF format (`.glb`), or the placeholder model from the finished mod.
+
+## Mod folder layout
+
+When you finish, the mod folder contains these files:
 
 ```text
 a-new-npc/
@@ -26,53 +39,57 @@ a-new-npc/
   tests/talk/test.json
 ```
 
-## Step 1: Start the folder
+## Creating the mod
 
-```sh
-lumalink new a-new-npc --id luma-keeper --name "The Keeper" --summary "A new character to talk to, with its own model, materials and lines." --author you
-lumalink add need lumakit a-new-npc
-```
+1. Create the mod folder, and add LumaKit to the mod's needs.
 
-```json luma.json
-{
-  "format": "1.0",
-  "id": "luma-keeper",
-  "version": "1.0.0",
-  "name": "The Keeper",
-  "summary": "A new character to talk to, with its own model, materials and lines.",
-  "text": {
-    "UsEnglish": {"name": "The Keeper", "summary": "A new character to talk to, with its own model, materials and lines."},
-    "EuEnglish": {"name": "The Keeper", "summary": "A new character to talk to, with its own model, materials and lines."},
-    "UsFrench": {"name": "Le Gardien", "summary": "Un nouveau personnage à qui parler, avec son modèle, ses matériaux et ses répliques."},
-    "EuFrench": {"name": "Le Gardien", "summary": "Un nouveau personnage à qui parler, avec son modèle, ses matériaux et ses répliques."},
-    "UsSpanish": {"name": "El Guardián", "summary": "Un personaje nuevo con quien hablar, con su propio modelo, materiales y frases."},
-    "EuSpanish": {"name": "El Guardián", "summary": "Un personaje nuevo con quien hablar, con su propio modelo, materiales y frases."},
-    "EuGerman": {"name": "Der Hüter", "summary": "Eine neue Figur zum Reden, mit eigenem Modell, eigenen Materialien und Sätzen."},
-    "EuItalian": {"name": "Il Custode", "summary": "Un nuovo personaggio con cui parlare, con modello, materiali e battute propri."},
-    "EuDutch": {"name": "De Hoeder", "summary": "Een nieuw personage om mee te praten, met een eigen model, materialen en zinnen."},
-    "UsPortuguese": {"name": "O Guardião", "summary": "Um novo personagem para conversar, com modelo, materiais e falas próprios."},
-    "JpJapanese": {"name": "キーパー", "summary": "話しかけられる新しいキャラクター。モデル、マテリアル、セリフはすべて独自です。"},
-    "KrKorean": {"name": "키퍼", "summary": "말을 걸 수 있는 새 캐릭터. 모델, 재질, 대사가 모두 새것입니다."},
-    "CnSimpChinese": {"name": "守护者", "summary": "可以交谈的新角色，拥有自己的模型、材质和台词。"},
-    "TwTradChinese": {"name": "守護者", "summary": "可以交談的新角色，擁有自己的模型、材質和台詞。"}
-  },
-  "authors": ["you"],
-  "game": { "id": "RMG" },
-  "needs": [{ "id": "lumakit", "version": ">=1.0.0" }],
-  "layers": [{ "name": "base" }],
-  "code": { "platforms": ["windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64", "ios-arm64"]}
-}
-```
+   ```sh
+   lumalink new a-new-npc --id luma-keeper --name "The Keeper" --summary "A new character to talk to, with its own model, materials and lines." --author YOUR-NAME
+   lumalink add need lumakit a-new-npc
+   ```
 
-## Step 2: The model
+1. Optionally, add the mod's name and summary in each of the game's languages. The finished `luma.json` looks like this:
 
-Copy your model to `layers/base/assets/Keeper.glb`. LumaLink cooks its meshes, materials, textures and clips into
-the game's formats when it packs the mod; the code names it `model "Keeper"` and its clip `"Wait"`.
+   ```json luma.json
+   {
+     "format": "1.0",
+     "id": "luma-keeper",
+     "version": "1.0.0",
+     "name": "The Keeper",
+     "summary": "A new character to talk to, with its own model, materials and lines.",
+     "text": {
+       "UsEnglish": {"name": "The Keeper", "summary": "A new character to talk to, with its own model, materials and lines."},
+       "EuEnglish": {"name": "The Keeper", "summary": "A new character to talk to, with its own model, materials and lines."},
+       "UsFrench": {"name": "Le Gardien", "summary": "Un nouveau personnage à qui parler, avec son modèle, ses matériaux et ses répliques."},
+       "EuFrench": {"name": "Le Gardien", "summary": "Un nouveau personnage à qui parler, avec son modèle, ses matériaux et ses répliques."},
+       "UsSpanish": {"name": "El Guardián", "summary": "Un personaje nuevo con quien hablar, con su propio modelo, materiales y frases."},
+       "EuSpanish": {"name": "El Guardián", "summary": "Un personaje nuevo con quien hablar, con su propio modelo, materiales y frases."},
+       "EuGerman": {"name": "Der Hüter", "summary": "Eine neue Figur zum Reden, mit eigenem Modell, eigenen Materialien und Sätzen."},
+       "EuItalian": {"name": "Il Custode", "summary": "Un nuovo personaggio con cui parlare, con modello, materiali e battute propri."},
+       "EuDutch": {"name": "De Hoeder", "summary": "Een nieuw personage om mee te praten, met een eigen model, materialen en zinnen."},
+       "UsPortuguese": {"name": "O Guardião", "summary": "Um novo personagem para conversar, com modelo, materiais e falas próprios."},
+       "JpJapanese": {"name": "キーパー", "summary": "話しかけられる新しいキャラクター。モデル、マテリアル、セリフはすべて独自です。"},
+       "KrKorean": {"name": "키퍼", "summary": "말을 걸 수 있는 새 캐릭터. 모델, 재질, 대사가 모두 새것입니다."},
+       "CnSimpChinese": {"name": "守护者", "summary": "可以交谈的新角色，拥有自己的模型、材质和台词。"},
+       "TwTradChinese": {"name": "守護者", "summary": "可以交談的新角色，擁有自己的模型、材質和台詞。"}
+     },
+     "authors": ["you"],
+     "game": { "id": "RMG" },
+     "needs": [{ "id": "lumakit", "version": ">=1.0.0" }],
+     "layers": [{ "name": "base" }],
+     "code": { "platforms": ["windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64", "ios-arm64"]}
+   }
+   ```
 
-## Step 3: His lines
+## Adding the model
 
-`merge/MessageData/messages.json` adds lines to the game's text. Each has a `default` and one line per language
-(`fr`, `es`, `de`, `it`, `nl`, `pt`, `ja`, `ko`, `zh-Hans`, `zh-Hant`), which covers the game's 14:
+Copy your model to `layers/base/assets/Keeper.glb`. When LumaLink packs the mod, it converts the model's meshes, materials, textures and animations into the game's formats. The code refers to the model as `model "Keeper"` and to its animation as `"Wait"`.
+
+For more information, see [Adding models](../how-tos/adding-models.md).
+
+## Adding the character's lines
+
+Create `layers/base/merge/MessageData/messages.json`. Each line has a `default` text, used for English, and one text for each other language: `fr`, `es`, `de`, `it`, `nl`, `pt`, `ja`, `ko`, `zh-Hans` and `zh-Hant`. Together they cover all 14 of the game's languages.
 
 ```json
 {
@@ -86,9 +103,11 @@ the game's formats when it packs the mod; the code names it `model "Keeper"` and
 }
 ```
 
-## Step 4: Where he stands
+The text `[player]` is replaced with the player's name. For more information, see [Message tags](../reference/lumascript/message-tags.md).
 
-A patch adds one row to Good Egg's object table: the Keeper, under his mod's name, a few steps in front of the start.
+## Placing the character
+
+Create `layers/base/patches/StageData/EggStarGalaxy.arc/jmp/placement/common/objinfo.json`. This patch adds one row to Good Egg Galaxy's object table: the Keeper, under the mod's ID, a few steps in front of the starting point.
 
 ```json
 {
@@ -108,9 +127,11 @@ A patch adds one row to Good Egg's object table: the Keeper, under his mod's nam
 }
 ```
 
-## Step 5: The code
+For more information, see [Placing objects in stages](../how-tos/placing-objects-in-stages.md).
 
-`source/main.lum`:
+## Writing the code
+
+Create `source/main.lum` with this code:
 
 ```lumascript
 use kit.actor
@@ -141,15 +162,11 @@ on start {
 }
 ```
 
-What each part does:
+* `actor.define` defines the new kind of object. By default, an object stands on the ground: it falls onto the ground below it and stays upright relative to the planet's gravity. `on_talk` gives the object the game's <kbd>A</kbd> prompt, and calls `chat` when the player presses <kbd>A</kbd> near it.
+* `chat` starts a task, because a conversation lasts many frames. `talk.ask` shows the question and waits for the answer, which is `0` for the first choice. `talk.say` shows a line and waits until the player closes it.
+* `log fact` writes values that the mod's test reads.
 
-- `actor.define` makes the kind of object. A kind stands on the ground by default: it falls onto the ground under it
-  and stays upright to the planet's gravity. `on_talk` gives him the game's A prompt; A by him calls `chat`.
-- `chat` starts a task, since a talk lasts many frames. `talk.ask` shows the question and waits for the answer
-  (0 for the first choice); `talk.say` shows a line and waits until the player closes it.
-- `log fact` lines are what the test reads.
-
-## Step 6: Check, build, test, pack
+## Building, testing and packing the mod
 
 ```sh
 lumalink check a-new-npc
@@ -158,15 +175,12 @@ lumalink test a-new-npc
 lumalink pack a-new-npc
 ```
 
-`test` starts the game hidden with the mod and LumaKit, walks Mario up to the Keeper, presses A through the talk and
-prints `pass` or what failed.
+`lumalink test` starts the game hidden with your mod and LumaKit, walks Mario up to the Keeper, presses <kbd>A</kbd> through the conversation, and prints `pass` or the check that failed.
 
-## See also
+To play the mod, drag the `.luma` file onto the game's window, turn the mod on in the **Mods** page, and enter Good Egg Galaxy.
 
-`lumakit/actor.md`, `lumakit/talk.md`, `content/models.md`, `language/text-and-services.md`, `lumalink/cmd-test.md`.
+## Next steps
 
-## Further reading
-
-* [Tutorials](index.md)
-* [LumaScript reference](../reference/lumascript/index.md)
-* [Testing a mod](../how-tos/testing-a-mod.md)
+* [Adding a new power-up](a-new-power-up.md)
+* [LumaKit: actor](../reference/lumakit/actor.md)
+* [LumaKit: talk](../reference/lumakit/talk.md)

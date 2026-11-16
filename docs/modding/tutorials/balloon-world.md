@@ -1,22 +1,39 @@
 ---
-title: Balloon World
+title: 'Making a game mode: Balloon World'
 shortTitle: Balloon World
-intro: Make a game mode with two halves, hiding a balloon and finding one.
+intro: Make a game mode with two halves, hiding a balloon for other players and finding the balloons they hid.
 contentType: tutorials
+example: balloon-world
 ---
 
-## About this tutorial
+## Introduction
 
-A game mode with two halves. Hide: the clock starts, the player runs somewhere in the stage and puts a balloon on
-the ground under Mario, types a hint, and the balloon is sent to a balloon server with its stage, star and
-position. Find: the server's balloons for the stage and star the player is in are listed by their hints; the one
-chosen stands in the stage, and the player races the clock to touch it and pop it; the time is sent to the server.
-The whole mod is the folder [`balloon-world`](../guides/balloon-world/) in the documentation.
+In this tutorial, you make Balloon World, a game mode with two halves:
 
-## Step 1: Make the folder
+* **Hide a balloon.** A clock starts, and the player runs somewhere in the stage and places a balloon on the ground under Mario. The player types a hint, and the mod sends the balloon to a balloon server with its stage, star and position.
+* **Find a balloon.** The mod lists the server's balloons for the current stage and star by their hints. The balloon the player chooses appears in the stage, and the player races the clock to touch it. The mod sends the time to the server.
+
+You learn how to:
+
+* Ask for network permissions and choose between the local network and the internet at run time.
+* Add entries to the pause menu, and show lists and messages with LumaKit's `menu` and `screen` modules.
+* Read text that the player types.
+* Send HTTP requests and read JSON answers.
+* Test a mod that talks to a server, without reaching the internet.
+
+## Prerequisites
+
+* Nebula, installed with Nebula Setup.
+* LumaLink. For more information, see [Installing LumaLink](../get-started/installing-lumalink.md).
+* Python 3, to run the script that generates the balloon model. The script needs no extra packages.
+* We recommend that you complete [Hiding the HUD](hide-the-hud.md) and [Adding a new character to talk to](a-new-npc.md) first.
+
+## Creating the mod
+
+Create the mod folder, and add the mod's needs, permissions and options.
 
 ```sh
-lumalink new balloon-world --id balloon-world --name "Balloon World" --summary "Hide a balloon in a stage for others to find, or find one another player hid, against the clock." --author you
+lumalink new balloon-world --id balloon-world --name "Balloon World" --summary "Hide a balloon in a stage for others to find, or find one another player hid, against the clock." --author YOUR-NAME
 lumalink add need lumakit balloon-world
 lumalink add permission net.local balloon-world --why "Talks to a balloon server on this computer or your local network."
 lumalink add permission net.internet balloon-world --host "*" --why "Sends the balloons you hide and your times to the balloon server you set, and gets the balloons others hid."
@@ -26,43 +43,36 @@ lumalink add option find_seconds balloon-world --kind number --default 60 --min 
 lumalink add option place balloon-world --kind key --default dpad_down --name "Place the balloon"
 ```
 
-- `net.local` reaches this computer and the local network, `net.internet` any other host: the server is an option,
-  so its host is `*`. The player is asked for both.
-- `server` is the server's address with no `/` at its end, for example `http://192.168.1.20:18741` or
-  `https://balloons.example.org`. The two numbers are the clocks. `place` is a button the player binds in Controls;
-  until bound it is the D-pad's down.
-- `lumalink add text <language> balloon-world --name ... --summary ...` gives the name and summary in each of the
-  game's 14 languages, and the option names go under `text.<language>.options` in `luma.json`.
+* `net.local` reaches this computer and the local network, and `net.internet` reaches any other host. The server address is an option, so its host is `*`. The player is asked to allow both.
+* `server` is the server's address without a trailing `/`, for example `http://192.168.1.20:18741` or `https://balloons.example.org`. The two number options are the time limits. `place` is a button the player can bind in **Controls**. Until it is bound, it is down on the D-pad.
+* To add the name and summary in another language, run `lumalink add text LANGUAGE balloon-world --name NAME --summary SUMMARY`. Option names go under `text.LANGUAGE.options` in `luma.json`.
 
-## Step 2: The balloon
+## Generating the balloon model
 
-`source/make_balloon.py` writes the model from shapes in code:
+The finished mod includes `source/make_balloon.py`, which builds the model from shapes in code. Copy it into your mod, then run it from the mod folder:
 
 ```sh
 python source/make_balloon.py
 ```
 
-It writes `layers/base/assets/Balloon.glb`: a red balloon 80 units across on a string, 130 units tall, its origin at
-the string's end, with a two-joint skin and a looping clip `Float` that bobs it. The code names it `model "Balloon"`
-and starts the clip as its idle action.
+The script writes `layers/base/assets/Balloon.glb`: a red balloon 80 units across on a string, 130 units tall in total, with its origin at the end of the string. It has a two-joint skin and a looping animation named `Float` that makes it bob. The code refers to the model as `model "Balloon"` and plays the animation while the balloon is idle.
 
-## Step 3: The lines
+## Adding the mod's text
 
-Every line the mod shows is a row of `layers/base/merge/MessageData/messages.json`, in English and the game's other
-languages (`fr`, `es`, `de`, `it`, `nl`, `pt`, `ja`, `ko`, `zh-Hans`, `zh-Hant`):
+Every line the mod shows is a row in `layers/base/merge/MessageData/messages.json`, in English and the game's other languages (`fr`, `es`, `de`, `it`, `nl`, `pt`, `ja`, `ko`, `zh-Hans` and `zh-Hant`):
 
-| row | shown |
+| Rows | Where they appear |
 |---|---|
-| `Balloon_Hide`, `Balloon_Find` | the two pause menu entries |
-| `Balloon_HideHow`, `Balloon_AskHint`, `Balloon_NoGround` | the line at the top while hiding, and under it |
-| `Balloon_Pick`, `Balloon_NoHint`, `Balloon_Hint` | the list of hints, and the line at the top while finding |
-| `Balloon_Sent`, `Balloon_NotSent`, `Balloon_HideTimeUp` | the result screens of a hide |
-| `Balloon_Found`, `Balloon_FindTimeUp`, `Balloon_NoneHere`, `Balloon_NoAnswer` | the result screens of a find |
-| `Balloon_NoServer` | either entry chosen with no server set |
+| `Balloon_Hide`, `Balloon_Find` | The two pause menu entries. |
+| `Balloon_HideHow`, `Balloon_AskHint`, `Balloon_NoGround` | The line at the top of the screen while hiding, and the lines under it. |
+| `Balloon_Pick`, `Balloon_NoHint`, `Balloon_Hint` | The list of hints, and the line at the top of the screen while finding. |
+| `Balloon_Sent`, `Balloon_NotSent`, `Balloon_HideTimeUp` | The result screens after hiding. |
+| `Balloon_Found`, `Balloon_FindTimeUp`, `Balloon_NoneHere`, `Balloon_NoAnswer` | The result screens after finding. |
+| `Balloon_NoServer` | Shown when the player chooses either entry and no server is set. |
 
-## Step 4: The code
+## Writing the code
 
-Put this in `balloon-world/source/main.lum`:
+Create `balloon-world/source/main.lum` with this code:
 
 ```lumascript
 use svc.net.local as local
@@ -515,71 +525,56 @@ fn escape(t: text) -> text {
 }
 ```
 
-- `actor.define` makes the balloon a kind of object: its model, its clip, a body 60 units across that the player
-  touches, and `touched` called when he does. `actor.spawn` stands one in the running stage, at the ground under
-  Mario when hiding and at the server's position when finding; it falls onto the ground there and stands upright to
-  the stage's gravity.
-- The ground under Mario is `MR::getFirstPolyOnLineToMap`: a line from 50 units above his feet, 1000 units along his
-  gravity. With no ground (over a pit) the balloon is not placed and the clock runs on.
-- `menu.add_pause_entry` adds the two entries to the pause menu, and `menu.close_pause` closes it when one is chosen.
-  The clock counts world steps (`on step`), which stop while a screen holds the world.
-- The hint is typed with the system keyboard (`input.text_request`); Enter sends it, Escape sends the balloon with
-  no hint.
-- `screen.choose` lists the hints; `screen.message` shows each result until A or B.
-- `request` sends one HTTP request at a time through `net.local` when the server is on this computer or the local
-  network, through `net.internet` otherwise, and gives the body of a 200 answer.
-- Leaving the stage during a hide or a find ends it.
+* `actor.define` defines the balloon as a kind of object: its model, its animation, a body 60 units across that the player can touch, and `touched`, which runs when the player touches it. `actor.spawn` places a balloon in the running stage: on the ground under Mario when hiding, and at the position from the server when finding. The balloon falls onto the ground and stays upright relative to the stage's gravity.
+* `MR::getFirstPolyOnLineToMap` finds the ground under Mario along a line that starts 50 units above his feet and runs 1000 units in the direction of his gravity. If there is no ground, for example over a pit, the balloon is not placed and the clock keeps running.
+* `menu.add_pause_entry` adds the two entries to the pause menu, and `menu.close_pause` closes the menu when the player chooses one. The clock counts world steps with `on step`, which stop while a screen is open.
+* `input.text_request` opens the system keyboard for the hint. <kbd>Enter</kbd> sends the balloon with the hint, and <kbd>Esc</kbd> sends it without one.
+* `screen.choose` lists the hints, and `screen.message` shows each result until the player presses <kbd>A</kbd> or <kbd>B</kbd>.
+* `request` sends one HTTP request at a time. It uses `net.local` when the server is on this computer or the local network, and `net.internet` otherwise. It returns the body of an answer with status 200.
+* Leaving the stage while hiding or finding ends the round.
 
-## Step 5: The server
+## Setting up a balloon server
 
-The mod talks JSON over HTTP to the address in `server`:
+The mod sends JSON over HTTP to the address in the `server` option. A balloon server must answer these requests:
 
-| request | body | answer (200) |
+| Request | Body | Answer with status 200 |
 |---|---|---|
-| `POST /balloons` | `{"id": "", "stage": "EggStarGalaxy", "scenario": 1, "at": [x, y, z], "hint": "..."}` | the balloon kept, with its `id` |
-| `GET /balloons?stage=<stage>&scenario=<star>` | none | a list of balloons in the same form |
-| `POST /found` | `{"id": "<id>", "steps": <world steps, 60 a second>}` | anything |
+| `POST /balloons` | `{"id": "", "stage": "EggStarGalaxy", "scenario": 1, "at": [x, y, z], "hint": "..."}` | The stored balloon, with its `id`. |
+| `GET /balloons?stage=STAGE&scenario=STAR` | None | A list of balloons in the same form. |
+| `POST /found` | `{"id": "ID", "steps": STEPS}`, where `STEPS` is the time in world steps at 60 per second | Any body. |
 
-Any other answer counts as a failure: the result screen says so.
+The mod treats any other answer as a failure, and the result screen tells the player.
 
-## Step 6: Test it
+## Testing the mod
 
-`tests/server/` is a second mod that is such a server, on this computer's port 18741: it starts with one balloon
-ahead of Good Egg Galaxy's start, keeps what it is sent while the game runs, and writes each request it takes as
-facts. Each test gives the mod `"server": "http://127.0.0.1:18741"`, so no test reaches the internet.
+The finished mod's `tests/server/` folder contains a second mod that acts as a balloon server on port 18741 of this computer. It starts with one balloon ahead of the starting point of Good Egg Galaxy, keeps what it receives while the game runs, and writes each request as facts that the tests check. Each test sets the `server` option to `http://127.0.0.1:18741`, so no test reaches the internet.
 
-- `tests/hide`: Mario walks ahead, Hide a balloon is chosen, he walks on and presses Place. It passes when the
-  balloon stands on the ground under him, the server got Good Egg Galaxy, star 1, a position on the start's path and
-  the typed hint, the mod got the id back, and the result screen says the balloon is hidden.
-- `tests/hide-time-up`: 10 seconds to hide and Place never pressed: the result screen says time is up and nothing
-  reaches the server.
-- `tests/find`: Find a balloon asks for this stage and star, the hint is chosen, the balloon stands where the server
-  said, Mario walks into it: it is gone, the server got its id and the time, and the result screen shows the time.
-- `tests/find-time-up`: 10 seconds to find and Mario stays at the start: the balloon goes, the result screen says
-  time is up and no time is sent.
+* `tests/hide`: Mario walks ahead, the player chooses **Hide a balloon**, walks on and presses the place button. The test passes when the balloon stands on the ground under Mario, the server receives Good Egg Galaxy, star 1, a position on the path from the starting point and the typed hint, the mod receives the balloon's ID, and the result screen says the balloon is hidden.
+* `tests/hide-time-up`: the time limit is 10 seconds and the place button is never pressed. The test passes when the result screen says time is up and the server receives nothing.
+* `tests/find`: the player chooses **Find a balloon**, the mod asks for this stage and star, and the player chooses the hint. The balloon appears where the server said, and Mario walks into it. The test passes when the balloon is gone, the server receives its ID and the time, and the result screen shows the time.
+* `tests/find-time-up`: the time limit is 10 seconds and Mario stays at the starting point. The test passes when the balloon disappears, the result screen says time is up, and no time is sent.
+
+To run the tests, copy the `tests` folder from the finished mod into `balloon-world`, then run:
 
 ```sh
 lumalink test balloon-world
 ```
 
-## Step 7: Play it
+## Playing the mod
 
-```sh
-lumalink pack balloon-world
-```
+1. Pack the mod.
 
-Drop `balloon-world.luma` on the game's window, switch it on, allow what it asks for and set Balloon server on the
-Mods screen. In a stage, press + and choose Hide a balloon or Find a balloon: the pause menu closes and the clock
-starts.
+   ```sh
+   lumalink pack balloon-world
+   ```
 
-## See also
+1. Drag the `.luma` file onto the game's window, and turn the mod on in the **Mods** page.
+1. Allow the permissions the mod asks for, and set **Balloon server** on the **Mods** page.
+1. In a stage, press <kbd>+</kbd> and choose **Hide a balloon** or **Find a balloon**. The pause menu closes and the clock starts.
 
-`lumakit/actor.md`, `lumakit/menu.md`, `lumakit/screen.md`, `lumakit/hud.md`, `services/net.md` (`net.local`,
-`net.internet`, HTTP), `services/input.md` (actions, text entry), `format/luma.md` (permissions, options),
-`lumalink/test-harness.md`.
+## Next steps
 
-## Further reading
-
-* [Tutorials](index.md)
-* [LumaScript reference](../reference/lumascript/index.md)
-* [Testing a mod](../how-tos/testing-a-mod.md)
+* [Racing a ghost: a time trial with a replay viewer](ghost-time-trial.md)
+* [About permissions](../concepts/permissions.md)
+* [Network service](../reference/services/net.md)
+* [LumaKit: menu](../reference/lumakit/menu.md)

@@ -70,7 +70,7 @@ Each row needs:
 
 A column you leave out takes the value most of the game's rows have: 1 for `scale_x`, `scale_y` and `scale_z`, and -1, "not given", for each argument.
 
-To find a good place, copy the position of an object near it from the extracted table and move it from there. 100 game units are 1 metre.
+To find a good place, copy the position of an object near it from the extracted table and move it from there. 100 game units are 1 meter.
 
 ### Your own objects
 

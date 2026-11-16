@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050609" />
+    <link rel="icon" href="../../favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="../../favicon-32.png" />
+    <link rel="apple-touch-icon" href="../../apple-touch-icon.png" />
+    <title>Saves &amp; Miis — Nebula</title>
+    <meta name="description" content="Backups, save import and Mii icons." />
+    <meta property="og:title" content="Saves &amp; Miis — Nebula" />
+    <meta property="og:description" content="Backups, save import and Mii icons." />
+    <link rel="preload" href="../../fonts/Delfino.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="../../style.css" />
+    <link rel="stylesheet" href="../../reference-ui.css" />
+    <link rel="stylesheet" href="../../player-site.css" />
+    <link rel="canonical" href="https://nebula.keepvaibin.com/play/saves/" />
+    <meta property="og:site_name" content="Nebula" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://nebula.keepvaibin.com/play/saves/" />
+    <meta property="og:image" content="https://nebula.keepvaibin.com/icon-192.png" />
+    <meta name="twitter:card" content="summary" />
+  </head>
+  <body class="inner-page">
+    <a class="skip" href="#main-content">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="../../" aria-label="Nebula home"
+        ><img class="brand-logo" src="../../brand-logo.png" alt="" width="34" height="34" />
+        nebula</a
+      ><button class="nav-toggle" aria-expanded="false" aria-controls="main-navigation">
+        Menu <span aria-hidden="true">☰</span>
+      </button>
+      <nav id="main-navigation" aria-label="Main navigation">
+        <a href="../../v2/">v2</a><a href="../../guide/">Setup</a
+        ><a href="../../play/">Player guide</a><a href="../../docs/">Modding</a
+        ><a href="../../help/">Help</a><a href="../../blog/">Blog</a
+        ><a href="../../download/">Download</a>
+      </nav>
+    </header>
+    <main id="main-content" class="inner-main">
+      <div class="page-heading">
+        <a class="breadcrumb" href="../../">Nebula /</a>
+        <p class="eyebrow">PLAYER INFORMATION</p>
+        <h1>Saves &amp; Miis</h1>
+        <p>Backups, save import and Mii icons.</p>
+      </div>
+      <nav class="page-toc" aria-label="On this page">
+        <a href="#backup">BACK UP</a><a href="#dolphin">IMPORT</a><a href="#location">SAVE FILES</a
+        ><a href="#miis">MII ICONS</a>
+      </nav>
+      <section class="content" id="backup">
+        <div class="section-label">BACK UP</div>
+        <div class="section-body">
+          <h2>Backups</h2>
+          <p>
+            Open Settings, then the GENERAL page, and choose Export saves. Choose where to keep the
+            dated ZIP file.
+          </p>
+        </div>
+      </section>
+      <section class="content" id="dolphin">
+        <div class="section-label">IMPORT</div>
+        <div class="section-body">
+          <h2>Save import</h2>
+          <ol class="setup-steps">
+            <li>
+              <span>01</span>
+              <div>
+                <h3>Find your save</h3>
+                <p>In Dolphin, right-click Super Mario Galaxy and choose Open Wii Save Folder.</p>
+              </div>
+            </li>
+            <li>
+              <span>02</span>
+              <div>
+                <h3>Import in Nebula</h3>
+                <p>
+                  Open Settings, then the GENERAL page. Choose Import saves and select GameData.bin
+                  in that folder.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span>03</span>
+              <div>
+                <h3>Replace and restart</h3>
+                <p>
+                  Choose Replace. Nebula moves your current save to a dated backup folder and
+                  restarts with the imported one.
+                </p>
+              </div>
+            </li>
+          </ol>
+          <p>
+            Import saves also reads Wii SD card saves (data.bin), Switch saves (GameData.bin),
+            Nebula.sav files and Nebula ZIP backups. Action Replay saves (.wii) cannot be read.
+          </p>
+        </div>
+      </section>
+      <section class="content" id="location">
+        <div class="section-label">SAVE FILES</div>
+        <div class="section-body">
+          <h2>Save location</h2>
+          <ul class="player-list">
+            <li>Windows: %LOCALAPPDATA%\Nebula\saves</li>
+            <li>Linux: ~/.local/share/Nebula/saves</li>
+            <li>macOS: ~/Library/Application Support/Nebula/saves</li>
+            <li>Android: inside the app. Use Export saves and Import saves.</li>
+          </ul>
+          <p>
+            Replaced saves move to a saves-backup-&lt;date&gt; folder beside the saves folder. Saves
+            folder on the GENERAL page opens it.
+          </p>
+          <p>Export a backup before a major update or a move to another computer.</p>
+        </div>
+      </section>
+      <section class="content" id="miis">
+        <div class="section-label">MII ICONS</div>
+        <div class="section-body">
+          <h2>Mii icons</h2>
+          <p>
+            Import Miis on the GENERAL page adds Miis from a Wii, DS, 3DS, Wii U, Switch, Mii Studio
+            or Mii Creator to the file icon list.
+          </p>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="footer-top">
+        <a class="brand" href="../../"
+          ><img class="brand-logo" src="../../brand-logo.png" alt="" width="34" height="34" />
+          nebula</a
+        >
+        <p>A little closer to the stars.</p>
+      </div>
+      <div class="footer-links">
+        <div>
+          <h3>Explore</h3>
+          <a class="text-link" href="../../v2/">Nebula v2</a
+          ><a class="text-link" href="../../play/">Player guide</a
+          ><a class="text-link" href="../../docs/">Modding docs</a
+          ><a class="text-link" href="../../blog/">Developer Blog</a>
+        </div>
+        <div>
+          <h3>Start playing</h3>
+          <a class="text-link" href="../../download/">Download</a
+          ><a class="text-link" href="../../guide/">Setup &amp; requirements</a
+          ><a class="text-link" href="../../play/controls/">Controls</a>
+        </div>
+        <div>
+          <h3>Get help</h3>
+          <a class="text-link" href="../../help/">Troubleshooting</a
+          ><a class="text-link" href="../../help/#report">Report a bug</a
+          ><a class="text-link" href="https://discord.gg/2fJEdhAw2f">Join Discord ↗</a>
+        </div>
+        <div>
+          <h3>Nebula</h3>
+          <a class="text-link" href="../../credits/">Credits</a
+          ><a class="text-link" href="../../legal/">Legal &amp; privacy</a
+          ><a class="text-link" href="https://github.com/keepvaibin/nebula">GitHub ↗</a>
+        </div>
+      </div>
+      <p class="legal-line">
+        © 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and
+        Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo.
+      </p>
+    </footer>
+    <script type="module" src="../../site.js"></script>
+
+    <script id="page-messages" type="application/json">
+      {
+        "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+      }
+    </script>
+  </body>
+</html>

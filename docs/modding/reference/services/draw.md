@@ -17,7 +17,7 @@ The header is `native/include/luma_draw.h`. In LumaScript, a service is called b
 
 ### Details from the header
 
-LumaCore's draw service: a mod draws at named points of the game's frame. In 2-D over the game (rectangles, lines, triangles, images, text in the game's fonts and the mod's own, every language), clipped and transformed; in 3-D in the world, depth tested (lines, triangles, models, billboards). Textures come by content name or from the mod's own pixels. Everything a mod draws is drawn the frame it asks and never again: nothing stays in the renderer, and a mod that is off draws nothing from that frame. Import: `LUMA_SERVICE(slot, "draw", "1.0")`. Units. 2-D: the game's layout units, the frame its HUD is laid out in: (0, 0) the screen's top left, x right, y down, 456 units high, as wide as the screen's shape makes it (608 at 4:3, 832 at 16:9, more on wider screens); the HUD's own 4:3 frame (608 x 456) centerd in it is the safe frame (screen's safe_*). 3-D: the game's world units (centimetres), its axes.
+LumaCore's draw service: a mod draws at named points of the game's frame. In 2-D over the game (rectangles, lines, triangles, images, text in the game's fonts and the mod's own, every language), clipped and transformed; in 3-D in the world, depth tested (lines, triangles, models, billboards). Textures come by content name or from the mod's own pixels. Everything a mod draws is drawn the frame it asks and never again: nothing stays in the renderer, and a mod that is off draws nothing from that frame. Import: `LUMA_SERVICE(slot, "draw", "1.0")`. Units. 2-D: the game's layout units, the frame its HUD is laid out in: (0, 0) the screen's top left, x right, y down, 456 units high, as wide as the screen's shape makes it (608 at 4:3, 832 at 16:9, more on wider screens); the HUD's own 4:3 frame (608 x 456) centered in it is the safe frame (screen's safe_*). 3-D: the game's world units (centimetres), its axes.
 
 ## Limits and constants
 
@@ -63,7 +63,7 @@ Text placing (text, text_measure): where x is on each line.
 | Name | Description |
 |---|---|
 | `LUMA_DRAW_LEFT = 0` | Lines start at x. |
-| `LUMA_DRAW_CENTRE = 1` | Lines centerd on x. |
+| `LUMA_DRAW_CENTRE = 1` | Lines centered on x. |
 | `LUMA_DRAW_RIGHT = 2` | Lines end at x. |
 
 ### Other constants
@@ -387,7 +387,7 @@ draw.billboard(texture: draw.Texture, pos: draw.Vec3, w: f32, h: f32, colour: co
 int32_t billboard(const LumaMod* mod, LumaDrawTexture texture, const LumaDrawVec3* pos, float w, float h, LumaColor colour);
 ```
 
-`texture` on a w x h quad centerd at `pos`, facing the camera, times `colour`. A texture freed: the placeholder, `LUMA_E_HANDLE` (reported).
+`texture` on a w x h quad centered at `pos`, facing the camera, times `colour`. A texture freed: the placeholder, `LUMA_E_HANDLE` (reported).
 
 ## Further reading
 

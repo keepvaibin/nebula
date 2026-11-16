@@ -42,7 +42,7 @@ task's), and a `wait p` on a task that ended without a value (stopped, its own `
 already) stops the waiting task too, its way out run; it never gives `T`'s zero. A library's `pub task f(...) -> T` is
 exported (its interface line `pub task`): the caller gets the handle with
 the library's own operations, and `wait` copies the value into the caller's memory. A `pending` dropped without `wait`
-is still the warning of D4.14.
+still gives a warning.
 
 A task without a result called gives `pending<>`: `wait p` goes on once the task ended by
 itself, and stops the waiting task as above when it was stopped or failed. Dropped, it is no warning (it loses

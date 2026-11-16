@@ -5,8 +5,6 @@ intro: Format LumaScript files - four spaces of indent for each open bracket, at
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink format
 
 Format LumaScript files: four spaces of indent for each open bracket, at most one blank line, LF line ends. Strings and comments are not changed.

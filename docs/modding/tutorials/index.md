@@ -1,33 +1,30 @@
 ---
 title: Tutorials
 shortTitle: Tutorials
-intro: Build complete mods step by step.
-contentType: tutorials
+intro: Build complete mods step by step, from a one-line change to a new galaxy.
+contentType: landing
 ---
 
 ## About the tutorials
 
-Each tutorial builds one complete mod. The finished mod of each is in the documentation's `guides` folder, with its tests, so you can compare your work or build it as it is.
+Each tutorial builds one complete mod and explains its code as you go. The tutorials start small and grow in scope, so later tutorials assume you know the earlier ones.
 
-Start with [Your first mod](first-mod.md).
+Every tutorial includes a download of the finished mod, with its tests, so you can compare your work or build the mod as it is.
 
-## All tutorials
-
-| Tutorial | What you build |
+| Tutorial | Description |
 |---|---|
-| [Your first mod](first-mod.md) | Make a mod that counts Mario's jumps, build it, and test it. |
-| [A small tweak: six health](a-small-tweak.md) | Change one number of the game by its name, so Mario starts each level with six health. |
-| [Hide the HUD](hide-the-hud.md) | Take the counters and the life meter off the screen, with an option to bring them back. |
-| [A new galaxy](a-new-galaxy.md) | Add a galaxy of your own with its stage, placements and text. |
-| [A new character to talk to](a-new-npc.md) | Add a character with its own model, materials and dialogue. |
-| [A new power-up: the Gold Flower](a-new-power-up.md) | Add a flower that turns Mario gold and lets him throw gold balls. |
-| [A video on a screen inside a galaxy](a-video-in-a-galaxy.md) | Play your mod's movie when Mario walks up to a screen in a galaxy. |
-| [Balloon World](balloon-world.md) | Make a game mode with two halves, hiding a balloon and finding one. |
-| [A ghost time trial with a replay viewer](ghost-time-trial.md) | Race against your best run and watch saved runs. |
-| [LiveSplit link](livesplit-link.md) | Drive LiveSplit, the speedrun timer, from the game. |
-| [An online leaderboard](online-leaderboard.md) | Send times to a leaderboard server and show the best ones. |
+| [Making a small tweak](a-small-tweak.md) | |
+| [Hiding the HUD](hide-the-hud.md) | |
+| [Adding a new character to talk to](a-new-npc.md) | |
+| [Adding a new power-up](a-new-power-up.md) | |
+| [Adding a new galaxy](a-new-galaxy.md) | |
+| [Playing a video inside a galaxy](a-video-in-a-galaxy.md) | |
+| [Making a game mode: Balloon World](balloon-world.md) | |
+| [Racing a ghost: a time trial with a replay viewer](ghost-time-trial.md) | |
+| [Connecting to LiveSplit](livesplit-link.md) | |
+| [Adding an online leaderboard](online-leaderboard.md) | |
 
 ## Further reading
 
-* [Quickstart](../get-started/quickstart.md)
-* [Creating a mod](../how-tos/creating-a-mod.md)
+* [Quickstart for Nebula mods](../get-started/quickstart.md)
+* [How-tos](../how-tos/index.md)

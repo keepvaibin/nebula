@@ -11,9 +11,9 @@ This page holds the detailed rules of LumaScript that complete the other referen
 
 ## More types and calls
 
-1. Section 4, `if let`: takes the same list as `guard`: `if let r = room, not r.host, let p = r.peers.get { }`
+1. `if let`: takes the same list as `guard`: `if let r = room, not r.host, let p = r.peers.get { }`
    checks each in order; the names bound are in scope in the `if` block only.
-2. Section 3, container functions (each a compile error on the wrong type, never a run-time lookup):
+2. container functions (each a compile error on the wrong type, never a run-time lookup):
    - `list<T>`: `len -> int`, `push(T)`, `pop -> T?`, `insert(int, T)`, `remove(int) -> T` (out of range: a
      script error), `get(int) -> T?`, `[int]` (out of range: a script error), `contains(T) -> bool` (T with `==`),
      `indexed -> list<(int, T)>`, `map(fn(T) -> U) -> list<U>`, `filter(fn(T) -> bool) -> list<T>`,
@@ -28,19 +28,19 @@ This page holds the detailed rules of LumaScript that complete the other referen
      simple case mapping), `parse_int -> i64?`, `parse_float -> f64?`.
    - `bytes`: `len`, `[int]`, `slice`, `push(u8)`, `read_u16/u32/u64/f32/f64(at, big: bool)`,
      `write_u16/...(at, value, big: bool)` (out of range: a script error).
-3. Section 7.1, nerves by name: `nerve "DinoPackunVs1.BattleLv2"` is the game's `const Nerve *` for that class's
+3. nerves by name: `nerve "DinoPackunVs1.BattleLv2"` is the game's `const Nerve *` for that class's
    step, usable where a game function takes `const Nerve *` (`self.setNerve(nerve "...")`) and comparable with
    `same(...)` to `getCurrentNerve`. Checked at compile time against the self-description's list of each class's
    nerves; a name not listed is a compile error naming the class and its nerves. A nerve
    named by a run-time `text` is not possible (no run-time lookup): a nerve chosen while running is a `match`
    over the class's steps, which the mod's build can generate from the same list.
-4. Section 8, `wrap ... every override of`: `wrap every override of LiveActor::movement { ... }` as `hook`
+4. `wrap ... every override of`: `wrap every override of LiveActor::movement { ... }` as `hook`
    allows (`K.vhook`); `self` is the object, of the virtual's class.
-5. Section 8, a hook calling the function it hooks: inside any hook of a mod, a call to a function the same mod
+5. a hook calling the function it hooks: inside any hook of a mod, a call to a function the same mod
    hooks runs the other mods' hooks and the game's code, not this mod's hooks on it (no recursion through one's own
    hooks); another mod's hooks run as usual (an `after MR::getPlayerPos` that calls `MR::getPlayerPos` gets the value
    without its own hook).
-6. Section 8, `result =` for a function returning a pointer to a vector (`Vec3f *`, `const TVec3f &`): the value
+6. `result =` for a function returning a pointer to a vector (`Vec3f *`, `const TVec3f &`): the value
    is kept in a slot of that hook (one per hook, on the game thread) and the caller receives a pointer to the slot,
    valid until the hook next runs. A caller that keeps the pointer across a second call of the same function sees the
    newer value; the compiler warns (S-code) on every such hook, naming the function.
@@ -77,7 +77,7 @@ block's `}`, the next statement may follow on the same line (`enter { ... } wait
 
 ## Hooks: re-entry, replace's error path, threads, order
 
-- The abi's flag is therefore cleared around `core->proceed(call)` and set again after it (abi D4 below), so a
+- The hook flag is cleared around `core->proceed(call)` and set again after it , so a
   recursive game function, or an override that calls its base under `every override of`, runs every mod's hooks each
   time, as the game would.
 - A `replace` whose body ends in a script error gives the game's own result by `core->proceed(call)` (which runs
@@ -192,7 +192,7 @@ no `option("key")` call.
 
 ```lumascript
 (* G.1 tokens *)
-IDENT    = letter_or_ "_" { letter | digit | "_" } ;          (* not a reserved word, D4.1 *)
+IDENT    = letter_or_ "_" { letter | digit | "_" } ;          (* not a reserved word *)
 GAME     = "`" { any but "`" and line end } "`" ;
 NUMBER   = "0x" hex {hex|"_"} | "0b" bin {bin|"_"} | digit {digit|"_"} ["." digit {digit|"_"}] [exp] [suffix] ;
 COLOR    = "#" hex*6 [hex*2] ;
@@ -274,7 +274,7 @@ assignop = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" |
 
 ## A `replace` off the game thread
 
-D4.3's rule reads: a call on another thread runs no script hook. A `before` does not skip, a `wrap` proceeds, an
+A call on another thread runs no script hook. A `before` does not skip, a `wrap` proceeds, an
 `after` leaves the result, and a `replace` proceeds: the game's own function runs and its result stands. Each is
 logged once per hook as S0901.
 
@@ -293,14 +293,14 @@ that are present are all whole; an absent one does not count. Otherwise it is `f
 
 ## A struct literal in a condition
 
-The rule of D4.10 is said where it bites: `if Point { x: 1 } == p` is refused at the `{` with "no struct literal in
+A struct literal cannot start a condition: `if Point { x: 1 } == p` is refused at the `{` with "no struct literal in
 the condition of if, while, match, guard or for: put it in parentheses". (A `{` after a capitalised name
 whose next words are `name:` cannot open a block, since no statement starts so.) The parser likewise names the word
 for `&&` (`and`), `||` (`or`) and a prefix `!` (`not`).
 
 ## What may be `none`, by evidence, both ways
 
-- Results and fields stay as D4.7: `T?` unless the self-description marks them never-null.
+- Results and fields are `T?` unless the self-description marks them never-null.
 - Parameters change. A pointer parameter takes `T`, not `T?`, unless the self-description marks it may-be-null.
   It marks it only from evidence:
   - the function tests it (`if (p)`, `p != nullptr`, `p == nullptr` before any use);
@@ -330,7 +330,7 @@ for `&&` (`and`), `||` (`or`) and a prefix `!` (`not`).
   - The player rows are the first evidence: getPlayerPos, getPlayerCenterPos, getPlayerRotate,
     getPlayerShadowRotate, getPlayerGravity, getPlayerUp/Front/SideVec, getPlayerGroundPos, getPlayerHitRadius,
     isPlayerInAreaObj (PlayerUtil.cpp:66 to 154).
-  - So `MR::getPlayerPos` is `vec3?` in fact, as D4.7 wrote, and the corpus tests it.
+  - So `MR::getPlayerPos` is `vec3?`.
 
 ## Nested wraps
 
@@ -346,11 +346,11 @@ around `proceed` saves and restores it: `let was = current; current = self; proc
 - `log fact`: `fact` is the word when a value starts right after it (a string, a number, a name, a color, a
   game name, true, false, none, self, result). `log fact + 1` and `log fact.n` log a variable named fact.
 - No comma before the `)` or `]` of a comma list (parameters, arguments, lists, tuples, fn types, patterns,
-  event names), as G.3 and G.4 write them. Brace lists (SEP) may end with `,` or a line end.
-- D4.2's "a block's `}`" is a block's only: after a struct literal's, a map's, a match's or a declaration's
+  event names). Brace lists (SEP) may end with `,` or a line end.
+- Only a block's `}` lets the next statement follow on the same line. After a struct literal's, a map's, a match's or a declaration's
   `}` the next statement needs a line end or `;`.
 - `lparams` (a hook's or an override's) is names, each with an optional type: `var` and defaults are errors.
-- `use` takes `.{names}` after a local path too, and `as` after any form (G.2 as written).
+- `use` takes `.{names}` after a local path too, and `as` after any form.
 - After type arguments, a token that starts with `>` gives up its first `>`: `list<int>= []`,
   `map<text, list<int>>= {}`.
 - One `start` line per `states`; a second is S0020 at the second.
@@ -360,12 +360,12 @@ around `proceed` saves and restores it: `let was = current; current = self; proc
   interpolation, and each node an operator or a postfix wraps around what came before (`a + b + c` is two deep,
   `f` two, `x as A as B` two). Past it is S0022 at the place, and the parse goes on. The compiler works on a stack
   of its own (64 MB), so any program within the limit is read in any build.
-- D4.2: a line end after `>` or `>>` is not dropped by the lexer, so a type ending in them ends its
+- A line end after `>` or `>>` is not dropped by the lexer, so a type ending in them ends its
   line (`items: list<int>`, `target: ref<Actor>`, `var m: map<text, list<int>>`). As operators they still go on to the
   next line (`a >` / `b` is one comparison, `a >>` / `b` one shift): the parser skips the line end after them.
-- G.1: an interpolation, and a string inside one, ends on its line; one that does not is S0004 at its `{`.
+- An interpolation, and a string inside one, ends on its line; one that does not is S0004 at its `{`.
 - One leading UTF-8 byte-order mark is skipped; CR LF and a lone CR each end a line.
-- Section 2: a word with a letter outside ASCII (`café`) is S0023, said once for the whole word, which
+- A word with a letter outside ASCII (`café`) is S0023, said once for the whole word, which
   reads on as a name.
 - Build-time codes S0001 to S0024 (S0022 the limit, S0023 names, S0024 the compiler could not start its thread)
   are worded in LumaLink's rows `LumaLink.Script.*` in the 14 languages; codes from S0901 are the run time's. Of two diagnostics at one place only the first is said.
@@ -373,7 +373,7 @@ around `proceed` saves and restores it: `let was = current; current = self; proc
 
 ## Type arguments at a line end
 
-- G.4 with D4.2: a call's type arguments that end a line, with its `(` at the start of the next
+- A call's type arguments that end a line, with its `(` at the start of the next
   (`json.decode<list<int>>` / `(data)`), are S0025 at the `(`, said once; the compiler reads on as the call. Such text
   was an error already (as written it is no call, and its comparison reading is a chained comparison, S0013). A
   comparison whose `>>` ends a line still goes on as a shift (`a < b >>` / `(c)` is `a < (b >> (c))`).
@@ -469,7 +469,7 @@ Built-in names take positional arguments only. `json` alone is no value (S0083).
 - `json.decode<T>(data)` takes `text` or `bytes` and gives `T?` (`none` when the data does not read as a `T`); `T` is
   json data.
 - A `json.Value`'s `.int` is `int?` (`i32`) and `.float` is `f32?`: `none` when the value is no number or does
-  not fit (an integer past `i32`, a fraction for `.int`). `.text .bool .list .map .get(k) .at(i)` as D4.10.
+  not fit (an integer past `i32`, a fraction for `.int`). `.text .bool .list .map .get(k) .at(i)` work the same way.
 
 ## Calls
 
@@ -512,21 +512,21 @@ const, reached through a view that is not const; an after hook's `result`. S0064
 `let`, a parameter that is not `var`, an option, a value (a call's result, a literal, `self` itself), const in the
 game, a const view, or a name a function value captured.
 
-- D7.2, literals (A42C-2), replaces "two literals are `int`, or `f32` when either is a float": an expression of
+- Literals: an expression of
   literals only (`1 + 2`, `1 << 4`, `(1 << 4) - 17`) takes its place's number type, an integer one also a float
   place; with no number place it is `int`, or `f32` when a literal in it is a float. An integer expression's value is
   worked out and checked to fit once, for the whole (`let x: u8 = 200 + 100` is S0050 naming 300). A shift's literal
-  left side (A42C-1) takes the place's integer type, else `int`, never the count's: `1 << n` with `n: u8` is an
+  left side takes the place's integer type, else `int`, never the count's: `1 << n` with `n: u8` is an
   `int`.
-- D7.5, const (A42C-3), replaces "among several still, on a const view the const member": among several still,
+- Const members: among several still,
   the member whose const matches the view's: the const one on a const view, the other on a view that is not const.
-- D7.5, float literals (A42C-4), replaces "a float literal for `f32` only, as C++ picks": a float literal is exact
-  for `f32` only. This is the language's rule (a float literal is an `f32`, D4.10), which fits the game, whose float
+- Float literals: a float literal is exact
+  for `f32` only. A float literal is an `f32`, which fits the game, whose float
   functions take `f32`; C++ would pick `double`.
 
 ## Flow, as the checker reads it
 
-Sections 4, 6.1, 11 and 12 and D4.14 stand. Where they say less, these sentences say exactly what is checked.
+These rules describe exactly what the checker verifies about control flow.
 
 ## Returns and `guard`
 
@@ -537,7 +537,7 @@ Sections 4, 6.1, 11 and 12 and D4.14 stand. Where they say less, these sentences
   and names the result type: S0101.
 - `guard`'s `else` block must leave by `return`, `stop`, `break`, `continue`, `go` or `skip`, or by an `if` or `match`
   whose every branch leaves: S0102, said at the `else` block's `{`.
-- Hooks follow D11: a `wrap` that proceeds, and a `before` that skips, are its rules.
+- Hooks: a `wrap` that proceeds, and a `before` that skips, are its rules.
 
 ## Views
 
@@ -589,7 +589,6 @@ the word.
 
 ## The `time` service in LumaScript
 
-Sections 10, 11 and 12 read with these.
 
 ## `use svc.time`: the table as it is
 
@@ -622,7 +621,7 @@ Sections 10, 11 and 12 read with these.
 - `on mods.stopped(gone)` with its parameter untyped or `u64` is always the LumaKit rule for stopped mods (a mod that called this
   library's exports is gone); svc.mods' STOPPED event is `on mods.stopped(e: mods.StoppedEvent)`, its record type
   written.
-- `on step` may not wait (D9.3's list gains it: S0105 `Script.Wait.Where`), and it is never a task. It may start one.
+- `on step` may not wait (S0105 `Script.Wait.Where`), and it is never a task. It may start one.
 
 ## `wait N frames` and `wait N seconds`
 
@@ -652,8 +651,7 @@ as before with `on step` in its list. Rows in the 14 languages come with the che
 
 ## Hooks, tasks and states as the checker reads them; `is_state`; `keep`/`kept`
 
-Sections 8 and 11 said what hooks, tasks and states do; this part says how a head and a body are read, exactly, as
-LumaLink checks them. Nothing in sections 8 and 11 changes but what D11.3 and D11.5 add.
+For what hooks, tasks and states do, see [Hooks](hooks.md), [Tasks](tasks.md) and [State machines](state-machines.md). This part describes exactly how LumaLink reads and checks a head and a body.
 
 ## A hook's head
 
@@ -722,7 +720,7 @@ S0112 to S0132 as above, with rows and the phrases `Script.Result.Before`/`NotHo
 
 ## Services as the checker reads them from their headers
 
-LumaLink reads every service from its header (services/registry.md), each the one way below; `time` is
+LumaLink reads every service from its header, each the one way below; `time` is
 its first case. What a header does not state yet is a note
 S0047 "not known in this game's self-description", never a guess.
 
@@ -769,7 +767,7 @@ function of the header for C mods.
 ## Results
 
 - Statuses. Each member's comment names every status it returns. The mod's mistakes (ARGUMENT, THREAD,
-  HANDLE, LIMIT) are reported by the service, and CANCELLED never reaches running code. Neither is a value a script
+  HANDLE, LIMIT) are reported by the service, and Canceled never reaches running code. Neither is a value a script
   sees. The function's answers are its other `LUMA_E_*`.
 - Outs, in order: one is `T`, more are a tuple. An out buffer is `text` or `bytes`. The compiler asks the
   whole length first (a null buffer with size 0), then fills.
@@ -780,14 +778,14 @@ function of the header for C mods.
   - an `int64_t` or `uint32_t` or `uint64_t` that is not a status (no `LUMA_E_` in its comment beyond the
     mistakes) is the number.
   - an `int64_t` length with answers (save.get) is folded into its out buffer's `T?`.
-- With LUMA_PENDING, see D12.5.
+- With LUMA_PENDING, see [Requests and their events](#requests-and-their-events).
 
 ## Requests and their events
 
 - A request takes `LumaEventFn fn, void *user` and gives its handle through `LumaHandle *out`. In LumaScript it
   is called in one of two ways:
   - with a closure `f(args, fn(e: <name>.<Kind>Event) { })`: it returns the handle `<name>.<K>?` (`none`
-    when refused), and the closure runs for each of its events, at a frame's start, under D9.2's view rules. The
+    when refused), and the closure runs for each of its events, at a frame's start, under the rules in [Views](#views). The
     event record has `status` (`svc.Answer?`: `none` for LUMA_OK, else the answer), `value` (u64, as the
     event kind's comment says) and `flags`.
   - waited, without a closure: `f(args) -> pending<R?>`, only for a request whose comment says it closes after
@@ -811,14 +809,14 @@ function of the header for C mods.
   on_step) is not a name of the script. Calling or naming it is S0108 `{name} is set by "on {what}", not called`.
 - S0111: a literal outside a parameter's range that its comment states as `<a> to <b>` (the form
   `<param>: <a> to <b>`; time.step's count 1 to 16, time.set_rate's rate 1 to 16000). `{name}'s {param} is
-  {found}; it takes {low} to {high}`. D10's S0111 for time.step is its first case.
+  {found}; it takes {low} to {high}`.
 - A service used without its permission is the validator's L506, said by LumaLink at check time
   with the `use`'s line.
 
 ## `time` read from its header
 
 - `time.now -> time.Now` and `time.wall -> time.Wall`, `time.monotonic_ns -> i64`, `hold`,
-  `release`, `set_rate(rate: u32)` and `step(count: u32) -> bool` are as D10.1.
+  `release`, `set_rate(rate: u32)` and `step(count: u32) -> bool` work as the `time` service describes. For more information, see [time](../services/time.md).
 - `time.timer(clock: time.Clock, after: u64, every: u64, fn(e: time.TimerEvent)) -> time.Timer?`: the closure takes
   the event record, whose `value` is the count. Every request reads the same
   way, so a script reads `e.value`.
@@ -838,18 +836,18 @@ S0107, S0108 and S0111 as above, with rows in the 14 languages.
 - `LumaColor` is `color`: the compiler packs 0xRRGGBBAA, each channel `round(c * 255)` of the 0..1 value.
 - A header with several tables (luma_mods.h: mods, mods.ids, mods.install) names them in its
   `#define LUMA_<X>_NAME "<a.b>"` texts; a face takes none of the names of a dotted service under it.
-- The shared statuses (registry 4: ARGUMENT for a null or unknown mod, CANCELLED, THREAD) are not in each member's
+- The shared statuses (registry 4: ARGUMENT for a null or unknown mod, Canceled, THREAD) are not in each member's
   comment; none is an answer, so no result changes.
 
 ## Streams
 
 - A member that takes `LumaEventFn fn, void *user` and whose comment has a line `events: KIND(fields), KIND(fields)`
   is a stream: one handle (or a listener and the sockets it accepts) and many events of several kinds. It may return
-  LUMA_OK with its handle at once (net's udp_open, tcp_listen) or LUMA_PENDING; D12.5's one-kind request form is
-  unchanged for members without the line.
+  LUMA_OK with its handle at once (net's udp_open, tcp_listen) or LUMA_PENDING; members without the line use the request form in
+  [Requests and their events](#requests-and-their-events).
 - In LumaScript it takes `fn(e: <name>.Event)`. `<name>.Event` is one enum for the service: a case per KIND any of
   its lines lists, CamelCase (`DATAGRAM` -> `Datagram`), carrying the listed fields in order, read by `match`. A KIND
-  has the same fields on every line of its service (a header that differs is LumaLink's mirror-test failure):
+  has the same fields on every line of its service:
   - `socket`: the event's handle (`LumaEvent.handle`) as the member's handle kind; ACCEPTED's is the new socket
     (`LumaEvent.value` as a handle), and an accepted socket's own events (DATA, SENT, CLOSED) reach the listener's
     function with their own `socket`.
@@ -857,8 +855,7 @@ S0107, S0108 and S0111 as above, with rows in the 14 languages.
     taken whole by the compiler in the call, else `LumaEvent.data`.
   - `from`: the take's other out (take_datagram's `LumaNetPeer` -> `net.Peer { host: text, port: u16 }`).
   - `status`: `svc.Answer?` (`none` for LUMA_OK). `value`: `u64`. `flags`: `u32`.
-- The closure runs once per event, at a frame's start, as D12.5's. The handle the call returns is `<name>.<K>?` as
-  D12.5's. C mods and the C ABI are unchanged; the line is a comment.
+- The closure runs once per event, at a frame's start, as for a request. The handle the call returns is `<name>.<K>?`, as for a request. C mods and the C ABI are unchanged; the line is a comment.
 - First headers: luma_net.h (both tables, 10 members). The other streams (audio stream_open
   and tap_open, capture open, input watch_device and open, mods watch_options and watch_mods, a repeating time.timer)
   take the line next.
@@ -876,7 +873,7 @@ S0107, S0108 and S0111 as above, with rows in the 14 languages.
 - `text "Key"` is the mod's line `Key` in the player's language, the key when the game has none. Made before the game
   has read its messages (`on start`), it holds the key and reads as the line when it is used. Read before then, it
   is its key there, and the mod log says so once. The message tags in a line are bracket words
-  (`language/message-tags.md`).
+  (see [Message tags](message-tags.md)).
 - `log` takes any `text`: a literal, a string with values placed in it, a `text "Key"` row, a variable or a result.
 
 ```lumascript
@@ -900,7 +897,7 @@ on start {
 
 The game's log gets `pad CoStar, name kind 2, ok`, then `Title`: the row is read in `on start`, before the game's
 messages exist, so it is its key, and the mod log says so. Kept in a variable and logged in `on stage`, it is the
-mod's line. `language/text-and-services.md` has each rule with its own example.
+mod's line. For each rule with its own example, see [Text and service values](text-and-service-values.md).
 
 ## Further reading
 

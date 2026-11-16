@@ -1,0 +1,101 @@
+{
+  "page": "/play/mods/",
+  "metadata": {
+    "title": "Mods & texture packs — Nebula",
+    "description": "Supported mods, installation and troubleshooting."
+  },
+  "text": {
+    "general": {
+      "link_1": "Skip to content"
+    },
+    "header": {
+      "aria_label_1": "Nebula home",
+      "link_1": "nebula",
+      "button_1": "Menu",
+      "label_2": "☰",
+      "aria_label_2": "Main navigation",
+      "link_2": "v2",
+      "link_3": "Setup",
+      "link_4": "Player guide",
+      "link_5": "Modding",
+      "link_6": "Help",
+      "link_8": "Blog",
+      "link_7": "Download"
+    },
+    "page": {
+      "link_1": "Nebula /",
+      "paragraph_1": "PLAYER INFORMATION",
+      "title_1": "Mods & texture packs",
+      "paragraph_2": "Supported mods, installation and troubleshooting."
+    },
+    "contents": {
+      "aria_label_1": "On this page",
+      "link_1": "COMPATIBILITY",
+      "link_2": "IMPORT",
+      "link_3": "TEXTURES & MOVIES",
+      "link_4": "TROUBLESHOOTING"
+    },
+    "supported": {
+      "div_1": "COMPATIBILITY",
+      "heading_1": "Supported mods",
+      "paragraph_1": ".luma mods, Riivolution packs, disc file replacements, Dolphin texture packs and replacement movies.",
+      "paragraph_2": "Wii code patches cannot run in a native game, and Nebula lists them at import.",
+      "link_1": "Modding docs →",
+      "link_2": "LumaLink",
+      "paragraph_3": "converts a Wii mod to a .luma file and lists what it cannot use."
+    },
+    "import": {
+      "div_1": "IMPORT",
+      "heading_1": "Installation",
+      "label_1": "01",
+      "subheading_1": "Open Mods",
+      "paragraph_1": "Open Settings, then the MODS page.",
+      "label_2": "02",
+      "subheading_2": "Import",
+      "paragraph_2": "Choose Import file or Import folder, or drop the mod on the game window. Archives can be .zip, .7z, .rar or .tar, without a password.",
+      "label_3": "03",
+      "subheading_3": "Load order",
+      "paragraph_3": "Move the mod to the list on the right. When two mods change the same file, the higher one wins.",
+      "label_4": "04",
+      "subheading_4": "Apply",
+      "paragraph_4": "Choose the mod’s options, then Apply and restart Nebula."
+    },
+    "packs": {
+      "div_1": "TEXTURES & MOVIES",
+      "heading_1": "Texture packs and movies",
+      "paragraph_1": "Dolphin texture packs use tex1_ file names. Texture packs On loads images as needed; Preload loads all of them at startup and uses more memory.",
+      "paragraph_2": "Replacement movies go in the movies folder, named like the game’s videos (for example PrologueA.mp4), as MP4, MKV or WebM. 4K video needs hardware video decoding."
+    },
+    "mod-help": {
+      "div_1": "TROUBLESHOOTING",
+      "heading_1": "Troubleshooting",
+      "paragraph_1": "Turn the mods off on the MODS page (on Windows, you can also hold Shift while Nebula starts). If the problem stops, turn the mods on one at a time. Error codes NEB-M01, NEB-M02 and NEB-M03 name the mod or file involved.",
+      "link_1": "Report a problem"
+    },
+    "footer": {
+      "link_1": "nebula",
+      "paragraph_1": "A little closer to the stars.",
+      "subheading_1": "Explore",
+      "link_2": "Nebula v2",
+      "link_3": "Player guide",
+      "subheading_2": "Start playing",
+      "link_4": "Modding docs",
+      "link_15": "Developer Blog",
+      "link_5": "Download",
+      "link_6": "Setup & requirements",
+      "link_7": "Controls",
+      "subheading_3": "Get help",
+      "link_8": "Troubleshooting",
+      "link_9": "Report a bug",
+      "link_10": "Join Discord ↗",
+      "subheading_4": "Nebula",
+      "link_12": "Credits",
+      "link_13": "Legal & privacy",
+      "link_14": "GitHub ↗",
+      "paragraph_2": "© 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo."
+    }
+  },
+  "messages": {
+    "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+  }
+}

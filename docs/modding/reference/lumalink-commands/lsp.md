@@ -5,8 +5,6 @@ intro: The editor server - the Language Server Protocol over stdin and stdout fo
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink lsp
 
 The editor server: the Language Server Protocol over stdin and stdout for a mod's LumaScript (errors, completion, hover, go to definition, rename).

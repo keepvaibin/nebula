@@ -5,8 +5,6 @@ intro: Look for a newer LumaLink and install it. On Linux and macOS, print where
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink update
 
 Look for a newer LumaLink and install it. On Linux and macOS, print where to download it.

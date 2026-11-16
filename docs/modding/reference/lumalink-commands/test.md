@@ -5,8 +5,6 @@ intro: Build the mod, run each tests/**/test.json in the game (hidden, silent) a
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink test
 
 Build the mod, run each tests/**/test.json in the game (hidden, silent) and print each check with what was found.

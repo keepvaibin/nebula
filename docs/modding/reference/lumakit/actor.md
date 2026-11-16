@@ -26,7 +26,7 @@ The module's source is `lumakit/source/actor.lum`.
 | Name | Kind | Description |
 |---|---|---|
 | [`Kind`](#kind) | Struct |  |
-| [`Sensor`](#sensor) | Enum | The sensors a kind may have, each a sphere `radius` across centerd `radius` above its feet. Body: what touches and is touched; Attack: what hurts the player; Eye: what sees; Push: what pushes others away. |
+| [`Sensor`](#sensor) | Enum | The sensors a kind may have, each a sphere `radius` across centered `radius` above its feet. Body: what touches and is touched; Attack: what hurts the player; Eye: what sees; Push: what pushes others away. |
 | [`Attack`](#attack) | Enum | The player's attacks an object tells apart in its messages (MR::isMsgPlayerSpinAttack ... isMsgFireBallAttack). Any: every one of them. An open enum: LumaKit 1.x only adds cases. |
 | [`KindId`](#kindid) | Struct | A kind's handle: its number, 0 for none. Its functions are also module functions (`actor.spawn(k, at)`). |
 | [`PlacementKey`](#placementkey) | Struct | Where a placed object stands in its stage's data: the same on every machine with the same mods. |
@@ -37,7 +37,7 @@ The module's source is `lumakit/source/actor.lum`.
 | [`all`](#all) | Function | Every object of the kind standing now, in the order made. A defeated one is dead, not gone (the game keeps a killed actor; a ref is none only once the object is destroyed), so liveness is the game's MR::isDead. |
 | [`name`](#name) | Function | The kind's name ("" for a handle that is not the calling mod's). |
 | [`attack_of`](#attack_of) | Function | Which of the player's attacks the message `msg` is (an override of receiveMsgPlayerAttack is given it), or none. |
-| [`add_body`](#add_body) | Function | An enemy's body: a sensor named "body" of the enemy kind, `radius` across and centerd `radius` above its feet; a shadow of the same size; gravity worked out for it each frame. Called once, from its init (after initHitSensor). |
+| [`add_body`](#add_body) | Function | An enemy's body: a sensor named "body" of the enemy kind, `radius` across and centered `radius` above its feet; a shadow of the same size; gravity worked out for it each frame. Called once, from its init (after initHitSensor). |
 | [`add_collision`](#add_collision) | Function | The model's collision mesh `name` as a moving collision part on its body sensor. Called once, from its init. |
 | [`move_forward`](#move_forward) | Function | One frame's move along where it faces, `speed` a frame, along the ground under gravity (call from control). |
 | [`move_toward`](#move_toward) | Function | One frame's move toward `at`, `speed` a frame, along the ground under gravity (call from control). |
@@ -85,7 +85,7 @@ pub struct Kind {
 pub enum Sensor { Body(radius: f32), Attack(radius: f32), Eye(radius: f32), Push(radius: f32) }
 ```
 
-The sensors a kind may have, each a sphere `radius` across centerd `radius` above its feet. Body: what touches and is touched; Attack: what hurts the player; Eye: what sees; Push: what pushes others away.
+The sensors a kind may have, each a sphere `radius` across centered `radius` above its feet. Body: what touches and is touched; Attack: what hurts the player; Eye: what sees; Push: what pushes others away.
 
 ### `Attack`
 
@@ -182,7 +182,7 @@ Which of the player's attacks the message `msg` is (an override of receiveMsgPla
 pub fn add_body(a: LiveActor, radius: f32)
 ```
 
-An enemy's body: a sensor named "body" of the enemy kind, `radius` across and centerd `radius` above its feet; a shadow of the same size; gravity worked out for it each frame. Called once, from its init (after initHitSensor).
+An enemy's body: a sensor named "body" of the enemy kind, `radius` across and centered `radius` above its feet; a shadow of the same size; gravity worked out for it each frame. Called once, from its init (after initHitSensor).
 
 ### `add_collision`
 

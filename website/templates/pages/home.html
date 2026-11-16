@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050609" />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="./favicon-32.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <title>{{metadata.title}}</title>
+    <meta name="description" content="{{metadata.description}}" />
+    <meta property="og:title" content="{{metadata.title}}" />
+    <meta property="og:description" content="{{metadata.description}}" />
+    <link rel="preload" href="./fonts/Delfino.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./reference-ui.css" />
+    <link rel="stylesheet" href="./player-site.css" />
+  </head>
+  <body class="home-page">
+    <a class="skip" href="#main-content">{{text.general.link_1}}</a>
+    <div id="space" aria-hidden="true"></div>
+    <div class="galaxy-scenery" aria-hidden="true">
+      <div class="planet moon"></div>
+      <div class="planet garden"></div>
+      <div class="horizon"></div>
+    </div>
+    <div class="star-hud" aria-hidden="true">
+      <span class="hud-star">{{text.general.label_2}}</span
+      ><span>{{text.general.label_3}} <span id="star-count">{{text.general.label_4}}</span></span
+      ><small>{{text.general.note_1}}</small>
+    </div>
+    <div class="star-cursor" aria-hidden="true">{{text.general.div_1}}</div>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="{{text.header.aria_label_1}}"
+        ><img class="brand-logo" src="./brand-logo.png" alt="" width="34" height="34" />
+        {{text.header.link_1}}</a
+      ><button class="nav-toggle" aria-expanded="false" aria-controls="main-navigation">
+        {{text.header.button_1}} <span aria-hidden="true">{{text.header.label_2}}</span>
+      </button>
+      <nav id="main-navigation" aria-label="{{text.header.aria_label_2}}">
+        <a href="./v2/">{{text.header.link_2}}</a><a href="./guide/">{{text.header.link_3}}</a
+        ><a href="./play/">{{text.header.link_4}}</a><a href="./docs/">{{text.header.link_5}}</a
+        ><a href="./help/">{{text.header.link_6}}</a><a href="./blog/">{{text.header.link_8}}</a
+        ><a href="./download/">{{text.header.link_7}}</a>
+      </nav>
+    </header>
+    <main id="main-content">
+      <section class="hero" aria-labelledby="title">
+        <div class="eyebrow"><span></span> {{text.hero.eyebrow}}</div>
+        <h1 id="title">
+          <span class="title-text">{{text.hero.title}}</span
+          ><span class="title-star" aria-hidden="true">{{text.hero.label_2}}</span>
+        </h1>
+        <p class="tagline">{{text.hero.tagline}}</p>
+        <p class="intro">{{text.hero.intro}}</p>
+        <div class="actions">
+          <a class="button primary" href="./v2/">{{text.hero.v2_button}}</a
+          ><a class="button secondary" href="./download/">{{text.hero.download_button}}</a>
+        </div>
+        <a class="hero-guide" href="./guide/">{{text.hero.setup_link}}</a>
+        <p class="platform">{{text.hero.platforms}}<br />{{text.hero.game_requirement}}</p>
+        <div class="hero-bottom">
+          <a href="#available" class="scroll"
+            ><span>{{text.hero.label_3}}</span> {{text.hero.scroll_prompt}}</a
+          >
+          <div class="play-controls">
+            <button id="formation" aria-pressed="false">{{messages.formWord}}</button
+            ><button id="regenerate">{{text.hero.regenerate_button}}</button
+            ><span id="collection-status" class="sr-only" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="interaction-hint" id="hint">{{text.hero.interaction_hint}}</div>
+      </section>
+      <div class="glance-strip" aria-label="{{text.stats.aria_label_1}}">
+        <div><strong>{{text.stats.emphasis_1}}</strong><span>{{text.stats.label_1}}</span></div>
+        <div><strong>{{text.stats.emphasis_2}}</strong><span>{{text.stats.label_2}}</span></div>
+        <div>
+          <strong data-download-count="" title="{{text.stats.title_1}}">{{downloads.total}}</strong
+          ><span>{{text.stats.label_3}}</span>
+        </div>
+        <div>
+          <strong data-star-count="" title="{{text.stats.title_2}}">{{downloads.stars}}</strong
+          ><span>{{text.stats.label_5}}</span>
+        </div>
+      </div>
+      <section class="content" id="available">
+        <div class="section-label">{{text.available.div_1}}</div>
+        <div class="section-body">
+          <h2>{{text.available.heading_1}}</h2>
+          <p class="release-summary">{{text.available.paragraph_1}}</p>
+          <div class="release-actions">
+            <a
+              class="button primary"
+              href="https://github.com/keepvaibin/nebula/releases/tag/v1.0.2"
+              >{{text.available.link_1}}</a
+            ><a class="release-help" href="./guide/">{{text.available.link_2}}</a>
+          </div>
+        </div>
+      </section>
+      <section class="content" id="v2">
+        <div class="section-label">{{text.v2.div_1}}</div>
+        <div class="section-body">
+          <h2>{{text.v2.heading_1}}</h2>
+          <p>{{text.v2.paragraph_1}}</p>
+          <div class="player-grid">
+            <a class="player-card" href="./play/graphics/"
+              ><span class="card-label">{{text.v2.label_1}}</span>
+              <h3>{{text.v2.subheading_1}} <span aria-hidden="true">{{text.v2.label_2}}</span></h3>
+              <p>{{text.v2.paragraph_3}}</p></a
+            ><a class="player-card" href="./play/graphics/#smoothness"
+              ><span class="card-label">{{text.v2.label_3}}</span>
+              <h3>{{text.v2.subheading_2}} <span aria-hidden="true">{{text.v2.label_4}}</span></h3>
+              <p>{{text.v2.paragraph_4}}</p></a
+            ><a class="player-card" href="./play/graphics/#resolution"
+              ><span class="card-label">{{text.v2.label_5}}</span>
+              <h3>{{text.v2.subheading_3}} <span aria-hidden="true">{{text.v2.label_6}}</span></h3>
+              <p>{{text.v2.paragraph_5}}</p></a
+            ><a class="player-card" href="./play/controls/"
+              ><span class="card-label">{{text.v2.label_7}}</span>
+              <h3>{{text.v2.subheading_4}} <span aria-hidden="true">{{text.v2.label_8}}</span></h3>
+              <p>{{text.v2.paragraph_6}}</p></a
+            ><a class="player-card" href="./v2/#comforts"
+              ><span class="card-label">{{text.v2.label_9}}</span>
+              <h3>{{text.v2.subheading_5}} <span aria-hidden="true">{{text.v2.label_10}}</span></h3>
+              <p>{{text.v2.paragraph_7}}</p></a
+            ><a class="player-card" href="./play/mods/"
+              ><span class="card-label">{{text.v2.label_11}}</span>
+              <h3>{{text.v2.subheading_6}} <span aria-hidden="true">{{text.v2.label_12}}</span></h3>
+              <p>{{text.v2.paragraph_8}}</p></a
+            ><a class="player-card" href="./v2/#achievements"
+              ><span class="card-label">{{text.v2.label_13}}</span>
+              <h3>{{text.v2.subheading_7}} <span aria-hidden="true">{{text.v2.label_14}}</span></h3>
+              <p>{{text.v2.paragraph_9}}</p></a
+            ><a class="player-card" href="./play/saves/"
+              ><span class="card-label">{{text.v2.label_15}}</span>
+              <h3>{{text.v2.subheading_8}} <span aria-hidden="true">{{text.v2.label_16}}</span></h3>
+              <p>{{text.v2.paragraph_10}}</p></a
+            >
+          </div>
+          <a class="button primary" href="./v2/">{{text.v2.link_1}}</a>
+        </div>
+      </section>
+      <section class="content" id="start">
+        <div class="section-label">{{text.start.div_1}}</div>
+        <div class="section-body">
+          <h2>{{text.start.heading_1}}</h2>
+          <ol class="setup-steps">
+            <li>
+              <span>{{text.start.label_1}}</span>
+              <div>
+                <h3>{{text.start.subheading_1}}</h3>
+                <p>{{text.start.paragraph_1}}</p>
+              </div>
+            </li>
+            <li>
+              <span>{{text.start.label_2}}</span>
+              <div>
+                <h3>{{text.start.subheading_2}}</h3>
+                <p>{{text.start.paragraph_2}}</p>
+              </div>
+            </li>
+            <li>
+              <span>{{text.start.label_3}}</span>
+              <div>
+                <h3>{{text.start.subheading_3}}</h3>
+                <p>{{text.start.paragraph_3}}</p>
+              </div>
+            </li>
+          </ol>
+          <div class="actions">
+            <a class="button primary" href="./guide/">{{text.start.link_1}}</a
+            ><a class="button secondary" href="./download/">{{text.start.link_2}}</a>
+          </div>
+        </div>
+      </section>
+      <section class="content" id="community">
+        <div class="section-label">{{text.community.div_1}}</div>
+        <div class="section-body">
+          <h2>{{text.community.heading_1}}</h2>
+          <p>{{text.community.paragraph_1}}</p>
+          <div class="actions">
+            <a class="button primary" href="https://discord.gg/2fJEdhAw2f"
+              ><svg class="discord-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path
+                  fill="currentColor"
+                  d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.211.375-.445.864-.609 1.249a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.618-1.249.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.674 4.37a.07.07 0 0 0-.032.027C.533 9.041-.32 13.571.099 18.044a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.994 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.099.246.198.373.292a.077.077 0 0 1-.006.127c-.598.352-1.22.65-1.873.891a.077.077 0 0 0-.04.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.029 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.67-3.549-13.647a.061.061 0 0 0-.031-.03ZM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.095 2.157 2.419 0 1.334-.956 2.419-2.157 2.419Zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.095 2.157 2.419 0 1.334-.946 2.419-2.157 2.419Z"
+                ></path></svg
+              >{{text.community.link_1}}</a
+            ><a class="button secondary" href="./help/#report">{{text.community.link_2}}</a>
+          </div>
+          <a class="text-link" href="./help/">{{text.community.link_3}}</a>
+        </div>
+      </section>
+      <section class="content" id="questions">
+        <div class="section-label">{{text.questions.div_1}}</div>
+        <div class="section-body">
+          <h2>{{text.questions.heading_1}}</h2>
+          <details id="question-1">
+            <summary>{{text.questions.question_1}}</summary>
+            <p>{{text.questions.paragraph_1}}</p>
+          </details>
+          <details id="question-2">
+            <summary>{{text.questions.question_2}}</summary>
+            <p>{{text.questions.paragraph_2}}</p>
+          </details>
+          <details id="question-3">
+            <summary>{{text.questions.question_3}}</summary>
+            <p>{{text.questions.paragraph_3}}</p>
+          </details>
+          <details id="question-4">
+            <summary>{{text.questions.question_4}}</summary>
+            <p>{{text.questions.paragraph_4}}</p>
+          </details>
+          <details id="question-5">
+            <summary>{{text.questions.question_5}}</summary>
+            <p>{{text.questions.paragraph_5}}</p>
+          </details>
+          <details id="question-6">
+            <summary>{{text.questions.question_6}}</summary>
+            <p>{{text.questions.paragraph_6}}</p>
+          </details>
+          <details id="question-7">
+            <summary>{{text.questions.question_7}}</summary>
+            <p>{{text.questions.paragraph_7}}</p>
+          </details>
+          <details id="question-8">
+            <summary>{{text.questions.question_8}}</summary>
+            <p>{{text.questions.paragraph_8}}</p>
+          </details>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="footer-top">
+        <a class="brand" href="./"
+          ><img class="brand-logo" src="./brand-logo.png" alt="" width="34" height="34" />
+          {{text.footer.link_1}}</a
+        >
+        <p>{{text.footer.paragraph_1}}</p>
+      </div>
+      <div class="footer-links">
+        <div>
+          <h3>{{text.footer.subheading_1}}</h3>
+          <a class="text-link" href="./v2/">{{text.footer.link_2}}</a
+          ><a class="text-link" href="./play/">{{text.footer.link_3}}</a
+          ><a class="text-link" href="./docs/">{{text.footer.link_4}}</a
+          ><a class="text-link" href="./blog/">{{text.footer.link_15}}</a>
+        </div>
+        <div>
+          <h3>{{text.footer.subheading_2}}</h3>
+          <a class="text-link" href="./download/">{{text.footer.link_5}}</a
+          ><a class="text-link" href="./guide/">{{text.footer.link_6}}</a
+          ><a class="text-link" href="./play/controls/">{{text.footer.link_7}}</a>
+        </div>
+        <div>
+          <h3>{{text.footer.subheading_3}}</h3>
+          <a class="text-link" href="./help/">{{text.footer.link_8}}</a
+          ><a class="text-link" href="./help/#report">{{text.footer.link_9}}</a
+          ><a class="text-link" href="https://discord.gg/2fJEdhAw2f">{{text.footer.link_10}}</a>
+        </div>
+        <div>
+          <h3>{{text.footer.subheading_4}}</h3>
+          <a class="text-link" href="./credits/">{{text.footer.link_12}}</a
+          ><a class="text-link" href="./legal/">{{text.footer.link_13}}</a
+          ><a class="text-link" href="https://github.com/keepvaibin/nebula"
+            >{{text.footer.link_14}}</a
+          >
+        </div>
+      </div>
+      <p class="legal-line">{{text.footer.paragraph_2}}</p>
+    </footer>
+    <script type="module" src="./site.js"></script>
+    <script type="module" src="./home.js"></script>
+
+    {{runtimeMessages}}
+  </body>
+</html>

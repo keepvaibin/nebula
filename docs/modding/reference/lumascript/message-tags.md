@@ -38,11 +38,6 @@ matched without case; a number is decimal or 0x and hex digits.
 - `[tag G T u...]` writes any tag: its group, its tag number and its parameter units.
 - `lumalink extract` writes the game's tags back as these words, and `[tag G T u...]` for one with no word.
 
-## See also
-
-- `language/text-and-services.md` (text of the game)
-- `format/luma.md` (`merge/`)
-
 ## Further reading
 
 * [LumaScript reference](index.md)

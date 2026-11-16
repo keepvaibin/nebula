@@ -149,7 +149,7 @@ on start {
 ## Text of the game
 
 A game function's `const char16_t *` result is `text?`: the game's UTF-16 converted to UTF-8. The game's message
-tags are written as words in brackets (every word: `language/message-tags.md`), a `[` of the text as `[[`, and a
+tags are written as words in brackets (for every word, see [Message tags](message-tags.md)), a `[` of the text as `[[`, and a
 lone surrogate as U+FFFD. A text given back to the game as `const char16_t *` has its words made into tags again.
 
 `text "Key"` made before the game has read its messages (in `on start`) holds the key and reads as the game's line
@@ -162,13 +162,6 @@ when it is used. Read before then, it is its key there, and the mod log says so 
   read `messages.json`, so a missing key builds and shows the key at run time.
 - A struct field that is a pointer of any other form (a pointer to a number, a `char *` the service writes) makes
   the struct unusable from LumaScript; C mods still use it.
-
-## See also
-
-- `language/language.md` (sections 3, 7.2, 10, D7.4, D12)
-- `language/message-tags.md`
-- `services/net.md`, `services/input.md`
-- `format/luma.md` (layer folders, `merge/`)
 
 ## Further reading
 

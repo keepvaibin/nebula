@@ -5,8 +5,6 @@ intro: List every service function of the game's SDK and whether scripts can cal
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink services
 
 List every service function of the game's SDK and whether scripts can call it: script, native (C mods only, by design) or c (C mods only).

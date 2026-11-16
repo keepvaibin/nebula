@@ -11,7 +11,6 @@ This page lists every class of the game that derives from `NameObj`, with its pa
 
 1058 classes derive from NameObj. A luma.json `object_classes` row's `like` names one of them; a mod's code reads the same rows through LumaCore (class count, row, is-a).
 
-
 ## Classes
 
 | Class | Parent | Header |

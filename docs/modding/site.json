@@ -1,0 +1,68 @@
+{
+  "metadata": {
+    "title": "Nebula modding documentation",
+    "titleSuffix": " — Nebula modding docs",
+    "description": "Make mods for Nebula with LumaScript, LumaKit, LumaCore services and LumaLink. Get started, learn the concepts, follow tutorials and look up the reference."
+  },
+  "header": {
+    "skip": "Skip to main content",
+    "brand": "nebula",
+    "brandSub": "Modding docs",
+    "homeLink": "Nebula home"
+  },
+  "docs": {
+    "home": "Modding docs",
+    "sidebarLabel": "Modding documentation",
+    "browse": "Open navigation",
+    "close": "Close navigation",
+    "searchLabel": "Search the modding docs",
+    "searchPlaceholder": "Search the docs",
+    "searchResults": "Search results",
+    "searchEmpty": "No results. Try a function, module, command or error code.",
+    "onThisPage": "In this article",
+    "previous": "Previous",
+    "next": "Next",
+    "pagerLabel": "Previous and next articles",
+    "copy": "Copy",
+    "copied": "Copied",
+    "sectionOverview": "Overview",
+    "viewAll": "View all {n} articles",
+    "downloadExample": "Download the finished mod",
+    "moved": "This page has moved.",
+    "movedLink": "Go to the new page",
+    "preview": "Installing mods?",
+    "previewText": "These docs are for making mods. To install mods made by others,",
+    "moreArticles": "More articles",
+    "articlesHeading": "Articles",
+    "sectionsHeading": "Sections"
+  },
+  "hub": {
+    "startSection": "get-started",
+    "startHeading": "Get started",
+    "startIntro": "Install LumaLink, then make, test and pack your first mod.",
+    "groups": {
+      "learn": {
+        "heading": "Learn",
+        "intro": "Understand how mods work, complete one task at a time, or build a complete mod step by step."
+      },
+      "reference": {
+        "heading": "Reference",
+        "intro": "Look up the language, the library, the services, the command-line tool, mod files and the game's names.",
+        "more": "All reference sections"
+      }
+    },
+    "popularLabel": "Popular",
+    "popular": [
+      "get-started/quickstart.md",
+      "reference/luma-json.md",
+      "reference/lumascript/hooks.md",
+      "reference/lumakit/hud.md",
+      "reference/services/save.md",
+      "reference/validator-rules.md"
+    ],
+    "playerTipLink": "see Using mods."
+  },
+  "footer": {
+    "legal": "© 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo."
+  }
+}

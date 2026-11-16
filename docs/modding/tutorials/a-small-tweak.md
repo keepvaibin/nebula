@@ -1,24 +1,35 @@
 ---
-title: A small tweak: six health
+title: Making a small tweak
 shortTitle: A small tweak
-intro: Change one number of the game by its name, so Mario starts each level with six health.
+intro: Change one of the game's numbers by name, so that Mario starts each level with six health instead of three.
 contentType: tutorials
+example: a-small-tweak
 ---
 
-## About this tutorial
+## Introduction
 
-One number of the game changed by its name: Mario starts each level with six health instead of three. When the mod
-is switched off or taken out, the number is the game's again. The whole mod is the folder [`a-small-tweak`](../guides/a-small-tweak/) in the documentation.
+In this tutorial, you make a mod that changes a single value in the game: the health Mario has when a level starts. The mod sets the value when the game starts, and Nebula restores the original value when the mod is turned off or removed.
 
-## Step 1: Make the folder
+This is the smallest kind of code mod. It needs no content files and no LumaKit modules.
+
+## Prerequisites
+
+* Nebula, installed with Nebula Setup.
+* LumaLink. For more information, see [Installing LumaLink](../get-started/installing-lumalink.md).
+
+## Creating the mod
+
+Create the mod folder.
 
 ```sh
-lumalink new six-health --id six-health --name "Six Health" --summary "Mario starts each level with six health." --author you
+lumalink new six-health --id six-health --name "Six Health" --summary "Mario starts each level with six health." --author YOUR-NAME
 ```
 
-## Step 2: Write the code
+Replace YOUR-NAME with your name.
 
-Put this in `six-health/source/main.lum`:
+## Writing the code
+
+Create `six-health/source/main.lum` with this code:
 
 ```lumascript
 on start {
@@ -26,49 +37,49 @@ on start {
 }
 ```
 
-`set_number` changes one of the game's numbers by its name: the file of the game's source that holds it, `#`, and the
-number's name. `cPlayerHealth` is the health Mario has when a level starts, and the size of his life meter. The game
-keeps what the number was; when the mod stops, every number it set is put back.
+`set_number` changes one of the game's numbers by name. The name is the source file that defines the number, followed by `#` and the number's name. `cPlayerHealth` is the health Mario has when a level starts, and also the size of his life meter.
 
-## Step 3: Build and check
+Nebula records the original value before the mod changes it. When the mod stops, every number it set returns to its original value.
+
+## Building and checking the mod
 
 ```sh
 lumalink build six-health
 lumalink check six-health
 ```
 
-`check` ends `Errors: 0`. A name the game does not have is refused when the mod starts, with the name in the mod log.
+The last line of the `check` output is `Errors: 0`. If a name does not exist in the game, the mod does not start, and the mod log names the value it could not find.
 
-## Step 4: Test it
+## Testing the mod
 
-The folder has two tests.
+The finished mod includes two tests:
 
-- `tests/six`: enters Good Egg Galaxy, reads Mario's health and its most (`MarioActor.mHealth`, `mMaxHealth`) and
-  takes a picture. It passes when both are 6 and the life meter shows the green of six health.
-- `tests/taken-out`: reads 6, takes the mod out while the game runs, enters the galaxy again and reads 3. It passes
-  when the mod log says `its 1 numbers are the game's again (or another mod's)`.
+* `tests/six` enters Good Egg Galaxy, reads Mario's health and maximum health (`MarioActor.mHealth` and `mMaxHealth`), and takes a picture. The test passes when both values are 6 and the life meter shows the color for six health.
+* `tests/taken-out` reads 6, removes the mod while the game runs, enters the galaxy again, and reads 3. The test passes when the mod log reports that the mod's numbers are restored.
+
+To run the tests, copy the `tests` folder from the finished mod into `six-health`, then run:
 
 ```sh
 lumalink test six-health
 ```
 
-Each test runs the game hidden and silent and ends `pass` or `fail` with the run folder.
+Each test runs the game hidden and silent, and ends with `pass` or `fail` and the path of its run folder.
 
-## Step 5: Play it
+## Playing the mod
 
-```sh
-lumalink pack six-health
-```
+1. Pack the mod.
 
-Drop `six-health.luma` on the game's window and switch it on in the Mods screen. The next level starts with six
-health.
+   ```sh
+   lumalink pack six-health
+   ```
 
-## See also
+   LumaLink writes the `.luma` file beside the mod folder.
 
-`language/language.md` (numbers), `format/rules.md`, `lumalink/test-harness.md`, `guides/first-mod.md`.
+1. Drag the `.luma` file onto the game's window, and turn the mod on in the **Mods** page.
+1. Enter any level. Mario starts with six health.
 
-## Further reading
+## Next steps
 
-* [Tutorials](index.md)
-* [LumaScript reference](../reference/lumascript/index.md)
+* [Hiding the HUD](hide-the-hud.md)
+* [About LumaScript](../concepts/lumascript.md)
 * [Testing a mod](../how-tos/testing-a-mod.md)

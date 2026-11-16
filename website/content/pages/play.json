@@ -1,0 +1,81 @@
+{
+  "page": "/play/",
+  "metadata": {
+    "title": "Player guide — Nebula",
+    "description": "Controls, graphics, mods and saves."
+  },
+  "text": {
+    "general": {
+      "link_1": "Skip to content"
+    },
+    "header": {
+      "aria_label_1": "Nebula home",
+      "link_1": "nebula",
+      "button_1": "Menu",
+      "label_2": "☰",
+      "aria_label_2": "Main navigation",
+      "link_2": "v2",
+      "link_3": "Setup",
+      "link_4": "Player guide",
+      "link_5": "Modding",
+      "link_6": "Help",
+      "link_8": "Blog",
+      "link_7": "Download"
+    },
+    "page": {
+      "link_1": "Nebula /",
+      "paragraph_1": "PLAYER INFORMATION",
+      "title_1": "Player guide",
+      "paragraph_2": "Controls, graphics, mods and saves."
+    },
+    "guides": {
+      "div_1": "GUIDES",
+      "heading_1": "Topics",
+      "label_1": "Picture",
+      "subheading_1": "Graphics & performance",
+      "label_2": "→",
+      "paragraph_1": "Ray tracing, resolution, upscaling and frame rate.",
+      "label_3": "Input",
+      "subheading_2": "Controls",
+      "label_4": "→",
+      "paragraph_2": "Default buttons, gyro and pointer, controllers and remapping.",
+      "label_5": "Mods",
+      "subheading_3": "Mods & texture packs",
+      "label_6": "→",
+      "paragraph_3": "Supported mods, importing, load order and troubleshooting.",
+      "label_7": "Progress",
+      "subheading_4": "Saves & Miis",
+      "label_8": "→",
+      "paragraph_4": "Backups, save import and Mii icons.",
+      "label_9": "Help",
+      "subheading_5": "Troubleshooting",
+      "label_10": "→",
+      "paragraph_5": "Common problems, error codes and bug reports."
+    },
+    "footer": {
+      "link_1": "nebula",
+      "paragraph_1": "A little closer to the stars.",
+      "subheading_1": "Explore",
+      "link_2": "Nebula v2",
+      "link_3": "Player guide",
+      "subheading_2": "Start playing",
+      "link_4": "Modding docs",
+      "link_15": "Developer Blog",
+      "link_5": "Download",
+      "link_6": "Setup & requirements",
+      "link_7": "Controls",
+      "subheading_3": "Get help",
+      "link_8": "Troubleshooting",
+      "link_9": "Report a bug",
+      "link_10": "Join Discord ↗",
+      "subheading_4": "Nebula",
+      "link_12": "Credits",
+      "link_13": "Legal & privacy",
+      "link_14": "GitHub ↗",
+      "paragraph_2": "© 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo."
+    }
+  },
+  "messages": {
+    "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+  }
+}

@@ -41,7 +41,7 @@ Only `luma_mod` is exported (`LUMA_EXPORT`); every other symbol is hidden.
 | `macos-arm64`, `macos-x64` | `arm64-` / `x86_64-apple-macos<the game's deployment target>` | ld64.lld `-dylib -undefined error -no_uuid` |
 | `ios-arm64` | `arm64-apple-ios<the game's deployment target>` | the same; the device signs it when the mod is installed |
 
-- The libraries import nothing but what `luma.h` and the loader (lumalink/loader.md) allow (the compiler's `memcpy`,
+- The libraries import nothing but what `luma.h` and the loader allow (the compiler's `memcpy`,
   `memset`, `memmove` and, on the MSVC targets, the stack probe, all given by `luma.h`'s freestanding helpers; F,
   1.1). A LumaScript mod with C sources is held to the same: its C may not call the C library either (no `malloc`,
   no `printf`); it has the run-time support's functions and `luma.h`.
@@ -159,7 +159,7 @@ depends on another mod's), freestanding: no C library, no OS call, nothing impor
 - Where it comes from: LumaCore has no allocator today, and a library that imports nothing cannot reach the
   system's. LumaCore gives `void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align)` and
   `void (*free)(const LumaMod* mod, void* p)` at the end of `LumaCore` (its `size` field makes the addition safe),
-  counted per mod so the Mods screen can show each mod's memory and the kernel frees what is left when a mod is
+  counted per mod so the **Mods** page can show each mod's memory and the kernel frees what is left when a mod is
   taken out. Until then a LumaScript mod cannot be built: the compiler refuses with
   "the game gives no memory to mods yet (lumascript-abi 7.1)".
 - `lumart` keeps its own small-block pools on top (sizes 16 to 512 bytes in steps), taking 64 KiB pages from
@@ -226,7 +226,7 @@ that C is the guard's, not a script error.
 
 ## Run-time error codes
 
-Section 6 said only that the codes are lumart's; S0901 was the one named. This is the list. Each is a row
+This is the list of run-time error codes. Each is a row
 `Script.<code>` in NebulaText.tsv in 14 languages, which the kernel's `report(mod, file,
 line, code, args, arg_count)` renders. The kernel adds the mod and `file.lum:line`; the row is only what went wrong.
 
@@ -286,10 +286,9 @@ different order in another language (Japanese puts S0904's `{1}` first).
    - `caller` is the calling mod. A library records what it makes under it and makes service
      calls for it.
    - `file` and `line` are the call's place in the caller's source. A library that raises a script error reports it
-     itself, through `core->report(caller, file, line, code, args)`, so the error is at the caller's line (lumakit
-     rule 8), and then returns 2.
+     itself, through `core->report(caller, file, line, code, args)`, so the error is at the caller's line, and then returns 2.
    - The caller's code treats 2 as 1 (it ends that run), except that nothing is left to report.
-     Section 6's codes become: 0 ok, 1 an error this mod's lumart holds, 2 an error already reported.
+     The codes are: 0 ok, 1 an error this mod's lumart holds, 2 an error already reported.
 5. Values across. As for any function, with one rule for a library's own types:
    - a `struct` from the library's interface goes by pointer, with its size first (`uint32_t`, the caller's
      `sizeof`). The library reads the fields within that size and takes the defaults for the rest. Fields are only
@@ -299,7 +298,7 @@ different order in another language (Japanese puts S0904's `{1}` first).
    - LumaLink's build of a library mod compares its new interface file with the one in the version it replaces
      (the newest published `.lumi` given, or none for 1.0). Anything other than added functions, fields at the end
      and cases in open enums stops the build. The message names the type or function and says "a new major
-     version is needed". So rule 12's promise is checked, not trusted.
+     version is needed".
 6. Closures. A closure given to another mod (`on_spin`) is passed as `{fn, env, owner}`. Its `fn` is a
    trampoline in the owner's library that acts as the boundary for it: it reports the owner's own errors and
    returns 2. A library that gets 1 or 2 from a closure stops that call only, and the closure's mod gets the report.

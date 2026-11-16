@@ -5,8 +5,6 @@ intro: Say what a validator code (L203, or 203) means, in a language.
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink explain
 
 Say what a validator code (L203, or 203) means, in a language.

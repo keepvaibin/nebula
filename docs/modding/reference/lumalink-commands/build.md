@@ -5,8 +5,6 @@ intro: Build a mod's code (LumaScript and C) for every platform.
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink build
 
 Build a mod's code (LumaScript and C) for every platform.

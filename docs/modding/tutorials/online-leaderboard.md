@@ -1,19 +1,33 @@
 ---
-title: An online leaderboard
-shortTitle: An online leaderboard
-intro: Send times to a leaderboard server and show the best ones.
+title: Adding an online leaderboard
+shortTitle: Online leaderboard
+intro: Send each star's time to a leaderboard server, and show the fastest times from the pause menu.
 contentType: tutorials
+example: online-leaderboard
 ---
 
-## About this tutorial
+## Introduction
 
+In this tutorial, you make a mod that sends each star's time to a leaderboard server, under a name the player types once. A new **Leaderboard** entry in the pause menu shows the server's ten fastest times for the current star and the player's place.
 
-Each star's time is sent to a leaderboard server under a name the player types once. Leaderboard, a new line of the
-pause menu, shows the server's ten fastest times for the star being played and the player's place. The server is an
-option: any server that answers the two requests in part 4, on the internet, on the local network or on this
-computer. The whole mod is the folder [`online-leaderboard`](../guides/online-leaderboard/) in the documentation.
+The server address is an option. It can be any server that answers the two requests described in [Setting up a leaderboard server](#setting-up-a-leaderboard-server), on the internet, on the local network or on the same computer.
 
-## The folder
+You learn how to:
+
+* Ask for optional permissions, and keep the mod working when the player refuses one.
+* Choose between `net.local` and `net.internet` from the server address.
+* Ask the player for text once, and keep it with the `save` service.
+* Show a list that loads while a request is in progress.
+
+## Prerequisites
+
+* Nebula, installed with Nebula Setup.
+* LumaLink. For more information, see [Installing LumaLink](../get-started/installing-lumalink.md).
+* We recommend that you complete [Connecting to LiveSplit](livesplit-link.md) first.
+
+## Mod folder layout
+
+When you finish, the mod folder contains these files:
 
 ```text
 online-leaderboard/
@@ -29,33 +43,32 @@ online-leaderboard/
   tests/server-down/test.json                   nothing listening at the server's address
 ```
 
-## Step 1: Start the folder
+## Creating the mod
+
+Create the mod folder, and add the mod's needs, permissions and option.
 
 ```sh
-lumalink new online-leaderboard --id online-leaderboard --name "Online Leaderboard" --summary "Sends each star's time to a leaderboard server under the name you type, and shows the server's top ten from the pause menu." --author you
+lumalink new online-leaderboard --id online-leaderboard --name "Online Leaderboard" --summary "Sends each star's time to a leaderboard server under the name you type, and shows the server's top ten from the pause menu." --author YOUR-NAME
 lumalink add need lumakit online-leaderboard --version ">=1.0.0"
 lumalink add permission net.internet online-leaderboard --host "*" --why "Sends your star times to the leaderboard server you choose and reads its top ten."
 lumalink add permission net.local online-leaderboard --why "Reaches a leaderboard server on this computer or your local network."
 lumalink add option server online-leaderboard --kind text --default "https://example.invalid/board" --max-length 256 --name "Leaderboard server"
 ```
 
-The mod asks for two permissions, and the player may refuse either one. `net.internet` with the host `*` reaches any
-public address; `net.local` reaches this computer and the local network. The code imports both as optional, so a
-refused one leaves the mod running without it.
+The mod asks for two permissions, and the player can refuse either one:
 
-The option `server` is the leaderboard's address. Its default is under `.invalid`, a name that never has an address,
-so the mod sends nothing anywhere until the player sets a server.
+* `net.internet` with the host `*` reaches any public address.
+* `net.local` reaches this computer and the local network.
 
-`luma.json`'s `text` block gives the mod's name, its summary and the option's name in each of the game's languages.
-`lumalink add text JpJapanese online-leaderboard --name ... --summary ...` writes the name and the summary of one; the
-option's name goes into the same block by hand, as `"options": { "server": { "name": "..." } }`.
+The code imports both services as optional, so if the player refuses one, the mod keeps running without it.
 
-## Step 2: The lines it shows
+The `server` option is the leaderboard's address. Its default address ends in `.invalid`, a domain that never has an address, so the mod sends nothing until the player sets a server.
 
-`layers/base/merge/MessageData/messages.json` adds the mod's lines to the game's messages: the pause menu's line, the
-board's titles, the name prompt, and what the mod says when a time is not sent. `default` is English; the other keys
-are the game's languages (`fr` and `es` serve both of their regions). A line with `{place}` takes a value from the
-code.
+To add the mod's name and summary in another language, run `lumalink add text LANGUAGE online-leaderboard --name NAME --summary SUMMARY`. Add the option's name to the same `text` block by hand, as `"options": { "server": { "name": "..." } }`.
+
+## Adding the mod's text
+
+Create `layers/base/merge/MessageData/messages.json`. It adds the mod's lines to the game's text: the pause menu entry, the titles of the leaderboard, the name prompt, and the messages that explain why a time was not sent. `default` is English, and the other keys are the game's languages. `fr` and `es` are used for both regions of each language. A line that contains `{place}` takes a value from the code.
 
 ```json
 {
@@ -68,11 +81,11 @@ code.
 }
 ```
 
-The code names each line as `text "Board.Menu"`, or `text "Board.TitlePlace"(place: 3)` for one with a value.
+The code refers to each line by name, for example `text "Board.Menu"`, or `text "Board.TitlePlace"(place: 3)` for a line with a value.
 
-## Step 3: The code
+## Writing the code
 
-Put this in `online-leaderboard/source/main.lum`:
+Create `online-leaderboard/source/main.lum` with this code:
 
 ```lumascript
 use optional svc.net.internet as internet
@@ -541,104 +554,93 @@ fn unreserved(c: u8) -> bool {
 }
 ```
 
-What each part does:
+### Timing a star
 
-- The time. `startStagePlayFirst` and `startStagePlayRetry` run when a stage starts and when it starts again after a
-  miss. They arm the attempt in a galaxy (not the file select, not the observatory); it begins at the first
-  `GameScene::exeSceneAction`, the game's play, so the opening camera is not timed. `time.now().step` counts the
-  world's steps, which stop while the game is paused. The star's "got it" scene (`requestPowerStarGetDemo`) ends the
-  attempt and sends its steps; a game over throws it away. The star is the stage's name and the star's number,
-  as `EggStarGalaxy/1`.
-- The name. The first time a star is sent with no name, `input.text_request` opens the platform's text entry (the
-  keyboard or input method on a computer, the system keyboard on an Android phone) and `hud.text` shows the prompt over the game with what
-  is typed so far (`input.text_peek`). Enter takes the name; Esc, Android's Back or a lost window focus takes none,
-  and that star's time is not sent. The
-  name is kept with `save.global`, so it is asked once, not once a game file.
-- Sending. `submit` posts the time as JSON. When a time is not sent, `say` shows why with `screen.message`, which
-  stays until the player presses A or B. A HUD line holds at most 64 characters, so `hud.text` keeps only the short
-  name prompt.
-- The board. `menu.add_pause_entry` adds Leaderboard to the pause menu. `screen.list` shows the board with
-  Loading... while the server answers, then the ten times and the player's place in its title. When the request
-  fails, `screen.message` says why. B closes it.
-- Which service. `local_url` reads the address's host: `localhost`, `127.x.x.x`, `10.x.x.x`, `172.16.x.x` to
-  `172.31.x.x`, `192.168.x.x`, `169.254.x.x`, `[::1]`, `[fc..]`, `[fd..]`, `[fe80..]` and those as `[::ffff:...]` go
-  through `net.local`, any other host through `net.internet`. These are the addresses each service takes; neither
-  stands in for the other, so a refused `net.local` is never tried through `net.internet`. A refused service is an
-  empty slot (`local == none`), and the mod says which reach the player did not allow. This computer's own public
-  address is not in that list: it goes to `net.internet`, which refuses it as a local address.
+`startStagePlayFirst` and `startStagePlayRetry` run when a stage starts, and when it starts again after Mario loses a life. In a galaxy, they prepare the attempt. The file select screen and the observatory are not timed. The attempt begins at the first call to `GameScene::exeSceneAction`, when play begins, so the opening camera is not timed.
 
-## Step 4: The server it talks to
+`time.now().step` counts the world's steps, which stop while the game is paused. The star cutscene (`requestPowerStarGetDemo`) ends the attempt and sends its step count. A game over discards it. The star is identified by the stage's name and the star's number, for example `EggStarGalaxy/1`.
 
-Any HTTP server that answers these two requests. `{server}` is the option, without a final `/`.
+### Asking for a name
 
-| request | body sent | answer |
+The first time the mod sends a time without a name, `input.text_request` opens the platform's text entry: the keyboard or input method on a computer, or the system keyboard on an Android device. `hud.text` shows the prompt over the game with the text typed so far (`input.text_peek`).
+
+<kbd>Enter</kbd> accepts the name. <kbd>Esc</kbd>, the Back button on Android, or a lost window focus cancels the prompt, and that star's time is not sent. The name is stored with `save.global`, so the mod asks once, not once for each save file.
+
+### Sending a time
+
+`submit` sends the time as JSON. When a time is not sent, `say` uses `screen.message` to explain why, and the message stays until the player presses <kbd>A</kbd> or <kbd>B</kbd>. A HUD line holds at most 64 characters, so `hud.text` is used only for the short name prompt.
+
+### Showing the leaderboard
+
+`menu.add_pause_entry` adds **Leaderboard** to the pause menu. `screen.list` shows the leaderboard with **Loading...** while the server answers, then the ten fastest times, with the player's place in the title. When the request fails, `screen.message` explains why. <kbd>B</kbd> closes the leaderboard.
+
+### Choosing a network service
+
+`local_url` reads the host of the server address. These hosts use `net.local`: `localhost`, `127.x.x.x`, `10.x.x.x`, `172.16.x.x` to `172.31.x.x`, `192.168.x.x`, `169.254.x.x`, `[::1]`, `[fc..]`, `[fd..]` and `[fe80..]`, and any of those written as `[::ffff:...]`. Any other host uses `net.internet`.
+
+These are exactly the addresses each service accepts, and neither service replaces the other. If the player refuses `net.local`, the mod never tries the same address through `net.internet`. A refused service is empty (`local == none`), and the mod tells the player which kind of access is not allowed. This computer's own public address is not in the list above: it goes to `net.internet`, which refuses it as a local address.
+
+## Setting up a leaderboard server
+
+The mod works with any HTTP server that answers these two requests. `{server}` is the value of the `server` option, without a trailing `/`.
+
+| Request | Body | Answer |
 |---|---|---|
-| `POST {server}/submit` | `{"star": "EggStarGalaxy/1", "name": "Mario", "frames": 689}`, `Content-Type: application/json` | 200 and any body |
-| `GET {server}/top?star=EggStarGalaxy%2F1&name=Mario` | none | 200 and `{"top": [{"name": "Rosalina", "frames": 6}, ...], "place": 11}` |
+| `POST {server}/submit` | `{"star": "EggStarGalaxy/1", "name": "Mario", "frames": 689}`, with `Content-Type: application/json` | Status 200 and any body. |
+| `GET {server}/top?star=EggStarGalaxy%2F1&name=Mario` | None | Status 200 and `{"top": [{"name": "Rosalina", "frames": 6}, ...], "place": 11}`. |
 
-`frames` are world steps at 60 a second. `top` is the star's best times, fastest first; the board shows the first
-ten. `place` is the name's place by its best time, 0 when it has none. Any other status, or no answer within 10
-seconds, is shown as the reason.
+* `frames` is a time in world steps, at 60 per second.
+* `top` lists the star's best times, fastest first. The leaderboard shows the first ten.
+* `place` is the name's place by its best time, or `0` when the name has no time.
 
-## Step 5: Build and check
+Any other status, or no answer within 10 seconds, is shown to the player as the reason the request failed.
+
+## Building and checking the mod
 
 ```sh
 lumalink build online-leaderboard
 lumalink check online-leaderboard
 ```
 
-`check` ends `Errors: 0`.
+The last line of the `check` output is `Errors: 0`.
 
-## Step 6: Test it
+> [!NOTE]
+> In the current version, LumaLink cannot yet build a comparison of an optional service with `none` (`local == none`) or a call to `input.text_peek`, so this mod does not build.
 
-A test must not reach the internet. `tests/board/server/` is a second small mod that listens on `127.0.0.1:47613`
-through `net.local` and answers as part 4 says. It holds ten times for Good Egg's first star, Rosalina's 0.10 seconds
-to Spike's 1.00, and writes each request it gets as facts. The tests set the option `server` to
-`http://127.0.0.1:47613/board`; the tests of the internet path use names under `.invalid`, which never have an
-address, so no test connects to a host on the internet.
+## Testing the mod
+
+A test must not reach the internet. The finished mod's `tests/board/server/` folder contains a second small mod that listens on `127.0.0.1:47613` through `net.local` and answers as described in [Setting up a leaderboard server](#setting-up-a-leaderboard-server). It holds ten times for the first star of Good Egg Galaxy, from Rosalina's 0.10 seconds to Spike's 1.00 seconds, and writes each request it receives as facts.
+
+The tests set the `server` option to `http://127.0.0.1:47613/board`. The tests for the internet path use domains ending in `.invalid`, which never have an address, so no test connects to a host on the internet.
 
 ```sh
 lumalink test online-leaderboard
 ```
 
-- `tests/board`: Good Egg, star 1. The harness calls the star scene at frame 600; the prompt opens, `Marix`,
-  Backspace, `o` and Enter type Mario, and the server gets the star, the name and a time of more than 600 steps as
-  JSON. In the galaxy again, PLUS and A on Leaderboard show the ten times with `Your place: 11` in the title, and B
-  closes it. A second star is sent under Mario with no prompt.
-- `tests/no-name`: Esc on the prompt. Nothing is sent and the message says no name was typed; the next
-  star asks again.
-- `tests/local-declined`: `net.local` refused, `net.internet` allowed. The board and the message say the
-  mod may not reach this computer, and the server gets no request.
-- `tests/internet-declined`: `net.internet` refused, the server `https://board.invalid/board`. The board and the line
-  over the game say the mod may not reach the internet.
-- `tests/unresolvable`: both allowed and the option left at `https://example.invalid/board`. The board and the line
-  say the server cannot be reached.
-- `tests/server-down`: the server `http://127.0.0.1:47614/board`, where nothing listens. The board and the line say
-  the server cannot be reached.
+* `tests/board` plays Good Egg Galaxy, star 1. The test calls the star cutscene at frame 600. The prompt opens, and the test types `Marix`, <kbd>Backspace</kbd>, `o` and <kbd>Enter</kbd> to enter the name Mario. The server receives the star, the name and a time of more than 600 steps as JSON. In the galaxy again, <kbd>+</kbd> and <kbd>A</kbd> on **Leaderboard** show the ten times with **Your place: 11** in the title, and <kbd>B</kbd> closes it. A second star is sent under the name Mario without the prompt.
+* `tests/no-name` presses <kbd>Esc</kbd> at the prompt. Nothing is sent, the message says that no name was entered, and the next star asks again.
+* `tests/local-declined` refuses `net.local` and allows `net.internet`. The leaderboard and the message say that the mod cannot reach this computer, and the server receives no request.
+* `tests/internet-declined` refuses `net.internet` and uses the server `https://board.invalid/board`. The leaderboard and the message say that the mod cannot reach the internet.
+* `tests/unresolvable` allows both services and leaves the option at `https://example.invalid/board`. The leaderboard and the message say that the server cannot be reached.
+* `tests/server-down` uses the server `http://127.0.0.1:47614/board`, where nothing is listening. The leaderboard and the message say that the server cannot be reached.
 
-Each test runs the game hidden and silent and ends `pass` or `fail` with its run folder.
+To run the tests, copy the `tests` folder from the finished mod into `online-leaderboard`, then run the command above. Each test runs the game hidden and silent, and ends with `pass` or `fail` and the path of its run folder.
 
-Not yet: LumaLink does not build `local == none` on an optional service or `input.text_peek`, so the mod does not
-build until the compiler takes both.
+## Playing the mod
 
-## Step 7: Play it
+1. Pack the mod.
 
-```sh
-lumalink pack online-leaderboard
-```
+   ```sh
+   lumalink pack online-leaderboard
+   ```
 
-Drop `online-leaderboard.luma` on the game's window, switch it on in the Mods screen, allow what it asks for and set
-Leaderboard server to the board's address. Get a star and type your name. Pause and choose Leaderboard to see the
-star's top ten.
+1. Drag the `.luma` file onto the game's window, and turn the mod on in the **Mods** page.
+1. Allow the permissions the mod asks for, and set **Leaderboard server** to the leaderboard's address.
+1. Collect a star and type your name.
+1. To see the star's ten fastest times, pause the game and choose **Leaderboard**.
 
-## See also
+## Next steps
 
-`services/net.md` (`net.local`, `net.internet`, `http`), `services/input.md` (`text_request`), `services/save.md`
-(`save.global`), `lumakit/menu.md`, `lumakit/screen.md`, `lumakit/hud.md`, `format/luma.md` (permissions,
-options, text), `lumalink/test-harness.md`, `guides/livesplit-link.md`.
-
-## Further reading
-
-* [Tutorials](index.md)
-* [LumaScript reference](../reference/lumascript/index.md)
-* [Testing a mod](../how-tos/testing-a-mod.md)
+* [About permissions](../concepts/permissions.md)
+* [Network service](../reference/services/net.md)
+* [Save service](../reference/services/save.md)

@@ -5,8 +5,6 @@ intro: List what is in a .luma, or a kind of thing in your imported game.
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink list
 
 List what is in a .luma, or a kind of thing in your imported game.

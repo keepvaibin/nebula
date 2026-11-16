@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050609" />
+    <link rel="icon" href="../../favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="../../favicon-32.png" />
+    <link rel="apple-touch-icon" href="../../apple-touch-icon.png" />
+    <title>Mods &amp; texture packs — Nebula</title>
+    <meta name="description" content="Supported mods, installation and troubleshooting." />
+    <meta property="og:title" content="Mods &amp; texture packs — Nebula" />
+    <meta property="og:description" content="Supported mods, installation and troubleshooting." />
+    <link rel="preload" href="../../fonts/Delfino.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="../../style.css" />
+    <link rel="stylesheet" href="../../reference-ui.css" />
+    <link rel="stylesheet" href="../../player-site.css" />
+    <link rel="canonical" href="https://nebula.keepvaibin.com/play/mods/" />
+    <meta property="og:site_name" content="Nebula" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://nebula.keepvaibin.com/play/mods/" />
+    <meta property="og:image" content="https://nebula.keepvaibin.com/icon-192.png" />
+    <meta name="twitter:card" content="summary" />
+  </head>
+  <body class="inner-page">
+    <a class="skip" href="#main-content">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="../../" aria-label="Nebula home"
+        ><img class="brand-logo" src="../../brand-logo.png" alt="" width="34" height="34" />
+        nebula</a
+      ><button class="nav-toggle" aria-expanded="false" aria-controls="main-navigation">
+        Menu <span aria-hidden="true">☰</span>
+      </button>
+      <nav id="main-navigation" aria-label="Main navigation">
+        <a href="../../v2/">v2</a><a href="../../guide/">Setup</a
+        ><a href="../../play/">Player guide</a><a href="../../docs/">Modding</a
+        ><a href="../../help/">Help</a><a href="../../blog/">Blog</a
+        ><a href="../../download/">Download</a>
+      </nav>
+    </header>
+    <main id="main-content" class="inner-main">
+      <div class="page-heading">
+        <a class="breadcrumb" href="../../">Nebula /</a>
+        <p class="eyebrow">PLAYER INFORMATION</p>
+        <h1>Mods &amp; texture packs</h1>
+        <p>Supported mods, installation and troubleshooting.</p>
+      </div>
+      <nav class="page-toc" aria-label="On this page">
+        <a href="#supported">COMPATIBILITY</a><a href="#import">IMPORT</a
+        ><a href="#packs">TEXTURES &amp; MOVIES</a><a href="#mod-help">TROUBLESHOOTING</a>
+      </nav>
+      <section class="content" id="supported">
+        <div class="section-label">COMPATIBILITY</div>
+        <div class="section-body">
+          <h2>Supported mods</h2>
+          <p>
+            .luma mods, Riivolution packs, disc file replacements, Dolphin texture packs and
+            replacement movies.
+          </p>
+          <p>
+            Wii code patches cannot run in a native game, and Nebula lists them at import.
+            <a class="text-link" href="https://github.com/keepvaibin/lumalink">LumaLink</a>
+            converts a Wii mod to a .luma file and lists what it cannot use.
+          </p>
+          <a class="text-link" href="../../docs/">Modding docs →</a>
+        </div>
+      </section>
+      <section class="content" id="import">
+        <div class="section-label">IMPORT</div>
+        <div class="section-body">
+          <h2>Installation</h2>
+          <ol class="setup-steps">
+            <li>
+              <span>01</span>
+              <div>
+                <h3>Open Mods</h3>
+                <p>Open Settings, then the MODS page.</p>
+              </div>
+            </li>
+            <li>
+              <span>02</span>
+              <div>
+                <h3>Import</h3>
+                <p>
+                  Choose Import file or Import folder, or drop the mod on the game window. Archives
+                  can be .zip, .7z, .rar or .tar, without a password.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span>03</span>
+              <div>
+                <h3>Load order</h3>
+                <p>
+                  Move the mod to the list on the right. When two mods change the same file, the
+                  higher one wins.
+                </p>
+              </div>
+            </li>
+            <li>
+              <span>04</span>
+              <div>
+                <h3>Apply</h3>
+                <p>Choose the mod’s options, then Apply and restart Nebula.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+      <section class="content" id="packs">
+        <div class="section-label">TEXTURES &amp; MOVIES</div>
+        <div class="section-body">
+          <h2>Texture packs and movies</h2>
+          <p>
+            Dolphin texture packs use tex1_ file names. Texture packs On loads images as needed;
+            Preload loads all of them at startup and uses more memory.
+          </p>
+          <p>
+            Replacement movies go in the movies folder, named like the game’s videos (for example
+            PrologueA.mp4), as MP4, MKV or WebM. 4K video needs hardware video decoding.
+          </p>
+        </div>
+      </section>
+      <section class="content" id="mod-help">
+        <div class="section-label">TROUBLESHOOTING</div>
+        <div class="section-body">
+          <h2>Troubleshooting</h2>
+          <p>
+            Turn the mods off on the MODS page (on Windows, you can also hold Shift while Nebula
+            starts). If the problem stops, turn the mods on one at a time. Error codes NEB-M01,
+            NEB-M02 and NEB-M03 name the mod or file involved.
+          </p>
+          <a class="button primary" href="../../help/#report">Report a problem</a>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="footer-top">
+        <a class="brand" href="../../"
+          ><img class="brand-logo" src="../../brand-logo.png" alt="" width="34" height="34" />
+          nebula</a
+        >
+        <p>A little closer to the stars.</p>
+      </div>
+      <div class="footer-links">
+        <div>
+          <h3>Explore</h3>
+          <a class="text-link" href="../../v2/">Nebula v2</a
+          ><a class="text-link" href="../../play/">Player guide</a
+          ><a class="text-link" href="../../docs/">Modding docs</a
+          ><a class="text-link" href="../../blog/">Developer Blog</a>
+        </div>
+        <div>
+          <h3>Start playing</h3>
+          <a class="text-link" href="../../download/">Download</a
+          ><a class="text-link" href="../../guide/">Setup &amp; requirements</a
+          ><a class="text-link" href="../../play/controls/">Controls</a>
+        </div>
+        <div>
+          <h3>Get help</h3>
+          <a class="text-link" href="../../help/">Troubleshooting</a
+          ><a class="text-link" href="../../help/#report">Report a bug</a
+          ><a class="text-link" href="https://discord.gg/2fJEdhAw2f">Join Discord ↗</a>
+        </div>
+        <div>
+          <h3>Nebula</h3>
+          <a class="text-link" href="../../credits/">Credits</a
+          ><a class="text-link" href="../../legal/">Legal &amp; privacy</a
+          ><a class="text-link" href="https://github.com/keepvaibin/nebula">GitHub ↗</a>
+        </div>
+      </div>
+      <p class="legal-line">
+        © 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and
+        Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo.
+      </p>
+    </footer>
+    <script type="module" src="../../site.js"></script>
+
+    <script id="page-messages" type="application/json">
+      {
+        "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+      }
+    </script>
+  </body>
+</html>

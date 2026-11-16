@@ -17,7 +17,7 @@ The header is `native/include/luma_anim.h`. In LumaScript, a service is called b
 
 ### Details from the header
 
-LumaCore's anim service: a clip of an actor's model played as the game plays its own (its joint, texture, color, texture-swap and visibility clips of one name started together), from a frame, at a rate, once or looping, blended from the pose it had; its frame read; frames of it marked, each mark an event as the clip passes it; its end an event. The clip is the model's own (a mod model's glTF animations, a game model's clips, or the mod's replacement of one: content/animation.md). Import: `LUMA_SERVICE(slot, "anim", "1.0")`.
+LumaCore's anim service: a clip of an actor's model played as the game plays its own (its joint, texture, color, texture-swap and visibility clips of one name started together), from a frame, at a rate, once or looping, blended from the pose it had; its frame read; frames of it marked, each mark an event as the clip passes it; its end an event. The clip is the model's own (a mod model's glTF animations, a game model's clips, or the mod's replacement of one). Import: `LUMA_SERVICE(slot, "anim", "1.0")`.
 
 ## Limits and constants
 

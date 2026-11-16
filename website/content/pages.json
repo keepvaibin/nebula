@@ -1,0 +1,72 @@
+[
+  {
+    "path": "",
+    "template": "templates/pages/home.html",
+    "copy": "content/pages/home.json"
+  },
+  {
+    "path": "v2/",
+    "template": "templates/pages/v2.html",
+    "copy": "content/pages/v2.json"
+  },
+  {
+    "path": "download/",
+    "template": "templates/pages/download.html",
+    "copy": "content/pages/download.json"
+  },
+  {
+    "path": "guide/",
+    "template": "templates/pages/guide.html",
+    "copy": "content/pages/guide.json"
+  },
+  {
+    "path": "play/",
+    "template": "templates/pages/play.html",
+    "copy": "content/pages/play.json"
+  },
+  {
+    "path": "play/graphics/",
+    "template": "templates/pages/play-graphics.html",
+    "copy": "content/pages/play-graphics.json"
+  },
+  {
+    "path": "play/controls/",
+    "template": "templates/pages/play-controls.html",
+    "copy": "content/pages/play-controls.json"
+  },
+  {
+    "path": "play/mods/",
+    "template": "templates/pages/play-mods.html",
+    "copy": "content/pages/play-mods.json"
+  },
+  {
+    "path": "play/saves/",
+    "template": "templates/pages/play-saves.html",
+    "copy": "content/pages/play-saves.json"
+  },
+  {
+    "path": "help/",
+    "template": "templates/pages/help.html",
+    "copy": "content/pages/help.json"
+  },
+  {
+    "path": "help/error-codes/",
+    "template": "templates/pages/help-error-codes.html",
+    "copy": "content/pages/help-error-codes.json"
+  },
+  {
+    "path": "credits/",
+    "template": "templates/pages/credits.html",
+    "copy": "content/pages/credits.json"
+  },
+  {
+    "path": "legal/",
+    "template": "templates/pages/legal.html",
+    "copy": "content/pages/legal.json"
+  },
+  {
+    "path": "404.html",
+    "template": "templates/pages/not-found.html",
+    "copy": "content/pages/not-found.json"
+  }
+]
