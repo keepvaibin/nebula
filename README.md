@@ -158,6 +158,10 @@ cargo build --release --locked -p nebula-import
 `identify` must report RMGE01, RMGP01 or RMGJ01. An extracted game folder works in place of the disc image. The
 content folder then holds `game.pak`.
 
+`nebula-import verify <content>/game.pak` reads the store back and checks it as the game loads it, then further (every
+table, node, parent and path hash), naming each disagreement on a line of its own and exiting 3 when one exists;
+`nebula-import list <content>/game.pak [prefix]` prints the tree it describes.
+
 ### Building the host
 
 ```powershell

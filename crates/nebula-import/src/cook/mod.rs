@@ -55,6 +55,7 @@ pub mod sound_effect;
 pub mod sound_sequence;
 pub mod sound_stream;
 pub mod store;
+pub mod store_index;
 pub mod table;
 pub mod table_keys;
 pub mod patch;
