@@ -6,6 +6,10 @@ author: keepvaibin
 image: battlerock.jpg
 ---
 
+First of all, I want to preface this with the information that I do have a Ko-Fi now! I don't really want to frame this in a scummy way, as I would never charge people for an app I am trying to create for everyone to use, but donations/tips are appreciated! This project will always be free but if you do appreciate the work I'm doing and like v2 when it comes out, a little goes a long way (and maybe my Taco Bell addiction can finally be subsidized)!
+
+Feel free to donate at [https://ko-fi.com/keepvaibin](https://ko-fi.com/keepvaibin). Once again, thank you for your support!
+
 Hello! If you've been following Nebula for a while, you've probably noticed things got a little quiet for about three weeks. That wasn't because nothing was happening, and in fact was because quite literally *everything* was happening, and none of it was in a state I could show off yet (typical trying to cram every feature I can think of into as short of a timeframe as possible lmao). It's a lot closer to being polished now, so let's talk about it!
 
 This post is long, but I wanted one place that explains what Nebula v2 actually is, what changed under the hood, and why I think it was worth tearing so much of the old work down to get here. If you only want the feature list, feel free to [skip ahead](#so-what-was-built). I won't be offended (but atp you should have just read the [discord announcement](https://discord.gg/2fJEdhAw2f)).
