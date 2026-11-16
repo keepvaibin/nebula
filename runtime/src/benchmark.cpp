@@ -1475,6 +1475,7 @@ void write_result(bool complete) {
 // The player's settings kept and the run's own in use, from the run's first frame on (its reset and title too): the
 // benchmark presents its way (apply_benchmark_presenting) whatever frame rate cap or VSync the player chose. A run in
 // the game holds them as it starts; a run from the command line at its first frame, once the settings file is read.
+// Your settings are the player's, ray tracing included (where the device traces); the standard ones trace nothing.
 void hold_settings() {
     Run& r = g_run;
     if (r.settings_held) return;
@@ -1482,7 +1483,6 @@ void hold_settings() {
     r.chosen = render::get_render_config_chosen();
     r.yours = r.chosen;
     r.yours.frame_generation = 0u;
-    r.yours.ray_tracing_enabled = false;
     render::apply_benchmark_presenting(r.yours);
     r.standard = r.chosen;
     render::apply_benchmark_standard(r.standard);

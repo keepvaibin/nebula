@@ -1,5 +1,6 @@
 #include "Game/MapObj/StarPiece.hpp"
 #include "Game/Render/FrameList.hpp"
+#include "Game/Util/GameLightSignal.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -321,9 +322,10 @@ void StarPiece::changeScale(f32 scale) {
 }
 
 void StarPiece::control() {
-    {
+    if (GameLightSignal::tracing()) {
         // A star bit is a small light of its own colour, for a renderer that lights from every source: its colour
-        // at full strength (the pieces' colours are dark so the crystal's shading reads), 40 candela.
+        // at full strength (the pieces' colours are dark so the crystal's shading reads), 40 candela. Only while the
+        // host traces (GameLightSignal::tracing).
         const f32 top = static_cast< f32 >(mColor.r > mColor.g ? (mColor.r > mColor.b ? mColor.r : mColor.b) : (mColor.g > mColor.b ? mColor.g : mColor.b));
         if (top > 0.0f) {
             NebulaFramePointLight light{};
@@ -335,6 +337,7 @@ void StarPiece::control() {
             light.color[2] = static_cast< f32 >(mColor.b) / top;
             light.candela = 40.0f;
             light.radius = getBinder() != nullptr ? MR::getBinderRadius(this) : 0.0f;
+            light.owner = GameLightSignal::pointOwner(this);
             Frame::pointLight(light);
         }
     }

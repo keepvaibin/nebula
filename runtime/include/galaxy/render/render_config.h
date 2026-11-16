@@ -193,10 +193,11 @@ struct RenderConfig {
     return config.per_pixel_lighting || config.enhanced_lighting || config.ray_tracing_enabled;
 }
 
-// Whether the 3D scene is drawn in the wide (FP16) target with its camera: for the enhanced lighting, or while tracing
-// (the relit scene goes over 1). `tracing`: ray tracing on and the tracer started.
+// Whether the 3D scene is drawn in the wide (FP16) target with its camera: always while tracing (the relit scene goes
+// over 1 and the camera's finish brings it in), and for the enhanced lighting when wide_scene asks. `tracing`:
+// ray tracing on and the tracer started.
 [[nodiscard]] inline bool scene_wide(const RenderConfig& config, bool tracing) noexcept {
-    return (config.enhanced_lighting || tracing) && config.wide_scene;
+    return tracing || (config.enhanced_lighting && config.wide_scene);
 }
 
 // Frames per second the game picture is presented at. The game renders 60; lower rates present the newest frame on
@@ -325,14 +326,14 @@ struct RenderFeatureCaps {
 
 // The settings as the renderer runs them, a copy taken under the lock (never a partial update): the player's, except
 // while the tracer runs, when the scene renders single-sampled and is anti-aliased temporally (the tracer
-// reads one depth and one item a pixel): MSAA is set aside and, without a temporal upscaler chosen, FSR 3 runs, in its
-// native anti-aliasing mode or at FSR 1's chosen scale. On a surface that presents only at its refresh
-// (present_waits_for_refresh) VSync is on whatever was chosen.
+// reads one depth and one item a pixel): MSAA is set aside and, without a temporal upscaler chosen, the one the tracer's
+// start picked runs, in its native anti-aliasing mode or at FSR 1's chosen scale.
 [[nodiscard]] RenderConfig get_render_config();
 // The player's settings as chosen and saved (Nebula Settings, config.ini): ray tracing off gives them back whole.
 [[nodiscard]] RenderConfig get_render_config_chosen();
-// Set as the tracer starts (with whether FSR 3 runs on this device) and stops.
-void set_render_tracing(bool tracing, bool fsr3) noexcept;
+// Set as the tracer starts and stops. `temporal`: the temporal upscaler that anti-aliases the traced scene where the
+// player chose none, the first this device runs (2 FSR 3, else 5 SGSR 2); 0 none.
+void set_render_tracing(bool tracing, unsigned temporal) noexcept;
 // Whether the tracer runs (set_render_tracing).
 [[nodiscard]] bool render_tracing() noexcept;
 
@@ -383,14 +384,22 @@ inline constexpr unsigned kRtPresetReference = 3u, kRtPresetCustom = 4u;
 inline unsigned rt_part(const RenderConfig& cfg, RtPart part) noexcept {
     return part < RtPart::Count ? std::min<unsigned>(cfg.rt_parts[static_cast<std::size_t>(part)], 3u) : 0u;
 }
+// Whether a part has a low level: reflections and glass and water have none (every reader of theirs asks medium or
+// high, so low ran as off); a low there is off.
+[[nodiscard]] constexpr bool rt_part_has_low(RtPart part) noexcept {
+    return part != RtPart::Reflect && part != RtPart::Transmit;
+}
+[[nodiscard]] constexpr unsigned rt_part_level(RtPart part, unsigned level) noexcept {
+    return level == 1u && !rt_part_has_low(part) ? 0u : (level < 3u ? level : 3u);
+}
 
-// The presets' parts: low leaves the painted reflections; reference takes high's parts and the reference
-// path tracer draws the picture.
+// The presets' parts: low leaves the painted reflections and draws glass and water as the game does;
+// reference takes high's parts and the reference path tracer draws the picture.
 inline void rt_apply_preset(RenderConfig& cfg) noexcept {
     constexpr std::uint8_t kParts[4][6] = {
         {2u, 2u, 2u, 2u, 2u, 2u},  // medium
         {3u, 3u, 3u, 3u, 3u, 3u},  // high
-        {1u, 1u, 1u, 0u, 1u, 1u},  // low
+        {1u, 1u, 1u, 0u, 0u, 1u},  // low
         {3u, 3u, 3u, 3u, 3u, 3u},  // reference
     };
     if (cfg.rt_quality < kRtPresetCustom) {
@@ -416,8 +425,8 @@ void set_render_feature_caps(const RenderFeatureCaps& caps);
 [[nodiscard]] RenderTimingConfig resolve_frame_timing_config_from_environment();
 [[nodiscard]] const RenderTimingConfig& get_frame_timing_config();
 
-// Reads config.ini (in the settings folder: --settings, else the data folder) if present, then the GALAXY_<KEY> overrides;
-// missing keys keep their defaults. Called once by the host before initialize().
+// Reads config.ini (in the settings folder: --settings, else the data folder) if present; missing keys keep their
+// defaults. Called once by the host before initialize().
 void load_render_config_from_file();
 
 // Writes the settings to the same config.ini.

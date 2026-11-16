@@ -30,7 +30,7 @@ add_custom_command(OUTPUT "${nebula_apple_utility_msl_dir}/utility_msl_data.h"
 get_target_property(nebula_apple_vk_sources galaxy_render_vk SOURCES)
 set(nebula_apple_mtl_sources)
 foreach(source IN LISTS nebula_apple_vk_sources)
-    # The tracer's shader table is the other renderers' bytes (rt_shaders.cpp): Metal's has none (mtl/rt_backend_mtl.cpp).
+    # The tracer's shader table is the other renderers' bytes (rt_shaders.cpp): Metal's is its MSL (mtl/rt_backend_mtl.mm).
     if(source MATCHES "/render/vk/" OR source MATCHES "_vk\\.cpp$" OR source MATCHES "utility_spirv_data\\.h$"
        OR source MATCHES "/render/rt/rt_shaders\\.cpp$" OR source MATCHES "rt_shaders_spirv\\.h$")
         continue()
@@ -41,12 +41,46 @@ file(GLOB nebula_apple_mtl_backend CONFIGURE_DEPENDS
     "${nebula_root}/runtime/src/render/mtl/*.mm" "${nebula_root}/runtime/src/render/mtl/*.cpp")
 # shader_msl.cpp is nebula_msl's (it needs SPIRV-Cross's headers).
 list(FILTER nebula_apple_mtl_backend EXCLUDE REGEX "/shader_msl\\.cpp$")
-# A mod's programs are made on the player's machine through the Vulkan renderer's HLSL front end, then SPIRV-Cross
-# (mtl/mod_shader_compile_mtl.cpp): that one source of render/vk comes along, with glslang.
+# The tracer on Metal (mtl/rt_backend_mtl.mm). Off: that file is the back end that never starts, and nothing below is
+# built. On: its Objective-C++ half, and the tracer's shaders as MSL (tools/rt_shaders_msl.cpp over the SPIR-V the SDL
+# build makes, cmake/rt_shaders.cmake) where that build has a dxc that writes SPIR-V: on a Mac only one named by
+# GALAXY_DXC_SPIRV. Without the shaders the tracer does not start (rt_shaders_present).
+option(NEBULA_METAL_RAY_TRACING "Build the ray tracer's Metal back end and its shaders as MSL" OFF)
+set(nebula_apple_rt_spirv "${CMAKE_BINARY_DIR}/sdl/generated/rt_shaders/rt_shaders_spirv.h")
+set(nebula_apple_rt_msl_dir "${CMAKE_BINARY_DIR}/generated/rt_shaders_msl")
+set(nebula_apple_rt_msl)
+if(NEBULA_METAL_RAY_TRACING AND GALAXY_DXC_SPIRV)
+    file(MAKE_DIRECTORY "${nebula_apple_rt_msl_dir}")
+    set(nebula_apple_rt_msl "${nebula_apple_rt_msl_dir}/rt_shaders_msl.h")
+    if(nebula_apple_builds_tools)
+        add_executable(nebula_apple_rt_shaders_msl "${CMAKE_CURRENT_SOURCE_DIR}/tools/rt_shaders_msl.cpp" "${nebula_apple_rt_spirv}")
+        target_include_directories(nebula_apple_rt_shaders_msl PRIVATE "${CMAKE_BINARY_DIR}/sdl/generated/rt_shaders")
+        target_link_libraries(nebula_apple_rt_shaders_msl PRIVATE nebula_msl)
+        set_target_properties(nebula_apple_rt_shaders_msl PROPERTIES
+            OUTPUT_NAME rt_shaders_msl RUNTIME_OUTPUT_DIRECTORY "${NEBULA_HOST_TOOLS}")
+        set(nebula_apple_rt_msl_tool "$<TARGET_FILE:nebula_apple_rt_shaders_msl>")
+        set(nebula_apple_rt_msl_dependency nebula_apple_rt_shaders_msl)
+    else()
+        set(nebula_apple_rt_msl_tool "${NEBULA_HOST_TOOLS}/rt_shaders_msl")
+        set(nebula_apple_rt_msl_dependency "${NEBULA_HOST_TOOLS}/rt_shaders_msl")
+    endif()
+    add_custom_command(OUTPUT "${nebula_apple_rt_msl}"
+        COMMAND "${nebula_apple_rt_msl_tool}" "${nebula_apple_rt_msl}" ${nebula_apple_msl_platform}
+        DEPENDS ${nebula_apple_rt_msl_dependency} "${nebula_apple_rt_spirv}" VERBATIM)
+endif()
 add_library(galaxy_render_mtl STATIC ${nebula_apple_mtl_sources} ${nebula_apple_mtl_backend}
     "${nebula_root}/runtime/src/render/vk/shader_compile_vk.cpp"
-    "${nebula_apple_utility_msl_dir}/utility_msl_data.h")
+    "${nebula_apple_utility_msl_dir}/utility_msl_data.h" ${nebula_apple_rt_msl})
 target_link_libraries(galaxy_render_mtl PRIVATE nebula_shader_compiler)
+if(NEBULA_METAL_RAY_TRACING)
+    set(nebula_apple_rt_definitions NEBULA_METAL_RAY_TRACING=1)
+    if(nebula_apple_rt_msl)
+        target_include_directories(galaxy_render_mtl PRIVATE "${nebula_apple_rt_msl_dir}")
+        list(APPEND nebula_apple_rt_definitions GALAXY_RT_MSL=1)
+    endif()
+    set_source_files_properties("${nebula_root}/runtime/src/render/mtl/rt_backend_mtl.mm" PROPERTIES
+        COMPILE_DEFINITIONS "${nebula_apple_rt_definitions}")
+endif()
 target_compile_features(galaxy_render_mtl PUBLIC cxx_std_20)
 # The game's version, from the main project's file (as platform/sdl reads it for its own targets).
 file(STRINGS "${nebula_root}/CMakeLists.txt" nebula_apple_project_line REGEX "^project\\(Nebula VERSION ")

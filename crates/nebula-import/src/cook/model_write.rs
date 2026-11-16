@@ -723,7 +723,7 @@ pub fn twin_measures(ir: &ModelIr, stem: &str) -> (Vec<f64>, std::collections::B
         }
     }
     let lower = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
-    if lower.ends_with("sky") || lower.starts_with("vrorbit") {
+    if super::hit_record::sky_named(&lower) || lower.starts_with("vrorbit") {
         return (area, references);
     }
     let which: Vec<bool> = ir.shapes.iter().map(|s| ir.materials.get(s.material as usize).is_some_and(debakes)).collect();
@@ -945,7 +945,7 @@ pub fn glow_shapes(s: &MeshStreams, two_sided: bool) -> Vec<GlowShape> {
 
 pub fn debake_report(ir: &ModelIr, stem: &str) -> Option<DebakeReport> {
     let lower = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
-    if lower.ends_with("sky") || lower.starts_with("vrorbit") {
+    if super::hit_record::sky_named(&lower) || lower.starts_with("vrorbit") {
         return None;
     }
     let debake_material: Vec<bool> = ir
@@ -1501,8 +1501,19 @@ fn pbr_means(ir: &ModelIr, m: &MaterialIr, p: &super::model_ir::PbrMaterial) -> 
 }
 
 /// A reading as the cook finishes it (hit_record::finish, then the art's numbers): the painted reflection's map gives
-/// its colour and, for metal and gloss, the roughness.
+/// its colour and, for metal and gloss, the roughness. Between the tables and the model's own parts (its sheens, its
+/// face), its name's class across the game's models (hit_record::follow_name).
 pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32, r: &mut super::hit_record::Reading) {
+    finish_reading_named(ir, stem, material, thickness, r);
+    // A glTF material's class is its own numbers', not a name's.
+    if let Some(m) = ir.materials.get(material).filter(|_| ir.pbr.is_empty()) {
+        super::hit_record::follow_name(stem, &super::hit_record::material_key(ir, m), r);
+    }
+    finish_reading_parts(ir, stem, material, r);
+}
+
+/// finish_reading up to the name's class: the maps' numbers, the tables, the near twin.
+pub fn finish_reading_named(ir: &ModelIr, stem: &str, material: usize, thickness: f32, r: &mut super::hit_record::Reading) {
     use super::hit_record::{mean_colour, roughness_of_map, Class};
     let Some(m) = ir.materials.get(material) else { return };
     if r.env_map != 0xFF {
@@ -1520,8 +1531,9 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
                     r.env_tint = tint.map(|v| v / top);
                 }
             }
-            if matches!(r.class, Class::Metal | Class::Gloss) {
-                if let Some(roughness) = roughness_of_map(w, h, &texels) {
+            if let Some(roughness) = roughness_of_map(w, h, &texels) {
+                r.map_roughness = roughness;
+                if matches!(r.class, Class::Metal | Class::Gloss) {
                     r.roughness = roughness;
                 }
             }
@@ -1551,10 +1563,15 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
     super::hit_record::finish_with(stem, &m.name, thickness, ray, r);
     // A far twin looks as its near model does.
     super::hit_record::follow_twin(stem, &m.name, r);
+}
+
+/// finish_reading after the name's class: what the model's own parts make of it.
+pub fn finish_reading_parts(ir: &ModelIr, stem: &str, material: usize, r: &mut super::hit_record::Reading) {
+    let Some(m) = ir.materials.get(material) else { return };
     // A glTF material is read from its own numbers (pbr_reading): no painted sheen, face rule or metal kind by name;
     // a metal kind its `ray` names is applied as for the game's metals.
     if !ir.pbr.is_empty() {
-        if ray.metal_kind.is_some_and(|k| k != 255) {
+        if m.ray.metal_kind.is_some_and(|k| k != 255) {
             super::hit_record::metal_finish(stem, &m.name, r);
         }
         return;
@@ -1568,7 +1585,7 @@ pub fn finish_reading(ir: &ModelIr, stem: &str, material: usize, thickness: f32,
         }
     }
     // A review row (an ice being's) is kept on its face too.
-    if face && r.rule != "the review (rt_materials.tsv)" {
+    if face && r.rule != super::hit_record::REVIEWED {
         super::hit_record::face_plain(r);
     }
     // A metal's F0 by its kind, the art a tint.
@@ -1766,7 +1783,7 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
     // vertex-coloured, its colour's rgb not lit, opaque and not emissive; never a sky's. The records learn of it here.
     let sky_model = {
         let lower = stem.to_ascii_lowercase();
-        lower.ends_with("sky") || lower.starts_with("vrorbit")
+        super::hit_record::sky_named(&lower) || lower.starts_with("vrorbit")
     };
     if !sky_model {
         let debake_material: Vec<bool> = ir

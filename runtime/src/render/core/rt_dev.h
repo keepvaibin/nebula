@@ -27,8 +27,8 @@ enum class RtDev : std::uint8_t {
     AreaEmission,   // kAreaEmission
     HitSky,         // kHitSky
     Bounce,         // kBounce
-    BounceMax,      // the indirect ratio's upper limit (kBounceMax, rt_pass_indirect.cpp kIndirectBounceMax)
-    SkyMin,         // its lower limit (kSkyMin, kIndirectSkyMin)
+    BounceMax,      // the indirect ratio's upper limit (kBounceMax below)
+    SkyMin,         // its lower limit (kSkyMin below)
     HitDark,        // kHitDark
     SunGlint,       // kSunGlint
     HitGain,        // 1: a hit's surfaces met against their running mean (1 / mean where over 1), 0 held at 1
@@ -56,6 +56,12 @@ enum class RtDev : std::uint8_t {
     KeepGloss,        // gloss (0.25)
     Count,
 };
+// The indirect ratio's limits (BounceMax, SkyMin): the code's own numbers, for the shading frame (rt_bounce.cpp), the
+// sky and bounce light's last step and the reference's out (rt_pass_indirect.cpp, rt_indirect_up.hlsl,
+// rt_reference_out.hlsl).
+inline constexpr float kBounceMax = 2.5f;
+inline constexpr float kSkyMin = 0.25f;
+
 inline constexpr unsigned kRtDevCount = static_cast<unsigned>(RtDev::Count);
 static_assert(kRtDevCount <= 64u, "one bit a tunable (RenderCore::rt_dev_set_)");
 inline constexpr unsigned kRtDevProgramFirst = static_cast<unsigned>(RtDev::BaseFloor);

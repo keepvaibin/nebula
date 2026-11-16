@@ -245,6 +245,13 @@ void Geometry::want(std::uint64_t key, const TriangleInput& input) {
         return;
     }
     Entry& entry = entries_[key];
+    if (entry.kind == BuildKind::Moving) {
+        // A key that named a moving mesh: what it built is that mesh's, and it is refitted no more.
+        std::erase(moving_, key);
+        retire(entry);
+        entry.kind = BuildKind::Static;
+        entry.moved = false;
+    }
     if (entry.queued || (entry.structure && same_input(entry.input, input))) {
         return;
     }
@@ -297,10 +304,18 @@ void Geometry::move(std::uint64_t key, const TriangleInput& input, bool rebuild)
     }
     const auto [found, fresh] = entries_.try_emplace(key);
     Entry& entry = found->second;
-    if (fresh) {
+    if (fresh || entry.kind != BuildKind::Moving) {
+        if (!fresh) {
+            // A key that named a mesh standing still: its structure and its place in the queue are that mesh's.
+            stats_.waiting -= entry.queued ? 1u : 0u;
+            entry.queued = false;
+            retire(entry);
+        }
         moving_.push_back(key);
         entry.kind = BuildKind::Moving;
-    } else if (entry.structure && !same_shape(entry.input, input)) {
+    } else if (entry.structure && (!same_shape(entry.input, input) || entry.input.indices != input.indices)) {
+        // An update may move vertices only (DXR, "Acceleration structure update constraints"): other counts, or
+        // indices from another buffer, whose contents may differ, are built anew.
         retire(entry);
     }
     entry.input = input;
@@ -355,11 +370,19 @@ void Geometry::clear() noexcept {
     pages_ = RangePages{};  // the pages themselves go with the back end's stop
     scratch_page_ = ~0u;
     scratch_bytes_ = scratch_used_ = 0u;
+    budget_ = budget_used_ = 0u;
     stats_ = GeometryStats{};
 }
 
+// The scratch is taken before a structure: a structure is made only for a build recorded at once, so none is ever named
+// before it is built.
 bool Geometry::build(Entry& entry, bool refit) {
-    const BuildSizes sizes = backend_.sizes(entry.input, entry.kind);
+    // A refit keeps the counts, formats and flags its build had, on which alone the sizes depend.
+    const BuildSizes sizes = refit ? entry.sizes : backend_.sizes(entry.input, entry.kind);
+    const Range scratch = take_scratch(refit ? sizes.update_scratch : sizes.build_scratch);
+    if (!scratch) {
+        return false;
+    }
     if (!refit && (!entry.structure || entry.built_bytes < sizes.structure)) {
         retire(entry);
         const Range range = take_structure(sizes.structure);
@@ -375,12 +398,11 @@ bool Geometry::build(Entry& entry, bool refit) {
         ++stats_.structures;
         stats_.triangles += entry.input.triangles();
     }
-    const Range scratch = take_scratch(refit ? sizes.update_scratch : sizes.build_scratch);
-    if (!scratch) {
-        return false;
-    }
     backend_.build(entry.input, entry.kind, entry.structure, scratch, refit);
     built_since_barrier_ = true;
+    if (!refit) {
+        entry.sizes = sizes;
+    }
     entry.state = State::Built;
     entry.used_frame = frame_index_;
     return true;
@@ -389,6 +411,9 @@ bool Geometry::build(Entry& entry, bool refit) {
 // Past the ceiling, the least recently named static structures go, down to seven eighths of it (what retired
 // structures still hold is counted gone). A mesh seen again asks for its structure again (RenderCore::rt_want_form).
 void Geometry::keep_under_ceiling() {
+    const std::uint64_t budget = backend_.memory_budget();
+    ceiling_ = budget != 0u ? std::min(budget / kBudgetShare, kStructureCeiling) : kStructureCeiling;
+    stats_.ceiling = ceiling_;
     std::uint64_t live = pages_.used_bytes();
     for (const Retired& retired : retired_) {
         live -= std::min(live, retired.structure.range.size);
@@ -497,6 +522,8 @@ void Geometry::frame(void* commands, unsigned frame_slot, std::uint64_t frame_in
     if (budget_triangles != 0u) {
         stats_.most_built_triangles = std::max(stats_.most_built_triangles, used);
     }
+    budget_ = budget_triangles;  // what is left of it is the moving meshes' first builds' (refit)
+    budget_used_ = used;
     if (built_since_barrier_) {
         backend_.barrier();
         built_since_barrier_ = false;
@@ -576,18 +603,39 @@ void Geometry::frame(void* commands, unsigned frame_slot, std::uint64_t frame_in
 void Geometry::refit() {
     stats_.refits = stats_.rebuilds = 0u;
     stats_.refit_triangles = 0u;
+    stats_.moving_waiting = 0u;
+    // A mesh met for the first time (a zone's actors) is built within what the frame's budget left, the oldest named
+    // first and one a frame at least, so none waits longer than the meshes named before it; until then it casts nothing
+    // (name() is 0). One past the budget is named again next frame with that frame's vertices.
+    bool first_built = false;
     for (const std::uint64_t key : moving_) {
         Entry& entry = entries_[key];
         if (!entry.moved) {
             continue;
         }
         entry.moved = false;
-        const bool refit = entry.structure && entry.refits + 1u < kRefitsToRebuild;
+        const bool first = !entry.structure;
+        if (first && budget_ != 0u && first_built && budget_used_ + entry.input.triangles() > budget_) {
+            ++stats_.moving_waiting;
+            continue;
+        }
+        const bool refit = !first && entry.refits + 1u < kRefitsToRebuild;
         if (build(entry, refit)) {
-            entry.refits = refit ? entry.refits + 1u : 0u;
+            if (first) {
+                first_built = true;
+                budget_used_ += entry.input.triangles();
+            }
+            // A first build starts the cycle at the key's own point in it: the rebuilds of meshes that arrive in one
+            // frame (a zone's actors) fall in different frames.
+            entry.refits = refit ? entry.refits + 1u : first ? static_cast<std::uint32_t>(key % kRefitsToRebuild) : 0u;
             ++(refit ? stats_.refits : stats_.rebuilds);
             stats_.refit_triangles += entry.input.triangles();
+        } else if (first) {
+            ++stats_.moving_waiting;  // no memory now
         }
+    }
+    if (budget_ != 0u) {
+        stats_.most_built_triangles = std::max(stats_.most_built_triangles, budget_used_);
     }
     if (built_since_barrier_) {
         backend_.barrier();
@@ -646,10 +694,19 @@ bool Geometry::build_with_micromap(Entry& entry) {
     stats_.compacted -= entry.state == State::Compacted ? 1u : 0u;
     entry.structure = structure;
     entry.built_bytes = range.size;
-    entry.input = input;
+    entry.sizes = sizes;
     entry.state = State::Built;
     entry.used_frame = frame_index_;
     entry.micromap = micromap;
+    // The two builds read the input (the micromap's states and descriptors, the structure's micromap indices) and
+    // nothing after them (DXR, BuildRaytracingAccelerationStructure: "GPU-side input resources are not referenced
+    // after the build has finished executing"); only the micromap itself is read by rays. The buffer goes once no
+    // frame can run the builds.
+    retired_buffers_.emplace_back(frame_index_, entry.omm.buffer);
+    entry.omm.buffer = kNoBuffer;
+    input.micromap_buffer = kNoBuffer;
+    input.micromap_indices = 0u;
+    entry.input = input;
     ++stats_.micromaps;
     ++stats_.micromaps_built;
     stats_.micromap_bytes += micromap.range.size;

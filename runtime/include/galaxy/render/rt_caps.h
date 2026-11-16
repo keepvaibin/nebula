@@ -30,8 +30,8 @@ struct RtCaps {
 
 [[nodiscard]] constexpr bool rt_capable(const RtCaps& caps) noexcept { return rt_refusal(caps) == nullptr; }
 
-// The RAY TRACING row is shown to players only once the tracer has an effect to show (the shadows' step sets this).
-// Until then the setting is reached from a settings file alone, and a player's build clamps it off (render_config.cpp).
+// The RAY TRACING row is shown to players only once the tracer is finished. Until then the
+// setting is reached from config.ini alone, and every build follows it (render_config.cpp sanitize).
 inline constexpr bool kRayTracingRowOffered = false;
 
 // The renderer's record of its device, set once the device exists (render thread) and read from any thread.

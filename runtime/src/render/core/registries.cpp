@@ -2,6 +2,7 @@
 #include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/program_table.h"
 #include "render/core/frame_core.h"
+#include "render/core/rt_ray_forms.h"
 
 #include <algorithm>
 #include <array>
@@ -348,8 +349,9 @@ bool same_pipeline(const PipelineEntry& entry, const NebulaPipelineDesc& desc, c
     return true;
 }
 
-// What a model's file says, with no device involved.
-void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes) {
+// What a model's file says, with no device involved; `ray_forms` its `.rayhit` rows (rt_ray_forms.h), none until the
+// game hands the host that table with the model (contract materials 3.4 layer 3).
+void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes, const std::vector<RayForm>& ray_forms = {}) {
     const auto& header = *static_cast<const NebulaModelHeader*>(file);
     if (header.draw_matrix_count != 0u) {
         const auto* draw = at<NebulaModelDrawMatrix>(file, header.draw_matrices_at);
@@ -422,28 +424,11 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
             gpu_mesh.hit_shine = hit.shine;
             gpu_mesh.hit_tint_keep = hit.tint_keep;
             gpu_mesh.hit_through = static_cast<float>(hit.through) / 255.0f;
-            // Where glow_source's colour sits among the rows of the material's own stages (the first form that
-            // replaces nothing), and its cooked value: registers r (code r) are signed, the others bytes, all /255
-            // as Material::fillRow fills them.
+            // glow_source's cooked value: registers r (code r) are signed, the others bytes, all /255 as
+            // Material::fillRow fills them.
             const std::uint32_t code = gpu_mesh.glow_source - 1u;
-            if (gpu_mesh.glow_source >= 1u && gpu_mesh.glow_source <= 9u && material.forms_at != 0u) {
-                const auto* forms = at<NebulaModelForm>(file, material.forms_at);
-                for (std::uint32_t f = 0; f < material.form_count; ++f) {
-                    const NebulaModelForm& form = forms[f];
-                    if (form.replace != 0u) {
-                        continue;
-                    }
-                    const auto* codes = at<std::uint32_t>(file, form.pixel_rows_at);
-                    for (std::uint32_t p = 0; p < form.pixel_row_count; ++p) {
-                        if (codes[p] == code && form.vertex_row_count + p < 0xFFFFu &&
-                            form.vertex_row_count + form.pixel_row_count < 0xFFFFu) {
-                            gpu_mesh.glow_row = static_cast<std::uint16_t>(form.vertex_row_count + p);
-                            gpu_mesh.glow_row_count = static_cast<std::uint16_t>(form.vertex_row_count + form.pixel_row_count);
-                            break;
-                        }
-                    }
-                    break;
-                }
+            const bool coded = gpu_mesh.glow_source >= 1u && gpu_mesh.glow_source <= 9u;
+            if (coded) {
                 for (unsigned c = 0; c < 3u; ++c) {
                     const float value = code <= NEBULA_ROW_REGISTER + 2u ? static_cast<float>(material.registers[code][c])
                                         : code < NEBULA_ROW_MATERIAL_COLOR
@@ -452,19 +437,32 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
                     gpu_mesh.glow_cooked[c] = value / 255.0f;
                 }
             }
-            // Map 0's coordinate: the form's texture table's first map, the first stage that samples it,
-            // its coordinate when made from a uv set by a matrix (type 1, sources 4 to 19; not the form's normal
-            // coordinate), and that coordinate's u and v rows among the form's vertex rows.
-            if (material.forms_at != 0u && material.coords_at != 0u && hit.stages_at != 0u) {
+            // In every form that draws the material's own stages, the row of glow_source and map 0's and map 1's
+            // coordinate rows (the first stage that samples the map, its coordinate when made from a uv set
+            // by a matrix, type 1, sources 4 to 19, not the form's normal coordinate). A mod's file is read only
+            // within its own size: each span below lies inside it, else that part is left unread.
+            const auto fits = [&](std::uint32_t offset, std::uint64_t count, std::uint64_t each) {
+                return offset != 0u && offset <= header.size && count * each <= header.size - offset;
+            };
+            if (fits(material.forms_at, material.form_count, sizeof(NebulaModelForm))) {
                 const auto* forms = at<NebulaModelForm>(file, material.forms_at);
                 for (std::uint32_t f = 0; f < material.form_count; ++f) {
                     const NebulaModelForm& form = forms[f];
-                    if (form.replace != 0u) {
+                    if (form.replace != 0u || form.vertex_row_count + form.pixel_row_count >= 0xFFFFu) {
                         continue;
                     }
-                    if (form.texture_count != 0u && form.vertex_row_count + form.pixel_row_count < 0xFFFFu) {
-                        // A map's coordinate rows: the first of its u and v rows among the form's vertex rows and the
-                        // uv set it reads, or none (map 0's and map 1's alike).
+                    GpuMesh::FormRows rows{form.vertex, form.pixel};
+                    if (coded && fits(form.pixel_rows_at, form.pixel_row_count, sizeof(std::uint32_t))) {
+                        const auto* codes = at<std::uint32_t>(file, form.pixel_rows_at);
+                        for (std::uint32_t p = 0; p < form.pixel_row_count; ++p) {
+                            if (codes[p] == code) {
+                                rows.glow_row = static_cast<std::uint16_t>(form.vertex_row_count + p);
+                                break;
+                            }
+                        }
+                    }
+                    if (form.texture_count != 0u && fits(material.coords_at, material.coord_count, sizeof(NebulaModelCoord)) &&
+                        fits(hit.stages_at, hit.stage_count, sizeof(NebulaModelStage)) && fits(form.textures_at, form.texture_count, 1u)) {
                         const auto map_rows = [&](std::uint8_t map, std::uint16_t& row, std::uint8_t& uv) {
                             const auto* stages = at<NebulaModelStage>(file, hit.stages_at);
                             std::uint32_t coord = 0xFFu;
@@ -478,7 +476,8 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
                                 return;
                             }
                             const NebulaModelCoord& c = at<NebulaModelCoord>(file, material.coords_at)[coord];
-                            if (c.type != 1u || c.source < 4u || c.source > 19u) {
+                            if (c.type != 1u || c.source < 4u || c.source > 19u ||
+                                !fits(form.vertex_rows_at, form.vertex_row_count, sizeof(std::uint32_t))) {
                                 return;
                             }
                             const auto* codes = at<std::uint32_t>(file, form.vertex_rows_at);
@@ -492,24 +491,24 @@ void read_model(const void* file, GpuModel& model, std::vector<GpuMesh>& meshes)
                             }
                         };
                         const auto* maps = at<std::uint8_t>(file, form.textures_at);
-                        map_rows(maps[0], gpu_mesh.map0_row, gpu_mesh.map0_uv);
-                        if (gpu_mesh.map0_row != 0xFFFFu) {
-                            gpu_mesh.map0_form_rows = static_cast<std::uint16_t>(form.vertex_row_count + form.pixel_row_count);
-                        }
+                        map_rows(maps[0], rows.map0_row, gpu_mesh.map0_uv);
                         if (form.texture_count >= 2u && maps[1] != maps[0]) {
-                            map_rows(maps[1], gpu_mesh.map1_row, gpu_mesh.map1_uv);
-                            if (gpu_mesh.map1_row != 0xFFFFu) {
+                            map_rows(maps[1], rows.map1_row, gpu_mesh.map1_uv);
+                            if (rows.map1_row != 0xFFFFu) {
                                 gpu_mesh.map1_slot = 1u;
                             }
                         }
                     }
-                    break;
+                    if (rows.glow_row != 0xFFFFu || rows.map0_row != 0xFFFFu) {
+                        gpu_mesh.form_rows.push_back(rows);
+                    }
                 }
             }
             // The alpha test's first comparison, where it is "greater" or "greater or equal" (4, 6): its reference.
             if (material.alpha_comp0 == 4u || material.alpha_comp0 == 6u) {
                 gpu_mesh.hit_alpha = std::max(static_cast<float>(material.alpha_ref0) / 255.0f, 1.0f / 255.0f);
             }
+            gpu_mesh.ray_form = ray_form_of_material(file, mesh.material, ray_forms);
         }
         if (paint_lights != nullptr) {
             gpu_mesh.paint_share = paint_lights[m].share;

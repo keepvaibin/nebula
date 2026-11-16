@@ -4,25 +4,29 @@
 // volume and the froxel volumetrics of Frostbite and others. Froxels: 96 x 54 across the scene's viewport, 48 slices
 // in depth at z = 50 (20000 / 50)^(k / 48). Each frame each froxel takes a point of its cell (the blue noise, a new one
 // each frame) and there:
-//   - V: one ray to the sun (everything solid stops it, as the sun pass takes a lit surface's);
+//   - V: one ray to a point of the sun's disc (everything solid stops it, as the sun pass takes a lit surface's);
 //   - the local lights: 4 candidates of the world light grid's cell by resampled importance (the grid lists every
 //     light whose reach touches the cell; the screen tiles list only those of the surfaces seen), each as all of its
 //     light (the air faces every light, as a particle's colour takes the sun's whole key); one shadow ray on High;
-//   - s, the sky: 1 on Medium and Low; on High one ray of 4000 units about the player's up, kept at kSkyMin when it
-//     meets something.
+//   - s, the sky: 1 on Medium and Low; on High one ray of 4000 units about the player's up, kept at kSkyHidden when it
+//     meets something solid or cut out.
 // Stored (Rgba16f 3D) as the programs take it: rgb what of the stage's light reaches the air, a channel at a time, as
 // a share of its full light (A s + K V) / (A + K) plus the local lights' share, so a drawn colour times it is lit;
-// a V (the light shafts' sun, 15.4). Averaged over frames: the froxel's centre is found in the frame before's volume
-// (the camera's move undone), and the new value takes 0.1 of the sum; out of that volume, or with no frame before,
-// the new value alone.
-// Binds: t4 the shading frame (rt_shade.hlsli), t9 the frame before's volume, u0 this frame's. Pass constants:
+// a V (the light shafts' sun, 15.4). Beside it (VolumeLights, Rgba16f 3D) the parts the light in the air takes apart
+// (rt_scatter.hlsl): rgb the local lights' share alone, a s. Averaged over frames, both by one weight and one test: the
+// froxel's centre is found in the frame before's volumes (the camera's move undone), and the new values take 0.1 of the
+// sum; out of those volumes, or with no frame before, the new values alone.
+// Binds: t4 the shading frame (rt_shade.hlsli), t9 the frame before's volume, t10 its lights' part, u0 this frame's
+// volume, u1 its lights' part. Pass constants:
 // g_pass.y the preset (0 Medium, 1 High, 2 Low), g_pass.z bit 0 a frame before to read, g_pass.w the shading frame's
 // first byte. Dispatch: 12 x (7 x 48) groups of 8 x 8 (a slice is 7 group rows).
 #include "rt_shade.hlsli"
 #include "rt_sample.hlsli"
 
 Texture3D<float4> g_before_volume : register(t9);
+Texture3D<float4> g_before_lights : register(t10);
 RT_FORMAT(rgba16f) RWTexture3D<float4> g_volume : register(u0);
+RT_FORMAT(rgba16f) RWTexture3D<float4> g_lights : register(u1);
 
 static const uint3 kCells = uint3(96u, 54u, 48u);
 static const float kNear = 50.0f, kFar = 20000.0f;
@@ -65,10 +69,14 @@ float3 air_lights(float3 at, bool shadowed, inout uint seed) {
     for (uint k = 0u; k < 4u; ++k) {
         const uint entry = g_tiles.Load(g_shade.grid.y + (run.x + min(uint(rt_random(seed) * float(run.y)), run.y - 1u)) * 4u);
         const uint emitter = g_glow.x + (entry & 0xFFFFu) * 48u;
-        const float3 toward = asfloat(g_drops.Load3(emitter)) - at;  // facing the light: all of it
+        // Facing the light: all of it. emitter_light takes a unit facing (its n.l); the way itself was the distance
+        // times n.l, every lamp in the air as many times too bright as it was units away.
+        const float3 toward = asfloat(g_drops.Load3(emitter)) - at;
+        const float far2 = dot(toward, toward);
+        const float3 facing = far2 > 1e-8f ? toward * rsqrt(far2) : float3(0.0f, 0.0f, 0.0f);
         float4 place;
         uint slot;
-        const float3 light = emitter_light(emitter, at, toward, 0xFFFFFFFFu, place, slot) * float(max(entry >> 16u, 1u));
+        const float3 light = emitter_light(emitter, at, facing, 0xFFFFFFFFu, place, slot) * float(max(entry >> 16u, 1u));
         const float target = rt_lum(light);
         if (!(target > 0.0f)) {
             continue;
@@ -90,7 +98,7 @@ float3 air_lights(float3 at, bool shadowed, inout uint seed) {
         float reach;
         const float3 toward = rt_toward_light(kept_place, at, rt_random2(seed), reach);
         if (reach > 1.0f) {
-            estimate *= rt_through(at, toward, reach, kept_slot);
+            estimate *= rt_through(at, toward, reach, kept_slot, kept_place);
         }
     }
     return estimate;
@@ -111,26 +119,27 @@ void main(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID) {
     uint seed = rt_seed(noise_at, frame, 8u);
     const bool high = g_pass.y == 1u;
 
-    // The sun.
+    // The sun: toward a point of its disc, a new one each frame (the sun pass's disc, so a shaft's edge is as soft as
+    // the shadow it continues; the history averages the disc).
     float3 v = float3(1.0f, 1.0f, 1.0f);
     if (rt_sun_traced()) {
-        v = rt_through_of(at, g_sun.xyz, kRtFarAway, 0xFFFFFFFFu, rt_sun_mask(true));
+        v = rt_through_of(at, rt_within(g_sun.xyz, g_sun.w, rt_random2(seed)), kRtFarAway, 0xFFFFFFFFu, rt_sun_mask(true));
     }
-    // The sky.
+    // The sky: what stops a gathered ray stops it (solid and cut-out things: rt_gather's mask; a crown of leaves hides
+    // the sky from the air under it as from the ground).
     float s = 1.0f;
-    if (high) {
+    if (high && dot(g_up.xyz, g_up.xyz) > 0.25f) {
         const float3 up = normalize(g_up.xyz);
-        if (rt_through_of(at, rt_cosine(up, float2(u2.y, rt_random(seed))), kSkyReach, 0xFFFFFFFFu, kMaskSolid).r < 0.5f) {
+        if (rt_through_of(at, rt_cosine(up, float2(u2.y, rt_random(seed))), kSkyReach, 0xFFFFFFFFu, kMaskSolid | kMaskCutout).r < 0.5f) {
             s = kSkyHidden;
         }
     }
     // The emitters alone (--diagnostics rt-added, g_more.z bit 7): no sun, no sky in the air either. Else the
     // stage's light's share in linear light, the model's under the relight.
-    float3 share = (g_more.z & 128u) != 0u ? float3(0.0f, 0.0f, 0.0f) : rt_air_share(s, v);
-    if (g_pass.y != 2u) {
-        share += air_lights(at, high, seed);  // Low: the sun and the sky alone
-    }
-    float4 now = float4(share, (v.r + v.g + v.b) * (1.0f / 3.0f));
+    const float3 share = (g_more.z & 128u) != 0u ? float3(0.0f, 0.0f, 0.0f) : rt_air_share(s, v);
+    const float3 lamps = g_pass.y != 2u ? air_lights(at, high, seed) : float3(0.0f, 0.0f, 0.0f);  // Low: the sun and the sky alone
+    float4 now = float4(share + lamps, (v.r + v.g + v.b) * (1.0f / 3.0f));
+    float4 now_lamps = float4(lamps, s);
 
     // The frame before's at this froxel's centre.
     if ((g_pass.z & 1u) != 0u) {
@@ -145,14 +154,18 @@ void main(uint3 group : SV_GroupID, uint3 thread : SV_GroupThreadID) {
             if (all(cell >= 0.0f) && all(cell <= float3(kCells))) {
                 const float3 inner = clamp(cell, 0.5f, float3(kCells) - 0.5f) / float3(kCells);
                 const float4 kept = g_before_volume.SampleLevel(g_wrap, inner, 0.0f);
-                if (all(kept == kept)) {
+                const float4 kept_lamps = g_before_lights.SampleLevel(g_wrap, inner, 0.0f);
+                if (all(kept == kept) && all(kept_lamps == kept_lamps)) {
                     // Where V moved (a caster passed, the sun turned) the history gives way: kKeep to a move of 0.25,
-                    // 0.6 from 0.5 on.
+                    // 0.6 from 0.5 on. The lights' part by the same weight: the two stay one light.
                     const float keep = lerp(kKeep, 0.6f, saturate((abs(now.a - kept.a) - 0.25f) / 0.25f));
-                    now = lerp(now, kept, 1.0f - (1.0f - keep) / fb_history_scale());
+                    const float held = 1.0f - (1.0f - keep) / fb_history_scale();
+                    now = lerp(now, kept, held);
+                    now_lamps = lerp(now_lamps, kept_lamps, held);
                 }
             }
         }
     }
     g_volume[froxel] = now;
+    g_lights[froxel] = now_lamps;
 }

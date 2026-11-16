@@ -7,7 +7,7 @@
 #define NEBULA_FRAME_LIST_H
 
 #include "luma_draw_native.h"
-
+#include <stddef.h>
 #include <stdint.h>
 #include "nebula_limits.h"
 
@@ -132,15 +132,24 @@ typedef struct NebulaFrameLightOwner {
    lights from every source takes them all. `position` in the world; `half_distance`: where its light is half what
    it is at the source (the request's brightness over the game's reference distance); `color` 0 to 1; `candela`:
    its intensity where the caller knows it (a star bit), else 0 and the half distance says it; `radius`: the glowing
-   body's own radius in the world's units where the caller knows it (the actor's binder), else 0. */
+   body's own radius in the world's units where the caller knows it (the actor's binder), else 0. `owner`: the
+   same number on every frame the same actor asks (its object id folded to 32 bits), so a renderer finds the light again
+   where the list's order moved; 0 unknown. An actor the game stops running (clipped) keeps its last light in the list. */
 typedef struct NebulaFramePointLight {
     float position[3];
     float half_distance;
     float color[3];
     float candela;
     float radius;
-    float reserved[3];
+    uint32_t owner;
+    float reserved[2];
 } NebulaFramePointLight;
+/* `owner` took the place of the first reserved float: the layout is the one game modules built before it write. */
+#ifdef __cplusplus
+static_assert(sizeof(NebulaFramePointLight) == 48 && offsetof(NebulaFramePointLight, owner) == 36, "the point light's layout");
+#else
+_Static_assert(sizeof(NebulaFramePointLight) == 48 && offsetof(NebulaFramePointLight, owner) == 36, "the point light's layout");
+#endif
 
 /* A drop shadow: what the game draws as a stencil volume under an actor, for a renderer that traces it instead. It
    falls from `position` along `direction` (unit length) for `length`, in the world, and is cast by the draws of the

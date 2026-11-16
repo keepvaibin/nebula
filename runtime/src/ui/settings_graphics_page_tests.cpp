@@ -13,7 +13,7 @@ class Host final : public galaxy::ui::GraphicsPageHost {
 public:
     bool rt = false;
     bool temporal = false;
-    bool traced = false;  // FSR 3 runs: with ray tracing on it anti-aliases the scene
+    bool traced = false;  // FSR 3 or SGSR 2 runs: with ray tracing on it anti-aliases the scene
     bool folders = true;
     unsigned refresh_hz = 144;
     mutable int opened = -1;
@@ -111,6 +111,28 @@ int main() {
                   "a part alone makes it custom, and the player's");
             quality.change(draft, 1);
             check(draft.rt_quality != galaxy::render::kRtPresetCustom && draft.rt_parts[1] == draft.rt_parts[0], "a preset sets every part");
+            // Reflections and glass and water have no low (nothing reads it apart from off): MEDIUM steps to OFF and
+            // back, and up to HIGH; a low of theirs shows as OFF.
+            for (const char* label : {"REFLECTIONS", "GLASS AND WATER"}) {
+                const std::size_t part = label[0] == 'R' ? 3u : 4u;
+                galaxy::ui::RenderConfig one = config;
+                row(rows, label).change(one, -1);
+                const unsigned down = one.rt_parts[part];
+                row(rows, label).change(one, 1);
+                const unsigned back = one.rt_parts[part];
+                row(rows, label).change(one, 1);
+                const unsigned up = one.rt_parts[part];
+                row(rows, label).change(one, 1);
+                check(down == 0u && back == 2u && up == 3u && one.rt_parts[part] == 3u, label);
+                galaxy::ui::RenderConfig low = config;
+                low.rt_quality = galaxy::render::kRtPresetCustom;
+                low.rt_parts[part] = 1u;
+                auto low_rows = galaxy::ui::graphics_page(low, host);
+                check(row(low_rows, label).value == "OFF", "a low of a part with none shows as off");
+            }
+            galaxy::ui::RenderConfig sun = config;
+            row(rows, "SUN SHADOWS").change(sun, -1);
+            check(sun.rt_parts[0] == 1u, "a part with a low keeps it");
         }
         host.traced = true;
         config.aa_mode = 1u;

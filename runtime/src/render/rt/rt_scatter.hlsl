@@ -5,17 +5,22 @@
 // Hillaire 2015: the froxel integration of Frostbite and Unreal's volumetric fog), so each pixel takes the air in
 // front of it with one trilinear fetch at its own depth (program.hlsli traced_scatter), blended things at theirs.
 // Each thread one column of froxels; through the slices, from the eye to each slice's middle:
-//   source = Vol.rgb + K / (A + K) V (hg(cos) / 4 - 1)   (Vol.rgb holds the sun's light as a surface square to it
-//            takes it: (A s + K V) / (A + K) + local; the air scatters pi p of it, p Henyey-Greenstein's normalised
-//            over the sphere (g = kForward): hg4pi / 4)
+//   source = A / (A + K) s + K / (A + K) V hg(cos) / 4 + local / 4
+//            (in units of a white ground, the air returns the sky's light whole and scatters
+//            pi p of the sun's, p Henyey-Greenstein's normalised over the sphere (g = kForward): hg4pi / 4; a local
+//            light reaches the air as E_v / (4 pi) against the ground's E_v / pi: a quarter. s and local from
+//            the lights' part of the volume (its rgb local, a s), V from the volume's a: each part from its own
+//            channel, no part taken back out of a sum)
 //   L += T source (1 - e^(-sigma d)),  T *= e^(-sigma d)
 // Stored (Rgba16f 3D, as the volume) rgb L in the unit traced_scatter adds it in (white air under the
 // stage's full light, every way alike: 1), a T. sigma: g_pass_value[0].x (the stage's air, per unit), A and K
 // the stage's (the shading frame).
-// Binds: t4 the shading frame, t9 this frame's volume, u0 the integral. Dispatch: 12 x 7 groups of 8 x 8.
+// Binds: t4 the shading frame, t9 this frame's volume, t10 its lights' part, u0 the integral. Dispatch: 12 x 7 groups
+// of 8 x 8.
 #include "rt_shade.hlsli"
 
 Texture3D<float4> g_air : register(t9);
+Texture3D<float4> g_air_lamps : register(t10);
 RT_FORMAT(rgba16f) RWTexture3D<float4> g_scatter : register(u0);
 
 static const uint3 kCells = uint3(96u, 54u, 48u);
@@ -40,28 +45,29 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     rt_shade_begin(g_pass.w);
-    const float sigma = g_pass_value[0].x;
+    // The eye under water (g_more.z bit 12): the water is the medium the eye's way crosses, not air (one
+    // medium; the game's fog has the eye's way there). Nothing scattered, everything let through.
+    const float sigma = (g_more.z & 4096u) != 0u ? 0.0f : g_pass_value[0].x;
     const float2 pixel = g_viewport.xy + (float2(id.xy) + 0.5f) / float2(kCells.xy) * g_viewport.zw;
     const float3 look = normalize(rt_eye_ray(g_ray, pixel));
     const float phase = hg4pi(dot(look, g_sun.xyz), kForward);
     const bool sun = rt_sun_traced() && (g_more.z & 128u) == 0u;  // the emitters alone: no sun
-    // The volume's sun part (rt_air_share) is there unless the emitters alone: without a traced sun it goes every
-    // way alike (hg4pi 1), still a quarter of it scattered.
-    const bool sun_held = (g_more.z & 128u) == 0u;
-    const float3 sun_share = rt_air_sun();  // the sun's part of the air's share, as the light volume's
+    // The stage's light (the sky's and the sun's parts, rt_air_share's) is there unless the emitters alone:
+    // without a traced sun the sun's part goes every way alike (hg4pi 1), still a quarter of it scattered.
+    const float stage = (g_more.z & 128u) == 0u ? 1.0f : 0.0f;
+    const float3 sky_share = rt_air_share(1.0f, float3(0.0f, 0.0f, 0.0f)) * stage;  // the sky's part at s = 1
+    const float3 sun_share = rt_air_sun() * (0.25f * (sun ? phase : 1.0f)) * stage;  // the sun's at V = 1, by pi p
     float3 light = float3(0.0f, 0.0f, 0.0f);
     float through = 1.0f, from = 0.0f;
     for (uint z = 0u; z < kCells.z; ++z) {
         const float to = min(slice_depth(float(z) + 0.5f), kAirReach);
         // The eye ray's length in the slice (its distances are along the view's axis); 0 past the air's reach.
         const float d = max(to - from, 0.0f) / max(-look.z, 0.05f);
-        const float4 air = g_air.Load(int4(id.xy, z, 0));
-        float3 source = air.rgb;
-        if (sun_held) {
-            source += sun_share * air.a * (0.25f * (sun ? phase : 1.0f) - 1.0f);  // pi p = hg4pi / 4
-        }
+        const float air_v = g_air.Load(int4(id.xy, z, 0)).a;
+        const float4 lamps = g_air_lamps.Load(int4(id.xy, z, 0));
+        const float3 source = sky_share * lamps.a + sun_share * air_v + 0.25f * lamps.rgb;  // a lamp's quarter
         const float kept = exp(-sigma * d);
-        light += through * max(source, 0.0f) * (1.0f - kept);
+        light += through * source * (1.0f - kept);
         through *= kept;
         from = to;
         g_scatter[uint3(id.xy, z)] = float4(light, through);

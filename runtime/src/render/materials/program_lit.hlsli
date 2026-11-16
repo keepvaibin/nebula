@@ -27,7 +27,7 @@ bool enh_on() { return (view_flags & 2u) != 0u; }
 // The pixel's traced light (program.hlsli traced_at): how much of the light set's key (light 0:
 // V, a channel) and fill (light 1: O, the sky's share: the fill is the artists' bounce light) reaches it, and none
 // of its point light (light 4: an emitter, in the added light; all of it when view_flags bit 32 says the local lights
-// are off); all of lights 2 and 3 (alpha tricks). Its ambient by O.
+// are off); all of lights 2 and 3 (alpha tricks). Its colour's ambient by O; every alpha as the game's.
 // A program whose colour sums no key (no lit colour channel it reads has light 0: the colour is the vertex colour with
 // only the alpha lit, or fill alone) begins with TRACED_UNKEYED (cook/programs.rs): its sums take nothing traced
 // but the lamps' removal, and traced_colour gives its colour the Painted share as an unlit program's.
@@ -91,14 +91,16 @@ float3 traced_light(uint n) {
     }
     return n == 0u ? g_traced.rgb : n == 1u ? g_traced_o : float3(1.0, 1.0, 1.0);
 }
-// The ambient by O: a colour's a channel at a time, an alpha's by O itself (a program that sums no key: as the game's).
-float ambient_term(float x) { return g_traced_keyed ? x * g_traced.a : x; }
+// The ambient by O, a channel at a time (a program that sums no key: as the game's). A lit channel's alpha is no
+// light: the stages take it as a control (Mario's rim: ra = (r0.a + lerp(t.a, k, ras.a)) * 2, the set's light added
+// without the map where the alpha, the ambient's plus light 2's facing of the eye, is low), so it stays the game's, as
+// the enhanced form's and every light's alpha (traced_light_term).
+float ambient_term(float x) { return x; }
 float3 ambient_term(float3 x) {
     g_set_amb = x;
     g_set_seen = true;
     return g_traced_keyed ? x * g_traced_o : x;
 }
-float4 ambient_term(float4 x) { return g_traced_keyed ? float4(x.rgb * g_traced_o, x.a * g_traced.a) : x; }
 #define AMBIENT_TERM(x) ambient_term(x)
 #else
 #define AMBIENT_TERM(x) (x)
@@ -346,9 +348,15 @@ float4 traced_sheen(EnhShade e) {
         (draw_flags & 128u) != 0u || !(held_l > 1e-4)) {
         return float4(0.0, 0.0, 0.0, 1.0);
     }
+    // The tracer's split-sum terms (rt_mirror.hlsli mirror_terms): Karis's fit at the roughness, its own error at 0
+    // replaced by Schlick's exact rise as the roughness falls to 0. One Fresnel for this sheen and the pass's.
     const float4 r = kSheenRough * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
     const float a004 = min(r.x * r.x, exp2(-9.28 * e.NoV)) * r.x + r.y;
-    const float2 ab = float2(-1.04, 1.04) * a004 + r.zw;
+    const float2 fit = float2(-1.04, 1.04) * a004 + r.zw;
+    const float2 fit0 = float2(-1.04, 1.04) * (min(1.0, exp2(-9.28 * e.NoV)) + 0.0425) + float2(1.04, -0.04);
+    const float g = 1.0 - saturate(e.NoV);
+    const float p = g * g * g * g * g;
+    const float2 ab = fit + (float2(1.0 - p, p) - fit0) * (1.0 - saturate(kSheenRough));
     const float f = saturate(0.04 * ab.x + ab.y);
     float3 sheen = (dot(view_relight[1].rgb, float3(0.2126, 0.7152, 0.0722)) / held_l) * g_traced_o * f;
     const float3 sun = float3(view_relight[1].w, view_relight[2].w, view_relight[3].w);
@@ -367,9 +375,9 @@ float4 traced_sheen(EnhShade e) {
 // A lit program begins with enh_begin(i.lit_eye, i.lit_nrm) in its entry, whose input `i` holds the pixel (i.pos): the
 // traced form reads the pixel's light there, and every light_term after it is taken by its share (when its colour
 // sums the key: else TRACED_UNKEYED came first, and traced_colour shares its colour as a painted one's).
-// A lit program's O held at 1 in luminance, its hue kept, and O's alpha likewise, by kForm:
-// the game's ambient and fill, both by O here, hold the sky and the mean bounce already; O over 1 is
-// sunlit ground's bounce counted again (brighter, flatter characters). O under 1 (occlusion) stays.
+// A lit program's O held at 1 in luminance, its hue kept, by kForm: the game's
+// ambient and fill, both by O here, hold the sky and the mean bounce already; O over 1 is sunlit ground's bounce
+// counted again (brighter, flatter characters). O under 1 (occlusion) stays.
 void traced_o_held() {
     if (!(view_look.x > 0.0)) {
         return;
@@ -377,7 +385,6 @@ void traced_o_held() {
     const float t = saturate(view_look.x);
     const float l = dot(g_traced_o, float3(0.2126, 0.7152, 0.0722));
     g_traced_o = lerp(g_traced_o, g_traced_o / max(l, 1.0), t);
-    g_traced.a = lerp(g_traced.a, min(g_traced.a, 1.0), t);
 }
 EnhShade enh_begin_traced(float3 P, float3 n, float4 pixel) {
     g_traced = traced_at(pixel);

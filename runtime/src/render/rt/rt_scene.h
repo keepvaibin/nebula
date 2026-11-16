@@ -16,8 +16,8 @@ namespace galaxy::render::rt {
 // One instance, in the layout Direct3D 12 and Vulkan both take.
 struct Instance {
     float transform[3][4];      // eye from the mesh's own space
-    std::uint32_t id_mask;      // id in the low 24 bits (the frame's item), mask in the high 8
-    std::uint32_t flags;        // high 8 bits: kInstance*; low 24: kKind*, which a ray reads back at a hit
+    std::uint32_t id_mask;      // the frame's item below kItemBits, its kind (kKind*) above to bit 23, mask in the high 8
+    std::uint32_t flags;        // high 8 bits: kInstance*; low 24 (the hit-group contribution): 0, no inline ray reads it
     std::uint64_t structure;    // the bottom-level structure's name
 };
 static_assert(sizeof(Instance) == 64u);
@@ -31,10 +31,14 @@ inline constexpr std::uint32_t kMaskLit = 16u;     // solid and drawn by a lit p
 inline constexpr std::uint32_t kMaskSky = 64u;     // the sky's dome: stops no light, is what a mirror shows where nothing else stands
 inline constexpr std::uint32_t kMaskCutout = 32u;  // opaque where its texture's alpha says so (an alpha test): a ray asks at each hit
 inline constexpr std::uint32_t kMaskShadowOnly = 128u;  // drawn for the tracer alone (a traced draw): only shadow rays meet it
-// What an instance is, read back at a hit (the instance's contribution field, which inline rays do not use).
+// What an instance is, read back at a hit: bits kItemBits-23 of its id, the one field of an instance a ray query reads
+// on Direct3D 12 (InstanceID), Vulkan (instanceCustomIndex) and Metal (userID) alike (rt_bindings.hlsli rt_hit_kind).
+inline constexpr std::uint32_t kItemBits = 21u;
+inline constexpr std::uint32_t kItemsMost = 1u << kItemBits;  // the items a scene's ids can name
 inline constexpr std::uint32_t kKindCutout = 1u;   // its pixel program may discard (an alpha test): a hit is not yet a surface
 inline constexpr std::uint32_t kKindCard = 4u;     // a billboard's sun card: never opaque, so a ray can pass its own
 inline constexpr std::uint32_t kKindClipped = 2u;  // with kKindCutout: a map part its clip areas show, every hit asked
+static_assert((kKindCutout | kKindCard | kKindClipped) < 1u << (24u - kItemBits));
 // Instance flags (the same bits in both APIs).
 inline constexpr std::uint32_t kInstanceNoCull = 1u;  // a ray that culls back faces meets both of this instance's
 inline constexpr std::uint32_t kInstanceFlip = 2u;    // its triangles face the other way
@@ -125,6 +129,7 @@ private:
     Structure structure_{};
     std::vector<RetiredPage> retired_;
     bool built_ = false;
+    bool fits_ = true;  // every id added this frame is below kItemsMost
 };
 
 }  // namespace galaxy::render::rt

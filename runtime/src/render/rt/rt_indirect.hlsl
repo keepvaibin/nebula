@@ -20,7 +20,8 @@
 // raw I in their channels (r, b, a), and the reservoirs: the sample's place (float bits, eye space of this frame) with
 // its normal and M in Rgba32ui, its light (ratio) and W in Rgba16f.
 // Pass constants: g_pass.y the mode; g_pass.z bit 0 the frame before's reservoirs and I count, bit 1 the near field
-// runs (rt_near.hlsl: the gather from its reach on); g_pass.w the shading
+// runs (rt_near.hlsl: the gather from its reach on), bit 2 the host reads the dome's and the hits' counts
+// (rt_dome_read), bit 3 the walk before's blended guide (t18) is bound (rt_screen_lights); g_pass.w the shading
 // frame's first byte in t4; g_pass_value[0..2] this frame's eye space from the frame before's (3x4 rows).
 #include "rt_shade.hlsli"
 
@@ -101,6 +102,35 @@ void gi_take(inout GiReservoir r, GiReservoir other, float weight, inout uint se
     }
 }
 
+// The full-res pixel of a 2 x 2 block a frame's turn visits (the receiver of its half-res pixel).
+static const uint2 kVisit[4] = {uint2(0u, 0u), uint2(1u, 1u), uint2(1u, 0u), uint2(0u, 1u)};
+
+// Where the receiver that drew the frame before's reservoir at `at` stood, moved into this frame: the pixel the
+// block's turn visited then (the turn counts one a frame), at the distance its half-res guide kept (`away`).
+float3 gi_drawn_from(int2 at, float away, uint width, uint height, float3x4 now_from_before) {
+    const int2 drew = min(at * 2 + int2(kVisit[(g_more.y - 1u) & 3u]), int2(width, height) - 1);
+    return mul(now_from_before, float4(rt_eye_ray(g_ray_before, float2(drew) + 0.5f) * away, 1.0f));
+}
+
+// The sample seen from receiver `x` rather than from `q`, the one that drew it: the Jacobian of the solid angle it
+// covers, (|cos at the sample toward x| / |toward q|) * (distance to q / distance to x)^2 (the reconnection shift's;
+// ReSTIR course notes 2023 eq. 6.15). Below 0 where it cannot be moved: degenerate, or over kMostJacobian (its weight
+// would be cut and its sample kept: left out instead).
+float gi_jacobian(GiReservoir other, float3 x, float3 q) {
+    const float3 to_r = x - other.at, to_q = q - other.at;
+    const float far_r = dot(to_r, to_r), far_q = dot(to_q, to_q);
+    if (!(far_r > 1e-6f) || !(far_q > 1e-6f)) {
+        return -1.0f;
+    }
+    const float cos_r = abs(dot(other.n, to_r * rsqrt(far_r)));
+    const float cos_q = abs(dot(other.n, to_q * rsqrt(far_q)));
+    if (!(cos_q > 1e-4f)) {
+        return -1.0f;
+    }
+    const float jacobian = cos_r / cos_q * far_q / far_r;
+    return jacobian <= kMostJacobian ? jacobian : -1.0f;
+}
+
 // Whether something solid stands between the ray's origin and a sample (short of the sample itself), tested from
 // `skip` on (High: the near field's reach). A sample nearer than `skip` is the near field's: hidden here.
 bool gi_hidden(float3 origin, float3 sample_at, float skip) {
@@ -131,12 +161,13 @@ void main(uint3 id : SV_DispatchThreadID) {
     if (id.x >= half_width || id.y >= half_height || g_pass.x != 0u) {
         return;
     }
-    if (all(id.xy < uint2(64u, 64u))) {
+    // The counts only while the host reads them (g_pass.z bit 2): a hold past its measuring walks keeps the means.
+    const bool counting = (g_pass.z & 4u) != 0u;
+    if (counting && all(id.xy < uint2(64u, 64u))) {
         rt_shade_begin(g_pass.w);
         rt_count_dome_directions(id.xy);  // the dome's mean, the stage's, not the view's
     }
     const uint turn = g_more.y & 3u;
-    static const uint2 kVisit[4] = {uint2(0u, 0u), uint2(1u, 1u), uint2(1u, 0u), uint2(0u, 1u)};
     const int2 pixel = int2(min(id.xy * 2u + kVisit[turn], uint2(width, height) - 1u));
     const int3 here = int3(pixel, 0);
     const float4 guide = g_guide.Load(here);
@@ -165,15 +196,18 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 origin = rt_ray_origin(s, dir);
 
     if (mode == kModeSky) {
-        // Traced ambient occlusion in the sky's colour: what stands within kSkyReach hides the sky.
+        // Traced ambient occlusion in the sky's colour: what stands within kSkyReach hides the sky. From the side the
+        // ray leaves by (rt_ray_origin, as the gather): from the lit side's point a ray under the geometric
+        // surface met the surface itself. Open sky is the open sky's O (rt_open_o: its luminance 1 and kSkyChroma of the
+        // dome's hue, what Medium's misses average to: what has no traced O takes the open sky's).
         uint item, triangle_;
         float2 where_;
         float far_;
-        const bool hit = rt_closest(s.origin, dir, kSkyReach, kMaskSolid | kMaskCutout, item, triangle_, where_, far_);
-        const float ratio = hit ? g_shade.look.y : 1.0f;
+        const bool hit = rt_closest(origin, dir, kSkyReach, kMaskSolid | kMaskCutout, item, triangle_, where_, far_);
+        const float3 ratio = (hit ? g_shade.look.y : 1.0f) * rt_open_o();
         g_reservoirs[id.xy] = uint4(0u, 0u, 0u, 0u);
         g_weights[id.xy] = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        g_raw[id.xy] = float4(ratio, 0.0f, ratio, ratio);
+        g_raw[id.xy] = float4(ratio.r, 0.0f, ratio.g, ratio.b);
         return;
     }
 
@@ -201,20 +235,21 @@ void main(uint3 id : SV_DispatchThreadID) {
             rt_hit_read(item, triangle_, where_, far_, from, dir, 0.05f, h);
             fresh.at = h.at;
             if (met == 1u || (h.item_flags & kItemSky) != 0u) {
-                fresh.light = rt_sky_ratio(rt_lin(rt_dome(h)));  // the dome's mean: rt_count_dome_directions (linear)
+                fresh.light = rt_sky_ratio(rt_dome_light(h));  // the dome's mean: rt_count_dome_directions
             } else {
                 fresh.n = h.ng;
                 const uint options = kRtShadeSunRay | kRtShadeLighting | (mode == kModeHigh ? kRtShadeLightRay : 0u);
                 float3 o = float3(g_shade.gains.y, g_shade.gains.y, g_shade.gains.y);
                 if (mode == kModeHigh && (g_pass.z & 1u) != 0u) {
                     float3 seen;
-                    if (rt_screen_cache(g_guide, g_out_before, h.at, seen)) {
+                    if (rt_screen_cache(g_guide, g_out_before, h, seen)) {
                         o = seen;
                     }
                 }
                 // The lamps on a hit the screen shows, as the screen has them, else the grid's.
                 float3 d_seen;
-                const bool d_known = (g_pass.z & 1u) != 0u && rt_screen_lights(g_guide, g_added_before, g_blended_before, h.at, d_seen);
+                const bool d_known = (g_pass.z & 1u) != 0u &&
+                                     rt_screen_lights(g_guide, g_added_before, g_blended_before, (g_pass.z & 8u) != 0u, h, d_seen);
                 const float3 bounce = g_shade.gains.z * rt_hit_radiance_with(h, options, o, d_known, d_seen, seed) /
                                       rt_o_unit();  // O's unit (the model's under the relight)
                 if (h.glows && !h.listed) {
@@ -222,7 +257,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 } else {
                     // A surface lit by the scene: against the mean of such hits, as the sky against its own;
                     // an area glow's emission over it as it is.
-                    if (((id.x | id.y) & 3u) == 0u) {
+                    if (counting && ((id.x | id.y) & 3u) == 0u) {
                         rt_count_hit(bounce);
                     }
                     const float3 glow = g_shade.gains.z * rt_hit_area_glow(h, true) / rt_o_unit();
@@ -263,11 +298,13 @@ void main(uint3 id : SV_DispatchThreadID) {
                     dot(n, normalize(mul((float3x3)now_from_before, rt_unpack_normal(was.a)))) >= 0.906f) {
                     const GiReservoir before = gi_load(at, now_from_before);
                     // Only a sample this receiver could have drawn counts its M: in front of its plane, past the near
-                    // field's reach.
-                    if (before.m > 0.0f && dot(n, before.at - x) > 0.0f && length(before.at - x) >= skip) {
+                    // field's reach. It was drawn from the pixel the block visited then, not this one
+                    // (the turn moves the receiver up to a pixel and a half): the same Jacobian as a neighbour's.
+                    const float jacobian = gi_jacobian(before, x, gi_drawn_from(at, was.r, width, height, now_from_before));
+                    if (before.m > 0.0f && dot(n, before.at - x) > 0.0f && length(before.at - x) >= skip && jacobian > 0.0f) {
                         const uint picked = r.sum > 0.0f ? 0u : 1u;
                         const float3 kept_at = r.at;
-                        gi_take(r, before, gi_target(before.light, before.at, x, n) * before.w * before.m, seed);
+                        gi_take(r, before, gi_target(before.light, before.at, x, n) * before.w * before.m * jacobian, seed);
                         reused = reused || any(r.at != kept_at) || picked != 0u;
                     }
                 }
@@ -290,10 +327,9 @@ void main(uint3 id : SV_DispatchThreadID) {
                 continue;
             }
             // The neighbour's receiver, moved into this frame: in the receiver's plane and facing as it does. Its
-            // place is the pixel that drew it: the block's visit the frame before (the turn counts one a
-            // frame), not the block's corner (a Jacobian off by that much fed itself through the reservoirs).
-            const int2 drew = at * 2 + int2(kVisit[(g_more.y - 1u) & 3u]);
-            const float3 q = mul(now_from_before, float4(rt_eye_ray(g_ray_before, float2(drew) + 0.5f) * was.r, 1.0f));
+            // place is the pixel that drew it, not the block's corner (a Jacobian off by that much fed
+            // itself through the reservoirs).
+            const float3 q = gi_drawn_from(at, was.r, width, height, now_from_before);
             const float3 nq = normalize(mul((float3x3)now_from_before, rt_unpack_normal(was.a)));
             if (dot(n, nq) < 0.906f || abs(dot(n, q - x)) > 0.05f * s.away + 2.0f) {
                 continue;
@@ -302,20 +338,11 @@ void main(uint3 id : SV_DispatchThreadID) {
             if (!(other.m > 0.0f) || dot(n, other.at - x) <= 0.0f) {
                 continue;  // none, or behind the receiver's plane
             }
-            // The sample seen from here rather than from the neighbour: the Jacobian of the solid angle it covers
-            // (|cos at the sample toward here| / |toward there|) * (distance there / distance here)^2.
-            const float3 to_r = x - other.at, to_q = q - other.at;
-            const float far_r = dot(to_r, to_r), far_q = dot(to_q, to_q);
-            const float cos_r = abs(dot(other.n, to_r * rsqrt(max(far_r, 1e-6f))));
-            const float cos_q = abs(dot(other.n, to_q * rsqrt(max(far_q, 1e-6f))));
-            if (!(cos_q > 1e-4f) || !(far_r > 1e-6f)) {
+            const float jacobian = gi_jacobian(other, x, q);
+            if (!(jacobian > 0.0f)) {
                 continue;
             }
-            const float jacobian = cos_r / cos_q * far_q / far_r;
-            if (!(jacobian <= kMostJacobian)) {
-                continue;  // its weight would be cut, its sample kept: left out instead
-            }
-            if (gi_hidden(s.origin, other.at, skip)) {
+            if (gi_hidden(rt_ray_origin(s, other.at - x), other.at, skip)) {
                 continue;  // hidden from here: neither its light nor its count
             }
             gi_take(r, other, gi_target(other.light, other.at, x, n) * other.w * other.m * jacobian, seed);
@@ -325,18 +352,22 @@ void main(uint3 id : SV_DispatchThreadID) {
     // Its contribution weight. The neighbours' samples were seen from here before they joined; on High the pixel's own
     // earlier one is checked once it is the one kept, and where it is hidden now the new sample alone is kept (a
     // hidden direction's light is the occluder's, not none: never a weight of 0).
+    // W whole for this pixel's estimate; held to a half float's range only where it is stored (a W cut before the
+    // estimate darkened grazing samples, whose target is small and W large).
     float target = gi_target(r.light, r.at, x, n);
-    r.w = target > 0.0f && r.m > 0.0f ? min(r.sum / (r.m * target), kMostWeight) : 0.0f;
+    r.w = target > 0.0f && r.m > 0.0f ? r.sum / (r.m * target) : 0.0f;
     const bool own_earlier = reused && all(r.at == own_at) && any(r.at != fresh_only.at);
-    if (mode == kModeHigh && own_earlier && r.w > 0.0f && gi_hidden(s.origin, r.at, skip)) {
+    if (mode == kModeHigh && own_earlier && r.w > 0.0f && gi_hidden(rt_ray_origin(s, r.at - x), r.at, skip)) {
         r = fresh_only;
         target = gi_target(r.light, r.at, x, n);
-        r.w = target > 0.0f && r.m > 0.0f ? min(r.sum / (r.m * target), kMostWeight) : 0.0f;
+        r.w = target > 0.0f && r.m > 0.0f ? r.sum / (r.m * target) : 0.0f;
     }
-    const float facing = max(dot(n, normalize(r.at - x)), 0.0f);
+    // The estimate f W, f = L cos / pi and W = w_sum / (M lum(L) cos): (L / lum(L)) w_sum / (M pi), the cosine
+    // cancelled rather than divided out (a grazing sample's W alone can pass a float's range).
     // Whole: the guard is the mean's clamp after the filters (rt_indirect_up); a half float's range only.
-    const float3 ratio = min(r.light * r.w * facing / kRtPi, kMostWeight);
+    const float3 ratio = target > 0.0f && r.m > 0.0f ? min(r.light * (r.sum / (r.m * rt_lum(r.light) * kRtPi)), kMostWeight)
+                                                     : float3(0.0f, 0.0f, 0.0f);
     g_reservoirs[id.xy] = uint4(asuint(r.at), gi_pack(r.n, min(r.m, kMostM * fb_history_scale())));
-    g_weights[id.xy] = float4(r.light, r.w);
+    g_weights[id.xy] = float4(r.light, min(r.w, kMostWeight));
     g_raw[id.xy] = float4(ratio.r, 0.0f, ratio.g, ratio.b);
 }

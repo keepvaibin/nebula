@@ -9,6 +9,7 @@
 
 #include <vk_mem_alloc.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -99,17 +100,22 @@ struct Backend::State {
     // A frame slot's passes take their sets from that slot's pools, reset when the slot comes round; a frame that
     // fills them adds one.
     std::vector<VkDescriptorPool> pools[kFramesInFlight];
-    std::size_t pool_at = 0u;
+    std::size_t pool_at[kFramesInFlight]{};  // each slot's first pool that may still have room
     [[nodiscard]] VkDescriptorSet allocate_set();
     std::vector<std::shared_ptr<vk::Texture>> images;
     VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
-    VkPipelineLayout layout = VK_NULL_HANDLE;  // made when the renderer's image set's layout is known (begin)
+    VkPipelineLayout layout = VK_NULL_HANDLE;  // over the passes' set and the renderer's image set (use_images_layout)
     VkSampler sampler = VK_NULL_HANDLE;        // s0
     VkDescriptorSet texture_set = VK_NULL_HANDLE;  // the renderer's textures, set 1
     VkDescriptorSetLayout images_layout = VK_NULL_HANDLE;
     VkPipeline pipelines[static_cast<unsigned>(RtShader::Count)]{};
     bool refused[static_cast<unsigned>(RtShader::Count)]{};
-    [[nodiscard]] bool make_pipeline(unsigned index);  // false: refused, the pass left out
+    [[nodiscard]] bool make_pipeline(unsigned index);  // false: refused (remembered), or no layout yet
+    [[nodiscard]] bool make_pipelines();               // every pass's but the reference's; false: one refused
+    // The passes' pipeline layout over `images` (the renderer's image set layout) and every pass's pipeline with it;
+    // false when the layout or a pass is refused. `failed`: so it was after the start (Backend::failed).
+    [[nodiscard]] bool use_images_layout(VkDescriptorSetLayout images);
+    bool failed = false;
     // Counters: the GPU adds to `counters`; a frame slot's copy is read a frame later.
     VkBuffer counters = VK_NULL_HANDLE;
     VmaAllocation counters_allocation = nullptr;
@@ -118,24 +124,39 @@ struct Backend::State {
     // The timed stretch (time_mark): two timestamps a frame slot (none: no measure).
     VkQueryPool times = VK_NULL_HANDLE;
     bool timed[kFramesInFlight][kTimedStretches]{};
-    // Buffers passes write and builds read.
+    // Buffers passes write and builds read. `address` is a multiple of kRangeAlign (a micromap's input), `offset` where
+    // it lies in the buffer (a pass binds the buffer from there).
     struct OwnBuffer {
         VkBuffer buffer = VK_NULL_HANDLE;
         VmaAllocation allocation = nullptr;
         std::uint64_t bytes = 0u;
         std::uint64_t address = 0u;
+        std::uint64_t offset = 0u;
         bool for_builds = false;
     };
     std::vector<OwnBuffer> buffers;
     // Opacity micromaps: the device builds them (the extension's feature and synchronization2).
     bool micromaps = false;
+    // What passes wrote and read since the last barrier between passes (or the frame's join), from their PassBinds: a
+    // pass waits only for an earlier one it shares an image, buffer or the counters with (Direct3D 12's transitions and
+    // UAV barriers order the same pairs). An image's marks: kWritten, kRead, kCopied (image_to_copy).
+    std::vector<std::uint8_t> marks;
+    std::vector<std::uint32_t> buffers_written;  // u9
+    std::vector<void*> textures_written;         // u7, the renderer's image
+    bool counters_added = false;
+    bool counters_copied = false;  // end_counters' copy read them: the next pass that adds waits for it
+    [[nodiscard]] VkPipelineStageFlags2 waits_for(const PassBinds& binds) const;  // the stages to wait for; 0: none
+    void touched(const PassBinds& binds);
+    void forget(bool copies) noexcept;  // after a barrier; `copies`: it waited for the copies too
 
     [[nodiscard]] bool make_passes();
     [[nodiscard]] std::uint64_t own_address(const TriangleInput& input) const {
         return input.own_buffer < buffers.size() ? buffers[input.own_buffer].address : 0u;
     }
     [[nodiscard]] std::uint64_t micromap_indices(const TriangleInput& input) const {
-        return input.micromap_buffer < buffers.size() ? buffers[input.micromap_buffer].address + input.micromap_indices : 0u;
+        return input.micromap_buffer < buffers.size() && buffers[input.micromap_buffer].buffer != VK_NULL_HANDLE
+                   ? buffers[input.micromap_buffer].address + input.micromap_indices
+                   : 0u;
     }
 };
 
@@ -147,13 +168,92 @@ constexpr std::uint32_t kImageBinding = 200u, kCountersBinding = 200u + kPassWri
                         kConstantsBinding = 300u, kPassConstantsBinding = 301u;
 constexpr VkDeviceSize kCountersBytes = VkDeviceSize{kCounters} * 4u;
 
+constexpr VkFormat format_of(ImageFormat format) noexcept {
+    switch (format) {
+    case ImageFormat::Rgba8: return VK_FORMAT_R8G8B8A8_UNORM;
+    case ImageFormat::Rgba16f: return VK_FORMAT_R16G16B16A16_SFLOAT;
+    case ImageFormat::Rg16f: return VK_FORMAT_R16G16_SFLOAT;
+    case ImageFormat::R16f: return VK_FORMAT_R16_SFLOAT;
+    case ImageFormat::R8: return VK_FORMAT_R8_UNORM;
+    case ImageFormat::Rgb10a2: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+    case ImageFormat::Rgba32ui: return VK_FORMAT_R32G32B32A32_UINT;
+    case ImageFormat::Rgba32f: return VK_FORMAT_R32G32B32A32_SFLOAT;
+    }
+    return VK_FORMAT_UNDEFINED;
+}
+
+constexpr ImageFormat kImageFormats[] = {ImageFormat::Rgba8, ImageFormat::Rgba16f, ImageFormat::Rg16f,   ImageFormat::R16f,
+                                         ImageFormat::R8,    ImageFormat::Rgb10a2, ImageFormat::Rgba32f, ImageFormat::Rgba32ui};
+static_assert(std::size(kImageFormats) == static_cast<std::size_t>(ImageFormat::Rgba32ui) + 1u, "every ImageFormat once");
+
+constexpr std::uint8_t kWritten = 1u, kRead = 2u, kCopied = 4u;
+
+constexpr std::uint64_t align_up(std::uint64_t value) noexcept { return (value + kRangeAlign - 1u) & ~(kRangeAlign - 1u); }
+
 }  // namespace
+
+VkPipelineStageFlags2 Backend::State::waits_for(const PassBinds& binds) const {
+    const auto mark = [&](std::uint32_t image) -> std::uint8_t { return image < marks.size() ? marks[image] : std::uint8_t{0u}; };
+    bool shared = binds.counters && counters_added;  // the atomics of a pass before (Direct3D 12: a UAV barrier)
+    bool copied = binds.counters && counters_copied;
+    for (const std::uint32_t read : binds.reads) {
+        shared = shared || (mark(read) & kWritten) != 0u;
+    }
+    for (const std::uint32_t write : binds.writes) {
+        shared = shared || (mark(write) & (kWritten | kRead)) != 0u;
+        copied = copied || (mark(write) & kCopied) != 0u;  // a copy read it: the write waits for the copy
+    }
+    if (binds.write_buffer != kNoBuffer) {
+        shared = shared || std::find(buffers_written.begin(), buffers_written.end(), binds.write_buffer) != buffers_written.end();
+    }
+    if (binds.write_texture.texture != nullptr) {
+        shared = shared ||
+                 std::find(textures_written.begin(), textures_written.end(), binds.write_texture.texture) != textures_written.end();
+    }
+    return shared || copied ? VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | (copied ? VK_PIPELINE_STAGE_2_COPY_BIT : VkPipelineStageFlags2{0u})
+                            : VkPipelineStageFlags2{0u};
+}
+
+void Backend::State::touched(const PassBinds& binds) {
+    const auto mark = [&](std::uint32_t image, std::uint8_t bit) {
+        if (image < images.size()) {
+            if (marks.size() < images.size()) {
+                marks.resize(images.size(), 0u);
+            }
+            marks[image] = static_cast<std::uint8_t>(marks[image] | bit);
+        }
+    };
+    for (const std::uint32_t read : binds.reads) {
+        mark(read, kRead);
+    }
+    for (const std::uint32_t write : binds.writes) {
+        mark(write, kWritten);
+    }
+    counters_added = counters_added || binds.counters;
+    if (binds.write_buffer != kNoBuffer) {
+        buffers_written.push_back(binds.write_buffer);
+    }
+    if (binds.write_texture.texture != nullptr) {
+        textures_written.push_back(binds.write_texture.texture);
+    }
+}
+
+void Backend::State::forget(bool copies) noexcept {
+    for (std::uint8_t& mark : marks) {
+        mark = copies ? std::uint8_t{0u} : static_cast<std::uint8_t>(mark & kCopied);
+    }
+    buffers_written.clear();
+    textures_written.clear();
+    counters_added = false;
+    counters_copied = counters_copied && !copies;
+}
 
 VkDescriptorSet Backend::State::allocate_set() {
     constexpr std::uint32_t kSets = 256u;
     std::vector<VkDescriptorPool>& slot_pools = pools[frame_slot];
-    for (unsigned tries = 0; tries < 64u; ++tries, ++pool_at) {
-        if (pool_at >= slot_pools.size()) {
+    std::size_t& at = pool_at[frame_slot];
+    for (unsigned tries = 0; tries < 64u; ++tries, ++at) {
+        if (at == slot_pools.size()) {
             const VkDescriptorPoolSize sizes[] = {
                 {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, kSets},
                 {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, kSets * (kPassBuffers + 2u + kPassMeshBuffers)},
@@ -173,7 +273,7 @@ VkDescriptorSet Backend::State::allocate_set() {
             slot_pools.push_back(pool);
         }
         VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-        info.descriptorPool = slot_pools[pool_at];
+        info.descriptorPool = slot_pools[at];
         info.descriptorSetCount = 1u;
         info.pSetLayouts = &set_layout;
         VkDescriptorSet set = VK_NULL_HANDLE;
@@ -286,7 +386,7 @@ VkAccelerationStructureGeometryKHR geometry_of(VkDevice device, const TriangleIn
     if (input.indices != 0u) {
         g.geometry.triangles.indexData.deviceAddress = device_address(device, input.indices);
     }
-    if (input.micromap != 0u) {
+    if (input.micromap != 0u && omm_indices != 0u) {
         // Its micromap decides where a triangle is opaque, transparent or asks (the geometry's opaque flag stands where an
         // instance turns micromaps off).
         usage = {input.triangles(), input.micromap_level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
@@ -328,16 +428,18 @@ Backend::~Backend() { stop(); }
 
 bool Backend::started() const noexcept { return state_ != nullptr; }
 
+bool Backend::failed() const noexcept { return state_ != nullptr && state_->failed; }
+
 bool Backend::State::make_pipeline(unsigned index) {
-    if (refused[index]) {
-        return false;
+    if (refused[index] || layout == VK_NULL_HANDLE) {
+        return false;  // no layout yet is no refusal: the passes are made with it (make_pipelines)
     }
     const RtShaderBytes code = rt_shader(static_cast<RtShader>(index));
     VkShaderModule module = VK_NULL_HANDLE;
     VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     module_info.codeSize = code.size;
     module_info.pCode = static_cast<const std::uint32_t*>(code.data);
-    bool made = code.size != 0u && layout != VK_NULL_HANDLE && vkCreateShaderModule(device, &module_info, nullptr, &module) == VK_SUCCESS;
+    bool made = code.size != 0u && vkCreateShaderModule(device, &module_info, nullptr, &module) == VK_SUCCESS;
     if (made) {
         VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
         info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
@@ -351,24 +453,123 @@ bool Backend::State::make_pipeline(unsigned index) {
     if (!made) {
         pipelines[index] = VK_NULL_HANDLE;
         refused[index] = true;
-        std::fprintf(stderr, "[rt] pass %u: no pipeline; the pass is left out\n", index);
+        std::fprintf(stderr, "[rt] pass %u: the driver refused its pipeline\n", index);
     }
     return made;
 }
 
-bool Backend::start(gpu::Device* device) {
+// Every pass's pipeline, made with the passes' layout (a pass's first use in a frame never waits on the driver's
+// compile): at the start, and again only should the renderer's image set layout change (begin). The reference's
+// (rt_shader_made_on_first_use) are made at their first dispatch instead. False at the first pass refused.
+bool Backend::State::make_pipelines() {
+    const auto making = std::chrono::steady_clock::now();
+    unsigned made = 0u, later = 0u;
+    for (unsigned index = 0; index < static_cast<unsigned>(RtShader::Count); ++index) {
+        if (index == static_cast<unsigned>(RtShader::Omm) && !micromaps) {
+            continue;
+        }
+        if (rt_shader_made_on_first_use(static_cast<RtShader>(index))) {
+            ++later;
+            continue;
+        }
+        if (pipelines[index] == VK_NULL_HANDLE && !make_pipeline(index)) {
+            return false;  // (make_pipeline named the pass)
+        }
+        ++made;
+    }
+    std::fprintf(stderr, "[rt] passes: %u pipelines made in %.1f ms, %u at their first use\n", made,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - making).count(), later);
+    return true;
+}
+
+bool Backend::State::use_images_layout(VkDescriptorSetLayout images) {
+    // The pipelines and the layout made with an earlier image set layout go (after the GPU's use of them).
+    for (VkPipeline& pipeline : pipelines) {
+        if (pipeline != VK_NULL_HANDLE) {
+            const VkPipeline old = pipeline;
+            vk::Context::get().defer([device = device, old] { vkDestroyPipeline(device, old, nullptr); });
+            pipeline = VK_NULL_HANDLE;
+        }
+    }
+    if (layout != VK_NULL_HANDLE) {
+        const VkPipelineLayout old = layout;
+        vk::Context::get().defer([device = device, old] { vkDestroyPipelineLayout(device, old, nullptr); });
+        layout = VK_NULL_HANDLE;
+    }
+    images_layout = images;
+    // A refusal was the driver's over the old layout: each pass is asked again with this one.
+    std::fill(std::begin(refused), std::end(refused), false);
+    const VkDescriptorSetLayout sets[2] = {set_layout, images};
+    VkPipelineLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    layout_info.setLayoutCount = 2u;
+    layout_info.pSetLayouts = sets;
+    if (vkCreatePipelineLayout(device, &layout_info, nullptr, &layout) != VK_SUCCESS) {
+        layout = VK_NULL_HANDLE;
+        std::fprintf(stderr, "[rt] the driver refused the passes' pipeline layout\n");
+        return false;
+    }
+    return make_pipelines();
+}
+
+bool Backend::start(gpu::Device* device, void* texture_layout) {
     stop();
     const vk::Context& context = vk::Context::get();
     if (device == nullptr || !context.rt_caps().enabled) {
         return false;
     }
-    VkPhysicalDeviceAccelerationStructurePropertiesKHR limits{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR};
-    VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-    properties.pNext = &limits;
-    vkGetPhysicalDeviceProperties2(context.physical_device(), &properties);
-    if (limits.minAccelerationStructureScratchOffsetAlignment > kRangeAlign) {
-        std::fprintf(stderr, "[rt] the device aligns build scratch to %u bytes; ranges are aligned to %llu\n",
-                     limits.minAccelerationStructureScratchOffsetAlignment, static_cast<unsigned long long>(kRangeAlign));
+    if (texture_layout == nullptr) {
+        std::fprintf(stderr, "[rt] the renderer has no image array for the passes to read\n");
+        return false;
+    }
+    // (Build scratch: every device aligns it to 256 bytes at most, kRangeAlign; pages start at a multiple of it.)
+    // The passes' set (make_passes) beside the texture array: more storage buffers and images in a stage than every Vulkan
+    // device must take (4 of each), as a phone's may not. (Its 16 sampled images, 2 uniform buffers and 2 sets are within
+    // every device's.)
+    const VkPhysicalDeviceLimits& device_limits = context.properties().limits;
+    constexpr std::uint32_t kStorageBuffers = kPassBuffers + 2u + kPassMeshBuffers;
+    // Work groups: rt_omm.hlsl [numthreads(256, 1, 1)] and rt_sun_tiles.hlsl [numthreads(16, 16, 1)] are above the
+    // minimum every Vulkan device must take (128 invocations, 128 across); a change there changes these.
+    if (device_limits.maxComputeWorkGroupInvocations < 256u || device_limits.maxComputeWorkGroupSize[0] < 256u ||
+        device_limits.maxComputeWorkGroupSize[1] < 16u) {
+        std::fprintf(stderr, "[rt] the device's compute work groups are smaller than the passes' (%u invocations, %u x %u)\n",
+                     device_limits.maxComputeWorkGroupInvocations, device_limits.maxComputeWorkGroupSize[0],
+                     device_limits.maxComputeWorkGroupSize[1]);
+        return false;
+    }
+    if (device_limits.maxPerStageDescriptorStorageBuffers < kStorageBuffers || device_limits.maxPerStageDescriptorStorageImages < kPassWrites) {
+        std::fprintf(stderr, "[rt] a pass binds more than the device takes in a stage (storage buffers %u, storage images %u)\n",
+                     device_limits.maxPerStageDescriptorStorageBuffers, device_limits.maxPerStageDescriptorStorageImages);
+        return false;
+    }
+    // Every image of the tracer's is written and sampled by passes: a device that cannot store one of its formats (only
+    // some are a requirement of every Vulkan device) does not start, rather than give up image by image.
+    for (const ImageFormat format : kImageFormats) {
+        VkFormatProperties formats{};
+        vkGetPhysicalDeviceFormatProperties(context.physical_device(), format_of(format), &formats);
+        constexpr VkFormatFeatureFlags kNeeded = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+        if ((formats.optimalTilingFeatures & kNeeded) != kNeeded) {
+            std::fprintf(stderr, "[rt] the device cannot write and sample format %d in a pass\n", static_cast<int>(format_of(format)));
+            return false;
+        }
+    }
+    // What the passes' SPIR-V declares beyond what the device was made with for rt_caps().enabled (RayQueryKHR: rayQuery;
+    // RuntimeDescriptorArray and SampledImageArrayNonUniformIndexing over the texture table: runtimeDescriptorArray and
+    // shaderSampledImageArrayNonUniformIndexing; ShaderNonUniform, ImageQuery, StorageImageExtendedFormats: core): the
+    // wave operations in compute (GroupNonUniform, -Ballot, -Arithmetic: the subgroup properties' operations and stages),
+    // and writes to an image whose format the renderer chooses (the view's and the signal's: StorageImageWriteWithoutFormat).
+    VkPhysicalDeviceSubgroupProperties subgroups{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES};
+    VkPhysicalDeviceProperties2 properties2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+    properties2.pNext = &subgroups;
+    vkGetPhysicalDeviceProperties2(context.physical_device(), &properties2);
+    VkPhysicalDeviceFeatures features{};
+    vkGetPhysicalDeviceFeatures(context.physical_device(), &features);
+    constexpr VkSubgroupFeatureFlags kWaves = VK_SUBGROUP_FEATURE_BASIC_BIT | VK_SUBGROUP_FEATURE_BALLOT_BIT | VK_SUBGROUP_FEATURE_ARITHMETIC_BIT;
+    if ((subgroups.supportedStages & VK_SHADER_STAGE_COMPUTE_BIT) == 0u || (subgroups.supportedOperations & kWaves) != kWaves ||
+        features.shaderStorageImageWriteWithoutFormat != VK_TRUE) {
+        std::fprintf(stderr, "[rt] the device lacks what the passes' shaders use (wave stages %#x, wave operations %#x, image writes "
+                             "without a format %u)\n",
+                     static_cast<unsigned>(subgroups.supportedStages), static_cast<unsigned>(subgroups.supportedOperations),
+                     static_cast<unsigned>(features.shaderStorageImageWriteWithoutFormat));
         return false;
     }
     auto state = new State{};
@@ -399,18 +600,11 @@ bool Backend::start(gpu::Device* device) {
             state->times = VK_NULL_HANDLE;
         }
     }
-    // Every pass's pipeline now (a pass's first use in a frame never waits on the driver's compile).
-    const auto making = std::chrono::steady_clock::now();
-    unsigned made = 0u, wanted = 0u;
-    for (unsigned index = 0; index < static_cast<unsigned>(RtShader::Count); ++index) {
-        if (index == static_cast<unsigned>(RtShader::Omm) && !state->micromaps) {
-            continue;
-        }
-        ++wanted;
-        made += state->pipelines[index] != VK_NULL_HANDLE || state->make_pipeline(index) ? 1u : 0u;
+    // Every pass now, the micromaps' opt-in settled: a pass the driver refuses leaves no tracer to run.
+    if (!state->use_images_layout(static_cast<VkDescriptorSetLayout>(texture_layout))) {
+        stop();
+        return false;
     }
-    std::fprintf(stderr, "[rt] passes: %u of %u pipelines made at the start in %.1f ms\n", made, wanted,
-                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - making).count());
     return true;
 }
 
@@ -477,8 +671,11 @@ BuildSizes Backend::sizes(const TriangleInput& input, BuildKind kind) const {
 }
 
 std::uint32_t Backend::make_page(std::uint64_t bytes, bool scratch) {
+    // A scratch page's address is a multiple of kRangeAlign, so every range's is: a build's scratch address must be a
+    // multiple of the device's scratch alignment (at most 256), and the memory under a buffer is aligned only to the
+    // buffer's own requirement (vkGetBufferDeviceAddress): the page is kRangeAlign larger and its address rounded up.
     VkBufferCreateInfo buffer_info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    buffer_info.size = bytes;
+    buffer_info.size = scratch ? bytes + kRangeAlign : bytes;
     buffer_info.usage = (scratch ? VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR) |
                         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     if (!scratch && state_->micromaps) {
@@ -488,7 +685,9 @@ std::uint32_t Backend::make_page(std::uint64_t bytes, bool scratch) {
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     State::Page page;
-    if (vmaCreateBuffer(vk::Context::get().allocator(), &buffer_info, &alloc_info, &page.buffer, &page.allocation, nullptr) != VK_SUCCESS) {
+    // (A structure page's ranges are buffer offsets, multiples of 256 as a structure's must be: its address is not used.)
+    if (vmaCreateBufferWithAlignment(vk::Context::get().allocator(), &buffer_info, &alloc_info, kRangeAlign, &page.buffer, &page.allocation,
+                                     nullptr) != VK_SUCCESS) {
         return ~0u;
     }
     vk::Context::get().set_name(VK_OBJECT_TYPE_BUFFER, reinterpret_cast<std::uint64_t>(page.buffer),
@@ -497,6 +696,7 @@ std::uint32_t Backend::make_page(std::uint64_t bytes, bool scratch) {
     VkBufferDeviceAddressInfo address{VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO};
     address.buffer = page.buffer;
     page.address = vkGetBufferDeviceAddress(state_->device, &address);
+    page.address = scratch ? align_up(page.address) : page.address;
     for (std::uint32_t i = 0; i < state_->pages.size(); ++i) {
         if (state_->pages[i].buffer == VK_NULL_HANDLE) {
             state_->pages[i] = page;
@@ -546,7 +746,7 @@ void Backend::frame(unsigned frame_slot) noexcept {
     for (const VkDescriptorPool pool : state_->pools[state_->frame_slot]) {
         vkResetDescriptorPool(state_->device, pool, 0u);
     }
-    state_->pool_at = 0u;
+    state_->pool_at[state_->frame_slot] = 0u;
     state_->counters_bound = false;  // the frame's first pass that counts zeroes them
     state_->joined = false;          // the frame's first begin waits for the last frame's tracer work
 }
@@ -558,9 +758,11 @@ void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noex
     s.asked = false;
     // The last frame's builds, micromap builds and passes before this frame's. Nothing else orders two
     // submissions on one queue, and this frame takes the same build scratch again from its start, builds the top level
-    // into the same structure, refits Moving structures in place and writes the buffers builds read.
+    // into the same structure, refits Moving structures in place and writes the buffers builds read. The copies of its
+    // images (image_to_copy) before this frame's passes write them again; the passes' marks start anew.
     if (!s.joined && s.commands != VK_NULL_HANDLE) {
         s.joined = true;
+        s.forget(true);
         if (const PFN_vkCmdPipelineBarrier2 barrier2 = vk::Context::get().pipeline_barrier2(); barrier2 != nullptr) {
             VkPipelineStageFlags2 stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
             VkAccessFlags2 writes = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_SHADER_WRITE_BIT;
@@ -571,7 +773,7 @@ void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noex
                 reads |= VK_ACCESS_2_MICROMAP_READ_BIT_EXT;
             }
             VkMemoryBarrier2 join{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
-            join.srcStageMask = stages;
+            join.srcStageMask = stages | VK_PIPELINE_STAGE_2_COPY_BIT;
             join.srcAccessMask = writes;
             join.dstStageMask = stages;
             join.dstAccessMask = reads | writes;
@@ -585,39 +787,19 @@ void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noex
             join.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR |
                                  VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
             const VkPipelineStageFlags stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-            vkCmdPipelineBarrier(s.commands, stages, stages, 0u, 1u, &join, 0u, nullptr, 0u, nullptr);
+            vkCmdPipelineBarrier(s.commands, stages | VK_PIPELINE_STAGE_TRANSFER_BIT, stages, 0u, 1u, &join, 0u, nullptr, 0u, nullptr);
         }
     }
     if (const auto* textures = static_cast<const TextureTable*>(descriptors); textures != nullptr && textures->layout != nullptr) {
         s.texture_set = static_cast<VkDescriptorSet>(textures->set);
         const auto images_layout = static_cast<VkDescriptorSetLayout>(textures->layout);
-        if (s.layout == VK_NULL_HANDLE || s.images_layout != images_layout) {
-            // The passes' pipeline layout over the two sets (anew should the renderer's layout ever change: the
-            // pipelines made with the old one go with it).
-            const VkDevice device = s.device;
-            for (VkPipeline& pipeline : s.pipelines) {
-                if (pipeline != VK_NULL_HANDLE) {
-                    const VkPipeline old = pipeline;
-                    vk::Context::get().defer([device, old] { vkDestroyPipeline(device, old, nullptr); });
-                    pipeline = VK_NULL_HANDLE;
-                }
-            }
-            if (s.layout != VK_NULL_HANDLE) {
-                const VkPipelineLayout old = s.layout;
-                vk::Context::get().defer([device, old] { vkDestroyPipelineLayout(device, old, nullptr); });
-                s.layout = VK_NULL_HANDLE;
-            }
-            const VkDescriptorSetLayout sets[2] = {s.set_layout, images_layout};
-            VkPipelineLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-            layout_info.setLayoutCount = 2u;
-            layout_info.pSetLayouts = sets;
-            if (vkCreatePipelineLayout(device, &layout_info, nullptr, &s.layout) != VK_SUCCESS) {
-                s.layout = VK_NULL_HANDLE;
-            }
-            s.images_layout = images_layout;
+        if (!s.failed && s.images_layout != images_layout && !s.use_images_layout(images_layout)) {
+            s.failed = true;  // the caller stops the tracer (Backend::failed)
         }
     }
 }
+
+void Backend::end() noexcept {}  // (Vulkan's commands are the renderer's own: nothing to close)
 
 void Backend::build(const TriangleInput& input, BuildKind kind, const Structure& to, const Range& scratch, bool refit) {
     VkAccelerationStructureTrianglesOpacityMicromapEXT omm{};
@@ -683,13 +865,15 @@ void Backend::build_scene(gpu::Address instances, std::uint32_t count, const Str
     vkCmdBuildAccelerationStructuresKHR(state_->commands, 1u, &info, &ranges);
 }
 
+// The builds and copies before (a copy runs in the build stage: the device has no ray tracing maintenance) and the
+// passes that traced before, then the builds, copies and traces after: Direct3D 12's barrier on every UAV orders the
+// passes too, so a structure a pass traced is never rebuilt or refitted under it.
 void Backend::barrier() {
     VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
     barrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
     barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-    vkCmdPipelineBarrier(state_->commands, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-                         VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0u, 1u, &barrier, 0u,
-                         nullptr, 0u, nullptr);
+    constexpr VkPipelineStageFlags kStages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    vkCmdPipelineBarrier(state_->commands, kStages, kStages, 0u, 1u, &barrier, 0u, nullptr, 0u, nullptr);
 }
 
 void Backend::ask_compacted_size(const Structure& structure, std::uint32_t slot) {
@@ -721,22 +905,6 @@ void Backend::compact(const Structure& from, const Structure& to) {
 }
 
 namespace {
-
-constexpr VkFormat format_of(ImageFormat format) noexcept {
-    switch (format) {
-    case ImageFormat::Rgba8: return VK_FORMAT_R8G8B8A8_UNORM;
-    case ImageFormat::Rgba16f: return VK_FORMAT_R16G16B16A16_SFLOAT;
-    case ImageFormat::Rg16f: return VK_FORMAT_R16G16_SFLOAT;
-    case ImageFormat::R16f: return VK_FORMAT_R16_SFLOAT;
-    case ImageFormat::R8: return VK_FORMAT_R8_UNORM;
-    case ImageFormat::R32f: return VK_FORMAT_R32_SFLOAT;
-    case ImageFormat::Rgb10a2: return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-    case ImageFormat::Rgba32ui: return VK_FORMAT_R32G32B32A32_UINT;
-    case ImageFormat::Rgba32f: return VK_FORMAT_R32G32B32A32_SFLOAT;
-    case ImageFormat::Rg16ui: return VK_FORMAT_R16G16_UINT;
-    }
-    return VK_FORMAT_UNDEFINED;
-}
 
 // A volume of `depth` slices, read and written by passes (Texture3D): its own image and a 3D view.
 std::shared_ptr<vk::Texture> make_volume(std::uint32_t width, std::uint32_t height, std::uint32_t depth, VkFormat format) {
@@ -779,18 +947,11 @@ std::shared_ptr<vk::Texture> make_volume(std::uint32_t width, std::uint32_t heig
     return texture;
 }
 
-// What a pass wrote, before the next pass or a draw reads it.
-void written(VkCommandBuffer commands) {
-    vk::shader_written(commands, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
-}
-
 }  // namespace
 
 std::uint32_t Backend::make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name, std::uint32_t depth) {
-    VkFormatProperties properties{};
-    vkGetPhysicalDeviceFormatProperties(vk::Context::get().physical_device(), format_of(format), &properties);
-    if (width == 0u || height == 0u || (properties.optimalTilingFeatures & VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT) == 0u) {
-        return kNoImage;
+    if (width == 0u || height == 0u) {
+        return kNoImage;  // (every format stores and samples: start asked)
     }
     std::shared_ptr<vk::Texture> image =
         depth > 1u ? make_volume(width, height, depth, format_of(format))
@@ -836,55 +997,86 @@ Backend::Live Backend::live() const noexcept {
     return live;
 }
 
-// An image of the tracer's stays in the general layout, which a copy reads too, once the pass's writes are done.
+std::uint64_t Backend::memory_budget() const noexcept {
+    std::uint64_t usage = 0u, budget = 0u;
+    return state_ != nullptr && vk::Context::get().device_memory_budget(usage, budget) ? budget : 0u;
+}
+
+namespace {
+
+// The use an image of the tracer's is in by its layout (only these three occur), and whether a change from it keeps the
+// contents (an image no pass wrote has none to keep).
+gpu::Use use_of(VkImageLayout layout) noexcept {
+    return layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ? gpu::Use::ShaderRead : gpu::Use::ComputeWrite;
+}
+
+gpu::Contents contents_of(VkImageLayout layout) noexcept {
+    return layout == VK_IMAGE_LAYOUT_UNDEFINED ? gpu::Contents::Discard : gpu::Contents::Keep;
+}
+
+// The image into `layout` (general for passes and copies, read-only for the draws), its contents kept.
+void image_to(VkCommandBuffer commands, vk::Texture& texture, VkImageLayout layout) {
+    if (texture.layout == layout) {
+        return;
+    }
+    vk::image_barrier(commands, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, use_of(texture.layout),
+                      layout == VK_IMAGE_LAYOUT_GENERAL ? gpu::Use::ComputeWrite : gpu::Use::ShaderRead, contents_of(texture.layout), 1u);
+    texture.layout = layout;
+}
+
+}  // namespace
+
+// The copy reads it in the general layout (rt_copy_to_scene), once the pass's writes are done; the next pass that
+// writes it waits for the copy (kCopied).
 void* Backend::image_to_copy(std::uint32_t image) {
-    if (image >= state_->images.size() || state_->images[image] == nullptr) {
+    State& s = *state_;
+    if (image >= s.images.size() || s.images[image] == nullptr) {
         return nullptr;
     }
+    vk::Texture& texture = *s.images[image];
+    image_to(s.commands, texture, VK_IMAGE_LAYOUT_GENERAL);
+    if (s.marks.size() < s.images.size()) {
+        s.marks.resize(s.images.size(), 0u);
+    }
+    s.marks[image] = static_cast<std::uint8_t>(s.marks[image] | kCopied);
     VkMemoryBarrier written_out{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
     written_out.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
     written_out.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    vkCmdPipelineBarrier(state_->commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0u, 1u, &written_out, 0u,
+    vkCmdPipelineBarrier(s.commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0u, 1u, &written_out, 0u,
                          nullptr, 0u, nullptr);
-    return state_->images[image].get();
+    return &texture;
 }
 
-// The draws' programs sample it in the read-only layout (the texture array's); the next pass that writes it takes it
-// back to the general one.
+// The draws' programs sample it in the read-only layout (the texture array's), an image no pass wrote too; the next
+// pass that writes it takes it back to the general one.
 void* Backend::image_to_sample(std::uint32_t image) {
     if (image >= state_->images.size() || state_->images[image] == nullptr) {
         return nullptr;
     }
     vk::Texture& texture = *state_->images[image];
-    if (texture.layout == VK_IMAGE_LAYOUT_GENERAL) {
-        vk::image_barrier(state_->commands, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ComputeWrite, gpu::Use::ShaderRead,
-                          gpu::Contents::Keep, 1u);
-        texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
+    image_to(state_->commands, texture, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     return &texture;
 }
 
-void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t groups_x, std::uint32_t groups_y) {
+bool Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t groups_x, std::uint32_t groups_y) {
     State& s = *state_;
     const auto index = static_cast<unsigned>(shader);
     if (index >= static_cast<unsigned>(RtShader::Count) || s.refused[index] || groups_x == 0u || groups_y == 0u ||
         s.layout == VK_NULL_HANDLE) {
-        return;
+        return false;
     }
     if (s.pipelines[index] == VK_NULL_HANDLE && !s.make_pipeline(index)) {
-        return;  // made at the start; here only after a refusal there
+        return false;  // made with the layout (begin), or here at the first use (rt_shader_made_on_first_use); false: refused
     }
     const VkCommandBuffer commands = s.commands;
     const auto image_of = [&](std::uint32_t image) -> vk::Texture* {
         return image < s.images.size() ? s.images[image].get() : nullptr;
     };
-    // A new image goes to the general layout, where it stays: read, written and copied from there.
+    // An image written goes to the general layout, its contents kept as Direct3D 12 keeps them (a pass may write part
+    // of it, or read what it wrote before); a new one there from no layout.
     for (const std::uint32_t write : binds.writes) {
-        vk::Texture* const image = image_of(write);
-        if (image != nullptr && image->layout != VK_IMAGE_LAYOUT_GENERAL) {
-            vk::image_barrier(commands, image->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ShaderRead, gpu::Use::ComputeWrite,
-                              gpu::Contents::Discard, 1u);
-            image->layout = VK_IMAGE_LAYOUT_GENERAL;
+        if (vk::Texture* const image = image_of(write)) {
+            image_to(commands, *image, VK_IMAGE_LAYOUT_GENERAL);
         }
     }
     // So does an image read before any pass wrote it (the filter's history on its first frame): a descriptor names
@@ -892,12 +1084,16 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
     for (const std::uint32_t read : binds.reads) {
         vk::Texture* const image = image_of(read);
         if (image != nullptr && image->layout == VK_IMAGE_LAYOUT_UNDEFINED) {
-            vk::image_barrier(commands, image->image, VK_IMAGE_ASPECT_COLOR_BIT, gpu::Use::ShaderRead, gpu::Use::ComputeWrite,
-                              gpu::Contents::Discard, 1u);
-            image->layout = VK_IMAGE_LAYOUT_GENERAL;
+            image_to(commands, *image, VK_IMAGE_LAYOUT_GENERAL);
         }
     }
     if (binds.counters && !s.counters_bound) {
+        // The last frame's passes added to them and its copy read them: both before this fill.
+        VkMemoryBarrier last{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+        last.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        last.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                             0u, 1u, &last, 0u, nullptr, 0u, nullptr);
         vkCmdFillBuffer(commands, s.counters, 0u, kCountersBytes, 0u);
         VkMemoryBarrier filled{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
         filled.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -909,7 +1105,7 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
 
     const VkDescriptorSet set = s.allocate_set();
     if (set == VK_NULL_HANDLE) {
-        return;  // the device has no pool left for it: the pass is left out this frame
+        return false;  // the device has no pool left for it: the pass is left out this frame
     }
     constexpr unsigned kMost = 5u + kPassBuffers + kPassTextures + kPassReads + kPassWrites + kPassMeshBuffers;
     VkWriteDescriptorSet writes[kMost]{};
@@ -956,13 +1152,15 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
             next(1u + kPassBuffers + kPassTextures + i, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE).pImageInfo = &views[view_count++];
         }
     }
+    // u7 is the renderer's image where the pass names one (as on Direct3D 12, it takes writes[7]'s place).
     for (std::uint32_t i = 0; i < kPassWrites; ++i) {
-        if (const vk::Texture* image = image_of(binds.writes[i])) {
+        const vk::Texture* image = image_of(binds.writes[i]);
+        if (image != nullptr && (i + 1u < kPassWrites || binds.write_texture.texture == nullptr)) {
             views[view_count] = {VK_NULL_HANDLE, image->view, VK_IMAGE_LAYOUT_GENERAL};
             next(kImageBinding + i, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE).pImageInfo = &views[view_count++];
         }
     }
-    if (binds.write_texture.texture != nullptr && image_of(binds.writes[kPassWrites - 1u]) == nullptr) {
+    if (binds.write_texture.texture != nullptr) {
         views[view_count] = {VK_NULL_HANDLE, static_cast<VkImageView>(binds.write_texture.texture), VK_IMAGE_LAYOUT_GENERAL};
         next(kImageBinding + kPassWrites - 1u, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE).pImageInfo = &views[view_count++];
     }
@@ -971,7 +1169,8 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
         next(kCountersBinding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).pBufferInfo = &buffers[buffer_count++];
     }
     if (binds.write_buffer < s.buffers.size() && s.buffers[binds.write_buffer].buffer != VK_NULL_HANDLE) {
-        buffers[buffer_count] = {s.buffers[binds.write_buffer].buffer, 0u, s.buffers[binds.write_buffer].bytes};
+        const State::OwnBuffer& own = s.buffers[binds.write_buffer];
+        buffers[buffer_count] = {own.buffer, own.offset, own.bytes};
         next(kWriteBufferBinding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).pBufferInfo = &buffers[buffer_count++];
     }
     if (binds.constants.at != 0u) {
@@ -986,11 +1185,23 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
         }
     }
     vkUpdateDescriptorSets(s.device, write_count, writes, 0u, nullptr);
+    // What an earlier pass wrote that this one reads or writes, or read that it writes (the counters' atomics too), and
+    // a copy of an image it writes or of the counters it adds to: made available and visible before it (V18). Passes that share nothing overlap; what
+    // the draws, copies and builds take from a pass waits in image_to_sample, image_to_copy, buffer_for, build_micromap,
+    // end_counters and the next frame's join.
+    if (const VkPipelineStageFlags2 after = s.waits_for(binds); after != 0u) {
+        vk::BarriersVk barriers(commands);
+        barriers.memory(after, VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+        barriers.issue();
+        s.forget((after & VK_PIPELINE_STAGE_2_COPY_BIT) != 0u);
+    }
+    s.touched(binds);
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, s.pipelines[index]);
     const VkDescriptorSet sets[2] = {set, s.texture_set};
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, s.layout, 0u, s.texture_set != VK_NULL_HANDLE ? 2u : 1u, sets, 0u, nullptr);
     vkCmdDispatch(commands, groups_x, groups_y, 1u);
-    written(commands);
+    return true;
 }
 
 void Backend::end_counters() {
@@ -998,13 +1209,23 @@ void Backend::end_counters() {
     if (!s.counters_bound) {
         return;
     }
+    // The passes' adds before the copy reads them, and this frame's copy before (the same frame slot's buffer is written
+    // by each call: the last holds them all).
     VkMemoryBarrier added{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-    added.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    added.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-    vkCmdPipelineBarrier(s.commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0u, 1u, &added, 0u, nullptr, 0u,
-                         nullptr);
+    added.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+    added.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(s.commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         0u, 1u, &added, 0u, nullptr, 0u, nullptr);
     const VkBufferCopy all{0u, 0u, kCountersBytes};
     vkCmdCopyBuffer(s.commands, s.counters, s.counters_read[s.frame_slot]->buffer, 1u, &all);
+    s.counters_copied = true;
+    // What the copy wrote, for the host's read once the frame's fence is signalled (a fence makes no device write
+    // visible to the host by itself).
+    VkMemoryBarrier read_back{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    read_back.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    read_back.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    vkCmdPipelineBarrier(s.commands, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0u, 1u, &read_back, 0u, nullptr, 0u,
+                         nullptr);
 }
 
 void Backend::read_counters(unsigned frame_slot, std::uint32_t out[kCounters]) const {
@@ -1045,8 +1266,12 @@ std::uint64_t Backend::timed_ticks(unsigned stretch, unsigned frame_slot) const 
 }
 
 std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char* name) {
+    // Its address a multiple of 256, as a micromap build reads its input (VUID-vkCmdBuildMicromapsEXT-pInfos-07515): the
+    // memory under a buffer is aligned only to the buffer's own requirement (vkGetBufferDeviceAddress), so the buffer is
+    // kRangeAlign larger, its address rounded up, and a pass binds it from there (the step is a multiple of that
+    // requirement, which is at least the storage-buffer offset alignment).
     VkBufferCreateInfo buffer_info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-    buffer_info.size = bytes;
+    buffer_info.size = bytes + kRangeAlign;
     buffer_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     if (state_->micromaps) {
@@ -1056,7 +1281,6 @@ std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char* name) {
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     State::OwnBuffer made;
-    // At a multiple of 256 bytes: a micromap build reads its input from there.
     if (vmaCreateBufferWithAlignment(vk::Context::get().allocator(), &buffer_info, &alloc_info, kRangeAlign, &made.buffer, &made.allocation,
                                      nullptr) != VK_SUCCESS) {
         return kNoBuffer;
@@ -1067,7 +1291,9 @@ std::uint32_t Backend::make_buffer(std::uint64_t bytes, const char* name) {
     made.bytes = bytes;
     VkBufferDeviceAddressInfo address{VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO};
     address.buffer = made.buffer;
-    made.address = vkGetBufferDeviceAddress(state_->device, &address);
+    const std::uint64_t start = vkGetBufferDeviceAddress(state_->device, &address);
+    made.address = align_up(start);
+    made.offset = made.address - start;
     for (std::uint32_t i = 0; i < state_->buffers.size(); ++i) {
         if (state_->buffers[i].buffer == VK_NULL_HANDLE) {
             state_->buffers[i] = made;
@@ -1086,7 +1312,11 @@ void Backend::free_buffer(std::uint32_t buffer) noexcept {
     state_->buffers[buffer] = State::OwnBuffer{};
 }
 
-bool Backend::micromaps() const noexcept { return state_ != nullptr && state_->micromaps; }
+// Only with the pass that writes a micromap's input made (as Direct3D 12): a micromap built over input no pass wrote
+// reads where its garbage points.
+bool Backend::micromaps() const noexcept {
+    return state_ != nullptr && state_->micromaps && state_->pipelines[static_cast<unsigned>(RtShader::Omm)] != VK_NULL_HANDLE;
+}
 
 BuildSizes Backend::micromap_sizes(const MicromapInput& input) const {
     const VkMicromapUsageEXT usage{input.triangles, input.level, VK_OPACITY_MICROMAP_FORMAT_4_STATE_EXT};
@@ -1123,9 +1353,10 @@ void Backend::free_micromap(Structure& micromap) noexcept {
 void Backend::build_micromap(const MicromapInput& input, const Structure& to, const Range& scratch) {
     State& s = *state_;
     const PFN_vkCmdPipelineBarrier2 barrier2 = vk::Context::get().pipeline_barrier2();
-    if (barrier2 == nullptr || input.buffer >= s.buffers.size()) {
+    if (barrier2 == nullptr || input.buffer >= s.buffers.size() || s.buffers[input.buffer].buffer == VK_NULL_HANDLE) {
         return;
     }
+    s.buffers[input.buffer].for_builds = true;  // as buffer_for(input.buffer, true): the barrier below is its change of use
     const std::uint64_t at = s.buffers[input.buffer].address;
     // The pass's writes before this build and the structure's build read them (the indices), and the scratch's last
     // use by a build before this one writes it.

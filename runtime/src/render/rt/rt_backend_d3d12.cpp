@@ -8,6 +8,7 @@
 #include "render/barriers_d3d12.h"
 
 #include <d3d12.h>
+#include <dxgi1_4.h>
 #include <wrl/client.h>
 
 #include <chrono>
@@ -81,7 +82,7 @@ struct Backend::State {
     ComPtr<ID3D12RootSignature> pass_root;
     ComPtr<ID3D12PipelineState> pipelines[static_cast<unsigned>(RtShader::Count)];
     bool refused[static_cast<unsigned>(RtShader::Count)]{};
-    [[nodiscard]] bool make_pipeline(unsigned index);  // false: refused, the pass left out
+    [[nodiscard]] bool make_pipeline(unsigned index);  // false: refused (remembered)
     // Counters: the GPU adds to `counters`; `counters_zero` clears it; a frame slot's copy is read a frame later.
     ComPtr<ID3D12Resource> counters, counters_zero;
     ComPtr<ID3D12Resource> counters_read[kFramesInFlight];
@@ -101,6 +102,11 @@ struct Backend::State {
     // Opacity micromaps: the device has DXR 1.2 and takes the ray queries' opt-in (pipeline_flags).
     bool micromaps = false;
     D3D12_PIPELINE_STATE_FLAGS pipeline_flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+    // The device's adapter, for its memory budget (memory_budget), and the last answer, asked at most every 100 ms (as
+    // the renderer's video_memory).
+    ComPtr<IDXGIAdapter3> adapter;
+    mutable std::uint64_t budget = 0u;
+    mutable std::chrono::steady_clock::time_point budget_read{};
 
     void transition(ID3D12Resource* resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) const {
         D3D12_RESOURCE_BARRIER barrier{};
@@ -222,6 +228,8 @@ Backend::~Backend() { stop(); }
 
 bool Backend::started() const noexcept { return state_ != nullptr; }
 
+bool Backend::failed() const noexcept { return false; }  // (every pass is made at the start, or the start fails)
+
 bool Backend::State::make_pipeline(unsigned index) {
     if (refused[index]) {
         return false;
@@ -234,16 +242,24 @@ bool Backend::State::make_pipeline(unsigned index) {
     const HRESULT made = code.size != 0u ? device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&pipelines[index])) : E_FAIL;
     if (FAILED(made)) {
         refused[index] = true;
-        std::fprintf(stderr, "[rt] pass %u: no pipeline (%08lx); the pass is left out\n", index, static_cast<unsigned long>(made));
+        std::fprintf(stderr, "[rt] pass %u: the driver refused its pipeline (%08lx)\n", index, static_cast<unsigned long>(made));
         return false;
     }
     return true;
 }
 
-bool Backend::start(gpu::Device* device) {
+bool Backend::start(gpu::Device* device, void*) {
     stop();
     auto state = new State{};
     if (device == nullptr || FAILED(device->QueryInterface(IID_PPV_ARGS(&state->device)))) {
+        delete state;
+        return false;
+    }
+    // The passes' wave operations (rt_common.hlsli: WaveActiveBallot, WaveIsFirstLane, WaveActiveSum), as Vulkan's start
+    // asks for its subgroup operations: a device without them would refuse every pass.
+    D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1{};
+    if (FAILED(state->device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, &options1, sizeof(options1))) || !options1.WaveOps) {
+        std::fprintf(stderr, "[rt] the device has no wave operations, which the passes' shaders use\n");
         delete state;
         return false;
     }
@@ -280,18 +296,26 @@ bool Backend::start(gpu::Device* device) {
     std::fprintf(stderr, "[rt] d3d12: raytracing tier %u.%u; opacity micromaps %s\n", static_cast<unsigned>(options5.RaytracingTier) / 10u,
                  static_cast<unsigned>(options5.RaytracingTier) % 10u, state->micromaps ? "on" : "off");
     // Every pass's pipeline now, the micromaps' opt-in settled (a pass's first use in a frame never waits on
-    // the driver's compile).
+    // the driver's compile), but the reference's (rt_shader_made_on_first_use): those at their first dispatch. A pass
+    // the driver refuses here leaves no tracer to run: the start fails, as on a device that cannot trace.
     const auto making = std::chrono::steady_clock::now();
-    unsigned made = 0u, wanted = 0u;
+    unsigned made = 0u, later = 0u;
     for (unsigned index = 0; index < static_cast<unsigned>(RtShader::Count); ++index) {
         if (index == static_cast<unsigned>(RtShader::Omm) && !state->micromaps) {
             continue;
         }
-        ++wanted;
-        made += state->pipelines[index] != nullptr || state->make_pipeline(index) ? 1u : 0u;
+        if (rt_shader_made_on_first_use(static_cast<RtShader>(index))) {
+            ++later;
+            continue;
+        }
+        if (state->pipelines[index] == nullptr && !state->make_pipeline(index)) {
+            delete state;  // (make_pipeline named the pass)
+            return false;
+        }
+        ++made;
     }
-    std::fprintf(stderr, "[rt] passes: %u of %u pipelines made at the start in %.1f ms\n", made, wanted,
-                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - making).count());
+    std::fprintf(stderr, "[rt] passes: %u pipelines made at the start in %.1f ms, %u at their first use\n", made,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - making).count(), later);
     D3D12_QUERY_HEAP_DESC times_desc{};
     times_desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
     times_desc.Count = 2u * kTimedStretches * kFramesInFlight;
@@ -305,6 +329,11 @@ bool Backend::start(gpu::Device* device) {
         } else {
             state->times_mapped = static_cast<const std::uint64_t*>(mapped);
         }
+    }
+    ComPtr<IDXGIFactory4> factory;
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) ||
+        FAILED(factory->EnumAdapterByLuid(state->device->GetAdapterLuid(), IID_PPV_ARGS(&state->adapter)))) {
+        state->adapter.Reset();  // no budget known: the structures keep their fixed ceiling
     }
     state_ = state;
     return true;
@@ -456,6 +485,8 @@ void Backend::begin(void* commands, unsigned frame_slot, void* descriptors) noex
     state_->descriptors = static_cast<DescriptorRing*>(descriptors);
 }
 
+void Backend::end() noexcept {}
+
 void Backend::build(const TriangleInput& input, BuildKind kind, const Structure& to, const Range& scratch, bool refit) {
     D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC triangles{};
     D3D12_RAYTRACING_GEOMETRY_OMM_LINKAGE_DESC linkage{};
@@ -550,11 +581,9 @@ constexpr DXGI_FORMAT format_of(ImageFormat format) noexcept {
     case ImageFormat::Rg16f: return DXGI_FORMAT_R16G16_FLOAT;
     case ImageFormat::R16f: return DXGI_FORMAT_R16_FLOAT;
     case ImageFormat::R8: return DXGI_FORMAT_R8_UNORM;
-    case ImageFormat::R32f: return DXGI_FORMAT_R32_FLOAT;
     case ImageFormat::Rgb10a2: return DXGI_FORMAT_R10G10B10A2_UNORM;
     case ImageFormat::Rgba32ui: return DXGI_FORMAT_R32G32B32A32_UINT;
     case ImageFormat::Rgba32f: return DXGI_FORMAT_R32G32B32A32_FLOAT;
-    case ImageFormat::Rg16ui: return DXGI_FORMAT_R16G16_UINT;
     }
     return DXGI_FORMAT_UNKNOWN;
 }
@@ -621,6 +650,22 @@ Backend::Live Backend::live() const noexcept {
     return live;
 }
 
+std::uint64_t Backend::memory_budget() const noexcept {
+    if (state_ == nullptr || !state_->adapter) {
+        return 0u;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    if (state_->budget == 0u || now - state_->budget_read >= std::chrono::milliseconds(100)) {
+        DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+        if (FAILED(state_->adapter->QueryVideoMemoryInfo(0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info))) {
+            return 0u;
+        }
+        state_->budget = info.Budget;
+        state_->budget_read = now;
+    }
+    return state_->budget;
+}
+
 void* Backend::image_to_copy(std::uint32_t image) {
     if (image >= state_->images.size() || state_->images[image].texture == nullptr) {
         return nullptr;
@@ -645,21 +690,22 @@ void* Backend::image_to_sample(std::uint32_t image) {
     return target.texture.Get();
 }
 
-void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t groups_x, std::uint32_t groups_y) {
+bool Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t groups_x, std::uint32_t groups_y) {
     State& s = *state_;
     const auto index = static_cast<unsigned>(shader);
     if (index >= static_cast<unsigned>(RtShader::Count) || s.refused[index] || s.descriptors == nullptr || groups_x == 0u || groups_y == 0u) {
-        return;
+        return false;
     }
     if (s.pipelines[index] == nullptr && !s.make_pipeline(index)) {
-        return;  // made at the start; here only after a refusal there
+        return false;  // made at the start, or here at the first use (rt_shader_made_on_first_use); false: refused
     }
     ID3D12GraphicsCommandList4* const list = s.commands.Get();
     const auto image_of = [&](std::uint32_t image) -> State::Image* {
         return image < s.images.size() && s.images[image].texture != nullptr ? &s.images[image] : nullptr;
     };
-    // Each image in the use this pass has for it; one written again without a change of use waits for the write before.
-    bool written_again = binds.counters;
+    // Each image in the use this pass has for it; one written again without a change of use waits for the write before
+    // (a UAV barrier: a transition of another resource, as the counters' zeroing below, orders nothing of the image's).
+    bool written_again = false;
     {
         BarriersD3D12 uses{list};
         for (const std::uint32_t read : binds.reads) {
@@ -682,7 +728,10 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
         list->CopyBufferRegion(s.counters.Get(), 0u, s.counters_zero.Get(), 0u, std::uint64_t{kCounters} * 4u);
         s.transition(s.counters.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         s.counters_bound = true;
-    } else if (written_again) {
+    } else if (binds.counters) {
+        written_again = true;  // the counters a pass before added to
+    }
+    if (written_again) {
         D3D12_RESOURCE_BARRIER barrier{};
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
         list->ResourceBarrier(1, &barrier);
@@ -790,6 +839,7 @@ void Backend::dispatch(RtShader shader, const PassBinds& binds, std::uint32_t gr
         list->SetComputeRootUnorderedAccessView(9, s.buffers[binds.write_buffer].buffer->GetGPUVirtualAddress());
     }
     list->Dispatch(groups_x, groups_y, 1);
+    return true;
 }
 
 void Backend::end_counters() {

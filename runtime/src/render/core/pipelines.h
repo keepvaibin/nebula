@@ -21,6 +21,12 @@
 
 namespace galaxy::render::core {
 
+// What the tracer draws, for Pipelines::prepare: `on` it runs; `second_layer` glass and water at medium and up
+// (rt_blended); `narrow` a scene was drawn in the narrow target while tracing (the wide one refused).
+struct PipelinesTraced {
+    bool on = false, second_layer = false, narrow = false;
+};
+
 class Pipelines {
 public:
 #if defined(NEBULA_GPU_VULKAN) || defined(NEBULA_GPU_METAL) || defined(NEBULA_GPU_D3D11)
@@ -62,13 +68,25 @@ public:
         std::uint32_t id = 0u;
         std::shared_ptr<const PipelineEntry> entry;
     };
+    using Traced = PipelinesTraced;
     // Queues each entry for every target kind and aux set of the settings, for the background threads: with `motion`, the
     // aux a scene draw of its state can take (scene_aux; 4 for every other with `one_pass`, 3 only with `layer`), and while
-    // the wide variant is listed the narrow variant's left for after the first scene (defer). With `traced` (ray tracing
-    // on), aux 1 and either 4 or 2 and 3 whatever the state, the prepass of an opaque entry and a lit program's traced
-    // forms. The jobs are made before the queue's lock is taken, and the queue takes them all at once.
+    // the wide variant is listed the narrow variant's left for after the first scene (defer). While tracing, the tracer's
+    // forms of an entry the prepass takes (an opaque one, and with `second_layer` a blended or added one): its prepass
+    // and a lit program's traced form under each aux the scene pass can give it, behind the game's forms
+    // (traced_jobs_), for the wide variant alone unless `narrow`. The jobs are made before the queue's lock is taken, and
+    // the queue takes them all at once.
     void prepare(const std::vector<Prepared>& entries, const std::vector<unsigned>& variants, bool motion, bool layer,
-                 bool one_pass, bool traced = false);
+                 bool one_pass, const Traced& traced = {});
+    // Whether the form is made, without making it: the walk draws a tracer's form only once it is (draw_walker). A made
+    // form stays made until shutdown; a refused one is never made.
+    [[nodiscard]] bool made(std::uint64_t id, unsigned variant, unsigned aux) const noexcept {
+        const std::uint32_t key = key_of(variant, aux);
+        const Page* page = page_of(id, key / kKeys);
+        return page != nullptr && page->rows[id & kPageMask][key & (kKeys - 1u)].load(std::memory_order_acquire) != nullptr;
+    }
+    // The tracer's forms queued and not yet tried (made or refused): 0 once its start set is through.
+    [[nodiscard]] std::uint32_t traced_pending() const noexcept { return traced_pending_.load(std::memory_order_acquire); }
     [[nodiscard]] std::uint32_t pending() const noexcept { return pending_.load(std::memory_order_relaxed); }
     [[nodiscard]] std::uint64_t created() const noexcept { return created_.load(std::memory_order_relaxed); }
     // Pipelines a draw wanted before the background had them: the cook's list missed them.
@@ -132,6 +150,7 @@ private:
         unsigned variant, aux;
         bool optimize = false;  // a draw's quickly linked pipeline, to be replaced by the optimised link
         bool deferred = false;  // a form left out of the start's set, made after the first scene is shown (defer)
+        bool tracer = false;    // one of the tracer's forms (traced_jobs_, traced_pending_)
     };
     // A form the start's set leaves out (a texture target form no run has drawn; any other kind a caller decides the same way):
     // queued in left_jobs_, made by a worker once jobs_ is empty and a scene has been shown, or by the draw that first needs it if
@@ -197,6 +216,9 @@ private:
     std::mutex lock_;
     std::condition_variable wake_;
     std::deque<Job> jobs_;
+    // The tracer's forms, taken once jobs_ is empty: a draw whose traced form is not made yet is drawn untraced, one whose
+    // own form is not made yet makes it (create_now), so the game's forms go first.
+    std::deque<Job> traced_jobs_;
     // The forms left to the cache, taken by a worker only when jobs_ is empty and scene_shown_ is set (under lock_). Not counted
     // in pending_: the first drain (drained) is the start's set alone.
     std::deque<Job> left_jobs_;
@@ -213,6 +235,7 @@ private:
     std::vector<std::thread> threads_;
     std::vector<gpu::PipelineRef> owned_;
     std::atomic<std::uint32_t> pending_{0u};
+    std::atomic<std::uint32_t> traced_pending_{0u};  // the tracer's jobs not yet tried (traced_pending)
     std::atomic<std::uint64_t> created_{0u}, failures_{0u};
     std::atomic<std::uint64_t> misses_{0u};  // the render thread counts, a worker reports
     unsigned workers_ = 0u;

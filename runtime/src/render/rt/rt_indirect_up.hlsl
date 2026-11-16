@@ -2,8 +2,10 @@
 // The sky and bounce light from half to full resolution: each pixel takes the four nearest
 // half-res values (the filter's last step: rgb in r, g, b), weighed by where they lie and by how surely they are its
 // own surface: the same object, the same distance, facing the same way (joint bilateral upsampling, Kopf et al.
-// 2007), so I stays inside the edges the picture has. Where none of the four is its surface, the nearest of any.
-// Written with its luminance at least kSkyMin (its colour kept), a channel at most kBounceMax: what the
+// 2007), so I stays inside the edges the picture has. Where none of the four is its surface, any of them by where they
+// lie (bilinear over the taps that hold a surface).
+// Written with its luminance at least kSkyMin (its colour kept), a channel at most kBounceMax (the reference's
+// twin: rt_reference_out.hlsl o_held; change both): what the
 // light pass and, from 22.13, the programs read. Where the near
 // field ran (High; g_pass_value[0].z 1), times V_near over three by three pixels of the same object at the same
 // depth (rt_near_time.hlsl): O = O_far * V_near, the contact under the clamp.

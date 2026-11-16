@@ -774,6 +774,8 @@ galaxy_test(galaxy_rt_geometry_tests SOURCES ${render_src}/rt/rt_geometry_tests.
     ${render_src}/rt/rt_scene.cpp ${render_src}/rt/rt_backend_fake.cpp)
 target_include_directories(galaxy_rt_geometry_tests PRIVATE runtime/src)
 target_include_directories(galaxy_core_world_lights_tests PRIVATE runtime/src native/include)
+galaxy_test(galaxy_core_rt_ray_forms_tests SOURCES ${render_src}/core/rt_ray_forms_tests.cpp)
+target_include_directories(galaxy_core_rt_ray_forms_tests PRIVATE runtime/src native/include)
 # The pipeline cache files' headers (header-only; both backends' caches).
 galaxy_test(galaxy_pipeline_cache_file_tests SOURCES ${render_src}/core/pipeline_cache_file_tests.cpp)
 target_include_directories(galaxy_pipeline_cache_file_tests PRIVATE runtime/src)

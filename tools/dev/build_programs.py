@@ -1,7 +1,7 @@
 """The game's compiled program set. build_programs.py CONTENT WORK [--write]
 
-Asks the importer for every program text (`nebula-import programs`), compiles each once in its base form and groups them by
-compiled instructions and stage signature: each group is one program. --write puts one text per group in
+Asks the importer for every program text (`nebula-import programs`), compiles each in its base form and its fullest form
+(FORMS) and groups them by both forms' compiled instructions and stage signatures: each group is one program. --write puts one text per group in
 runtime/src/render/programs/ and table.tsv there, which maps every text's hash to its program. Fails if two programs in that folder compile the same, so the set can't grow a duplicate."""
 import hashlib
 import os
@@ -17,12 +17,27 @@ INCLUDE = os.path.join(ROOT, "runtime", "src", "render", "materials")
 OUT = os.path.join(ROOT, "runtime", "src", "render", "programs")
 
 
+# The forms a program is grouped by: its base form and the one with the most of its own text in it (a text's
+# `#if NATIVE_TRACED` blocks and the TRACED_* macros are empty in the base form: two texts that differ only there
+# compiled the same and were grouped as one, the traced form of one of them lost). Vertex: its motion form, and its
+# traced motion form where the renderer compiles one (compile_programs.py add_program: a de-lit colour's gain).
+FORMS = {"v": [[], ["NATIVE_MOTION"], ["NATIVE_TRACED", "NATIVE_MOTION"]], "p": [[], ["NATIVE_TRACED", "NATIVE_MOTION"]]}
+
+
+def forms_of(n, text):
+    """The forms of FORMS the text `n` is compiled and grouped in."""
+    if n[0] == "v" and "traced_vertex_gain(" not in text and "traced_map_gain(" not in text:
+        return FORMS["v"][:2]
+    return FORMS[n[0]]
+
+
 def compile_one(job):
-    src, out, stage = job
+    src, out, stage, defines = job
     if os.path.exists(out) and os.path.getsize(out) and os.path.getmtime(out) >= os.path.getmtime(src):
         return None
     profile, entry = ("vs_6_0", "program_vs") if stage == "v" else ("ps_6_0", "program_ps")
-    r = subprocess.run([DXC, "-nologo", "-T", profile, "-E", entry, "-O3", "-Qstrip_debug", "-I", INCLUDE, "-Fc", out, "-Fo", out + ".o", src],
+    r = subprocess.run([DXC, "-nologo", "-T", profile, "-E", entry, "-O3", "-Qstrip_debug", "-I", INCLUDE] + ["-D" + d + "=1" for d in defines] +
+                       ["-Fc", out, "-Fo", out + ".o", src],
                        capture_output=True, text=True)
     if os.path.exists(out + ".o"):
         os.remove(out + ".o")
@@ -72,7 +87,15 @@ def main():
     os.makedirs(ll, exist_ok=True)
     subprocess.run([IMPORT, "programs", content, texts], check=True)
     names = sorted(n[:-5] for n in os.listdir(texts) if n.endswith(".hlsl"))
-    jobs = [(os.path.join(texts, n + ".hlsl"), os.path.join(ll, n + ".ll"), n[0]) for n in names]
+
+    def ll_of(n, form):
+        return os.path.join(ll, n + ("" if form == 0 else ".%d" % form) + ".ll")
+
+    text_of = {}
+    for n in names:
+        with open(os.path.join(texts, n + ".hlsl"), encoding="utf-8", errors="replace") as text:
+            text_of[n] = text.read()
+    jobs = [(os.path.join(texts, n + ".hlsl"), ll_of(n, k), n[0], defines) for n in names for k, defines in enumerate(forms_of(n, text_of[n]))]
     with ThreadPoolExecutor(int(os.environ.get("JOBS", "4"))) as pool:
         failed = [r for r in pool.map(compile_one, jobs) if r]
     for f in failed[:10]:
@@ -94,7 +117,7 @@ def main():
             if not os.path.exists(plain) or open(plain, encoding="utf-8", newline="").read() != old:
                 with open(plain, "w", encoding="utf-8", newline="") as f:
                     f.write(old)
-            tapped[n] = (plain, os.path.join(ll, n + ".untapped.ll"), n[0])
+            tapped[n] = (plain, os.path.join(ll, n + ".untapped.ll"), n[0], [])
             # programs.rs text_hash: the first 64 bits of the SHA-1, little-endian.
             digest = hashlib.sha1(old.encode()).digest()
             named[n] = n[0] + "%016x" % int.from_bytes(digest[:8], "little")
@@ -107,11 +130,15 @@ def main():
     for n in names:
         # A text whose base form leaves out what other forms keep (programs.rs stage_lines: an alpha test only ray
         # tracing's and the per-sample forms keep) stays its own program, so those forms stay its own.
-        with open(os.path.join(texts, n + ".hlsl"), encoding="utf-8", errors="replace") as f:
-            text = f.read()
-        own = n if "#if NATIVE_TRACED || NATIVE_PREPASS || NATIVE_SAMPLE" in text else None
-        listing = tapped[n][1] if n in tapped else os.path.join(ll, n + ".ll")
-        groups.setdefault((n[0], key_of(listing), own), []).append(n)
+        own = n if "#if NATIVE_TRACED || NATIVE_PREPASS || NATIVE_SAMPLE" in text_of[n] else None
+        # Each form's signatures and instructions (the base form's from the text without shared taps, as named above;
+        # the other forms read a tap's sample in place), and the varyings the sample form interpolates per sample
+        # (PER_SAMPLE is empty in the forms compiled here).
+        per_sample = "\n".join(line.strip() for line in text_of[n].splitlines() if "PER_SAMPLE" in line)
+        listings = [tapped[n][1] if n in tapped else ll_of(n, 0)]
+        listings += [ll_of(n, k) for k in range(1, len(forms_of(n, text_of[n])))]
+        key = "\n".join(key_of(listing) for listing in listings) + "\n" + per_sample
+        groups.setdefault((n[0], key, own), []).append(n)
     vertex = sum(1 for k in groups if k[0] == "v")
     pixel = sum(1 for k in groups if k[0] == "p")
     group_of = {}

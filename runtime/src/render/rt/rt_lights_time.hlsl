@@ -1,5 +1,3 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The local lights' share over time: rt_light_time.hlsl compiled for light of any size, keeping the moments of its
-// noise (see there).
-#define RT_LIGHTS 1
+// The local lights' share over time, keeping the moments of its noise: rt_light_time.hlsl (see there).
 #include "rt_light_time.hlsl"

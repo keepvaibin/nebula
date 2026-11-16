@@ -174,6 +174,7 @@ bool a_moving_mesh_is_refitted_and_forgotten() {
         run.geometry.frame(nullptr, static_cast<unsigned>(run.frame % kFramesInFlight), run.frame, 1u);
         TriangleInput moved = mesh(500u, i * 0x100u);
         moved.own_buffer = 0u;  // vertices a pass wrote, at byte 0 on the first frame
+        moved.indices = 0x800000u;  // over the same indices (an update moves vertices only)
         run.geometry.move(7u, moved);
         run.geometry.refit();
     }
@@ -187,6 +188,101 @@ bool a_moving_mesh_is_refitted_and_forgotten() {
         run.step();
     }
     ok &= expect(run.geometry.name(7u) == 0u && log.structures == 0u, "one no frame names is forgotten and released");
+    ok &= expect(log.faults == 0u, "and nothing a back end refuses was recorded");
+    return ok;
+}
+
+// Moving meshes named first in one frame (a zone's actors) are rebuilt in different frames after it.
+bool moving_meshes_that_arrive_together_are_rebuilt_apart() {
+    Run run;
+    std::uint32_t most = 0u;
+    for (unsigned i = 0; i < 2u * Geometry::kRefitsToRebuild; ++i) {
+        ++run.frame;
+        run.geometry.frame(nullptr, static_cast<unsigned>(run.frame % kFramesInFlight), run.frame, 0u);
+        for (std::uint64_t key = 1u; key <= 4u; ++key) {
+            TriangleInput moved = mesh(100u, key * 0x100000u + i * 0x100u);
+            moved.own_buffer = 0u;
+            moved.indices = key * 0x1000000u;
+            run.geometry.move(key, moved);
+        }
+        run.geometry.refit();
+        if (i != 0u && run.geometry.stats().rebuilds > most) {
+            most = run.geometry.stats().rebuilds;
+        }
+    }
+    bool ok = expect(most == 1u, "after their first builds, no two are rebuilt in one frame");
+    ok &= expect(fake::log().builds == 4u + 8u && fake::log().faults == 0u, "each rebuilt every cycle, and nothing a back end refuses was recorded");
+    return ok;
+}
+
+// Moving meshes met in one frame (a zone's actors) are first built within the frame's budget, the oldest named first
+// and one a frame at least, after the standing meshes; one not built yet is not named.
+bool moving_meshes_are_first_built_within_the_budget() {
+    Run run;
+    run.geometry.want(9u, mesh(1000u, 0x9000000u));  // a standing mesh that takes the whole budget
+    bool ok = true;
+    for (unsigned i = 0; i < 5u; ++i) {
+        ++run.frame;
+        run.geometry.frame(nullptr, static_cast<unsigned>(run.frame % kFramesInFlight), run.frame, 250u);
+        for (std::uint64_t key = 1u; key <= 4u; ++key) {
+            TriangleInput moved = mesh(100u, key * 0x100000u + i * 0x100u);
+            moved.own_buffer = 0u;
+            moved.indices = key * 0x1000000u;
+            run.geometry.move(key, moved);
+        }
+        run.geometry.refit();
+        if (i == 0u) {
+            ok &= expect(run.geometry.name(9u) != 0u && run.geometry.name(1u) != 0u && run.geometry.name(2u) == 0u &&
+                             run.geometry.stats().moving_waiting == 3u,
+                         "a frame whose budget the standing meshes took still builds one moving mesh, the oldest");
+        } else if (i == 1u) {
+            ok &= expect(run.geometry.name(2u) != 0u && run.geometry.name(3u) != 0u && run.geometry.name(4u) == 0u &&
+                             run.geometry.stats().moving_waiting == 1u && run.geometry.stats().refits == 1u,
+                         "then as many as the budget holds, in the order they were named, the built one refitted");
+        }
+    }
+    ok &= expect(run.geometry.name(4u) != 0u && run.geometry.stats().moving_waiting == 0u, "none waits past the ones before it");
+    ok &= expect(fake::log().builds == 1u + 4u && fake::log().faults == 0u, "each built once, and nothing a back end refuses was recorded");
+    return ok;
+}
+
+// A key that names a standing mesh, then a moving one, then a standing one again: each time the structure it had goes
+// and it is in one list only (a standing key left among the moving was never taken out, and the frame's forgetting
+// loop met it for ever).
+bool a_key_that_changes_kind_is_in_one_list() {
+    Run run;
+    run.geometry.want(5u, mesh(100u));
+    run.step();
+    const std::uint64_t standing = run.geometry.name(5u);
+    TriangleInput moved = mesh(100u, 0x5000u);
+    moved.own_buffer = 0u;
+    run.geometry.move(5u, moved);
+    run.step();
+    const std::uint64_t moving = run.geometry.name(5u);
+    bool ok = expect(standing != 0u && moving != 0u && moving != standing, "a moving mesh gets a structure of its own");
+    run.geometry.want(5u, mesh(100u));
+    for (std::uint64_t i = 0; i <= Geometry::kFramesToForget + kFramesToRelease; ++i) {
+        run.step();
+    }
+    ok &= expect(run.geometry.name(5u) != 0u && fake::log().structures == 1u && fake::log().builds == 3u,
+                 "standing again, it is built again and not forgotten as a moving one");
+    ok &= expect(fake::log().faults == 0u, "and nothing a back end refuses was recorded");
+    return ok;
+}
+
+// A device with no memory for a build's scratch: no structure is made for a build that cannot be recorded, so none is
+// named before it is built.
+bool no_structure_is_named_before_it_is_built() {
+    Run run;
+    fake::Log& log = fake::log();
+    run.geometry.want(1u, mesh(1000u));
+    log.refuse_scratch = true;
+    run.step();
+    bool ok = expect(run.geometry.name(1u) == 0u && log.builds == 0u && log.structures == 0u && run.geometry.stats().waiting == 1u,
+                     "with no scratch nothing is made, and the mesh waits");
+    log.refuse_scratch = false;
+    run.step();
+    ok &= expect(run.geometry.name(1u) != 0u && log.builds == 1u && log.structures == 1u, "it is built when there is");
     ok &= expect(log.faults == 0u, "and nothing a back end refuses was recorded");
     return ok;
 }
@@ -254,8 +350,8 @@ bool a_scene_is_built_over_its_instances() {
 // released mesh is built again when wanted again.
 bool a_ceiling_releases_the_least_recently_named() {
     Run run;
-    const fake::Log& log = fake::log();
-    run.geometry.set_ceiling(fake::structure_bytes(1000u));
+    fake::Log& log = fake::log();
+    log.memory_budget = fake::structure_bytes(1000u) * Geometry::kBudgetShare;  // a ceiling of one mesh's structure
     for (std::uint64_t key = 1u; key <= 5u; ++key) {
         run.geometry.want(key, mesh(1000u, key * 0x10000u));
     }
@@ -273,7 +369,39 @@ bool a_ceiling_releases_the_least_recently_named() {
     return ok;
 }
 
-// A cutout mesh's micromap and the structure built again over it.
+// 5.3 G-4: the ceiling is a share of the device's budget, never above kStructureCeiling, which it is while no budget is
+// known; a budget that moves is followed in the next frame; and the structures the scene names stay past it.
+bool the_ceiling_is_a_share_of_the_budget() {
+    Run run;
+    fake::Log& log = fake::log();
+    constexpr std::uint64_t kMB = 1ull << 20u;
+    run.step();
+    bool ok = expect(run.geometry.stats().ceiling == Geometry::kStructureCeiling, "no budget known: the fixed ceiling");
+    log.memory_budget = 4096u * kMB;
+    run.step();
+    ok &= expect(run.geometry.stats().ceiling == 4096u * kMB / Geometry::kBudgetShare, "a 4 GB budget: its share");
+    log.memory_budget = 32768u * kMB;
+    run.step();
+    ok &= expect(run.geometry.stats().ceiling == Geometry::kStructureCeiling, "a large budget: no more than the fixed ceiling");
+    // A ceiling of one mesh's structure: four meshes named every frame all stay built.
+    log.memory_budget = fake::structure_bytes(1000u) * Geometry::kBudgetShare;
+    for (std::uint64_t key = 1u; key <= 4u; ++key) {
+        run.geometry.want(key, mesh(1000u, key * 0x10000u));
+    }
+    for (unsigned i = 0; i < 12u; ++i) {
+        run.step();
+        for (std::uint64_t key = 1u; key <= 4u; ++key) {
+            (void)run.geometry.name(key);
+        }
+    }
+    ok &= expect(run.geometry.stats().ceiling == fake::structure_bytes(1000u) && run.geometry.stats().released == 0u &&
+                     run.geometry.stats().structures == 4u,
+                 "past the ceiling, what the scene names stays");
+    ok &= expect(log.faults == 0u, "and nothing a back end refuses was recorded");
+    return ok;
+}
+
+// 5.3 G-2: a cutout mesh's micromap and the structure built again over it.
 bool a_mesh_takes_a_micromap() {
     Run run;
     const fake::Log& log = fake::log();
@@ -312,11 +440,16 @@ bool a_mesh_takes_a_micromap() {
 int main() {
     bool ok = ranges_fit_and_merge();
     ok &= a_ceiling_releases_the_least_recently_named();
+    ok &= the_ceiling_is_a_share_of_the_budget();
     ok &= a_mesh_is_built_compacted_and_released();
     ok &= a_budget_spreads_builds();
     ok &= what_is_drawn_is_built_first_the_nearest_first();
     ok &= scratch_is_used_again_only_after_a_barrier();
     ok &= a_moving_mesh_is_refitted_and_forgotten();
+    ok &= moving_meshes_that_arrive_together_are_rebuilt_apart();
+    ok &= moving_meshes_are_first_built_within_the_budget();
+    ok &= a_key_that_changes_kind_is_in_one_list();
+    ok &= no_structure_is_named_before_it_is_built();
     ok &= an_answer_waits_for_its_frame_slot();
     ok &= a_scene_is_built_over_its_instances();
     ok &= a_mesh_takes_a_micromap();

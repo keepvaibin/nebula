@@ -137,7 +137,15 @@ pub struct Reading {
     pub metal_kind: u8,
     /// The share of the sun its far side takes (a crown of leaves, a cloud), 0 none.
     pub through: f32,
+    /// Its painted reflection's sharpness as roughness (roughness_of_map; finish_reading), below 0 none: a metal's and
+    /// a gloss's roughness, whichever rule or row makes it one.
+    pub map_roughness: f32,
 }
+
+/// Reading::rule of a material a review row classes.
+pub const REVIEWED: &str = "the review (rt_materials.tsv)";
+/// Reading::rule of a material rt_water.tsv classes.
+pub const WATER_RULE: &str = "water (rt_water.tsv)";
 
 /// The models that glow (data/rt_glow.tsv): a model's file stem to its light's colour (None: the material's own) and
 /// strength.
@@ -180,6 +188,18 @@ pub struct Twins {
     /// Each near material's area and de-bake Lref, in `near`'s order.
     measures: std::collections::HashMap<String, Vec<(f64, Option<f64>)>>,
     bloom: std::collections::HashMap<String, std::collections::HashSet<String>>,
+    /// Every material as the tables and its near twin leave it (finish_reading_named), by material_key.
+    votes: Vec<NameVote>,
+    /// Once every model is in (twins_ready), the reading each name of several classes takes, by material_key.
+    names: Option<std::collections::HashMap<String, Reading>>,
+}
+
+/// One material of one model in its name's vote.
+struct NameVote {
+    key: String,
+    stem: String,
+    area: f64,
+    reading: Reading,
 }
 
 static TWINS: std::sync::RwLock<Option<Twins>> = std::sync::RwLock::new(None);
@@ -191,6 +211,8 @@ pub fn twins_begin() {
             near: std::collections::HashMap::new(),
             measures: std::collections::HashMap::new(),
             bloom: std::collections::HashMap::new(),
+            votes: Vec::new(),
+            names: None,
         });
 }
 
@@ -206,22 +228,30 @@ pub fn twins_add(name: &str, bytes: &[u8]) {
     let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
     let mut stats = Stats::default();
     let Ok(ir) = read_file(bytes, Source::of(bytes), &mut stats) else { return };
+    // Its materials' areas and de-bake levels (a far twin's swap keeps both).
+    let (area, levels) = super::model_write::twin_measures(&ir, &stem);
+    let mut votes = Vec::with_capacity(ir.materials.len());
     let materials: Vec<(String, Reading)> = ir
         .materials
         .iter()
         .enumerate()
         .map(|(i, m)| {
+            // finish_reading with the name's step left out: the names are decided once every model is in.
             let mut r = read(m);
-            super::model_write::finish_reading(&ir, &stem, i, 0.0, &mut r);
+            super::model_write::finish_reading_named(&ir, &stem, i, 0.0, &mut r);
+            votes.push(NameVote { key: material_key(&ir, m), stem: stem.clone(), area: area.get(i).copied().unwrap_or(0.0), reading: r.clone() });
+            super::model_write::finish_reading_parts(&ir, &stem, i, &mut r);
             (m.name.to_ascii_lowercase(), r)
         })
         .collect();
-    // Its materials' areas and de-bake levels (a far twin's swap keeps both).
-    let (area, levels) = super::model_write::twin_measures(&ir, &stem);
     let measures: Vec<(f64, Option<f64>)> =
         (0..ir.materials.len()).map(|i| (area.get(i).copied().unwrap_or(0.0), levels.get(&(i as u32)).copied())).collect();
     let mut twins = TWINS.write().unwrap_or_else(|e| e.into_inner());
     let Some(twins) = twins.as_mut() else { return };
+    // A model read twice (an archive's copy) votes once.
+    if !twins.near.contains_key(&stem) {
+        twins.votes.extend(votes);
+    }
     twins.measures.entry(stem.clone()).or_insert(measures);
     if let Some(base) = stem.strip_suffix("bloom") {
         twins.bloom.entry(base.to_string()).or_default().extend(materials.iter().map(|(n, _)| n.clone()));
@@ -282,7 +312,7 @@ pub fn twin_reference(stem: &str, material: &str) -> Option<f64> {
 /// A far twin's material takes its near model's class and numbers (twin_of), unless a review row chose
 /// its own. Its colour, maps, emission and de-light stay its own.
 pub fn follow_twin(stem: &str, material: &str, r: &mut Reading) {
-    if r.rule == "the review (rt_materials.tsv)" {
+    if r.rule == REVIEWED {
         return;
     }
     let Some((_, _, near)) = twin_of(stem, material, false) else { return };
@@ -294,7 +324,152 @@ pub fn follow_twin(stem: &str, material: &str, r: &mut Reading) {
     r.tint_keep = near.tint_keep;
     r.body = near.body;
     r.shine = near.shine;
+    // Its own thickness, a shell as the near model's (the near reading's was read with none: twins_add).
+    if clear_shell(r) {
+        r.thickness = 0.0;
+    }
     r.rule = "its near twin's";
+}
+
+/// One material name is one class across models: what makes two materials of two
+/// models one material: the name (its "(n)" dropped, any case) and what it is made of: its stages, its colour channels'
+/// controls, its blend and tests, its coordinates and its maps' names. Its colours are left out (the same material
+/// recoloured is still it). A generic name (lambert1, Material) on unrelated things has other stages or other maps: another
+/// key, never one class.
+pub fn material_key(ir: &ModelIr, m: &MaterialIr) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let count = (m.pixel_stage_count as usize).min(m.stages.len());
+    m.stages[..count].hash(&mut h);
+    m.swaps.hash(&mut h);
+    m.channel_count.hash(&mut h);
+    // Each colour channel's colour and alpha controls (signals' `lit`).
+    for c in &m.channels[..(2 * m.channel_count as usize).min(m.channels.len())] {
+        (c.enable, c.material_source, c.ambient_source, c.light_mask, c.diffuse, c.attenuation).hash(&mut h);
+    }
+    (m.blend_type, m.blend_src, m.blend_dst, m.alpha_comp0, m.alpha_op, m.alpha_comp1, m.depth_write, m.cull).hash(&mut h);
+    for c in &m.coords {
+        (c.kind, c.source, c.matrix != NONE).hash(&mut h);
+    }
+    for &t in &m.textures {
+        ir.textures.get(t as usize).map(|t| t.name.to_ascii_lowercase()).hash(&mut h);
+    }
+    let name = m.name.split('(').next().unwrap_or(&m.name).trim().to_ascii_lowercase();
+    format!("{name}#{:016x}", h.finish())
+}
+
+/// Whether a reading's class is a table's (a review row's, rt_water.tsv's): it decides for its name, and nothing
+/// changes it.
+fn by_table(r: &Reading) -> bool {
+    r.rule == REVIEWED || r.rule == WATER_RULE
+}
+
+/// Every model is in (programs::prepare_written_files, audit): for each material_key whose materials take more
+/// than one class, the reading they all take: a table's class where one says (rows of several classes: the one most
+/// of the rows' area takes), else the class most of the key's area takes (each material's triangles' area,
+/// model_write::twin_measures; one each where no mesh of the key reads); its numbers those of the largest material of
+/// that class. A far twin (twin_of) follows its near model and does not vote.
+pub fn twins_ready() {
+    let mut twins = TWINS.write().unwrap_or_else(|e| e.into_inner());
+    let Some(t) = twins.as_mut() else { return };
+    let names = {
+        let near = &t.near;
+        let copy = |stem: &str| {
+            let far = stem.strip_suffix("low").or_else(|| stem.strip_suffix("middle")).or_else(|| stem.strip_suffix("break"));
+            far.or_else(|| stem.strip_suffix("bloom")).is_some_and(|base| near.contains_key(base))
+        };
+        name_readings(&t.votes, &copy)
+    };
+    t.names = Some(names);
+}
+
+/// A bloom twin (`<model>bloom` beside its model): the game's second draw of its model's glow, which the name rules
+/// leave as it is (lava_or_sun: not on a bloom copy). `stem` lower case.
+fn bloom_twin(stem: &str) -> bool {
+    let twins = TWINS.read().unwrap_or_else(|e| e.into_inner());
+    stem.strip_suffix("bloom").is_some_and(|base| twins.as_ref().is_some_and(|t| t.near.contains_key(base)))
+}
+
+/// twins_ready's decisions from the votes; `copy`: a far twin's or a bloom twin's stem (its model's copy: no vote).
+fn name_readings(votes: &[NameVote], copy: &dyn Fn(&str) -> bool) -> std::collections::HashMap<String, Reading> {
+    let mut keys: BTreeMap<&str, Vec<&NameVote>> = BTreeMap::new();
+    for v in votes.iter().filter(|v| !copy(&v.stem)) {
+        keys.entry(v.key.as_str()).or_default().push(v);
+    }
+    let mut names = std::collections::HashMap::new();
+    for (key, votes) in keys {
+        if votes.iter().all(|v| v.reading.class == votes[0].reading.class) {
+            continue;
+        }
+        let tabled: Vec<&NameVote> = votes.iter().copied().filter(|v| by_table(&v.reading)).collect();
+        let voters = if tabled.is_empty() { &votes } else { &tabled };
+        let any_area = voters.iter().any(|v| v.area > 0.0);
+        let weight = |v: &NameVote| if any_area { v.area } else { 1.0 };
+        let mut by_class: BTreeMap<Class, f64> = BTreeMap::new();
+        for v in voters {
+            *by_class.entry(v.reading.class).or_default() += weight(v);
+        }
+        // The heaviest class; even weights: the lower class number (a stable choice).
+        let Some((&class, _)) = by_class.iter().max_by(|a, b| a.1.total_cmp(b.1).then(b.0.cmp(a.0))) else { continue };
+        let Some(most) = voters.iter().filter(|v| v.reading.class == class).max_by(|a, b| weight(a).total_cmp(&weight(b)).then(b.stem.cmp(&a.stem)))
+        else {
+            continue;
+        };
+        names.insert(key.to_string(), most.reading.clone());
+    }
+    names
+}
+
+/// The name decisions made (twins_ready): each material_key, its materials' classes as voted and the class they take
+/// (the census's unified_names.tsv); empty outside a cook.
+pub fn name_decisions() -> Vec<(String, Vec<(String, Class, bool, f64)>, Class)> {
+    let twins = TWINS.read().unwrap_or_else(|e| e.into_inner());
+    let Some(t) = twins.as_ref() else { return Vec::new() };
+    let Some(names) = t.names.as_ref() else { return Vec::new() };
+    let mut out: Vec<(String, Vec<(String, Class, bool, f64)>, Class)> = names
+        .iter()
+        .map(|(key, r)| {
+            let members = t.votes.iter().filter(|v| &v.key == key).map(|v| (v.stem.clone(), v.reading.class, by_table(&v.reading), v.area)).collect();
+            (key.clone(), members, r.class)
+        })
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+/// A material takes its name's class across the game's models (twins_ready), with that reading's numbers; its
+/// colours, maps and measures stay its own. A table's row for it decides for it alone; a bloom twin stays as it is.
+pub fn follow_name(stem: &str, key: &str, r: &mut Reading) {
+    let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    if bloom_twin(&stem) {
+        return;
+    }
+    let twins = TWINS.read().unwrap_or_else(|e| e.into_inner());
+    if let Some(named) = twins.as_ref().and_then(|t| t.names.as_ref()).and_then(|n| n.get(key)) {
+        take_name(named, r);
+    }
+}
+
+/// follow_name's step: `named`'s class and numbers over `r`, unless a table classes `r` or it is of that class.
+fn take_name(named: &Reading, r: &mut Reading) {
+    if by_table(r) || named.class == r.class {
+        return;
+    }
+    r.class = named.class;
+    r.roughness = named.roughness;
+    r.metal = named.metal;
+    r.ior = named.ior;
+    r.transmission = named.transmission;
+    r.tint_keep = named.tint_keep;
+    r.body = named.body;
+    r.shine = named.shine;
+    r.through = named.through;
+    r.metal_kind = named.metal_kind;
+    // The votes were read with no thickness (twins_add): the shell by the index, as finish (a crystal keeps its body).
+    if clear_shell(r) {
+        r.thickness = 0.0;
+    }
+    r.rule = "its name's class across the models";
 }
 
 /// Whether the game draws a material of the model `stem` again in its bloom pass (a `<stem>bloom` model
@@ -351,6 +526,14 @@ pub fn drawn_shadow(stem: &str, material: &str, class: Class) -> bool {
     }
     (material.starts_with("shadow") || material.ends_with("shadow") || material.contains("shadow_") || material.contains("shadow0"))
         && matches!(class, Class::Translucent | Class::Painted | Class::Glass)
+}
+
+/// A sky's model by its name: CloudSky, the Observatory dome's AstroDomeSkyA to C (the
+/// game's own class Sky): "sky" last, or before one last letter or digit of a variant (not SkyIsland, a mod's
+/// SkywayPlanet). `stem` lower case.
+pub fn sky_named(stem: &str) -> bool {
+    let b = stem.split('.').next().unwrap_or(stem).as_bytes();
+    b.ends_with(b"sky") || b.len() > 3 && b[..b.len() - 1].ends_with(b"sky") && b[b.len() - 1].is_ascii_alphanumeric()
 }
 
 /// Whether a material is lava or a sun's surface by its name: lava (Lava_v, LavaMat_v, Lava_m_v, Lava2_v, not
@@ -441,7 +624,10 @@ pub fn sheen_layer(stem: &str, material: &str, r: &Reading) -> bool {
     }
     let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
     let name = material.to_ascii_lowercase();
-    if ["glow", "bloom", "starlight", "beam", "fire", "flash"].iter().any(|w| name.contains(w)) {
+    // A light by its name is no sheen (HellBallGuidePartsA's Light_v, the guide's lamp); a painted highlight
+    // (HiLightMat) is one.
+    let lights = name.replace("hilight", "").replace("highlight", "");
+    if ["glow", "bloom", "light", "beam", "fire", "flash"].iter().any(|w| lights.contains(w)) {
         return false;
     }
     let one = format!("{stem}/{name}");
@@ -590,10 +776,11 @@ pub fn promote_sheen_body(kind: SheenKind, r: &mut Reading) {
     if matches!(r.class, Class::Glass | Class::Metal | Class::Gloss | Class::Water) {
         return;
     }
+    // The clear classes' surfaces are their table's (ice 0.05; an ice being's 0.08 is its row's).
     let (class, ior, roughness) = match kind {
-        SheenKind::Crystal => (Class::Glass, 1.8, 0.02),
-        SheenKind::Ice => (Class::Glass, 1.31, 0.08),
-        SheenKind::Glass => (Class::Glass, 1.5, 0.02),
+        SheenKind::Crystal => (Class::Glass, CLEAR_CRYSTAL.ior, CLEAR_CRYSTAL.roughness),
+        SheenKind::Ice => (Class::Glass, CLEAR_ICE.ior, CLEAR_ICE.roughness),
+        SheenKind::Glass => (Class::Glass, CLEAR_GLASS.ior, CLEAR_GLASS.roughness),
         SheenKind::Unknown => (Class::Gloss, 1.5, 0.1),
     };
     r.class = class;
@@ -620,6 +807,8 @@ pub const GLOW_BLOOM: u8 = 4;
 /// `class:<kind>` override the value.
 pub fn glow_kind(stem: &str, material: &str) -> (&'static str, f32) {
     fn kind_of(s: &str) -> Option<(&'static str, f32)> {
+        // A painted highlight (HiLightMat, Highlight) is no lamp, nor a clamp: the words inside them are not theirs.
+        let s = &s.replace("hilight", "").replace("highlight", "").replace("clamp", "");
         let has = |words: &[&str]| words.iter().any(|w| s.contains(w));
         if has(&["lava", "magma", "yougan", "prominence"]) {
             Some(("lava", 300.0))
@@ -722,7 +911,7 @@ pub fn glow_with_rule(stem: &str, material: &str, r: &Reading) -> ([f32; 4], u8)
     }
     // Not a light by data: the sky, a bloom pass's twin (the game's second draw of a glow), an
     // Observatory miniature, a painted sheen that is not drawn while tracing, what light passes through.
-    if stem.ends_with("sky")
+    if sky_named(&stem)
         || stem.starts_with("vr")
         || stem.ends_with("bloom")
         || stem.starts_with("mini")
@@ -935,9 +1124,12 @@ pub fn evaluate(m: &MaterialIr, map: &dyn Fn(u8) -> [f32; 4], raster: &dyn Fn(u8
 }
 
 /// The maps a material reads through a coordinate made from the normal that are its painted reflections: not those
-/// that hold a colour ramp.
+/// that hold a colour ramp, a highlight sprite or a shade (shades).
 fn environment_maps(m: &MaterialIr) -> Vec<u8> {
-    normal_maps(m).into_iter().filter(|map| !m.ramp_maps.contains(map) && !m.highlight_maps.contains(map)).collect()
+    normal_maps(m)
+        .into_iter()
+        .filter(|map| !m.ramp_maps.contains(map) && !m.highlight_maps.contains(map) && !m.shade_maps.contains(map))
+        .collect()
 }
 
 /// What a map read through a normal-made coordinate holds. Each
@@ -1074,6 +1266,20 @@ fn sprite_adds(m: &MaterialIr, sprite: u8) -> bool {
     on <= 1e-3 || off >= 0.25 * on
 }
 
+/// A normal-indexed map under which white gives a darker result than black (the other maps mid grey) whether the
+/// rasterised colours are mid grey or white is a shade the art paints by facing, not a reflection: a mirror only adds
+/// light. The Starshroom's hull: lerp(r0, r1, t), the ship's light and dark colour (colorchange.brk). It keeps its own
+/// fetch, as a ramp does. Not a rim that gives way to the lit colour (lerp(rim, lit, t): white is the lit colour, as
+/// bright as the light makes it; AstroBase's zenmaibasemetal_v, OceanRing's tubes).
+fn shades(m: &MaterialIr, map: u8) -> bool {
+    let at = |v: f32, lit: f32| {
+        let raster = move |_: u8| [lit, lit, lit, 1.0];
+        let c = evaluate(m, &move |n: u8| if n == map { [v, v, v, 1.0] } else { [0.5, 0.5, 0.5, 1.0] }, &raster);
+        luminance([c[0], c[1], c[2]])
+    };
+    [0.5f32, 1.0].iter().all(|&lit| at(1.0, lit) < at(0.0, lit))
+}
+
 /// Each material's normal-indexed maps that are painted highlight sprites (MaterialIr highlight_maps), and the
 /// first one's roughness and peak.
 pub fn mark_highlights(ir: &mut ModelIr) {
@@ -1083,7 +1289,7 @@ pub fn mark_highlights(ir: &mut ModelIr) {
         .map(|m| {
             normal_maps(m)
                 .into_iter()
-                .filter(|map| !m.ramp_maps.contains(map))
+                .filter(|map| !m.ramp_maps.contains(map) && !m.shade_maps.contains(map))
                 .filter(|&map| sprite_adds(m, map))
                 .filter_map(|map| map_texels(ir, m, map).and_then(|(w, h, t)| map_shape(w, h, &t)).filter(is_highlight).map(|s| (map, s)))
                 .collect()
@@ -1113,20 +1319,22 @@ fn map_texels(ir: &ModelIr, m: &MaterialIr, map: u8) -> Option<(u32, u32, Vec<[u
     super::texture::record_level0(ir.records.get(t.record)?)
 }
 
-/// Each material's normal-indexed maps that hold a colour ramp (MaterialIr ramp_maps).
+/// Each material's normal-indexed maps that hold a colour ramp (MaterialIr ramp_maps); and of the rest, those that
+/// are a shade the art paints by facing (MaterialIr shade_maps, shades).
 pub fn mark_ramps(ir: &mut ModelIr) {
-    let found: Vec<Vec<u8>> = ir
+    let found: Vec<(Vec<u8>, Vec<u8>)> = ir
         .materials
         .iter()
         .map(|m| {
-            normal_maps(m)
+            let (ramps, rest): (Vec<u8>, Vec<u8>) = normal_maps(m)
                 .into_iter()
-                .filter(|&map| map_texels(ir, m, map).and_then(|(w, h, t)| map_shape(w, h, &t)).is_some_and(|s| is_ramp(&s)))
-                .collect()
+                .partition(|&map| map_texels(ir, m, map).and_then(|(w, h, t)| map_shape(w, h, &t)).is_some_and(|s| is_ramp(&s)));
+            (ramps, rest.into_iter().filter(|&map| shades(m, map)).collect())
         })
         .collect();
-    for (m, ramps) in ir.materials.iter_mut().zip(found) {
+    for (m, (ramps, shades)) in ir.materials.iter_mut().zip(found) {
         m.ramp_maps = ramps;
+        m.shade_maps = shades;
     }
 }
 
@@ -1208,8 +1416,7 @@ fn raster_colour(m: &MaterialIr, code: u8, light: f32) -> [f32; 4] {
 /// maps black (as signals' full): the art's colour as drawn. None when no stage reads a map that is not an environment's.
 pub fn shown_with_maps(m: &MaterialIr, mean: &dyn Fn(u8) -> Option<[f32; 4]>) -> Option<[f32; 3]> {
     let environment = environment_maps(m);
-    let count = (m.pixel_stage_count as usize).min(m.stages.len());
-    if !m.stages[..count].iter().any(|s| s.map != 0xFF && !environment.contains(&s.map)) {
+    if !reads_colour_map(m) {
         return None;
     }
     let map = |n: u8| -> [f32; 4] {
@@ -1221,6 +1428,13 @@ pub fn shown_with_maps(m: &MaterialIr, mean: &dyn Fn(u8) -> Option<[f32; 4]>) ->
     };
     let out = evaluate(m, &map, &|code| raster_colour(m, code, 1.0));
     Some([out[0], out[1], out[2]].map(|v| v.clamp(0.0, 1.0)))
+}
+
+/// Whether a stage samples a map that is not a painted reflection's: what a grey map stood for in signals.
+fn reads_colour_map(m: &MaterialIr) -> bool {
+    let environment = environment_maps(m);
+    let count = (m.pixel_stage_count as usize).min(m.stages.len());
+    m.stages[..count].iter().any(|s| s.map != 0xFF && !environment.contains(&s.map))
 }
 
 pub fn signals(m: &MaterialIr) -> Signals {
@@ -1348,15 +1562,32 @@ fn alpha_test_always(m: &MaterialIr) -> bool {
 /// The class and numbers the signals give (the design's 2b.3, the rules that need the material alone).
 /// Whether a material's name says it is falling water: "fallmat" or "fallback" (FallMat, DxFallMat, ExFallMatSplash,
 /// FallBackFaceMat ...: every Fall material of the census) or "taki" (waterfall) at its start; not OtaKing, Rainfall.
-/// A clear material's index and roughness by what the census names it: crystal 1.8 (as the art asks), ice
-/// 1.31 and a little rough, other glass 1.5. `stem` and `name` lower case.
-fn clear_kind(stem: &str, name: &str) -> (f32, Option<f32>) {
+/// A clear class's surface: its index and roughness. rt_clear_through tells
+/// them apart by these numbers (an index of 1.7 and over a crystal, 1.30 to 1.32 ice, ice 0.07 rough and over an ice
+/// being).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ClearKind {
+    pub ior: f32,
+    pub roughness: f32,
+}
+pub const CLEAR_GLASS: ClearKind = ClearKind { ior: 1.5, roughness: 0.02 };
+pub const CLEAR_BUBBLE: ClearKind = ClearKind { ior: 1.33, roughness: 0.02 };
+pub const CLEAR_CRYSTAL: ClearKind = ClearKind { ior: 1.8, roughness: 0.02 };
+pub const CLEAR_ICE: ClearKind = ClearKind { ior: 1.31, roughness: 0.05 };
+pub const CLEAR_ICE_BEING: ClearKind = ClearKind { ior: 1.31, roughness: 0.08 };
+
+/// A clear material's kind by what the census names it: crystal (cry..., a crystal model), ice (ice... or an
+/// ice model), a bubble (bubble or awa in the material's name), other glass. The ice beings are their review rows'.
+/// `stem` and `name` lower case.
+fn clear_kind(stem: &str, name: &str) -> ClearKind {
     if name.starts_with("cry") || stem.contains("crystal") {
-        (1.8, None)
+        CLEAR_CRYSTAL
     } else if name.starts_with("ice") || stem.starts_with("ice") || stem.ends_with("ice") {
-        (1.31, Some(0.08))
+        CLEAR_ICE
+    } else if name.contains("bubble") || name.starts_with("awa") {
+        CLEAR_BUBBLE
     } else {
-        (1.5, None)
+        CLEAR_GLASS
     }
 }
 
@@ -1438,6 +1669,7 @@ pub fn pbr_reading(p: &PbrMaterial, means: &PbrMeans) -> Reading {
         traced_hidden: false,
         metal_kind: 255, // its colour as the file gives it
         through: 0.0,
+        map_roughness: -1.0, // no painted reflection's map: its roughness is the file's
     }
 }
 
@@ -1504,6 +1736,13 @@ pub fn ray_glow(r: &Reading, glow: &super::model_ir::RayGlow) -> [f32; 4] {
     [c[0], c[1], c[2], glow.strength]
 }
 
+/// The game's other glass is a shell (capsules, bubbles, barriers, tanks, windows, transparent planets): a
+/// closed mesh's 3V/A made each a solid ball to rt_transmit. Crystal and ice keep the body. By its index, whichever
+/// path makes it glass (finish, a far twin's, its name's class).
+fn clear_shell(r: &Reading) -> bool {
+    r.class == Class::Glass && r.ior < 1.7 && !(CLEAR_ICE.ior - 0.005..=CLEAR_ICE.ior + 0.005).contains(&r.ior)
+}
+
 fn falling_water(name: &str) -> bool {
     let name = name.to_ascii_lowercase();
     name.contains("fallmat") || name.contains("fallback") || name.starts_with("taki")
@@ -1513,8 +1752,9 @@ pub fn read(m: &MaterialIr) -> Reading {
     let s = signals(m);
     let full = [s.unlit[0] + s.lit_gain[0], s.unlit[1] + s.lit_gain[1], s.unlit[2] + s.lit_gain[2]];
     // Maps were mid grey: twice the result is the colour under a white map, the nearest thing to a base colour the
-    // material alone gives (the textures' own means refine it at the cook).
-    let base = full.map(|v| (v * 2.0).clamp(0.0, 1.0));
+    // material alone gives; rt_hit_read multiplies it by the map. With no colour map the result is the colour itself.
+    let under_white = if reads_colour_map(m) { 2.0 } else { 1.0 };
+    let base = full.map(|v| (v * under_white).clamp(0.0, 1.0));
     let dark_base = luminance(full) < 0.2;
     let env_map = environment_maps(m).first().copied().unwrap_or(0xFF);
     let mut r = Reading {
@@ -1539,6 +1779,7 @@ pub fn read(m: &MaterialIr) -> Reading {
         traced_hidden: false,
         metal_kind: 0,
         through: 0.0,
+        map_roughness: -1.0,
     };
     let metal_hue = s.environment_saturation < 0.15 || (8.0..=60.0).contains(&s.environment_hue);
     if s.blend == 2 {
@@ -1546,7 +1787,7 @@ pub fn read(m: &MaterialIr) -> Reading {
         // may as well be water or cracked crystal (the first audit's mistakes). The game's draw category settles
         // the rest at run time (bloom and glare buffers).
         r.class = Class::Emissive;
-        r.emission = s.unlit.map(|v| (v * 2.0).min(4.0));
+        r.emission = s.unlit.map(|v| (v * under_white).min(4.0));
         r.rule = "added to what is behind it";
     } else if s.blend != 0 && (s.environment || s.warp) && falling_water(&m.name) {
         // A waterfall's sheet is drawn as glass is (warped or reflecting, blended), but its colour is the white water
@@ -1554,7 +1795,10 @@ pub fn read(m: &MaterialIr) -> Reading {
         r.class = Class::Translucent;
         r.transmission = 0.5;
         r.rule = "falling water (named so), blended";
-    } else if s.blend != 0 && (s.environment || s.warp) {
+    } else if s.blend != 0 && (s.environment || (s.warp && s.lit)) {
+        // A warp moves the material's own maps (census warp_maps.tsv: highlights, environment pictures, a swirl; no
+        // scene copy among them): glass when lit, as the bubbles and panes are. Unlit, its art is all there is to it
+        // (KoopaBattleVs2's dark matter, the black hole's swirl, the sand tornado): blended, drawn as the game.
         r.class = Class::Glass;
         r.roughness = 0.02;
         r.transmission = 1.0;
@@ -1611,7 +1855,7 @@ pub fn read(m: &MaterialIr) -> Reading {
     if r.class == Class::Emissive && r.glow_source == 0 && luminance(r.signals.unlit) < 0.02 {
         if let Some((code, lit)) = glow_probe(m) {
             r.glow_source = code;
-            r.glow_lit = lit;
+            r.glow_lit = lit.map(|v| (v * under_white).min(4.0));  // under a white map, as the emission and the base
         }
     }
     r
@@ -1718,7 +1962,7 @@ pub fn finish_with(stem: &str, name: &str, measured: f32, ray: &super::model_ir:
         r.roughness = 0.03;
         r.metal = 0.0;
         r.transmission = 1.0;
-        r.rule = "water (rt_water.tsv)";
+        r.rule = WATER_RULE;
     }
     // Lava and suns: they shine of themselves. The emissive class shows them as they are on screen (draw flag
     // 64: no share, no shadow, no added light) and to every ray; glow_of makes them lights. The review's rows after.
@@ -1726,34 +1970,7 @@ pub fn finish_with(stem: &str, name: &str, measured: f32, ray: &super::model_ir:
         r.class = Class::Emissive;
         r.rule = "lava or a sun, by its name";
     }
-    // White water: a fall's or a splash's sheet scatters white, none of its art's tint, whatever its
-    // class (an opaque painted sheet too). Glass and water keep theirs; the review's rows come after.
-    if falling_water(name) && !matches!(r.class, Class::Glass | Class::Water) {
-        r.tint_keep = 0.0;
-    }
-    // The clear classes: the surface untinted, the colour absorption; glass's index by
-    // its name. The review's rows come after and may say otherwise.
-    if r.class == Class::Glass || r.class == Class::Water {
-        r.tint_keep = 0.0;
-    }
-    if r.class == Class::Glass {
-        let (ior, roughness) = clear_kind(&stem, &name.to_ascii_lowercase());
-        r.ior = ior;
-        if let Some(roughness) = roughness {
-            r.roughness = roughness;
-        }
-        // The game's other glass is a shell (capsules, bubbles, barriers, tanks, windows, transparent
-        // planets): a closed mesh's 3V/A made each a solid ball to rt_transmit. Crystal and ice keep the body.
-        if roughness.is_none() && ior < 1.7 {
-            r.thickness = 0.0;
-        }
-        // A pale crystal (the Pull Star Path pillars, base 0.81 1 1) has no hue of its own: its
-        // base and its reflection's tint white. A crystal coloured on purpose (saturation 0.5 and over) keeps its colour.
-        if ior >= 1.7 && hue_saturation(r.base).1 < 0.5 {
-            r.base = [1.0, 1.0, 1.0];
-            r.env_tint = [1.0, 1.0, 1.0];
-        }
-    }
+    class_numbers(&stem, name, r);
     r.through = foliage_through(&stem, &name.to_ascii_lowercase(), r);
     // An eye read as metal (an environment map's) is a small gloss, never a mirror ball. The rows after.
     if r.class == Class::Metal && is_eye(name) {
@@ -1764,19 +1981,92 @@ pub fn finish_with(stem: &str, name: &str, measured: f32, ray: &super::model_ir:
         r.rule = "an eye: a small gloss";
     }
     ray_numbers(r, ray);
-    review(MATERIALS_TABLE, &stem, name, r);
+    let mut thickness_given = ray.thickness.is_some();
+    thickness_given |= review(MATERIALS_TABLE, &stem, name, r);
     for table in &packs.materials {
-        review(table, &stem, name, r);
+        thickness_given |= review(table, &stem, name, r);
+    }
+    // By the index the material ends with (a row's crystal of a glass name is a crystal), unless a row gives the thickness.
+    if !thickness_given && clear_shell(r) {
+        r.thickness = 0.0;
+    }
+    // A white crystal's art colour is a painted metal's: the base by its reflection's hue (BlueChip and
+    // YellowChip lambert60, glass by their rows: their colour is all in the reflection's map); rt_clear_through takes
+    // a share of it. Not ice or glass: their maps paint what is around them (the census: Ice Mario's and the ice
+    // steps' reflections are orange). A pale crystal whitened above has a white reflection and stays white.
+    if r.class == Class::Glass && r.ior >= 1.7 && hue_saturation(r.base).1 < 0.05 {
+        r.base = painted_art_colour(r);
+    }
+}
+
+/// What a class's name says of its numbers in finish, past the class rules' own: a fall's white water, and the clear
+/// classes'. The review's numbers come after and may say otherwise. `stem` lower case.
+fn class_numbers(stem: &str, name: &str, r: &mut Reading) {
+    let lower = name.to_ascii_lowercase();
+    // White water: a fall's or a splash's sheet scatters white, none of its art's tint, whatever its
+    // class (an opaque painted sheet too). Glass and water keep theirs.
+    if falling_water(name) && !matches!(r.class, Class::Glass | Class::Water) {
+        r.tint_keep = 0.0;
+    }
+    // The clear classes: the surface untinted, the colour absorption; glass's index by
+    // its name.
+    if r.class == Class::Glass || r.class == Class::Water {
+        r.tint_keep = 0.0;
+    }
+    if r.class == Class::Glass {
+        let clear = clear_kind(stem, &lower);
+        r.ior = clear.ior;
+        r.roughness = clear.roughness;
+        // A pale crystal (the Pull Star Path pillars, base 0.81 1 1) has no hue of its own: its
+        // base and its reflection's tint white. A crystal coloured on purpose (saturation 0.5 and over) keeps its colour.
+        if clear.ior >= 1.7 && hue_saturation(r.base).1 < 0.5 {
+            r.base = [1.0, 1.0, 1.0];
+            r.env_tint = [1.0, 1.0, 1.0];
+        }
+    }
+}
+
+/// A class's own numbers where no rule of read() says more (the first rule of each class there): what a review row's
+/// class comes with before the row's own numbers, so a row that changes the class never keeps the old class's (a glass
+/// row over a translucent reading kept its transmission 0.5, its roughness 0.45). A painted reflection's sharpness
+/// (finish_reading) is a metal's and a gloss's roughness. The colours stay the material's.
+fn class_defaults(class: Class, r: &mut Reading) {
+    let s = r.signals;
+    (r.roughness, r.metal, r.ior, r.transmission, r.tint_keep, r.body, r.shine) = (0.45, 0.0, 1.5, 0.0, -1.0, -1.0, -1.0);
+    // Only the emissive class shows its emission (rt_shade.hlsli rt_hit_read); read() gives no other one any.
+    if class != Class::Emissive {
+        r.emission = [0.0; 3];
+    }
+    // read()'s strong reflection over a dark (metal) or a bright (gloss) base.
+    let strong = s.environment && s.environment_share >= 0.5;
+    let dark_base = luminance([s.unlit[0] + s.lit_gain[0], s.unlit[1] + s.lit_gain[1], s.unlit[2] + s.lit_gain[2]]) < 0.2;
+    match class {
+        Class::Gloss => r.roughness = if strong && !dark_base { 0.1 } else if s.environment { 0.2 } else { 0.3 },
+        Class::Metal => (r.roughness, r.metal) = (if (strong && dark_base) || s.lit { 0.15 } else { 0.2 }, 1.0),
+        Class::Glass => (r.roughness, r.transmission) = (0.02, 1.0),
+        Class::Translucent => r.transmission = 0.5,
+        Class::Painted => r.roughness = 0.9,
+        Class::Water => (r.ior, r.roughness, r.transmission) = (1.33, 0.03, 1.0),
+        Class::Dielectric | Class::Ramp | Class::Emissive | Class::Cutout => {}
+    }
+    if matches!(class, Class::Metal | Class::Gloss) && r.map_roughness >= 0.0 {
+        r.roughness = r.map_roughness;
+    }
+    // A two-sided alpha-tested sheet lets some light through, whatever its class (read()).
+    if s.alpha_test && s.blend == 0 && s.two_sided {
+        r.transmission = r.transmission.max(0.25);
     }
 }
 
 /// A review table's rows (the game's data/rt_materials.tsv, or a pack's) for the material `name` of the model `stem`
-/// (lower case): each matching row's fields over what `r` holds.
-fn review(table: &str, stem: &str, name: &str, r: &mut Reading) {
+/// (lower case): each matching row's fields over what `r` holds. A row's class first, with that class's own numbers
+/// (class_defaults, class_numbers) when it is another; then the row's numbers. True when a row gave the thickness.
+fn review(table: &str, stem: &str, name: &str, r: &mut Reading) -> bool {
     let (head, rows) = rows_of(table);
     let column = |what: &str| head.iter().position(|h| h == what);
     let (model, material) = (column("model"), column("material"));
-    let (Some(model), Some(material)) = (model, material) else { return };
+    let (Some(model), Some(material)) = (model, material) else { return false };
+    let mut thickness_given = false;
     for row in rows {
         let field = |what: &str| column(what).and_then(|c| row.get(c)).map(|v| v.trim()).filter(|v| !v.is_empty());
         let number = |what: &str| field(what).and_then(|v| v.parse::<f32>().ok()).filter(|v| v.is_finite());
@@ -1785,8 +2075,13 @@ fn review(table: &str, stem: &str, name: &str, r: &mut Reading) {
             continue;
         }
         if let Some(class) = field("class").and_then(|c| Class::by_name(&c.to_ascii_lowercase())) {
-            r.class = class;
-            r.rule = "the review (rt_materials.tsv)";
+            if class != r.class {
+                class_defaults(class, r);
+                r.class = class;
+                class_numbers(stem, name, r);
+                r.through = foliage_through(stem, &name.to_ascii_lowercase(), r);
+            }
+            r.rule = REVIEWED;
         }
         if let Some(v) = number("roughness") {
             r.roughness = v.clamp(0.0, 1.0);
@@ -1799,6 +2094,7 @@ fn review(table: &str, stem: &str, name: &str, r: &mut Reading) {
         }
         if let Some(v) = number("thickness") {
             r.thickness = v.max(0.0);
+            thickness_given = true;
         }
         if let Some(v) = number("tint keep") {
             r.tint_keep = v.clamp(0.0, 1.0);
@@ -1826,6 +2122,7 @@ fn review(table: &str, stem: &str, name: &str, r: &mut Reading) {
             }
         }
     }
+    thickness_given
 }
 
 /// The metals' F0, linear (Lagarde and de Rousiers 2014, Hoffman 2015: the spectral
@@ -1849,13 +2146,13 @@ pub const FALL_THROUGH: f32 = 0.3;
 /// 0.3); leaves FOLIAGE_THROUGH, a cloud CLOUD_THROUGH, only on a class that takes light on its body
 /// (dielectric, gloss, painted, ramp), never a sky's.
 pub fn foliage_through(stem: &str, name: &str, r: &Reading) -> f32 {
-    if stem.ends_with("sky") || stem.starts_with("vr") {
+    if sky_named(stem) || stem.starts_with("vr") {
         return 0.0;
     }
     if falling_water(name) || name.contains("foam") {
         return FALL_THROUGH;
     }
-    if !matches!(r.class, Class::Dielectric | Class::Gloss | Class::Painted | Class::Ramp) || stem.ends_with("sky") || stem.starts_with("vr") {
+    if !matches!(r.class, Class::Dielectric | Class::Gloss | Class::Painted | Class::Ramp) {
         return 0.0;
     }
     if ["leaf", "leaves", "happa", "bush"].iter().any(|w| name.contains(w)) {
@@ -1916,6 +2213,29 @@ pub fn metal_kind_of_colour(base: [f32; 3]) -> u8 {
     if luminance(base.map(srgb_to_linear)) >= 0.5 { 2 } else { 4 }
 }
 
+/// A metal's or a clear thing's art colour (sRGB). Drawn by a painted reflection, a metal shows the base times that map's colour (its
+/// mean times the stage's multiplier: env_tint, finish_reading). Where the map has a hue (saturation 0.3,
+/// metal_kind_of_colour's), that product at the base's linear luminance, its largest channel at most 1: the orange of
+/// the sling star's StarFoo under a white base is gold, not silver. A grey map, or none: the base. A base with a hue of
+/// its own (saturation 0.3) keeps it: the product of two unlike hues is the small rest of their overlap, not a colour
+/// the art shows (the ice ball's blue under an orange map is no brown).
+fn painted_art_colour(r: &Reading) -> [f32; 3] {
+    if r.env_map == 0xFF || hue_saturation(r.env_tint).1 < 0.3 || hue_saturation(r.base).1 >= 0.3 {
+        return r.base;
+    }
+    let base = r.base.map(srgb_to_linear);
+    let tint = r.env_tint.map(srgb_to_linear);
+    let shown = [base[0] * tint[0], base[1] * tint[1], base[2] * tint[2]];
+    let (want, have) = (luminance(base), luminance(shown));
+    if have <= 1e-4 {
+        return r.base;
+    }
+    let scaled = shown.map(|v| v * want / have);
+    let top = scaled[0].max(scaled[1]).max(scaled[2]);
+    let unit = if top > 1.0 { scaled.map(|v| v / top) } else { scaled };
+    unit.map(linear_to_srgb)
+}
+
 /// A metal's F0 by its kind, the art's hue (its linear colour over its largest channel) a tint of METAL_TINT; the
 /// result as its base (sRGB) and its kind in its index field (1 + kind / 100; 1.5 none: item word 15 bits 12-19).
 pub fn metal_finish(stem: &str, material: &str, r: &mut Reading) {
@@ -1927,6 +2247,7 @@ pub fn metal_finish(stem: &str, material: &str, r: &mut Reading) {
         return;
     }
     let stem = stem.split('.').next().unwrap_or(stem).to_ascii_lowercase();
+    let painted = painted_art_colour(r);
     let mut kind = r.metal_kind;
     if kind == 0 {
         kind = metal_kind_named(&material.to_ascii_lowercase());
@@ -1935,10 +2256,14 @@ pub fn metal_finish(stem: &str, material: &str, r: &mut Reading) {
         kind = metal_kind_named(&stem);
     }
     if kind == 0 {
-        kind = metal_kind_of_colour(r.base);
+        kind = metal_kind_of_colour(painted);
     }
-    let Some(&(_, f0)) = METAL_KINDS.get(usize::from(kind).wrapping_sub(1)) else { return };
-    let art = r.base.map(srgb_to_linear);
+    let Some(&(_, f0)) = METAL_KINDS.get(usize::from(kind).wrapping_sub(1)) else {
+        // Another hue: its F0 is the art's colour.
+        r.base = painted;
+        return;
+    };
+    let art = painted.map(srgb_to_linear);
     let top = art[0].max(art[1]).max(art[2]);
     let hue = if top > 1e-4 { art.map(|v| v / top) } else { [1.0; 3] };
     for c in 0..3 {
@@ -1986,6 +2311,56 @@ pub fn mean_colour(texels: &[[u8; 4]]) -> Option<[f32; 3]> {
 }
 
 /// Every material of every model under CONTENT, one row each, and the classes' counts.
+/// One material's class as the audit read it.
+pub struct NamedClass {
+    pub model: String,
+    pub material: String,
+    pub class: Class,
+    pub reviewed: bool,
+}
+
+/// A material name a review row sets in some models while others of that name take another class by the rules.
+#[derive(Debug, PartialEq)]
+pub struct ReviewGap {
+    pub material: String,
+    pub reviewed: Vec<String>,
+    pub reviewed_class: Class,
+    pub other: Vec<String>,
+    pub other_class: Class,
+}
+
+/// The review's gaps (one name, one class): by material name without its "(n)", the reviewed
+/// models' first class against each other class the unreviewed models of that name take. Generic exporter names
+/// (lambert*, Material*) are left out: the same name is no same material across models.
+pub fn review_gaps(all: &[NamedClass]) -> Vec<ReviewGap> {
+    let base = |name: &str| name.split('(').next().unwrap_or(name).trim().to_ascii_lowercase();
+    let mut by_name: BTreeMap<String, Vec<&NamedClass>> = BTreeMap::new();
+    for n in all {
+        let b = base(&n.material);
+        if b.starts_with("lambert") || b.starts_with("material") || b.starts_with("blinn") || b.starts_with("phong") {
+            continue;
+        }
+        by_name.entry(b).or_default().push(n);
+    }
+    let mut gaps = Vec::new();
+    for (name, list) in by_name {
+        let Some(first) = list.iter().find(|n| n.reviewed) else { continue };
+        let mut others: BTreeMap<Class, Vec<String>> = BTreeMap::new();
+        for n in list.iter().filter(|n| !n.reviewed && n.class != first.class) {
+            let models = others.entry(n.class).or_default();
+            if !models.contains(&n.model) {
+                models.push(n.model.clone());
+            }
+        }
+        let mut reviewed: Vec<String> = list.iter().filter(|n| n.reviewed).map(|n| n.model.clone()).collect();
+        reviewed.dedup();
+        for (class, other) in others {
+            gaps.push(ReviewGap { material: name.clone(), reviewed: reviewed.clone(), reviewed_class: first.class, other, other_class: class });
+        }
+    }
+    gaps
+}
+
 pub fn audit(input: &Path, output: &Path) -> Result<()> {
     let mut out = std::io::BufWriter::new(std::fs::File::create(output)?);
     // Every painted sheen drawn as an added layer, the body found under it and the body's class before and after.
@@ -2028,6 +2403,10 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
     let (mut map_painted_meshes, mut map_lit_meshes) = (0usize, 0usize);
     let (mut debaked_meshes, mut mapped_meshes, mut debaked_models, mut mapped_models) = (0usize, 0usize, 0usize, 0usize);
     let mut classes: BTreeMap<Class, (u32, u32)> = BTreeMap::new();
+    let mut named: Vec<NamedClass> = Vec::new();
+    let mut warps = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("warp_maps.tsv"))?);
+    writeln!(warps, "model\tmaterial\tclass\tlit\tmap\ttexture\tsize\tspread")?;
+    let flag01 = |b: bool| u8::from(b);
     let mut stats = Stats::default();
     let (mut models, mut materials, mut unread, mut glowing) = (0u32, 0u32, 0u32, 0u32);
     // Every model read once first, as the cook's prepare_written_files does (the twins: a far twin's class and
@@ -2043,6 +2422,23 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
         twins_clear();
         return Err(error);
     }
+    twins_ready();
+    // Each name of several classes and the one its materials take.
+    let mut unified = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("unified_names.tsv"))?);
+    writeln!(
+        unified,
+        "# Written by nebula-import rt-materials: a material (name and stages: hit_record.rs material_key) whose models\n\
+         # read it as several classes, and the class every model takes (a table's where a row says, else the class of most\n\
+         # area). table: 1 where a row of rt_materials.tsv or rt_water.tsv classes it there (it keeps its row's).\n\
+         key\tclass taken\tmodels\tmodel classes (model class table area)"
+    )?;
+    let decisions = name_decisions();
+    for (key, members, class) in &decisions {
+        let list: Vec<String> = members.iter().map(|(s, c, t, a)| format!("{s} {} {} {:.0}", c.name(), u8::from(*t), a)).collect();
+        writeln!(unified, "{key}\t{}\t{}\t{}", class.name(), members.len(), list.join(", "))?;
+    }
+    unified.flush()?;
+    println!("one name, one class: {} material keys of several classes unified", decisions.len());
     let walked = super::programs::walk_files(input, &mut |name, bytes| {
         let source = Source::of(&bytes);
         if source == Source::Table || bytes.starts_with(b"RLYT") {
@@ -2109,6 +2505,25 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
             let mut r = read(m);
             super::model_write::finish_reading(&ir, stem, i, measured.get(i).copied().unwrap_or(0.0), &mut r);
             let s = r.signals;
+            // Each warped stage's map (the picture its offset moves), for the blended ones: a scene copy or its own art.
+            if s.warp && s.blend != 0 {
+                let count = (m.pixel_stage_count as usize).min(m.stages.len());
+                for st in m.stages[..count].iter().filter(|st| st.map != 0xFF && st.warp.iter().any(|&b| b != 0)) {
+                    let texture = m.textures.get(usize::from(st.map)).and_then(|&t| ir.textures.get(t as usize));
+                    let shape = map_texels(&ir, m, st.map).and_then(|(w, h, t)| map_shape(w, h, &t));
+                    writeln!(
+                        warps,
+                        "{name}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.3}",
+                        m.name,
+                        r.class.name(),
+                        flag01(s.lit),
+                        st.map,
+                        texture.map_or("", |t| t.name.as_str()),
+                        texture.map_or_else(String::new, |t| format!("{} x {}", t.width, t.height)),
+                        shape.map_or(-1.0, |s| s.spread)
+                    )?;
+                }
+            }
             let glow = glow_of(stem.split('.').next().unwrap_or(stem), &m.name, &r);
             let triple = |v: [f32; 3]| format!("{:.2} {:.2} {:.2}", v[0], v[1], v[2]);
             let flag = |b: bool| u8::from(b);
@@ -2243,16 +2658,37 @@ pub fn audit(input: &Path, output: &Path) -> Result<()> {
             entry.0 += 1;
             materials += 1;
             let _ = &mut entry.1;
+            named.push(NamedClass {
+                model: short,
+                material: m.name.clone(),
+                class: r.class,
+                reviewed: r.rule == REVIEWED,
+            });
         }
         Ok(())
     });
     twins_clear();
     walked?;
+    // A material reviewed in some models and read otherwise in others of the same name.
+    let gaps = review_gaps(&named);
+    let mut gap_file = std::io::BufWriter::new(std::fs::File::create(output.with_file_name("review_gaps.tsv"))?);
+    writeln!(
+        gap_file,
+        "# Written by nebula-import rt-materials: a material name (its (n) dropped) a review row sets in some models while other\n\
+         # models with the same name take another class by the rules. Each: a row owed, or a reason it differs.\n\
+         material\treviewed\tclass by the review\tnot reviewed\tclass by the rules"
+    )?;
+    for g in &gaps {
+        writeln!(gap_file, "{}\t{}\t{}\t{}\t{}", g.material, g.reviewed.join(" "), g.reviewed_class.name(), g.other.join(" "), g.other_class.name())?;
+    }
+    gap_file.flush()?;
+    println!("review gaps: {} material names reviewed in some models and not in others", gaps.len());
     out.flush()?;
     sheens.flush()?;
     by_rule.flush()?;
     debake.flush()?;
     ramps.flush()?;
+    warps.flush()?;
     println!("normal-indexed maps: {ramp_count} colour ramps, {sprite_count} highlight sprites, {picture_count} painted reflections");
     println!("de-light: {debaked_meshes} meshes in {debaked_models} models; {mapped_meshes} meshes in {mapped_models} models with a map ratio");
     println!("de-light by the map alone: {map_painted_meshes} meshes painted by a map, {map_lit_meshes} whose map holds light");
@@ -2269,12 +2705,12 @@ mod tests {
 
     #[test]
     fn clear_kinds_by_name() {
-        assert_eq!(clear_kind("assemblyblockpartsa", "crystal_v"), (1.8, None));
-        assert_eq!(clear_kind("stardustartplanet", "crya_v"), (1.8, None));
-        assert_eq!(clear_kind("smallmazeplanet", "icemat"), (1.31, Some(0.08)));
-        assert_eq!(clear_kind("icecube", "lambert2(2)"), (1.31, Some(0.08)));
-        assert_eq!(clear_kind("karikariice", "omotemat_v"), (1.31, Some(0.08)));
-        assert_eq!(clear_kind("bathtubplanet", "glass_v"), (1.5, None));
+        assert_eq!(clear_kind("assemblyblockpartsa", "crystal_v"), CLEAR_CRYSTAL);
+        assert_eq!(clear_kind("stardustartplanet", "crya_v"), CLEAR_CRYSTAL);
+        assert_eq!(clear_kind("smallmazeplanet", "icemat"), CLEAR_ICE);
+        assert_eq!(clear_kind("icecube", "lambert2(2)"), CLEAR_ICE);
+        assert_eq!(clear_kind("karikariice", "omotemat_v"), CLEAR_ICE);
+        assert_eq!(clear_kind("bathtubplanet", "glass_v"), CLEAR_GLASS);
     }
 
     // The shadow models by name, with their materials and classes as the cook reads them
@@ -2346,6 +2782,28 @@ mod tests {
         m.swaps = [[0, 1, 2, 3]; 4];
         m.material_color = [[255; 4]; 2];
         m
+    }
+
+    #[test]
+    fn a_base_is_what_rt_hit_read_multiplies() {
+        // rt_hit_read shows base x map x (2 x vertex colour where flagged): read with no map, the colour as it is; with a
+        // map, twice its grey map's reading; the vertex's mid grey stays in the base. The emission alike.
+        let near = |a: [f32; 3], b: [f32; 3]| (0..3).all(|c| (a[c] - b[c]).abs() < 2e-3);
+        let mut plain = painted();
+        plain.material_color = [[102, 51, 204, 255]; 2];
+        assert!(near(read(&plain).base, [0.4, 0.2, 0.8]), "a register's colour: {:?}", read(&plain).base);
+        let mut vertex = painted();
+        vertex.channels[0].material_source = 1;
+        assert!(near(read(&vertex).base, [0.5, 0.5, 0.5]), "the vertex's grey, doubled by rt_hit_read");
+        let mut mapped = plain.clone();
+        mapped.stages[0].map = 0;
+        mapped.stages[0].color_in = [15, 8, 10, 15];
+        assert!(near(read(&mapped).base, [0.4, 0.2, 0.8]), "a map times the register: {:?}", read(&mapped).base);
+        let mut added = plain.clone();
+        (added.blend_type, added.blend_src, added.blend_dst) = (1, 4, 1);
+        assert!(near(read(&added).emission, [0.4, 0.2, 0.8]), "an untextured glow: {:?}", read(&added).emission);
+        (mapped.blend_type, mapped.blend_src, mapped.blend_dst) = (1, 4, 1);
+        assert!(near(read(&mapped).emission, [0.4, 0.2, 0.8]), "a textured glow under a white map");
     }
 
     #[test]
@@ -2429,6 +2887,50 @@ mod tests {
         let before = (plain.base, plain.ior);
         metal_finish("anything", "Gold_v", &mut plain);
         assert!((plain.base, plain.ior) == before && plain.metal_kind == 0);
+        // Drawn by its painted reflection: the map's colour, not the white multiplier's (SpinDriverMat, StarFoo).
+        let mut star = read(&painted());
+        (star.class, star.base, star.env_map, star.env_tint) = (Class::Metal, [1.0; 3], 0, [1.0, 0.72, 0.11]);
+        metal_finish("spindriver", "SpinDriverMat", &mut star);
+        assert_eq!(star.metal_kind, 1, "gold, not silver");
+        // A blue one keeps its blue as its F0; a grey map leaves the base's kind; no map, the base.
+        let mut blue = read(&painted());
+        (blue.class, blue.base, blue.env_map, blue.env_tint) = (Class::Metal, [1.0; 3], 0, [0.16, 0.52, 1.0]);
+        metal_finish("bluestarcupsuleplanet", "BlueStarMat", &mut blue);
+        assert!(blue.metal_kind == 0 && blue.base[2] > 0.99 && blue.base[0] < 0.2 && blue.ior == 1.5, "{:?}", blue.base);
+        let mut grey = read(&painted());
+        (grey.class, grey.base, grey.env_map, grey.env_tint) = (Class::Metal, [0.3, 0.3, 0.32], 0, [1.0, 0.98, 0.94]);
+        metal_finish("anything", "Metal_v", &mut grey);
+        assert_eq!(grey.metal_kind, 4);
+        let mut bare = read(&painted());
+        (bare.class, bare.base, bare.env_map, bare.env_tint) = (Class::Metal, [0.9, 0.9, 0.88], 0xFF, [1.0, 0.72, 0.11]);
+        metal_finish("anything", "Metal_v", &mut bare);
+        assert_eq!(bare.metal_kind, 2);
+        // A base with its own hue keeps it under a map of another hue (the ice ball: blue under orange).
+        let mut blue_base = read(&painted());
+        (blue_base.class, blue_base.base, blue_base.env_map, blue_base.env_tint) = (Class::Metal, [0.23, 0.75, 1.0], 0, [1.0, 0.63, 0.0]);
+        metal_finish("iceball", "UraMat_v", &mut blue_base);
+        assert!(blue_base.metal_kind == 0 && blue_base.base == [0.23, 0.75, 1.0], "{:?}", blue_base.base);
+    }
+
+    #[test]
+    fn a_clear_things_art_colour_is_its_reflections_hue() {
+        // BlueChip lambert60: glass by its row, a white base, its blue all in the painted reflection (0.16 0.52 1.0).
+        let mut chip = read(&painted());
+        (chip.base, chip.env_map, chip.env_tint) = ([1.0, 1.0, 1.0], 0, [0.16, 0.52, 1.0]);
+        finish("bluechip", "lambert60", 0.0, &mut chip);
+        assert_eq!(chip.class, Class::Glass);
+        let lin = chip.base.map(srgb_to_linear);
+        assert!(lin[2] > lin[1] && lin[1] > lin[0], "{:?}", chip.base);
+        // Ice under an orange reflection (Ice Mario) keeps its white.
+        let mut ice = read(&painted());
+        (ice.class, ice.base, ice.env_map, ice.env_tint) = (Class::Glass, [1.0, 1.0, 1.0], 0, [1.0, 0.29, 0.0]);
+        finish("icemario", "Body1_v", 0.0, &mut ice);
+        assert!(ice.base == [1.0, 1.0, 1.0], "{:?}", ice.base);
+        // A pale crystal is white and its reflection too: it stays white.
+        let mut pillar = read(&painted());
+        (pillar.class, pillar.base, pillar.env_map, pillar.env_tint) = (Class::Glass, [0.81, 1.0, 1.0], 0, [0.2, 0.6, 1.0]);
+        finish("crystalpillar", "Crystal_v", 0.0, &mut pillar);
+        assert!(pillar.base == [1.0, 1.0, 1.0] && pillar.env_tint == [1.0, 1.0, 1.0], "{:?}", pillar.base);
     }
 
     #[test]
@@ -2552,6 +3054,8 @@ mod tests {
             near: std::collections::HashMap::new(),
             measures: std::collections::HashMap::new(),
             bloom: std::collections::HashMap::new(),
+            votes: Vec::new(),
+            names: None,
         };
         twins.near.insert("testtwin".into(), vec![("road_v".into(), gloss.clone()), ("grass_v".into(), plain.clone()),
                                                   ("rock_v".into(), plain.clone())]);
@@ -2592,6 +3096,75 @@ mod tests {
     }
 
     #[test]
+    fn a_map_whose_white_darkens_is_a_shade() {
+        // lerp(C0, C1, map), C1 the darker (the Starshroom hull's light and dark colours): a shade. prev + map: a
+        // reflection. lerp(0, raster, map): a reflection that multiplies the paint, brighter under white.
+        let mut hull = MaterialIr { pixel_stage_count: 1, ..Default::default() };
+        let mut s = stage([2, 4, 8, 15], [7, 7, 7, 7]);
+        s.map = 0;
+        hull.stages.push(s);
+        hull.swaps = [[0, 1, 2, 3]; 4];
+        hull.registers[0] = [80, 220, 60, 255];
+        hull.registers[1] = [52, 121, 56, 255];
+        assert!(shades(&hull, 0));
+        let mut added = hull.clone();
+        added.stages[0].color_in = [15, 15, 15, 8];
+        assert!(!shades(&added, 0));
+        let mut multiplied = hull.clone();
+        multiplied.stages[0].color_in = [15, 10, 8, 15];
+        assert!(!shades(&multiplied, 0));
+        // lerp(C0, raster, map), C0 a bright rim: white is the lit colour, brighter than the rim under a white light.
+        let mut rim = hull.clone();
+        rim.stages[0].color_in = [2, 10, 8, 15];
+        rim.registers[0] = [220, 220, 220, 255];
+        assert!(!shades(&rim, 0));
+        assert!(sky_named("astrodomeskya") && sky_named("cloudsky.bdl") && !sky_named("skyislandplanet") && !sky_named("skywayplanet"));
+    }
+
+    #[test]
+    fn a_warp_alone_makes_glass_only_when_lit() {
+        // Blended, its own map moved by a warp, no painted reflection: unlit, its art (the dark matter, the black
+        // hole's swirl) is translucent; lit (a bubble, a pane), glass.
+        let mut swirl = painted();
+        (swirl.has_indirect, swirl.blend_type, swirl.blend_src, swirl.blend_dst) = (true, 1, 4, 5);
+        swirl.stages[0].warp[0] = 1;
+        let r = read(&swirl);
+        assert!(r.signals.warp && !r.signals.lit && r.signals.blend == 1);
+        assert_eq!(r.class, Class::Translucent);
+        let mut pane = swirl.clone();
+        (pane.channels[0].enable, pane.channels[0].light_mask) = (1, 1);
+        let r = read(&pane);
+        assert!(r.signals.lit);
+        assert_eq!(r.class, Class::Glass);
+    }
+
+    #[test]
+    fn a_reviewed_name_read_otherwise_elsewhere_is_a_gap() {
+        let n = |model: &str, material: &str, class: Class, reviewed: bool| NamedClass {
+            model: model.to_string(),
+            material: material.to_string(),
+            class,
+            reviewed,
+        };
+        let all = [
+            n("koopavs2partsdarkmattera", "DMMatA_v", Class::Translucent, true),
+            n("koopavs2partsdarkmatterb", "DMMatA_v(2)", Class::Translucent, true),
+            n("koopavs2partsreversegroada", "DMMatA_v", Class::Glass, false),
+            n("koopavs2partsreversegroadb", "DMMatA_v", Class::Glass, false),
+            n("other", "DMMatA_v", Class::Translucent, false),
+            n("a", "lambert2_v", Class::Metal, true),
+            n("b", "lambert2_v", Class::Gloss, false),
+            n("c", "Stone_v", Class::Dielectric, false),
+        ];
+        let gaps = review_gaps(&all);
+        assert_eq!(gaps.len(), 1, "{gaps:?}");
+        assert_eq!(gaps[0].material, "dmmata_v");
+        assert_eq!(gaps[0].reviewed, ["koopavs2partsdarkmattera", "koopavs2partsdarkmatterb"]);
+        assert_eq!((gaps[0].reviewed_class, gaps[0].other_class), (Class::Translucent, Class::Glass));
+        assert_eq!(gaps[0].other, ["koopavs2partsreversegroada", "koopavs2partsreversegroadb"]);
+    }
+
+    #[test]
     fn sheens_say_their_body() {
         assert_eq!(sheen_kind("crystalcages.bdl", "HiLightMat"), SheenKind::Crystal);
         assert_eq!(sheen_kind("capsulecage", "CrystalFaceMat(2)"), SheenKind::Crystal);
@@ -2600,6 +3173,14 @@ mod tests {
         assert_eq!(sheen_kind("mariofreezeice", "Break_HiLightMat(3)"), SheenKind::Ice);
         assert_eq!(sheen_kind("someplanet", "glass_omote_v"), SheenKind::Glass);
         assert_eq!(sheen_kind("starpiececluster", "StarPieceClusterMat_v"), SheenKind::Unknown);
+        // Added, all a painted reflection: a sheen, unless its name says it is a light.
+        let mut r = read(&painted());
+        r.class = Class::Emissive;
+        (r.signals.blend, r.signals.environment, r.signals.environment_share) = (2, true, 0.9);
+        assert!(sheen_layer("crystalcages.bdl", "HiLightMat", &r));
+        assert!(sheen_layer("bosskameck", "StickJewelHiLightMat_v", &r));
+        assert!(!sheen_layer("hellballguidepartsa", "Light_v", &r));
+        assert!(!sheen_layer("anything", "StarLightMat", &r));
     }
 
     #[test]
@@ -2624,6 +3205,134 @@ mod tests {
         finish("somethingelse", "CxSeaMat", 3.0, &mut other);
         assert_eq!(other.class, Class::Painted);
         assert!(name_matches("Water*", "watermat_v_x") && !name_matches("Water", "watermat"));
+    }
+
+    #[test]
+    fn a_rows_class_comes_with_that_classs_numbers() {
+        // A translucent reading (transmission 0.5, roughness 0.45) made glass by a row that gives only the class: glass's
+        // own numbers, the clear table's by its name (a crystal box 1.8), untinted; the row's numbers over them.
+        let mut blended = painted();
+        (blended.blend_type, blended.blend_src, blended.blend_dst) = (1, 4, 5);
+        let mut r = read(&blended);
+        assert!(r.class == Class::Translucent && r.transmission == 0.5);
+        review("model\tmaterial\tclass\ncrystalbox\tIndTex\tglass\n", "crystalbox", "IndTex", &mut r);
+        assert_eq!((r.class, r.transmission, r.tint_keep, r.rule), (Class::Glass, 1.0, 0.0, REVIEWED));
+        assert_eq!((r.ior, r.roughness), (CLEAR_CRYSTAL.ior, CLEAR_CRYSTAL.roughness));
+        let mut given = read(&blended);
+        review("model\tmaterial\tclass\troughness\tior\nanything\tPane\tglass\t0.01\t1.6\n", "anything", "Pane", &mut given);
+        assert_eq!((given.roughness, given.ior, given.transmission), (0.01, 1.6, 1.0));
+        // A glass reading made a dielectric: no light through it, no clear surface, its tint its class's own.
+        let lit = painted();
+        let mut glass = read(&lit);
+        (glass.class, glass.transmission, glass.roughness, glass.ior, glass.tint_keep) = (Class::Glass, 1.0, 0.02, 1.8, 0.0);
+        review("model\tmaterial\tclass\nanything\tShell\tdielectric\n", "anything", "Shell", &mut glass);
+        assert_eq!((glass.transmission, glass.roughness, glass.ior, glass.tint_keep), (0.0, 0.45, 1.5, -1.0));
+        // The same class: the rules' numbers stay (a strong reflection's 0.1 gloss is no 0.2).
+        let mut gloss = read(&lit);
+        (gloss.class, gloss.roughness) = (Class::Gloss, 0.1);
+        review("model\tmaterial\tclass\nanything\tPaint\tgloss\n", "anything", "Paint", &mut gloss);
+        assert_eq!(gloss.roughness, 0.1);
+        // Made a metal: its painted reflection's sharpness is its roughness.
+        let mut metal = read(&lit);
+        metal.map_roughness = 0.07;
+        review("model\tmaterial\tclass\nanything\tGold_v\tmetal\n", "anything", "Gold_v", &mut metal);
+        assert_eq!((metal.class, metal.metal, metal.roughness), (Class::Metal, 1.0, 0.07));
+    }
+
+    #[test]
+    fn one_material_is_one_class_across_models() {
+        // Gold_v gloss in a small model and metal in a large one: metal for both, with the metal's numbers; a
+        // row decides over area; a far twin does not vote; another material of the same name (other stages) is another
+        // key, untouched.
+        let reading = |class: Class, roughness: f32| {
+            let mut r = read(&painted());
+            (r.class, r.roughness, r.metal) = (class, roughness, if class == Class::Metal { 1.0 } else { 0.0 });
+            r
+        };
+        let vote = |key: &str, stem: &str, area: f64, r: Reading| NameVote { key: key.into(), stem: stem.into(), area, reading: r };
+        let votes = vec![
+            vote("gold_v#1", "smallplanet", 10.0, reading(Class::Gloss, 0.2)),
+            vote("gold_v#1", "bigplanet", 90.0, reading(Class::Metal, 0.07)),
+            vote("gold_v#1", "bigplanetlow", 900.0, reading(Class::Gloss, 0.2)),
+            vote("lambert1#2", "a", 50.0, reading(Class::Painted, 0.9)),
+            vote("lambert1#3", "b", 50.0, reading(Class::Gloss, 0.2)),
+        ];
+        let names = name_readings(&votes, &|s: &str| s == "bigplanetlow");
+        assert_eq!(names.len(), 1, "one key of two classes; the far twin's area left out");
+        let mut small = reading(Class::Gloss, 0.2);
+        take_name(&names["gold_v#1"], &mut small);
+        assert_eq!((small.class, small.roughness, small.metal), (Class::Metal, 0.07, 1.0));
+        // A row in the small model: its class for every model of the key; the row's own material keeps its row.
+        let mut row = reading(Class::Gloss, 0.1);
+        row.rule = REVIEWED;
+        let votes = vec![vote("gold_v#1", "smallplanet", 10.0, row.clone()), vote("gold_v#1", "bigplanet", 90.0, reading(Class::Metal, 0.07))];
+        let names = name_readings(&votes, &|_: &str| false);
+        let mut big = reading(Class::Metal, 0.07);
+        take_name(&names["gold_v#1"], &mut big);
+        assert_eq!((big.class, big.roughness, big.metal), (Class::Gloss, 0.1, 0.0));
+        let mut kept = row.clone();
+        kept.class = Class::Dielectric;
+        take_name(&names["gold_v#1"], &mut kept);
+        assert_eq!(kept.class, Class::Dielectric, "a row's material is the row's");
+        // The key: the name without its (n), any case, and the stages: another combiner is another key.
+        let ir = ModelIr::default();
+        let mut a = painted();
+        a.name = "Gold_v(2)".into();
+        let mut b = painted();
+        b.name = "gold_v".into();
+        b.material_color = [[10; 4]; 2];
+        assert_eq!(material_key(&ir, &a), material_key(&ir, &b), "a recolour is the same material");
+        b.stages[0].color_op = 1;
+        assert_ne!(material_key(&ir, &a), material_key(&ir, &b));
+    }
+
+    #[test]
+    fn a_names_crystal_keeps_its_body_and_its_glass_is_a_shell() {
+        // The votes are read with no thickness (twins_add): the shell follows the index, as in finish.
+        let mut crystal = read(&painted());
+        (crystal.class, crystal.ior, crystal.roughness, crystal.transmission, crystal.thickness) =
+            (Class::Glass, CLEAR_CRYSTAL.ior, CLEAR_CRYSTAL.roughness, 1.0, 0.0);
+        let mut bit = read(&painted());
+        (bit.class, bit.thickness) = (Class::Metal, 38.0);
+        take_name(&crystal, &mut bit);
+        assert_eq!((bit.class, bit.thickness), (Class::Glass, 38.0));
+        let mut pane = crystal.clone();
+        pane.ior = CLEAR_GLASS.ior;
+        let mut window = read(&painted());
+        window.thickness = 20.0;
+        take_name(&pane, &mut window);
+        assert_eq!((window.class, window.thickness), (Class::Glass, 0.0));
+    }
+
+    #[test]
+    fn the_clear_classes_are_the_owners_table() {
+        // Glass 1.5 (a bubble 1.33), crystal 1.8, ice 1.31, all at most 0.02 rough but ice 0.05.
+        assert_eq!(clear_kind("bathtubplanet", "glass_v"), CLEAR_GLASS);
+        assert_eq!(clear_kind("anything", "soapbubble_v"), CLEAR_BUBBLE);
+        assert_eq!(clear_kind("crystalbox", "indtex"), CLEAR_CRYSTAL);
+        assert_eq!(clear_kind("icecube", "lambert2(2)"), CLEAR_ICE);
+        for k in [CLEAR_GLASS, CLEAR_BUBBLE, CLEAR_CRYSTAL] {
+            assert!(k.roughness <= 0.02);
+        }
+        assert_eq!((CLEAR_ICE.ior, CLEAR_ICE.roughness, CLEAR_ICE_BEING.roughness), (1.31, 0.05, 0.08));
+        // A sheen's ice body is ice, not an ice being.
+        let mut body = read(&painted());
+        promote_sheen_body(SheenKind::Ice, &mut body);
+        assert_eq!((body.ior, body.roughness), (CLEAR_ICE.ior, CLEAR_ICE.roughness));
+        // Every glass row of the game's table is one of the table's kinds, and an ice being's roughness is 0.08.
+        let (head, rows) = rows_of(MATERIALS_TABLE);
+        let at = |what: &str| head.iter().position(|h| h == what).unwrap();
+        let (class, ior, rough) = (at("class"), at("ior"), at("roughness"));
+        for row in rows {
+            let number = |c: usize| row.get(c).and_then(|v| v.trim().parse::<f32>().ok());
+            if row.get(class).is_some_and(|c| c.trim() == "glass") {
+                let (n, g) = (number(ior).unwrap_or(1.5), number(rough).unwrap_or(0.02));
+                let kind = [CLEAR_GLASS, CLEAR_BUBBLE, CLEAR_CRYSTAL, CLEAR_ICE, CLEAR_ICE_BEING].into_iter().find(|k| k.ior == n && k.roughness == g);
+                assert!(kind.is_some(), "{row:?}: index {n}, roughness {g} is no kind of the clear classes' table");
+            } else if let Some(n) = number(ior) {
+                assert!(n == CLEAR_CRYSTAL.ior || row.get(class).is_some_and(|c| !c.trim().is_empty()), "{row:?}: an index without a class");
+            }
+        }
     }
 
     #[test]

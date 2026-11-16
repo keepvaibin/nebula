@@ -177,6 +177,7 @@ public:
         void* descriptors = nullptr;
     };
     [[nodiscard]] RtCommands rt_commands_begin() { return {}; }
+    [[nodiscard]] void* rt_texture_layout() const noexcept { return nullptr; }
     void rt_commands_end() {}
     [[nodiscard]] bool rt_depth_begin(rt::TextureView&, unsigned&, unsigned&, rt::ImageFormat&) { return false; }
     void rt_depth_end() {}

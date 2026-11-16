@@ -2011,9 +2011,9 @@ std::uint32_t RendererVk::rt_publish_light(void* image, TextureStore& textures, 
     if (texture == nullptr) {
         return null_texture_slot_;
     }
-    // The tracer owns the image (and frees it frames after its last use): the picture only names it.
-    static_cast<void>(publish_picture(kRtLightPicture + which, texture->width, texture->height, gpu::TextureRef(gpu::TextureRef(), texture),
-                                      0u, textures));
+    // The picture holds the image while the texture array names it (Direct3D 12's picture holds its resource the same
+    // way): the tracer may let it go, and another image may take its address, while draws still sample this one.
+    static_cast<void>(publish_picture(kRtLightPicture + which, texture->width, texture->height, gpu::texture_ref(texture), 0u, textures));
     return pictures_[kRtLightPicture + which].view;
 }
 

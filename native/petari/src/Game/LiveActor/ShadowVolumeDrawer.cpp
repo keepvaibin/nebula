@@ -9,6 +9,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/GameLightSignal.hpp"
 #include "Game/System/LumaCore.hpp"
 
 namespace {
@@ -94,8 +95,9 @@ void ShadowVolumeDrawer::draw() const {
         // jumped, is never blended from where it was (world-space shapes carry no teleport test of their own).
         beginDrawObject();
         // For a renderer that traces this shadow instead of filling its volume: where it falls and whose it is.
-        // (A drawer whose own isDraw does not ask a controller may have none: its shadow stays the game's.)
-        if (const ShadowController* pController = getController()) {
+        // (A drawer whose own isDraw does not ask a controller may have none: its shadow stays the game's.) Only while
+        // the host traces (GameLightSignal::tracing).
+        if (const ShadowController* pController = getController(); pController != nullptr && GameLightSignal::tracing()) {
             Vec3f position;
             Vec3f direction;
             calcBaseDropPosition(&position, pController);

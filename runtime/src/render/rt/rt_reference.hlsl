@@ -8,16 +8,17 @@
 //      of it, weighed by the count;
 //   I  the sky's and the bounce light's ratio to the stage's ambient: a cosine ray; where it meets the sky the
 //      dome's ratio, where it meets a surface that surface's light by path tracing (its sun, one local light, and a
-//      further bounce for its own sky, up to four bounces, Russian roulette after the second);
+//      further bounce for its own sky: the whole series, Russian roulette from the second bounce on ending it;
+//      rt_reference_paths.hlsli ref_ratio), each gathered ray as the real-time gather's;
 //   R  what a glass, water, metal or gloss pixel mirrors (every class the reflections pass traces on High): the
 //      radiance seen along the GGX-sampled direction (a mirror's own under roughness 0.03; water's 0), the same path
-//      tracing where it lands, metal and glass traced on (up to four specular bounces), the sun's glint; unweighed,
+//      tracing where it lands, metal mirrored on and glass seen through or mirrored by its Fresnel, the sun's glint; unweighed,
 //      as the reflections pass's R raw; a 1 where the pixel mirrors, 0 elsewhere. rt_reflect_out.hlsl composites the
 //      mean as it does a preset's R (rt_bounce.cpp rt_reference_publish).
 // The host starts the count again whenever anything differs (another list, the camera, a cut, the size) and keeps
 // adding, up to 4,096 samples, while the same list is walked again (--diagnostics rt-reference holds each picture
 // that is taken). rt_reference_out.hlsl turns the means into the images the programs read, after the filters.
-// Pass constants: g_pass.z bit 0 start again; g_pass.w the shading frame's first byte in t4; g_pass_value[0].x paths
+// Pass constants: g_pass.z bit 0 start again, bit 2 the host reads the dome's and the hits' counts; g_pass.w the shading frame's first byte in t4; g_pass_value[0].x paths
 // a frame, .y the most samples kept.
 #include "rt_shade.hlsli"
 
@@ -42,7 +43,9 @@ void main(uint3 id : SV_DispatchThreadID) {
     if (id.x >= width || id.y >= height) {
         return;
     }
-    if (all(id.xy < uint2(64u, 64u))) {
+    // The counts only while the host reads them (g_pass.z bit 2): a hold past its measuring walks keeps the means.
+    const bool counting = (g_pass.z & 4u) != 0u;
+    if (counting && all(id.xy < uint2(64u, 64u))) {
         rt_shade_begin(g_pass.w);
         rt_count_dome_directions(id.xy);  // the dome's mean, as the indirect pass counts it
     }
@@ -77,7 +80,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         return;
     }
     uint seed = rt_seed(id.xy, g_more.y, 17u);
-    s_count_dome = false;  // the dome's mean: the same fixed directions as the indirect pass
+    // The gathered hits' mean (rt_count_hit; a sunless room's open O, V's unit there), counted as the
+    // real-time pass counts it while it is off: the first path's first hit of one pixel in sixteen.
+    const bool count_hits = counting && ((id.x | id.y) & 3u) == 0u;
     // What the pixel mirrors (R): the radiance its mirror ray sees, as the reflections pass's R raw (rt_reflect.hlsl
     // reflects: on High glass and water, metal and gloss); rt_reflect_out.hlsl composites the mean.
     const uint class_ = look & 255u;
@@ -108,9 +113,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
         v_sum += v;
         // D: every local light, by one chosen uniformly.
-        d_sum += ref_light(s.at, s.origin, s.smooth_, s.slot, seed);
+        d_sum += ref_light(s.at, s.origin, s.smooth_, ref_self(pixel, s.slot), seed);
         // I: the sky and what bounces.
-        i_sum += ref_ratio(s.origin, s.smooth_, seed);
+        i_sum += ref_ratio(s, s.smooth_, count_hits && p == 0u, seed);
         // R.
         if (mirrors) {
             const float3 dir0 = rough < 0.03f ? reflect(look_along, mirror_n) : rt_ggx_reflect(mirror_n, -look_along, rough * rough, rt_random2(seed));

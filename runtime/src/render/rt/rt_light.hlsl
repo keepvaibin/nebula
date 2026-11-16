@@ -183,7 +183,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         // What the surface mirrors: glass, metal and glossy things show the scene and the sky along the eye's ray turned
         // at the surface, more at a glancing look (Schlick's term), a metal in its own colour; and the sun's own glint
         // where that ray runs at the sun unhindered.
-        if ((g_more.z & 32u) != 0u && (second || (g_more.z & 1024u) == 0u)) {  // bit 10: the reflections pass has the opaque layer
+        // (item is not 0 where the guide holds a surface: rt_surface.hlsl writes no surface for item 0 on either layer;
+        // the test keeps the item reads below in bounds whatever the guide says.)
+        if (item != 0u && (g_more.z & 32u) != 0u && (second || (g_more.z & 1024u) == 0u)) {  // bit 10: the reflections pass has the opaque layer
             const uint look = g_items.Load(g_at.x + (item - 1u) * kItemBytes + 44u);
             const uint tint_word = g_items.Load(g_at.x + (item - 1u) * kItemBytes + 48u);
             const uint class_ = look & 255u;
@@ -216,8 +218,8 @@ void main(uint3 id : SV_DispatchThreadID) {
                 // What it mirrors by the shared hit shading, as the reflections pass's rays: the things in front with
                 // their sun and lights traced, the dome, the sun's glint. None without the frame.
                 uint mirror_seed = rt_seed(id.xy, g_more.y, 53u);
-                const float3 seen_ = g_pass.y != 0u ? rt_mirror_seen(s.at + n * s.skin, turned_ray, abs(g_ray.x),
-                                                                     kRtShadeSunRay | kRtShadeLightRay, mirror_seed)
+                const float3 seen_ = g_pass.y != 0u ? rt_mirror_seen(rt_ray_origin(s, turned_ray), turned_ray,
+                                                                     abs(g_ray.x), kRtShadeSunRay | kRtShadeLightRay, mirror_seed)
                                                     : float3(0.0f, 0.0f, 0.0f);
                 mirror.rgb = seen_ * tint * share_;
                 // The painted reflection it was drawn with gives way to the real one: that much less of the colour under
@@ -238,9 +240,10 @@ void main(uint3 id : SV_DispatchThreadID) {
                 }
             }
         }
-        // A dielectric's sheen: the sun's GGX lobe and the sky's, F0 0.04, by the
-        // model, on what no class mirrors; a = 1 - F_env. The sky's part by the point's O' where the host binds it,
-        // else the open O' (not by V, which cut the sheen out at a shadow's edge).
+        // A dielectric's sheen: the sky's lobe, F0 0.04, by the model, on what no class
+        // mirrors; a = 1 - F_env. By the point's O' where the host binds it, else the open O' (not by
+        // V, which cut it out at a shadow's edge). The sun's GGX lobe is withdrawn at every roughness (it put
+        // glare everywhere; a matte surface takes no sun lobe).
         if (!second && item != 0u && g_pass.y != 0u && (g_more.z & (1u | 32u)) == (1u | 32u) && (g_more.z & (128u | 512u)) == 0u &&
             mirror.a == 1.0f && !any(mirror.rgb != 0.0f)) {
             const uint sheen_look = g_items.Load(g_at.x + (item - 1u) * kItemBytes + 44u);
@@ -249,31 +252,16 @@ void main(uint3 id : SV_DispatchThreadID) {
                 rt_shade_begin(g_pass.w);
                 const float t = rt_form();
                 if (t > 0.0f) {
-                    const float kSheenF0 = 0.04f, kSheenPi = 3.14159265f;
+                    const float kSheenF0 = 0.04f;
                     const float rough_ = max(float(sheen_look >> 16u & 255u) / 255.0f, 0.05f);
                     const float3 to_eye = -normalize(s.at);
                     const float3 n = dot(s.smooth_, to_eye) > 0.0f ? s.smooth_ : s.normal;
                     const float nv = max(dot(n, to_eye), 1e-3f);
-                    const float nl = saturate(dot(n, g_sun.xyz));
-                    const float a2 = max(rough_ * rough_ * rough_ * rough_, 1e-6f);  // GGX alpha = roughness^2
-                    const float3 h = normalize(g_sun.xyz + to_eye);
-                    const float nh = saturate(dot(n, h)), vh = saturate(dot(to_eye, h));
-                    const float dd = nh * nh * (a2 - 1.0f) + 1.0f;
-                    const float d = a2 / (kSheenPi * dd * dd);
-                    const float vis = 0.5f / max(nl * sqrt(nv * nv * (1.0f - a2) + a2) + nv * sqrt(nl * nl * (1.0f - a2) + a2), 1e-5f);
-                    const float g5 = 1.0f - vh;
-                    const float f = kSheenF0 + (1.0f - kSheenF0) * g5 * g5 * g5 * g5 * g5;
                     const RtStageLight st = rt_stage_light();
                     const float2 terms = mirror_terms(rough_, nv);
                     const float f_env = saturate(kSheenF0 * terms.x + terms.y);
                     const float3 o_here = g_pass.z != 0u ? max(g_point_o.Load(int3(pixel, 0)).rgb, 0.0f) : rt_open_o();
-                    // Where the look
-                    // and the sun both graze, pi D Vis F is 12 at roughness 0.7 against 0.042 head on. A matte surface's
-                    // sun highlight is at most kSheenMost of the sun's light on it; a smoother one (roughness under
-                    // 0.6, open at 0.3) keeps the model's peak.
-                    const float kSheenMost = 0.0f;  // a matte surface takes no sun lobe ("glare everywhere")
-                    const float most = kSheenMost;  // the sun's lobe withdrawn at every roughness (a lit dielectric's is 0.45)
-                    const float3 lobe = st.sun * (v * nl * min(kSheenPi * d * vis * f, most)) + st.sky * rt_o_prime(o_here) * f_env;
+                    const float3 lobe = st.sky * rt_o_prime(o_here) * f_env;
                     mirror = float4(t * min(lobe, 16.0f), 1.0f - t * f_env);
                 }
             }

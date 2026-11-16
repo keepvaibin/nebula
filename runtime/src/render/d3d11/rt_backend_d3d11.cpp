@@ -20,9 +20,10 @@ bool shaders_load(gpu::Device*) { return false; }
 Backend::Backend() = default;
 Backend::~Backend() = default;
 
-bool Backend::start(gpu::Device*) { return false; }
+bool Backend::start(gpu::Device*, void*) { return false; }
 void Backend::stop() noexcept {}
 bool Backend::started() const noexcept { return false; }
+bool Backend::failed() const noexcept { return false; }
 BuildSizes Backend::sizes(const TriangleInput&, BuildKind) const { return {}; }
 std::uint32_t Backend::make_page(std::uint64_t, bool) { return ~0u; }
 void Backend::free_page(std::uint32_t) noexcept {}

@@ -108,7 +108,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     // A temporal upscaler antialiases the scene itself: anti-aliasing and MSAA have no part in its picture (the
     // renderers skip both under it), so their rows go while it runs.
     const bool temporal = state.temporal_upscaling;
-    // With ray tracing on and no temporal upscaler chosen, FSR 3 anti-aliases the scene: the row says so,
+    // With ray tracing on and no temporal upscaler chosen, FSR 3 or SGSR 2 anti-aliases the scene: the row says so,
     // and MSAA and SMAA have no part in the picture until ray tracing is off again.
     const bool traced_temporal = rt_on && !temporal && state.traced_temporal;
     if (traced_temporal) {
@@ -162,10 +162,14 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         "SETS EVERY PART BELOW. REFERENCE: PATH TRACED, FOR COMPARISON"});
         static constexpr const char* kLevels[] = {"OFF", "LOW", "MEDIUM", "HIGH"};
         const auto part_row = [&](const char* name, RtPart part, const char* help) {
-            rows.push_back({name, kLevels[rt_part(render, part)],
+            rows.push_back({name, kLevels[rt_part_level(part, rt_part(render, part))],
                             [part](RenderConfig& draft, int delta) {
                                 const auto at = static_cast<std::size_t>(part);
-                                draft.rt_parts[at] = static_cast<std::uint8_t>(settings_step(rt_part(draft, part), 4u, delta));
+                                // OFF, LOW, MEDIUM, HIGH; OFF, MEDIUM, HIGH where the part has no low (rt_part_has_low).
+                                const bool low = rt_part_has_low(part);
+                                const unsigned level = rt_part_level(part, rt_part(draft, part));
+                                const unsigned next = settings_step(low || level == 0u ? level : level - 1u, low ? 4u : 3u, delta);
+                                draft.rt_parts[at] = static_cast<std::uint8_t>(low || next == 0u ? next : next + 1u);
                                 draft.rt_quality = kRtPresetCustom;
                                 draft.rt_chosen = true;
                             },

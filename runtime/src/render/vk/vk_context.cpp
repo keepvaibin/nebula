@@ -1042,7 +1042,13 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     // geometry shaders. Without them (or under rt-no-geometry, the test of that) the prepass names its item only and
     // the surface pass finds the triangle by a ray.
     rt_caps_.triangle_ids = available.geometryShader == VK_TRUE && !::galaxy::diagnosing(::galaxy::kDiagnoseRtNoGeometry);
-    const bool rt_enable = ray_tracing && rt_caps_.ray_queries && rt_caps_.acceleration_structures && rt_caps_.bindless;
+    // The tracer's view and signal passes write an image whose format the renderer chooses (StorageImageWriteWithoutFormat
+    // in their SPIR-V): the device is made with that feature for them, whatever the upscalers above asked.
+    const bool rt_enable = ray_tracing && rt_caps_.ray_queries && rt_caps_.acceleration_structures && rt_caps_.bindless &&
+                           available.shaderStorageImageWriteWithoutFormat == VK_TRUE;
+    if (rt_enable) {
+        enabled.shaderStorageImageWriteWithoutFormat = VK_TRUE;
+    }
     if (rt_enable && rt_caps_.triangle_ids) {
         enabled.geometryShader = VK_TRUE;
     }

@@ -28,10 +28,19 @@ static const uint kMaskLit = 16u;
 static const uint kMaskCutout = 32u;
 static const uint kMaskSky = 64u;
 static const uint kMaskShadowOnly = 128u;  // a draw only the tracer sees: the sun's and the lamps' shadow rays alone
-// What an instance is (rt_scene.h), read back at a hit: CommittedInstanceContributionToHitGroupIndex.
+// What an instance is (rt_scene.h), read back at a hit: bits kItemBits-23 of its id (rt_hit_kind).
 static const uint kKindCutout = 1u;
 static const uint kKindClipped = 2u;  // a map part its clip areas show (rt_scene.h)
 static const uint kKindCard = 4u;     // a billboard's sun card: the sun pass's ray from that billboard passes it
+// An instance's id at a hit (Candidate/CommittedInstanceID; rt_scene.h Instance::id_mask): the frame's item below
+// kItemBits, its kind above, to bit 23. The one per-instance field all three APIs' ray queries read (Metal: userID).
+static const uint kItemBits = 21u;
+uint rt_hit_item(uint id) {
+    return id & ((1u << kItemBits) - 1u);
+}
+uint rt_hit_kind(uint id) {
+    return id >> kItemBits;
+}
 
 // The scene camera as a pass reads it (RtView, the occlusion's constants): `ray` gives a pixel's eye ray at distance 1
 // (x = px * ray.x + ray.y, y = py * ray.z + ray.w, z = -1), `depth` turns the depth target's value into eye z
@@ -59,13 +68,22 @@ float rt_pack_normal(float3 n) {
     return 1.0f + float(q.x + q.y * 32u);
 }
 
-float3 rt_unpack_normal(float packed) {
-    const uint v = uint(packed - 0.5f);
-    const float2 o = float2(float(v & 31u), float(v >> 5u & 31u)) / 31.0f * 2.0f - 1.0f;
+// A unit normal on the octahedral map, whole (S.normal's two pairs), and back.
+float2 rt_oct(float3 n) {
+    const float3 a = n / max(abs(n.x) + abs(n.y) + abs(n.z), 1e-6f);
+    return a.z >= 0.0f ? a.xy : (1.0f - abs(a.yx)) * float2(a.x >= 0.0f ? 1.0f : -1.0f, a.y >= 0.0f ? 1.0f : -1.0f);
+}
+
+float3 rt_unoct(float2 o) {
     float3 n = float3(o, 1.0f - abs(o.x) - abs(o.y));
     const float t = saturate(-n.z);
     n.xy += float2(n.x >= 0.0f ? -t : t, n.y >= 0.0f ? -t : t);
     return normalize(n);
+}
+
+float3 rt_unpack_normal(float packed) {
+    const uint v = uint(packed - 0.5f);
+    return rt_unoct(float2(float(v & 31u), float(v >> 5u & 31u)) / 31.0f * 2.0f - 1.0f);
 }
 
 uint rt_hash(uint x) {

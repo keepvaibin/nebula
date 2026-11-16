@@ -29,6 +29,9 @@
 #include "galaxy/host_extension.h"
 #include "galaxy/path_text.h"
 #include "galaxy/platform_paths.h"
+#include "galaxy/platform_time.h"
+#include "galaxy/precise_wait.h"
+#include "galaxy/content_viewport.h"
 #include "galaxy/game_step.h"
 #include "galaxy/asset_store.h"
 #include "galaxy/save_files.h"
@@ -116,7 +119,6 @@
 #include "galaxy/save_transfer.h"
 #include <nebula_frame_list.h>
 #include "galaxy/render/rt_materials.h"
-#include "galaxy/render/rt_caps.h"
 #include "galaxy/render/texture_pack.h"
 #if defined(NEBULA_HOST_D3D12)
 #endif
@@ -3289,7 +3291,9 @@ uint32_t svc_option(void*, uint32_t what) {
     case NEBULA_OPTION_RAY_TRACING:
 #if defined(NEBULA_HOST_RENDERER)
     {
-        if (!galaxy::render::get_render_config().ray_tracing_enabled || !galaxy::render::rt_capable(galaxy::render::rt_caps())) {
+        // On only while the tracer runs (set as it starts and stops): a setting on whose tracer did not start leaves the
+        // game's mirror pass, shadow sets and clipping as they are.
+        if (!galaxy::render::render_tracing()) {
             return 0u;
         }
         // A stage's row may keep its shadow light sets as the artists made them (rt_stages.tsv `shadow sets`).
@@ -4137,6 +4141,10 @@ void extension_quit(void*) {
 #endif
 }
 #if defined(NEBULA_HOST_RENDERER)
+void extension_lose_gpu_device(void*) {
+    galaxy::render::lose_gpu_device();
+}
+
 void extension_menu_key(void*, uint32_t key) {
     // An open text request takes the editing keys first, as the window's keyboard gives them to it.
     if (galaxy::luma_input::text_open()) {
@@ -4223,6 +4231,7 @@ void attach_extensions() {
     host.open_settings = extension_open_settings;
     host.resize_window = extension_resize_window;
     host.type_text = extension_type_text;
+    host.lose_gpu_device = extension_lose_gpu_device;
 #endif
     std::string error;
     if (!galaxy::extensions::attach(files, host, error)) {

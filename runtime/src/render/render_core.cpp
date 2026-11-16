@@ -1600,8 +1600,6 @@ void RenderCore::drop_device_state() {
     walk_constants_known_.clear();
     walk_material_at_.clear();
     walk_lerped_.clear();
-    walk_ring_cpu_ = nullptr;
-    walk_index_cpu_ = nullptr;
     generated_written_.clear();
     scene_phase_ = target_open_ = temporal_scene_ = motion_scene_ = false;
     black_shown_ = picture_made_in_chunk_ = false;
@@ -2251,14 +2249,11 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     }
     matrix_bytes += std::size_t{list.instance_row_count} * 16u;
     if (rt_backend_.started()) {
-        // The scene's instances, and the ring draws' triangles as the tracer takes them.
-        matrix_bytes += std::size_t{list.item_count} * sizeof(rt::Instance) + 64u;
-        matrix_bytes += std::size_t{list.ring_index_count} * 12u + static_cast<std::size_t>(list.ring_vertex_bytes);
-        // The drop shadows' pass: its drops, each item's slot, and the screen's tiles with their entries (a drop that
-        // covers the screen fills every tile).
-        const std::size_t tiles = (std::size_t{renderer_.frame_map().width} / 16u + 2u) * (std::size_t{renderer_.frame_map().height} / 16u + 2u);
-        matrix_bytes += std::size_t{list.shadow_drop_count} * (48u + tiles * 4u) + tiles * 8u + std::size_t{list.item_count} * 4u + 2048u;
+        // The tracer's whole upload for this walk, every table at its bound (rt_ring_need): the ring grows for it before
+        // begin_frame, and rt_frame serves the walk only where the frame's segment holds this request.
+        matrix_bytes += rt_ring_need(list);
     }
+    rt_ring_frame_bytes_ = matrix_bytes;
     std::size_t constant_bytes = std::size_t{list.view_count} * (sizeof(core::ViewRows) + 255u);
     for (std::uint32_t c = 0; c < list.constants_count; ++c) {
         const auto& constants = list.constants[c];
@@ -2268,7 +2263,9 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
     renderer_.vertex_ring().require_frame_bytes(list.ring_vertex_bytes);
     renderer_.index_ring().require_frame_bytes(std::size_t{list.ring_index_count} * sizeof(std::uint32_t));
     if (rt_backend_.started()) {
-        constant_bytes += 1024u + std::size_t{list.item_count} * 256u;  // the tracer's passes' constants (a skinned draw's)
+        // The tracer's constants: its passes' own (under 64 blocks of 256 bytes a walk, both layers), and one block a
+        // skinned draw or a micromap build (at most one an item between them).
+        constant_bytes += 64u * 256u + std::size_t{list.item_count} * 256u;
     }
     renderer_.constant_ring().require_frame_bytes(constant_bytes);
     // A ring gives memory back only on a frame without the 3D scene (a load's, a fade's): making it again there shows nothing.
@@ -2485,9 +2482,18 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
         const bool one_pass = motion && renderer_.motion_pass_only();
         const bool layer = motion && renderer_.has_layer_targets();
         const unsigned samples = renderer_.scene_samples_log2();
+        // The tracer's forms follow its second layer (glass and water at medium and up, rt_blended) and a scene drawn
+        // narrow (rt_scene_narrow_, kept while it runs).
+        core::Pipelines::Traced traced;
+        traced.on = rt_backend_.started();
+        rt_scene_narrow_ = rt_scene_narrow_ && traced.on;
+        rt_forms_ready_ = rt_forms_ready_ && traced.on;
+        traced.second_layer = traced.on && rt_part(render, RtPart::Transmit) >= 2u;
+        traced.narrow = rt_scene_narrow_;
         const std::uint32_t settings =
             samples | (wide ? 4u : 0u) | (motion ? 8u : 0u) | (pixel_lit_ ? 16u : 0u) | (one_pass ? 32u : 0u) |
-            (rt_backend_.started() ? 64u : 0u);  // tracing turned on: every pipeline again, with its traced forms
+            (traced.on ? 64u : 0u) |  // tracing turned on: every pipeline again, with its traced forms
+            (traced.second_layer ? 128u : 0u) | (traced.narrow ? 256u : 0u);
         if (settings != pipelines_settings_) {
             pipelines_settings_ = settings;
             pipelines_queued_.store(0u, std::memory_order_relaxed);
@@ -2506,7 +2512,7 @@ void RenderCore::begin_walk_frame(ListEntry& entry) {
                 }
                 entries.push_back({id, std::make_shared<const core::PipelineEntry>(pipeline)});
             }
-            pipelines_.prepare(entries, variants, motion, layer, one_pass, rt_backend_.started());
+            pipelines_.prepare(entries, variants, motion, layer, one_pass, traced);
             pipelines_queued_.store(count, std::memory_order_relaxed);
         }
     }

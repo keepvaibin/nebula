@@ -63,12 +63,6 @@ bool triangle_place(uint4 first, uint4 second, uint stream, uint triangle_, floa
     return true;
 }
 
-// The pixel's place on screen of an eye-space point (rt_eye_ray's inverse).
-float2 pixel_of(float3 p) {
-    const float away = max(-p.z, 1e-3f);
-    return float2((p.x / away - g_ray.y) / g_ray.x, (p.y / away - g_ray.w) / g_ray.z);
-}
-
 // The surface as its mesh shades it at the pixel, in the eye's space: its triangle's three vertex normals by where the
 // pixel lies among the corners, through the mesh's matrix (`geometric` where the item gives no triangle, a skinned or
 // frame-made mesh, or the numbers fail; it faces the way `geometric` does).
@@ -129,10 +123,20 @@ float3 shading_normal(uint4 first, uint4 second, uint stream, uint row_before, u
     known = true;
     coordinate = (uv[0] * u + uv[1] * v + uv[2] * w) / total;
     vertex_colour = (colour[0] * u + colour[1] * v + colour[2] * w) / total;
-    // The map's footprint: the triangle's area on the map over its area on screen.
-    const float2 s0 = pixel_of(place[0]), s1 = pixel_of(place[1]), s2 = pixel_of(place[2]);
-    const float2 m1 = uv[1] - uv[0], m2 = uv[2] - uv[0], p1 = s1 - s0, p2 = s2 - s0;
-    map_per_pixel = abs(m1.x * m2.y - m1.y * m2.x) / max(abs(p1.x * p2.y - p1.y * p2.x), 1e-6f);
+    // The map's footprint, as a ray's cone (rt_hit_read; Akenine-Moller et al., "Improved Shader and Texture Level of
+    // Detail Using Ray Cones", JCGT 2021): the triangle's area on the map over its area in the eye's space, times the
+    // pixel's width at the point squared over the facing squared (lambda = 0.5 log2(ta / pa) + log2 w - log2 |n.d|).
+    // Its corners' screen places would not do: a corner behind the eye (a large floor's) has none.
+    const float2 m1 = uv[1] - uv[0], m2 = uv[2] - uv[0];
+    // |e0 x e1| from the cross itself: `scale` is its square only in exact arithmetic (a long sliver's d00 d11 - d01^2
+    // cancels to below 0, and its root is NaN).
+    const float3 across = cross(e0, e1);
+    const float area = length(across);
+    if (area > 0.0f) {
+        const float facing = max(abs(dot(across, at)) / (area * max(length(at), 1e-6f)), 0.05f);
+        const float width = rt_cone_width(at, 0.0f, 0.0f) / facing;
+        map_per_pixel = abs(m1.x * m2.y - m1.y * m2.x) / area * width * width;
+    }
     float3 n = normal[0] * u + normal[1] * v + normal[2] * w;
     const float size = dot(n, n);
     if (!(size > 1e-12f)) {
@@ -186,7 +190,7 @@ uint triangle_by_ray(uint item, float2 centre, float away) {
     uint found = kItemNoTriangle;
     float best = 1.0e30f;
     while (query.Proceed()) {
-        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE && query.CandidateInstanceID() == item - 1u) {
+        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE && rt_hit_item(query.CandidateInstanceID()) == item - 1u) {
             const float t = query.CandidateTriangleRayT();
             const float off = away > 0.0f ? abs(t - away) : t;
             if (off < best) {
@@ -195,7 +199,7 @@ uint triangle_by_ray(uint item, float2 centre, float away) {
             }
         }
     }
-    InterlockedAdd(g_counters[17], 1u);
+    rt_count(17u);
     return found;
 }
 
@@ -425,8 +429,10 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float level = 0.5f * log2(max(map_per_pixel * float(map_width) * float(map_height), 1.0f));
         base *= g_textures[NonUniformResourceIndex(third.x)].SampleLevel(g_wrap, coordinate, level);
     }
+    // The vertex colour as the hit record reads it (kVertexGrey: the cooker read it mid grey; rt_hit_read the same); its
+    // alpha as it is.
     if ((hit_flags & 8u) != 0u) {
-        base *= vertex_colour;
+        base *= float4(vertex_colour.rgb * kVertexGrey, vertex_colour.a);
     }
     g_base[id.xy] = saturate(base);
 }

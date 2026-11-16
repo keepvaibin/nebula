@@ -59,7 +59,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     if (g_mode.x == 0u) {
         float3 colour = float3(0.02f, 0.02f, 0.05f);
         if (met) {
-            const uint h = rt_hash(query.CommittedInstanceID() * 2654435761u + 17u);
+            const uint h = rt_hash(rt_hit_item(query.CommittedInstanceID()) * 2654435761u + 17u);
             colour = (float3(h & 255u, (h >> 8u) & 255u, (h >> 16u) & 255u) / 255.0f * 0.75f + 0.25f) * shade;
             colour *= query.CommittedTriangleFrontFace() ? 1.0f : 0.6f;
         }
@@ -79,7 +79,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     } else if (met) {
         kind = 6u;
     }
-    if ((kind == 5u || kind == 6u) && (query.CommittedInstanceContributionToHitGroupIndex() & kKindCutout) != 0u) {
+    if ((kind == 5u || kind == 6u) && (rt_hit_kind(query.CommittedInstanceID()) & kKindCutout) != 0u) {
         kind = 7u;
     }
     InterlockedAdd(g_counters[0], 1u);

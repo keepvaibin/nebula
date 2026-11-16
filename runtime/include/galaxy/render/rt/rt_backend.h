@@ -77,8 +77,8 @@ struct Structure {
     [[nodiscard]] explicit operator bool() const noexcept { return name != 0u; }
 };
 
-// Ranges are aligned to this in both kinds of page (Direct3D 12's structure alignment; Vulkan's structure offsets are
-// multiples of it, and a device whose scratch alignment is larger does not start).
+// Ranges are aligned to this in both kinds of page (Direct3D 12's structure and scratch alignment; Vulkan's structure
+// offsets are multiples of it, and every device's scratch alignment divides it: the limit's required maximum is 256).
 inline constexpr std::uint64_t kRangeAlign = 256u;
 // Compacted sizes are asked through this many slots a frame.
 inline constexpr std::uint32_t kSizeSlots = 1024u;
@@ -89,7 +89,7 @@ inline constexpr std::uint64_t kFramesToRelease = kFramesInFlight + 1u;
 inline constexpr unsigned kTimedSun = 0u, kTimedBuilds = 1u, kTimedStretches = 2u;
 
 // A pass: one of the tracer's compute shaders (rt_shaders.h) and what it binds, by the registers of rt_bindings.hlsli.
-enum class ImageFormat : std::uint8_t { Rgba8, Rgba16f, Rg16f, R16f, R8, R32f, Rgb10a2, Rgba32f, Rgba32ui, Rg16ui };
+enum class ImageFormat : std::uint8_t { Rgba8, Rgba16f, Rg16f, R16f, R8, Rgb10a2, Rgba32f, Rgba32ui };
 inline constexpr std::uint32_t kNoImage = ~0u;
 inline constexpr unsigned kPassBuffers = 4u, kPassTextures = 4u, kPassReads = 12u, kPassWrites = 8u;
 // Mesh memory a pass reads to know a surface where a ray or a pixel meets it (t21 up): the arenas the scene's meshes
@@ -135,10 +135,16 @@ public:
     Backend& operator=(const Backend&) = delete;
     ~Backend();
 
-    // False when the device cannot build (the caller checked rt_caps first: then it can).
-    [[nodiscard]] bool start(gpu::Device* device);
+    // Every pass's pipeline is made here, but the reference's (rt_shader_made_on_first_use). False when the device cannot
+    // build (the caller checked rt_caps first: then it can) or the driver refuses a pass made here: a tracer missing a
+    // pass is no tracer. `texture_layout`: Vulkan's image array set layout (TextureTable::layout, the renderer's for the
+    // device's life), which the passes' pipeline layout names; none there, no tracer. The other APIs ignore it.
+    [[nodiscard]] bool start(gpu::Device* device, void* texture_layout = nullptr);
     void stop() noexcept;
     [[nodiscard]] bool started() const noexcept;
+    // The tracer can no longer run (Vulkan: a pass the driver refused when begin brought another texture layout): the
+    // caller stops it. False on the other APIs, whose passes are all made at the start.
+    [[nodiscard]] bool failed() const noexcept;
 
     [[nodiscard]] BuildSizes sizes(const TriangleInput& input, BuildKind kind) const;
 
@@ -164,6 +170,9 @@ public:
     // `frame_slot`: each slot's size answers are kept apart. `descriptors`: where a pass's views go this frame on
     // Direct3D 12 (the renderer's DescriptorRing*; null when only builds follow); Vulkan keeps pools of its own.
     void begin(void* commands, unsigned frame_slot, void* descriptors = nullptr) noexcept;
+    // The tracer's commands since begin end here, before the renderer records into `commands` again (Metal closes its
+    // acceleration-structure encoder; the other APIs have nothing to close). Nothing when none was begun.
+    void end() noexcept;
     // A build into `to` with working memory `scratch`, or with `refit` a refit of `to` in place (Moving structures).
     // Builds between two barriers have ranges of their own in every page.
     void build(const TriangleInput& input, BuildKind kind, const Structure& to, const Range& scratch, bool refit);
@@ -200,9 +209,10 @@ public:
     [[nodiscard]] std::uint32_t make_image(ImageFormat format, std::uint32_t width, std::uint32_t height, const char* name,
                                            std::uint32_t depth = 1u);
     void free_image(std::uint32_t image) noexcept;
-    // The pass, `groups_x` by `groups_y` groups. Nothing when the shader is not in this build or the driver refused it
-    // (told once).
-    void dispatch(RtShader shader, const PassBinds& binds, std::uint32_t groups_x, std::uint32_t groups_y);
+    // The pass, `groups_x` by `groups_y` groups; true when it was recorded. Nothing, and false, when the shader is not in
+    // this build or the driver refused it (told once), no descriptors are given, or no group: what it would write stays
+    // unwritten, so a caller that hands its output on (a micromap's input, an image copied out) checks.
+    bool dispatch(RtShader shader, const PassBinds& binds, std::uint32_t groups_x, std::uint32_t groups_y);
     // A buffer of the tracer's that passes write and builds read (skinned vertices). kNoBuffer when the device has no
     // memory. `buffer_for` puts it in the use its next commands have for it: written by passes, or read by builds.
     [[nodiscard]] std::uint32_t make_buffer(std::uint64_t bytes, const char* name);
@@ -214,6 +224,10 @@ public:
         std::uint64_t image_bytes = 0u, buffer_bytes = 0u;
     };
     [[nodiscard]] Live live() const noexcept;
+    // The device memory the OS or driver lets this process use, in bytes (Direct3D 12: the local segment's budget;
+    // Vulkan: the largest device-local heap's, both asked of the API at most every 100 ms; Metal: the recommended working
+    // set, read once at the device's start); 0 when not known.
+    [[nodiscard]] std::uint64_t memory_budget() const noexcept;
     void buffer_for(std::uint32_t buffer, bool builds);
     // What a pass binds to read `bytes` at `at` in a buffer of the renderer's: a view starting where the API lets one
     // start, and where `at` is in it (`offset`, bytes).

@@ -105,6 +105,7 @@ void Pipelines::shutdown() noexcept {
         std::lock_guard guard(lock_);
         quit_ = true;
         jobs_.clear();
+        traced_jobs_.clear();
         left_jobs_.clear();
     }
     wake_.notify_all();
@@ -325,90 +326,100 @@ bool added_prepass_draws(std::uint32_t state) noexcept {
            ((state >> 20u) & 3u) == 0u && ((state >> 15u) & 3u) != NEBULA_CULL_ALL;
 }
 
+namespace {
+
+constexpr std::uint64_t site(std::uint64_t shader) noexcept { return NEBULA_PROGRAM_SITE | shader << 1u; }
+
+// Whether only particle and instanced draws (NEBULA_ITEM_PARTICLE, NEBULA_ITEM_INSTANCES) take this entry: the particle
+// and glyph instance programs (TypedDraw::drawInstances) and the particle pixel program (ParticleDraw::flush, its
+// widened corners too).
+bool particle_programs(const PipelineEntry& entry) noexcept {
+    return entry.desc.vertex == site(NEBULA_SHADER_PARTICLE_INSTANCES) || entry.desc.vertex == site(NEBULA_SHADER_GLYPH_INSTANCES) ||
+           entry.desc.pixel == site(NEBULA_SHADER_PARTICLE);
+}
+
+// Whether the tracer's prepass can take a draw of this entry: never a particle or instanced draw, nor a widened line or
+// point (RenderCore::rt_prepass_draws); the widened corner input is drawn by no other kind of item (TypedDraw::widen).
+bool prepass_takes(const PipelineEntry& entry) noexcept {
+    return !particle_programs(entry) &&
+           std::none_of(entry.inputs.begin(), entry.inputs.end(),
+                        [](const NebulaLayoutInput& input) { return input.semantic == NEBULA_INPUT_WIDEN; });
+}
+
+}  // namespace
+
 void Pipelines::prepare(const std::vector<Prepared>& entries, const std::vector<unsigned>& variants, bool motion, bool layer,
-                        bool one_pass, bool traced) {
+                        bool one_pass, const Traced& traced) {
     std::vector<Job> now;
+    std::vector<Job> tracer;
     std::vector<Job> later;
+    // With the wide variant listed, walk_scene_begin draws every scene wide unless the wide targets cannot be had
+    // (begin_wide_scene: memory, the camera pass): the narrow variant's motion forms are left for after the first scene,
+    // made then or by such a draw; its tracer forms are asked for once a scene was drawn narrow while tracing (`narrow`).
+    const bool wide_listed =
+        std::any_of(variants.begin(), variants.end(), [](unsigned listed) { return (listed & kSceneVariantHdr) != 0u; });
+    const bool wide_traced = traced.on && !traced.narrow && std::any_of(variants.begin(), variants.end(), [](unsigned listed) {
+                                 return (listed & kSceneVariantHdr) != 0u && (listed & kSceneVariantSamplesMask) == 0u;
+                             });
     for (const Prepared& prepared : entries) {
         const std::uint32_t id = prepared.id;
         const PipelineEntry& entry = *prepared.entry;
-        const auto add = [&](unsigned variant, unsigned aux) { now.push_back(Job{id, prepared.entry, variant, aux}); };
-        // The tracer's forms of a scene draw (no target, one sample): its prepass, and a lit program's traced forms under
-        // the aux the scene pass gives an opaque draw.
-        // An added state: its prepass and exchange forms, for the glass rows' shells among its draws.
-        const bool added = traced && added_prepass_draws(entry.desc.state);
-        const bool prepass = traced && (prepass_draws(entry.desc.state) || blended_prepass_draws(entry.desc.state) || added);
+        const std::uint32_t state = entry.desc.state;
+        // The aux the scene pass gives a draw of this state (draw_walker): with motion written its scene_aux, which one
+        // pass for the scene turns into 4 (the motion target left alone) unless it is the motion; without motion, none.
+        const auto scene_form = [&](bool layer_window) -> unsigned {
+            const unsigned aux = motion ? scene_aux(state, layer_window) : 0u;
+            return motion && one_pass && aux != 1u ? 4u : aux;
+        };
+        const unsigned out_of_window = scene_form(false);
+        const unsigned in_window = layer ? scene_form(true) : out_of_window;
+        // The tracer's forms of a scene draw: its prepass (through the vertex form the scene pass runs, so both find one
+        // depth), and a lit program's traced form under each aux the scene pass can give it. An added state's traced
+        // forms are its exchange forms, for the glass rows' shells.
+        const bool added = added_prepass_draws(state);
+        const bool blended = blended_prepass_draws(state) || added;
+        const bool prepass = traced.on && (prepass_draws(state) || (blended && traced.second_layer)) && prepass_takes(entry);
         const bool lit = prepass && program_traced(entry.desc.pixel);
-        const bool blended = blended_prepass_draws(entry.desc.state) || added;
-        const unsigned exchange = added ? kAuxExchange : 0u;
+        const unsigned traced_aux = kAuxTraced | (added ? kAuxExchange : 0u);
+        const auto add = [&](unsigned variant, unsigned aux) { now.push_back(Job{id, prepared.entry, variant, aux}); };
+        const auto add_traced = [&](unsigned variant, unsigned aux) {
+            tracer.push_back(Job{id, prepared.entry, variant, aux, false, false, true});
+        };
         for (const unsigned variant : variants) {
             add(variant, 0u);
-            const bool scene = (variant & kSceneVariantTarget) == 0u && (variant & kSceneVariantSamplesMask) == 0u;
-            if (scene && prepass) {
-                // The aux the scene pass gives it (draw_walker scene_aux): with motion written, an opaque draw the
-                // motion (1), a blended one the reactive mask (2; 3 in a layer window too), or with one pass for the
-                // scene the motion target left alone (4); without motion, none. The prepass runs the same vertex form.
-                const bool writes_motion = motion && !blended;
-                add(variant, writes_motion ? kAuxPrepassMotion : kAuxPrepass);
+            if ((variant & kSceneVariantTarget) != 0u || (variant & kSceneVariantSamplesMask) != 0u) {
+                continue;  // the scene's forms are the one-sample screen target's
+            }
+            const bool narrow = (variant & kSceneVariantHdr) == 0u;
+            if (prepass && (!wide_traced || !narrow)) {
+                add_traced(variant, out_of_window == 1u ? kAuxPrepassMotion : kAuxPrepass);
                 if (lit) {
-                    if (!motion || !blended) {
-                        add(variant, kAuxTraced | exchange | (writes_motion ? 1u : 0u));
-                    } else if (one_pass) {
-                        add(variant, kAuxTraced | exchange | 4u);
-                    } else {
-                        add(variant, kAuxTraced | exchange | 2u);
-                        if (layer) {
-                            add(variant, kAuxTraced | exchange | 3u);
-                        }
+                    add_traced(variant, traced_aux | out_of_window);
+                    if (in_window != out_of_window) {
+                        add_traced(variant, traced_aux | in_window);
                     }
                 }
             }
-            if (!motion || !scene) {
-                continue;
-            }
-            if (!traced) {
-                // The motion forms a scene draw of this state can take (draw_walker: scene_aux, which one pass for the scene
-                // turns into 4 unless it is the motion), out of a layer window and, with `layer`, in one; aux 0 is above.
-                const auto scene_form = [&](bool layer_window) -> unsigned {
-                    const unsigned aux = scene_aux(entry.desc.state, layer_window);
-                    return one_pass && aux != 1u ? 4u : aux;
-                };
-                const unsigned out_of_window = scene_form(false);
-                const unsigned in_window = layer ? scene_form(true) : out_of_window;
-                // With the wide variant listed, walk_scene_begin draws every scene wide unless the wide targets cannot be
-                // had (begin_wide_scene: memory, the camera pass): the narrow variant's motion forms are left for after the
-                // first scene, made then or by such a draw.
-                const bool left = (variant & kSceneVariantHdr) == 0u &&
-                                  std::any_of(variants.begin(), variants.end(),
-                                              [](unsigned listed) { return (listed & kSceneVariantHdr) != 0u; });
-                const auto motion_form = [&](unsigned aux) {
-                    if (aux == 0u) {
-                        return;
-                    }
-                    if (left) {
-                        later.push_back(Job{id, prepared.entry, variant, aux, false, true});
-                    } else {
-                        add(variant, aux);
-                    }
-                };
-                motion_form(out_of_window);
-                if (in_window != out_of_window) {
-                    motion_form(in_window);
+            // The motion forms a scene draw of this state can take, out of a layer window and, with `layer`, in one; aux 0 is
+            // above.
+            const bool left = narrow && wide_listed;
+            const auto motion_form = [&](unsigned aux) {
+                if (aux == 0u) {
+                    return;
                 }
-                continue;
-            }
-            add(variant, 1u);
-            if (one_pass) {
-                add(variant, 4u);
-                continue;
-            }
-            add(variant, 2u);
-            if (layer) {
-                add(variant, 3u);
+                if (left) {
+                    later.push_back(Job{id, prepared.entry, variant, aux, false, true});
+                } else {
+                    add(variant, aux);
+                }
+            };
+            motion_form(out_of_window);
+            if (in_window != out_of_window) {
+                motion_form(in_window);
             }
         }
     }
-    if (now.empty() && later.empty()) {
+    if (now.empty() && tracer.empty() && later.empty()) {
         return;
     }
     {
@@ -416,9 +427,13 @@ void Pipelines::prepare(const std::vector<Prepared>& entries, const std::vector<
         if (quit_) {
             return;
         }
-        pending_.fetch_add(static_cast<std::uint32_t>(now.size()), std::memory_order_relaxed);
+        pending_.fetch_add(static_cast<std::uint32_t>(now.size() + tracer.size()), std::memory_order_relaxed);
+        traced_pending_.fetch_add(static_cast<std::uint32_t>(tracer.size()), std::memory_order_relaxed);
         for (Job& job : now) {
             jobs_.push_back(std::move(job));
+        }
+        for (Job& job : tracer) {
+            traced_jobs_.push_back(std::move(job));
         }
         for (Job& job : later) {
             left_jobs_.push_back(std::move(job));
@@ -441,13 +456,14 @@ void Pipelines::worker() {
                 (void)wake_.wait_until(guard, std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(until)),
                                        [this] { return quit_; });
             }
-            // The left forms only once the queue is empty and a scene has been shown (release_left).
+            // The tracer's forms once the game's are taken; the left forms only once both queues are empty and a scene has
+            // been shown (release_left).
             const auto left_ready = [this] { return scene_shown_.load(std::memory_order_relaxed) && !left_jobs_.empty(); };
-            wake_.wait(guard, [&] { return quit_ || !jobs_.empty() || left_ready(); });
+            wake_.wait(guard, [&] { return quit_ || !jobs_.empty() || !traced_jobs_.empty() || left_ready(); });
             if (quit_) {
                 return;
             }
-            std::deque<Job>& from = !jobs_.empty() ? jobs_ : left_jobs_;
+            std::deque<Job>& from = !jobs_.empty() ? jobs_ : !traced_jobs_.empty() ? traced_jobs_ : left_jobs_;
             job = std::move(from.front());
             from.pop_front();
         }
@@ -501,6 +517,9 @@ void Pipelines::worker() {
                 }
             } catch (...) {
             }
+        }
+        if (job.tracer && !job.deferred) {
+            traced_pending_.fetch_sub(1u, std::memory_order_acq_rel);
         }
         if (!job.deferred && pending_.fetch_sub(1u, std::memory_order_acq_rel) == 1u) {
             drained();

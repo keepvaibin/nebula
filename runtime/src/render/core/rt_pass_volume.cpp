@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The light volume (rt_volume.hlsl): the light in the air over the scene camera's view, 96 x
-// 54 x 48 froxels, this frame's and the frame before's by turns (VolumeA, VolumeB). On High where the stage has air,
+// 54 x 48 froxels, this frame's and the frame before's by turns (VolumeA, VolumeB; beside them VolumeLightsA, B: the
+// local lights' part alone and the sky's s, which the light in the air takes apart). On High where the stage has air,
 // the light the air scatters toward the eye, integrated through it (rt_scatter.hlsl, 15.4: Scatter). Published after
 // the light pass as pictures the programs sample (rt_walk.cpp rt_light, pictures 4 and 5): a particle draw that is
 // not a light itself (rt_volume_reads) takes its colour times the air's light there (program.hlsli traced_air, draw
@@ -26,11 +27,15 @@ float RenderCore::rt_air_density() const {
 
 void RenderCore::rt_pass_volume() {
     const RtFrame& frame = rt_light_frame_;
-    if (!rt_pass_volume_on() || frame.layer != 0u) {
+    if (frame.layer != 0u) {
         return;
     }
+    // Not drawn until this walk draws them: a part turned off leaves no picture of an earlier walk to the programs.
     rt_volume_drawn_ = false;
     rt_scatter_drawn_ = false;
+    if (!rt_pass_volume_on()) {
+        return;
+    }
     rt::PassBinds binds;
     std::uint32_t shade_at = 0u;
     if (!rt_shade_binds(binds, shade_at)) {
@@ -45,11 +50,19 @@ void RenderCore::rt_pass_volume() {
     binds.reads[0] = rt_before(RtImage::VolumeA);
     const std::uint32_t volume = rt_now(RtImage::VolumeA);
     binds.writes[0] = volume;
-    if (binds.reads[0] == rt::kNoImage || volume == rt::kNoImage) {
+    // The lights' part and the sky's s beside it (the light in the air's quarter for lamps): written
+    // and kept by the same dispatch, so rt_volume_turn_ is its history's too.
+    binds.reads[1] = rt_before(RtImage::VolumeLightsA);
+    const std::uint32_t lamps = rt_now(RtImage::VolumeLightsA);
+    binds.writes[1] = lamps;
+    if (binds.reads[0] == rt::kNoImage || volume == rt::kNoImage || binds.reads[1] == rt::kNoImage || lamps == rt::kNoImage) {
         return;
     }
     // 96 / 8 groups across; a slice of 54 rows is 7 group rows, 48 slices.
-    rt_backend_.dispatch(RtShader::Volume, binds, 12u, 7u * 48u);
+    if (!rt_backend_.dispatch(RtShader::Volume, binds, 12u, 7u * 48u)) {
+        rt_volume_turn_ = 0u;  // nothing written: the next walk reads no history from it
+        return;
+    }
     rt_volume_turn_ = frame.turn + 1u;
     rt_volume_drawn_ = true;
 
@@ -67,9 +80,9 @@ void RenderCore::rt_pass_volume() {
     }
     through.pass_constants = rt_bounce_constants(0u, 0u, at, values);
     through.reads[0] = volume;
+    through.reads[1] = lamps;
     through.writes[0] = scatter;
-    rt_backend_.dispatch(RtShader::Scatter, through, 12u, 7u);
-    rt_scatter_drawn_ = true;
+    rt_scatter_drawn_ = rt_backend_.dispatch(RtShader::Scatter, through, 12u, 7u);
 }
 
 }  // namespace galaxy::render

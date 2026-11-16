@@ -197,6 +197,9 @@ pub struct MaterialIr {
     /// The maps read through a normal-made coordinate that hold a colour ramp, not a reflection
     /// (hit_record.rs mark_ramps): they keep their own fetch.
     pub ramp_maps: Vec<u8>,
+    /// The maps read through a normal-made coordinate under which white darkens the result: a shade the art paints by
+    /// facing, not a reflection (hit_record.rs shades). They keep their own fetch; the class is the rest's.
+    pub shade_maps: Vec<u8>,
     /// The maps read through a normal-made coordinate that are painted highlight sprites (hit_record.rs
     /// mark_highlights), and the first one's roughness and peak as the enhanced highlight takes them.
     pub highlight_maps: Vec<u8>,

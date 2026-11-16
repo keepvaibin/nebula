@@ -33,7 +33,8 @@ cbuffer FrameConstants : register(b0) {
     uint4 g_glow;       // the emitters (48 bytes each: centre, radius; colour, reach; slot): x their first byte in the
                         // drops' buffer, y their tiles' and z their entries' first byte in the tiles' buffer, w how many
     uint4 g_mesh_at[3]; // where each arena's first byte is in its buffer (eight of them), then the rows'
-    float4 g_sky;       // rgb: what a mirror shows where its ray meets nothing at all; w: a room's open O (the
+    float4 g_sky;       // rgb: what a ray shows where it meets nothing, not even the dome read from the eye
+                        // (rt_shade.hlsli rt_look, the miss rule); w: a room's open O (the
                         // gathered hits' running mean, rt_hit_mean_; 0 not yet measured): V's unit with no traced
                         // sun
     float4 g_up;        // xyz: the player's up in the eye's space (where the sky is)
@@ -72,7 +73,7 @@ cbuffer PassConstants : register(b1) {
     float4 g_pass_value[3];  // free for the pass
 };
 
-// The item table (rt_walk.cpp rt_tables: sixteen uints an item). Flags (word 1): bit 0 lit (its program sums the key
+// The item table (rt_walk.cpp rt_tables: twenty uints an item, kItemBytes). Flags (word 1): bit 0 lit (its program sums the key
 // at the pixel), 1 takes the game's drop shadows, 2 a surface of the scene, 3 a sheet drawn from both sides, 4 the sky
 // (shown as it is); bits 8 up its light set from 1.
 static const uint kItemBytes = 80u;  // rt_walk.cpp kRtItemWords
@@ -80,7 +81,11 @@ static const uint kItemLit = 1u, kItemGround = 2u, kItemSurface = 4u, kItemThin 
 // Bit 6: a map part its clip areas show (g_clip): a ray meets it where it shows alone. Bit 7: its program alpha-tests
 // (can discard): a clipped part without it is whole where it shows.
 static const uint kItemClipped = 64u, kItemAlphaTested = 128u;
-// A two-sided cutout (a leaf, a petal, a flower card): its sun ray starts this far out, so the cards of one clump do
+// Bits 28, 29: the kind of light set that lights it, as the raster's draw flags 2048 and 4096 say (a character's,
+// strong, weak or coin set; the planet set): the share's tint bound a ray takes (rt_shade.hlsli rt_tint_bound). The
+// set's number (bits 8 up) stays under bit 28.
+static const uint kItemSetCharacter = 1u << 28u, kItemSetPlanet = 1u << 29u;
+// A two-sided cutout (a leaf, a petal, a flower card; D5): its sun ray starts this far out, so the cards of one clump do
 // not black each other out, and its far side takes this share of the sun (light through a petal or a leaf).
 static const float kCardClear = 30.0f, kCardThrough = 0.6f;
 // A crown of leaves or a cloud (item word 14 bits 26-31: its share of the sun on its far side x 63) is lit from

@@ -4,8 +4,8 @@
 // most 16 frames: a shadow must follow its moving caster (the lights keep 32). The history is held inside what this
 // frame's rays saw around the pixel (their mean, give or take 1.25 of their spread, over five by five pixels of the
 // same object), so a caster that moves leaves no trail. The occluder's distance is the nearest of the taps that have
-// one (each ray reports the first caster its walk met, not the nearest: B3), averaged over time: the blur after takes
-// the penumbra's width from it. Outside the penumbra tiles
+// one (each ray reports its nearest caster: rt_sun.hlsl), so a contact stays sharp where a far caster's penumbra
+// meets it, averaged over time: the blur after takes the penumbra's width from it. Outside the penumbra tiles
 // (rt_sun_tiles) V is copied through.
 #include "rt_bindings.hlsli"
 #include "rt_frame.hlsli"

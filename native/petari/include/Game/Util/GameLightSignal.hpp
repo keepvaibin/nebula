@@ -16,8 +16,12 @@ namespace GameLightSignal {
     // LightDirector's construction: a new scene, before its actors are made.
     void sceneStart();
     // GameScene::draw3D's begin: the stage's light where the player is, the star core and the lights of clipped
-    // requesters (once a frame).
+    // requesters (once a frame). Writes nothing, and keeps no requester, while the host does not trace.
     void frame();
+    // Whether the host traces, as the last frame() found it: the lights of the world are written only then.
+    bool tracing();
+    // A point light's owner (NebulaFramePointLight::owner): the object's id folded to 32 bits, never 0 (0: none).
+    u32 pointOwner(const void* pObject);
 
     // BrightSun::control: the visible sun at `rPosition`, placed from the camera.
     void sun(const Vec3f& rPosition);

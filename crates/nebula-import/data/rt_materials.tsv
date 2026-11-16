@@ -7,8 +7,8 @@
 # side takes, its sun ray passing its own clump; leaves 0.6 and clouds 0.5 by name). Empty fields keep the
 # cooker's numbers; a note says what the picture showed. A mod's pack may carry a file of the same form.
 model	material	class	roughness	metal	ior	thickness	tint keep	body	shine	emission	note	traced	kind	through
-starduststartplanet	CryA_v				2.42						Pull Star Path pillar: tint removed, more reflective
-tshapeplanet	crystal_v				2.42						Pull Star Path pillar: tint removed, more reflective
+starduststartplanet	CryA_v				1.8						Pull Star Path pillar: tint removed; a crystal, ior 1.8
+tshapeplanet	crystal_v				1.8						Pull Star Path pillar: tint removed; a crystal, ior 1.8
 itembubble	LifeBubble_Mat	glass	0.02	0	1.33	0	0			0 0 0	item bubble: a clear shell, not a glowing light
 airbubble	LifeBubble_Mat	glass	0.02	0	1.33	0	0			0 0 0	air bubble: a clear shell, not milky
 ufokinoko	lambert4_v	glass	0.02	0	1.5	0	0			0 0 0	the Starshroom's dome: a clear shell, not a glowing light
@@ -254,13 +254,7 @@ karikariice	OmoteMat_v(2)	glass	0.08	0	1.31		0.7	0.5			ice being: was translucen
 karikariice	UraMat_v	glass	0.08	0	1.31		0.7	0.5			ice being: was painted; loses a little tint, half clear, glows (rt_glow row)
 kinopiogoodsstarpiece	StarPiece1_v	glass	0.02	0	1.8		0	0			crystal: was metal; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
 kirairachain	KirairaChain_Mat_v	metal	0.30	1							metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light
-koopabattlemapplanet	MetalBackMat_v	metal	0.26	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
 koopabattlemapplanet	MetalRingMat_v	metal	0.28	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
-koopabattlemapplanet	MetalSideMat_v	metal	0.30	1							metal: was painted; named as a metal: mirror metal, no diffuse, no painted light
-koopabattlemapplanetvs2	MetalRingMat_v	metal	0.30	1							metal: was dielectric; named as a metal: mirror metal, no diffuse, no painted light
-koopabattlemapplanetvs2	MetalSideMat_v	metal	0.30	1							metal: was painted; named as a metal: mirror metal, no diffuse, no painted light
-koopabattlemapplanetvs3lv3	MetalBackMat_v	metal	0.26	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
-koopabattlemapplanetvs3lv3	MetalSideMat_v	metal	0.30	1							metal: was painted; named as a metal: mirror metal, no diffuse, no painted light
 koopafire	fire	emissive								1.000 1.000 1.000	fire: was painted; named fire or flame: shown as is and a light; emission = its base colour
 koopafire	fire_v_x	emissive								1.000 1.000 1.000	fire: was painted; named fire or flame: shown as is and a light; emission = its base colour
 koopaplate	MetalMat_v(2)	metal	0.26	1							metal: was gloss; named as a metal: mirror metal, no diffuse, no painted light
@@ -421,7 +415,7 @@ starmanfort	Window_v	gloss	0.05	0							window: was painted; a window painted on
 starpiece	StarPiece1_v	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
 starpiececluster	StarPieceClusterMat_v	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
 starpiececluster	StarPieceClusterMat_v(2)	glass	0.02	0	1.8		0	0			crystal: was glass; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
-starpiececluster	StarPieceClusterMat_v(3)	glass	0.02	0	1.8		0	0			crystal: was emissive; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
+starpiececluster	StarPieceClusterMat_v(3)	painted				0					a star bit cluster's glow layer, an added overlay, not a glass body (the transmit pass bent rays through it)			
 starpiecedummy	StarPiece1_v	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
 starpiecedummy	StarPiece1_v(10)	glass	0.02	0	1.8		0	0			crystal: was gloss; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
 starpiecedummy	StarPiece1_v(2)	glass	0.02	0	1.8		0	0			crystal: was metal; crystal, ior 1.8, white mirror, through-colour 0.25 of the art's
@@ -550,12 +544,6 @@ twinfalllakeplanetlow	mizu_shita_v_x	dielectric		0							bed: the far stand-in i
 lavasteam	lambert5_v	translucent	1	0							the lava stages' steam column: dims the sun, no hard shadow
 raincloudvolume	VolumeMat	translucent	1	0							a rain volume: dims the sun, no hard shadow
 # Mario's forms.
-teresamario	body_m_v	translucent									Boo form: a ghost; its opaque draw dims the sun, no hard shadow
-teresamario	Cap_v	translucent									Boo form: a ghost; its opaque draw dims the sun, no hard shadow
-teresamario	Eye_v	translucent									Boo form: a ghost; its opaque draw dims the sun, no hard shadow
-teresaluigi	body_m_v	translucent									Boo form: a ghost; its opaque draw dims the sun, no hard shadow
-teresaluigi	Cap_v	translucent									Boo form: a ghost; its opaque draw dims the sun, no hard shadow
-teresaluigi	Eye_v	translucent									Boo form: a ghost; its opaque draw dims the sun, no hard shadow
 hoppermario	Snake_v	metal		1							spring form's coil: steel		iron
 hopperluigi	Snake_v	metal		1							spring form's coil: steel		iron
 teresa	body_m_v	translucent									a ghost: drawn as the game, dims the sun, no hard shadow
@@ -578,6 +566,11 @@ koopavs2partsdarkmatterb	DMMatA*	translucent									a ghost: drawn as the game,
 koopavs2partsdarkmatterc	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow
 koopavs2partsdarkmatterd	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow
 koopavs2partsdarkmattere	DMMatA*	translucent									a ghost: drawn as the game, dims the sun, no hard shadow
+bosskameck2barrier	Kekkai_v_x	glass	0.02	0	1.5	0	0				Kamek's barrier: clear glass; unlit and warped, which the rule leaves translucent
+astrodomeentranceobservatory	glass_v_x	glass	0.02	0	1.5	0	0				the Observatory entrance's pane, as the Kitchen's and the Well's (lit, glass by the rule): this one is unlit and warped, which the rule leaves translucent
+spinningbox	lambert15	glass	0.02	0	1.8	0	0				the spinning box's clear pane: a crystal, ior 1.8; unlit and warped, which the rule leaves translucent
+powerstar	Empty	glass	0.02	0	1.8		0				the power star's shell (a star already collected): a crystal, ior 1.8 (glass 1.5 by the rule)
+grandstar	GrandStarEmpty	glass	0.02	0	1.8		0				the grand star's shell, as the power star's: a crystal, ior 1.8 (glass 1.5 by the rule)
 # Honey and quicksand.
 beewallclimbplaneta	honey_v_x	gloss	0.1	0	1.5		1				honey (the Honeyhive climbing wall): an opaque draw: a glossy body, its colour the body's		
 beewallclimbplanetb	honey_01_v	gloss	0.1	0	1.5		1				honey (the Honeyhive climbing wall): an opaque draw: a glossy body, its colour the body's		
@@ -846,9 +839,7 @@ ufokinokolow	lambert7_v	gloss	0.10	0							the Starshroom, a painted hull with a
 ufokinokolow	wawa:lambert7_v	metal	0.15	1							the Starshroom, a window rim: chrome		chrome	
 ufokinokolow	wawa:lambert8_v	metal	0.15	1							the Starshroom, a window rim: chrome		chrome	
 ufokinokolow	lambert13_v	metal	0.25	1							the Starshroom, the bands and bolts: silver		silver	
-ufokinokounderconstruction	lambert8_v	gloss	0.10	0							the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0); not a metal: its paint stays			
 ufokinokounderconstruction	lambert7_v	gloss	0.10	0							the Starshroom, a painted hull with a strong coat (the art's reflection share is its F0); not a metal: its paint stays			
-ufokinokounderconstruction	wawa:lambert7_v	metal	0.15	1							the Starshroom, a window rim: chrome		chrome	
 ufokinokounderconstruction	wawa:lambert8_v	metal	0.15	1							the Starshroom, a window rim: chrome		chrome	
 ufokinokounderconstruction	lambert13_v	metal	0.25	1							the Starshroom, the bands and bolts: silver		silver	
 iceringiceplanet	CrackMat_v	painted				0					the frozen lake's crack lines (Freezeflame's shards), an added overlay, not a glass body (the transmit pass bent rays through it)			
@@ -859,4 +850,3 @@ icelavaislandicemovablestepa	Ice02_v	painted				0					an ice step's added layer,
 crystalcagelbreak	HiLightMat*	painted				0					a breaking crystal cage's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it)			
 crystalcagesbreak	HiLightMat*	painted				0					a breaking crystal cage's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it)			
 crystalboxbreak	HiLightMat*	painted				0					a breaking crystal box's highlight layers, an added overlay, not a glass body (the transmit pass bent rays through it)			
-starpiececluster	StarPieceClusterMat_v(3)	painted				0					a star bit cluster's glow layer, an added overlay, not a glass body (the transmit pass bent rays through it)			

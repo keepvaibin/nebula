@@ -89,19 +89,26 @@ std::string spirv_to_msl(std::span<const std::uint32_t> spirv, MslStage stage, c
                          std::string& error) {
     try {
         const bool arrays = !options.utility && !options.bound_tables && stage == MslStage::Fragment;
+        // dxc gives the tracer's texture table (`Texture2D g_textures[]`) a runtime array already.
         spirv_cross::CompilerMSL compiler(arrays ? with_runtime_arrays(spirv)
                                                  : std::vector<std::uint32_t>(spirv.begin(), spirv.end()));
         spirv_cross::CompilerMSL::Options msl;
         msl.platform = options.ios ? spirv_cross::CompilerMSL::Options::iOS : spirv_cross::CompilerMSL::Options::macOS;
         // The deployment targets' language (macOS 12, iOS 15); arrays without a length need 3.0 (macOS 13, iOS 16), which
-        // every device that reads them so has.
-        msl.set_msl_version(arrays ? 3u : 2u, arrays ? 0u : 4u);
+        // every device that reads them so has; the tracer's 3.1 (macOS 14, iOS 17).
+        if (options.tracer) {
+            msl.set_msl_version(3u, 1u);
+        } else {
+            msl.set_msl_version(arrays ? 3u : 2u, arrays ? 0u : 4u);
+        }
         // The HLSL sources are written for Direct3D's clip space, which is Metal's: nothing is turned.
         msl.enable_decoration_binding = false;
-        msl.argument_buffers = arrays;
+        msl.argument_buffers = arrays || options.tracer;
         msl.argument_buffers_tier = spirv_cross::CompilerMSL::Options::ArgumentBuffersTier::Tier2;
         // Every draw binds the same arrays whatever a program reads of them.
-        msl.force_active_argument_buffer_resources = arrays;
+        msl.force_active_argument_buffer_resources = arrays || options.tracer;
+        // The tracer's wave operations (rt_common.hlsli rt_count) over the SIMD-group on iOS as on macOS, not a quad.
+        msl.ios_use_simdgroup_functions = options.tracer;
         compiler.set_msl_options(msl);
 
         const spv::ExecutionModel model = model_of(stage);
@@ -131,6 +138,48 @@ std::string spirv_to_msl(std::span<const std::uint32_t> spirv, MslStage stage, c
             each(resources.sampled_images);
             each(resources.storage_images);
             bind(spirv_cross::kPushConstDescSet, spirv_cross::kPushConstBinding, options.set_stride * 3u);
+        } else if (options.tracer) {
+            // Set 0 at the kRt* indices (a binding names a buffer or a texture by what the module declares there); the
+            // counts are rt_backend.h's kPassBuffers, kPassTextures, kPassReads, kPassMeshBuffers and kPassWrites, which
+            // tools/dev/translate_rt_shaders_msl.py checks against that header.
+            const auto place = [&](std::uint32_t binding, std::uint32_t buffer, std::uint32_t texture) {
+                spirv_cross::MSLResourceBinding resource;
+                resource.stage = model;
+                resource.desc_set = 0u;
+                resource.binding = binding;
+                resource.msl_buffer = buffer;
+                resource.msl_texture = texture;
+                compiler.add_msl_resource_binding(resource);
+            };
+            place(0u, kRtBufferScene, 0u);
+            for (std::uint32_t i = 0; i < 4u; ++i) {
+                place(1u + i, kRtBufferRenderer + i, 0u);
+                place(5u + i, 0u, kRtTextureRenderer + i);
+            }
+            for (std::uint32_t i = 0; i < 12u; ++i) {
+                place(9u + i, 0u, kRtTextureRead + i);
+            }
+            for (std::uint32_t i = 0; i < 9u; ++i) {
+                place(21u + i, kRtBufferMesh + i, 0u);
+            }
+            for (std::uint32_t i = 0; i < 8u; ++i) {
+                place(200u + i, i == 0u ? kRtBufferProbeOut : 0u, kRtTextureWritten + i);
+            }
+            place(208u, kRtBufferCounters, 0u);
+            place(209u, kRtBufferWritten, 0u);
+            place(300u, kRtBufferFrame, 0u);
+            place(301u, kRtBufferPass, 0u);
+            // s0: linear, repeating, no level clamp (rt_backend_vk.cpp's sampler, rt_backend_d3d12.cpp's static one).
+            spirv_cross::MSLConstexprSampler wrap;
+            wrap.min_filter = wrap.mag_filter = spirv_cross::MSL_SAMPLER_FILTER_LINEAR;
+            wrap.mip_filter = spirv_cross::MSL_SAMPLER_MIP_FILTER_LINEAR;
+            wrap.s_address = wrap.t_address = wrap.r_address = spirv_cross::MSL_SAMPLER_ADDRESS_REPEAT;
+            compiler.remap_constexpr_sampler_by_binding(0u, 100u, wrap);
+            compiler.add_discrete_descriptor_set(0u);
+            // Set 1, the renderer's texture table: an array without a length, read through the buffer's address.
+            compiler.set_argument_buffer_device_address_space(1u, true);
+            bind(1u, spirv_cross::kArgumentBufferBinding, kRtBufferTextureArray);
+            bind(1u, 0u, 0u);
         } else {
             bind(0u, 0u, kBufferView);
             bind(0u, 1u, kBufferVertexRows);

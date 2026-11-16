@@ -50,11 +50,13 @@ struct GeometryStats {
     std::uint32_t builds = 0u, compactions = 0u;  // this frame
     std::uint64_t refit_triangles = 0u;    // under the moving meshes of the last refit()
     std::uint32_t refits = 0u, rebuilds = 0u;  // of the last refit(): refitted, and built anew
+    std::uint32_t moving_waiting = 0u;         // of the last refit(): moving meshes named, not built yet (the budget)
     std::uint64_t most_built_triangles = 0u;  // the most one budgeted frame built, since the start
     std::uint64_t timed_triangles = 0u;       // the builds of the frame slot's last frame, timed: their triangles
     std::uint64_t timed_ticks = 0u;           // and their GPU time (0: none timed)
     std::uint32_t released = 0u;              // static structures released past the ceiling, since the start
-    std::uint32_t micromaps = 0u;             // opacity micromaps under built structures
+    std::uint64_t ceiling = 0u;               // the ceiling this frame (bytes)
+    std::uint32_t micromaps = 0u;             // opacity micromaps under built structures (5.3 G-2)
     std::uint64_t micromap_bytes = 0u;        // in ranges
     std::uint32_t micromaps_built = 0u;       // since the start
 };
@@ -72,9 +74,11 @@ public:
     // A waiting mesh the scene draws this frame, `distance_sq` from the eye (squared): the next frame builds such meshes
     // before the rest, the nearest first (what comes into view casts first).
     void drawn_at(std::uint64_t key, float distance_sq);
-    // A mesh whose vertices move: built by the first refit() after it is named, refitted from then on, rebuilt every
-    // `kRefitsToRebuild` refits or when its triangles change. Named each frame it is to be traced; one not named for
-    // kFramesToForget frames is forgotten.
+    // A mesh whose vertices move: built by a refit() after it is named (its first build within what the frame's budget
+    // left, the oldest named first, one a frame at least: 0 from name() until then), refitted from then on, rebuilt
+    // every `kRefitsToRebuild` refits (each mesh at its own point of the cycle, by its key, so meshes that arrive
+    // together are not rebuilt together) or when its triangles or its indices change. Named each frame it is to be
+    // traced; one not named for kFramesToForget frames is forgotten.
     // `rebuild`: its triangles are not last frame's moved (a mesh made anew each frame): built, never refitted.
     void move(std::uint64_t key, const TriangleInput& input, bool rebuild = false);
     // The moving meshes named since the last call are built or refitted from their vertices as they lie now, ending
@@ -107,10 +111,13 @@ public:
     static constexpr std::uint64_t kScratchPage = 4ull << 20u;
     static constexpr std::uint32_t kRefitsToRebuild = 30u;
     static constexpr std::uint64_t kFramesToForget = 4u;
-    // Past this much structure memory the least recently named static structures go (the whole game compacts
-    // to about 320 MB); one named in the last kFramesToForget frames stays.
+    // 5.3 G-4: past the ceiling the least recently named static structures go; one named in the last kFramesToForget
+    // frames stays, so a stage that needs more keeps it while the device gives pages. The ceiling is 1/kBudgetShare of
+    // the device's memory budget (Backend::memory_budget, each frame), at most kStructureCeiling (the whole game
+    // compacts to about 320 MB), which is also the ceiling while the budget is not known. kBudgetShare: the smallest
+    // power of two at which an 8 GB card's budget still holds the whole game.
     static constexpr std::uint64_t kStructureCeiling = 512ull << 20u;
-    void set_ceiling(std::uint64_t bytes) noexcept { ceiling_ = bytes; }
+    static constexpr std::uint64_t kBudgetShare = 16u;
 
 private:
     enum class State : std::uint8_t { Waiting, Built, SizeAsked, Compacted };
@@ -120,6 +127,7 @@ private:
         State state = State::Waiting;
         Structure structure{};
         std::uint64_t built_bytes = 0u;        // the range a refit and a rebuild of the same shape fit
+        BuildSizes sizes{};                    // of its last build: a refit of the same shape needs no new query
         std::uint64_t asked_frame = 0u;       // Static: the frame its compacted size was asked in
         std::uint32_t refits = 0u;
         std::uint64_t named_frame = 0u;        // Moving: the last frame move() named it
@@ -165,6 +173,7 @@ private:
     std::deque<std::uint64_t> micromap_queue_;  // static meshes whose micromap input waits, oldest first
     std::vector<std::pair<std::uint64_t, std::uint32_t>> retired_buffers_;  // frame, a micromap input's buffer
     std::uint64_t frame_index_ = 0u;
+    std::uint64_t budget_ = 0u, budget_used_ = 0u;  // the frame's build budget (0: none) and the triangles built in it
     bool built_since_barrier_ = false;
     std::uint64_t ceiling_ = kStructureCeiling;
     std::uint64_t timed_triangles_[kFramesInFlight]{};  // each frame slot's timed builds

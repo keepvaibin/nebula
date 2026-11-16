@@ -16,15 +16,29 @@ cbuffer SkinConstants : register(b0) {
     float4 g_root[3]; // the root's space from the eye's
 };
 
+// Whether each of four floats, by its bits, is a number: an exponent not all ones. A bit test, because a float test of
+// a computed value may be folded to true: a Vulkan driver takes NotNaN and NotInf for every float operation of a module
+// without SignedZeroInfNanPreserve (spirvenv, "Precision and Operation"); the inputs, as loaded, pass through none.
+bool4 numbers(uint4 bits) { return (bits & 0x7F800000u) != 0x7F800000u; }
+
 [numthreads(64, 1, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
     if (id.x >= g_count.x) {
         return;
     }
-    const float4 at = float4(asfloat(g_positions.Load3(g_at.x + id.x * 12u)), 1.0f);
+    const uint3 position = g_positions.Load3(g_at.x + id.x * 12u);
+    const float4 at = float4(asfloat(position), 1.0f);
     const uint row = g_at.z + g_matrices.Load(g_at.y + id.x * 4u) * 96u;
-    const float3 eye = float3(dot(asfloat(g_rows.Load4(row)), at), dot(asfloat(g_rows.Load4(row + 16u)), at),
-                              dot(asfloat(g_rows.Load4(row + 32u)), at));
+    const uint4 r0 = g_rows.Load4(row), r1 = g_rows.Load4(row + 16u), r2 = g_rows.Load4(row + 32u);
+    const float3 eye = float3(dot(asfloat(r0), at), dot(asfloat(r1), at), dot(asfloat(r2), at));
     const float4 seen = float4(eye, 1.0f);
-    g_out.Store3(g_at.w + id.x * 12u, asuint(float3(dot(g_root[0], seen), dot(g_root[1], seen), dot(g_root[2], seen))));
+    const float3 placed = float3(dot(g_root[0], seen), dot(g_root[1], seen), dot(g_root[2], seen));
+    // A vertex its inputs cannot place (a NaN or infinite position, row or root, or a product past the float range)
+    // goes to the root's origin, one point for every such vertex: a triangle of three of them is a point, active and
+    // never met, which a refit may make and unmake (DXR and Vulkan: a degenerate triangle may; a NaN vertex's, inactive,
+    // may not). The inputs are tested as loaded, before any arithmetic.
+    const bool placeable = all(numbers(r0)) && all(numbers(r1)) && all(numbers(r2)) && all(numbers(uint4(position, 0u))) &&
+                           all(numbers(asuint(g_root[0]))) && all(numbers(asuint(g_root[1]))) && all(numbers(asuint(g_root[2]))) &&
+                           all(numbers(uint4(asuint(placed), 0u)));
+    g_out.Store3(g_at.w + id.x * 12u, placeable ? asuint(placed) : uint3(0u, 0u, 0u));
 }

@@ -91,23 +91,28 @@ struct GpuMesh {
     float hit_env_tint[3]{};
     float hit_body = -1.0f, hit_shine = -1.0f, hit_tint_keep = -1.0f;  // the review's; below 0: the class's own
     float hit_through = 0.0f;  // the share of the sun its far side takes (NebulaModelHit.through / 255)
-    // The live colour of glow_source: its row among the material's form 0 rows (vertex rows first; 0xFFFF
-    // none), how many rows that form has, and the row's cooked colour, which the live one is measured against.
-    std::uint16_t glow_row = 0xFFFFu;
-    std::uint16_t glow_row_count = 0u;
+    // The rows a ray reads live, in each form of the material that draws its own stages (replace 0): the form's
+    // programs (as NebulaPipelineDesc names them: a draw's form is found by its pipeline), the row of glow_source
+    // among its rows (vertex rows first) and map 0's and map 1's coordinate rows among its vertex rows (0xFFFF
+    // none). A form numbers its rows by first use: the lit form's colour channels are pixel rows where
+    // the vertex-lit form's are vertex rows, so one row number names other rows in the two. Only forms with a
+    // row to read are listed (registered once; a walk reads it by reference).
+    struct FormRows {
+        std::uint64_t vertex = 0u, pixel = 0u;
+        std::uint16_t glow_row = 0xFFFFu, map0_row = 0xFFFFu, map1_row = 0xFFFFu;
+    };
+    std::vector<FormRows> form_rows;
+    // glow_source's cooked colour, which the live one is measured against.
     float glow_cooked[3]{};
-    // Map 0's coordinate (the water's ripple): the first of its two rows (u, v) among the material's own
-    // form's rows (vertex rows first; 0xFFFF none: no stage samples map 0 through a coordinate made from a uv set by a
-    // matrix), the uv set it reads, and that form's row count (a draw's rows are the form's where they agree).
-    std::uint16_t map0_row = 0xFFFFu;
-    std::uint16_t map0_form_rows = 0u;
+    // Map 0's (the water's ripple) and map 1's (water moves by both of its maps) uv sets; map1_slot map 1's
+    // place in the item's texture table (the form's second map).
     std::uint8_t map0_uv = 0u;
-    // Map 1's the same way (water moves by both of its maps), in the same form; map1_slot its place in the
-    // item's texture table (the form's second map).
-    std::uint16_t map1_row = 0xFFFFu;
     std::uint8_t map1_uv = 0u;
     std::uint8_t map1_slot = 0xFFu;
     float hit_alpha = 0.5f;  // an alpha-tested material: the alpha from which it is there
+    // Its material's ray-hit form (a mod's surface shader, contract materials 3.4 layer 3; rt_ray_forms.h): 1 + its row
+    // in the model's `.rayhit`, 0 none. Its record is what a ray sees, never by a map: the maps are the shader's own.
+    std::uint8_t ray_form = 0u;
     // Its paint as one light (nebula_model.h NebulaModelPaintLight; the Physical style): the share b / (a + b)
     // (0: it stays painted) and the light's direction in the model's space, octahedral.
     float paint_share = 0.0f;

@@ -341,8 +341,9 @@ static void clamp_render_config(RenderConfig& cfg) {
     cfg.rt_quality = std::min(cfg.rt_quality, kRtPresetCustom);
     cfg.rt_style = std::min(cfg.rt_style, 1u);
     cfg.rt_probe_ms = cfg.rt_probe_ms > 0.0f ? std::min(cfg.rt_probe_ms, 1000.0f) : 0.0f;  // NaN too: not measured
-    for (std::uint8_t& part : cfg.rt_parts) {
-        part = static_cast<std::uint8_t>(std::min<unsigned>(part, 3u));
+    for (std::size_t part = 0; part < cfg.rt_parts.size(); ++part) {
+        // A saved low of a part that has none (reflections, glass and water) is off.
+        cfg.rt_parts[part] = static_cast<std::uint8_t>(rt_part_level(static_cast<RtPart>(part), cfg.rt_parts[part]));
     }
     rt_apply_preset(cfg);
     // Ray tracing follows its setting in every build; Nebula Settings offers its row once it is finished
@@ -400,7 +401,9 @@ static std::filesystem::path config_path() {
 }  // namespace
 
 namespace {
-// Bit 0: the tracer runs; bit 1: FSR 3 runs on the device.
+// Bit 8: the tracer runs; bits 0-7 then the temporal upscaler that anti-aliases its scene where the player chose none
+// (set_render_tracing; 0: none runs on this device).
+constexpr unsigned kTracingRuns = 256u;
 std::atomic<unsigned> s_tracing{0u};
 std::atomic<bool> s_present_waits_for_refresh{false};
 }  // namespace
@@ -430,24 +433,25 @@ RenderConfig get_render_config() {
         copy.vsync_interval = 1u;
     }
     const unsigned tracing = s_tracing.load(std::memory_order_relaxed);
-    if ((tracing & 1u) != 0u) {
+    if ((tracing & kTracingRuns) != 0u) {
         copy.msaa_samples = 1u;
-#if !defined(NEBULA_GPU_METAL)
-        if ((tracing & 2u) != 0u && copy.upscaler <= 1u) {
-            // FSR 1's scales are the temporal modes' (1-5); 0, the output's size, is FSR 3's native anti-aliasing.
+        const unsigned temporal = tracing & 255u;
+        if (temporal != 0u && copy.upscaler <= 1u) {
+            // FSR 1's scales are the temporal modes' (1-5); 0, the output's size, is the temporal upscaler's native
+            // anti-aliasing.
             copy.temporal_quality = copy.upscaler == 1u ? copy.spatial_quality : 0u;
-            copy.upscaler = 2u;
+            copy.upscaler = temporal;
         }
-#endif
     }
     return copy;
 }
 
-void set_render_tracing(bool tracing, bool fsr3) noexcept {
-    s_tracing.store((tracing ? 1u : 0u) | (tracing && fsr3 ? 2u : 0u), std::memory_order_relaxed);
+void set_render_tracing(bool tracing, unsigned temporal) noexcept {
+    const unsigned upscaler = temporal >= 2u && temporal <= 6u ? temporal : 0u;  // a temporal one's number (FSR 3 .. MetalFX)
+    s_tracing.store(tracing ? kTracingRuns | upscaler : 0u, std::memory_order_relaxed);
 }
 
-bool render_tracing() noexcept { return (s_tracing.load(std::memory_order_relaxed) & 1u) != 0u; }
+bool render_tracing() noexcept { return (s_tracing.load(std::memory_order_relaxed) & kTracingRuns) != 0u; }
 
 namespace {
 std::atomic<bool> s_frame_generation_running{false};

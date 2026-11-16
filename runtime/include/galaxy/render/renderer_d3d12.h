@@ -404,6 +404,7 @@ public:
         void* descriptors = nullptr;
     };
     [[nodiscard]] RtCommands rt_commands_begin();
+    [[nodiscard]] void* rt_texture_layout() const noexcept { return nullptr; }  // (Vulkan's alone)
     void rt_commands_end();
     // The scene's depth as a pass reads it, until rt_depth_end, with its size and the format an image must have to be
     // copied over the scene's colour (rt_copy_to_scene). With `color_view`, the scene's colour as drawn so far for the

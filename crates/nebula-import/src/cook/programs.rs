@@ -1333,9 +1333,10 @@ pub fn generate(source: &MaterialIr, form: Form, skinned: bool, registers: &Regi
     let fog_type = if form.fog_linear { 2 } else { m.fog.kind };
     let mut env_coords = BTreeSet::new();
     for (i, c) in m.coords.iter().enumerate() {
-        // A coordinate whose every map is a colour ramp (MaterialIr ramp_maps) keeps its own fetch.
+        // A coordinate whose every map is a colour ramp (MaterialIr ramp_maps) or a shade (shade_maps) keeps its
+        // own fetch.
         let mut maps = m.stages.iter().filter(|s| s.map != 0xFF && usize::from(s.coord) == i).map(|s| s.map).peekable();
-        let ramp_only = maps.peek().is_some() && maps.all(|map| m.ramp_maps.contains(&map));
+        let ramp_only = maps.peek().is_some() && maps.all(|map| m.ramp_maps.contains(&map) || m.shade_maps.contains(&map));
         if !ramp_only && matches!(coord_source(m, c)?, From::EyeNormal | From::WorldNormal | From::ObjectNormal) {
             env_coords.insert(i as u8);
         }
@@ -1792,6 +1793,7 @@ pub fn prepare_written_files(files: &[super::PakFile], read: &mut dyn FnMut(&sup
         }
         Ok(())
     })?;
+    super::hit_record::twins_ready();  // One name, one class.
     *WRITTEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(written);
     Ok(())
 }

@@ -264,9 +264,19 @@ private:
     [[nodiscard]] const float* walk_material_rows(std::uint32_t index);
     // One material at this walk's t: one entry, one registered slot, or rows the same to the byte.
     [[nodiscard]] bool walk_same_material(std::uint32_t a, std::uint32_t b);
-    // The ring draws from `first` that are one draw with it; their indices in `index_count`.
-    [[nodiscard]] std::uint32_t merge_ring_run(std::uint32_t first, std::uint32_t end, std::uint32_t matrix_at,
-                                               std::uint32_t& index_count);
+    // Ring draws drawn as one: how many, their indices, and where the joined draw reads them. A run of more than one
+    // reads copies of its own (its indices, and its vertices where a draw's rows differ from the first's), so this
+    // walk's copies of the ring stay as listed for every other draw of the same items (the tracer's prepasses draw them
+    // one at a time).
+    struct RingRun {
+        std::uint32_t count = 1u;
+        std::uint32_t index_count = 0u;
+        gpu::Address indices = 0u;   // 0: the walk's copy, from the first draw's `first`
+        gpu::Address vertices = 0u;  // 0: the walk's copy, from the first draw's ring_at
+        std::uint32_t vertex_bytes = 0u;
+    };
+    // The ring draws from `first` that are one draw with it.
+    [[nodiscard]] RingRun merge_ring_run(std::uint32_t first, std::uint32_t end, std::uint32_t matrix_at);
     // The table's texture list for this walk: the buffer and its first pair (DrawRoot::table). Direct3D 12, and Vulkan with
     // descriptor indexing (renderer_.bindless()).
     void walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first);
@@ -348,6 +358,17 @@ private:
     void rt_want(std::uint32_t id, const core::GpuMesh& mesh);
     void rt_want_form(std::uint32_t id, const core::GpuMesh& mesh, bool refined);
     void rt_frame(const NebulaFrameList& list);
+    // The most the tracer takes from the matrix ring in a walk of `list` (0 while it is stopped): begin_walk_frame asks the
+    // ring for it and sets rt_ring_frame_bytes_ (the walk's whole request); rt_frame makes it the walk's allowance.
+    [[nodiscard]] std::size_t rt_ring_need(const NebulaFrameList& list) const;
+    // A matrix ring allocation within the walk's allowance, or none (cpu null): the walk is then not traced.
+    [[nodiscard]] UploadRing::Allocation rt_ring_take(std::size_t size, std::size_t alignment);
+    std::size_t rt_ring_frame_bytes_ = 0u;  // the matrix ring's request for the coming walk, the tracer's share in it
+    // What rt_ring_need last gave: begin_walk_frame's, the tracer's share inside rt_ring_frame_bytes_, which rt_frame
+    // takes out again for the share by the size begin_frame left.
+    mutable std::size_t rt_ring_need_last_ = 0u;
+    std::size_t rt_ring_left_ = 0u;         // what the tracer may still take from it this walk
+    bool rt_ring_short_ = false;            // a walk went untraced for want of ring room (logged once until one is served)
     // The scene a frame traces: its instances from the list's scene passes, at the walk's time.
     rt::Scene rt_scene_{rt_backend_};
     rt::SceneCensus rt_census_;  // --diagnostics rt-inputs
@@ -391,6 +412,7 @@ private:
         float root[3][4]{};      // the eye's space from the root's: its instance's matrix
         float root_inverse[3][4]{};
         rt::TriangleInput input{};
+        bool recorded = false;  // its skin pass was recorded this walk (rt_skin): only then is its mesh moved
     };
     std::vector<RtSkin> rt_skins_;
     std::uint32_t rt_skin_buffer_ = rt::kNoBuffer;
@@ -404,8 +426,37 @@ private:
         std::uint32_t item = 0u;
         bool regenerated = false;      // a draw whose vertices are not last frame's moved
     };
-    RtRing rt_rings_[4];  // early, opaque, blended; and the game's code-drawn water
-    std::uint32_t rt_water_ring_item_ = ~0u;  // the water ring's first item this frame: its words are water's
+    RtRing rt_rings_[3];  // early, opaque, blended
+    // The game's code-drawn water (OceanBowl, OceanRing, OceanSphere, WaterRoad), a draw at a time, as model water
+    // is: a structure and an instance of its own (a hit names its own item), and its vertices as a mesh the passes read
+    // (rt_tables), made in the matrix ring each walk. Its words in rt_water_words_: object-space positions (3 a corner),
+    // attributes (6: normal, colour, first coordinate, the cooked layout), the corner list (1), in that order.
+    struct RtWater {
+        std::uint32_t item = 0u;
+        std::uint32_t corners = 0u;
+        std::size_t world = 0u;     // its first float in rt_water_world_ (the eye's space: its structure's input)
+        std::size_t words = 0u;     // its first word in rt_water_words_
+        std::uint64_t mesh = 0u;    // its positions' byte from the matrix ring's base (0: not made this walk)
+        std::uint32_t row = 0u;     // its matrix's first row in the walk's rows (draws under one matrix share a surface)
+        bool regenerated = false;   // its vertices are not last frame's moved
+        bool normals = false;       // its layout gives vertex normals (else they are made: rt_water_smooth)
+    };
+    std::vector<RtWater> rt_waters_;  // by item
+    std::vector<float> rt_water_world_;
+    std::vector<std::uint32_t> rt_water_words_;
+    // A corner of code-drawn water without vertex normals, for the walk's weld (rt_water_smooth): its matrix row and its
+    // object position's bits (the key: strips of one sea share their edge points), its attribute word in
+    // rt_water_words_, its triangle's normal by twice its area. Kept from walk to walk (its room only).
+    struct RtWaterCorner {
+        std::uint32_t row = 0u, x = 0u, y = 0u, z = 0u;
+        std::size_t attribute = 0u;
+        float n[3] = {0.0f, 0.0f, 0.0f};
+    };
+    std::vector<RtWaterCorner> rt_water_weld_;
+    void rt_water_smooth();
+    // The ring's vertices as this walk draws them (draw_walker.cpp: moved at t where the walk moved them, else the
+    // list's own): what the tracer takes for the frame's own draws, so its triangles are the drawn ones. Null: none.
+    const std::byte* walk_ring_traced_ = nullptr;
     // The game's drop shadows, traced in place of their stencil volumes (the light pass, rt_light.hlsl). A drop is
     // traced when the scene holds its caster's draws; its volume's draws are then left out of the walk.
     struct RtCaster {
@@ -497,10 +548,11 @@ private:
     // The passes of the frame, in their order (rt_walk.cpp): its tables and constants; the surfaces; the sun; the local
     // lights; the sky and bounce light; the shares the programs read with what the surfaces mirror; the reflections;
     // the light volume; then the filters, and the report (--diagnostics rt-inputs).
-    void rt_tables(const Affine34& world_from_now);
+    // false: the ring had no room for the tables (the walk is not traced).
+    [[nodiscard]] bool rt_tables(const Affine34& world_from_now);
     [[nodiscard]] rt::BufferView rt_pass_constants(std::uint32_t layer, std::uint32_t step, std::uint32_t last, std::uint32_t free = 0u);
-    // The blue noise into its image once it is made (rt_sample.hlsli), and the sun's filter.
-    void rt_noise_fill();
+    // The blue noise into its image once it is made (rt_sample.hlsli; false: no room for its bytes), and the sun's filter.
+    [[nodiscard]] bool rt_noise_fill();
     void rt_sun_filter();
     bool rt_noise_filled_ = false;
     [[nodiscard]] rt::PassBinds rt_pass_binds() const;
@@ -544,7 +596,8 @@ private:
         BlendLightsA, BlendLightsB, BlendMomentsA, BlendMomentsB, Facing, BlendBody,
         IndirectRaw, IndirectAverageA, IndirectAverageB, IndirectMomentsA, IndirectMomentsB, Indirect, GiReservoirsA,
         GiReservoirsB, GiWeightsA, GiWeightsB, IndirectGuideA, IndirectGuideB, IndirectMotion, IndirectStep, ReflectRaw, ReflectAverageA, ReflectAverageB, Reflect, Transmit, VolumeA,
-        VolumeB, Scatter, ReflectMoved, RrDiffuse, RrSpecular, RrNormalRoughness, RrHit, NearRaw, NearA, NearB, Count
+        VolumeB, Scatter, ReflectMoved, RrDiffuse, RrSpecular, RrNormalRoughness, RrHit, NearRaw, NearA, NearB,
+        VolumeLightsA, VolumeLightsB, ReflectFramesA, ReflectFramesB, Count
     };
     // The passes an image is made for.
     static constexpr std::uint32_t kRtPassLight = 1u, kRtPassIndirect = 2u, kRtPassReflect = 4u, kRtPassVolume = 8u,
@@ -642,6 +695,9 @@ private:
     // Per material name hash, its cooked base and its base by the live colour, where they differ (rt-inputs).
     std::unordered_map<std::uint32_t, std::array<float, 6>> rt_live_tints_;
     std::vector<std::uint32_t> rt_glow_tiles_, rt_glow_entries_, rt_glow_counts_;
+    // The slots of the glowing meshes' lights rt_emitter_bins left out past the tiles' room this walk: rt_tables lists
+    // their items' glow no more (word 14 bit 24), so a ray that meets one shows its light.
+    std::vector<std::uint32_t> rt_glow_dropped_slots_;
     void rt_emitter(const NebulaFrameItem& item, const core::GpuMesh& mesh, const float centre[3], float radius,
                     const float (*place)[4] = nullptr);
     // A rigid glowing mesh's light by its cooked shapes; false: it has none usable, the box path
@@ -753,10 +809,15 @@ private:
     [[nodiscard]] bool rt_volume_reads(const NebulaFrameItem& item, std::uint32_t state) const;
     [[nodiscard]] float rt_air_density() const;
     bool rt_volume_drawn_ = false, rt_scatter_drawn_ = false;
-    bool rt_indirect_shown_ = false;     // the indirect ratio is picture 7 this frame
+    bool rt_indirect_shown_ = false;     // the indirect ratio is picture 7 this frame (the bounce's colour)
+    bool rt_indirect_drawn_ = false;     // this walk's step up wrote the Indirect picture (rt_pass_indirect): its readers' test
+    // The last walk's indirect chain (gather, filters, step up) was all recorded: its histories hold that walk.
+    bool rt_indirect_chain_ = false;
     std::uint32_t rt_indirect_slot_ = 0u;
     // The reflections' change was written this frame (rt_pass_reflect.cpp): the reactive mask reads it (rt_reactive).
     bool rt_reflect_moved_ = false;
+    bool rt_reflect_traced_ = false;  // this frame's reflection rays were recorded: R raw holds them
+    bool rt_reflect_kept_ = false;  // the last walk's reflections over time were recorded: its average and count hold it
     bool rt_transmit_drawn_ = false;        // the transmit pass wrote T this walk (ViewRows::transmit)
     std::uint32_t rt_transmit_slot_ = 0u;   // T's place among the textures (picture 6)
     // The guide blended draws compare with (15.2; ViewRows::blend_guide): 0 none this walk, 1 the second layer's
@@ -798,8 +859,7 @@ private:
     std::vector<std::uint8_t> walk_constants_known_;
     std::vector<std::uint32_t> walk_material_at_;  // per entry: its rows' place in walk_lerped_, the list's, or not yet
     std::vector<std::byte> walk_ring_stage_;        // the ring's vertices with positions moved at t, before they are copied out
-    std::byte* walk_ring_cpu_ = nullptr;            // this walk's copies of the ring's vertices and indices
-    std::uint32_t* walk_index_cpu_ = nullptr;
+    std::vector<std::byte> walk_run_stage_;         // a joined ring run's vertices with their matrix numbers, before they are copied out
     std::uint64_t walk_view_stamp_ = 0u;
     gpu::Address walk_rows_ring_ = 0u, walk_vertex_ring_ = 0u, walk_ring_previous_ = 0u;
     const float (*walk_rows_cpu_)[4] = nullptr;
@@ -1102,6 +1162,12 @@ private:
     bool enhanced_lighting_ = false;
     // scene_wide (render_config.h) for this frame, sampled at each frame start: the scene's target and pipelines.
     bool wide_scene_ = false;
+    // While the tracer runs: a scene was drawn in the narrow target, the wide one refused (walk_scene_begin); the
+    // narrow variant's tracer forms then join the pipelines' start set (begin_walk_frame).
+    bool rt_scene_narrow_ = false;
+    // The tracer's forms of its start set are made (Pipelines::traced_pending reached 0 once since the tracer started):
+    // until then the scene draws untraced as a whole (walk_scene_begin).
+    bool rt_forms_ready_ = false;
     // Texture-pack settings last applied (render config and the mods' folders, polled at frame begin).
     TexturePackSettings texture_pack_settings_{};
     bool texture_pack_settings_applied_ = false;

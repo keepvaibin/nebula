@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -81,11 +82,13 @@ void Scene::clear() noexcept {
     capacity_ = 0u;
     instances_.clear();
     built_ = false;
+    fits_ = true;
 }
 
 void Scene::begin() noexcept {
     instances_.clear();
     built_ = false;
+    fits_ = true;
 }
 
 // The draws' front face is the one whose vertices run clockwise on screen; a ray's is the one whose normal (the cross
@@ -99,7 +102,22 @@ void Scene::add(const float (*rows)[4], std::uint32_t id, std::uint32_t mask, st
     }
     Instance& instance = instances_.emplace_back();
     std::memcpy(instance.transform, rows, sizeof(instance.transform));
-    instance.id_mask = (id & 0xFFFFFFu) | mask << 24u;
+    // A transform that is not finite (a NaN or an infinity in the game's matrices) means nothing to the structure's build
+    // in either API and spoils its bounds: the instance keeps its place in the list (callers name instances by it) at the
+    // identity under mask 0, which no ray takes.
+    bool finite = true;
+    for (const auto& row : instance.transform) {
+        for (const float value : row) {
+            finite = finite && std::isfinite(value);
+        }
+    }
+    if (!finite) {
+        static constexpr float kIdentity[3][4] = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
+        std::memcpy(instance.transform, kIdentity, sizeof(instance.transform));
+        mask = 0u;
+    }
+    fits_ = fits_ && id < kItemsMost;
+    instance.id_mask = (id & (kItemsMost - 1u)) | (kind & (kKindCutout | kKindCard | kKindClipped)) << kItemBits | mask << 24u;
     std::uint32_t flags = kInstanceNoCull;
     if (faces != Faces::Both) {
         const float (*m)[4] = instance.transform;
@@ -113,13 +131,13 @@ void Scene::add(const float (*rows)[4], std::uint32_t id, std::uint32_t mask, st
     if (micromapped == Micromapped::Other) {
         flags |= kInstanceNoMicromaps;
     }
-    instance.flags = flags << 24u | (kind & 0xFFFFFFu);
+    instance.flags = flags << 24u;
     instance.structure = structure;
 }
 
 void Scene::no_micromap(std::uint32_t instance) noexcept {
     Instance& at = instances_[instance];
-    at.flags |= (kInstanceNoMicromaps | ((at.flags & kKindCutout) != 0u ? kInstanceNotOpaque : 0u)) << 24u;
+    at.flags |= (kInstanceNoMicromaps | ((at.id_mask >> kItemBits & kKindCutout) != 0u ? kInstanceNotOpaque : 0u)) << 24u;
 }
 
 // The structure and its scratch in use go once no recorded frame can read them.
@@ -151,7 +169,8 @@ bool Scene::build(gpu::Address address, std::uint64_t frame_index) {
     release(frame_index);
     built_ = false;
     const auto count = static_cast<std::uint32_t>(instances_.size());
-    if (count == 0u || address == 0u) {
+    // An item past what an id names would alias another's: no scene this frame.
+    if (count == 0u || address == 0u || !fits_) {
         return false;
     }
     if (count > capacity_) {

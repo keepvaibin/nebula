@@ -49,6 +49,21 @@ int main() {
     bool passed = true;
 
     {
+        // The wide scene: always while tracing, whatever wide_scene says; untraced, the enhanced lighting's with wide_scene.
+        using galaxy::render::scene_wide;
+        galaxy::render::RenderConfig config{};
+        bool ok = true;
+        for (const bool enhanced : {false, true}) {
+            for (const bool wide : {false, true}) {
+                config.enhanced_lighting = enhanced;
+                config.wide_scene = wide;
+                ok = ok && scene_wide(config, true) && scene_wide(config, false) == (enhanced && wide);
+            }
+        }
+        passed = expect(ok, "scene_wide: always while tracing, else enhanced_lighting && wide_scene") && passed;
+    }
+
+    {
         const auto same = [](const std::vector<unsigned>& got, std::initializer_list<unsigned> want) {
             return std::equal(got.begin(), got.end(), want.begin(), want.end());
         };
@@ -221,25 +236,46 @@ int main() {
             passed &= expect(value.max_fps == 60.0f && value.texture_lod_bias == 8u &&
                 value.anisotropic_filtering == 1u, "direct config applies the same numeric boundary checks");
         }
-#if !defined(NEBULA_GPU_METAL)
+#if !defined(NEBULA_GPU_METAL)  // Metal runs MetalFX for the other systems' upscalers (clamp_unimplemented_features)
         {
-            // The tracer running: the scene single-sampled, anti-aliased by FSR 3; the player's choices kept.
+            // The tracer running: the scene single-sampled, anti-aliased by the temporal upscaler its start picked (FSR 3,
+            // else SGSR 2) where the player chose none; the player's choices kept.
             galaxy::render::RenderConfig chosen{};
             chosen.msaa_samples = 4u;
             chosen.upscaler = 1u;
             chosen.spatial_quality = 3u;
             galaxy::render::set_render_config(chosen);
-            galaxy::render::set_render_tracing(true, true);
-            const auto traced = galaxy::render::get_render_config();
+            galaxy::render::set_render_tracing(true, 2u);
+            const auto fsr3 = galaxy::render::get_render_config();
             const auto kept = galaxy::render::get_render_config_chosen();
-            galaxy::render::set_render_tracing(true, false);
-            const auto no_fsr3 = galaxy::render::get_render_config();
-            galaxy::render::set_render_tracing(false, false);
+            galaxy::render::set_render_tracing(true, 5u);
+            const auto sgsr2 = galaxy::render::get_render_config();
+            const bool tracing = galaxy::render::render_tracing();
+            galaxy::render::set_render_tracing(true, 0u);
+            const auto none = galaxy::render::get_render_config();
+            galaxy::render::set_render_tracing(false, 5u);
             const auto after = galaxy::render::get_render_config();
-            passed &= expect(traced.msaa_samples == 1u && traced.upscaler == 2u && traced.temporal_quality == 3u &&
-                    kept.msaa_samples == 4u && kept.upscaler == 1u && no_fsr3.msaa_samples == 1u && no_fsr3.upscaler == 1u &&
-                    after == galaxy::render::get_render_config_chosen() && after.msaa_samples == 4u,
-                "with the tracer running the scene is single-sampled and FSR 3 anti-aliases it; off, the choices return");
+            passed &= expect(fsr3.msaa_samples == 1u && fsr3.upscaler == 2u && fsr3.temporal_quality == 3u &&
+                    sgsr2.msaa_samples == 1u && sgsr2.upscaler == 5u && sgsr2.temporal_quality == 3u && tracing &&
+                    none.msaa_samples == 1u && none.upscaler == 1u && kept.msaa_samples == 4u && kept.upscaler == 1u &&
+                    after == galaxy::render::get_render_config_chosen() && after.msaa_samples == 4u &&
+                    !galaxy::render::render_tracing(),
+                "with the tracer running the scene is single-sampled and FSR 3 or SGSR 2 anti-aliases it; off, the choices return");
+            // Upscaling off: the temporal upscaler's native anti-aliasing (quality 0); a temporal upscaler the player
+            // chose is his, mode and all.
+            chosen.upscaler = 0u;
+            chosen.temporal_quality = 2u;
+            galaxy::render::set_render_config(chosen);
+            galaxy::render::set_render_tracing(true, 5u);
+            const auto native = galaxy::render::get_render_config();
+            chosen.upscaler = 4u;
+            galaxy::render::set_render_config(chosen);
+            const auto own = galaxy::render::get_render_config();
+            const auto own_chosen = galaxy::render::get_render_config_chosen();
+            galaxy::render::set_render_tracing(false, 0u);
+            passed &= expect(native.upscaler == 5u && native.temporal_quality == 0u && native.msaa_samples == 1u &&
+                    own.upscaler == own_chosen.upscaler && own.temporal_quality == 2u && own.msaa_samples == 1u,
+                "with upscaling off the traced scene takes native anti-aliasing; a chosen temporal upscaler stays");
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
         }
 #endif
@@ -277,10 +313,10 @@ int main() {
             galaxy::render::set_render_config(low);
             const auto set_low = galaxy::render::get_render_config();
             const galaxy::render::RenderConfig defaults{};
-            passed &= expect(set_low.rt_parts == std::array<std::uint8_t, 6>{1u, 1u, 1u, 0u, 1u, 1u} && defaults.rt_quality == 0u &&
+            passed &= expect(set_low.rt_parts == std::array<std::uint8_t, 6>{1u, 1u, 1u, 0u, 0u, 1u} && defaults.rt_quality == 0u &&
                                  defaults.rt_parts == std::array<std::uint8_t, 6>{2u, 2u, 2u, 2u, 2u, 2u} && defaults.rt_lens_bloom &&
                                  defaults.rt_probe_ms == 0.0f && !defaults.rt_chosen,
-                             "a preset sets every part; medium by default");
+                             "a preset sets every part (low: reflections and glass and water off); medium by default");
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
         }
         {
@@ -560,6 +596,29 @@ int main() {
                 galaxy::render::rt_part(loaded, galaxy::render::RtPart::Reflect) == 0u &&
                 galaxy::render::rt_part(loaded, galaxy::render::RtPart::Sun) == 3u,
             "the file's render config enables ray tracing and takes its parts by name; an old key it no longer has is ignored");
+        {
+            // Reflections and glass and water have no low: a saved low reads as off, the low preset sets them off, and
+            // a part with a low keeps it.
+            const galaxy::render::RenderConfig lows =
+                load("ray_tracing_enabled=1\nrt_quality=custom\nrt_reflect=low\nrt_transmit=low\nrt_sun=low\nrt_volume=low\n");
+            const galaxy::render::RenderConfig preset = load("ray_tracing_enabled=1\nrt_quality=low\n");
+            galaxy::render::RenderConfig direct = preset;
+            direct.rt_quality = galaxy::render::kRtPresetCustom;
+            direct.rt_parts.fill(1u);
+            galaxy::render::set_render_config(direct);
+            const galaxy::render::RenderConfig set = galaxy::render::get_render_config();
+            using galaxy::render::RtPart;
+            passed &= expect(
+                galaxy::render::rt_part(lows, RtPart::Reflect) == 0u && galaxy::render::rt_part(lows, RtPart::Transmit) == 0u &&
+                    galaxy::render::rt_part(lows, RtPart::Sun) == 1u && galaxy::render::rt_part(lows, RtPart::Volume) == 1u &&
+                    galaxy::render::rt_part(preset, RtPart::Reflect) == 0u &&
+                    galaxy::render::rt_part(preset, RtPart::Transmit) == 0u &&
+                    galaxy::render::rt_part(preset, RtPart::Lights) == 1u &&
+                    galaxy::render::rt_part(set, RtPart::Reflect) == 0u && galaxy::render::rt_part(set, RtPart::Transmit) == 0u &&
+                    galaxy::render::rt_part(set, RtPart::Indirect) == 1u,
+                "reflections and glass and water have no low: it reads, presets and sets as off");
+            galaxy::render::set_render_config(galaxy::render::RenderConfig{});
+        }
 
         const galaxy::render::RenderConfig quality =
             load("texture_lod_bias=99\nanisotropic_filtering=99\nenhanced_mipmaps=1\n");

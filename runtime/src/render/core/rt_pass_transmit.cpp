@@ -9,7 +9,7 @@
 namespace galaxy::render {
 
 bool RenderCore::rt_transmit_wanted() const {
-    return rt_part(get_render_config(), RtPart::Transmit) >= 3u && !::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded) &&
+    return rt_levels_[static_cast<unsigned>(RtPart::Transmit)] >= 3u && !::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded) &&
            !::galaxy::diagnosing(::galaxy::kDiagnoseRtMotion);
 }
 
@@ -42,8 +42,7 @@ void RenderCore::rt_pass_transmit() {
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);
     binds.writes[0] = out;
-    rt_backend_.dispatch(RtShader::Transmit, binds, frame.across, frame.down);
-    rt_transmit_drawn_ = true;
+    rt_transmit_drawn_ = rt_backend_.dispatch(RtShader::Transmit, binds, frame.across, frame.down);
 }
 
 }  // namespace galaxy::render

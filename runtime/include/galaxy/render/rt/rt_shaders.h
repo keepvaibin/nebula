@@ -16,6 +16,13 @@ enum class RtShader : unsigned {
     ReflectSpace, ReflectOut, Volume, Scatter, RrGuides, Transmit, TransmitReference, Omm, NearRays, NearTime, Count
 };
 
+// The reference path tracer's passes (rt_bounce.cpp: dispatched only where rt_fb_reference(), the Reference preset or
+// the reference picture): a developer's ground truth, not play. The back ends make their pipelines at their first
+// dispatch, not at the start, so the player's start never waits on the driver's compile of the largest modules.
+[[nodiscard]] constexpr bool rt_shader_made_on_first_use(RtShader shader) noexcept {
+    return shader == RtShader::Reference || shader == RtShader::ReferenceOut || shader == RtShader::TransmitReference;
+}
+
 struct RtShaderBytes {
     const void* data = nullptr;
     std::size_t size = 0u;

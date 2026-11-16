@@ -4,8 +4,8 @@
 // average over time holds the share of the disc and of the pixel a hard edge covers). Writes V raw:
 //   rgb  1 where the ray reaches the sun, 0 where something solid stands on it, else what the blended things on it
 //        let through (let_through: a red crystal's shadow is red);
-//   a    how far along the ray that thing stood, in units (kNoOccluder: nothing): the sun filter's blur follows the
-//        penumbra's true width by it (rt_sun_time, rt_sun_blur).
+//   a    how far along the ray the nearest such thing stood, in units (kNoOccluder: nothing): the sun filter's blur
+//        follows the penumbra's true width by it (rt_sun_time, rt_sun_blur).
 // A surface turned from the sun takes none of its key whatever V is: no ray, V = 1 and no occluder, so the filter
 // draws no edge there; the light pass puts the facing in (rt_light.hlsl).
 #include "rt_common.hlsli"
@@ -15,6 +15,9 @@ Texture2D<float4> g_normals : register(t10);
 Texture2D<float4> g_motion : register(t11);
 Texture2D<float4> g_material : register(t12);
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_sun_raw : register(u0);
+// The farthest caster's distance written: the largest half float under kNoOccluder (kNoOccluder - 1 rounds up to
+// kNoOccluder in this image, and a caster past 65488 units then gave the blur no distance: rt_sun_time).
+static const float kFarthestOccluder = 65472.0f;
 
 [numthreads(8, 8, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
@@ -76,12 +79,14 @@ void main(uint3 id : SV_DispatchThreadID) {
         }
         uint met;
         // A billboard's own sun card is no shadow on it; a card's or a crown's own clump none either.
+        // The nearest caster, not the first the walk meets: the blur's width is 2 tan x its distance, and a first hit
+        // is any layer of a crown, often the farthest (NRD's SIGMA inputs: no ACCEPT_FIRST_HIT for the distance; B3).
         const bool clump = through > 0.0f || clear > 0.0f;
         const float occluder = occluder_at_but(from, toward, 200000.0f,
-                                               (paint_holds ? kMaskLit : kMaskSolid | kMaskCutout) | kMaskShadowOnly, true,
+                                               (paint_holds ? kMaskLit : kMaskSolid | kMaskCutout) | kMaskShadowOnly, false,
                                                own_item != 0u ? (own_item - 1u) | (clump ? kOwnWhole : 0u) : 0xFFFFFFFFu, met);
         if (occluder >= 0.0f) {
-            v = float4(0.0f, 0.0f, 0.0f, min(occluder + clear, kNoOccluder - 1.0f));
+            v = float4(0.0f, 0.0f, 0.0f, min(occluder + clear, kFarthestOccluder));
             InterlockedAdd(g_counters[18], 1u);
         } else {
             float first;
@@ -91,7 +96,7 @@ void main(uint3 id : SV_DispatchThreadID) {
                 tint = let_through(from, toward, 200000.0f, first);
             }
             if (first >= 0.0f) {
-                v = float4(tint, min(first + clear, kNoOccluder - 1.0f));
+                v = float4(tint, min(first + clear, kFarthestOccluder));
             }
         }
     }

@@ -19,6 +19,10 @@ struct Log {
     // What must stay zero: two builds between barriers sharing scratch, a build outside its pages, a refit or a copy of
     // a structure not finished by a barrier, a structure named after it was freed.
     std::uint32_t faults = 0u;
+    // What a test sets: scratch pages are refused, as by a device whose memory is full; the device's memory budget
+    // (Backend::memory_budget; 0: not known).
+    bool refuse_scratch = false;
+    std::uint64_t memory_budget = 0u;
 };
 
 // The log since the last reset (the back end's start resets it too).

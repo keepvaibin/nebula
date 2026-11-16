@@ -424,8 +424,10 @@ float4 traced_mirror(float3 colour, float alpha, float4 pixel) {
 // A painted environment map's texel where the light pass traced what the surface mirrors (rt_mirror.hlsli
 // SUBSTITUTE): the mirror picture holds rgb R tinted by the map's own colour and the class's gain, a -(1 + keep), keep
 // how much of the painted shine comes back where R is dark. Elsewhere the texel as it is.
+// A glowing body this frame (draw flag 16384): its painted map is its own look (the sling
+// star's whole gold is one), kept as painted; traced_colour's body rule adds it to F R, held to 1.2 of it.
 float4 env_fetch(float4 painted, float4 pixel) {
-    if ((view_flags & 8u) == 0u || !traced_mirror_own(pixel)) {
+    if ((view_flags & 8u) == 0u || (draw_flags & 16384u) != 0u || !traced_mirror_own(pixel)) {
         return painted;
     }
     const float4 mirror = gTextures[uint(view_traced.z)].Load(int3(pixel.xy, 0));
@@ -601,7 +603,23 @@ float4 traced_sea(float3 pattern, float3 ring, float3 screen, float3 tint, float
     const float3 waves = traced_lin(saturate(pattern * kSeaPattern + ring));
     const float3 lamps = waves * added;
     const float3 waves_lit = a * (waves * share + lamps * min(1.0, 0.6 / max(max(lamps.r, max(lamps.g, lamps.b)), 1e-4)));
-    // What lies under it is the frame behind, as it was drawn (every thing under the sea, under the traced light
+    // One water model (model water's traced_mirror): where T is written (High), what lies under
+    // it is T, traced bent through the water and absorbed by its way, read moved by the same wobble; the water's
+    // colour is that absorption, no veil. F R' + (1 - F) waves + what they leave of T, the pixel covered whole.
+    if (view_transmit.y > 0.5) {
+        const uint t_at = uint(view_transmit.x);
+        const float4 t_here = gTextures[t_at].Load(int3(pixel.xy, 0));
+        const float4 seen = traced_moved(t_at, pixel.xy + warp * a, 0.5, t_here);
+        if (seen.a > 0.5) {
+            const float wave_top = max(waves_lit.r, max(waves_lit.g, waves_lit.b));
+            const float covered = saturate(f + (1.0 - f) * wave_top);
+            g_sea_out = float4(traced_srgb(mirror.rgb + (1.0 - f) * waves_lit + (1.0 - covered) * seen.rgb), 1.0);
+            g_sea_done = true;
+            return g_sea_out;
+        }
+    }
+    // No T (Medium; or the refracted way left the water unmeasured: rt_transmit writes alpha 0, REFLECT's one miss
+    // rule): what lies under it is the frame behind, as it was drawn (every thing under the sea, under the traced light
     // already): the blend lets it through. The water's own colour is a thin veil of the game's tint, lit.
     const float veil = kSeaTint * a;
     const float3 own = veil * traced_lin(tint) * share + waves_lit;

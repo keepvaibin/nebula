@@ -6,7 +6,7 @@
 // here, over it and its four neighbours on the same object, as the light pass did.
 // SUBSTITUTE (the programs fetch a painted environment map through ENV_FETCH, program.hlsli
 // env_fetch): at a painted pixel that is not water, with a traced R, the mirror picture holds rgb R times
-// the painted map's own colour (item word 15 bits 0-11, 4 bits a channel; none: white) and the class's gain, a
+// the painted map's own colour (item word 15 bits 0-11; 4 bits a channel; none: white; no gain), a
 // -(1 + keep (1 - saturate(lum(R) / 0.25))): how much of the painted shine comes back where R is dark. The programs
 // put R in the painted map's place inside the artist's own stage graph. A painted map that is a capture of the scene
 // (item word 11 hit flag 128: the frozen lake's mirror, whose pass High leaves out) keeps none: R holds the scene.
@@ -26,13 +26,6 @@ RT_FORMAT(rgba16f) RWTexture2D<float4> g_mirror : register(u0);
 ByteAddressBuffer g_items : register(t1);         // the item table (rt_common.hlsli's)
 Texture2D<uint2> g_item_map : register(t6);       // the pixel's item, from 1
 static const uint kCaptured = 128u;               // a hit flag (item word 11 bits 8-15): its maps include a capture
-
-// The pixel's index for its mirror's F0 (rt_mirror.hlsli mirror_f0; item word 15 bits 12-19): glass and water only,
-// as rt_reflect.hlsl reads it.
-uint mirror_ior_bits(int3 here, uint klass) {
-    const uint item = klass == kMirrorGlass || klass == kMirrorWater || klass == kMirrorMetal ? g_item_map.Load(here).x : 0u;
-    return item != 0u ? g_items.Load(g_at.x + (item - 1u) * kItemBytes + 60u) >> 12u & 255u : 0u;
-}
 
 // The pixel's item word 15 for its mirror: bits 0-11 what the art's material returns of a white environment
 // (4 bits a channel; 0: no painted map), bits 12-19 its index or a metal's kind; 0 for a class that mirrors nothing.
@@ -91,7 +84,6 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 n = dot(smooth_, look) < 0.0f ? smooth_ : unoct(normals.ba);
     const uint bits = uint(material.b * 255.0f + 0.5f);
     const uint klass = bits & 15u;
-    const uint ior_bits = mirror_ior_bits(here, klass);
     const uint word15 = mirror_word(here, klass);
     if ((g_pass.w & 1u) != 0u) {
         const float4 weight = mirror_weight_word(bits, material.r, material.a, g_base.Load(here).rgb,
@@ -109,11 +101,10 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float3 tint = (word & 0xFFFu) != 0u && klass != kMirrorGlass
                                 ? float3(word & 15u, (word >> 4u) & 15u, (word >> 8u) & 15u) / 15.0f
                                 : float3(1.0f, 1.0f, 1.0f);
-        const float gain = 1.0f;  // no gain over the mirror
         const float keep = captured ? 0.0f : klass == kMirrorMetal ? rt_dev_or(kDevKeepMetal, 0.5f)
                                            : klass == kMirrorGloss ? rt_dev_or(kDevKeepGloss, 0.25f) : 0.0f;
         const float seen = dot(r.rgb, float3(0.2126f, 0.7152f, 0.0722f));
-        g_mirror[id.xy] = float4(r.rgb * tint * gain, -(1.0f + keep * (1.0f - saturate(seen / 0.25f))));
+        g_mirror[id.xy] = float4(r.rgb * tint, -(1.0f + keep * (1.0f - saturate(seen / 0.25f))));
         return;
     }
     const float4 w = mirror_weight_word(uint(material.b * 255.0f + 0.5f), material.r, material.a, g_base.Load(here).rgb,

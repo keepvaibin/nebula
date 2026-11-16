@@ -6,6 +6,7 @@
 #include "galaxy/render/render_core.h"
 
 #include "galaxy/launch_args.h"
+#include "galaxy/render/rt_materials.h"
 #include "render/core/world_lights.h"
 
 #include <algorithm>
@@ -25,9 +26,7 @@ constexpr float kShadowTint = 0.2f;    // how much of the per-channel ratio a pa
 constexpr float kSkyGain = 1.0f;       // the dome as light
 constexpr float kAreaEmission = 3.0f;  // an emissive surface as a ray sees it, in shares
 constexpr float kHitSky = 0.7f;        // a hit's own indirect when no screen knows it
-constexpr float kBounce = 1.0f;        // the bounce light's strength
-constexpr float kBounceMax = 2.5f;     // the indirect ratio's limits
-constexpr float kSkyMin = 0.25f;
+constexpr float kBounce = 1.0f;        // the bounce light's strength (its limits kBounceMax, kSkyMin: rt_dev.h)
 constexpr float kHitDark = 0.15f;      // a hit's light in sky-only mode
 constexpr float kSunGlint = 4.0f;      // the sun as a mirror shows it
 
@@ -95,7 +94,9 @@ void RenderCore::rt_shade_frame(RtShadeFrame& frame) const {
         frame.fill[c] = fill[c];
     }
     frame.key[3] = rt_dev(RtDev::ShadowTint, kShadowTint);  // rt_dev.h: one key with the programs' view_stage_a.w
-    frame.sky[3] = rt_dev(RtDev::SkyGain, kSkyGain);
+    // The dome as light by the stage row's sky gain (rt_stages.tsv), a run's sky_gain over it as sun_gain (rt_tables).
+    const RtStage* const stage_row = rt_stage(list.stage_hash);
+    frame.sky[3] = rt_dev(RtDev::SkyGain, kSkyGain * (stage_row != nullptr ? stage_row->sky_gain : kRtStageDefaults.sky_gain));
     frame.gains[0] = rt_dev(RtDev::AreaEmission, kAreaEmission);
     frame.gains[1] = rt_dev(RtDev::HitSky, kHitSky);
     frame.gains[2] = rt_dev(RtDev::Bounce, kBounce);
@@ -171,9 +172,18 @@ void RenderCore::rt_world_grid() {
         for (unsigned a = 0; a < 3u; ++a) {
             const float centre = emitter.centre[0] * rt_grid_axis_[a][0] + emitter.centre[1] * rt_grid_axis_[a][1] +
                                  emitter.centre[2] * rt_grid_axis_[a][2] + rt_grid_axis_[a][3];
-            r.low[a] = std::max(static_cast<int>(std::floor(centre - reach)), 0);
-            r.high[a] = std::min(static_cast<int>(std::floor(centre + reach)), static_cast<int>(counts[a]) - 1);
-            cells = r.low[a] > r.high[a] || !std::isfinite(centre) ? 0u : cells * static_cast<std::size_t>(r.high[a] - r.low[a] + 1);
+            // Inside the grid's own range before a float becomes an int (a far light's cell number is past an int's).
+            const float last = static_cast<float>(counts[a] - 1u);
+            const float low = std::floor(centre - reach), high = std::floor(centre + reach);
+            if (!(low <= last) || !(high >= 0.0f) || !(low <= high)) {  // outside the grid, no reach, or not a number
+                cells = 0u;
+                r.low[a] = 1;
+                r.high[a] = 0;
+                continue;
+            }
+            r.low[a] = static_cast<int>(std::max(low, 0.0f));
+            r.high[a] = static_cast<int>(std::min(high, last));
+            cells *= static_cast<std::size_t>(r.high[a] - r.low[a] + 1);
         }
         if (cells == 0u) {
             r.low[0] = 1;
@@ -185,6 +195,61 @@ void RenderCore::rt_world_grid() {
     std::uint32_t keep_every = 1u;
     while (entries - particle_entries + particle_entries / keep_every > kGridMostEntries && keep_every < 64u) {
         keep_every *= 2u;
+    }
+    // Still past the bound with the particles thinned (CPU C13): the meshes' and the points' lights that give least at
+    // the eye leave the grid, their cells emptied, in that order, as rt_emitter_bins drops entries. A light the grid held
+    // the walk before (its entries through rt_emitter_remap_, when that grid was this walk's last) weighs twice what it
+    // gives, keep_every's own step, so one at the edge does not come and go; equal ones by what they are.
+    const auto cells_of = [](const Range& r) -> std::size_t {
+        std::size_t n = 1u;
+        for (unsigned a = 0; a < 3u; ++a) {
+            n *= r.low[a] <= r.high[a] ? static_cast<std::size_t>(r.high[a] - r.low[a] + 1) : 0u;
+        }
+        return n;
+    };
+    std::size_t particles_kept = 0u;
+    for (std::size_t e = 0; e < emitters; ++e) {
+        particles_kept += rt_emitters_[e].kind == 2u && e % keep_every == 0u ? cells_of(ranges[e]) : 0u;
+    }
+    if (entries - particle_entries + particles_kept > kGridMostEntries) {
+        std::vector<std::uint8_t> held(emitters, 0u);
+        const std::size_t old_first = std::size_t{kGridCells} * 2u;
+        if (rt_shade_turn_ == rt_light_frame_.turn && rt_grid_words_.size() >= old_first + rt_grid_entries_) {
+            for (std::size_t k = 0; k < rt_grid_entries_; ++k) {
+                const std::uint32_t was = rt_grid_words_[old_first + k] & 0xFFFFu;
+                if (was < rt_emitter_remap_.size() && rt_emitter_remap_[was] < emitters) {
+                    held[rt_emitter_remap_[was]] = 1u;
+                }
+            }
+        }
+        std::vector<float> weight(emitters, 0.0f);
+        std::vector<std::uint32_t> order;
+        for (std::size_t e = 0; e < emitters; ++e) {
+            if (rt_emitters_[e].kind == 2u || cells_of(ranges[e]) == 0u) {
+                continue;
+            }
+            const RtEmitter& l = rt_emitters_[e];
+            const float r2 = l.radius * l.radius;
+            const float g = std::max({l.colour[0], l.colour[1], l.colour[2]}) * r2 /
+                            std::max(l.centre[0] * l.centre[0] + l.centre[1] * l.centre[1] + l.centre[2] * l.centre[2] + r2, 1e-4f);
+            weight[e] = held[e] != 0u ? 2.0f * g : g;
+            order.push_back(static_cast<std::uint32_t>(e));
+        }
+        std::stable_sort(order.begin(), order.end(), [&](std::uint32_t a, std::uint32_t b) {
+            return weight[a] != weight[b] ? weight[a] > weight[b] : rt_emitters_[a].reserved[1] < rt_emitters_[b].reserved[1];
+        });
+        std::size_t room = kGridMostEntries > particles_kept ? kGridMostEntries - particles_kept : 0u;
+        bool full = false;
+        for (const std::uint32_t e : order) {
+            const std::size_t cells = cells_of(ranges[e]);
+            full = full || cells > room;
+            if (full) {
+                ranges[e].low[0] = 1;
+                ranges[e].high[0] = 0;
+            } else {
+                room -= cells;
+            }
+        }
     }
     const auto kept = [&](std::size_t e) { return rt_emitters_[e].kind != 2u || e % keep_every == 0u; };
     // Count, then place (a counting sort by cell).
@@ -388,7 +453,8 @@ void RenderCore::rt_pass_reference() {
     const unsigned now_set = (rt_light_frame_.turn & 1u) * 4u, before_set = 4u - now_set;
     // A walk that is not held shows the reference's noise.
     const float values[3][4] = {{rt_hold_left_ != 0u ? static_cast<float>(kRefPaths) : 1.0f, static_cast<float>(kRefMostSamples), 0.0f, 0.0f}};
-    binds.pass_constants = rt_bounce_constants(0u, restart ? 1u : 0u, shade_at, values);
+    // g_pass.z bit 2: count the dome's directions only while rt_dome_read reads them.
+    binds.pass_constants = rt_bounce_constants(0u, (restart ? 1u : 0u) | (measured ? 4u : 0u), shade_at, values);
     binds.reads[0] = rt_now(RtImage::GuideA);
     binds.reads[1] = rt_image(RtImage::Normal);
     binds.reads[2] = rt_image(RtImage::Motion);
@@ -396,7 +462,10 @@ void RenderCore::rt_pass_reference() {
         binds.reads[3u + i] = rt_ref_images_[before_set + i];
         binds.writes[i] = rt_ref_images_[now_set + i];
     }
-    rt_backend_.dispatch(RtShader::Reference, binds, rt_light_frame_.across, rt_light_frame_.down);
+    if (!rt_backend_.dispatch(RtShader::Reference, binds, rt_light_frame_.across, rt_light_frame_.down)) {
+        rt_ref_list_ = nullptr;  // nothing summed into this turn's set: the next walk starts again
+        return;
+    }
     rt_ref_now_ = now_set;
     rt_ref_ready_ = true;
 }
@@ -424,8 +493,13 @@ void RenderCore::rt_pass_transmit_reference() {
     static constexpr const char* kNames[2] = {"Nebula RT Reference T A", "Nebula RT Reference T B"};
     bool images = true;
     for (unsigned i = 0; i < 2u; ++i) {
-        restart = restart || rt_ref_t_images_[i] == rt::kNoImage;  // new sums hold nothing yet
-        images = rt_bounce_image(rt_ref_t_images_[i], rt::ImageFormat::Rgba32f, frame.width, frame.height, kNames[i]) != rt::kNoImage && images;
+        // Made at the second layer's size, which the check above keeps (rt_bounce_image follows the opaque layer's).
+        std::uint32_t& image = rt_ref_t_images_[i];
+        restart = restart || image == rt::kNoImage;  // new sums hold nothing yet
+        if (image == rt::kNoImage) {
+            image = rt_backend_.make_image(rt::ImageFormat::Rgba32f, frame.width, frame.height, kNames[i]);
+        }
+        images = image != rt::kNoImage && images;
     }
     if (!images) {
         return;
@@ -444,7 +518,10 @@ void RenderCore::rt_pass_transmit_reference() {
     binds.reads[3] = rt_ref_t_images_[1u - now];
     binds.writes[0] = out;
     binds.writes[1] = rt_ref_t_images_[now];
-    rt_backend_.dispatch(RtShader::TransmitReference, binds, frame.across, frame.down);
+    if (!rt_backend_.dispatch(RtShader::TransmitReference, binds, frame.across, frame.down)) {
+        rt_ref_t_width_ = rt_ref_t_height_ = 0u;  // this turn's sum unwritten: made again, and started again, next walk
+        return;
+    }
     rt_transmit_drawn_ = true;
 }
 
@@ -453,18 +530,26 @@ void RenderCore::rt_reference_publish() {
     if (!rt_ref_ready_ || rt_light_frame_.layer != 0u) {
         return;
     }
-    const float values[3][4] = {{rt_dev(RtDev::SkyMin, kSkyMin), rt_dev(RtDev::BounceMax, kBounceMax), 0.0f, 0.0f}};
+    // .z 1: the landing cue's guide (t13) and the drops with their tiles (t3, t4) are bound (rt_reference_out.hlsl),
+    // so the reference's Light carries the cue as the real-time light space step's does.
+    const float values[3][4] = {{rt_dev(RtDev::SkyMin, kSkyMin), rt_dev(RtDev::BounceMax, kBounceMax), 1.0f, 0.0f}};
     rt::PassBinds means;
     means.constants = rt_light_frame_.binds.constants;
     means.pass_constants = rt_bounce_constants(0u, 0u, 0u, values);
+    means.buffers[2] = rt_light_frame_.binds.buffers[2];
+    means.buffers[3] = rt_light_frame_.binds.buffers[3];
     for (unsigned i = 0; i < 4u; ++i) {
         means.reads[i] = rt_ref_images_[rt_ref_now_ + i];
     }
+    means.reads[4] = rt_now(RtImage::GuideA);
     means.writes[0] = rt_image(RtImage::Light);
     means.writes[1] = rt_image(RtImage::Added);
     means.writes[2] = rt_image(RtImage::Mirror);
     means.writes[3] = rt_image(RtImage::Indirect);  // its rgb O, as the step up writes the real-time one
-    rt_backend_.dispatch(RtShader::ReferenceOut, means, rt_light_frame_.across, rt_light_frame_.down);
+    if (!rt_backend_.dispatch(RtShader::ReferenceOut, means, rt_light_frame_.across, rt_light_frame_.down)) {
+        rt_ref_ready_ = false;  // nothing written: the Indirect picture is not this walk's, so it is not published
+        return;
+    }
     // The reference's R through the reflections' own composite where they are on (rt_reflect_out.hlsl, g_pass.w bit 0:
     // the mean, the local lights' highlights added there): the Mirror picture in a preset's encoding, so the two
     // differ by the signal alone.
@@ -534,14 +619,14 @@ void RenderCore::rt_signals() {
             binds.pass_constants = rt_bounce_constants(0u, 0u, signal.channels | signal.over << 8u, values);
             binds.reads[0] = source;
             binds.writes[0] = image;
-            rt_backend_.dispatch(RtShader::Signal, binds, (width + 7u) / 8u, (height + 7u) / 8u);
-            drawn = true;
+            drawn = rt_backend_.dispatch(RtShader::Signal, binds, (width + 7u) / 8u, (height + 7u) / 8u);
         }
         renderer_.rt_depth_end();
         if (drawn) {
             renderer_.rt_copy_to_scene(rt_backend_.image_to_copy(image));
         }
     }
+    rt_backend_.end();
     renderer_.rt_commands_end();
     if (drawn) {
         renderer_.set_debug_capture_paths(rt_hold_folder_ + "signal_" + signal.name + "_" + rt_hold_number_ + ".ppm", {});

@@ -380,12 +380,10 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
     }
 
     // The frame's vertices for this walk: copied once a walk, positions moved at t where an item's pair has as many.
-    walk_ring_cpu_ = nullptr;
-    walk_index_cpu_ = nullptr;
+    walk_ring_traced_ = nullptr;
     if (list.ring_vertex_bytes != 0u) {
         const UploadRing::Allocation vertices = renderer_.vertex_ring().allocate(list.ring_vertex_bytes, 16u);
         walk_.ring_vertices = vertices.gpu;
-        walk_ring_cpu_ = vertices.cpu;
         // The ring is write-combined memory: the positions moved at t are made in a copy of the vertices, which then go
         // out in one sequential copy, not patched in place after it.
         if (between && before != nullptr && !now.cut) {
@@ -421,8 +419,10 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
                 }
             }
             std::memcpy(vertices.cpu, shaped, list.ring_vertex_bytes);
+            walk_ring_traced_ = shaped;  // the tracer's ring draws: the vertices drawn (rt_scene)
         } else {
             std::memcpy(vertices.cpu, list.ring_vertices, list.ring_vertex_bytes);
+            walk_ring_traced_ = static_cast<const std::byte*>(list.ring_vertices);
         }
         // The vertices they were at on the frame before, for what writes motion: its own, or its pair's.
         walk_ring_previous_ = same_list ? now.ring_address : from_before ? before->ring_address : gpu::Address{0u};
@@ -434,7 +434,6 @@ void RenderCore::prepare_walk(ListData& now, ListData* before, const WalkTime& t
         const UploadRing::Allocation indices = renderer_.index_ring().allocate(bytes, 4u);
         std::memcpy(indices.cpu, list.ring_indices, bytes);
         walk_.ring_indices = indices.gpu;
-        walk_index_cpu_ = reinterpret_cast<std::uint32_t*>(indices.cpu);
     }
 
     // Views: their terms at t, and where the projection was on the frame before.
@@ -729,15 +728,19 @@ bool RenderCore::walk_same_material(std::uint32_t a, std::uint32_t b) {
 
 // Ring draws after `first` join its draw while they differ from it only in their rows, vertices and indices. Each
 // joining draw's vertices name their rows by matrix number from the first draw's rows (the rows lie in block order, six
-// a matrix), and its indices count from the first draw's vertices. The patches go into this walk's copies of the ring,
-// which each draw pass reads once per walk.
-std::uint32_t RenderCore::merge_ring_run(std::uint32_t first, std::uint32_t end, std::uint32_t matrix_at, std::uint32_t& index_count) {
+// a matrix), and its indices count from the first draw's vertices. Those numbers go into copies of the run's own: the
+// walk's copies of the ring are read by the GPU once, as the walk last left them, by every draw of the walk, and a draw
+// of one of these items alone (the tracer's prepasses, a pass whose run starts elsewhere) reads them as listed.
+// Without the room for the copies the draws are drawn one at a time.
+RenderCore::RingRun RenderCore::merge_ring_run(std::uint32_t first, std::uint32_t end, std::uint32_t matrix_at) {
     const NebulaFrameList& list = *walk_.now->list;
     const NebulaFrameItem& head = list.items[first];
     const std::uint32_t stride = head.mesh;
-    index_count = head.count;
-    if (walk_ring_cpu_ == nullptr || walk_index_cpu_ == nullptr || stride == 0u) {
-        return 1u;
+    RingRun run;
+    run.index_count = head.count;
+    std::uint32_t& index_count = run.index_count;
+    if (walk_ring_traced_ == nullptr || list.ring_indices == nullptr || stride == 0u) {
+        return run;
     }
     const auto rows_of = [&](const NebulaFrameItem& item) {
         return std::int64_t{walk_block_rows_[item.block]} + std::int64_t{item.matrix} * kRowsPerMatrix;
@@ -771,25 +774,68 @@ std::uint32_t RenderCore::merge_ring_run(std::uint32_t first, std::uint32_t end,
         index_count += next.count;
         ++count;
     }
-    const auto* vertices = static_cast<const std::byte*>(list.ring_vertices);
-    for (std::uint32_t k = 1u; k < count; ++k) {
-        const NebulaFrameItem& item = list.items[first + k];
-        const auto add_matrix = static_cast<std::uint32_t>((rows_of(item) - head_rows) / kRowsPerMatrix);
-        if (add_matrix != 0u) {
-            for (std::uint32_t v = 0; v < item.ring_count; ++v) {
-                const std::size_t at = std::size_t{item.ring_at} + std::size_t{v} * stride + matrix_at;
-                std::uint32_t matrix;
-                std::memcpy(&matrix, vertices + at, sizeof(matrix));
-                matrix += add_matrix;
-                std::memcpy(walk_ring_cpu_ + at, &matrix, sizeof(matrix));
-            }
+    if (count == 1u) {
+        return run;
+    }
+    // The vertices: the walk's copy where every draw's rows are the first's; else a copy of the span from the first
+    // draw's vertices to the last's end (another draw's vertices between are copied and left unread), the matrix
+    // numbers moved there. Staged in memory that reads back, then copied out in one sequential write.
+    const NebulaFrameItem& last = list.items[first + count - 1u];
+    bool moved_rows = false;
+    for (std::uint32_t k = 1u; k < count && !moved_rows; ++k) {
+        moved_rows = rows_of(list.items[first + k]) != head_rows;
+    }
+    UploadRing::Allocation vertex_copy{};
+    std::size_t span = 0u;
+    if (moved_rows) {
+        span = std::size_t{last.ring_at} + std::size_t{last.ring_count} * stride - head.ring_at;
+        if (span > list.ring_vertex_bytes - head.ring_at || span > std::size_t{0xFFFFFFFFu}) {
+            run.index_count = head.count;
+            return run;
         }
-        const std::uint32_t add_vertex = (item.ring_at - head.ring_at) / stride;
-        for (std::uint32_t n = 0; n < item.count; ++n) {
-            walk_index_cpu_[item.first + n] = list.ring_indices[item.first + n] + add_vertex;
+        vertex_copy = renderer_.vertex_ring().allocate(span, 16u);
+        if (vertex_copy.cpu == nullptr) {
+            run.index_count = head.count;
+            return run;
         }
     }
-    return count;
+    const UploadRing::Allocation index_copy = renderer_.index_ring().allocate(std::size_t{index_count} * 4u, 4u);
+    if (index_copy.cpu == nullptr) {
+        run.index_count = head.count;  // the vertex copy taken stays unread: the ring frees it with the frame
+        return run;
+    }
+    if (moved_rows) {
+        walk_run_stage_.assign(walk_ring_traced_ + head.ring_at, walk_ring_traced_ + head.ring_at + span);
+        for (std::uint32_t k = 1u; k < count; ++k) {
+            const NebulaFrameItem& item = list.items[first + k];
+            const auto add_matrix = static_cast<std::uint32_t>((rows_of(item) - head_rows) / kRowsPerMatrix);
+            if (add_matrix == 0u) {
+                continue;
+            }
+            for (std::uint32_t v = 0; v < item.ring_count; ++v) {
+                const std::size_t at = std::size_t{item.ring_at - head.ring_at} + std::size_t{v} * stride + matrix_at;
+                std::uint32_t matrix;
+                std::memcpy(&matrix, walk_run_stage_.data() + at, sizeof(matrix));
+                matrix += add_matrix;
+                std::memcpy(walk_run_stage_.data() + at, &matrix, sizeof(matrix));
+            }
+        }
+        std::memcpy(vertex_copy.cpu, walk_run_stage_.data(), span);
+        run.vertices = vertex_copy.gpu;
+        run.vertex_bytes = static_cast<std::uint32_t>(span);
+    }
+    auto* const indices = reinterpret_cast<std::uint32_t*>(index_copy.cpu);
+    std::uint32_t written = 0u;
+    for (std::uint32_t k = 0u; k < count; ++k) {
+        const NebulaFrameItem& item = list.items[first + k];
+        const std::uint32_t add_vertex = (item.ring_at - head.ring_at) / stride;
+        for (std::uint32_t n = 0; n < item.count; ++n) {
+            indices[written++] = list.ring_indices[item.first + n] + add_vertex;
+        }
+    }
+    run.indices = index_copy.gpu;
+    run.count = count;
+    return run;
 }
 
 void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_t& first) {
@@ -1220,7 +1266,24 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
         }
         if (rt_prepass_walk_) {
             // Through the vertex stage the scene pass will use for it: the two passes find one depth.
-            aux = static_cast<std::uint8_t>(aux == 1u ? kAuxPrepassMotion : kAuxPrepass);
+            const auto prepass = static_cast<std::uint8_t>(aux == 1u ? kAuxPrepassMotion : kAuxPrepass);
+            // The workers make the tracer's forms, this thread never: until its prepass form and the traced forms the scene
+            // pass can ask for (a blended draw's in a layer window and out of one) are made, the item stays out of the
+            // prepass and the scene pass draws it untraced. An added clear shell's traced forms are its exchange forms.
+            const unsigned traced = kAuxTraced | (rt_blended_walk_ && core::added_prepass_draws(state) ? kAuxExchange : 0u);
+            bool made = pipelines_.made(item.pipeline, target_variant, prepass);
+            if (made && program_traced(entry.desc.pixel)) {
+                made = pipelines_.made(item.pipeline, target_variant, traced | aux);
+                if (made && (aux == 2u || aux == 3u) && renderer_.has_layer_targets()) {
+                    const unsigned other = aux == 2u ? core::scene_aux(state, true) : 2u;
+                    made = pipelines_.made(item.pipeline, target_variant, traced | other);
+                }
+            }
+            if (!made) {
+                ++i;
+                continue;
+            }
+            aux = prepass;
         } else if (rt_light_on_ && scene_layer && rt_prepassed_[i] != 0u && aux <= 4u &&
                    program_traced(entry.desc.pixel)) {
             aux = static_cast<std::uint8_t>(aux | kAuxTraced);  // a surface the light pass saw: its colour and lights by their shares
@@ -1271,10 +1334,12 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             }
         }
         // Consecutive ring draws of one material are one draw.
-        std::uint32_t ring_index_count = item.count;
+        RingRun ring_run;
+        ring_run.index_count = item.count;
         const bool motion_form = aux_motion_form(aux);
         if (ring && !instanced && (item.flags & NEBULA_ITEM_INDEXED) != 0u && !motion_form && !rt_prepass_walk_) {
-            instances = merge_ring_run(i, end, entry.matrix_at, ring_index_count);
+            ring_run = merge_ring_run(i, end, entry.matrix_at);
+            instances = ring_run.count;
         }
 
         encoder.set_draw_aux(aux_targets(aux));
@@ -1377,16 +1442,20 @@ void RenderCore::walk_draw_items(const NebulaFramePass& pass, Draws& encoder) {
             encoder.draw(item.count, item.ring_count, 0u);
         } else if (ring) {
             const std::uint32_t stride = item.mesh;
-            const auto bytes = static_cast<std::uint32_t>(list.ring_vertex_bytes - item.ring_at);
-            const gpu::Address at = walk_.ring_vertices + item.ring_at;
+            const auto bytes = ring_run.vertices != 0u ? ring_run.vertex_bytes
+                                                       : static_cast<std::uint32_t>(list.ring_vertex_bytes - item.ring_at);
+            const gpu::Address at = ring_run.vertices != 0u ? ring_run.vertices : walk_.ring_vertices + item.ring_at;
             encoder.set_stream(gpu::kStreamPosition, {at, bytes, stride});
             if (motion_form) {
                 encoder.set_stream(gpu::kStreamBefore, {ring_item_before(i, at), bytes, stride});
             }
             encoder.set_stream(gpu::kStreamZero, {renderer_.zero_stream(16u), 16u, 0u});
-            if ((item.flags & NEBULA_ITEM_INDEXED) != 0u) {
+            if ((item.flags & NEBULA_ITEM_INDEXED) != 0u && ring_run.indices != 0u) {
+                encoder.set_indices(ring_run.indices, ring_run.index_count * 4u, 4u);  // a joined run's own (merge_ring_run)
+                encoder.draw_indexed(ring_run.index_count, 1u, 0u, 0);
+            } else if ((item.flags & NEBULA_ITEM_INDEXED) != 0u) {
                 encoder.set_indices(walk_.ring_indices, list.ring_index_count * 4u, 4u);
-                encoder.draw_indexed(ring_index_count, 1u, item.first, 0);
+                encoder.draw_indexed(ring_run.index_count, 1u, item.first, 0);
             } else {
                 encoder.draw(item.count, 1u, item.first);
             }
@@ -1510,12 +1579,27 @@ void RenderCore::walk_scene_begin(const NebulaFramePass& pass) {
         switched = true;
     }
     renderer_.begin_wide_scene(wide);
+    // The programs leave their shoulder to the camera only on the wide target the scene draws into: the one made (by
+    // this call or the clear before), not the wish; a refused one leaves the 10-bit target.
+    if ((renderer_.scene_variant() & kSceneVariantHdr) == 0) {
+        view_flags_ &= ~4u;
+    }
     if (switched) {
         display_pictures_.set_frame_map(renderer_.frame_map());
     }
     ++walk_view_stamp_;
     if (rt_backend_.started()) {
-        if (static_cast<std::uint32_t>(&pass - list.passes) == rt_traced_begin_) {
+        // A refused wide target leaves the scene narrow: its tracer forms join the start set from the next walk on.
+        rt_scene_narrow_ = rt_scene_narrow_ || (wide && (renderer_.scene_variant() & kSceneVariantHdr) == 0);
+        // Until the start set's tracer forms are made the scene draws as with ray tracing off, whole: an item drawn
+        // untraced among traced ones (draw_walker's prepass) would have neither the traced light nor its own drop shadow.
+        if (!rt_forms_ready_ && pipelines_.traced_pending() == 0u) {
+            rt_forms_ready_ = true;
+            std::fprintf(stderr, "[rt] the tracer's pipelines are made: the scene is traced from this walk\n");
+        }
+        if (!rt_forms_ready_) {
+            rt_untraced();
+        } else if (static_cast<std::uint32_t>(&pass - list.passes) == rt_traced_begin_) {
             rt_scene(pass);
             rt_prepass(pass);
         } else {

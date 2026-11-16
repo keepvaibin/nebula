@@ -691,6 +691,7 @@ unsigned pending_settings_changes() {
     changes += d.rt_parts != live.rt_parts;
     changes += d.rt_lens_bloom != live.rt_lens_bloom;
     changes += d.rt_landing_shadow != live.rt_landing_shadow;
+    changes += d.rt_style != live.rt_style;
     changes += d.texture_packs != live.texture_packs ||
         (d.texture_packs && d.texture_pack_preload != live.texture_pack_preload);
     changes += d.texture_dump != live.texture_dump;
@@ -1177,6 +1178,7 @@ void apply_native_settings_draft() {
     applied.rt_chosen = next.rt_chosen;
     applied.rt_lens_bloom = next.rt_lens_bloom;
     applied.rt_landing_shadow = next.rt_landing_shadow;
+    applied.rt_style = next.rt_style;
     applied.texture_packs = next.texture_packs;
     applied.texture_pack_preload = next.texture_pack_preload;
     applied.texture_dump = next.texture_dump;
@@ -2114,7 +2116,7 @@ public:
         state.xess_supported = host_window::upscaler_caps().xess;
         state.xess_installed = xess_installed_now();
         state.ray_tracing_offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
-        state.traced_temporal = fsr3_available();
+        state.traced_temporal = fsr3_available() || sgsr2_available();  // the tracer's pick (rt_walk.cpp rt_start)
         state.temporal_upscaling = temporal_upscaler(render) != 0u;
         state.spatial_upscaling = spatial_quality_mode(render);
         state.curved_surfaces_offered = curved_surfaces_offered();

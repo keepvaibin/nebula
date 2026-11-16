@@ -42,8 +42,9 @@ Backend::Backend() = default;
 Backend::~Backend() { stop(); }
 
 bool Backend::started() const noexcept { return state_ != nullptr; }
+bool Backend::failed() const noexcept { return false; }
 
-bool Backend::start(gpu::Device*) {
+bool Backend::start(gpu::Device*, void*) {
     stop();
     state_ = new State{};
     g_log = fake::Log{};
@@ -60,7 +61,10 @@ BuildSizes Backend::sizes(const TriangleInput& input, BuildKind) const {
     return {fake::structure_bytes(triangles), std::uint64_t{triangles} * 16u + 100u, std::uint64_t{triangles} * 4u + 100u};
 }
 
-std::uint32_t Backend::make_page(std::uint64_t bytes, bool) {
+std::uint32_t Backend::make_page(std::uint64_t bytes, bool scratch) {
+    if (scratch && g_log.refuse_scratch) {
+        return ~0u;
+    }
     state_->pages.push_back(bytes);
     ++g_log.pages;
     return static_cast<std::uint32_t>(state_->pages.size() - 1u);
@@ -102,6 +106,8 @@ void Backend::begin(void*, unsigned frame_slot, void*) noexcept {
     barrier();
     --g_log.barriers;
 }
+
+void Backend::end() noexcept {}
 
 void Backend::build(const TriangleInput& input, BuildKind, const Structure& to, const Range& scratch, bool refit) {
     ++(refit ? g_log.refits : g_log.builds);
@@ -180,12 +186,16 @@ std::uint32_t Backend::make_image(ImageFormat, std::uint32_t width, std::uint32_
 
 void Backend::free_image(std::uint32_t) noexcept {}
 Backend::Live Backend::live() const noexcept { return {}; }
+std::uint64_t Backend::memory_budget() const noexcept { return state_ != nullptr ? g_log.memory_budget : 0u; }
 
 void* Backend::image_to_copy(std::uint32_t) { return nullptr; }
 
 void* Backend::image_to_sample(std::uint32_t) { return nullptr; }
 
-void Backend::dispatch(RtShader, const PassBinds&, std::uint32_t, std::uint32_t) { ++g_log.passes; }
+bool Backend::dispatch(RtShader, const PassBinds&, std::uint32_t, std::uint32_t) {
+    ++g_log.passes;
+    return true;
+}
 
 void Backend::end_counters() {}
 

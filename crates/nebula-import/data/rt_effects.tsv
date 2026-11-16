@@ -196,8 +196,6 @@ BossStinkBugGroundRunWater00	not added to the picture	0	steady
 BossStinkBugGroundRunWater01	water	0	steady
 BossStinkBugJumpSmoke00	not added to the picture	0	steady
 BossStinkBugShoot00	not added to the picture	0	steady
-BossStinkBugShoot01	motion streak	50	streak
-BossStinkBugShoot02	motion streak	50	streak
 BreakableBungBreak00	not added to the picture	0	steady
 BreakableBungBreak01	not added to the picture	0	steady
 BurySand00	not added to the picture	0	steady
@@ -649,7 +647,6 @@ FooMarioFlyEnd00	motion streak	50	streak
 FooMarioGlow00	glow or lamp	300	steady
 FooMarioGlow01	glow or lamp	300	steady
 FooMarioGlow02	glow or lamp	300	steady
-FooMarioTailLamp00	not added to the picture	0	steady
 ForestObstacleWoodAFallSmoke00	not added to the picture	0	steady
 ForestObstacleWoodAFallSmoke01	not added to the picture	0	steady
 ForestWaterFall00	water	0	steady
@@ -772,8 +769,6 @@ HomingKillerChaseStart01	impact flash	120	flash
 HomingKillerChaseStart02	impact flash	120	flash
 HomingKillerChaseStart03	impact flash	120	flash
 HomingKillerShoot00	not added to the picture	0	steady
-HomingKillerShoot01	impact flash	120	flash
-HomingKillerShoot02	impact flash	120	flash
 HomingKillerSmoke00	not added to the picture	0	steady
 HomingKillerSmoke01	not added to the picture	0	steady
 HomingKillerSmokeChase00	not added to the picture	0	steady
@@ -1014,8 +1009,6 @@ KaronRecovery00	not added to the picture	0	steady
 KaronRecovery01	signal or energy	150	pulse
 KillerGunnerSingleSmoke00	not added to the picture	0	steady
 KillerGunnerSingleSmoke01	not added to the picture	0	steady
-KillerGunnerSingleSmoke02	smoke, steam or dust	0	steady
-KillerGunnerSingleSmoke03	smoke, steam or dust	0	steady
 KinipioSleepZ00	not added to the picture	0	steady
 KinokoLifeUpGlow00	pick-up glow	100	flash
 KinokoLifeUpGlow01	not added to the picture	0	steady
@@ -1088,8 +1081,6 @@ KoopaJrShipCannonShellFire03	fire or lava	500	flicker
 KoopaJrShipCannonShellSmoke00	not added to the picture	0	steady
 KoopaJrShipCannonShellSmoke01	not added to the picture	0	steady
 KoopaJrShipCannonShoot00	not added to the picture	0	steady
-KoopaJrShipCannonShoot01	motion streak	50	streak
-KoopaJrShipCannonShoot02	motion streak	50	streak
 KoopaJrShipDamage00	not added to the picture	0	steady
 KoopaJrShipDamage01	impact flash	120	flash
 KoopaJrShipDamage02	impact flash	120	flash
@@ -1104,9 +1095,6 @@ KoopaJrShipHeadCannonBreak00	not added to the picture	0	steady
 KoopaJrShipHeadCannonBreak01	not added to the picture	0	steady
 KoopaJrShipHeadCannonShoot00	not added to the picture	0	steady
 KoopaJrShipHeadCannonShoot01	not added to the picture	0	steady
-KoopaJrShipHeadCannonShoot02	motion streak	50	streak
-KoopaJrShipHeadCannonShoot03	motion streak	50	streak
-KoopaJrShipHeadCannonShootSign00	motion streak	50	streak
 KoopaJrShipPodLastLight00	glow or lamp	300	steady
 KoopaJrShipPodLastSmoke00	not added to the picture	0	steady
 KoopaJrSweat00	not added to the picture	0	steady
@@ -2286,8 +2274,6 @@ StinkBugParentAngrySmoke00	not added to the picture	0	steady
 StinkBugParentAngrySmoke01	not added to the picture	0	steady
 StinkBugSmallRushSmoke00	not added to the picture	0	steady
 StoryDemoAc01KpShipCannonShoot00	not added to the picture	0	steady
-StoryDemoAc01KpShipCannonShoot01	motion streak	50	streak
-StoryDemoAc01KpShipCannonShoot02	motion streak	50	streak
 StoryDemoAc01KpShipCannonShoot03	motion streak	50	streak
 StoryDemoAc01KpShipCannonShoot04	motion streak	50	streak
 StoryDemoAc03BlackSmoke00	not added to the picture	0	steady
@@ -3102,8 +3088,6 @@ TornadoChargeEnd00	signal or energy	150	pulse
 TorpeadShoot00	not added to the picture	0	steady
 TorpeadShoot01	not added to the picture	0	steady
 TorpeadShoot02	not added to the picture	0	steady
-TorpeadShoot03	motion streak	50	streak
-TorpeadShoot04	motion streak	50	streak
 TorpedoBubbleChase00	not added to the picture	0	steady
 TorpedoBubbleChase01	not added to the picture	0	steady
 TorpedoBubbleChase02	water	0	steady

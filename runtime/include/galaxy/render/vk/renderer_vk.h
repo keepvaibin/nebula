@@ -163,6 +163,9 @@ public:
         void* descriptors = nullptr;
     };
     [[nodiscard]] RtCommands rt_commands_begin();
+    // The image array set layout the tracer's passes name (rt_backend.h Backend::start), for the device's life; null
+    // without the array.
+    [[nodiscard]] void* rt_texture_layout() const noexcept { return bindless_ ? draw_layout_.sets[1] : nullptr; }
     void rt_commands_end();
     // The scene's depth as a pass reads it, until rt_depth_end, with its size and the format an image must have to be
     // copied over the scene's colour (rt_copy_to_scene). With `color_view`, the scene's colour as drawn so far for the
