@@ -1,0 +1,96 @@
+{
+  "page": "/download/",
+  "metadata": {
+    "title": "Download Nebula",
+    "description": "You need your own copy of Super Mario Galaxy."
+  },
+  "text": {
+    "general": {
+      "link_1": "Skip to content"
+    },
+    "header": {
+      "aria_label_1": "Nebula home",
+      "link_1": "nebula",
+      "button_1": "Menu",
+      "label_2": "☰",
+      "aria_label_2": "Main navigation",
+      "link_2": "v2",
+      "link_3": "Setup",
+      "link_4": "Player guide",
+      "link_5": "Modding",
+      "link_6": "Help",
+      "link_8": "Blog",
+      "link_7": "Download"
+    },
+    "page": {
+      "link_1": "Nebula /",
+      "paragraph_1": "PLAYER INFORMATION",
+      "title_1": "Download Nebula",
+      "paragraph_2": "You need your own copy of Super Mario Galaxy."
+    },
+    "contents": {
+      "aria_label_1": "On this page",
+      "link_1": "CURRENT RELEASE",
+      "link_3": "PLATFORMS",
+      "link_4": "YOUR GAME"
+    },
+    "current": {
+      "div_1": "LATEST RELEASE",
+      "heading_1": "Nebula v1.0.2",
+      "paragraph_1": "Nebula v1.0.2 for Windows, released 27 October 2026.",
+      "paragraph_2": "Download Nebula-Setup.exe under Assets on the release page.",
+      "link_1": "Download v1.0.2 ↗",
+      "link_2": "All releases ↗"
+    },
+    "platforms": {
+      "div_1": "PLATFORMS",
+      "heading_1": "Platforms",
+      "label_1": "v1.0.2 · v2",
+      "subheading_1": "Windows",
+      "paragraph_1": "Windows 10 (1803 or newer) or Windows 11, 64-bit. Windows on ARM runs the x64 version.",
+      "label_2": "v2",
+      "subheading_2": "Linux",
+      "paragraph_2": "x64 and ARM64, including Steam Deck. Needs glibc 2.38 or newer, for example Ubuntu 24.04 or Fedora 39. Installs from the .tar.gz package with install.sh.",
+      "label_3": "v2",
+      "subheading_3": "macOS",
+      "paragraph_3": "macOS 12 or newer, on Apple silicon and Intel Macs.",
+      "label_4": "v2",
+      "subheading_4": "Android",
+      "paragraph_4": "Android 12 or newer, 64-bit ARM, Vulkan 1.1. Touch controls and controllers.",
+      "label_5": "In development",
+      "subheading_5": "iPhone and iPad",
+      "paragraph_5": "An iPhone and iPad version is in development."
+    },
+    "before": {
+      "div_1": "YOUR GAME",
+      "heading_1": "Game files",
+      "paragraph_1": "Nebula includes no game files. You need Super Mario Galaxy for Wii, North America (RMGE01), as an ISO, RVZ or extracted folder.",
+      "link_1": "System requirements"
+    },
+    "footer": {
+      "link_1": "nebula",
+      "paragraph_1": "A little closer to the stars.",
+      "subheading_1": "Explore",
+      "link_2": "Nebula v2",
+      "link_3": "Player guide",
+      "subheading_2": "Start playing",
+      "link_4": "Modding docs",
+      "link_15": "Developer Blog",
+      "link_5": "Download",
+      "link_6": "Setup & requirements",
+      "link_7": "Controls",
+      "subheading_3": "Get help",
+      "link_8": "Troubleshooting",
+      "link_9": "Report a bug",
+      "link_10": "Join Discord ↗",
+      "subheading_4": "Nebula",
+      "link_12": "Credits",
+      "link_13": "Legal & privacy",
+      "link_14": "GitHub ↗",
+      "paragraph_2": "© 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo."
+    }
+  },
+  "messages": {
+    "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+  }
+}

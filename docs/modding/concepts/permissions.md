@@ -29,7 +29,7 @@ The player answers once for each mod. Nebula asks again only when an update chan
 
 ## Declaring a permission
 
-List each permission in the `permissions` array of `luma.json`. Every entry has a `name` and a `why`. An `net.internet` entry also lists its `hosts`.
+List each permission in the `permissions` array of `luma.json`. Every entry has a `name` and a `why`. A `net.internet` entry also lists its `hosts`.
 
 ```json
 "permissions": [

@@ -1,0 +1,65 @@
+{
+  "page": "/404.html",
+  "metadata": {
+    "title": "Page not found — Nebula",
+    "description": "This page does not exist. It may have moved."
+  },
+  "text": {
+    "general": {
+      "link_1": "Skip to content"
+    },
+    "header": {
+      "aria_label_1": "Nebula home",
+      "link_1": "nebula",
+      "button_1": "Menu",
+      "label_2": "☰",
+      "aria_label_2": "Main navigation",
+      "link_2": "v2",
+      "link_3": "Setup",
+      "link_4": "Player guide",
+      "link_5": "Modding",
+      "link_6": "Help",
+      "link_8": "Blog",
+      "link_7": "Download"
+    },
+    "page": {
+      "link_1": "Nebula /",
+      "paragraph_1": "ERROR 404",
+      "title_1": "Page not found",
+      "paragraph_2": "The address may be mistyped, or the page may have moved."
+    },
+    "links": {
+      "div_1": "WHERE TO NEXT",
+      "heading_1": "Try one of these",
+      "paragraph_1": "Start from the home page, browse the modding docs, or check the help page.",
+      "link_1": "Home page",
+      "link_2": "Modding docs",
+      "link_3": "Help"
+    },
+    "footer": {
+      "link_1": "nebula",
+      "paragraph_1": "A little closer to the stars.",
+      "subheading_1": "Explore",
+      "link_2": "Nebula v2",
+      "link_3": "Player guide",
+      "subheading_2": "Start playing",
+      "link_4": "Modding docs",
+      "link_15": "Developer Blog",
+      "link_5": "Download",
+      "link_6": "Setup & requirements",
+      "link_7": "Controls",
+      "subheading_3": "Get help",
+      "link_8": "Troubleshooting",
+      "link_9": "Report a bug",
+      "link_10": "Join Discord ↗",
+      "subheading_4": "Nebula",
+      "link_12": "Credits",
+      "link_13": "Legal & privacy",
+      "link_14": "GitHub ↗",
+      "paragraph_2": "© 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo."
+    }
+  },
+  "messages": {
+    "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+  }
+}

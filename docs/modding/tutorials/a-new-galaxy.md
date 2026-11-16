@@ -1,73 +1,84 @@
 ---
-title: A new galaxy
+title: Adding a new galaxy
 shortTitle: A new galaxy
-intro: Add a galaxy of your own with its stage, placements and text.
+intro: Add a galaxy of your own, with its stage, enemies, a boss with its own cutscene and music, and text in every language.
 contentType: tutorials
+example: a-new-galaxy
 ---
 
-## About this tutorial
+## Introduction
 
-A galaxy the game never had: Orb King Galaxy, a small mossy planet with three Spikerolls that roll at Mario and the
-Orb King, a boss that wakes with its own scene, shows a life meter, plays its own music and gives the galaxy's star
-when it is stomped three times. Every model, sound and table is made for it; nothing is taken from the game. The
-whole mod is the folder [`a-new-galaxy`](../guides/a-new-galaxy/) in the documentation.
+In this tutorial, you add Orb King Galaxy, a galaxy the game never had. It is a small mossy planet with three Spikerolls that roll toward Mario, and the Orb King, a boss that wakes with its own cutscene, shows a life meter and plays its own music. Stomping the Orb King three times makes the galaxy's star appear.
 
-## Step 1: Make the folder
+Every model, sound and table in this mod is made for it. Nothing is copied from the game.
+
+You learn how to:
+
+* Generate models and music with a script.
+* Build a stage from the game's tables.
+* Define a galaxy with LumaKit's `stage` module, and enemies and a boss with the `actor` module.
+* Play a cutscene with the `cutscene` module, and show a meter with the `hud` module.
+
+## Prerequisites
+
+* Nebula, installed with Nebula Setup.
+* LumaLink. For more information, see [Installing LumaLink](../get-started/installing-lumalink.md).
+* Python 3, to run the script that generates the mod's models and sounds. The script needs no extra packages.
+
+## Creating the mod
+
+Create the mod folder, and add LumaKit to the mod's needs.
 
 ```sh
-lumalink new orb-galaxy --id orb-galaxy --name "Orb King Galaxy" --summary "A new galaxy: a mossy planet, rolling Spikerolls and the Orb King, who guards its star." --author you
+lumalink new orb-galaxy --id orb-galaxy --name "Orb King Galaxy" --summary "A new galaxy: a mossy planet, rolling Spikerolls and the Orb King, who guards its star." --author YOUR-NAME
 lumalink add need lumakit orb-galaxy
 ```
 
-The galaxy, the enemies, the scene and the meter are LumaKit's `kit.stage`, `kit.actor`, `kit.cutscene` and
-`kit.hud`.
+The galaxy, the enemies, the cutscene and the meter use LumaKit's `kit.stage`, `kit.actor`, `kit.cutscene` and `kit.hud` modules.
 
-## Step 2: Make the content
+## Generating the content
 
-`source/content/make_content.py` makes every model and sound from numbers (Python 3, nothing to install). Run it
-from the mod's folder:
+The finished mod includes `source/content/make_content.py`, which generates every model and sound from code. Copy it into your mod, then run it from the mod folder:
 
 ```sh
 python source/content/make_content.py
 ```
 
-It writes `layers/base/assets/`:
+The script writes these files to `layers/base/assets/`:
 
-| File | What it is |
+| File | Description |
 |---|---|
-| `NebulaPlanet.glb` | the planet: a sphere 20 m across with gentle bumps, normals, UVs and a generated moss texture |
-| `NebulaPlanet.kcl.glb` | the ground Mario walks on: the same surface, coarser; a `.kcl.glb` is cooked as collision |
-| `Spikeroll.glb` | the enemy: a purple ball with gold spikes and eyes, skinned to a two-joint skeleton, clips `Wait`, `Roll`, `Down` |
-| `OrbKing.glb` | the boss: a blue sphere with red eyes and a gold crown on its own joint, clips `Wait`, `Slam`, `Dizzy`, `Hurt`, `Down` |
-| `NebulaTheme.wav`, `BossTheme.wav` | the music: a calm major loop and a driving minor loop, 32 kHz stereo |
-| `NebulaTheme.sound.json` | the galaxy's music as a stream, read from disk as it plays, so it can be minutes long: `{"kind": "stream", "loop": true, ...}` |
-| `BossTheme.sound.json` | the boss music as a sound, held in memory (60 seconds at most): `{"kind": "effect", "bus": "music", "loop": true, ...}` |
+| `NebulaPlanet.glb` | The planet: a sphere 20 m across with gentle bumps, normals, UVs and a generated moss texture. |
+| `NebulaPlanet.kcl.glb` | The ground Mario walks on: the same surface at a lower resolution. A `.kcl.glb` file is converted into collision. |
+| `Spikeroll.glb` | The enemy: a purple ball with gold spikes and eyes, skinned to a two-joint skeleton, with the animations `Wait`, `Roll` and `Down`. |
+| `OrbKing.glb` | The boss: a blue sphere with red eyes and a gold crown on its own joint, with the animations `Wait`, `Slam`, `Dizzy`, `Hurt` and `Down`. |
+| `NebulaTheme.wav`, `BossTheme.wav` | The music: a calm loop in a major key and a driving loop in a minor key, at 32 kHz stereo. |
+| `NebulaTheme.sound.json` | The galaxy's music as a stream. A stream is read from disk as it plays, so it can be several minutes long: `{"kind": "stream", "loop": true, ...}`. |
+| `BossTheme.sound.json` | The boss music as a sound held in memory, which can be at most 60 seconds long: `{"kind": "effect", "bus": "music", "loop": true, ...}`. |
 
-glTF lengths are metres; the game uses 100 of its units for each. A clip's name is the action the code starts. The
-game cooks each file when the mod is imported.
+glTF lengths are in meters, and the game uses 100 of its units for each meter. An animation's name is the name of the action your code starts. The game converts each file when the player imports the mod.
 
-## Step 3: The stage
+## Building the stage
 
-A galaxy is a stage of tables under `layers/base/files/StageData/`:
+A galaxy is a stage made of tables in `layers/base/files/StageData/`:
 
-| File | What it holds |
+| File | Contents |
 |---|---|
-| `OrbKingGalaxyScenario.arc/zonelist.bcsv.json` | the zones of the galaxy: one, the galaxy itself |
-| `OrbKingGalaxyScenario.arc/scenariodata.bcsv.json` | its one scenario, with the star's name |
-| `OrbKingGalaxy.arc/jmp/start/common/startinfo.json` | where Mario starts: 1150 above the center, on top of the planet |
-| `OrbKingGalaxy.arc/jmp/placement/common/planetobjinfo.json` | `GlobalPointGravity` at the center: everything falls toward the planet |
-| `OrbKingGalaxy.arc/jmp/placement/common/objinfo.json` | empty: the planet, the enemies and the boss are placed by the code (section 4) |
-| `OrbKingGalaxy.arc/camera/cameraparam.bcam.json` | the cameras: none of its own, so the game's default camera |
-| the other tables of `jmp/` | empty; `path/commonpathinfo` holds no rail, so the stage has no opening flight and no `ScenarioStarter` (a starter needs a rail named by its `CommonPath_ID`) |
+| `OrbKingGalaxyScenario.arc/zonelist.bcsv.json` | The galaxy's zones. This galaxy has one zone, the galaxy itself. |
+| `OrbKingGalaxyScenario.arc/scenariodata.bcsv.json` | The galaxy's single scenario, with the star's name. |
+| `OrbKingGalaxy.arc/jmp/start/common/startinfo.json` | Where Mario starts: 1150 units above the center, on top of the planet. |
+| `OrbKingGalaxy.arc/jmp/placement/common/planetobjinfo.json` | A `GlobalPointGravity` at the center, so everything falls toward the planet. |
+| `OrbKingGalaxy.arc/jmp/placement/common/objinfo.json` | Empty. The code places the planet, the enemies and the boss. |
+| `OrbKingGalaxy.arc/camera/cameraparam.bcam.json` | The cameras. The galaxy has none of its own, so the game uses its default camera. |
+| The other tables in `jmp/` | Empty. `path/commonpathinfo` has no rail, so the stage has no opening flight and no `ScenarioStarter`, which needs a rail named by its `CommonPath_ID`. |
 
-Rows name their columns: `name`, `l_id`, `pos_x` to `pos_z`, `dir_x` to `dir_z`, `scale_x` to `scale_z`,
-`Obj_arg0` to `Obj_arg7`. `lumalink extract --game <game.pak> -o <folder> StageData/<a galaxy>` writes any of the
-game's stages in the same form to read from. The galaxy's lines (its name and the star's, in 14 languages) are in
-`layers/base/merge/MessageData/messages.json`.
+Each row names its columns: `name`, `l_id`, `pos_x` to `pos_z`, `dir_x` to `dir_z`, `scale_x` to `scale_z`, and `Obj_arg0` to `Obj_arg7`. To see how the game's own stages are built, extract one in the same form with `lumalink extract --game GAME-PAK -o OUTPUT-FOLDER StageData/GALAXY-NAME`. For more information, see [lumalink extract](../reference/lumalink-commands/extract.md).
 
-## Step 4: Write the code
+The galaxy's name and the star's name, in all 14 languages, are in `layers/base/merge/MessageData/messages.json`.
 
-Put this in `orb-galaxy/source/main.lum`:
+## Writing the code
+
+Create `orb-galaxy/source/main.lum` with this code:
 
 ```lumascript
 use kit.stage
@@ -196,55 +207,46 @@ fn king_hit(k: LiveActor, attack: actor.Attack) -> bool {
 }
 ```
 
-- `stage.define_galaxy` makes the stage a galaxy with one star; `text "..."` is a line of `messages.json` in the
-  player's language. `stage.music` plays `NebulaTheme` over the stage instead of the game's music.
-- `actor.define` makes a kind of object from a model: its sensors (Body: what touches, Attack: what hurts Mario),
-  the attacks that defeat it, what it drops, and a function run every frame. A kind is placed as `<mod id>/<name>`.
-- `stage.build` runs each time the stage loads: the planet with its model and ground, three Spikerolls on its upper
-  half and the Orb King on the far side, upside down so it stands on the planet. Anything else a mod places when a
-  stage starts goes in `on stage "Name" { }`, which runs once the stage stands and Mario is at its start (the
-  stage's name is already the new one while it loads).
-- The Orb King waits until Mario is within 1500 units, then plays its scene (the camera looks at it, it slams, a
-  short wait), shows a meter of 3 at the top right and switches to `BossTheme`. It then walks, charges and sits
-  dizzy in turn. Only a stomp while it is dizzy counts; the third makes its star appear where it stood and the
-  galaxy's music comes back.
+* `stage.define_galaxy` makes the stage a galaxy with one star. `text "..."` refers to a line in `messages.json`, shown in the player's language. `stage.music` plays `NebulaTheme` in the stage instead of the game's music.
+* `actor.define` defines a kind of object from a model: its sensors (`Body` for what touches it and `Attack` for what hurts Mario), the attacks that defeat it, what it drops, and a function that runs every frame. A kind is placed in a stage as `MOD-ID/NAME`.
+* `stage.build` runs each time the stage loads. It places the planet with its model and ground, three Spikerolls on its upper half, and the Orb King upside down on the far side so that it stands on the planet. To place other objects when a stage starts, use `on stage "NAME" { }`. It runs once the stage is ready and Mario is at its starting point.
+* The Orb King waits until Mario is within 1500 units. Then it plays its cutscene (the camera turns to it, it slams the ground, and there is a short pause), shows a meter of 3 at the top right of the screen, and switches the music to `BossTheme`. It then walks, charges and sits dizzy in turn. Only a stomp while it is dizzy counts. The third stomp makes the star appear where the Orb King stood, and the galaxy's music returns.
 
-## Step 5: Build and check
+## Building and checking the mod
 
 ```sh
 lumalink build orb-galaxy
 lumalink check orb-galaxy
 ```
 
-`check` reads every content file as the game's import does (models, collision, sounds, tables, lines) and ends
-`Errors: 0`.
+`lumalink check` reads every content file the way the game's importer does, including models, collision, sounds, tables and text. The last line of the output is `Errors: 0`.
 
-## Step 6: Test it
+## Testing the mod
 
-- `tests/visit`: enters the galaxy and takes a picture. It passes when the stage is ready, the galaxy's music has
-  started as a stream and is heard, and the ground under Mario is the moss green of the planet.
-- `tests/boss`: starts Mario near the Orb King. It passes when the Orb King wakes and, after its scene, its meter
-  shows at the top right.
+The finished mod includes two tests:
+
+* `tests/visit` enters the galaxy and takes a picture. The test passes when the stage is ready, the galaxy's music is playing as a stream, and the ground under Mario is the moss green of the planet.
+* `tests/boss` starts Mario near the Orb King. The test passes when the Orb King wakes and, after its cutscene, its meter appears at the top right.
+
+To run the tests, copy the `tests` folder from the finished mod into `orb-galaxy`, then run:
 
 ```sh
 lumalink test orb-galaxy
 ```
 
-## Step 7: Play it
+## Playing the mod
 
-```sh
-lumalink pack orb-galaxy
-```
+1. Pack the mod.
 
-Drop `orb-galaxy.luma` on the game's window and switch it on.
+   ```sh
+   lumalink pack orb-galaxy
+   ```
 
-## See also
+1. Drag the `.luma` file onto the game's window, and turn the mod on in the **Mods** page.
 
-`lumakit/stage.md`, `lumakit/actor.md`, `lumakit/cutscene.md`, `lumakit/hud.md`, `content/models.md`,
-`content/sound.md`, `content/stages.md`, `language/text-and-services.md` (text lines).
+## Next steps
 
-## Further reading
-
-* [Tutorials](index.md)
-* [LumaScript reference](../reference/lumascript/index.md)
-* [Testing a mod](../how-tos/testing-a-mod.md)
+* [Playing a video inside a galaxy](a-video-in-a-galaxy.md)
+* [LumaKit: stage](../reference/lumakit/stage.md)
+* [LumaKit: cutscene](../reference/lumakit/cutscene.md)
+* [Placing objects in stages](../how-tos/placing-objects-in-stages.md)

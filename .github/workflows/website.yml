@@ -1,0 +1,93 @@
+name: Website
+
+# Builds nebula.keepvaibin.com from website/ and docs/modding/, and publishes it to GitHub Pages. It runs only when
+# those folders (or this file) change, separately from the game's builds. Pull requests get the tests and a build,
+# with nothing published.
+#
+# One-time setup:
+#   1. Settings > Pages > Build and deployment > Source: "GitHub Actions".
+#   2. Settings > Pages > Custom domain: nebula.keepvaibin.com, then tick "Enforce HTTPS" once it is offered.
+#   3. At the DNS provider for keepvaibin.com: a CNAME record for "nebula" pointing at keepvaibin.github.io.
+#
+# To publish from a branch instead: set the repository variable WEBSITE_BRANCH (Settings > Secrets and variables >
+# Actions > Variables) to a branch name such as gh-pages, and set Pages' source to "Deploy from a branch" on that
+# branch's root. Each build then replaces that branch's single commit with the finished site.
+on:
+  push:
+    branches: [main]
+    paths: ['website/**', 'docs/modding/**', '.github/workflows/website.yml']
+  pull_request:
+    paths: ['website/**', 'docs/modding/**', '.github/workflows/website.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Test and build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - run: npm ci
+      - run: npm test
+      # The build fetches the latest download count from GitHub; the token avoids its rate limit.
+      - run: npm run build
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: website/dist
+
+  deploy:
+    name: Publish to GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.WEBSITE_BRANCH == ''
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  branch:
+    name: Publish to the ${{ vars.WEBSITE_BRANCH }} branch
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.WEBSITE_BRANCH != ''
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: github-pages
+      - name: Replace the branch with this build
+        env:
+          BRANCH: ${{ vars.WEBSITE_BRANCH }}
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ github.token }}
+        run: |
+          mkdir site && tar -xf artifact.tar -C site && cd site
+          touch .nojekyll
+          git init -q -b "$BRANCH"
+          git add -A
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "Website build of ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" "$BRANCH"

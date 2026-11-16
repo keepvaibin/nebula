@@ -1,18 +1,22 @@
 ---
-title: Get started
+title: Get started with modding Nebula
 shortTitle: Get started
-intro: Install LumaLink and make your first Nebula mod.
+intro: Learn what a Nebula mod can do, install LumaLink, and make your first mod.
 contentType: landing
 ---
 
-## About get started
+## About getting started
 
-Start here if you are new to modding Nebula.
-
-## Articles
+If you are new to modding Nebula, read these articles in order. When you finish the quickstart, you have a working mod and the tools to build more.
 
 | Article | Description |
 |---|---|
-| [About modding Nebula](about-modding-nebula.md) | Learn what a Nebula mod is, what it can change, and which tools you use to make one. |
-| [Installing LumaLink](installing-lumalink.md) | Install LumaLink, the tool that makes, checks, builds, tests and packs Nebula mods, on Windows, Linux or macOS, on x64 or ARM. |
-| [Quickstart for Nebula mods](quickstart.md) | Make a mod that counts Mario's jumps on the screen, test it in the game, and pack it into a .luma file. |
+| [About modding Nebula](about-modding-nebula.md) | |
+| [Installing LumaLink](installing-lumalink.md) | |
+| [Quickstart for Nebula mods](quickstart.md) | |
+| [Modding glossary](glossary.md) | |
+
+## Further reading
+
+* [Concepts](../concepts/index.md)
+* [Tutorials](../tutorials/index.md)

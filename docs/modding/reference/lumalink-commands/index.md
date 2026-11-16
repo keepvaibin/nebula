@@ -22,8 +22,6 @@ children:
   - /update
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About LumaLink commands
 
 Run `lumalink COMMAND --help` to print any command's help, or `lumalink --help` for the list.

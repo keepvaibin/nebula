@@ -5,8 +5,6 @@ intro: Write a mod folder as a .luma, after the validator passes it with every r
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink pack
 
 Write a mod folder as a .luma, after the validator passes it with every rule checked.

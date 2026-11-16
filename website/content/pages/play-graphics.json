@@ -1,0 +1,134 @@
+{
+  "page": "/play/graphics/",
+  "metadata": {
+    "title": "Graphics & performance — Nebula",
+    "description": "Frame rate, resolution, upscaling and detail settings."
+  },
+  "text": {
+    "general": {
+      "link_1": "Skip to content"
+    },
+    "header": {
+      "aria_label_1": "Nebula home",
+      "link_1": "nebula",
+      "button_1": "Menu",
+      "label_2": "☰",
+      "aria_label_2": "Main navigation",
+      "link_2": "v2",
+      "link_3": "Setup",
+      "link_4": "Player guide",
+      "link_5": "Modding",
+      "link_6": "Help",
+      "link_8": "Blog",
+      "link_7": "Download"
+    },
+    "page": {
+      "link_1": "Nebula /",
+      "paragraph_1": "PLAYER INFORMATION",
+      "title_1": "Graphics & performance",
+      "paragraph_2": "Frame rate, resolution, upscaling and detail settings."
+    },
+    "contents": {
+      "aria_label_1": "On this page",
+      "link_1": "RAY TRACING",
+      "link_2": "FRAME RATE",
+      "link_3": "PICTURE",
+      "link_4": "PERFORMANCE"
+    },
+    "ray-tracing": {
+      "div_1": "RAY TRACING",
+      "heading_1": "Ray tracing",
+      "paragraph_1": "Ray tracing replaces the game’s lighting with ray-traced sunlight, shadows, reflections and water. Lamps, fire and Lumas light the scene around them.",
+      "paragraph_2": "It needs a GPU with hardware ray tracing. The SYSTEM page shows whether this computer has it.",
+      "paragraph_3": "Turn it on and choose the quality on the GRAPHICS page. Start at Low or Medium and raise it while the game stays smooth."
+    },
+    "smoothness": {
+      "div_1": "FRAME RATE",
+      "heading_1": "Interpolation",
+      "paragraph_1": "The game runs at 60 updates per second. Interpolation draws frames between updates for faster displays.",
+      "paragraph_2": "On the GRAPHICS page, set Interpolation to Native and choose a target frame rate or Match refresh. Higher rates use more GPU time.",
+      "paragraph_3": "DLSS Frame Generation works with DLSS on NVIDIA RTX 40 and 50 series GPUs. FSR frame generation works with FSR 3, XeSS or SGSR 2 on displays of 119 Hz or more."
+    },
+    "resolution": {
+      "div_1": "PICTURE",
+      "heading_1": "Resolution, upscaling and detail",
+      "aria_label_1": "Setting reference",
+      "column_1": "Setting",
+      "column_2": "What it changes",
+      "column_3": "When to change it",
+      "row_1": "Internal resolution",
+      "cell_1_1": "Resolution of the 3D scene, from 144p to 2160p, or Match display.",
+      "cell_1_2": "Lower this first if the game runs slowly.",
+      "row_2": "Aspect ratio",
+      "cell_2_1": "Auto, or a fixed ratio from 4:3 to 32:9.",
+      "cell_2_2": "Auto follows your window.",
+      "row_3": "HUD resolution",
+      "cell_3_1": "Resolution of text, menus and the HUD.",
+      "cell_3_2": "Choose Display for sharp text.",
+      "row_4": "Upscaling",
+      "cell_4_1": "DLSS, FSR 3, XeSS, SGSR 2 and MetalFX render fewer pixels and rebuild the image. FSR 1 scales the finished image.",
+      "cell_4_2": "Start with Quality; try Balanced for more speed.",
+      "row_5": "Anti-aliasing",
+      "cell_5_1": "SMAA, FXAA or MSAA.",
+      "cell_5_2": "MSAA costs the most GPU time.",
+      "row_6": "Curved surfaces",
+      "cell_6_1": "Smoother outlines on round models.",
+      "cell_6_2": "Keep on unless you prefer the original outlines.",
+      "row_7": "Mipmaps",
+      "cell_7_1": "Generated adds distant detail the game lacks.",
+      "cell_7_2": "Try it if distant surfaces shimmer.",
+      "row_8": "Texture filtering",
+      "cell_8_1": "Anisotropic filtering up to 16×.",
+      "cell_8_2": "Raise it for clearer floors and walls.",
+      "row_9": "Ambient occlusion",
+      "cell_9_1": "SSAO or GTAO shading where surfaces meet.",
+      "cell_9_2": "Turn it off to reduce GPU load.",
+      "row_10": "Bloom",
+      "cell_10_1": "Glow around bright objects, 0 to 200%.",
+      "cell_10_2": "Personal preference.",
+      "row_11": "Lighting",
+      "cell_11_1": "Per vertex (original), per pixel, or enhanced.",
+      "cell_11_2": "Per vertex costs the least.",
+      "row_12": "HDR",
+      "cell_12_1": "Wide brightness range on an HDR display.",
+      "cell_12_2": "Shown when the display is in HDR mode."
+    },
+    "performance": {
+      "div_1": "PERFORMANCE",
+      "heading_1": "Performance",
+      "item_1": "Lower the internal resolution before the display resolution.",
+      "item_2": "Use DLSS, FSR 3 or XeSS in Quality or Balanced mode. DLSS needs an NVIDIA RTX GPU and a one-time download.",
+      "item_3": "Lower the ray tracing quality, or turn ray tracing off.",
+      "item_4": "The Performance preset on the GRAPHICS page lowers resolution and turns off optional effects.",
+      "item_5": "Choose a lower interpolation target, such as 120 instead of 240.",
+      "item_6": "Turn off ambient occlusion or lower MSAA.",
+      "item_7": "On a laptop, connect power. Nebula uses the high-performance GPU by default.",
+      "paragraph_1": "Benchmark on the home screen recommends settings for your computer."
+    },
+    "footer": {
+      "link_1": "nebula",
+      "paragraph_1": "A little closer to the stars.",
+      "subheading_1": "Explore",
+      "link_2": "Nebula v2",
+      "link_3": "Player guide",
+      "subheading_2": "Start playing",
+      "link_4": "Modding docs",
+      "link_15": "Developer Blog",
+      "link_5": "Download",
+      "link_6": "Setup & requirements",
+      "link_7": "Controls",
+      "subheading_3": "Get help",
+      "link_8": "Troubleshooting",
+      "link_9": "Report a bug",
+      "link_10": "Join Discord ↗",
+      "subheading_4": "Nebula",
+      "link_12": "Credits",
+      "link_13": "Legal & privacy",
+      "link_14": "GitHub ↗",
+      "paragraph_2": "© 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo."
+    }
+  },
+  "messages": {
+    "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+  }
+}

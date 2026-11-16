@@ -5,8 +5,6 @@ intro: Start the installed game with a mod - a folder is packed first, then impo
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink run
 
 Start the installed game with a mod: a folder is packed first, then imported into the game's mods. A mod folder with code plays in dev mode: each change to its code is built and reloaded in the running game until the game is closed.

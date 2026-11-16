@@ -5,8 +5,6 @@ intro: Start a mod - a folder with its luma.json and an empty base layer.
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink new
 
 Start a mod: a folder with its luma.json and an empty base layer.

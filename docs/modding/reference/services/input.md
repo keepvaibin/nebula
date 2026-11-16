@@ -31,7 +31,7 @@ The header is `native/include/luma_input.h`. In LumaScript, a service is called 
 
 ### Details from the header
 
-LumaCore's input services. `input` 1.3, no permission: `LUMA_SERVICE(slot, "input", "1.3")`. - The mod's own actions (1.0), which the player binds in Controls. An action is a `key` option of the mod's luma.json: its `key` is the action's id, its `name` what Controls shows, its `default` the game control it follows until the player binds it (one of input_bindings.cpp's kTargetIds: "c" follows the game's C wherever the player has put it). The bindings live only in the game's settings (`modbind.` lines), kept while the mod is off or removed. - What the game gets from a player's controller this frame, the kind of device the player uses and an event when it changes, text typed with the system keyboard, and rumble (1.1). - What aims the main player's pointer (1.2). - The actions of a mod that needs this one, found by their ids (1.3). `input.inject` 1.0, permission "input.inject" (the Mods page says the mod moves the player): the mod supplies a player's controller. `input.dev` 1.0, permission "input.devices": the computer's HID devices, listed and read raw.
+LumaCore's input services. `input` 1.3, no permission: `LUMA_SERVICE(slot, "input", "1.3")`. - The mod's own actions (1.0), which the player binds in Controls. An action is a `key` option of the mod's luma.json: its `key` is the action's id, its `name` what Controls shows, its `default` the game control it follows until the player binds it (one of input_bindings.cpp's kTargetIds: "c" follows the game's C wherever the player has put it). The bindings live only in the game's settings (`modbind.` lines), kept while the mod is off or removed. - What the game gets from a player's controller this frame, the kind of device the player uses and an event when it changes, text typed with the system keyboard, and rumble (1.1). - What aims the main player's pointer (1.2). - The actions of a mod that needs this one, found by their ids (1.3). `input.inject` 1.0, permission "input.inject" (the **Mods** page says the mod moves the player): the mod supplies a player's controller. `input.dev` 1.0, permission "input.devices": the computer's HID devices, listed and read raw.
 
 ## Limits and constants
 
@@ -291,7 +291,7 @@ int32_t text_request(const LumaMod* mod, const LumaInputTextRequest* request, Lu
 
 Needs `input` 1.1 or later.
 
-Call it on the game thread. Opens the system keyboard (and its input method: composition, candidates) for the player to type; the game's controls are held while it is open (the game reads a controller at rest, every action reads up). The text arrives as `LUMA_INPUT_EVENT_TEXT` through fn when the player confirms (Enter) or cancels (Escape). `*out`: the request. `LUMA_PENDING`; a TEXT event follows (to fn), closed after its event. One request open at once in the game: a new one ends the open one CANCELLED. `LUMA_E_ABSENT` where the host has no text entry ; a null request, fn or out, a size below 1.1's, a bad kind, max_length 0 or past `LUMA_INPUT_TEXT_MOST`, or an initial that is not UTF-8: `LUMA_E_ARGUMENT` (reported).
+Call it on the game thread. Opens the system keyboard (and its input method: composition, candidates) for the player to type; the game's controls are held while it is open (the game reads a controller at rest, every action reads up). The text arrives as `LUMA_INPUT_EVENT_TEXT` through fn when the player confirms (Enter) or cancels (Escape). `*out`: the request. `LUMA_PENDING`; a TEXT event follows (to fn), closed after its event. One request open at once in the game: a new one ends the open one Canceled. `LUMA_E_ABSENT` where the host has no text entry ; a null request, fn or out, a size below 1.1's, a bad kind, max_length 0 or past `LUMA_INPUT_TEXT_MOST`, or an initial that is not UTF-8: `LUMA_E_ARGUMENT` (reported).
 
 In a task, `wait` gives the `TEXT` event's result instead of calling a closure.
 
@@ -321,7 +321,7 @@ int32_t text_cancel(const LumaMod* mod, LumaHandle request);
 
 Needs `input` 1.1 or later.
 
-Call it on the game thread. Ends the mod's open request: its event comes CANCELLED. `LUMA_OK`; one that is not its open one: `LUMA_E_HANDLE` (reported).
+Call it on the game thread. Ends the mod's open request: its event comes Canceled. `LUMA_OK`; one that is not its open one: `LUMA_E_HANDLE` (reported).
 
 ### `rumble`
 

@@ -5,8 +5,6 @@ intro: Check that a .luma is exactly what its folder packs to.
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink verify
 
 Check that a .luma is exactly what its folder packs to.

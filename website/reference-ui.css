@@ -1,0 +1,676 @@
+@font-face {
+  font-family: Delfino;
+  src:
+    url('/fonts/Delfino.woff2') format('woff2'),
+    url('/fonts/Delfino.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+:root {
+  font-family: Delfino, 'Trebuchet MS', sans-serif;
+  --ui-ink: #34455e;
+  --ui-blue: #31769c;
+  --ui-rim: #f8fdff;
+  --ui-focus: #43f4e6;
+}
+button,
+.button,
+nav,
+.brand,
+.tagline,
+h1,
+h2,
+h3,
+summary,
+.section-label,
+.star-hud,
+.demo,
+.eyebrow,
+.platform,
+.scroll,
+.chapter-caption {
+  font-family: Delfino, 'Trebuchet MS', sans-serif;
+}
+/* Gloss, white upper bevel, and a shaded blue base match the supplied settings clip. */
+.button,
+.play-controls button,
+nav > a {
+  color: #244960;
+  background: linear-gradient(180deg, #ffffff 0%, #effcff 28%, #bcefff 65%, #72c6ee 100%);
+  border: 2px solid #37c5f5;
+  border-top-color: #6ddcff;
+  border-radius: 30px;
+  box-shadow:
+    inset 0 0 0 1px #f5fdff,
+    inset 0 2px 1px #fff,
+    inset 0 -3px 2px #4383ad66,
+    0 2px 0 #527699,
+    0 3px 3px #091a3955;
+  text-shadow: 0 1px #fff;
+  font-weight: 400;
+  letter-spacing: 0.1px;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s,
+    transform 0.15s;
+}
+.button:hover,
+.play-controls button:hover,
+nav > a:hover,
+.play-controls button[aria-pressed='true'] {
+  background: linear-gradient(180deg, #ffffff 0%, #e5faff 28%, #a2e7ff 65%, #59b9e9 100%);
+  color: #193e55;
+  border-color: #42c8f7;
+  box-shadow:
+    inset 0 0 0 1px #f5fdff,
+    inset 0 2px 1px #fff,
+    inset 0 -3px 2px #4383ad66,
+    0 2px 0 #527699,
+    0 3px 3px #091a3955;
+  transform: translateY(-1px);
+}
+.button:active,
+.play-controls button:active,
+nav > a:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 4px #245e8799;
+}
+.button:focus-visible,
+.play-controls button:focus-visible,
+nav > a:focus-visible {
+  outline: 3px solid #7ffff3;
+  outline-offset: 4px;
+}
+nav {
+  gap: 10px;
+}
+nav > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 21px;
+  font-size: 13px;
+}
+header {
+  border: 0;
+}
+.demo {
+  letter-spacing: 1px;
+}
+.brand {
+  font-size: 28px;
+  font-weight: 400;
+}
+.brand-star {
+  font-size: 31px;
+}
+h1 {
+  font-size: clamp(78px, 12.5vw, 190px);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  -webkit-text-stroke: 1px #eaf9ff;
+  text-shadow:
+    0 3px #b1d5ea,
+    0 6px #5988b1,
+    0 9px #243a61,
+    0 13px 25px #040719aa;
+}
+.title-star {
+  -webkit-text-stroke: 0;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 1.4px;
+}
+.tagline {
+  font-size: clamp(24px, 2.7vw, 36px);
+  letter-spacing: 0.1px;
+  font-weight: 400;
+  text-shadow: 0 2px 1px #102438;
+}
+/* The introduction becomes a speech bubble, retaining a quiet center in space. */
+.intro {
+  position: relative;
+  background: linear-gradient(150deg, #fff, #f0f5fc);
+  border: 3px solid #fff;
+  border-radius: 24px;
+  padding: 16px 27px;
+  color: #414c60;
+  box-shadow:
+    0 4px 0 #7f91b366,
+    0 7px 24px #0005;
+  font-size: 15px;
+  line-height: 1.6;
+  text-shadow: 0 1px white;
+  max-width: 520px;
+}
+.intro:after {
+  content: '';
+  position: absolute;
+  right: 42px;
+  bottom: -13px;
+  width: 21px;
+  height: 21px;
+  background: #f1f6fc;
+  clip-path: polygon(0 0, 100% 100%, 100% 0);
+}
+.actions {
+  margin-top: 29px;
+}
+.button {
+  font-size: 14px;
+  min-height: 49px;
+  padding: 0 25px;
+  gap: 19px;
+}
+.platform {
+  font-size: 10px;
+  letter-spacing: 0.7px;
+}
+.hero {
+  padding-top: 70px;
+}
+.play-controls button {
+  font-size: 12px;
+  padding: 8px 19px;
+  min-height: 37px;
+}
+.scroll {
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+.interaction-hint {
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+.star-hud {
+  font-size: 25px;
+  font-weight: 400;
+  color: #fff0a6;
+  text-shadow:
+    2px 2px #19253b,
+    -2px -2px #19253b,
+    2px -2px #19253b,
+    -2px 2px #19253b,
+    0 4px #0008;
+  gap: 8px;
+}
+.star-hud small {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #eff8ff;
+}
+.hud-star {
+  filter: drop-shadow(1px 2px 0 #142344);
+}
+/* A continuous settings-window treatment, with readable inset rows. */
+.content {
+  border: 5px solid white;
+  border-radius: 28px;
+  background: linear-gradient(135deg, #d5e9fa, #c4ddf1);
+  box-shadow:
+    inset 0 0 0 2px #effaff,
+    0 5px 0 #778fb4,
+    0 14px 40px #0004;
+  color: var(--ui-ink);
+}
+.section-label {
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  color: #3c6b93;
+  padding-top: 8px;
+}
+.section-label:before {
+  color: #fff1a1;
+  text-shadow: 1px 2px #7192b3;
+  margin-bottom: 10px;
+}
+h2 {
+  font-size: clamp(29px, 3vw, 41px);
+  font-weight: 400;
+  color: #344660;
+  text-shadow: 0 1px #fff;
+  letter-spacing: -0.3px;
+  margin-bottom: 22px;
+}
+h2 span {
+  color: #487da9;
+}
+.section-body > p {
+  color: #3d526d;
+  font-size: 16px;
+  line-height: 1.75;
+}
+.text-link {
+  color: #245b86;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.text-link:hover {
+  color: #173f66;
+}
+.facts {
+  gap: 12px;
+  margin-top: 35px;
+}
+.facts > div {
+  background: #f5fbffe0;
+  border: 2px solid #fff;
+  border-radius: 14px;
+  padding: 18px 16px;
+  box-shadow: 0 2px #9ebbd244;
+}
+.facts span {
+  color: #347aab;
+  font-size: 15px;
+}
+h3 {
+  font-weight: 400;
+  font-size: 17px;
+  color: #344760;
+  margin: 12px 0 8px;
+}
+.facts p,
+li p {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #4b6078;
+}
+ol {
+  margin: 25px 0;
+  display: grid;
+  gap: 9px;
+}
+li {
+  padding: 20px 18px;
+  border: 2px solid #fff;
+  border-radius: 15px;
+  background: #f3f9ffe0;
+  gap: 20px;
+  box-shadow: 0 2px #8caccc44;
+}
+li > span {
+  color: #3885b1;
+  font-size: 18px;
+}
+li h3 {
+  margin-top: 0;
+}
+li > a {
+  background: #d5f4ff;
+  color: #3387b7;
+  border: 2px solid #70bdd6;
+  border-radius: 10px;
+  padding: 2px 11px;
+  box-shadow: inset 0 0 0 2px white;
+  font-size: 22px;
+}
+li > a:hover {
+  background: #aaffef;
+}
+details {
+  border: 2px solid #fff;
+  border-radius: 15px;
+  background: #f4f9ffe6;
+  padding: 0;
+  margin-bottom: 10px;
+  box-shadow: 0 2px #8caccc44;
+}
+details:last-child {
+  margin-bottom: 0;
+}
+summary {
+  font-size: 17px;
+  color: #344a64;
+  padding: 18px 20px;
+  border-radius: 13px;
+  line-height: 1.5;
+}
+summary:hover,
+details[open] > summary {
+  background: #d6faff;
+  box-shadow: inset 0 0 0 2px #6cc6e1;
+}
+details p {
+  color: #425a76;
+  font-size: 15px;
+  line-height: 1.7;
+  margin: 0;
+  padding: 14px 20px 20px;
+}
+details p + p {
+  padding-top: 0;
+}
+details p .text-link {
+  display: inline;
+  margin: 0;
+}
+details p a {
+  color: #216a9e;
+}
+footer {
+  margin-top: 65px;
+}
+footer p {
+  font-size: 12px;
+}
+footer > a:last-child {
+  font-size: 13px;
+}
+.chapter-caption {
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+#title.star-title {
+  color: transparent;
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+}
+@media (max-width: 700px) {
+  nav {
+    gap: 7px;
+  }
+  nav > a {
+    min-height: 32px;
+    padding: 0 13px;
+    font-size: 11px;
+  }
+  .brand {
+    font-size: 24px;
+    gap: 6px;
+  }
+  .brand-star {
+    font-size: 26px;
+  }
+  .eyebrow {
+    font-size: 8px;
+    letter-spacing: 1px;
+  }
+  h1 {
+    font-size: 19vw;
+  }
+  .tagline {
+    font-size: 25px;
+  }
+  .intro {
+    font-size: 14px;
+    padding: 13px 18px;
+    border-radius: 21px;
+    max-width: 330px;
+  }
+  .actions {
+    gap: 10px;
+    width: 100%;
+    justify-content: center;
+  }
+  .actions .button {
+    font-size: 12px;
+    padding: 0 16px;
+    gap: 10px;
+    min-height: 46px;
+  }
+  .platform {
+    font-size: 8px;
+    letter-spacing: 0.2px;
+  }
+  .play-controls button {
+    font-size: 11px;
+    padding: 8px 13px;
+  }
+  .star-hud {
+    font-size: 20px;
+    top: 105px;
+  }
+  .star-hud small {
+    font-size: 9px;
+  }
+  .content {
+    grid-template-columns: 1fr;
+    gap: 20px;
+    border-radius: 24px;
+  }
+  .section-label {
+    font-size: 12px;
+  }
+  .section-label:before {
+    margin-right: 8px;
+  }
+  h2 {
+    font-size: 30px;
+  }
+  .section-body > p {
+    font-size: 15px;
+  }
+  .facts {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-top: 25px;
+  }
+  .facts > div {
+    display: grid;
+    grid-template-columns: 25px 1fr;
+    gap: 5px 10px;
+    padding: 14px;
+  }
+  .facts h3 {
+    margin: 0;
+  }
+  .facts p {
+    grid-column: 2;
+    font-size: 14px;
+  }
+  li {
+    gap: 12px;
+    padding: 17px 13px;
+  }
+  li h3 {
+    font-size: 17px;
+  }
+  li p {
+    font-size: 14px;
+  }
+  .getting-started .button {
+    font-size: 12px;
+    padding: 0 13px;
+    gap: 8px;
+  }
+  summary {
+    font-size: 16px;
+    padding: 15px;
+  }
+  details p {
+    padding: 14px 15px 18px;
+  }
+  .scroll {
+    font-size: 9px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  .play-controls button,
+  nav > a {
+    transition: none;
+  }
+  .button:hover,
+  .play-controls button:hover,
+  nav > a:hover {
+    transform: none;
+  }
+}
+
+nav > a.source {
+  color: #244960;
+}
+nav > a.source:hover {
+  color: #193e55;
+}
+/* Original Galaxy textures replace the procedural space and placeholder planets. */
+#space {
+  background:
+    radial-gradient(ellipse at 50% 110%, #08588788, transparent 53%),
+    linear-gradient(#10163e, #071e4a 58%, #001427);
+}
+#space:before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('/environment/sky/AstroDomeUniverse.webp');
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+#space canvas {
+  position: relative;
+  z-index: 1;
+}
+#space:after {
+  z-index: 2;
+  background: linear-gradient(transparent 80%, #030716);
+}
+.galaxy-scenery {
+  background-image: url('/environment/sky/AstroDomeGalaxy.webp');
+  background-repeat: no-repeat;
+  background-size: 130% 66%;
+  background-position: 50% -20%;
+  mix-blend-mode: screen;
+  z-index: 0;
+}
+.planet.moon,
+.planet.garden {
+  background: none;
+  box-shadow: none;
+  border: 0;
+  visibility: hidden;
+}
+.planet.garden:after {
+  display: none;
+}
+.horizon {
+  display: none;
+}
+.chapter-caption {
+  display: none;
+}
+.hero {
+  z-index: 1;
+}
+header,
+.star-hud {
+  z-index: 3;
+}
+@media (max-width: 700px) {
+  .galaxy-scenery {
+    background-size: 200% 50%;
+    background-position: 48% -5%;
+  }
+  .planet.garden {
+    width: 180px;
+    height: 180px;
+  }
+}
+
+#space:before {
+  background-size: 300px 300px;
+  opacity: 0.6;
+}
+.galaxy-scenery {
+  opacity: 0.42;
+}
+@media (max-width: 700px) {
+  #space:before {
+    background-size: 240px 240px;
+  }
+}
+
+#space {
+  z-index: 0;
+}
+.planet.garden {
+  right: 2%;
+  top: 65%;
+}
+@media (max-width: 700px) {
+  .planet.garden {
+    right: -28px;
+    top: 63%;
+  }
+}
+
+/* Honeyhive replaces the upper-left asteroid field. */
+
+.planet.moon {
+  width: 175px;
+  height: 175px;
+  left: -30px;
+  top: 19%;
+}
+@media (max-width: 700px) {
+  .planet.moon {
+    width: 115px;
+    height: 115px;
+    left: -60px;
+    top: 17%;
+  }
+}
+
+.section-body > p a {
+  color: #245b86;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Keep the intro compact even on tall windows. */
+.hero {
+  height: auto;
+  min-height: 0;
+  padding: 32px 24px 135px;
+}
+.hero-bottom {
+  bottom: 24px;
+}
+.interaction-hint {
+  bottom: 78px;
+}
+#space,
+.galaxy-scenery {
+  min-height: 0;
+}
+@media (min-width: 1500px) {
+  .hero {
+    padding-top: 44px;
+  }
+}
+@media (max-width: 700px) {
+  .hero {
+    height: auto;
+    padding: 52px 24px 145px;
+  }
+  .hero-bottom {
+    bottom: 25px;
+  }
+  .interaction-hint {
+    display: none;
+  }
+  #space,
+  .galaxy-scenery {
+    min-height: 0;
+  }
+}
+
+/* Keep the heading box stable while only its visible lettering pops. */
+#title .title-text {
+  display: inline-block;
+  transform-origin: 50% 50%;
+  color: #f6fbff;
+  -webkit-text-stroke: 1px #eaf9ff;
+  text-shadow:
+    0 3px #b1d5ea,
+    0 6px #5988b1,
+    0 9px #243a61,
+    0 13px 25px #040719aa;
+}
+#title.star-title .title-text {
+  opacity: 0;
+}

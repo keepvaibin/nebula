@@ -1,13 +1,13 @@
 ---
 title: kit.menu
 shortTitle: menu
-intro: "Entries in the game's pause menu. (A mod's settings are its `luma.json` options on the Mods screen, read with `option` and `on option`: a setting is an option, not a menu entry; one way, language rule 5.)"
+intro: "Entries in the game's pause menu. (A mod's settings are its `luma.json` options on the **Mods** page, read with `option` and `on option`: a setting is an option, not a menu entry.)"
 contentType: reference
 ---
 
 ## About kit.menu
 
-The `kit.menu` module of LumaKit gives you entries in the game's pause menu. (A mod's settings are its `luma.json` options on the Mods screen, read with `option` and `on option`: a setting is an option, not a menu entry; one way, language rule 5.).
+The `kit.menu` module of LumaKit gives you entries in the game's pause menu. (A mod's settings are its `luma.json` options on the **Mods** page, read with `option` and `on option`: a setting is an option, not a menu entry.).
 
 To use the module, add `lumakit` to the `needs` of your mod's `luma.json` and write:
 

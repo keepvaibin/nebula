@@ -11,7 +11,7 @@ A C mod includes `luma.h`. LumaCore gives the mod a table of functions, LumaCore
 
 From the header:
 
-> LumaCore: what a mod's native code is written against. A mod's library links nothing. It exports one thing, `luma_mod` (LUMA_MOD), which lists what it asks the game for by name. The game fills each slot before the mod's first line runs. A name the game does not have stops the mod from loading, and the Mods screen says which name; a slot marked LUMA_OPTIONAL is left empty instead. Names do not change between builds of the game. A function's signature is part of what a mod asks for: the same name with other parameters does not bind.
+> LumaCore: what a mod's native code is written against. A mod's library links nothing. It exports one thing, `luma_mod` (LUMA_MOD), which lists what it asks the game for by name. The game fills each slot before the mod's first line runs. A name the game does not have stops the mod from loading, and the **Mods** page says which name; a slot marked LUMA_OPTIONAL is left empty instead. Names do not change between builds of the game. A function's signature is part of what a mod asks for: the same name with other parameters does not bind.
 
 Header: `native/include/luma.h`.
 
@@ -40,7 +40,7 @@ Header: `native/include/luma.h`.
 | `LUMA_CTORS` | `\` |  |
 | `LUMA_LIFE` | `\` |  |
 | `LUMA_RUNTIME` | `\` |  |
-| `LUMA_NEW` | `\` | Off Windows these are visible by the language's rule; the build's luma_mod.map exports luma_mod alone and -Bsymbolic binds the mod's own calls to them (lumalink/loader.md). |
+| `LUMA_NEW` | `\` | Off Windows these are visible by the language's rule; the build's luma_mod.map exports luma_mod alone and -Bsymbolic binds the mod's own calls to them. |
 
 ## Types
 
@@ -95,7 +95,7 @@ One call of a hooked function.
 |---|---|
 | `const LumaFunction* function` |  |
 | `void** args` | As `LumaFunction`.invoke takes them; a hook may change what they point at. |
-| `void* result` | Where the result is, or goes; null for a constructor or destructor. Zero (a class: as its default constructor makes it; a reference: a null pointer) until a hook or the function writes it (lumalink/loader.md). |
+| `void* result` | Where the result is, or goes; null for a constructor or destructor. Zero (a class: as its default constructor makes it; a reference: a null pointer) until a hook or the function writes it. |
 | `uint32_t next` | The kernel's. |
 | `uint32_t ran` | The kernel's: whether the function's own code ran, and the deepest wrap entered. |
 | `const void* chain` | The kernel's: the hooks this call runs, fixed when it starts. |
@@ -190,7 +190,7 @@ A table of the game's data as LumaCore.table gives it.
 
 ### `LumaExport`
 
-The kernel's own, said for a mod by LumaCore (not passed to report): 2 `Hook.NoResult` and 3 `Hook.SkipRefused` (a hook's result), 4 `Hook.ServiceNotGranted`, and the objects contract's 5 `Object.NoRow` (found: the class's type_info name as the ABI writes it), 6 `Object.NotReadable` (where: the call), 7 `Object.Ambiguous` (where, found: the class). One function a library mod gives the mods that need it. Names "<module>.<fn>" and the signature form are docs/modding/language/compiled-form.md's ("A mod's functions for other mods"); the kernel compares both strings and nothing else. Sorted by name.
+The kernel's own, said for a mod by LumaCore (not passed to report): 2 `Hook.NoResult` and 3 `Hook.SkipRefused` (a hook's result), 4 `Hook.ServiceNotGranted`, and the objects contract's 5 `Object.NoRow` (found: the class's type_info name as the ABI writes it), 6 `Object.NotReadable` (where: the call), 7 `Object.Ambiguous` (where, found: the class). One function a library mod gives the mods that need it. Names "<module>.<fn>" and the signature form are described in [The compiled form](lumascript/compiled-form.md); the kernel compares both strings and nothing else. Sorted by name.
 
 | Name | Description |
 |---|---|
@@ -208,7 +208,7 @@ The kernel's own, said for a mod by LumaCore (not passed to report): 2 `Hook.NoR
 | `uint32_t import_count` |  |
 | `int32_t (*start)(const LumaCore* core, const LumaMod* mod)` | After every slot is filled. Non-zero: the mod could not start and is left off. May be null. |
 | `void (*stop)(void)` | When the mod is taken out, after its hooks are: other threads may still be inside one until the game's grace ends, so it frees nothing they read (memory from `alloc` and its globals go after the grace). From stop and finish (and after a start that refused), hook, define_class, alias_class, set_number, set_table and make_gravity refuse (-1, or null), said in the log: what the mod added then would outlive it. May be null. |
-| `void (*begin)(const LumaCore* core, const LumaMod* mod)` | Luma.h's, filled by `LUMA_MOD`: before `start`, it keeps the core for `new` and runs the C++ globals' constructors (the system's loader runs none: lumalink/loader.md). |
+| `void (*begin)(const LumaCore* core, const LumaMod* mod)` | Luma.h's, filled by `LUMA_MOD`: before `start`, it keeps the core for `new` and runs the C++ globals' constructors (the system's loader runs none). |
 | `void (*finish)(void)` | Luma.h's: after the grace, the destructors `atexit` took, the last first; then the game frees the mod's memory and closes its library. |
 | `const LumaExport* exports` | A library mod's functions for the mods that need it (kind 6 imports); none for most mods. |
 | `uint32_t export_count` |  |
@@ -318,7 +318,7 @@ Takes out a hook this mod added (in its imports or with `hook`): the same functi
 void* alloc(const LumaMod* mod, uint64_t size, uint64_t align);
 ```
 
-Memory for the mod, `size` bytes aligned to `align` (a power of two up to 65536), counted on the Mods screen and freed when the mod is taken out. Null: none left (the mod says so). From any thread.
+Memory for the mod, `size` bytes aligned to `align` (a power of two up to 65536), counted on the **Mods** page and freed when the mod is taken out. Null: none left (the mod says so). From any thread.
 
 ### `free`
 
@@ -334,7 +334,7 @@ Gives back what `alloc` gave this mod; null does nothing.
 void report(const LumaMod* mod, const char* file, uint32_t line, uint32_t code, const char* const* args, uint32_t arg_count);
 ```
 
-Something went wrong in the mod's code at `file`:`line` (lumalink/loader.md). `code` picks the words: 900 to 9999 lumart's (Script.S0901...), args {0}, {1}... in order; 1 to 99 the kernel's and luma.h's own (`LUMA_REPORT_`*). Said once in the game's log and kept for the Mods page in the player's language; repeats are counted. Args are UTF-8 and copied; at most 8 are kept. From any thread.
+Something went wrong in the mod's code at `file`:`line`. `code` picks the words: 900 to 9999 lumart's (Script.S0901...), args {0}, {1}... in order; 1 to 99 the kernel's and luma.h's own (`LUMA_REPORT_`*). Said once in the game's log and kept for the **Mods** page in the player's language; repeats are counted. Args are UTF-8 and copied; at most 8 are kept. From any thread.
 
 ### `own_class`
 
@@ -398,7 +398,7 @@ In `start` only: the bytes the mod's previous load kept this session, their coun
 int32_t define_class(const LumaMod* mod, const LumaClassDef* def);
 ```
 
-Classes (language/classes.md). Defines a mod's class: its number (>= 0; class_of, own_class, as_class and is_a know it), or -1 the definition is not whole (null, size, empty or long name, base not a polymorphic class with a row, data_align), -2 the name (or `replaces`) is taken, -3 not on the game thread, -4 an override names no virtual of the base, or one the base runs with no row (inline, implicit), or one whose hook is refused, -5 no factory row of the maker's name, or `replaces` is no name the factory makes. Every refusal is said in the log with the name it is about, and nothing of the class is left. Its hooks are the mod's: they go when it goes, and its objects are then plain objects of the base.
+Classes. For more information, see [Defining classes](lumascript/defining-classes.md). Defines a mod's class: its number (>= 0; class_of, own_class, as_class and is_a know it), or -1 the definition is not whole (null, size, empty or long name, base not a polymorphic class with a row, data_align), -2 the name (or `replaces`) is taken, -3 not on the game thread, -4 an override names no virtual of the base, or one the base runs with no row (inline, implicit), or one whose hook is refused, -5 no factory row of the maker's name, or `replaces` is no name the factory makes. Every refusal is said in the log with the name it is about, and nothing of the class is left. Its hooks are the mod's: they go when it goes, and its objects are then plain objects of the base.
 
 ### `class_data`
 
@@ -414,7 +414,7 @@ The object's data when it is one of the class's (from the object or any of its s
 void* number(const LumaMod* mod, const char* name, const char* signature, uint32_t place, uint32_t* kind);
 ```
 
-Numbers in the game's code (language/numbers.md): every number written in a function's code that the game reads at run time, named by the function's row name, its signature, and its place there (the k-th named number, from 1, in source order; luma_numbers.json lists them all), and every file's number constant by its name, with signature "" and place 0. A null signature asks for the only function of that name with a number at that place. number: its address and, in *kind, its kind (1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64, 10 u64, 11 bool: a file's constant, 0 or 1), or null and kind 0: no such number, or several (give the signature); said in the log. Any thread.
+Numbers in the game's code: every number written in a function's code that the game reads at run time, named by the function's row name, its signature, and its place there (the k-th named number, from 1, in source order; luma_numbers.json lists them all), and every file's number constant by its name, with signature "" and place 0. A null signature asks for the only function of that name with a number at that place. number: its address and, in *kind, its kind (1 f32, 2 f64, 3 s8, 4 u8, 5 s16, 6 u16, 7 s32, 8 u32, 9 s64, 10 u64, 11 bool: a file's constant, 0 or 1), or null and kind 0: no such number, or several (give the signature); said in the log. Any thread.
 
 ### `set_number`
 
@@ -430,7 +430,7 @@ Sets one to `value` for the mod. When the mod goes, every number it set is again
 int32_t table(const LumaMod* mod, const char* name, LumaTable* out);
 ```
 
-Tables of the game's data (language/numbers.md): every file-scope or class-static array or plain record with an initializer, by its name (`File.cpp#name` when only its file sees it; luma_numbers.json "tables" lists them with their types). table: 0 and `*out` filled (data as the game reads it now, its element type, the size in bytes, the count of elements, 1 for a record), or -1: no such table, or no memory (said). Any thread.
+Tables of the game's data: every file-scope or class-static array or plain record with an initializer, by its name (`File.cpp#name` when only its file sees it; luma_numbers.json "tables" lists them with their types). table: 0 and `*out` filled (data as the game reads it now, its element type, the size in bytes, the count of elements, 1 for a record), or -1: no such table, or no memory (said). Any thread.
 
 ### `set_table`
 
@@ -446,7 +446,7 @@ Writes `size` bytes at `offset` in the table for the mod. When the mod goes, the
 int32_t make(const LumaMod* mod, const char* name, uint32_t count, const LumaMakePlace* place, uint32_t flags, void** objects);
 ```
 
-Objects (classes contract, "make"): `count` objects by a name the factory makes (a game object's, a mod class's, a mod's object: as a stage places it, its changes and replacements applied), each made and initialised as a placed one, at `place[i]` (null: the origin, unturned, scale 1, every argument -1). While the scene makes its objects (from a hook that runs then: after StageDataHolder::initPlacementMario, a class's init) or once it is made (during play: each object then takes its after-placement step in this call); they stand in the main stage and live as long as the scene; made inside another object's init, they join that placement's view group. Flags: `LUMA_MAKE_DEAD`. Each object's address in objects[i] (objects may be null). Returns the count made (fewer when a creator makes nothing, said), or -1 the factory makes nothing by that name, -2 its files are not in this game, -3 not on the game thread, no scene, or the scene is starting, -4 a bad argument (count not 1 to 1024, a place smaller than `LumaMakePlace` or not finite, an unknown flag) or no memory. Every refusal is said in the log with the name.
+Objects (classes contract, "make"): `count` objects by a name the factory makes (a game object's, a mod class's, a mod's object: as a stage places it, its changes and replacements applied), each made and initialized as a placed one, at `place[i]` (null: the origin, unturned, scale 1, every argument -1). While the scene makes its objects (from a hook that runs then: after StageDataHolder::initPlacementMario, a class's init) or once it is made (during play: each object then takes its after-placement step in this call); they stand in the main stage and live as long as the scene; made inside another object's init, they join that placement's view group. Flags: `LUMA_MAKE_DEAD`. Each object's address in objects[i] (objects may be null). Returns the count made (fewer when a creator makes nothing, said), or -1 the factory makes nothing by that name, -2 its files are not in this game, -3 not on the game thread, no scene, or the scene is starting, -4 a bad argument (count not 1 to 1024, a place smaller than `LumaMakePlace` or not finite, an unknown flag) or no memory. Every refusal is said in the log with the name.
 
 ### `alias_class`
 

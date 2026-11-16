@@ -1,0 +1,114 @@
+{
+  "page": "/v2/",
+  "metadata": {
+    "title": "Nebula v2",
+    "description": "Native code from the Petari decompilation, ray tracing, four platforms, more controllers, mods and 34 achievements."
+  },
+  "text": {
+    "general": {
+      "link_1": "Skip to content"
+    },
+    "header": {
+      "aria_label_1": "Nebula home",
+      "link_1": "nebula",
+      "button_1": "Menu",
+      "label_2": "☰",
+      "aria_label_2": "Main navigation",
+      "link_2": "v2",
+      "link_3": "Setup",
+      "link_4": "Player guide",
+      "link_5": "Modding",
+      "link_6": "Help",
+      "link_8": "Blog",
+      "link_7": "Download"
+    },
+    "page": {
+      "link_1": "Nebula /",
+      "paragraph_1": "CURRENT RELEASE",
+      "title_1": "Nebula v2",
+      "paragraph_2": "What is new in Nebula v2."
+    },
+    "contents": {
+      "aria_label_1": "On this page",
+      "link_1": "OVERVIEW",
+      "link_3": "A CLOSER LOOK",
+      "link_4": "WHAT’S NEW",
+      "link_5": "ACHIEVEMENTS"
+    },
+    "overview": {
+      "div_1": "OVERVIEW",
+      "heading_1": "Built from the decompilation",
+      "paragraph_1": "Nebula v2 runs Super Mario Galaxy as native code built from SMGCommunity’s Petari decompilation.",
+      "paragraph_2": "Setup reads your disc image and prepares the game files. It no longer compiles the game.",
+      "label_1": "✦",
+      "emphasis_1": "The v2 trailer",
+      "paragraph_3": "Coming soon. Gameplay footage will be added here."
+    },
+    "showcase": {
+      "div_1": "A CLOSER LOOK",
+      "heading_1": "Ray Tracing.",
+      "label_1": "✦",
+      "emphasis_1": "Comet Observatory",
+      "label_2": "✦",
+      "emphasis_2": "Beach Bowl Galaxy",
+      "label_3": "✦",
+      "emphasis_3": "Smoothness in motion"
+    },
+    "comforts": {
+      "div_1": "WHAT’S NEW",
+      "heading_1": "What’s new in v2",
+      "item_1": "Ray-traced lighting, shadows, reflections and water on GPUs with hardware ray tracing.",
+      "item_2": "Windows (Direct3D 12 and 11), Linux and Android (Vulkan), and macOS (Metal).",
+      "item_3": "A home screen with Play, Settings, Benchmark and Quit, and in-app updates.",
+      "item_4": "DLSS, FSR 1, FSR 3, XeSS, SGSR 2 and MetalFX upscaling.",
+      "item_5": "MSAA, SMAA and FXAA anti-aliasing, SSAO and GTAO ambient occlusion, enhanced lighting and HDR.",
+      "item_6": "Interpolation above 60 Hz, with DLSS Frame Generation and FSR frame generation on supported GPUs.",
+      "item_7": "PlayStation, Steam, Steam Deck and generic controllers, with gyro pointing on controllers with motion sensors.",
+      "item_8": "Cutscene skip with a confirmation.",
+      "item_9": "Dialogue speed up to Instant, including Rosalina’s storybook.",
+      "item_10": "Separate volumes for music, effects, voices, ambience, cutscenes and the Wii Remote speaker.",
+      "item_11": "Mods as .luma files made with LumaLink, and direct import of Riivolution and Dolphin texture packs.",
+      "item_12": "Mii import for file icons.",
+      "item_13": "Discord status with your current galaxy and mission.",
+      "item_14": "Save import and export in the game, from a Wii, Dolphin or the Switch release.",
+      "item_15": "Menus in all 14 of the game’s languages, and error codes with a saved report."
+    },
+    "achievements": {
+      "div_1": "ACHIEVEMENTS",
+      "heading_1": "34 achievements",
+      "paragraph_1": "After the first Grand Star, a Luma in the Comet Observatory shows your achievements and play statistics.",
+      "subheading_1": "A Star Is Born",
+      "paragraph_2": "Grab your very first Power Star.",
+      "subheading_2": "Snack Time",
+      "paragraph_3": "Feed a Hungry Luma until it transforms into a new galaxy.",
+      "subheading_3": "Pocketful of Star Bits",
+      "paragraph_4": "Stash away 1,000 Star Bits.",
+      "label_1": "Examples"
+    },
+    "footer": {
+      "link_1": "nebula",
+      "paragraph_1": "A little closer to the stars.",
+      "subheading_1": "Explore",
+      "link_2": "Nebula v2",
+      "link_3": "Player guide",
+      "subheading_2": "Start playing",
+      "link_4": "Modding docs",
+      "link_15": "Developer Blog",
+      "link_5": "Download",
+      "link_6": "Setup & requirements",
+      "link_7": "Controls",
+      "subheading_3": "Get help",
+      "link_8": "Troubleshooting",
+      "link_9": "Report a bug",
+      "link_10": "Join Discord ↗",
+      "subheading_4": "Nebula",
+      "link_12": "Credits",
+      "link_13": "Legal & privacy",
+      "link_14": "GitHub ↗",
+      "paragraph_2": "© 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo."
+    }
+  },
+  "messages": {
+    "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+  }
+}

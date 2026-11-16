@@ -1,0 +1,83 @@
+{
+  "page": "/legal/",
+  "metadata": {
+    "title": "Legal & privacy — Nebula",
+    "description": "Licensing, game ownership and optional online features."
+  },
+  "text": {
+    "general": {
+      "link_1": "Skip to content"
+    },
+    "header": {
+      "aria_label_1": "Nebula home",
+      "link_1": "nebula",
+      "button_1": "Menu",
+      "label_2": "☰",
+      "aria_label_2": "Main navigation",
+      "link_2": "v2",
+      "link_3": "Setup",
+      "link_4": "Player guide",
+      "link_5": "Modding",
+      "link_6": "Help",
+      "link_8": "Blog",
+      "link_7": "Download"
+    },
+    "page": {
+      "link_1": "Nebula /",
+      "paragraph_1": "PLAYER INFORMATION",
+      "title_1": "Legal & privacy",
+      "paragraph_2": "Licensing, game ownership and optional online features."
+    },
+    "contents": {
+      "aria_label_1": "On this page",
+      "link_1": "LICENSE",
+      "link_2": "YOUR COPY",
+      "link_3": "PRIVACY"
+    },
+    "licence": {
+      "div_1": "LICENSE",
+      "heading_1": "Free software",
+      "paragraph_1": "Nebula is licensed under the GNU General Public License v3.0 only. Petari is licensed under CC0 1.0. Other components keep their own licenses.",
+      "link_1": "Nebula license ↗"
+    },
+    "your-game": {
+      "div_1": "YOUR COPY",
+      "heading_1": "Game files",
+      "paragraph_1": "Nebula does not distribute Nintendo game files or disc images. Setup prepares the game from your own copy.",
+      "paragraph_2": "Super Mario Galaxy, Wii and Nintendo are trademarks of Nintendo. Nebula is not affiliated with, endorsed by or sponsored by Nintendo. Other product names and trademarks belong to their respective owners."
+    },
+    "privacy": {
+      "div_1": "PRIVACY",
+      "heading_1": "Privacy",
+      "paragraph_1": "Nebula checks GitHub for new releases when it starts; Check at start on the SYSTEM page turns this off. DLSS and XeSS download from NVIDIA and Intel only when you choose them. Discord status connects only to the Discord app on your computer. Mods ask permission before using the internet, your files, the camera or the microphone.",
+      "paragraph_2": "Crash reports and diagnostics recordings stay on your computer unless you attach them to a report.",
+      "paragraph_3": "This website has no analytics or accounts. Your browser reads the download count from GitHub. External sites such as GitHub and Discord have their own privacy policies.",
+      "paragraph_4": "After a benchmark, Nebula can send its results if you choose Send. The report holds your graphics card, processor, memory, system version, settings and the benchmark’s measurements, and is encrypted so only keepvaibin can read it. You can add the end of the game log, with names and paths removed. It never holds your user or computer name, file paths, serial numbers, saves, Miis or mods. The server uses your IP address only to limit how often one address can send, and does not store it. Reports are deleted after 180 days."
+    },
+    "footer": {
+      "link_1": "nebula",
+      "paragraph_1": "A little closer to the stars.",
+      "subheading_1": "Explore",
+      "link_2": "Nebula v2",
+      "link_3": "Player guide",
+      "subheading_2": "Start playing",
+      "link_4": "Modding docs",
+      "link_15": "Developer Blog",
+      "link_5": "Download",
+      "link_6": "Setup & requirements",
+      "link_7": "Controls",
+      "subheading_3": "Get help",
+      "link_8": "Troubleshooting",
+      "link_9": "Report a bug",
+      "link_10": "Join Discord ↗",
+      "subheading_4": "Nebula",
+      "link_12": "Credits",
+      "link_13": "Legal & privacy",
+      "link_14": "GitHub ↗",
+      "paragraph_2": "© 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo."
+    }
+  },
+  "messages": {
+    "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+  }
+}

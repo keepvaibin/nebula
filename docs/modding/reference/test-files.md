@@ -121,7 +121,7 @@ Applied after the stage is ready, then read back.
 
 | Item | Description |
 |---|---|
-| `position` | `[x, y, z]` in game units. A glTF metre is 100 units. |
+| `position` | `[x, y, z]` in game units. A glTF meter is 100 units. |
 | `at` | `"NAME#N"`: the N-th object of that name, counted from 0 in the order the game made them. The player is placed 150 units above it, against its gravity. `"class:CLASS#N"` counts objects of a class instead. |
 | `form` | A form by the game's name: `normal`, `fire`, `ice`, `bee`, `boo`, `spring`, `flying`, `rainbow` or `tornado`. |
 | `life` | Health, from 1 to the game's maximum. |

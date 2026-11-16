@@ -30,7 +30,7 @@ Export with these settings:
 |---|---|
 | Format | glTF Binary (`.glb`), or glTF Separate (`.gltf` with its files) |
 | Up axis | +Y up. The model faces +Z. These are glTF's defaults. |
-| Unit | 1 metre is 100 of the game's units. A 1 m cube is 100 units on each side. |
+| Unit | 1 meter is 100 of the game's units. A 1 m cube is 100 units on each side. |
 | Geometry | Triangles. Strips and fans are turned into triangles. Points and lines are refused. |
 | Skin weights | At most 4 joints for each vertex. |
 | Textures | PNG or JPEG. |

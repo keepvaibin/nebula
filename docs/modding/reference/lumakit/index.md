@@ -20,7 +20,7 @@ LumaKit is one library mod with the id `lumakit`. A mod that uses a module adds 
 | [`kit.gravity`](gravity.md) | the player's gravity overridden, new gravity shapes placeable like the game's, the gravity at a point. |
 | [`kit.hud`](hud.md) | counters, timers, meters, text, pictures in corners; text in 3D; popups; subtitles; the game's own HUD parts hidden. |
 | [`kit.item`](item.md) | things picked up, placed in stages by name or made by code, in containers, carried in an inventory. |
-| [`kit.menu`](menu.md) | entries in the game's pause menu. (A mod's settings are its `luma.json` options on the Mods screen, read with `option` and `on option`: a setting is an option, not a menu entry; one way, language rule 5.) |
+| [`kit.menu`](menu.md) | entries in the game's pause menu. (A mod's settings are its `luma.json` options on the **Mods** page, read with `option` and `on option`: a setting is an option, not a menu entry.) |
 | [`kit.net.kit`](net-kit.md) | reliable ordered messages and rooms over the `net` service's datagrams; a clock shared between peers; a small HTTP and WebSocket server for a page (a phone as a controller). |
 | [`kit.player.character`](player-character.md) | a playable character (name, icon, model, animations, voice, constants), switching mid-level, a second player. |
 | [`kit.player.form`](player-form.md) | a power-up: its look, aura, timer, music, what the player's actions do while it lasts, its own physics and scale, and the game's own forms by name to give from code. |

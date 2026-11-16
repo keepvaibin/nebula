@@ -3,13 +3,12 @@ title: Quickstart for Nebula mods
 shortTitle: Quickstart
 intro: Make a mod that counts Mario's jumps on the screen, test it in the game, and pack it into a .luma file.
 contentType: get-started
+example: first-mod
 ---
 
 ## Introduction
 
-In this quickstart, you make a mod that shows how many times Mario has jumped, in the top-left corner of the screen. You write its code in LumaScript, test it in the game, and pack it into a `.luma` file that anyone can import.
-
-The finished mod is in the `first-mod` folder beside the tutorials.
+In this quickstart, you make a mod that shows how many times Mario has jumped, in the top-left corner of the screen. You write its code in LumaScript, build and check it with LumaLink, test it in the game, and pack it into a `.luma` file that anyone can import.
 
 ## Prerequisites
 
@@ -24,19 +23,21 @@ The finished mod is in the `first-mod` folder beside the tutorials.
    lumalink new jump-counter --id jump-counter --name "Jump Counter" --summary "Counts Mario's jumps in the top left corner." --author YOUR-NAME
    ```
 
-   Replace YOUR-NAME with your name. LumaLink writes `jump-counter/luma.json` with the mod's name, ID and version, and an empty `base` layer.
+   Replace YOUR-NAME with your name. LumaLink writes `jump-counter/luma.json` with the mod's name, ID and version, and creates an empty `base` layer.
 
-1. Add LumaKit, which draws the counter.
+1. Add LumaKit to the mod's needs. LumaKit draws the counter.
 
    ```shell
    lumalink add need lumakit jump-counter
    ```
 
-1. Optionally, add the name and summary in another language. This example adds German.
+1. Optionally, add the mod's name and summary in another language. This example adds German.
 
    ```shell
    lumalink add text EuGerman jump-counter --name "Sprungzähler" --summary "Zählt Marios Sprünge oben links."
    ```
+
+   The game supports 14 languages. The finished mod includes all of them.
 
 ## Writing the code
 
@@ -61,8 +62,8 @@ hook before Mario::tryJump() {
 }
 ```
 
-* `on start` runs once, when the game starts with the mod on. It puts a counter showing 0 in the top-left corner.
-* `hook before Mario::tryJump()` runs each time the game is about to try a jump. It adds one, shows the new number, and writes `jump 1`, `jump 2` and so on to the mod log.
+* `on start` runs once, when the game starts with the mod turned on. It puts a counter showing 0 in the top-left corner.
+* `hook before Mario::tryJump()` runs each time the game is about to try a jump. It adds one to the count, shows the new number, and writes `jump 1`, `jump 2` and so on to the mod log.
 
 ## Building and checking the mod
 
@@ -72,7 +73,7 @@ hook before Mario::tryJump() {
    lumalink build jump-counter
    ```
 
-   LumaLink turns `source` into native code for every platform, in `code/PLATFORM`. A mistake in the code stops the build with the file, line and column.
+   LumaLink compiles the code in `source` into native code for every platform, in `code/PLATFORM`. If the code has a mistake, the build stops and reports the file, line and column.
 
 1. Check the mod.
 
@@ -80,7 +81,7 @@ hook before Mario::tryJump() {
    lumalink check jump-counter
    ```
 
-   LumaLink reads the folder the way the game will, and prints each finding with its code. The last line is `Errors: 0`.
+   LumaLink reads the folder the way the game will, and prints each finding with its code. The last line of the output is `Errors: 0`.
 
 ## Testing the mod
 
@@ -112,7 +113,12 @@ hook before Mario::tryJump() {
    lumalink test jump-counter
    ```
 
-LumaLink starts the game hidden and silent with your mod, enters Good Egg Galaxy, presses <kbd>A</kbd> once and takes a picture before and after. The test passes when the mod log has `jump 1`. The pictures are in the run folder that LumaLink names.
+LumaLink starts the game hidden and silent with your mod, enters Good Egg Galaxy, presses <kbd>A</kbd> once, and takes a picture before and after the jump. The test passes when the mod log contains `jump 1`. The pictures are saved in the run folder that LumaLink prints.
+
+> [!NOTE]
+> In the current version, a LumaKit HUD element created in `on start` stops the game at its first screen, so this test does not pass yet. The mod builds and checks without errors.
+
+For more information, see [Testing a mod](../how-tos/testing-a-mod.md).
 
 ## Playing the mod
 
@@ -122,13 +128,13 @@ LumaLink starts the game hidden and silent with your mod, enters Good Egg Galaxy
    lumalink pack jump-counter
    ```
 
-   LumaLink writes `jump-counter.luma`.
+   LumaLink writes a `.luma` file beside the mod folder, named after the mod's ID and version.
 
-1. Drag `jump-counter.luma` onto the game's window, and turn the mod on in the **MODS** page.
+1. Drag the `.luma` file onto the game's window, and turn the mod on in the **Mods** page.
 1. Play. Each jump adds one to the counter.
 
 ## Next steps
 
 * [Making a small tweak](../tutorials/a-small-tweak.md)
 * [About LumaScript](../concepts/lumascript.md)
-* [Testing a mod](../how-tos/testing-a-mod.md)
+* [About mod files and layers](../concepts/mod-files-and-layers.md)

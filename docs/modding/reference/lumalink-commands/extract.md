@@ -5,8 +5,6 @@ intro: Write files out of a .luma, or out of your imported game.
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink extract
 
 Write files out of a .luma, or out of your imported game.

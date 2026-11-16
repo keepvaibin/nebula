@@ -5,8 +5,6 @@ intro: Check a mod folder or a .luma with the game's own validator and list ever
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink check
 
 Check a mod folder or a .luma with the game's own validator and list every problem.

@@ -5,8 +5,6 @@ intro: Add a part to a mod by command, checked before it is kept - `add need lum
 contentType: reference
 ---
 
-<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
-
 ## About lumalink add
 
 Add a part to a mod by command, checked before it is kept: `add need lumakit <folder>`, `add option balls <folder> --kind number --default 3 --name Balls`, `add file title.arc <folder> --at LayoutData/Title.arc`, `add character <model.glb> <folder> --replaces mario`.
@@ -46,7 +44,7 @@ lumalink add [OPTIONS] <ITEM> <VALUE> <FOLDER>
 | `--root <ROOT>` | permission fs.exchange: a root it reads or writes (repeat for several). |
 | `--kind <KIND>` | option: choice, number, toggle, text or key. |
 | `--default <VALUE>` | option: its value until the player sets one. |
-| `--name <TEXT>` | option: its name on the Mods screen; text: the mod's name in that language. |
+| `--name <TEXT>` | option: its name on the **Mods** page; text: the mod's name in that language. |
 | `--summary <TEXT>` | text: the mod's summary in that language. |
 | `--min <NUMBER>` | option number: the least value. |
 | `--max <NUMBER>` | option number: the most value. |

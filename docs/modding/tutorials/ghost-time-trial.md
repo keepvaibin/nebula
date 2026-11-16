@@ -1,23 +1,36 @@
 ---
-title: A ghost time trial with a replay viewer
-shortTitle: A ghost time trial with a replay viewer
-intro: Race against your best run and watch saved runs.
+title: 'Racing a ghost: a time trial with a replay viewer'
+shortTitle: Ghost time trial
+intro: Time and record every attempt at a star, race a ghost of your best run, and watch saved runs from the pause menu.
 contentType: tutorials
+example: ghost-time-trial
 ---
 
-## About this tutorial
+## Introduction
 
-Every attempt at a star is timed and recorded: Mario's place, turn and animation at each step of the world. A timer
-in the top right corner counts from the moment the stage's play begins until the star is got. The fastest run of
-each star is kept in the mod's own files, so it is still there after the game is started again. On the next attempt
-at that star a ghost runs the kept run beside the player, step for step: the game's own Cosmic Mario model, dark
-blue with the game's star specks, drawn solid (not see-through) and in one pose, arms out, since it plays no
-animation. Replays, a new line of the pause menu, lists every kept run and plays the one chosen with a free camera, at
-1/8x to 8x.
+In this tutorial, you make a time trial mod. Every attempt at a star is timed and recorded: Mario's position, rotation and animation at each step of the world.
 
-The whole mod is the folder [`ghost-time-trial`](../guides/ghost-time-trial/) in the documentation.
+* A timer in the top-right corner counts from the moment play begins in a stage until Mario collects the star.
+* The fastest run for each star is saved in the mod's own files, so it is kept after the game restarts.
+* On the next attempt at that star, a ghost follows the saved run beside the player, step for step. The ghost is the game's own Cosmic Mario model, drawn solid and in a single pose with its arms out, because it does not play animations.
+* A new **Replays** entry in the pause menu lists every saved run and plays the one you choose with a free camera, at speeds from 1/8x to 8x.
 
-## The folder
+You learn how to:
+
+* Time an attempt with world steps, so the time is the same on any computer and stops while the game is paused.
+* Record and play back the player's movement with LumaKit's `replay` module.
+* Save and read files in the mod's own data folder with the `fs` service.
+* Take control of the camera with the `camera` module.
+
+## Prerequisites
+
+* Nebula, installed with Nebula Setup.
+* LumaLink. For more information, see [Installing LumaLink](../get-started/installing-lumalink.md).
+* We recommend that you complete [Making a game mode: Balloon World](balloon-world.md) first.
+
+## Mod folder layout
+
+When you finish, the mod folder contains these files:
 
 ```text
 ghost-time-trial/
@@ -29,23 +42,22 @@ ghost-time-trial/
   tests/viewer/test.json                        the pause menu's Replays, played and left
 ```
 
-The mod has no model of its own: the ghost is the game's.
+The mod has no model of its own. The ghost uses the game's Cosmic Mario model.
 
-## Step 1: Start the folder
+## Creating the mod
+
+Create the mod folder, and add LumaKit to the mod's needs.
 
 ```sh
-lumalink new ghost-time-trial --id ghost-time-trial --name "Ghost Time Trial" --summary "Times each star; a ghost runs your best time beside you. Replays in the pause menu." --author you
+lumalink new ghost-time-trial --id ghost-time-trial --name "Ghost Time Trial" --summary "Times each star; a ghost runs your best time beside you. Replays in the pause menu." --author YOUR-NAME
 lumalink add need lumakit ghost-time-trial
 ```
 
-`luma.json` then holds the mod's name and its need of LumaKit. Its `text` block gives the name and the summary in
-each of the game's 14 languages (`lumalink add text JpJapanese ghost-time-trial --name ... --summary ...` writes one).
+To add the name and summary in another language, run `lumalink add text LANGUAGE ghost-time-trial --name NAME --summary SUMMARY`.
 
-## Step 2: The lines it shows
+## Adding the mod's text
 
-`layers/base/merge/MessageData/messages.json` adds four lines to the game's messages: the pause menu's line, the
-list's title, and the two things the list can say. `default` is English; the other keys are the game's languages
-(`fr` and `es` serve both of their regions).
+Create `layers/base/merge/MessageData/messages.json`. It adds four lines to the game's text: the pause menu entry, the title of the list of runs, and the two messages the list can show. `default` is English, and the other keys are the game's languages. `fr` and `es` are used for both regions of each language.
 
 ```json
 {
@@ -58,11 +70,11 @@ list's title, and the two things the list can say. `default` is English; the oth
 }
 ```
 
-The code names each line as `text "GhostTrial_Replays"`; the game shows it in the player's language.
+The code refers to each line by name, for example `text "GhostTrial_Replays"`, and the game shows it in the player's language.
 
-## Step 3: The code
+## Writing the code
 
-Put this in `ghost-time-trial/source/main.lum`:
+Create `ghost-time-trial/source/main.lum` with this code:
 
 ```lumascript
 use kit.replay
@@ -389,75 +401,70 @@ fn end_watch() {
 }
 ```
 
-What each part does:
+### Timing an attempt
 
-- The attempt. `startStagePlayFirst` and `startStagePlayRetry` run when a stage starts and when it starts again after
-  a miss. They arm the attempt; it begins at the first `GameScene::exeSceneAction`, the game's play, so an opening
-  camera or a star's start scene is not timed and skipping one changes nothing. The file select and the observatory
-  are not timed.
-- The time. `on step` runs once each step of the world, so the timer stops while the game is paused and the time is
-  the same at any speed of the machine. The timer is made with `hud.timer`, held (`hud.run_timer(t, false)`) and set
-  each step to the attempt's steps. The game's star scene (`requestPowerStarGetDemo`) ends the attempt; a game over
-  throws it away.
-- The recording. `replay.record(replay.What.Player)` takes Mario's pose each step; `replay.stop_recording` gives
-  the track, and `replay.encode` its bytes, which read the same on every platform.
-- The files. `fs.write` writes into the mod's own data folder. Each finished run is
-  `runs/<stage> <star>/<date> <time> <steps>.replay`; `bests.json` names each star's fastest run. `on start` reads
-  `bests.json` back, so a best survives a restart of the game.
-- The ghost. `replay.puppet(look)` makes a figure of a model; here the model is the game's own Cosmic Mario
-  (`ObjectData/GhostMario`), named as `model "GhostMario"`. `replay.pose(p, track, step)` puts it where the
-  player was at that step, turned the same way. It is the model alone: it does not play Mario's animations, so it
-  moves along the run in one pose. Past the end of the track it is hidden.
-- The viewer. `menu.add_pause_entry` adds Replays to the pause menu. `fs.list` lists the runs, `screen.choose` shows
-  them (up and down, A takes one, B backs out). `menu.close_pause()` closes the pause menu, as its own Continue does,
-  and the run plays: `camera.free()` takes the camera, the player is held still and hidden, RIGHT and LEFT double and
-  halve the speed, B ends it. The bar at the bottom shows the speed and where the run is. The playback holds while
-  the pause menu is open; choosing another run or starting a stage ends it (`end_watch`). Watching a run ends the
-  attempt in progress; the next starts when a stage starts.
+`startStagePlayFirst` and `startStagePlayRetry` run when a stage starts, and when it starts again after Mario loses a life. They prepare the attempt, which begins at the first call to `GameScene::exeSceneAction`, when play begins. An opening camera or a star's introduction is not timed, so skipping one does not change the time. The file select screen and the observatory are not timed.
 
-## Step 4: Build and check
+`on step` runs once for each step of the world. The timer stops while the game is paused, and the time is the same on any computer. The timer is created with `hud.timer`, stopped with `hud.run_timer(t, false)`, and set to the attempt's step count at each step. The game's star cutscene (`requestPowerStarGetDemo`) ends the attempt. A game over discards it.
+
+### Recording and saving runs
+
+`replay.record(replay.What.Player)` records Mario's pose at each step. `replay.stop_recording` returns the recorded track, and `replay.encode` returns its bytes, which read the same on every platform.
+
+`fs.write` writes to the mod's own data folder. Each finished run is saved as `runs/STAGE STAR/DATE TIME STEPS.replay`, and `bests.json` names the fastest run for each star. `on start` reads `bests.json`, so the best runs are kept when the game restarts.
+
+### Showing the ghost
+
+`replay.puppet(look)` creates a figure from a model. Here the model is the game's Cosmic Mario (`ObjectData/GhostMario`), referred to as `model "GhostMario"`. `replay.pose(p, track, step)` moves the figure to where the player was at that step, facing the same way. The figure does not play Mario's animations, so it moves along the run in a single pose. After the end of the track, the figure is hidden.
+
+### Watching saved runs
+
+`menu.add_pause_entry` adds **Replays** to the pause menu. `fs.list` lists the saved runs, and `screen.choose` shows them. The player moves through the list with up and down, chooses a run with <kbd>A</kbd>, and goes back with <kbd>B</kbd>.
+
+`menu.close_pause()` closes the pause menu in the same way as its own **Continue** entry, and the run plays. `camera.free()` takes control of the camera, and the player character is held still and hidden. Right on the D-pad doubles the speed, left halves it, and <kbd>B</kbd> stops the playback. A bar at the bottom of the screen shows the speed and the position in the run.
+
+Playback pauses while the pause menu is open. Choosing another run or starting a stage ends it (`end_watch`). Watching a run also ends the attempt in progress, and the next attempt begins when a stage starts.
+
+## Building and checking the mod
 
 ```sh
 lumalink build ghost-time-trial
 lumalink check ghost-time-trial
 ```
 
-`check` ends `Errors: 0`. The mod asks for no permission: the data folder is its own.
+The last line of the `check` output is `Errors: 0`. The mod asks for no permissions, because its data folder belongs to the mod.
 
-## Step 5: Test it
+## Testing the mod
+
+The finished mod includes three tests:
+
+* `tests/run` plays Good Egg Galaxy, star 1. The control stick walks Mario, and at frame 300 the test calls the star cutscene. The test passes when the time is 389 steps (the attempt began 89 frames before the test's frame 0), the timer reads 0:01.48 at frame 0 and stops at 0:06.48, and the run is saved as the best run. Then the test enters the stage again and passes when the ghost is within 20 units of Mario's position at three steps of the first run.
+* `tests/run-kept` starts the game again with the files that `tests/run` saved. The test passes when the first attempt shows the ghost of the saved run.
+* `tests/viewer` records a run, enters the stage again, opens the pause menu, chooses **Replays**, and chooses the run in the list. The test passes when the run plays, pressing right, right and left gives speeds of 2x, 4x and 2x, and <kbd>B</kbd> stops the playback.
+
+To run the tests, copy the `tests` folder from the finished mod into `ghost-time-trial`, then run:
 
 ```sh
 lumalink test ghost-time-trial
 ```
 
-- `tests/run`: Good Egg, star 1. The stick walks Mario; at frame 300 the harness calls the star scene. It passes when
-  the time is 389 steps (the attempt began 89 frames before the test's frame 0), the timer reads 0:01.48 at frame 0
-  and stops at 0:06.48, the run is written and is the best; then, with the stage entered again, the ghost stands
-  within 20 units of where Mario stood at three steps of the first run.
-- `tests/run-kept`: starts the game again with the files `tests/run` left. It passes when the first attempt has the
-  ghost of the kept run.
-- `tests/viewer`: makes a run, enters the stage again, opens the pause menu, takes Replays and the one run in the
-  list. It passes when the run plays, RIGHT, RIGHT and LEFT give 2x, 4x and 2x, and B ends it.
+Each test runs the game hidden and silent, and ends with `pass` or `fail` and the path of its run folder.
 
-Each test runs the game hidden and silent and ends `pass` or `fail` with its run folder.
+## Playing the mod
 
-## Step 6: Play it
+1. Pack the mod.
 
-```sh
-lumalink pack ghost-time-trial
-```
+   ```sh
+   lumalink pack ghost-time-trial
+   ```
 
-Drop `ghost-time-trial.luma` on the game's window and switch it on in the Mods screen. Enter a galaxy: the timer
-starts with the play. Get the star; enter the galaxy again and the ghost runs beside you. Pause and choose Replays
-to watch any kept run.
+1. Drag the `.luma` file onto the game's window, and turn the mod on in the **Mods** page.
+1. Enter a galaxy. The timer starts when play begins.
+1. Collect the star, then enter the galaxy again. The ghost runs beside you.
+1. To watch a saved run, pause the game and choose **Replays**.
 
-## See also
+## Next steps
 
-`lumakit/replay.md`, `lumakit/hud.md`, `lumakit/menu.md`, `lumakit/screen.md`, `lumakit/camera.md`,
-`services/fs.md`, `services/time.md`, `language/language.md` (`on step`, hooks, tasks), `lumalink/test-harness.md`.
-
-## Further reading
-
-* [Tutorials](index.md)
-* [LumaScript reference](../reference/lumascript/index.md)
-* [Testing a mod](../how-tos/testing-a-mod.md)
+* [Connecting to LiveSplit](livesplit-link.md)
+* [LumaKit: replay](../reference/lumakit/replay.md)
+* [File system service](../reference/services/fs.md)

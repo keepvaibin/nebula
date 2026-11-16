@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050609" />
+    <link rel="icon" href="../../favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="../../favicon-32.png" />
+    <link rel="apple-touch-icon" href="../../apple-touch-icon.png" />
+    <title>Error codes — Nebula</title>
+    <meta name="description" content="What each error code means and what to try." />
+    <meta property="og:title" content="Error codes — Nebula" />
+    <meta property="og:description" content="What each error code means and what to try." />
+    <link rel="preload" href="../../fonts/Delfino.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="../../style.css" />
+    <link rel="stylesheet" href="../../reference-ui.css" />
+    <link rel="stylesheet" href="../../player-site.css" />
+    <link rel="canonical" href="https://nebula.keepvaibin.com/help/error-codes/" />
+    <meta property="og:site_name" content="Nebula" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://nebula.keepvaibin.com/help/error-codes/" />
+    <meta property="og:image" content="https://nebula.keepvaibin.com/icon-192.png" />
+    <meta name="twitter:card" content="summary" />
+  </head>
+  <body class="inner-page">
+    <a class="skip" href="#main-content">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="../../" aria-label="Nebula home"
+        ><img class="brand-logo" src="../../brand-logo.png" alt="" width="34" height="34" />
+        nebula</a
+      ><button class="nav-toggle" aria-expanded="false" aria-controls="main-navigation">
+        Menu <span aria-hidden="true">☰</span>
+      </button>
+      <nav id="main-navigation" aria-label="Main navigation">
+        <a href="../../v2/">v2</a><a href="../../guide/">Setup</a
+        ><a href="../../play/">Player guide</a><a href="../../docs/">Modding</a
+        ><a href="../../help/">Help</a><a href="../../blog/">Blog</a
+        ><a href="../../download/">Download</a>
+      </nav>
+    </header>
+    <main id="main-content" class="inner-main">
+      <div class="page-heading">
+        <a class="breadcrumb" href="../../">Nebula /</a>
+        <p class="eyebrow">PLAYER INFORMATION</p>
+        <h1>Error codes</h1>
+        <p>What each error code means and what to try.</p>
+      </div>
+      <nav class="page-toc" aria-label="On this page">
+        <a href="#codes">LOOKUP</a><a href="#report">MORE HELP</a>
+      </nav>
+      <section class="content" id="codes">
+        <div class="section-label">LOOKUP</div>
+        <div class="section-body">
+          <h2>Error codes</h2>
+          <label class="search-label" for="code-search">Search by code or problem</label
+          ><input
+            id="code-search"
+            class="site-search"
+            type="search"
+            placeholder="NEB-G01, graphics, mod…"
+            data-filter=".error-entry"
+          />
+          <p class="search-empty" hidden="">
+            No matching codes. Try another word or use the bug report guide.
+          </p>
+          <div class="error-list">
+            <article class="error-entry" id="neb-c01">
+              <h3><a href="#neb-c01">NEB-C01</a></h3>
+              <p>The game’s code crashed with no mods in use.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Start again. If it repeats at the
+                same place, report it with the report files.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-c02">
+              <h3><a href="#neb-c02">NEB-C02</a></h3>
+              <p>The game stopped on one of its own checks. The report quotes its message.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Start again. If it repeats at the
+                same place, report it with the report files.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-c03">
+              <h3><a href="#neb-c03">NEB-C03</a></h3>
+              <p>The game’s code ran out of stack space.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Start again. If it repeats at the
+                same place, report it with the report files.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-m01">
+              <h3><a href="#neb-m01">NEB-M01</a></h3>
+              <p>The game crashed while mods were in use. The report lists them.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Turn the mods off. If the crash
+                stops, turn them on one at a time.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-m02">
+              <h3><a href="#neb-m02">NEB-M02</a></h3>
+              <p>
+                The game crashed within 15 seconds of reading a mod’s file. The report names the mod
+                and the file.
+              </p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Turn that mod off, or check that it
+                matches your game’s region and version.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-m03">
+              <h3><a href="#neb-m03">NEB-M03</a></h3>
+              <p>The game crashed in a mod’s code. The report names the mod. Windows only.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Turn that mod off and send its
+                author the report files.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-t01">
+              <h3><a href="#neb-t01">NEB-T01</a></h3>
+              <p>A texture pack image stopped Nebula while loading. The report names the file.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Remove the image from the pack, or
+                save it again as a PNG.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-v01">
+              <h3><a href="#neb-v01">NEB-V01</a></h3>
+              <p>A replacement movie stopped Nebula while playing. The report names the file.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Remove the video, or convert it to
+                an H.264 MP4.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-g01">
+              <h3><a href="#neb-g01">NEB-G01</a></h3>
+              <p>The graphics driver reset the graphics card.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Update the graphics driver. Turn
+                off ray tracing or frame generation, or lower the internal resolution.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-g02">
+              <h3><a href="#neb-g02">NEB-G02</a></h3>
+              <p>The renderer stopped on another error. The report quotes it.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Update the graphics driver. If it
+                repeats, report it.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-r01">
+              <h3><a href="#neb-r01">NEB-R01</a></h3>
+              <p>Nebula ran out of memory.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Close other programs, set Texture
+                packs to On instead of Preload, or lower the internal resolution.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-n01">
+              <h3><a href="#neb-n01">NEB-N01</a></h3>
+              <p>Nebula’s own code crashed.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Start again. If it repeats, report
+                it.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-n02">
+              <h3><a href="#neb-n02">NEB-N02</a></h3>
+              <p>Nebula stopped on an unexpected error. The report quotes it.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Start again. If it repeats, report
+                it.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-n03">
+              <h3><a href="#neb-n03">NEB-N03</a></h3>
+              <p>Nebula stopped itself (abort).</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Start again. If it repeats, report
+                it.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-n04">
+              <h3><a href="#neb-n04">NEB-N04</a></h3>
+              <p>Nebula stopped on an internal error while starting.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Start again. If it repeats, report
+                it.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-s01">
+              <h3><a href="#neb-s01">NEB-S01</a></h3>
+              <p>Nebula could not open the game content (game.pak).</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Open Nebula Setup and choose
+                Repair.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-s02">
+              <h3><a href="#neb-s02">NEB-S02</a></h3>
+              <p>The game content is damaged.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Run Nebula Setup again to rebuild
+                it from your disc image.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-s03">
+              <h3><a href="#neb-s03">NEB-S03</a></h3>
+              <p>The game module is missing or from another Nebula version.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Install or update Nebula again.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-s04">
+              <h3><a href="#neb-s04">NEB-S04</a></h3>
+              <p>The graphics card could not start the game.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Update the graphics driver. With
+                two graphics cards, choose the other one under Graphics card on the SYSTEM page.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-s05">
+              <h3><a href="#neb-s05">NEB-S05</a></h3>
+              <p>Nebula could not read its settings file.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Rename config.ini in Nebula’s
+                settings folder to start with default settings.
+              </p>
+            </article>
+            <article class="error-entry" id="neb-s06">
+              <h3><a href="#neb-s06">NEB-S06</a></h3>
+              <p>Nebula was started with unknown arguments.</p>
+              <p class="error-try">
+                <span class="error-try-label">What to try</span> Start Nebula from its shortcut or
+                app menu entry.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+      <section class="content" id="report">
+        <div class="section-label">MORE HELP</div>
+        <div class="section-body">
+          <h2>Reports</h2>
+          <p>
+            Attach the newest .txt and .dmp files from Nebula’s crashes folder, with the steps that
+            caused the problem.
+          </p>
+          <a class="button primary" href="../../help/#report">How to report a bug</a>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="footer-top">
+        <a class="brand" href="../../"
+          ><img class="brand-logo" src="../../brand-logo.png" alt="" width="34" height="34" />
+          nebula</a
+        >
+        <p>A little closer to the stars.</p>
+      </div>
+      <div class="footer-links">
+        <div>
+          <h3>Explore</h3>
+          <a class="text-link" href="../../v2/">Nebula v2</a
+          ><a class="text-link" href="../../play/">Player guide</a
+          ><a class="text-link" href="../../docs/">Modding docs</a
+          ><a class="text-link" href="../../blog/">Developer Blog</a>
+        </div>
+        <div>
+          <h3>Start playing</h3>
+          <a class="text-link" href="../../download/">Download</a
+          ><a class="text-link" href="../../guide/">Setup &amp; requirements</a
+          ><a class="text-link" href="../../play/controls/">Controls</a>
+        </div>
+        <div>
+          <h3>Get help</h3>
+          <a class="text-link" href="../../help/">Troubleshooting</a
+          ><a class="text-link" href="../../help/#report">Report a bug</a
+          ><a class="text-link" href="https://discord.gg/2fJEdhAw2f">Join Discord ↗</a>
+        </div>
+        <div>
+          <h3>Nebula</h3>
+          <a class="text-link" href="../../credits/">Credits</a
+          ><a class="text-link" href="../../legal/">Legal &amp; privacy</a
+          ><a class="text-link" href="https://github.com/keepvaibin/nebula">GitHub ↗</a>
+        </div>
+      </div>
+      <p class="legal-line">
+        © 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and
+        Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo.
+      </p>
+    </footer>
+    <script type="module" src="../../site.js"></script>
+
+    <script id="page-messages" type="application/json">
+      {
+        "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+      }
+    </script>
+  </body>
+</html>

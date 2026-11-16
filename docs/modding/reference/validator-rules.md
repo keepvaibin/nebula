@@ -5,8 +5,6 @@ intro: Every code the validator reports, with its level and its words, and every
 contentType: reference
 ---
 
-<!-- Written by tools/modding/validator_rules.py from localization/NebulaText.tsv. Do not edit by hand. -->
-
 ## About validator rules
 
 The validator checks a mod in LumaLink (`lumalink check`, `build` and `pack`) and again in the game, when it

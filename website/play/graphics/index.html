@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050609" />
+    <link rel="icon" href="../../favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="../../favicon-32.png" />
+    <link rel="apple-touch-icon" href="../../apple-touch-icon.png" />
+    <title>Graphics &amp; performance — Nebula</title>
+    <meta name="description" content="Frame rate, resolution, upscaling and detail settings." />
+    <meta property="og:title" content="Graphics &amp; performance — Nebula" />
+    <meta
+      property="og:description"
+      content="Frame rate, resolution, upscaling and detail settings."
+    />
+    <link rel="preload" href="../../fonts/Delfino.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="../../style.css" />
+    <link rel="stylesheet" href="../../reference-ui.css" />
+    <link rel="stylesheet" href="../../player-site.css" />
+    <link rel="canonical" href="https://nebula.keepvaibin.com/play/graphics/" />
+    <meta property="og:site_name" content="Nebula" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://nebula.keepvaibin.com/play/graphics/" />
+    <meta property="og:image" content="https://nebula.keepvaibin.com/icon-192.png" />
+    <meta name="twitter:card" content="summary" />
+  </head>
+  <body class="inner-page">
+    <a class="skip" href="#main-content">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="../../" aria-label="Nebula home"
+        ><img class="brand-logo" src="../../brand-logo.png" alt="" width="34" height="34" />
+        nebula</a
+      ><button class="nav-toggle" aria-expanded="false" aria-controls="main-navigation">
+        Menu <span aria-hidden="true">☰</span>
+      </button>
+      <nav id="main-navigation" aria-label="Main navigation">
+        <a href="../../v2/">v2</a><a href="../../guide/">Setup</a
+        ><a href="../../play/">Player guide</a><a href="../../docs/">Modding</a
+        ><a href="../../help/">Help</a><a href="../../blog/">Blog</a
+        ><a href="../../download/">Download</a>
+      </nav>
+    </header>
+    <main id="main-content" class="inner-main">
+      <div class="page-heading">
+        <a class="breadcrumb" href="../../">Nebula /</a>
+        <p class="eyebrow">PLAYER INFORMATION</p>
+        <h1>Graphics &amp; performance</h1>
+        <p>Frame rate, resolution, upscaling and detail settings.</p>
+      </div>
+      <nav class="page-toc" aria-label="On this page">
+        <a href="#ray-tracing">RAY TRACING</a><a href="#smoothness">FRAME RATE</a
+        ><a href="#resolution">PICTURE</a><a href="#performance">PERFORMANCE</a>
+      </nav>
+      <section class="content" id="ray-tracing">
+        <div class="section-label">RAY TRACING</div>
+        <div class="section-body">
+          <h2>Ray tracing</h2>
+          <p>
+            Ray tracing replaces the game’s lighting with ray-traced sunlight, shadows, reflections
+            and water. Lamps, fire and Lumas light the scene around them.
+          </p>
+          <p>
+            It needs a GPU with hardware ray tracing. The SYSTEM page shows whether this computer
+            has it.
+          </p>
+          <p>
+            Turn it on and choose the quality on the GRAPHICS page. Start at Low or Medium and raise
+            it while the game stays smooth.
+          </p>
+        </div>
+      </section>
+      <section class="content" id="smoothness">
+        <div class="section-label">FRAME RATE</div>
+        <div class="section-body">
+          <h2>Interpolation</h2>
+          <p>
+            The game runs at 60 updates per second. Interpolation draws frames between updates for
+            faster displays.
+          </p>
+          <p>
+            On the GRAPHICS page, set Interpolation to Native and choose a target frame rate or
+            Match refresh. Higher rates use more GPU time.
+          </p>
+          <p>
+            DLSS Frame Generation works with DLSS on NVIDIA RTX 40 and 50 series GPUs. FSR frame
+            generation works with FSR 3, XeSS or SGSR 2 on displays of 119 Hz or more.
+          </p>
+        </div>
+      </section>
+      <section class="content" id="resolution">
+        <div class="section-label">PICTURE</div>
+        <div class="section-body">
+          <h2>Resolution, upscaling and detail</h2>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Setting reference">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Setting</th>
+                  <th scope="col">What it changes</th>
+                  <th scope="col">When to change it</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Internal resolution</th>
+                  <td>Resolution of the 3D scene, from 144p to 2160p, or Match display.</td>
+                  <td>Lower this first if the game runs slowly.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Aspect ratio</th>
+                  <td>Auto, or a fixed ratio from 4:3 to 32:9.</td>
+                  <td>Auto follows your window.</td>
+                </tr>
+                <tr>
+                  <th scope="row">HUD resolution</th>
+                  <td>Resolution of text, menus and the HUD.</td>
+                  <td>Choose Display for sharp text.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Upscaling</th>
+                  <td>
+                    DLSS, FSR 3, XeSS, SGSR 2 and MetalFX render fewer pixels and rebuild the image.
+                    FSR 1 scales the finished image.
+                  </td>
+                  <td>Start with Quality; try Balanced for more speed.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Anti-aliasing</th>
+                  <td>SMAA, FXAA or MSAA.</td>
+                  <td>MSAA costs the most GPU time.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Curved surfaces</th>
+                  <td>Smoother outlines on round models.</td>
+                  <td>Keep on unless you prefer the original outlines.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Mipmaps</th>
+                  <td>Generated adds distant detail the game lacks.</td>
+                  <td>Try it if distant surfaces shimmer.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Texture filtering</th>
+                  <td>Anisotropic filtering up to 16×.</td>
+                  <td>Raise it for clearer floors and walls.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Ambient occlusion</th>
+                  <td>SSAO or GTAO shading where surfaces meet.</td>
+                  <td>Turn it off to reduce GPU load.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Bloom</th>
+                  <td>Glow around bright objects, 0 to 200%.</td>
+                  <td>Personal preference.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Lighting</th>
+                  <td>Per vertex (original), per pixel, or enhanced.</td>
+                  <td>Per vertex costs the least.</td>
+                </tr>
+                <tr>
+                  <th scope="row">HDR</th>
+                  <td>Wide brightness range on an HDR display.</td>
+                  <td>Shown when the display is in HDR mode.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="content" id="performance">
+        <div class="section-label">PERFORMANCE</div>
+        <div class="section-body">
+          <h2>Performance</h2>
+          <ul class="player-list">
+            <li>Lower the internal resolution before the display resolution.</li>
+            <li>
+              Use DLSS, FSR 3 or XeSS in Quality or Balanced mode. DLSS needs an NVIDIA RTX GPU and
+              a one-time download.
+            </li>
+            <li>Lower the ray tracing quality, or turn ray tracing off.</li>
+            <li>
+              The Performance preset on the GRAPHICS page lowers resolution and turns off optional
+              effects.
+            </li>
+            <li>Choose a lower interpolation target, such as 120 instead of 240.</li>
+            <li>Turn off ambient occlusion or lower MSAA.</li>
+            <li>On a laptop, connect power. Nebula uses the high-performance GPU by default.</li>
+          </ul>
+          <p>Benchmark on the home screen recommends settings for your computer.</p>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="footer-top">
+        <a class="brand" href="../../"
+          ><img class="brand-logo" src="../../brand-logo.png" alt="" width="34" height="34" />
+          nebula</a
+        >
+        <p>A little closer to the stars.</p>
+      </div>
+      <div class="footer-links">
+        <div>
+          <h3>Explore</h3>
+          <a class="text-link" href="../../v2/">Nebula v2</a
+          ><a class="text-link" href="../../play/">Player guide</a
+          ><a class="text-link" href="../../docs/">Modding docs</a
+          ><a class="text-link" href="../../blog/">Developer Blog</a>
+        </div>
+        <div>
+          <h3>Start playing</h3>
+          <a class="text-link" href="../../download/">Download</a
+          ><a class="text-link" href="../../guide/">Setup &amp; requirements</a
+          ><a class="text-link" href="../../play/controls/">Controls</a>
+        </div>
+        <div>
+          <h3>Get help</h3>
+          <a class="text-link" href="../../help/">Troubleshooting</a
+          ><a class="text-link" href="../../help/#report">Report a bug</a
+          ><a class="text-link" href="https://discord.gg/2fJEdhAw2f">Join Discord ↗</a>
+        </div>
+        <div>
+          <h3>Nebula</h3>
+          <a class="text-link" href="../../credits/">Credits</a
+          ><a class="text-link" href="../../legal/">Legal &amp; privacy</a
+          ><a class="text-link" href="https://github.com/keepvaibin/nebula">GitHub ↗</a>
+        </div>
+      </div>
+      <p class="legal-line">
+        © 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and
+        Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo.
+      </p>
+    </footer>
+    <script type="module" src="../../site.js"></script>
+
+    <script id="page-messages" type="application/json">
+      {
+        "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+      }
+    </script>
+  </body>
+</html>

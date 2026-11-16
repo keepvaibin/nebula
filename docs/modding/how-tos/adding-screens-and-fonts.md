@@ -12,7 +12,7 @@ The game's screens, such as the coin counter, the star counter and the pause men
 A mod can:
 
 * Add a screen, and show it from code.
-* Change the game's screens by pane name: move, hide, resize or recolour a pane, or change its text.
+* Change the game's screens by pane name: move, hide, resize or recolor a pane, or change its text.
 * Add a font from a TrueType or OpenType file.
 
 ## Prerequisites

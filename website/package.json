@@ -1,0 +1,32 @@
+{
+  "name": "nebula-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "models:optimize": "node scripts/optimize-models.mjs",
+    "images:optimize": "node scripts/optimize-images.mjs",
+    "dev": "vite --host 127.0.0.1",
+    "blog:drafts": "npm run content && vite --host 127.0.0.1 --mode drafts",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test",
+    "content": "node scripts/render-pages.mjs",
+    "predev": "npm run content",
+    "prebuild": "npm run content",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "three": "^0.180.0",
+    "three-mesh-bvh": "^0.9.16"
+  },
+  "devDependencies": {
+    "linkedom": "^0.18.15",
+    "marked": "^18.2.0",
+    "parse5": "^8.0.1",
+    "prettier": "^3.9.10",
+    "sharp": "^0.34.3",
+    "vite": "^7.1.0"
+  }
+}

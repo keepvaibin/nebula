@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050609" />
+    <link rel="icon" href="../favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="../favicon-32.png" />
+    <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+    <title>Nebula v2</title>
+    <meta
+      name="description"
+      content="Native code from the Petari decompilation, ray tracing, four platforms, more controllers, mods and 34 achievements."
+    />
+    <meta property="og:title" content="Nebula v2" />
+    <meta
+      property="og:description"
+      content="Native code from the Petari decompilation, ray tracing, four platforms, more controllers, mods and 34 achievements."
+    />
+    <link rel="preload" href="../fonts/Delfino.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="../style.css" />
+    <link rel="stylesheet" href="../reference-ui.css" />
+    <link rel="stylesheet" href="../player-site.css" />
+    <link rel="canonical" href="https://nebula.keepvaibin.com/v2/" />
+    <meta property="og:site_name" content="Nebula" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://nebula.keepvaibin.com/v2/" />
+    <meta property="og:image" content="https://nebula.keepvaibin.com/icon-192.png" />
+    <meta name="twitter:card" content="summary" />
+  </head>
+  <body class="inner-page">
+    <a class="skip" href="#main-content">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="../" aria-label="Nebula home"
+        ><img class="brand-logo" src="../brand-logo.png" alt="" width="34" height="34" /> nebula</a
+      ><button class="nav-toggle" aria-expanded="false" aria-controls="main-navigation">
+        Menu <span aria-hidden="true">☰</span>
+      </button>
+      <nav id="main-navigation" aria-label="Main navigation">
+        <a aria-current="page" href="../v2/">v2</a><a href="../guide/">Setup</a
+        ><a href="../play/">Player guide</a><a href="../docs/">Modding</a><a href="../help/">Help</a
+        ><a href="../blog/">Blog</a><a href="../download/">Download</a>
+      </nav>
+    </header>
+    <main id="main-content" class="inner-main">
+      <div class="page-heading">
+        <a class="breadcrumb" href="../">Nebula /</a>
+        <p class="eyebrow">CURRENT RELEASE</p>
+        <h1>Nebula v2</h1>
+        <p>What is new in Nebula v2.</p>
+      </div>
+      <nav class="page-toc" aria-label="On this page">
+        <a href="#overview">OVERVIEW</a><a href="#showcase" hidden>A CLOSER LOOK</a
+        ><a href="#comforts">WHAT’S NEW</a><a href="#achievements">ACHIEVEMENTS</a>
+      </nav>
+      <section class="content" id="overview">
+        <div class="section-label">OVERVIEW</div>
+        <div class="section-body">
+          <h2>Built from the decompilation</h2>
+          <p>
+            Nebula v2 runs Super Mario Galaxy as native code built from SMGCommunity’s Petari
+            decompilation.
+          </p>
+          <p>
+            Setup reads your disc image and prepares the game files. It no longer compiles the game.
+          </p>
+          <figure class="media-placeholder">
+            <span aria-hidden="true">✦</span>
+            <figcaption>
+              <strong>The v2 trailer</strong>
+              <p>Coming soon. Gameplay footage will be added here.</p>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+      <!-- Shown once each card has a real screenshot or video. -->
+      <section class="content" id="showcase" hidden>
+        <div class="section-label">A CLOSER LOOK</div>
+        <div class="section-body">
+          <h2>Ray Tracing.</h2>
+          <div class="capture-grid">
+            <figure class="media-placeholder">
+              <span aria-hidden="true">✦</span>
+              <figcaption>
+                <strong>Comet Observatory</strong>
+              </figcaption>
+            </figure>
+            <figure class="media-placeholder">
+              <span aria-hidden="true">✦</span>
+              <figcaption>
+                <strong>Beach Bowl Galaxy</strong>
+              </figcaption>
+            </figure>
+            <figure class="media-placeholder">
+              <span aria-hidden="true">✦</span>
+              <figcaption>
+                <strong>Smoothness in motion</strong>
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+      <section class="content" id="comforts">
+        <div class="section-label">WHAT’S NEW</div>
+        <div class="section-body">
+          <h2>What’s new in v2</h2>
+          <ul class="player-list">
+            <li>
+              Ray-traced lighting, shadows, reflections and water on GPUs with hardware ray tracing.
+            </li>
+            <li>Windows (Direct3D 12 and 11), Linux and Android (Vulkan), and macOS (Metal).</li>
+            <li>A home screen with Play, Settings, Benchmark and Quit, and in-app updates.</li>
+            <li>DLSS, FSR 1, FSR 3, XeSS, SGSR 2 and MetalFX upscaling.</li>
+            <li>
+              MSAA, SMAA and FXAA anti-aliasing, SSAO and GTAO ambient occlusion, enhanced lighting
+              and HDR.
+            </li>
+            <li>
+              Interpolation above 60 Hz, with DLSS Frame Generation and FSR frame generation on
+              supported GPUs.
+            </li>
+            <li>
+              PlayStation, Steam, Steam Deck and generic controllers, with gyro pointing on
+              controllers with motion sensors.
+            </li>
+            <li>Cutscene skip with a confirmation.</li>
+            <li>Dialogue speed up to Instant, including Rosalina’s storybook.</li>
+            <li>
+              Separate volumes for music, effects, voices, ambience, cutscenes and the Wii Remote
+              speaker.
+            </li>
+            <li>
+              Mods as .luma files made with LumaLink, and direct import of Riivolution and Dolphin
+              texture packs.
+            </li>
+            <li>Mii import for file icons.</li>
+            <li>Discord status with your current galaxy and mission.</li>
+            <li>Save import and export in the game, from a Wii, Dolphin or the Switch release.</li>
+            <li>Menus in all 14 of the game’s languages, and error codes with a saved report.</li>
+          </ul>
+        </div>
+      </section>
+      <section class="content" id="achievements">
+        <div class="section-label">ACHIEVEMENTS</div>
+        <div class="section-body">
+          <h2>34 achievements</h2>
+          <p>
+            After the first Grand Star, a Luma in the Comet Observatory shows your achievements and
+            play statistics.
+          </p>
+          <p class="examples-label">Examples</p>
+          <div class="player-grid">
+            <article class="player-card">
+              <h3>A Star Is Born</h3>
+              <p>Grab your very first Power Star.</p>
+            </article>
+            <article class="player-card">
+              <h3>Snack Time</h3>
+              <p>Feed a Hungry Luma until it transforms into a new galaxy.</p>
+            </article>
+            <article class="player-card">
+              <h3>Pocketful of Star Bits</h3>
+              <p>Stash away 1,000 Star Bits.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="footer-top">
+        <a class="brand" href="../"
+          ><img class="brand-logo" src="../brand-logo.png" alt="" width="34" height="34" />
+          nebula</a
+        >
+        <p>A little closer to the stars.</p>
+      </div>
+      <div class="footer-links">
+        <div>
+          <h3>Explore</h3>
+          <a class="text-link" href="../v2/">Nebula v2</a
+          ><a class="text-link" href="../play/">Player guide</a
+          ><a class="text-link" href="../docs/">Modding docs</a
+          ><a class="text-link" href="../blog/">Developer Blog</a>
+        </div>
+        <div>
+          <h3>Start playing</h3>
+          <a class="text-link" href="../download/">Download</a
+          ><a class="text-link" href="../guide/">Setup &amp; requirements</a
+          ><a class="text-link" href="../play/controls/">Controls</a>
+        </div>
+        <div>
+          <h3>Get help</h3>
+          <a class="text-link" href="../help/">Troubleshooting</a
+          ><a class="text-link" href="../help/#report">Report a bug</a
+          ><a class="text-link" href="https://discord.gg/2fJEdhAw2f">Join Discord ↗</a>
+        </div>
+        <div>
+          <h3>Nebula</h3>
+          <a class="text-link" href="../credits/">Credits</a
+          ><a class="text-link" href="../legal/">Legal &amp; privacy</a
+          ><a class="text-link" href="https://github.com/keepvaibin/nebula">GitHub ↗</a>
+        </div>
+      </div>
+      <p class="legal-line">
+        © 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and
+        Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo.
+      </p>
+    </footer>
+    <script type="module" src="../site.js"></script>
+
+    <script id="page-messages" type="application/json">
+      {
+        "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+      }
+    </script>
+  </body>
+</html>

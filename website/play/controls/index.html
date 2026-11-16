@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050609" />
+    <link rel="icon" href="../../favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="../../favicon-32.png" />
+    <link rel="apple-touch-icon" href="../../apple-touch-icon.png" />
+    <title>Controls — Nebula</title>
+    <meta
+      name="description"
+      content="Default buttons, pointer and motion, controllers and remapping."
+    />
+    <meta property="og:title" content="Controls — Nebula" />
+    <meta
+      property="og:description"
+      content="Default buttons, pointer and motion, controllers and remapping."
+    />
+    <link rel="preload" href="../../fonts/Delfino.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="../../style.css" />
+    <link rel="stylesheet" href="../../reference-ui.css" />
+    <link rel="stylesheet" href="../../player-site.css" />
+    <link rel="canonical" href="https://nebula.keepvaibin.com/play/controls/" />
+    <meta property="og:site_name" content="Nebula" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://nebula.keepvaibin.com/play/controls/" />
+    <meta property="og:image" content="https://nebula.keepvaibin.com/icon-192.png" />
+    <meta name="twitter:card" content="summary" />
+  </head>
+  <body class="inner-page">
+    <a class="skip" href="#main-content">Skip to content</a>
+    <header class="site-header">
+      <a class="brand" href="../../" aria-label="Nebula home"
+        ><img class="brand-logo" src="../../brand-logo.png" alt="" width="34" height="34" />
+        nebula</a
+      ><button class="nav-toggle" aria-expanded="false" aria-controls="main-navigation">
+        Menu <span aria-hidden="true">☰</span>
+      </button>
+      <nav id="main-navigation" aria-label="Main navigation">
+        <a href="../../v2/">v2</a><a href="../../guide/">Setup</a
+        ><a href="../../play/">Player guide</a><a href="../../docs/">Modding</a
+        ><a href="../../help/">Help</a><a href="../../blog/">Blog</a
+        ><a href="../../download/">Download</a>
+      </nav>
+    </header>
+    <main id="main-content" class="inner-main">
+      <div class="page-heading">
+        <a class="breadcrumb" href="../../">Nebula /</a>
+        <p class="eyebrow">PLAYER INFORMATION</p>
+        <h1>Controls</h1>
+        <p>Default buttons, pointer and motion, controllers and remapping.</p>
+      </div>
+      <nav class="page-toc" aria-label="On this page">
+        <a href="#defaults">DEFAULTS</a><a href="#motion">POINTER &amp; MOTION</a
+        ><a href="#devices">CONTROLLERS</a><a href="#remapping">REMAPPING</a>
+      </nav>
+      <section class="content" id="defaults">
+        <div class="section-label">DEFAULTS</div>
+        <div class="section-body">
+          <h2>Default controls</h2>
+          <p>
+            Keyboard and mouse, controllers and the Wii Remote with Nunchuk work at the same time.
+            The controller layout follows the Switch release.
+          </p>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Action reference">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Action</th>
+                  <th scope="col">Keyboard / mouse</th>
+                  <th scope="col">Xbox</th>
+                  <th scope="col">Switch Pro</th>
+                  <th scope="col">PlayStation</th>
+                  <th scope="col">Steam</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Jump, confirm (A)</th>
+                  <td>Space, Enter, left mouse button</td>
+                  <td>A</td>
+                  <td>A</td>
+                  <td>Cross</td>
+                  <td>A</td>
+                </tr>
+                <tr>
+                  <th scope="row">Jump in play, back in menus</th>
+                  <td>–</td>
+                  <td>B</td>
+                  <td>B</td>
+                  <td>Circle</td>
+                  <td>B</td>
+                </tr>
+                <tr>
+                  <th scope="row">Star Bits, back (B)</th>
+                  <td>Left Shift, Right Shift, right mouse button</td>
+                  <td>LB</td>
+                  <td>L</td>
+                  <td>L1</td>
+                  <td>LB</td>
+                </tr>
+                <tr>
+                  <th scope="row">Crouch, ground pound (Z)</th>
+                  <td>Z, Left Ctrl, Right Ctrl</td>
+                  <td>LT</td>
+                  <td>ZL</td>
+                  <td>L2</td>
+                  <td>LT</td>
+                </tr>
+                <tr>
+                  <th scope="row">Camera reset (C)</th>
+                  <td>C</td>
+                  <td>Left stick click</td>
+                  <td>Left stick click</td>
+                  <td>L3</td>
+                  <td>Left stick click</td>
+                </tr>
+                <tr>
+                  <th scope="row">Spin (Wii Remote shake)</th>
+                  <td>Q, E</td>
+                  <td>X, Y, RB, RT</td>
+                  <td>X, Y, ZR, shake the controller</td>
+                  <td>Square, Triangle, R2, shake</td>
+                  <td>X, Y, RT, shake</td>
+                </tr>
+                <tr>
+                  <th scope="row">Move (Nunchuk stick)</th>
+                  <td>W A S D</td>
+                  <td>Left stick</td>
+                  <td>Left stick</td>
+                  <td>Left stick</td>
+                  <td>Left stick</td>
+                </tr>
+                <tr>
+                  <th scope="row">Camera, first person (D-pad)</th>
+                  <td>Arrow keys</td>
+                  <td>D-pad</td>
+                  <td>D-pad; right stick while the gyro points</td>
+                  <td>same as Switch</td>
+                  <td>same as Switch</td>
+                </tr>
+                <tr>
+                  <th scope="row">Pointer</th>
+                  <td>Mouse; I J K L</td>
+                  <td>Right stick</td>
+                  <td>Gyro; right stick when the gyro is off</td>
+                  <td>same as Switch</td>
+                  <td>same as Switch</td>
+                </tr>
+                <tr>
+                  <th scope="row">Pointer recenter</th>
+                  <td>R</td>
+                  <td>Right stick click</td>
+                  <td>R</td>
+                  <td>R1</td>
+                  <td>RB</td>
+                </tr>
+                <tr>
+                  <th scope="row">Pause (+)</th>
+                  <td>= or P</td>
+                  <td>Menu</td>
+                  <td>+</td>
+                  <td>Options</td>
+                  <td>Menu</td>
+                </tr>
+                <tr>
+                  <th scope="row">Minus (−)</th>
+                  <td>- or M</td>
+                  <td>View</td>
+                  <td>−</td>
+                  <td>Share (Create)</td>
+                  <td>View</td>
+                </tr>
+                <tr>
+                  <th scope="row">HOME</th>
+                  <td>H</td>
+                  <td>–</td>
+                  <td>HOME</td>
+                  <td>PS</td>
+                  <td>Steam</td>
+                </tr>
+                <tr>
+                  <th scope="row">1, 2</th>
+                  <td>1, 2 (and numpad)</td>
+                  <td>–</td>
+                  <td>–</td>
+                  <td>–</td>
+                  <td>–</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            On controllers, B / Circle is jump during play and Back in menus. Use LB / L / L1 to
+            shoot Star Bits.
+          </p>
+        </div>
+      </section>
+      <section class="content" id="motion">
+        <div class="section-label">POINTER &amp; MOTION</div>
+        <div class="section-body">
+          <h2>Pointer and motion</h2>
+          <ul class="player-list">
+            <li>The mouse moves the pointer. On Xbox controllers, use the right stick.</li>
+            <li>
+              PlayStation, Switch and Steam controllers point with the gyro. With the gyro off, the
+              right stick points.
+            </li>
+            <li>The recenter button moves the pointer to the middle of the screen.</li>
+            <li>Shake a controller with motion sensors to spin, or press a spin button.</li>
+            <li>
+              Tilt the controller to steer the Star Ball and Ray Surfing. Keyboards and Xbox
+              controllers steer with movement.
+            </li>
+            <li>
+              Pointer speed, gyro sensitivity, dead zones and vibration are on the CONTROLS page.
+            </li>
+            <li>
+              PlayStation controllers also point with the touchpad, and Steam controllers with the
+              right trackpad.
+            </li>
+          </ul>
+        </div>
+      </section>
+      <section class="content" id="devices">
+        <div class="section-label">CONTROLLERS</div>
+        <div class="section-body">
+          <h2>Supported controllers</h2>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Controller reference">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Controller</th>
+                  <th scope="col">Connection / notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Xbox</th>
+                  <td>USB, Bluetooth or the Xbox Wireless Adapter.</td>
+                </tr>
+                <tr>
+                  <th scope="row">PlayStation</th>
+                  <td>
+                    DualShock 4, DualSense and DualSense Edge over USB or Bluetooth, with gyro and
+                    touchpad.
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Switch Pro</th>
+                  <td>USB or Bluetooth, with gyro and HD Rumble.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Switch 2 Pro</th>
+                  <td>
+                    USB only. On Windows, needs the WinUSB driver on its second USB interface (for
+                    example with Zadig).
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Joy-Con</th>
+                  <td>A left and a right half pair as one controller.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Steam Deck / Steam controllers</th>
+                  <td>
+                    Steam Deck controls, Steam Controller (2015) by USB or receiver, Steam
+                    Controller (2026) by USB, Bluetooth or receiver.
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">8BitDo</th>
+                  <td>X-input, Switch or D-input mode.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Generic gamepad</th>
+                  <td>Any USB or Bluetooth controller, without vibration.</td>
+                </tr>
+                <tr>
+                  <th scope="row">Wii Remote + Nunchuk</th>
+                  <td>
+                    Bluetooth or a Mayflash DolphinBar on Windows, DolphinBar on Android. Points at
+                    a sensor bar, or by motion with Wii MotionPlus.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="content" id="remapping">
+        <div class="section-label">REMAPPING</div>
+        <div class="section-body">
+          <h2>Remapping</h2>
+          <p>
+            On the CONTROLS page, choose a device, then a Wii input. Each Wii input takes up to four
+            inputs. Controls are saved per controller family.
+          </p>
+          <p>Button icons on the GENERAL page sets one button style for every controller.</p>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="footer-top">
+        <a class="brand" href="../../"
+          ><img class="brand-logo" src="../../brand-logo.png" alt="" width="34" height="34" />
+          nebula</a
+        >
+        <p>A little closer to the stars.</p>
+      </div>
+      <div class="footer-links">
+        <div>
+          <h3>Explore</h3>
+          <a class="text-link" href="../../v2/">Nebula v2</a
+          ><a class="text-link" href="../../play/">Player guide</a
+          ><a class="text-link" href="../../docs/">Modding docs</a
+          ><a class="text-link" href="../../blog/">Developer Blog</a>
+        </div>
+        <div>
+          <h3>Start playing</h3>
+          <a class="text-link" href="../../download/">Download</a
+          ><a class="text-link" href="../../guide/">Setup &amp; requirements</a
+          ><a class="text-link" href="../../play/controls/">Controls</a>
+        </div>
+        <div>
+          <h3>Get help</h3>
+          <a class="text-link" href="../../help/">Troubleshooting</a
+          ><a class="text-link" href="../../help/#report">Report a bug</a
+          ><a class="text-link" href="https://discord.gg/2fJEdhAw2f">Join Discord ↗</a>
+        </div>
+        <div>
+          <h3>Nebula</h3>
+          <a class="text-link" href="../../credits/">Credits</a
+          ><a class="text-link" href="../../legal/">Legal &amp; privacy</a
+          ><a class="text-link" href="https://github.com/keepvaibin/nebula">GitHub ↗</a>
+        </div>
+      </div>
+      <p class="legal-line">
+        © 2026 keepvaibin. Nebula is free software under the GNU GPL v3. Super Mario Galaxy, Wii and
+        Nintendo are trademarks of Nintendo. Nebula is not affiliated with Nintendo.
+      </p>
+    </footer>
+    <script type="module" src="../../site.js"></script>
+
+    <script id="page-messages" type="application/json">
+      {
+        "downloadCountTitle": "GitHub release-asset downloads across {releases} releases. Not unique players."
+      }
+    </script>
+  </body>
+</html>
