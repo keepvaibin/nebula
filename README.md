@@ -169,6 +169,21 @@ cmake --build build\host --target Nebula
 configure a second folder with `-DNEBULA_HOST_BASELINE=ON`: it builds `Nebula-x86-64-v2.exe`, which goes
 beside `Nebula.exe` and is started in its place on those processors.
 
+On Linux the host is `platform/sdl`, built with GCC or clang. The shaders are compiled into it at build time by two
+tools the Windows Vulkan build makes; `platform/linux-tools` builds them on Linux from the same dependency checkouts,
+and `NEBULA_HOST_TOOLS` names its folder. `-DSDL_X11=OFF` keeps SDL on Wayland, which needs no X11 headers.
+
+```bash
+cmake -S platform/linux-tools -B build/tools -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_DEPS=$HOME/nebula-deps
+cmake --build build/tools
+cmake -S platform/sdl -B build/sdl -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEBULA_DEPS=$HOME/nebula-deps \
+      -DNEBULA_HOST_TOOLS=$PWD/build/tools -DSDL_X11=OFF
+cmake --build build/sdl
+```
+
+A controller is SDL's: a pad the kernel exposes as `/dev/input/event*` with `ID_INPUT_JOYSTICK` gets its `uaccess`
+ACL from udev, and F1 opens the page where a binding is captured by pressing it.
+
 ### Building the game module
 
 ```powershell

@@ -556,6 +556,10 @@ namespace exact_sse2 {
 // passes, so the same planes (the kernels test). The vector types and their operations come from each platform.
 #if defined(__clang__) && !GALAXY_FUSED_MULTIPLY_ADD_IS_BASE
 #pragma clang attribute push(__attribute__((target("avx,fma"))), apply_to = function)
+#elif defined(__GNUC__) && !GALAXY_FUSED_MULTIPLY_ADD_IS_BASE
+/* GCC has no attribute-push form: the ISA is a region pragma around the same kernels. */
+#pragma GCC push_options
+#pragma GCC target("avx,fma")
 #endif
 template <class Vec, class Ops>
 inline void aan_odd_lanes(Vec z10, Vec z11, Vec z12, Vec z13, Vec& out7, Vec& out6, Vec& out5, Vec& out4) noexcept {
@@ -660,6 +664,8 @@ inline void transform_columns(const Vec* x, Vec* out) noexcept {
 }
 #if defined(__clang__) && !GALAXY_FUSED_MULTIPLY_ADD_IS_BASE
 #pragma clang attribute pop
+#elif defined(__GNUC__) && !GALAXY_FUSED_MULTIPLY_ADD_IS_BASE
+#pragma GCC pop_options
 #endif
 
 #define MOVIE_VIDEO_IDCT_SIMD 1
@@ -783,6 +789,9 @@ inline void idct_simd(const s16* coefficients, const float* quantization, u8* ou
 #else
 #if defined(__clang__)
 #pragma clang attribute push(__attribute__((target("avx,fma"))), apply_to = function)
+#elif defined(__GNUC__)
+#pragma GCC push_options
+#pragma GCC target("avx,fma")
 #endif
 struct AvxOps {
   static __m256 set(float v) noexcept { return _mm256_set1_ps(v); }
@@ -900,6 +909,8 @@ inline void idct_simd(const s16* coefficients, const float* quantization, u8* ou
 } // namespace fma3
 #if defined(__clang__)
 #pragma clang attribute pop
+#elif defined(__GNUC__)
+#pragma GCC pop_options
 #endif
 #endif
 #undef MOVIE_VIDEO_IDCT_SIMD

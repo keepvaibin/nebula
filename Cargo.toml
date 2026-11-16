@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/nebula-import"]
+members = ["crates/nebula-import", "crates/nebula-fast"]
 resolver = "2"
 
 [workspace.package]
