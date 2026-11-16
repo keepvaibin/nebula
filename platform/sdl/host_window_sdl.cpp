@@ -525,6 +525,7 @@ void pad_sensor_event(const SDL_GamepadSensorEvent& event) {
         return;
     }
     if (event.sensor == SDL_SENSOR_ACCEL) {
+        source.has_accel = true;
         for (int axis_index = 0; axis_index < 3; ++axis_index) {
             g_accel[index][static_cast<std::size_t>(axis_index)] = event.data[axis_index] / SDL_STANDARD_GRAVITY;
         }
@@ -535,6 +536,7 @@ void pad_sensor_event(const SDL_GamepadSensorEvent& event) {
     if (event.sensor != SDL_SENSOR_GYRO) {
         return;
     }
+    source.has_gyro = true;
     ++source.gyro_events;
     source.by_events = true;
     if (!g_accel_valid[index] && source.has_accel) {
@@ -566,8 +568,21 @@ void pad_sensor_event(const SDL_GamepadSensorEvent& event) {
 // with g_input_mutex held, after the pump's events.
 void poll_pad_motion(std::size_t index, SDL_Gamepad* gamepad) {
     PadMotionSource& source = g_motion_source[index];
-    if (source.by_events || !source.has_gyro || source.android) {
+    if (source.by_events || source.android) {
         return;
+    }
+    if (!source.has_gyro) {
+        // A sensor the driver only exposes once read: motion schemes get one late probe.
+        if (!galaxy::input::scheme_has_motion(scheme_of(gamepad))) {
+            return;
+        }
+        source.has_gyro = SDL_SetGamepadSensorEnabled(gamepad, SDL_SENSOR_GYRO, true);
+        if (!source.has_gyro) {
+            return;
+        }
+        if (!source.has_accel) {
+            source.has_accel = SDL_SetGamepadSensorEnabled(gamepad, SDL_SENSOR_ACCEL, true);
+        }
     }
     float gyro[3]{};
     if (!SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_GYRO, gyro, 3)) {
@@ -905,10 +920,20 @@ void open_gamepad(SDL_JoystickID id) {
 #else
                 const bool sdl_sensors = true;
 #endif
-                source.has_gyro = sdl_sensors && SDL_GamepadHasSensor(slot, SDL_SENSOR_GYRO) &&
-                                  SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_GYRO, true);
-                source.has_accel = sdl_sensors && SDL_GamepadHasSensor(slot, SDL_SENSOR_ACCEL) &&
-                                   SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_ACCEL, true);
+                if (sdl_sensors) {
+                    // HasSensor is the fast answer; some drivers (DualSense on Linux hidapi, in particular) only admit the
+                    // sensor once asked, so a motion scheme gets one try even when HasSensor says no.
+                    source.has_gyro = SDL_GamepadHasSensor(slot, SDL_SENSOR_GYRO) &&
+                                      SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_GYRO, true);
+                    if (!source.has_gyro && galaxy::input::scheme_has_motion(scheme_of(slot))) {
+                        source.has_gyro = SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_GYRO, true);
+                    }
+                    source.has_accel = SDL_GamepadHasSensor(slot, SDL_SENSOR_ACCEL) &&
+                                       SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_ACCEL, true);
+                    if (!source.has_accel && galaxy::input::scheme_has_motion(scheme_of(slot))) {
+                        source.has_accel = SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_ACCEL, true);
+                    }
+                }
                 std::fprintf(stderr, "[input] gamepad \"%s\" %04x:%04x scheme %u connected; gyro %d (%.0f Hz), accelerometer %d\n",
                              SDL_GetGamepadName(slot), SDL_GetGamepadVendor(slot), SDL_GetGamepadProduct(slot),
                              static_cast<unsigned>(scheme_of(slot)), source.has_gyro ? 1 : 0,
