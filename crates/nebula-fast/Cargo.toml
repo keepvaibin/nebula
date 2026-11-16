@@ -1,0 +1,12 @@
+[package]
+name = "nebula-fast"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Fast path hashing and lookup helpers for Nebula's runtime-facing hot paths."
+
+[lib]
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[dependencies]
