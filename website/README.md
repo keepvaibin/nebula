@@ -2,7 +2,7 @@
 
 The source of [nebula.keepvaibin.com](https://nebula.keepvaibin.com/): the player site (home page, v2, download,
 setup guide, player guide, help, credits, legal), the developer blog at `/blog/` and the modding documentation
-at `/docs/`. It is a static site built with [Vite](https://vite.dev/); nothing runs on a server.
+at `/modding/docs/`. It is a static site built with [Vite](https://vite.dev/); nothing runs on a server.
 
 ## Run it locally
 

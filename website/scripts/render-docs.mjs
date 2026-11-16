@@ -1,5 +1,6 @@
 /**
- * Renders the modding docs (docs/modding/**.md at the repository root) into static pages under docs/.
+ * Renders the modding docs (docs/modding/**.md at the repository root) into static pages under
+ * modding/docs/. The docs were first published at docs/; every page there forwards to its new address.
  *
  * The source folder keeps the layout of the documentation repository: get-started/, concepts/,
  * how-tos/, tutorials/ and reference/ (with reference/lumascript/, reference/lumakit/,
@@ -18,8 +19,12 @@ import { highlight } from './lib/highlight.mjs';
 const root = resolve(import.meta.dirname, '..');
 // The modding docs live in the repository's docs/modding/, beside the code they describe.
 const docsDir = resolve(root, '../docs/modding');
-const outDir = resolve(root, 'docs');
-const publicDir = resolve(root, 'public/docs');
+// Where the docs sit on the site, and where they sat first.
+export const DOCS = 'modding/docs/';
+const FIRST_DOCS = 'docs/';
+const DOCS_DEPTH = DOCS.split('/').filter(Boolean).length;
+const outDirs = ['modding', 'docs'].map((dir) => resolve(root, dir));
+const publicDir = resolve(root, 'public', DOCS);
 const indexFile = resolve(publicDir, 'search-index.json');
 const examplesSource = resolve(docsDir, 'examples');
 const examplesOut = resolve(publicDir, 'examples');
@@ -117,8 +122,8 @@ export function loadDocs() {
       navTitle: group.title,
       description: data.intro || '',
       body,
-      path: `docs/${group.id}/`,
-      depth: 2,
+      path: `${DOCS}${group.id}/`,
+      depth: DOCS_DEPTH + 1,
       kind: 'group',
     });
   }
@@ -135,8 +140,8 @@ export function loadDocs() {
       ...spec,
       group,
       kind: 'section',
-      path: `docs/${spec.id}/`,
-      depth: 2,
+      path: `${DOCS}${spec.id}/`,
+      depth: DOCS_DEPTH + 1,
       pages: [],
       body: '',
     };
@@ -192,8 +197,8 @@ export function loadDocs() {
           contentType: data.contentType || 'reference',
           example: data.example,
           body,
-          path: `docs/${spec.id}/${slug}/`,
-          depth: 3,
+          path: `${DOCS}${spec.id}/${slug}/`,
+          depth: DOCS_DEPTH + 2,
         };
         if (page.example && !existsSync(resolve(examplesSource, page.example)))
           problems.push(`${key}: example "${page.example}" is not in docs/modding/examples`);
@@ -243,15 +248,21 @@ export function loadDocs() {
     title: hubDoc.data.title,
     description: hubDoc.data.intro,
     body: hubDoc.body,
-    path: 'docs/',
-    depth: 1,
+    path: DOCS,
+    depth: DOCS_DEPTH,
   };
   return { groups, sections, site, pages, hub, problems };
 }
 
-function redirects() {
+/** Forwarding pages, from address to address (both from the site root): the moves listed in
+ *  redirects.json, every page's first address under docs/, and modding/ to the docs' front page. */
+function redirects(real) {
   const file = resolve(docsDir, 'redirects.json');
-  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+  const moved = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+  const list = Object.entries(moved).map(([from, to]) => [`${DOCS}${from}`, `${DOCS}${to}`]);
+  for (const path of real) list.push([`${FIRST_DOCS}${path.slice(DOCS.length)}`, path]);
+  list.push([`${DOCS.split('/')[0]}/`, DOCS]);
+  return list.filter(([from]) => !real.includes(from));
 }
 
 /** Output folders (relative to the site root) for vite.config.js. */
@@ -260,7 +271,7 @@ export function docPages() {
   const { groups, sections, pages } = loadDocs();
   return [
     ...new Set([
-      'docs/',
+      DOCS,
       ...groups.filter((g) => g.path && g.key).map((g) => g.path),
       ...sections.map((s) => s.path),
       ...pages.map((p) => p.path),
@@ -270,11 +281,8 @@ export function docPages() {
 
 /** Every address the docs build writes: the pages, then the redirects from old addresses. */
 export function docRoutes() {
-  const real = new Set(docPages());
-  const moved = Object.keys(redirects())
-    .map((from) => `docs/${from}`)
-    .filter((path) => !real.has(path));
-  return [...real, ...moved];
+  const real = docPages();
+  return [...real, ...redirects(real).map(([from]) => from)];
 }
 
 const rel = (depth) => '../'.repeat(depth);
@@ -380,7 +388,7 @@ function topbar(site, depth) {
   const r = rel(depth);
   const h = site.header;
   return `<a class="docs-skip" href="#main-content">${escapeHtml(h.skip)}</a>
-<header class="docs-topbar"><button class="docs-menu-toggle" type="button" aria-expanded="false" aria-controls="docs-sidebar" aria-label="${escapeHtml(site.docs.browse)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><div class="docs-brand"><a class="docs-brand-home" href="${r}" aria-label="${escapeHtml(h.homeLink)}"><img class="docs-brand-logo" src="${r}brand-logo.png" alt="" width="26" height="26" /> ${escapeHtml(h.brand)}</a><a class="docs-brand-sub" href="${r}docs/">${escapeHtml(h.brandSub)}</a></div>${searchBox(site, depth, 'top')}<a class="docs-topbar-link" href="${r}">${escapeHtml(h.homeLink)}</a></header>`;
+<header class="docs-topbar"><button class="docs-menu-toggle" type="button" aria-expanded="false" aria-controls="docs-sidebar" aria-label="${escapeHtml(site.docs.browse)}"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button><div class="docs-brand"><a class="docs-brand-home" href="${r}" aria-label="${escapeHtml(h.homeLink)}"><img class="docs-brand-logo" src="${r}brand-logo.png" alt="" width="26" height="26" /> ${escapeHtml(h.brand)}</a><a class="docs-brand-sub" href="${r}${DOCS}">${escapeHtml(h.brandSub)}</a></div>${searchBox(site, depth, 'top')}<a class="docs-topbar-link" href="${r}">${escapeHtml(h.homeLink)}</a></header>`;
 }
 
 function documentShell({ site, depth, title, description, path, bodyClass, sidebarHtml, content }) {
@@ -396,7 +404,7 @@ function documentShell({ site, depth, title, description, path, bodyClass, sideb
 <link rel="apple-touch-icon" href="${r}apple-touch-icon.png" />
 <title>${escapeHtml(title)}</title>
 <meta name="description" content="${escapeHtml(description)}" />
-${shareTags(path, { type: path === 'docs/' ? 'website' : 'article' })}
+${shareTags(path, { type: path === DOCS ? 'website' : 'article' })}
 <meta property="og:title" content="${escapeHtml(title)}" />
 <meta property="og:description" content="${escapeHtml(description)}" />
 <link rel="preload" href="${r}fonts/Delfino.woff2" as="font" type="font/woff2" crossorigin />
@@ -419,7 +427,7 @@ ${content}
 
 function searchBox(site, depth, id) {
   const r = rel(depth);
-  return `<div class="docs-search docs-search-${id}" role="search" data-index="${r}docs/search-index.json" data-root="${r}"><label class="sr-only" for="docs-search-${id}">${escapeHtml(site.docs.searchLabel)}</label><input id="docs-search-${id}" type="search" placeholder="${escapeHtml(site.docs.searchPlaceholder)}" autocomplete="off" spellcheck="false" enterkeyhint="go" aria-controls="docs-results-${id}" aria-autocomplete="list" /><kbd class="docs-search-key" aria-hidden="true">/</kbd><ul class="docs-results" id="docs-results-${id}" role="listbox" aria-label="${escapeHtml(site.docs.searchResults)}" hidden></ul><p class="docs-results-empty" role="status" hidden>${escapeHtml(site.docs.searchEmpty)}</p></div>`;
+  return `<div class="docs-search docs-search-${id}" role="search" data-index="${r}${DOCS}search-index.json" data-docs="${r}${DOCS}"><label class="sr-only" for="docs-search-${id}">${escapeHtml(site.docs.searchLabel)}</label><input id="docs-search-${id}" type="search" placeholder="${escapeHtml(site.docs.searchPlaceholder)}" autocomplete="off" spellcheck="false" enterkeyhint="go" aria-controls="docs-results-${id}" aria-autocomplete="list" /><kbd class="docs-search-key" aria-hidden="true">/</kbd><ul class="docs-results" id="docs-results-${id}" role="listbox" aria-label="${escapeHtml(site.docs.searchResults)}" hidden></ul><p class="docs-results-empty" role="status" hidden>${escapeHtml(site.docs.searchEmpty)}</p></div>`;
 }
 
 function sidebar({ site, groups, depth, current }) {
@@ -445,14 +453,14 @@ function sidebar({ site, groups, depth, current }) {
     })
     .join('');
   return `<aside class="docs-sidebar" id="docs-sidebar" aria-label="${escapeHtml(site.docs.sidebarLabel)}">
-<div class="docs-sidebar-top"><a class="docs-home-link" href="${r}docs/"${current?.kind === 'hub' ? ' aria-current="page"' : ''}>${escapeHtml(site.docs.home)}</a><button class="docs-close" type="button" aria-controls="docs-sidebar" aria-label="${escapeHtml(site.docs.close)}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+<div class="docs-sidebar-top"><a class="docs-home-link" href="${r}${DOCS}"${current?.kind === 'hub' ? ' aria-current="page"' : ''}>${escapeHtml(site.docs.home)}</a><button class="docs-close" type="button" aria-controls="docs-sidebar" aria-label="${escapeHtml(site.docs.close)}"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
 <nav class="docs-nav" aria-label="${escapeHtml(site.docs.sidebarLabel)}">${nav}</nav>
 </aside>`;
 }
 
 function breadcrumb(site, doc) {
   const r = rel(doc.depth);
-  const crumbs = [[site.docs.home, 'docs/']];
+  const crumbs = [[site.docs.home, DOCS]];
   const section = doc.kind === 'page' ? doc.section : doc.kind === 'section' ? doc : null;
   const group = section?.group || (doc.kind === 'group' ? doc : null);
   if (group?.key && doc !== group) crumbs.push([group.navTitle, group.path]);
@@ -472,7 +480,7 @@ function exampleLink(site, depth, name, size = 0) {
   const kb = size
     ? ` <span class="docs-download-size">${size > 1048576 ? `${(size / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(size / 1024))} KB`}</span>`
     : '';
-  return `<a class="docs-download" href="${rel(depth)}docs/examples/${escapeHtml(name)}.zip" download><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>${escapeHtml(site.docs.downloadExample)}${kb}</a>`;
+  return `<a class="docs-download" href="${rel(depth)}${DOCS}examples/${escapeHtml(name)}.zip" download><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>${escapeHtml(site.docs.downloadExample)}${kb}</a>`;
 }
 
 function toc(site, headings) {
@@ -600,7 +608,7 @@ ${html}
 
 function renderHub(ctx) {
   const { site, groups, hub, byKey } = ctx;
-  const depth = 1;
+  const depth = hub.depth;
   const r = rel(depth);
   const text = site.hub;
   const start = groups.flatMap((g) => g.sections).find((s) => s.id === text.startSection);
@@ -646,7 +654,7 @@ ${bands}
     depth,
     title: site.metadata.title,
     description: site.metadata.description,
-    path: 'docs/',
+    path: DOCS,
     bodyClass: 'docs-hub-page',
     sidebarHtml: sidebar({ site, groups, depth, current: hub }),
     content,
@@ -654,8 +662,8 @@ ${bands}
 }
 
 function renderRedirect(site, from, to) {
-  const depth = from.split('/').filter(Boolean).length + 1;
-  const target = `${rel(depth)}docs/${to}`;
+  const depth = from.split('/').filter(Boolean).length;
+  const target = `${rel(depth)}${to}`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -801,7 +809,7 @@ export function buildDocs() {
     if (key.endsWith('.zip') && key.startsWith('examples/')) {
       const name = posix.basename(key, '.zip');
       if (!zips.has(name)) problems.push(`${doc.key || doc.id}: no example named ${name}`);
-      return `${rel(doc.depth)}docs/examples/${name}.zip`;
+      return `${rel(doc.depth)}${DOCS}examples/${name}.zip`;
     }
     const target = byKey.get(key) || landingsByKey.get(key);
     if (!target) {
@@ -822,19 +830,19 @@ export function buildDocs() {
     files.set(`${group.path}index.html`, renderLanding(ctx, group, group.sections));
   for (const key of site.hub.popular)
     if (!byKey.has(key)) problems.push(`site.json: hub.popular lists missing page ${key}`);
-  files.set('docs/index.html', renderHub(ctx));
-  for (const [from, to] of Object.entries(redirects())) {
-    if (files.has(`docs/${from}index.html`)) continue;
-    if (!files.has(`docs/${to}index.html`))
-      problems.push(`redirects.json: ${from} points at missing ${to}`);
-    files.set(`docs/${from}index.html`, renderRedirect(site, from, to));
+  files.set(`${DOCS}index.html`, renderHub(ctx));
+  const real = [...files.keys()].map((file) => file.slice(0, -'index.html'.length));
+  for (const [from, to] of redirects(real)) {
+    if (!files.has(`${to}index.html`))
+      problems.push(`redirects.json: ${from.slice(DOCS.length)} points at missing ${to.slice(DOCS.length)}`);
+    files.set(`${from}index.html`, renderRedirect(site, from, to));
   }
 
   const index = pages.map((p) => ({
     t: p.title,
     n: p.navTitle !== p.title ? p.navTitle : undefined,
     s: p.section.navTitle,
-    u: p.path.slice('docs/'.length),
+    u: p.path.slice(DOCS.length),
     d: p.description,
     h: p.headings
       .filter((h) => h.depth <= 3)
@@ -869,7 +877,7 @@ export async function renderDocs({ strict = !process.env.DOCS_DRAFT } = {}) {
       } else if (!wanted.has(path)) rmSync(path);
     }
   };
-  removeStale(outDir);
+  for (const dir of outDirs) removeStale(dir);
   removeStale(examplesOut);
   let written = 0;
   const writeIfChanged = (file, data) => {

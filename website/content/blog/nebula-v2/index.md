@@ -177,8 +177,8 @@ hook before Mario::tryJump() {
 The documentation is pretty extensive. There's a getting started guide, explanations of how everything works, and full tutorials for things like adding a new galaxy, a new NPC, a new power-up, a ghost time trial, a LiveSplit link, and even an online leaderboard. I really want to see what you all come up with, so please share anything you make!
 
 - **Download LumaLink:** [LumaLink releases on GitHub](https://github.com/keepvaibin/lumalink/releases/latest)
-- **Modding documentation:** [Nebula modding docs](/docs/)
-- **Make your first mod:** [Quickstart for Nebula mods](/docs/get-started/quickstart/)
+- **Modding documentation:** [Nebula modding docs](/modding/docs/)
+- **Make your first mod:** [Quickstart for Nebula mods](/modding/docs/get-started/quickstart/)
 
 ## Wrapping up
 

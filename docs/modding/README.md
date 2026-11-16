@@ -1,6 +1,6 @@
 # Writing the modding docs
 
-The website's modding documentation (`nebula.keepvaibin.com/docs/`) is generated from the Markdown files in this folder. In `website/`, `npm run content` (and `npm run dev` and `npm run build`) turns them into HTML with the sidebar, search, "In this article" links and previous and next links. The pages also read well on GitHub, and the code's comments link to them by path, so keep file names stable; when a page must move, add its old address to `redirects.json`.
+The website's modding documentation (`nebula.keepvaibin.com/modding/docs/`) is generated from the Markdown files in this folder. In `website/`, `npm run content` (and `npm run dev` and `npm run build`) turns them into HTML with the sidebar, search, "In this article" links and previous and next links. The pages also read well on GitHub, and the code's comments link to them by path, so keep file names stable; when a page must move, add its old address to `redirects.json`.
 
 ## Folders
 

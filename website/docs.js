@@ -153,7 +153,7 @@ for (const box of document.querySelectorAll('.docs-search')) {
   const input = box.querySelector('input');
   const list = box.querySelector('.docs-results');
   const empty = box.querySelector('.docs-results-empty');
-  const root = box.dataset.root;
+  const docs = box.dataset.docs;
   let selected = -1;
   const close = () => {
     list.hidden = true;
@@ -177,7 +177,7 @@ for (const box of document.querySelectorAll('.docs-search')) {
     selected = -1;
     list.innerHTML = results
       .map(({ page, heading }) => {
-        const href = `${root}docs/${page.u}${heading ? '#' + heading[1] : ''}`;
+        const href = `${docs}${page.u}${heading ? '#' + heading[1] : ''}`;
         const where = heading ? `${page.s} › ${page.t} › ${heading[0]}` : page.s;
         return `<li><a href="${href}"><strong>${mark(heading ? heading[0] : page.t, terms)}</strong><small>${escapeHtml(where)}</small><small>${mark(page.d, terms)}</small></a></li>`;
       })

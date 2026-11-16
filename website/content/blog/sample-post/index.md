@@ -20,7 +20,7 @@ For a phrase in a paragraph, use <span class="text-small">smaller text</span>, <
 
 ## Links
 
-Link to [another post](../nebula-v2/), to a [page on the site](/play/mods/), to a [section of the modding docs](/docs/get-started/quickstart/), to a [heading in this post](#tables) or to an [external site](https://github.com/keepvaibin/nebula).
+Link to [another post](../nebula-v2/), to a [page on the site](/play/mods/), to a [section of the modding docs](/modding/docs/get-started/quickstart/), to a [heading in this post](#tables) or to an [external site](https://github.com/keepvaibin/nebula).
 
 ## Lists and quotes
 

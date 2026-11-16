@@ -90,7 +90,7 @@ Any word or phrase can be a link:
 | -------------------------- | -------------------------------------------------- |
 | Another post               | `[read the v2 post](../nebula-v2/)`                |
 | A page on the site         | `[mods guide](/play/mods/)`                        |
-| A page in the modding docs | `[quickstart](/docs/get-started/quickstart/)`      |
+| A page in the modding docs | `[quickstart](/modding/docs/get-started/quickstart/)`      |
 | A heading in the same post | `[see the tables](#tables)`                        |
 | Another website            | `[Petari](https://github.com/SMGCommunity/Petari)` |
 

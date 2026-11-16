@@ -31,7 +31,7 @@ test('player pages have valid local links, anchors and unique IDs', () => {
           : resolve(dirname(file), path);
       // Modding docs are generated at build time; tests/modding-docs.test.js checks them.
       const fromRoot = relative(root, target).split(sep).join('/');
-      if (fromRoot === 'mods' || fromRoot === 'docs' || fromRoot.startsWith('docs/')) {
+      if (fromRoot === 'modding/docs' || fromRoot.startsWith('modding/docs/')) {
         assert.ok(
           docRoutes.has(fromRoot.replace(/\/?$/, '/')),
           `Missing docs page ${href} in ${file}`,
