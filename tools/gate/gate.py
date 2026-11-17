@@ -22,6 +22,7 @@ import datetime
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -306,6 +307,16 @@ def replays(g, label, renderer, against=None):
         pathlib.Path(log).write_text("\n".join(lines) + "\n", encoding="utf-8")
         return ok, lines[-1]
     return fn
+
+
+def device_screen(work):
+    """The device's screen size, (width, height), from its runs' logs in a work folder (the Vulkan renderer's
+    "[vulkan] swapchain WxH" line, the last one of the first run that has one), or None."""
+    for log in sorted(pathlib.Path(work).rglob("run.log")):
+        sizes = re.findall(r"\[vulkan\] swapchain (\d+)x(\d+)", log.read_text(encoding="utf-8", errors="replace"))
+        if sizes:
+            return int(sizes[-1][0]), int(sizes[-1][1])
+    return None
 
 
 def jvm_test_counts(folder):
@@ -647,10 +658,20 @@ def run_checks(args):
                         tablet_tour = gate_tour.write(g.work / "tour-tablet", None)
                         step_hash.with_hash(tablet_tour.parent)
                         g.check("tour/tablet", harness(g, tablet_tour, "vulkan", "tour-tablet", args.tablet))
-                        g.check("replays/tablet", replays(g, "tour-tablet", "vulkan", ("tour", "d3d12")))
                 finally:
                     g.check("tablet/remove", device_step(g, "remove"))
                     shutil.rmtree(args.tablet_lock, ignore_errors=True)
+                # The device's game steps against the PC's. The game runs the actors the picture shows (its clipping
+                # follows the picture's shape), so the PC plays the same tour on Direct3D 12 at the device's screen
+                # size, and the two must agree at every step.
+                screen = device_screen(g.work / "runs-tour-tablet-vulkan")
+                if screen is None:
+                    g.missing("replays/tablet", "the device's runs name no screen size")
+                else:
+                    pc_tour = gate_tour.write(g.work / "tour-tablet-pc", None, window=screen)
+                    step_hash.with_hash(pc_tour.parent)
+                    g.check("tour/tablet-pc", harness(g, pc_tour, "d3d12", "tour-tablet-pc"))
+                    g.check("replays/tablet", replays(g, "tour-tablet", "vulkan", ("tour-tablet-pc", "d3d12")))
         g.missing("pictures/tablet", "approved pictures are kept per renderer for one adapter; a device's own set is "
                                      "not in pictures.py yet")
         for name, why in (

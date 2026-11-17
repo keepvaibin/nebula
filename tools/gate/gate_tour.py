@@ -12,6 +12,9 @@ steps count from there. A stage with a long opening sequence is played as long a
 With a disc (RMGP01, RMGJ01), every test carries it (the harness's "disc") and its name the disc's prefix, so the
 tour runs on that disc's game.pak, whose data (text, layouts, fonts) is its own.
 
+With a window size, every stop plays in a window of that size: the game runs the actors the picture shows (its
+clipping follows the picture's shape), so the PC's steps can match a device's only at the device's screen size.
+
     python -X utf8 -I tools/gate/gate_tour.py OUT [--disc DISC] [STAGE SCENARIO ...]
 """
 import json
@@ -30,7 +33,7 @@ def stops():
     return [(i, l.split()[0], int(l.split()[1])) for i, l in enumerate(lines)]
 
 
-def test_for(index, stage, scenario, disc=None):
+def test_for(index, stage, scenario, disc=None, window=None):
     r = random.Random(20261116 + index)
     steps = [{"at": 30, "picture": "arrive"}]
     at = 40
@@ -60,19 +63,21 @@ def test_for(index, stage, scenario, disc=None):
             "limit_seconds": 240, "steps": steps, "expect": []}
     if disc:
         test["disc"] = disc
+    if window:
+        test["window"] = [int(window[0]), int(window[1])]
     return name, test
 
 
-def write(out, only=None, disc=None):
+def write(out, only=None, disc=None, window=None):
     """Writes the tour (or the stops named in only, as "Stage scenario") under out, for disc when given (else the
-    run's own pak); returns its suite.json."""
+    run's own pak), in a window of that size when given; returns its suite.json."""
     out = pathlib.Path(out)
     want = None if only is None else {tuple(s.split()) for s in only}
     names = []
     for index, stage, scenario in stops():
         if want is not None and (stage, str(scenario)) not in want:
             continue
-        name, test = test_for(index, stage, scenario, disc)
+        name, test = test_for(index, stage, scenario, disc, window)
         folder = out / name
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "test.json").write_text(json.dumps(test, indent=2) + "\n", encoding="utf-8")
