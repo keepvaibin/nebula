@@ -82,6 +82,9 @@ void program_use_triangle_ids(bool ids) noexcept;
 [[nodiscard]] const char* program_file_name() noexcept;
 // SHA-1 of the programs' headers.
 [[nodiscard]] const char* program_interface() noexcept;
+// The programs' identity: the one the cook wrote (every program's bytes and where it is), else, for a file from before it
+// wrote one, a hash of the table of where each program is. Another build's programs have another. 0: no programs.
+[[nodiscard]] std::uint64_t program_set_identity() noexcept;
 
 // A dev run's file: with --diagnostics, dev/<name> beside the program, whole, into `into`; false (and `into`
 // empty) without --diagnostics or the file. Used for dev/programs.bin and dev/rt_shaders.bin (tools/f_stage.sh).

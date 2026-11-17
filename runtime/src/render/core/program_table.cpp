@@ -52,6 +52,7 @@ struct Blob {
     const Row* pixel = nullptr;
     std::uint32_t vertex_count = 0u, pixel_count = 0u;
     char interface_text[41]{};
+    std::uint64_t identity = 0u;  // program_set_identity
 };
 
 // A dev run's programs: dev/programs.bin beside the program, kept for the run.
@@ -93,6 +94,16 @@ Blob open_blob() noexcept {
     std::memcpy(blob.interface_text, blob.bytes + 16u, 40u);
     blob.vertex = reinterpret_cast<const Row*>(blob.bytes + 64u);
     blob.pixel = blob.vertex + blob.vertex_count;
+    std::memcpy(&blob.identity, blob.bytes + 56u, 8u);
+    if (blob.identity == 0u) {
+        // A file from before the cook wrote one: the header and the rows (where every program is, and how long).
+        const std::size_t size = 64u + (std::size_t{blob.vertex_count} + blob.pixel_count) * sizeof(Row);
+        std::uint64_t hash = 14695981039346656037ull;
+        for (std::size_t i = 0; i < size; ++i) {
+            hash = (hash ^ blob.bytes[i]) * 1099511628211ull;
+        }
+        blob.identity = hash != 0u ? hash : 1u;
+    }
     return blob;
 }
 
@@ -251,6 +262,10 @@ const char* program_file_name() noexcept {
 
 const char* program_interface() noexcept {
     return blob().interface_text;
+}
+
+std::uint64_t program_set_identity() noexcept {
+    return blob().identity;
 }
 
 bool dev_shader_file(const char* name, std::vector<unsigned char>& into) {

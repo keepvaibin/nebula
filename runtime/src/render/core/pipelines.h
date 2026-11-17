@@ -70,6 +70,11 @@ public:
     void prepare(const std::vector<Prepared>& entries, const std::vector<unsigned>& variants, bool motion, bool layer,
                  bool one_pass, bool traced = false);
     [[nodiscard]] std::uint32_t pending() const noexcept { return pending_.load(std::memory_order_relaxed); }
+    // Whether the cache the driver took holds the start's whole set, made by an earlier run of these programs at these
+    // settings (the targets file, decide_warm): each of its pipelines is then a load from the cache, not a compile, and
+    // nothing need wait for the workers. False until the first worker has looked, and where the renderer keeps no cache
+    // file of its own (Direct3D 11, Metal: the driver's or the system's own cache, which no file here describes).
+    [[nodiscard]] bool warm() const noexcept { return warm_.load(std::memory_order_acquire); }
     [[nodiscard]] std::uint64_t created() const noexcept { return created_.load(std::memory_order_relaxed); }
     // Pipelines a draw wanted before the background had them: the cook's list missed them.
     [[nodiscard]] std::uint64_t misses() const noexcept { return misses_; }
@@ -174,6 +179,10 @@ private:
     // (left_jobs_), or by the draw that first needs it if that comes sooner, a load from the cache, not a compile. The file beside the cache keeps both sets and the hash of the cache data they go with: a cache
     // the driver refused, written by another run, or holding other programs names nothing, and every form is prepared.
     bool targets_open();
+    // warm(): the targets file names the cache data the driver took, was written after the start's set of a run drained,
+    // and by a run of these programs (program_set_identity) at the start's settings (start_settings_). Decided once, by
+    // the first worker to take a job after the first list (prepare) set the settings.
+    void decide_warm() noexcept;
     [[nodiscard]] std::uint64_t form_key(const PipelineEntry& entry, unsigned variant, unsigned aux);
     [[nodiscard]] bool left_to_cache(std::uint64_t form);
     void note_target_drawn(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux);
@@ -183,6 +192,13 @@ private:
     std::mutex targets_lock_;
     bool targets_tried_ = false, targets_on_ = false, targets_unsaved_ = false;
     std::uint64_t targets_hash_ = 0u;  // the cache data the targets file names: written again when the cache file moves
+    // The targets file's run (targets_open): its programs, its start's settings, whether its start's set had drained when
+    // it was written, and whether the cache data it names is the data the driver took.
+    std::uint64_t file_programs_ = 0u, file_settings_ = 0u;
+    bool file_complete_ = false, file_names_cache_ = false;
+    bool start_drained_ = false;  // this run's start's set drained (drained): the cache written from then holds it
+    std::atomic<std::uint64_t> start_settings_{0u};  // the first list's targets and passes (prepare); 0 before it
+    std::atomic<bool> warm_{false}, warm_decided_{false};
     std::filesystem::path targets_file_;
     std::unordered_set<std::uint64_t> target_cached_;  // in the cache the driver took at the start
     std::unordered_set<std::uint64_t> target_stored_;  // put in the cache by this run, or there from the start

@@ -3255,11 +3255,14 @@ uint32_t svc_option(void*, uint32_t what) {
             return mods;
         }
 #if defined(NEBULA_HOST_RENDERER)
-        // The title waits once for the pipeline list; what a later settings change adds prepares behind the game.
+        // The title waits once for the pipeline list, the first run and after the programs, the driver or the settings
+        // changed; what a later settings change adds prepares behind the game. Not when the driver's cache from an earlier
+        // run holds the whole list (warm): each is then a load, made behind the title, or by the draw that first needs it.
         // Deterministic test mode doesn't: how long the workers take is the machine's, so the frames waited would differ
         // run to run, and a draw makes its own pipeline when it isn't made yet.
         if (!gPipelinesPrepared) {
-            gPipelinesPrepared = deterministic_mode() || galaxy::render::pipeline_progress().left == 0u;
+            const galaxy::render::PipelineProgress progress = galaxy::render::pipeline_progress();
+            gPipelinesPrepared = deterministic_mode() || progress.left == 0u || progress.warm;
         }
         return gPipelinesPrepared ? 0u : 2u;
 #else

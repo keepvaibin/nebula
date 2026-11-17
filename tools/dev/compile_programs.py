@@ -372,6 +372,7 @@ def main():
     placed = {}
     chunks = []
     sizes = {}
+    digests = []
 
     def place(key):
         nonlocal at
@@ -385,6 +386,7 @@ def main():
             return placed[key]
         pad = -at % 16
         chunks.append(b"\0" * pad + data)
+        digests.append(digest)
         at += pad
         placed[key] = sizes[digest] = (at, len(data))
         at += len(data)
@@ -397,7 +399,12 @@ def main():
             for variant, key in rows[(stage, row)].items():
                 words[variant] = place(key)
             packed.append(struct.pack("<QII", row, flags[(stage, row)], coords.get((stage, row), 0)) + b"".join(struct.pack("<II", *w) for w in words))
-    head = b"NBPROG03" + struct.pack("<II", len(vertex), len(pixel)) + interface.encode() + b"\0" * 8
+    # Bytes 56-63, the programs' identity: every program's bytes and where it is, so a driver cache of pipelines made from
+    # another build's programs is known as one at the start (program_set_identity, the pipelines' targets file).
+    identity = hashlib.sha256(b"".join(packed) + b"".join(digests)).digest()[:8]
+    if identity == b"\0" * 8:
+        identity = b"\0" * 7 + b"\1"
+    head = b"NBPROG03" + struct.pack("<II", len(vertex), len(pixel)) + interface.encode() + identity
     blob = head + b"".join(packed) + b"".join(chunks)
     temp = out + ".tmp"
     with open(temp, "wb") as f:
