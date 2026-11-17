@@ -70,7 +70,7 @@ bench::ResultView result(const char* when, const char* backend) {
     r.refresh_hz = 60.0;
     r.verdict = "fits";
     r.yours = part(143.0, 2u);
-    r.standard = part(98.6, 2u);
+    r.yours.stages[1].average_fps = 98.6;
     return r;
 }
 
@@ -111,7 +111,7 @@ int main() {
         check(pages[1].table.rfind("\t#<STAGE\t#AVERAGE", 0) == 0, "the stage heading is left aligned");
         check(pages[1].table.find("1\t<@CosmosGardenGalaxy\t143 FPS") != std::string::npos, "a stage line");
         check(pages[1].table.find("\n#YOUR SETTINGS\n") != std::string::npos, "the part heading is a line alone");
-        check(pages[1].table.find("\t#<ALL STAGES\t#98.6 FPS") != std::string::npos, "one place under 100 FPS");
+        check(pages[1].table.find("2\t<@HeavenlyBeachGalaxy\t98.6 FPS") != std::string::npos, "one place under 100 FPS");
 
         // Where the time goes: four cells a line, the hardware group's names left aligned.
         check_marks(pages[2].table, 4u, "time marks");

@@ -715,35 +715,6 @@ int main() {
                          "dynamic resolution");
         passed &= expect(!preset.hud_output_resolution && preset.hud_internal_resolution && !galaxy::render::render_hud_at_output(preset),
                          "the performance preset draws the 2D layer at 480 lines and enlarges once at present");
-        {
-            // Two very different players' settings end at one standard: only the window, display and GPU stay theirs.
-            galaxy::render::RenderConfig a{};
-            a.internal_height = 2160u;
-            a.upscaler = 2u;
-            a.dynamic_resolution = true;
-            a.frame_generation = 2u;
-            a.ray_tracing_enabled = true;
-            a.hdr = true;
-            a.vsync_interval = 1u;
-            a.max_fps = 144.0f;
-            a.aspect_mode = 6u;
-            a.window_width = 2560u;
-            galaxy::render::RenderConfig b{};
-            galaxy::render::apply_performance_preset(b);
-            b.window_width = 1280u;
-            galaxy::render::apply_benchmark_standard(a);
-            galaxy::render::apply_benchmark_standard(b);
-            passed &= expect(a.internal_height == 1080u && a.aspect_mode == 4u && a.upscaler == 0u && !a.dynamic_resolution &&
-                                 a.frame_generation == 0u && !a.ray_tracing_enabled && !a.hdr && a.vsync_interval == 0u &&
-                                 galaxy::render::unlimited_frame_rate(a.max_fps) && a.msaa_samples == 4u &&
-                                 a.aa_mode == 1u && a.smaa_quality == 2u &&
-                                 a.ambient_occlusion && a.enhanced_lighting && a.per_pixel_lighting && a.bloom == 100u &&
-                                 a.anisotropic_filtering == 16u,
-                             "the benchmark standard: 1920 x 1080, high settings, nothing that changes with the device");
-            b.window_width = a.window_width;
-            passed &= expect(a == b && a.window_width == 2560u,
-                             "the benchmark standard is the same from any settings; the window stays the player's");
-        }
         galaxy::render::RenderConfig exact{};
         exact.internal_height = 720u;
         const bool before = galaxy::render::render_hud_at_output(exact);

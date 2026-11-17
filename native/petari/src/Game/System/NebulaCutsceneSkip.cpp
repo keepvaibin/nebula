@@ -31,6 +31,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
 #include "Game/System/NebulaClock.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     enum State {
@@ -221,6 +222,15 @@ namespace {
         }
     }
 
+    // A benchmark run holds its stage under full black until play (NebulaBenchmarkState::cover): what plays there is
+    // skipped unasked, its opening tour first (the run measures play).
+    bool isRunCovered() {
+        const NebulaHostServices* const pHost = nebula_host();
+        NebulaBenchmarkState run;
+        return pHost->benchmark_state != nullptr && pHost->benchmark_state(pHost->user, &run) != 0 && run.cover >= 255u &&
+               run.stopping == 0;
+    }
+
     // The picture and sound fade back in as the game's own fades do.
     void finishSkip(const char* pWhy) {
         sState = State_Idle;
@@ -250,14 +260,15 @@ namespace NebulaCutsceneSkip {
 
         switch (sState) {
         case State_Idle: {
-            // The HDR calibration's reference stage plays under the settings menu: its opening tour is skipped unasked
-            // (the menu covers the screen in black meanwhile).
-            if (NebulaSettingsMenu::isSceneLive() && isSkippableNow()) {
+            // The HDR calibration's reference stage plays under the settings menu, a benchmark's stage under the run's
+            // cover: their opening tours are skipped unasked (the screen is black meanwhile).
+            const bool covered = NebulaSettingsMenu::isSceneLive() || isRunCovered();
+            if (covered && isSkippableNow()) {
                 sState = State_FadeOut;
                 sFadeFrames = 0;
                 mute(true);
                 MR::closeSystemWipeFade();
-                report("skipping under the HDR calibration");
+                report(NebulaSettingsMenu::isSceneLive() ? "skipping under the HDR calibration" : "skipping under the benchmark's cover");
                 break;
             }
             if (!MR::isHeldPause(PLAYER_1)) {

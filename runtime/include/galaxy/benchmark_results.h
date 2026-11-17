@@ -53,7 +53,7 @@ struct StageView {
     bool settings_held = true;
 };
 
-// One part of a run: the player's settings, or the standard settings.
+// The run's part at the player's settings.
 struct PartView {
     bool present = false;
     double average_fps = 0.0, low_10_fps = 0.0, low_1_fps = 0.0, low_01_fps = 0.0, average_ms = 0.0, p99_ms = 0.0;
@@ -83,7 +83,7 @@ struct ResultView {
     double refresh_hz = 0.0;
     std::string verdict;      // fits, cpu_bound, below_target, none
     double spare_percent = 0.0;
-    PartView yours, standard;
+    PartView yours;
     std::vector<RecommendationRow> recommendation;
     bool thermal_judged = false;
     double thermal_slowdown = 1.0;  // the GPU's time at the end over its time at the start

@@ -5436,7 +5436,7 @@ namespace {
     const u32 cRunTrack = NEBULA_RGBA(0xCB, 0xD6, 0xEB, 0xFF);
     const u32 cRunFill = 0x6FA6EAFF;
     // What a step measures (NEBULA_BENCHMARK_PART_*), as the host's texts name it.
-    const char* const cRunParts[] = {"YOUR SETTINGS", "STANDARD SETTINGS", "EACH EFFECT ALONE", "FIRST STAGE AGAIN"};
+    const char* const cRunParts[] = {"YOUR SETTINGS", "EACH EFFECT ALONE", "FIRST STAGE AGAIN"};
 
     // `rText` cut with an ellipsis until `pBox` (at its size, drawn `squeeze` wide) is no wider than `room`.
     void fitLine(TextBox* pBox, MR::Text16& rText, f32 room, f32 squeeze, f32* pWidth) {

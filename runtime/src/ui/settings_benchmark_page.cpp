@@ -108,9 +108,9 @@ const char* renderer_name(const std::string& backend) {
     return "-";
 }
 
-// The part the summary and the time page read: the player's settings when they were measured, else the standard.
+// The part the summary and the time page read: the player's settings.
 const bench::PartView& main_part(const bench::ResultView& r) {
-    return r.yours.present || !r.standard.present ? r.yours : r.standard;
+    return r.yours;
 }
 
 BenchmarkPage summary_page(const bench::ResultView& r, const BenchmarkClock& clock) {
@@ -149,11 +149,9 @@ BenchmarkPage stages_page(const bench::ResultView& r) {
     BenchmarkPage page{"STAGES", {}, false};
     line(page.table, {"", left_heading("STAGE"), heading("AVERAGE"), heading("10% LOW"), heading("1% LOW"),
                       heading("99TH PERCENTILE")});
-    if (r.yours.present && !r.yours.stages.empty()) stage_lines(page.table, r.yours, "YOUR SETTINGS");
-    if (r.standard.present && !r.standard.stages.empty()) {
-        stage_lines(page.table, r.standard, "STANDARD SETTINGS (1920X1080, HIGH)");
-    }
-    if (!(r.yours.present && !r.yours.stages.empty()) && !(r.standard.present && !r.standard.stages.empty())) {
+    if (r.yours.present && !r.yours.stages.empty()) {
+        stage_lines(page.table, r.yours, "YOUR SETTINGS");
+    } else {
         line(page.table, {"", "NO STAGE WAS MEASURED"});
     }
     return page;

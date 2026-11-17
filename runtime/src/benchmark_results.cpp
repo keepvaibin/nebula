@@ -218,7 +218,6 @@ bool parse_result(std::string_view text, ResultView& out) {
         for (const Value& run : runs->items) {
             const std::string part = text_at(&run, "part");
             if (part == "yours") out.yours = part_of(run);
-            if (part == "standard") out.standard = part_of(run);
             if (const Value* scenes = run.find("scenes"); scenes != nullptr) {
                 for (const Value& scene : scenes->items) {
                     out.gpu_memory_peak_mb = std::max(out.gpu_memory_peak_mb, whole_at(&scene, "gpu_memory_peak_mb"));

@@ -2431,7 +2431,6 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
 int32_t svc_benchmark_state(void*, NebulaBenchmarkState* state) {
 #if defined(NEBULA_HOST_RENDERER)
     static_assert(static_cast<uint32_t>(galaxy::bench::Part::Yours) == NEBULA_BENCHMARK_PART_YOURS &&
-                      static_cast<uint32_t>(galaxy::bench::Part::Standard) == NEBULA_BENCHMARK_PART_STANDARD &&
                       static_cast<uint32_t>(galaxy::bench::Part::Probe) == NEBULA_BENCHMARK_PART_PROBE &&
                       static_cast<uint32_t>(galaxy::bench::Part::Again) == NEBULA_BENCHMARK_PART_AGAIN,
                   "the benchmark's parts are numbered alike");

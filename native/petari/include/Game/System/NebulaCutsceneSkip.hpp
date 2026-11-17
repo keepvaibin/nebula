@@ -12,7 +12,8 @@ class SysInfoWindow;
 // ends the skip there. The picture and sound then fade back in.
 // Skippable: the prerendered movies, a galaxy's opening camera tour, the Comet Observatory's story scenes and the
 // lessons the game starts itself, stars returning to the Observatory, and the bosses' scenes. Talks Mario starts, a
-// star's get, Mario flying into a galaxy, questions, saves and the levels' own short scenes are not.
+// star's get, Mario flying into a galaxy, questions, saves and the levels' own short scenes are not. Under a black screen
+// (the HDR calibration's reference stage, a benchmark's stage before play) they are skipped unasked.
 namespace NebulaCutsceneSkip {
     void init();                // GameSystem::initAfterSystemArchiveLoaded
     void update();              // GameSystem::update, once per step

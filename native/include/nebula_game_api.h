@@ -796,7 +796,6 @@ typedef struct NebulaSettingsView {
 /* What a benchmark step measures (NebulaBenchmarkState). */
 enum {
     NEBULA_BENCHMARK_PART_YOURS = 0, /* the player's settings */
-    NEBULA_BENCHMARK_PART_STANDARD,  /* the standard settings (1920x1080, High), the same on every device */
     NEBULA_BENCHMARK_PART_PROBE,     /* one optional pass, alone, to price it */
     NEBULA_BENCHMARK_PART_AGAIN,     /* the first stage again, the device warmed up */
 };
@@ -806,7 +805,7 @@ typedef struct NebulaBenchmarkState {
     uint32_t step;       /* the step running, from 1 */
     uint32_t steps;      /* the run's steps */
     uint32_t part;       /* NEBULA_BENCHMARK_PART_* */
-    uint32_t showing;    /* 1 while the step's stage is on screen (its opening, warming up or measured); 0 while it
+    uint32_t showing;    /* 1 while the step's stage is on screen (under the cover until play, warming up or measured); 0 while it
                             loads */
     uint32_t fps_tenths; /* pictures shown a second (every present) over the last second, in tenths; 0 not known */
     uint32_t progress;   /* the whole run, 0 to 10000, never going back */

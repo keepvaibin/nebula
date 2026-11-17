@@ -151,12 +151,12 @@ struct Options {
 };
 
 // The run as the game's run panel shows it (live_state).
-enum class Part : unsigned { Yours, Standard, Probe, Again };
+enum class Part : unsigned { Yours, Probe, Again };
 struct LiveState {
     std::uint32_t step = 0u, steps = 0u;  // the step running, from 1, of the run's steps
-    Part part = Part::Yours;              // what the step measures: your settings, the standard settings, one
-                                          // optional pass, or the first stage again (the device warmed up)
-    bool showing = false;                 // the step's stage is on screen: its opening, warming up or measured
+    Part part = Part::Yours;              // what the step measures: your settings, one optional pass, or the
+                                          // first stage again (the device warmed up)
+    bool showing = false;                 // the step's stage is on screen: under the cover until play, warming up or measured
                                           // (not loading)
     std::uint32_t cover = 0u;             // black over the game, under the panel, 0 to 255: settings change under it
     std::uint32_t fps_tenths = 0u;        // pictures shown a second over the last half second, in tenths; 0 not known

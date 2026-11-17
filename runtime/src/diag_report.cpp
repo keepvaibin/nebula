@@ -193,7 +193,7 @@ const Rule& benchmark_schema() {
              {"slowest_frames", list(slow_frame, 10)}},
             frames));
         const Rule run = object({
-            {"part", one_of({"yours", "standard"})},
+            {"part", one_of({"yours"})},
             {"measured_with", settings},
             {"summary", object(with({{"limiter", limiter}, {"display_limited", boolean()}}, frames))},
             {"scenes", list(scene, 16)},
@@ -235,8 +235,7 @@ const Rule& benchmark_schema() {
                                                 16)}}))},
             {"summary", object({{"verdict", one_of({"fits", "cpu_bound", "below_target", "none"})},
                                 {"average_fps", n}, {"low_10_fps", n}, {"low_1_fps", n}, {"spare_percent", n},
-                                {"limiter", limiter}, {"worst_stage", text(64)}, {"standard_average_fps", n},
-                                {"standard_low_10_fps", n}, {"standard_low_1_fps", n}})},
+                                {"limiter", limiter}, {"worst_stage", text(64)}})},
         });
     }();
     return schema;
