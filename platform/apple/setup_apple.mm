@@ -315,9 +315,9 @@ bool ensure_game_data(int argc, char** argv) {
     if (present) {
         std::fprintf(stderr, "[setup] %s is not a game.pak this version of Nebula reads\n", pak.c_str());
     }
-    // A run with no screen has nobody to ask.
+    // A run with no screen has nobody to ask; a start check (host_main.cpp run_start_check) needs no game data.
     for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) == "--seconds") {
+        if (std::string(argv[i]) == "--seconds" || std::string(argv[i]) == "--start-check") {
             return true;
         }
     }

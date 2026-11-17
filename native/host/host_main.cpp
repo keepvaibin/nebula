@@ -1974,6 +1974,63 @@ void submit_frame_unchecked(bool present, bool black) {
     gSubmissions.fetch_add(1, std::memory_order_relaxed);
 }
 
+// --start-check N (the push workflow's check, docs/plan/01-AGENT-1-ENGINE.md E0.3): the program's own start without the
+// game's files, on a computer with no game data and perhaps no graphics card. The settings, the window and the renderer
+// start (a software adapter is allowed in this mode alone), then N frames of a cleared picture go through the frame
+// walk and the present as the game's do. Exit 0: every frame was drawn and at least one picture shown; 3: the renderer
+// did not start; 4: no picture was shown; 5: the renderer kept a frame for 10 seconds. A crash ends it as a crash.
+int run_start_check(unsigned frames) {
+    try {
+        galaxy::render::load_render_config_from_file();
+    } catch (const std::exception& failure) {
+        std::fprintf(stderr, "start check: the settings did not load: %s\n", failure.what());
+        return 3;
+    }
+    const galaxy::render::RenderConfig config = galaxy::render::get_render_config();
+    if (!galaxy::render::initialize(static_cast<int>(config.window_width), static_cast<int>(config.window_height))) {
+        std::fprintf(stderr, "start check: the renderer did not start: %s\n", galaxy::render::startup_failure().c_str());
+        return 3;
+    }
+    galaxy::render::set_frame_end_presents(true);
+    // The frame: its whole picture cleared (colour, alpha and depth), then shown.
+    NebulaFramePass passes[2]{};
+    passes[0].kind = NEBULA_PASS_CLEAR;
+    passes[0].clear_channels = 7u;
+    passes[0].clear_rgba = 0x204060FFu;
+    passes[0].phase = 0xFFu;
+    passes[1].kind = NEBULA_PASS_SHOW;
+    passes[1].phase = 0xFFu;
+    // Three lists in turn: the renderer reads the newest it walked and the one before (render_core.cpp
+    // release_lists_before), and a list is written again only once the renderer has let go of it.
+    NebulaFrameList lists[3]{};
+    for (NebulaFrameList& list : lists) {
+        list.passes = passes;
+        list.pass_count = 2u;
+        list.released = 1u;
+    }
+    for (unsigned frame = 0u; frame < frames; ++frame) {
+        galaxy::render::pump_messages();
+        NebulaFrameList& list = lists[frame % 3u];
+        const auto asked = std::chrono::steady_clock::now();
+        while (list.released == 0u) {
+            if (std::chrono::steady_clock::now() - asked > std::chrono::seconds(10)) {
+                std::fprintf(stderr, "start check: frame %u was not let go of in 10 seconds\n", frame - 3u);
+                return 5;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        list.released = 0u;
+        list.game_frame = frame + 1u;
+        galaxy::render::attach_frame_list(&list);
+        submit_frame_unchecked(false, false);
+    }
+    galaxy::render::wait_for_render_idle();
+    const galaxy::render::DisplayPresentStats shown = galaxy::render::display_present_stats();
+    std::printf("start check: %u frames drawn, %llu pictures shown\n", frames, static_cast<unsigned long long>(shown.presented));
+    std::fflush(stdout);
+    return shown.presented != 0u ? 0 : 4;
+}
+
 [[noreturn]] void finish_and_exit(bool restart);
 // The start a restart asks for (host_window.h Restart): Android's activity reads it (start_again); the other hosts add
 // its arguments (add_restart_argument) before finish_and_exit.
@@ -5659,6 +5716,8 @@ void read_launch_args(int argc, char** argv) {
 #endif
         } else if (key == "--seconds") {
             args.timed = std::atof(argv[i + 1]) > 0.0;
+        } else if (key == "--start-check") {
+            args.start_check = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
         } else if (key == "--diagnostics") {
             std::string_view unknown;
             unsigned what = 0u;
@@ -5938,7 +5997,7 @@ int main(int argc, char** argv) {
                    key == "--gpu-start-retry" || key == "--extension" || key == "--import" || key == "--imports-taken" ||
                    key == "--safe-start" || key == "--shipped-mods" || key == "--mod-dev" || key == "--renderer" || key == "--started-again" ||
                    key == "--start-again-of" || key == "--hidden" || key == "--gpu-driver" || key == "--gpu-driver-library" ||
-                   key == "--gpu-driver-hooks") {
+                   key == "--gpu-driver-hooks" || key == "--start-check") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
@@ -5953,6 +6012,13 @@ int main(int argc, char** argv) {
         }
     }
 #if defined(NEBULA_HOST_RENDERER)
+    if (const unsigned frames = ::galaxy::launch_args().start_check; frames != 0u) {
+        // The process ends here without the renderer's shutdown, as a game's end does (finish_and_exit).
+        const int code = run_start_check(frames);
+        std::fflush(stdout);
+        std::fflush(stderr);
+        std::_Exit(code);
+    }
     if (benchmark) {
         // No save folder: the game's saves stay in memory. Straight to the title, no time limit (it quits when done).
         saves.clear();

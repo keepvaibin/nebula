@@ -2035,7 +2035,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         // Every hardware adapter is tried in preference order and the first that
         // creates a D3D12 device is kept (entry zero may not). Legacy enumeration
         // covers systems without IDXGIFactory6 or a failed preferred enumeration.
-        // A software adapter is never selected.
+        // A software adapter is selected only by the start check (launch_args.h start_check), on a computer without a
+        // graphics card.
         ComPtr<IDXGIAdapter1> adapter;
         DXGI_ADAPTER_DESC1 adapter_desc{};
         std::string refused;  // the last adapter passed over for what the renderer needs, and why
@@ -2043,7 +2044,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             DXGI_ADAPTER_DESC1 description{};
             if (candidate == nullptr ||
                 FAILED(candidate->GetDesc1(&description)) ||
-                (description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0u ||
+                ((description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0u && ::galaxy::launch_args().start_check == 0u) ||
                 (same_card_only_ && (description.AdapterLuid.LowPart != card_.LowPart ||
                                      description.AdapterLuid.HighPart != card_.HighPart))) {
                 return false;

@@ -3,6 +3,7 @@
 // the gpu:: functions gpu_types.h declares for every back end.
 #include "galaxy/render/d3d11/d3d11_context.h"
 
+#include "galaxy/launch_args.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_choice.h"
 
@@ -109,7 +110,9 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
     std::string refused;
     for (const ComPtr<IDXGIAdapter1>& adapter : adapters) {
         DXGI_ADAPTER_DESC1 desc{};
-        if (FAILED(adapter->GetDesc1(&desc)) || (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0u) {
+        // A software adapter is taken only by the start check (launch_args.h start_check), after every hardware one.
+        if (FAILED(adapter->GetDesc1(&desc)) ||
+            ((desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0u && ::galaxy::launch_args().start_check == 0u)) {
             continue;
         }
         const std::string name = narrow(desc.Description);

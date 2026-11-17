@@ -137,6 +137,9 @@ struct LaunchArgs {
     // window, dialog or Discord status, and no keyboard, mouse, controller motor or Wii Remote of the player's.
     bool started_hidden = false;
     bool timed = false;                 // --seconds over 0: a run that ends by itself, a test's
+    // --start-check N: the program's start without the game's files (host_main.cpp run_start_check): the window and the
+    // renderer, which may take a software adapter when no graphics card runs it, then N frames drawn and shown.
+    unsigned start_check = 0u;
     unsigned gpu_start_retry = 0u;      // --gpu-start-retry: starts so far that found no graphics memory free
     unsigned started_again = 0u;        // --started-again: starts this run made again before this one
     // --start-again-of <id>-<time> (Windows): the process this start takes over from, by its id and creation time.
@@ -183,7 +186,8 @@ inline constexpr unsigned kResolutionStepsPictures = 120u;
 // A player's own start: shown, not timed, and with no host extension (a test driver's). Only it may choose settings for
 // the player (the first start's measured height).
 [[nodiscard]] inline bool ordinary_start() noexcept {
-    return !g_launch_args.started_hidden && !g_launch_args.timed && g_launch_args.extensions.empty();
+    return !g_launch_args.started_hidden && !g_launch_args.timed && g_launch_args.start_check == 0u &&
+           g_launch_args.extensions.empty();
 }
 
 // Whether this run records any of `what` (Diagnostic bits).
