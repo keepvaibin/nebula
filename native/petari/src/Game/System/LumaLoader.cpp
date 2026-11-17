@@ -445,6 +445,7 @@ namespace luma {
             {5, "Object.NoRow", {"found", nullptr}},
             {6, "Object.NotReadable", {"where", nullptr}},
             {7, "Object.Ambiguous", {"where", "found"}},
+            {8, "Call.NotNow", {"found", "need"}},
         };
         const u32 kCodeNoResult = 2;
         const u32 kCodeSkipRefused = 3;
@@ -452,6 +453,7 @@ namespace luma {
         const u32 kCodeObjectNoRow = 5;
         const u32 kCodeObjectNotReadable = 6;
         const u32 kCodeObjectAmbiguous = 7;
+        const u32 kCodeNotNow = 8;
 
         // The row a code says, into pId, and the names of its args (null: positional); false when the code is no row
         // (a bug in the reporting runtime). 100 to 899 are the services' (services/registry.md 12d).
@@ -1079,6 +1081,20 @@ namespace luma {
 
         void noResult(const Function* pFunction, const void* pOwner) { mended(pFunction, pOwner, kCodeNoResult); }
 
+        // A mod's call of a game function not made: a scene object it needs is not there now (luma_hook.h present,
+        // which checks only calls made while a mod's code runs on this thread). Said for that mod (once per function
+        // and need, then counted).
+        void notNow(const Function* pFunction, const char* pNeed) {
+            LumaMod* const pMod = luma::guard::current();
+            if (pMod == nullptr) {
+                return;
+            }
+            char found[256];
+            nebula_snprintf(found, sizeof(found), "%s %s", pFunction->name, pFunction->signature);
+            const char* const args[2] = {found, pNeed};
+            record(pMod, found, 0, kCodeNotNow, args, 2);
+        }
+
         // Classes (docs/modding/reference/lumascript/defining-classes.md).
         s32 apiDefineClass(const LumaMod* pMod, const LumaClassDef* pDef) {
             return refusedWhileGoing(pMod, "define_class") ? -1 : luma::classes::define(pMod, pDef);
@@ -1586,6 +1602,7 @@ namespace luma {
         (void)functionCount();
         gSkipRefused = skipRefused;
         gNoResult = noResult;
+        gNotNow = notNow;
         LumaMod* const pMod = new LumaMod();
         copyText(pMod->name, sizeof(pMod->name), pId != nullptr ? pId : "");
         copyText(pMod->file, sizeof(pMod->file), pFile != nullptr ? pFile : "");

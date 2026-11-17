@@ -24,6 +24,9 @@ namespace luma {
         // A fault was caught in the mod's code this session: none of its code runs again until the next start.
         bool faulted(const LumaMod* pMod);
 
+        // The mod whose code runs on this thread now (the innermost run()), or null outside every one.
+        LumaMod* current();
+
         // A mod's library from the host's half: its image's base and its code (all 0 when there is none: its faults are
         // never resumed).
         void codeRange(void* pLibrary, uintptr_t* pBase, uintptr_t* pBegin, uintptr_t* pEnd);

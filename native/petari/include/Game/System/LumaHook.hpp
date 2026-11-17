@@ -106,4 +106,6 @@ namespace luma {
     // loader to report each once.
     extern void (*gSkipRefused)(const Function* pFunction, const void* pOwner);
     extern void (*gNoResult)(const Function* pFunction, const void* pOwner);
+    // A mod's call not made because a need was missing (luma_hook.h present): pNeed names it.
+    extern void (*gNotNow)(const Function* pFunction, const char* pNeed);
 }

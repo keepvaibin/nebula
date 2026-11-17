@@ -36,7 +36,8 @@ def fact(name, signature, kind, owner, virtual=False, pure=False, const=False, o
         inside = signature[signature.index("(") + 1:signature.rindex(")")]
         marks = [None] * (inside.count(",") + 1 if inside.strip() else 0)
     return {"name": name, "signature": signature, "kind": kind, "owner": owner, "virtual": virtual, "pure": pure,
-            "const": const, "overrides": [{"name": n, "signature": s, "row": r} for n, s, r in overrides], "marks": marks}
+            "const": const, "overrides": [{"name": n, "signature": s, "row": r} for n, s, r in overrides], "marks": marks,
+            "needs": [], "null_when": []}  # no scene object here: needs_fixture_test.py has those
 
 
 def mark(way, count=None, fixed=None, nullable=False):

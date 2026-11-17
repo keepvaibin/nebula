@@ -19,6 +19,34 @@ namespace luma {
         unsigned char* hooked;
     };
 
+    // A function's flag (the lumaflg section): whether hooks are on it, and the set of scene objects it needs (M2;
+    // 0: none), which the kernel gives it when it sorts the rows (NeedsRow). A row's `hooked` points at `hooked`.
+    struct alignas(4) Flag {
+        unsigned char hooked;
+        unsigned char spare;
+        unsigned short needs;
+    };
+    static_assert(sizeof(Flag) == 4, "a flag is 4 bytes");
+
+    // What a function needs (tools/lumacore/gen_types.py needs_rows, in the lumand section): its row's name and
+    // signature and the scene objects whose absence makes it fault: their SceneObj ids (0xFF: the scene's holder of
+    // them), ended by 0xFE, and their names in the same order, each ended by a NUL. 32 bytes aligned to 32, so a
+    // linker's pad between objects is whole records (with a null name).
+    enum : unsigned char { kNeedScene = 0xFF, kNeedsEnd = 0xFE };
+    struct alignas(32) NeedsRow {
+        const char* name;
+        const char* signature;
+        const unsigned char* ids;
+        const char* names;
+    };
+    static_assert(sizeof(NeedsRow) == 32, "a needs row is one 32-byte step");
+
+    // Before a call (invoke) of a function with needs, made while a mod's code runs on this thread: whether every one
+    // is there now (true for every other caller: the host and the harness). False: the call is not made, the caller
+    // gets its result type's empty value, and the calling mod's log says what was missing (once per function and
+    // need, then counted).
+    bool present(const Function* fn, unsigned short needs);
+
     // The function whose own code the hook runner is about to enter on this thread.
     [[clang::require_constant_initialization]] extern LUMA_THREAD const Function* tBody;
 
@@ -73,6 +101,14 @@ namespace luma {
             }
         }
         template <class F> static void put(void* r, F&& f) { ::new (Place(), r) R(f()); }
+        // A call not made (present): R's empty value, as a skip gives; a fixed result (no default constructor, or a
+        // destructor) has none, so its bytes are left zero: refused all the same, as the call could fault in the game.
+        static void none(void* r) {
+            __builtin_memset(r, 0, sizeof(R));
+            if constexpr (kKind == kPlain) {
+                ::new (Place(), r) R();
+            }
+        }
         R take() {
             R* p = reinterpret_cast<R*>(bytes);
             struct End { R* p; ~End() { p->~R(); } } end = {p};
@@ -83,11 +119,13 @@ namespace luma {
         static constexpr unsigned kKind = kReference;
         R* p = nullptr;
         template <class F> static void put(void* r, F&& f) { *static_cast<R**>(r) = &f(); }
+        static void none(void* r) { *static_cast<R**>(r) = nullptr; }
         R& take() { return *p; }
     };
     template <> struct Result<void> {
         static constexpr unsigned kKind = kPlain;
         template <class F> static void put(void*, F&& f) { f(); }
+        static void none(void*) {}
         void take() {}
     };
 
@@ -133,21 +171,24 @@ namespace luma {
 #define LUMA_FLAG_SECTION __attribute__((section("lumaflg$m")))
 #define LUMA_ROW_SECTION __attribute__((section("lumafn$m"), used))
 #define LUMA_NUMBERS_SECTION __attribute__((section("lumanum$m"), used))
+#define LUMA_NEEDS_SECTION __attribute__((section("lumand$m"), used))
 #elif defined(__APPLE__)
 #define LUMA_FLAG_SECTION __attribute__((section("__DATA,lumaflg")))
 #define LUMA_ROW_SECTION __attribute__((section("__DATA,lumafn"), used))
 #define LUMA_NUMBERS_SECTION __attribute__((section("__DATA,lumanum"), used))
+#define LUMA_NEEDS_SECTION __attribute__((section("__DATA,lumand"), used))
 #else
 #define LUMA_FLAG_SECTION __attribute__((section("lumaflg")))
 #define LUMA_ROW_SECTION __attribute__((section("lumafn"), used, retain))
 #define LUMA_NUMBERS_SECTION __attribute__((section("lumanum"), used, retain))
+#define LUMA_NEEDS_SECTION __attribute__((section("lumand"), used, retain))
 #endif
 
 #define LUMA_LIST(...) {__VA_ARGS__}
 
-#define LUMA_ROW(NAME, SIGNATURE, INVOKE)                   \
-    LUMA_FLAG_SECTION static unsigned char luma_hooked = 0; \
-    LUMA_ROW_SECTION static const ::luma::Function luma_fn = {NAME, SIGNATURE, INVOKE, &luma_hooked}
+#define LUMA_ROW(NAME, SIGNATURE, INVOKE)                     \
+    LUMA_FLAG_SECTION static ::luma::Flag luma_flag = {0, 0, 0}; \
+    LUMA_ROW_SECTION static const ::luma::Function luma_fn = {NAME, SIGNATURE, INVOKE, &luma_flag.hooked}
 
 // RESULT: the function's result type. CALL: the function called on luma_a. PARAMS and ARGS: the hooked path's own
 // copy of the parameters (it is another function, so the path with no hook keeps nothing for it). POINTERS: args.
@@ -157,9 +198,13 @@ namespace luma {
             *static_cast<unsigned*>(luma_r) = ::luma::Result<::luma::Type<RESULT>>::kKind;                           \
             return;                                                                                                  \
         }                                                                                                            \
+        if (__builtin_expect(luma_flag.needs != 0, 0) && !::luma::present(&luma_fn, luma_flag.needs)) {              \
+            ::luma::Result<::luma::Type<RESULT>>::none(luma_r);                                                      \
+            return;                                                                                                  \
+        }                                                                                                            \
         ::luma::Result<::luma::Type<RESULT>>::put(luma_r, [&]() -> ::luma::Type<RESULT> { return CALL; });           \
     }));                                                                                                             \
-    if (__builtin_expect(luma_hooked, 0)) {                                                                          \
+    if (__builtin_expect(luma_flag.hooked, 0)) {                                                                          \
         if (::luma::tBody == &luma_fn) {                                                                             \
             ::luma::tBody = nullptr;                                                                                 \
         } else {                                                                                                     \
@@ -186,7 +231,7 @@ namespace luma {
 // LUMA_VA_COPY), which ends before the body starts its own.
 #define LUMA_TELL_VA(NAME, SIGNATURE, LAST, POINTERS)    \
     LUMA_ROW(NAME, SIGNATURE, nullptr);                  \
-    if (__builtin_expect(luma_hooked, 0)) {              \
+    if (__builtin_expect(luma_flag.hooked, 0)) {              \
         __builtin_va_list luma_va;                       \
         __builtin_va_start(luma_va, LAST);               \
         ::luma::Param<__builtin_va_list> luma_vp = luma_va; \
@@ -198,7 +243,7 @@ namespace luma {
 
 #define LUMA_TELL(NAME, SIGNATURE, POINTERS)       \
     LUMA_ROW(NAME, SIGNATURE, nullptr);            \
-    if (__builtin_expect(luma_hooked, 0)) {        \
+    if (__builtin_expect(luma_flag.hooked, 0)) {        \
         void* luma_args[] = LUMA_LIST POINTERS;              \
         ::luma::tell(&luma_fn, luma_args);         \
     }

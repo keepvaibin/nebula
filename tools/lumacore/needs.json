@@ -1,0 +1,11 @@
+{
+ "about": "What the needs pass (gen_types.py merge_needs) cannot see in a function's code, each with why. A need is a scene object by its SceneObj_ name without the prefix, or scene (the scene's holder of those objects). A row named here that is not a function row stops the build.",
+ "rows": [
+  {
+   "name": "MR::getSceneObjHolder",
+   "signature": "SceneObjHolder *()",
+   "needs": ["scene"],
+   "why": "it reads GameSystem's scene controller with no test (SceneObjHolder.cpp); the controller is null before the first scene"
+  }
+ ]
+}

@@ -114,6 +114,12 @@ K_MEMBER_REF_EXPR = 102
 K_STRING_LITERAL, K_INIT_LIST = 109, 119
 # 1.9's variadic check: a call
 K_CALL_EXPR = 103
+# The needs pass (M2): statements and expressions whose shape says how a pointer is used.
+K_CONDITIONAL, K_IF_STMT, K_WHILE, K_DO, K_FOR, K_RETURN, K_CONTINUE, K_BREAK = 116, 205, 207, 208, 209, 214, 210, 211
+K_LAMBDA = 144
+# CXBinaryOperatorKind and CXUnaryOperatorKind
+B_EQ, B_NE, B_LAND, B_LOR, B_ASSIGN = 15, 16, 20, 21, 22
+U_DEREF, U_LNOT = 6, 10
 # The kernel's own units: their numbers and tables are not the game's data.
 KERNEL_PREFIX = 'Game/System/Luma'
 SC_STATIC = 3
@@ -239,6 +245,9 @@ def load(path):
     api.canonicalCursor = fn('clang_getCanonicalCursor', CXCursor, CXCursor)
     api.templateArgCount = fn('clang_Cursor_getNumTemplateArguments', c_int, CXCursor)
     api.templateArgType = fn('clang_Cursor_getTemplateArgumentType', CXType, CXCursor, c_uint)
+    # The needs pass (M2): which operator an expression is (LLVM 17 and later).
+    api.binaryKind = fn('clang_getCursorBinaryOperatorKind', c_int, CXCursor)
+    api.unaryKind = fn('clang_getCursorUnaryOperatorKind', c_int, CXCursor)
     return api
 
 
@@ -1288,6 +1297,43 @@ class Unit:
         if self.label.endswith('NameObj/NameObjFactory.cpp'):
             self.places_part['factory'] = self.factory_rows(api.cursor(self.tu))
 
+    # Needs (M2, the audit's design note "marking every function with what it needs"): for each row, the functions it
+    # calls and the game's scene objects it reads, each with how its result is used. A pointer the function uses
+    # without a test is `deref`; one it gives back is `returned`; one it tests first (compares, a condition, an earlier
+    # `if (...) return;` that names it) is `tested`. A use the rules do not place is `deref`: the pass marks more, never
+    # less. gen_types.py closes these over the whole game (needs, null_when).
+    #   calls  [{"name", "signature", "use", "line"}]: each callee with a row, once per use
+    #   roots  [{"id", "use", "checked", "line"}]: each MR::getSceneObj<T>(id), by the id's enum constant without
+    #          SceneObj_; checked: under a test of MR::isExistSceneObj with the same id
+    def needs_facts(self):
+        self.needs = []
+        for cursor, name, signature, _role in self.facts:
+            calls, roots, made = {}, {}, {}
+            Needs(self, calls, roots, made).go(cursor, [])
+            self.needs.append({
+                'name': name, 'signature': signature,
+                'calls': [{'name': n, 'signature': sg, 'use': u, 'line': ln} for (n, sg, u), ln in calls.items()],
+                'roots': [{'id': i, 'use': u, 'checked': c, 'line': ln} for (i, u, c), ln in roots.items()],
+                'made': [{'id': i, 'line': ln} for i, ln in made.items()]})
+
+    def leaves(self, statement):
+        """A statement that always leaves its block: return, break, continue, or a block that ends in one."""
+        if statement.kind in (K_RETURN, K_CONTINUE, K_BREAK):
+            return True
+        if statement.kind == K_COMPOUND:
+            kids = self.children(statement)
+            return bool(kids) and self.leaves(kids[-1])
+        return False
+
+    def scene_obj_id(self, argument):
+        """The SceneObj_ constant an id argument names (MarioHolder for SceneObj_MarioHolder), or None."""
+        c = self.bare(argument)
+        if c.kind == K_DECL_REF_EXPR:
+            name = self.string(self.api.spelling(self.api.referenced(c)))
+            if name.startswith('SceneObj_'):
+                return name[len('SceneObj_'):]
+        return None
+
     def placement_iter(self, t):
         """A parameter of the placement iterator's type (TableIter, by reference or pointer, const or not)."""
         api = self.api
@@ -1801,8 +1847,157 @@ class Unit:
         write_if_changed(output + '.rows', ('\n'.join(self.rows) + '\n' if self.rows else '').encode())
         write_if_changed(output + '.functions', (json.dumps(self.functions, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.places', (json.dumps(self.places_part, ensure_ascii=False) + '\n').encode('utf-8'))
+        write_if_changed(output + '.needs', (json.dumps(self.needs, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.left', ('\n'.join(self.left) + '\n' if self.left else '').encode())
         write_if_changed(output + '.globals', ''.join(name + '\n' for name in sorted(self.defines) if name).encode())
+
+
+class Needs:
+    """One row's walk for Unit.needs_facts."""
+
+    def __init__(self, unit, calls, roots, made):
+        self.unit, self.api = unit, unit.api
+        self.calls, self.roots, self.made = calls, roots, made  # made: the ids MR::createSceneObj(id) makes here
+        self.locals = {}  # a local's hash -> the subject its initializer or an assignment gave it
+        self.cache = {}
+
+    def subject(self, call):
+        """What a call stands for: ('root', id) for MR::getSceneObj<T>(id) or MR::isExistSceneObj(id) ('?' when the id
+        is not a SceneObj_ constant), ('made', id) for MR::createSceneObj(id) (which makes the object when it is not
+        there), ('row', name, signature) for a callee with a row, None for anything else."""
+        api, unit = self.api, self.unit
+        target = api.referenced(call)
+        if api.isNull(target) or target.kind not in FUNCTIONS:
+            return None
+        spelling = unit.string(api.spelling(target))
+        if spelling in ('getSceneObj', 'isExistSceneObj', 'createSceneObj') and api.numArgs(call) >= 1:
+            scope = unit.scope(target)
+            if scope is not None and [n for n, _, _ in scope] == ['MR'] and (
+                    spelling != 'getSceneObj' or not api.isNull(api.specialized(target))):
+                return ('made' if spelling == 'createSceneObj' else 'root',
+                        unit.scene_obj_id(api.argument(call, 0)) or '?')
+        ident = unit.identity(target)
+        return ('row',) + ident if ident is not None else None
+
+    def held(self, ref):
+        return self.locals.get(self.api.hashCursor(self.api.referenced(ref)))
+
+    def mentions(self, cond):
+        """The subjects a condition names: calls, and locals that hold one."""
+        api = self.api
+        key = api.hashCursor(cond)
+        if key in self.cache:
+            return self.cache[key]
+        found = set()
+
+        def take(c):
+            if c.kind == K_CALL:
+                subject = self.subject(c)
+                if subject is not None:
+                    found.add(subject)
+            elif c.kind == K_DECL_REF_EXPR:
+                held = self.held(c)
+                if held is not None:
+                    found.add(held)
+
+        def visit(child, _parent, _data):
+            take(CXCursor.from_buffer_copy(child))
+            return 2
+
+        take(cond)
+        api.visit(cond, VISITOR(visit), None)
+        self.cache[key] = found
+        return found
+
+    def guarded(self, subject, stack):
+        """A test of `subject` on the way here: an enclosing if, loop or ?: whose condition names it (the use is in its
+        body), or an earlier statement of an enclosing block, `if (...) return/break/continue;`, whose condition names
+        it."""
+        unit = self.unit
+        for depth in range(len(stack) - 1, 0, -1):
+            node, index = stack[depth - 1]
+            if node.kind in (K_IF_STMT, K_WHILE, K_FOR, K_CONDITIONAL) and index > 0:
+                kids = unit.children(node)
+                if kids and subject in self.mentions(kids[0]):
+                    return True
+            elif node.kind == K_COMPOUND:
+                for earlier in unit.children(node)[:index]:
+                    if earlier.kind == K_IF_STMT:
+                        parts = unit.children(earlier)
+                        if len(parts) >= 2 and unit.leaves(parts[1]) and subject in self.mentions(parts[0]):
+                            return True
+        return False
+
+    def use(self, stack):
+        """How the expression at the top of `stack` is used: 'deref', 'returned', 'tested', or ('local', hash) for a
+        local it is stored in; 'deref' when no rule places it. stack: [(cursor, index of the child on the path)]."""
+        api, unit = self.api, self.unit
+        at = len(stack) - 1
+        # Wrappers, and a branch of ?:, which is used as the ?: is.
+        while at > 0 and (stack[at - 1][0].kind in (K_UNEXPOSED_EXPR, K_PAREN) or stack[at - 1][0].kind in K_CASTS
+                          or stack[at - 1][0].kind == K_CONDITIONAL and stack[at - 1][1] > 0):
+            at -= 1
+        if at == 0:
+            return 'deref'
+        parent, index = stack[at - 1]
+        kind = parent.kind
+        if kind in (K_MEMBER_REF_EXPR, K_ARRAY_SUBSCRIPT) and index == 0:
+            return 'deref'
+        if kind == K_UNARY_OPERATOR:
+            return 'tested' if api.unaryKind(parent) == U_LNOT else 'deref'
+        if kind == K_RETURN:
+            return 'returned'
+        if kind == K_BINARY:
+            op = api.binaryKind(parent)
+            if op in (B_EQ, B_NE, B_LAND, B_LOR):
+                return 'tested'
+            if op == B_ASSIGN and index == 1:
+                left = unit.bare(unit.children(parent)[0])
+                if left.kind == K_DECL_REF_EXPR:
+                    return ('local', api.hashCursor(api.referenced(left)))
+            return 'deref'
+        if kind in (K_IF_STMT, K_WHILE, K_FOR, K_CONDITIONAL) and index == 0 or kind == K_DO and index == 1:
+            return 'tested'
+        if kind == K_VAR:
+            return ('local', api.hashCursor(parent))
+        return 'deref'
+
+    def note(self, subject, use, line, stack):
+        if isinstance(use, tuple):
+            self.locals[use[1]] = subject
+            return
+        if subject[0] == 'root':
+            # checked: MR::isExistSceneObj(id) guards it, so the scene's holder is there too (getSceneObjHolder reads
+            # the scene controller with no test).
+            checked = self.guarded(subject, stack)
+            self.roots.setdefault((subject[1], 'tested' if use == 'deref' and checked else use, checked), line)
+            return
+        if use == 'deref' and self.guarded(subject, stack):
+            use = 'tested'
+        self.calls.setdefault((subject[1], subject[2], use), line)
+
+    def go(self, node, stack):
+        api, unit = self.api, self.unit
+        for i, child in enumerate(unit.children(node)):
+            stack.append((node, i))
+            path = stack + [(child, -1)]
+            if child.kind == K_CALL:
+                subject = self.subject(child)
+                if subject is not None and subject[0] == 'made':
+                    # The holder must be there (createSceneObj reads it with no test); the object then is.
+                    self.made.setdefault(subject[1], unit.line(child))
+                    self.roots.setdefault((subject[1], 'tested', False), unit.line(child))
+                elif subject is not None:
+                    target = api.referenced(child)
+                    if not (subject[0] == 'root' and unit.string(api.spelling(target)) == 'isExistSceneObj'):
+                        self.note(subject, self.use(path), unit.line(child), path)
+            elif child.kind == K_DECL_REF_EXPR:
+                held = self.held(child)
+                if held is not None:
+                    self.note(held, self.use(path), unit.line(child), path)
+            if child.kind != K_LAMBDA:
+                self.go(child, stack)
+            stack.pop()
 
 
 def number_value(written, floating):
@@ -1986,6 +2181,7 @@ def main():
     unit.read_marks()
     unit.function_facts(types)
     unit.places(types)
+    unit.needs_facts()
     unit.write(output)
     if '--depfile' in options:
         included = []

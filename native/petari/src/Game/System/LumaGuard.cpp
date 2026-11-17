@@ -267,6 +267,8 @@ namespace luma {
             thread_local LumaGuardThread tThread = {nullptr, 0u, 0u};
             // The ticks the boundaries nested in this thread's innermost one took (its own time is its total less them).
             thread_local u64 tNestedTicks = 0;
+            // The mod whose code runs on this thread now (current()): the innermost run()'s.
+            thread_local LumaMod* tMod = nullptr;
 
             // ---- Code time (luma_guard_cost) ----
             // The cheapest clock there is, never a system call (a hook can run thousands of times a frame): the
@@ -474,6 +476,8 @@ namespace luma {
             frame.address = 0;
             frame.resume = luma_guard_resume;
             frame.call_return = reinterpret_cast<uintptr_t>(luma_guard_call_return);
+            LumaMod* const pOuterMod = tMod;
+            tMod = pMod;
             // The frame is complete before the host's handler, on this thread, can see it.
             __atomic_signal_fence(__ATOMIC_SEQ_CST);
             pThread->top = &frame;
@@ -483,6 +487,7 @@ namespace luma {
             const u64 total = ticks() - start;
             charge(pMod, total > tNestedTicks ? total - tNestedTicks : 0);
             tNestedTicks = outerNested + total;
+            tMod = pOuterMod;
             if (returned) {
                 pThread->top = frame.outer;
                 if (pResult != nullptr) {
@@ -496,6 +501,8 @@ namespace luma {
             pThread->handling = 0u;
             return false;
         }
+
+        LumaMod* current() { return tMod; }
 
         void measureForHarness() {
             // Once, in a harness run only (the facts writer is set): the boundary's cost against a plain call of the same
@@ -538,6 +545,8 @@ namespace luma {
                 frame.address = 0;
                 frame.resume = luma_guard_resume;
                 frame.call_return = reinterpret_cast<uintptr_t>(luma_guard_call_return);
+                LumaMod* const pOuterMod = tMod;  // as run() keeps it
+                tMod = nullptr;
                 __atomic_signal_fence(__ATOMIC_SEQ_CST);
                 pThread->top = &frame;
                 __atomic_signal_fence(__ATOMIC_SEQ_CST);
@@ -548,6 +557,7 @@ namespace luma {
                 const u64 total = ticks() - start;
                 __atomic_fetch_add(&measured, total > tNestedTicks ? total - tNestedTicks : 0, __ATOMIC_RELAXED);
                 tNestedTicks = outerNested + total;
+                tMod = pOuterMod;
                 pThread->top = frame.outer;
             }
             const u64 t2 = ticks();

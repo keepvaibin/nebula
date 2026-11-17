@@ -1,6 +1,10 @@
 #include "Game/System/LumaHook.hpp"
 
+#include "Game/System/GameSystem.hpp"
 #include "Game/System/LumaGuard.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/GameSystemSceneController.hpp"
+#include "Game/Util/SingletonHolder.hpp"
 
 #include <nebula_module.h>
 #include <stdlib.h>
@@ -11,15 +15,19 @@ namespace luma {
 #if defined(__APPLE__)
     extern const Function sRowsStart __asm__("section$start$__DATA$lumafn");
     extern const Function sRowsStop __asm__("section$end$__DATA$lumafn");
-    extern unsigned char sFlagsStart __asm__("section$start$__DATA$lumaflg");
-    extern unsigned char sFlagsStop __asm__("section$end$__DATA$lumaflg");
+    extern Flag sFlagsStart __asm__("section$start$__DATA$lumaflg");
+    extern Flag sFlagsStop __asm__("section$end$__DATA$lumaflg");
+    extern const NeedsRow sNeedsStart __asm__("section$start$__DATA$lumand");
+    extern const NeedsRow sNeedsStop __asm__("section$end$__DATA$lumand");
 #elif !defined(_WIN32)
     // Weak: the linker defines them only when the section exists, and the module without rows has none;
     // both are then null, so there are no rows.
     extern "C" __attribute__((weak, visibility("hidden"))) const Function __start_lumafn[];
     extern "C" __attribute__((weak, visibility("hidden"))) const Function __stop_lumafn[];
-    extern "C" __attribute__((weak, visibility("hidden"))) unsigned char __start_lumaflg[];
-    extern "C" __attribute__((weak, visibility("hidden"))) unsigned char __stop_lumaflg[];
+    extern "C" __attribute__((weak, visibility("hidden"))) Flag __start_lumaflg[];
+    extern "C" __attribute__((weak, visibility("hidden"))) Flag __stop_lumaflg[];
+    extern "C" __attribute__((weak, visibility("hidden"))) const NeedsRow __start_lumand[];
+    extern "C" __attribute__((weak, visibility("hidden"))) const NeedsRow __stop_lumand[];
 #endif
 
     namespace {
@@ -27,22 +35,30 @@ namespace luma {
 #if defined(_WIN32)
         __attribute__((section("lumafn$a"), used)) const Function sRowsBefore = {};
         __attribute__((section("lumafn$z"), used)) const Function sRowsAfter = {};
-        __attribute__((section("lumaflg$a"), used)) unsigned char sFlagsBefore = 0;
-        __attribute__((section("lumaflg$z"), used)) unsigned char sFlagsAfter = 0;
+        __attribute__((section("lumaflg$a"), used)) Flag sFlagsBefore = {0, 0, 0};
+        __attribute__((section("lumaflg$z"), used)) Flag sFlagsAfter = {0, 0, 0};
+        __attribute__((section("lumand$a"), used)) const NeedsRow sNeedsBefore = {};
+        __attribute__((section("lumand$z"), used)) const NeedsRow sNeedsAfter = {};
         const Function* rowsBegin() { return &sRowsBefore + 1; }
         const Function* rowsEnd() { return &sRowsAfter; }
-        unsigned char* flagsBegin() { return &sFlagsBefore + 1; }
-        unsigned char* flagsEnd() { return &sFlagsAfter; }
+        Flag* flagsBegin() { return &sFlagsBefore + 1; }
+        Flag* flagsEnd() { return &sFlagsAfter; }
+        const NeedsRow* needsBegin() { return &sNeedsBefore + 1; }
+        const NeedsRow* needsEnd() { return &sNeedsAfter; }
 #elif defined(__APPLE__)
         const Function* rowsBegin() { return &sRowsStart; }
         const Function* rowsEnd() { return &sRowsStop; }
-        unsigned char* flagsBegin() { return &sFlagsStart; }
-        unsigned char* flagsEnd() { return &sFlagsStop; }
+        Flag* flagsBegin() { return &sFlagsStart; }
+        Flag* flagsEnd() { return &sFlagsStop; }
+        const NeedsRow* needsBegin() { return &sNeedsStart; }
+        const NeedsRow* needsEnd() { return &sNeedsStop; }
 #else
         const Function* rowsBegin() { return __start_lumafn; }
         const Function* rowsEnd() { return __stop_lumafn; }
-        unsigned char* flagsBegin() { return __start_lumaflg; }
-        unsigned char* flagsEnd() { return __stop_lumaflg; }
+        Flag* flagsBegin() { return __start_lumaflg; }
+        Flag* flagsEnd() { return __stop_lumaflg; }
+        const NeedsRow* needsBegin() { return __start_lumand; }
+        const NeedsRow* needsEnd() { return __stop_lumand; }
 #endif
 
         struct Hook {
@@ -69,6 +85,13 @@ namespace luma {
 
         const Function** sSorted = nullptr;
         u32 sCount = 0;
+        // The sets of needs the rows have (NeedsRow), each once; a flag's `needs` is its set's place + 1.
+        struct NeedsSet {
+            const unsigned char* ids;
+            const char* names;
+        };
+        NeedsSet* sNeedsSets = nullptr;
+        u32 sNeedsSetCount = 0;
         Chain** sChains = nullptr;  // one per flag; null: no hooks
         Retired* sRetired = nullptr;
         u32 sRetiredCount = 0;
@@ -114,6 +137,8 @@ namespace luma {
         }
 
         void sortRows();
+        void giveNeeds();
+        Flag* flagOf(const Function* pFunction);
 
         // The first caller sorts; a caller on another thread meanwhile waits for it, so no thread reads half a table.
         void prepare() {
@@ -132,7 +157,7 @@ namespace luma {
 
         void sortRows() {
             const u32 rows = static_cast<u32>(rowsEnd() - rowsBegin());
-            const u32 flags = static_cast<u32>(flagsEnd() - flagsBegin());
+            const u32 flags = static_cast<u32>(flagsEnd() - flagsBegin());  // Flag records, pads between files included
             sSorted = new const Function*[rows + 1];
             for (const Function* pRow = rowsBegin(); pRow != rowsEnd(); pRow++) {
                 // A linker may pad between the files' rows.
@@ -141,7 +166,7 @@ namespace luma {
                 }
                 // A row with no flag is a call row (varargs.md section 4: constexpr): found and called, never hooked.
                 if (pRow->signature == nullptr ||
-                    (pRow->hooked != nullptr && (pRow->hooked < flagsBegin() || pRow->hooked >= flagsEnd()))) {
+                    (pRow->hooked != nullptr && !flagOf(pRow))) {
                     nebula_log("[luma] the function rows are not as the build wrote them; no function can be hooked\n");
                     sCount = 0;
                     return;
@@ -158,9 +183,104 @@ namespace luma {
                 sift(sSorted, 0, end);
             }
             sChains = new Chain*[flags + 1]();
+            giveNeeds();
         }
 
-        Chain** slotOf(const Function* pFunction) { return &sChains[pFunction->hooked - flagsBegin()]; }
+        // The flag record a row's `hooked` points into; null when it points at no whole record of the section.
+        Flag* flagOf(const Function* pFunction) {
+            unsigned char* const pAt = pFunction->hooked;
+            unsigned char* const pBegin = reinterpret_cast<unsigned char*>(flagsBegin());
+            if (pAt < pBegin || pAt >= reinterpret_cast<unsigned char*>(flagsEnd()) ||
+                static_cast<u64>(pAt - pBegin) % sizeof(Flag) != 0) {
+                return nullptr;
+            }
+            return reinterpret_cast<Flag*>(pAt);
+        }
+
+        Chain** slotOf(const Function* pFunction) { return &sChains[reinterpret_cast<Flag*>(pFunction->hooked) - flagsBegin()]; }
+
+        const Function* sortedRow(const char* pName, const char* pSignature) {
+            u32 low = 0;
+            u32 high = sCount;
+            while (low < high) {
+                const u32 middle = (low + high) / 2;
+                const s32 name = compare(sSorted[middle]->name, pName);
+                const s32 order = name != 0 ? name : compare(sSorted[middle]->signature, pSignature);
+                if (order < 0) {
+                    low = middle + 1;
+                } else {
+                    high = middle;
+                }
+            }
+            return low < sCount && compare(sSorted[low]->name, pName) == 0 && compare(sSorted[low]->signature, pSignature) == 0
+                       ? sSorted[low]
+                       : nullptr;
+        }
+
+        bool sameIds(const unsigned char* pA, const unsigned char* pB) {
+            while (*pA != kNeedsEnd && *pA == *pB) {
+                pA++;
+                pB++;
+            }
+            return *pA == *pB;
+        }
+
+        // Each row the needs section names gets its set in its flag (M2; luma_hook.h present). A row the section
+        // names that is not a row of the module is said once: the build wrote both, so it is a fault of the build.
+        void giveNeeds() {
+            const u32 rows = static_cast<u32>(needsEnd() - needsBegin());
+            if (rows == 0) {
+                return;
+            }
+            sNeedsSets = new NeedsSet[rows];
+            u32 missing = 0;
+            for (const NeedsRow* pRow = needsBegin(); pRow != needsEnd(); pRow++) {
+                if (pRow->name == nullptr || pRow->ids == nullptr || pRow->ids[0] == kNeedsEnd) {
+                    continue;  // a linker's pad
+                }
+                const Function* const pFunction = sortedRow(pRow->name, pRow->signature);
+                Flag* const pFlag = pFunction != nullptr && pFunction->hooked != nullptr ? flagOf(pFunction) : nullptr;
+                if (pFlag == nullptr) {
+                    missing++;
+                    continue;
+                }
+                u32 set = 0;
+                while (set < sNeedsSetCount && !sameIds(sNeedsSets[set].ids, pRow->ids)) {
+                    set++;
+                }
+                if (set == sNeedsSetCount) {
+                    if (sNeedsSetCount == 0xFFFFu) {
+                        missing++;
+                        continue;
+                    }
+                    sNeedsSets[sNeedsSetCount++] = {pRow->ids, pRow->names};
+                }
+                pFlag->needs = static_cast<unsigned short>(set + 1);
+            }
+            if (missing != 0) {
+                nebula_log("[luma] %u needs rows name no function row of the module; those functions are called with no "
+                           "check\n",
+                           missing);
+            }
+        }
+
+        // Whether the scene's holder of scene objects is there (MR::getSceneObjHolder reads it with no test). Before
+        // the game system is made (a mod's start) there is none.
+        bool sceneHolderThere() {
+            const GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+            const GameSystemSceneController* const pController = pSystem != nullptr ? pSystem->mSceneController : nullptr;
+            return pController != nullptr && pController->isExistSceneObjHolder();
+        }
+
+        const char* nameAt(const char* pNames, u32 index) {
+            for (; index > 0; index--) {
+                while (*pNames != 0) {
+                    pNames++;
+                }
+                pNames++;
+            }
+            return pNames;
+        }
 
         // The chain a call runs: read once, when it starts.
         const Chain* chainOf(const Function* pFunction) { return __atomic_load_n(slotOf(pFunction), __ATOMIC_ACQUIRE); }
@@ -261,6 +381,28 @@ namespace luma {
 
     void (*gSkipRefused)(const Function* pFunction, const void* pOwner) = nullptr;
     void (*gNoResult)(const Function* pFunction, const void* pOwner) = nullptr;
+
+    void (*gNotNow)(const Function* pFunction, const char* pNeed) = nullptr;
+
+    bool present(const Function* pFunction, unsigned short needs) {
+        // Only a mod's call is checked: the host and the harness call rows too (GameSystem::update each frame), and
+        // they call each one where the game does.
+        if (needs == 0 || needs > sNeedsSetCount || guard::current() == nullptr) {
+            return true;
+        }
+        const NeedsSet& rSet = sNeedsSets[needs - 1];
+        const bool holder = sceneHolderThere();  // every object is the holder's: none is there without it
+        for (u32 i = 0; rSet.ids[i] != kNeedsEnd; i++) {
+            const u32 id = rSet.ids[i];
+            if (!holder || (id != kNeedScene && !MR::isExistSceneObj(static_cast<int>(id)))) {
+                if (gNotNow != nullptr) {
+                    gNotNow(pFunction, nameAt(rSet.names, i));
+                }
+                return false;
+            }
+        }
+        return true;
+    }
 
     void markGameThread() { tGameThread = true; }
 
