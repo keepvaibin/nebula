@@ -14,7 +14,9 @@ import java.util.List;
  * A test runner's run on Android, built into test builds only (the shipped app has platform/android/app/src/shipped's
  * Harness, which answers none). The runner pushes a run folder under the app's private data over adb and starts the
  * game screen with the intent extra "nebula.harness" naming it; the game then runs as the desktop runner runs it
- * (tools/test_driver/luma_test): the run's own folders, the test extension, a time limit.
+ * (tools/test_driver/luma_test): the run's own folders, the test extension, a time limit. With the extra
+ * "nebula.start_check" (frames) the start is the push workflow's start check instead (host_main.cpp run_start_check):
+ * the run's settings and data folders, no game data, no extension.
  */
 final class Harness {
     private Harness() {}
@@ -82,6 +84,14 @@ final class Harness {
             }
         } catch (android.system.ErrnoException | IOException failed) {
             throw new IllegalStateException("harness run: the environment could not be set", failed);
+        }
+        final int startCheck = activity.getIntent().getIntExtra("nebula.start_check", 0);
+        if (startCheck > 0) {
+            return new String[] {
+                "--start-check", String.valueOf(startCheck),
+                "--data", new File(folder, "appdata").getPath(),
+                "--settings", new File(folder, "settings").getPath(),
+                "--crash-dumps", folder.getPath()};
         }
         final String libraries = activity.getApplicationInfo().nativeLibraryDir;
         final List<String> arguments = new ArrayList<>(List.of(

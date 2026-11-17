@@ -2,6 +2,7 @@
 
     python -X utf8 -I tools/lumacore/luma_test_android.py prepare --device SERIAL --apk <test apk> --pak <game.pak>
     python -X utf8 -I tools/lumacore/luma_test_android.py remove  --device SERIAL
+    python -X utf8 -I tools/lumacore/luma_test_android.py start-check --device SERIAL [--apk <test apk>] [--frames N]
     python -X utf8 -I tools/lumacore/luma_test.py run <suite.json | test> --device SERIAL --bin <test-bin-ABI> ...
 
 Only the test app is ever touched: dev.nebula.galaxy.test, a debuggable build with its own id (platform/android/app/
@@ -21,6 +22,12 @@ folder, writes the plan and judges the files that come back; this module only mo
   3. how the process ended comes from Android's own record (ApplicationExitInfo), which Android writes a little after
      the process is gone: it is read again until the record is there;
   4. the folder comes back over the local one, the app's log of the run is run.log, the device copy is removed.
+start-check is the push workflow's start check (host_main.cpp run_start_check) on a device or an emulator: the test
+app starts with the intent extra nebula.start_check (its Harness.java gives the game a run folder of its own and no
+game data); the settings, the window and the Vulkan renderer start and N cleared pictures are shown. Its exit status
+(0: pass; 3: no renderer; 4: no picture shown; 5: a frame held 10 seconds) is read from Android's exit record, as a
+run's is. --apk installs the test app first (adb installs by the APK's own id: dev.nebula.galaxy.test only).
+
 The bin folder is build_apk.ps1's test-bin-<ABI>: libsmg_game.so, libsmg_game_plain.so, libnebula_test_extension.so,
 luma-test.so, luma_types.json. A test's "disc" runs only when the device's game is of that disc.
 """
@@ -44,6 +51,9 @@ ABIS = {"arm64-v8a": "android-arm64", "x86_64": "android-x64"}
 LOG_TAGS = ("Nebula", "NebulaGame", "libc", "DEBUG", "AndroidRuntime")
 # How long Android may take to write its exit record after the process is gone.
 EXIT_RECORD_SECONDS = 5.0
+# The start check's run folder (files/harness/<it>) and how long the game process may take to appear after am start.
+START_CHECK = "start-check"
+START_SECONDS = 60.0
 
 
 class Device:
@@ -127,6 +137,40 @@ class Device:
                 self.exit_seen = "pid %s: no record after %.2f s; the last answer:\n%s" % (pid, time.time() - began, out)
                 return False, None
             time.sleep(0.1)
+
+
+def start_check(device, frames, limit, clock=time.time, sleep=time.sleep):
+    """The start check on the device (start-check above): (code, what was seen). code is the game process's exit code
+    from Android's record (0 passes), None when no end was read: the test app missing, a start refused, a process that
+    never appeared, one still running at the limit (stopped), or an end Android gave no code for."""
+    if not device.installed():
+        return None, "the test app %s is not installed" % PACKAGE
+    folder = "files/harness/" + START_CHECK
+    code, out = device.run_as("rm -rf %s && mkdir -p %s/settings %s/appdata" % (folder, folder, folder))
+    if code != 0:
+        return None, "the start check's folder could not be made: %s" % out.strip()[:200]
+    device.shell("am force-stop " + PACKAGE)
+    device.adb("logcat", "-c")
+    began = clock()
+    code, out = device.shell("am start -W -n %s --es nebula.harness %s --ei nebula.start_check %d"
+                             % (ACTIVITY, START_CHECK, frames))
+    if code != 0 or "Error" in out:
+        return None, "am start: %s" % out.strip()[:300]
+    game_pid = ""
+    while clock() < began + limit:
+        now_pid = device.pid()
+        if now_pid:
+            game_pid = now_pid
+        elif game_pid:
+            found, ended = device.exit_record(game_pid)
+            if not found and device.pid() == game_pid:
+                continue  # pidof's answer lost, not the process
+            return ended, device.exit_seen
+        elif clock() > began + START_SECONDS:
+            return None, "the game process %s never appeared in %d seconds" % (GAME_PROCESS, START_SECONDS)
+        sleep(0.25)
+    device.shell("am force-stop " + PACKAGE)
+    return None, "the start check did not end in %d seconds; stopped" % limit
 
 
 def device_lock(path, who):
@@ -341,6 +385,28 @@ def remove(args):
     return 0 if not device.installed() else 1
 
 
+def start_check_command(args):
+    device = Device(args.device)
+    if not device.answers():
+        raise SystemExit("%s does not answer adb" % args.device)
+    taken = device_lock(args.device_lock, args.who)
+    if taken is not None:
+        raise SystemExit("the device's lock %s is held: %s" % (args.device_lock, taken))
+    try:
+        if args.apk:
+            r = device.adb("install", "-r", args.apk)
+            said = (r.stdout + r.stderr).decode("utf-8", "replace").strip().splitlines()
+            print("install:", said[-1] if said else "adb install said nothing")
+        code, seen = start_check(device, args.frames, args.limit)
+        log = device.adb("logcat", "-d", "-v", "brief", "-s", *LOG_TAGS).stdout.decode("utf-8", "replace")
+        print(log.strip())
+        print(seen.strip())
+        print("start check: %s" % ("pass" if code == 0 else "FAILED (exit %s)" % code))
+        return 0 if code == 0 else 1
+    finally:
+        release_lock(args.device_lock)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -352,8 +418,15 @@ def main():
     p.add_argument("--device-lock", default=os.environ.get("LUMA_TEST_DEVICE_LOCK"))
     r = sub.add_parser("remove")
     r.add_argument("--device", required=True)
+    s = sub.add_parser("start-check")
+    s.add_argument("--device", required=True)
+    s.add_argument("--apk", default="", help="the test app to install first")
+    s.add_argument("--frames", type=int, default=300)
+    s.add_argument("--limit", type=int, default=300, help="seconds the check may take")
+    s.add_argument("--who", default="?")
+    s.add_argument("--device-lock", default=os.environ.get("LUMA_TEST_DEVICE_LOCK"))
     args = parser.parse_args()
-    return prepare(args) if args.command == "prepare" else remove(args)
+    return {"prepare": prepare, "remove": remove, "start-check": start_check_command}[args.command](args)
 
 
 if __name__ == "__main__":

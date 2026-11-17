@@ -11,7 +11,10 @@ python -X utf8 -I tools/lumacore/tests/harness_android_test.py [--work <folder>]
 - the record's reasons map to codes: an exit's status, a signal's 128 + n, a crash's 134;
 - the package is the test app's and nothing else;
 - the device lock is made at once or not at all, and names its holder;
-- the platform names follow the device's ABI.
+- the platform names follow the device's ABI;
+- the start check (the push workflow's, on an emulator) starts the test app with its own extras and no game data, and
+  its verdict is the game process's exit record: 0 passes, a status or a crash is that code, a process that never
+  ends is stopped at the limit, one that never starts is reported.
 Exit 0 when every case holds.
 """
 import importlib.util
@@ -53,6 +56,44 @@ class ScriptedDevice(android.Device):
     def shell(self, command, timeout=600):
         self.asked += 1
         return 0, self.answers[min(self.asked, len(self.answers)) - 1]
+
+
+class StartDevice(android.Device):
+    """A device for the start check: the game process is there for `alive` looks, then gone with `record`; or never
+    there (alive None: it never started) or there for good (alive -1)."""
+
+    def __init__(self, alive, record, installed=True):
+        super().__init__("fake")
+        self.alive, self.record, self.is_installed = alive, record, installed
+        self.commands, self.looks, self.now = [], 0, 0.0
+
+    def installed(self):
+        return self.is_installed
+
+    def adb(self, *args, timeout=600, stdin=None):
+        self.commands.append(" ".join(args))
+
+        class Done:
+            returncode, stdout, stderr = 0, b"", b""
+        return Done()
+
+    def shell(self, command, timeout=600):
+        self.commands.append(command)
+        if command.startswith("pidof "):
+            self.looks += 1
+            there = self.alive == -1 or (self.alive is not None and self.looks <= self.alive)
+            return (0, "4321\n") if there else (1, "")
+        if command.startswith("dumpsys activity exit-info"):
+            return 0, self.record
+        if command.startswith("am start"):
+            return 0, "Status: ok\nActivity: %s\n" % android.ACTIVITY
+        return 0, ""
+
+    def clock(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += seconds
 
 
 def main():
@@ -97,6 +138,32 @@ def main():
     android.release_lock(lock)
     check(not lock.exists() and android.device_lock(lock, "third") is None, "a released lock is free again")
     android.release_lock(lock)
+
+    d = StartDevice(alive=3, record=RECORD % (1, 0))
+    code, seen = android.start_check(d, 300, 120, clock=d.clock, sleep=d.sleep)
+    started = [c for c in d.commands if c.startswith("am start")]
+    check(code == 0 and "pid=4321" in seen, "a clean start check passes: %s %s" % (code, seen))
+    check(len(started) == 1 and "--es nebula.harness %s" % android.START_CHECK in started[0]
+          and "--ei nebula.start_check 300" in started[0] and "nebula.seconds" not in started[0],
+          "the start check starts the test app with its own extras: %s" % started)
+    check(any(c.startswith("run-as %s " % android.PACKAGE) and "files/harness/%s" % android.START_CHECK in c
+              for c in d.commands), "the start check gets a run folder of its own in the test app's files")
+    check(not any("dev.nebula.galaxy " in c + " " or "dev.nebula.galaxy/" in c for c in d.commands),
+          "the start check never names the player's game")
+    for reason, status, want in ((1, 3, 3), (1, 4, 4), (5, 0, 134)):
+        code, _ = android.start_check(StartDevice(alive=2, record=RECORD % (reason, status)), 300, 120,
+                                      clock=lambda: 0.0, sleep=lambda s: None)
+        check(code == want, "a start check that ends with reason %d status %d gives %s: %s" % (reason, status, want, code))
+    hung = StartDevice(alive=-1, record="")
+    code, seen = android.start_check(hung, 300, 120, clock=hung.clock, sleep=hung.sleep)
+    check(code is None and "did not end" in seen and ("am force-stop " + android.PACKAGE) in hung.commands[-1],
+          "a start check past its limit is stopped and fails: %s %s" % (code, seen))
+    never = StartDevice(alive=None, record="")
+    code, seen = android.start_check(never, 300, 120, clock=never.clock, sleep=never.sleep)
+    check(code is None and "never" in seen, "a game process that never starts fails: %s %s" % (code, seen))
+    code, seen = android.start_check(StartDevice(alive=3, record="", installed=False), 300, 120,
+                                     clock=lambda: 0.0, sleep=lambda s: None)
+    check(code is None and "not installed" in seen, "no test app: no start: %s" % seen)
 
     check(android.host_for("arm64-v8a")["code"] == "code/android-arm64/mod.so", "arm64 code path")
     check(android.host_for("x86_64")["platform"] == "android-x64", "x86_64 platform")
