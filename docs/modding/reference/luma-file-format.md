@@ -48,6 +48,7 @@ An archive that uses `\` between folders throughout, as .NET Framework's `ZipFil
 | `saves/REGION/` | Yes, offered to the player and never written silently | Save files the mod brings, for each region. For more information, see [Saves a mod brings](#saves-a-mod-brings). |
 | `certs/` | Yes, only through a network permission's `roots` | PEM files of the TLS root certificates the mod adds for its own hosts. |
 | `kit/MODULE/` | No | Data for library mods such as LumaKit, checked against the schema that module supplies. A schema is data in a fixed subset of JSON Schema, never code that the validator runs. |
+| `code/ID.kit/MODULE/VERSION.json` | No | In a library mod: the schema of the data that other mods give it in `kit/MODULE/`, one file for each data version (a whole number from 1 to 1000000). |
 | `source/` | No. LumaLink's `verify` reads it. | LumaScript and C sources, and the build description. |
 | `tests/` | No. LumaLink's `test` reads it. | The mod's tests: each `tests/**/test.json` is run by the test harness. |
 
