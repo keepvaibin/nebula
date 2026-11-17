@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "19-settings-step",
-  "about": "A settings step opens the host's Settings on a page; keys move in it (from Import file, right x6 to Log; space opens it)",
+  "about": "A settings step opens the host's Settings on a page; keys move in it (the page opens on the first mod on: down past both mods to Import file, right x6 to Log; space opens it)",
   "proves": [
     "harness.self"
   ],
@@ -12,6 +12,14 @@
     {
       "at": 120,
       "settings": "mods"
+    },
+    {
+      "at": 140,
+      "key": "down"
+    },
+    {
+      "at": 160,
+      "key": "down"
     },
     {
       "at": 180,

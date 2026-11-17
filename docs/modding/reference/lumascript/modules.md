@@ -33,6 +33,7 @@ A library mod offers modules to other mods. A mod uses one with `use <mod id>.<m
 * A library's `pub task` is exported. The caller gets the task's handle, and `wait` copies the result into the caller's memory.
 * The library's service calls are its own. A request made inside an export is answered to the library.
 * `on mods.stopped(gone)`, with its parameter untyped or `u64`, runs in the library when a mod that called its exports stops. Use it to end what that mod started. The `mods` service's own STOPPED event is written `on mods.stopped(e: mods.StoppedEvent)`.
+* A library that reads data from the mods that use it (their `kit/<module>/<name>.json` files, read with `mods.kit_names` and `mods.kit_read`) gives that data's schema in its own folder at `code/<library id>.kit/<module>/<version>.json`. The validator checks each mod's data against the version its `luma.json` names in `kit`. For more information, see [luma.json](../luma-json.md).
 
 ## Further reading
 
