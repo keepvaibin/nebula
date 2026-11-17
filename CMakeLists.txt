@@ -137,72 +137,8 @@ endfunction()
 
 include_directories("${CMAKE_CURRENT_LIST_DIR}/native/include")
 
-add_library(galaxy_runtime_abi INTERFACE)
-target_include_directories(galaxy_runtime_abi INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include")
-
-add_library(galaxy_atomic_file STATIC runtime/src/atomic_file.cpp)
-target_link_libraries(galaxy_atomic_file PUBLIC galaxy_runtime_abi)
-
-add_library(galaxy_asset_store STATIC runtime/src/asset_store.cpp)
-target_link_libraries(galaxy_asset_store PUBLIC galaxy_runtime_abi)
-
-add_library(galaxy_save_files STATIC runtime/src/save_files.cpp)
-target_link_libraries(galaxy_save_files PUBLIC galaxy_runtime_abi galaxy_atomic_file)
-
-# Every console's Mii files (mii_formats.h): the Mii import's reader, and where a Wii save folder keeps its Mii database.
-add_library(galaxy_mii_formats STATIC runtime/src/mii_formats.cpp)
-target_link_libraries(galaxy_mii_formats PUBLIC galaxy_runtime_abi)
-galaxy_host_options(galaxy_mii_formats)
-
-# Save import and export in the game (save_transfer.h): its zips, the Wii SD save's AES and the GameData.bin check are
-# BoringSSL's, zlib's inflate and the game's own SaveFileFormat.hpp.
-add_library(galaxy_save_transfer STATIC runtime/src/save_transfer.cpp)
-target_link_libraries(galaxy_save_transfer PUBLIC galaxy_runtime_abi galaxy_atomic_file nebula_bssl_crypto nebula_zinflate
-    PRIVATE galaxy_mii_formats)
-target_include_directories(galaxy_save_transfer PRIVATE native/petari/include)
-
-# The host's extensions (host_extension.h, --extension).
-add_library(galaxy_host_extension STATIC runtime/src/host_extension.cpp runtime/src/luma_services_host.cpp)
-target_link_libraries(galaxy_host_extension PUBLIC galaxy_runtime_abi)
-galaxy_host_options(galaxy_host_extension)
-add_library(galaxy_runtime_settings STATIC
-    runtime/src/runtime_settings.cpp
-    runtime/src/input_bindings.cpp
-    runtime/src/input/mod_actions.cpp
-    runtime/src/achievements.cpp
-    runtime/src/stats.cpp)
-target_link_libraries(galaxy_runtime_settings PUBLIC galaxy_runtime_abi galaxy_atomic_file galaxy_host_extension)
-galaxy_host_options(galaxy_runtime_settings)
-
-add_library(galaxy_host_pointer_events STATIC runtime/src/host_pointer_events.cpp)
-target_link_libraries(galaxy_host_pointer_events PUBLIC galaxy_runtime_abi)
-galaxy_host_options(galaxy_host_pointer_events)
-
-add_library(galaxy_native_input STATIC
-    runtime/src/controller_roster.cpp
-    runtime/src/generic_hid.cpp
-    runtime/src/input/wiimote_input.cpp
-    runtime/src/input/wiimote_motion.cpp
-    runtime/src/input/wiimote_motion_pointer.cpp
-    runtime/src/native_input.cpp
-    runtime/src/playstation_controller.cpp
-    runtime/src/simple_pads.cpp
-    runtime/src/switch2_ble.cpp
-    runtime/src/pointer_control.cpp
-    runtime/src/rumble.cpp
-    runtime/src/steam_controller.cpp
-    runtime/src/switch_controller.cpp
-    runtime/src/tilt.cpp
-    runtime/src/wiimote_protocol.cpp
-    runtime/src/wiimote_speaker.cpp)
-target_link_libraries(galaxy_native_input PUBLIC galaxy_runtime_abi)
-galaxy_host_options(galaxy_native_input)
-
-# The game's sound mixed natively (audio_mixer.h).
-add_library(galaxy_audio_mixer STATIC runtime/src/audio_mixer.cpp runtime/src/movie_audio.cpp)
-target_include_directories(galaxy_audio_mixer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include"
-                           "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
-galaxy_host_options(galaxy_audio_mixer)
+# The runtime's small libraries (shared with the unit tests' own project, tests/unit).
+include(cmake/runtime_libs.cmake)
 
 add_library(galaxy_native_host STATIC
     runtime/src/game_paths.cpp
@@ -631,86 +567,31 @@ if(NEBULA_HOST_IPO)
 endif()
 message(STATUS "Host Release IPO: ${nebula_host_ipo_effective}")
 
-enable_testing()
-# A unit test: an executable from SOURCES linked with LIBS, registered with ctest (run with ARGS).
-function(galaxy_test name)
-    cmake_parse_arguments(arg "" "" "SOURCES;LIBS;ARGS" ${ARGN})
-    add_executable(${name} ${arg_SOURCES})
-    target_include_directories(${name} PRIVATE runtime/include)
-    target_compile_features(${name} PRIVATE cxx_std_20)
-    target_link_libraries(${name} PRIVATE galaxy_runtime_abi ${arg_LIBS})
-    if(MSVC)
-        target_compile_options(${name} PRIVATE /W4 /WX /permissive- /EHsc)
-    endif()
-    add_test(NAME ${name} COMMAND ${name} ${arg_ARGS})
-endfunction()
+# The unit tests every desktop system runs (cmake/unit_tests.cmake); the tests of Windows code and of the renderers
+# follow.
+include(cmake/unit_tests.cmake)
 
 set(rt runtime/src)
-galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
+set(render_src runtime/src/render)
 # The update core of the desktop hosts (runtime/src/update), with a stand-in transport and platform.
 galaxy_test(galaxy_update_tests SOURCES ${rt}/update/update.cpp ${rt}/update/update_crypto.cpp ${rt}/update/update_tests.cpp
     LIBS galaxy_atomic_file shell32 ARGS "${CMAKE_CURRENT_SOURCE_DIR}/installer/release-public-key.xml")
-galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
-galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
-galaxy_test(galaxy_launch_args_tests SOURCES ${rt}/launch_args_tests.cpp)
-target_include_directories(galaxy_save_format_tests PRIVATE native/petari/include)
-galaxy_test(galaxy_save_transfer_tests SOURCES ${rt}/save_transfer_tests.cpp LIBS galaxy_save_transfer galaxy_mii_formats)
-galaxy_test(galaxy_asset_store_tests SOURCES ${rt}/asset_store_tests.cpp ${rt}/luma_game_store.cpp LIBS galaxy_asset_store)
-target_include_directories(galaxy_asset_store_tests PRIVATE crates/nebula-import/include)
-# D-07: an older install's store and saves under the current layout.
-galaxy_test(galaxy_install_migration_tests SOURCES ${rt}/install_migration_tests.cpp LIBS galaxy_save_files galaxy_asset_store)
-# The game's calendar (native/petari), compiled against a host the test provides.
-galaxy_test(galaxy_native_calendar_tests SOURCES ${rt}/native_calendar_tests.cpp
-    native/petari/src/Game/System/NebulaCalendar.cpp)
-target_include_directories(galaxy_native_calendar_tests PRIVATE native/include native/petari/include)
-galaxy_test(galaxy_runtime_settings_tests SOURCES ${rt}/runtime_settings_tests.cpp LIBS galaxy_runtime_settings)
-galaxy_test(galaxy_achievements_tests SOURCES ${rt}/achievements_tests.cpp LIBS galaxy_runtime_settings)
-galaxy_test(galaxy_stats_tests SOURCES ${rt}/stats_tests.cpp LIBS galaxy_runtime_settings)
-galaxy_test(galaxy_controls_tests SOURCES ${rt}/controls_tests.cpp LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_live_controls_engine_tests SOURCES ${rt}/input/live_controls_engine_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_input_hotplug_tests SOURCES ${rt}/input/input_hotplug_tests.cpp LIBS galaxy_native_host)
-galaxy_test(galaxy_keyboard_layout_tests SOURCES ${rt}/input/keyboard_layout_tests.cpp LIBS galaxy_runtime_settings)
-galaxy_test(galaxy_keyboard_state_tests SOURCES ${rt}/input/keyboard_state_tests.cpp)
-galaxy_test(galaxy_raw_mouse_tests SOURCES ${rt}/input/raw_mouse_tests.cpp)
-galaxy_test(galaxy_rumble_route_tests SOURCES ${rt}/input/rumble_route_tests.cpp ${rt}/input/rumble_route.cpp)
-galaxy_test(galaxy_wiimote_motion_tests SOURCES ${rt}/input/wiimote_motion_tests.cpp ${rt}/input/wiimote_motion.cpp)
-galaxy_test(galaxy_wiimote_motion_pointer_tests SOURCES ${rt}/input/wiimote_motion_pointer_tests.cpp
-    LIBS galaxy_native_input)
-galaxy_test(galaxy_mouse_projection_tests SOURCES ${rt}/input/mouse_projection_tests.cpp LIBS galaxy_native_input)
 galaxy_test(galaxy_raw_mouse_win32_tests SOURCES ${rt}/input/raw_mouse_win32_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_key_positions_win32_tests SOURCES ${rt}/input/key_positions_win32_tests.cpp
     ${rt}/input/key_positions_win32.cpp LIBS user32)
-galaxy_test(galaxy_pad_controller_tests SOURCES ${rt}/pad_controller_tests.cpp
-    LIBS galaxy_runtime_settings galaxy_native_input)
-galaxy_test(galaxy_native_input_tests SOURCES ${rt}/native_input_tests.cpp LIBS galaxy_native_input)
-galaxy_test(galaxy_wiimote_speaker_tests SOURCES ${rt}/wiimote_speaker_tests.cpp LIBS galaxy_native_input)
-galaxy_test(galaxy_host_pointer_events_tests SOURCES ${rt}/host_pointer_events_tests.cpp
-    LIBS galaxy_host_pointer_events)
-galaxy_test(galaxy_audio_mixer_tests SOURCES ${rt}/audio_mixer_tests.cpp LIBS galaxy_audio_mixer)
-galaxy_test(galaxy_movie_video_tests SOURCES ${rt}/movie_video_tests.cpp ${rt}/movie_video.cpp)
-# draw.post's registry (mod_post.cpp) without a device.
-galaxy_test(galaxy_mod_post_tests SOURCES ${rt}/render/mod_post_tests.cpp ${rt}/render/mod_post.cpp)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
-if(WIN32)
-    galaxy_test(galaxy_windows_child_tests SOURCES ${rt}/windows_child_tests.cpp)
-endif()
-galaxy_test(galaxy_power_policy_tests SOURCES ${rt}/power_policy_tests.cpp)
-galaxy_test(galaxy_frame_phase_tests SOURCES ${rt}/frame_phase_tests.cpp ${rt}/frame_phase.cpp)
-galaxy_test(galaxy_precise_wait_tests SOURCES ${rt}/precise_wait_tests.cpp)
-galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp ${rt}/frame_telemetry.cpp)
-galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii_import.cpp
-    LIBS galaxy_atomic_file galaxy_mii_formats)
-galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
-galaxy_test(galaxy_luma_net_reach_tests SOURCES ${rt}/luma_net_reach_tests.cpp ${rt}/luma_net_reach.cpp)
-galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/mod_consent.cpp ${rt}/luma.cpp
-    ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
-# The consent store (docs/modding/concepts/permissions.md): answers, digests and their round trip through the mod settings.
-galaxy_test(galaxy_mod_consent_tests SOURCES ${rt}/mod_consent_tests.cpp ${rt}/mod_consent.cpp ${rt}/mods.cpp ${rt}/mod_xml.cpp
-    ${rt}/luma.cpp ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp
-    LIBS galaxy_atomic_file nebula_archive)
-# Console mods the tests read as files (runtime/tests).
-target_compile_definitions(galaxy_mods_tests PRIVATE MODS_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/runtime/tests")
-galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
+galaxy_test(galaxy_windows_child_tests SOURCES ${rt}/windows_child_tests.cpp)
+galaxy_test(galaxy_settings_graphics_page_tests SOURCES ${rt}/ui/settings_graphics_page_tests.cpp
+    ${rt}/ui/settings_graphics_page.cpp ${rt}/ui/settings_model.cpp LIBS galaxy_render)
+# The HDR calibration's steps, with the renderer library's levels and patterns.
+galaxy_test(galaxy_hdr_calibration_tests SOURCES ${rt}/ui/hdr_calibration_tests.cpp LIBS galaxy_render)
+galaxy_test(galaxy_calibration_scene_tests SOURCES ${rt}/calibration_scene_tests.cpp LIBS galaxy_render)
+galaxy_test(galaxy_os_hdr_tests SOURCES ${rt}/render/os_hdr_tests.cpp LIBS galaxy_render)
+galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.cpp ${render_src}/window_owner.cpp)
+target_link_libraries(galaxy_window_owner_tests PRIVATE dwmapi)
+set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 
 # Additions a build asks for at configure, as a list of CMake files (-DNEBULA_EXTRA_CMAKE=<file>;...), each included
 # here after the product's targets and galaxy_test. A build that passes none builds the product and its unit tests only.
@@ -720,64 +601,6 @@ foreach(extra IN LISTS NEBULA_EXTRA_CMAKE)
     include("${extra}")
 endforeach()
 
-galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
-galaxy_test(galaxy_launcher_model_tests SOURCES ${rt}/ui/launcher_model_tests.cpp)
-galaxy_test(galaxy_resolution_fit_tests SOURCES ${rt}/render/resolution_fit_tests.cpp)
-galaxy_test(galaxy_benchmark_recommend_tests SOURCES ${rt}/benchmark_recommend_tests.cpp ${rt}/benchmark_recommend.cpp
-    ${rt}/strict_json.cpp)
-galaxy_test(galaxy_benchmark_stats_tests SOURCES ${rt}/benchmark_stats_tests.cpp ${rt}/benchmark_stats.cpp ${rt}/strict_json.cpp)
-galaxy_test(galaxy_diag_report_tests SOURCES ${rt}/diag_report_tests.cpp ${rt}/diag_report.cpp ${rt}/diag_seal.cpp ${rt}/strict_json.cpp
-    LIBS nebula_archive nebula_bssl_crypto)
-target_compile_definitions(galaxy_diag_report_tests PRIVATE
-    NEBULA_BENCHMARK_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/tools/telemetry/testdata/benchmark.json")
-
-galaxy_test(galaxy_settings_model_tests SOURCES ${rt}/ui/settings_model_tests.cpp ${rt}/ui/settings_model.cpp)
-
-galaxy_test(galaxy_settings_save_model_tests SOURCES ${rt}/ui/settings_save_model_tests.cpp ${rt}/ui/settings_save_model.cpp)
-
-galaxy_test(galaxy_settings_graphics_page_tests SOURCES ${rt}/ui/settings_graphics_page_tests.cpp
-    ${rt}/ui/settings_graphics_page.cpp ${rt}/ui/settings_model.cpp LIBS galaxy_render)
-
-galaxy_test(galaxy_settings_general_page_tests SOURCES ${rt}/ui/settings_general_page_tests.cpp
-    ${rt}/ui/settings_general_page.cpp ${rt}/ui/settings_model.cpp)
-
-galaxy_test(galaxy_settings_display_page_tests SOURCES ${rt}/ui/settings_display_page_tests.cpp
-    ${rt}/ui/settings_display_page.cpp ${rt}/ui/settings_model.cpp)
-# The HDR calibration's steps, with the renderer library's levels and patterns.
-galaxy_test(galaxy_hdr_calibration_tests SOURCES ${rt}/ui/hdr_calibration_tests.cpp LIBS galaxy_render)
-galaxy_test(galaxy_calibration_scene_tests SOURCES ${rt}/calibration_scene_tests.cpp LIBS galaxy_render)
-galaxy_test(galaxy_os_hdr_tests SOURCES ${rt}/render/os_hdr_tests.cpp LIBS galaxy_render)
-
-galaxy_test(galaxy_settings_advanced_page_tests SOURCES ${rt}/ui/settings_advanced_page_tests.cpp
-    ${rt}/ui/settings_advanced_page.cpp ${rt}/ui/settings_model.cpp runtime/src/render/galaxy_select.cpp)
-galaxy_test(galaxy_settings_system_page_tests SOURCES ${rt}/ui/settings_system_page_tests.cpp
-    ${rt}/ui/settings_system_page.cpp ${rt}/ui/settings_model.cpp ${rt}/render/renderer_choice.cpp)
-galaxy_test(galaxy_renderer_choice_tests SOURCES ${rt}/render/renderer_choice_tests.cpp ${rt}/render/renderer_choice.cpp)
-galaxy_test(galaxy_settings_benchmark_page_tests SOURCES ${rt}/ui/settings_benchmark_page_tests.cpp
-    ${rt}/ui/settings_benchmark_page.cpp ${rt}/benchmark_results.cpp ${rt}/benchmark_stats.cpp ${rt}/strict_json.cpp)
-if(WIN32)
-    target_link_libraries(galaxy_settings_benchmark_page_tests PRIVATE shell32)
-endif()
-galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.cpp ${rt}/discord_presence.cpp)
-
-set(render_src runtime/src/render)
-galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpolation_tests.cpp
-    ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
-galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.cpp ${render_src}/core/pairing.cpp
-    ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
-target_include_directories(galaxy_core_pairing_tests PRIVATE runtime/src native/include)
-galaxy_test(galaxy_present_slots_tests SOURCES ${render_src}/present_slots_tests.cpp ${render_src}/present_slots.cpp)
-galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.cpp ${render_src}/window_owner.cpp)
-target_link_libraries(galaxy_window_owner_tests PRIVATE dwmapi)
-galaxy_test(galaxy_core_world_lights_tests SOURCES ${render_src}/core/world_lights_tests.cpp ${render_src}/core/world_lights.cpp)
-galaxy_test(galaxy_rt_geometry_tests SOURCES ${render_src}/rt/rt_geometry_tests.cpp ${render_src}/rt/rt_geometry.cpp
-    ${render_src}/rt/rt_scene.cpp ${render_src}/rt/rt_backend_fake.cpp)
-target_include_directories(galaxy_rt_geometry_tests PRIVATE runtime/src)
-target_include_directories(galaxy_core_world_lights_tests PRIVATE runtime/src native/include)
-# The pipeline cache files' headers (header-only; both backends' caches).
-galaxy_test(galaxy_pipeline_cache_file_tests SOURCES ${render_src}/core/pipeline_cache_file_tests.cpp)
-target_include_directories(galaxy_pipeline_cache_file_tests PRIVATE runtime/src)
-set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name render_config gpu_sampler rt_materials texture_pack movie_playback frame_pass post_process
         render_core_host rt_caps)
