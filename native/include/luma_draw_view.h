@@ -127,9 +127,9 @@ typedef struct LumaDrawViewService {
        caller keeps its last eye). Never needs a view. */
     int32_t (*eye_of)(const LumaMod* mod, const LumaDrawViewCamera* camera, LumaDrawViewEye* out);
     /* 1.0. Game thread. The main camera at `eye` (null: the game's own again) from now on: each frame, right after the
-       game's camera moves and again before the scene's models take their poses, the scene's view and field of view are
-       set from it (the header's first comment), so everything that reads the camera reads it: the player's stick
-       directions, clipping, the pointer, sound, the picture. It holds while the scene's update is held (a pause, a
+       game's camera moves and again before the scene's models take their poses, the scene's view, field of view and
+       watch point (MR::getCameraWatchPos: `at`) are set from it (the header's first comment), so everything that reads
+       the camera reads it: the player's stick directions, clipping, the pointer, sound, the picture. It holds while the scene's update is held (a pause, a
        cutscene's hold); the game's camera keeps working out its own pose underneath and has it back at once on null.
        The newest mod to call main_eye or main_rig holds it; one mod's null gives back only its own. LUMA_OK. An eye not
        finite, `at` at the eye, `up` along the look or zero, fov out of range: LUMA_E_ARGUMENT, reported. Ends with the

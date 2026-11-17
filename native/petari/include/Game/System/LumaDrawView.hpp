@@ -5,6 +5,7 @@
 // draw.view.end.<h>.
 
 #include <luma_service_provider.h>
+#include <nebula_geometry.hpp>
 
 namespace luma {
     namespace draw {
@@ -24,6 +25,10 @@ namespace luma {
             // pointer's camera, the view load, clipping, the player's stick directions): the held main camera, on the
             // poses the frame starts with. One load while none is held.
             void mainCameraAfterGame();
+            // MR::getCameraWatchPos: the point the held main camera looks at while it is in the context (null: the
+            // game's camera's own), so everything placed by the camera's watch point (sound emitters, the ocean ring,
+            // a mod's read of the camera) follows the main camera as the view does.
+            const Vec3f* mainWatchPos();
             // NebulaArena::destroy: views following an actor in [pStart, pEnd) stop following (the camera stays); a
             // main rig on one gives the game its camera back at the next apply.
             void released(const void* pStart, const void* pEnd);

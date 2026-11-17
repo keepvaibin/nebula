@@ -15,6 +15,7 @@
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/System/LumaDrawView.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -602,6 +603,10 @@ namespace MR {
     }
 
     const Vec3f& getCameraWatchPos() {
+        // A mod's main camera (draw.view main_eye, main_rig) looks at its own point while it holds the view.
+        if (const Vec3f* const pMain = luma::draw::view::mainWatchPos()) {
+            return *pMain;
+        }
         return getCameraDirector()->mPoseParam1->mWatchPos;
     }
 

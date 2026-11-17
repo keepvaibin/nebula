@@ -187,7 +187,7 @@ view.main_eye(eye: view.Eye?)
 int32_t main_eye(const LumaMod* mod, const LumaDrawViewEye* eye);
 ```
 
-Call it on the game thread. The main camera at `eye` (null: the game's own again) from now on: each frame, before the scene's models take their poses, the scene's view and field of view are set from it, so it holds while the scene's update is held (a pause, a cutscene's hold) and what reads the camera until the game's camera moves again (clipping, the stick's directions, sound) reads it; the game's camera keeps working out its own pose underneath and has it back at once on null. The newest mod to call holds it; one mod's null gives back only its own. `LUMA_OK`. An eye not finite, `at` at the eye, `up` along the look or zero, fov out of range: `LUMA_E_ARGUMENT` (reported). Ends with the mod.
+Call it on the game thread. The main camera at `eye` (null: the game's own again) from now on: each frame, right after the game's camera moves and again before the scene's models take their poses, the scene's view, field of view and watch point (`MR::getCameraWatchPos`) are set from it, so everything that reads the camera reads it (clipping, the stick's directions, the pointer, sound, the picture), and it holds while the scene's update is held (a pause, a cutscene's hold); the game's camera keeps working out its own pose underneath and has it back at once on null. The newest mod to call holds it; one mod's null gives back only its own. `LUMA_OK`. An eye not finite, `at` at the eye, `up` along the look or zero, fov out of range: `LUMA_E_ARGUMENT` (reported). Ends with the mod.
 
 ## Further reading
 

@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "2471-view",
-  "about": "fv-view: a 256x144 view drawn over the screen's top-left quarter: black before it has a camera (f70); the player from 450 along world +z (f110); set_on 0 keeps that picture while its camera looks away (f150); a WORLD rig at the player, offset (0, 150, 400): eye_of gives the eye 0, 150, 400 from him looking at his place (f190); main_eye moves the main camera to his side (f230), null gives the game's camera back (f270); release, again E_HANDLE, its texture drawn after E_HANDLE",
+  "about": "fv-view: a 256x144 view drawn over the screen's top-left quarter: black before it has a camera (f70); the player from 450 along world +z (f110); set_on 0 keeps that picture while its camera looks away (f150); a WORLD rig at the player, offset (0, 150, 400): eye_of gives the eye 0, 150, 400 from him looking at his place (f190); main_eye moves the main camera to his side (f230) and the game's watch point (MR::getCameraWatchPos) to the point it looks at, null gives the game's camera back (f270); release, again E_HANDLE, its texture drawn after E_HANDLE",
   "proves": [
     "draw.view"
   ],
@@ -169,6 +169,14 @@
     {
       "fact": "mod.fv-view.main",
       "is": 0
+    },
+    {
+      "fact": "mod.fv-view.main_watch_d2",
+      "at_most": 1
+    },
+    {
+      "fact": "mod.fv-view.back_watch_d2",
+      "at_least": 100
     },
     {
       "fact": "mod.fv-view.main_back",
