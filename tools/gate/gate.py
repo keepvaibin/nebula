@@ -195,6 +195,23 @@ def rust_tests(g):
     return fn
 
 
+def disc_images(folder):
+    """{disc id: image} of a folder holding the discs as RMGE01.wbfs, RMGP01.rvz and so on."""
+    out = {}
+    for f in sorted(pathlib.Path(folder).glob("RMG*.*")) if folder else []:
+        out.setdefault(f.stem.upper(), f)
+    return out
+
+
+def collision_proof(g, image):
+    """Every collision model of a disc image cooked and proved as an import does (nebula-import collision-proof:
+    each octree path reaches the same prisms as the disc's)."""
+    def fn(log):
+        code = run([pathlib.Path(g.bin) / "nebula-import.exe", "collision-proof", image], log, timeout=1800)
+        return code == 0, last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
+    return fn
+
+
 EXES = {"d3d12": "Nebula.exe", "vulkan": "NebulaVk.exe", "d3d11": "NebulaD11.exe"}
 
 
@@ -413,6 +430,8 @@ def main():
                    "RMGP01=D:/NebulaWork/build/a1-pak-pal-35/game.pak", "RMGJ01=D:/NebulaWork/build/a1-pak-jp-35/game.pak"))),
                    help="the other discs' game.paks, DISC=path joined by the path separator: the tests with a \"disc\"")
     p.add_argument("--work", default=os.environ.get("NEBULA_GATE_WORK", "D:/NebulaWork/build/gate-runs"))
+    p.add_argument("--discs", default=os.environ.get("NEBULA_GATE_DISCS", "D:/NebulaWork/discs"),
+                   help="a folder of disc images named by disc (RMGE01.wbfs, RMGP01.rvz, RMGJ01.rvz): the collision proof")
     p.add_argument("--out", help="the result file (default: result.json in the run's work folder)")
     p.add_argument("--jobs", default=str(max(4, (os.cpu_count() or 8) - 4)))
     p.add_argument("--no-build", action="store_true", help="use the bins already in the build root")
@@ -441,6 +460,13 @@ def main():
     for r in RENDERERS:
         g.check("start/%s" % r, start_check(g, r))
     g.check("rust", rust_tests(g))
+    # The cooked collision against each disc's (P-169): the quick gate proves the US disc only.
+    discs = disc_images(args.discs)
+    for disc in ("RMGE01",) if args.mode == "quick" else ("RMGE01", "RMGP01", "RMGJ01"):
+        if disc in discs:
+            g.check("import/collision/%s" % disc, collision_proof(g, discs[disc]))
+        else:
+            g.missing("import/collision/%s" % disc, "no %s image in %s (--discs)" % (disc, args.discs))
     g.check("harness/self", scripts(g, HARNESS_SELF, ("--work", "{out}")))
     commands = pathlib.Path(args.build_root) / "game" / "compile_commands.json"
     g.check("description/self", scripts(g, DESCRIPTION_SELF, ("--commands", str(commands), "--out", "{out}")))
