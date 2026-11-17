@@ -5,6 +5,7 @@
 #include "sdl_host.h"
 
 #include "galaxy/launch_args.h"
+#include "galaxy/vsync_grid.h"
 
 #import <Foundation/Foundation.h>
 #include <TargetConditionals.h>
@@ -28,8 +29,7 @@
 namespace {
 
 std::mutex g_mutex;
-std::int64_t g_vsync_ns = 0;     // the latest vsync
-std::int64_t g_interval_ns = 0;  // between vsyncs, smoothed
+galaxy::VsyncGrid g_grid;  // the display link's vsyncs
 std::atomic<std::int64_t> g_display_period_ns{0};  // the display's stated refresh period
 std::atomic<std::int64_t> g_frame_slot_ns{0};
 std::atomic<std::int64_t> g_frame_period_ns{0};
@@ -65,16 +65,7 @@ void note_vsync(std::int64_t vsync, std::int64_t stated) noexcept {
         g_display_period_ns.store(stated, std::memory_order_relaxed);
     }
     const std::lock_guard<std::mutex> lock(g_mutex);
-    if (g_vsync_ns != 0 && vsync > g_vsync_ns) {
-        const std::int64_t delta = vsync - g_vsync_ns;
-        // Callbacks a display skipped (the window out of sight, a sleeping display) are not an interval.
-        if (g_interval_ns == 0 || delta > 3 * g_interval_ns) {
-            g_interval_ns = stated > 0 ? stated : (g_interval_ns != 0 ? g_interval_ns : delta);
-        } else {
-            g_interval_ns += (delta - g_interval_ns) / 8;
-        }
-    }
-    g_vsync_ns = vsync;
+    g_grid.note(vsync, stated);
 }
 
 #if TARGET_OS_OSX
@@ -164,34 +155,19 @@ namespace galaxy::sdl {
 
 bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept {
     std::call_once(g_started, [] { start_clock(); });
-    std::int64_t base = 0;
-    std::int64_t interval = 0;
+    galaxy::VsyncGrid grid;
     {
         const std::lock_guard<std::mutex> lock(g_mutex);
-        base = g_vsync_ns;
-        interval = g_interval_ns;
+        grid = g_grid;
     }
-    const std::int64_t now = now_ns();
-    // No vsyncs yet, or none for a quarter second (out of sight, the display asleep): the host's clock.
-    if (base == 0 || interval == 0 || now - base > 250000000) {
+    // The next frame slot on the vsync grid (galaxy/vsync_grid.h), or the host's clock when there is no grid that
+    // keeps the game at its speed.
+    std::int64_t target = 0;
+    std::int64_t frame_period = 0;
+    if (!grid.next_slot(period_ns, last_ns, now_ns(), target, frame_period)) {
         g_frame_slot_ns.store(0, std::memory_order_relaxed);
         return false;
     }
-    // Only a display whose vsyncs divide the frame period (60, 120, 180 or 240 Hz) keeps the game at its speed; at
-    // 50 or 75 Hz, say, the host's own clock runs it.
-    const double vsyncs = static_cast<double>(period_ns) / static_cast<double>(interval);
-    if (std::abs(vsyncs - std::round(vsyncs)) > 0.03 || std::round(vsyncs) < 1.0) {
-        g_frame_slot_ns.store(0, std::memory_order_relaxed);
-        return false;
-    }
-    // The first vsync at least one frame period (less half a vsync) after the last frame slot; from now when the clock
-    // fell behind (a suspended app, a stalled thread), as a display skips the fields it missed.
-    std::int64_t earliest = last_ns + period_ns - interval / 2;
-    if (last_ns == 0 || earliest < now - period_ns) {
-        earliest = now;
-    }
-    const std::int64_t steps = std::max<std::int64_t>((earliest - base + interval - 1) / interval, 0);
-    const std::int64_t target = base + steps * interval;
     mach_wait_until(ns_to_ticks(target));
     if (::galaxy::diagnosing(::galaxy::kDiagnosePresentStats)) {
         // How long after the vsync it asked for the frame's thread ran again, every ten seconds.
@@ -211,7 +187,7 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept 
         }
     }
     last_ns = target;
-    g_frame_period_ns.store(std::llround(vsyncs) * interval, std::memory_order_relaxed);
+    g_frame_period_ns.store(frame_period, std::memory_order_relaxed);
     g_frame_slot_ns.store(target, std::memory_order_release);
     return true;
 }
@@ -227,7 +203,7 @@ bool display_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& 
     period_ns = g_frame_period_ns.load(std::memory_order_relaxed);
     {
         const std::lock_guard<std::mutex> lock(g_mutex);
-        vsync_ns = g_interval_ns;
+        vsync_ns = g_grid.interval_ns;
     }
     now = now_ns();
     return false;
@@ -236,8 +212,8 @@ bool display_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& 
 bool vsync_grid(std::int64_t& vsync_ns, std::int64_t& interval_ns) noexcept {
     const std::int64_t stated = g_display_period_ns.load(std::memory_order_relaxed);
     const std::lock_guard<std::mutex> lock(g_mutex);
-    vsync_ns = g_vsync_ns;
-    interval_ns = stated > 0 ? stated : g_interval_ns;
+    vsync_ns = g_grid.vsync_ns;
+    interval_ns = stated > 0 ? stated : g_grid.interval_ns;
     return vsync_ns != 0 && interval_ns != 0;
 }
 
@@ -246,7 +222,7 @@ double display_refresh_hz() noexcept {
         return 1e9 / static_cast<double>(period);
     }
     const std::lock_guard<std::mutex> lock(g_mutex);
-    return g_interval_ns != 0 ? 1e9 / static_cast<double>(g_interval_ns) : 0.0;
+    return g_grid.interval_ns != 0 ? 1e9 / static_cast<double>(g_grid.interval_ns) : 0.0;
 }
 
 }  // namespace galaxy::sdl
