@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdio>
@@ -484,7 +485,10 @@ Request* g_in_call = nullptr;  // game thread: the request whose event's call ru
 struct Worker {
     std::mutex lock;
     std::condition_variable ready;
+    std::condition_variable progress;  // a job done (finish waits on it)
     std::deque<Request*> jobs;
+    bool busy = false;          // a job taken and not yet done
+    std::uint64_t done = 0;     // jobs done
     bool started = false;
 };
 Worker* g_worker = nullptr;      // game thread makes it; its fields under its lock
@@ -509,8 +513,15 @@ Worker* worker() {
                         w->ready.wait(jobs_lock, [w] { return !w->jobs.empty(); });
                         request = w->jobs.front();
                         w->jobs.pop_front();
+                        w->busy = true;
                     }
                     work(request);
+                    {
+                        const std::lock_guard<std::mutex> jobs_lock(w->lock);
+                        w->busy = false;
+                        w->done++;
+                    }
+                    w->progress.notify_all();
                 }
             }).detach();
             g_worker->started = true;
@@ -1382,6 +1393,36 @@ void forget_data(std::string_view id) {
         w->ready.notify_one();
     } catch (...) {
     }
+}
+
+std::size_t finish(unsigned stall_ms) noexcept {
+    try {
+        Worker* w = nullptr;
+        {
+            const std::lock_guard<std::mutex> lock(g_worker_make);
+            w = g_worker;
+        }
+        if (w == nullptr || !w->started) {
+            return 0;
+        }
+        std::unique_lock<std::mutex> lock(w->lock);
+        const auto idle = [w] { return w->jobs.empty() && !w->busy; };
+        while (!idle()) {
+            const std::uint64_t seen = w->done;
+            if (!w->progress.wait_for(lock, std::chrono::milliseconds(stall_ms), [&] { return idle() || w->done != seen; })) {
+                const std::size_t left = w->jobs.size() + (w->busy ? 1u : 0u);
+                lock.unlock();
+                if (g_log != nullptr) {
+                    g_log("LumaCore fs: the disk did no request for a while at the end; the mods' requests still queued "
+                          "are not done");
+                }
+                return left;
+            }
+        }
+    } catch (...) {
+        // A lock or a wait that failed: nothing more can be waited for.
+    }
+    return 0;
 }
 
 }  // namespace galaxy::luma_fs

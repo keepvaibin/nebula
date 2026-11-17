@@ -5,6 +5,7 @@
 
 #include <luma_service_provider.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <span>
@@ -40,5 +41,10 @@ void data_ids(std::vector<std::string>& out);
 
 // Any thread: the player's FORGET. id's data folder is removed on the fs worker, after every request queued before.
 void forget_data(std::string_view id);
+
+// Any thread, before the process ends (the host's finish), when no mod runs: waits until the worker has done every
+// request queued (a write a mod made in its last frame), so a mod's file is not lost at the end. It gives up only when
+// no request is done for `stall_ms` (a disk that stopped), and says so in the log. The requests left undone.
+std::size_t finish(unsigned stall_ms) noexcept;
 
 }  // namespace galaxy::luma_fs

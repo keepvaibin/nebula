@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fs-last",
+  "name": "fs-last",
+  "summary": "fs-last (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

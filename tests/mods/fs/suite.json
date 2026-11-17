@@ -13,6 +13,8 @@
     "2310-exchange-declined",
     "2310b-exchange-undeclared",
     "2311-two-mods",
-    "2312-quota"
+    "2312-quota",
+    "2313-write-at-end",
+    "2314-written-at-end"
   ]
 }
