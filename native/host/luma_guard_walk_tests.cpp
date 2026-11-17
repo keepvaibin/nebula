@@ -1,10 +1,14 @@
-// Tests for the guard's need walk (native/include/luma_guard_walk.h: which mod a caught fault turns off) and its table
-// of mods' code (luma_guard_spans.h: it grows past any count of libraries, M-001).
+// Tests for the guard's need walk (native/include/luma_guard_walk.h: which mod a caught fault turns off), its table
+// of mods' code (luma_guard_spans.h: it grows past any count of libraries, M-001) and its reading of a mod library's
+// unwind tables (luma_guard_unwind.h: hostile bytes give 0, never a read outside them).
 #include "luma_guard_spans.h"
+#include "luma_guard_unwind.h"
 
 #include <luma_guard_walk.h>
 
 #include <cstdint>
+#include <cstring>
+#include <memory>
 #include <iostream>
 #include <map>
 #include <set>
@@ -116,11 +120,144 @@ bool spans() {
     return ok;
 }
 
+// Bytes in a block of exactly their size (an address sanitizer sees any read past it).
+std::unique_ptr<std::uint8_t[]> exact(const std::vector<std::uint8_t>& bytes) {
+    auto block = std::make_unique<std::uint8_t[]>(bytes.size() == 0 ? 1 : bytes.size());
+    if (!bytes.empty()) std::memcpy(block.get(), bytes.data(), bytes.size());
+    return block;
+}
+
+void put32(std::vector<std::uint8_t>& bytes, std::size_t at, std::uint32_t v) {
+    if (bytes.size() < at + 4) bytes.resize(at + 4);
+    std::memcpy(bytes.data() + at, &v, 4);
+}
+
+std::uintptr_t eh(const std::vector<std::uint8_t>& bytes, std::uintptr_t address, std::uintptr_t pc) {
+    const auto block = exact(bytes);
+    return galaxy::luma_guard::eh_frame_hdr_function(block.get(), bytes.size(), address, pc);
+}
+
+std::uint32_t pe_begin(const std::vector<std::uint8_t>& image, std::size_t entry) {
+    const auto block = exact(image);
+    return galaxy::luma_guard::pe_function_begin(block.get(), image.size(), entry);
+}
+
+int pe_register(const std::vector<std::uint8_t>& image, std::size_t entry) {
+    const auto block = exact(image);
+    return galaxy::luma_guard::pe_frame_register(block.get(), image.size(), entry);
+}
+
+struct Random {
+    std::uint64_t state = 0x9E3779B97F4A7C15ull;
+    std::uint32_t next() {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        return static_cast<std::uint32_t>(state >> 16);
+    }
+};
+
+bool unwind() {
+    bool ok = true;
+    constexpr std::uintptr_t kAt = 0x40000000u;
+    // A header as lld writes it: version 1, eh_frame_ptr pcrel sdata4, fde_count udata4, the table datarel sdata4;
+    // three functions at +0x100, +0x200, +0x300 from the header.
+    std::vector<std::uint8_t> hdr = {1, 0x1B, 0x03, 0x3B};
+    put32(hdr, 4, 0x40);
+    put32(hdr, 8, 3);
+    for (std::uint32_t i = 0; i < 3; ++i) {
+        put32(hdr, 12 + i * 8, 0x100 * (i + 1));
+        put32(hdr, 16 + i * 8, 0x1000 + i);
+    }
+    ok &= expect(eh(hdr, kAt, kAt + 0x250) == kAt + 0x200, "eh_frame_hdr: the start at or below pc");
+    ok &= expect(eh(hdr, kAt, kAt + 0x100) == kAt + 0x100, "eh_frame_hdr: pc at a start");
+    ok &= expect(eh(hdr, kAt, kAt + 0x3FF0) == kAt + 0x300, "eh_frame_hdr: past the last start");
+    ok &= expect(eh(hdr, kAt, kAt + 0xFF) == 0, "eh_frame_hdr: before the first start");
+    // Every shorter header (truncated anywhere) is read within its bytes; all but the whole one give 0.
+    for (std::size_t n = 0; n < hdr.size(); ++n) {
+        const std::vector<std::uint8_t> cut(hdr.begin(), hdr.begin() + static_cast<std::ptrdiff_t>(n));
+        ok &= expect(eh(cut, kAt, kAt + 0x250) == 0, "eh_frame_hdr cut to " + std::to_string(n) + " bytes gives 0");
+    }
+    // A count beyond its bytes, a count that is not absolute, an unknown encoding, another version: 0.
+    auto hostile = hdr;
+    put32(hostile, 8, 0xFFFFFFFFu);
+    ok &= expect(eh(hostile, kAt, kAt + 0x250) == 0, "eh_frame_hdr: a count past its bytes gives 0");
+    put32(hostile, 8, 4);
+    ok &= expect(eh(hostile, kAt, kAt + 0x250) == 0, "eh_frame_hdr: one entry too many gives 0");
+    hostile = hdr;
+    hostile[2] = 0x13;
+    ok &= expect(eh(hostile, kAt, kAt + 0x250) == 0, "eh_frame_hdr: a pcrel count gives 0");
+    hostile = hdr;
+    hostile[1] = 0x0C;
+    ok &= expect(eh(hostile, kAt, kAt + 0x250) == 0, "eh_frame_hdr: an 8-byte eh_frame_ptr (not read) gives 0");
+    hostile = hdr;
+    hostile[0] = 2;
+    ok &= expect(eh(hostile, kAt, kAt + 0x250) == 0, "eh_frame_hdr: version 2 gives 0");
+    hostile = hdr;
+    hostile[3] = 0x1B;
+    ok &= expect(eh(hostile, kAt, kAt + 0x250) == 0, "eh_frame_hdr: a pcrel table gives 0");
+    ok &= expect(galaxy::luma_guard::eh_frame_hdr_function(nullptr, 64, kAt, kAt) == 0, "eh_frame_hdr: none");
+
+    // Windows x64: RUNTIME_FUNCTION at 0x40 (0x80..0x90, unwind 0x60); UNWIND_INFO version 1 with frame register 5.
+    std::vector<std::uint8_t> image(256, 0);
+    put32(image, 0x40, 0x80);
+    put32(image, 0x44, 0x90);
+    put32(image, 0x48, 0x60);
+    image[0x60] = 0x01;
+    image[0x63] = 0x05;
+    ok &= expect(pe_begin(image, 0x40) == 0x80, "pdata: the function's begin");
+    ok &= expect(pe_register(image, 0x40) == 5, "pdata: the frame register");
+    // A later part chained to the first: 0xA0 (0xA0..0xB0, unwind 0xC0, chained, 2 codes) -> 0xC8 (begin 0x80).
+    put32(image, 0xA0, 0xA0);
+    put32(image, 0xA4, 0xB0);
+    put32(image, 0xA8, 0xC0);
+    image[0xC0] = 0x21;  // version 1, UNW_FLAG_CHAININFO
+    image[0xC2] = 2;     // two unwind codes, 4 bytes
+    put32(image, 0xC8, 0x80);
+    put32(image, 0xCC, 0x90);
+    put32(image, 0xD0, 0x60);
+    ok &= expect(pe_begin(image, 0xA0) == 0x80, "pdata: a chained part gives its function's begin");
+    ok &= expect(pe_register(image, 0xA0) == 5, "pdata: a chained part's frame register is its function's");
+    // Hostile: unwind data past the image, an entry past it, a chain that loops.
+    auto bad = image;
+    put32(bad, 0x48, 0x1000);
+    ok &= expect(pe_begin(bad, 0x40) == 0 && pe_register(bad, 0x40) == -1, "pdata: unwind data past the image");
+    ok &= expect(pe_begin(image, 250) == 0 && pe_register(image, 250) == -1, "pdata: an entry cut by the image's end");
+    ok &= expect(pe_begin(image, ~std::size_t{0} - 4) == 0, "pdata: an entry far past the image");
+    bad = image;
+    put32(bad, 0xD0, 0xC0);  // the chained entry's unwind is the chaining one: a loop
+    put32(bad, 0xC8, 0x80);
+    ok &= expect(pe_begin(bad, 0xA0) == 0 && pe_register(bad, 0xA0) == -1, "pdata: a chain that loops stops");
+    image.resize(0xCA);  // the chained RUNTIME_FUNCTION cut by the image's end
+    ok &= expect(pe_begin(image, 0xA0) == 0, "pdata: a chained entry cut by the image's end");
+
+    // Random bytes, from a fixed seed: whatever they say, each reader stays within them.
+    Random random;
+    unsigned answered = 0;
+    for (unsigned round = 0; round < 20000; ++round) {
+        std::vector<std::uint8_t> bytes(random.next() % 96);
+        for (auto& b : bytes) b = static_cast<std::uint8_t>(random.next());
+        if (bytes.size() >= 4 && (round & 1u) != 0) {
+            bytes[0] = 1;
+            bytes[3] = 0x3B;
+            bytes[2] = (round & 2u) != 0 ? 0x03 : 0x0B;
+            if (bytes.size() >= 12) put32(bytes, 8, random.next() % 12);
+        }
+        if (eh(bytes, kAt, kAt + random.next() % 0x400) != 0) ++answered;
+        const std::size_t entry = bytes.empty() ? 0 : random.next() % (bytes.size() + 8);
+        if (pe_begin(bytes, entry) != 0) ++answered;
+        (void)pe_register(bytes, entry);
+    }
+    ok &= expect(answered != 0, "the random rounds reach the tables (some give a function)");
+    return ok;
+}
+
 }  // namespace
 
 int main() {
     bool ok = walks();
     ok &= spans();
+    ok &= unwind();
     if (!ok) return 1;
     std::cout << "luma_guard_walk_tests: the need walk and the growing table hold\n";
     return 0;

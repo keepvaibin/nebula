@@ -13,6 +13,7 @@
 #include "galaxy/luma_guard_host.h"
 #include "galaxy/mod_crash.h"
 #include "luma_guard_spans.h"
+#include "luma_guard_unwind.h"
 #include "luma_guard_words.h"
 
 #include <luma_guard.h>
@@ -173,17 +174,22 @@ constexpr std::uintptr_t kCallReturnSp = 48;
 constexpr unsigned kMostFrames = 4096;
 constexpr const char* kUnreadable = "the frames between the fault and the boundary could not be read";
 
+// The bytes of the image at `image` (SizeOfImage: the loader checked the headers that give it), or 0.
+std::size_t image_size(DWORD64 image) noexcept {
+    if (image == 0) return 0;
+    const auto* base = reinterpret_cast<const std::uint8_t*>(image);
+    return reinterpret_cast<const IMAGE_NT_HEADERS*>(base + reinterpret_cast<const IMAGE_DOS_HEADER*>(base)->e_lfanew)
+        ->OptionalHeader.SizeOfImage;
+}
+
 // The function's frame register (UNWIND_INFO's FrameRegister, through its chained entries): the unwind reads the
-// frame's saved words from that register's value. 0: none.
-unsigned frame_register(DWORD64 image, const RUNTIME_FUNCTION* entry) noexcept {
-    for (unsigned depth = 0; entry != nullptr && depth < 32; ++depth) {
-        const auto* info = reinterpret_cast<const std::uint8_t*>(image + entry->UnwindData);
-        if ((info[3] & 0x0Fu) != 0u) return info[3] & 0x0Fu;
-        if (((info[0] >> 3) & UNW_FLAG_CHAININFO) == 0u) return 0u;
-        const unsigned codes = (info[2] + 1u) & ~1u;  // UNWIND_CODE slots, padded to an even count
-        entry = reinterpret_cast<const RUNTIME_FUNCTION*>(info + 4 + codes * 2u);
-    }
-    return 0u;
+// frame's saved words from that register's value. 0: none; -1: its unwind data is not wholly in its image (a mod's
+// file: read within it only, luma_guard_unwind.h).
+int frame_register(DWORD64 image, const RUNTIME_FUNCTION* entry) noexcept {
+    const auto at = reinterpret_cast<std::uintptr_t>(entry);
+    if (entry == nullptr || at < image) return -1;
+    return galaxy::luma_guard::pe_frame_register(reinterpret_cast<const std::uint8_t*>(image), image_size(image),
+                                                 at - static_cast<std::uintptr_t>(image));
 }
 
 // From the fault's own registers up the real call chain to the boundary, frame by frame, as the system's unwinder
@@ -211,7 +217,9 @@ const char* why_not_frames(const LumaGuardFrame* frame, const CONTEXT* fault_con
             context.Rip = *reinterpret_cast<const DWORD64*>(sp);
             context.Rsp = sp + 8u;
         } else {
-            if (const unsigned reg = frame_register(image, entry); reg != 0u) {
+            const int reg = frame_register(image, entry);
+            if (reg < 0) return kUnreadable;
+            if (reg != 0) {
                 const auto value = static_cast<std::uintptr_t>((&context.Rax)[reg]);
                 if (value < lowest || value >= stack_base) return kUnreadable;
             }
@@ -260,7 +268,9 @@ void chain_for_report(const LumaGuardFrame* frame, const CONTEXT* fault_context,
             context.Rip = *reinterpret_cast<const DWORD64*>(sp);
             context.Rsp = sp + 8u;
         } else {
-            if (const unsigned reg = frame_register(image, entry); reg != 0u) {
+            const int reg = frame_register(image, entry);
+            if (reg < 0) break;
+            if (reg != 0) {
                 const auto value = static_cast<std::uintptr_t>((&context.Rax)[reg]);
                 if (value < lowest || value >= stack_base) break;
             }
@@ -424,59 +434,28 @@ Range code_at(const void* address) noexcept {
 std::uintptr_t function_at(std::uintptr_t pc) {
     DWORD64 image = 0;
     const RUNTIME_FUNCTION* entry = RtlLookupFunctionEntry(pc, &image, nullptr);
-    // A function's later parts chain to its first entry, whose begin is the function's.
-    for (unsigned depth = 0; entry != nullptr && depth < 32; ++depth) {
-        const auto* info = reinterpret_cast<const std::uint8_t*>(image + entry->UnwindData);
-        if (((info[0] >> 3) & UNW_FLAG_CHAININFO) == 0u) return static_cast<std::uintptr_t>(image + entry->BeginAddress);
-        const unsigned codes = (info[2] + 1u) & ~1u;
-        entry = reinterpret_cast<const RUNTIME_FUNCTION*>(info + 4 + codes * 2u);
-    }
-    return 0;
+    if (entry == nullptr || image == 0 || reinterpret_cast<std::uintptr_t>(entry) < image) return 0;
+    // The mod's unwind data is read within its image only.
+    const std::uint32_t begin = galaxy::luma_guard::pe_function_begin(
+        reinterpret_cast<const std::uint8_t*>(image), image_size(image),
+        reinterpret_cast<std::uintptr_t>(entry) - static_cast<std::uintptr_t>(image));
+    return begin != 0 ? static_cast<std::uintptr_t>(image) + begin : 0;
 }
 #elif defined(_WIN32) || defined(__APPLE__)
 // Windows on ARM64 has no guard yet; the Mac's compact unwind is not read: the cut names no function.
 std::uintptr_t function_at(std::uintptr_t) { return 0; }
 #else
-// .eh_frame_hdr (the image's PT_GNU_EH_FRAME): a table of each function's first byte, sorted, which the linker writes for
-// the unwinder. Read as the unwinder reads it: the largest start at or below pc.
-struct EhFind {
-    std::uintptr_t pc;
-    std::uintptr_t begin;
-};
-
-bool read_encoded(const std::uint8_t*& at, std::uint8_t encoding, std::uintptr_t data, std::uintptr_t* out) noexcept {
-    const std::uintptr_t here = reinterpret_cast<std::uintptr_t>(at);
-    std::int64_t value = 0;
-    switch (encoding & 0x0Fu) {
-    case 0x03: {  // udata4
-        std::uint32_t v;
-        std::memcpy(&v, at, 4);
-        value = v;
-        at += 4;
-        break;
-    }
-    case 0x0B: {  // sdata4
-        std::int32_t v;
-        std::memcpy(&v, at, 4);
-        value = v;
-        at += 4;
-        break;
-    }
-    default: return false;
-    }
-    switch (encoding & 0x70u) {
-    case 0x00: *out = static_cast<std::uintptr_t>(value); return true;
-    case 0x10: *out = here + static_cast<std::uintptr_t>(value); return true;  // pcrel
-    case 0x30: *out = data + static_cast<std::uintptr_t>(value); return true;  // datarel
-    default: return false;
-    }
-}
-
+// The largest function start at or below pc in the image's .eh_frame_hdr (PT_GNU_EH_FRAME), the table the linker
+// writes for the unwinder. The header is the mod's: it is read only where it lies inside one of the image's readable
+// loaded segments, and within it (luma_guard_unwind.h).
 std::uintptr_t function_at(std::uintptr_t pc) {
-    EhFind find{pc, 0};
+    struct Find {
+        std::uintptr_t pc;
+        std::uintptr_t begin;
+    } find{pc, 0};
     dl_iterate_phdr(
         [](dl_phdr_info* info, std::size_t, void* data) -> int {
-            auto* f = static_cast<EhFind*>(data);
+            auto* f = static_cast<Find*>(data);
             const ElfW(Phdr)* hdr_segment = nullptr;
             bool here = false;
             for (ElfW(Half) i = 0; i < info->dlpi_phnum; ++i) {
@@ -489,24 +468,18 @@ std::uintptr_t function_at(std::uintptr_t pc) {
             }
             if (!here) return 0;
             if (hdr_segment == nullptr) return 1;
-            const auto* hdr = reinterpret_cast<const std::uint8_t*>(info->dlpi_addr + hdr_segment->p_vaddr);
-            const auto data = reinterpret_cast<std::uintptr_t>(hdr);
-            if (hdr[0] != 1u || hdr[3] != 0x3Bu) return 1;  // version 1, a table of datarel sdata4 pairs
-            const std::uint8_t* at = hdr + 4;
-            std::uintptr_t eh_frame = 0, count = 0;
-            if (hdr[1] == 0xFFu || !read_encoded(at, hdr[1], data, &eh_frame)) return 1;
-            if (hdr[2] == 0xFFu || !read_encoded(at, hdr[2], data, &count)) return 1;
-            const auto* table = reinterpret_cast<const std::int32_t*>(at);
-            std::size_t low = 0, high = count;  // the first entry whose start is above pc
-            while (low < high) {
-                const std::size_t mid = low + (high - low) / 2;
-                if (data + static_cast<std::uintptr_t>(static_cast<std::intptr_t>(table[mid * 2])) <= f->pc) {
-                    low = mid + 1;
-                } else {
-                    high = mid;
-                }
+            const std::uintptr_t hdr = info->dlpi_addr + hdr_segment->p_vaddr;
+            std::size_t size = 0;
+            for (ElfW(Half) i = 0; i < info->dlpi_phnum; ++i) {
+                const ElfW(Phdr)& header = info->dlpi_phdr[i];
+                if (header.p_type != PT_LOAD || (header.p_flags & PF_R) == 0) continue;
+                const std::uintptr_t begin = info->dlpi_addr + header.p_vaddr;
+                if (hdr < begin || hdr - begin >= header.p_memsz) continue;
+                const std::uintptr_t room = header.p_memsz - (hdr - begin);
+                size = static_cast<std::size_t>(hdr_segment->p_memsz < room ? hdr_segment->p_memsz : room);
+                break;
             }
-            if (low != 0) f->begin = data + static_cast<std::uintptr_t>(static_cast<std::intptr_t>(table[(low - 1) * 2]));
+            f->begin = galaxy::luma_guard::eh_frame_hdr_function(reinterpret_cast<const std::uint8_t*>(hdr), size, hdr, f->pc);
             return 1;
         },
         &find);
