@@ -3905,7 +3905,11 @@ void NebulaSettingsScreen::clickRow(const NebulaSettingsView& rView, s32 row, s3
         NebulaHost::settingsInput(NEBULA_SETTINGS_PRESS, button >= 0 ? button : 0);
     } else if ((pData->flags & NEBULA_SETTINGS_ROW_CHANGES) != 0 && !hasSlider(*pData)) {
         NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, row);
-        NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, hasArrows(*pData) ? 2 : 1);
+        // A setting with arrows changes by its arrows (or left and right): a click or a tap on its name only selects it,
+        // so a finger that lands on a row on its way never changes it. One without arrows (on or off) changes.
+        if (!hasArrows(*pData)) {
+            NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, 1);
+        }
     }
 }
 
