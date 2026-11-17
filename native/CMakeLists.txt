@@ -273,11 +273,12 @@ target_compile_definitions(smg_game_common INTERFACE $<$<PLATFORM_ID:Linux,Andro
     # defines those functions itself (math/src/nebula_libc.c) and calls its own.
     $<$<PLATFORM_ID:Darwin,iOS>:_FORTIFY_SOURCE=0>)
 # The game's math functions whose results are rounded (math/src/nebula_libm.c): the compiler treats none of them as the
-# C library's. With -fno-math-errno it would otherwise make intrinsics of them: fold a call with a constant using the
-# build computer's own library, and join a sinf and a cosf of one angle into one sincosf (ELF) or __sincosf_stret
-# (Apple) answered by the system's library, so a device's game steps differed from the PC's (Android's sincosf). The
-# exact ones (sqrt, floor, ceil, trunc, round, fmod) stay the compiler's: single instructions, the same everywhere.
-# cmake/check_module_imports.cmake, at each module's link, fails on any math function taken from the system.
+# C library's. With -fno-math-errno it would otherwise make intrinsics of them and fold a call with a constant using the
+# build computer's own library. A sine and a cosine of one angle that still reach the compiler as intrinsics (<cmath>'s
+# std::sin(float) is __builtin_sinf) are joined into one sincosf (ELF) or __sincosf_stret (Apple): nebula_libm.c
+# defines those too, so the system's never answers (Android's sincosf made a device's game steps differ from the
+# PC's). The exact ones (sqrt, floor, ceil, trunc, round, fmod) stay the compiler's: single instructions, the same
+# everywhere. cmake/check_module_imports.cmake, at each module's link, fails on any math function taken from the system.
 set(game_math sin cos tan asin acos atan atan2 pow)
 set(game_math_flags "")
 foreach(name IN LISTS game_math)

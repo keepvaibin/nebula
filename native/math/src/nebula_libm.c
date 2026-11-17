@@ -353,6 +353,41 @@ float powf(float x, float y) {
     return (float)pow(x, y);
 }
 
+/* A sine and a cosine of one angle, as the compiler may join them: a call through <cmath> (std::sin(float) is
+   __builtin_sinf, which -fno-builtin-sinf does not reach) becomes an intrinsic, and a sine and a cosine of one angle
+   become one sincosf (ELF) or __sincosf_stret (Apple). These answer it with the module's own sine and cosine, each as
+   a call of its own gives it; the module binds its calls to them (-Bsymbolic, Mach-O's two-level names), never to the
+   system's. This file is built with -fno-builtin, so nothing here is joined again. */
+void sincosf(float x, float* sine, float* cosine) {
+    *sine = sinf(x);
+    *cosine = cosf(x);
+}
+
+void sincos(double x, double* sine, double* cosine) {
+    *sine = sin(x);
+    *cosine = cos(x);
+}
+
+#if defined(__APPLE__)
+/* Apple's forms (<math.h> __float2, __double2): the pair is returned in registers. */
+struct nebula_float2 {
+    float sine, cosine;
+};
+struct nebula_double2 {
+    double sine, cosine;
+};
+
+struct nebula_float2 __sincosf_stret(float x) {
+    struct nebula_float2 r = {sinf(x), cosf(x)};
+    return r;
+}
+
+struct nebula_double2 __sincos_stret(double x) {
+    struct nebula_double2 r = {sin(x), cos(x)};
+    return r;
+}
+#endif
+
 float floorf(float x) {
     const uint32_t b = bits32(x);
     const int e = (int)(b >> 23 & 0xFF) - 127;
