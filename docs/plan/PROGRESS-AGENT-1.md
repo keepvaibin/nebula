@@ -66,3 +66,28 @@ One dated entry per package step. Newest last.
 - docs/using-nebula/diagnostics.md describes the harness, the hooks and the file tools that stay.
 - Gate quick on these changes: 11 of 13 pass; engine 11 of 11, tour 12 of 12. description/self and mods wait for
   Agent 2 as before.
+
+## 2026-11-17 E0.10 and E0.11 The step-hash replay, the benchmark's truth (engine/next, not yet on main)
+
+- E0.10, the tool (a6b483875): a test's "hash": "on" step has the game write a hash of every live actor after every
+  step; tools/verify/step_hash.py replays tour stops on two builds and names the first step and actor that differ.
+- The proof it was made for: the game arena and frame-list changes of E0.4 (N-1004 to N-1008) against the files before
+  them, on Direct3D 12: 101 of 102 tour stops the same over 600 steps. 030-FactoryGalaxy-4 fails setup on both sides
+  (P-122, E2), so it has no hashes.
+- E0.10 still open: the 20 recordings in the gate and the PC-against-Android comparison.
+- E0.11 (70309e4b1), on Direct3D 12, Vulkan and Direct3D 11 with the built-in stages, hidden:
+  - P-089: the benchmark counts the game's own steps. Each scene ran about 60 steps a second beside 800 to 4,950
+    pictures a second. "Fits" now needs both 1% lows at 58 or more. The run beside a build said cpu_bound: its steps'
+    1% low was 42.5 while the pictures' was 420. The old rule would have said fits.
+  - P-090: GPU times are one per game step (AstroGalaxy: 779 steps, 780 GPU times, 30,020 pictures).
+  - P-091: a result from another renderer gives no recommendation and says so.
+  - P-159: Vulkan stops acquiring and presenting while its window cannot be seen, as Direct3D does; Metal has the same
+    rule (its build is the push workflow's Mac job, not yet run).
+  - The result is schema 3; the telemetry fixture is now a real run's result.
+- Store version 35 (8fd1a5799) for the placeholder model's program (e3a2026ed); paks of all three discs at 35.
+- N-1032 (465dbbe23), from Agent 2's report: on Direct3D 11 and Metal a draw table kept its old samplers when a
+  painted replacement arrived, so the menu's key pictures were drawn aliased. New test tests/engine/menu-key-icons:
+  Direct3D 11 against the Direct3D 12 picture, rmse 5.83 before, 0.00 after.
+- N-1012 (3465976af): the gate's Android build runs the launcher's JVM tests (8 of 8), with JUnit and org.json
+  downloaded under the owner's permission.
+- Unit tests 85 of 85, nebula-import 334 pass, telemetry 6 of 6.
