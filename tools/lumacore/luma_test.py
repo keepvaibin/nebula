@@ -427,11 +427,12 @@ def read_test(folder, types=None):
             raise HarnessError("hide_game_files must be a list")
         hidden = [hidden_path(h, "hide_game_files[%d]" % i) for i, h in enumerate(t["hide_game_files"])]
     # How the run must end (revision 10): "end", at its end step by the harness (the default); or "crash", by the
-    # host's crash reporter before the end step (a test of a fault that must never be resumed, guard 2). A crash test
-    # names the crash line it expects: at least one log expectation reading the host's "crash: " line.
+    # host's crash reporter before the end step (a test of a fault that must never be resumed, guard 2); or
+    # "crash-at-stop", at its end step, then by the crash reporter while the game stops (a mod's stop function). A
+    # crash test names the crash line it expects: at least one log expectation reading the host's "crash: " line.
     ends = text(t, "ends", "") if "ends" in t else "end"
-    if ends not in ("end", "crash"):
-        raise HarnessError("ends must be end or crash")
+    if ends not in ("end", "crash", "crash-at-stop"):
+        raise HarnessError("ends must be end, crash or crash-at-stop")
     # How many processes the run's game was (1: it never started again; the host's start-again adds one each).
     starts = whole(t, "starts", "") if "starts" in t else None
     if starts is not None and starts < 1:
@@ -439,7 +440,7 @@ def read_test(folder, types=None):
     setup = read_setup(t, bare, seed, language, classes)
     steps = read_steps(t, bare, classes)
     expect, not_here = read_expect(t, bare, steps)
-    if ends == "crash" and not any(c["kind"] == "log" and c["pattern"].startswith("crash: ") for c in expect):
+    if ends != "end" and not any(c["kind"] == "log" and c["pattern"].startswith("crash: ") for c in expect):
         raise HarnessError("a test that ends in a crash expects its crash line: a log expectation starting \"crash: \"")
     return {"folder": folder, "raw": t, "name": t["name"], "proves": proves, "bare": bare, "mods": mods,
             "language": language, "seed": seed, "renderers": renderers, "limit": limit, "window": window,
@@ -2066,9 +2067,12 @@ def evaluate(test, renderer, run_folder, ran):
     code = ran.get("code")
     died = (not end and not stop and isinstance(code, int) and code != 0
             and ran.get("seconds", float(test["limit"])) < test["limit"])
-    crashed = bool(dumps or crash_lines or died)
-    # A test that must end in a crash (ends "crash") that crashed is judged by its checks, as any run that ended.
-    meant = test["ends"] == "crash" and crashed
+    # After the end step (ends "crash-at-stop"): the game gone with a code that is not 0 while it stopped.
+    died_at_stop = (test["ends"] == "crash-at-stop" and bool(end) and not stop and isinstance(code, int) and code != 0)
+    crashed = bool(dumps or crash_lines or died or died_at_stop)
+    # A test that must end in a crash (ends "crash", or "crash-at-stop" once its end step was reached) that crashed is
+    # judged by its checks, as any run that ended; a crash-at-stop test that crashed before its end step is a crash.
+    meant = crashed and (test["ends"] == "crash" or (test["ends"] == "crash-at-stop" and bool(end)))
     verdict, reason = None, None
     declined = [line for line in log_lines if "fatal: --extension" in line or "extension: test extension:" in line]
     # The host could not open the bin folder's game.pak (host_main.cpp open_pak: another store version, or unreadable).
@@ -2102,11 +2106,18 @@ def evaluate(test, renderer, run_folder, ran):
         add("the game started %d time%s" % (test["starts"], "" if test["starts"] == 1 else "s"),
             ran.get("starts") == test["starts"], ran.get("starts"))
     end_step = next(s for s in test["steps"] if s["action"] == "end")
-    if test["ends"] == "crash":
-        # The crash is the run's end: before the end step, by the host's crash reporter (its line, a dump, the game
-        # gone with a code that is not 0, not killed at the limit).
-        add("the game ended in a crash before its end step", crashed and not end,
-            (crash_lines[:1] or dumps) if not end else end[-1]["value"].get("frame"))
+    if test["ends"] in ("crash", "crash-at-stop"):
+        if test["ends"] == "crash":
+            # The crash is the run's end: before the end step, by the host's crash reporter (its line, a dump, the
+            # game gone with a code that is not 0, not killed at the limit).
+            add("the game ended in a crash before its end step", crashed and not end,
+                (crash_lines[:1] or dumps) if not end else end[-1]["value"].get("frame"))
+        else:
+            # The end step reached, then the crash while the game stopped.
+            frame = end[-1]["value"].get("frame") if end else None
+            add("the run reached its end step", bool(end) and (end_step["at"] is None or frame == end_step["at"]), frame)
+            add("the game crashed while it stopped, after its end step", crashed and bool(end),
+                crash_lines[:1] or dumps or ran.get("code"))
         if platform.system() == "Windows":
             add("a crash dump was written", bool(dumps), dumps)
         else:
@@ -2125,7 +2136,7 @@ def evaluate(test, renderer, run_folder, ran):
     # library did not load or has no luma_validate_message. Every refusal of the run is then codes only.
     coded = [line for line in log_lines if "refusals are given as codes" in line]
     add("refusals are given in words", not coded, coded)
-    if test["ends"] != "crash" and end:
+    if test["ends"] == "end" and end:
         # Nothing the game asked for was lost (galaxy/loss_report.h): the [loss] counts the host logs at its exit (a draw
         # with no material or pipeline, a texture drawn blank, a sound read past its memory) are all 0.
         report = [line for line in log_lines if line.startswith("[loss] ") and not line.startswith("[loss] first")]
