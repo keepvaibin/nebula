@@ -46,3 +46,23 @@ One dated entry per package step. Newest last.
 - Also: the harness's real-time mode (c9f931174) and a test's "disc" (c93921de3, Agent 2's ask).
 - Gate quick on 0aa8e3a6f plus the Android changes: 10 of 12 pass. description/self waits for Agent 2's
   functions_fixture fix (on mods/work); mods waits for tools/lumacore/mod_tests.py (mods M0).
+
+## 2026-11-17 E0.5 The dead tools retired (engine/work, not yet on main)
+
+- run.sh and every script built on it are gone (f8746bc45, P-124). Where each went:
+  - to tests/engine, run by the gate on each renderer (25459b87d): boots.sh to boot; gpulost.sh to device-lost (two
+    losses); sizes.sh and resize.sh to window-small, -wide, -tall, -4k and window-resize; luigi.sh and luigi2.sh to
+    luigi-stages; save.sh to save-files and save-files-again; home_det.sh to home-menu;
+  - to later steps: tour.sh, all_stops.sh, galaxy.sh, stopcross, look, validate.sh and extended.sh to the gate's tour
+    and E0.6, E0.7, E0.14; fs_det.sh, window.sh, mii.sh and movie.sh to E0.7 (N-1017); interp_real.sh to E0.9;
+    perf.sh to E0.17; pgo_profile.sh to E0.15; monkey.py to E0.14; rt_inputs.sh goes with ray tracing;
+  - losscheck.py to a check every harness test now makes (3f7d2a257, N-1016); the other run.log readers (gaps,
+    loads, matchframes, align_*, compare_stops, sheet, water_summary, perf_summary) had nothing left to read.
+- The test extension now runs only a harness's plan (357d25a18). Its environment paths did nothing in a harness run,
+  so the first window-resize test passed without resizing anything (N-1015). Window sizes and device loss are now
+  plan steps; a step the host cannot do is a harness error.
+- A real fault found by the new device-lost test: the host never offered extensions lose_gpu_device (N-1013).
+- A test's settings names are checked: a setting the game reads or one of four test hooks (N-1014).
+- docs/using-nebula/diagnostics.md describes the harness, the hooks and the file tools that stay.
+- Gate quick on these changes: 11 of 13 pass; engine 11 of 11, tour 12 of 12. description/self and mods wait for
+  Agent 2 as before.
