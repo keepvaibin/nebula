@@ -8,7 +8,8 @@ that commit is fetched into a checkout of its own (--lumalink-cache, default ./l
 build is incremental; the repository is LUMALINK_REPO, default github.com/keepvaibin/lumalink) and built there, and its
 tests/game (the tests of LumaKit and LumaScript) run here too, with its own lumakit/ as the kit under test.
 LUMALINK names another lumalink program instead (a LumaLink tree under work), with LUMALINK_TREE its checkout; without
-LUMALINK_TREE then, only this tree's tests run, and a row says so.
+LUMALINK_TREE, the checkout the program was built in (<checkout>/target/...); for a program built in none, only this
+tree's tests run, and a row says so (not a pass).
 
 The tests are copied into <work>/tree (never built in the source tree), every mod there with a source/ folder is built
 with `lumalink build` for the platforms its luma.json's "code" names (else this system's), and every suite.json is run
@@ -279,6 +280,15 @@ def run_origin(args, prefix, copy, source, run_root, work, build_failed):
 LUMALINK_PIN = TREE / "tools" / "lumacore" / "lumalink.commit"
 
 
+def built_in(program):
+    """The LumaLink checkout a program was built in (<checkout>/target/<profile>/lumalink), whose tests/game it is
+    tested with when LUMALINK_TREE is not given; None for a program built elsewhere."""
+    for up in program.parents[:4]:
+        if (up / "Cargo.toml").is_file() and (up / "tests" / "game").is_dir() and program.is_relative_to(up / "target"):
+            return up
+    return None
+
+
 def pinned_lumalink(cache):
     """The lumalink program built from the pinned LumaLink commit in `cache` (fetched there when it is not), and the
     checkout: (program, checkout). The checkout is reset to the pin each time; its target/ stays for the next build."""
@@ -364,7 +374,7 @@ def main():
     os.environ["LUMALINK"] = str(lumalink)
 
     ll_tree = os.environ.get("LUMALINK_TREE")
-    ll_tree = pathlib.Path(ll_tree).resolve() if ll_tree else None
+    ll_tree = pathlib.Path(ll_tree).resolve() if ll_tree else built_in(lumalink)
     if ll_tree is not None and not (ll_tree / "tests" / "game").is_dir():
         raise SystemExit("LUMALINK_TREE has no tests/game: %s" % ll_tree)
     tree, build_failed = prepare(args, lumalink, work, ll_tree)
@@ -379,7 +389,7 @@ def main():
         origins.append(("lumalink/", tree / "lumalink" / "tests" / "game", ll_tree / "tests" / "game",
                         work / args.renderer / "lumalink"))
     elif not args.only or any(o.startswith("lumalink/") for o in args.only):
-        rows.append(("lumalink", "-", "not-run", "LUMALINK_TREE not given: LumaLink's tests/game did not run"))
+        rows.append(("lumalink", "-", "not-run", "no LUMALINK_TREE, and LUMALINK was built in no LumaLink checkout: LumaLink's tests/game did not run"))
     for prefix, copy, source, run_root in origins:
         rows += run_origin(args, prefix, copy, source, run_root, work, build_failed)
     for suite, name, verdict, reason in rows:
