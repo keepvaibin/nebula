@@ -12,6 +12,13 @@ first actor in it, say where it does.
         Writes the tour (tools/gate/gate_tour.py; every stop, or the ones named) with the hash on from its first step,
         plays it on both builds, and compares. Where a stop differs, both builds play it again with "hash detail" at
         the first step that differs, to name the actor.
+    python -X utf8 -I tools/verify/step_hash.py record WORK [--out tests/replays]
+        Keeps the hashes of the recorded stops (RECORDED_STOPS) from a work folder's tour runs, one file a stop
+        (tests/replays/<test>.tsv: step, hash, actors). Their runs must have passed with every step hashed.
+    python -X utf8 -I tools/verify/step_hash.py check WORK [--against WORK2] [--some]
+        The gate's replays: a work folder's tour runs against the recordings (every recorded stop must have run,
+        unless --some), or against another work folder's runs of the same tests (a renderer or a device against
+        Direct3D 12).
 
 Exit status: 0 when every pair has hashes and they are all the same, 1 otherwise.
 """
@@ -25,6 +32,18 @@ import sys
 TREE = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TREE / "tools" / "gate"))
 import gate_tour  # noqa: E402
+
+# The stops whose hashes are kept (tests/replays): the gate's twelve quick stops and eight more (a ship, a garden, a
+# beach, the last boss, a reversing world, a rolling ball, a launch-star stage, a ghost stage). A change to the game's
+# source that changes what the game does changes them; one that is meant to is recorded again (record).
+RECORDED_STOPS = [
+    "HoneyBeeKingdomGalaxy 1", "OceanRingGalaxy 1", "EggStarGalaxy 1", "KoopaBattleVs1Galaxy 1",
+    "SandClockGalaxy 1", "IceVolcanoGalaxy 1", "HellProminenceGalaxy 1", "TeresaMario2DGalaxy 1",
+    "SurfingLv1Galaxy 1", "CannonFleetGalaxy 1", "OceanPhantomCaveGalaxy 4", "FactoryGalaxy 1",
+    "BattleShipGalaxy 1", "CosmosGardenGalaxy 1", "HeavenlyBeachGalaxy 1", "KoopaBattleVs3Galaxy 1",
+    "ReverseKingdomGalaxy 1", "TamakoroExLv1Galaxy 1", "StarDustGalaxy 1", "PhantomGalaxy 1",
+]
+RECORDINGS = TREE / "tests" / "replays"
 
 
 def read_facts(folder):
@@ -161,6 +180,119 @@ def replay(args):
     return code
 
 
+def plain_steps(steps):
+    """read_facts' steps as {frame: (hash text, actors)}."""
+    return {frame: (str(h), int(n)) for frame, (h, n) in steps.items()}
+
+
+def runs_by_test(work):
+    """{test name: run folder} of a luma_test.py work folder (runs/<suite>/<test>/<renderer>)."""
+    return {f.parent.name: f for f in sorted(pathlib.Path(work).glob("runs/*/*/*")) if f.is_dir()}
+
+
+def passed(folder):
+    try:
+        return json.loads((pathlib.Path(folder) / "result.json").read_text(encoding="utf-8")).get("verdict") == "pass"
+    except (OSError, ValueError):
+        return False
+
+
+def recorded_tests():
+    """The tour's test names of RECORDED_STOPS."""
+    want = {tuple(s.split()) for s in RECORDED_STOPS}
+    names = [gate_tour.test_for(i, stage, scenario)[0] for i, stage, scenario in gate_tour.stops()
+             if (stage, str(scenario)) in want]
+    if len(names) != len(want):
+        raise SystemExit("step_hash.py: a recorded stop is not in the tour list")
+    return names
+
+
+def read_recording(path):
+    steps = {}
+    for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines():
+        if line and not line.startswith("#"):
+            frame, h, n = line.split("\t")
+            steps[int(frame)] = (h, int(n))
+    return steps
+
+
+def same_steps(a, b, what):
+    """(same, text) for two {frame: (hash, actors)}: every step of each in the other, and the same."""
+    if not a or not b:
+        return False, "no hashes in %s" % what
+    for frame in sorted(set(a) & set(b)):
+        if a[frame] != b[frame]:
+            return False, "differs from step %d (hash %s, %d actors / %s, %d actors)" % ((frame,) + a[frame] + b[frame])
+    if set(a) != set(b):
+        return False, "the same where both have steps, but %d steps are in one only" % len(set(a) ^ set(b))
+    return True, "the same over %d steps" % len(a)
+
+
+def record(work, out):
+    runs = runs_by_test(work)
+    out = pathlib.Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    for name in recorded_tests():
+        run = runs.get(name)
+        if run is None or not passed(run):
+            raise SystemExit("step_hash.py record: %s has no passed run in %s" % (name, work))
+        steps = plain_steps(read_facts(run)[0])
+        if sorted(steps) != list(range(gate_tour.FRAMES)):
+            raise SystemExit("step_hash.py record: %s has %d hashed steps, not 0 to %d" % (name, len(steps), gate_tour.FRAMES - 1))
+        commit = json.loads((run / "result.json").read_text(encoding="utf-8")).get("commit", "unknown")
+        lines = ["# %s: the hash of every live actor after each step (step_hash.py record, a build of %s)" % (name, commit)]
+        lines += ["%d\t%s\t%d" % (f, h, n) for f, (h, n) in sorted(steps.items())]
+        (out / (name + ".tsv")).write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("step_hash: %d stops recorded in %s" % (len(RECORDED_STOPS), out))
+    return 0
+
+
+def check(work, against=None, some=False, recordings=RECORDINGS):
+    """(ok, lines): a work folder's runs against the recordings, or against another work folder's runs of the same
+    tests. Against the recordings, a recorded stop that did not run fails (unless `some`); against runs, the tests
+    both ran and passed are compared and the rest are named. Either way a run that failed is named, not compared: its
+    own check says why."""
+    runs = runs_by_test(work)
+    if against is None:
+        names = recorded_tests()
+        other = {n: plain_steps_of_file(recordings / (n + ".tsv")) for n in names}
+    else:
+        theirs = runs_by_test(against)
+        names = sorted(set(runs) | set(theirs))
+        other = {n: theirs.get(n) for n in names}
+    lines, same, differ, skipped = [], 0, [], []
+    for name in names:
+        run, ref = runs.get(name), other.get(name)
+        if ref is None:
+            skipped.append(name + (" (not recorded)" if against is None else " (not run there)"))
+            continue
+        if run is None:
+            (skipped if some or against is not None else differ).append(name + " (not run)")
+            continue
+        if not passed(run) or (against is not None and not passed(ref)):
+            skipped.append(name + " (a run did not pass)")
+            continue
+        mine = plain_steps(read_facts(run)[0])
+        theirs_steps = ref if against is None else plain_steps(read_facts(ref)[0])
+        ok, text = same_steps(mine, theirs_steps, name)
+        lines.append("%-40s %s" % (name, text))
+        if ok:
+            same += 1
+        else:
+            differ.append("%s (%s)" % (name, text))
+    summary = "%d of %d the same" % (same, same + len(differ))
+    if differ:
+        summary += "; not: " + ", ".join(differ[:6]) + (" ..." if len(differ) > 6 else "")
+    if skipped:
+        summary += "; not compared: " + ", ".join(skipped[:6]) + (" ..." if len(skipped) > 6 else "")
+    lines.append(summary)
+    return same > 0 and not differ, lines
+
+
+def plain_steps_of_file(path):
+    return read_recording(path) if pathlib.Path(path).is_file() else None
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="command", required=True)
@@ -174,9 +306,22 @@ def main():
     r.add_argument("--renderer", default="d3d12")
     r.add_argument("--stops", nargs="*", default=[])
     r.add_argument("--paks", default=os.environ.get("LUMA_TEST_PAKS", ""))
+    w = sub.add_parser("record")
+    w.add_argument("work")
+    w.add_argument("--out", default=str(RECORDINGS))
+    k = sub.add_parser("check")
+    k.add_argument("work")
+    k.add_argument("--against")
+    k.add_argument("--some", action="store_true")
     args = p.parse_args()
     if args.command == "compare":
         sys.exit(compare(args.a, args.b)[0])
+    if args.command == "record":
+        sys.exit(record(args.work, args.out))
+    if args.command == "check":
+        ok, lines = check(args.work, args.against, args.some)
+        print("\n".join(lines))
+        sys.exit(0 if ok else 1)
     sys.exit(replay(args))
 
 

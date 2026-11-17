@@ -1,5 +1,6 @@
 """step_hash_test.py: tools/verify/step_hash.py on facts whose answer is known: the same runs, a run that differs from a
-step on (named with its first actor), a run with no hashes, and runs paired by their place in two work folders."""
+step on (named with its first actor), a run with no hashes, runs paired by their place in two work folders, and the
+gate's replays: recordings kept and checked, a renderer's runs against another's."""
 import contextlib
 import io
 import json
@@ -11,8 +12,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "verify"))
 import step_hash  # noqa: E402
 
 
-def write_run(folder, hashes, actors=None):
+def write_run(folder, hashes, actors=None, verdict=None):
     folder.mkdir(parents=True)
+    if verdict:
+        (folder / "result.json").write_text(json.dumps({"verdict": verdict, "commit": "c0ffee"}), encoding="utf-8")
     lines = [{"frame": -1, "key": "setup.done", "value": True}]
     for frame, h in enumerate(hashes):
         lines.append({"frame": frame, "key": "hash.step", "value": {"h": h, "actors": 3}})
@@ -62,6 +65,57 @@ def main():
             write_run(t / side / "runs" / "tour" / "002-Stage-2" / "d3d12", ["x1", h])
         code, failed = step_hash.compare(t / "A", t / "B")
         check(code == 1 and len(failed) == 1 and "002-Stage-2" in failed[0][0], "work folders: runs paired by place")
+
+        # The gate's replays, on two recorded stops of three steps each.
+        step_hash.RECORDED_STOPS = ["BattleShipGalaxy 1", "BattleShipGalaxy 2"]
+        step_hash.gate_tour.FRAMES = 3
+        one, two = step_hash.recorded_tests()
+        good = ["r1", "r2", "r3"]
+
+        def tour(name, runs):
+            for test, (hashes, verdict) in runs.items():
+                write_run(t / name / "runs" / "tour" / test / "d3d12", hashes, verdict=verdict)
+            return t / name
+
+        source = tour("source", {one: (good, "pass"), two: (good, "fail")})
+        try:
+            step_hash.record(source, t / "rec")
+            check(False, "record refuses a recorded stop whose run did not pass")
+        except SystemExit:
+            pass
+        source = tour("source2", {one: (good, "pass"), two: (good, "pass")})
+        step_hash.record(source, t / "rec")
+        check(sorted(p.name for p in (t / "rec").iterdir()) == sorted([one + ".tsv", two + ".tsv"]),
+              "record keeps one file a stop")
+        check("a build of c0ffee" in (t / "rec" / (one + ".tsv")).read_text(encoding="utf-8"), "the file names its build")
+        short = tour("short2", {one: (["r1", "r2"], "pass"), two: (good, "pass")})
+        try:
+            step_hash.record(short, t / "rec-short")
+            check(False, "record refuses a run with steps missing")
+        except SystemExit:
+            pass
+
+        ok, lines = step_hash.check(tour("same", {one: (good, "pass"), two: (good, "pass")}), recordings=t / "rec")
+        check(ok and lines[-1].startswith("2 of 2 the same"), "the same steps as recorded: pass")
+        ok, lines = step_hash.check(tour("changed", {one: (good, "pass"), two: (["r1", "x2", "x3"], "pass")}),
+                                    recordings=t / "rec")
+        check(not ok and "differs from step 1" in lines[-1], "a stop that changed from step 1: named, fails")
+        partial = tour("partial", {one: (good, "pass")})
+        ok, lines = step_hash.check(partial, recordings=t / "rec")
+        check(not ok and "(not run)" in lines[-1], "a recorded stop not run fails the full gate")
+        ok, lines = step_hash.check(partial, some=True, recordings=t / "rec")
+        check(ok and "1 of 1" in lines[-1], "the quick gate checks the recorded stops it ran")
+        failed = tour("failed", {one: (good, "pass"), two: ([], "setup-failed")})
+        ok, lines = step_hash.check(failed, recordings=t / "rec")
+        check(ok and "(a run did not pass)" in lines[-1], "a run that failed is named, not compared (its tour check fails)")
+        ok, lines = step_hash.check(tour("none", {one: ([], "pass"), two: (good, "pass")}), recordings=t / "rec")
+        check(not ok and "no hashes" in lines[-1], "a passed run with no hashes fails")
+
+        device = tour("device", {one: (good, "pass"), two: (good, "setup-failed")})
+        ok, lines = step_hash.check(device, against=tour("pc", {one: (good, "pass"), two: (good, "pass")}))
+        check(ok and lines[-1].startswith("1 of 1") and "not compared" in lines[-1], "another renderer's runs: compared")
+        ok, lines = step_hash.check(tour("device2", {one: (["r1", "r2", "y3"], "pass")}), against=t / "pc")
+        check(not ok and "differs from step 2" in lines[-1], "a device that steps differently: fails")
 
     if failures:
         print("step_hash_test.py: FAILED:\n  " + "\n  ".join(failures))

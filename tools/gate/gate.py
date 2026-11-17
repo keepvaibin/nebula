@@ -23,7 +23,9 @@ import time
 HERE = pathlib.Path(__file__).resolve().parent
 TREE = HERE.parent.parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(TREE / "tools" / "verify"))
 import gate_tour  # noqa: E402
+import step_hash  # noqa: E402
 
 # The twelve stops --quick plays: one per kind of stage (a hub, water, gravity, a boss, sand, ice, lava, a 2D stage,
 # a race, the fleet, the heaviest stop of the tour, the factory). Names as tools/verify/tours/tour_enterable.txt
@@ -266,6 +268,19 @@ def harness(g, suite, renderer, label, device=None):
     return fn
 
 
+def replays(g, label, renderer, against=None):
+    """The step-hash replay (tools/verify/step_hash.py check): a tour's runs, hashed at every step, against the
+    recorded stops (tests/replays), or against another tour's runs (`against`: (label, renderer)) of the same tests.
+    The quick gate plays only some recorded stops."""
+    def fn(log):
+        work = g.work / ("runs-%s-%s" % (label, renderer))
+        other = None if against is None else g.work / ("runs-%s-%s" % against)
+        ok, lines = step_hash.check(work, other, some=g.args.mode == "quick")
+        pathlib.Path(log).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return ok, lines[-1]
+    return fn
+
+
 def jvm_test_counts(folder):
     """The launcher's JVM tests from Gradle's result files: (tests, not passed), or None without any."""
     import xml.etree.ElementTree as ElementTree
@@ -443,9 +458,12 @@ def main():
 
     stops = QUICK_STOPS if args.mode == "quick" else None
     tour = gate_tour.write(g.work / "tour", stops)
+    step_hash.with_hash(tour.parent)
     for r in renderers:
         g.check("tour/%s" % r, harness(g, tour, r, "tour"))
         g.check("pictures/tour/%s" % r, pictures(g, "tour", r))
+        # The game's steps: Direct3D 12's against the recordings; another renderer's against Direct3D 12's.
+        g.check("replays/%s" % r, replays(g, "tour", r, None if r == "d3d12" else ("tour", "d3d12")))
     region_stops = QUICK_REGION_STOPS if args.mode == "quick" else None
     for disc in REGION_DISCS:
         region = gate_tour.write(g.work / ("tour-%s" % disc), region_stops, disc)
@@ -472,8 +490,10 @@ def main():
                     if g.check("tablet/prepare", device_step(g, "prepare")):
                         g.check("android/tablet", harness(g, TREE / "tests" / "android" / "suite.json", "vulkan",
                                                           "android", args.tablet))
-                        g.check("tour/tablet", harness(g, gate_tour.write(g.work / "tour-tablet", None), "vulkan",
-                                                       "tour-tablet", args.tablet))
+                        tablet_tour = gate_tour.write(g.work / "tour-tablet", None)
+                        step_hash.with_hash(tablet_tour.parent)
+                        g.check("tour/tablet", harness(g, tablet_tour, "vulkan", "tour-tablet", args.tablet))
+                        g.check("replays/tablet", replays(g, "tour-tablet", "vulkan", ("tour", "d3d12")))
                 finally:
                     g.check("tablet/remove", device_step(g, "remove"))
                     shutil.rmtree(args.tablet_lock, ignore_errors=True)
@@ -483,9 +503,7 @@ def main():
             ("build/linux", "runs in the push workflow only (E0.3); no Linux on this computer"),
             ("build/macos", "runs in the push workflow only (E0.3)"),
             ("unit/linux", "runs in the push workflow only (E0.3, E0.4)"),
-            ("unit/android", "runs in the push workflow only: JUnit is not on this computer (board ask, E0.4)"),
             ("mods/android", "the mod tests on a device are not in the gate yet (mods M0, tools/lumacore/mod_tests.py)"),
-            ("replays", "the step-hash replay not in the gate yet (E0.10)"),
             ("hostile-files", "the bad-file corpus is not in the gate yet (mods M6)"),
             ("two-mods", "the two-mod tests are not in the gate yet (mods M2)"),
             ("sanitizers", "sanitizer builds not in the gate yet (E0.14)"),
