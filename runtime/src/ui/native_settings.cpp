@@ -80,6 +80,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <thread>
 #include <string>
 #include <utility>
@@ -2528,6 +2529,12 @@ bool s_crash_asked = false;
 bool s_crash_showing = false;
 bool s_crash_focus = true;
 bool s_crash_facts = false;
+// The question about a library whose code failed under two mods' calls (when-a-mod-fails.md, "A library that fails
+// under two mods"): turn it off, or turn the two on again. Shown as the crash question is, once per library a run;
+// `common`: the library it is about while it shows; `asked`: the libraries answered or closed. Under s_mods_mutex.
+std::string s_common;
+std::set<std::string> s_common_asked;
+bool s_common_focus = true;
 
 // The Mods screen's lines about each mod as the harness facts `modscreen.<id>` (test-harness.md 4): its line in its
 // list, and each row of its page while that shows, written when what they say changes (a page each time it opens).
@@ -2936,6 +2943,58 @@ void answer_crash(CrashAnswer answer) {
         return;
     }
     select_mods_row(s_settings_draft, "mod:" + id);
+}
+
+enum class CommonAnswer { TurnOff, TurnOn, Closed };
+
+// The player's answer to the common-place question about the library s_common. Turn it off: off in the saved mods
+// (from the next start; the restart is offered). Turn them on again: the two mods it faulted under are loaded again
+// now (galaxy::mods::reload_later). Closed: nothing changes. Not asked again this run about it.
+void answer_common(CommonAnswer answer) {
+    std::string id;
+    std::optional<galaxy::modlog::FaultsUnder> under;
+    {
+        const std::lock_guard<std::mutex> lock(s_mods_mutex);
+        id = s_common;
+        if (id.empty()) return;
+        s_common.clear();
+        s_common_asked.insert(id);
+        s_common_focus = true;
+        if (answer == CommonAnswer::TurnOff) {
+            for (galaxy::mods::ModInfo& mod : s_mods) {
+                if (mod.id != id || !mod.enabled) continue;
+                mod.enabled = false;
+                save_mods();
+            }
+            if (galaxy::mods::mods_differ_from_session(s_mods)) {
+                s_mods_restart_ask.store(true, std::memory_order_release);
+            }
+            s_mods_scanned = false;
+        }
+    }
+    if (answer == CommonAnswer::TurnOn) {
+        under = galaxy::modlog::faults_under(id);
+        if (under.has_value()) {
+            if (!under->first.empty()) galaxy::mods::reload_later(under->first);
+            if (!under->second.empty()) galaxy::mods::reload_later(under->second);
+        }
+    }
+    const char* const said = answer == CommonAnswer::TurnOff ? "off" : answer == CommonAnswer::TurnOn ? "on" : "closed";
+    galaxy::modlog::fact("common.answer." + id, std::string("{\"answer\":\"") + said + "\"}");
+    select_mods_row(s_settings_draft, "mod:" + id);
+}
+
+// With s_mods_mutex held: the first library, on this start and not yet asked about, whose code failed under two
+// different mods' calls, and those two; null when none.
+galaxy::mods::ModInfo* common_place_locked(galaxy::modlog::FaultsUnder* under) {
+    for (galaxy::mods::ModInfo& mod : s_mods) {
+        if (!mod.enabled || s_common_asked.count(mod.id) != 0u) continue;
+        const std::optional<galaxy::modlog::FaultsUnder> faults = galaxy::modlog::faults_under(mod.id);
+        if (!faults.has_value() || faults->second.empty()) continue;
+        *under = *faults;
+        return &mod;
+    }
+    return nullptr;
 }
 
 void revert_mods_draft() {
@@ -3853,6 +3912,44 @@ std::vector<SettingsRow> crash_page(const galaxy::mods::ModInfo& mod) {
     return rows;
 }
 
+// The common-place question about `mod` (when-a-mod-fails.md): its name, what happened (Guard.CommonPlace), then Turn
+// it off (the focus) and Turn them on again. With s_mods_mutex held.
+std::vector<SettingsRow> common_page(const galaxy::mods::ModInfo& mod, const galaxy::modlog::FaultsUnder& under) {
+    std::vector<SettingsRow> rows;
+    const std::string title = mod_title(mod);
+    const auto line = [&rows](std::string text) {
+        SettingsRow row{std::move(text), {}, nullptr, {}, true};
+        row.names = 1u;
+        rows.push_back(std::move(row));
+    };
+    line(title);
+    line(galaxy::modlog::row_words("Guard.CommonPlace", mod.id, {{"mod", title}, {"first", under.first}, {"second", under.second}}));
+    const std::vector<std::string> buttons = {"TURN IT OFF", "TURN THEM ON AGAIN"};
+    SettingsRow choice = button_row({}, buttons,
+                                    [](RenderConfig&, unsigned pressed) {
+                                        if (pressed < 2u) answer_common(pressed == 0u ? CommonAnswer::TurnOff : CommonAnswer::TurnOn);
+                                    },
+                                    {});
+    choice.key = "common-buttons";
+    rows.push_back(std::move(choice));
+    if (s_common_focus) {
+        s_common_focus = false;
+        s_native_settings_row.store(static_cast<unsigned>(rows.size() - 1u), std::memory_order_relaxed);
+        select_settings_button(0u);
+        std::string json = "{\"first\":";
+        galaxy::modlog::append_json_text(json, under.first);
+        json += ",\"second\":";
+        galaxy::modlog::append_json_text(json, under.second);
+        json += ",\"text\":";
+        galaxy::modlog::append_json_text(json, rows[1].label);
+        json += ",\"focus\":";
+        galaxy::modlog::append_json_text(json, buttons.front());
+        json += '}';
+        s_modscreen_pending.emplace_back("common.shown." + mod.id, std::move(json));
+    }
+    return rows;
+}
+
 // A world clock's rate as the page writes it, in thousandths: "2X", "0.5X", "1.25X" (S.#X words it in each language).
 std::string clock_rate_text(std::uint32_t rate) {
     std::string text = std::to_string(rate / 1000u);
@@ -4527,7 +4624,7 @@ bool screens_screen_up() {
     const std::lock_guard<std::mutex> lock(s_mods_mutex);
     const bool on_mods = s_native_settings_visible.load(std::memory_order_relaxed) &&
                          s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount == kModsTab;
-    return s_consent_open || (s_crash_showing && on_mods);
+    return s_consent_open || ((s_crash_showing || !s_common.empty()) && on_mods);
 }
 
 // The menu on MODS over the paused game, on `row` of the request's page.
@@ -4632,6 +4729,15 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
         if (const galaxy::mods::ModInfo* crashed = crashed_mod_locked()) {
             s_crash_showing = true;
             return crash_page(*crashed);
+        }
+    }
+    // The common-place question, as the crash question is shown (after it).
+    s_common.clear();
+    if (!s_mod_log_open && s_mod_options.empty() && mods_draft_changes_locked() == 0u) {
+        galaxy::modlog::FaultsUnder under;
+        if (const galaxy::mods::ModInfo* library = common_place_locked(&under)) {
+            s_common = library->id;
+            return common_page(*library, under);
         }
     }
     if (s_consent_open) {
@@ -4789,11 +4895,19 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
             return true;
         }
         bool crash = false;
+        bool common = false;
         bool asking = false;
         {
             const std::lock_guard<std::mutex> lock(s_mods_mutex);
             crash = s_crash_showing;
+            common = !s_common.empty();
             asking = s_consent_open;
+        }
+        if (common && !crash) {
+            // The common-place question: Escape, Backspace or B closes it, nothing changed.
+            if (key != VK_ESCAPE && key != VK_BACK) return false;
+            if (!was_down) answer_common(CommonAnswer::Closed);
+            return true;
         }
         if (crash) {
             // The crash question: Escape, Backspace or B closes it, nothing changed; the rest are the rows' own.

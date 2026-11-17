@@ -71,6 +71,9 @@ struct Reload {
     bool asked = false;            // a take-out was asked (the mod was running)
 };
 std::optional<Reload> g_reload;
+// reload_later's queue (any thread in, dev_frame out).
+std::mutex g_later_mutex;
+std::vector<std::string> g_later;
 
 // NebulaModEvent's names in lower case, in its order: what an achievement's "when" names.
 constexpr const char* kEventNames[] = {
@@ -1005,7 +1008,23 @@ void reload(std::string_view mod_id) {
     begin_reload(std::string(mod_id), "null");
 }
 
+void reload_later(std::string_view mod_id) {
+    const std::lock_guard<std::mutex> lock(g_later_mutex);
+    g_later.emplace_back(mod_id);
+}
+
 void dev_frame() {
+    if (!g_reload) {
+        std::string next;
+        {
+            const std::lock_guard<std::mutex> lock(g_later_mutex);
+            if (!g_later.empty()) {
+                next = std::move(g_later.front());
+                g_later.erase(g_later.begin());
+            }
+        }
+        if (!next.empty()) begin_reload(std::move(next), "null");
+    }
     if (g_reload) {
         Reload& r = *g_reload;
         ++r.frames;

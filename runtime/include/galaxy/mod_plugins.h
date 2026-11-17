@@ -207,8 +207,11 @@ bool take_out(std::string_view mod_id);
 [[nodiscard]] std::filesystem::path reload_folder();
 // A reload of a mod with code from its installed folder, as a request does (the harness's reload step). Game thread.
 void reload(std::string_view mod_id);
-// Game thread, once a frame at its start: every 30 frames each dev mod's request (<id>.request) is looked for, and a
-// reload under way takes its next step. Without dev mods and with no reload, one test.
+// The same reload asked from any thread (the Mods page's "Turn them on again"): queued, each begun by dev_frame on the
+// game thread once no reload is under way. Its result is the fact reload.<id> and the log line, as for `reload`.
+void reload_later(std::string_view mod_id);
+// Game thread, once a frame at its start: a reload_later begun, every 30 frames each dev mod's request (<id>.request)
+// looked for, and a reload under way takes its next step. Without dev mods and with no reload, two tests.
 void dev_frame();
 // Sets where unlocked mod achievements are saved (galaxy::achievements::unlock_mod, which returns true when new). When
 // unset (the headless host), unlocks last only for the run.
