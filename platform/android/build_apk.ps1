@@ -10,7 +10,10 @@
 #                 [-SeedTool <vk_shader_seed.exe>] [-Signing <signing.properties>] [-Abis arm64-v8a,x86_64]
 #                 [-FfxShaders <FidelityFX's Vulkan shader headers, made already>]
 #                 [-Debuggable: the APK can be debugged (run-as) on a test device]
-#                 [-Harness <the folder of a test runner's Harness.java>: test builds; without it the app runs none]
+#                 [-Harness <the folder of a test runner's Harness.java>: test builds; without it the app runs none.
+#                  With it (and -Debuggable, so the app is dev.nebula.galaxy.test beside the game) the APK carries the
+#                  test extension, and <Work>\test-bin-<ABI> is the Android runner's bin folder: libsmg_game.so,
+#                  libsmg_game_plain.so, libnebula_test_extension.so, the game half luma-test.so, luma_types.json]
 #                 [-Plain: no ThinLTO for the game module and host; links in a fraction of the time, for development]
 #                 [-ReleaseKey <the release key's private XML>: Nebula.apk.sig, the release-key signature the app's
 #                  updates check (Updates.kt); default the Windows setups' key at its usual place, '' for none]
@@ -42,6 +45,9 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
+# A test build is its own app (dev.nebula.galaxy.test, app/build.gradle.kts): only a debuggable build gets that id, so
+# a harness build that is not debuggable would replace the player's game.
+if ($Harness -ne "" -and -not $Debuggable) { throw "-Harness needs -Debuggable: a test build is its own app beside the game" }
 $android = Join-Path $root "platform\android"
 $sdk = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } else { Join-Path $env:LOCALAPPDATA "Android\Sdk" }
 $ndk = Join-Path $sdk "ndk\28.2.13676358"
@@ -117,11 +123,35 @@ foreach ($abi in $Abis -split ",") {
     }
     $dest = Join-Path $jni $abi
     New-Item -ItemType Directory -Force $dest | Out-Null
+    # The test extension only in a test build: one left in jniLibs by an earlier test build never reaches another.
+    Remove-Item -LiteralPath (Join-Path $dest "libnebula_test_extension.so") -Force -ErrorAction SilentlyContinue
     Copy-Item "$module/libsmg_game.so", "$module/libsmg_game_plain.so", "$hostBuild/libmain.so", "$hostBuild/libnebula_mods.so", "$hostBuild/SDL3/libSDL3.so",
         "$Work\cargo\$triple\dist\libnebula_import.so" $dest -Force
     # libadrenotools' hooks for an imported Vulkan driver (arm64 only; platform/sdl/CMakeLists.txt).
     if ($abi -eq "arm64-v8a") {
         Copy-Item "$hostBuild/adrenotools/src/hook/libhook_impl.so", "$hostBuild/adrenotools/src/hook/libmain_hook.so" $dest -Force
+    }
+    if ($Harness -ne "") {
+        # The test runs' extension (tools/test_driver/test_driver.cmake's sources) in the app, and the runner's bin
+        # folder: the game modules, the extension, the game half (built as tools/gate/build_windows.ps1 builds it for
+        # Windows) and the game's self-description.
+        $testBin = Join-Path $Work "test-bin-$abi"
+        New-Item -ItemType Directory -Force $testBin | Out-Null
+        $ext = "$root/tools/test_driver/extension"
+        Invoke-Logged "$Work\test-extension-$abi.log" {
+            & "$llvm\${triple}31-clang++.cmd" -std=c++20 -O2 -fPIC -shared -static-libstdc++ "-Wl,--no-undefined" `
+                -Wall -Wextra -Werror "-I$root/runtime/include" "-I$root/native/include" `
+                "$ext/test_extension.cpp" "$ext/harness.cpp" "$ext/test_services.cpp" "$ext/data_guard.cpp" `
+                "$root/runtime/src/hidden_start.cpp" -ldl -llog -o "$testBin/libnebula_test_extension.so"
+        }
+        Invoke-Logged "$Work\test-half-$abi.log" {
+            & "$llvm\${triple}31-clang.cmd" -O2 -shared -fPIC -nostdlib -ffreestanding -fno-stack-protector `
+                -fvisibility=hidden -fno-use-init-array -fuse-ld=lld "-Wl,-T,$root/native/include/luma_ctors.ld" `
+                "-Wl,--no-undefined" "-Wl,-z,defs" -Wall -Wextra -Werror "-I$root/native/include" `
+                "$root/tools/test_driver/luma_test/luma_test.c" -o "$testBin/luma-test.so"
+        }
+        Copy-Item "$testBin/libnebula_test_extension.so" $dest -Force
+        Copy-Item "$module/libsmg_game.so", "$module/libsmg_game_plain.so", "$module/luma_types/luma_types.json" $testBin -Force
     }
 }
 

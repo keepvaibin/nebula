@@ -64,6 +64,9 @@ Every check that starts the game is a harness test: a `test.json` that `tools/lu
 | `tests/engine` | The engine's own tests: the start, device loss, window shapes and live resizing, stage loads as Luigi, save files. |
 | `tools/gate/gate_tour.py` | The galaxy tour (`tools/verify/tours/tour_enterable.txt`) as harness tests. |
 | `tests/mods` | The mod engine's tests (`tools/lumacore/mod_tests.py`). |
+| `tools/gate/pictures.py` | The approved pictures of each test and renderer, checked exactly, and approved after review. |
+
+On Android the same tests run on a device with `luma_test.py run ... --device <adb serial>`, in a separate test app (`dev.nebula.galaxy.test`, from `platform/android/build_apk.ps1 -Debuggable -Harness ...`) that `tools/lumacore/luma_test_android.py prepare` installs with a game.pak and `remove` uninstalls. The installed game is never touched.
 
 A test's `settings` names the game's settings the way `tools/verify/settings_args.py` lists them, for example `GALAXY_MAX_FPS=30`. Four test hooks go to the game's environment instead, because the host reads them when it starts:
 

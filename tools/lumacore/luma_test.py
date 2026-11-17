@@ -97,7 +97,7 @@ LINE_WORDS = 16
 VEC_TYPES = {"const Vec3f &", "const TVec3f &", "Vec3f *", "const Vec3f *", "Vec3f", "TVec3f"}
 OBJECT_TYPES = {"LiveActor *", "const LiveActor *", "NameObj *", "const NameObj *", "MarioActor *"}
 READ_TYPES = {"f32", "s32", "u32", "u16", "s16", "u8", "bool", "TVec3f", "Vec3f", "const char *"}
-FACT_OPS = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "exists", "absent", "has", "count"}
+FACT_OPS = {"is", "is_not", "less", "at_most", "more", "at_least", "near", "far", "exists", "absent", "has", "count"}
 # Revision 6: the host's Settings pages by name, lower case, as the Settings screen's own list keeps
 # them (runtime/src/ui/native_settings.cpp kNativeSettingsTabNames), and the number the host opens each by. "advanced"
 # is shown in test builds and dev mode only; elsewhere the host opens "display" for it.
@@ -552,11 +552,21 @@ def read_check(c, path, keys):
         if "within" not in c:
             raise HarnessError("%s: near needs within" % path)
         within = number(c, "within", path)
-        if not (isinstance(value, (int, float)) and not isinstance(value, bool)) and not (
-                isinstance(value, list) and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)):
-            raise HarnessError("%s.near takes a number or a list of numbers" % path)
     elif "within" in c and "within" in keys:
         raise HarnessError("%s: within belongs with near" % path)
+    # `far`: the value is more than `beyond` from VALUE (a number, or [x, y, z] by distance): a check of the whole
+    # run only, as the game's own waits know near and not far.
+    if op == "far":
+        if "far" not in keys:
+            raise HarnessError("%s: far is a check of the whole run (expect), not a wait" % path)
+        if "beyond" not in c:
+            raise HarnessError("%s: far needs beyond" % path)
+        within = number(c, "beyond", path)
+    elif "beyond" in c and "far" in keys:
+        raise HarnessError("%s: beyond belongs with far" % path)
+    if op in ("near", "far") and not (isinstance(value, (int, float)) and not isinstance(value, bool)) and not (
+            isinstance(value, list) and value and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)):
+        raise HarnessError("%s.%s takes a number or a list of numbers" % (path, op))
     return op, value, within
 
 
@@ -837,11 +847,11 @@ def read_expect(t, bare, steps):
                 not_here.append({"check": path, "systems": systems})
                 continue
         if "fact" in c:
-            keys_known(c, path, {"fact", "when", "frames", "within", "matching", "field", "scope"} | FACT_OPS)
+            keys_known(c, path, {"fact", "when", "frames", "within", "beyond", "matching", "field", "scope"} | FACT_OPS)
             scope_of(c, path)
             if bare:
                 raise HarnessError("%s: a bare test checks only the log, pictures and sound" % path)
-            op, value, within = read_check(c, path, {"within", "count"})
+            op, value, within = read_check(c, path, {"within", "count", "far"})
             # `matching`: only the writes whose value has it (as `has` reads) are checked, so `count`, `absent`
             # and the rest speak of one mod's or one word's writes of a key many write ("modlog", "fx.*").
             matching = None
@@ -1309,6 +1319,12 @@ def sha256(path):
     return h.hexdigest()
 
 
+def run_diagnostics(test, args):
+    """The game's --diagnostics for a run: the runner's own (--diagnostics, for every run) then the test's, once each."""
+    given = [d for d in (args.diagnostics or "").split(",") if d]
+    return given + [d for d in test.get("diagnostics", []) if d not in given]
+
+
 def plan_text(test, out):
     lines = ["harness 1", "out %s" % out, "bare %d" % (1 if test["bare"] else 0)]
     if not test["has_stage"]:
@@ -1455,7 +1471,11 @@ def pak_header(pak):
 
 def pak_disc(pak):
     """The disc a game.pak was imported from (RMGE01, RMGP01, RMGJ01), or None when the header has none."""
-    head = pak_header(pak)
+    return pak_disc_of(pak_header(pak))
+
+
+def pak_disc_of(head):
+    """The disc a game.pak's 64-byte header names, or None."""
     disc = head[48:54].decode("ascii", "replace") if len(head) == 64 else ""
     return disc if disc in DISCS else None
 
@@ -1621,8 +1641,7 @@ def run_one(test, renderer, args, run_folder, previous):
     command = [str(run_folder / "bin" / exe.name), "--pak", pak, "--saves", str(run_folder / "saves"),
                "--seconds", str(int(math.ceil(test["limit"]))), "--settings", str(settings),
                "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / HOST["extension"])] + imports
-    diagnostics = [d for d in (args.diagnostics or "").split(",") if d] + [
-        d for d in test.get("diagnostics", []) if d not in (args.diagnostics or "").split(",")]
+    diagnostics = run_diagnostics(test, args)
     if diagnostics:
         # A stress or record the whole run is made under (--diagnostics ring-stress): the game's own switch.
         command += ["--diagnostics", ",".join(diagnostics)]
@@ -2022,13 +2041,16 @@ def check_value(actual, op, value, within):
         return has_value(actual, value)
     if op == "is_not":
         return not same_value(actual, value)
-    if op == "near":
+    if op in ("near", "far"):
+        distance = None
         if isinstance(actual, (int, float)) and not isinstance(actual, bool) and isinstance(value, (int, float)):
-            return abs(actual - value) <= within
-        if isinstance(actual, list) and isinstance(value, list) and len(actual) == len(value) and all(
+            distance = abs(actual - value)
+        elif isinstance(actual, list) and isinstance(value, list) and len(actual) == len(value) and all(
                 isinstance(v, (int, float)) and not isinstance(v, bool) for v in actual):
-            return math.sqrt(sum((p - q) ** 2 for p, q in zip(actual, value))) <= within
-        return False
+            distance = math.sqrt(sum((p - q) ** 2 for p, q in zip(actual, value)))
+        if distance is None:
+            return False  # not a value of that shape: neither near nor far
+        return distance <= within if op == "near" else distance > within
     if isinstance(actual, bool) or not isinstance(actual, (int, float)):
         return False
     return {"less": actual < value, "at_most": actual <= value, "more": actual > value, "at_least": actual >= value}[op]
@@ -2325,7 +2347,28 @@ def run_tests(args):
     lock = pathlib.Path(args.lock)
     if lock.exists():
         raise SystemExit("run.lock held: " + lock.read_text(encoding="utf-8", errors="replace").strip())
-    global CLASSES, GPU
+    global CLASSES, GPU, HOST, EXES, HOST_SYSTEM, run_one
+    device = None
+    if args.device:
+        # An Android device over adb (luma_test_android.py): this runner's tests, its platform's names, the start
+        # moved to the device. The test app must be there with its game (luma_test_android.py prepare).
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("luma_test_android", TREE / "tools" / "lumacore" / "luma_test_android.py")
+        android = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(android)
+        device = android.Device(args.device)
+        if not device.answers():
+            raise SystemExit("%s does not answer adb" % args.device)
+        if not device.installed():
+            raise SystemExit("the test app %s is not on %s: luma_test_android.py prepare" % (android.PACKAGE, args.device))
+        HOST = android.host_for(device.abi())
+        EXES = HOST["exes"]
+        HOST_SYSTEM = HOST["platform"].split("-")[0]
+        this = sys.modules[__name__]
+        run_one = lambda test, renderer, a, run_folder, previous: android.run_one(this, device, test, a, run_folder, previous)  # noqa: E731
+        taken = android.device_lock(args.device_lock, args.who)
+        if taken is not None:
+            raise SystemExit("the device's lock %s is held: %s" % (args.device_lock, taken))
     if args.gpu is not None and not re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{4}:[0-9a-f]{8}", args.gpu):
         raise SystemExit("--gpu: vendor:device:subsystem in lowercase hex, as the game's config.ini gpu (10de:2b85:89ef1043)")
     GPU = args.gpu
@@ -2384,6 +2427,8 @@ def run_tests(args):
                         "limit_scale": args.limit_scale, "test_json": test["raw"]})
     finally:
         lock.unlink()
+        if device is not None:
+            android.release_lock(args.device_lock)
     return 0 if all_pass else 1
 
 
@@ -2452,6 +2497,10 @@ def main():
     run.add_argument("--pak-for", action="append", metavar="DISC=PAK",
                      help="the game.pak of another disc, for the tests whose \"disc\" it is (or LUMA_TEST_PAKS)")
     run.add_argument("--renderer")
+    run.add_argument("--device", help="an Android device's adb serial: the tests run there, in the test app "
+                     "(luma_test_android.py); --bin is build_apk.ps1's test-bin-<ABI>")
+    run.add_argument("--device-lock", default=os.environ.get("LUMA_TEST_DEVICE_LOCK"),
+                     help="with --device: a lock folder taken for the whole run (made at once or not at all)")
     run.add_argument("--work")
     run.add_argument("--who", default="?")
     run.add_argument("--module", default="hooks", choices=("hooks", "plain"))

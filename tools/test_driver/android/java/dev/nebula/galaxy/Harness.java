@@ -4,6 +4,11 @@ package dev.nebula.galaxy;
 import android.app.Activity;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A test runner's run on Android, built into test builds only (the shipped app has platform/android/app/src/shipped's
@@ -60,11 +65,26 @@ final class Harness {
             for (String[] pair : names) {
                 android.system.Os.setenv(pair[0], pair[1], true);
             }
-        } catch (android.system.ErrnoException failed) {
+            // The test's hooks (luma_test.py TEST_HOOKS), which the host reads from its environment at start: env.txt,
+            // one NAME=value a line, GALAXY_TEST_ names only.
+            final File hooks = new File(folder, "env.txt");
+            if (hooks.isFile()) {
+                for (String line : Files.readAllLines(hooks.toPath(), StandardCharsets.UTF_8)) {
+                    final int at = line.indexOf('=');
+                    if (line.isEmpty()) {
+                        continue;
+                    }
+                    if (at < 0 || !line.substring(0, at).matches("GALAXY_TEST_[A-Z0-9_]{1,64}")) {
+                        throw new IllegalStateException("harness run: env.txt takes GALAXY_TEST_ names only: " + line);
+                    }
+                    android.system.Os.setenv(line.substring(0, at), line.substring(at + 1), true);
+                }
+            }
+        } catch (android.system.ErrnoException | IOException failed) {
             throw new IllegalStateException("harness run: the environment could not be set", failed);
         }
         final String libraries = activity.getApplicationInfo().nativeLibraryDir;
-        return new String[] {
+        final List<String> arguments = new ArrayList<>(List.of(
             "--data", new File(folder, "appdata").getPath(),
             "--pak", GameFiles.pak(activity).getPath(),
             "--saves", new File(folder, "saves").getPath(),
@@ -72,8 +92,34 @@ final class Harness {
             "--seconds", String.valueOf(seconds),
             "--crash-dumps", folder.getPath(),
             "--module", libraries + "/libsmg_game.so",
-            "--extension", libraries + "/libnebula_test_extension.so",
-            "--diagnostics", "0",
-        };
+            "--extension", libraries + "/libnebula_test_extension.so"));
+        // The run's --diagnostics (luma_test_android.py writes the runner's and the test's names to diagnostics.txt);
+        // the game checks the names, so one it does not know ends the start with its message.
+        final String diagnostics = diagnostics(new File(folder, "diagnostics.txt"));
+        if (!diagnostics.isEmpty()) {
+            arguments.add("--diagnostics");
+            arguments.add(diagnostics);
+            if (("," + diagnostics + ",").contains(",timeline,")) {
+                arguments.add("--timeline");
+                arguments.add(new File(folder, "timeline.bin").getPath());
+            }
+        }
+        return arguments.toArray(new String[0]);
+    }
+
+    /** diagnostics.txt's one line of names ("timeline,frame-times"), or "" without the file. */
+    private static String diagnostics(File file) {
+        if (!file.isFile()) {
+            return "";
+        }
+        try {
+            final String names = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8).trim();
+            if (!names.matches("[a-z0-9,-]{0,512}")) {
+                throw new IllegalStateException("harness run: diagnostics.txt takes names and commas only: " + names);
+            }
+            return names;
+        } catch (IOException failed) {
+            throw new IllegalStateException("harness run: diagnostics.txt could not be read", failed);
+        }
     }
 }

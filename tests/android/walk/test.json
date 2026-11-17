@@ -1,0 +1,82 @@
+{
+  "harness": 1,
+  "name": "walk",
+  "about": "Good Egg, star 1, in real time: the stick tilted forward for two seconds moves Mario at least 3 m from his start. The run's diagnostics reach the game (frame-times lines), and after 600 frames the pacing line names the game and render threads' CPU time.",
+  "time": "real",
+  "diagnostics": [
+    "frame-times"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 5,
+      "read": "LiveActor.mPosition",
+      "of": "player",
+      "type": "Vec3f",
+      "fact": "start_pos"
+    },
+    {
+      "at": 10,
+      "picture": "start"
+    },
+    {
+      "at": 10,
+      "stick": [
+        0,
+        1
+      ],
+      "frames": 120
+    },
+    {
+      "at": 140,
+      "read": "LiveActor.mPosition",
+      "of": "player",
+      "type": "Vec3f",
+      "fact": "end_pos"
+    },
+    {
+      "at": 140,
+      "picture": "walked"
+    },
+    {
+      "at": 700,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "start_pos",
+      "near": [
+        -3304.509,
+        -13081.804,
+        -15353.938
+      ],
+      "within": 5
+    },
+    {
+      "fact": "end_pos",
+      "far": [
+        -3304.509,
+        -13081.804,
+        -15353.938
+      ],
+      "beyond": 300
+    },
+    {
+      "log": "\\[latency\\] frame=[0-9]+ qpc="
+    },
+    {
+      "log": "\\[pacing\\] 600 frames in [0-9.]+ ms \\([0-9.]+ ms a frame\\), [0-9]+ on the display's vsync"
+    },
+    {
+      "log": "; game CPU [0-9.]+ ms average, [0-9.]+ ms longest \\(frame [0-9]+\\)"
+    },
+    {
+      "log": "; render CPU [0-9.]+ ms average, [0-9.]+ ms longest \\(frame [0-9]+\\)"
+    }
+  ]
+}
