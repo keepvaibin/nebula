@@ -1,8 +1,0 @@
-{
-  "harness": 1,
-  "tests": [
-    "6201-list",
-    "6202-page",
-    "6703-code-time"
-  ]
-}
