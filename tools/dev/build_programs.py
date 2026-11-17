@@ -1,6 +1,7 @@
-"""The game's compiled program set. build_programs.py CONTENT WORK [--write]
+"""The game's compiled program set. build_programs.py DISC WORK [--write]
 
-Asks the importer for every program text (`nebula-import programs`), compiles each once in its base form and groups them by
+DISC is a disc image or an emulator's extraction, as `nebula-import import` takes. Asks the importer for every program text
+(`nebula-import programs`), compiles each once in its base form and groups them by
 compiled instructions and stage signature: each group is one program. --write puts one text per group in
 runtime/src/render/programs/ and table.tsv there, which maps every text's hash to its program. Fails if two programs in that folder compile the same, so the set can't grow a duplicate."""
 import hashlib
@@ -65,12 +66,12 @@ def key_of(path):
 
 
 def main():
-    content, work = sys.argv[1], sys.argv[2]
+    disc, work = sys.argv[1], sys.argv[2]
     write = "--write" in sys.argv[3:]
     texts = os.path.join(work, "texts")
     ll = os.path.join(work, "ll")
     os.makedirs(ll, exist_ok=True)
-    subprocess.run([IMPORT, "programs", content, texts], check=True)
+    subprocess.run([IMPORT, "programs", disc, texts], check=True)
     names = sorted(n[:-5] for n in os.listdir(texts) if n.endswith(".hlsl"))
     jobs = [(os.path.join(texts, n + ".hlsl"), os.path.join(ll, n + ".ll"), n[0]) for n in names]
     with ThreadPoolExecutor(int(os.environ.get("JOBS", "4"))) as pool:

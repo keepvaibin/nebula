@@ -4,12 +4,12 @@
 
 use super::clip::{self, ClipIr, Track, KIND_REGISTERS};
 use super::model_ir::*;
-use super::{archive, pak_files, pak_system_area, Stats};
+use super::{archive, pak_files, Stats};
 use anyhow::{bail, Context, Result};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 use std::fs::File;
-use std::io::{BufWriter, Read, Seek, SeekFrom, Write as _};
+use std::io::{BufWriter, Write as _};
 use std::path::Path;
 
 // What a constant row holds. The game fills a material's rows from these numbers (nebula_model.h NEBULA_ROW_*).
@@ -2083,16 +2083,12 @@ fn walk_partition_files(files: &[super::PakFile], read: &mut dyn FnMut(&super::P
     Ok(())
 }
 
+/// Every model, archive member and animation of a disc's game partition, as the cook meets them. `input` is what
+/// `nebula-import import` takes: a disc image or an emulator's extraction (a cooked game.pak holds cooked models, not
+/// the disc's).
 pub(super) fn walk_files(input: &Path, visit: &mut dyn FnMut(&str, Vec<u8>) -> Result<()>) -> Result<()> {
-    let source = input.join("game.pak");
-    let mut pak = File::open(&source).with_context(|| format!("{} cannot be opened", source.display()))?;
-    let system = pak_system_area(&mut pak)?;
-    walk_partition_files(&pak_files(system.fst())?, &mut |file| {
-        let mut bytes = vec![0u8; file.length as usize];
-        pak.seek(SeekFrom::Start(file.offset))?;
-        pak.read_exact(&mut bytes)?;
-        Ok(bytes)
-    }, visit)
+    let mut partition = crate::Partition::open(input)?;
+    partition.read_files(|system, read| walk_partition_files(&pak_files(system.fst())?, read, visit))
 }
 
 /// Whether a mesh names its matrix per vertex.
@@ -2100,7 +2096,21 @@ pub fn mesh_skinned(ir: &ModelIr, m: &MaterialIr) -> bool {
     ir.shapes.get(m.mesh as usize).is_some_and(|s| s.groups.iter().any(|g| g.attributes & ATTR_MATRIX != 0))
 }
 
-/// `nebula-import programs CONTENT OUT`: every text of the game in OUT/v<hash>.hlsl and p<hash>.hlsl, and OUT/forms.tsv naming
+/// Every form's texts of a model's materials, as model_write cooks them: (material, form, texts). `stem` is the model's
+/// file name without its extension.
+fn model_texts(name: &str, stem: &str, ir: &ModelIr, written: &Written) -> Result<Vec<(usize, Form, Text)>> {
+    let mut out = Vec::new();
+    for (i, m) in ir.materials.iter().enumerate() {
+        let registers = written.registers(m);
+        for form in forms_of(stem, m, i)? {
+            let t = generate(m, form, mesh_skinned(ir, m), &registers).with_context(|| format!("{name} material {} form {form:?}", m.name))?;
+            out.push((i, form, t));
+        }
+    }
+    Ok(out)
+}
+
+/// `nebula-import programs DISC OUT`: every text of the game in OUT/v<hash>.hlsl and p<hash>.hlsl, and OUT/forms.tsv naming
 /// each model's material forms. tools/dev/build_programs.py compiles them.
 pub fn write_set(input: &Path, output: &Path) -> Result<()> {
     std::fs::create_dir_all(output)?;
@@ -2138,16 +2148,19 @@ pub fn write_set(input: &Path, output: &Path) -> Result<()> {
         let ir = read_file(&bytes, source, &mut stats).with_context(|| name.to_string())?;
         let stem = name.rsplit('/').next().unwrap_or(name);
         let stem = stem.split('.').next().unwrap_or(stem);
-        for (i, m) in ir.materials.iter().enumerate() {
-            let registers = written.registers(m);
-            for form in forms_of(stem, m, i)? {
-                let t = generate(m, form, mesh_skinned(&ir, m), &registers).with_context(|| format!("{name} material {} form {form:?}", m.name))?;
-                let (v, p) = (emit(&t.vertex, 'v', &mut seen)?, emit(&t.pixel, 'p', &mut seen)?);
-                writeln!(table, "{name}\t{i}\t{}\t{}\t{}\t{v:016x}\t{p:016x}\t{}\t{}\t{}\t{}", form.replace, u8::from(form.normal_coord), u8::from(form.lit), t.textures.len(), u8::from(t.alpha_test), form.pass, u8::from(form.fog_linear))?;
-            }
+        for (i, form, t) in model_texts(name, stem, &ir, &written)? {
+            let (v, p) = (emit(&t.vertex, 'v', &mut seen)?, emit(&t.pixel, 'p', &mut seen)?);
+            writeln!(table, "{name}\t{i}\t{}\t{}\t{}\t{v:016x}\t{p:016x}\t{}\t{}\t{}\t{}", form.replace, u8::from(form.normal_coord), u8::from(form.lit), t.textures.len(), u8::from(t.alpha_test), form.pass, u8::from(form.fog_linear))?;
         }
         Ok(())
     })?;
+    // The store's own model, which no disc file holds: the placeholder a mod's missing class draws (cook/mod.rs
+    // write_store places it).
+    let name = format!("/{}/{}", super::PLACEHOLDER_ARCHIVE, super::PLACEHOLDER_MODEL);
+    for (i, form, t) in model_texts(&name, super::PLACEHOLDER_STEM, &super::placeholder_ir()?, &written)? {
+        let (v, p) = (emit(&t.vertex, 'v', &mut seen)?, emit(&t.pixel, 'p', &mut seen)?);
+        writeln!(table, "{name}\t{i}\t{}\t{}\t{}\t{v:016x}\t{p:016x}\t{}\t{}\t{}\t{}", form.replace, u8::from(form.normal_coord), u8::from(form.lit), t.textures.len(), u8::from(t.alpha_test), form.pass, u8::from(form.fog_linear))?;
+    }
     table.flush()?;
     println!("{} texts", seen.len());
     Ok(())
@@ -2182,6 +2195,23 @@ mod tests {
         // A divided coordinate, another varying, a warp and a scaled coordinate stay as they were.
         for i in [1, 2, 3, 5, 6] {
             assert!(!lines[i].contains("TAP"), "{}", lines[i]);
+        }
+    }
+
+    /// Every program text of the placeholder model is in the program set the runtime is built with: without them a mod's
+    /// missing class drew nothing (ledger N-2022). Its material is in no animation, so any cook's registers are these.
+    #[test]
+    fn the_placeholder_programs_are_in_the_set() {
+        let table = include_str!("../../../../runtime/src/render/programs/table.tsv");
+        let set: HashSet<&str> = table.lines().filter_map(|l| l.split('\t').nth(1)).collect();
+        let ir = super::super::placeholder_ir().unwrap();
+        let texts = model_texts("placeholder", super::super::PLACEHOLDER_STEM, &ir, &Written::default()).unwrap();
+        assert!(!texts.is_empty());
+        for (i, form, t) in texts {
+            for text in [&t.vertex, &t.pixel] {
+                let hash = format!("{:016x}", text_hash(text));
+                assert!(set.contains(hash.as_str()), "material {i} form {form:?}: text {hash} is not in the program set");
+            }
         }
     }
 

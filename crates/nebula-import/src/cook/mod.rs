@@ -660,9 +660,23 @@ pub fn placeholder_sound() -> Result<Vec<u8>> {
     Ok(nsfx)
 }
 
+/// The placeholder model's file name without its extension: the stem its forms are cooked under.
+pub const PLACEHOLDER_STEM: &str = "NebulaPlaceholder";
+
 /// The placeholder's cooked model, from data/placeholder/model.gltf and its face.png (make_placeholder.py writes both),
 /// carried in the importer so every import cooks the same bytes.
 pub fn placeholder_model() -> Result<Vec<u8>> {
+    let (model, _) = gltf::to_files(&placeholder_source()?, None, PLACEHOLDER_STEM).context("the placeholder's model")?;
+    Ok(model)
+}
+
+/// The placeholder's model as the cook reads it: its program texts go in the game's program set (programs::write_set).
+pub fn placeholder_ir() -> Result<model_ir::ModelIr> {
+    Ok(gltf::to_ir(&placeholder_source()?, None).context("the placeholder's model")?.0)
+}
+
+/// data/placeholder/model.gltf with face.png inside it.
+fn placeholder_source() -> Result<Vec<u8>> {
     let mut source: serde_json::Value =
         serde_json::from_slice(include_bytes!("../../../../data/placeholder/model.gltf")).context("the placeholder's model.gltf")?;
     let face = include_bytes!("../../../../data/placeholder/face.png");
@@ -672,8 +686,7 @@ pub fn placeholder_model() -> Result<Vec<u8>> {
         }
         image["uri"] = serde_json::Value::String(format!("data:image/png;base64,{}", gltf::base64_text(face)));
     }
-    let (model, _) = gltf::to_files(&serde_json::to_vec(&source)?, None, "NebulaPlaceholder").context("the placeholder's model")?;
-    Ok(model)
+    Ok(serde_json::to_vec(&source)?)
 }
 
 /// main.dol in a system area (its header's sections give its length).

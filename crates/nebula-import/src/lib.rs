@@ -964,6 +964,25 @@ impl Partition {
         }
         let name = output.file_name().context("the destination has no file name")?.to_string_lossy();
         let temporary = output.with_file_name(format!(".{name}.importing"));
+        let mut stats = cook::Stats::default();
+        let result = self.read_files(|system, read| cook::write_cooked_pak(system, read, &temporary, progress, &mut stats));
+        let size = match result {
+            Ok(size) => size,
+            Err(error) => {
+                let _ = fs::remove_file(&temporary);
+                return Err(error);
+            }
+        };
+        fs::rename(&temporary, output).with_context(|| format!("{} cannot be replaced", output.display()))?;
+        Ok((size, stats))
+    }
+
+    /// The partition's system area, as a cooked pak starts with it, and a reader of its files' bytes by their file
+    /// table entry: what the cook and the importer's walks over the disc's files (cook/programs.rs walk_files) read.
+    pub fn read_files<T>(
+        &mut self,
+        walk: impl FnOnce(&cook::SystemArea, &mut dyn FnMut(&cook::PakFile) -> Result<Vec<u8>>) -> Result<T>,
+    ) -> Result<T> {
         let mut area = Vec::new();
         let (mut fst_offset, mut fst_size) = (0usize, 0usize);
         for (label, offset, bytes) in &self.system {
@@ -990,17 +1009,7 @@ impl Partition {
             reader.read_exact(&mut bytes).with_context(|| format!("{} cannot be read from {origin}", file.path))?;
             Ok(bytes)
         };
-        let mut stats = cook::Stats::default();
-        let result = cook::write_cooked_pak(&system, &mut read, &temporary, progress, &mut stats);
-        let size = match result {
-            Ok(size) => size,
-            Err(error) => {
-                let _ = fs::remove_file(&temporary);
-                return Err(error);
-            }
-        };
-        fs::rename(&temporary, output).with_context(|| format!("{} cannot be replaced", output.display()))?;
-        Ok((size, stats))
+        walk(&system, &mut read)
     }
 }
 

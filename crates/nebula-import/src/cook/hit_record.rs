@@ -1985,7 +1985,7 @@ pub fn mean_colour(texels: &[[u8; 4]]) -> Option<[f32; 3]> {
     Some(unit_colour([(sum[0] / n) as f32, (sum[1] / n) as f32, (sum[2] / n) as f32]))
 }
 
-/// Every material of every model under CONTENT, one row each, and the classes' counts.
+/// Every material of every model of DISC (a disc image or an extraction, walk_files), one row each, and the classes' counts.
 pub fn audit(input: &Path, output: &Path) -> Result<()> {
     let mut out = std::io::BufWriter::new(std::fs::File::create(output)?);
     // Every painted sheen drawn as an added layer, the body found under it and the body's class before and after.
