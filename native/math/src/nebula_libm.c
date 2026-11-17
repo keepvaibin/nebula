@@ -369,21 +369,17 @@ void sincos(double x, double* sine, double* cosine) {
 }
 
 #if defined(__APPLE__)
-/* Apple's forms (<math.h> __float2, __double2): the pair is returned in registers. */
-struct nebula_float2 {
-    float sine, cosine;
-};
-struct nebula_double2 {
-    double sine, cosine;
-};
+/* Apple's forms, with the SDK's own types (<math.h> declares them: struct __float2 and __double2, the sine first and
+   the pair returned in registers). */
+#include <math.h>
 
-struct nebula_float2 __sincosf_stret(float x) {
-    struct nebula_float2 r = {sinf(x), cosf(x)};
+struct __float2 __sincosf_stret(float x) {
+    struct __float2 r = {sinf(x), cosf(x)};
     return r;
 }
 
-struct nebula_double2 __sincos_stret(double x) {
-    struct nebula_double2 r = {sin(x), cos(x)};
+struct __double2 __sincos_stret(double x) {
+    struct __double2 r = {sin(x), cos(x)};
     return r;
 }
 #endif
