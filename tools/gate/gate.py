@@ -266,19 +266,43 @@ def harness(g, suite, renderer, label, device=None):
     return fn
 
 
+def jvm_test_counts(folder):
+    """The launcher's JVM tests from Gradle's result files: (tests, not passed), or None without any."""
+    import xml.etree.ElementTree as ElementTree
+    tests = bad = 0
+    files = sorted(pathlib.Path(folder).glob("TEST-*.xml"))
+    for f in files:
+        suite = ElementTree.parse(f).getroot()
+        tests += int(suite.get("tests", "0"))
+        bad += int(suite.get("failures", "0")) + int(suite.get("errors", "0")) + int(suite.get("skipped", "0"))
+    return (tests, bad) if files else None
+
+
 def build_android(g):
     """The test app for a device (platform/android/build_apk.ps1 -Debuggable -Harness: dev.nebula.galaxy.test beside
-    the player's game) and the runner's bin folder for arm64 devices. Its shader tools are the MSVC build's."""
+    the player's game) and the runner's bin folder for arm64 devices, with the launcher's JVM tests (app/src/test) in
+    the same Gradle run. Its shader tools are the MSVC build's."""
     def fn(log):
         work = pathlib.Path(g.args.build_root) / "android"
+        results = TREE / "platform" / "android" / "app" / "build" / "test-results" / "testReleaseUnitTest"
+        shutil.rmtree(results, ignore_errors=True)
         code = run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
                     TREE / "platform" / "android" / "build_apk.ps1", "-Deps", g.args.android_deps, "-Work", work,
                     "-HostTools", pathlib.Path(g.args.build_root) / "msvc", "-Abis", "arm64-v8a", "-Debuggable",
-                    "-Harness", TREE / "tools" / "test_driver" / "android" / "java", "-ReleaseKey", ""], log)
+                    "-Harness", TREE / "tools" / "test_driver" / "android" / "java", "-ReleaseKey", "", "-UnitTests"],
+                   log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         apk = work / "Nebula.apk"
-        ok = code == 0 and apk.is_file() and (work / "test-bin-arm64-v8a" / "libnebula_test_extension.so").is_file()
-        return ok, ("%s (%.1f MB)" % (apk, apk.stat().st_size / 1e6)) if ok else last_line(text)
+        counts = jvm_test_counts(results)
+        ok = (code == 0 and apk.is_file() and (work / "test-bin-arm64-v8a" / "libnebula_test_extension.so").is_file()
+              and counts is not None and counts[0] > 0 and counts[1] == 0)
+        if not ok:
+            if code == 0 and (counts is None or counts[0] == 0):
+                return False, "the launcher's JVM tests did not run"
+            if counts is not None and counts[1] != 0:
+                return False, "the launcher's JVM tests: %d of %d did not pass" % (counts[1], counts[0])
+            return False, last_line(text)
+        return True, "%s (%.1f MB); JVM tests %d of %d" % (apk, apk.stat().st_size / 1e6, counts[0], counts[0])
     return fn
 
 
