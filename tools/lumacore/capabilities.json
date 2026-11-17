@@ -284,6 +284,7 @@
     "kit.replay": "kit.replay conformance: poses and inputs recorded and played back the same; a puppet follows a track (lumakit 2.19)",
     "kit.ride": "kit.ride conformance: a mount defined, mounted, moved and dismounted (lumakit 2.21)",
     "kit.shop": "kit.shop conformance: wares bought with coins or star bits, stock counted, a purchase refused when short (lumakit 2.15)",
-    "kit.ui.kit": "kit.ui.kit conformance: a panel of widgets opened, changed by input and closed (lumakit 2.20)"
+    "kit.ui.kit": "kit.ui.kit conformance: a panel of widgets opened, changed by input and closed (lumakit 2.20)",
+    "docs.examples": "Each example in docs/modding that is a whole mod builds with lumalink build and, in the game, does what its page says"
   }
 }

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "double-bits",
+  "version": "1.0.0",
+  "name": "Double Bits",
+  "summary": "Twice the star bits (the C how-to's mod of C alone).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

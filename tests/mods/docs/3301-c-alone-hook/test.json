@@ -1,0 +1,58 @@
+{
+  "harness": 1,
+  "name": "3301-c-alone-hook",
+  "about": "docs/modding/how-tos/writing-code-in-c.md, Writing a mod in C alone: the example mod, C with no LumaScript, loads, logs its line and doubles the star bits the game adds (3 become 6)",
+  "proves": [
+    "docs.examples",
+    "kernel.bind",
+    "kernel.hook.before"
+  ],
+  "mods": [
+    "../mods/double-bits"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getStockedStarPieceNum",
+      "signature": "s32()",
+      "args": [],
+      "fact": "before"
+    },
+    {
+      "at": 90,
+      "call": "MR::addStockedStarPiece",
+      "signature": "void(int)",
+      "args": [
+        3
+      ]
+    },
+    {
+      "at": 120,
+      "call": "MR::getStockedStarPieceNum",
+      "signature": "s32()",
+      "args": [],
+      "fact": "after"
+    },
+    {
+      "at": 150,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "before",
+      "is": 0
+    },
+    {
+      "fact": "after",
+      "is": 6
+    },
+    {
+      "log": "\\[mod double-bits\\] double-bits: on"
+    }
+  ]
+}
