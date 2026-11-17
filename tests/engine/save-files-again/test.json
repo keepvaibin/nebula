@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "name": "save-files-again",
+  "about": "The saves save-files left, read by a new start of the game: file 3, the copy, loads.",
+  "continue_from": "save-files",
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 60,
+      "load_file": 3
+    },
+    {
+      "after": {
+        "fact": "file.loaded",
+        "is": 3
+      },
+      "end": true,
+      "timeout": 900
+    }
+  ],
+  "expect": [
+    {
+      "fact": "file.loaded",
+      "is": 3
+    }
+  ]
+}

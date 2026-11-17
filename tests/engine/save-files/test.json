@@ -1,0 +1,52 @@
+{
+  "harness": 1,
+  "name": "save-files",
+  "about": "The file select's operations on the save on disk: file 1 copied to 3, a new file 2, then file 2 erased.",
+  "save": {
+    "spin": true
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 60,
+      "copy_file": [
+        1,
+        3
+      ]
+    },
+    {
+      "after": {
+        "fact": "file.copied",
+        "exists": true
+      },
+      "new_file": 2,
+      "timeout": 900
+    },
+    {
+      "after": {
+        "fact": "file.created",
+        "is": 2
+      },
+      "erase_file": 2,
+      "timeout": 900
+    },
+    {
+      "after": {
+        "fact": "file.erased",
+        "is": 2
+      },
+      "end": true,
+      "timeout": 900
+    }
+  ],
+  "expect": [
+    {
+      "fact": "file.created",
+      "is": 2
+    },
+    {
+      "fact": "file.erased",
+      "is": 2
+    }
+  ]
+}

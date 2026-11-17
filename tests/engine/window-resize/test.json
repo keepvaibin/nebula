@@ -1,0 +1,138 @@
+{
+  "harness": 1,
+  "name": "window-resize",
+  "about": "The window resized during play through ten sizes, small, wide, tall and 4K, a picture after each: no crash, no refused size.",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "BattleShipGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 300,
+  "steps": [
+    {
+      "at": 30,
+      "picture": "before"
+    },
+    {
+      "at": 120,
+      "window": [
+        640,
+        480
+      ]
+    },
+    {
+      "at": 180,
+      "picture": "640x480"
+    },
+    {
+      "at": 240,
+      "window": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "at": 300,
+      "picture": "1920x1080"
+    },
+    {
+      "at": 360,
+      "window": [
+        800,
+        600
+      ]
+    },
+    {
+      "at": 420,
+      "picture": "800x600"
+    },
+    {
+      "at": 480,
+      "window": [
+        3440,
+        1440
+      ]
+    },
+    {
+      "at": 540,
+      "picture": "3440x1440"
+    },
+    {
+      "at": 600,
+      "window": [
+        1080,
+        1350
+      ]
+    },
+    {
+      "at": 660,
+      "picture": "1080x1350"
+    },
+    {
+      "at": 720,
+      "window": [
+        3840,
+        2160
+      ]
+    },
+    {
+      "at": 780,
+      "picture": "3840x2160"
+    },
+    {
+      "at": 840,
+      "window": [
+        1366,
+        768
+      ]
+    },
+    {
+      "at": 900,
+      "picture": "1366x768"
+    },
+    {
+      "at": 960,
+      "window": [
+        2560,
+        1080
+      ]
+    },
+    {
+      "at": 1020,
+      "picture": "2560x1080"
+    },
+    {
+      "at": 1080,
+      "window": [
+        320,
+        240
+      ]
+    },
+    {
+      "at": 1140,
+      "picture": "320x240"
+    },
+    {
+      "at": 1200,
+      "window": [
+        1280,
+        720
+      ]
+    },
+    {
+      "at": 1260,
+      "picture": "1280x720"
+    },
+    {
+      "at": 1320,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "no_log": "exceeds the video-memory"
+    }
+  ]
+}

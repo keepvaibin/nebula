@@ -1,0 +1,32 @@
+{
+  "harness": 1,
+  "name": "window-tall",
+  "about": "The game in a 1080x1350 window: the stage plays, its picture taken, no crash.",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "BattleShipGalaxy",
+    "scenario": 1
+  },
+  "window": [
+    1080,
+    1350
+  ],
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 300,
+      "picture": "play"
+    },
+    {
+      "at": 360,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "no_log": "exceeds the video-memory"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "device-lost",
+  "about": "The graphics device lost twice in play, 300 frames apart: the game makes a new device each time and plays on.",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "BattleShipGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 30,
+      "picture": "before"
+    },
+    {
+      "at": 300,
+      "lose_device": true
+    },
+    {
+      "at": 600,
+      "lose_device": true
+    },
+    {
+      "at": 900,
+      "picture": "after"
+    },
+    {
+      "at": 960,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "the graphics card was reset",
+      "times": 2
+    },
+    {
+      "log": "a new device in",
+      "times": 2
+    }
+  ]
+}

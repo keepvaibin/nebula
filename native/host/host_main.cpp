@@ -4253,6 +4253,9 @@ void extension_open_settings(void*, uint32_t page) {
 void extension_resize_window(void*, uint32_t width, uint32_t height) {
     galaxy::render::host_window::resize_window_client(width, height);
 }
+void extension_lose_gpu_device(void*) {
+    galaxy::render::lose_gpu_device();
+}
 // The harness's text step: the code points SDL's text input hands its host (the Win32 window's WM_CHAR feeds each of
 // them to the same text_char).
 void extension_type_text(void*, const char* utf8) {
@@ -4307,6 +4310,7 @@ void attach_extensions() {
     host.menu_open = extension_menu_open;
     host.open_settings = extension_open_settings;
     host.resize_window = extension_resize_window;
+    host.lose_gpu_device = extension_lose_gpu_device;
     host.type_text = extension_type_text;
 #endif
     std::string error;

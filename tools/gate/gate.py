@@ -3,7 +3,7 @@
     python -X utf8 -I tools/gate/gate.py --quick [options]
     python -X utf8 -I tools/gate/gate.py --full  [options]
 
---quick: the Windows builds, the unit tests, the Rust tests, the mod tests on Direct3D 12 and twelve tour stops.
+--quick: the Windows builds, the unit tests, the Rust tests, the mod tests, the engine tests (tests/engine) and twelve tour stops on Direct3D 12.
 --full:  every check of docs/plan/00-READ-FIRST.md section 4.2 this computer can run; a check that does not exist yet
          or cannot run here is a failure, named as such, never a pass.
 
@@ -326,6 +326,10 @@ def main():
     else:
         for r in renderers:
             g.check("mods/%s" % r, mod_tests(g, r))
+
+    # The engine's own tests (tests/engine): start, device loss, window shapes and sizes, stage loads, save files.
+    for r in renderers:
+        g.check("engine/%s" % r, harness(g, TREE / "tests" / "engine" / "suite.json", r, "engine"))
 
     stops = QUICK_STOPS if args.mode == "quick" else None
     tour = gate_tour.write(g.work / "tour", stops)

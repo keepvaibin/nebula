@@ -1,0 +1,80 @@
+{
+  "harness": 1,
+  "name": "luigi-stages",
+  "about": "Luigi through three stage loads (Battlerock, Egg Star, Battlerock again): each stage ready, no crash (the old luigi.sh and luigi2.sh).",
+  "save": {
+    "character": "luigi",
+    "spin": true
+  },
+  "stage": {
+    "name": "BattleShipGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 300,
+  "steps": [
+    {
+      "at": 120,
+      "picture": "first"
+    },
+    {
+      "at": 180,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 1
+      }
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "EggStarGalaxy"
+        }
+      },
+      "picture": "second",
+      "timeout": 3000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "EggStarGalaxy"
+        }
+      },
+      "stage": {
+        "name": "BattleShipGalaxy",
+        "scenario": 1
+      },
+      "timeout": 300
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "BattleShipGalaxy"
+        }
+      },
+      "picture": "third",
+      "timeout": 3000
+    },
+    {
+      "after": {
+        "fact": "stage.ready",
+        "has": {
+          "name": "BattleShipGalaxy"
+        }
+      },
+      "end": true,
+      "timeout": 3000
+    }
+  ],
+  "expect": [
+    {
+      "fact": "setup.save.character",
+      "is": "luigi"
+    },
+    {
+      "fact": "stage.ready",
+      "count": 3
+    }
+  ]
+}

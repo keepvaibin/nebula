@@ -1,0 +1,64 @@
+{
+  "harness": 1,
+  "name": "home-menu",
+  "about": "The HOME menu opened and closed during play, twice: the game holds and goes on, no crash (the old home_det.sh).",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "BattleShipGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 60,
+      "picture": "before"
+    },
+    {
+      "at": 120,
+      "hold": [
+        "HOME"
+      ],
+      "frames": 5
+    },
+    {
+      "at": 240,
+      "picture": "open"
+    },
+    {
+      "at": 300,
+      "hold": [
+        "HOME"
+      ],
+      "frames": 5
+    },
+    {
+      "at": 420,
+      "picture": "closed"
+    },
+    {
+      "at": 480,
+      "hold": [
+        "HOME"
+      ],
+      "frames": 5
+    },
+    {
+      "at": 600,
+      "hold": [
+        "HOME"
+      ],
+      "frames": 5
+    },
+    {
+      "at": 720,
+      "picture": "after"
+    },
+    {
+      "at": 780,
+      "end": true
+    }
+  ],
+  "expect": []
+}

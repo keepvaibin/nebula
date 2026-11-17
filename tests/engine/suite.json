@@ -1,0 +1,16 @@
+{
+  "harness": 1,
+  "tests": [
+    "boot",
+    "device-lost",
+    "window-small",
+    "window-wide",
+    "window-tall",
+    "window-4k",
+    "window-resize",
+    "home-menu",
+    "luigi-stages",
+    "save-files",
+    "save-files-again"
+  ]
+}
