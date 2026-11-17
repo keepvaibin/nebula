@@ -334,6 +334,7 @@ def main():
             ("build/linux", "runs in the push workflow only (E0.3); no Linux on this computer"),
             ("build/macos", "runs in the push workflow only (E0.3)"),
             ("unit/linux", "runs in the push workflow only (E0.3, E0.4)"),
+            ("unit/android", "runs in the push workflow only: JUnit is not on this computer (board ask, E0.4)"),
             ("mods/android", "the Android runner is not in the gate yet (E0.13)"),
             ("tour/tablet", "the Android runner is not in the gate yet (E0.13)"),
             ("pictures", "approved pictures not in the gate yet (E0.7)"),

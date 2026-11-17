@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.util.Base64
 import androidx.core.content.IntentCompat
 import org.json.JSONArray
 import org.json.JSONObject
@@ -21,6 +20,7 @@ import java.net.URL
 import java.security.KeyFactory
 import java.security.Signature
 import java.security.spec.RSAPublicKeySpec
+import java.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** A published release newer than this build: its version, notes as plain text, and its signed APK. */
@@ -396,14 +396,20 @@ object Updates {
         }
     }
 
-    /** RSA PKCS#1 v1.5 SHA-256 over the whole file, the signature file being its base64 (build-native-setup.ps1). */
-    internal fun verifySignature(file: File, signatureFile: ByteArray): Boolean = runCatching {
-        val signature = Base64.decode(String(signatureFile, Charsets.US_ASCII).trim(), Base64.DEFAULT)
+    /**
+     * RSA PKCS#1 v1.5 SHA-256 over the whole file, the signature file being its base64 (build-native-setup.ps1), by
+     * the release key (or the key given: the test's own).
+     */
+    internal fun verifySignature(
+        file: File,
+        signatureFile: ByteArray,
+        modulus: String = RELEASE_MODULUS,
+        exponent: String = RELEASE_EXPONENT,
+    ): Boolean = runCatching {
+        val base64 = Base64.getMimeDecoder()
+        val signature = base64.decode(String(signatureFile, Charsets.US_ASCII).trim())
         val key = KeyFactory.getInstance("RSA").generatePublic(
-            RSAPublicKeySpec(
-                BigInteger(1, Base64.decode(RELEASE_MODULUS, Base64.DEFAULT)),
-                BigInteger(1, Base64.decode(RELEASE_EXPONENT, Base64.DEFAULT)),
-            ),
+            RSAPublicKeySpec(BigInteger(1, base64.decode(modulus)), BigInteger(1, base64.decode(exponent))),
         )
         val verifier = Signature.getInstance("SHA256withRSA")
         verifier.initVerify(key)

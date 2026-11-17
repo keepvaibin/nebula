@@ -284,4 +284,4 @@ jobs:
           New-Item -ItemType Directory -Force $shipped | Out-Null
           Copy-Item installer\lumakit\lumakit.luma $shipped
           .\platform\android\build_apk.ps1 -Deps (Join-Path $temp 'deps') -Work (Join-Path $temp 'apk') `
-            -HostTools (Join-Path $temp 'host-tools') -ShippedMods $shipped -Unsigned -ReleaseKey ''
+            -HostTools (Join-Path $temp 'host-tools') -ShippedMods $shipped -Unsigned -ReleaseKey '' -UnitTests

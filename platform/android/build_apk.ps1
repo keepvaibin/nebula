@@ -17,6 +17,7 @@
 #                 [-ShippedMods <the folder of the .luma files that come with the game: LumaKit>]
 #                 [-Unsigned: Nebula-unsigned.apk, a release build with no signature (and no .sig), which
 #                  installer/sign-release.ps1 signs with the release key; the release workflow builds this]
+#                 [-UnitTests: also the launcher's JVM tests (app/src/test), in the same Gradle run]
 #   A release publishes the two as Nebula-Android.apk and Nebula-Android.apk.sig (a beta: Nebula-Beta-Android.apk).
 param(
     [Parameter(Mandatory = $true)][string]$Deps,
@@ -36,7 +37,8 @@ param(
     # carries them in its assets' mods folder and the game installs them at start. Empty: an app without them (a test
     # build); its mods that need LumaKit then need it installed by hand.
     [string]$ShippedMods = "",
-    [switch]$Unsigned
+    [switch]$Unsigned,
+    [switch]$UnitTests
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path "$PSScriptRoot\..\..").Path
@@ -216,7 +218,9 @@ if ($Debuggable) { $properties += "-Pnebula.debuggable=true" }
 if ($Harness -ne "") { $properties += "-Pnebula.harness=$Harness" }
 Push-Location $android
 try {
-    Invoke-Logged "$Work\gradle.log" { & .\gradlew.bat --no-daemon assembleRelease "-PnebulaAbis=$Abis" @properties }
+    $tasks = @("assembleRelease")
+    if ($UnitTests) { $tasks += "testReleaseUnitTest" }
+    Invoke-Logged "$Work\gradle.log" { & .\gradlew.bat --no-daemon @tasks "-PnebulaAbis=$Abis" @properties }
 } finally { Pop-Location }
 if ($Unsigned) {
     # installer/sign-release.ps1 signs it and then writes its .sig: one written now would not match the signed file.
