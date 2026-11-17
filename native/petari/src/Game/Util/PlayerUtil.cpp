@@ -59,16 +59,22 @@ namespace MR {
         return MarioAccess::isTeresaDisappear();
     }
 
+    // With no player (a mod's call at the boot or while a scene is built; MarioAccess::getPlayerActor is null then),
+    // the rows below answer: a pointer null (none to a script), a number 0, a test false, an out-parameter unwritten.
+    // The game itself calls them only with a player.
     bool isPlayerInAreaObj(const char* pName) {
-        return isInAreaObj(pName, MarioAccess::getPlayerActor()->mPosition);
+        const MarioActor* pPlayer = MarioAccess::getPlayerActor();
+        return pPlayer != nullptr && isInAreaObj(pName, pPlayer->mPosition);
     }
 
     Vec3f* getPlayerPos() {
-        return &MarioAccess::getPlayerActor()->mPosition;
+        MarioActor* pPlayer = MarioAccess::getPlayerActor();
+        return pPlayer != nullptr ? &pPlayer->mPosition : nullptr;
     }
 
     Vec3f* getPlayerCenterPos() {
-        return &MarioAccess::getPlayerActor()->mCenterPos;
+        MarioActor* pPlayer = MarioAccess::getPlayerActor();
+        return pPlayer != nullptr ? &pPlayer->mCenterPos : nullptr;
     }
 
     void getPlayerTakePos(Vec3f* pPos) {
@@ -84,11 +90,13 @@ namespace MR {
     }
 
     Vec3f* getPlayerRotate() {
-        return &MarioAccess::getPlayerActor()->mRotation;
+        MarioActor* pPlayer = MarioAccess::getPlayerActor();
+        return pPlayer != nullptr ? &pPlayer->mRotation : nullptr;
     }
 
     Vec3f* getPlayerShadowRotate() {
-        return &MarioAccess::getPlayerActor()->mShadowRotate;
+        MarioActor* pPlayer = MarioAccess::getPlayerActor();
+        return pPlayer != nullptr ? &pPlayer->mShadowRotate : nullptr;
     }
 
     Vec3f* getPlayerVelocity() {
@@ -104,7 +112,11 @@ namespace MR {
     }
 
     f32 getPlayerHitRadius() {
-        return MarioAccess::getPlayerActor()->mPlayerMode == (s16)6 ? 100.0f : 60.0f;
+        const MarioActor* pPlayer = MarioAccess::getPlayerActor();
+        if (pPlayer == nullptr) {
+            return 0.0f;
+        }
+        return pPlayer->mPlayerMode == (s16)6 ? 100.0f : 60.0f;
     }
 
     void setPlayerWalkingResist(f32 resist) {
@@ -112,7 +124,8 @@ namespace MR {
     }
 
     const Vec3f* getPlayerGravity() {
-        return &MarioAccess::getPlayerActor()->getGravityVec();
+        const MarioActor* pPlayer = MarioAccess::getPlayerActor();
+        return pPlayer != nullptr ? &pPlayer->getGravityVec() : nullptr;
     }
 
     void calcPlayerSpinPullVelocity(Vec3f* pVelocity, const Vec3f& rPos) {
@@ -132,15 +145,21 @@ namespace MR {
     }
 
     void getPlayerUpVec(Vec3f* pVec) {
-        MarioAccess::getPlayerActor()->getUpVec(pVec);
+        if (const MarioActor* pPlayer = MarioAccess::getPlayerActor(); pPlayer != nullptr) {
+            pPlayer->getUpVec(pVec);
+        }
     }
 
     void getPlayerFrontVec(Vec3f* pVec) {
-        MarioAccess::getPlayerActor()->getFrontVec(pVec);
+        if (const MarioActor* pPlayer = MarioAccess::getPlayerActor(); pPlayer != nullptr) {
+            pPlayer->getFrontVec(pVec);
+        }
     }
 
     void getPlayerSideVec(Vec3f* pVec) {
-        MarioAccess::getPlayerActor()->getSideVec(pVec);
+        if (const MarioActor* pPlayer = MarioAccess::getPlayerActor(); pPlayer != nullptr) {
+            pPlayer->getSideVec(pVec);
+        }
     }
 
     void getPlayerThrowVec(Vec3f* pVec) {
@@ -148,7 +167,9 @@ namespace MR {
     }
 
     void getPlayerGroundPos(Vec3f* pPos) {
-        MarioAccess::getPlayerActor()->getGroundPos(pPos);
+        if (const MarioActor* pPlayer = MarioAccess::getPlayerActor(); pPlayer != nullptr) {
+            pPlayer->getGroundPos(pPos);
+        }
     }
 
     const Vec3f* getPlayerGroundNormal() {

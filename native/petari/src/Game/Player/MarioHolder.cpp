@@ -19,7 +19,9 @@ MarioActor* MarioHolder::getMarioActor() const {
 }
 
 namespace MR {
+    // Null while no scene holds a player (the boot, a scene still being built): a mod may ask then
+    // (docs/modding/reference/lumascript/detailed-rules.md); the game itself asks only with one.
     MarioHolder* getMarioHolder() {
-        return MR::getSceneObj< MarioHolder >(SceneObj_MarioHolder);
+        return MR::isExistSceneObj(SceneObj_MarioHolder) ? MR::getSceneObj< MarioHolder >(SceneObj_MarioHolder) : nullptr;
     }
 };  // namespace MR

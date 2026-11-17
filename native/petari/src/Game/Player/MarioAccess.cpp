@@ -625,8 +625,10 @@ namespace MarioAccess {
         getPlayerActor()->setNerve(GET_NERVE(MarioActor, MarioActorNrvNoRush));
     }
 
+    // Null while there is no player (MR::getMarioHolder): a script's `MarioActor?` is none then.
     MarioActor* getPlayerActor() {
-        return MR::getMarioHolder()->getMarioActor();
+        const MarioHolder* pHolder = MR::getMarioHolder();
+        return pHolder != nullptr ? pHolder->getMarioActor() : nullptr;
     }
 
     void validateSensor() {

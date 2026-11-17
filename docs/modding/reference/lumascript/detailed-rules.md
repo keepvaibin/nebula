@@ -121,8 +121,8 @@ written `var x`.
 
 Every game pointer or reference result, every pointer field read from a game object, and every pointer
 parameter is `T?` (and `const char *` is `text?`), unless the self-description marks it never-null. The self-description takes
-that mark only from evidence: a C++ reference type `T &`, or a list kept by hand with each row's reason. So
-`MarioAccess::getPlayerActor` is `MarioActor?` (`if let p = MarioAccess::getPlayerActor { ... }`), and `none`
+that mark only from a C++ reference type `T &`. So `MarioAccess::getPlayerActor` is `MarioActor?`
+(`if let p = MarioAccess::getPlayerActor { ... }`, none while there is no player), and `none`
 may be passed for a pointer parameter (`initModelManagerWithAnm("Crumble", none, false)`). `self` in a hook or a class
 is never `none`.
 
@@ -316,21 +316,19 @@ for `&&` (`and`), `||` (`or`) and a prefix `!` (`not`).
 - Text with a `T?`. Interpolating a `T?` (`"{x}"`) is a compile error: "`x` may be none: write
   `{x ?? ...}` or test it with `if let`". A `T?` given where a `T` goes is the same error, for the mod's own
   functions as for the game's.
-- Never-null by evidence, for the self-description's hand list: `MR::getCurrentStageName` gives
-  `mCurrSceneControlInfo.mStage`, which is `""` from SceneControlInfo's constructor (GameSystemSceneController.cpp:50).
-  It is written only with `MR::internName`'s result (:57, :460 from the next info, :466 `""`), and internName maps
-  null to `""` (StringUtil.cpp:480). So it is `text`.
-- A result that is a field's address of another result. `MR::getPlayerPos` is
-  `&MarioAccess::getPlayerActor->mPosition` (PlayerUtil.cpp:70). With no player it is not null but an address near
-  0, so neither `T` nor `T?` makes it safe. The self-description marks such a function needs the inner one:
-  - when the body dereferences or offsets a may-be-null result with no test, the row says `needs
-    MarioAccess::getPlayerActor`;
-  - the generated call tests the needed function first and gives `none` for a `T?` result. For a function with no
-    result or a value result it gives a script error naming the need, and the game's function is not called.
-  - The player rows are the first evidence: getPlayerPos, getPlayerCenterPos, getPlayerRotate,
-    getPlayerShadowRotate, getPlayerGravity, getPlayerUp/Front/SideVec, getPlayerGroundPos, getPlayerHitRadius,
-    isPlayerInAreaObj (PlayerUtil.cpp:66 to 154).
-  - So `MR::getPlayerPos` is `vec3?`.
+- A pointer result that is never null in fact is still `T?` when its type is a pointer: `MR::getCurrentStageName`
+  never gives null (it is `""` before any stage), but its type is `const char *`, so it is `text?`. Write
+  `MR::getCurrentStageName ?? ""`.
+- The player. There is no player at the boot, on the file select, and while a scene is being built.
+  - `MarioAccess::getPlayerActor` is none then (`MarioActor?`). Test it before using the player:
+    `if let p = MarioAccess::getPlayerActor { ... }`.
+  - These rows answer with no player instead of reading one: `MR::getPlayerPos`, `getPlayerCenterPos`,
+    `getPlayerRotate`, `getPlayerShadowRotate` and `getPlayerGravity` give none (`vec3?`); `getPlayerHitRadius`
+    gives 0; `isPlayerInAreaObj` gives false; `getPlayerUpVec`, `getPlayerFrontVec`, `getPlayerSideVec` and
+    `getPlayerGroundPos` leave their out-parameter as it was (PlayerUtil.cpp).
+  - Every other function of `MarioAccess` and of the player in `MR` reads the player with no test, as the game
+    calls it only with one: call it inside `if let p = MarioAccess::getPlayerActor { ... }`. Called with no player,
+    it faults inside the game, and the game stops.
 
 ## Nested wraps
 
