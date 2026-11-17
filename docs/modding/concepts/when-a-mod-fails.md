@@ -40,6 +40,19 @@ The guard returns to the game only when it is certain the game's state is whole.
 * A second fault happened while the first one was being handled.
 * The mod called the game and the game called the mod again, so returning would skip game code that is half done.
 
+## The next start after a crash
+
+When the game ends with a crash while mods are on, the next start reads what the crash left:
+
+* When the crash names a mod, that mod is off for the next start. The other mods stay on. The **Mods** page asks what to do with it: **Keep it off**, **Turn it on again** or **Remove**. Unless the player keeps it off, the mod starts again at the start after.
+* When a mod crashed the game while the game started, before the first frame of the first scene, at two of its starts in a row, it stays off until the player turns it on. Crashes during play never count toward this.
+* When the crash names no mod and mods' code was running, every mod's code is off for the next start. Mods without code stay on.
+* When the crash names no mod and no mod's code was running, every mod is off for the next start, and the **Mods** page says why.
+
+In dev mode, the mod you are working on stays on after a crash. For more information, see [Reloading a mod while playing](../how-tos/reloading-a-mod-while-playing.md).
+
+In a test, the question is the fact `crash.shown.ID` (`twice`, `enabled`, `text`, `focus`) and the player's answer is `crash.answer.ID` (`off`, `on`, `remove` or `closed`). To test the start after a crash, end one test with `"ends": "crash"` and continue from it. For more information, see [Test files](../reference/test-files.md).
+
 ## Code time
 
 The guard also measures how long each mod's code runs in each frame. The mod's page on the **Mods** page shows the average and the worst time a frame over the last 120 frames. In a test, the fact `kernel.guard_time` gives the same two values.

@@ -1,0 +1,64 @@
+{
+  "harness": 1,
+  "name": "6702-start-crash-next",
+  "about": "The next start: crash-start is off for it (its code never starts); the Mods tab asks, the focus on KEEP IT OFF; no answer, nothing changes",
+  "proves": [
+    "mods.after_crash.named",
+    "mods.after_crash.question"
+  ],
+  "continue_from": "6701-start-crash",
+  "mods": [
+    {
+      "path": "../mods/crash-start",
+      "loads": false
+    },
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 200,
+      "picture": "question"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "mods: the last run crashed in the mod crash-start: it is off for this start"
+    },
+    {
+      "fact": "mod.crash-start.started",
+      "absent": true
+    },
+    {
+      "fact": "crash.shown.crash-start",
+      "has": {
+        "twice": false,
+        "enabled": true,
+        "text": "crash-start closed Nebula unexpectedly. It is off for this start.",
+        "focus": "KEEP IT OFF"
+      }
+    },
+    {
+      "fact": "crash.answer.crash-start",
+      "absent": true
+    },
+    {
+      "picture": "question",
+      "like": "refs/{renderer}/question.png",
+      "within": {
+        "rmse": 0.5
+      }
+    }
+  ]
+}

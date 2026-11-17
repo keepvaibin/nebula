@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "crash-start",
+  "name": "crash-start",
+  "summary": "crash-start (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

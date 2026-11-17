@@ -1,0 +1,32 @@
+{
+  "harness": 1,
+  "name": "6708-play-crash-again",
+  "about": "Turned on again, guard-deep starts and crashes in play again",
+  "proves": [
+    "mods.after_crash.named"
+  ],
+  "continue_from": "6707-play-crash-next",
+  "ends": "crash",
+  "mods": [
+    "../../guard-crash/mods/guard-deep"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-deep.started",
+      "exists": true
+    },
+    {
+      "log": "crash: guard: the code of the mod guard-deep failed "
+    }
+  ]
+}

@@ -11,6 +11,7 @@
 // passes on untouched: Windows, to the next vectored handler and the crash reporter; POSIX, to the handler that was
 // there before (the default one ends the process), after one line on stderr naming the mod.
 #include "galaxy/luma_guard_host.h"
+#include "galaxy/mod_crash.h"
 #include "luma_guard_words.h"
 
 #include <luma_guard.h>
@@ -529,9 +530,11 @@ void on_signal(int signal, siginfo_t* info, void* raw) {
     const char* why = why_not_here(thread, frame, fault, regs.pc, regs.sp);
     if (why == nullptr) why = why_not_words(frame, regs.sp, regs.lr);
     if (why != nullptr) {
-        // Not resumed: the game ends, so its crash lines go out now, whichever handler ends it.
+        // Not resumed: the game ends, so its crash lines go out now, whichever handler ends it, and the crash record
+        // names the mod (mod_crash.h: the platform's handler after this one leaves it).
         note(frame, fault, regs.pc, why);
         report_fault(signal, info, raw);
+        galaxy::mod_crash::write(g_note_mod);
         pass_on(signal, info, raw);
         return;
     }

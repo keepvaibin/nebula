@@ -12,8 +12,9 @@ namespace galaxy::game_module {
 [[nodiscard]] std::filesystem::path plain_beside(const std::filesystem::path& rows_module);
 
 // The module to load, before it loads, and `why` (for the log line "game module: ..."):
-// - rows_module when an enabled mod has code for this device the player allowed and the last run did not crash with
-//   mods' code on (mods_folder/.code_crashed absent), or when `need_rows` (--luma-describe reads the type rows);
+// - rows_module when an enabled mod has code for this device the player allowed, other than the mod the last run's
+//   crash named and unless that crash named none with code on (galaxy::mods::take_safe_start, called first), or when
+//   `need_rows` (--luma-describe reads the type rows);
 //   in a safe start (`safe`: every mod off for this start, galaxy::mods::take_safe_start) only the mod `kept` counts
 //   (the harness's own game half, which stays on; empty: none);
 // - its plain sibling otherwise, when that file exists;

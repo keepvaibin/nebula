@@ -5,6 +5,7 @@
 
 #include "galaxy/mods.h"
 #include "galaxy/mod_consent.h"
+#include "galaxy/mod_crash.h"
 
 #include <atomic>
 #if defined(__APPLE__)
@@ -28,6 +29,15 @@
 #include <mutex>
 #include <set>
 #include <sstream>
+
+// The crash record's write (mod_crash.h): only the system's own file calls; the harness run's mark (harness_half).
+#if defined(_WIN32)
+#include "galaxy/windows_api.h"
+#else
+#include <cstdlib>
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 
 namespace galaxy::mods {
 namespace {
@@ -1061,15 +1071,62 @@ namespace {
 std::atomic<bool> s_code_off_after_crash{false};
 std::atomic<SafeStart> s_safe_start{SafeStart::kNo};
 std::atomic<bool> s_safe_start_taken{false};
+// The mod the last run's crash named (take_safe_start), and whether it crashed at two of its starts running. Written
+// once, before any reader.
+std::string s_crashed_id;
+bool s_crashed_twice = false;
+
+// The mods whose code crashed the game at their last start (mods folder's .crashed_at_start, one id a line).
+fs::path crashed_at_start_file() {
+    const fs::path folder = mods_folder();
+    return folder.empty() ? folder : folder / ".crashed_at_start";
 }
+
+std::set<std::string> read_crashed_at_start() {
+    std::set<std::string> ids;
+    std::ifstream in(crashed_at_start_file(), std::ios::binary);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        // Only what a mod id can be: a line with anything else is not one.
+        if (line.empty() || line.size() > mod_crash::kModMax) continue;
+        if (std::all_of(line.begin(), line.end(), [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_'; })) {
+            ids.insert(line);
+        }
+    }
+    return ids;
+}
+
+void write_crashed_at_start(const std::set<std::string>& ids) {
+    const fs::path file = crashed_at_start_file();
+    if (file.empty()) return;
+    std::error_code error;
+    if (ids.empty()) {
+        fs::remove(file, error);
+        return;
+    }
+    std::string text;
+    for (const std::string& id : ids) text += id + "\n";
+    (void)io::write_file_atomically(file, text);
+}
+}  // namespace
 
 void set_code_off_after_crash() noexcept {
     s_code_off_after_crash.store(true, std::memory_order_relaxed);
 }
 
+bool code_off_after_crash() noexcept {
+    return s_code_off_after_crash.load(std::memory_order_relaxed);
+}
+
 std::filesystem::path safe_start_file() {
     const std::filesystem::path folder = mods_folder();
     return folder.empty() ? folder : folder / ".safe_start";
+}
+
+std::filesystem::path crash_file() {
+    const std::filesystem::path folder = mods_folder();
+    return folder.empty() ? folder : folder / ".crash";
 }
 
 SafeStart take_safe_start(bool asked) {
@@ -1081,10 +1138,31 @@ SafeStart take_safe_start(bool asked) {
     const std::filesystem::path file = safe_start_file();
     std::error_code error;
     if (!file.empty() && std::filesystem::exists(file, error)) {
-        if (safe == SafeStart::kNo) {
-            safe = std::filesystem::file_size(file, error) == 0u && !error ? SafeStart::kAfterCrash : SafeStart::kAsked;
-        }
+        safe = SafeStart::kAsked;
         std::filesystem::remove(file, error);
+    }
+    // The last run's crash, taken whatever this start is: an asked safe start has every mod off already.
+    const std::optional<mod_crash::Record> crash = crash_file().empty() ? std::nullopt : mod_crash::take(crash_file());
+    if (crash && safe == SafeStart::kNo) {
+        if (!crash->mod.empty()) {
+            // The named mod is off for this start. At its start twice running: off until the player turns it on. A dev
+            // mod stays on: its maker is working on that crash (mods.h dev_mods).
+            if (dev_mod(crash->mod) || harness_half(crash->mod)) {
+                s_safe_start.store(safe, std::memory_order_relaxed);
+                return safe;
+            }
+            s_crashed_id = crash->mod;
+            if (crash->phase == mod_crash::Phase::kStart) {
+                std::set<std::string> ids = read_crashed_at_start();
+                s_crashed_twice = ids.erase(crash->mod) != 0u;
+                if (!s_crashed_twice) ids.insert(crash->mod);
+                write_crashed_at_start(ids);
+            }
+        } else if (crash->code_on) {
+            s_code_off_after_crash.store(true, std::memory_order_relaxed);  // every mod's code, but the dev mods'
+        } else {
+            safe = SafeStart::kAfterCrash;
+        }
     }
     s_safe_start.store(safe, std::memory_order_relaxed);
     return safe;
@@ -1092,6 +1170,17 @@ SafeStart take_safe_start(bool asked) {
 
 SafeStart safe_start() noexcept {
     return s_safe_start.load(std::memory_order_relaxed);
+}
+
+CrashedMod crashed_mod() {
+    return CrashedMod{s_crashed_id, s_crashed_twice};
+}
+
+void note_start_done(std::span<const std::string> code_mods) {
+    std::set<std::string> ids = read_crashed_at_start();
+    std::size_t erased = 0;
+    for (const std::string& id : code_mods) erased += ids.erase(id);
+    if (erased != 0u) write_crashed_at_start(ids);
 }
 
 namespace {
@@ -1335,7 +1424,9 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 mod.code_declined = !mod.code_token.empty() && !mod.code_allowed && s != nullptr && s->code_no == mod.code_token;
                 mod.code_changed = !mod.code_token.empty() && !mod.code_allowed && !mod.code_declined && s != nullptr &&
                                    (!s->code_ok.empty() || !s->code_no.empty());
-                if (mod.problem.empty() && !mod.code_token.empty() && s_code_off_after_crash.load(std::memory_order_relaxed)) {
+                // Every mod's code is off after a crash that named none, but a dev mod's and the harness's own.
+                if (mod.problem.empty() && !mod.code_token.empty() && s_code_off_after_crash.load(std::memory_order_relaxed) &&
+                    !dev_mod(mod.id) && !harness_half(mod.id)) {
                     mod.problem = "THIS MOD'S CODE IS OFF AFTER A CRASH. RESTART TO TRY IT AGAIN";
                 }
                 for (const luma::KeyOption& key : manifest->keys) {
@@ -1949,6 +2040,15 @@ const std::vector<std::string>& dev_mods() {
 
 bool dev_mod(std::string_view id) {
     return std::find(g_dev_mods.begin(), g_dev_mods.end(), id) != g_dev_mods.end();
+}
+
+bool harness_half(std::string_view id) {
+#if defined(_WIN32)
+    const bool harness_run = GetEnvironmentVariableA("LUMA_HARNESS_PLAN", nullptr, 0) != 0;
+#else
+    const bool harness_run = std::getenv("LUMA_HARNESS_PLAN") != nullptr;
+#endif
+    return harness_run && id == "luma-test";
 }
 
 void set_shipped_mods(std::set<std::string> ids) {
@@ -2582,3 +2682,152 @@ std::filesystem::path code_layers_restart_file() {
 }
 
 }  // namespace galaxy::mods
+
+// ---- The crash record (mod_crash.h) ------------------------------------------------------------------------------
+
+namespace galaxy::mod_crash {
+namespace {
+// What write() needs, made by arm(): the file as the system names it, and the record's state. A fault handler reads
+// these; arm() runs before any code it guards.
+#if defined(_WIN32)
+using PathUnit = wchar_t;
+#else
+using PathUnit = char;
+#endif
+constexpr std::size_t kPathMax = 1024;
+PathUnit g_path[kPathMax];
+std::atomic<bool> g_armed{false};
+std::atomic<bool> g_code_on{false};
+std::atomic<Phase> g_phase{Phase::kStart};
+std::atomic<bool> g_named{false};  // this crash's record names a mod: a later write without one leaves it
+
+bool id_char(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_';
+}
+
+const char* phase_word(Phase phase) {
+    return phase == Phase::kPlay ? "play" : "start";
+}
+
+// `word` and its end into `out` at `*at`, no further than `size`.
+void put(char* out, std::size_t size, std::size_t* at, const char* word) {
+    while (*word != '\0' && *at < size) out[(*at)++] = *word++;
+}
+}  // namespace
+
+std::string format(const Record& record) {
+    std::string text = "nebula crash 1\nphase ";
+    text += phase_word(record.phase);
+    text += record.code_on ? "\ncode 1\n" : "\ncode 0\n";
+    if (!record.mod.empty()) text += "mod " + record.mod + "\n";
+    return text;
+}
+
+std::optional<Record> parse(std::string_view text) {
+    // Lines, each ended by \n: the first "nebula crash 1", then phase, code and an optional mod, in that order.
+    std::string_view lines[5];
+    std::size_t count = 0;
+    while (!text.empty()) {
+        const std::size_t end = text.find('\n');
+        if (end == std::string_view::npos || count == 5u) return std::nullopt;
+        lines[count++] = text.substr(0, end);
+        text.remove_prefix(end + 1u);
+    }
+    if (count < 3u || count > 4u || lines[0] != "nebula crash 1") return std::nullopt;
+    Record record;
+    if (lines[1] == "phase start") {
+        record.phase = Phase::kStart;
+    } else if (lines[1] == "phase play") {
+        record.phase = Phase::kPlay;
+    } else {
+        return std::nullopt;
+    }
+    if (lines[2] != "code 0" && lines[2] != "code 1") return std::nullopt;
+    record.code_on = lines[2] == "code 1";
+    if (count == 4u) {
+        const std::string_view mod = lines[3].substr(0, 4);
+        const std::string_view id = lines[3].size() > 4u ? lines[3].substr(4) : std::string_view();
+        if (mod != "mod " || id.empty() || id.size() > kModMax || !std::all_of(id.begin(), id.end(), id_char)) return std::nullopt;
+        record.mod = std::string(id);
+    }
+    return record;
+}
+
+void arm(const std::filesystem::path& file, bool code_on) noexcept {
+    g_armed.store(false, std::memory_order_release);
+    const auto& native = file.native();
+    if (native.empty() || native.size() >= kPathMax) return;
+    std::copy(native.begin(), native.end(), g_path);
+    g_path[native.size()] = 0;
+    g_code_on.store(code_on, std::memory_order_relaxed);
+    g_phase.store(Phase::kStart, std::memory_order_relaxed);
+    g_named.store(false, std::memory_order_relaxed);
+    g_armed.store(true, std::memory_order_release);
+}
+
+void set_code_on(bool code_on) noexcept {
+    g_code_on.store(code_on, std::memory_order_relaxed);
+}
+
+void set_phase(Phase phase) noexcept {
+    g_phase.store(phase, std::memory_order_relaxed);
+}
+
+Phase phase() noexcept {
+    return g_phase.load(std::memory_order_relaxed);
+}
+
+bool armed() noexcept {
+    return g_armed.load(std::memory_order_acquire);
+}
+
+void disarm() noexcept {
+    g_armed.store(false, std::memory_order_release);
+}
+
+void write(const char* mod) noexcept {
+    if (!g_armed.load(std::memory_order_acquire)) return;
+    const bool named = mod != nullptr && id_char(*mod);
+    if (!named && g_named.load(std::memory_order_acquire)) return;
+    if (named) g_named.store(true, std::memory_order_release);
+    char text[160];
+    std::size_t at = 0;
+    put(text, sizeof(text), &at, "nebula crash 1\nphase ");
+    put(text, sizeof(text), &at, phase_word(g_phase.load(std::memory_order_relaxed)));
+    put(text, sizeof(text), &at, g_code_on.load(std::memory_order_relaxed) ? "\ncode 1\n" : "\ncode 0\n");
+    if (named) {
+        put(text, sizeof(text), &at, "mod ");
+        for (std::size_t i = 0; i < kModMax && id_char(mod[i]); ++i) text[at++] = mod[i];
+        text[at++] = '\n';
+    }
+#if defined(_WIN32)
+    // The system's calls, not the C runtime's: a fault inside the runtime may hold its locks.
+    const HANDLE out = CreateFileW(g_path, GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (out == INVALID_HANDLE_VALUE) return;
+    DWORD wrote = 0;
+    (void)WriteFile(out, text, static_cast<DWORD>(at), &wrote, nullptr);
+    (void)CloseHandle(out);
+#else
+    const int out = open(g_path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (out < 0) return;
+    (void)!::write(out, text, at);
+    (void)close(out);
+#endif
+}
+
+std::optional<Record> take(const std::filesystem::path& file) {
+    std::error_code error;
+    if (file.empty() || !std::filesystem::is_regular_file(file, error)) return std::nullopt;
+    std::string text;
+    {
+        std::ifstream in(file, std::ios::binary);
+        char buffer[256];
+        in.read(buffer, sizeof(buffer));
+        // A record is short: a longer file is not one.
+        if (in.gcount() < static_cast<std::streamsize>(sizeof(buffer))) text.assign(buffer, static_cast<std::size_t>(in.gcount()));
+    }
+    std::filesystem::remove(file, error);
+    return parse(text);
+}
+
+}  // namespace galaxy::mod_crash

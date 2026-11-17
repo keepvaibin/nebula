@@ -1,0 +1,16 @@
+{
+  "harness": 1,
+  "tests": [
+    "6701-start-crash",
+    "6702-start-crash-next",
+    "6703-start-crash-again",
+    "6704-start-crash-twice",
+    "6705-twice-stays-off",
+    "6706-play-crash",
+    "6707-play-crash-next",
+    "6708-play-crash-again",
+    "6709-play-crash-not-twice",
+    "6710-code-crash",
+    "6711-code-crash-after"
+  ]
+}

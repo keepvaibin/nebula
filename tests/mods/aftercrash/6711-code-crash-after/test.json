@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "name": "6711-code-crash-after",
+  "about": "The start after: hello's code starts again",
+  "proves": [
+    "mods.after_crash.code"
+  ],
+  "continue_from": "6710-code-crash",
+  "mods": [
+    "../../harness/mods/hello"
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "no_log": "the last run crashed"
+    },
+    {
+      "fact": "mod.hello.hello",
+      "exists": true
+    }
+  ]
+}

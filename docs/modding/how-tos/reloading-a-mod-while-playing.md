@@ -10,7 +10,7 @@ contentType: how-tos
 Dev mode is for the person who makes a mod. When you play a mod folder that has code, LumaLink starts the game in dev mode for that mod. In dev mode:
 
 * Your mod's code and every permission it declares are allowed without the question players see. Nothing is saved, so the next start without dev mode asks as usual.
-* A crash doesn't turn your mod's code off for the next start. Other mods' code still turns off after a crash.
+* A crash doesn't turn your mod off for the next start, even when the crash names it. Other mods follow the usual rules. For more information, see [When a mod fails](../concepts/when-a-mod-fails.md#the-next-start-after-a-crash).
 * Each time you save a change to a file in `source/`, LumaLink builds the mod and the game reloads its code while you play.
 
 Dev mode is available on Windows, Linux, and macOS. Nebula for Android and iOS has no dev mode.

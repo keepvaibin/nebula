@@ -49,6 +49,7 @@
 #include "galaxy/luma_input_service.h"
 #include "galaxy/luma_mods_service.h"
 #include "galaxy/mods.h"
+#include "galaxy/mod_crash.h"
 #include <luma_input.h>
 #include <luma_refs.h>
 #include "galaxy/render/host_window.h"
@@ -312,27 +313,14 @@ char gCrashActivityFile[512];
 char gCrashModRead[640];
 char gCrashPlugin[128];
 
-// While mods' code runs: the file a crash leaves, so that the next start leaves the code off once.
-std::filesystem::path gCodeCrashFile;
-
 void gather_crash_facts(galaxy::crash::Facts::Kind kind, const char* text, bool in_game = false,
                         bool stack_overflow = false) noexcept {
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     galaxy::host::stop_all_rumble();
 #endif
-    if (!gCodeCrashFile.empty()) {
-        std::filesystem::path file;
-        file.swap(gCodeCrashFile);
-#if defined(_WIN32)
-        if (FILE* out = _wfopen(file.c_str(), L"wb")) {
-            std::fclose(out);
-        }
-#else
-        if (FILE* out = std::fopen(file.c_str(), "wb")) {
-            std::fclose(out);
-        }
-#endif
-    }
+    // While mods change the game: the crash record for the next start (mod_crash.h). The mod is named after, when it
+    // can be (note_crash_plugin).
+    galaxy::mod_crash::write(nullptr);
     std::snprintf(gCrashText, sizeof(gCrashText), "%s", text != nullptr ? text : "");
     gCrashFacts.kind = kind;
     gCrashFacts.in_game = in_game;
@@ -781,12 +769,7 @@ std::optional<galaxy::startcheck::MissingPart> gMissingPart;
 // LUMA_HARNESS_PLAN) is the test's instrument, not a player's mod: a start that turns every mod off (a safe start, a
 // missing part) leaves it on, or no such start could be run as a test (it gives the setup and the steps, and ends the run).
 bool is_harness_half(const std::string& mod_id) {
-#if defined(_WIN32)
-    const bool harness_run = GetEnvironmentVariableA("LUMA_HARNESS_PLAN", nullptr, 0) != 0;
-#else
-    const bool harness_run = std::getenv("LUMA_HARNESS_PLAN") != nullptr;
-#endif
-    return harness_run && mod_id == "luma-test";
+    return galaxy::mods::harness_half(mod_id);
 }
 
 // A safe start asked at launch: --safe-start 1, or Shift held as Nebula starts (Windows, a visible start).
@@ -986,6 +969,20 @@ int64_t steady_ms() {
 constexpr auto kBootPeriod = std::chrono::microseconds(2000);
 constexpr uint32_t kBootFrames = 600;
 std::atomic<bool> gBootFast{true};
+
+// The start is over at the first scene's first frame: a crash from then on is one in play (mod_crash.h), and the mods
+// whose code ran at this start leave the list of those whose code crashed at their last start. Game thread.
+bool gStartDone = false;
+
+void note_start_done() {
+    gStartDone = true;
+    galaxy::mod_crash::set_phase(galaxy::mod_crash::Phase::kPlay);
+    if (gPlugins.empty()) return;
+    std::vector<std::string> ran;
+    ran.reserve(gPlugins.size());
+    for (const galaxy::mods::PluginFile& plugin : gPlugins) ran.push_back(plugin.mod_id);
+    galaxy::mods::note_start_done(ran);
+}
 
 void end_boot_fast(const char* why) {
     if (gBootFast.exchange(false, std::memory_order_relaxed)) {
@@ -1538,6 +1535,7 @@ void note_crash_plugin(const EXCEPTION_POINTERS* info) noexcept {
         std::snprintf(gCrashPlugin, sizeof(gCrashPlugin), "%s", galaxy::luma_guard::note_mod());
         gCrashFacts.plugin_mod = gCrashPlugin;
         gCrashFacts.in_plugin = true;
+        galaxy::mod_crash::write(gCrashPlugin);
         return;
     }
     bool in_plugin = false;
@@ -1545,6 +1543,7 @@ void note_crash_plugin(const EXCEPTION_POINTERS* info) noexcept {
         std::snprintf(gCrashPlugin, sizeof(gCrashPlugin), "%s", mod);
         gCrashFacts.plugin_mod = gCrashPlugin;
         gCrashFacts.in_plugin = in_plugin;
+        galaxy::mod_crash::write(gCrashPlugin);
         char line[192];
         std::snprintf(line, sizeof(line), in_plugin ? "in the code of the mod %s" : "in a call the code of the mod %s made", gCrashPlugin);
         log_line("crash:", line);
@@ -2753,6 +2752,7 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
         gSceneBegins.fetch_add(1, std::memory_order_relaxed);
         if (!galaxy::extensions::holds_menus()) galaxy::render::native_settings_reopen_held();
         end_boot_fast("first 3D scene");
+        if (!gStartDone) note_start_done();
     }
     list->game_frame = gGameFrames.load(std::memory_order_relaxed);
     galaxy::render::attach_frame_list(list);
@@ -2807,6 +2807,7 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
     if ((list->flags & NEBULA_FRAME_HAS_SCENE) != 0u) {
         gSceneBegins.fetch_add(1, std::memory_order_relaxed);
         end_boot_fast("first 3D scene");
+        if (!gStartDone) note_start_done();
     }
     list->released = 1u;
 }
@@ -5043,17 +5044,14 @@ void svc_mods_start(void*) {
     struct AnswerAtEnd {
         ~AnswerAtEnd() { layers_answered(std::nullopt); }
     } answer_at_end;
-    const fs::path crashed = galaxy::mods::mods_folder() / ".code_crashed";
-    std::error_code crash_error;
-    if (fs::exists(crashed, crash_error)) {
-        fs::remove(crashed, crash_error);
-        if (!gPlugins.empty()) {
-            // A dev mod's code stays on: its maker is working on that crash (mods.h dev_mods).
-            log_line("mods:", galaxy::mods::dev_mods().empty() ? "the last run crashed with mods' code on: it stays off for this run"
-                                                                : "the last run crashed with mods' code on: it stays off for this run, but for the dev mods");
-            std::erase_if(gPlugins, [](const galaxy::mods::PluginFile& p) { return !galaxy::mods::dev_mod(p.mod_id); });
-            galaxy::mods::set_code_off_after_crash();
-        }
+    // The last run crashed with mods' code on and no mod could be named (mods.h take_safe_start): every mod's code
+    // stays off for this run. A dev mod's code stays on: its maker is working on that crash (mods.h dev_mods).
+    if (galaxy::mods::code_off_after_crash() && !gPlugins.empty()) {
+        log_line("mods:", galaxy::mods::dev_mods().empty() ? "the last run crashed with mods' code on: it stays off for this run"
+                                                            : "the last run crashed with mods' code on: it stays off for this run, but for the dev mods");
+        std::erase_if(gPlugins, [](const galaxy::mods::PluginFile& p) {
+            return !galaxy::mods::dev_mod(p.mod_id) && !galaxy::mods::harness_half(p.mod_id);
+        });
     }
     // The plain module has no rows: no mod's code starts with it. The choice at start saw no such mod, or the crash flag
     // above turned its code off; one here means the mods changed between that look and this start,
@@ -5101,10 +5099,8 @@ void svc_mods_start(void*) {
         log_the_start();
         return;
     }
-    // A crash from here with code on leaves the code off at the next start; without, every mod (set at the scan).
-    if (!gPlugins.empty()) {
-        gCodeCrashFile = crashed;
-    }
+    // A crash from here says the mods' code was on (the record was armed at the scan).
+    galaxy::mod_crash::set_code_on(!gPlugins.empty());
     const auto game_api = reinterpret_cast<const NebulaModApi* (*)()>(find_symbol(gModule.module, "nebula_game_mod_api"));
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::mods::set_achievement_store(galaxy::achievements::unlock_mod);
@@ -6234,10 +6230,27 @@ int main(int argc, char** argv) {
                 for (galaxy::mods::ModInfo& mod : mods) {
                     if (!is_harness_half(mod.id)) mod.enabled = false;
                 }
-            } else if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
-                // A crash from here on (the cook, the packs, the game) makes the next start safe; svc_mods_start
-                // narrows it to the code when code is on.
-                gCodeCrashFile = galaxy::mods::safe_start_file();
+            } else {
+                // The mod the last run's crash named: off for this start. Crashed at two of its starts running, it
+                // stays off until the player turns it on: that is the player's choice from now (saved).
+                if (const galaxy::mods::CrashedMod crashed = galaxy::mods::crashed_mod(); !crashed.id.empty()) {
+                    const auto found = std::find_if(mods.begin(), mods.end(), [&crashed](const galaxy::mods::ModInfo& m) { return m.id == crashed.id; });
+                    if (found != mods.end() && found->enabled) {
+                        const std::string line = "the last run crashed in the mod " + crashed.id +
+                                                 (crashed.twice ? ", at two of its starts running: it is off until it is turned on"
+                                                                : ": it is off for this start");
+                        log_line("mods:", line.c_str());
+                        found->enabled = false;
+                        if (crashed.twice && !galaxy::mods::save_mod_settings(mods)) {
+                            log_line("mods:", "the mods' settings could not be saved");
+                        }
+                    }
+                }
+                // A crash from here on (the cook, the packs, the game) leaves the record for the next start
+                // (mod_crash.h); svc_mods_start says whether the mods' code is on.
+                if (std::any_of(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& mod) { return mod.enabled; })) {
+                    galaxy::mod_crash::arm(galaxy::mods::crash_file(), false);
+                }
             }
             bool added_language = false;
             for (const galaxy::mods::ModInfo& mod : mods) {

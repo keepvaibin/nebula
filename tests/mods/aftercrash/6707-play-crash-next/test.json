@@ -1,0 +1,57 @@
+{
+  "harness": 1,
+  "name": "6707-play-crash-next",
+  "about": "The next start: guard-deep is off for it; right and Space turn it on again (saved; it starts with the next start)",
+  "proves": [
+    "mods.after_crash.named",
+    "mods.after_crash.question"
+  ],
+  "continue_from": "6706-play-crash",
+  "mods": [
+    {
+      "path": "../../guard-crash/mods/guard-deep",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 180,
+      "key": "right"
+    },
+    {
+      "at": 240,
+      "key": "space"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "mods: the last run crashed in the mod guard-deep: it is off for this start"
+    },
+    {
+      "fact": "mod.guard-deep.started",
+      "absent": true
+    },
+    {
+      "fact": "crash.shown.guard-deep",
+      "has": {
+        "twice": false,
+        "enabled": true,
+        "text": "guard-deep closed Nebula unexpectedly. It is off for this start."
+      }
+    },
+    {
+      "fact": "crash.answer.guard-deep",
+      "has": {
+        "answer": "on"
+      }
+    }
+  ]
+}
