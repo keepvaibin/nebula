@@ -730,8 +730,12 @@ typedef void (*LumaCtor)(void);
 
 /* LUMA_MOD and LUMA_LIBRARY_MOD with a `cut` (LumaModInfo.cut): the mod is told when a fault in another mod's code
    cut a call of its code short. */
-#define LUMA_MOD_CUT(imports, start, stop, cut)     LUMA_RUNTIME                                    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, 0, 0, 0, 0, 0, cut}
-#define LUMA_LIBRARY_MOD_CUT(imports, start, stop, exports, dependent_gone, cut)     LUMA_RUNTIME                                                                     LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, exports, sizeof(exports) / sizeof(exports[0]), dependent_gone, 0, 0, cut}
+#define LUMA_MOD_CUT(imports, start, stop, cut) \
+    LUMA_RUNTIME                            \
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, 0, 0, 0, 0, 0, cut}
+#define LUMA_LIBRARY_MOD_CUT(imports, start, stop, exports, dependent_gone, cut) \
+    LUMA_RUNTIME                                                             \
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, exports, sizeof(exports) / sizeof(exports[0]), dependent_gone, 0, 0, cut}
 
 /* An argument of a hooked call, and its result. */
 #define LUMA_ARG(call, n, type) (*(type*)(call)->args[n])
