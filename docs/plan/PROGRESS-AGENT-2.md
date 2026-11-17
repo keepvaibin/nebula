@@ -61,3 +61,31 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   6902; LumaLink s-events; tools/gate/tests/events_page_test.py.
 - Open in M2: N-2023 (LumaScript proves needs at build time), N-2024 (safe handlers), M-038, M-045, M-049, M-076,
   M-077 (LumaKit at any time).
+
+## 2026-11-17 M2 Call safety (second part)
+
+- M-001 is open again: the planner's decision of 12:33 (board) changes who is turned off (by need along the chain of
+  mods between the boundary and the fault), adds a boundary on a library's calls up into a mod's code, a notice to the
+  mods left with cut code, file+offset names, and a growing library table. 5fd2e8768 stays as the resume point.
+- M-076, M-077 fixed (0c05e409d): save.game's export and offer asked in the boot wait for the game's read of the
+  files. tests/mods/save 2272 (the game ended before).
+- N-2025, N-2031 fixed (7162d1b98, be9ab36cc): mod_tests.py ran tests the copy did not hold, then (my N-2025 fix)
+  a reused copy ran only an earlier --only's tests. harness_mod_tests_copy_test.py, both cases fail before.
+- M-045 fixed (LumaLink 08bb7f3): kit.area, kit.gravity and kit.player.form act for player 1 alone. kit-extra.
+- A probe of every LumaKit call at every moment (LumaLink kit-any-time, kit-any-time-title: 196 calls at boot, the
+  title, a stage ready, play, leaving, each frame of the load, the next stage) found four faults that ended the game
+  or the mod's run, each fixed:
+  - N-2026 (d3e9454ae): calls that read the save files before the system archive made them (item.give of lives at
+    boot). The needs pass now knows the game system's objects: UserFile, CometScheduler; 2,143 functions need one.
+  - N-2027 (d3e9454ae): calls that read the player's actor while a scene is made (MarioAccess::incLife during the
+    next stage's load): MarioActor, needed by 3,674 functions.
+  - N-2028 (LumaLink 1eea14f): a kit.actor kind with no look ended the game at its spawn (draw buffer, actions).
+  - N-2029 (LumaLink 5ab668b): camera.side, replay.current_pose and replay.view were script errors with nothing there.
+- M-038, M-049 fixed: shop.open and item.give at the boot and on the title, through the needs (the calls are not made
+  when their objects are missing); Lives(n) holds to the game's 99 (LumaLink fe9bf25), a large n held the frame.
+- N-2030 fixed (51b4f65a4): tasks.md wrote `p.stop`; the language takes `p.stop()`.
+- Runs on d3d12: the LumaLink kit suite 31 of 32 (kit-any-time-title expected no player on the title; the title is
+  a game scene with the player in it, so the expectation was corrected); after the lives change, kit-any-time,
+  kit-any-time-title, kit-item and kit-shop 4 of 4.
+- Open in M2: M-001 (as above), N-2023, N-2024, M-031 (Android aftercrash run); the full M2 regression on all three
+  renderers.
