@@ -1,0 +1,190 @@
+{
+  "harness": 1,
+  "name": "2401-draw-shapes",
+  "about": "jd-shapes draws at hud.after every frame over the game's HUD: a red rectangle, a green outline 4 wide, a blue line 6 wide, a triangle blended red/green/blue, text in MessageFont26 (left at 40,120 and centred on 304), a 4x4 checker from pixels drawn nearest at 64x64, a yellow square clipped to 60x60 and a white square turned 45 degrees; every call LUMA_OK, text_measure's box and the advance whole units above 0; then its function removed: nothing drawn from the next frame (pictures f90 with every shape where draw.c places it: a person's look, then the reference; f130 the game's own picture again)",
+  "proves": [
+    "draw.point",
+    "draw.shapes",
+    "draw.text",
+    "draw.clip",
+    "draw.image",
+    "draw.textures"
+  ],
+  "mods": [
+    "../mods/jd-shapes"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2401
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 110,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2402
+      ]
+    },
+    {
+      "at": 130,
+      "picture": "f130"
+    },
+    {
+      "at": 150,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jd-shapes.font",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.pixels",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.size",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.size_wh",
+      "is": 404,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.measure",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.measure_w",
+      "more": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.measure_h",
+      "more": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.at",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.rect",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.outline",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.line",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.tri",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.text",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.advance",
+      "more": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.centred",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.image",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.clip_push",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.clip_pop",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.transform_push",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.transform_pop",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-shapes.off",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "draw.at.4",
+      "has": {
+        "mod": "jd-shapes",
+        "point": 4
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jd-shapes",
+        "code": 470
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jd-shapes",
+        "code": 472
+      },
+      "absent": true
+    },
+    {
+      "picture": "f90",
+      "like": "2401-f90",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

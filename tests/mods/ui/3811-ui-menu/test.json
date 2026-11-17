@@ -1,0 +1,104 @@
+{
+  "harness": 1,
+  "name": "3811-ui-menu",
+  "about": "ju-menu (ui 1.2): CoinCounter's Counter made a one-row menu (LUMA_OK, focus on it, drawn a tenth larger); 33 rows and null panes refused (LUMA_E_ARGUMENT), a pane of another screen refused (LUMA_E_HANDLE) leaving the menu; menu_chosen gives -1 before any press, a null row LUMA_E_ARGUMENT; A held at 130 takes row 0 once, seen by the next frame's time handler; count 0 takes the menu away (LUMA_OK)",
+  "proves": [
+    "ui.menu"
+  ],
+  "mods": [
+    "../mods/ju-menu"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 130,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 160,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3803
+      ]
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-menu.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-menu.open_other",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-menu.pane",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-menu.pane_other",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-menu.rows",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-menu.rows_many",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-menu.rows_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-menu.rows_other",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-menu.chosen_now",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-menu.chosen_row",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-menu.chosen_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-menu.on_frame",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-menu.taken",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-menu.rows_none",
+      "is": 0
+    }
+  ]
+}

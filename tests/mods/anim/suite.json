@@ -1,0 +1,11 @@
+{
+  "harness": 1,
+  "tests": [
+    "3601-walk-replace",
+    "3602-walk-not-a-joint",
+    "3603-walk-events",
+    "3604-walk-events-past-end",
+    "3605-blink-shut",
+    "3606-blink-no-such-material"
+  ]
+}

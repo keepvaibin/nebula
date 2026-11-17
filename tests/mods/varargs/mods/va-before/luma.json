@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "va-before",
+  "name": "va-before",
+  "summary": "va-before (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

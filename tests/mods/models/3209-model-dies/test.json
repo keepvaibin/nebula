@@ -1,0 +1,107 @@
+{
+  "harness": 1,
+  "name": "3209-model-dies",
+  "about": "jm-dies attaches Coin 100 up on the first Goomba of Good Egg 1 the game animates, then kills it with its own kill (as a stomp does): the handle ends \"actor\" once, as the Goomba's own parts; detaching the ended handle is LUMA_E_HANDLE and an attach on the dead Goomba LUMA_E_ARGUMENT, nothing written (a coin over a Goomba, gone with its death smoke: a person's look)",
+  "proves": [
+    "model.actor_end"
+  ],
+  "mods": [
+    "../mods/jm-dies"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3202
+      ]
+    },
+    {
+      "at": 220,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3203
+      ]
+    },
+    {
+      "at": 260,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-dies.seen",
+      "is": 1
+    },
+    {
+      "fact": "mod.jm-dies.attach",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-dies.kill",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-dies.detach",
+      "is": -3
+    },
+    {
+      "fact": "mod.jm-dies.dead",
+      "is": -1
+    },
+    {
+      "fact": "mod.jm-dies.none_written",
+      "is": 1
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "mod": "jm-dies",
+        "model": "Coin",
+        "follow": "actor",
+        "placeholder": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.end.1",
+      "has": {
+        "why": "actor"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.end.1",
+      "count": 1
+    },
+    {
+      "fact": "model.attach.2",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-dies",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

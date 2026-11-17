@@ -1,0 +1,42 @@
+{
+  "harness": 1,
+  "name": "04a-spin-granted",
+  "about": "With the spin granted in the save, the spin gesture makes the player spin",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/spinwatch"
+  ],
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "shake": 10
+    },
+    {
+      "at": 90,
+      "picture": "spin"
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "setup.save.spin",
+      "is": true
+    },
+    {
+      "fact": "mod.spinwatch.spins",
+      "at_least": 1
+    }
+  ]
+}

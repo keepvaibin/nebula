@@ -1,0 +1,42 @@
+{
+  "harness": 1,
+  "name": "6102-import-refused",
+  "about": "jv-bad (a summary past 200 characters, L204) imported: the validator's Error refuses it, nothing is added (NOT IMPORTED, no folder) and the result page lists the finding",
+  "proves": [
+    "import.refuse"
+  ],
+  "mods": [
+    {
+      "path": "../../startval/mods/jv-bad",
+      "install": "import",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "import.jv-bad",
+      "has": {
+        "line": 1,
+        "text": "NOT IMPORTED",
+        "id": "",
+        "checked": true,
+        "refused": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "import.jv-bad",
+      "has": {
+        "code": 204,
+        "error": true
+      },
+      "when": "any"
+    }
+  ]
+}

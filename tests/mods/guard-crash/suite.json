@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "1632-not-resumed-deep",
+    "1633-not-resumed-game"
+  ]
+}

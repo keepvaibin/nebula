@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "ju-light",
+  "name": "ju-light",
+  "version": "1.0.0",
+  "summary": "J's test mod ju-light.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

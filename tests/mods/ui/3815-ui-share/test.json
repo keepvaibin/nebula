@@ -1,0 +1,218 @@
+{
+  "harness": 1,
+  "name": "3815-ui-share",
+  "about": "ju-share (ui 1.3): two mod rows on two pause-layer screens join the game's own menu focus beside the pause menu's buttons (share_rows): row 1 at 0,-122 between the lower button (0,-73) and Settings (0,-161), row 2 at 0,-215. Up from nothing reaches the upper button (Back), Down the lower one, Down again row 1 (shared_focus 1, ui.share.3, row 1's pane, focused), A takes row 1 (chosen 1, once), Up gives the highlight back to the lower button (focused 0), Up to Back, and A on Back closes the menu as the game does (the pad stays the game's). Row 2 is never highlighted. Refusals: null rows with a count, 33 rows, a handle never given, a null out. After the menu's end both screens close and shared_focus answers none",
+  "proves": [
+    "ui.share"
+  ],
+  "mods": [
+    "../mods/ju-share"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "hold": [
+        "PLUS"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 220,
+      "picture": "rows"
+    },
+    {
+      "at": 230,
+      "hold": [
+        "UP"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 250,
+      "hold": [
+        "DOWN"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 270,
+      "hold": [
+        "DOWN"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 290,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 320,
+      "hold": [
+        "UP"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 340,
+      "hold": [
+        "UP"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 360,
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 470,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-share.on_frame",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-share.open_1",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-share.open_2",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-share.pane_1",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-share.pane_2",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-share.move_1",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-share.move_2",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-share.share",
+      "is": 0,
+      "when": "all"
+    },
+    {
+      "fact": "mod.ju-share.null_rows",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-share.many",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-share.unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-share.focus_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-share.focused",
+      "is": 1,
+      "when": "any"
+    },
+    {
+      "fact": "mod.ju-share.focused",
+      "at_most": 1,
+      "when": "all"
+    },
+    {
+      "fact": "mod.ju-share.chosen",
+      "is": 1
+    },
+    {
+      "fact": "mod.ju-share.chosen",
+      "count": 1
+    },
+    {
+      "fact": "mod.ju-share.closed",
+      "is": 1
+    },
+    {
+      "fact": "mod.ju-share.close_1",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-share.close_2",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-share.after_focused",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-share.after_chosen",
+      "is": 0
+    },
+    {
+      "fact": "ui.share.3",
+      "has": {
+        "pane": "Row",
+        "focused": true,
+        "chosen": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.share.3",
+      "has": {
+        "focused": false
+      },
+      "when": "last"
+    },
+    {
+      "fact": "ui.share.4",
+      "absent": true
+    },
+    {
+      "picture": "rows",
+      "box": [
+        540,
+        545,
+        200,
+        16
+      ],
+      "mean_rgb": [
+        40,
+        160,
+        80
+      ],
+      "within": 40
+    },
+    {
+      "picture": "rows",
+      "like": "3815-{renderer}-rows.png",
+      "box": [
+        300,
+        420,
+        680,
+        300
+      ],
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "harness": 1,
+  "name": "6406-choose",
+  "about": "CHOOSE, the clipboard turned to not allowed, DONE: code yes, net.internet yes, system.clipboard no. From the buttons: up to the clipboard row (the last permission), right turns it, down to the buttons, left to DONE (the first)",
+  "proves": [
+    "consent.choose"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jc-choose",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 180,
+      "key": "left"
+    },
+    {
+      "at": 240,
+      "key": "space"
+    },
+    {
+      "at": 300,
+      "key": "up"
+    },
+    {
+      "at": 360,
+      "key": "right"
+    },
+    {
+      "at": 420,
+      "key": "down"
+    },
+    {
+      "at": 480,
+      "key": "left"
+    },
+    {
+      "at": 540,
+      "key": "space"
+    },
+    {
+      "at": 660,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "consent.answer.jc-choose",
+      "has": {
+        "code": "yes",
+        "permissions": {
+          "net.internet": "yes",
+          "system.clipboard": "no"
+        }
+      },
+      "when": "any"
+    }
+  ]
+}

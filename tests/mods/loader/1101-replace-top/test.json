@@ -1,0 +1,46 @@
+{
+  "harness": 1,
+  "name": "1101-replace-top",
+  "about": "The higher mod holds a replace; the lower is refused with L805 naming it and stays off whole",
+  "proves": [
+    "kernel.hook.replace",
+    "kernel.refusal"
+  ],
+  "mods": [
+    "../mods/lt-rep1",
+    {
+      "path": "../mods/lt-rep2",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getPlayerLeft",
+      "signature": "s32()",
+      "args": [],
+      "fact": "left"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "left",
+      "is": 100
+    },
+    {
+      "fact": "mod.lt-rep1.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-rep2.started",
+      "absent": true
+    },
+    {
+      "log": "lt-rep2: .*replaces \"MR::getPlayerLeft\" .*which lt-rep1 replaces already"
+    }
+  ]
+}

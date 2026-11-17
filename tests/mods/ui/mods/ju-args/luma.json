@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ju-args",
+  "name": "ju-args",
+  "version": "1.0.0",
+  "summary": "J's test mod ju-args.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

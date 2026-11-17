@@ -1,0 +1,32 @@
+{
+  "harness": 1,
+  "name": "07b-call-unsupported",
+  "about": "A call whose signature has an unsupported parameter type is harness-error",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getDummyDisplayModelId",
+      "signature": "s32(const TableIter &, s32)",
+      "args": [
+        0,
+        0
+      ],
+      "fact": "x"
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": []
+}

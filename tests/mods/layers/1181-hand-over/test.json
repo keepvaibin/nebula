@@ -1,0 +1,70 @@
+{
+  "harness": 1,
+  "name": "1181-hand-over",
+  "about": "ly-choose's first answer starts the game again: the old process hands over its files (logs handing over, then ending) and the new one waits for that, not for the old one's end: host.handover_ms within 2000 ms, no fallback wait",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    "../mods/ly-choose"
+  ],
+  "starts": 2,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-choose.a_on",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-choose.b_on",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-choose.started",
+      "is": 1
+    },
+    {
+      "log": "host: restart",
+      "times": 1
+    },
+    {
+      "log": "host: handing over to a new process",
+      "times": 1,
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "log": "host: ending: the new process takes over",
+      "times": 1,
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "log": "host: started again: the process before it handed over its files after [0-9]+ ms",
+      "times": 1,
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "no_log": "host: started again: (no hand-over|the hand-over did not come|the process before it ended without)",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "host.handover_ms",
+      "at_most": 2000,
+      "systems": [
+        "windows"
+      ]
+    }
+  ]
+}

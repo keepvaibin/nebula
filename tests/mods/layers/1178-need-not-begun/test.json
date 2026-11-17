@@ -1,0 +1,60 @@
+{
+  "harness": 1,
+  "name": "1178-need-not-begun",
+  "about": "ly-dep-fault needs ly-lib-fault, whose layers call faults: ly-dep-fault never begins and is named",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ly-lib-fault",
+      "loads": false
+    },
+    {
+      "path": "../mods/ly-dep-fault",
+      "loads": false
+    }
+  ],
+  "starts": 1,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-lib-fault.entered",
+      "count": 1
+    },
+    {
+      "fact": "mod.ly-lib-fault.survived",
+      "absent": true
+    },
+    {
+      "fact": "mod.ly-lib-fault.started",
+      "absent": true
+    },
+    {
+      "log": "\\[mod ly-lib-fault\\] GUARD: its code failed \\(start: layers\\): "
+    },
+    {
+      "log": "ly-lib-fault.*its begin or start failed and the guard stopped it"
+    },
+    {
+      "no_log": "host: restart"
+    },
+    {
+      "fact": "mod.ly-dep-fault.started",
+      "absent": true
+    },
+    {
+      "log": "ly-dep-fault \\(mod\\.[a-z]+\\) not started: it needs ly-lib-fault, which did not start"
+    }
+  ],
+  "faults": [
+    {
+      "mod": "ly-lib-fault"
+    }
+  ]
+}

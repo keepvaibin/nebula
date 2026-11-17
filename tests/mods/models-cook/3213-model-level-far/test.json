@@ -1,0 +1,116 @@
+{
+  "harness": 1,
+  "name": "3213-model-level-far",
+  "about": "jm-lod attaches its two-level model jm-lod:lv (red base, blue lvLow) to Toy Time's AsteroidBlockPlanet, which is in view group 26 and has its own Low model. Away from the group's cubes the base is drawn; with the player held in the group's far view cube the game draws the planet's Low and the attached model's Low (blue) with it; held in the group's near cube, the base (red) again. No distance rule: the level's view cube picks",
+  "proves": [
+    "model.levels"
+  ],
+  "mods": [
+    "../../models/mods/jm-lod"
+  ],
+  "stage": {
+    "name": "FactoryGalaxy",
+    "scenario": 2
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3202
+      ]
+    },
+    {
+      "at": 440,
+      "picture": "far"
+    },
+    {
+      "at": 500,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3203
+      ]
+    },
+    {
+      "at": 740,
+      "picture": "near"
+    },
+    {
+      "at": 760,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-lod.seen",
+      "is": 1
+    },
+    {
+      "fact": "mod.jm-lod.attach",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "mod": "jm-lod",
+        "model": "jm-lod:lv",
+        "placeholder": false,
+        "drawn": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.attach.1",
+      "field": "levels",
+      "is": [
+        "Low"
+      ],
+      "when": "last"
+    },
+    {
+      "fact": "model.level.1",
+      "has": {
+        "level": "base"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.level.1",
+      "has": {
+        "level": "Low"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.level.1",
+      "field": "level",
+      "is": "base",
+      "when": "last"
+    },
+    {
+      "fact": "model.level.1",
+      "count": 3
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-lod",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

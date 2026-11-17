@@ -1,0 +1,48 @@
+{
+  "harness": 1,
+  "name": "3606-blink-no-such-material",
+  "about": "ga-blink-bad names the material KuriboBody, which the Goomba lacks: refused naming it, the model and the model's materials (Cook.Anim.NoGameMaterial, rule 804), no clip made, the stage plays with the game's blink",
+  "proves": [
+    "anim.materials"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ga-blink-bad",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "ga-blink-bad",
+        "level": "error",
+        "code": 804
+      },
+      "when": "any"
+    },
+    {
+      "fact": "cook.model",
+      "matching": {
+        "mod": "ga-blink-bad"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

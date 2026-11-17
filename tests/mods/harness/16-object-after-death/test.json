@@ -1,0 +1,51 @@
+{
+  "harness": 1,
+  "name": "16-object-after-death",
+  "about": "An object read after a stage change the harness did not make is the new scene's, never the freed one (H-2): the player falls, the stage starts again",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "read": "NameObj.mName",
+      "of": "object:カメラコンテキスト#0",
+      "type": "const char *",
+      "fact": "ctx.before"
+    },
+    {
+      "at": 150,
+      "call": "MR::forceKillPlayerByAbyss",
+      "signature": "void()",
+      "args": []
+    },
+    {
+      "at": 1500,
+      "read": "NameObj.mName",
+      "of": "object:カメラコンテキスト#0",
+      "type": "const char *",
+      "fact": "ctx.after"
+    },
+    {
+      "at": 1560,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ctx.before",
+      "is": "カメラコンテキスト"
+    },
+    {
+      "fact": "ctx.after",
+      "is": "カメラコンテキスト"
+    }
+  ]
+}

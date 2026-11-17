@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jt-stripes",
+  "name": "jt-stripes",
+  "version": "1.0.0",
+  "summary": "J's test mod jt-stripes.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

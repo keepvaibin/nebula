@@ -1,0 +1,103 @@
+{
+  "harness": 1,
+  "name": "2506-inject",
+  "about": "in-inject (input.inject granted) holds the stick up on player 0 for 120 frames: the game reads it (injected, stick up, a button past the game's dropped, a stick x not a number read 0 and noted), the player's own read stays uninjected, Mario moves; after the end the read is the player's again",
+  "proves": [
+    "services.input"
+  ],
+  "mods": [
+    "../mods/in-inject"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.in-inject.after_end_injected",
+        "exists": true
+      },
+      "end": true,
+      "timeout": 1200
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-inject.begin_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-inject.again_busy",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-inject.player2_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-inject.small_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-inject.zero_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-inject.has_pos",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-inject.set_nan_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-inject.set_failed",
+      "absent": true
+    },
+    {
+      "fact": "mod.in-inject.injected_frames",
+      "is": 118
+    },
+    {
+      "fact": "mod.in-inject.up_frames",
+      "is": 118
+    },
+    {
+      "fact": "mod.in-inject.buttons_zero_frames",
+      "is": 118
+    },
+    {
+      "fact": "mod.in-inject.raw_free_frames",
+      "is": 118
+    },
+    {
+      "fact": "mod.in-inject.moved_sq",
+      "at_least": 40000
+    },
+    {
+      "fact": "mod.in-inject.end_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-inject.stale_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-inject.after_end_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-inject.after_end_injected",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "in-inject",
+        "code": 101
+      },
+      "when": "any"
+    }
+  ]
+}

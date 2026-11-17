@@ -1,0 +1,24 @@
+{
+  "effects": {
+    "trio": {
+      "draw": "AFTER_INDIRECT",
+      "particles": [
+        {
+          "like": "TicoTouchGlow00"
+        },
+        {
+          "like": "TicoTouchGlow00",
+          "shape": {
+            "primary": "ff4040ff"
+          }
+        },
+        {
+          "like": "TicoTouchGlow00",
+          "shape": {
+            "primary": "4060ffff"
+          }
+        }
+      ]
+    }
+  }
+}

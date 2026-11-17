@@ -1,0 +1,38 @@
+{
+  "harness": 1,
+  "name": "6602-crash",
+  "about": "After a crash with mods on (mods/.safe_start empty): the top row says why",
+  "proves": [
+    "mods.safe_start.crash"
+  ],
+  "mods": [
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "safe_start": "crash",
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modscreen.nebula",
+      "has": {
+        "line": 0,
+        "page": "list",
+        "label": "NEBULA CLOSED UNEXPECTEDLY WITH MODS ON. EVERY MOD IS OFF UNTIL THE NEXT START"
+      },
+      "when": "any",
+      "scope": "installation"
+    }
+  ]
+}

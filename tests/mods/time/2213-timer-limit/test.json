@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "2213-timer-limit",
+  "about": "The 65th timer: LUMA_E_LIMIT, Service.Limit with 64",
+  "proves": [
+    "services.time.timers"
+  ],
+  "mods": [
+    "../mods/tm-limit"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-limit.made",
+      "is": 64
+    },
+    {
+      "fact": "mod.tm-limit.last",
+      "is": -4
+    },
+    {
+      "log": "tm-limit: time\\.timer reached its limit of 64; it did nothing\\."
+    }
+  ]
+}

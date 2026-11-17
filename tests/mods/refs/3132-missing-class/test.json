@@ -1,0 +1,63 @@
+{
+  "harness": 1,
+  "name": "3132-missing-class",
+  "about": "A placement of a class no mod makes: the after-start check says Content.MissingClass (620) once for it, the placeholder object stands at the place (picture f120: the checker cube 600 units along x from the start), the stage plays on (the player walks)",
+  "proves": [
+    "refs.after_start",
+    "refs.missing_class"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jr-class",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "picture": "f120"
+    },
+    {
+      "at": 130,
+      "stick": [
+        1,
+        0
+      ],
+      "frames": 40
+    },
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "refs.after_start",
+      "field": "missing",
+      "is": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jr-class",
+        "code": 620
+      },
+      "count": 1
+    },
+    {
+      "fact": "placeholder",
+      "matching": {
+        "mod": "jr-class",
+        "kind": "class",
+        "found": "JrNoSuchClass",
+        "file": "layers/base/patches/StageData/EggStarGalaxy.arc/jmp/placement/common/objinfo.json",
+        "line": 8
+      },
+      "count": 1
+    }
+  ]
+}

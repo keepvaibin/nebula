@@ -1,0 +1,64 @@
+{
+  "harness": 1,
+  "name": "2227-empty",
+  "about": "get_text and get_image on the empty clipboard: TEXT and IMAGE with LUMA_E_NOT_FOUND",
+  "proves": [
+    "services.system.clipboard"
+  ],
+  "mods": [
+    "../mods/sys-clip-empty"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4242
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-clip-empty.get_text",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-clip-empty.get_image",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-clip-empty.ev_kind",
+      "is": 1,
+      "when": "any"
+    },
+    {
+      "fact": "mod.sys-clip-empty.ev_kind",
+      "is": 2,
+      "when": "any"
+    },
+    {
+      "fact": "mod.sys-clip-empty.ev_status",
+      "is": -7,
+      "when": "all"
+    },
+    {
+      "fact": "mod.sys-clip-empty.events",
+      "is": 2
+    }
+  ]
+}

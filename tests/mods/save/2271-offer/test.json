@@ -1,0 +1,211 @@
+{
+  "harness": 1,
+  "name": "2271-offer",
+  "about": "save.game's offer: file 1's export written to the data folder (fs) as offer.sav and a broken file as broken.sav; a missing path LUMA_E_NOT_FOUND; broken.sav LUMA_PENDING then its event LUMA_E_FORMAT (no screen); offer.sav opens the screen, a second offer while it is up LUMA_E_BUSY; file 1 (in play) skipped, file 2 picked, REPLACE: event LUMA_OK value 2, file 2 exported is the offered file byte for byte, Notes Save.Offered and Save.Replaced; again over the created file 2: its old bytes kept in luma/replaced first; an offer cancelled while its screen is up: LUMA_OK, no event, and the next offer is not busy",
+  "proves": [
+    "services.save.game",
+    "services.fs",
+    "services.permissions",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/save-g"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4268
+      ]
+    },
+    {
+      "at": 120,
+      "key": "down"
+    },
+    {
+      "at": 180,
+      "key": "space"
+    },
+    {
+      "at": 240,
+      "key": "space"
+    },
+    {
+      "at": 300,
+      "key": "esc"
+    },
+    {
+      "at": 400,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4269
+      ]
+    },
+    {
+      "at": 460,
+      "key": "down"
+    },
+    {
+      "at": 520,
+      "key": "space"
+    },
+    {
+      "at": 580,
+      "key": "space"
+    },
+    {
+      "at": 640,
+      "key": "esc"
+    },
+    {
+      "at": 720,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4270
+      ]
+    },
+    {
+      "at": 820,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-g.o_start",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o_export",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o_write1",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o_write2",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o_write_good",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.o_write_bad",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.o_missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-g.o_bad",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o_bad_status",
+      "is": -15
+    },
+    {
+      "fact": "mod.save-g.o_bad_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.o1",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o1_busy",
+      "is": -14
+    },
+    {
+      "fact": "mod.save-g.o1_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.o1_value",
+      "is": 2
+    },
+    {
+      "fact": "mod.save-g.o1_check",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o1_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o2",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o2_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.o2_value",
+      "is": 2
+    },
+    {
+      "fact": "mod.save-g.o3",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o3_cancel",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.o3_again",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.o3_cancel2",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.o_after_cancel",
+      "absent": true
+    },
+    {
+      "fact": "mod.save-g.o_other_event",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "save-g",
+        "source": "code",
+        "level": "note",
+        "code": 182,
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "save-g",
+        "source": "code",
+        "level": "note",
+        "code": 183,
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "LumaCore save: file 2 kept as luma/replaced/\\d{4}-\\d\\d-\\d\\d-\\d{6}-file2\\.bin before save-g's file replaces it",
+      "times": 1
+    }
+  ]
+}

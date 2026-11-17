@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fw-args",
+  "name": "fw-args",
+  "version": "1.0.0",
+  "summary": "J's test mod fw-args.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

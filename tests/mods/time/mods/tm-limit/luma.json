@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tm-limit",
+  "name": "tm-limit",
+  "summary": "tm-limit (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "harness": 1,
+  "name": "1502-taken-out",
+  "about": "nm-numbers taken out while the game runs: every number it set is the game's again (the function returns 2, the float is 1e-4 again), said in the log",
+  "proves": [
+    "kernel.numbers.taken_out"
+  ],
+  "mods": [
+    "../mods/nm-numbers",
+    "../mods/nm-watch"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "take_out": "nm-numbers",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.nm-numbers",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1501
+      ],
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "mod.nm-watch.after_float_game",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.nm-numbers.call_after",
+      "is": 7
+    },
+    {
+      "fact": "mod.nm-numbers.float_after",
+      "is": 1
+    },
+    {
+      "log": "\\[mod nm-numbers\\] its\\ 2\\ numbers\\ are\\ the\\ game's\\ again\\ \\(or\\ another\\ mod's\\)"
+    },
+    {
+      "fact": "mod.nm-watch.after_call",
+      "is": 2
+    },
+    {
+      "fact": "mod.nm-watch.after_float_game",
+      "is": 1
+    }
+  ]
+}

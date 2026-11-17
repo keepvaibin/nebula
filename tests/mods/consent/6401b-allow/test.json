@@ -1,0 +1,70 @@
+{
+  "harness": 1,
+  "name": "6401b-allow",
+  "about": "A mod on with code and net.internet (two hosts): the MODS page asks; the facts as shown, the focus on NOT NOW; ALLOW (two lefts) records both answers and the mod stays on",
+  "proves": [
+    "consent.screen",
+    "consent.allow"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jc-net",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 180,
+      "key": "left"
+    },
+    {
+      "at": 240,
+      "key": "left"
+    },
+    {
+      "at": 300,
+      "key": "space"
+    },
+    {
+      "at": 420,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "consent.shown.jc-net",
+      "has": {
+        "code": true,
+        "code_changed": false,
+        "focus": "NOT NOW",
+        "rows": [
+          {
+            "name": "net.internet",
+            "label": "Internet",
+            "required": false,
+            "new": false,
+            "why": "Sends your best times to the board.",
+            "text": "Connects to the internet: api.example.org, *.example.net.",
+            "roots": ""
+          }
+        ]
+      },
+      "when": "any"
+    },
+    {
+      "fact": "consent.answer.jc-net",
+      "has": {
+        "code": "yes",
+        "permissions": {
+          "net.internet": "yes"
+        }
+      },
+      "when": "any"
+    }
+  ]
+}

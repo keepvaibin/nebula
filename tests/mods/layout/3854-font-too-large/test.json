@@ -1,0 +1,48 @@
+{
+  "harness": 1,
+  "name": "3854-font-too-large",
+  "about": "gl-font-bad asks for its font at size 96, where M's advance of 1500 units is 144 pixels, past the 127 the game's font form holds: the font is refused naming 84 as the largest size that fits (Cook.Font.TooLarge, rule 804), nothing of it is in the store, and the stage plays",
+  "proves": [
+    "layout.font"
+  ],
+  "mods": [
+    {
+      "path": "../mods/gl-font-bad",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "gl-font-bad",
+        "level": "error",
+        "code": 804
+      },
+      "when": "any"
+    },
+    {
+      "fact": "cook.font",
+      "matching": {
+        "mod": "gl-font-bad"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

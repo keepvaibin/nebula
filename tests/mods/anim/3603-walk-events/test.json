@@ -1,0 +1,50 @@
+{
+  "harness": 1,
+  "name": "3603-walk-events",
+  "about": "ga-events (no code) gives the Goomba's own walk three frame events (Walk.anim.json, written out of order): the cook writes Walk.events beside walk.bck, three rows checked against its 40 frames (cook.events), refuses nothing, and the stage plays",
+  "proves": [
+    "anim.events"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ga-events",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "cook.events",
+      "has": {
+        "mod": "ga-events",
+        "other": "Walk",
+        "rows": 3,
+        "frames": 40
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ga-events",
+        "level": "error"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

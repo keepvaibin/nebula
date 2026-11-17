@@ -1,0 +1,29 @@
+{
+  "harness": 1,
+  "name": "1108-api0-refused",
+  "about": "A luma_mod that says api 0 is refused and its start never runs",
+  "proves": [
+    "kernel.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../mods/lt-api0",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-api0.started",
+      "absent": true
+    },
+    {
+      "log": "lt-api0.*api 0"
+    }
+  ]
+}

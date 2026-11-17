@@ -1,0 +1,66 @@
+{
+  "harness": 1,
+  "name": "2228-text-mistakes",
+  "about": "take_text after the event's call: LUMA_E_HANDLE; set_text not UTF-8: LUMA_E_ARGUMENT text; both reported",
+  "proves": [
+    "services.system.clipboard",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/sys-clip-text"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4242
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4243
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-clip-text.take_after",
+      "is": -3
+    },
+    {
+      "fact": "mod.sys-clip-text.set_bad",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-clip-text.events",
+      "is": 2
+    },
+    {
+      "log": "sys-clip-text: system\\.clipboard\\.take_text was given a handle that is closed or not its own\\.",
+      "times": 1
+    },
+    {
+      "log": "sys-clip-text: system\\.clipboard\\.set_text was given a wrong text; it did nothing\\."
+    }
+  ]
+}

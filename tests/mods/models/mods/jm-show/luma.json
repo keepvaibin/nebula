@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jm-show",
+  "name": "jm-show",
+  "version": "1.0.0",
+  "summary": "J's test mod jm-show.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

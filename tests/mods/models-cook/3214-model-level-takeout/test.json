@@ -1,0 +1,83 @@
+{
+  "harness": 1,
+  "name": "3214-model-level-takeout",
+  "about": "jm-lod's two-level model drawn at its Low level in view group 26's far cube, then the mod is taken out: the handle ends \"mod\" once and both levels stop drawing (no level fact after the end)",
+  "proves": [
+    "model.levels_freed"
+  ],
+  "mods": [
+    "../../models/mods/jm-lod"
+  ],
+  "stage": {
+    "name": "FactoryGalaxy",
+    "scenario": 2
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3202
+      ]
+    },
+    {
+      "at": 440,
+      "picture": "far"
+    },
+    {
+      "at": 460,
+      "take_out": "jm-lod"
+    },
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-lod.attach",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "field": "levels",
+      "is": [
+        "Low"
+      ],
+      "when": "last"
+    },
+    {
+      "fact": "model.level.1",
+      "has": {
+        "level": "Low"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.level.1",
+      "count": 2
+    },
+    {
+      "fact": "model.end.1",
+      "has": {
+        "why": "mod"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.end.1",
+      "count": 1
+    }
+  ]
+}

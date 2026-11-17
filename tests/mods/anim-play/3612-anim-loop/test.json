@@ -1,0 +1,140 @@
+{
+  "harness": 1,
+  "name": "3612-anim-loop",
+  "about": "ja-loop plays Sway as the clip says (a loop) at rate 2 with a mark at 30: the mark comes every loop, frame reads a frame inside the clip and its last, stop ends it (LUMA_E_CANCELLED, stopped), then the ended play answers LUMA_E_HANDLE",
+  "proves": [
+    "anim.how",
+    "anim.mark",
+    "anim.frame",
+    "anim.end"
+  ],
+  "mods": [
+    "../mods/ja-loop"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3601
+      ]
+    },
+    {
+      "at": 150,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3602
+      ]
+    },
+    {
+      "at": 160,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3603
+      ]
+    },
+    {
+      "at": 170,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3604
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ja-loop.play",
+      "is": 0
+    },
+    {
+      "fact": "anim.play.1",
+      "has": {
+        "clip": "Sway",
+        "kinds": [
+          "bck"
+        ],
+        "loops": true,
+        "rate": 2
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.ja-loop.frame",
+      "is": 0
+    },
+    {
+      "fact": "mod.ja-loop.inside",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-loop.last",
+      "at_least": 59
+    },
+    {
+      "fact": "mod.ja-loop.last",
+      "at_most": 61
+    },
+    {
+      "fact": "anim.frame.1",
+      "exists": true
+    },
+    {
+      "fact": "mod.ja-loop.ev1_mark0",
+      "at_least": 2
+    },
+    {
+      "fact": "mod.ja-loop.stop",
+      "is": 0
+    },
+    {
+      "fact": "mod.ja-loop.stop2",
+      "is": -3
+    },
+    {
+      "fact": "mod.ja-loop.frame2",
+      "is": -3
+    },
+    {
+      "fact": "anim.end.1",
+      "is": {
+        "why": "stop"
+      }
+    },
+    {
+      "fact": "mod.ja-loop.ev1_end_status",
+      "is": -12
+    },
+    {
+      "fact": "mod.ja-loop.ev1_end_why",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-loop.ev1_ends",
+      "is": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ja-loop",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

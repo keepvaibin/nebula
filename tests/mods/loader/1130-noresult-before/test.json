@@ -1,0 +1,58 @@
+{
+  "harness": 1,
+  "name": "1130-noresult-before",
+  "about": "A before that skips a reference-result function without writing: the function runs, said once",
+  "proves": [
+    "kernel.hook.before"
+  ],
+  "mods": [
+    "../mods/lt-noresult"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4246
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 70,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4246
+      ],
+      "fact": "ran_again"
+    },
+    {
+      "at": 80,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ran",
+      "is": 3
+    },
+    {
+      "fact": "ran_again",
+      "is": 3
+    },
+    {
+      "log": "lt-noresult: a hook on CameraLocalUtil::getVecReg.*gave no result, so the game's own function ran",
+      "times": 1
+    },
+    {
+      "no_log": "a hook on .*getVecReg.*seen"
+    }
+  ]
+}

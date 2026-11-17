@@ -1,0 +1,11 @@
+{
+  "kind": "effect",
+  "file": "jump.wav",
+  "volume": 0.8,
+  "pitch": [
+    0.95,
+    1.05
+  ],
+  "bus": "effects",
+  "positioned": false
+}

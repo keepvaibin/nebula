@@ -1,0 +1,93 @@
+{
+  "harness": 1,
+  "name": "2607-capture-camera",
+  "about": "the camera (capture.camera, granted): RGBA frames with stride width × 4, or ENDED ABSENT on a machine without one; a 2nd open LIMIT; 5000 wide, a width without a height, 120 fps, a null fn ARGUMENT; closed, closed again HANDLE",
+  "proves": [
+    "services.capture.camera",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/capture-camera"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.capture-camera.first_event",
+        "exists": true
+      },
+      "timeout": 3600,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4802
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.capture-camera.others",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.capture-camera.open_answer",
+      "is": 1
+    },
+    {
+      "fact": "mod.capture-camera.open_twice",
+      "is": 1
+    },
+    {
+      "fact": "mod.capture-camera.width_5000",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-camera.no_height",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-camera.fps_120",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-camera.no_fn",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-camera.heard_or_absent",
+      "is": 1
+    },
+    {
+      "fact": "mod.capture-camera.shapes_right",
+      "is": 1
+    },
+    {
+      "fact": "mod.capture-camera.ended_other",
+      "is": 0
+    },
+    {
+      "fact": "mod.capture-camera.close_answer",
+      "is": 1
+    },
+    {
+      "fact": "mod.capture-camera.close_again",
+      "is": -3
+    },
+    {
+      "fact": "mod.capture-camera.others",
+      "is": 0
+    }
+  ]
+}

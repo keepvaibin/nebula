@@ -1,0 +1,164 @@
+{
+  "harness": 1,
+  "name": "2705-ipc",
+  "about": "endpoints on this device (1.2): ipc_listen on the mod's endpoint, ipc_connect to it, ping and pong:ping both ways, the client's close is the server's CLOSED 0; the same endpoint again: EXISTS; port on it: HANDLE; a wrong or 65-byte name: ARGUMENT; net.internet's ipc calls: DENIED; an endpoint nobody listens on: ERROR NOT_FOUND",
+  "proves": [
+    "services.net.local",
+    "services.net.ipc",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/net-ipc"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4501
+      ]
+    },
+    {
+      "at": 300,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4502
+      ]
+    },
+    {
+      "at": 320,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-ipc.listen",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-ipc.listen_twice",
+      "is": -8
+    },
+    {
+      "fact": "mod.net-ipc.port_ipc",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-ipc.bad_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-ipc.long_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-ipc.internet_connect",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-ipc.internet_listen",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-ipc.connect",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.connect_nobody",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.connected",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.send_ping",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-ipc.accepted",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.accepted_from_listener",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.server_data",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.server_got_ping",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.send_pong",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-ipc.client_data",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.client_got_pong",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.close_client",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-ipc.closed",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.closed_is_server",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.closed_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-ipc.sent",
+      "is": 2
+    },
+    {
+      "fact": "mod.net-ipc.errors_client",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-ipc.nobody_errors",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ipc.nobody_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.net-ipc.others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-ipc.close_listener",
+      "is": 0
+    },
+    {
+      "log": "net-ipc: net\\.local\\.ipc_connect was given a wrong name; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "net-ipc",
+        "english": "net-ipc: net.local.ipc_connect was given a wrong name; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    }
+  ]
+}

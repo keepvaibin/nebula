@@ -1,0 +1,81 @@
+{
+  "harness": 1,
+  "name": "2242-states",
+  "about": "find: a mod refused by the check (L505) REFUSED, one whose code was not allowed NOT_STARTED, itself RUNNING, an id not installed LUMA_E_NOT_FOUND",
+  "proves": [
+    "services.mods",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/mods-a",
+    {
+      "path": "../mods/mods-refused",
+      "loads": false
+    },
+    {
+      "path": "../mods/mods-denied",
+      "loads": false,
+      "code": "deny"
+    }
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4251
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-a.find_refused",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.state_refused",
+      "is": 2
+    },
+    {
+      "fact": "mod.mods-a.find_denied",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.state_denied",
+      "is": 3
+    },
+    {
+      "fact": "mod.mods-a.find_self",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.state_self",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.find_none",
+      "is": -7
+    },
+    {
+      "fact": "mod.mods-a.state_none",
+      "absent": true
+    },
+    {
+      "fact": "mod.mods-refused.started",
+      "absent": true
+    },
+    {
+      "fact": "mod.mods-denied.started",
+      "absent": true
+    },
+    {
+      "log": "mods-refused: mod\\.(dll|so|dylib): the game has no service \\\"mods\\\" at version 1\\.9"
+    }
+  ]
+}

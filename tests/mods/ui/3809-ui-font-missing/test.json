@@ -1,0 +1,58 @@
+{
+  "harness": 1,
+  "name": "3809-ui-font-missing",
+  "about": "ju-font-bad opens GlFont whose font the cook refused (G's gl-font-bad): the layout still names Luma/ju-font-bad/fonts/GlTitle.brfnt, which the store lacks: Content.MissingFont once, the message font stands in, the screen opens and draws",
+  "proves": [
+    "ui.mod_font"
+  ],
+  "mods": [
+    "../mods/ju-font-bad"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-font-bad.open",
+      "is": 0
+    },
+    {
+      "fact": "font.1",
+      "has": {
+        "name": "Luma/ju-font-bad/fonts/GlTitle.brfnt",
+        "loaded": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-font-bad",
+        "code": 672
+      },
+      "count": 1
+    },
+    {
+      "fact": "ui.screen.1",
+      "field": "drawn",
+      "is": true,
+      "when": "any"
+    }
+  ]
+}

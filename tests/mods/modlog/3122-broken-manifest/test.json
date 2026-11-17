@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "3122-broken-manifest",
+  "about": "Host half. A .luma whose luma.json is not JSON: one VALIDATOR entry L201 naming luma.json and its line; at the title one summary notice of 1; the validator's own words in English",
+  "proves": [
+    "modlog.validator",
+    "modlog.notice.summary"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jl-broken",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jl-broken",
+        "source": "validator",
+        "level": "error",
+        "code": 201,
+        "file": "luma.json",
+        "line": 2
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog.notice",
+      "has": {
+        "row": "ModLog.Summary",
+        "count": 1
+      },
+      "when": "any",
+      "scope": "installation"
+    }
+  ]
+}

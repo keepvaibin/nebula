@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "reg-order-b",
+  "name": "reg-order-b",
+  "summary": "reg-order-b (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

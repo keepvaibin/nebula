@@ -1,0 +1,35 @@
+{
+  "harness": 1,
+  "name": "1901-va-call",
+  "about": "A mod calls MR::formatTextV by name with its own va_list (u\"%d\", 4247): 4 characters, '4' to '7'",
+  "proves": [
+    "kernel.varargs.call"
+  ],
+  "mods": [
+    "../mods/va-call"
+  ],
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.va-call.count",
+        "exists": true
+      },
+      "end": true,
+      "timeout": 600
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.va-call.count",
+      "is": 4
+    },
+    {
+      "fact": "mod.va-call.first",
+      "is": 52
+    },
+    {
+      "fact": "mod.va-call.last",
+      "is": 55
+    }
+  ]
+}

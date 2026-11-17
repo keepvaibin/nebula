@@ -1,0 +1,59 @@
+{
+  "harness": 1,
+  "name": "1161-stop-hook",
+  "about": "k1-stop's stop calls core->hook while the mod is taken out: refused (-1) and said; after its library closed, a call of MR::getRandom(s32, s32) does not reach it and the game goes on",
+  "proves": [
+    "kernel.reload.take_out"
+  ],
+  "mods": [
+    "../mods/k1-stop"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "take_out": "k1-stop",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.k1-stop",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4247
+      ],
+      "fact": "later"
+    },
+    {
+      "after": {
+        "fact": "later",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.k1-stop.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.k1-stop.stop_hook",
+      "is": -1
+    },
+    {
+      "fact": "mod.k1-stop.hooked_after_stop",
+      "count": 0
+    },
+    {
+      "log": "\\[mod k1-stop\\] hook refused: the mod is being taken out"
+    }
+  ]
+}

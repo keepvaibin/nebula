@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "gs-sfx-bad",
+  "version": "1.0.0",
+  "name": "gs-sfx-bad",
+  "summary": "gs-sfx-bad (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

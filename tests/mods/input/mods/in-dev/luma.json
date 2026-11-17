@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "in-dev",
+  "name": "in-dev",
+  "summary": "in-dev (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "input.devices",
+      "why": "The input test asks for it."
+    }
+  ]
+}

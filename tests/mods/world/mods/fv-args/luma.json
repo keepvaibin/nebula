@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fv-args",
+  "name": "fv-args",
+  "version": "1.0.0",
+  "summary": "J's test mod fv-args.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

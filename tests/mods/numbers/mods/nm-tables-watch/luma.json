@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "nm-tables-watch",
+  "name": "nm-tables-watch",
+  "summary": "nm-tables-watch (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

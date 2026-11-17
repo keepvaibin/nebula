@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jd-points",
+  "name": "jd-points",
+  "version": "1.0.0",
+  "summary": "J's test mod jd-points.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

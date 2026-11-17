@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "reg-again",
+  "name": "reg-again",
+  "summary": "reg-again (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "harness": 1,
+  "name": "1625-override-access",
+  "about": "guard-9-1 faults (access) in GuardShell's override of LiveActor::calcAnim, before it proceeds: caught at the boundary, the mod off and taken out at the next frame, GUARD in the log and the mod log, the game goes on",
+  "proves": [
+    "kernel.guard.resume",
+    "kernel.guard.boundaries"
+  ],
+  "mods": [
+    "../mods/guard-9-1"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "takeout.guard-9-1",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1625
+      ],
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-9-1.entered",
+      "count": 1
+    },
+    {
+      "fact": "mod.guard-9-1.survived",
+      "absent": true
+    },
+    {
+      "fact": "mod.guard-9-1.again",
+      "absent": true
+    },
+    {
+      "log": "\\[mod guard-9-1\\] GUARD: its code failed \\(class: LiveActor::calcAnim\\): a memory access it may not make at .+\\+0x[0-9a-f]+, address 0x[0-9a-f]+\\. It is off until the next start; what it was changing may be half done\\."
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "guard-9-1",
+        "source": "guard",
+        "level": "error",
+        "code": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.guard-9-1.started",
+      "is": 1
+    },
+    {
+      "fact": "takeout.guard-9-1",
+      "exists": true
+    },
+    {
+      "fact": "after",
+      "exists": true
+    },
+    {
+      "fact": "mod.guard-9-1.defined",
+      "is": 1
+    }
+  ],
+  "faults": [
+    {
+      "mod": "guard-9-1"
+    }
+  ]
+}

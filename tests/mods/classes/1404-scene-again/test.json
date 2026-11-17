@@ -1,0 +1,49 @@
+{
+  "harness": 1,
+  "name": "1404-scene-again",
+  "about": "a new scene makes the class's objects again from its own stage: the first scene's objects are forgotten with it (each new object's data is zeroed), and the game goes on",
+  "proves": [
+    "kernel.classes.scene"
+  ],
+  "mods": [
+    "../mods/lc-shell"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 2
+      }
+    },
+    {
+      "at": 700,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-shell.made",
+      "at_least": 1,
+      "when": "first"
+    },
+    {
+      "fact": "mod.lc-shell.made",
+      "more": 8
+    },
+    {
+      "fact": "mod.lc-shell.made_zeroed",
+      "is": 1,
+      "when": "all"
+    },
+    {
+      "fact": "mod.lc-shell.made_data_found",
+      "is": 1,
+      "when": "all"
+    }
+  ]
+}

@@ -1,0 +1,125 @@
+{
+  "harness": 1,
+  "name": "2291b-forget",
+  "about": "the next run with fg-user removed loads file 1: fg-lib reads \"fg-user/kept\" (8849); the REMOVED MODS line lists fg-user for it alone; FORGET of fg-user: fg-lib gets FORGOTTEN once with \"fg-user\", its \"fg-user/kept\" is gone at once and after file 1 is loaded again, and its own \"own\" (8850) stays",
+  "proves": [
+    "services.save",
+    "services.mods"
+  ],
+  "continue_from": "2291a-forget-write",
+  "mods": [
+    "../mods/fg-lib",
+    {
+      "path": "../mods/fg-user",
+      "remove": true
+    },
+    "../../save/mods/save-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4291
+      ],
+      "at": 10
+    },
+    {
+      "at": 20,
+      "forget": "fg-user"
+    },
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4292
+      ],
+      "after": {
+        "fact": "mod.fg-lib.forgotten_count",
+        "exists": true
+      },
+      "timeout": 300
+    },
+    {
+      "after": {
+        "fact": "mod.fg-lib.for_after",
+        "exists": true
+      },
+      "load_file": 1,
+      "timeout": 300
+    },
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4293
+      ],
+      "after": {
+        "fact": "file.loaded",
+        "exists": true
+      },
+      "timeout": 900
+    },
+    {
+      "after": {
+        "fact": "mod.fg-lib.for_loaded",
+        "exists": true
+      },
+      "end": true,
+      "timeout": 300
+    }
+  ],
+  "expect": [
+    {
+      "fact": "setup.file",
+      "is": "loaded"
+    },
+    {
+      "fact": "mod.fg-lib.for_before",
+      "is": 8849
+    },
+    {
+      "fact": "mod.fg-lib.own_before",
+      "is": 8850
+    },
+    {
+      "fact": "mod.fg-lib.forgotten_count",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.fg-lib.forgotten_user",
+      "is": 1
+    },
+    {
+      "fact": "mod.fg-lib.forgotten_size",
+      "is": 7
+    },
+    {
+      "fact": "mod.fg-lib.for_after",
+      "is": -7
+    },
+    {
+      "fact": "mod.fg-lib.own_after",
+      "is": 8850
+    },
+    {
+      "fact": "mod.fg-lib.for_loaded",
+      "is": -7
+    },
+    {
+      "fact": "mod.fg-lib.own_loaded",
+      "is": 8850
+    },
+    {
+      "no_log": "not on the REMOVED MODS line"
+    }
+  ]
+}

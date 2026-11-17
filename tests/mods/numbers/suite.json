@@ -1,0 +1,9 @@
+{
+  "harness": 1,
+  "tests": [
+    "1501-set-by-name",
+    "1502-taken-out",
+    "1503-tables-by-name",
+    "1504-tables-taken-out"
+  ]
+}

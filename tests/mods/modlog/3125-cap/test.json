@@ -1,0 +1,47 @@
+{
+  "harness": 1,
+  "name": "3125-cap",
+  "about": "300 entries of one mod, then one of another: 256 kept and ModLog.TooMany 44; the other's kept",
+  "proves": [
+    "modlog.limits"
+  ],
+  "mods": [
+    "../mods/jl-many1",
+    "../mods/jl-one"
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jl-many1",
+        "row": "ModLog.TooMany"
+      },
+      "field": "count",
+      "is": 44,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "count": 1,
+      "matching": {
+        "mod": "jl-one"
+      }
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jl-one",
+        "file": "jl_many.lumi",
+        "line": 1,
+        "count": 1
+      },
+      "when": "any"
+    }
+  ]
+}

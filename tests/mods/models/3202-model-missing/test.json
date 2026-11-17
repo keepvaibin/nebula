@@ -1,0 +1,85 @@
+{
+  "harness": 1,
+  "name": "3202-model-missing",
+  "about": "jm-missing attaches JmNoSuchModel twice: LUMA_OK both, the placeholder model each time, Content.MissingModel one entry counted twice",
+  "proves": [
+    "model.missing"
+  ],
+  "mods": [
+    "../mods/jm-missing"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 70,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3202
+      ]
+    },
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-missing.attach1",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-missing.attach2",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "mod": "jm-missing",
+        "model": "NebulaPlaceholder",
+        "placeholder": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.attach.2",
+      "has": {
+        "placeholder": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jm-missing",
+        "source": "content",
+        "level": "error",
+        "code": 621
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-missing",
+        "code": 621
+      },
+      "field": "count",
+      "is": 2,
+      "when": "last"
+    }
+  ]
+}

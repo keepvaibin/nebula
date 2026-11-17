@@ -1,0 +1,80 @@
+{
+  "harness": 1,
+  "name": "2807-assets-cook",
+  "about": "the game's cooker at run time (needs nebula_import's luma_cook_entry, contract 4): a text file cooked as it is and provided (its bytes the same), a cut model refused with the cooker's words and nothing provided; each answer by its request",
+  "proves": [
+    "services.assets.cook"
+  ],
+  "mods": [
+    "../mods/assets-cook"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.assets-cook.text_cooked",
+        "exists": true
+      },
+      "timeout": 3600,
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "mod.assets-cook.broken_absent",
+        "exists": true
+      },
+      "timeout": 3600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.assets-cook.text_cook",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-cook.broken_cook",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-cook.requests_differ",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-cook.text_cooked",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-cook.text_held",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-cook.text_bytes",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-cook.text_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-cook.broken_cooked",
+      "is": -15
+    },
+    {
+      "fact": "mod.assets-cook.broken_words",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-cook.broken_absent",
+      "is": -7
+    }
+  ]
+}

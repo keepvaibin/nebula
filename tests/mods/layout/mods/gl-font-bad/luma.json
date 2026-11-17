@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "gl-font-bad",
+  "version": "1.0.0",
+  "name": "gl-font-bad",
+  "summary": "gl-font-bad (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "spinwatch",
+  "version": "1.0.0",
+  "name": "spinwatch",
+  "summary": "spinwatch (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

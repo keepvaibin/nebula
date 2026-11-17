@@ -1,0 +1,15 @@
+{
+  "harness": 1,
+  "tests": [
+    "1201-shape",
+    "1202-bits",
+    "1203-global",
+    "1204-field-sig",
+    "1205-global-sig",
+    "1206-field-unbound",
+    "1207-global-unbound",
+    "1208-type-unbound",
+    "1209-field-optional",
+    "1210-same-twice"
+  ]
+}

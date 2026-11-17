@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-svc",
+  "name": "lt-svc",
+  "summary": "lt-svc (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

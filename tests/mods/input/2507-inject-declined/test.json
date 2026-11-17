@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "2507-inject-declined",
+  "about": "input.inject declared, declined: off before its start, Consent.OffDeclined names it",
+  "proves": [
+    "services.input",
+    "services.permissions"
+  ],
+  "mods": [
+    {
+      "path": "../mods/in-inject",
+      "permissions": {
+        "input.inject": "deny"
+      },
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-inject.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "in-inject",
+        "source": "loader",
+        "level": "note",
+        "row": "Consent.OffDeclined"
+      },
+      "when": "any"
+    }
+  ]
+}

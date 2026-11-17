@@ -1,0 +1,36 @@
+{
+  "harness": 1,
+  "name": "6104-import-already",
+  "about": "jv-good imported while the same jv-good is placed: nothing is added or replaced (ALREADY IN YOUR MODS)",
+  "proves": [
+    "import.already"
+  ],
+  "mods": [
+    {
+      "path": "../../startval/mods/jv-good",
+      "loads": false
+    },
+    {
+      "path": "../../startval/mods/jv-good",
+      "install": "import",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "import.jv-good",
+      "has": {
+        "line": 1,
+        "text": "ALREADY IN YOUR MODS",
+        "id": "jv-good"
+      },
+      "when": "any"
+    }
+  ]
+}

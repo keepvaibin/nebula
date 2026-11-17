@@ -1,0 +1,64 @@
+{
+  "harness": 1,
+  "name": "3871-sound-cooked",
+  "about": "gs-sfx (no code) brings two sound effects in assets/sfx: Jump (44.1 kHz stereo WAV, resampled to 24000 frames) and Hum (48 kHz 24-bit mono FLAC, 8192 frames, looped); the start cooks both to Luma/gs-sfx/sfx/*.nsfx (cook.sound), refuses nothing, and the stage plays",
+  "proves": [
+    "sound.effect"
+  ],
+  "mods": [
+    {
+      "path": "../mods/gs-sfx",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "cook.sound",
+      "has": {
+        "mod": "gs-sfx",
+        "other": "Luma/gs-sfx/sfx/Jump.nsfx",
+        "frames": 24000,
+        "channels": 2,
+        "rate": 44100,
+        "looped": 0
+      },
+      "when": "any"
+    },
+    {
+      "fact": "cook.sound",
+      "has": {
+        "mod": "gs-sfx",
+        "other": "Luma/gs-sfx/sfx/Hum.nsfx",
+        "frames": 8192,
+        "channels": 1,
+        "rate": 48000,
+        "looped": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "gs-sfx",
+        "level": "error"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

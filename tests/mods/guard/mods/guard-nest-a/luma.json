@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "guard-nest-a",
+  "name": "guard-nest-a",
+  "summary": "guard-nest-a (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

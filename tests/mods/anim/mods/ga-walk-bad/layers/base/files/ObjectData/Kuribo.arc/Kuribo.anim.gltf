@@ -1,0 +1,209 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "agents/luma/g/tests/anim/make_tests.py"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "Root",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "children": [
+        1
+      ]
+    },
+    {
+      "name": "Center",
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "translation": [
+        0.0,
+        0.7875,
+        0.0
+      ],
+      "children": [
+        2
+      ]
+    },
+    {
+      "name": "Body",
+      "rotation": [
+        0.49999999999999867,
+        0.5000000366025518,
+        0.49999999999999867,
+        0.4999999633974483
+      ],
+      "translation": [
+        0.0,
+        -0.5273,
+        0.0
+      ],
+      "children": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "name": "Head",
+      "rotation": [
+        0.7071067553046344,
+        0.7071068070684595,
+        -1.6408486525592004e-08,
+        -1.6408485324407094e-08
+      ],
+      "translation": [
+        0.3722,
+        -0.0029,
+        0.0
+      ],
+      "children": [
+        6
+      ]
+    },
+    {
+      "name": "LFoot",
+      "rotation": [
+        0.7071067553046344,
+        0.7071068070684595,
+        -1.6408486525592004e-08,
+        -1.6408485324407094e-08
+      ],
+      "translation": [
+        -0.1263,
+        -0.11689999999999999,
+        0.3
+      ]
+    },
+    {
+      "name": "RFoot",
+      "rotation": [
+        0.7071067553046344,
+        0.7071068070684595,
+        -1.6408486525592004e-08,
+        -1.6408485324407094e-08
+      ],
+      "translation": [
+        -0.1263,
+        -0.11689999999999999,
+        -0.3
+      ]
+    },
+    {
+      "name": "Hat"
+    }
+  ],
+  "animations": [
+    {
+      "name": "Walk",
+      "samplers": [
+        {
+          "input": 0,
+          "output": 1
+        },
+        {
+          "input": 2,
+          "output": 3
+        }
+      ],
+      "channels": [
+        {
+          "sampler": 0,
+          "target": {
+            "node": 2,
+            "path": "rotation"
+          }
+        },
+        {
+          "sampler": 1,
+          "target": {
+            "node": 3,
+            "path": "scale"
+          }
+        },
+        {
+          "sampler": 0,
+          "target": {
+            "node": 6,
+            "path": "rotation"
+          }
+        }
+      ]
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 5,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 2,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5126,
+      "count": 2,
+      "type": "VEC3"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 20
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 20,
+      "byteLength": 80
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 100,
+      "byteLength": 8
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 108,
+      "byteLength": 24
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 132,
+      "uri": "data:application/octet-stream;base64,AAAAAAAAgD4AAAA/AABAPwAAgD8AAAA/AQAAPwAAAD////8+QbAbP0KwGz/HtLg+xrS4PgAAAD8BAAA/AAAAP////z7ItLg+ybS4PkGwGz9BsBs/AAAAPwEAAD8AAAA/////PgAAAAAAAIA/zczMP83MzD/NzMw/zczMP83MzD/NzMw/"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "k1-fault",
+  "name": "k1-fault",
+  "summary": "k1-fault (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

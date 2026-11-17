@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "1182-texture-only-named",
+    "1183-merge-refused-named"
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "harness": 1,
+  "name": "2111-posted-twice",
+  "about": "A node posted twice before the frame is given once",
+  "proves": [
+    "services.events"
+  ],
+  "mods": [
+    "../mods/reg-twice"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4260
+      ]
+    },
+    {
+      "at": 31,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4261
+      ]
+    },
+    {
+      "at": 32,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4263
+      ]
+    },
+    {
+      "at": 33,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4264
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-twice.post",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-twice.given_1",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-twice.given_2",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-twice.given_3",
+      "is": 1
+    }
+  ]
+}

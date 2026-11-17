@@ -1,0 +1,56 @@
+{
+  "harness": 1,
+  "name": "3207-model-player-parts",
+  "about": "jm-parts lists the player's parts: LUMA_OK with no room and the total 10; with room for 2 the second is MarioHandR at HandR",
+  "proves": [
+    "model.player_parts"
+  ],
+  "mods": [
+    "../mods/jm-parts"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 100,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-parts.none",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-parts.total",
+      "is": 10
+    },
+    {
+      "fact": "mod.jm-parts.two",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-parts.second_hand_r",
+      "is": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-parts",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

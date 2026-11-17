@@ -1,0 +1,7 @@
+{
+  "verdict": "pass",
+  "facts": {
+    "setup.save.spin": false,
+    "mod.spinwatch.spins": 0
+  }
+}

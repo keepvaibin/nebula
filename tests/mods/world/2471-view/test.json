@@ -1,0 +1,270 @@
+{
+  "harness": 1,
+  "name": "2471-view",
+  "about": "fv-view: a 256x144 view drawn over the screen's top-left quarter: black before it has a camera (f70); the player from 450 along world +z (f110); set_on 0 keeps that picture while its camera looks away (f150); a WORLD rig at the player, offset (0, 150, 400): eye_of gives the eye 0, 150, 400 from him looking at his place (f190); main_eye moves the main camera to his side (f230), null gives the game's camera back (f270); release, again E_HANDLE, its texture drawn after E_HANDLE",
+  "proves": [
+    "draw.view"
+  ],
+  "mods": [
+    "../mods/fv-view"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2471
+      ]
+    },
+    {
+      "at": 70,
+      "picture": "f70"
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2472
+      ]
+    },
+    {
+      "at": 110,
+      "picture": "f110"
+    },
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2473
+      ]
+    },
+    {
+      "at": 150,
+      "picture": "f150"
+    },
+    {
+      "at": 160,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2474
+      ]
+    },
+    {
+      "at": 190,
+      "picture": "f190"
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2475
+      ]
+    },
+    {
+      "at": 230,
+      "picture": "f230"
+    },
+    {
+      "at": 240,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2476
+      ]
+    },
+    {
+      "at": 270,
+      "picture": "f270"
+    },
+    {
+      "at": 280,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2477
+      ]
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fv-view.create",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.texture",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.texture_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fv-view.at",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.image",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.camera",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.off",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.camera_off",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.on",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.rig",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.eye_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.eye_dx",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.eye_dy",
+      "is": 150
+    },
+    {
+      "fact": "mod.fv-view.eye_dz",
+      "is": 400
+    },
+    {
+      "fact": "mod.fv-view.eye_fov",
+      "is": 50
+    },
+    {
+      "fact": "mod.fv-view.main",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.main_back",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.release",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-view.release2",
+      "is": -3
+    },
+    {
+      "fact": "mod.fv-view.image_after",
+      "is": -3
+    },
+    {
+      "fact": "mod.fv-view.at_d2",
+      "at_most": 1
+    },
+    {
+      "picture": "f70",
+      "box": [
+        4,
+        4,
+        632,
+        352
+      ],
+      "mean_rgb": [
+        0,
+        0,
+        0
+      ],
+      "within": 3
+    },
+    {
+      "picture": "f110",
+      "like": "refs/{renderer}/f110.png",
+      "within": {
+        "rmse": 6.0
+      },
+      "box": [
+        0,
+        0,
+        640,
+        360
+      ]
+    },
+    {
+      "picture": "f150",
+      "like": "refs/{renderer}/f150.png",
+      "within": {
+        "rmse": 6.0
+      },
+      "box": [
+        0,
+        0,
+        640,
+        360
+      ]
+    },
+    {
+      "picture": "f190",
+      "like": "refs/{renderer}/f190.png",
+      "within": {
+        "rmse": 6.0
+      },
+      "box": [
+        0,
+        0,
+        640,
+        360
+      ]
+    },
+    {
+      "picture": "f230",
+      "like": "refs/{renderer}/f230.png",
+      "within": {
+        "rmse": 6.0
+      }
+    },
+    {
+      "picture": "f270",
+      "like": "refs/{renderer}/f270.png",
+      "within": {
+        "rmse": 6.0
+      }
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fv-view",
+        "code": 101
+      },
+      "absent": true
+    }
+  ]
+}

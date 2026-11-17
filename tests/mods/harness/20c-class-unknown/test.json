@@ -1,0 +1,29 @@
+{
+  "harness": 1,
+  "name": "20c-class-unknown",
+  "about": "A class the types file lacks is harness-error at read_test, naming it",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "read": "NameObj.mName",
+      "of": "class:NoSuchClass#0",
+      "type": "const char *",
+      "fact": "kuribo.name"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": []
+}

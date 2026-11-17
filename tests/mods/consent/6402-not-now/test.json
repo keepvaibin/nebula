@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "6402-not-now",
+  "about": "The same, NOT NOW (the focus as it opens): code no, the permission not asked, the mod off; the page does not ask again in this run",
+  "proves": [
+    "consent.notnow"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jc-net",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 180,
+      "key": "space"
+    },
+    {
+      "at": 360,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "consent.answer.jc-net",
+      "has": {
+        "code": "no",
+        "permissions": {
+          "net.internet": "not asked"
+        }
+      },
+      "when": "any"
+    },
+    {
+      "fact": "consent.answer.jc-net",
+      "count": 1
+    }
+  ]
+}

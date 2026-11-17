@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "jc-none",
+  "name": "jc-none",
+  "version": "1.0.0",
+  "summary": "J's test mod jc-none.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "why": "Opens the guide.",
+      "name": "system.links"
+    }
+  ]
+}

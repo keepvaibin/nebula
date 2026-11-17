@@ -1,0 +1,22 @@
+{
+  "harness": 1,
+  "name": "1143-take-out-cxx",
+  "about": "lt-cxx (C++ globals 1, 2, 3, 4 built in that order) taken out while the game runs: its stop first, then its destructors the last built first (4, 3, 2, 1), then its terminator, all before takeout.lt-cxx",
+  "proves": ["kernel.reload.take_out"],
+  "mods": ["../../loader/mods/lt-cxx"],
+  "stage": {"name": "EggStarGalaxy", "scenario": 1},
+  "steps": [
+    {"at": 120, "take_out": "lt-cxx", "wait": true},
+    {"after": {"fact": "takeout.lt-cxx", "exists": true}, "end": true}
+  ],
+  "expect": [
+    {"fact": "mod.lt-cxx.order", "is": 1234},
+    {"fact": "mod.lt-cxx.stopped", "is": 1},
+    {"fact": "mod.lt-cxx.destroyed_4", "is": 1},
+    {"fact": "mod.lt-cxx.destroyed_3", "is": 2},
+    {"fact": "mod.lt-cxx.destroyed_2", "is": 3},
+    {"fact": "mod.lt-cxx.destroyed_1", "is": 4},
+    {"fact": "mod.lt-cxx.terminated", "is": 5},
+    {"fact": "takeout.lt-cxx", "has": {"stopped": true, "finished": true}}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ja-events",
+  "name": "ja-events",
+  "version": "1.0.0",
+  "summary": "J's test mod ja-events.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

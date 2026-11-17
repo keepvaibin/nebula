@@ -1,0 +1,94 @@
+{
+  "harness": 1,
+  "name": "2609-audio-game",
+  "about": "the game's SE_PM_JUMP_M started by name heard everywhere and from the player's place; the placed one moved and stopped, stopped again HANDLE; the one with no place cannot be placed; a name not in the game's table NOT_FOUND; a null name, a null out, follow 5 ARGUMENT; 16 at once, the 17th LIMIT",
+  "proves": [
+    "services.audio",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/audio-game"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4802
+      ]
+    },
+    {
+      "at": 50,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.audio-game.everywhere",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-game.at_player",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-game.place",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-game.place_flat",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-game.missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.audio-game.null_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-game.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-game.follow_5",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-game.stop",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-game.stop_again",
+      "is": -3
+    },
+    {
+      "fact": "mod.audio-game.stop_flat",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-game.stray_stop",
+      "is": -3
+    },
+    {
+      "fact": "mod.audio-game.played_or_busy_16",
+      "is": 16
+    },
+    {
+      "fact": "mod.audio-game.seventeenth_held",
+      "is": 1
+    }
+  ]
+}

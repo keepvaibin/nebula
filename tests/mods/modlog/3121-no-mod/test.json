@@ -1,0 +1,35 @@
+{
+  "harness": 1,
+  "name": "3121-no-mod",
+  "about": "No mod but the harness's game half (a mod with code that reports nothing): the store is never made and no modlog fact is written (contract 5). The notice actor exists while any mod is on, the game half included, so \"no actor with no mod at all\" is not a harness test",
+  "proves": [
+    "modlog.nocost"
+  ],
+  "mods": [],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog.state",
+      "has": {
+        "allocated": false
+      },
+      "when": "all",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog",
+      "absent": true,
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "absent": true,
+      "scope": "installation"
+    }
+  ]
+}

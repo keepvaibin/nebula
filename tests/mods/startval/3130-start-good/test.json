@@ -1,0 +1,52 @@
+{
+  "harness": 1,
+  "name": "3130-start-good",
+  "about": "A one-form mod with no findings has no Error in its log; a mod declaring a permission with no code gets the validator's Note L218 at the start, and no Error",
+  "proves": [
+    "validator.start"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jv-good",
+      "loads": false
+    },
+    {
+      "path": "../mods/jv-none",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-none",
+        "source": "validator",
+        "level": "note",
+        "code": 218
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jv-good",
+        "level": "error"
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jv-none",
+        "level": "error"
+      },
+      "absent": true
+    }
+  ]
+}

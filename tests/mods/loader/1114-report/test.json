@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "1114-report",
+  "about": "report: said once with its place in English, repeats counted at 10, kernel codes, no row, past 256",
+  "proves": [
+    "kernel.report"
+  ],
+  "mods": [
+    "../mods/lt-report"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "\\[mod lt-report\\] lt_report\\.lumi:12: lt\\.example was called off the game thread"
+    },
+    {
+      "log": "lt_report\\.lumi:12: ",
+      "times": 2
+    },
+    {
+      "log": "lt_report\\.lumi:12: .*\\(seen 10 times\\)"
+    },
+    {
+      "no_log": "lt_report\\.lumi:12: .*\\(seen [2-9] times\\)"
+    },
+    {
+      "log": "lt_report\\.lumi:20: .*12345"
+    },
+    {
+      "log": "lt_report\\.lumi:30: report code 77 is no row"
+    },
+    {
+      "log": "\\[mod lt-report\\] lt\\.example was called off the game thread",
+      "times": 1
+    },
+    {
+      "log": "\\[mod lt-report\\] .*reports more than the Mods page keeps \\(256\\)"
+    }
+  ]
+}

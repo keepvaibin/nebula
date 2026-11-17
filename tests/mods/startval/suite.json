@@ -1,0 +1,10 @@
+{
+  "harness": 1,
+  "tests": [
+    "3130-start-good",
+    "3131-start-refused",
+    "3132-start-kept",
+    "3134-start-needs",
+    "3135-start-conflict"
+  ]
+}

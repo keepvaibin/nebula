@@ -1,0 +1,22 @@
+{
+  "harness": 1,
+  "name": "03-stage-missing",
+  "about": "A stage the game does not have is setup-failed, naming it",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "stage": {
+    "name": "NoSuchGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": []
+}

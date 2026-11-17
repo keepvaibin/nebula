@@ -1,0 +1,225 @@
+{
+  "harness": 1,
+  "name": "2706-net-tls",
+  "about": "TLS (1.3): tls_listen with a leaf for localhost and 127.0.0.1 signed by the mod's own root (luma.json roots), with a wrong.example leaf and with a self-signed one; tls_connect to localhost and to 127.0.0.1 (CONNECTED after the handshake; send before it: CLOSED), ping and pong:ping, the client's close is the server's CLOSED 0 (close_notify); the wrong-name and stranger listeners: ERROR DENIED with Net.CertificateRefused, their server sockets CLOSED DENIED; a missing file NOT_FOUND, a key not the certificate's FORMAT, '..', a rooted path and a null key ARGUMENT; net.internet's tls_listen DENIED, its tls_connect to LOCALHOST ERROR DENIED; asked once every awaited event has come (the mod's settled: the handshakes' pace, not a frame count)",
+  "proves": [
+    "services.net.local",
+    "services.net.internet",
+    "services.net.tls",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/net-tls"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4501
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.net-tls.settled",
+        "exists": true
+      },
+      "timeout": 3600,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4502
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.net-tls.close_listeners",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-tls.listen",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-tls.listen_wrong",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-tls.listen_stranger",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-tls.ports_given",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.net-tls.key_mismatch",
+      "is": -15
+    },
+    {
+      "fact": "mod.net-tls.key_as_certificate",
+      "is": -15
+    },
+    {
+      "fact": "mod.net-tls.dotdot",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-tls.rooted",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-tls.null_key",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-tls.internet_listen",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-tls.connect",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.send_early",
+      "is": -11
+    },
+    {
+      "fact": "mod.net-tls.connect_address",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.connect_wrong",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.connect_stranger",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.connect_far",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-tls.connect_internet",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.connected",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.send_ping",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-tls.address_connected",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.close_address_client",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-tls.accepted",
+      "is": 4
+    },
+    {
+      "fact": "mod.net-tls.server_data",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.send_pong",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-tls.client_data",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.client_got_pong",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.close_client",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-tls.closed_server",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.closed_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-tls.wrong_status",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-tls.stranger_status",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-tls.inet_status",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-tls.refused_servers",
+      "is": 2
+    },
+    {
+      "fact": "mod.net-tls.other_closed_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-tls.others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-tls.close_listeners",
+      "is": 1
+    },
+    {
+      "log": "net-tls: net\\.local\\.tls_connect refused the certificate of localhost: ",
+      "times": 2
+    },
+    {
+      "log": "net-tls: net\\.local\\.tls_listen could not use its file certs/none\\.pem "
+    },
+    {
+      "log": "net-tls: net\\.local\\.tls_listen could not use its file certs/wrong\\.key "
+    },
+    {
+      "log": "net-tls: net\\.local\\.tls_listen could not use its file certs/server\\.key "
+    },
+    {
+      "log": "net-tls: net\\.local\\.tls_listen was given a wrong certificate; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "net-tls",
+        "english": "net-tls: net.local.tls_listen was given a wrong certificate; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "net-tls: net\\.local\\.tls_listen was given a wrong key; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

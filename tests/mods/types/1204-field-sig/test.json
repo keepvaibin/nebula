@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "1204-field-sig",
+  "about": "A field asked with another type text is refused (Z-4, Name.FieldSig)",
+  "proves": [
+    "kernel.refusal",
+    "kernel.bind"
+  ],
+  "mods": [
+    {
+      "path": "../mods/tt-sig-field",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tt-sig-field.started",
+      "absent": true
+    },
+    {
+      "log": "tt-sig-field: .*field \"Vec3<f32>\\.x\" of type \"s32\""
+    }
+  ]
+}

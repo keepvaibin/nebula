@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "2962-player-draw-time",
+  "about": "player: make and make-then-remove before GameScene::draw (the frame's calc done) both LUMA_OK; neither is drawn before its first calc, the game draws on",
+  "proves": [
+    "services.player",
+    "services.player.unposed"
+  ],
+  "mods": [
+    "../mods/pl-draw"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4291
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.pl-draw.drawn_make",
+      "is": 0
+    },
+    {
+      "fact": "mod.pl-draw.drawn_remove",
+      "is": 0
+    }
+  ]
+}

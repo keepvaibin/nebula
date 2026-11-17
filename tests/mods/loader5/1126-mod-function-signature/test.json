@@ -1,0 +1,76 @@
+{
+  "harness": 1,
+  "name": "1126-mod-function-signature",
+  "about": "An export with another signature refuses the mod (L505 Name.FunctionSig); the start's check refuses it first (the kept report has the library's exports), so the loader's own bind line is not reached",
+  "proves": [
+    "kernel.bind",
+    "kernel.refusal"
+  ],
+  "mods": [
+    "../../loader/mods/lt-lib",
+    {
+      "path": "../../loader/mods/lt-uses-sig",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-uses-sig.started",
+      "absent": true
+    },
+    {
+      "log": "mods: lt-uses-sig: THIS MOD HAS ERRORS"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-uses-sig",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "lt-uses-sig: code/windows-x64/mod.dll: the game has no function \"lt-lib/lt.add\" with the signature \"lumi1:00000000000000ff\"."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-uses-sig",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "lt-uses-sig: code/linux-x64/mod.so: the game has no function \"lt-lib/lt.add\" with the signature \"lumi1:00000000000000ff\"."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-uses-sig",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/macos-arm64/mod.dylib",
+        "text": "lt-uses-sig: code/macos-arm64/mod.dylib: the game has no function \"lt-lib/lt.add\" with the signature \"lumi1:00000000000000ff\"."
+      },
+      "when": "any",
+      "systems": [
+        "macos"
+      ]
+    }
+  ]
+}

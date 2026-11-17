@@ -1,0 +1,9 @@
+{
+  "harness": 1,
+  "tests": [
+    "3851-layout-cooked",
+    "3852-layout-no-texture",
+    "3853-font-cooked",
+    "3854-font-too-large"
+  ]
+}

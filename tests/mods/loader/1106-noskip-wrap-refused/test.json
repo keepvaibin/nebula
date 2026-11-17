@@ -1,0 +1,29 @@
+{
+  "harness": 1,
+  "name": "1106-noskip-wrap-refused",
+  "about": "A wrap on a function whose result is fixed (no empty value) is refused at bind (L512)",
+  "proves": [
+    "kernel.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../mods/lt-noskip",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-noskip.started",
+      "absent": true
+    },
+    {
+      "log": "lt-noskip: .*luma_mod cannot be used: GameDataFunction::makeGalaxyScenarioAccessor gives a result that has no empty value"
+    }
+  ]
+}

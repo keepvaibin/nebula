@@ -1,0 +1,76 @@
+{
+  "harness": 1,
+  "name": "3210-model-limit",
+  "about": "jm-limit attaches Coin 64 times (each LUMA_OK), the 65th is LUMA_E_LIMIT (Service.Limit 104 in the mod log); one detach frees a slot and the next attach is LUMA_OK on the detached part (reused)",
+  "proves": [
+    "model.limit"
+  ],
+  "mods": [
+    "../mods/jm-limit"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 70,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3202
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-limit.ok",
+      "is": 64
+    },
+    {
+      "fact": "mod.jm-limit.over",
+      "is": -4
+    },
+    {
+      "fact": "mod.jm-limit.detach",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-limit.again",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.65",
+      "has": {
+        "reused": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.attach.66",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jm-limit",
+        "code": 104
+      },
+      "when": "any"
+    }
+  ]
+}

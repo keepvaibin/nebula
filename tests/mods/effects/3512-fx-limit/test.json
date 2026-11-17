@@ -1,0 +1,80 @@
+{
+  "harness": 1,
+  "name": "3512-fx-limit",
+  "about": "je-fx-limit starts TicoTouchGlow00 on the player 256 times (each LUMA_OK); the 257th is LUMA_E_LIMIT (Service.Limit 104 once in the mod log, nothing written). Stopping one frees its place: the next start is LUMA_OK. The game's emitter and particle pools grow on demand (EmitterManager::growEmitters), so 256 never starve the game's own",
+  "proves": [
+    "fx.limit"
+  ],
+  "mods": [
+    "../mods/je-fx-limit"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3501
+      ]
+    },
+    {
+      "at": 70,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3502
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.je-fx-limit.ok",
+      "is": 256
+    },
+    {
+      "fact": "mod.je-fx-limit.over",
+      "is": -4
+    },
+    {
+      "fact": "mod.je-fx-limit.over_written",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-limit.stop",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-limit.again",
+      "is": 0
+    },
+    {
+      "fact": "fx.start.257",
+      "has": {
+        "mod": "je-fx-limit"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "fx.start.258",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-fx-limit",
+        "code": 104
+      },
+      "count": 1
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "harness": 1,
+  "name": "2225-text",
+  "about": "set_text then get_text: SET OK; TEXT with value 12; take_text with 5 bytes gives 4 and a NUL, returns 12, once",
+  "proves": [
+    "services.system.clipboard"
+  ],
+  "mods": [
+    "../mods/sys-clip-text"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4242
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4243
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-clip-text.set",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-clip-text.get",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-clip-text.ev_kind",
+      "is": 3,
+      "when": "any"
+    },
+    {
+      "fact": "mod.sys-clip-text.ev_kind",
+      "is": 1,
+      "when": "any"
+    },
+    {
+      "fact": "mod.sys-clip-text.ev_status",
+      "is": 0,
+      "when": "all"
+    },
+    {
+      "fact": "mod.sys-clip-text.ev_value",
+      "is": 12
+    },
+    {
+      "fact": "mod.sys-clip-text.take",
+      "is": 12
+    },
+    {
+      "fact": "mod.sys-clip-text.take_head",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-clip-text.take_again",
+      "is": -3
+    }
+  ]
+}

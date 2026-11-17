@@ -1,0 +1,47 @@
+{
+  "harness": 1,
+  "name": "6601-asked",
+  "about": "--safe-start 1: the Mods tab's top row says SAFE START, jc-none stays in the ENABLED list (the player's choice kept)",
+  "proves": [
+    "mods.safe_start"
+  ],
+  "mods": [
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "safe_start": "asked",
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modscreen.nebula",
+      "has": {
+        "line": 0,
+        "page": "list",
+        "label": "SAFE START: EVERY MOD IS OFF UNTIL THE NEXT START"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modscreen.jc-none",
+      "has": {
+        "line": 0,
+        "list": "on"
+      },
+      "when": "any",
+      "scope": "installation"
+    }
+  ]
+}

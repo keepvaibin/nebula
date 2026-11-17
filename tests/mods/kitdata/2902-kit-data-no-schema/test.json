@@ -1,0 +1,51 @@
+{
+  "harness": 1,
+  "name": "2902-kit-data-no-schema",
+  "about": "kd-user-bare gives data to kd-bare, a library that gives no schema for it: the validator refuses kd-user-bare at load (L702, naming kd-bare), its start never runs, kd-bare sees no needing mod and the game runs on",
+  "proves": [
+    "services.mods"
+  ],
+  "mods": [
+    "../mods/kd-bare",
+    {
+      "path": "../mods/kd-user-bare",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.kd-bare.needing_count",
+        "exists": true
+      },
+      "end": true,
+      "timeout": 1200
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.kd-bare.needing_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.kd-bare.needing_count",
+      "is": 0
+    },
+    {
+      "fact": "mod.kd-user-bare.own_status",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "kd-user-bare",
+        "code": 702
+      },
+      "when": "any"
+    }
+  ]
+}

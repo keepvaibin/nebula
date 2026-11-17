@@ -1,0 +1,32 @@
+{
+  "format": "1.0",
+  "id": "ly-dep-no",
+  "name": "ly-dep-no",
+  "summary": "ly-dep-no (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "ly-lib-no"
+    }
+  ],
+  "layers": [
+    {
+      "name": "a",
+      "when": {
+        "code": true
+      }
+    },
+    {
+      "name": "b",
+      "when": {
+        "code": true
+      }
+    }
+  ]
+}

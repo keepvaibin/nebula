@@ -1,0 +1,118 @@
+{
+  "harness": 1,
+  "name": "2231-links",
+  "about": "open: LINK OK, the Note naming its site; again at once: LUMA_E_BUSY; a second site 10 s on: its own entry; the first again: count 2",
+  "proves": [
+    "services.system.links"
+  ],
+  "mods": [
+    "../mods/sys-links"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 630,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4242
+      ]
+    },
+    {
+      "at": 1250,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4243
+      ]
+    },
+    {
+      "at": 1260,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4244
+      ]
+    },
+    {
+      "at": 1270,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-links.open_1",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-links.open_again",
+      "is": -14
+    },
+    {
+      "fact": "mod.sys-links.open_2",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-links.open_3",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-links.events",
+      "is": 3
+    },
+    {
+      "fact": "mod.sys-links.ev_status",
+      "is": 0,
+      "when": "all"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "sys-links",
+        "source": "code",
+        "level": "note",
+        "code": 140,
+        "file": "example.org",
+        "text": "sys-links opened a page on example.org in your browser.",
+        "count": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "sys-links",
+        "source": "code",
+        "level": "note",
+        "code": 140,
+        "file": "example.com",
+        "count": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "sys-links",
+        "code": 140,
+        "file": "example.org",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "LumaCore: sys-links opens https://example\\.org/luma"
+    }
+  ]
+}

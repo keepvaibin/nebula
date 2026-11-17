@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "code-elsewhere",
+  "name": "code-elsewhere",
+  "summary": "code-elsewhere (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "code": {
+    "platforms": [
+      "linux-arm64"
+    ]
+  }
+}

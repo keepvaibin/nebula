@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tt-sig-global",
+  "name": "tt-sig-global",
+  "summary": "tt-sig-global (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

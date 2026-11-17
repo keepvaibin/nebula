@@ -1,0 +1,56 @@
+{
+  "harness": 1,
+  "name": "3128-threads",
+  "about": "The same (file, line, code) from another thread and from the game thread in one frame: one entry, count 2",
+  "proves": [
+    "modlog.threads"
+  ],
+  "mods": [
+    "../mods/jl-thread"
+  ],
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4350
+      ],
+      "fact": "both"
+    },
+    {
+      "at": 90,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jl-thread.made",
+      "is": 1
+    },
+    {
+      "fact": "mod.jl-thread.off_game",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jl-thread",
+        "file": "jl_thread.lumi",
+        "line": 7,
+        "code": 901,
+        "count": 2
+      },
+      "when": "last",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog",
+      "count": 2,
+      "matching": {
+        "mod": "jl-thread"
+      }
+    }
+  ]
+}

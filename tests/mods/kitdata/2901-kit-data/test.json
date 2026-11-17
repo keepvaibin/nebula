@@ -1,0 +1,137 @@
+{
+  "harness": 1,
+  "name": "2901-kit-data",
+  "about": "kd-lib (a library) finds kd-user through needing(), lists its kit/player.form names (\"a\", \"b\"; their schema in kd-lib's code/kd-lib.kit), reads a.json's 7 bytes twice, gets NOT_FOUND for c, and is refused path parts, a number that is no mod (Mods.KitNotNeeded) and a null length; its own kit is empty; kd-user reads its own; kd-other, which nothing needs, gets no needing mod",
+  "proves": [
+    "services.mods"
+  ],
+  "mods": [
+    "../mods/kd-lib",
+    "../mods/kd-user",
+    "../mods/kd-other"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.kd-lib.null_length_refused",
+        "exists": true
+      },
+      "end": true,
+      "timeout": 1200
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.kd-lib.needing_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.kd-lib.needing_count",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.needing_null_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.names_length_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.kd-lib.names_length",
+      "is": 4
+    },
+    {
+      "fact": "mod.kd-lib.names_short",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.names_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.kd-lib.names_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.names_other_module",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.read_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.kd-lib.read_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.read_again",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.read_missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.kd-lib.module_path_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.name_path_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.dot_name_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.no_mod_denied",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.own_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.kd-lib.null_length_refused",
+      "is": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "kd-lib",
+        "code": 168
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "kd-lib",
+        "code": 101
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.kd-user.own_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.kd-user.own_length",
+      "is": 4
+    },
+    {
+      "fact": "mod.kd-other.needing_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.kd-other.needing_count",
+      "is": 0
+    }
+  ]
+}

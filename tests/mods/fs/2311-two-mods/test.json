@@ -1,0 +1,126 @@
+{
+  "harness": 1,
+  "name": "2311-two-mods",
+  "about": "a mod's data folder is its own: the other mod reads NOT_FOUND at the same path; the Exchange folder is shared: the other mod reads the note",
+  "proves": [
+    "services.fs",
+    "services.fs.exchange"
+  ],
+  "mods": [
+    "../mods/fs-writer",
+    "../mods/fs-reader"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-writer.e1_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4300
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-writer.e2_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-reader.e1_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4300
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-reader.e2_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4300
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-reader.e3_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-writer.e1_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-writer.e1_value",
+      "is": 4
+    },
+    {
+      "fact": "mod.fs-writer.e2_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-writer.e2_value",
+      "is": 5
+    },
+    {
+      "fact": "mod.fs-reader.e1_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.fs-reader.e2_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-reader.e2_value",
+      "is": 5
+    },
+    {
+      "fact": "mod.fs-reader.e2_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-reader.e3_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-reader.e3_value",
+      "is": 1
+    }
+  ]
+}

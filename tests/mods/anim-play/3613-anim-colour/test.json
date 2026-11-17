@@ -1,0 +1,107 @@
+{
+  "harness": 1,
+  "name": "3613-anim-colour",
+  "about": "ja-glow plays Glow, a colour-only clip (a .bpk leads), with no how; then Nod from frame 10 with no blend: the joint clip plays beside the colour clip, which goes on; Nod ends at its last frame",
+  "proves": [
+    "anim.on_model",
+    "anim.how"
+  ],
+  "mods": [
+    "../mods/ja-glow"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3601
+      ]
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3602
+      ]
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3603
+      ]
+    },
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ja-glow.play",
+      "is": 0
+    },
+    {
+      "fact": "anim.play.1",
+      "has": {
+        "clip": "Glow",
+        "kinds": [
+          "bpk"
+        ],
+        "loops": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.ja-glow.nod",
+      "is": 0
+    },
+    {
+      "fact": "anim.play.2",
+      "has": {
+        "clip": "Nod",
+        "kinds": [
+          "bck"
+        ],
+        "start": 10
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.ja-glow.glow_frame",
+      "is": 0
+    },
+    {
+      "fact": "anim.end.1",
+      "absent": true
+    },
+    {
+      "fact": "anim.end.2",
+      "is": {
+        "why": "end"
+      }
+    },
+    {
+      "fact": "mod.ja-glow.ev2_end_why",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ja-glow",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

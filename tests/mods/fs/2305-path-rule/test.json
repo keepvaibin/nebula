@@ -1,0 +1,185 @@
+{
+  "harness": 1,
+  "name": "2305-path-rule",
+  "about": "paths outside the rule and other mistakes: LUMA_E_ARGUMENT at once, reported naming the argument; one byte over 64 MiB: LUMA_E_TOO_LARGE at once, Service.Limit; 16 parts taken; cancel of no request and a take outside an event: LUMA_E_HANDLE",
+  "proves": [
+    "services.fs",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/fs-args"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-args.e1_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-args.events",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-args.dotdot",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.empty",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.double_slash",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.leading_slash",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.backslash",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.device",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.device_com",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.half_written",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.trailing_space",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.trailing_dot",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.hidden",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.not_ascii",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.colon",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.too_long",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.part_too_long",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.parts_17",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.null_path",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.null_fn",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.null_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.recursive_2",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.to_inside",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.move_empty",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.write_empty",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-args.over",
+      "is": -16
+    },
+    {
+      "log": "fs-args: fs\\.write reached its limit of 67108864; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "mod.fs-args.parts_16",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-args.cancel_none",
+      "is": -3
+    },
+    {
+      "fact": "mod.fs-args.take_outside",
+      "is": -3
+    },
+    {
+      "fact": "mod.fs-args.events",
+      "is": 1
+    },
+    {
+      "log": "fs-args: fs\\.read was given a wrong path; it did nothing\\."
+    },
+    {
+      "log": "fs-args: fs\\.write was given a wrong data; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "fs-args: fs\\.list was given a wrong recursive; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "fs-args: fs\\.move was given a wrong to; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "fs-args: fs\\.cancel was given a handle that is closed or not its own\\.",
+      "times": 1
+    }
+  ]
+}

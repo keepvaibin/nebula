@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "1208-type-unbound",
+  "about": "A record with no size is refused with its reason (Name.TypeUnbound)",
+  "proves": [
+    "kernel.refusal",
+    "kernel.bind"
+  ],
+  "mods": [
+    {
+      "path": "../mods/tt-unb-type",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tt-unb-type.started",
+      "absent": true
+    },
+    {
+      "log": "tt-unb-type: .*type \"MR::NameIndexOf<MR::NameKeyExact>::Slot\" a mod can bind \\(no size"
+    }
+  ]
+}

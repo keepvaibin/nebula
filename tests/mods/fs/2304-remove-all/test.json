@@ -1,0 +1,102 @@
+{
+  "harness": 1,
+  "name": "2304-remove-all",
+  "about": "remove \"\": the data folder's 2 files; then list \"\" empty; a missing file, folder: NOT_FOUND; 21 events in all",
+  "proves": [
+    "services.fs"
+  ],
+  "mods": [
+    "../mods/fs-data"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.e16_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.e24_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4303
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.events",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-data.e20_kind",
+      "is": 3
+    },
+    {
+      "fact": "mod.fs-data.e20_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e20_value",
+      "is": 2
+    },
+    {
+      "fact": "mod.fs-data.e21_kind",
+      "is": 5
+    },
+    {
+      "fact": "mod.fs-data.e21_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e21_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e21_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-data.e22_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.fs-data.e23_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.fs-data.e24_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.fs-data.events",
+      "is": 21
+    }
+  ]
+}

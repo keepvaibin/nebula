@@ -1,0 +1,80 @@
+{
+  "harness": 1,
+  "name": "1169-runtime-layout",
+  "about": "a mod built with LumaScript runtime layout 2 that calls a function of a mod built with layout 1 (same signature) is refused by name, L513, before the signature; the mod it needs loads and starts; the start's check refuses it first (L513 from the kept reports' runtime layouts), so the kernel's own bind sentence is not reached",
+  "proves": [
+    "kernel.bind",
+    "kernel.refusal"
+  ],
+  "mods": [
+    "../mods/k1-layout-lib",
+    {
+      "path": "../mods/k1-layout-user",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.k1-layout-lib.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.k1-layout-user.started",
+      "absent": true
+    },
+    {
+      "log": "mods: k1-layout-user: THIS MOD HAS ERRORS"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "k1-layout-user",
+        "source": "validator",
+        "level": "error",
+        "code": 513,
+        "file": "code/windows-x64/mod.dll",
+        "text": "k1-layout-user: code/windows-x64/mod.dll: k1-layout-user is built with LumaScript runtime layout 2 and k1-layout-lib, whose k1.layout it calls, with layout 1. Rebuild the older one with a current LumaLink, or update it."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "k1-layout-user",
+        "source": "validator",
+        "level": "error",
+        "code": 513,
+        "file": "code/linux-x64/mod.so",
+        "text": "k1-layout-user: code/linux-x64/mod.so: k1-layout-user is built with LumaScript runtime layout 2 and k1-layout-lib, whose k1.layout it calls, with layout 1. Rebuild the older one with a current LumaLink, or update it."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "k1-layout-user",
+        "source": "validator",
+        "level": "error",
+        "code": 513,
+        "file": "code/macos-arm64/mod.dylib",
+        "text": "k1-layout-user: code/macos-arm64/mod.dylib: k1-layout-user is built with LumaScript runtime layout 2 and k1-layout-lib, whose k1.layout it calls, with layout 1. Rebuild the older one with a current LumaLink, or update it."
+      },
+      "when": "any",
+      "systems": [
+        "macos"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "ju-open",
+  "name": "ju-open",
+  "version": "1.0.0",
+  "summary": "J's test mod ju-open.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

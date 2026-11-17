@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fv-view",
+  "name": "fv-view",
+  "version": "1.0.0",
+  "summary": "J's test mod fv-view.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

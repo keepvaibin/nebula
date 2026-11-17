@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jm-joint",
+  "name": "jm-joint",
+  "version": "1.0.0",
+  "summary": "J's test mod jm-joint.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

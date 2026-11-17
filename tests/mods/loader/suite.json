@@ -1,0 +1,28 @@
+{
+  "harness": 1,
+  "tests": [
+    "1101-replace-top",
+    "1102-replace-top-reversed",
+    "1103-order",
+    "1104-order-reversed",
+    "1105-skip-zero",
+    "1106-noskip-wrap-refused",
+    "1107-skip-refused-once",
+    "1108-api0-refused",
+    "1109-service-present",
+    "1110-service-absent",
+    "1111-service-optional",
+    "1112-service-newer",
+    "1113-memory",
+    "1114-report",
+    "1115-unhook",
+    "1116-thread",
+    "1117-frame",
+    "1118-partial",
+    "1119-churn",
+    "1120-released",
+    "1121-cxx",
+    "1130-noresult-before",
+    "1131-noresult-wrap"
+  ]
+}

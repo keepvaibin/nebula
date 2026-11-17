@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "version": "1.0.0",
+  "summary": "J's start check test.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "id": "jv-none",
+  "name": "jv-none",
+  "permissions": [
+    {
+      "name": "system.links",
+      "why": "Opens the guide."
+    }
+  ]
+}

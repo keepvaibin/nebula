@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "2229-limit",
+  "about": "a 5th request while 4 are open: LUMA_E_LIMIT, Service.Limit with 4",
+  "proves": [
+    "services.system.clipboard",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/sys-clip-limit"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-clip-limit.made",
+      "is": 4
+    },
+    {
+      "fact": "mod.sys-clip-limit.last",
+      "is": -4
+    },
+    {
+      "log": "sys-clip-limit: system\\.clipboard\\.get_text reached its limit of 4; it did nothing\\."
+    }
+  ]
+}

@@ -1,0 +1,135 @@
+{
+  "harness": 1,
+  "name": "2206-step",
+  "about": "Held, step(3): one frame of 3 world steps, then none again",
+  "proves": [
+    "services.time",
+    "services.time.handlers"
+  ],
+  "mods": [
+    "../mods/tm-step"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4223
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4224
+      ]
+    },
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4222
+      ]
+    },
+    {
+      "at": 50,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-step.hold",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-step.step",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-step.after_step",
+      "is": 3
+    },
+    {
+      "fact": "mod.tm-step.ds",
+      "is": 3,
+      "when": "any",
+      "frames": [
+        20,
+        26
+      ]
+    },
+    {
+      "fact": "mod.tm-step.steps",
+      "is": 3,
+      "when": "any",
+      "frames": [
+        20,
+        26
+      ]
+    },
+    {
+      "fact": "mod.tm-step.calls",
+      "is": 3,
+      "when": "any",
+      "frames": [
+        20,
+        26
+      ]
+    },
+    {
+      "fact": "mod.tm-step.ds",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        13,
+        19
+      ]
+    },
+    {
+      "fact": "mod.tm-step.ds",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        27,
+        39
+      ]
+    },
+    {
+      "fact": "mod.tm-step.steps",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        27,
+        39
+      ]
+    }
+  ]
+}

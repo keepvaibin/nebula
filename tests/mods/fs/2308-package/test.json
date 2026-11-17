@@ -1,0 +1,89 @@
+{
+  "harness": 1,
+  "name": "2308-package",
+  "about": "read_package luma.json; list_package of the installed folder, flat and recursive; a missing file: NOT_FOUND; the data folder does not hold the package's files",
+  "proves": [
+    "services.fs"
+  ],
+  "mods": [
+    "../mods/fs-package"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-package.e5_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-package.events",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-package.e1_kind",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-package.e1_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-package.e1_len",
+      "at_least": 100
+    },
+    {
+      "fact": "mod.fs-package.e2_kind",
+      "is": 5
+    },
+    {
+      "fact": "mod.fs-package.e2_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-package.e2_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-package.e3_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-package.e3_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-package.e4_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.fs-package.e5_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.fs-package.events",
+      "is": 5
+    }
+  ]
+}

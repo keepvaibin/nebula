@@ -1,0 +1,121 @@
+{
+  "harness": 1,
+  "name": "2403-draw-points",
+  "about": "jd-points sets a function at each of the seven points: in a running stage world.before, world.opaque.after, world.after, hud.before, hud.after and present are each called every frame (counts within a few frames of each other), loading not at all; the screen is 456 high with the 4:3 frame (608) centred; line3 at world.after answers LUMA_OK (FB's layer 3, fb/2.4-world); hud.before's dark blue rectangle is under the game's HUD (picture: the HUD's counters drawn over the tint)",
+  "proves": [
+    "draw.point"
+  ],
+  "mods": [
+    "../mods/jd-points"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2401
+      ]
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2402
+      ]
+    },
+    {
+      "at": 100,
+      "picture": "f100"
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jd-points.at",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.at_failed",
+      "absent": true
+    },
+    {
+      "fact": "mod.jd-points.calls0",
+      "at_least": 35,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.calls1",
+      "at_least": 35,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.calls2",
+      "at_least": 35,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.calls3",
+      "at_least": 35,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.calls4",
+      "at_least": 35,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.calls6",
+      "at_least": 35,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.calls5",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.screen",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.h",
+      "is": 456,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.w",
+      "at_least": 608,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.safe_w",
+      "is": 608,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-points.world_line3",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "picture": "f100",
+      "like": "2403-f100",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

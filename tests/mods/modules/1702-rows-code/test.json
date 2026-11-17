@@ -1,0 +1,46 @@
+{
+  "harness": 1,
+  "name": "1702-rows-code",
+  "about": "A mod with code (lt-hold, with the game half): the host loads smg_game.dll, the module with rows, naming the first mod with code, and the mod's hook runs",
+  "proves": [
+    "kernel.modules.rows"
+  ],
+  "mods": [
+    "../../loader/mods/lt-hold"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4247
+      ],
+      "fact": "called"
+    },
+    {
+      "after": {
+        "fact": "called",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "game module: rows \\(mod [a-z0-9][a-z0-9._-]* has code\\)"
+    },
+    {
+      "no_log": "game module: plain"
+    },
+    {
+      "fact": "mod.lt-hold.hooked",
+      "count": 1
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "harness": 1,
+  "name": "3806-ui-anim",
+  "about": "ju-anim plays CoinCounter's Flash once: its end comes at a frame's start with LUMA_OK; an animation the layout lacks is LUMA_E_NOT_FOUND (Ui.MissingAnimation); Wait looping gives no end until stop, which ends it with LUMA_E_CANCELLED",
+  "proves": [
+    "ui.play",
+    "ui.animation_end"
+  ],
+  "mods": [
+    "../mods/ju-anim"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3802
+      ]
+    },
+    {
+      "at": 260,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3803
+      ]
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-anim.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-anim.play",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-anim.missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.ju-anim.loop",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-anim.stop",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-anim.end",
+      "is": 0,
+      "when": "first"
+    },
+    {
+      "fact": "mod.ju-anim.end",
+      "is": -12,
+      "when": "last"
+    },
+    {
+      "fact": "mod.ju-anim.ends",
+      "is": 2
+    },
+    {
+      "fact": "mod.ju-anim.end_kind",
+      "is": 1
+    },
+    {
+      "fact": "mod.ju-anim.end_screen",
+      "is": 1
+    },
+    {
+      "fact": "ui.play.1",
+      "has": {
+        "animation": "Flash",
+        "loop": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.play.1",
+      "has": {
+        "animation": "Wait",
+        "loop": true
+      },
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-anim",
+        "code": 576
+      },
+      "count": 1
+    }
+  ]
+}

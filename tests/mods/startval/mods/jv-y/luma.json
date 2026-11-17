@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "version": "1.0.0",
+  "summary": "J's start check test.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "id": "jv-y",
+  "name": "jv-y",
+  "conflicts": [
+    {
+      "id": "jv-x",
+      "why": "Both change the lives."
+    }
+  ]
+}

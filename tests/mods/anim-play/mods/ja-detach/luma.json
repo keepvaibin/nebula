@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ja-detach",
+  "name": "ja-detach",
+  "version": "1.0.0",
+  "summary": "J's test mod ja-detach.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

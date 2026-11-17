@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "2245b-ids-new-record",
+  "about": "the same order with no record: n7254c5c586 gets the derived 17707348, n00e263ff68 moves to 17707349, breath 18409466 again (derived, the same on every machine)",
+  "proves": [
+    "services.mods.ids"
+  ],
+  "mods": [
+    "../mods/mods-a"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4257
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-a.r_c2",
+      "is": 17707348
+    },
+    {
+      "fact": "mod.mods-a.r_c1",
+      "is": 17707349
+    },
+    {
+      "fact": "mod.mods-a.r_breath",
+      "is": 18409466
+    }
+  ]
+}

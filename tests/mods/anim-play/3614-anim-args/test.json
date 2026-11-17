@@ -1,0 +1,133 @@
+{
+  "harness": 1,
+  "name": "3614-anim-args",
+  "about": "ja-args: every refusal of anim 1.0 (null and false actors, an empty clip, rates -1 and 17, blend -2, loop 3, start -1 and past the clip, 17 marks, null marks, a null out, a 4-byte how, unknown model and play handles) answers its status and writes no handle; JaNoClip is LUMA_E_NOT_FOUND and Content.MissingAnimation; the one good play is play 1",
+  "proves": [
+    "anim.refusals"
+  ],
+  "mods": [
+    "../mods/ja-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3601
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ja-args.attach",
+      "is": 0
+    },
+    {
+      "fact": "mod.ja-args.null_actor",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.not_actor",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.empty_clip",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.rate_low",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.rate_high",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.blend",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.loop",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.start",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.too_many",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.null_marks",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.small_how",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.past",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-args.model_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.ja-args.stop_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.ja-args.frame_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.ja-args.missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.ja-args.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-args.good",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "ja-args",
+        "source": "content",
+        "level": "error",
+        "code": 627
+      },
+      "when": "any"
+    },
+    {
+      "fact": "anim.play.1",
+      "has": {
+        "clip": "Nod"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "anim.play.2",
+      "absent": true
+    }
+  ]
+}

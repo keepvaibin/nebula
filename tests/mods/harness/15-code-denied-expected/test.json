@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "15-code-denied-expected",
+  "about": "The same, with loads false and the refusal expected, passes",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    {
+      "path": "../mods/hello",
+      "code": "deny",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.hello.loaded",
+      "is_not": true
+    },
+    {
+      "no_log": "fact hello"
+    }
+  ]
+}

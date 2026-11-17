@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "je-fx-dies",
+  "name": "je-fx-dies",
+  "version": "1.0.0",
+  "summary": "J's test mod je-fx-dies.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

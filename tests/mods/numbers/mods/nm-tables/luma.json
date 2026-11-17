@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "nm-tables",
+  "name": "nm-tables",
+  "summary": "nm-tables (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

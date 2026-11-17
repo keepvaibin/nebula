@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jm-levels",
+  "name": "jm-levels",
+  "version": "1.0.0",
+  "summary": "J's test mod jm-levels.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

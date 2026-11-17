@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "je-fx-missing",
+  "name": "je-fx-missing",
+  "version": "1.0.0",
+  "summary": "J's test mod je-fx-missing.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

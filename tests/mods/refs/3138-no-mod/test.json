@@ -1,0 +1,25 @@
+{
+  "harness": 1,
+  "name": "3138-no-mod",
+  "about": "No mod: the after-start check is never called and no placeholder is made (contract 7)",
+  "proves": [
+    "refs.nocost"
+  ],
+  "mods": [],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "refs.after_start",
+      "absent": true
+    },
+    {
+      "fact": "placeholder",
+      "absent": true
+    }
+  ]
+}

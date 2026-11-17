@@ -1,0 +1,47 @@
+{
+  "harness": 1,
+  "name": "1182-texture-only-named",
+  "about": "cm-tex-bad brings texture pack pictures and nothing else: the start cooks it (the plan's pictures are read as the pack reader reads them) and names its cut picture in the mod log on cm-tex-bad; the good one is not named",
+  "proves": [
+    "modlog.entry"
+  ],
+  "mods": [
+    {
+      "path": "../mods/cm-tex-bad",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "cm-tex-bad",
+        "level": "error",
+        "file": "layers/base/textures/airbubblegenerator/Hilight.png"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "cm-tex-bad",
+        "file": "layers/base/textures/airbubble/LifeBubble_Env.png"
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "code": 804,
+        "mod": ""
+      },
+      "absent": true
+    }
+  ]
+}

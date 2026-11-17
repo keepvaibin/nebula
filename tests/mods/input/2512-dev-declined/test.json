@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "2512-dev-declined",
+  "about": "input.devices declared, declined: off before its start, Consent.OffDeclined names it",
+  "proves": [
+    "services.input",
+    "services.permissions"
+  ],
+  "mods": [
+    {
+      "path": "../mods/in-dev",
+      "permissions": {
+        "input.devices": "deny"
+      },
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-dev.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "in-dev",
+        "source": "loader",
+        "level": "note",
+        "row": "Consent.OffDeclined"
+      },
+      "when": "any"
+    }
+  ]
+}

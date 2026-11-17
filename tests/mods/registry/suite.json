@@ -1,0 +1,22 @@
+{
+  "harness": 1,
+  "tests": [
+    "2101-svc-exact",
+    "2102-svc-older-minor",
+    "2103-svc-newer-minor",
+    "2104-svc-other-major",
+    "2105-permission-denied",
+    "2106-permission-granted",
+    "2107-optional-newer",
+    "2108-ask-not-granted",
+    "2109-off-thread",
+    "2110-events-limit",
+    "2111-posted-twice",
+    "2112-posted-from-delivery",
+    "2113-two-mods-order",
+    "2113-two-mods-order-reversed",
+    "2114-taken-out-queued",
+    "2116-struct-size",
+    "2117-library-acts"
+  ]
+}

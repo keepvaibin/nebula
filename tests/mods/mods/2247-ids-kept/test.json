@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "2247-ids-kept",
+  "about": "after 2246, mods-a not asking: mods-b's n22ef9733f3, which derives mods-a/nf4172bf1dd's 33489625, gets 33489626; Mods.IdMoved names both",
+  "proves": [
+    "services.mods.ids"
+  ],
+  "mods": [
+    "../mods/mods-a",
+    "../mods/mods-b"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4258
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-b.kb",
+      "is": 33489626
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "mods-b",
+        "source": "code",
+        "level": "note",
+        "code": 160,
+        "count": 1
+      },
+      "when": "any"
+    }
+  ],
+  "continue_from": "2246-ids-meet"
+}

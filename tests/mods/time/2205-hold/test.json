@@ -1,0 +1,157 @@
+{
+  "harness": 1,
+  "name": "2205-hold",
+  "about": "Held: the step stops, the frame goes on, holders 1, the sound held; released: a step a frame again",
+  "proves": [
+    "services.time"
+  ],
+  "mods": [
+    "../mods/tm-hold"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4222
+      ]
+    },
+    {
+      "at": 50,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-hold.hold",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-hold.release",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-hold.df",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        13,
+        28
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.ds",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        13,
+        28
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.steps",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        13,
+        28
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.holders",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        13,
+        28
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.sound",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        13,
+        28
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.calls",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        13,
+        28
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.state",
+      "is": 2,
+      "when": "all",
+      "frames": [
+        13,
+        28
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.ds",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        34,
+        48
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.steps",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        34,
+        48
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.holders",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        34,
+        48
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.sound",
+      "is": 1000,
+      "when": "all",
+      "frames": [
+        34,
+        48
+      ]
+    }
+  ]
+}

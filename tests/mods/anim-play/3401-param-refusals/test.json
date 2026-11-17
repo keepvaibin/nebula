@@ -1,0 +1,91 @@
+{
+  "harness": 1,
+  "name": "3401-param-refusals",
+  "about": "ja-param's set_param refusals on its attached cube: null material, param or rgba and a NaN are ARGUMENT, handle 999999 and a detached model HANDLE, a parameter the cube has none of NOT_FOUND with Content.MissingParam",
+  "proves": [
+    "content.model.set_param"
+  ],
+  "mods": [
+    "../mods/ja-param"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3601
+      ]
+    },
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3602
+      ]
+    },
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ja-param.attach",
+      "is": 0
+    },
+    {
+      "fact": "mod.ja-param.null_material",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-param.null_param",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-param.null_rgba",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-param.nan",
+      "is": -1
+    },
+    {
+      "fact": "mod.ja-param.bad_handle",
+      "is": -3
+    },
+    {
+      "fact": "mod.ja-param.missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.ja-param.detach",
+      "is": 0
+    },
+    {
+      "fact": "mod.ja-param.ended",
+      "is": -3
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "ja-param",
+        "source": "content",
+        "level": "error",
+        "code": 671
+      },
+      "when": "any"
+    },
+    {
+      "fact": "content.model.param.1",
+      "absent": true
+    }
+  ]
+}

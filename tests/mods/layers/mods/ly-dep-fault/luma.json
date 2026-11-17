@@ -1,0 +1,32 @@
+{
+  "format": "1.0",
+  "id": "ly-dep-fault",
+  "name": "ly-dep-fault",
+  "summary": "ly-dep-fault (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "ly-lib-fault"
+    }
+  ],
+  "layers": [
+    {
+      "name": "a",
+      "when": {
+        "code": true
+      }
+    },
+    {
+      "name": "b",
+      "when": {
+        "code": true
+      }
+    }
+  ]
+}

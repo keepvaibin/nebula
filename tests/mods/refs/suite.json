@@ -1,0 +1,9 @@
+{
+  "harness": 1,
+  "tests": [
+    "3131-missing-image",
+    "3132-missing-class",
+    "3138-no-mod",
+    "3139-check-before-scene"
+  ]
+}

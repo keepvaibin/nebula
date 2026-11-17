@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lc-watch",
+  "name": "lc-watch",
+  "summary": "lc-watch (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

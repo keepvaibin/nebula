@@ -1,0 +1,61 @@
+{
+  "harness": 1,
+  "name": "2204-rates-three",
+  "about": "Three mods at 1001, 1001, 999: the world at 1000 (the exact product, rounded once)",
+  "proves": [
+    "services.time"
+  ],
+  "mods": [
+    "../mods/tm-r1001a",
+    "../mods/tm-r1001b",
+    "../mods/tm-r999"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-r1001a.rate",
+      "is": 1000,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r1001a.steps",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "2253-of-mod",
+  "about": "of_mod: the mod by its own caller() number is the mod find gives (order, state); 0 and a number that is no mod LUMA_E_NOT_FOUND, not reported; a null out LUMA_E_ARGUMENT, reported",
+  "proves": [
+    "services.mods",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/mods-a"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4259
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-a.of_self",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.of_self_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.mods-a.of_zero",
+      "is": -7
+    },
+    {
+      "fact": "mod.mods-a.of_other_number",
+      "is": -7
+    },
+    {
+      "fact": "mod.mods-a.of_null_out",
+      "is": -1
+    },
+    {
+      "log": "mods-a: mods\\.of_mod was given a wrong out; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "harness": 1,
+  "name": "1105-skip-zero",
+  "about": "A before that skips a Vec3f function without writing gives the caller 0,0,0; other calls run",
+  "proves": [
+    "kernel.hook.before"
+  ],
+  "mods": [
+    "../mods/lt-skip"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "CameraLocalUtil::getNormalizedOr",
+      "signature": "Vec3f(const Vec3f &, const Vec3f &)",
+      "args": [
+        [
+          777,
+          0,
+          0
+        ],
+        [
+          1,
+          2,
+          3
+        ]
+      ],
+      "fact": "skipped"
+    },
+    {
+      "at": 31,
+      "call": "CameraLocalUtil::getNormalizedOr",
+      "signature": "Vec3f(const Vec3f &, const Vec3f &)",
+      "args": [
+        [
+          3,
+          0,
+          0
+        ],
+        [
+          1,
+          2,
+          3
+        ]
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 32,
+      "call": "CameraLocalUtil::getNormalizedOr",
+      "signature": "Vec3f(const Vec3f &, const Vec3f &)",
+      "args": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0
+        ]
+      ],
+      "fact": "ran_default"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "skipped",
+      "near": [
+        0,
+        0,
+        0
+      ],
+      "within": 0.0
+    },
+    {
+      "fact": "ran",
+      "near": [
+        1,
+        0,
+        0
+      ],
+      "within": 0.0001
+    },
+    {
+      "fact": "ran_default",
+      "near": [
+        0,
+        1,
+        0
+      ],
+      "within": 0.0001
+    }
+  ]
+}

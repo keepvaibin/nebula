@@ -1,0 +1,120 @@
+{
+  "harness": 1,
+  "name": "2801-assets-read",
+  "about": "the Goomba's archive by its disc path, in another case and in the store's form, GAME_ONLY the same; its entries walked to a file and that file's bytes; a folder's bytes and a file's entries FORMAT; nothing there and an index past the end NOT_FOUND; a short name buffer TOO_LARGE with the size needed; an older struct keeps the bytes it does not have",
+  "proves": [
+    "services.assets"
+  ],
+  "mods": [
+    "../mods/assets-read"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.assets-read.arc_find",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-read.arc_folder",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.arc_archive",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.arc_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.arc_from_mod",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-read.case_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.store_form_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.game_only_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.file_found",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.file_find",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-read.file_bytes",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-read.file_bytes_match",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.file_bytes_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.file_entries",
+      "is": -15
+    },
+    {
+      "fact": "mod.assets-read.folder_bytes",
+      "is": -15
+    },
+    {
+      "fact": "mod.assets-read.missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.assets-read.past_end",
+      "is": -7
+    },
+    {
+      "fact": "mod.assets-read.name_short",
+      "is": -16
+    },
+    {
+      "fact": "mod.assets-read.name_short_empty",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.needed_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-read.query_size",
+      "is": -16
+    },
+    {
+      "fact": "mod.assets-read.old_find",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-read.old_kept",
+      "is": 1
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "harness": 1,
+  "tests": [
+    "2401-draw-shapes",
+    "2402-draw-args",
+    "2403-draw-points",
+    "2404-draw-text"
+  ]
+}

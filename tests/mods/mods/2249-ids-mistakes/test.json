@@ -1,0 +1,61 @@
+{
+  "harness": 1,
+  "name": "2249-ids-mistakes",
+  "about": "a space not in 1.0, a name outside the rule, a bad mod id, a null out: LUMA_E_ARGUMENT, reported (get's first said, its next two counted; of's said)",
+  "proves": [
+    "services.mods.ids",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/mods-a"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4254
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-a.bad_space",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-a.bad_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-a.bad_mod",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-a.null_out",
+      "is": -1
+    },
+    {
+      "log": "mods-a: mods\\.ids\\.get was given a wrong space; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "mods-a: mods\\.ids\\.get was given a wrong name",
+      "times": 1
+    },
+    {
+      "log": "mods-a: mods\\.ids\\.of was given a wrong mod_id; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "mods-a: mods\\.ids\\.get was given a wrong out",
+      "times": 1
+    }
+  ]
+}

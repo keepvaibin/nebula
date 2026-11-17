@@ -1,0 +1,82 @@
+{
+  "harness": 1,
+  "name": "3813-ui-paused",
+  "about": "ju-paused opens CoinCounter on the pause layer from PauseMenu::appear, so the screen is first made while the game is paused, and sets its Counter to 34: LUMA_OK, the screen drawn (ui.screen drawn true, which needs its draw list) and on the picture over the pause menu (the picture's box at the counter like the reference a person kept)",
+  "proves": [
+    "ui.open",
+    "ui.pane",
+    "ui.text"
+  ],
+  "mods": [
+    "../mods/ju-paused"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "hold": [
+        "PLUS"
+      ],
+      "frames": 4
+    },
+    {
+      "at": 200,
+      "picture": "paused"
+    },
+    {
+      "at": 230,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-paused.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-paused.opens",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.ju-paused.pane",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-paused.text",
+      "is": 0
+    },
+    {
+      "fact": "ui.open.1",
+      "has": {
+        "mod": "ju-paused",
+        "layout": "CoinCounter",
+        "layer": "pause",
+        "reused": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.screen.1",
+      "field": "drawn",
+      "is": true,
+      "when": "last"
+    },
+    {
+      "picture": "paused",
+      "like": "3813-{renderer}-paused.png",
+      "box": [
+        1060,
+        530,
+        200,
+        100
+      ],
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

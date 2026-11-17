@@ -1,0 +1,55 @@
+{
+  "harness": 1,
+  "name": "2509-inject-takeout",
+  "about": "in-inject taken out while it injects: the game reads the player's A again at once",
+  "proves": [
+    "services.input",
+    "kernel.reload"
+  ],
+  "mods": [
+    "../mods/in-inject",
+    "../mods/in-game"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.in-inject.begin_ok",
+        "exists": true
+      },
+      "take_out": "in-inject",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.in-inject",
+        "exists": true
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 30
+    },
+    {
+      "after": {
+        "fact": "mod.in-game.a_frames",
+        "at_least": 20
+      },
+      "end": true,
+      "timeout": 1200
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-inject.begin_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.a_frames",
+      "at_least": 20
+    }
+  ]
+}

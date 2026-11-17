@@ -1,0 +1,4 @@
+{
+  "verdict": "pass",
+  "note": "before the fix, ctx.after read the freed scene's object (#0 stayed the first one): garbage or crashed. A fail naming 'no live object' is the harness right and the timing wrong (the stage had not started again by frame 1500): look at the log, not a pass."
+}

@@ -1,0 +1,39 @@
+{
+  "harness": 1,
+  "name": "2270c-export-undeclared",
+  "about": "save.game imported, not declared: L506 at import, as lumalink check says",
+  "proves": [
+    "services.save.game",
+    "services.permissions"
+  ],
+  "mods": [
+    {
+      "path": "../mods/save-gu",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-gu.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "save-gu",
+        "code": 506
+      },
+      "when": "any"
+    }
+  ]
+}

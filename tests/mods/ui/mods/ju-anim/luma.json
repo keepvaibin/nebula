@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "ju-anim",
+  "name": "ju-anim",
+  "version": "1.0.0",
+  "summary": "J's test mod ju-anim.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

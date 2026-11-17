@@ -1,0 +1,27 @@
+{
+  "format": "1.0",
+  "id": "ly-choose",
+  "name": "ly-choose",
+  "summary": "ly-choose (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "a",
+      "when": {
+        "code": true
+      }
+    },
+    {
+      "name": "b",
+      "when": {
+        "code": true
+      }
+    }
+  ]
+}

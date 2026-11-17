@@ -1,0 +1,7 @@
+{
+  "kind": "effect",
+  "file": "beep.wav",
+  "positioned": false,
+  "priority": 128,
+  "bus": "effects"
+}

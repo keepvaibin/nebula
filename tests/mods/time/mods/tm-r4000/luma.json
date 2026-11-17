@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tm-r4000",
+  "name": "tm-r4000",
+  "summary": "tm-r4000 (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "harness": 1,
+  "name": "3812-ui-boot",
+  "about": "ju-boot asks for CoinCounter from start and again each frame while it has no live screen: open is LUMA_E_BUSY (Ui.NoScene) until a scene runs with the system archive's fonts, never a screen on the boot font (no digits, deleted when the file fonts are made: a crash at its next draw); on the stage its screen is live and reads 1230, no Ui.NoGlyph (picture f100: a second coin counter reading 1230)",
+  "proves": [
+    "ui.open.boot",
+    "ui.no_scene"
+  ],
+  "mods": [
+    "../mods/ju-boot"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 90,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3812
+      ]
+    },
+    {
+      "at": 100,
+      "picture": "f100"
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-boot.on_frame",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-boot.open",
+      "is": 0,
+      "when": "all"
+    },
+    {
+      "fact": "mod.ju-boot.text",
+      "is": 0,
+      "when": "all"
+    },
+    {
+      "fact": "mod.ju-boot.stage_alive",
+      "is": 1
+    },
+    {
+      "fact": "mod.ju-boot.stage_text",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-boot",
+        "code": 577
+      },
+      "absent": true
+    }
+  ]
+}

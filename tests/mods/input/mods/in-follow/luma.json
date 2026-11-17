@@ -1,0 +1,27 @@
+{
+  "format": "1.0",
+  "id": "in-follow",
+  "name": "in-follow",
+  "summary": "in-follow (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "options": [
+    {
+      "key": "jump2",
+      "kind": "key",
+      "name": "Second jump",
+      "default": "a"
+    },
+    {
+      "key": "spin2",
+      "kind": "key",
+      "name": "Second spin",
+      "default": "b"
+    }
+  ]
+}

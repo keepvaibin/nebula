@@ -1,0 +1,133 @@
+{
+  "harness": 1,
+  "name": "2805-assets-provide-mistakes",
+  "about": "provide with null files, a count of 0 and over the most, a null data with bytes, a '..' part, a path given twice, a file where a folder is, an empty path among two, a null and a root path: ARGUMENT; bytes over the most: LIMIT; withdraw with a null path and cook with a null fn: ARGUMENT; each said",
+  "proves": [
+    "services.assets.provide",
+    "services.assets.cook",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/assets-provide-mistakes"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.assets-provide-mistakes.null_files",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.zero_count",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.too_many",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.null_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.dot_dot",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.twice",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.file_is_folder",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.empty_path",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.null_path",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.root_path",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.over_most",
+      "is": -4
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.withdraw_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-provide-mistakes.cook_null_fn",
+      "is": -1
+    },
+    {
+      "log": "assets-provide-mistakes: assets\\.provide was given a wrong files; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "assets-provide-mistakes",
+        "english": "assets-provide-mistakes: assets.provide was given a wrong files; it did nothing.",
+        "count": 6
+      },
+      "when": "any"
+    },
+    {
+      "log": "assets-provide-mistakes: assets\\.provide was given a wrong count; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "assets-provide-mistakes",
+        "english": "assets-provide-mistakes: assets.provide was given a wrong count; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "assets-provide-mistakes: assets\\.provide was given a wrong path; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "assets-provide-mistakes",
+        "english": "assets-provide-mistakes: assets.provide was given a wrong path; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "assets-provide-mistakes: assets\\.provide reached its limit of 268435456; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "assets-provide-mistakes: assets\\.withdraw was given a wrong path; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "assets-provide-mistakes: assets\\.cook was given a wrong fn; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

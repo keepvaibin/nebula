@@ -1,0 +1,16 @@
+{
+  "harness": 1,
+  "tests": [
+    "3121-no-mod",
+    "3122-broken-manifest",
+    "3122-broken-manifest-ja",
+    "3123-repeat",
+    "3123-repeat-ja",
+    "3124-notices",
+    "3125-cap",
+    "3125-cap-five",
+    "3127-page-keys",
+    "3128-threads",
+    "3129-entry-whole"
+  ]
+}

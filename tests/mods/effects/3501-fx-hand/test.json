@@ -1,0 +1,100 @@
+{
+  "harness": 1,
+  "name": "3501-fx-hand",
+  "about": "je-fx-hand starts the game's TicoTouchGlow00 on the player's right hand, followed: LUMA_OK, its fx.start names it, particles live in its first frames, no content line; stop ends it (fx.end stop); a second stop is refused as an ended handle (the glow on Mario's hand: a person's look)",
+  "proves": [
+    "fx.start",
+    "fx.stop",
+    "fx.alive"
+  ],
+  "mods": [
+    "../mods/je-fx-hand"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3501
+      ]
+    },
+    {
+      "at": 240,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3502
+      ]
+    },
+    {
+      "at": 260,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3503
+      ]
+    },
+    {
+      "at": 320,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.je-fx-hand.start",
+      "is": 0
+    },
+    {
+      "fact": "fx.start.1",
+      "has": {
+        "mod": "je-fx-hand",
+        "name": "TicoTouchGlow00",
+        "joint": "HandR",
+        "follow": true,
+        "placeholder": false,
+        "group": 0
+      },
+      "when": "any"
+    },
+    {
+      "fact": "fx.alive.1",
+      "field": "particles",
+      "more": 0,
+      "when": "any"
+    },
+    {
+      "fact": "mod.je-fx-hand.stop",
+      "is": 0
+    },
+    {
+      "fact": "fx.end.1",
+      "is": {
+        "why": "stop"
+      }
+    },
+    {
+      "fact": "mod.je-fx-hand.stop2",
+      "is": -3
+    },
+    {
+      "fact": "fx.start.2",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-fx-hand",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

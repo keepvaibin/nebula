@@ -1,0 +1,7 @@
+{
+  "verdict": "fail",
+  "reason_has": [
+    "hello"
+  ],
+  "note": "the implicit 'every mod loaded' check fails, naming hello and the message it was refused with"
+}

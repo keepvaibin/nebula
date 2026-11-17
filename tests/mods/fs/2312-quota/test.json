@@ -1,0 +1,158 @@
+{
+  "harness": 1,
+  "name": "2312-quota",
+  "about": "four files of 64 MiB fill the 256 MiB data folder; one byte more: LIMIT, said once on the Mods page; remove \"\": 4 files",
+  "proves": [
+    "services.fs",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/fs-quota"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-quota.e1_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-quota.e2_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4303
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-quota.e3_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4304
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-quota.e4_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4305
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-quota.e5_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4306
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-quota.e6_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-quota.w5",
+      "is": 1
+    },
+    {
+      "log": "fs-quota: fs\\.write reached its limit of 256 MiB; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "mod.fs-quota.e1_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-quota.e1_value",
+      "is": 67108864
+    },
+    {
+      "fact": "mod.fs-quota.e2_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-quota.e2_value",
+      "is": 67108864
+    },
+    {
+      "fact": "mod.fs-quota.e3_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-quota.e3_value",
+      "is": 67108864
+    },
+    {
+      "fact": "mod.fs-quota.e4_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-quota.e4_value",
+      "is": 67108864
+    },
+    {
+      "fact": "mod.fs-quota.e5_kind",
+      "is": 2
+    },
+    {
+      "fact": "mod.fs-quota.e5_status",
+      "is": -4
+    },
+    {
+      "fact": "mod.fs-quota.e6_kind",
+      "is": 3
+    },
+    {
+      "fact": "mod.fs-quota.e6_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-quota.e6_value",
+      "is": 4
+    }
+  ]
+}

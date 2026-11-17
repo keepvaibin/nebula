@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "name": "2108-ask-not-granted",
+  "about": "LumaCore.service for test.secret without the permission is null and said once",
+  "proves": [
+    "kernel.service",
+    "services.permissions"
+  ],
+  "mods": [
+    "../mods/reg-ask"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-ask.asked",
+      "is": 0
+    },
+    {
+      "log": "reg-ask may not use test\\.secret"
+    }
+  ]
+}

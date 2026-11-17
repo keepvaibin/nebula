@@ -1,0 +1,15 @@
+{
+  "harness": 1,
+  "tests": [
+    "3201-model-hand",
+    "3202-model-missing",
+    "3203-model-joint",
+    "3204-model-args",
+    "3205-model-skeleton",
+    "3206-model-show",
+    "3207-model-player-parts",
+    "3209-model-dies",
+    "3210-model-limit",
+    "3211-model-scene"
+  ]
+}

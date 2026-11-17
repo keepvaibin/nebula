@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "3141-no-compiler",
+    "3145-no-mod"
+  ]
+}

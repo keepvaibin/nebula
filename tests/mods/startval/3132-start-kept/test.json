@@ -1,0 +1,33 @@
+{
+  "harness": 1,
+  "name": "3132-start-kept",
+  "about": "The second start reads the kept verdict back: the same finding, the mod still refused",
+  "proves": [
+    "validator.start.kept"
+  ],
+  "continue_from": "3131-start-refused",
+  "mods": [
+    {
+      "path": "../mods/jv-bad",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-bad",
+        "source": "validator",
+        "level": "error",
+        "code": 204
+      },
+      "when": "any"
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "harness": 1,
+  "name": "2601-audio-play",
+  "about": "its own cooked sound played: ENDED OK once the mix played its 0.1 s; the <id>:<path> form; a looped play changed, stopped with no event, its handle closed; a file that is not a cooked sound FORMAT, reported (a name no file has: 2611)",
+  "proves": [
+    "services.audio",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/audio-play"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4802
+      ]
+    },
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4803
+      ]
+    },
+    {
+      "at": 70,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.audio-play.play",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-play.play_id_form",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-play.play_loop",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-play.voice_set",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-play.not_a_sound",
+      "is": -15
+    },
+    {
+      "fact": "mod.audio-play.bus_volume",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-play.ended_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-play.ended_other",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-play.first_closed",
+      "is": -3
+    },
+    {
+      "fact": "mod.audio-play.loop_set",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-play.stop",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-play.stop_again",
+      "is": -3
+    },
+    {
+      "fact": "mod.audio-play.ended_after_stop",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-play.others",
+      "is": 0
+    },
+    {
+      "log": "audio-play: audio\\.play was given bad, which is not a cooked sound; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

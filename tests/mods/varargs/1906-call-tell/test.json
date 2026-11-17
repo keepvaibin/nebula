@@ -1,0 +1,25 @@
+{
+  "harness": 1,
+  "name": "1906-call-tell",
+  "about": "Importing a function with `...` to call it is refused at start (Lib.CallTell)",
+  "proves": [
+    "kernel.varargs.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../mods/call-tell",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "call-tell: .*luma_mod cannot be used: \"MR::tryCreateCsvParser\" is a constructor, a destructor or a function with a variable number of arguments"
+    }
+  ]
+}

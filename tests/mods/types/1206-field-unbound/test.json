@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "1206-field-unbound",
+  "about": "A field two bases each have is refused with the bases named (Name.FieldUnbound)",
+  "proves": [
+    "kernel.refusal",
+    "kernel.bind"
+  ],
+  "mods": [
+    {
+      "path": "../mods/tt-unb-field",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tt-unb-field.started",
+      "absent": true
+    },
+    {
+      "log": "tt-unb-field: .*field \"AudAnmSoundObject\\.mHandles\" a mod can bind \\(.*mHandles.*each have it\\)"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "ka-lib",
+  "name": "ka-lib",
+  "summary": "ka-lib (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "net.local",
+      "why": "The registry test asks for it."
+    }
+  ]
+}

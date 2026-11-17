@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jd-text",
+  "name": "jd-text",
+  "version": "1.0.0",
+  "summary": "J's test mod jd-text.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

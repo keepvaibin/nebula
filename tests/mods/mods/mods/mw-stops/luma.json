@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "mw-stops",
+  "name": "mw-stops",
+  "summary": "mw-stops (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

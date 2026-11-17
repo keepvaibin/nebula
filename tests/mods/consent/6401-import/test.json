@@ -1,0 +1,83 @@
+{
+  "harness": 1,
+  "name": "6401-import",
+  "about": "jc-net imported as Open with starts it: IMPORTED, then the question shows unanswered through the boot; Escape is the result's Done, two lefts and Space ALLOW; one answer, code yes",
+  "proves": [
+    "consent.screen",
+    "consent.allow",
+    "import.check"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jc-net",
+      "install": "import",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "key": "esc"
+    },
+    {
+      "at": 180,
+      "key": "left"
+    },
+    {
+      "at": 240,
+      "key": "left"
+    },
+    {
+      "at": 300,
+      "key": "space"
+    },
+    {
+      "at": 420,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "import.jc-net",
+      "has": {
+        "line": 1,
+        "text": "IMPORTED",
+        "id": "jc-net"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "consent.shown.jc-net",
+      "has": {
+        "code": true,
+        "focus": "NOT NOW",
+        "rows": [
+          {
+            "name": "net.internet",
+            "label": "Internet",
+            "required": false,
+            "new": false,
+            "why": "Sends your best times to the board.",
+            "text": "Connects to the internet: api.example.org, *.example.net.",
+            "roots": ""
+          }
+        ]
+      },
+      "when": "any"
+    },
+    {
+      "fact": "consent.answer.jc-net",
+      "has": {
+        "code": "yes",
+        "permissions": {
+          "net.internet": "yes"
+        }
+      },
+      "when": "any"
+    },
+    {
+      "fact": "consent.answer.jc-net",
+      "count": 1
+    }
+  ]
+}

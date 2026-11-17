@@ -1,0 +1,126 @@
+{
+  "harness": 1,
+  "name": "3611-anim-once",
+  "about": "ja-once plays its model's Nod once with marks 0, 10, 20 and 999: LUMA_OK, the joint clip leading, marks 0 to 2 come once each and 999 never, then its end (LUMA_OK, ended) (the cube nods once over Mario: a person's look)",
+  "proves": [
+    "anim.on_model",
+    "anim.how",
+    "anim.mark",
+    "anim.end"
+  ],
+  "mods": [
+    "../mods/ja-once"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3601
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ja-once.attach",
+      "is": 0
+    },
+    {
+      "fact": "mod.ja-once.play",
+      "is": 0
+    },
+    {
+      "fact": "anim.play.1",
+      "has": {
+        "clip": "Nod",
+        "kinds": [
+          "bck"
+        ],
+        "loops": false,
+        "on_model": true,
+        "start": 0
+      },
+      "when": "any"
+    },
+    {
+      "fact": "anim.play.1",
+      "field": "frames",
+      "at_least": 29,
+      "when": "last"
+    },
+    {
+      "fact": "anim.play.1",
+      "field": "frames",
+      "at_most": 31,
+      "when": "last"
+    },
+    {
+      "fact": "anim.mark.1.0",
+      "exists": true
+    },
+    {
+      "fact": "anim.mark.1.1",
+      "exists": true
+    },
+    {
+      "fact": "anim.mark.1.2",
+      "exists": true
+    },
+    {
+      "fact": "anim.mark.1.3",
+      "absent": true
+    },
+    {
+      "fact": "anim.end.1",
+      "is": {
+        "why": "end"
+      }
+    },
+    {
+      "fact": "mod.ja-once.ev1_mark0",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-once.ev1_mark1",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-once.ev1_mark2",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-once.ev1_mark3",
+      "absent": true
+    },
+    {
+      "fact": "mod.ja-once.ev1_end_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.ja-once.ev1_end_why",
+      "is": 0
+    },
+    {
+      "fact": "mod.ja-once.ev1_ends",
+      "is": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ja-once",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

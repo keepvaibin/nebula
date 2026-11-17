@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "je-fx-limit",
+  "name": "je-fx-limit",
+  "version": "1.0.0",
+  "summary": "J's test mod je-fx-limit.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

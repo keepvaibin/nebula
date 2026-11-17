@@ -1,0 +1,189 @@
+{
+  "harness": 1,
+  "name": "3124-notices",
+  "about": "Seven Errors in one frame while playing: three notices (newest at the bottom), the rest wait; when the first goes, four wait, so the oldest two fold into one ModLog.More line; then the sixth and seventh",
+  "proves": [
+    "modlog.notice",
+    "modlog.notice.fold"
+  ],
+  "mods": [
+    "../mods/jl-say1",
+    "../mods/jl-say2",
+    "../mods/jl-say3",
+    "../mods/jl-say4",
+    "../mods/jl-say5",
+    "../mods/jl-say6",
+    "../mods/jl-say7"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ],
+      "fact": "said1"
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ],
+      "fact": "said2"
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4303
+      ],
+      "fact": "said3"
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4304
+      ],
+      "fact": "said4"
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4305
+      ],
+      "fact": "said5"
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4306
+      ],
+      "fact": "said6"
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4307
+      ],
+      "fact": "said7"
+    },
+    {
+      "at": 130,
+      "picture": "three"
+    },
+    {
+      "at": 516,
+      "picture": "folded"
+    },
+    {
+      "at": 1318,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog.notice",
+      "has": {
+        "mod": "jl-say1",
+        "code": 901
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "has": {
+        "mod": "jl-say2",
+        "code": 901
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "has": {
+        "mod": "jl-say3",
+        "code": 901
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "has": {
+        "row": "ModLog.More",
+        "count": 2
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "has": {
+        "mod": "jl-say6",
+        "code": 901
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "has": {
+        "mod": "jl-say7",
+        "code": 901
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "count": 6,
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "matching": {
+        "mod": "jl-say4"
+      },
+      "absent": true,
+      "scope": "installation"
+    },
+    {
+      "picture": "three",
+      "like": "refs/{renderer}/three.png",
+      "within": {
+        "rmse": 6.0
+      }
+    },
+    {
+      "picture": "folded",
+      "like": "refs/{renderer}/folded.png",
+      "within": {
+        "rmse": 6.0
+      }
+    }
+  ]
+}

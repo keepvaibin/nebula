@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "1113-memory",
+  "about": "Memory for mods: aligned to 65536, whole, apart; null past what there is; from a hook too",
+  "proves": [
+    "kernel.memory"
+  ],
+  "mods": [
+    "../mods/lt-mem"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4246
+      ],
+      "fact": "in_hook"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-mem.a16",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-mem.b64k",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-mem.c",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-mem.apart",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-mem.huge_null",
+      "is": 1
+    },
+    {
+      "fact": "in_hook",
+      "is": 1
+    }
+  ]
+}

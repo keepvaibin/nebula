@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "2244-ids-get",
+  "about": "get(message, breath) twice: the same number, the derived one (18409466); sensor's breath its own derived (30078845)",
+  "proves": [
+    "services.mods.ids"
+  ],
+  "mods": [
+    "../mods/mods-a"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4252
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-a.breath1",
+      "is": 18409466
+    },
+    {
+      "fact": "mod.mods-a.breath2",
+      "is": 18409466
+    },
+    {
+      "fact": "mod.mods-a.sbreath",
+      "is": 30078845
+    }
+  ]
+}

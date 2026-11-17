@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ja-args",
+  "name": "ja-args",
+  "version": "1.0.0",
+  "summary": "J's test mod ja-args.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

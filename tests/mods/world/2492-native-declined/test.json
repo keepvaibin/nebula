@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "2492-native-declined",
+  "about": "fn-native with native declined: off before its start (its import of draw.native needs the permission), Consent.OffDeclined names it",
+  "proves": [
+    "draw.native",
+    "services.permissions"
+  ],
+  "mods": [
+    {
+      "path": "../mods/fn-native",
+      "permissions": {
+        "native": "deny"
+      },
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fn-native.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fn-native",
+        "source": "loader",
+        "level": "note",
+        "row": "Consent.OffDeclined"
+      },
+      "when": "any"
+    }
+  ]
+}

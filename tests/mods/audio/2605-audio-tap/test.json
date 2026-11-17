@@ -1,0 +1,118 @@
+{
+  "harness": 1,
+  "name": "2605-audio-tap",
+  "about": "a tap of the mods' mix hears its own stream's tone in blocks of 1024 frames, a tap of the output gets blocks too; a 3rd tap LIMIT, a tap without a function ARGUMENT; its sound as the game's music and restored; taps closed, a closed one HANDLE",
+  "proves": [
+    "services.audio",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/audio-tap"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4802
+      ]
+    },
+    {
+      "at": 50,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.audio-tap.tap_mods",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-tap.tap_output",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-tap.tap_3rd",
+      "is": -4
+    },
+    {
+      "fact": "mod.audio-tap.tap_no_fn",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-tap.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-tap.push",
+      "is": 24000
+    },
+    {
+      "fact": "mod.audio-tap.music",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-tap.blocks_mods_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-tap.loud_mods_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-tap.blocks_output_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-tap.block_frames",
+      "is": 1024
+    },
+    {
+      "fact": "mod.audio-tap.block_rate_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-tap.restore",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-tap.restore_again",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-tap.close_mods",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-tap.close_output",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-tap.close_again",
+      "is": -3
+    },
+    {
+      "fact": "mod.audio-tap.stream_close",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-tap.others",
+      "is": 0
+    },
+    {
+      "log": "audio-tap: audio\\.tap_open reached its limit of 2; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

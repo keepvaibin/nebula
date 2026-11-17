@@ -1,0 +1,8 @@
+{
+  "stage": "material",
+  "params": [
+    {"name": "speed", "type": "float", "default": 0.0},
+    {"name": "tint", "type": "float4", "default": [0.1, 0.3, 1.0, 1.0]}
+  ],
+  "reads": ["time", "world_position"]
+}

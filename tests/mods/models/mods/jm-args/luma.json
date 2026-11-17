@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jm-args",
+  "name": "jm-args",
+  "version": "1.0.0",
+  "summary": "J's test mod jm-args.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "panes": [
+    {
+      "name": "Hud",
+      "type": "pane",
+      "position": [
+        240,
+        170
+      ],
+      "widen": true,
+      "children": [
+        {
+          "name": "Icon",
+          "type": "picture",
+          "texture": "Moon",
+          "size": [
+            32,
+            32
+          ],
+          "anchor": "right"
+        },
+        {
+          "name": "Count",
+          "type": "text",
+          "size": [
+            160,
+            32
+          ],
+          "position": [
+            4,
+            0
+          ],
+          "anchor": "left",
+          "text": "x 120",
+          "length": 16,
+          "font": "NumberFont",
+          "font_size": 28,
+          "place": "left",
+          "colour": "ffffffff"
+        },
+        {
+          "name": "Hit",
+          "type": "bounding",
+          "size": [
+            200,
+            40
+          ],
+          "visible": false
+        }
+      ]
+    },
+    {
+      "name": "Banner",
+      "type": "picture",
+      "size": [
+        300,
+        36
+      ],
+      "position": [
+        0,
+        -190
+      ],
+      "corners": [
+        "203080c0",
+        "203080c0",
+        "101840c0",
+        "101840c0"
+      ],
+      "children": [
+        {
+          "name": "Title",
+          "type": "text",
+          "size": [
+            300,
+            36
+          ],
+          "text": "ルイージ",
+          "font": "MessageFont26",
+          "font_size": 26
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "name": "Counter",
+      "panes": [
+        "Icon",
+        "Count"
+      ]
+    }
+  ]
+}

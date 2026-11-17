@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tt-unb-field",
+  "name": "tt-unb-field",
+  "summary": "tt-unb-field (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

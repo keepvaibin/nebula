@@ -1,0 +1,7 @@
+{
+  "verdict": "pass",
+  "facts": {
+    "mod.hello.hello": 1,
+    "mod.hello.loaded": true
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "harness": 1,
+  "name": "2608-audio-place",
+  "about": "a sound played from a place 10 units right of the camera ends with ENDED OK (the mix played it placed); one looped from the player's place is heard in the mods' tap, moved to a point, to no place, stopped; a LumaAudioPlace of 8 bytes, follow 3, a NaN and a 2e7 coordinate ARGUMENT; a stray handle HANDLE",
+  "proves": [
+    "services.audio",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/audio-place"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4802
+      ]
+    },
+    {
+      "at": 50,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.audio-place.tap_mods",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-place.play_at",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-place.play_at_loop",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-place.small_place",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-place.follow_3",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-place.pos_nan",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-place.pos_2e7",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-place.stray_place",
+      "is": -3
+    },
+    {
+      "fact": "mod.audio-place.ended_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-place.loud_mods_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-place.place_point",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-place.place_none",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-place.stop",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-place.place_stopped",
+      "is": -3
+    },
+    {
+      "fact": "mod.audio-place.tap_close",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-place.ended_other",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-place.others",
+      "is": 0
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "harness": 1,
+  "name": "2201-now",
+  "about": "Nothing set: frame and step grow by 1 a frame, one on_step call a frame, state PLAY, rate 1000",
+  "proves": [
+    "services.time",
+    "services.time.handlers"
+  ],
+  "mods": [
+    "../mods/tm-basic"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-basic.on_frame",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-basic.on_step",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-basic.df",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        8,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-basic.ds",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        8,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-basic.steps",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        8,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-basic.state",
+      "is": 2,
+      "when": "all",
+      "frames": [
+        8,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-basic.rate",
+      "is": 1000,
+      "when": "all",
+      "frames": [
+        8,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-basic.holders",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        8,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-basic.sound",
+      "is": 1000,
+      "when": "all",
+      "frames": [
+        8,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-basic.calls",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        8,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-basic.sif",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        8,
+        38
+      ]
+    }
+  ]
+}

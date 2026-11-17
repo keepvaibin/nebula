@@ -1,0 +1,37 @@
+{
+  "harness": 1,
+  "name": "2281-code-entry",
+  "about": "code.platforms [windows-x64] and code/windows-x64/mod.dll, no plugins list: the library starts and its hook runs",
+  "proves": [
+    "format.code",
+    "kernel.hook.after"
+  ],
+  "mods": [
+    "../mods/code-entry"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4283
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.code-entry.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.code-entry.called",
+      "is": 3
+    }
+  ]
+}

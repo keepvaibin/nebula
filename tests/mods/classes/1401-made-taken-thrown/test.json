@@ -1,0 +1,152 @@
+{
+  "harness": 1,
+  "name": "1401-made-taken-thrown",
+  "about": "LcShell, a mod's class from JetTurtle in place of every Kuribo: made by the factory with its own data, it is of its class and of the base, its overrides run for its own objects only, and the player takes it and throws it with the player's own code",
+  "proves": [
+    "kernel.classes.define",
+    "kernel.classes.made",
+    "kernel.classes.data",
+    "kernel.classes.override",
+    "kernel.classes.objects"
+  ],
+  "mods": [
+    "../mods/lc-shell"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 150,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1401
+      ],
+      "fact": "checked"
+    },
+    {
+      "at": 210,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1402
+      ],
+      "fact": "threw"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-shell.defined",
+      "is": 1
+    },
+    {
+      "log": "class LcShell: from JetTurtle \\(made by the factory's JetTurtle; in place of Kuribo\\), 16 bytes of its own, 3 overrides"
+    },
+    {
+      "fact": "mod.lc-shell.made",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-shell.made_zeroed",
+      "is": 1,
+      "when": "all"
+    },
+    {
+      "fact": "mod.lc-shell.made_data_found",
+      "is": 1,
+      "when": "all"
+    },
+    {
+      "fact": "mod.lc-shell.has_first",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.has_player",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.number_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.own_is_class",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.is_class",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.is_base",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.as_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.player_not",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.player_no_data",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.first_index",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.calc_own",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-shell.calc_wrong",
+      "is": 0
+    },
+    {
+      "fact": "mod.lc-shell.calc_others",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-shell.first_calcs",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-shell.has_sensor",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.take_answer",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.taken",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.taken_index",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.throw_answer",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.thrown",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.thrown_index",
+      "is": 1
+    }
+  ]
+}

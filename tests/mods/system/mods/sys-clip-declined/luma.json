@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "sys-clip-declined",
+  "name": "sys-clip-declined",
+  "summary": "sys-clip-declined (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "system.clipboard",
+      "why": "The system test asks for it."
+    }
+  ]
+}

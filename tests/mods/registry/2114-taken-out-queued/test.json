@@ -1,0 +1,82 @@
+{
+  "harness": 1,
+  "name": "2114-taken-out-queued",
+  "about": "A mod taken out with 10 events queued (harness r7 take_out, before the next frame's deliveries): none given, drop 10 times, mod_gone before mod_end",
+  "proves": [
+    "services.events",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/reg-takeout",
+    "../mods/reg-watch"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4260
+      ]
+    },
+    {
+      "at": 10,
+      "take_out": "reg-takeout"
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4267
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-takeout.post",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-watch.stats",
+      "is": 0
+    },
+    {
+      "fact": "mod.reg-watch.known",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-watch.posted",
+      "is": 10
+    },
+    {
+      "fact": "mod.reg-watch.delivered",
+      "is": 0
+    },
+    {
+      "fact": "mod.reg-watch.dropped",
+      "is": 10
+    },
+    {
+      "fact": "mod.reg-watch.after_gone",
+      "is": 0
+    },
+    {
+      "fact": "mod.reg-watch.gone_before_end",
+      "is": 1
+    },
+    {
+      "fact": "takeout.reg-takeout",
+      "has": {
+        "stopped": true,
+        "finished": true
+      }
+    }
+  ]
+}

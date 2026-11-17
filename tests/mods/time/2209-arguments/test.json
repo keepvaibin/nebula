@@ -1,0 +1,71 @@
+{
+  "harness": 1,
+  "name": "2209-arguments",
+  "about": "set_rate 0 and 16001, step 0 and 17: LUMA_E_ARGUMENT, reported; 1 and 16000 taken; release without hold: LUMA_OK",
+  "proves": [
+    "services.time",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/tm-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-args.rate_0",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-args.rate_16001",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-args.rate_1",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-args.rate_16000",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-args.rate_1000",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-args.step_0",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-args.step_17",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-args.release",
+      "is": 0
+    },
+    {
+      "log": "tm-args: time\\.set_rate was given a wrong rate; it did nothing\\."
+    },
+    {
+      "log": "tm-args: time\\.step was given a wrong count; it did nothing\\."
+    }
+  ]
+}

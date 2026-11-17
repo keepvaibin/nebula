@@ -1,0 +1,55 @@
+{
+  "harness": 1,
+  "name": "3605-blink-shut",
+  "about": "ga-blink (no code) replaces the Goomba's blink (a texture swap the game plays) from an animation file naming the game's material KuriboAll_v and its textures KuriboAll.0 and KuriboAll.2: the cook makes one clip, Blink.btp, and no joint clip (cook.model clips 1, materials 1), refuses nothing, and the stage plays; Goombas keep their eyes shut nearly all the time (pictures/blink.png: a person's look)",
+  "proves": [
+    "anim.materials"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ga-blink",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 600,
+      "picture": "blink"
+    },
+    {
+      "at": 660,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "cook.model",
+      "has": {
+        "mod": "ga-blink",
+        "other": "ObjectData/Kuribo.arc/kuribo.bdl",
+        "clips": 1,
+        "materials": 1,
+        "meshes": 0
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ga-blink",
+        "level": "error"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

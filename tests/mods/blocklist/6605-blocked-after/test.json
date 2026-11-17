@@ -1,0 +1,38 @@
+{
+  "harness": 1,
+  "name": "6605-blocked-after",
+  "about": "The start after BLOCK: jc-none scans off (mods.ini kept it on), in the DISABLED list",
+  "proves": [
+    "mods.blocklist"
+  ],
+  "mods": [
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "continue_from": "6604-block",
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modscreen.jc-none",
+      "has": {
+        "line": 0,
+        "page": "list",
+        "list": "off"
+      },
+      "when": "first",
+      "scope": "installation"
+    }
+  ]
+}

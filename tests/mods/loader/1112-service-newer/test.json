@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "1112-service-newer",
+  "about": "A service minor newer than the game's refuses the mod like an absent one",
+  "proves": [
+    "kernel.service",
+    "kernel.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../mods/lt-svc-new",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-svc-new.started",
+      "absent": true
+    },
+    {
+      "log": "lt-svc-new: .*harness"
+    }
+  ]
+}

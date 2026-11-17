@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "je-fx-hand",
+  "name": "je-fx-hand",
+  "version": "1.0.0",
+  "summary": "J's test mod je-fx-hand.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

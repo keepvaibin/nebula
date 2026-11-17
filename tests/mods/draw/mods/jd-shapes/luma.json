@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jd-shapes",
+  "name": "jd-shapes",
+  "version": "1.0.0",
+  "summary": "J's test mod jd-shapes.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

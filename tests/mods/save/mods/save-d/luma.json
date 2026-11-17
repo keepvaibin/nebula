@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "save-d",
+  "name": "save-d",
+  "summary": "save-d (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

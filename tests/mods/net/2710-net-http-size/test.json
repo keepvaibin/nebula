@@ -1,0 +1,33 @@
+{
+  "harness": 1,
+  "name": "2710-net-http-size",
+  "about": "http takes a request of a later minor (its size 16 bytes past this build's: LUMA_PENDING) and refuses one smaller than 1.3's (LUMA_E_ARGUMENT)",
+  "proves": [
+    "services.net.http",
+    "services.registry"
+  ],
+  "mods": [
+    {
+      "path": "../mods/nh-size",
+      "permissions": {
+        "net.local": "allow"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.nh-size.later",
+      "is": 1
+    },
+    {
+      "fact": "mod.nh-size.smaller",
+      "is": -1
+    }
+  ]
+}

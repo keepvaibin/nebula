@@ -1,0 +1,99 @@
+{
+  "harness": 1,
+  "name": "1408-slots",
+  "about": "LcSlots, a mod's class from Kuribo in place of every Kuribo, overrides three virtuals by slot, named by LiveActor's inline declarations (no function row): its hooks run for its own objects only, proceed runs Kuribo's code or LiveActor's inline body, and a virtual call through the object reaches the hook",
+  "proves": [
+    "kernel.classes.override",
+    "kernel.classes.slots"
+  ],
+  "mods": [
+    "../mods/lc-slots"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 150,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1408
+      ],
+      "fact": "checked"
+    },
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-slots.defined",
+      "is": 1
+    },
+    {
+      "log": "class LcSlots: from Kuribo \\(made by the factory's Kuribo; in place of Kuribo\\), 8 bytes of its own, 3 overrides"
+    },
+    {
+      "fact": "mod.lc-slots.made",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-slots.made_own_class",
+      "is": 1,
+      "when": "all"
+    },
+    {
+      "fact": "mod.lc-slots.made_is_base",
+      "is": 1,
+      "when": "all"
+    },
+    {
+      "fact": "mod.lc-slots.has_first",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-slots.own_is_class",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-slots.most_controls",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-slots.control_own",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-slots.control_wrong",
+      "is": 0
+    },
+    {
+      "fact": "mod.lc-slots.attack_answer",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-slots.attack_marked",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-slots.take_answer",
+      "is": 0
+    },
+    {
+      "fact": "mod.lc-slots.take_proceeded",
+      "is": 0
+    },
+    {
+      "fact": "mod.lc-slots.take_own",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-slots.take_wrong",
+      "is": 0
+    }
+  ]
+}

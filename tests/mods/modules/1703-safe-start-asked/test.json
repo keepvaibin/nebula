@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "1703-safe-start-asked",
+  "about": "A safe start (asked) with lt-hold, a mod with code, on: the module choice knows the safe start, so only the harness's game half counts and lt-hold's hook never runs",
+  "proves": [
+    "kernel.modules.rows"
+  ],
+  "safe_start": "asked",
+  "mods": [
+    {
+      "path": "../../loader/mods/lt-hold",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4247
+      ],
+      "fact": "called"
+    },
+    {
+      "after": {
+        "fact": "called",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "game module: rows \\(safe start: only mod luma-test's code starts\\)"
+    },
+    {
+      "no_log": "game module: rows \\(mod lt-hold has code\\)"
+    },
+    {
+      "log": "mods: safe start: every mod is off for this start"
+    },
+    {
+      "fact": "mod.lt-hold.hooked",
+      "absent": true
+    }
+  ]
+}

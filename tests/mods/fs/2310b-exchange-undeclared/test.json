@@ -1,0 +1,35 @@
+{
+  "harness": 1,
+  "name": "2310b-exchange-undeclared",
+  "about": "fs.exchange imported, not declared: L506 at import",
+  "proves": [
+    "services.permissions",
+    "services.fs.exchange"
+  ],
+  "mods": [
+    {
+      "path": "../mods/fs-ex-undecl",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-ex-undecl.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fs-ex-undecl",
+        "code": 506
+      },
+      "when": "any"
+    }
+  ]
+}

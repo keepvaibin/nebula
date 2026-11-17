@@ -1,0 +1,121 @@
+{
+  "harness": 1,
+  "name": "2702-tcp-mistakes",
+  "about": "a host outside the local network or a name, port 0, a null fn, local_network 2: ARGUMENT; 16 listeners then LIMIT; send on a listener, take outside DATA, close twice: HANDLE; a port nobody listens on: ERROR UNREACHABLE",
+  "proves": [
+    "services.net.local",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/net-mistakes"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4501
+      ]
+    },
+    {
+      "at": 130,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4502
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.net-mistakes.refused_status",
+        "exists": true
+      },
+      "timeout": 3600,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4503
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.net-mistakes.refused_events",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-mistakes.host_far",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-mistakes.host_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-mistakes.port_zero",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-mistakes.null_fn",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-mistakes.bad_network",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-mistakes.listeners_made",
+      "is": 16
+    },
+    {
+      "fact": "mod.net-mistakes.listener_17",
+      "is": -4
+    },
+    {
+      "fact": "mod.net-mistakes.send_listener",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-mistakes.take_outside",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-mistakes.close_once",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-mistakes.close_twice",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-mistakes.refused_connect",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-mistakes.refused_events",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-mistakes.refused_status",
+      "is": -17
+    },
+    {
+      "log": "net-mistakes: net\\.local\\.tcp_connect was given a wrong host; it did nothing\\."
+    },
+    {
+      "log": "net-mistakes: net\\.local\\.tcp_listen was given a wrong local_network; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "net-mistakes: net\\.local\\.tcp_listen reached its limit of 16; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

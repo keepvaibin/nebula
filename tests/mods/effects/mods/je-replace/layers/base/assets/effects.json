@@ -1,0 +1,9 @@
+{
+  "replace": {
+    "DeathSmokeS00": {
+      "shape": {
+        "primary": "ff2020ff"
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "gs-stage",
+  "version": "1.0.0",
+  "name": "gs-stage",
+  "summary": "gs-stage (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

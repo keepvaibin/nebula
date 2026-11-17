@@ -1,0 +1,55 @@
+{
+  "harness": 1,
+  "name": "3127-page-keys",
+  "about": "Mods > Log reached by keys: the page lists jl-repeat's entry with its place and count, once",
+  "proves": [
+    "modlog.page"
+  ],
+  "mods": [
+    "../mods/jl-repeat"
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 180,
+      "key": "up"
+    },
+    {
+      "at": 240,
+      "key": "up"
+    },
+    {
+      "at": 300,
+      "key": "up"
+    },
+    {
+      "at": 360,
+      "key": "down"
+    },
+    {
+      "at": 420,
+      "key": "down"
+    },
+    {
+      "at": 480,
+      "key": "space"
+    },
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog.page",
+      "count": 1,
+      "matching": {
+        "value": "jl_repeat.lumi:12 ×1000"
+      },
+      "scope": "installation"
+    }
+  ]
+}

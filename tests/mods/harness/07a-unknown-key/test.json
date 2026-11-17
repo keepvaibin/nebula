@@ -1,0 +1,23 @@
+{
+  "harness": 1,
+  "name": "07a-unknown-key",
+  "about": "An unknown key is harness-error naming the key and its place",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "wait": true,
+      "colour": "red"
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": []
+}

@@ -1,0 +1,109 @@
+{
+  "harness": 1,
+  "name": "2307-cancel",
+  "about": "a cancelled write still happens, without its event, and holds its place in the 32 until done; a cancelled read gives no event and frees its place; cancel again: LUMA_E_HANDLE; a read after them gives the written byte; asked once the 31st event has come (events_now: the worker's pace, not a frame count), and no 32nd by the end",
+  "proves": [
+    "services.fs",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/fs-cancel"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-cancel.events_now",
+        "is": 31
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-cancel.events",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-cancel.w1",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-cancel.cancel_w1",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-cancel.r2",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-cancel.cancel_r2",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-cancel.cancel_r2_again",
+      "is": -3
+    },
+    {
+      "fact": "mod.fs-cancel.r3",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-cancel.fill_made",
+      "is": 30
+    },
+    {
+      "fact": "mod.fs-cancel.fill_last",
+      "is": -4
+    },
+    {
+      "log": "fs-cancel: fs\\.read reached its limit of 32; it did nothing\\."
+    },
+    {
+      "fact": "mod.fs-cancel.e1_status",
+      "absent": true
+    },
+    {
+      "fact": "mod.fs-cancel.e2_status",
+      "absent": true
+    },
+    {
+      "fact": "mod.fs-cancel.events",
+      "is": 31
+    },
+    {
+      "fact": "mod.fs-cancel.events_now",
+      "is": 31
+    },
+    {
+      "fact": "mod.fs-cancel.e3_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-cancel.e3_value",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-cancel.e3_same",
+      "is": 1
+    }
+  ]
+}

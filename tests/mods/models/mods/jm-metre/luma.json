@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jm-metre",
+  "name": "jm-metre",
+  "version": "1.0.0",
+  "summary": "J's test mod jm-metre.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

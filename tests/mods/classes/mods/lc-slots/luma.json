@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lc-slots",
+  "name": "lc-slots",
+  "summary": "lc-slots (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

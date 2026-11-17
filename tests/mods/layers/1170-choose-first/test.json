@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "1170-choose-first",
+  "about": "ly-choose chooses its code layer a with no record of an earlier answer: the game starts again once, before content, and the played process has a's asset and not b's",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    "../mods/ly-choose"
+  ],
+  "starts": 2,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-choose.asked",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-choose.a_on",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-choose.b_on",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-choose.started",
+      "is": 1
+    },
+    {
+      "log": "host: restart",
+      "times": 1
+    },
+    {
+      "log": "mods: the code of ly-choose chose other layers than the content was cooked with: the game starts again with them",
+      "times": 1
+    }
+  ]
+}

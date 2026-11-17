@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "3139-check-before-scene",
+  "about": "The after-start check runs at the mods' start, before any scene: given jr-class's row it answers it there (Content.MissingClass 620 once, refs.after_start says one missing) and the game reaches the title and runs on; no stage, so no placeholder is made",
+  "proves": [
+    "refs.after_start",
+    "refs.missing_class"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jr-class",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "refs.after_start",
+      "field": "missing",
+      "is": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jr-class",
+        "code": 620
+      },
+      "count": 1
+    },
+    {
+      "fact": "placeholder",
+      "absent": true
+    }
+  ]
+}

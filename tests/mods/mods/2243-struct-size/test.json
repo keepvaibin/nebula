@@ -1,0 +1,37 @@
+{
+  "harness": 1,
+  "name": "2243-struct-size",
+  "about": "at with a LumaModsInfo of 8 bytes: LUMA_E_ARGUMENT, Service.StructSize with 8 and 260",
+  "proves": [
+    "services.mods",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/mods-a"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4255
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-a.at_8",
+      "is": -1
+    },
+    {
+      "log": "mods-a: mods\\.at was given a LumaModsInfo of 8 bytes; it needs at least 260\\.",
+      "times": 1
+    }
+  ]
+}

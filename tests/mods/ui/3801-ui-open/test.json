@@ -1,0 +1,169 @@
+{
+  "harness": 1,
+  "name": "3801-ui-open",
+  "about": "ju-open opens the game's CoinCounter layout on the HUD, finds its pane Counter (the number's text boxes under it, as the game sets them) and sets 12: LUMA_OK, drawn every frame; the pane hidden, shown, then the whole screen hidden (pictures: a second coin counter reading 12, then without its number, then gone: a person's look)",
+  "proves": [
+    "ui.open",
+    "ui.pane",
+    "ui.text",
+    "ui.visible"
+  ],
+  "mods": [
+    "../mods/ju-open"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3802
+      ]
+    },
+    {
+      "at": 120,
+      "picture": "f120"
+    },
+    {
+      "at": 130,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3803
+      ]
+    },
+    {
+      "at": 140,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3804
+      ]
+    },
+    {
+      "at": 160,
+      "picture": "f160"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-open.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-open.pane",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-open.text",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-open.hide",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-open.show",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-open.screen_hide",
+      "is": 0
+    },
+    {
+      "fact": "ui.open.1",
+      "has": {
+        "mod": "ju-open",
+        "layout": "CoinCounter",
+        "layer": "hud",
+        "reused": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.pane.2",
+      "has": {
+        "screen": 1,
+        "pane": "Counter",
+        "visible": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.text.2",
+      "has": {
+        "pane": "Counter",
+        "text": "12"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.text.2",
+      "field": "boxes",
+      "at_least": 1,
+      "when": "any"
+    },
+    {
+      "fact": "ui.visible.2",
+      "has": {
+        "visible": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.visible.2",
+      "has": {
+        "visible": true
+      },
+      "when": "last"
+    },
+    {
+      "fact": "ui.screen.1",
+      "field": "drawn",
+      "is": true,
+      "when": "any"
+    },
+    {
+      "fact": "ui.screen.1",
+      "field": "hidden",
+      "is": true,
+      "when": "last"
+    },
+    {
+      "fact": "ui.end.1",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-open",
+        "code": 570
+      },
+      "absent": true
+    }
+  ]
+}

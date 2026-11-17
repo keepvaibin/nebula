@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "je-fx-args",
+  "name": "je-fx-args",
+  "version": "1.0.0",
+  "summary": "J's test mod je-fx-args.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

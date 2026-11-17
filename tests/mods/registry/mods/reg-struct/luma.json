@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "reg-struct",
+  "name": "reg-struct",
+  "summary": "reg-struct (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

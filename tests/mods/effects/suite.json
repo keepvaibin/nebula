@@ -1,0 +1,18 @@
+{
+  "harness": 1,
+  "tests": [
+    "3501-fx-hand",
+    "3502-fx-missing",
+    "3503-fx-joint",
+    "3504-fx-args",
+    "3505-fx-tint",
+    "3506-fx-keep",
+    "3507-fx-no-mod",
+    "3508-replace",
+    "3509-group",
+    "3510-fx-on-model",
+    "3511-table-missing-particle",
+    "3512-fx-limit",
+    "3513-fx-dies"
+  ]
+}

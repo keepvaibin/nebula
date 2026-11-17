@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "gl-hud-bad",
+  "version": "1.0.0",
+  "name": "gl-hud-bad",
+  "summary": "gl-hud-bad (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

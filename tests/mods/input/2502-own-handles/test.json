@@ -1,0 +1,36 @@
+{
+  "harness": 1,
+  "name": "2502-own-handles",
+  "about": "in-other reads handles 1 to 8 with in-follow loaded: only its own action x reads, the 7 others are refused LUMA_E_HANDLE",
+  "proves": [
+    "services.input"
+  ],
+  "mods": [
+    "../mods/in-follow",
+    "../mods/in-other"
+  ],
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.in-other.others_refused",
+        "exists": true
+      },
+      "end": true,
+      "timeout": 900
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-other.x_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-other.own_reads",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-other.others_refused",
+      "is": 7
+    }
+  ]
+}

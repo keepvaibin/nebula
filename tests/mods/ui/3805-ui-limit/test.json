@@ -1,0 +1,65 @@
+{
+  "harness": 1,
+  "name": "3805-ui-limit",
+  "about": "ju-limit: 16 screens open at once, the 17th is LUMA_E_LIMIT (Service.Limit); one closed, one opens again",
+  "proves": [
+    "ui.limit"
+  ],
+  "mods": [
+    "../mods/ju-limit"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3802
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-limit.ok",
+      "is": 16
+    },
+    {
+      "fact": "mod.ju-limit.over",
+      "is": -4
+    },
+    {
+      "fact": "mod.ju-limit.close",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-limit.again",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-limit",
+        "code": 104
+      },
+      "count": 1
+    }
+  ]
+}

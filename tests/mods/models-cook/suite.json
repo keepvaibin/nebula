@@ -1,0 +1,9 @@
+{
+  "harness": 1,
+  "tests": [
+    "3208-model-metre",
+    "3212-model-level-refused",
+    "3213-model-level-far",
+    "3214-model-level-takeout"
+  ]
+}

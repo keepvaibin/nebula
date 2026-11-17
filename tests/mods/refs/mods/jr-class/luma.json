@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jr-class",
+  "version": "1.0.0",
+  "name": "jr-class",
+  "summary": "jr-class (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fg-user",
+  "name": "fg-user",
+  "summary": "fg-user (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

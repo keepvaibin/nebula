@@ -1,0 +1,187 @@
+{
+  "harness": 1,
+  "name": "2708-net-ws",
+  "about": "WebSocket (1.4): the mod serves WebSocket on a tcp_listen and connects to itself: 101 choosing \"chat\" of \"chat, other\" (CONNECTED data chat), text and binary echoed, a ping answered with its data, a message in two frames joined, the server's close 4000 \"bye\" (CLOSED OK 4000 with the reason, echoed); a wrong Accept and a 404 ERROR FORMAT with the HTTP status; text not UTF-8 CLOSED FORMAT 1007 (the service's close 1007); an http url, a protocol with a space, a null fn, binary 2, text not UTF-8 ARGUMENT; ws_send before CONNECTED CLOSED, send on it and ws_send after its end HANDLE",
+  "proves": [
+    "services.net.local",
+    "services.net.ws",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/net-ws"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4501
+      ]
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4502
+      ]
+    },
+    {
+      "at": 110,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-ws.listen",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-ws.http_url",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-ws.space_protocol",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-ws.null_fn",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-ws.echo",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.send_early",
+      "is": -11
+    },
+    {
+      "fact": "mod.net-ws.plain_send",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-ws.badaccept",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.missing",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.badtext",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.connected_echo",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.chosen_chat",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.send_binary_2",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-ws.send_bad_text",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-ws.msg_echo",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.msg_binary",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.msg_frag",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.pong_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.closed_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-ws.closed_value",
+      "is": 4000
+    },
+    {
+      "fact": "mod.net-ws.closed_reason",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.server_close_code",
+      "is": 4000
+    },
+    {
+      "fact": "mod.net-ws.err_badaccept",
+      "is": -15
+    },
+    {
+      "fact": "mod.net-ws.err_badaccept_value",
+      "is": 101
+    },
+    {
+      "fact": "mod.net-ws.err_missing",
+      "is": -15
+    },
+    {
+      "fact": "mod.net-ws.err_missing_value",
+      "is": 404
+    },
+    {
+      "fact": "mod.net-ws.closed_badtext",
+      "is": -15
+    },
+    {
+      "fact": "mod.net-ws.closed_badtext_value",
+      "is": 1007
+    },
+    {
+      "fact": "mod.net-ws.server_close_1007",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-ws.send_after_close",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-ws.others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-ws.close_listener",
+      "is": 0
+    },
+    {
+      "log": "net-ws: net\\.local\\.ws_connect was given a wrong url; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "net-ws: net\\.local\\.ws_connect was given a wrong protocol; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "net-ws: net\\.local\\.ws_connect was given a wrong fn; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "net-ws: net\\.local\\.ws_send was given a wrong binary; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "net-ws: net\\.local\\.ws_send was given a wrong data; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

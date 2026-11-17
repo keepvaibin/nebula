@@ -1,0 +1,101 @@
+{
+  "harness": 1,
+  "name": "2291a-forget-write",
+  "about": "fg-lib sets \"fg-user/kept\" (a value kept for fg-user) and its own \"own\" in file 1; a bad id before the '/' and save.global's '/' key are refused; save-a's game save writes the file",
+  "proves": [
+    "services.save",
+    "services.mods"
+  ],
+  "mods": [
+    "../mods/fg-lib",
+    "../mods/fg-user",
+    "../../save/mods/save-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4290
+      ],
+      "at": 10
+    },
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4259
+      ],
+      "at": 20
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.confirm_ready",
+        "is": 1
+      },
+      "hold": [
+        "RIGHT"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.focused",
+        "is": 1
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.done_ready",
+        "is": 1
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.saved",
+        "is": 1
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fg-lib.watch",
+      "is": 0
+    },
+    {
+      "fact": "mod.fg-lib.set_for",
+      "is": 0
+    },
+    {
+      "fact": "mod.fg-lib.set_own",
+      "is": 0
+    },
+    {
+      "fact": "mod.fg-lib.set_bad_id",
+      "is": -1
+    },
+    {
+      "fact": "mod.fg-lib.global_for",
+      "is": -1
+    },
+    {
+      "fact": "mod.save-a.save_ok",
+      "is": 1
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "harness": 1,
+  "name": "2270b-export-declined",
+  "about": "save.game declared, required, declined: off before the start check, Consent.OffDeclined names it, no code started",
+  "proves": [
+    "services.save.game",
+    "services.permissions"
+  ],
+  "mods": [
+    {
+      "path": "../mods/save-gd",
+      "permissions": {
+        "save.game": "deny"
+      },
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-gd.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "save-gd",
+        "source": "loader",
+        "level": "note",
+        "row": "Consent.OffDeclined"
+      },
+      "when": "any"
+    },
+    {
+      "no_log": "L506"
+    }
+  ]
+}

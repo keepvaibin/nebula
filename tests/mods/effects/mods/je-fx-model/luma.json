@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "je-fx-model",
+  "name": "je-fx-model",
+  "version": "1.0.0",
+  "summary": "J's test mod je-fx-model.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

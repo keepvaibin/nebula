@@ -1,0 +1,75 @@
+{
+  "harness": 1,
+  "name": "2610-audio-replace",
+  "about": "a mod with no code whose cooked Jump replaces the game's SE_PM_JUMP: the index holds one name (audio.replacing count 1); the player's jump starts the mod's sound in its place, placed, not a level sound (audio.replaced)",
+  "proves": [
+    "services.audio",
+    "sound.replace"
+  ],
+  "mods": [
+    {
+      "path": "../../sound/mods/gs-sfx-swap",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 200,
+      "hold": [
+        "A"
+      ],
+      "frames": 10
+    },
+    {
+      "at": 400,
+      "hold": [
+        "A"
+      ],
+      "frames": 10
+    },
+    {
+      "at": 600,
+      "hold": [
+        "A"
+      ],
+      "frames": 10
+    },
+    {
+      "after": {
+        "fact": "audio.replaced",
+        "exists": true
+      },
+      "end": true,
+      "timeout": 1200
+    }
+  ],
+  "expect": [
+    {
+      "fact": "audio.replacing",
+      "has": {
+        "count": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "audio.replaced",
+      "has": {
+        "name": "SE_PM_JUMP",
+        "mod": "gs-sfx-swap",
+        "level": 0,
+        "placed": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

@@ -1,0 +1,239 @@
+{
+  "harness": 1,
+  "name": "04d-spin-why",
+  "about": "F's diagnosis of 04a: the player's spin gates read before and after a shake at frame 60 and at 400",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/spinwatch"
+  ],
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 59,
+      "read": "MarioActor.mSwingPermission",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f59.mSwingPermission"
+    },
+    {
+      "at": 59,
+      "read": "MarioActor.mInDemo",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f59.mInDemo"
+    },
+    {
+      "at": 59,
+      "read": "MarioActor.mRemoteDemo",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f59.mRemoteDemo"
+    },
+    {
+      "at": 59,
+      "read": "MarioActor.mSwingInhibitTimer",
+      "of": "player",
+      "type": "u16",
+      "fact": "why.f59.mSwingInhibitTimer"
+    },
+    {
+      "at": 59,
+      "read": "MarioActor.mSpinIntervalTimer",
+      "of": "player",
+      "type": "u16",
+      "fact": "why.f59.mSpinIntervalTimer"
+    },
+    {
+      "at": 59,
+      "read": "MarioActor.mRushJustEnded",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f59.mRushJustEnded"
+    },
+    {
+      "at": 59,
+      "read": "MarioActor.mTakeCount",
+      "of": "player",
+      "type": "u32",
+      "fact": "why.f59.mTakeCount"
+    },
+    {
+      "at": 59,
+      "read": "MarioActor.mPlayerMode",
+      "of": "player",
+      "type": "u16",
+      "fact": "why.f59.mPlayerMode"
+    },
+    {
+      "at": 59,
+      "call": "MR::isDemoActive",
+      "signature": "bool()",
+      "args": [],
+      "fact": "why.f59.demo"
+    },
+    {
+      "at": 60,
+      "shake": 10
+    },
+    {
+      "at": 62,
+      "read": "MarioActor.mSwingPermission",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f62.mSwingPermission"
+    },
+    {
+      "at": 62,
+      "read": "MarioActor.mInDemo",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f62.mInDemo"
+    },
+    {
+      "at": 62,
+      "read": "MarioActor.mRemoteDemo",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f62.mRemoteDemo"
+    },
+    {
+      "at": 62,
+      "read": "MarioActor.mSwingInhibitTimer",
+      "of": "player",
+      "type": "u16",
+      "fact": "why.f62.mSwingInhibitTimer"
+    },
+    {
+      "at": 62,
+      "read": "MarioActor.mSpinIntervalTimer",
+      "of": "player",
+      "type": "u16",
+      "fact": "why.f62.mSpinIntervalTimer"
+    },
+    {
+      "at": 62,
+      "read": "MarioActor.mRushJustEnded",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f62.mRushJustEnded"
+    },
+    {
+      "at": 62,
+      "read": "MarioActor.mTakeCount",
+      "of": "player",
+      "type": "u32",
+      "fact": "why.f62.mTakeCount"
+    },
+    {
+      "at": 62,
+      "read": "MarioActor.mPlayerMode",
+      "of": "player",
+      "type": "u16",
+      "fact": "why.f62.mPlayerMode"
+    },
+    {
+      "at": 62,
+      "call": "MR::isDemoActive",
+      "signature": "bool()",
+      "args": [],
+      "fact": "why.f62.demo"
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 399,
+      "read": "MarioActor.mSwingPermission",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f399.mSwingPermission"
+    },
+    {
+      "at": 399,
+      "read": "MarioActor.mInDemo",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f399.mInDemo"
+    },
+    {
+      "at": 399,
+      "read": "MarioActor.mRemoteDemo",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f399.mRemoteDemo"
+    },
+    {
+      "at": 399,
+      "read": "MarioActor.mSwingInhibitTimer",
+      "of": "player",
+      "type": "u16",
+      "fact": "why.f399.mSwingInhibitTimer"
+    },
+    {
+      "at": 399,
+      "read": "MarioActor.mSpinIntervalTimer",
+      "of": "player",
+      "type": "u16",
+      "fact": "why.f399.mSpinIntervalTimer"
+    },
+    {
+      "at": 399,
+      "read": "MarioActor.mRushJustEnded",
+      "of": "player",
+      "type": "bool",
+      "fact": "why.f399.mRushJustEnded"
+    },
+    {
+      "at": 399,
+      "read": "MarioActor.mTakeCount",
+      "of": "player",
+      "type": "u32",
+      "fact": "why.f399.mTakeCount"
+    },
+    {
+      "at": 399,
+      "read": "MarioActor.mPlayerMode",
+      "of": "player",
+      "type": "u16",
+      "fact": "why.f399.mPlayerMode"
+    },
+    {
+      "at": 399,
+      "call": "MR::isDemoActive",
+      "signature": "bool()",
+      "args": [],
+      "fact": "why.f399.demo"
+    },
+    {
+      "at": 400,
+      "shake": 10
+    },
+    {
+      "at": 405,
+      "picture": "f405"
+    },
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "setup.save.spin",
+      "is": true
+    },
+    {
+      "fact": "mod.spinwatch.spins",
+      "at_least": 1
+    }
+  ]
+}

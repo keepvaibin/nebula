@@ -1,0 +1,52 @@
+{
+  "harness": 1,
+  "name": "3901-stage-placed",
+  "about": "js-stage adds eight Coins in a ring about scenario 1's start and two Kuribos 900 units each side by a patch of EggStarGalaxy's objinfo: the scene makes them with its own (no mod code), they are drawn (picture f120: the ring of coins round the player, a Kuribo each side), no mod error is logged; the player walks through the ring (pictures show; no fact read yet)",
+  "proves": [
+    "stage.place"
+  ],
+  "mods": [
+    {
+      "path": "../mods/js-stage",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "picture": "f120"
+    },
+    {
+      "at": 130,
+      "stick": [
+        1,
+        0
+      ],
+      "frames": 40
+    },
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "js-stage"
+      },
+      "absent": true
+    },
+    {
+      "picture": "f120",
+      "like": "3901-f120",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

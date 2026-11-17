@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "name": "1209-field-optional",
+  "about": "The wrong type text on an optional field leaves its slot as it was and the mod on",
+  "proves": [
+    "kernel.bind"
+  ],
+  "mods": [
+    "../mods/tt-opt-field"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tt-opt-field.slot",
+      "is": -1
+    },
+    {
+      "fact": "mod.tt-opt-field.started",
+      "is": 1
+    }
+  ]
+}

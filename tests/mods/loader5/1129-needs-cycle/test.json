@@ -1,0 +1,56 @@
+{
+  "harness": 1,
+  "name": "1129-needs-cycle",
+  "about": "Two mods that need each other: neither starts, and each is named with the cycle (L800)",
+  "proves": [
+    "kernel.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../../loader/mods/lt-cyc-a",
+      "loads": false
+    },
+    {
+      "path": "../../loader/mods/lt-cyc-b",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-cyc-a.started",
+      "absent": true
+    },
+    {
+      "fact": "mod.lt-cyc-b.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-cyc-a",
+        "source": "validator",
+        "level": "error",
+        "code": 800,
+        "text": "lt-cyc-a needs lt-cyc-b: each needs the next, in a circle (lt-cyc-a -> lt-cyc-b -> lt-cyc-a), so none of them can start first."
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-cyc-b",
+        "source": "validator",
+        "level": "error",
+        "code": 800,
+        "text": "lt-cyc-b needs lt-cyc-a: each needs the next, in a circle (lt-cyc-b -> lt-cyc-a -> lt-cyc-b), so none of them can start first."
+      },
+      "when": "any"
+    }
+  ]
+}

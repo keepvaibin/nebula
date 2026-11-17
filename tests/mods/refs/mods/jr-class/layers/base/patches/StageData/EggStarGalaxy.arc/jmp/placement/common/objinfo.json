@@ -1,0 +1,21 @@
+{
+  "patch": 1,
+  "key": [
+    "l_id"
+  ],
+  "add": [
+    {
+      "name": "JrNoSuchClass",
+      "l_id": 9131,
+      "pos_x": -2664.6,
+      "pos_y": -13081.3,
+      "pos_z": -15332.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    }
+  ]
+}

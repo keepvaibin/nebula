@@ -1,0 +1,57 @@
+{
+  "format": "1.0",
+  "id": "opt-mistakes",
+  "name": "opt-mistakes",
+  "summary": "opt-mistakes (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "options": [
+    {
+      "key": "lives",
+      "kind": "choice",
+      "name": "Lives",
+      "default": "three",
+      "values": [
+        "one",
+        "three"
+      ],
+      "value_names": {
+        "one": "One",
+        "three": "Three"
+      }
+    },
+    {
+      "key": "speed",
+      "kind": "number",
+      "name": "Speed",
+      "default": 1.5,
+      "min": 0,
+      "max": 2,
+      "step": 0.5
+    },
+    {
+      "key": "hard",
+      "kind": "toggle",
+      "name": "Hard",
+      "default": true
+    },
+    {
+      "key": "label",
+      "kind": "text",
+      "name": "Label",
+      "default": "Hi ★",
+      "max_length": 8
+    },
+    {
+      "key": "jump",
+      "kind": "key",
+      "name": "Jump",
+      "default": "A"
+    }
+  ]
+}

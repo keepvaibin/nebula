@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ga-walk-bad",
+  "version": "1.0.0",
+  "name": "ga-walk-bad",
+  "summary": "ga-walk-bad (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

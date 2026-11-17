@@ -1,0 +1,29 @@
+{
+  "harness": 1,
+  "name": "3507-fx-no-mod",
+  "about": "No mod: content.fx does nothing; no fx fact is written while Good Egg plays",
+  "proves": [
+    "fx.nocost"
+  ],
+  "mods": [],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "fx.start.1",
+      "absent": true
+    },
+    {
+      "fact": "fx.alive.1",
+      "absent": true
+    }
+  ]
+}

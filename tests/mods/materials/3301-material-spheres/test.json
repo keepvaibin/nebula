@@ -1,0 +1,230 @@
+{
+  "harness": 1,
+  "name": "3301-material-spheres",
+  "about": "jt-spheres attaches its two glTF spheres beside the player: metal (base 0.95, metal 1, roughness 0.05) on the player's right (x -130; the picture's right with the camera behind), rough (red, metal 0, roughness 0.8) on the left, cooked at install from the mod's assets; both drawn, neither the placeholder. Pictures before and after the player turns (raster, no tracing): the metal sphere reflects the stage's light as a sky above a sharp horizon and a dark ground below (program_pbr.hlsli pbr_environment; the scene itself where the tracer owns the pixel) with one sharp highlight; the red one is evenly shaded with a broad dim highlight (a person's look, then the references). Each sphere has its own box: its picture like the reference's there, and its colours measured: the red one red, the metal one light in a band above its middle (the sky) and near black in a band below (the ground), in both pictures",
+  "proves": [
+    "material.lit",
+    "material.metal",
+    "material.rough",
+    "material.environment"
+  ],
+  "mods": [
+    "../mods/jt-spheres"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3301
+      ]
+    },
+    {
+      "at": 120,
+      "picture": "front"
+    },
+    {
+      "at": 130,
+      "stick": [
+        1,
+        0
+      ],
+      "frames": 50
+    },
+    {
+      "at": 220,
+      "picture": "turned"
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jt-spheres.metal",
+      "is": 0
+    },
+    {
+      "fact": "mod.jt-spheres.rough",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "mod": "jt-spheres",
+        "model": "jt-spheres:metal",
+        "placeholder": false,
+        "drawn": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.attach.2",
+      "has": {
+        "mod": "jt-spheres",
+        "model": "jt-spheres:rough",
+        "placeholder": false,
+        "drawn": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jt-spheres",
+        "source": "content"
+      },
+      "absent": true
+    },
+    {
+      "picture": "front",
+      "like": "3301-front",
+      "within": {
+        "rmse": 12
+      }
+    },
+    {
+      "picture": "turned",
+      "like": "3301-turned",
+      "within": {
+        "rmse": 12
+      }
+    },
+    {
+      "picture": "front",
+      "box": [
+        547,
+        358,
+        52,
+        52
+      ],
+      "like": "3301-front",
+      "within": {
+        "rmse": 10
+      }
+    },
+    {
+      "picture": "front",
+      "box": [
+        682,
+        361,
+        52,
+        52
+      ],
+      "like": "3301-front",
+      "within": {
+        "rmse": 10
+      }
+    },
+    {
+      "picture": "front",
+      "box": [
+        561,
+        372,
+        24,
+        24
+      ],
+      "mean_rgb": [
+        156,
+        72,
+        59
+      ],
+      "within": 25
+    },
+    {
+      "picture": "front",
+      "box": [
+        694,
+        366,
+        16,
+        8
+      ],
+      "mean_rgb": [
+        126,
+        148,
+        149
+      ],
+      "within": 25
+    },
+    {
+      "picture": "front",
+      "box": [
+        696,
+        398,
+        24,
+        8
+      ],
+      "mean_rgb": [
+        26,
+        26,
+        42
+      ],
+      "within": 25
+    },
+    {
+      "picture": "turned",
+      "box": [
+        558,
+        482,
+        96,
+        98
+      ],
+      "like": "3301-turned",
+      "within": {
+        "rmse": 10
+      }
+    },
+    {
+      "picture": "turned",
+      "box": [
+        580,
+        492,
+        30,
+        12
+      ],
+      "mean_rgb": [
+        125,
+        147,
+        149
+      ],
+      "within": 25
+    },
+    {
+      "picture": "turned",
+      "box": [
+        585,
+        552,
+        40,
+        14
+      ],
+      "mean_rgb": [
+        25,
+        25,
+        42
+      ],
+      "within": 25
+    },
+    {
+      "picture": "turned",
+      "box": [
+        503,
+        420,
+        28,
+        28
+      ],
+      "mean_rgb": [
+        128,
+        63,
+        56
+      ],
+      "within": 25
+    }
+  ]
+}

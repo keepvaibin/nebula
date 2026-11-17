@@ -1,0 +1,23 @@
+{
+  "harness": 1,
+  "name": "1701-plain-bare",
+  "about": "No mod and no game half (a bare test): the host loads smg_game_plain.dll, the game without rows, and says so before the module loads",
+  "proves": [
+    "kernel.modules.plain"
+  ],
+  "bare": true,
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "game module: plain \\(no mod with code on\\)"
+    },
+    {
+      "no_log": "game module: rows"
+    }
+  ]
+}

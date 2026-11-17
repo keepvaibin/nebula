@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "3131-missing-image",
+  "about": "A new model whose glTF names an image the mod lacks: the start's cook cannot make it and leaves it out with one L804 Error (source cook) on the mod naming the model, the cook's reason as LumaLink check gives it (\"missing.png\", a file the model names, cannot be read); no placeholder is made, the game runs on",
+  "proves": [
+    "modlog.entry"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jr-image",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jr-image",
+        "source": "cook",
+        "level": "error",
+        "code": 804
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jr-image",
+        "code": 804
+      },
+      "count": 1
+    },
+    {
+      "fact": "placeholder",
+      "absent": true
+    }
+  ]
+}

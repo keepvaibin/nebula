@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fs-package",
+  "name": "fs-package",
+  "summary": "fs-package (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

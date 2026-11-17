@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tt-shape2",
+  "name": "tt-shape2",
+  "summary": "tt-shape2 (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

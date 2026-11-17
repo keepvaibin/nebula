@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jl-one",
+  "name": "jl-one",
+  "version": "1.0.0",
+  "summary": "J's test mod jl-one.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

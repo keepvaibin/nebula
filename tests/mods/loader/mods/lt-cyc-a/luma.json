@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "lt-cyc-a",
+  "name": "lt-cyc-a",
+  "summary": "lt-cyc-a (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "lt-cyc-b"
+    }
+  ]
+}

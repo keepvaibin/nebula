@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "version": "1.0.0",
+  "summary": "J's start check test.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "id": "jv-needs2",
+  "name": "jv-needs2",
+  "needs": [
+    {
+      "id": "jv-needs"
+    }
+  ]
+}

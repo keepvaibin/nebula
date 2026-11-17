@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "cm-merge-ok",
+  "name": "cm-merge-ok",
+  "version": "1.0.0",
+  "summary": "cm-merge-ok (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

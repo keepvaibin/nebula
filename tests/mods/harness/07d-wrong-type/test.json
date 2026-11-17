@@ -1,0 +1,19 @@
+{
+  "harness": 1,
+  "name": "07d-wrong-type",
+  "about": "A string where a number belongs is harness-error naming the key",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "limit_seconds": "60",
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": []
+}

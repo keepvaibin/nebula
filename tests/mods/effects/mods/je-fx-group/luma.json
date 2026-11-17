@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "je-fx-group",
+  "name": "je-fx-group",
+  "version": "1.0.0",
+  "summary": "J's test mod je-fx-group.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

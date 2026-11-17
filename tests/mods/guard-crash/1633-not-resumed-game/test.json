@@ -1,0 +1,51 @@
+{
+  "harness": 1,
+  "name": "1633-not-resumed-game",
+  "about": "guard-game: a fault in the game's code (a null actor passed to MR::isDead from its after hook) is not resumed: the game ends with a crash line naming the mod, never silently; its minidump is written by the crash watcher on Windows; on Linux and macOS the crash line names the signal",
+  "proves": [
+    "kernel.guard.not_resumed"
+  ],
+  "ends": "crash",
+  "mods": [
+    "../mods/guard-game"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-game.entered",
+      "exists": true
+    },
+    {
+      "fact": "mod.guard-game.survived",
+      "absent": true
+    },
+    {
+      "log": "crash: guard: the code of the mod guard-game failed \\(after hook: MarioActor::control\\): .+; not resumed: "
+    },
+    {
+      "log": "crash: minidump nebula-native-[0-9]{8}-[0-9]{6}-[0-9]+[.]dmp$",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "log": "crash: SIG(SEGV|BUS|ILL|FPE) at ",
+      "systems": [
+        "linux",
+        "macos"
+      ]
+    },
+    {
+      "no_log": "\\[mod guard-game\\] GUARD:"
+    }
+  ]
+}

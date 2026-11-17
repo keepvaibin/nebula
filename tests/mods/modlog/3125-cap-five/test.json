@@ -1,0 +1,91 @@
+{
+  "harness": 1,
+  "name": "3125-cap-five",
+  "about": "Five mods of 300 each, one after another: four keep 256 (44 not kept each); the fifth keeps its first 16 past the session's 1,024 (284 not kept)",
+  "proves": [
+    "modlog.limits"
+  ],
+  "mods": [
+    "../mods/jl-many1",
+    "../mods/jl-many2",
+    "../mods/jl-many3",
+    "../mods/jl-many4",
+    "../mods/jl-many5"
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jl-many1",
+        "row": "ModLog.TooMany"
+      },
+      "field": "count",
+      "is": 44,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jl-many2",
+        "row": "ModLog.TooMany"
+      },
+      "field": "count",
+      "is": 44,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jl-many3",
+        "row": "ModLog.TooMany"
+      },
+      "field": "count",
+      "is": 44,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jl-many4",
+        "row": "ModLog.TooMany"
+      },
+      "field": "count",
+      "is": 44,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jl-many5",
+        "row": "ModLog.TooMany"
+      },
+      "field": "count",
+      "is": 284,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jl-many5",
+        "line": 16,
+        "count": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jl-many5",
+        "line": 17,
+        "count": 1
+      },
+      "absent": true
+    }
+  ]
+}

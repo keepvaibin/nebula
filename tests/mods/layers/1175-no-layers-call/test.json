@@ -1,0 +1,39 @@
+{
+  "harness": 1,
+  "name": "1175-no-layers-call",
+  "about": "ly-none has code layers and no layers call: none of them is on, no start-again",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    "../mods/ly-none"
+  ],
+  "starts": 1,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-none.asked",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-none.a_on",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-none.b_on",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-none.started",
+      "is": 1
+    },
+    {
+      "no_log": "host: restart"
+    }
+  ]
+}

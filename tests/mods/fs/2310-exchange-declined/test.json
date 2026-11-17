@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "2310-exchange-declined",
+  "about": "fs.exchange declared, required, declined: off before the start check, Consent.OffDeclined names it, no code started",
+  "proves": [
+    "services.permissions",
+    "services.fs.exchange"
+  ],
+  "mods": [
+    {
+      "path": "../mods/fs-ex-declined",
+      "loads": false,
+      "permissions": {
+        "fs.exchange": "deny"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-ex-declined.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fs-ex-declined",
+        "source": "loader",
+        "level": "note",
+        "row": "Consent.OffDeclined"
+      },
+      "when": "any"
+    },
+    {
+      "no_log": "L506"
+    }
+  ]
+}

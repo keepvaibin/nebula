@@ -1,0 +1,35 @@
+{
+  "harness": 1,
+  "name": "2232b-links-undeclared",
+  "about": "system.links imported, not declared: as 2224b",
+  "proves": [
+    "services.permissions",
+    "services.system.links"
+  ],
+  "mods": [
+    {
+      "path": "../mods/sys-links-undeclared",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-links-undeclared.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "sys-links-undeclared",
+        "code": 506
+      },
+      "when": "any"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "harness": 1,
+  "tests": [
+    "2450-world",
+    "2451-world-args",
+    "2452-inst-gold",
+    "2453-inst-args",
+    "2454-mesh",
+    "2471-view",
+    "2472-view-args",
+    "2481-post",
+    "2491-native",
+    "2492-native-declined"
+  ]
+}

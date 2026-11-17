@@ -1,0 +1,67 @@
+{
+  "harness": 1,
+  "name": "1115-unhook",
+  "about": "hook and unhook at run time: a running call keeps its hooks; the next has what is left",
+  "proves": [
+    "kernel.unhook"
+  ],
+  "mods": [
+    "../mods/lt-unhook"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4247
+      ],
+      "fact": "first"
+    },
+    {
+      "at": 31,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4247
+      ],
+      "fact": "second"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "first",
+      "is": 132
+    },
+    {
+      "fact": "second",
+      "is": 3
+    },
+    {
+      "fact": "mod.lt-unhook.hook_after",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-unhook.unhook_before",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-unhook.unhook_again",
+      "is": -1
+    },
+    {
+      "fact": "mod.lt-unhook.unhook_never",
+      "is": -1
+    },
+    {
+      "fact": "mod.lt-unhook.unhook_self",
+      "is": 0
+    }
+  ]
+}

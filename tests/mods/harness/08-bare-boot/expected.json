@@ -1,0 +1,8 @@
+{
+  "verdict": "pass",
+  "run_folder_lacks": [
+    "mods/luma_test",
+    "luma_test.dll"
+  ],
+  "facts_file": "absent or empty"
+}

@@ -1,0 +1,93 @@
+{
+  "harness": 1,
+  "name": "2208-step-two-holders",
+  "about": "Two mods hold; one steps: LUMA_E_BUSY, nothing logged",
+  "proves": [
+    "services.time"
+  ],
+  "mods": [
+    "../mods/tm-hold-a",
+    "../mods/tm-hold-b"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 15,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4223
+      ]
+    },
+    {
+      "at": 25,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4222
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-hold-a.hold",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-hold-b.hold",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-hold-a.step",
+      "is": -14
+    },
+    {
+      "no_log": "tm-hold-a: time\\.step"
+    },
+    {
+      "fact": "mod.tm-hold-a.holders",
+      "is": 2,
+      "when": "all",
+      "frames": [
+        13,
+        22
+      ]
+    },
+    {
+      "fact": "mod.tm-hold-a.ds",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        13,
+        22
+      ]
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "2207-step-not-held",
+  "about": "step without holding: LUMA_E_ARGUMENT, Time.NotHeld in the log once",
+  "proves": [
+    "services.time"
+  ],
+  "mods": [
+    "../mods/tm-nothold"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4223
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-nothold.step_1",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-nothold.step_2",
+      "is": -1
+    },
+    {
+      "log": "tm-nothold: time\\.step works only while the mod holds the game; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

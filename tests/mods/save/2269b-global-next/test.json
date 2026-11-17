@@ -1,0 +1,37 @@
+{
+  "harness": 1,
+  "name": "2269b-global-next",
+  "about": "the next run: the value (8809), with no game save between",
+  "proves": [
+    "services.save.global"
+  ],
+  "mods": [
+    "../mods/save-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4260
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-a.next_gget",
+      "is": 8809
+    }
+  ],
+  "continue_from": "2269a-global"
+}

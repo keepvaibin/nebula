@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "1304-overrider",
+  "about": "overrider names MarioActor::calcAndSetBaseMtx for LiveActor's virtual, LiveActor's getBaseMtx",
+  "proves": [
+    "kernel.objects.overrider"
+  ],
+  "mods": [
+    "../mods/to-objects"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ran",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.player",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.overrider_calc_mario",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.overrider_base_live",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.overrider_unknown_null",
+      "is": 1
+    }
+  ]
+}

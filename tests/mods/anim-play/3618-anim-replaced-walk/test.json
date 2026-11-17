@@ -1,0 +1,73 @@
+{
+  "harness": 1,
+  "name": "3618-anim-replaced-walk",
+  "about": "ja-goomba plays a Goomba's Walk with ja-walk90 installed (G's ga-walk stretched to 1.5 s): the Walk it plays is the mod's, 90 frames long (ja-walk90 has no code: it starts nothing)",
+  "proves": [
+    "anim.play",
+    "anim.game_clip"
+  ],
+  "mods": [
+    "../mods/ja-goomba",
+    {
+      "path": "../mods/ja-walk90",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3601
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ja-goomba.seen",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-goomba.play",
+      "is": 0
+    },
+    {
+      "fact": "anim.play.1",
+      "has": {
+        "model": "kuribo",
+        "clip": "Walk"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "anim.play.1",
+      "field": "frames",
+      "at_least": 89,
+      "when": "last"
+    },
+    {
+      "fact": "anim.play.1",
+      "field": "frames",
+      "at_most": 91,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ja-goomba",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

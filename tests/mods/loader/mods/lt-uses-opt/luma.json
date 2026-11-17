@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "lt-uses-opt",
+  "name": "lt-uses-opt",
+  "summary": "lt-uses-opt (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "lt-lib"
+    }
+  ]
+}

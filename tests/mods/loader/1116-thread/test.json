@@ -1,0 +1,65 @@
+{
+  "harness": 1,
+  "name": "1116-thread",
+  "about": "A hook runs on its caller's thread; off the game thread game_thread is 0 and hook/unhook give -3",
+  "proves": [
+    "kernel.threads"
+  ],
+  "mods": [
+    "../mods/lt-thread"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4248
+      ],
+      "fact": "asked"
+    },
+    {
+      "at": 310,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-thread.start_thread",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-thread.here",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-thread.made",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-thread.thread_game",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-thread.on",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lt-thread.off",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-thread.off_hook",
+      "is": -3
+    },
+    {
+      "fact": "mod.lt-thread.off_unhook",
+      "is": -3
+    }
+  ]
+}

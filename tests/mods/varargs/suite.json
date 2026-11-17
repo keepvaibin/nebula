@@ -1,0 +1,11 @@
+{
+  "harness": 1,
+  "tests": [
+    "1901-va-call",
+    "1902-va-before",
+    "1903-va-after",
+    "1904-cx-call",
+    "1905-cx-hook",
+    "1906-call-tell"
+  ]
+}

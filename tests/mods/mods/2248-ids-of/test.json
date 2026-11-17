@@ -1,0 +1,49 @@
+{
+  "harness": 1,
+  "name": "2248-ids-of",
+  "about": "of: mods-a/breath (asked earlier in the run) its number; mods-a/never LUMA_E_NOT_FOUND, not reported",
+  "proves": [
+    "services.mods.ids"
+  ],
+  "mods": [
+    "../mods/mods-a",
+    "../mods/mods-b"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4252
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4258
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-b.of_breath",
+      "is": 18409466
+    },
+    {
+      "fact": "mod.mods-b.of_never",
+      "is": -7
+    },
+    {
+      "no_log": "mods\\.ids\\.of was given"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "pl-extra",
+  "name": "pl-extra",
+  "summary": "pl-extra (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

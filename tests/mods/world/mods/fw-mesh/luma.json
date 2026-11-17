@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "fw-mesh",
+  "name": "fw-mesh",
+  "version": "1.0.0",
+  "summary": "J's test mod fw-mesh.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

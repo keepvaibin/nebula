@@ -1,0 +1,92 @@
+{
+  "harness": 1,
+  "name": "3505-fx-tint",
+  "about": "je-fx-tint starts TicoTouchGlow00 at the player's base, 120 up and turned 90 degrees, left where it started; tint 2.0 orange; stop now (a larger orange glow above Mario that stays where it began: a person's look)",
+  "proves": [
+    "fx.place"
+  ],
+  "mods": [
+    "../mods/je-fx-tint"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3501
+      ]
+    },
+    {
+      "at": 70,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3502
+      ]
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3503
+      ]
+    },
+    {
+      "at": 260,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.je-fx-tint.start",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-tint.tint",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-tint.stop",
+      "is": 0
+    },
+    {
+      "fact": "fx.start.1",
+      "has": {
+        "mod": "je-fx-tint",
+        "joint": "",
+        "follow": false,
+        "placeholder": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "fx.alive.1",
+      "field": "particles",
+      "more": 0,
+      "when": "any"
+    },
+    {
+      "fact": "fx.end.1",
+      "is": {
+        "why": "stop"
+      }
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-fx-tint",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

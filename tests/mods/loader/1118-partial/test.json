@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "1118-partial",
+  "about": "A mod binds whole or not at all: a missing name refuses it and its hook is not left behind",
+  "proves": [
+    "kernel.bind",
+    "kernel.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../mods/lt-partial",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        4249,
+        4249
+      ],
+      "fact": "r"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "r",
+      "is": 4249
+    },
+    {
+      "fact": "mod.lt-partial.started",
+      "absent": true
+    },
+    {
+      "log": "lt-partial: .*MR::ltNoSuchFunction"
+    }
+  ]
+}

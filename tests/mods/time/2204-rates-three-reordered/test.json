@@ -1,0 +1,61 @@
+{
+  "harness": 1,
+  "name": "2204-rates-three-reordered",
+  "about": "The same three mods with 999 first in the list: still 1000",
+  "proves": [
+    "services.time"
+  ],
+  "mods": [
+    "../mods/tm-r999",
+    "../mods/tm-r1001a",
+    "../mods/tm-r1001b"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-r999.rate",
+      "is": 1000,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r999.steps",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    }
+  ]
+}

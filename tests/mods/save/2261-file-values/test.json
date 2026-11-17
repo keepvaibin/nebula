@@ -1,0 +1,124 @@
+{
+  "harness": 1,
+  "name": "2261-file-values",
+  "about": "at the title (before the harness's first load): get, set, remove, file LUMA_E_ABSENT; in the loaded file 1: set then get the value, get with no room its length, file 1 Mario, get and remove of an unset key LUMA_E_NOT_FOUND (not reported), remove then get, an empty value; a wrong key, a null value, a null out LUMA_E_ARGUMENT, reported (set's first said, its second counted)",
+  "proves": [
+    "services.save",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/save-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4251
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-a.title_get",
+      "is": -6
+    },
+    {
+      "fact": "mod.save-a.title_set",
+      "is": -6
+    },
+    {
+      "fact": "mod.save-a.title_remove",
+      "is": -6
+    },
+    {
+      "fact": "mod.save-a.title_file",
+      "is": -6
+    },
+    {
+      "fact": "mod.save-a.set_kept",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.get_kept",
+      "is": 8802
+    },
+    {
+      "fact": "mod.save-a.get_size0",
+      "is": 4
+    },
+    {
+      "fact": "mod.save-a.file",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.character",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.get_none",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-a.remove_none",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-a.set_gone",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.remove_gone",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.get_gone",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-a.set_empty",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.get_empty",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.bad_key",
+      "is": -1
+    },
+    {
+      "fact": "mod.save-a.null_value",
+      "is": -1
+    },
+    {
+      "fact": "mod.save-a.null_number",
+      "is": -1
+    },
+    {
+      "log": "save-a: save\\.set was given a wrong key; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "save-a: save\\.set was given a wrong value",
+      "times": 1
+    },
+    {
+      "log": "save-a: save\\.file was given a wrong number; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "no_log": "save-a: save\\.(get|remove) "
+    }
+  ]
+}

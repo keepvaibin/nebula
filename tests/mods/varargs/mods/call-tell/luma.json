@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "call-tell",
+  "name": "call-tell",
+  "summary": "call-tell (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

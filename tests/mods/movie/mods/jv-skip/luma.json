@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jv-skip",
+  "name": "jv-skip",
+  "version": "1.0.0",
+  "summary": "J's test mod jv-skip.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

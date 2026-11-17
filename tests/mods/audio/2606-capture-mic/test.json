@@ -1,0 +1,93 @@
+{
+  "harness": 1,
+  "name": "2606-capture-mic",
+  "about": "the microphone (audio.microphone, granted): 1024-frame blocks at 48 kHz, or ENDED ABSENT on a machine without one; a 2nd open LIMIT; a wrong rate, channels, desc size, a null fn ARGUMENT; closed, closed again HANDLE",
+  "proves": [
+    "services.audio.microphone",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/capture-mic"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.capture-mic.first_event",
+        "exists": true
+      },
+      "timeout": 3600,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4802
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.capture-mic.others",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.capture-mic.open_answer",
+      "is": 1
+    },
+    {
+      "fact": "mod.capture-mic.open_twice",
+      "is": 1
+    },
+    {
+      "fact": "mod.capture-mic.rate_4k",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-mic.channels_3",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-mic.small_desc",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-mic.no_fn",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-mic.heard_or_absent",
+      "is": 1
+    },
+    {
+      "fact": "mod.capture-mic.shapes_right",
+      "is": 1
+    },
+    {
+      "fact": "mod.capture-mic.ended_other",
+      "is": 0
+    },
+    {
+      "fact": "mod.capture-mic.close_answer",
+      "is": 1
+    },
+    {
+      "fact": "mod.capture-mic.close_again",
+      "is": -3
+    },
+    {
+      "fact": "mod.capture-mic.others",
+      "is": 0
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ga-blink",
+  "version": "1.0.0",
+  "name": "ga-blink",
+  "summary": "ga-blink (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

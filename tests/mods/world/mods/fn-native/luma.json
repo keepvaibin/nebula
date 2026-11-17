@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "fn-native",
+  "name": "fn-native",
+  "version": "1.0.0",
+  "summary": "J's test mod fn-native.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "native",
+      "why": "The draw.native test clears the picture with the device."
+    }
+  ]
+}

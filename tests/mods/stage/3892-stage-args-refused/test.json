@@ -1,0 +1,41 @@
+{
+  "harness": 1,
+  "name": "3892-stage-args-refused",
+  "about": "gs-stage-bad's patch names \"Wind\", which BigFan lacks: the patch fails whole, said by name (Cook.Stage.ArgName, rule 804), and the stage plays without its fans",
+  "proves": [
+    "stage.args"
+  ],
+  "mods": [
+    {
+      "path": "../mods/gs-stage-bad",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 150,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "gs-stage-bad",
+        "level": "error",
+        "code": 804
+      },
+      "when": "any"
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

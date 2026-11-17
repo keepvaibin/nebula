@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "6401c-import-loads",
+  "about": "The next start after 6401-import: the imported mod, allowed there, starts its code and nothing asks again",
+  "proves": [
+    "consent.allow"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jc-net"
+    }
+  ],
+  "continue_from": "6401-import",
+  "steps": [
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "consent.shown.jc-net",
+      "absent": true
+    },
+    {
+      "fact": "consent.answer.jc-net",
+      "absent": true
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "harness": 1,
+  "name": "1103-order",
+  "about": "Befores, wraps and afters of two mods run in the list's order: 1 2, wraps 3 4, 6 5, afters 8 7",
+  "proves": [
+    "kernel.hook.before",
+    "kernel.hook.wrap",
+    "kernel.hook.after"
+  ],
+  "mods": [
+    "../mods/lt-ord1",
+    "../mods/lt-ord2"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4242
+      ],
+      "fact": "trace"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "trace",
+      "is": 12346587
+    }
+  ]
+}

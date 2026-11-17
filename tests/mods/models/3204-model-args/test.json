@@ -1,0 +1,90 @@
+{
+  "harness": 1,
+  "name": "3204-model-args",
+  "about": "jm-args: every refusal of content.model 1.0 (null actor, empty name, follow 3, null out, a 4-byte LumaPlace, bytes that are no actor, unknown handles, player_parts with null parts) answers its status and writes no handle; the one good attach is handle 1 and ends with detach",
+  "proves": [
+    "model.refusals"
+  ],
+  "mods": [
+    "../mods/jm-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-args.null_actor",
+      "is": -1
+    },
+    {
+      "fact": "mod.jm-args.empty_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.jm-args.bad_follow",
+      "is": -1
+    },
+    {
+      "fact": "mod.jm-args.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.jm-args.small_place",
+      "is": -1
+    },
+    {
+      "fact": "mod.jm-args.not_actor",
+      "is": -1
+    },
+    {
+      "fact": "mod.jm-args.detach_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.jm-args.show_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.jm-args.parts_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.jm-args.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.jm-args.good",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-args.detach",
+      "is": 0
+    },
+    {
+      "fact": "model.end.1",
+      "is": {
+        "why": "detach"
+      }
+    },
+    {
+      "fact": "model.attach.2",
+      "absent": true
+    }
+  ]
+}

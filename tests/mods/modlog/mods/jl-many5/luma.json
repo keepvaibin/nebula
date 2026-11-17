@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jl-many5",
+  "name": "jl-many5",
+  "version": "1.0.0",
+  "summary": "J's test mod jl-many5.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

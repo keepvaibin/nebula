@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jl-say2",
+  "name": "jl-say2",
+  "version": "1.0.0",
+  "summary": "J's test mod jl-say2.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

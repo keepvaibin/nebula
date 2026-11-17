@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "hello",
+  "version": "1.0.0",
+  "name": "hello",
+  "summary": "hello (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

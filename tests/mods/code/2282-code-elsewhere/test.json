@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "2282-code-elsewhere",
+  "about": "code.platforms [linux-arm64] only: off here with the reason, its code never loaded",
+  "proves": [
+    "format.code",
+    "kernel.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../mods/code-elsewhere",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.code-elsewhere.started",
+      "absent": true
+    },
+    {
+      "log": "code-elsewhere: THIS MOD HAS NO VERSION FOR THIS DEVICE"
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "harness": 1,
+  "name": "2303-move-remove",
+  "about": "move to a new folder; onto a folder: EXISTS; the old path: NOT_FOUND; remove an empty folder: 0 files; read or write a folder: NOT_FOUND, EXISTS; an empty file written and read",
+  "proves": [
+    "services.fs"
+  ],
+  "mods": [
+    "../mods/fs-data"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.e16_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.e24_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4303
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.events",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-data.e5_kind",
+      "is": 4
+    },
+    {
+      "fact": "mod.fs-data.e5_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e6_status",
+      "is": -8
+    },
+    {
+      "fact": "mod.fs-data.e7_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.fs-data.e8_kind",
+      "is": 3
+    },
+    {
+      "fact": "mod.fs-data.e8_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e8_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e13_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.fs-data.e14_status",
+      "is": -8
+    },
+    {
+      "fact": "mod.fs-data.e15_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e15_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e16_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e16_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e16_len",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e16_same",
+      "is": 1
+    }
+  ]
+}

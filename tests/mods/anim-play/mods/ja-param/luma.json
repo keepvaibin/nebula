@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ja-param",
+  "name": "ja-param",
+  "version": "1.0.0",
+  "summary": "J's test mod ja-param.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

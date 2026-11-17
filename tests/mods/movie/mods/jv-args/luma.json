@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jv-args",
+  "name": "jv-args",
+  "version": "1.0.0",
+  "summary": "J's test mod jv-args.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

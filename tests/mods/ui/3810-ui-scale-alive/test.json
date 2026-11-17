@@ -1,0 +1,110 @@
+{
+  "harness": 1,
+  "name": "3810-ui-scale-alive",
+  "about": "ju-scale (ui 1.1): CoinCounter's Counter shows 1234 scaled 2 across and 1.5 down (pane fact scale_x 2000, scale_y 1500; picture: the number twice as wide where the layout puts it), alive answers true while the screen is open; a NaN scale and one of 100 are refused (LUMA_E_ARGUMENT); after close alive answers false (LUMA_OK), a handle never given LUMA_E_HANDLE, a null out LUMA_E_ARGUMENT, set_scale on the closed screen's pane LUMA_E_HANDLE",
+  "proves": [
+    "ui.scale",
+    "ui.alive"
+  ],
+  "mods": [
+    "../mods/ju-scale"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 110,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3802
+      ]
+    },
+    {
+      "at": 130,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-scale.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-scale.scale",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-scale.alive",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-scale.alive_is",
+      "is": 1
+    },
+    {
+      "fact": "mod.ju-scale.scale_nan",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-scale.scale_far",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-scale.close",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-scale.alive_closed_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-scale.alive_closed",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-scale.alive_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-scale.alive_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-scale.scale_closed",
+      "is": -3
+    },
+    {
+      "fact": "ui.scale.2",
+      "has": {
+        "pane": "Counter",
+        "scale_x": 2000,
+        "scale_y": 1500
+      },
+      "when": "any"
+    },
+    {
+      "picture": "f90",
+      "like": "3810-f90",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

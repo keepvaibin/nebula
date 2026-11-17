@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "2262b-save-next",
+  "about": "the next run loads file 1: the saved value (8802), not the one set after the save; the key set after the save LUMA_E_NOT_FOUND",
+  "proves": [
+    "services.save"
+  ],
+  "mods": [
+    "../mods/save-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4253
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "setup.file",
+      "is": "loaded"
+    },
+    {
+      "fact": "mod.save-a.next_kept",
+      "is": 8802
+    },
+    {
+      "fact": "mod.save-a.next_unsaved",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-a.next_file",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.next_character",
+      "is": 0
+    }
+  ],
+  "continue_from": "2262a-save"
+}

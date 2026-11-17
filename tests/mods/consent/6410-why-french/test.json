@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "6410-why-french",
+  "about": "jc-why gives net.internet's why in UsFrench in its text block: played in French, the question shows that line, not the manifest's English one",
+  "proves": [
+    "consent.screen"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jc-why",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "language": "UsFrench",
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "consent.shown.jc-why",
+      "has": {
+        "rows": [
+          {
+            "name": "net.internet",
+            "label": "Internet",
+            "required": false,
+            "new": false,
+            "why": "Envoie tes meilleurs temps au tableau.",
+            "text": "Se connecte à Internet : api.example.org, *.example.net.",
+            "roots": ""
+          }
+        ]
+      },
+      "when": "any"
+    }
+  ]
+}

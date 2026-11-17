@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "1171-choose-again",
+  "about": "The next start of 1170: the answer is the record's, so no start-again; a still on",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    "../mods/ly-choose"
+  ],
+  "continue_from": "1170-choose-first",
+  "starts": 1,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-choose.asked",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-choose.a_on",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-choose.b_on",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-choose.started",
+      "is": 1
+    },
+    {
+      "no_log": "host: restart"
+    }
+  ]
+}

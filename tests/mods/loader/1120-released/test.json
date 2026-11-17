@@ -1,0 +1,69 @@
+{
+  "harness": 1,
+  "name": "1120-released",
+  "about": "A kept handle is dropped when its object's arena goes (lumacore::released): none after a restart",
+  "proves": [
+    "kernel.released"
+  ],
+  "mods": [
+    "../mods/lt-released"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4251
+      ],
+      "fact": "held"
+    },
+    {
+      "at": 150,
+      "call": "MR::forceKillPlayerByAbyss",
+      "signature": "void()",
+      "args": []
+    },
+    {
+      "at": 1500,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4252
+      ],
+      "fact": "none"
+    },
+    {
+      "at": 1560,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-released.held",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-released.none",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-released.told_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-released.dropped",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lt-released.player_again",
+      "is": 1
+    }
+  ]
+}

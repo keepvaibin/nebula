@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "2101-svc-exact",
+  "about": "An import of test.svc 1.3 binds the provider's table: size, major 1, minor 3, a call answered",
+  "proves": [
+    "kernel.service",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/reg-svc13"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-svc13.slot",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-svc13.size",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-svc13.major",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-svc13.minor",
+      "is": 3
+    },
+    {
+      "fact": "mod.reg-svc13.echo",
+      "is": 0
+    },
+    {
+      "fact": "mod.reg-svc13.out",
+      "is": 42
+    }
+  ]
+}

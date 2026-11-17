@@ -1,0 +1,64 @@
+{
+  "harness": 1,
+  "name": "3506-fx-keep",
+  "about": "je-fx-keep starts TicoTouchGlow00 at Spine1 and never stops it: fx.alive.1 is written for the handle's first frames only (tunable alive.1, 120) and the effect stays open while the stage plays",
+  "proves": [
+    "fx.alive"
+  ],
+  "mods": [
+    "../mods/je-fx-keep"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3501
+      ]
+    },
+    {
+      "at": 400,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.je-fx-keep.start",
+      "is": 0
+    },
+    {
+      "fact": "fx.alive.1",
+      "field": "frame",
+      "at_most": 120,
+      "when": "all"
+    },
+    {
+      "fact": "fx.alive.1",
+      "field": "frame",
+      "at_least": 100,
+      "when": "last"
+    },
+    {
+      "fact": "fx.end.1",
+      "frames": [
+        0,
+        390
+      ],
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-fx-keep",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

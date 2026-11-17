@@ -1,0 +1,15 @@
+{
+  "harness": 1,
+  "tests": [
+    "2701-tcp-echo",
+    "2702-tcp-mistakes",
+    "2703-internet-rules",
+    "2704-udp",
+    "2705-ipc",
+    "2706-net-tls",
+    "2707-net-http",
+    "2708-net-ws",
+    "2709-net-address",
+    "2710-net-http-size"
+  ]
+}

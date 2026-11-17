@@ -1,0 +1,42 @@
+{
+  "harness": 1,
+  "name": "1162-number-port-default",
+  "about": "a number option of 65535 values (1 to 65535 by 1) is kept as a range: mods.option reads its default 16834",
+  "proves": [
+    "services.mods"
+  ],
+  "mods": [
+    {
+      "path": "../mods/k1-port"
+    }
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4462
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.k1-port.status",
+      "is": 5
+    },
+    {
+      "fact": "mod.k1-port.port",
+      "is": 16834
+    },
+    {
+      "fact": "mod.k1-port.len",
+      "is": 5
+    }
+  ]
+}

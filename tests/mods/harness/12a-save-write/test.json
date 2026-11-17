@@ -1,0 +1,72 @@
+{
+  "harness": 1,
+  "name": "12a-save-write",
+  "about": "A test writes a value into the game's save through the game's own save",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/saveprobe"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.saveprobe.ready",
+        "is": "confirm"
+      },
+      "hold": [
+        "RIGHT"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.saveprobe.focused",
+        "is": true
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.saveprobe.ready",
+        "is": "done"
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.saveprobe.saved",
+        "is": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.saveprobe.asked",
+      "is": true
+    },
+    {
+      "fact": "mod.saveprobe.focused",
+      "is": true
+    },
+    {
+      "fact": "mod.saveprobe.saved",
+      "is": true
+    },
+    {
+      "fact": "mod.saveprobe.save_ok",
+      "is": true
+    }
+  ]
+}

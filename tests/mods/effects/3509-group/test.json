@@ -1,0 +1,90 @@
+{
+  "harness": 1,
+  "name": "3509-group",
+  "about": "je-fx-group starts its own je-fx-group:trio (three emitters from TicoTouchGlow00, draw AFTER_INDIRECT) on the player: the cook writes it in group 3 with three particles, the run time reads that from its effects list and the effect starts with three emitters in group 3; stop ends it (three glows over Mario: a person's look)",
+  "proves": [
+    "fx.group"
+  ],
+  "mods": [
+    "../mods/je-fx-group"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3501
+      ]
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3502
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.je-fx-group.start",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-group.stop",
+      "is": 0
+    },
+    {
+      "fact": "cook.effect",
+      "has": {
+        "mod": "je-fx-group",
+        "other": "je-fx-group:trio",
+        "group": 3,
+        "replaced": 0
+      },
+      "when": "any"
+    },
+    {
+      "fact": "fx.start.1",
+      "has": {
+        "mod": "je-fx-group",
+        "name": "je-fx-group:trio",
+        "emitters": 3,
+        "group": 3,
+        "placeholder": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "fx.alive.1",
+      "field": "particles",
+      "more": 0,
+      "when": "any"
+    },
+    {
+      "fact": "fx.end.1",
+      "is": {
+        "why": "stop"
+      }
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-fx-group",
+        "level": "error"
+      },
+      "absent": true
+    }
+  ]
+}

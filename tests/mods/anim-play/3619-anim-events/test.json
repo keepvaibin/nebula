@@ -1,0 +1,134 @@
+{
+  "harness": 1,
+  "name": "3619-anim-events",
+  "about": "ja-events plays a Goomba's Walk once with its own mark at frame 5; the mod's Walk.events rows come as marks 1 to 3 after it, each once, each with its name",
+  "proves": [
+    "anim.events"
+  ],
+  "mods": [
+    "../mods/ja-events"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3601
+      ]
+    },
+    {
+      "at": 150,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3602
+      ]
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ja-events.seen",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-events.play",
+      "is": 0
+    },
+    {
+      "fact": "anim.play.1",
+      "field": "event_rows",
+      "is": 3,
+      "when": "last"
+    },
+    {
+      "fact": "mod.ja-events.ev1_mark0",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-events.ev1_namelen0",
+      "absent": true
+    },
+    {
+      "fact": "mod.ja-events.ev1_mark1",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-events.ev1_namelen1",
+      "is": 5
+    },
+    {
+      "fact": "mod.ja-events.ev1_namesum1",
+      "is": 558
+    },
+    {
+      "fact": "anim.mark.1.1",
+      "has": {
+        "event": "start"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.ja-events.ev1_mark2",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-events.ev1_namelen2",
+      "is": 9
+    },
+    {
+      "fact": "mod.ja-events.ev1_namesum2",
+      "is": 966
+    },
+    {
+      "fact": "anim.mark.1.2",
+      "has": {
+        "event": "step_left"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.ja-events.ev1_mark3",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-events.ev1_namelen3",
+      "is": 10
+    },
+    {
+      "fact": "mod.ja-events.ev1_namesum3",
+      "is": 1081
+    },
+    {
+      "fact": "anim.mark.1.3",
+      "has": {
+        "event": "step_right"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "anim.end.1",
+      "is": {
+        "why": "end"
+      }
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ja-events",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

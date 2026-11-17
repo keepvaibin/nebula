@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ka-user",
+  "name": "ka-user",
+  "summary": "ka-user (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "ka-lib"
+    }
+  ]
+}

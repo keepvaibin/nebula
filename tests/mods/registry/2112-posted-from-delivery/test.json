@@ -1,0 +1,75 @@
+{
+  "harness": 1,
+  "name": "2112-posted-from-delivery",
+  "about": "A node posted again from its own delivery is given in the next frame, not the same, and not later",
+  "proves": [
+    "services.events"
+  ],
+  "mods": [
+    "../mods/reg-again"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4260
+      ]
+    },
+    {
+      "at": 31,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4261
+      ]
+    },
+    {
+      "at": 32,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4263
+      ]
+    },
+    {
+      "at": 33,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4264
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-again.post",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-again.given_1",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-again.given_2",
+      "is": 2
+    },
+    {
+      "fact": "mod.reg-again.given_3",
+      "is": 2
+    },
+    {
+      "fact": "mod.reg-again.in_order",
+      "is": 1
+    }
+  ]
+}

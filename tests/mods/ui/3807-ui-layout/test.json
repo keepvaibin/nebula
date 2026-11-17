@@ -1,0 +1,177 @@
+{
+  "harness": 1,
+  "name": "3807-ui-layout",
+  "about": "ju-layout opens its own layout GlHud (G's gl-hud source, cooked at install to LayoutData/GlHud.arc): its text pane Count is set to x 99 in NumberFont, which has digits only: 99 drawn, Ui.NoGlyph names the x (U+0078); Title the Japanese name, the hidden Hit shown; a picture pane takes no text (Ui.NotText); 20 characters in Count's 16 are cut (Ui.TextCut) (picture: the mod's own HUD drawn by the game's layout drawer over the life meter (G's source places Hud at 240,170): the Star icon, 99, the banner with マリオ)",
+  "proves": [
+    "ui.open",
+    "ui.text",
+    "ui.text_cut",
+    "ui.no_glyph",
+    "ui.mod_layout"
+  ],
+  "mods": [
+    "../mods/ju-layout"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3802
+      ]
+    },
+    {
+      "at": 140,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-layout.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-layout.count",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-layout.text",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-layout.title",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-layout.title_text",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-layout.hit",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-layout.hit_show",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-layout.icon",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-layout.icon_not_text",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-layout.cut",
+      "is": 0
+    },
+    {
+      "fact": "ui.open.1",
+      "has": {
+        "mod": "ju-layout",
+        "layout": "GlHud",
+        "layer": "hud",
+        "reused": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.text.2",
+      "has": {
+        "pane": "Count",
+        "text": "x 99"
+      },
+      "when": "first"
+    },
+    {
+      "fact": "ui.text.2",
+      "has": {
+        "pane": "Count",
+        "text": "x 12345678901234"
+      },
+      "when": "last"
+    },
+    {
+      "fact": "ui.text.3",
+      "has": {
+        "pane": "Title",
+        "text": "マリオ"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.visible.4",
+      "has": {
+        "pane": "Hit",
+        "visible": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.screen.1",
+      "field": "drawn",
+      "is": true,
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-layout",
+        "code": 572
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-layout",
+        "code": 573
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-layout",
+        "code": 570
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "ju-layout",
+        "code": 577,
+        "row": "Ui.NoGlyph"
+      },
+      "when": "any"
+    },
+    {
+      "picture": "f90",
+      "like": "3807-f90",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

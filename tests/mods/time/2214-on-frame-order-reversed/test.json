@@ -1,0 +1,50 @@
+{
+  "harness": 1,
+  "name": "2214-on-frame-order-reversed",
+  "about": "The same two mods the other way round: the other's handler first",
+  "proves": [
+    "services.time.handlers"
+  ],
+  "mods": [
+    "../mods/tm-order-b",
+    "../mods/tm-order-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4222
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-order-a.step",
+      "is": -14
+    },
+    {
+      "fact": "mod.tm-order-b.step",
+      "is": 0
+    }
+  ]
+}

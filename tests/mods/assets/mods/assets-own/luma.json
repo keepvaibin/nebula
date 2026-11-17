@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "assets-own",
+  "name": "assets-own",
+  "summary": "assets-own (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

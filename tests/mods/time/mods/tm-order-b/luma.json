@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tm-order-b",
+  "name": "tm-order-b",
+  "summary": "tm-order-b (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

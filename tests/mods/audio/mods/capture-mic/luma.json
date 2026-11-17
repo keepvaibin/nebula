@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "capture-mic",
+  "name": "capture-mic",
+  "summary": "capture-mic (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "audio.microphone",
+      "why": "The capture test asks for it."
+    }
+  ]
+}

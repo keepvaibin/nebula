@@ -1,0 +1,22 @@
+{
+  "harness": 1,
+  "name": "07c-two-ends",
+  "about": "Two end steps is harness-error",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    },
+    {
+      "at": 60,
+      "end": true
+    }
+  ],
+  "expect": []
+}

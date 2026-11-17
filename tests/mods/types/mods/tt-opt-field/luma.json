@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tt-opt-field",
+  "name": "tt-opt-field",
+  "summary": "tt-opt-field (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

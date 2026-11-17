@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "2116-struct-size",
+  "about": "A struct whose size is below the first minor's is LUMA_E_ARGUMENT, Service.StructSize with 4 and 16",
+  "proves": [
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/reg-struct"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-struct.small",
+      "is": -1
+    },
+    {
+      "fact": "mod.reg-struct.whole",
+      "is": 0
+    },
+    {
+      "log": "reg-struct: test\\.svc\\.take_struct was given a LumaTestSvcStruct of 4 bytes; it needs at least 16"
+    }
+  ]
+}

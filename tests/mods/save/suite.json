@@ -1,0 +1,19 @@
+{
+  "harness": 1,
+  "tests": [
+    "2261-file-values",
+    "2262a-save",
+    "2262b-save-next",
+    "2263-copy-erase",
+    "2265a-luigi",
+    "2265b-mario",
+    "2268a-limits",
+    "2268b-limits-next",
+    "2269a-global",
+    "2269b-global-next",
+    "2270a-export",
+    "2270b-export-declined",
+    "2270c-export-undeclared",
+    "2271-offer"
+  ]
+}

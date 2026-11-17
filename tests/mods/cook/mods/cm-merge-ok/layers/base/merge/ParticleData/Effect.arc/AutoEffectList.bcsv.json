@@ -1,0 +1,12 @@
+{
+  "change": [
+    {
+      "where": {
+        "GroupName": "Kuribo"
+      },
+      "set": {
+        "RateValue": 1.0
+      }
+    }
+  ]
+}

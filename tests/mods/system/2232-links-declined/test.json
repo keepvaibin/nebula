@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "2232-links-declined",
+  "about": "system.links declared, required, declined: as 2224",
+  "proves": [
+    "services.permissions",
+    "services.system.links"
+  ],
+  "mods": [
+    {
+      "path": "../mods/sys-links-declined",
+      "loads": false,
+      "permissions": {
+        "system.links": "deny"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-links-declined.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "sys-links-declined",
+        "source": "loader",
+        "level": "note",
+        "row": "Consent.OffDeclined"
+      },
+      "when": "any"
+    },
+    {
+      "no_log": "L506"
+    }
+  ]
+}

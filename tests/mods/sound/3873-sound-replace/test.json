@@ -1,0 +1,57 @@
+{
+  "harness": 1,
+  "name": "3873-sound-replace",
+  "about": "gs-sfx-swap's Jump.sound.json replaces the game's SE_PM_JUMP (the take-off of every jump): it cooks with the name kept (cook.sound replaces); its Leap.sound.json names SE_PM_JUMP_XL, which the game lacks, and is refused by name (Cook.Sound.NoGameSound, rule 804); the stage plays",
+  "proves": [
+    "sound.replace"
+  ],
+  "mods": [
+    {
+      "path": "../mods/gs-sfx-swap",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "cook.sound",
+      "has": {
+        "mod": "gs-sfx-swap",
+        "other": "Luma/gs-sfx-swap/sfx/Jump.nsfx",
+        "replaces": "SE_PM_JUMP"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "cook.sound",
+      "matching": {
+        "other": "Luma/gs-sfx-swap/sfx/Leap.nsfx"
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "gs-sfx-swap",
+        "level": "error",
+        "code": 804
+      },
+      "when": "any"
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

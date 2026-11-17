@@ -1,0 +1,52 @@
+{
+  "harness": 1,
+  "name": "1183-merge-refused-named",
+  "about": "cm-merge-ok and cm-merge-bad merge into one table (AutoEffectList); the cook refuses cm-merge-bad's (a column the table lacks) and the mod log names cm-merge-bad, not the other merge's mod and not none",
+  "proves": [
+    "modlog.entry"
+  ],
+  "mods": [
+    {
+      "path": "../mods/cm-merge-ok",
+      "loads": false
+    },
+    {
+      "path": "../mods/cm-merge-bad",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "cm-merge-bad",
+        "source": "cook",
+        "level": "error",
+        "code": 804
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "cm-merge-ok",
+        "code": 804
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "code": 804,
+        "mod": ""
+      },
+      "absent": true
+    }
+  ]
+}

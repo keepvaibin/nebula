@@ -1,0 +1,46 @@
+{
+  "harness": 1,
+  "name": "3134-start-needs",
+  "about": "jv-needs needs jv-gone, which is not installed: L800, refused; jv-needs2 needs jv-needs: refused with it (L800, the next round)",
+  "proves": [
+    "validator.start.refuse"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jv-needs",
+      "loads": false
+    },
+    {
+      "path": "../mods/jv-needs2",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-needs",
+        "source": "validator",
+        "level": "error",
+        "code": 800
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-needs2",
+        "source": "validator",
+        "level": "error",
+        "code": 800
+      },
+      "when": "any"
+    }
+  ]
+}

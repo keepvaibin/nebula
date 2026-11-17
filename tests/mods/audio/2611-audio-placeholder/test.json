@@ -1,0 +1,124 @@
+{
+  "harness": 1,
+  "name": "2611-audio-placeholder",
+  "about": "names no file has, by play, play_at and music: each LUMA_OK with a voice, the placeholder chime playing in its place (ENDED OK for both with a function once its 120 ms played; the music once, then restored); Content.MissingSound (624) in the mod log one entry a name, counted on every call; the placeholder fact once a name (references 4, 5.1)",
+  "proves": [
+    "services.audio",
+    "services.registry",
+    "audio.placeholder"
+  ],
+  "mods": [
+    "../mods/audio-missing"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4802
+      ]
+    },
+    {
+      "at": 50,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.audio-missing.play_missing",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-missing.play_voice",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-missing.play_at_missing",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-missing.play_at_voice",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-missing.play_other",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-missing.music_missing",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-missing.ended_ok",
+      "is": 2
+    },
+    {
+      "fact": "mod.audio-missing.ended_other",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-missing.restore",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-missing.others",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "audio-missing",
+        "code": 624,
+        "count": 3
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "audio-missing",
+        "code": 624,
+        "count": 4
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "audio-missing",
+        "code": 624,
+        "count": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "placeholder",
+      "matching": {
+        "mod": "audio-missing",
+        "kind": "sound",
+        "found": "nothing-here"
+      },
+      "count": 1
+    },
+    {
+      "fact": "placeholder",
+      "matching": {
+        "mod": "audio-missing",
+        "kind": "sound",
+        "found": "nothing-else"
+      },
+      "count": 1
+    }
+  ]
+}

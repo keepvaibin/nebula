@@ -1,0 +1,98 @@
+{
+  "harness": 1,
+  "name": "2604-audio-mistakes",
+  "about": "null and empty names, a small LumaAudioPlay, pitch 5, bus 7, loop 2, a null out, bus_volume's bus 4 and volume 2, a stream of 4 kHz and of 3 channels: ARGUMENT, reported; a stray handle HANDLE",
+  "proves": [
+    "services.audio",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/audio-mistakes"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.audio-mistakes.null_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.empty_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.small_how",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.pitch_5",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.bus_7",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.loop_2",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.bus_4",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.volume_2",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.rate_4k",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.channels_3",
+      "is": -1
+    },
+    {
+      "fact": "mod.audio-mistakes.stray_handle",
+      "is": -3
+    },
+    {
+      "log": "audio-mistakes: audio\\.play was given a wrong name; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "audio-mistakes",
+        "english": "audio-mistakes: audio.play was given a wrong name; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "audio-mistakes: audio\\.play was given a LumaAudioPlay of 8 bytes; it needs at least 24\\.",
+      "times": 1
+    },
+    {
+      "log": "audio-mistakes: audio\\.voice_stop was given a handle that is closed or not its own\\.",
+      "times": 1
+    }
+  ]
+}

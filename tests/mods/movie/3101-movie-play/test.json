@@ -1,0 +1,109 @@
+{
+  "harness": 1,
+  "name": "3101-movie-play",
+  "about": "jv-play plays its own movie movies/intro (AV1 in WebM, cooked at install to Luma/jv-play/movies/intro.nmov, decoded by dav1d) over the stage by the game's movie player: LUMA_OK, position mid-way a frame of 0 or more of frames above 0, then its end LUMA_OK once (LUMA_MOVIE_EVENT_ENDED) and the stage goes on (pictures f100: the movie's frame full screen at its shape; f400: the stage again)",
+  "proves": [
+    "movie.play",
+    "movie.av1"
+  ],
+  "mods": [
+    "../mods/jv-play"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3101
+      ]
+    },
+    {
+      "at": 100,
+      "picture": "f100"
+    },
+    {
+      "at": 110,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3102
+      ]
+    },
+    {
+      "at": 400,
+      "picture": "f400"
+    },
+    {
+      "at": 420,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jv-play.play",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-play.position",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-play.frame",
+      "at_least": 0
+    },
+    {
+      "fact": "mod.jv-play.frames",
+      "more": 0
+    },
+    {
+      "fact": "mod.jv-play.end",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-play.ends",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-play.end_kind",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-play.end_movie",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "movie.end.1",
+      "has": {
+        "why": "end"
+      },
+      "when": "any"
+    },
+    {
+      "picture": "f100",
+      "like": "3101-f100",
+      "within": {
+        "rmse": 12
+      }
+    },
+    {
+      "picture": "f400",
+      "like": "3101-f400",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

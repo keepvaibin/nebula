@@ -1,0 +1,77 @@
+{
+  "harness": 1,
+  "name": "2511-dev",
+  "about": "in-dev (input.devices granted): list answers on Windows, an unknown path is NOT_FOUND there; elsewhere both answer ABSENT (services-input D2-6); the refusals everywhere",
+  "proves": [
+    "services.input"
+  ],
+  "mods": [
+    "../mods/in-dev"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-dev.list_status",
+      "is": 0,
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "mod.in-dev.list_status",
+      "is": -6,
+      "systems": [
+        "linux",
+        "macos",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "fact": "mod.in-dev.found_at_most",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-dev.small_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-dev.null_found_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-dev.empty_path_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-dev.unknown_path",
+      "is": -7,
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "mod.in-dev.unknown_path",
+      "is": -6,
+      "systems": [
+        "linux",
+        "macos",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "fact": "mod.in-dev.write_handle_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-dev.close_handle_refused",
+      "is": 1
+    }
+  ]
+}

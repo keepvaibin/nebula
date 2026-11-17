@@ -1,0 +1,35 @@
+{
+  "harness": 1,
+  "name": "2508-inject-undeclared",
+  "about": "input.inject imported, not declared in luma.json: refused at import (L506)",
+  "proves": [
+    "services.input",
+    "services.permissions"
+  ],
+  "mods": [
+    {
+      "path": "../mods/in-inject-undecl",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-inject-undecl.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "in-inject-undecl",
+        "code": 506
+      },
+      "when": "any"
+    }
+  ]
+}

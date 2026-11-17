@@ -1,0 +1,98 @@
+{
+  "harness": 1,
+  "name": "3816-ui-label",
+  "about": "ju-label opens the game's own layout PauseMenu on the HUD, plays its Appear and each button's ButtonAppear (play_pane), and sets the upper button's label pane Text1 (text Txt1 and shadow Sha1, buffers of 7 in the game's layout) to \"Kit A two words\": the boxes grow to the text as the game's own setting does, so the fact's text is the whole 15 characters, no Ui.TextCut is said, and the picture shows the label whole on the upper button (box at the button, against a kept reference). A mod's own layout keeps its declared length as the cut: 3803 and 3807",
+  "proves": [
+    "ui.text_grows"
+  ],
+  "mods": [
+    "../mods/ju-label"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 110,
+      "picture": "label"
+    },
+    {
+      "at": 130,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-label.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-label.pane_up",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-label.pane_down",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-label.appear",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-label.appear_up",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-label.appear_down",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-label.pane_label",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-label.label",
+      "is": 0
+    },
+    {
+      "fact": "ui.text.4",
+      "has": {
+        "pane": "Text1",
+        "text": "Kit A two words",
+        "boxes": 2
+      },
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-label",
+        "code": 572
+      },
+      "absent": true
+    },
+    {
+      "picture": "label",
+      "like": "3816-{renderer}-label.png",
+      "box": [
+        290,
+        270,
+        700,
+        100
+      ],
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

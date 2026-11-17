@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "badfacts",
+  "version": "1.0.0",
+  "name": "badfacts",
+  "summary": "badfacts (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

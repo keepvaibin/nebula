@@ -1,0 +1,121 @@
+{
+  "harness": 1,
+  "name": "2701-tcp-echo",
+  "about": "loopback TCP within one mod: listen on a port the system picks, connect, ping and pong:ping both ways, SENT on each side, the client's close is the server's CLOSED with status 0",
+  "proves": [
+    "services.net.local"
+  ],
+  "mods": [
+    "../mods/net-echo"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4501
+      ]
+    },
+    {
+      "at": 300,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4502
+      ]
+    },
+    {
+      "at": 320,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-echo.listen",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-echo.port_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-echo.port_given",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.connect",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.send_ping",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-echo.accepted_from_listener",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.server_waiting",
+      "is": 4
+    },
+    {
+      "fact": "mod.net-echo.server_got_ping",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.send_pong",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-echo.client_got_pong",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.close_client",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-echo.closed_is_server",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.closed_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-echo.connected",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.accepted",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.server_data",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.client_data",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.sent",
+      "is": 2
+    },
+    {
+      "fact": "mod.net-echo.closed",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.errors",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-echo.close_listener",
+      "is": 0
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "harness": 1,
+  "name": "2224b-clipboard-undeclared",
+  "about": "system.clipboard imported, not declared: L506 at import, as lumalink check says",
+  "proves": [
+    "services.permissions",
+    "services.system.clipboard"
+  ],
+  "mods": [
+    {
+      "path": "../mods/sys-clip-undeclared",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-clip-undeclared.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "sys-clip-undeclared",
+        "code": 506
+      },
+      "when": "any"
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "harness": 1,
+  "name": "3203-model-joint",
+  "about": "jm-joint attaches Coin at JmNoJoint, a joint the player lacks: LUMA_OK, drawn at the base (gap under 1 unit), Content.MissingJoint once",
+  "proves": [
+    "model.missing_joint"
+  ],
+  "mods": [
+    "../mods/jm-joint"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-joint.attach",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "mod": "jm-joint",
+        "model": "Coin",
+        "joint": "JmNoJoint",
+        "placeholder": false,
+        "drawn": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.pose.1",
+      "field": "gap",
+      "at_most": 1.0,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jm-joint",
+        "source": "content",
+        "level": "error",
+        "code": 626
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-joint",
+        "code": 626
+      },
+      "count": 1
+    }
+  ]
+}

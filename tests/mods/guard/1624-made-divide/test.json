@@ -1,0 +1,90 @@
+{
+  "harness": 1,
+  "name": "1624-made-divide",
+  "about": "guard-8-3 faults (divide) in its class GuardShell's made (a JetTurtle made in place of every Kuribo): caught at the boundary, the mod off and taken out at the next frame, GUARD in the log and the mod log, the game goes on",
+  "proves": [
+    "kernel.guard.resume",
+    "kernel.guard.boundaries"
+  ],
+  "mods": [
+    "../mods/guard-8-3"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "takeout.guard-8-3",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1624
+      ],
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-8-3.entered",
+      "count": 1
+    },
+    {
+      "fact": "mod.guard-8-3.survived",
+      "absent": true
+    },
+    {
+      "fact": "mod.guard-8-3.again",
+      "absent": true
+    },
+    {
+      "log": "\\[mod guard-8-3\\] GUARD: its code failed \\(class: GuardShell\\): a division by zero at .+\\+0x[0-9a-f]+, address 0x[0-9a-f]+\\. It is off until the next start; what it was changing may be half done\\."
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "guard-8-3",
+        "source": "guard",
+        "level": "error",
+        "code": 3
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.guard-8-3.quotient",
+      "absent": true
+    },
+    {
+      "fact": "mod.guard-8-3.started",
+      "is": 1
+    },
+    {
+      "fact": "takeout.guard-8-3",
+      "exists": true
+    },
+    {
+      "fact": "after",
+      "exists": true
+    },
+    {
+      "fact": "mod.guard-8-3.defined",
+      "is": 1
+    }
+  ],
+  "faults": [
+    {
+      "mod": "guard-8-3"
+    }
+  ]
+}

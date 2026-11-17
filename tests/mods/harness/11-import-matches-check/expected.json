@@ -1,0 +1,8 @@
+{
+  "verdict": "pass",
+  "import_matches_check": {
+    "fact": "import.broken.luma",
+    "file": "../fixtures/broken.luma"
+  },
+  "note": "line 1 the outcome (NOT IMPORTED), then each finding as lumalink check names it, in order"
+}

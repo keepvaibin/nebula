@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tt-sig-field",
+  "name": "tt-sig-field",
+  "summary": "tt-sig-field (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

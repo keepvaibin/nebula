@@ -1,0 +1,55 @@
+{
+  "harness": 1,
+  "name": "3601-walk-replace",
+  "about": "ga-walk (no code) replaces the Goomba's walk clip with an animation file (Kuribo.anim.gltf, joints only): the cook says it made one clip for the game's model and no mesh (cook.model), refuses nothing, and the stage plays; walking Goombas sway with big heads (pictures/walk.png: a person's look)",
+  "proves": [
+    "anim.replace"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ga-walk",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 600,
+      "picture": "walk"
+    },
+    {
+      "at": 660,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "cook.model",
+      "has": {
+        "mod": "ga-walk",
+        "other": "ObjectData/Kuribo.arc/kuribo.bdl",
+        "clips": 1,
+        "meshes": 0,
+        "joints": 6
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ga-walk",
+        "level": "error"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

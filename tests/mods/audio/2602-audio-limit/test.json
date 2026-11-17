@@ -1,0 +1,70 @@
+{
+  "harness": 1,
+  "name": "2602-audio-limit",
+  "about": "33 looped plays: the 33rd plays and the oldest of equal priority ends with ENDED LIMIT, reported",
+  "proves": [
+    "services.audio",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/audio-limit"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4802
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.audio-limit.played_32",
+      "is": 32
+    },
+    {
+      "fact": "mod.audio-limit.play_33",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-limit.ended_limit",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-limit.ended_ok",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-limit.first_closed",
+      "is": -3
+    },
+    {
+      "fact": "mod.audio-limit.stopped_32",
+      "is": 32
+    },
+    {
+      "fact": "mod.audio-limit.others",
+      "is": 0
+    },
+    {
+      "log": "audio-limit plays more than 32 sounds at once: beep, its sound of the lowest priority, was stopped \\(audio\\.play\\)\\.",
+      "times": 1
+    }
+  ]
+}

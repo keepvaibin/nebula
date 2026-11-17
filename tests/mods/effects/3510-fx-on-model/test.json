@@ -1,0 +1,118 @@
+{
+  "harness": 1,
+  "name": "3510-fx-on-model",
+  "about": "je-fx-model attaches the game's Coin 150 up from the player (content.model) and starts TicoTouchGlow00 on it at its root and at JeNoSocket (its root, Content.MissingJoint once); detaching the model ends both effects (\"model\"); start_on_model on the ended handle is LUMA_E_HANDLE (a glow on the coin above Mario: a person's look)",
+  "proves": [
+    "fx.on_model"
+  ],
+  "mods": [
+    "../mods/je-fx-model"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3501
+      ]
+    },
+    {
+      "at": 240,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3502
+      ]
+    },
+    {
+      "at": 250,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3503
+      ]
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.je-fx-model.attach",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-model.start",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-model.socket",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-model.detach",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-model.ended",
+      "is": -3
+    },
+    {
+      "fact": "fx.start.1",
+      "has": {
+        "mod": "je-fx-model",
+        "name": "TicoTouchGlow00",
+        "model": 1,
+        "placeholder": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "fx.start.2",
+      "has": {
+        "joint": "JeNoSocket",
+        "model": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "fx.alive.1",
+      "field": "particles",
+      "more": 0,
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-fx-model",
+        "code": 626
+      },
+      "count": 1
+    },
+    {
+      "fact": "fx.end.1",
+      "is": {
+        "why": "model"
+      }
+    },
+    {
+      "fact": "fx.end.2",
+      "is": {
+        "why": "model"
+      }
+    },
+    {
+      "fact": "fx.start.3",
+      "absent": true
+    }
+  ]
+}

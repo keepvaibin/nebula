@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "audio-stream",
+  "name": "audio-stream",
+  "summary": "audio-stream (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

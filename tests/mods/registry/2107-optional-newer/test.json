@@ -1,0 +1,28 @@
+{
+  "harness": 1,
+  "name": "2107-optional-newer",
+  "about": "An optional import of a minor too new starts the mod with the slot null",
+  "proves": [
+    "kernel.service",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/reg-opt"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-opt.slot",
+      "is": 0
+    },
+    {
+      "fact": "mod.reg-opt.started",
+      "is": 1
+    }
+  ]
+}

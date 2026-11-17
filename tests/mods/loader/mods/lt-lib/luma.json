@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-lib",
+  "name": "lt-lib",
+  "summary": "lt-lib (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

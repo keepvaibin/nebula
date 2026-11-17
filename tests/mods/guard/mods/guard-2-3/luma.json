@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "guard-2-3",
+  "name": "guard-2-3",
+  "summary": "guard-2-3 (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

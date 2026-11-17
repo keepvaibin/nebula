@@ -1,0 +1,41 @@
+{
+  "harness": 1,
+  "name": "6101-import-good",
+  "about": "jv-good imported as Open with imports it: the validator ran and found no error, the mod is added (IMPORTED, its folder jv-good) and the result page says so",
+  "proves": [
+    "import.check"
+  ],
+  "mods": [
+    {
+      "path": "../../startval/mods/jv-good",
+      "install": "import",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "import.jv-good",
+      "has": {
+        "line": 1,
+        "text": "IMPORTED",
+        "id": "jv-good",
+        "checked": true,
+        "refused": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "import.jv-good",
+      "matching": {
+        "error": true
+      },
+      "absent": true
+    }
+  ]
+}

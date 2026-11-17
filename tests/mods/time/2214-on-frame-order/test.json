@@ -1,0 +1,66 @@
+{
+  "harness": 1,
+  "name": "2214-on-frame-order",
+  "about": "on_frame in list order: the higher mod's handler runs first",
+  "proves": [
+    "services.time.handlers"
+  ],
+  "mods": [
+    "../mods/tm-order-a",
+    "../mods/tm-order-b"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4222
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-order-a.step",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-order-b.step",
+      "is": -14
+    },
+    {
+      "fact": "mod.tm-order-a.hold",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-order-b.hold",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-order-a.release",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-order-b.release",
+      "is": 0
+    }
+  ]
+}

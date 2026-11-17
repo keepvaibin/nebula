@@ -1,0 +1,63 @@
+{
+  "harness": 1,
+  "name": "3617-anim-game-walk",
+  "about": "ja-goomba plays a Goomba's own Walk once: LUMA_OK on the game's actor, its model kuribo (the resource holder's name); the game's Walk is not 90 frames long (3618's)",
+  "proves": [
+    "anim.play"
+  ],
+  "mods": [
+    "../mods/ja-goomba"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3601
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ja-goomba.seen",
+      "is": 1
+    },
+    {
+      "fact": "mod.ja-goomba.play",
+      "is": 0
+    },
+    {
+      "fact": "anim.play.1",
+      "has": {
+        "model": "kuribo",
+        "clip": "Walk",
+        "on_model": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "anim.play.1",
+      "field": "frames",
+      "is_not": 90,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ja-goomba",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

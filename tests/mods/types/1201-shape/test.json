@@ -1,0 +1,73 @@
+{
+  "harness": 1,
+  "name": "1201-shape",
+  "about": "Sizes by name and alias, a field two bases up, fields through a base, an inline of an anonymous namespace called",
+  "proves": [
+    "kernel.type",
+    "kernel.field",
+    "kernel.call"
+  ],
+  "mods": [
+    "../mods/tt-shape"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tt-shape.pos_size",
+      "is": 48
+    },
+    {
+      "fact": "mod.tt-shape.vec_size",
+      "is": 12
+    },
+    {
+      "fact": "mod.tt-shape.mtx_at",
+      "is": 0
+    },
+    {
+      "fact": "mod.tt-shape.xyz_at",
+      "is": 408
+    },
+    {
+      "fact": "mod.tt-shape.m03",
+      "is": 1500
+    },
+    {
+      "fact": "mod.tt-shape.m13",
+      "is": -2250
+    },
+    {
+      "fact": "mod.tt-shape.m23",
+      "is": 3000
+    },
+    {
+      "fact": "mod.tt-shape.m00",
+      "is": 1000
+    },
+    {
+      "fact": "mod.tt-shape.m11",
+      "is": 1000
+    },
+    {
+      "fact": "mod.tt-shape.m22",
+      "is": 1000
+    },
+    {
+      "fact": "mod.tt-shape.m01",
+      "is": 0
+    },
+    {
+      "fact": "mod.tt-shape.untouched",
+      "is": 1
+    },
+    {
+      "fact": "mod.tt-shape.started",
+      "is": 1
+    }
+  ]
+}

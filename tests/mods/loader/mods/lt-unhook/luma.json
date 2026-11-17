@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-unhook",
+  "name": "lt-unhook",
+  "summary": "lt-unhook (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}
