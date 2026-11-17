@@ -2400,6 +2400,7 @@ def report(run_folder, name, proves, renderer, verdict, reason, checks, args, ex
     log_lines = (run_folder / "run.log").read_text(encoding="utf-8", errors="replace").splitlines() if (run_folder / "run.log").exists() else []
     result = {"harness": HARNESS, "runner": RUNNER_VERSION, "test": name, "proves": proves, "renderer": renderer,
               "platform": HOST["platform"], "os": platform.platform(), "gpu": gpu_line(log_lines),
+              "driver": next((l.split("=", 1)[1].strip() for l in log_lines if l.startswith("[gpu] driver=")), ""),
               "commit": args.commit, "module": args.module, "verdict": verdict, "reason": reason, "checks": checks}
     test_json = extra.pop("test_json", None)
     result.update(extra)

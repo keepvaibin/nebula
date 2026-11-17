@@ -870,6 +870,9 @@ RenderAdapter render_adapter() {
 }
 
 void record_render_driver(std::string version) noexcept {
+    // In the log beside the [gpu] adapter line: a test's pictures are approved for one adapter and driver.
+    std::printf("[gpu] driver=%s\n", version.empty() ? "unknown" : version.c_str());
+    std::fflush(stdout);
     const std::lock_guard<std::mutex> lock(s_adapter_lock);
     s_adapter.driver = std::move(version);
 }
