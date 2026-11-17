@@ -336,12 +336,12 @@ const LumaTestSecretService kSecret = {
 // One provider has the moments for both services: they are one service's two halves for the tests.
 const LumaServiceProvider kSvcProvider = {
     sizeof(LumaServiceProvider), "test.svc", &kSvc.base, nullptr, nullptr, 0u, nullptr,
-    mod_begin, mod_gone, mod_end, registered,
+    mod_begin, mod_gone, mod_end, registered, nullptr,
 };
 
 const LumaServiceProvider kSecretProvider = {
     sizeof(LumaServiceProvider), "test.secret", &kSecret.base, "test.secret", nullptr, 0u, nullptr,
-    nullptr, nullptr, nullptr, nullptr,
+    nullptr, nullptr, nullptr, nullptr, nullptr,
 };
 
 const LumaServiceProvider* const kProviders[] = {&kSvcProvider, &kSecretProvider};
