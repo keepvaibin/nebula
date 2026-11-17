@@ -172,6 +172,9 @@ struct RenderConfig {
     // GPU that is not present, picks one automatically (the high-performance GPU first). Set at start-up from
     // config.ini (GALAXY_GPU overrides) and kept for the session; see next_start_gpu().
     std::array<char, 32> gpu{};
+    // The graphics backend to use when the game starts: 0 Vulkan, 1 OpenGL. Applied at the next start (restart
+    // required). If the selected backend is not available in this build, the host falls back to its default backend.
+    unsigned graphics_backend    = 0;
     // Game picture aspect, an index of kAspectRatios (0 follows the window's shape). Applied at the next video
     // frame.
     unsigned aspect_mode         = 0;

@@ -35,6 +35,8 @@ The launcher passes `--pak` and `--saves` for you. The Android app also passes `
 
 To choose the graphics card, use **Settings** in Nebula, or set `gpu=` in `config.ini`. When `gpu=` is empty, Nebula uses the high-performance graphics card.
 
+To choose the graphics backend, use **Settings › Graphics › Graphics Backend**, or set `graphics_backend=` in `config.ini` to `vulkan` or `opengl`. The backend is chosen when the renderer starts, so the game restarts when the setting is applied. A build carries the backends it was compiled with: a choice the build has not got renders with its own backend, and the choice stays in `config.ini` for a build that has it.
+
 ### About safe starts
 
 After a crash with mods turned on, the next start is a safe start. If only mod code was on, that start turns off only the code. A safe start loads the game without the parts that mod code needs, and the log shows `game module: plain (safe start: REASON)`.

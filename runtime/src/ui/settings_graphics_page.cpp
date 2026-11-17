@@ -19,6 +19,20 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     char text[96]{};
     rows.push_back(button_row("PRESET", {"PERFORMANCE"}, [](RenderConfig& draft, unsigned) { apply_performance_preset(draft); },
                               "LOWER RESOLUTION AND EVERY OPTIONAL EFFECT OFF FOR THE STEADIEST FRAME RATE"));
+    {
+        static constexpr const char* kBackendNames[] = {"VULKAN", "OPENGL"};
+        const unsigned backend = render.graphics_backend <= 1u ? render.graphics_backend : 0u;
+        std::string backend_value = kBackendNames[backend];
+#if !defined(NEBULA_GPU_GL)
+        // A build only carries the backends it was compiled with: the choice is kept for a build that has it, and
+        // this one renders with its own backend.
+        if (backend == 1u) backend_value += " (NOT IN THIS BUILD)";
+#endif
+        rows.push_back({"GRAPHICS BACKEND", backend_value,
+                        [](RenderConfig& draft, int) { draft.graphics_backend = draft.graphics_backend == 0u ? 1u : 0u; },
+                        "RENDERER USED AT START: VULKAN OR OPENGL. APPLY AND RESTART THE GAME FOR THE CHANGE TO TAKE EFFECT. "
+                        "IF THE SELECTED BACKEND IS NOT AVAILABLE IN THIS BUILD, THE HOST USES ITS DEFAULT BACKEND."});
+    }
     rows.push_back({"RESOLUTION", {}, nullptr, {}, true});
     const std::vector<unsigned>& choices = state.upscalers;
     const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();

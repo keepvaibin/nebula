@@ -243,6 +243,9 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         cfg.gpu.fill('\0');
         const std::size_t length = std::min(std::strlen(val), cfg.gpu.size() - 1u);
         std::memcpy(cfg.gpu.data(), val, length);
+    } else if (std::strcmp(key, "graphics_backend") == 0) {
+        static constexpr const char* kNames[] = {"vulkan", "opengl"};
+        cfg.graphics_backend = parse_choice(val, kNames, cfg.graphics_backend);
     }
     else if (std::strcmp(key, "aspect") == 0) {
         cfg.aspect_mode = parse_aspect_mode(val, cfg.aspect_mode);
@@ -310,6 +313,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.aspect_mode = std::min(cfg.aspect_mode, kAspectModeCount - 1u);
     cfg.monitor.back() = '\0';
     cfg.gpu.back() = '\0';
+    cfg.graphics_backend = std::min(cfg.graphics_backend, 1u);
     cfg.msaa_samples = std::bit_floor(std::clamp(cfg.msaa_samples, 1u, 8u));
     cfg.taa_enabled = false;
     cfg.rt_quality = std::min(cfg.rt_quality, kRtPresetCustom);
@@ -714,6 +718,7 @@ bool save_render_config_to_file() {
              << "display_mode=" << cfg.display_mode << '\n'
              << "monitor=" << cfg.monitor.data() << '\n'
              << "gpu=" << gpu.data() << '\n'
+             << "graphics_backend=" << (cfg.graphics_backend == 1u ? "opengl" : "vulkan") << '\n'
              << "aspect=" << kAspectNames[std::min(cfg.aspect_mode, kAspectModeCount - 1u)] << '\n';
     if (!contents) {
         return false;

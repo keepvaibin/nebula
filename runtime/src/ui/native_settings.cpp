@@ -677,6 +677,7 @@ unsigned pending_settings_changes() {
     changes += d.texture_packs != live.texture_packs ||
         (d.texture_packs && d.texture_pack_preload != live.texture_pack_preload);
     changes += d.texture_dump != live.texture_dump;
+    changes += d.graphics_backend != live.graphics_backend;
     changes += controls_changes();
     changes += runtime_draft_changes(nullptr);
     changes += mods_draft_changes();
@@ -1167,7 +1168,9 @@ void apply_native_settings_draft() {
     applied.texture_packs = next.texture_packs;
     applied.texture_pack_preload = next.texture_pack_preload;
     applied.texture_dump = next.texture_dump;
+    applied.graphics_backend = next.graphics_backend;
     const bool display_changed = display_settings_differ(live, applied);
+    const bool backend_changed = applied.graphics_backend != live.graphics_backend;
     const unsigned changes = pending_settings_changes();
     commit_mods_draft();
     // The game's settings the menu changed, over the live ones (the controls applied the input mode).
@@ -1192,6 +1195,10 @@ void apply_native_settings_draft() {
     flush_native_settings_if_dirty();
     std::cerr << "[settings] applied " << changes << " change"
               << (changes == 1u ? "" : "s") << '\n';
+    if (backend_changed && host_window::restart_game(false)) {
+        // The graphics backend is chosen when the renderer starts: the new one takes this program's place.
+        std::cerr << "[settings] graphics backend changed: restarting\n";
+    }
 }
 
 void revert_native_settings_draft() {
@@ -1904,7 +1911,7 @@ bool handle_native_settings_key(std::uintptr_t key, bool was_down, bool from_pad
         set_native_settings_visible(true);
         return true;
     }
-    if (key == VK_F1) {
+    if (key == VK_F1 || key == VK_F10) {
         if (was_down) {
             return true;
         }

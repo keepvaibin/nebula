@@ -43,6 +43,9 @@ extern std::atomic<bool> borderless_active;
 extern std::atomic<bool> move_size_active;
 // The window was closed.
 extern std::atomic<bool> quit_request;
+// A start again was asked for (restart_game): the host ends this process and starts it with the same arguments at its
+// next loop. The window and the game's saves are let go as a quit's are.
+extern std::atomic<bool> restart_request;
 // The latest client size (width << 32 | height), recorded by the window. The render thread resizes the swap chain at
 // the top of begin_frame, between frames with no command list recording, so every GPU object changes on the thread
 // that owns it.

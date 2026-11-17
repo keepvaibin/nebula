@@ -1616,6 +1616,7 @@ unsigned backbuffer_height = 0;
 std::atomic<bool> borderless_active{true};
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
+std::atomic<bool> restart_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0u};
 std::atomic<bool> surface_withdrawn{false};
 std::timed_mutex surface_use;
@@ -1900,7 +1901,10 @@ bool restart_game(bool) {
     galaxy::sdl::call_activity("restartGame");
     return true;
 #else
-    return false;
+    // The host's loop sees the request and starts the program again with this start's arguments (finish_and_exit),
+    // so a setting that needs a new process (the graphics backend) takes effect.
+    restart_request.store(true, std::memory_order_release);
+    return true;
 #endif
 }
 

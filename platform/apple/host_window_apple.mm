@@ -1157,6 +1157,7 @@ unsigned backbuffer_height = 0;
 std::atomic<bool> borderless_active{false};
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
+std::atomic<bool> restart_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0u};
 std::atomic<bool> surface_withdrawn{false};
 std::timed_mutex surface_use;

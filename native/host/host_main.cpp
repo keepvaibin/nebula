@@ -5709,6 +5709,16 @@ int main(int argc, char** argv) {
         galaxy::discord::start(kDiscordClientId);
     }
     const galaxy::render::RenderConfig render_config = galaxy::render::get_render_config();
+    // The settings' graphics backend, chosen at the next start. A build only carries the backend it was compiled
+    // with (this one: Vulkan), so a choice it has not got renders with the compiled one and the choice stays in
+    // config.ini for a build that has it.
+    if (render_config.graphics_backend != 0u) {
+#if defined(NEBULA_GPU_OPENGL)
+        log_line("render:", "graphics backend opengl (config.ini)");
+#else
+        log_line("render:", "graphics_backend=opengl is not in this build: using the compiled backend");
+#endif
+    }
     if (!galaxy::render::initialize(static_cast<int>(render_config.window_width),
                                     static_cast<int>(render_config.window_height))) {
         const std::string reason = galaxy::render::startup_failure();
@@ -5943,6 +5953,11 @@ int main(int argc, char** argv) {
         galaxy::render::pump_messages();
         if (galaxy::render::quit_requested()) {
             break;
+        }
+        if (galaxy::render::host_window::restart_request.exchange(false, std::memory_order_acq_rel)) {
+            // A setting that needs a new process (the graphics backend): this one ends as a quit's does, and the
+            // same program starts again with this start's arguments and the ones a restart adds.
+            finish_and_exit(true);
         }
         if (!first_frame && gSubmissions.load(std::memory_order_relaxed) != 0u) {
             first_frame = true;
