@@ -28,7 +28,8 @@ enum class RtDev : std::uint8_t {
                     // where it first shows after the key; 0: the key's lifted direction, its angle to the sky's logged
     SunOccluders,   // 1: each sun ray's blocker counted by item and logged every 300 frames ("[rt-occluders]"); 2 the
                     // second layer's pixels by their own item instead; 0 none
-    TransmitWhy,    // 1: water's T shows how its refracted walk ended (rt_transmit.hlsl why); 0 T
+    TransmitWhy,    // 1: water's T shows how its refracted walk ended (rt_transmit.hlsl why); 2: each water draw
+                    // shows which way its program took (program.hlsli traced_sea_why); 0 neither
     Count,
 };
 

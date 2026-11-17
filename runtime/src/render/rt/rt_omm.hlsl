@@ -99,7 +99,7 @@ void main(uint3 group : SV_GroupID, uint thread : SV_GroupIndex) {
     float2 a, b, c;
     micro_corners(thread, a, b, c);
     uint state = 0u;  // where the map cannot be read, cutout_there says nothing is there
-    if (first.z < 8u && map.x != 0xFFFFFFFFu) {
+    if (first.z < kMeshNone && map.x != 0xFFFFFFFFu) {
         const uint base = mesh_at(first.z);
         const uint3 corner = triangle_corners(first, second, triangle_);
         const float2 c0 = asfloat(arena_words(first.z, base + first.w + corner.x * 24u + 12u).yz);

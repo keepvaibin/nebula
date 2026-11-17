@@ -591,14 +591,20 @@ pub fn is_eye(material: &str) -> bool {
     face_kind(&name) == 2 && !["light", "cone", "beam"].iter().any(|w| name.contains(w))
 }
 
+/// The roughness of a plain surface (a dielectric no rule or row names otherwise: grass, sand, soil, rock, wood, painted
+/// walls). The game's art is matte: its surfaces are painted to read by their colour, and natural ground is rough
+/// (measured soil, sand, stone and grass: perceptual roughness 0.8 and over). At 0.45 a low sun facing the camera
+/// laid a wide glare over every lawn and path.
+pub const PLAIN_ROUGHNESS: f32 = 0.8;
+
 /// A face part is a plain surface: no light through it (the thin sheet's), and no mirror, clear or metal
-/// class (an environment map's, a painted sprite's): a dielectric at 0.45. Its painted reflection stays as drawn (a
+/// class (an environment map's, a painted sprite's): a dielectric at PLAIN_ROUGHNESS. Its painted reflection stays as drawn (a
 /// dielectric mirrors nothing in the tracer).
 pub fn face_plain(r: &mut Reading) {
     r.transmission = 0.0;
     if matches!(r.class, Class::Gloss | Class::Glass | Class::Metal | Class::Translucent | Class::Water) {
         r.class = Class::Dielectric;
-        r.roughness = 0.45;
+        r.roughness = PLAIN_ROUGHNESS;
         r.metal = 0.0;
         r.ior = 1.5;
         r.rule = "a face part: a plain surface";
@@ -1775,7 +1781,7 @@ pub fn read(m: &MaterialIr) -> Reading {
         signals: s,
         base,
         emission: [0.0; 3],
-        roughness: 0.45,
+        roughness: PLAIN_ROUGHNESS,
         metal: 0.0,
         ior: 1.5,
         transmission: 0.0,
@@ -2128,11 +2134,12 @@ fn class_numbers(stem: &str, name: &str, r: &mut Reading) {
 
 /// A class's own numbers where no rule of read() says more (the first rule of each class there): what a review row's
 /// class comes with before the row's own numbers, so a row that changes the class never keeps the old class's (a glass
-/// row over a translucent reading kept its transmission 0.5, its roughness 0.45). A painted reflection's sharpness
+/// row over a translucent reading kept its transmission 0.5, its roughness PLAIN_ROUGHNESS). A painted reflection's sharpness
 /// (finish_reading) is a metal's and a gloss's roughness. The colours stay the material's.
 fn class_defaults(class: Class, r: &mut Reading) {
     let s = r.signals;
-    (r.roughness, r.metal, r.ior, r.transmission, r.tint_keep, r.body, r.shine) = (0.45, 0.0, 1.5, 0.0, -1.0, -1.0, -1.0);
+    (r.roughness, r.metal, r.ior, r.transmission, r.tint_keep, r.body, r.shine) =
+        (PLAIN_ROUGHNESS, 0.0, 1.5, 0.0, -1.0, -1.0, -1.0);
     // Only the emissive class shows its emission (rt_shade.hlsli rt_hit_read); read() gives no other one any.
     if class != Class::Emissive {
         r.emission = [0.0; 3];
@@ -2237,8 +2244,10 @@ pub const METAL_KINDS: [(&str, [f32; 3]); 7] = [
     ("platinum", [0.673, 0.637, 0.585]),
 ];
 /// The share of the sun a crown of leaves' far side takes (light through the
-/// leaves; rt_frame.hlsli kCardThrough, a card's), and a cloud's.
-pub const FOLIAGE_THROUGH: f32 = 0.6;
+/// leaves; rt_frame.hlsli kCardThrough, a card's), and a cloud's. A green leaf passes some 0.05 to 0.2 of visible
+/// light, most in the green (PROSPECT leaf optics, Jacquemoud and Baret 1990): 0.2. At 0.6 every bush and plant
+/// was lit on its shaded side nearly as on its sunny one: pale, flat, never dark.
+pub const FOLIAGE_THROUGH: f32 = 0.2;
 pub const CLOUD_THROUGH: f32 = 0.5;
 pub const FALL_THROUGH: f32 = 0.3;
 
@@ -3347,7 +3356,7 @@ mod tests {
 
     #[test]
     fn a_rows_class_comes_with_that_classs_numbers() {
-        // A translucent reading (transmission 0.5, roughness 0.45) made glass by a row that gives only the class: glass's
+        // A translucent reading (transmission 0.5, roughness PLAIN_ROUGHNESS) made glass by a row that gives only the class: glass's
         // own numbers, the clear table's by its name (a crystal box 1.8), untinted; the row's numbers over them.
         let mut blended = painted();
         (blended.blend_type, blended.blend_src, blended.blend_dst) = (1, 4, 5);
@@ -3364,7 +3373,7 @@ mod tests {
         let mut glass = read(&lit);
         (glass.class, glass.transmission, glass.roughness, glass.ior, glass.tint_keep) = (Class::Glass, 1.0, 0.02, 1.8, 0.0);
         review("model\tmaterial\tclass\nanything\tShell\tdielectric\n", "anything", "Shell", &mut glass);
-        assert_eq!((glass.transmission, glass.roughness, glass.ior, glass.tint_keep), (0.0, 0.45, 1.5, -1.0));
+        assert_eq!((glass.transmission, glass.roughness, glass.ior, glass.tint_keep), (0.0, PLAIN_ROUGHNESS, 1.5, -1.0));
         // The same class: the rules' numbers stay (a strong reflection's 0.1 gloss is no 0.2).
         let mut gloss = read(&lit);
         (gloss.class, gloss.roughness) = (Class::Gloss, 0.1);

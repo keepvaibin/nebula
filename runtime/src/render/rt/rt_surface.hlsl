@@ -35,7 +35,7 @@ bool triangle_place(uint4 first, uint4 second, uint stream, uint triangle_, floa
     at = float3(0.0f, 0.0f, 0.0f);
     normal = float3(0.0f, 0.0f, 1.0f);
     const uint arena = first.z;
-    if (arena >= 8u) {
+    if (arena >= kMeshNone) {
         return false;
     }
     const uint base = mesh_at(arena);
@@ -87,7 +87,7 @@ float3 shading_normal(uint4 first, uint4 second, uint stream, uint row_before, u
     vertex_colour = float4(1.0f, 1.0f, 1.0f, 1.0f);
     map_per_pixel = 0.0f;
     const uint arena = first.z;
-    if (arena >= 8u) {
+    if (arena >= kMeshNone) {
         return geometric;
     }
     const uint base = mesh_at(arena);
@@ -211,8 +211,9 @@ uint triangle_by_ray(uint item, float2 centre, float away) {
 // below the last's and jittered inside its step, so no two are commensurate and the field never repeats as a grid),
 // spread wide about one wind (a short-crested sea: a far view keeps only the longest waves, and they cross), each its
 // own phase, moving by deep water's dispersion (omega^2 = g k, g kSeaGravity units a second squared: longer waves run faster) on the game's time.
-// Lengths 920 units (some six Marios) down to 35; the slopes sum to 0.30 root mean square, a lively wind sea's: the
-// mirror and the bed seen through the water bend as a real sea's do. Table: tools/wave_table.py's output, fixed seed.
+// Lengths 920 units (some six Marios) down to 35; the slopes sum to 0.17 root mean square, a light breeze's over open
+// water (Cox and Munk 1954: slope variance 0.003 + 0.00512 U, U 5 m/s): the mirror and the bed seen through the water
+// bend as a calm sea's do. Table: tools/wave_table.py's output, fixed seed.
 // `at`: the point on one of the mesh's three planes, in its units (sea_field), so the waves stand still on the water
 // as the eye moves. The slope (dh/da, dh/db). A wave shorter than kWaveFootprints pixels' footprints (`pixel`, units)
 // fades out over the next doubling, and the slope it no longer gives goes to `variance` (half its steepness squared a
@@ -223,38 +224,38 @@ static const float kSeaGravity = 980.0f;  // a unit a centimetre: Mario stands s
 static const float kWaveFootprints = 3.0f;
 static const float4 kSeaWave[kSeaWaves] = {
     // x, y: direction on the water's plane (the wind along x); z: length (units); w: steepness (a k)
-    float4(0.7490f, 0.6626f, 919.1f, 0.0750f),
-    float4(1.0000f, -0.0089f, 786.3f, 0.0750f),
-    float4(0.6915f, 0.7224f, 757.6f, 0.0750f),
-    float4(0.9588f, -0.2842f, 658.1f, 0.0750f),
-    float4(0.8090f, 0.5879f, 594.0f, 0.0750f),
-    float4(0.9923f, -0.1242f, 533.1f, 0.0750f),
-    float4(0.7700f, 0.6381f, 475.5f, 0.0750f),
-    float4(0.4911f, -0.8711f, 436.4f, 0.0750f),
-    float4(0.7772f, 0.6293f, 400.7f, 0.0750f),
-    float4(0.7470f, -0.6648f, 366.4f, 0.0750f),
-    float4(0.8573f, 0.5148f, 326.7f, 0.0750f),
-    float4(0.7934f, -0.6087f, 286.5f, 0.0750f),
-    float4(0.3147f, 0.9492f, 265.2f, 0.0750f),
-    float4(-0.3443f, -0.9389f, 233.4f, 0.0750f),
-    float4(0.9585f, 0.2850f, 204.0f, 0.0750f),
-    float4(0.6253f, -0.7804f, 187.9f, 0.0750f),
-    float4(0.9971f, 0.0763f, 167.7f, 0.0750f),
-    float4(0.9675f, -0.2528f, 158.4f, 0.0750f),
-    float4(0.7839f, 0.6209f, 137.6f, 0.0750f),
-    float4(0.1999f, -0.9798f, 120.7f, 0.0750f),
-    float4(-0.0029f, 1.0000f, 110.8f, 0.0750f),
-    float4(0.9069f, -0.4212f, 98.3f, 0.0750f),
-    float4(0.9532f, 0.3022f, 90.1f, 0.0750f),
-    float4(0.9738f, -0.2272f, 85.3f, 0.0750f),
-    float4(0.8827f, 0.4698f, 74.8f, 0.0750f),
-    float4(0.9783f, -0.2072f, 69.6f, 0.0750f),
-    float4(-0.0751f, 0.9972f, 58.7f, 0.0750f),
-    float4(0.9431f, -0.3325f, 54.5f, 0.0750f),
-    float4(0.9825f, 0.1860f, 50.7f, 0.0750f),
-    float4(0.5406f, -0.8413f, 45.6f, 0.0750f),
-    float4(0.9981f, 0.0610f, 39.2f, 0.0750f),
-    float4(0.0944f, -0.9955f, 35.5f, 0.0750f),
+    float4(0.7490f, 0.6626f, 919.1f, 0.0425f),
+    float4(1.0000f, -0.0089f, 786.3f, 0.0425f),
+    float4(0.6915f, 0.7224f, 757.6f, 0.0425f),
+    float4(0.9588f, -0.2842f, 658.1f, 0.0425f),
+    float4(0.8090f, 0.5879f, 594.0f, 0.0425f),
+    float4(0.9923f, -0.1242f, 533.1f, 0.0425f),
+    float4(0.7700f, 0.6381f, 475.5f, 0.0425f),
+    float4(0.4911f, -0.8711f, 436.4f, 0.0425f),
+    float4(0.7772f, 0.6293f, 400.7f, 0.0425f),
+    float4(0.7470f, -0.6648f, 366.4f, 0.0425f),
+    float4(0.8573f, 0.5148f, 326.7f, 0.0425f),
+    float4(0.7934f, -0.6087f, 286.5f, 0.0425f),
+    float4(0.3147f, 0.9492f, 265.2f, 0.0425f),
+    float4(-0.3443f, -0.9389f, 233.4f, 0.0425f),
+    float4(0.9585f, 0.2850f, 204.0f, 0.0425f),
+    float4(0.6253f, -0.7804f, 187.9f, 0.0425f),
+    float4(0.9971f, 0.0763f, 167.7f, 0.0425f),
+    float4(0.9675f, -0.2528f, 158.4f, 0.0425f),
+    float4(0.7839f, 0.6209f, 137.6f, 0.0425f),
+    float4(0.1999f, -0.9798f, 120.7f, 0.0425f),
+    float4(-0.0029f, 1.0000f, 110.8f, 0.0425f),
+    float4(0.9069f, -0.4212f, 98.3f, 0.0425f),
+    float4(0.9532f, 0.3022f, 90.1f, 0.0425f),
+    float4(0.9738f, -0.2272f, 85.3f, 0.0425f),
+    float4(0.8827f, 0.4698f, 74.8f, 0.0425f),
+    float4(0.9783f, -0.2072f, 69.6f, 0.0425f),
+    float4(-0.0751f, 0.9972f, 58.7f, 0.0425f),
+    float4(0.9431f, -0.3325f, 54.5f, 0.0425f),
+    float4(0.9825f, 0.1860f, 50.7f, 0.0425f),
+    float4(0.5406f, -0.8413f, 45.6f, 0.0425f),
+    float4(0.9981f, 0.0610f, 39.2f, 0.0425f),
+    float4(0.0944f, -0.9955f, 35.5f, 0.0425f),
 };
 static const float kSeaPhase[kSeaWaves] = {
     2.5417f, 2.0214f, 0.0412f, 6.2296f, 3.2735f, 5.2301f, 2.7313f, 2.9287f,
@@ -348,7 +349,7 @@ float3 water_ripple(uint4 first, uint4 second, uint stream, uint triangle_, floa
                     out float wave_variance) {
     wave_variance = 0.0f;
     const uint arena = first.z;
-    if (arena >= 8u) {
+    if (arena >= kMeshNone) {
         return smooth_;
     }
     const uint base = mesh_at(arena);
@@ -427,12 +428,12 @@ void main(uint3 id : SV_DispatchThreadID) {
     float3 at = rt_eye_ray(g_ray, centre) * away;
     float3 normal;
     // The pixel's triangle: the prepass's, or where it could not name one the ray's. The first layer with none
-    // found keeps the depth's own normal (no mesh: arena 8).
+    // found keeps the depth's own normal (no mesh: kMeshNone).
     uint triangle_ = named.y;
     if (triangle_ == kItemNoTriangle) {
         triangle_ = triangle_by_ray(item, centre, second ? -1.0f : away);
     }
-    const uint4 shaded = triangle_ == kItemNoTriangle ? uint4(words4.xy, 8u, words4.w) : words4;
+    const uint4 shaded = triangle_ == kItemNoTriangle ? uint4(words4.xy, kMeshNone, words4.w) : words4;
     if (second) {
         if (!triangle_place(shaded, mesh, third.z, triangle_, rt_eye_ray(g_ray, centre), at, normal)) {
             no_surface(id.xy, second);
@@ -475,7 +476,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     }
     g_guide[id.xy] = float4(away, float(words4.x & 1023u), float(words4.x >> 10u), rt_pack_normal(smooth_));
     // Water shades by its rippled normal; the guide keeps the smooth one for the filters. `shaded` and the
-    // resolved `triangle_`: with no triangle found its arena is 8 and the ripple stays out.
+    // resolved `triangle_`: with no triangle found its slot is kMeshNone and the ripple stays out.
     float wave_variance = 0.0f;  // the slope variance the waves' filter took away
     const float3 shading = (third.w & 255u) == kClassWater
                                ? water_ripple(shaded, mesh, third.z, triangle_, at, smooth_, wave_variance)

@@ -547,6 +547,9 @@ private:
     std::vector<std::uint8_t> rt_prepassed_;  // an item of the list: 1 drawn in this walk's prepass, 2 in its second
     bool rt_prepass_walk_ = false;            // walk_draw_items draws the prepass
     bool rt_blended_walk_ = false;            // and it is the second layer's
+    // The second layer's walk in two rounds (rt_blended): 1 the blended things that are not clear, 2 the clear
+    // surfaces (water, glass), drawn last so that a pixel's clear surface names it.
+    std::uint8_t rt_blended_round_ = 0u;
     // The frame's traced light as rt_tables set it up, for every pass and both layers: the bindings every pass shares
     // (the scene, the frame's buffers and mesh memory, the depth and the item map, the frame's constants at b0), the
     // picture's size and groups (across 0: no light this walk), the eye's terms, the frame's turn (the noise's, and
@@ -656,6 +659,17 @@ private:
     float rt_dev_[kRtDevCount]{};
     std::uint64_t rt_dev_set_ = 0u;
     std::uint32_t rt_program_signal_ = 0u;  // this walk's scene shows a signal: view_flags 64 (S) or 128 (A)
+    // The traced light's exposure, metered against the game's own light (rt_tables), eased: the value, the game frame
+    // it last stepped on, the stage it is for.
+    float rt_meter_ = 1.0f;
+    std::uint32_t rt_meter_frame_ = 0u, rt_meter_stage_ = 0u;
+    bool rt_meter_known_ = false;
+    // Its white balance (the same meter, a channel at a time): the traced light's colour gains, luminance one.
+    float rt_balance_[3]{1.0f, 1.0f, 1.0f};
+    // The game's key and fill lights of the stage, this walk (rt_sun): unit directions in the eye's space (false: none
+    // known), and the fill's colour by the row's sun gain.
+    float rt_key_eye_[3]{}, rt_fill_eye_[3]{}, rt_stage_f_[3]{};
+    bool rt_key_known_ = false, rt_fill_known_ = false;
     std::uint32_t rt_stage_logged_ = 0u;    // the stage whose [rt-stage] line was written (rt-inputs)
     [[nodiscard]] float rt_dev(RtDev which, float otherwise) const noexcept {
         const unsigned i = static_cast<unsigned>(which);

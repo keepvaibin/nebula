@@ -36,10 +36,13 @@ ByteAddressBuffer g_arena5 : register(t26);
 ByteAddressBuffer g_arena6 : register(t27);
 ByteAddressBuffer g_arena7 : register(t28);
 ByteAddressBuffer g_rows : register(t29);
+// An item's mesh slot (item word 2): 0 to 7 the arenas, 8 the rows buffer (code-drawn water's meshes are made in the
+// matrix ring, rt_walk.cpp rt_scene), kMeshNone and over no mesh.
+static const uint kMeshNone = 9u;
 // Every texture of the renderer's, by the numbers the draws' programs use, and one sampler (linear, repeating).
 Texture2D<float4> g_textures[] : register(t0, space1);
 SamplerState g_wrap : register(s0);
-RWStructuredBuffer<uint> g_counters : register(u8);
+#include "rt_counters.hlsli"
 // The sun's occluder bins after the counters (rt_backend.h kOccluderBins; g_more.z bit 15, rt_dev sun_occluders): a sun
 // ray's blocker by its item's index, the second layer's water first, then every other surface. The last six bins of
 // each run: kOccluderLayerTwo a second layer pixel the pass takes, kOccluderNoSurface one of them it leaves at 1 (no
@@ -59,24 +62,6 @@ void rt_count_layer_item(bool water, uint item) {
 void rt_count_occluder(bool water, uint bin) {
     if ((g_more.z & 32768u) != 0u) {
         InterlockedAdd(g_counters[kOccluderFirst + (water ? 0u : kOccluderBins) + min(bin, kOccluderPast)], 1u);
-    }
-}
-
-// A count into the counters: one atomic a wave, not one a thread (the same sums; every lane of a wave would otherwise
-// queue on the one address).
-void rt_count(uint counter) {
-    // The ballot's four words counted, not WaveActiveCountBits: SPIRV-Cross's MSL helper for that does not compile on
-    // iOS (vulkan-sdk-1.4.350.1). The same count on every API for any wave up to 128 lanes.
-    const uint4 ballot = WaveActiveBallot(true);
-    const uint lanes = countbits(ballot.x) + countbits(ballot.y) + countbits(ballot.z) + countbits(ballot.w);
-    if (WaveIsFirstLane()) {
-        InterlockedAdd(g_counters[counter], lanes);
-    }
-}
-void rt_count_sum(uint counter, uint value) {
-    const uint sum = WaveActiveSum(value);
-    if (WaveIsFirstLane()) {
-        InterlockedAdd(g_counters[counter], sum);
     }
 }
 
@@ -127,7 +112,8 @@ uint3 arena_words(uint arena, uint at) {
     case 4u: return g_arena4.Load3(at);
     case 5u: return g_arena5.Load3(at);
     case 6u: return g_arena6.Load3(at);
-    default: return g_arena7.Load3(at);
+    case 7u: return g_arena7.Load3(at);
+    default: return g_rows.Load3(at);
     }
 }
 
@@ -140,7 +126,8 @@ uint arena_word(uint arena, uint at) {
     case 4u: return g_arena4.Load(at);
     case 5u: return g_arena5.Load(at);
     case 6u: return g_arena6.Load(at);
-    default: return g_arena7.Load(at);
+    case 7u: return g_arena7.Load(at);
+    default: return g_rows.Load(at);
     }
 }
 
@@ -186,7 +173,7 @@ float alpha_there(uint item, uint triangle_, float2 where_) {
     const uint at = g_at.x + item * kItemBytes;
     const uint4 first = g_items.Load4(at), second = g_items.Load4(at + 16u);
     const uint map = g_items.Load(at + 32u);
-    if (first.z >= 8u || map == 0xFFFFFFFFu) {
+    if (first.z >= kMeshNone || map == 0xFFFFFFFFu) {
         return 1.0f;
     }
     const uint base = mesh_at(first.z);
@@ -241,7 +228,7 @@ bool cutout_there(uint item, uint triangle_, float2 where_, float3 at_eye) {
     if (clipped && (first.y & kItemAlphaTested) == 0u) {
         return true;  // its program discards nothing: its map's alpha is no test of it
     }
-    if (arena >= 8u || map.x == 0xFFFFFFFFu) {
+    if (arena >= kMeshNone || map.x == 0xFFFFFFFFu) {
         if (clipped) {
             return true;
         }
@@ -343,7 +330,7 @@ float caustic_there(uint item, uint triangle_, float2 where_) {
     const uint at = g_at.x + item * kItemBytes;
     const uint4 first = g_items.Load4(at), second = g_items.Load4(at + 16u);
     const uint map = g_items.Load(at + 32u);
-    if (first.z >= 8u || map == 0xFFFFFFFFu) {
+    if (first.z >= kMeshNone || map == 0xFFFFFFFFu) {
         return 1.0f;
     }
     const uint base = mesh_at(first.z);

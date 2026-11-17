@@ -12,7 +12,10 @@ import random
 
 N = 32
 L_MAX, L_MIN = 900.0, 36.0
-RMS = 0.30  # the sea's root mean square slope
+# The sea's root mean square slope: a light breeze over open water by Cox and Munk's sun-glitter measure (1954),
+# slope variance 0.003 + 0.00512 U for wind U in m/s; U = 5 gives 0.0286, RMS 0.17. (0.30, a gale's, made every
+# lagoon a storm.)
+RMS = 0.17
 
 rng = random.Random(20261116)
 ratio = (L_MIN / L_MAX) ** (1.0 / (N - 1))

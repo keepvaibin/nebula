@@ -21,6 +21,7 @@ Texture2D<float4> g_guide : register(t11);  // eye distance, the object's slot i
 RT_FORMAT(rgba16f) RWTexture2D<float4> g_out : register(u0);
 #ifndef RT_LIGHTS
 #include "rt_mirror.hlsli"
+#include "rt_counters.hlsli"
 Texture2D<float4> g_facing : register(t9);       // r: how the surface faces the sun (rt_light.hlsl)
 Texture2D<float4> g_material : register(t10);
 Texture2D<float4> g_motion_map : register(t12);  // for --diagnostics rt-motion
@@ -30,6 +31,15 @@ Texture2D<float4> g_base : register(t15);
 Texture2D<float4> g_normals : register(t16);
 #include "rt_sky.hlsli"  // for --diagnostics rt-sky
 SamplerState g_wrap : register(s0);
+
+// The exposure's meter (rt_walk.cpp, the frame constants): log2 of a light, fixed point from -16 (counters 52 to 60).
+uint meter_log(float x) {
+    return uint((clamp(log2(max(x, 1e-6f)), -16.0f, 8.0f) + 16.0f) * 256.0f + 0.5f);
+}
+float meter_lin(float x) {
+    x = saturate(x);
+    return x <= 0.04045f ? x / 12.92f : pow((x + 0.055f) / 1.055f, 2.4f);
+}
 
 float3 unoct(float2 o) {
     float3 n = float3(o, 1.0f - abs(o.x) - abs(o.y));
@@ -61,9 +71,29 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 look = normalize(rt_eye_ray(g_ray, float2(pixel) + 0.5f));
     const float3 smooth_ = unoct(normals.rg);
     const float3 n = dot(smooth_, look) < 0.0f ? smooth_ : unoct(normals.ba);
+    light += rt_fill(n, rt_untraced_v(i).r);
     const ShadeMaterial m = mirror_material(bits, material.r, material.g, g_base.Load(here).rgb, 0u);
     const ShadeLobes lobes = shade_lobes(m, max(-dot(n, look), kShadeNvLeast));
     float4 out_ = float4(light, (1.0f - m.metal) * (1.0f - dot(lobes.mirror, float3(0.2126f, 0.7152f, 0.0722f))));
+    // The meter, at a pixel in 16 by 16: the traced light at white at exposure 1 and no white balance against the
+    // game's own light there, its ambient, its key and its fill by the surface's facing (the key all of it where none
+    // is known), as brightness and a channel at a time.
+    if ((id.x & 15u) == 8u && (id.y & 15u) == 8u && (g_more.z & (128u | 512u | 16384u)) == 0u) {
+        const float3 traced = light / max(g_sky_light.w * g_balance.rgb, 1e-4f);
+        const float key = dot(g_look.xyz, g_look.xyz) > 0.25f ? saturate(dot(n, g_look.xyz)) : 1.0f;
+        const float3 shown = g_game_a.rgb + g_game_k.rgb * key + g_game_f.rgb * saturate(dot(n, g_fill_dir.xyz));
+        const float3 game = float3(meter_lin(shown.r), meter_lin(shown.g), meter_lin(shown.b));
+        const float3 weights = float3(0.2126f, 0.7152f, 0.0722f);
+        rt_count(52u);
+        rt_count_sum(53u, meter_log(dot(traced, weights)));
+        rt_count_sum(54u, meter_log(dot(game, weights)));
+        rt_count_sum(55u, meter_log(traced.r));
+        rt_count_sum(56u, meter_log(traced.g));
+        rt_count_sum(57u, meter_log(traced.b));
+        rt_count_sum(58u, meter_log(game.r));
+        rt_count_sum(59u, meter_log(game.g));
+        rt_count_sum(60u, meter_log(game.b));
+    }
     if ((g_more.z & 128u) != 0u) {
         out_.rgb = float3(0.0f, 0.0f, 0.0f);  // the emitters alone (--diagnostics rt-added)
     }

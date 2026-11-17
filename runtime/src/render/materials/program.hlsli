@@ -30,7 +30,8 @@ cbuffer View : register(b0) {
     float3 view_sky_up;        // the player's up in eye space, unit length
     uint view_flags;           // bit 0 view_sky_up known, bit 1 enhanced, bit 2 wide target, bit 3 traced light,
                                // bit 4 the traced light shown in place of the colour (--diagnostics rt-light), bit 9
-                               // the camera under water with the traced light (traced_water_hue)
+                               // the camera under water with the traced light (traced_water_hue), bit 10 each water
+                               // draw's way shown (rt_dev transmit_why 2: traced_sea_why)
     float4 view_scale;         // x: the frame scale; y: particles' time in this frame; z: their time in the frame before
     float4 view_traced;        // with bit 3: x the traced light's place among the textures, y the added light's,
                                // z the mirror's, w the facing's
@@ -411,6 +412,20 @@ float4 env_fetch(float4 painted, float4 pixel) {
 // the sea's own; g_sea_done then, and traced_colour returns g_sea_out. Elsewhere the game's colour.
 static bool g_sea_done = false;
 static float4 g_sea_out = float4(0.0, 0.0, 0.0, 0.0);
+// rt_dev transmit_why 2 (view bit 10): a water draw that draws at the pixel shows which way its program took, whole
+// for a code-drawn sea (traced_sea), at half for model water (traced_colour): red the second layer names no surface
+// here (the sheet is not in it), blue no clear surface's mirror here, magenta the clear mirror but no T, green T.
+bool traced_sea_why() {
+    return (view_flags & 1024u) != 0u;
+}
+float4 traced_sea_way(float4 pixel, bool clear, bool seen, float scale) {
+    bool named = false;
+    if (view_blend_guide.y > 0.5 && view_blend_guide.y < 1.5) {
+        named = gTextures[uint(view_blend_guide.x)].Load(int3(pixel.xy, 0)).a != 0.0;
+    }
+    const float3 way = !named ? float3(1.0, 0.0, 0.0) : !clear ? float3(0.0, 0.0, 1.0) : !seen ? float3(1.0, 0.0, 1.0) : float3(0.0, 1.0, 0.0);
+    return float4(way * scale, 1.0);
+}
 static const float kSeaTint = 0.12;  // where no T is traced: the water's own veil of its colour over the frame behind
 #if !NATIVE_PREPASS
 // Picture `place` about `at` (pixels): four taps by their bilinear weights, a tap whose a is not over `least` left out
@@ -452,6 +467,12 @@ float4 traced_sea(float3 pattern, float3 ring, float3 screen, float3 tint, float
     const float4 mirror_here = gTextures[mirror_at].Load(int3(pixel.xy, 0));
     const float4 light = gTextures[uint(view_traced.x)].Load(int3(pixel.xy, 0));
     const float3 d = gTextures[uint(view_traced.y)].Load(int3(pixel.xy, 0)).rgb;
+    if (traced_sea_why()) {
+        const bool clear = mirror_here.a > 3.5;
+        const bool seen = clear && view_transmit.y > 0.5 && gTextures[uint(view_transmit.x)].Load(int3(pixel.xy, 0)).a > 0.5;
+        g_sea_out = traced_sea_way(pixel, clear, seen, 1.0);
+        return g_sea_out;
+    }
     // The water's own colour where no T is traced: its tint at half its hue, lit.
     const float3 own = traced_water_tint(traced_lin(saturate(tint))) * light.a * (light.rgb + d);
     if (mirror_here.a <= 3.5) {
@@ -520,8 +541,12 @@ float4 traced_colour(float4 c, float4 pixel) {
     if (!own && traced_second_sheet(pixel)) {
         return float4(0.0, 0.0, 0.0, 0.0);
     }
-    // Water's own colour at half its hue, every body alike (traced_water_tint).
-    const float3 base = (draw_flags & 65536u) != 0u ? traced_water_tint(traced_lin(c.rgb)) : traced_lin(c.rgb);
+    if (traced_sea_why() && (draw_flags & 65536u) != 0u) {
+        const bool seen = mirror.a > 3.5 && view_transmit.y > 0.5 && gTextures[uint(view_transmit.x)].Load(int3(pixel.xy, 0)).a > 0.5;
+        return own ? traced_sea_way(pixel, mirror.a > 3.5, seen, 0.5) : float4(0.5, 0.5, 0.0, 1.0);
+    }
+    // Water's own colour at half its hue, every body alike (traced_water_tint): a sea, a lake, a fall (flag 1024).
+    const float3 base = (draw_flags & (65536u | 1024u)) != 0u ? traced_water_tint(traced_lin(c.rgb)) : traced_lin(c.rgb);
     const float3 diffuse = base * lit + traced_emit(base);
     if (mirror.a > 3.5) {
         // Glass and water: F R + (1 - F) T where T is traced (High: what lies behind, bent), the pixel covered whole;

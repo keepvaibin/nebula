@@ -260,6 +260,40 @@ float3 rt_water_way(float3 origin, float3 dir, float reach) {
     return (1.0f - shade_f0_of_ior(kShadeIorWater)) * shade_beer(shade_extinction(shade_water(rt_water_clear())), way);
 }
 
+// The nearest water face on a ray within [from_t, reach] (a body drawn as several sheets: its nearest is its surface):
+// its item, triangle, the weights of its second and third corners and its distance. Water is blended (kMaskBlended, the
+// geometry built opaque: every candidate offered), its class item word 11's.
+bool rt_water_nearest(float3 origin, float3 dir, float from_t, float reach, out uint item, out uint triangle_, out float2 where_,
+                      out float t) {
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = dir;
+    ray.TMin = from_t;
+    ray.TMax = reach;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_FORCE_NON_OPAQUE, kMaskBlended, ray);
+    item = 0u;
+    triangle_ = 0u;
+    where_ = float2(0.0f, 0.0f);
+    t = reach;
+    bool found = false;
+    while (query.Proceed()) {
+        const uint candidate = rt_hit_item(query.CandidateInstanceID());
+        if ((g_items.Load(g_at.x + candidate * kItemBytes + 44u) & 255u) != kClassWater) {
+            continue;
+        }
+        const float at_t = query.CandidateTriangleRayT();
+        if (at_t < t) {
+            t = at_t;
+            item = candidate;
+            triangle_ = query.CandidatePrimitiveIndex();
+            where_ = query.CandidateTriangleBarycentrics();
+            found = true;
+        }
+    }
+    return found;
+}
+
 // ---- What a hit knows.
 struct RtHit {
     float3 at, ng, ns;     // place, geometric normal, smooth normal (facing the ray)
@@ -339,7 +373,7 @@ void rt_hit_read(uint item, uint triangle_, float2 where_, float far_, float3 or
     h.far = far_;
     float3 map = float3(1.0f, 1.0f, 1.0f);
     const uint arena = w0.z;
-    if (arena < 8u) {
+    if (arena < kMeshNone) {
         const uint base = mesh_at(arena);
         const uint3 corner = triangle_corners(w0, w1, triangle_);
         float3 place[3], normal[3];
@@ -776,7 +810,7 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
     const float3 d = d_known ? d_seen : rt_grid_light(h.at, h.ns, h.glow_body ? h.slot : 0xFFFFFFFFu, (options & kRtShadeLightRay) != 0u, seed);
     const ShadeLobes lobes = shade_lobes(m, dot(h.ns, h.view));
     const float3 highlight = facing > 0.0f ? shade_highlight(m, lobes, h.ns, h.view, g_sun.xyz, g_sun.w) * sun : float3(0.0f, 0.0f, 0.0f);
-    return shade_surface(m, lobes, sun * facing + d + o, o, highlight);
+    return shade_surface(m, lobes, sun * facing + d + o + rt_fill(h.ns, rt_untraced_v(o).r), o, highlight);
 }
 
 // ---- What a mirrored ray sees: one function for every mirror the passes trace.
@@ -793,6 +827,12 @@ float3 rt_hit_radiance_with(RtHit h, uint options, float3 o, bool d_known, float
 // along its mirror direction by its exact Fresnel (the walk traces no further mirror) and taking the square root of
 // its body's through-colour (rt_clear_face; half a body a face, as let_through) times 1 - F.
 // `far_`: the way to the first thing met (`reach` where none).
+// Water (blended, as glass: no solid mask holds it) is met too, once a walk, where it stands before the solid thing:
+// its surface mirrors the sky along its mirror direction by water's exact Fresnel (1.33), and what lies under it is
+// seen through the way to it, by the water's absorption, with the light its body scatters over that way
+// (rt_water_absorb, rt_water_scattered: the second layer's water alike). Without it a mirror showed no sea and no
+// water slide at all, only the bed under them. The first leg's water search starts kWaterLayer out, so a mirror ray
+// that leaves a water surface does not meet the sheet it leaves (a sea is drawn as more than one).
 static const uint kClearFaces = 3u;
 // The walk alone, its end unshaded, so that a pass shades the one hit a walk ends on by one call of the hit shading
 // (each textual call of a function that traces is another copy of its ray queries in the compiled pass). One ray
@@ -822,6 +862,7 @@ RtLook rt_look(float3 from, float3 dir, float reach, float cone, uint clear_face
     float3 at_ = from;
     float run = 0.0f;
     bool dome = false;
+    bool watered = false;  // the walk crossed water's surface (once a walk)
     [loop] for (uint leg = 0u; leg < clear_faces + 2u; ++leg) {
         const float3 origin = dome ? float3(0.0f, 0.0f, 0.0f) : at_;
         // The first leg's reach as given (a wall's distance may be under 1); a later face's what is left of it.
@@ -830,6 +871,26 @@ RtLook rt_look(float3 from, float3 dir, float reach, float cone, uint clear_face
         float2 where_;
         float t;
         const bool met = rt_closest(origin, dir, leg_reach, dome ? kMaskSky : kMaskSolid | kMaskCutout, item, triangle_, where_, t);
+        if (!dome && !watered && clear_faces != 0u && l.faces < clear_faces) {
+            uint w_item, w_triangle;
+            float2 w_where;
+            float w_t;
+            if (rt_water_nearest(origin, dir, leg == 0u ? kWaterLayer : 0.0f, met ? t : leg_reach, w_item, w_triangle, w_where, w_t)) {
+                RtHit w;
+                rt_hit_read(w_item, w_triangle, w_where, w_t, origin, dir, cone, w);
+                const float f = shade_fresnel_exact(abs(dot(w.ns, dir)), kShadeIorWater);
+                l.added += l.tint * f * rt_sky_light(reflect(dir, w.ns));
+                l.tint *= 1.0f - f;
+                // Under it to the thing met (no bed within reach: deep water, its body alone).
+                const float way = met ? max(t - w_t, 0.0f) : 1.0e6f;
+                l.added += l.tint * rt_water_scattered(way, float3(1.0f, 1.0f, 1.0f));
+                l.tint *= rt_water_absorb(way);
+                l.met = true;
+                l.far_ = l.far_ < 0.0f ? run + w_t : l.far_;
+                watered = true;
+                ++l.faces;
+            }
+        }
         if (!met && !dome) {
             l.far_ = l.far_ < 0.0f ? reach : l.far_;
             if (!sky) {

@@ -138,7 +138,9 @@ void main(uint3 id : SV_DispatchThreadID) {
         // The second layer's Light: no compose step follows it. A surface that shows itself (emissive, painted: its
         // colours are its light) takes 1, its colour as drawn.
         const float keep = (1.0f - m.metal) * (1.0f - dot(lobes.mirror, float3(0.2126f, 0.7152f, 0.0722f)));
-        const float3 light = !lit ? float3(1.0f, 1.0f, 1.0f) : emitters_alone ? float3(0.0f, 0.0f, 0.0f) : g_sun_light.rgb * v * facing + i;
+        const float3 light = !lit ? float3(1.0f, 1.0f, 1.0f)
+                             : emitters_alone ? float3(0.0f, 0.0f, 0.0f)
+                                              : g_sun_light.rgb * v * facing + i + rt_fill(n, rt_untraced_v(i).r);
         g_out[id.xy] = float4(light, lit ? keep : 1.0f);
     }
 }

@@ -56,6 +56,7 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float3 look = normalize(rt_eye_ray(g_ray, float2(id.xy) + 0.5f));
     const float3 smooth_ = unoct(normals.rg);
     const float3 n = dot(smooth_, look) < 0.0f ? smooth_ : unoct(normals.ba);
+    light += rt_fill(n, rt_untraced_v(light_i).r);
     const ShadeMaterial m = mirror_material(bits, material.r, material.g, g_base.Load(here).rgb, 0u);
     const ShadeLobes lobes = shade_lobes(m, max(-dot(n, look), kShadeNvLeast));
     float3 added = min(d.rgb, 32.0f);

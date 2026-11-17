@@ -105,7 +105,7 @@ float3 ref_path(float3 from, float3 dir, float roughness, bool lighting, inout u
         const float3 d = ref_light(h.at, rt_off(h.at, h.ng), h.ns, h.glow_body ? h.slot : 0xFFFFFFFFu, seed);
         const ShadeLobes lobes = shade_lobes(m, dot(h.ns, h.view));
         const float3 highlight = facing > 0.0f ? shade_highlight(m, lobes, h.ns, h.view, g_sun.xyz, g_sun.w) * sun : float3(0.0f, 0.0f, 0.0f);
-        result += weight * (lobes.diffuse * (sun * facing + d) + highlight + m.emit);
+        result += weight * (lobes.diffuse * (sun * facing + d + rt_fill(h.ns, 1.0f)) + highlight + m.emit);
         // The next direction, by the lobes' albedos.
         const float pd = rt_lum(lobes.diffuse), ps = rt_lum(lobes.mirror);
         if (!(pd + ps > 0.0f)) {

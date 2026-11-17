@@ -22,7 +22,7 @@ cbuffer FrameConstants : register(b0) {
     float4 g_sun;       // xyz: the direction to the shadow sun; w: the tangent of its half angle
     float4 g_stage;     // x y free; z: the game's time at the frame in seconds, wrapped at an hour (the caustics'
                         // drift); w: the drop light's tangent (kDropTan 0.035, 2 degrees): the landing cue's edge
-    float4 g_look;      // x y z free; w: the stage's water clear (green's 1/e way under water, units; rt_stages.tsv,
+    float4 g_look;      // x y z: the game's key in the eye's space (0: none known; the meter); w: the stage's water clear (green's 1/e way under water, units; rt_stages.tsv,
                         // 1770 by default)
     uint4 g_glow;       // the emitters (48 bytes each: centre, radius; colour, reach; slot): x their first byte in the
                         // drops' buffer, y their tiles' and z their entries' first byte in the tiles' buffer, w how many
@@ -42,11 +42,30 @@ cbuffer FrameConstants : register(b0) {
     uint4 g_clip;          // the clip areas' volumes (clip_shows): x their first byte in the items' buffer
                            // (after the items; 64 each: the rows from the eye to the unit shape, then the shape), y how
                            // many, z where the clipped map parts show: 1 inside a volume, 2 outside every one, 0 whole
-    float4 g_sun_light;    // rgb: the stage's sun light on a face square to it, light units: lin(sat(A + K)) - lin(A)
+    float4 g_sun_light;    // rgb: the stage's sun light on a face square to it, light units: lin(sat(A + K)) - lin(A),
+                           // by the exposure
                            // (rt_shade.hlsli rt_sun_light)
-    float4 g_sky_light;    // rgb: the lighting sky's mean, light units: lin(A) (rt_shade.hlsli rt_sky_mean)
+    float4 g_sky_light;    // rgb: the lighting sky's mean, light units: the drawn sky's mean (lin(A) until measured;
+                           // rt_shade.hlsli rt_sky_mean), by the exposure; w: the exposure
     float4 g_sky_faces;    // x 1: the sky picture is drawn this frame (g_sky_picture, rt_shade.hlsli rt_sky_picture)
+    float4 g_fill_light;   // rgb: the game's fill light on a face square to it, light units: lin(sat(A + F)) - lin(A),
+                           // by the exposure (0: the stage has none)
+    float4 g_fill_dir;     // xyz: the direction to it in the eye's space; w: the soft key against g_sun_light (rt_fill)
+    float4 g_game_a;       // rgb: the game's ambient A as it lights (the exposure's meter, rt_light_space.hlsl)
+    float4 g_game_k;       // rgb: its key K
+    float4 g_game_f;       // rgb: its fill F (0: none)
+    float4 g_balance;      // rgb: the white balance the light carries (with the exposure, g_sky_light.w; the meter)
 };
+
+// The game's two soft lights, as the game lights with them: unshadowed, by the facing of `n`, and by how open the point
+// is, `open` (0 to 1: the share of the sky its I holds), so a cave or the underside of a ledge does not take them.
+// Its fill (the key's companion: the soft second light the stage's art is lit by), and the soft key: a share of the
+// key's light from the game's key direction, which follows the camera (g_look; rt_walk.cpp kSoftKey).
+float3 rt_fill(float3 n, float open) {
+    const float3 fill = g_fill_light.rgb * saturate(dot(n, g_fill_dir.xyz));
+    const float3 key = g_sun_light.rgb * (g_fill_dir.w * saturate(dot(n, g_look.xyz)));
+    return (fill + key) * saturate(open);
+}
 
 // The sun's visibility where it is not traced (a stage without a sun, the sun part off): the share of the lighting
 // sky the point's I holds, at most 1 (a room's key is hidden by what hides its sky: under a table, in a corner).
@@ -77,8 +96,9 @@ static const uint kItemClipped = 64u, kItemAlphaTested = 128u;
 // set's number (bits 8 up) stays under bit 28.
 static const uint kItemSetCharacter = 1u << 28u, kItemSetPlanet = 1u << 29u;
 // A two-sided cutout (a leaf, a petal, a flower card; D5): its sun ray starts this far out, so the cards of one clump do
-// not black each other out, and its far side takes this share of the sun (light through a petal or a leaf).
-static const float kCardClear = 30.0f, kCardThrough = 0.6f;
+// not black each other out, and its far side takes this share of the sun (light through a petal or a leaf: a green
+// leaf passes some 0.05 to 0.2 of visible light, hit_record.rs FOLIAGE_THROUGH).
+static const float kCardClear = 30.0f, kCardThrough = 0.2f;
 // A crown of leaves or a cloud (item word 14 bits 26-31: its share of the sun on its far side x 63) is lit from
 // both sides by that share; its sun ray, and a card's, passes every triangle of its own item (occluder_at_but's `own`
 // with kOwnWhole).
