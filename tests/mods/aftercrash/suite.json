@@ -11,6 +11,8 @@
     "6708-play-crash-again",
     "6709-play-crash-not-twice",
     "6710-code-crash",
-    "6711-code-crash-after"
+    "6711-code-crash-after",
+    "6712-stop-crash",
+    "6713-stop-crash-next"
   ]
 }
