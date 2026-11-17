@@ -95,10 +95,15 @@ std::atomic<std::int64_t> g_pad_input_ms{0};
 // Held while someone plays with a controller in front (hold_display_for_pads; the main thread's).
 IOPMAssertionID g_display_assertion = kIOPMNullAssertionID;
 bool g_cursor_hidden = false;
+// A mod's first-person look wants the mouse (set_mouse_look, any thread); the window holds it now (the main thread's):
+// the cursor hidden and kept still, its moves the look's.
+std::atomic<bool> g_mouse_look_wanted{false};
+bool g_mouse_look_held = false;
 // The display mode the window was last put in (RenderConfig::display_mode; ~0: none yet).
 unsigned g_applied_mode = ~0u;
 // The system refused the last change to full screen (the main thread's).
 bool g_full_screen_owed = false;
+double g_wheel_carry = 0.0;  // the wheel's turn short of a 120th of a notch (pump_events, the main thread)
 
 // Keys the settings menu takes from other threads and from the pads, in order, on the main thread.
 std::mutex g_menu_keys_mutex;
@@ -1046,11 +1051,14 @@ void pump_events(int timeout_ms) noexcept {
                 break;
             }
             case NSEventTypeScrollWheel: {
-                // In 120ths of a notch, positive away from the player (Windows' WHEEL_DELTA), as the game takes it: a
-                // wheel's lines, or a trackpad's points at ten to a notch.
-                const double turned = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY / 10.0 : event.scrollingDeltaY;
-                const double notches = event.directionInvertedFromDevice ? -turned : turned;
-                menu_wheel += static_cast<int>(std::lround(notches * 120.0));
+                // In 120ths of a notch, positive scrolling back up the page (Windows' WHEEL_DELTA), as the game takes
+                // it: a wheel's lines, or a trackpad's points at ten to a notch. The turn as the system gives it: with
+                // natural scrolling on the list moves the way every other page does. Parts of a notch add up (the carry).
+                const double notches = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY / 10.0 : event.scrollingDeltaY;
+                g_wheel_carry += notches * 120.0;
+                const double whole = std::trunc(g_wheel_carry);
+                g_wheel_carry -= whole;
+                menu_wheel += static_cast<int>(whole);
                 break;
             }
             default:
@@ -1081,7 +1089,7 @@ void pump_events(int timeout_ms) noexcept {
                     galaxy::ui::launcher_visible() || galaxy::bench::running(),
                 galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
-                galaxy::render::native_settings_post_key(step.keys[i]);
+                galaxy::render::native_settings_post_key(step.keys[i] | (((step.repeats >> i) & 1u) != 0u ? galaxy::render::kMenuKeyRepeat : 0u));
             }
             break;
         }

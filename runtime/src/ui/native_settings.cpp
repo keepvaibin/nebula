@@ -410,6 +410,8 @@ std::string s_controls_message;
 std::uint64_t s_controls_message_until_ms = 0u;
 // The window thread's left/right-resolved code for the key being handled.
 std::uint32_t s_handled_key_normalized = 0u;
+// The controller key being handled is a held direction's repeat (native_settings_pad_key): the rows stop at the ends.
+bool s_pad_key_repeat = false;
 
 constexpr unsigned kNativeSettingsTabCount = 8;
 
@@ -1484,7 +1486,8 @@ void adjust_native_setting_unlogged(int delta) {
     }
 }
 
-void move_native_setting_row(int delta) {
+// The selection a row on, past headings. `wrap`: from the last row to the first and back; else it stays at the end.
+void move_native_setting_row(int delta, bool wrap) {
     end_controls_capture();
     s_native_settings_button_row.store(~0u, std::memory_order_relaxed);
     const unsigned tab =
@@ -1495,11 +1498,15 @@ void move_native_setting_row(int delta) {
         s_native_settings_row.store(0u, std::memory_order_relaxed);
         return;
     }
-    int row = static_cast<int>(s_native_settings_row.load(std::memory_order_relaxed));
+    const int from = static_cast<int>(s_native_settings_row.load(std::memory_order_relaxed));
+    int row = from;
     for (unsigned tries = 0u; tries < count; ++tries) {
-        row = (row + delta) % static_cast<int>(count);
-        if (row < 0) {
-            row += static_cast<int>(count);
+        row += delta;
+        if (row < 0 || row >= static_cast<int>(count)) {
+            if (!wrap) {
+                return;  // no row past the end: the selection stays
+            }
+            row = row < 0 ? static_cast<int>(count) - 1 : 0;
         }
         if (!native_settings_heading(tab, static_cast<unsigned>(row))) {
             break;
@@ -1995,10 +2002,9 @@ bool handle_native_settings_key(std::uintptr_t key, bool was_down, bool from_pad
         cycle_native_settings_tab(-1);
         return true;
     case VK_UP:
-        move_native_setting_row(-1);
-        return true;
     case VK_DOWN:
-        move_native_setting_row(1);
+        // A press goes round from the last row to the first; a held key's repeats stop at the end.
+        move_native_setting_row(key == VK_UP ? -1 : 1, !was_down && !s_pad_key_repeat);
         return true;
     case VK_LEFT:
     case VK_RIGHT:
@@ -6147,29 +6153,27 @@ bool native_settings_text_wanted() noexcept {
 }
 
 bool native_settings_pad_key(std::uintptr_t virtual_key) {
-    return handle_native_settings_key(virtual_key, false, true);
+    // A held direction's repeat (native_settings_pad_step) comes marked: the rows stop at the page's ends for it.
+    const bool repeat = (virtual_key & kMenuKeyRepeat) != 0u;
+    s_pad_key_repeat = repeat;
+    const bool taken = handle_native_settings_key(virtual_key & ~kMenuKeyRepeat, false, true);
+    s_pad_key_repeat = false;
+    return taken;
 }
 
 bool native_settings_capture_mouse(galaxy::input::MouseButton button) {
     return native_settings_capture_mouse_button(button);
 }
 
-// The wheel moves the selection a row a notch, as the arrow keys, never while a binding waits for its input; false
-// while the menu is closed: the game's own screens take it.
-bool native_settings_wheel(int delta) {
+// The wheel scrolls what the menu shows, as a page scrolls: the game takes it (pointer_wheel) and moves its list, never
+// the selection, and stops at the list's ends. Taken here, and dropped, while a binding waits for its input (the
+// wheel is no binding). False otherwise: the window gives it to the game.
+bool native_settings_wheel(int) {
     if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
         return false;
     }
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-    if (controls_capturing()) {
-        return true;
-    }
-    static int s_wheel = 0;
-    constexpr int kNotch = 120;
-    s_wheel += delta;
-    for (; s_wheel >= kNotch; s_wheel -= kNotch) (void)handle_native_settings_key(VK_UP, false);
-    for (; s_wheel <= -kNotch; s_wheel += kNotch) (void)handle_native_settings_key(VK_DOWN, false);
-    return true;
+    return controls_capturing();
 }
 
 namespace {

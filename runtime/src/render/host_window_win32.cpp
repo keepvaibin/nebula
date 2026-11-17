@@ -1774,6 +1774,11 @@ bool touch_target_at(float, float) noexcept {
     return false;
 }
 
+// Windows gives a touch screen's fingers to the window as the mouse: the menus take them as one.
+bool menu_finger(MenuFinger&) noexcept {
+    return false;
+}
+
 void note_corner_buttons(std::uint32_t) noexcept {}
 
 float corner_buttons_foot() noexcept {

@@ -91,11 +91,16 @@ namespace {
 
 std::mutex g_input_mutex;
 InputState g_input;                 // guarded by g_input_mutex
+// A mod's first-person look wants the mouse (set_mouse_look, any thread); the window holds it now (SDL's relative mode,
+// the pump's thread).
+std::atomic<bool> g_mouse_look_wanted{false};
+bool g_mouse_look_held = false;
 SDL_Window* g_window = nullptr;
 std::atomic<bool> g_background{false};
 std::atomic<bool> g_low_memory{false};
 std::atomic<bool> g_menu_context{false};
 std::atomic<bool> g_title_screen{false};
+float g_wheel_carry = 0.0f;  // the wheel's turn short of a 120th of a notch (pump_events, the event thread)
 std::atomic<bool> g_direct_touch{false};
 
 // SDL's thread, the only one that calls SDL's window, gamepad and Java functions. The game's threads run on stacks of
@@ -165,6 +170,60 @@ float g_finger_travel = 0.0f;
 // How far a finger moves before it counts as moving, in window pixels: Android's touch slop for this display
 // (GameActivity, ViewConfiguration), as its own views use it; elsewhere any move.
 std::atomic<float> g_touch_slop_px{0.0f};
+
+// The pointer's finger's recent places, for its speed as it is lifted (a list's fling). The speed is the slope of a
+// straight line fitted to the places of the last kFingerSpeedWindowUs; a finger that held still for kFingerStillUs before
+// it lifted has none (Android's VelocityTracker: a 100 ms horizon, a 40 ms pause). Guarded by g_input_mutex.
+struct FingerSample {
+    std::uint64_t us;
+    float x;
+    float y;
+};
+constexpr std::uint64_t kFingerSpeedWindowUs = 100000u;
+constexpr std::uint64_t kFingerStillUs = 40000u;
+std::array<FingerSample, 32> g_finger_samples{};
+std::size_t g_finger_sample_count = 0;  // the newest at g_finger_sample_count - 1, the list shifted when full
+
+void add_finger_sample(std::uint64_t us, float x, float y) {
+    if (g_finger_sample_count == g_finger_samples.size()) {
+        std::move(g_finger_samples.begin() + 1, g_finger_samples.end(), g_finger_samples.begin());
+        --g_finger_sample_count;
+    }
+    g_finger_samples[g_finger_sample_count++] = {us, x, y};
+}
+
+// The finger's speed at `now_us` in window pixels a second, from its samples.
+void finger_speed(std::uint64_t now_us, float& vx, float& vy) {
+    vx = 0.0f;
+    vy = 0.0f;
+    if (g_finger_sample_count < 2u) return;
+    const FingerSample& newest = g_finger_samples[g_finger_sample_count - 1u];
+    if (now_us > newest.us + kFingerStillUs) return;
+    std::size_t first = g_finger_sample_count - 1u;
+    while (first > 0u && newest.us - g_finger_samples[first - 1u].us <= kFingerSpeedWindowUs) --first;
+    const std::size_t count = g_finger_sample_count - first;
+    if (count < 2u) return;
+    double mean_t = 0.0, mean_x = 0.0, mean_y = 0.0;
+    for (std::size_t i = first; i < g_finger_sample_count; ++i) {
+        mean_t += static_cast<double>(newest.us - g_finger_samples[i].us);
+        mean_x += g_finger_samples[i].x;
+        mean_y += g_finger_samples[i].y;
+    }
+    mean_t /= static_cast<double>(count);
+    mean_x /= static_cast<double>(count);
+    mean_y /= static_cast<double>(count);
+    double tt = 0.0, tx = 0.0, ty = 0.0;
+    for (std::size_t i = first; i < g_finger_sample_count; ++i) {
+        // Time counted back from the newest sample, in seconds: the slope's sign turns.
+        const double t = (mean_t - static_cast<double>(newest.us - g_finger_samples[i].us)) * 1e-6;
+        tt += t * t;
+        tx += t * (g_finger_samples[i].x - mean_x);
+        ty += t * (g_finger_samples[i].y - mean_y);
+    }
+    if (tt <= 0.0) return;
+    vx = static_cast<float>(tx / tt);
+    vy = static_cast<float>(ty / tt);
+}
 
 #if defined(__ANDROID__)
 // stdout and stderr to logcat and to <data>/logs/game.log, line by line (the host and the renderer log there).
@@ -950,11 +1009,23 @@ void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
         g_input.finger_land_x = x;
         g_input.finger_land_y = y;
         g_input.finger_moved = false;
+        ++g_input.finger_touches;
+        g_input.mouse_pointer = false;  // Android's touches come here from the activity, not as SDL's finger events
+        g_input.finger_travel_px = 0.0f;
+        g_input.finger_vx = 0.0f;
+        g_input.finger_vy = 0.0f;
+        g_finger_sample_count = 0u;
     }
     if (!g_pointer_finger_valid || id != g_pointer_finger) {
         return;
     }
+    const std::uint64_t now_us = galaxy::steady_us();
+    // The lift's own place is not a sample: Android's reports it late, where the last move left it.
+    if (!up) {
+        add_finger_sample(now_us, x, y);
+    }
     const float side = static_cast<float>(std::max(1, std::min(g_input.window_width, g_input.window_height)));
+    g_input.finger_travel_px = std::max(g_input.finger_travel_px, std::hypot(x - g_finger_down_x, y - g_finger_down_y));
     g_finger_travel = std::max(g_finger_travel, std::hypot(x - g_finger_down_x, y - g_finger_down_y) / side);
     if (!g_input.finger_moved &&
         std::hypot(x - g_finger_down_x, y - g_finger_down_y) > g_touch_slop_px.load(std::memory_order_relaxed)) {
@@ -972,6 +1043,7 @@ void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
     g_input.finger_down = !up;
     if (up) {
         g_pointer_finger_valid = false;
+        finger_speed(now_us, g_input.finger_vx, g_input.finger_vy);
         if (now - g_finger_down_ms <= kTapMs && g_finger_travel <= kTapTravel) {
             ++g_input.taps;
             g_input.tap_x = x;
@@ -1212,9 +1284,14 @@ void pump_events(int timeout_ms) noexcept {
             break;
         }
         case SDL_EVENT_MOUSE_WHEEL: {
-            // In 120ths of a notch, positive away from the player (Windows' WHEEL_DELTA), as the game takes it.
-            const float notches = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y;
-            menu_wheel += static_cast<int>(std::lround(notches * 120.0f));
+            // In 120ths of a notch, positive scrolling back up the page (Windows' WHEEL_DELTA), as the game takes it. The
+            // turn as the system gives it: with natural scrolling on (SDL_MOUSEWHEEL_FLIPPED) the list moves the way every
+            // other page on the system does. A high-resolution wheel's or a touchpad's parts of a notch add up (the
+            // carry), so a slow turn scrolls as far as a quick one.
+            g_wheel_carry += event.wheel.y * 120.0f;
+            const float whole = std::trunc(g_wheel_carry);
+            g_wheel_carry -= whole;
+            menu_wheel += static_cast<int>(whole);
             break;
         }
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -1327,7 +1404,7 @@ void pump_events(int timeout_ms) noexcept {
                 galaxy::render::native_settings_overlay_visible() || galaxy::render::home_menu_visible() ||
                     galaxy::ui::launcher_visible() || galaxy::bench::running(), galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
-                galaxy::render::native_settings_post_key(step.keys[i]);
+                galaxy::render::native_settings_post_key(step.keys[i] | (((step.repeats >> i) & 1u) != 0u ? galaxy::render::kMenuKeyRepeat : 0u));
             }
             break;
         }
@@ -1395,6 +1472,7 @@ InputState input_state() noexcept {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     InputState state = g_input;
     state.touch_buttons |= g_touch_pressed | (g_back_held ? kTouchHome : 0u);
+    state.touch_slop_px = g_touch_slop_px.load(std::memory_order_relaxed);
     return state;
 }
 

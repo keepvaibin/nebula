@@ -211,6 +211,8 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
 void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept;
 // The bit the SDL and Apple hosts' menu-key queues mark a keyboard key with (above every key code).
 inline constexpr std::uintptr_t kMenuKeyKeyboard = std::uintptr_t{1} << 30;
+// The bit a controller's menu key carries when it is a held direction's repeat (native_settings_pad_step), not a press.
+inline constexpr std::uintptr_t kMenuKeyRepeat = std::uintptr_t{1} << 29;
 // The mods saved differ from the ones this run started with.
 [[nodiscard]] bool native_settings_mods_changed();
 

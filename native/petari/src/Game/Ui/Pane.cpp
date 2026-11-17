@@ -85,6 +85,13 @@ namespace Ui {
         mpLayout->TouchStructure();
     }
 
+    void Pane::RenewDrawIdentity() {
+        mDrawSlot = 0;
+        for (Pane* pChild : mChildList) {
+            pChild->RenewDrawIdentity();
+        }
+    }
+
     void Pane::AppendChild(Pane* pChild) {
         mChildList.PushBack(pChild);
         pChild->mpParent = this;

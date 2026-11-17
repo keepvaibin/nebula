@@ -58,6 +58,7 @@ struct NativeSettingsPadState {
 struct NativeSettingsPadStep {
     std::array<std::uint8_t, 4> keys{};
     std::size_t key_count{};
+    std::uint8_t repeats{};  // bit i: keys[i] is a held direction's repeat, not a press (a list stops at its end for it)
     std::uint16_t game_buttons{};  // the buttons the game sees
     bool game_neutral{};           // sticks and triggers neutral as well
 };
@@ -83,8 +84,9 @@ struct NativeSettingsPadStep {
     std::uint64_t now_ms) noexcept {
     using namespace settings_pad;
     NativeSettingsPadStep step{};
-    const auto emit = [&step](std::uint8_t key) {
+    const auto emit = [&step](std::uint8_t key, bool repeat = false) {
         if (step.key_count < step.keys.size()) {
+            if (repeat) step.repeats = static_cast<std::uint8_t>(step.repeats | (1u << step.key_count));
             step.keys[step.key_count++] = key;
         }
     };
@@ -120,7 +122,7 @@ struct NativeSettingsPadStep {
                 emit(native_settings_pad_direction_key(state.repeat));
             } else if (state.repeat != 0u && (held & state.repeat) != 0u) {
                 if (now_ms >= state.repeat_at_ms) {
-                    emit(native_settings_pad_direction_key(state.repeat));
+                    emit(native_settings_pad_direction_key(state.repeat), true);
                     state.repeat_at_ms = now_ms + kRepeatIntervalMs;
                 }
             } else {

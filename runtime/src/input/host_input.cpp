@@ -588,7 +588,7 @@ bool route_native_settings_pad(std::uint16_t& buttons, float stick_x, float stic
         galaxy::input::native_settings_pad_step(
             s_state, buttons, stick_x, stick_y, visible(), GetTickCount64());
     for (std::size_t i = 0; i < step.key_count; ++i) {
-        sink(step.keys[i]);
+        sink(step.keys[i] | (((step.repeats >> i) & 1u) != 0u ? galaxy::render::kMenuKeyRepeat : 0u));
     }
     buttons = step.game_buttons;
     return step.game_neutral;
