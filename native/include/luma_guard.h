@@ -84,13 +84,20 @@ typedef struct LumaGuardHost {
     int32_t (*code_range)(void* library, uintptr_t* base, uintptr_t* begin, uintptr_t* end);
 } LumaGuardHost;
 
-/* Where the stack pointer saved in regs is: the index per calling convention (MSVC names x64 _M_X64). */
+/* Where the stack pointer saved in regs is: the index per calling convention (MSVC names x64 _M_X64).
+   LUMA_GUARD_CALL_BYTES: the bytes just below that stack pointer that are luma_guard_call's own while it calls the mod
+   (its saved registers, and the call's return address where the processor pushes one); the mod's frames are below
+   them. win-x64: return address, rbx, 32 bytes of shadow space, the call's return slot. sysv-x64: return address,
+   rbx, the call's return slot. aarch64: fp, lr, x19 and padding (the call's return address is in lr). */
 #if defined(_WIN32) && (defined(__x86_64__) || defined(_M_X64))
 #define LUMA_GUARD_SP 8
+#define LUMA_GUARD_CALL_BYTES 56
 #elif defined(__x86_64__)
 #define LUMA_GUARD_SP 6
+#define LUMA_GUARD_CALL_BYTES 24
 #elif defined(__aarch64__) || defined(_M_ARM64)
 #define LUMA_GUARD_SP 12
+#define LUMA_GUARD_CALL_BYTES 32
 #endif
 
 /* The game module's export "luma_guard_install": 1 taken; 0 not (a host struct too small). */

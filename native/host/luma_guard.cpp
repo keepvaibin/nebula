@@ -11,6 +11,7 @@
 // passes on untouched: Windows, to the next vectored handler and the crash reporter; POSIX, to the handler that was
 // there before (the default one ends the process), after one line on stderr naming the mod.
 #include "galaxy/luma_guard_host.h"
+#include "luma_guard_words.h"
 
 #include <luma_guard.h>
 
@@ -189,28 +190,16 @@ bool has_unwind_data(std::uintptr_t pc) noexcept {
 }
 #endif
 
-// For a mod with no unwind data (and on POSIX, where the call chain is not followed yet): the words on the stack from
-// the fault up to the boundary. A return address into the game or the host below one into the mod means the mod
-// called the game, which called the mod again. A word a returned call left in a frame of the mod counts too, so a
-// fault after the mod called the game is not resumed: it errs that way. `lr`: the faulting thread's link register (0
-// where the return address is on the stack).
+// For a mod with no unwind data (and on POSIX, where the call chain is not followed yet): the words on the mod's frames
+// (luma_guard_words.h). `lr`: the faulting thread's link register (0 where the return address is on the stack).
 [[maybe_unused]] const char* why_not_words(const LumaGuardFrame* frame, std::uintptr_t sp, std::uintptr_t lr) noexcept {
-    const std::uintptr_t top = static_cast<std::uintptr_t>(frame->regs[LUMA_GUARD_SP]);
-    bool game_seen = false;
-    const auto look = [&](std::uintptr_t value) {
-        if (value == frame->call_return) return false;
-        if (g_game.has(value) || g_host.has(value)) {
-            game_seen = true;
-        } else if (game_seen && value >= frame->code_begin && value < frame->code_end) {
-            return true;
-        }
-        return false;
-    };
-    if (lr != 0 && look(lr)) return kGameBetween;
-    for (std::uintptr_t at = sp & ~std::uintptr_t{7}; at < top; at += sizeof(std::uintptr_t)) {
-        if (look(*reinterpret_cast<const std::uintptr_t*>(at))) return kGameBetween;
+    switch (scan_words(sp, static_cast<std::uintptr_t>(frame->regs[LUMA_GUARD_SP]), LUMA_GUARD_CALL_BYTES, lr, frame->call_return,
+                       CodeSpan{frame->code_begin, frame->code_end}, CodeSpan{g_game.begin, g_game.end}, CodeSpan{g_host.begin, g_host.end})) {
+    case Words::ModOnly: return nullptr;
+    case Words::GameBetween: return kGameBetween;
+    case Words::Unreadable: break;
     }
-    return nullptr;
+    return "the stack between the fault and the mod's boundary is not one the guard can read";
 }
 
 // The note the crash report carries, written without allocating (the faulting thread may hold the heap's lock).
