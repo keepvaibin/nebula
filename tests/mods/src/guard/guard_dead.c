@@ -6,13 +6,15 @@
    the game's code, not the mod's (rule 3).
    -DCASE=3, mod crash-start: unbounded recursion in its start (a crash while the game starts: the next start leaves
    the mod off, services/mods.md "After a crash").
+   -DCASE=4, mod crash-stop: unbounded recursion in its stop (a crash while the mod is taken out in play: the next
+   start leaves the mod off).
    Facts: "entered 1" before; "survived 1" must never appear. */
 #define FAULT 1 /* guard_facts.h's fault_here is not used here */
 #include "guard_facts.h"
 
 static int32_t done;
 
-#if CASE == 1 || CASE == 3
+#if CASE == 1 || CASE == 3 || CASE == 4
 /* Each level keeps a page of its own on the stack and uses it after the call, so no level is a tail call and none is
    folded away. */
 static volatile int32_t bottom = -1; /* never reached: the compiler cannot see that the recursion has no end */
@@ -71,7 +73,7 @@ static const LumaImport imports[] = {
     LUMA_HOOK_ON("MarioActor::control", "void()", LUMA_AFTER, after_control),
     LUMA_FUNCTION(is_dead, "MR::isDead", "bool(const LiveActor *)"),
 };
-#elif CASE == 3
+#elif CASE == 3 || CASE == 4
 static int32_t after_control(LumaCall* call, void* user) {
     (void)call;
     (void)user;
@@ -82,7 +84,7 @@ static const LumaImport imports[] = {
     LUMA_HOOK_ON("MarioActor::control", "void()", LUMA_AFTER, after_control),
 };
 #else
-#error "CASE is 1 (stack overflow), 2 (a fault in the game's code) or 3 (a stack overflow in the start)"
+#error "CASE is 1 (stack overflow), 2 (a fault in the game's code), 3 (a stack overflow in the start) or 4 (one in the stop)"
 #endif
 
 static int32_t start(const LumaCore* core, const LumaMod* mod) {
@@ -99,4 +101,13 @@ static int32_t start(const LumaCore* core, const LumaMod* mod) {
     return 0;
 }
 
-LUMA_MOD(imports, start, 0);
+#if CASE == 4
+static void stop(void) {
+    fact("entered", 1);
+    fact("survived", deeper(1));
+}
+#else
+#define stop 0
+#endif
+
+LUMA_MOD(imports, start, stop);

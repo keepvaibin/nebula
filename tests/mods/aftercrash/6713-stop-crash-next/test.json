@@ -1,0 +1,58 @@
+{
+  "harness": 1,
+  "name": "6713-stop-crash-next",
+  "about": "The next start: crash-stop is off for it; the Mods tab asks; Space keeps it off (saved)",
+  "proves": [
+    "mods.after_crash.named",
+    "mods.after_crash.question"
+  ],
+  "continue_from": "6712-stop-crash",
+  "mods": [
+    {
+      "path": "../mods/crash-stop",
+      "loads": false
+    },
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 200,
+      "key": "space"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "mods: the last run crashed in the mod crash-stop: it is off for this start"
+    },
+    {
+      "fact": "mod.crash-stop.started",
+      "absent": true
+    },
+    {
+      "fact": "crash.shown.crash-stop",
+      "has": {
+        "twice": false,
+        "enabled": true,
+        "text": "crash-stop closed Nebula unexpectedly. It is off for this start."
+      }
+    },
+    {
+      "fact": "crash.answer.crash-stop",
+      "has": {
+        "answer": "off"
+      }
+    }
+  ]
+}

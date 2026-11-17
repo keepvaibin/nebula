@@ -1,0 +1,51 @@
+{
+  "harness": 1,
+  "name": "6712-stop-crash",
+  "about": "crash-stop is taken out in play and its stop overflows its stack: the game crashes naming it",
+  "proves": [
+    "mods.after_crash.named"
+  ],
+  "ends": "crash",
+  "mods": [
+    {
+      "path": "../mods/crash-stop"
+    },
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "take_out": "crash-stop",
+      "wait": true
+    },
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.crash-stop.started",
+      "exists": true
+    },
+    {
+      "fact": "mod.crash-stop.entered",
+      "exists": true
+    },
+    {
+      "fact": "mod.crash-stop.survived",
+      "absent": true
+    },
+    {
+      "log": "crash: guard: the code of the mod crash-stop failed "
+    }
+  ]
+}
