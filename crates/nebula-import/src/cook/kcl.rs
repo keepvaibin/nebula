@@ -287,15 +287,32 @@ impl Ncol {
     }
 }
 
-/// A collision file cooked: a disc's KCL to NCOL; a cooked one as it is.
-pub fn cook(bytes: &[u8]) -> Result<Vec<u8>> {
+/// A collision file cooked: a disc's KCL to NCOL, proved to reach the same prisms from every place (proof::walks_agree,
+/// counted in `stats`); a cooked one as it is.
+pub fn cook(bytes: &[u8], stats: &mut super::Stats) -> Result<Vec<u8>> {
     if bytes.starts_with(MAGIC) {
         return Ok(bytes.to_vec());
     }
     let ncol = Ncol::from_disc(bytes)?.to_bytes();
-    #[cfg(feature = "proof-tools")]
-    proof::walks_agree(bytes, &ncol)?;
+    stats.octree_leaves += proof::walks_agree(bytes, &ncol)?;
+    stats.collision_models += 1;
     Ok(ncol)
+}
+
+/// `nebula-import collision-proof DISC`: every collision model of a disc image (the archives' KCL files) cooked and
+/// proved as an import does, without writing anything: (models, octree leaves). The gate runs it on each disc.
+pub fn prove_disc(input: &std::path::Path) -> Result<(u64, u64)> {
+    let mut stats = super::Stats::default();
+    super::programs::walk_files(input, &mut |name, bytes| {
+        if name.to_ascii_lowercase().ends_with(".kcl") {
+            cook(&bytes, &mut stats).with_context(|| format!("{name}: collision"))?;
+        }
+        Ok(())
+    })?;
+    if stats.collision_models == 0 {
+        bail!("{}: no collision model found", input.display());
+    }
+    Ok((stats.collision_models, stats.octree_leaves))
 }
 
 fn sub(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
@@ -501,7 +518,6 @@ pub fn from_triangles(triangles: &[Triangle]) -> Result<Vec<u8>> {
 }
 
 /// A walk of the octree from a root slot down a path of child slots: the prism numbers of the list it reaches.
-#[cfg(any(test, feature = "proof-tools"))]
 fn ncol_list(ncol: &Ncol, root: usize, path: &[usize]) -> Option<Vec<u32>> {
     let mut block = 0usize;
     let mut word = *ncol.octree.get(root)?;
@@ -521,14 +537,9 @@ fn ncol_list(ncol: &Ncol, root: usize, path: &[usize]) -> Option<Vec<u32>> {
 }
 
 /// The disc's octree compared with the cooked one: every root and every path down reaches the same prisms, and the
-/// arrays and scalars read the same (proof-tools: the cook stops on a difference).
-#[cfg(feature = "proof-tools")]
+/// arrays and scalars read the same. Every import runs it: the cook stops on a difference.
 pub mod proof {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    pub static MODELS: AtomicU64 = AtomicU64::new(0);
-    pub static LEAVES: AtomicU64 = AtomicU64::new(0);
 
     fn disc_list(bytes: &[u8], base: usize, root: usize, path: &[usize]) -> Result<Option<Vec<u32>>> {
         let mut block = 0usize;
@@ -576,7 +587,8 @@ pub mod proof {
         Ok(())
     }
 
-    pub fn walks_agree(bytes: &[u8], cooked: &[u8]) -> Result<()> {
+    /// The leaves both octrees reach, the same; an error at the first place they differ.
+    pub fn walks_agree(bytes: &[u8], cooked: &[u8]) -> Result<u64> {
         let ncol = Ncol::from_ncol(cooked)?;
         let disc = Ncol::from_disc(bytes)?;
         // By bytes: floats compared by their bits.
@@ -594,9 +606,7 @@ pub mod proof {
         for root in 0..roots {
             descend(bytes, base, &ncol, root, &mut Vec::new(), &mut leaves)?;
         }
-        MODELS.fetch_add(1, Ordering::Relaxed);
-        LEAVES.fetch_add(leaves, Ordering::Relaxed);
-        Ok(())
+        Ok(leaves)
     }
 }
 
@@ -666,8 +676,28 @@ mod tests {
         assert_eq!(ncol.octree, [0x8000_0000]);
         assert_eq!(ncol.lists, [0, 1, 0]);
         assert_eq!(ncol_list(&ncol, 0, &[]), Some(vec![1]));
-        let cooked = cook(&disc()).unwrap();
+        let mut stats = super::super::Stats::default();
+        let cooked = cook(&disc(), &mut stats).unwrap();
         assert_eq!(Ncol::from_ncol(&cooked).unwrap(), ncol);
-        assert_eq!(cook(&cooked).unwrap(), cooked);
+        assert_eq!(cook(&cooked, &mut stats).unwrap(), cooked);
+    }
+
+    /// P-169: every import proves its collision models, not only a proof-tools build.
+    #[test]
+    fn an_import_proves_every_collision_model() {
+        let mut stats = super::super::Stats::default();
+        cook(&disc(), &mut stats).unwrap();
+        cook(&disc(), &mut stats).unwrap();
+        assert_eq!((stats.collision_models, stats.octree_leaves), (2, 2));
+        assert!(stats.summary().contains("collision models proved: 2, octree leaves agreeing: 2"));
+    }
+
+    #[test]
+    fn a_cooked_model_that_reaches_other_prisms_is_refused() {
+        let mut ncol = Ncol::from_disc(&disc()).unwrap();
+        ncol.lists = vec![0, 2, 0];
+        assert!(proof::walks_agree(&disc(), &ncol.to_bytes()).is_err());
+        let good = Ncol::from_disc(&disc()).unwrap().to_bytes();
+        assert_eq!(proof::walks_agree(&disc(), &good).unwrap(), 1);
     }
 }

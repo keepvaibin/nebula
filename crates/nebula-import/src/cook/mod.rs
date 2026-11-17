@@ -82,6 +82,9 @@ pub struct Stats {
     pub left_out: Vec<LeftOut>,
     /// The pipelines the files cooked draw with (NebulaData/Pipelines.bin).
     pub pipelines: pipeline_list::Pipelines,
+    /// The disc's collision models cooked and proved (kcl::proof), and the octree leaves the proof walked.
+    pub collision_models: u64,
+    pub octree_leaves: u64,
 }
 
 impl Stats {
@@ -100,31 +103,30 @@ impl Stats {
         self.bytes_out += other.bytes_out;
         self.left_out.extend(other.left_out);
         self.pipelines.merge(other.pipelines);
+        self.collision_models += other.collision_models;
+        self.octree_leaves += other.octree_leaves;
     }
 
     pub fn summary(&self) -> String {
         let images: Vec<String> = self.images.iter().map(|(k, v)| format!("{k} {v}")).collect();
         #[allow(unused_mut)]
         let mut summary = format!(
-            "{} files cooked, {} expanded, {} left out, {} -> {} bytes; images: {}",
+            "{} files cooked, {} expanded, {} left out, {} -> {} bytes; images: {}; collision models proved: {}, octree \
+             leaves agreeing: {}",
             self.cooked_files,
             self.expanded_files,
             self.left_out.len(),
             self.bytes_in,
             self.bytes_out,
-            images.join(", ")
+            images.join(", "),
+            self.collision_models,
+            self.octree_leaves
         );
         #[cfg(feature = "proof-tools")]
         summary.push_str(&format!(
             "; tables proved: {}, reads agreeing: {}",
             table::proof::TABLES.load(std::sync::atomic::Ordering::Relaxed),
             table::proof::READS.load(std::sync::atomic::Ordering::Relaxed)
-        ));
-        #[cfg(feature = "proof-tools")]
-        summary.push_str(&format!(
-            "; collision models proved: {}, octree leaves agreeing: {}",
-            kcl::proof::MODELS.load(std::sync::atomic::Ordering::Relaxed),
-            kcl::proof::LEAVES.load(std::sync::atomic::Ordering::Relaxed)
         ));
         #[cfg(feature = "proof-tools")]
         summary.push_str(&format!(
@@ -362,7 +364,7 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     } else if matches!(extension(name).as_str(), "bct" | "csw") {
         Some(native_data::speaker(&bytes, &extension(name)).with_context(|| format!("{name}: speaker file"))?)
     } else if extension(name) == "kcl" {
-        Some(kcl::cook(&bytes).with_context(|| format!("{name}: collision"))?)
+        Some(kcl::cook(&bytes, stats).with_context(|| format!("{name}: collision"))?)
     } else if fur::is_fur_text(name) {
         Some(fur::cook(&bytes).with_context(|| format!("{name}: fur"))?)
     } else if bytes.starts_with(b"RFNT") {
