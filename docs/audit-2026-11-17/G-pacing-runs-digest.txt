@@ -1,0 +1,212 @@
+== d12-v1-match
+thread CPU, middle: render thread 99.4 ms a second, game thread 39.4 ms a second
+statistics (22 windows of 2 s): in-between per step 3; shown 239.99 a second (measured 239.99); game 60.0012 steps a second
+  sequences started 2641, ended on their real picture 5, replaced first 2636; real-only 0; late slots 0; dropped 0; failed 0; history resets 10
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 0 / 10565 / 0 / 0
+  picture's moment to the refresh after its present: 8.308 to 8.424 ms
+  per in-between picture: wall 4.114 ms, GPU 0.158 ms; step delay at most 1.172 ms; cadence drops 0; capped 0
+  cuts by threshold 16, cuts the game stated 16, teleports 46, flips 8
+steps      n=2701 middle=16.667 p90=16.667 p99=16.773 lowest=16.167 highest=17.128 ms; 60.0013 steps a second
+display: 239.9923 Hz by the DWM readings (360 readings)
+wait       n=2700 middle=18.304 p90=20.129 p99=20.422 lowest=14.699 highest=24.544 ms
+pictures   n=10807 middle=0.000 p90=0.006 p99=0.027 lowest=0.000 highest=3.134 ms (animation error, absolute)
+  two pictures for one refresh: 0 of 10807; display gap middle 4.167 ms, highest 4.176 ms
+moment>disp n=10808 middle=4.032 p90=4.043 p99=4.052 lowest=3.966 highest=4.060 ms
+delay      n=2704 middle=42.420 p90=42.677 p99=42.804 lowest=41.621 highest=45.455 ms (step start to the list whole on the display, lead 8.34 ms)
+DXGI statistics: 10807 presents over 10807 refreshes (1.000 refreshes a present)
+
+== d12-v1-120
+thread CPU, middle: render thread 163.0 ms a second, game thread 39.8 ms a second
+statistics (22 windows of 2 s): in-between per step 1; shown 120.00 a second (measured 120.00); game 59.9990 steps a second
+  sequences started 2646, ended on their real picture 6, replaced first 2640; real-only 0; late slots 0; dropped 0; failed 0; history resets 10
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 0 / 1 / 5290 / 1
+  picture's moment to the refresh after its present: 4.141 to 8.321 ms
+  per in-between picture: wall 0.353 ms, GPU 0.152 ms; step delay at most 1.299 ms; cadence drops 0; capped 0
+  cuts by threshold 16, cuts the game stated 16, teleports 46, flips 8
+steps      n=2701 middle=16.667 p90=16.667 p99=16.750 lowest=16.067 highest=17.259 ms; 60.0000 steps a second
+display: 239.9923 Hz by the DWM readings (180 readings)
+wait       n=2701 middle=17.815 p90=18.242 p99=18.558 lowest=14.472 highest=26.807 ms
+pictures   n=5403 middle=0.000 p90=0.010 p99=0.097 lowest=0.000 highest=4.167 ms (animation error, absolute)
+  two pictures for one refresh: 0 of 5403; display gap middle 8.334 ms, highest 12.500 ms
+moment>disp n=5404 middle=4.075 p90=4.083 p99=4.091 lowest=4.001 highest=8.228 ms
+delay      n=2706 middle=38.248 p90=38.550 p99=38.770 lowest=37.696 highest=39.397 ms (step start to the list whole on the display, lead 4.17 ms)
+DXGI statistics: 5402 presents over 10804 refreshes (2.000 refreshes a present)
+
+== d12-v1-144
+thread CPU, middle: render thread 144.6 ms a second, game thread 36.3 ms a second
+statistics (22 windows of 2 s): in-between per step 2; shown 120.00 a second (measured 120.00); game 60.0008 steps a second
+  sequences started 2646, ended on their real picture 5, replaced first 2641; real-only 0; late slots 0; dropped 0; failed 0; history resets 10
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 0 / 3 / 5286 / 2
+  picture's moment to the refresh after its present: 4.127 to 12.510 ms
+  per in-between picture: wall 0.348 ms, GPU 0.148 ms; step delay at most 1.411 ms; cadence drops 0; capped 0
+  cuts by threshold 16, cuts the game stated 16, teleports 48, flips 8
+steps      n=2701 middle=16.667 p90=16.667 p99=16.777 lowest=16.137 highest=17.196 ms; 59.9994 steps a second
+display: 239.9923 Hz by the DWM readings (180 readings)
+wait       n=2700 middle=22.986 p90=23.301 p99=23.592 lowest=15.775 highest=31.301 ms
+pictures   n=5401 middle=0.000 p90=0.009 p99=0.097 lowest=0.000 highest=16.667 ms (animation error, absolute)
+  two pictures for one refresh: 1 of 5402; display gap middle 8.334 ms, highest 16.667 ms
+moment>disp n=5403 middle=4.102 p90=4.119 p99=4.130 lowest=3.989 highest=12.428 ms
+delay      n=2703 middle=38.299 p90=38.589 p99=38.870 lowest=37.766 highest=52.425 ms (step start to the list whole on the display, lead 4.17 ms)
+DXGI statistics: 5402 presents over 10804 refreshes (2.000 refreshes a present)
+
+== d12-v1-60
+steps      n=2701 middle=16.667 p90=16.667 p99=16.790 lowest=16.225 highest=17.108 ms; 60.0000 steps a second
+display: 239.9923 Hz by the DWM readings (90 readings)
+no-interp  n=2701 middle=16.538 p90=16.951 p99=17.045 lowest=15.699 highest=17.058 ms
+DXGI statistics: 2701 presents over 10804 refreshes (4.000 refreshes a present)
+
+== d12-v0-144
+thread CPU, middle: render thread 156.1 ms a second, game thread 39.6 ms a second
+statistics (22 windows of 2 s): in-between per step 2; shown 144.00 a second (measured 144.00); game 59.9989 steps a second
+  sequences started 2648, ended on their real picture 5, replaced first 2643; real-only 0; late slots 0; dropped 0; failed 0; history resets 10
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 0 / 2119 / 4235 / 1
+  picture's moment to the refresh after its present: 0.273 to 9.259 ms
+  per in-between picture: wall 0.324 ms, GPU 0.148 ms; step delay at most 1.242 ms; cadence drops 0; capped 0
+  cuts by threshold 16, cuts the game stated 16, teleports 46, flips 8
+steps      n=2701 middle=16.667 p90=16.667 p99=16.830 lowest=16.317 highest=17.017 ms; 59.9984 steps a second
+display: 239.9923 Hz by the DWM readings (216 readings)
+wait       n=2700 middle=20.644 p90=23.424 p99=23.805 lowest=14.825 highest=27.184 ms
+pictures   n=6484 middle=1.389 p90=2.780 p99=2.781 lowest=0.919 highest=6.123 ms (animation error, absolute)
+  two pictures for one refresh: 0 of 6484; display gap middle 8.334 ms, highest 12.500 ms
+moment>disp n=6485 middle=2.386 p90=4.039 p99=4.477 lowest=0.265 highest=9.210 ms
+delay      n=2727 middle=36.672 p90=36.913 p99=37.172 lowest=36.294 highest=40.087 ms (step start to the list whole on the display, lead 2.63 ms)
+DXGI statistics: 6483 presents over 10805 refreshes (1.667 refreshes a present)
+
+== d12-v0-240
+thread CPU, middle: render thread 232.4 ms a second, game thread 38.5 ms a second
+statistics (22 windows of 2 s): in-between per step 3; shown 180.00 a second (measured 240.02); game 60.0023 steps a second
+  sequences started 2643, ended on their real picture 2643, replaced first 0; real-only 0; late slots 3; dropped 0; failed 0; history resets 10
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 501 / 9568 / 497 / 3
+  picture's moment to the refresh after its present: 0.351 to 9.135 ms
+  per in-between picture: wall 0.334 ms, GPU 0.150 ms; step delay at most 1.122 ms; cadence drops 0; capped 0
+  cuts by threshold 16, cuts the game stated 16, teleports 46, flips 8
+steps      n=2701 middle=16.667 p90=16.667 p99=16.765 lowest=16.247 highest=17.087 ms; 60.0000 steps a second
+display: 239.9923 Hz by the DWM readings (360 readings)
+wait       n=2701 middle=16.987 p90=17.188 p99=17.458 lowest=11.957 highest=17.535 ms
+pictures   n=10203 middle=0.000 p90=0.000 p99=4.167 lowest=0.000 highest=8.334 ms (animation error, absolute)
+  two pictures for one refresh: 602 of 10805; display gap middle 4.167 ms, highest 12.500 ms
+moment>disp n=10806 middle=0.852 p90=4.394 p99=4.844 lowest=0.285 highest=9.059 ms
+delay      n=5400 middle=32.837 p90=33.131 p99=33.223 lowest=32.506 highest=33.269 ms (step start to the list whole on the display, lead 2.98 ms)
+DXGI statistics: 10804 presents over 10806 refreshes (1.000 refreshes a present)
+
+== d12-v0-unl
+thread CPU, middle: render thread 948.1 ms a second, game thread 41.4 ms a second
+statistics (22 windows of 2 s): in-between per step 4294967295; shown 3639.40 a second (measured 3546.78); game 60.0025 steps a second
+  sequences started 2641, ended on their real picture 21, replaced first 2620; real-only 0; late slots 130443; dropped 0; failed 0; history resets 62
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 141853 / 10533 / 12 / 1
+  picture's moment to the refresh after its present: 0.096 to 22.561 ms
+  per in-between picture: wall 0.271 ms, GPU 0.154 ms; step delay at most 1.633 ms; cadence drops 0; capped 2641
+  cuts by threshold 16, cuts the game stated 16, teleports 44, flips 8
+steps      n=2701 middle=16.667 p90=16.667 p99=16.824 lowest=16.209 highest=17.124 ms; 60.0000 steps a second
+display: 239.9923 Hz by the DWM readings (5196 readings)
+wait       n=2701 middle=17.059 p90=17.439 p99=17.892 lowest=5.392 highest=17.945 ms
+pictures   n=10794 middle=3.921 p90=4.013 p99=4.035 lowest=0.140 highest=12.211 ms (animation error, absolute)
+  two pictures for one refresh: 145062 of 155856; display gap middle 4.167 ms, highest 12.501 ms
+moment>disp n=155857 middle=2.178 p90=3.932 p99=4.351 lowest=0.007 highest=14.187 ms
+delay      n=2755 middle=36.842 p90=37.153 p99=37.574 lowest=36.244 highest=39.921 ms (step start to the list whole on the display, lead 2.83 ms)
+DXGI statistics: 155856 presents over 10807 refreshes (0.069 refreshes a present)
+
+== vk-v1-match
+thread CPU, middle: render thread 146.4 ms a second, game thread 56.3 ms a second
+statistics (22 windows of 2 s): in-between per step 3; shown 239.99 a second (measured 240.00); game 60.0027 steps a second
+  sequences started 2641, ended on their real picture 13, replaced first 2628; real-only 0; late slots 11; dropped 0; failed 0; history resets 10
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 0 / 10551 / 0 / 1
+  picture's moment to the refresh after its present: 4.140 to 54.151 ms
+  per in-between picture: wall 0.293 ms, GPU 0.137 ms; step delay at most 1.506 ms; cadence drops 0; capped 0
+  cuts by threshold 16, cuts the game stated 16, teleports 68, flips 5
+steps      n=2701 middle=16.667 p90=16.667 p99=16.804 lowest=14.930 highest=18.403 ms; 60.0000 steps a second
+wait       n=2700 middle=17.615 p90=18.292 p99=21.254 lowest=8.270 highest=62.774 ms
+
+== vk-v0-240
+thread CPU, middle: render thread 227.3 ms a second, game thread 57.5 ms a second
+statistics (22 windows of 2 s): in-between per step 3; shown 239.97 a second (measured 239.99); game 59.9968 steps a second
+  sequences started 2642, ended on their real picture 8, replaced first 2634; real-only 0; late slots 13; dropped 0; failed 0; history resets 10
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 1 / 10556 / 0 / 1
+  picture's moment to the refresh after its present: 4.136 to 62.462 ms
+  per in-between picture: wall 0.464 ms, GPU 0.161 ms; step delay at most 1.578 ms; cadence drops 0; capped 0
+  cuts by threshold 16, cuts the game stated 16, teleports 68, flips 5
+steps      n=2701 middle=16.667 p90=16.667 p99=16.761 lowest=8.762 highest=24.572 ms; 59.9963 steps a second
+wait       n=2699 middle=18.705 p90=20.883 p99=21.681 lowest=2.995 highest=72.552 ms
+
+== d11-v1-match
+statistics (22 windows of 2 s): in-between per step 3; shown 239.99 a second (measured 239.99); game 59.9974 steps a second
+  sequences started 2640, ended on their real picture 9, replaced first 2631; real-only 0; late slots 0; dropped 0; failed 0; history resets 10
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 0 / 10561 / 0 / 0
+  picture's moment to the refresh after its present: 8.316 to 8.372 ms
+  per in-between picture: wall 4.056 ms, GPU 0.239 ms; step delay at most 1.492 ms; cadence drops 0; capped 0
+  cuts by threshold 16, cuts the game stated 16, teleports 44, flips 8
+steps      n=2701 middle=16.667 p90=16.667 p99=16.785 lowest=16.245 highest=17.089 ms; 60.0000 steps a second
+wait       n=2701 middle=17.726 p90=20.580 p99=21.461 lowest=15.181 highest=22.687 ms
+
+== hb-v1-match
+  in-between per step: 1; pictures a second: middle 0.0, lowest 0.0, highest 0.0 (27 windows)
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 0 / 537 / 2182 / 537 = 16.5% exactly one refresh apart
+  GPU cap on in-between pictures seen: 0; sequences ended on their real picture 3256 of 3256; late moments 1; cadence drops 0
+  per in-between picture: wall 0.00 ms, GPU 0.00 ms; step delay at most 5.85 ms; moment to refresh 3.0 to 25.0 ms
+  Android: 599 presents, 599 at the slot asked, 0 late, 23 at the target interval; 59.9 a second; longest gap 41.67 ms; ready 25.65 ms early; depth 50.00 ms
+  Android: 600 presents, 600 at the slot asked, 0 late, 165 at the target interval; 60.0 a second; longest gap 25.00 ms; ready 25.06 ms early; depth 50.00 ms
+  Android: 600 presents, 600 at the slot asked, 0 late, 183 at the target interval; 60.0 a second; longest gap 25.35 ms; ready 24.27 ms early; depth 45.64 ms
+  Android: 605 presents, 605 at the slot asked, 0 late, 172 at the target interval; 60.0 a second; longest gap 25.40 ms; ready 15.75 ms early; depth 33.33 ms
+  Android: 604 presents, 604 at the slot asked, 0 late, 174 at the target interval; 60.0 a second; longest gap 25.00 ms; ready 7.95 ms early; depth 36.32 ms
+  Android: 604 presents, 604 at the slot asked, 0 late, 164 at the target interval; 60.0 a second; longest gap 25.00 ms; ready 7.99 ms early; depth 33.33 ms
+  GPU a picture: 10.30 to 12.73 ms average, longest 18.97 ms; scene openings 3.0
+  steps on the display's vsync: 3000 of 3000 (120.0 Hz); CPU work a step 5.74 to 5.83 ms average, longest 7.82 ms
+  battery 24.0 C, thermal status 0 at the end
+== hb-v0-match
+  in-between per step: 1; pictures a second: middle 106.9, lowest 103.9, highest 115.3 (27 windows)
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 80 / 4922 / 783 / 1 = 85.1% exactly one refresh apart
+  GPU cap on in-between pictures seen: 1; sequences ended on their real picture 1 of 3245; late moments 85; cadence drops 0
+  per in-between picture: wall 7.86 ms, GPU 5.56 ms; step delay at most 4.86 ms; moment to refresh 8.3 to 25.0 ms
+  GPU a picture: 4.77 to 5.35 ms average, longest 9.71 ms; scene openings 3.0
+  steps on the display's vsync: 3000 of 3000 (120.0 Hz); CPU work a step 8.42 to 9.29 ms average, longest 11.42 ms
+  battery 24.1 C, thermal status 0 at the end
+== hb-v1-60
+  no in-between pictures (no [interp-stats] lines)
+  Android: 600 presents, 600 at the slot asked, 0 late, 600 at the target interval; 60.0 a second; longest gap 17.08 ms; ready 24.30 ms early; depth 50.00 ms
+  Android: 600 presents, 600 at the slot asked, 0 late, 600 at the target interval; 60.0 a second; longest gap 17.19 ms; ready 12.42 ms early; depth 50.00 ms
+  Android: 600 presents, 600 at the slot asked, 0 late, 600 at the target interval; 60.0 a second; longest gap 16.67 ms; ready 11.46 ms early; depth 50.00 ms
+  Android: 604 presents, 604 at the slot asked, 0 late, 604 at the target interval; 60.0 a second; longest gap 17.09 ms; ready 11.45 ms early; depth 50.00 ms
+  Android: 604 presents, 604 at the slot asked, 0 late, 604 at the target interval; 60.0 a second; longest gap 17.14 ms; ready 12.09 ms early; depth 50.00 ms
+  GPU a picture: 10.80 to 12.78 ms average, longest 18.59 ms; scene openings 3.0
+  steps on the display's vsync: 2400 of 2400 (60.0 Hz); CPU work a step 5.55 to 5.82 ms average, longest 7.82 ms
+  battery 24.1 C, thermal status 0 at the end
+== op-v1-match
+  in-between per step: 1; pictures a second: middle 71.9, lowest 70.7, highest 108.9 (32 windows)
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 0 / 2010 / 2533 / 211 = 42.3% exactly one refresh apart
+  GPU cap on in-between pictures seen: 1; sequences ended on their real picture 3 of 3855; late moments 318; cadence drops 0
+  per in-between picture: wall 9.83 ms, GPU 6.92 ms; step delay at most 5.26 ms; moment to refresh 8.3 to 25.1 ms
+  Android: 808 presents, 806 at the slot asked, 2 late, 469 at the target interval; 80.7 a second; longest gap 33.33 ms; ready 6.69 ms early; depth 41.67 ms
+  Android: 765 presents, 765 at the slot asked, 0 late, 406 at the target interval; 76.4 a second; longest gap 25.00 ms; ready 10.29 ms early; depth 41.67 ms
+  Android: 721 presents, 721 at the slot asked, 0 late, 332 at the target interval; 71.7 a second; longest gap 25.00 ms; ready 8.68 ms early; depth 41.67 ms
+  Android: 720 presents, 720 at the slot asked, 0 late, 336 at the target interval; 72.0 a second; longest gap 25.00 ms; ready 8.75 ms early; depth 41.67 ms
+  Android: 719 presents, 719 at the slot asked, 0 late, 326 at the target interval; 71.7 a second; longest gap 25.00 ms; ready 8.91 ms early; depth 41.67 ms
+  Android: 720 presents, 720 at the slot asked, 0 late, 326 at the target interval; 71.6 a second; longest gap 25.00 ms; ready 8.75 ms early; depth 41.67 ms
+  Android: 729 presents, 729 at the slot asked, 0 late, 346 at the target interval; 72.6 a second; longest gap 33.33 ms; ready 8.70 ms early; depth 41.67 ms
+  GPU a picture: 5.94 to 6.70 ms average, longest 12.78 ms; scene openings 5.0
+  steps on the display's vsync: 3600 of 3600 (120.0 Hz); CPU work a step 5.10 to 5.48 ms average, longest 8.27 ms
+  battery 24.1 C, thermal status 0 at the end
+== op-v1-match-dr
+  in-between per step: 1; pictures a second: middle 72.1, lowest 69.9, highest 99.8 (32 windows)
+  presents by refreshes since the one before (0 / 1 / 2 / 3+): 1 / 1893 / 2700 / 138 = 40.0% exactly one refresh apart
+  GPU cap on in-between pictures seen: 1; sequences ended on their real picture 3 of 3853; late moments 240; cadence drops 0
+  per in-between picture: wall 9.81 ms, GPU 6.94 ms; step delay at most 3.43 ms; moment to refresh 8.3 to 25.1 ms
+  Android: 993 presents, 993 at the slot asked, 0 late, 794 at the target interval; 99.2 a second; longest gap 33.33 ms; ready 9.34 ms early; depth 33.33 ms
+  Android: 760 presents, 760 at the slot asked, 0 late, 395 at the target interval; 75.9 a second; longest gap 25.00 ms; ready 1.31 ms early; depth 33.33 ms
+  Android: 720 presents, 720 at the slot asked, 0 late, 325 at the target interval; 72.1 a second; longest gap 25.00 ms; ready 0.50 ms early; depth 33.33 ms
+  Android: 720 presents, 720 at the slot asked, 0 late, 320 at the target interval; 71.9 a second; longest gap 25.00 ms; ready 0.59 ms early; depth 33.33 ms
+  Android: 720 presents, 720 at the slot asked, 0 late, 323 at the target interval; 71.7 a second; longest gap 25.00 ms; ready 0.43 ms early; depth 33.34 ms
+  Android: 724 presents, 724 at the slot asked, 0 late, 345 at the target interval; 72.2 a second; longest gap 25.00 ms; ready 0.65 ms early; depth 33.33 ms
+  Android: 728 presents, 728 at the slot asked, 0 late, 329 at the target interval; 72.4 a second; longest gap 25.41 ms; ready 0.49 ms early; depth 33.34 ms
+  GPU a picture: 5.34 to 6.70 ms average, longest 9.77 ms; scene openings 5.0
+  steps on the display's vsync: 3600 of 3600 (120.0 Hz); CPU work a step 5.30 to 5.46 ms average, longest 8.29 ms
+  battery 24.2 C, thermal status 0 at the end
+== op-v1-60
+  no in-between pictures (no [interp-stats] lines)
+  Android: 593 presents, 587 at the slot asked, 6 late, 589 at the target interval; 59.3 a second; longest gap 66.67 ms; ready 8.60 ms early; depth 66.67 ms
+  Android: 604 presents, 604 at the slot asked, 0 late, 604 at the target interval; 60.0 a second; longest gap 17.23 ms; ready 25.14 ms early; depth 50.00 ms
+  Android: 604 presents, 604 at the slot asked, 0 late, 604 at the target interval; 60.0 a second; longest gap 17.27 ms; ready 12.87 ms early; depth 50.00 ms
+  Android: 604 presents, 604 at the slot asked, 0 late, 604 at the target interval; 60.0 a second; longest gap 17.25 ms; ready 12.82 ms early; depth 50.00 ms
+  Android: 604 presents, 604 at the slot asked, 0 late, 604 at the target interval; 60.0 a second; longest gap 17.16 ms; ready 13.33 ms early; depth 50.00 ms
+  GPU a picture: 12.01 to 14.15 ms average, longest 25.87 ms; scene openings 5.0
+  steps on the display's vsync: 2400 of 2400 (60.0 Hz); CPU work a step 3.93 to 4.13 ms average, longest 8.26 ms
+  battery 24.2 C, thermal status 0 at the end

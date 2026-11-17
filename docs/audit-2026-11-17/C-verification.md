@@ -1,0 +1,181 @@
+# Verification of the readers' findings (by the main session)
+
+Marks: CONFIRMED = I read the cited lines and they say what the finding claims. RUN = confirmed by a run of mine.
+CORRECTED = the finding was wrong in part; the correction is given. WITHDRAWN = wrong. Findings not listed are the
+reader's, unverified by me.
+
+## Port (audit-port.md)
+- P-001 CONFIRMED (render_config.cpp:594-595 forces the key off; test asserts it).
+- P-002 CONFIRMED as a call path (each renderer's begin_frame calls poll_render_config_file); cost not measured.
+- P-003 CONFIRMED (display_clock.cpp:141 tolerance 0.03; frame_phase.cpp:14 1%).
+- P-004 CONFIRMED (callbacks re-post unconditionally).
+- P-005 CONFIRMED (release fence on the render side; plain volatile read on the game side, FrameList.cpp:355).
+- P-006 CONFIRMED (storeOp STORE copied to depth, renderer_vk.cpp:603-608).
+- P-007 CONFIRMED (thresholds draw_walker.cpp:1082-1085; parallel_record_end ends the scene pass, renderer_vk_frame.cpp:2768).
+- P-008 CONFIRMED (throws "a command buffer failed"; no device-lost wording).
+- P-009 CONFIRMED (stubs in the D3D11 and Metal headers).
+- P-010 CONFIRMED (create_now builds inline; build_fast returns nullptr on D3D12).
+- P-011 CONFIRMED (D3D11 queries every call; D3D12 caches 100 ms).
+- P-012 CONFIRMED (comment says game thread only; takeBlock has no lock or check).
+- P-013 CONFIRMED (ArenaOwned ctor calls findFromRoot).
+- P-014 consistent (pgo_profile.sh is a hand step; CMake flags not re-read by me).
+- P-015 CONFIRMED (crash_log.cpp:10 is Linux only). P-016 CONFIRMED (host_window_sdl.cpp:1072-1076: only Android opens a log file).
+- P-017 CONFIRMED (SA_ONSTACK set; no sigaltstack for engine threads). P-018 CONFIRMED (host_main.cpp:4629 waits 5 s).
+- P-020 CONFIRMED as code (startActivity then kill in one UI task, GameActivity.java:721-731); effect needs a run.
+- P-021 CONFIRMED (draw_walker.cpp:1978-1986, the comment says so itself). P-022 CONFIRMED (the pass average is repeated per renderer).
+- P-023 CONFIRMED (two workflows, no test step; also seen by me directly). P-024 CONFIRMED (tests build on Windows only).
+- P-025 CONFIRMED at the cited line (resolve_scene in the bloom pass). P-026, P-027 CONFIRMED at the cited lines.
+- P-030 CONFIRMED (vkDeviceWaitIdle in the frame, renderer_vk_frame.cpp:1457). P-031 CONFIRMED (StoreAndMultisampleResolve).
+- P-032 CONFIRMED (RendererMtl::wants_hdr returns false). P-033 CONFIRMED (display_clock_apple.mm:183 tolerance 0.03).
+- P-035 CONFIRMED (release.yml:446 builds -a arm64 only). P-036 CONFIRMED at the cited callback; "silently" not re-traced.
+- P-037 CONFIRMED (out_.resize in the audio callback). P-038 CONFIRMED (linear shift on insert, DrawBuffer.cpp:69-71).
+- P-039, P-040 CONFIRMED at the cited functions.
+- P-028, P-029, P-034: no line citation in the heading block; not checked in this pass.
+- P-019 CORRECTED by me (a performance hint exists: runtime/src/perf_hint.cpp); reader rewrote it in Round 2.
+- P-041 CONFIRMED (host_main.cpp:1043 counts frames, comment says "twice a second"). P-042 CONFIRMED (render_config.h:53 default max_fps = game steps).
+- P-043, P-044 consistent (test stubs cited; the absence of tests is the claim). P-045 CONFIRMED at the cited call (30 s timeout); the mix-up itself not re-traced.
+- P-046, P-047 CONFIRMED at the cited lines. P-048 CONFIRMED (reset_sampler_frame calls wait_for_gpu when full, renderer_d3d12.cpp:1264-1269).
+- P-049 CONFIRMED (wait_for_gpu before the temporal reset). P-050 CONFIRMED (wait_for_gpu then destroy inside the recorded frame, :5118-5120).
+- P-051, P-052, P-053 CONFIRMED at the cited lines. P-054 CONFIRMED (run_one_time allocates and submits its own buffer).
+- P-055 same as P-006. P-056 CONFIRMED (the comment states the wait and the 4000 limit). P-057, P-058 CONFIRMED.
+- P-059 CONFIRMED at the cited function; "on the game thread at registration" not re-traced.
+- P-060 CONFIRMED (Map WRITE_DISCARD per root op). P-061 CONFIRMED (sampler map only grows at the cited function).
+- P-062 not located by my tool; not checked. P-063, P-064 CONFIRMED (upload_written: vector resize 4096 per buffer each call).
+- P-065 CONFIRMED (MSL compiled at first use in utility_function). P-066 CONFIRMED.
+- P-067 CONFIRMED (non-Windows flush_progress_bounded ignores wait_ms and flushes inline). P-068, P-069 consistent.
+- P-070 CONFIRMED (fprintf + fflush per log line). P-071 CONFIRMED at the cited line (queued_frames feeds the movie clock); the zero on SDL not re-read.
+- P-072 CONFIRMED (kQuietSecondsToLower = 10).
+- P-073 CONFIRMED (host_input.cpp:622-623 per-axis dead zone).
+- P-079 CONFIRMED (SaveDataHandler.cpp:155-159: any other version is "damaged").
+- P-082 WITHDRAWN by the reader (Round 5).
+- P-089 CONFIRMED and RUN (benchmark.cpp:810-812 times picture to picture; my result file shows game ms per picture).
+- P-092 CONFIRMED (update.cpp:337, 638).
+- P-074 CONFIRMED (stick origin taken from the first report, wiimote_input.cpp:333-337). P-076 CONFIRMED (absolute mice return no motion, raw_mouse_win32.cpp:27).
+- P-080 CONFIRMED (pause/yield spin loop, SaveDataHandler.cpp:120-126). P-081 CONFIRMED (moves aside then in, undo only on failure; no journal).
+- P-085 CONFIRMED (library mutex held across the import, mii_import.cpp:425). P-090 CONFIRMED at the cited function. P-091 CONFIRMED (only the GPU name is compared).
+- P-093 CONFIRMED at the cited accessor (one prefs file); the two-process overwrite not re-traced. P-094 CONFIRMED (Storage.removeGame before the import opens the disc, ImportService.kt:103-105).
+- P-099 CONFIRMED (NEW_TASK | CLEAR_TASK). P-101 CONFIRMED (120 s restart of the sky animation). P-104 CONFIRMED (AppKit imported unguarded).
+- P-106 CONFIRMED (English literal in setup_apple.mm:60). P-107 CONFIRMED (monitor id = localizedName).
+- P-075, P-077, P-078, P-083, P-084, P-086, P-087, P-088, P-095, P-096, P-097, P-098, P-100, P-102, P-103, P-105, P-109, P-110, P-111, P-112: the cited lines exist and are the code the finding is about; the finding's reasoning was not re-traced by me (consistent).
+- P-108: no line citation; not checked.
+- P-113 CONFIRMED (setup.cpp:307-312: "No" uninstalls and deletes the data folder).
+- P-119 CONFIRMED (achievements.ini and stats.ini absent from save_transfer.cpp).
+- P-114 CONFIRMED (Uninstall called inline from the window's handler). P-115 CONFIRMED (per-monitor aware, then GetDpiForSystem, ui.cpp:47-48).
+- P-116 CONFIRMED at the cited stub (non-Windows returns nothing). P-117 consistent (250 ms wait limit). P-118 CONFIRMED (kBuggyQuarterIdct = true, with the SDK comment).
+- P-120 CONFIRMED (setup_engine.cpp:175 requires NTFS). P-123 consistent. P-125 consistent (the macOS installer checks the signing requirement).
+- P-126, P-127, P-128 CONFIRMED at the cited lines. P-129 CONFIRMED (queries loop over every zone and part, no index).
+- P-130 CONFIRMED. P-131 CONFIRMED (StrikeLists allocates with new when maxHits exceeds the stack room, CollisionParts.cpp:297-300).
+- P-132, P-133, P-134, P-135, P-136 CONFIRMED at the cited lines. P-137 CONFIRMED (linear scan for a dead actor).
+- P-138 consistent. P-139 CONFIRMED at the cited function. P-140 CONFIRMED (LiveActor.cpp:168 requests the shadow every movement).
+- P-141 CONFIRMED (walks every chunk and slot). P-142 CONFIRMED (a light record built per load). P-143 consistent (draw body not fully read).
+- P-144, P-145, P-146 CONFIRMED at the cited lines. P-147 CONFIRMED (counts frames, by its own comment). P-148 CONFIRMED (HitSensor.cpp:90-93 drops past mGroupSize).
+- P-149, P-150, P-151, P-152, P-153, P-154, P-155, P-156, P-157 CONFIRMED that the cited code is as described (matrices per particle on the CPU; register-style material fill; per-picture camera/matrix walk; ResTIMG records built at load). Their cost is not measured.
+- P-158 CONFIRMED (cSkipMaxMicros = 15,000,000 of wall time). P-159 CONFIRMED (comment and code: drawn and submitted, not presented, when occluded).
+- P-160, P-161, P-162 consistent (cited lines are context). P-163 to P-173: reader's findings from rounds 11 to 13, not yet checked by me.
+- P-122 RUN (probe p9, p10: FactoryGalaxy 4 never gives control; Mario touches no surface; height cycles every 280 frames).
+- P-159 accepted (hidden-window present skip on D3D; my hidden benchmark cannot rank Vulkan against D3D).
+- P-164 consistent (NebulaAchievements.cpp:330, 352, 362 use hasPowerStar).
+- R10 FactoryGalaxy candidate (a) WITHDRAWN (current upstream matches Nebula's test; I fetched it).
+
+## Mods (audit-mods.md)
+- M-001 CONFIRMED (LumaLoader.cpp:1865-1871 binds the raw address; luma_guard.cpp:100-103 refuses a pc outside the calling mod).
+- M-014 CORRECTED by RUN: the unsafe window is the boot frames (probes crash there), not the title.
+- M-027 accepted (guard tests 1619-1621 crash by RUN; applies to mods without unwind data; LumaLink always emits it).
+- M-031 CONFIRMED (platform/sdl/crash_log.cpp never writes the safe-start file).
+- M-002 CONFIRMED (endMod finishes at once when the mod has no published hook, LumaLoader.cpp:1411-1415).
+- M-003 CONFIRMED (NEBULA_PANIC when a block's header check fails, LumaLoader.cpp:907-910).
+- M-004 CONFIRMED as a doc line (luma.h:355). M-005 consistent. M-006 CONFIRMED (#error for Windows on ARM64, LumaGuard.cpp:251).
+- M-007 CONFIRMED that the comment claims the guard covers the read; the reader's point is that the read is in kernel code. Not re-traced.
+- M-008, M-009: no known trigger (reader's own note). M-010 CONFIRMED (kMaxClasses = 1024, never reused).
+- M-011 / M-029 CONFIRMED in principle (the guard refuses any fault outside the mod's code range); the per-function list is the reader's.
+- M-012 CONFIRMED at the platform switch. M-013 CONFIRMED (unbounded spin in quiet(), LumaDrawNative.cpp:72-76).
+- M-015 CONFIRMED (only achievement rows subscribe, mod_plugins.cpp:389-390). M-016 CONFIRMED (events.md names docs/modding/EVENTS.md; the file is absent).
+- M-017 CONFIRMED as a doc claim (detailed-rules.md:88-89); the absence of the mark was the reader's check.
+- M-019 CONFIRMED (the one running test needs LUMA_SDK). M-020 consistent. M-021 CONFIRMED (single mirrored / mirror_owner values, camera.lum:321-324).
+- M-022, M-025 CONFIRMED as doc claims. M-023 CONFIRMED (rebuild decided by file times only). M-026 superseded by my runs.
+- M-028 CONFIRMED (handlerTrampoline is a plain call the compiler may or may not turn into a jump).
+- M-030 CONFIRMED (the extra player is allocated in the scene arena, LumaPlayer.cpp:184-186); the leak on remove not re-traced.
+- M-032 CONFIRMED (the crash text tells the player to turn the mod off; nothing does it).
+- M-034 CONFIRMED (replay.lum:782-783 comment ends in a stray "//."). M-035 CONFIRMED and RUN (add.rs:598; the test fails).
+- M-037, M-038, M-039, M-040, M-041, M-042, M-043: the cited kit code is as described (hooks per MarioActor, single globals, bare slot numbers, bare alias names); effects with two mods not re-traced.
+- M-036: citation not located by my tool; it is a list of untested behaviours.
+- M-059 consistent (single g_look_mod, luma_input.cpp:1137-1150).
+- M-076 consistent (LumaSave.cpp:862-872 uses mSaveDataHandler with no null test; boot-time null needs a run).
+- M-083 CONFIRMED (luma_fs.cpp:132-137 vs luma.cpp:259-269).
+- M-045 consistent (luma_player.h:53-56 itself says a MarioActor hook runs for extra players too). M-046, M-047, M-048, M-050 CONFIRMED at the cited kit code (one value or one name for all mods).
+- M-051 CONFIRMED at the queue (ui/kit.lum:369 pushes the callback for a later frame); the freed-code call not re-traced.
+- M-053 CONFIRMED (actor.lum:144-146 fails on a base other than LiveActor). M-054 consistent.
+- M-055 CONFIRMED (luma_net.cpp:3853-3856 appends a pong to the outgoing buffer with no budget check).
+- M-056 CONFIRMED at the cited order line. M-057 CONFIRMED (NSEvent deltaX/deltaY, host_window_apple.mm:227-228). M-058 consistent.
+- M-060 CONFIRMED (extra world steps each run the update, GameSystem.cpp:193-196). M-061, M-062, M-063 consistent (cited code is the hold path).
+- M-065 CONFIRMED (four slots: sDrawn[1 + LUMA_PLAYER_MOST_EXTRA]). M-066 consistent.
+- M-067 CONFIRMED (luma_input.h:4 says "input 1.3"; LUMA_INPUT_MINOR is 4). M-068 CONFIRMED (PI / 6 cut test, MarioActor.cpp:2822).
+- M-069 CONFIRMED (look_choice and host.look() read on every sample). M-070 CONFIRMED at the cited colour logic; the two-mod drift not re-traced.
+- M-071 CONFIRMED (pools sized LIMIT * 4 across mods). M-072 CONFIRMED (returns null when no scene arena, LumaDraw.cpp:1448-1450).
+- M-073 CONFIRMED as a header claim. M-074 CONFIRMED (the code's own comment: Metal has none, functions are not called).
+- M-075 CONFIRMED (a leading '/' is taken from the store's root, LumaDrawPost.cpp:240-243). M-077 consistent.
+- M-078 CONFIRMED (unbounded pause spin, LumaSave.cpp:296-299). M-079 CONFIRMED (ABSENT for a newer chunk, in a comment only).
+- M-080 CONFIRMED (the code's own comment: an ended slot is reused and its handle then answers HANDLE). M-081 consistent.
+- M-084 CONFIRMED at the limit line (32 requests); the 64 MiB each not re-read. M-085 CONFIRMED (the folder is measured on every write, by its own comment).
+- M-086 CONFIRMED (assets_mod_end erases the mod's spent count; "its bytes stay"). M-087 CONFIRMED (pools across mods).
+- M-088 consistent (tableFits exists and claims to check; the missing per-cell check is the reader's reading). M-089 consistent.
+- M-090 CONFIRMED (stb_image compiled into luma_system.cpp). M-091, M-092 consistent. M-093 CONFIRMED at the id rule.
+- M-094 CONFIRMED as a header claim. M-095 CONFIRMED (std::thread(look_up, ...).detach(), luma_net.cpp:4672).
+- M-096 CONFIRMED as a header value (16 MiB "either way"). M-097 CONFIRMED (listen allows 100 bytes).
+- M-044, M-049, M-052, M-064, M-082: no line citation in the heading block; not checked in this pass.
+- M-100 accepted (safe start works by RUN; the notice moved to the LOG page).
+- M-098 CONFIRMED (std::thread(io_loop).detach()). M-099 CONFIRMED as a header claim (fe80::/10 listed).
+- M-101 CONFIRMED (nested loop over all mods, mods.cpp:1632-1635). M-102 WITHDRAWN by the reader. M-103, M-104 consistent.
+- M-105 consistent (the Android import call; the "never runs" path not re-traced). M-107, M-108: no line citation; not checked.
+- M-109 CONFIRMED as a header claim. M-110 consistent. M-111 CONFIRMED (the header documents "Return 0 to cancel" for events no mod receives).
+- M-112 CONFIRMED (every achievement compared by name on every raise, mod_plugins.cpp:95-98). M-113 consistent.
+- M-114 CONFIRMED (the emitter's own comment: one kept copy per distinct text, never freed).
+- M-116 CONFIRMED (svc.rs:1313-1314 takes the header's MAJOR.MINOR) and RUN (balloon-world).
+- M-118 consistent. M-119 CONFIRMED (S0067's text says "test it first, or give a value with ??").
+- M-120 CONFIRMED (values-and-memory.md:27 writes `target?.get { k.mVelocity = vec3 }`) and RUN.
+- M-121 CONFIRMED (parse.rs:1337 takes the chain's first position). M-122 CONFIRMED (vec3 takes exactly 3 arguments, call.rs:926).
+- M-123 consistent (the place is writable unless it is text; the game-side read not re-traced). M-124 consistent.
+- M-125 CONFIRMED (emit.rs:916-918 refuses `every override`). M-126, M-127, M-128 consistent with the cited emitter code.
+- M-129 CONFIRMED (snprintf per event call, LumaServices.cpp:414-415). M-130 consistent. M-131 CONFIRMED (the emitted expression, expr.rs:1747).
+- M-132 CONFIRMED (the watch table hooks NebulaArena::free and NameObj::~NameObj, lumart.c:2306-2309).
+- M-133 CONFIRMED at the cited emission (data pointer read once at entry). M-134, M-135, M-136 consistent with the cited code.
+- M-137 CONFIRMED (a kept-closure table). M-138 CONFIRMED (memcpy of the smaller size; the rest left zero, library.rs:485-487).
+- M-139 CONFIRMED (one log text for every refusal). M-140 consistent. M-141 CONFIRMED (the .luma.part file is written before the second check).
+- M-142 consistent. M-143 CONFIRMED (256 GiB and 1,000,000 entries, mod_import.cpp:83-84). M-144 CONFIRMED (the check returns null when its library is missing).
+- M-145 CONFIRMED at the accessor reader; the cross-primitive total not re-traced. M-146 consistent. M-148, M-149 CONFIRMED at the cited lines.
+- M-151 CONFIRMED at the cap (MOST_SAMPLES = 2^28 a channel). M-152 CONFIRMED (the allowed word list includes for, while, do).
+- M-153 CONFIRMED (LUMALINK_DATA, when absolute, is taken as the data folder). M-154 CONFIRMED (logs "asked again after it" and returns).
+- M-155 consistent. M-156 CONFIRMED at the `ws  ` command reader; the allocation line not re-read. M-157 consistent.
+- M-158 CONFIRMED (MEMBERS_MAX = 4 GiB per archive). M-159 CONFIRMED (read_ogg has no cap at the cited reader).
+- M-160 consistent (the recursive passes/at pair); the exponential case is the reader's construction, not run.
+- M-161 CONFIRMED (mod_check.cpp:219-221 re-validates without the names when the first run fails).
+- M-162 consistent. M-163 CONFIRMED (manifest lines are joined to the folder; only ".." is filtered, so an absolute line escapes).
+- M-164 CONFIRMED (passed = some result and all results pass; a renderer with no result is not counted).
+- M-165 consistent. M-166 WITHDRAWN by the reader. M-167 CONFIRMED (glob recurses once per `*`, rules/patches.rs:75-78).
+- M-168 CONFIRMED at the pass-through (kcl.rs:291-294 returns an already-cooked file unchanged); the game-side out-of-bounds read needs a run.
+- M-169 CONFIRMED at the header reads (rows and count taken from the file before use).
+- M-170 to M-174: documentation and test-coverage lists; M-170's refused spellings RUN by me (S0083, S0012).
+- M-175 CONFIRMED by me (camera.lum:127-141 hides once; MarioActor.cpp:133 and MarioActorInit.cpp:127 reset the flag).
+- M-176, M-177: reader's, not checked.
+- M-106 CORRECTED: the older version does replace the newer, but the message is "OLDER VERSION: name (old TO new)"
+  (mod_import.cpp:604-608), not "UPDATED".
+- M-115 / M-120 RUN (the compiler refused the documented getPlayerActor form in my probe).
+- M-116 / M-147 RUN (balloon-world: L505 against the installed game, none with --names).
+- M-150 CONFIRMED in pieces (mods.cpp:86, 1966; mod_log.cpp:685-695, 983-992; validate_c.rs:514-518); end-to-end run still owed.
+- First-person report tool faults C1, C2: fixed in the current LumaLink source by RUN (new -> check -> pack; add need).
+
+## Port P-163 to P-183 (checked 11-17, after the last reader round)
+- P-163 consistent (the menu's update is called once per system step, GameSystem.cpp:279-281).
+- P-164 CONFIRMED (NebulaAchievements.cpp:330, 352, 362 use galaxy.hasPowerStar; the file's own hasStar at :159-160 is the form that sees the star just collected, and GameScene.cpp:724-728 calls evaluate() at the star get).
+- P-165 consistent. P-166 CONFIRMED (Binder.cpp:254-257: the plane room grows by the hit count; no cap).
+- P-167 consistent at the cited function; the comparison with upstream is the reader's.
+- P-168 the flag is CONFIRMED (native/CMakeLists.txt:276, -ffp-contract=off); its effect on play is suspected, not shown.
+- P-169 CONFIRMED (kcl.rs:295-298: the walk comparison is behind the proof-tools feature).
+- P-170 the guard exists as described (ScenarioStarter.cpp:47-61); RULED OUT as the cause of the stuck stop: its log line is absent from that run.
+- P-171 CONFIRMED (StageDataHolder.cpp:22: 32 layer folder names).
+- P-172, P-174, P-176, P-178, P-180, P-183: READ (the cited lines are the right code; the argument not re-traced).
+- P-173 CONFIRMED at the cited condition (Material.cpp:731-732: the registered slot is kept only while the stamp matches).
+- P-175 CONFIRMED (temporal_upscaler.cpp:50-52 sets three flags; no dynamic-resolution flag is set anywhere in runtime/src/render).
+- P-177 CONFIRMED at the cited line (ViewGroupCtrl.cpp:72 indexes by mObjArg0 with no test); the crash is suspected.
+- P-179 CONFIRMED (MultiEmitterCallBack.cpp:20-21 returns white). P-181 CONFIRMED (vertices written per draw).
+- P-182 CONFIRMED (ViewGroupCtrl.cpp:105 names HeavensDoorGalaxy).

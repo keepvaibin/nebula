@@ -1,0 +1,376 @@
+M-001	M-001 crash: a fault inside a library mod's code (LumaKit) called by a	crash: a fault inside a library mod's code (LumaKit) called by another mod is never resumed; the game ends
+M-002	M-002 wrong behaviour: the hook-chain grace covers hooks only; a mod w	wrong behaviour: the hook-chain grace covers hooks only; a mod with no published hook is freed at once, with no grace, while its service callbacks may still be held by providers
+M-003	M-003 wrong behaviour: a block header overwrite by a mod (buffer under	wrong behaviour: a block header overwrite by a mod (buffer underflow) stops the whole game instead of turning the mod off
+M-004	M-004 docs wrong: luma.h says an out-of-memory `new` "stops the game";	docs wrong: luma.h says an out-of-memory `new` "stops the game"; inside any boundary the trap is a mod fault the guard resumes
+M-005	M-005 maintainability: kernel entry points that take a mod-supplied `L	maintainability: kernel entry points that take a mod-supplied `LumaFunction*` dereference it without checking it is a row
+M-006	M-006 missing feature: Windows on ARM64 has no guard in the game modul	missing feature: Windows on ARM64 has no guard in the game module and no build; mods still ship windows-arm64 code
+M-007	M-007 crash: own_class, as_class, is_a, class_data, overrider and call	crash: own_class, as_class, is_a, class_data, overrider and call_method read the object's vtable in the kernel; a stale or wrong object pointer ends the game, though the comment says the guard covers it
+M-008	M-008 crash: an override whose call is still running on another thread	crash: an override whose call is still running on another thread when its mod is taken out panics the game in slotOriginal
+M-009	M-009 wrong behaviour: LumaClasses.modGone spins on the game thread un	wrong behaviour: LumaClasses.modGone spins on the game thread until every make in progress on any thread ends
+M-010	M-010 maintainability: kMaxClasses (1024) class rows are never reused 	maintainability: kMaxClasses (1024) class rows are never reused in a session; dev reloads use them up
+M-011	M-011 crash: every pointer a mod gives a service is read in kernel or 	crash: every pointer a mod gives a service is read in kernel or host code; a bad pointer ends the game, not the mod
+M-012	M-012 missing feature: the microphone and camera services have backend	missing feature: the microphone and camera services have backends only on Windows and Android
+M-013	M-013 wrong behaviour: draw.native's take-out waits without limit for 	wrong behaviour: draw.native's take-out waits without limit for a mod function running on the render thread
+M-014	M-014 crash: a game function a mod calls when its state is missing (no	crash: a game function a mod calls when its state is missing (no scene, no player) faults in game code and ends the game; the rows carry no precondition a checker could use
+M-015	M-015 missing feature: the 29 NEBULA_MOD_EVENT_* events never reach mo	missing feature: the 29 NEBULA_MOD_EVENT_* events never reach mod code; only the host's achievement rows subscribe, so their "return to cancel / return to replace" semantics are unused
+M-016	M-016 docs wrong: events.md links docs/modding/EVENTS.md, which does n	docs wrong: events.md links docs/modding/EVENTS.md, which does not exist
+M-017	M-017 docs wrong: detailed-rules.md promises a build warning for hooki	docs wrong: detailed-rules.md promises a build warning for hooking a function that runs off the game thread, from a self-description mark that does not exist
+M-018	M-009 wrong behaviour: LumaClasses.modGone spins on the game thread un	, where take-out cannot overlap a make.
+M-019	M-019 maintainability: the compiler's run-time checks (overflow, divis	maintainability: the compiler's run-time checks (overflow, division, shifts, conversions) are tested as text only; the one test that runs generated C is skipped silently without LUMA_SDK
+M-020	M-020 maintainability: an off-thread hook's report reads the runtime's	maintainability: an off-thread hook's report reads the runtime's global caller without synchronisation
+M-021	M-021 wrong behaviour: kit.camera's field of view, mirror and shake ar	wrong behaviour: kit.camera's field of view, mirror and shake are one value each; with two mods the newer one's end resets the game's default instead of giving the earlier mod's back
+M-022	M-022 docs wrong: "A call from another thread is a script error" for L	docs wrong: "A call from another thread is a script error" for LumaKit; the library's export wrappers have no thread test
+M-023	M-023 maintainability: `pack` rebuilds code only when a source file is	maintainability: `pack` rebuilds code only when a source file is newer than the oldest code file; a LumaLink update or a new game self-description packs code built by the old compiler against the old rows
+M-024	Coverage	, M-025. Maintainability: M-005, M-010, M-019, M-020, M-023, M-026. M-008 and M-009 have no known trigger in
+M-025	M-025 docs wrong: concepts/lumascript.md says a script cannot read a g	docs wrong: concepts/lumascript.md says a script cannot read a game object after it is gone, and errors.md that a script error cannot damage memory; a game call at the wrong time ends the game (M-014) and a LumaKit fault ends it t
+M-026	M-026 maintainability: no recorded run covers this tree; PROVEN.md pro	maintainability: no recorded run covers this tree; PROVEN.md proves an older commit, and the two board files disagree on its count
+M-027	M-027 wrong behaviour: every service event (guard kind 6) of a mod wit	wrong behaviour: every service event (guard kind 6) of a mod without unwind data is refused by the word scan, because luma_guard_call's own saved rbx holds the mod's function address
+M-028	M-028 maintainability: time handlers and draw points are resumable onl	maintainability: time handlers and draw points are resumable only because the compiler turns the trampoline's call into a tail jump
+M-029	M-029 crash: the full list for M-011 - every service function whose po	crash: the full list for M-011 - every service function whose pointer argument is read or written by kernel or host code (a bad one ends the game, not the mod)
+M-030	M-030 wrong behaviour: player.make and player.remove leak each extra p	wrong behaviour: player.make and player.remove leak each extra player's memory until the scene ends; a mod that makes and removes in a loop ends the game out of memory
+M-031	M-031 crash: on Linux, macOS and Android a fault with mods on never ma	crash: on Linux, macOS and Android a fault with mods on never makes the next start safe; a mod whose code crashes the game at start crashes it on every start
+M-032	M-032 missing feature: after a crash that names a mod, nothing turns t	missing feature: after a crash that names a mod, nothing turns that mod off or offers to; the next start turns off every mod's code once, and a restart turns it all on again
+M-033	Coverage	Missing feature: M-032, M-036. Docs wrong: M-034. Maintainability: M-028, M-035. Area 3's "what would have to be
+M-034	M-034 docs wrong: three LumaKit doc comments lost words, and the refer	docs wrong: three LumaKit doc comments lost words, and the reference pages print the gap
+M-035	M-035 maintainability: the LumaLink test each_manifest_part_is_written	maintainability: the LumaLink test each_manifest_part_is_written_in_the_format_order_and_checked asks for lumakit >=1.2.0 while LumaKit is 1.0.0, so it fails
+M-036	M-036 missing feature: behaviours with no test in any suite	missing feature: behaviours with no test in any suite
+M-037	M-037 wrong behaviour: kit.gravity's timed overrides count down once p	wrong behaviour: kit.gravity's timed overrides count down once per MarioActor, so with svc.player's extra players a `frames` override ends early
+M-038	M-038 crash: kit.shop.open in a scene without a stage's playing result	crash: kit.shop.open in a scene without a stage's playing result (the title, the file select, a mod's own menu before any stage) ends the game
+M-039	M-039 docs wrong: kit.shop's header says coins are taken with MR::incC	docs wrong: kit.shop's header says coins are taken with MR::incCoin and a negative count, and that the shop closes when the keeper goes; the code uses MR::payCoin and checks the keeper only between choices
+M-040	M-040 maintainability: kit.projectile's slot lists only grow; a slot i	maintainability: kit.projectile's slot lists only grow; a slot is reused only while its object is alive in the current stage, so each new stage, and each throw that cannot make an object, adds slots for the session
+M-041	M-041 wrong behaviour: kit.talk says one line at a time for all mods w	wrong behaviour: kit.talk says one line at a time for all mods with no hand-over; a second `say` while a line shows takes the globals, and whichever ends first ends both
+M-042	M-042 wrong behaviour: kit.hud's handles are bare slot numbers checked	wrong behaviour: kit.hud's handles are bare slot numbers checked against no owner; a mod's handle to an element that went (removed, timed out, or its mod stopped) changes or removes whatever element of any mod now holds that slot
+M-043	M-043 wrong behaviour: kit.area, kit.gravity and kit.ride give the gam	wrong behaviour: kit.area, kit.gravity and kit.ride give the game bare names for their kinds; two mods with one name clash and the second's kind silently places the first's, and a data kind read at LumaKit's start is aliased for L
+M-044	M-044 wrong behaviour: kit.menu moves the game's Back and Quit only wh	wrong behaviour: kit.menu moves the game's Back and Quit only when the pause menu opens; an entry added, removed or stopped while the menu is open leaves them in the wrong place
+M-045	M-045 wrong behaviour: kit.area, kit.gravity and kit.player.form act i	wrong behaviour: kit.area, kit.gravity and kit.player.form act in MarioActor hooks with no test that the actor is player 1; svc.player's extra players trigger the main player's effects
+M-046	M-046 wrong behaviour: when a mod stops while the player rides one of 	wrong behaviour: when a mod stops while the player rides one of its mounts, kit.ride calls that stopped mod's on_dismount
+M-047	M-047 wrong behaviour: kit.stage galaxies and domes are one per name f	wrong behaviour: kit.stage galaxies and domes are one per name for all mods; a second mod's definition takes the first's, and when it stops the galaxy is gone for both
+M-048	M-048 wrong behaviour: kit.stage.build's gravity fields never pull; ea	wrong behaviour: kit.stage.build's gravity fields never pull; each load of a built stage defines a new gravity shape and alias that nothing places or ends, until the session's 4096 alias rows run out
+M-049	kit.item (item.lum, 638 lines)	
+M-050	M-050 wrong behaviour: kit.replay's seed is one value for every mod; a	wrong behaviour: kit.replay's seed is one value for every mod; a second mod's seed replaces the first's, and when that mod stops the game's own random numbers come back instead of the first mod's sequence (the M-021 pattern)
+M-051	M-051 crash: kit.ui.kit runs a button's or slider's callback one frame	crash: kit.ui.kit runs a button's or slider's callback one frame after the press; if its mod is taken out in between, LumaKit calls into the freed mod
+M-052	M-052 wrong behaviour: kit.net.kit trusts what any peer says: a player	wrong behaviour: kit.net.kit trusts what any peer says: a player can tell the host that any id joined or left, any machine on the network can give a waiting player its id, any player can grow the host's clock maps without limit, a
+M-053	M-053 wrong behaviour: the kit data schemas accept values the kit cann	wrong behaviour: the kit data schemas accept values the kit cannot take; a data-only mod that passes the validator can stop LumaKit's data read or hang the game
+M-054	M-054 wrong behaviour: kit.cutscene and kit.stage share svc.audio's on	wrong behaviour: kit.cutscene and kit.stage share svc.audio's one music without knowing of each other; a cutscene with music in a galaxy that has a mod's music gives the game's music back when it ends
+M-055	M-055 wrong behaviour: a WebSocket server can make the game queue pong	wrong behaviour: a WebSocket server can make the game queue pongs without limit; pongs bypass the send budget every other send is held to
+M-056	M-056 wrong behaviour: the game's mirrors reflect the game's own camer	wrong behaviour: the game's mirrors reflect the game's own camera, not the mod's main camera
+M-057	M-057 wrong behaviour: on macOS the look turns by the system's acceler	wrong behaviour: on macOS the look turns by the system's accelerated pointer motion, not the mouse's counts
+M-058	M-058 wrong behaviour: on macOS the held cursor is frozen where it was	wrong behaviour: on macOS the held cursor is frozen where it was, not moved into the picture
+M-059	M-059 wrong behaviour: one look for all mods: a second mod's on silent	wrong behaviour: one look for all mods: a second mod's on silently replaces the first, its off or end ends both, and its scale reaches every reader
+M-060	M-060 wrong behaviour: with more than one controller read in a frame, 	wrong behaviour: with more than one controller read in a frame, look() keeps only the last read's turn
+M-061	M-061 wrong behaviour (Windows): the mouse clip is given back only by 	wrong behaviour (Windows): the mouse clip is given back only by the next controller read
+M-062	M-062 wrong behaviour (Linux): where SDL cannot hold the mouse the loo	wrong behaviour (Linux): where SDL cannot hold the mouse the look gets no mouse motion and asks again every pump
+M-063	M-063 wrong behaviour (Android): a mouse click on the picture drops th	wrong behaviour (Android): a mouse click on the picture drops the mouse hold
+M-064	Coverage	, M-065, M-066, M-068. Docs wrong: M-067. Maintainability: M-069 (no mod, no cost). No new crash: every new
+M-065	M-065 wrong behaviour: set_drawn's four slots fill with removed extra 	wrong behaviour: set_drawn's four slots fill with removed extra players; a later hide is not recorded and outlives its mod
+M-066	M-066 wrong behaviour: a JOINT rig on Mario reads the skeleton without	wrong behaviour: a JOINT rig on Mario reads the skeleton without Mario's own body scale and look offset
+M-067	M-067 docs wrong: luma_input.h's first comment names input 1.3	docs wrong: luma_input.h's first comment names input 1.3
+M-068	M-068 wrong behaviour: a fast turn of the look counts as a camera cut 	wrong behaviour: a fast turn of the look counts as a camera cut for the player and for the frame interpolation
+M-069	M-069 maintainability: the look's host work runs on every controller r	maintainability: the look's host work runs on every controller read with no mod
+M-070	M-070 draw.inst: two mods on one actor compound each other's colours (	draw.inst: two mods on one actor compound each other's colours (and scale) every frame
+M-071	M-071 Shared pools behind per-mod limits: draw textures and fonts, dra	Shared pools behind per-mod limits: draw textures and fonts, draw.mesh, draw.post programs and slots
+M-072	M-072 draw.mesh answers LUMA_E_LIMIT "32" when no scene runs	draw.mesh answers LUMA_E_LIMIT "32" when no scene runs
+M-073	M-073 draw.light: radius and CASTS are checked and then dropped; the h	draw.light: radius and CASTS are checked and then dropped; the header describes traced lights
+M-074	M-074 draw.native on macOS and iOS: at() succeeds, the function never 	draw.native on macOS and iOS: at() succeeds, the function never runs, backend() answers 0
+M-075	M-075 draw.post.program takes a store path from the root, undocumented	draw.post.program takes a store path from the root, undocumented
+M-076	M-076 save.game.export_file during the boot ends the game	save.game.export_file during the boot ends the game
+M-077	M-077 export_file and offer read the user files before the game has re	export_file and offer read the user files before the game has read them
+M-078	M-078 save.global waits for the host's file thread with an unbounded s	save.global waits for the host's file thread with an unbounded spin on the game thread
+M-079	M-079 luma_save.h leaves out answers and a limit the code gives	luma_save.h leaves out answers and a limit the code gives
+M-080	M-080 audio.game_play takes another mod's ended slot; that mod's stop 	audio.game_play takes another mod's ended slot; that mod's stop then answers HANDLE
+M-081	M-081 A replaced music stream is read from the store mapping on the au	A replaced music stream is read from the store mapping on the audio thread, under the mixer lock
+M-082	Coverage	M-029 gains three entries (LumaDraw.cpp 755, 986, 1381). Items 1 to 4 are read completely; items 5, 6 and 7 are
+M-083	M-083 fs refuses a data folder to every mod whose id has a '.'	fs refuses a data folder to every mod whose id has a '.'
+M-084	M-084 One mod can pin gigabytes of host memory through fs and assets.c	One mod can pin gigabytes of host memory through fs and assets.cook
+M-085	M-085 Every fs write walks the whole folder; one worker serves every m	Every fs write walks the whole folder; one worker serves every mod
+M-086	M-086 assets.provide's "256 MiB over a session" is per run of the mod	assets.provide's "256 MiB over a session" is per run of the mod
+M-087	M-087 anim: the play slots and the event pool are shared by every mod 	anim: the play slots and the event pool are shared by every mod behind a per-mod limit, and a lost END is silent
+M-088	M-088 A mod's cooked table (.subs, .events) is read with no bounds che	A mod's cooked table (.subs, .events) is read with no bounds check on its cells; the comment says otherwise
+M-089	M-089 content.model: a reused part keeps the colours an earlier handle	content.model: a reused part keeps the colours an earlier handle set, from the same mod or another
+M-090	M-090 A picture another program put on the clipboard is decoded by stb	A picture another program put on the clipboard is decoded by stb_image inside the game
+M-091	M-091 system.display is never filled on iOS, and the comment that says	system.display is never filled on iOS, and the comment that says it will be is wrong
+M-092	M-092 Device threads are detached and may still run while the process 	Device threads are detached and may still run while the process tears down its statics
+M-093	M-093 A mod whose id has a '.' makes the whole mods.ids record unreada	A mod whose id has a '.' makes the whole mods.ids record unreadable at the next start, and its data can never be forgotten
+M-094	M-094 mods.option for a "key" option always gives the manifest's defau	mods.option for a "key" option always gives the manifest's default, never the player's binding
+M-095	M-095 wrong behaviour: name lookups have no limit; a mod or a slow DNS	wrong behaviour: name lookups have no limit; a mod or a slow DNS server can start threads without end
+M-096	M-096 wrong behaviour and docs wrong: ws_send cannot send a message ab	wrong behaviour and docs wrong: ws_send cannot send a message above 4 MiB, though the header gives 16 MiB "either way"; http's 4 MiB body limit is not in its header
+M-097	M-097 wrong behaviour: a mod's own endpoint may be up to 100 bytes, bu	wrong behaviour: a mod's own endpoint may be up to 100 bytes, but ipc_connect accepts only 64, so another mod cannot reach it; Apple's socket path can be too long
+M-098	M-098 crash at exit (suspected): the net I/O thread and the lookup thr	crash at exit (suspected): the net I/O thread and the lookup threads are detached and use static objects that exit destroys
+M-099	M-099 missing feature: IPv6 link-local addresses pass the local rule b	missing feature: IPv6 link-local addresses pass the local rule but cannot connect
+M-100	M-100 docs wrong (tests and capability text stale): the safe-start not	docs wrong (tests and capability text stale): the safe-start notice moved from the Mods list to the LOG page; 6601 and 6602 still look for it on the list
+M-101	M-101 wrong behaviour: the Mods list's overlap count is quadratic in m	wrong behaviour: the Mods list's overlap count is quadratic in mods and in files, recomputed on every change of the list
+M-102	M-102 WITHDRAWN after reading native_settings.cpp: texture-only and mo	WITHDRAWN after reading native_settings.cpp: texture-only and movie-only mods apply live (apply_live_mods, native_settings.cpp:2666-2670, called by save_mods 2695 and reread_mods_locked 2737), so leaving them out of the restart si
+M-103	runtime/src/mod_log.cpp (1020 lines, read completely)	wrong behaviour: the start's cross-check validates every package again whenever any one package changes, and rounds can repeat it once per refused package
+M-104	native_settings.cpp 2759-4815 (read completely), plus the helpers it c	wrong behaviour: the Mods page does work that grows with the square of the number of mods, several times per frame, while the page shows
+M-105	native_settings.cpp 2759-4815 (read completely), plus the helpers it c	wrong behaviour: on Android, a Riivolution or files mod in a .zip is reported as imported, then never runs
+M-106	native_settings.cpp 2759-4815 (read completely), plus the helpers it c	wrong behaviour: importing an older version of an installed mod replaces the newer one, and the result says UPDATED
+M-107	native_settings.cpp 2759-4815 (read completely), plus the helpers it c	wrong behaviour: on Linux, macOS and Android, importing an update of a mod this session is using replaces its folder while the game still reads it
+M-108	native_settings.cpp 2759-4815 (read completely), plus the helpers it c	docs wrong (translation): two strings on a mod's page have no translation
+M-109	tools/lumacore/gen_classes.py (235) and gen_lumacore.py (68): read com	docs wrong: luma_modlog.h says an entry's count is at most LUMA_MODLOG_ARGS, but the host sends ARGS + 1 on purpose
+M-110	tools/lumacore/gen_classes.py (235) and gen_lumacore.py (68): read com	maintainability: a game class the header scanner misses gets class id 0 ("unknown") with no build error
+M-111	Read completely: NebulaMods.cpp (870), NebulaMods.hpp (98), NebulaModC	docs wrong / maintainability: the events' return-value contracts have no possible user, and the events page is stale
+M-112	Read completely: NebulaMods.cpp (870), NebulaMods.hpp (98), NebulaModC	wrong behaviour (cost): an achievement on a frequent event does string work for every achievement on every raise, for the whole session
+M-113	Design note: marking every function with what it needs	maintainability: the only call lists the build keeps drop template callees, so a needs pass built on them would see no scene reach at all
+M-114	Round 7 count	wrong behaviour: texts given to the game and closures given to services are kept until the mod stops, one per distinct value; a mod that does either each frame grows without limit
+M-115	Round 7 count	docs wrong: detailed-rules.md tells modders to write `if let p = MarioAccess::getPlayerActor { ... }`, which the compiler refuses
+M-116	Round 7 count	wrong behaviour (compatibility): a mod asks each service at the SDK's newest minor version, not the lowest one that has the functions it calls, so a mod rebuilt with a newer LumaLink stops loading on every older game
+M-117	Round 7 count	maintainability (tests): language features that no in-game suite runs, and features no compiler test compiles
+M-118	The `T?` question: no proof; four counter-examples	the checker refuses a `T?` that the game takes. This is too strict, not unsound.
+M-119	The `T?` question: no proof; four counter-examples	S0067 says "test it first", but only optional services narrow on a test. For a value, `if x != none`
+M-120	Findings	docs wrong: the reference writes calls without `()` and uses `vec3` alone as a zero vector; the compiler refuses both
+M-121	Findings	wrong behaviour (diagnostics): an error on any part of a postfix chain is placed at the chain's first word
+M-122	Findings	missing feature: no zero or default value for the built-in value types, though the docs promise one
+M-123	The `T?` question: no proof; four counter-examples	the checker lets a `none` reach a game pointer field the game may read without a test.
+M-124	Findings	maintainability (C and scripts): an `extern fn` is never compared with the C header it names
+M-125	Findings	docs wrong: `hook ... every override of` is documented and checked, but the back end refuses it
+M-126	Findings	crash: `skip <text>` in a before hook of a `const char *` or `const char16_t *` function hands the game the runtime's block, not characters
+M-127	Findings	wrong behaviour (C does not compile): reading `result`, or an after hook's named result, of a `const char *` function
+M-128	Findings	maintainability (cost): each hook body copies every named `const char *` parameter on every call
+M-129	Findings	maintainability (cost): every service event call formats a string and scans every mod record
+M-130	Findings	wrong behaviour: JSON of a map keyed by a game enum writes a bare number as an object key
+M-131	Findings	wrong behaviour: `clamp(v, lo, hi)` with lo > hi gives lo for every v below hi, with no report
+M-132	M-132 maintainability (cost): a mod holding any live `ref` keeps two b	maintainability (cost): a mod holding any live `ref` keeps two before hooks on every game free and every NameObj destruction
+M-133	M-133 crash: a class override keeps the object's data pointer across `	crash: a class override keeps the object's data pointer across `base.f()`; if the base call destroys the object, later field reads and writes use freed memory
+M-134	M-134 wrong behaviour: tasks started by `on stop` have their way-outs 	wrong behaviour: tasks started by `on stop` have their way-outs run inside lumart_end, after luma_finish
+M-135	M-135 crash: a library function that returns its own struct or enum wr	crash: a library function that returns its own struct or enum writes its own size into the caller's value; a struct that gained a field overruns the older caller's
+M-136	M-136 crash: a library keeps a dependent's closure past that mod's sto	crash: a library keeps a dependent's closure past that mod's stop; the generated dependent_gone drops nothing
+M-137	M-137 maintainability (memory, cost): every distinct closure given to 	maintainability (memory, cost): every distinct closure given to a service is kept until unload, and each keep scans the whole table
+M-138	M-138 wrong behaviour: a struct a caller passes to a newer library get	wrong behaviour: a struct a caller passes to a newer library gets zero, not the defaults, in the fields the caller does not have
+M-139	M-139 docs wrong (low): `keep()` logs "more than 1 MiB as json" when t	docs wrong (low): `keep()` logs "more than 1 MiB as json" when the core refused the value for another reason
+M-140	M-140 crash (low): an `export c fn` runs script code on whatever threa	crash (low): an `export c fn` runs script code on whatever thread the mod's C calls it from
+M-141	M-141 maintainability (low): `pack` leaves `<id>-<version>.luma.part` 	maintainability (low): `pack` leaves `<id>-<version>.luma.part` beside the folder when writing or the second check fails with an error (a full disk)
+M-142	M-142 wrong behaviour: linux-arm64 is built with outline atomics on a 	wrong behaviour: linux-arm64 is built with outline atomics on a Linux host that has GCC 9.3.1 or newer, so its link fails, and the output depends on the host
+M-143	M-143 crash (disk and memory exhaustion): an archive added to the game	crash (disk and memory exhaustion): an archive added to the game is unpacked up to 256 GiB before the validator sees it, and an asset up to 4 GiB is read whole into memory
+M-144	M-144 wrong behaviour (fails open): when the validator cannot run, imp	wrong behaviour (fails open): when the validator cannot run, import accepts the mod and the start records no refusal
+M-145	M-145 crash (memory exhaustion): a small glTF can make the cook alloca	crash (memory exhaustion): a small glTF can make the cook allocate gigabytes; only each accessor is limited
+M-146	M-146 hang: a BRSTM, BCSTM or BFSTM header with a block size of 0 and 	hang: a BRSTM, BCSTM or BFSTM header with a block size of 0 and a large block count loops for billions of iterations
+M-147	M-147 docs wrong (usability): `check` and `pack` check against the ins	docs wrong (usability): `check` and `pack` check against the installed game, `build` against what `--names` or LUMA_INCLUDE gave, and nothing records which
+M-148	M-148 maintainability (low): `build` rewrites luma.json in place, and 	maintainability (low): `build` rewrites luma.json in place, and silently does not record a platform for a luma.json with a byte order mark
+M-149	M-149 maintainability (low): an SDK path that contains a comma breaks 	maintainability (low): an SDK path that contains a comma breaks every ELF link
+M-150	M-150 wrong behaviour (fails open, verified): a package the validator 	wrong behaviour (fails open, verified): a package the validator cannot finish is started with its code
+M-151	M-151 crash (memory exhaustion): FLAC and OGG are decoded whole before	crash (memory exhaustion): FLAC and OGG are decoded whole before the length limit is checked; FLAC can reach 1 GiB a channel
+M-152	M-152 crash (device lost) or hang: a mod's shader may loop without bou	crash (device lost) or hang: a mod's shader may loop without bound; neither the compiler nor the game limits it
+M-153	M-153 wrong behaviour (data loss): uninstall deletes the whole LUMALIN	wrong behaviour (data loss): uninstall deletes the whole LUMALINK_DATA folder
+M-154	M-154 wrong behaviour: a reload asked while another runs is dropped, t	wrong behaviour: a reload asked while another runs is dropped, though the log says it will be asked again
+M-155	M-155 wrong behaviour: a mod that cannot be taken out is loaded a seco	wrong behaviour: a mod that cannot be taken out is loaded a second time beside its running copy
+M-156	M-156 crash (memory exhaustion): a mod's sound archive can ask for 64 	crash (memory exhaustion): a mod's sound archive can ask for 64 GiB with one 12-byte command
+M-157	M-157 hang and memory exhaustion: a layout animation (BRLAN) can repea	hang and memory exhaustion: a layout animation (BRLAN) can repeat one key curve billions of times
+M-158	M-158 crash or hang: nested game archives multiply the 4 GiB member li	crash or hang: nested game archives multiply the 4 GiB member limit
+M-159	M-159 crash (memory exhaustion), corrects M-151: an Ogg stream given i	crash (memory exhaustion), corrects M-151: an Ogg stream given in place of a game stream is decoded with no limit
+M-160	M-160 hang: a library mod's data schema can make the check take expone	hang: a library mod's data schema can make the check take exponential time, in LumaLink and at every game start
+M-161	M-161 wrong behaviour (fails open, partly): a mod that makes the valid	wrong behaviour (fails open, partly): a mod that makes the validator fail only when the game's self-description is given is checked again without it
+M-162	M-162 wrong behaviour, revises M-152: a post program a mod's code regi	wrong behaviour, revises M-152: a post program a mod's code registers while running skips the cook's checks; three of four renderers compile it in the game's process with no time limit
+M-163	M-163 maintainability (low): uninstall deletes every path the install 	maintainability (low): uninstall deletes every path the install manifest lists, including absolute ones
+M-164	M-164 wrong behaviour (low): `test` counts a test as passed when any o	wrong behaviour (low): `test` counts a test as passed when any one renderer left a pass, and one unreadable result loses every result
+M-165	M-165 wrong behaviour (low): failures that LumaLink's window does not 	wrong behaviour (low): failures that LumaLink's window does not show
+M-166	M-166 crash (suspected): a texture record's width times height is comp	crash (suspected): a texture record's width times height is computed in 32 bits before anything is read
+M-167	M-167 crash (stack overflow) and hang: a patch selector's `glob` recur	crash (stack overflow) and hang: a patch selector's `glob` recurses once per `*` and backtracks without limit, in the validator at every start and in the cook
+M-168	M-168 memory safety (game process): the cook passes already-cooked fil	memory safety (game process): the cook passes already-cooked files through unchecked, and the game reads them in place with only a magic check
+M-169	M-169 crash (memory exhaustion): a mod's cooked table reserves rows an	crash (memory exhaustion): a mod's cooked table reserves rows and columns from its header before reading any
+M-170	M-170 docs wrong: code blocks the compiler refuses	docs wrong: code blocks the compiler refuses
+M-171	M-171 docs wrong: features documented as working that the compiler ref	docs wrong: features documented as working that the compiler refuses with S0800
+M-172	M-172 docs missing: 80 of the compiler's build-time codes appear on no	docs missing: 80 of the compiler's build-time codes appear on no page, including S0012 and S0800
+M-173	M-173 docs missing: no page warns about calls that crash on the first 	docs missing: no page warns about calls that crash on the first `on frame`
+M-174	M-174 missing feature (tests): behaviours no test proves, most likely 	missing feature (tests): behaviours no test proves, most likely to be hit first (extends M-036 and M-117)
+M-175	M-175 docs wrong (misleading): kit.camera promises the player's body s	docs wrong (misleading): kit.camera promises the player's body stays hidden while a first-person rig holds the camera; it is hidden once and comes back
+M-176	M-176 docs wrong: three service pages tell C modders to import an olde	docs wrong: three service pages tell C modders to import an older version than the header provides
+M-177	M-177 docs wrong (low): anim.md's limits table gives three limits one 	docs wrong (low): anim.md's limits table gives three limits one description
+P-001	Area 1: frame pacing and presentation	(maintainability) `frame_rate_decouple` is a dead setting with a live branch in the render loop.
+P-002	Area 1: frame pacing and presentation	(performance) Every renderer's begin_frame stats config.ini twice a second on the render thread and can block on the settings UI mutex.
+P-003	Area 1: frame pacing and presentation	(wrong behaviour) The game's speed follows the display, not 60 Hz, whenever the display is within 3 % (Android) or 1 % (Windows) of a multiple of the step.
+P-004	Area 1: frame pacing and presentation	(performance, Android) The Choreographer thread re-posts its vsync callback forever, also while the app is in the background.
+P-005	Area 1: frame pacing and presentation	(wrong behaviour, formally; ARM) The game side reuses a frame list's store after reading `released` with no acquire.
+P-006	Area 2: the frame as drawn	(performance, Android/tiled GPUs) Every Vulkan scene pass stores depth and stencil, and the multisampled colour, at its end; no pass variant discards them at their last use and no transient (lazily allocated) attachments exist.
+P-007	Area 2: the frame as drawn	(performance, Android/tiled GPUs) Vulkan parallel recording splits the scene pass into several render pass instances.
+P-008	Area 2: the frame as drawn	(crash, macOS/iOS) A Metal command-buffer error is never treated as a recoverable device loss; it ends the renderer.
+P-009	Area 2: the frame as drawn	(platform gap) Feature parity: D3D11 and Metal lack several features the other two have; three of them silently.
+P-010	Area 2: the frame as drawn	(performance) A draw whose pipeline is not made yet compiles it on the render thread; only Vulkan with graphics pipeline libraries gets a quick link.
+P-011	Area 2: the frame as drawn	(performance, D3D11) D3D11's `video_memory` queries the adapter on every walk, generated pictures included; D3D12 and Vulkan cache it for 100 ms.
+P-012	Area 4: game step performance structure	(wrong behaviour, latent) The game's global `operator new`/`delete` are not thread-safe and nothing enforces the "game thread only" rule.
+P-013	Area 4: game step performance structure	(performance, scales with object count) Every object construction and every `delete` searches all arenas linearly.
+P-014	Area 4: game step performance structure	(maintainability) The Windows release links a stored PGO profile whose staleness warnings are switched off.
+P-015	Area 5: services (audio, input, saves, settings UI, benchmark, updater	(platform gap) macOS and iOS write no crash report of Nebula's own.
+P-016	Area 5: services (audio, input, saves, settings UI, benchmark, updater	(platform gap, Linux) A Linux start from the app menu keeps no log file, so a crash report goes nowhere.
+P-017	Area 5: services (audio, input, saves, settings UI, benchmark, updater	(crash reporting) The SDL crash handler sets `SA_ONSTACK` but the render thread and game thread have no alternate stack of their own, so a stack overflow there is not reported.
+P-018	Area 5: services (audio, input, saves, settings UI, benchmark, updater	(wrong behaviour, rare) At exit or restart the host waits at most 5 s for pending saves, then ends the process anyway.
+P-019	Area 6: Android app	(platform gap, Android) Corrected in Round 2. The app gives the system a performance hint, but it never reads the thermal state, and its hint reports only the busiest thread's CPU time, not the frame's wall time.
+P-020	Area 6: Android app	(wrong behaviour, suspected) Android's restart starts the new activity in the `:game` process and kills that same process in the same UI-thread task.
+P-021	Area 8: console-era design left	(console-era remnant) A frame copy asked before the frame's first draw returns the previous shown picture, "as the console's frame buffer still held it".
+P-022	Area 9: code health	(maintainability) The same per-renderer logic is written four times.
+P-023	Area 9: code health	is in Area 10. P-001 (dead `frame_rate_decouple` branch) and `resolve_frame_timing_config_from_environment` (render_config.cpp:498-500, reads no environment, returns defaults: a misleading name) are the dead or stale paths found.
+P-024	Area 10: tests and gates	(untested, platform gap) Unit tests build only on Windows; the POSIX and Android branches of tested code are never tested.
+P-025	Area 2 and 3, Direct3D 12 (Round 2)	(performance, D3D12 with MSAA) With MSAA, bloom and scene AA resolve the scene and then copy the resolved picture again, a second full-frame write and read that is not needed.
+P-026	Area 2 and 3, Direct3D 12 (Round 2)	(performance, D3D12) The present pass recreates its shader views every frame, and the post-process and bloom helpers build every descriptor table fresh in the frame's ring. This is designed (a ring), and it is listed here only bec
+P-027	Area 2 and 3, Direct3D 12 (Round 2)	(performance, D3D12 HDR output) Opening the HDR 2D layer takes two full-size conversion draws from the same source, and closing it takes a third, every frame the HUD is drawn with HDR output.
+P-028	Area 2 and 3, Direct3D 12 (Round 2)	(performance, D3D12) Several size changes drain the whole GPU in the middle of a frame (`wait_for_gpu`), while other size changes in the same renderer retire the old resource instead.
+P-029	Area 2 and 3, Direct3D 12 (Round 2)	(memory, D3D12) A shader-visible descriptor heap that is replaced when it grows is kept until the renderer is re-initialised.
+P-030	Area 2 and 3, Direct3D 12 (Round 2)	(performance, Vulkan and Metal) The frame-generation and FSR 3 paths call `vkDeviceWaitIdle` from the render thread in the middle of a frame whenever an output or render size changes. This is P-028 on Vulkan.
+P-031	Area 3, Metal and Direct3D 11 (Round 2)	(performance, Apple silicon and iOS) The Metal scene pass always stores depth and stencil, MSAA stores the multisampled colour as well as resolving it, and no target is memoryless. This is P-006 on Apple's tile-based GPUs.
+P-032	Area 3, Metal and Direct3D 11 (Round 2)	(platform gap) Neither Metal nor Direct3D 11 offers HDR output.
+P-033	Area 3, Metal and Direct3D 11 (Round 2)	(wrong behaviour, macOS and iOS) The Apple display clock locks the game to the display under the same loose 3 % tolerance as Android.
+P-034	Area 3, Metal and Direct3D 11 (Round 2)	(performance, macOS and iOS) The Apple display link is never stopped.
+P-035	Area 3, Metal and Direct3D 11 (Round 2)	(untested, macOS) The released Mac app runs only on Apple silicon, but the only Mac runs the tree records are on Intel Macs. The Intel-only code paths ship in no package.
+P-036	Area 7, platform hosts (Round 2)	(wrong behaviour, Linux) With no XDG desktop portal and no Zenity installed, every file pick (saves, mods, Miis) silently does nothing.
+P-037	Area 7, platform hosts (Round 2)	(performance, Linux and Android) The SDL audio callback can allocate on the audio thread.
+P-038	Area 4, the game step's per-frame work (Round 2)	(performance, scales with object count) Draw-buffer packet insertion, removal and light re-sort are linear per call, so clipping churn costs O(n) per changed actor for each of its materials.
+P-039	Area 4, the game step's per-frame work (Round 2)	(performance, worse than linear) Sensor hits are found by testing every pair between groups, each step.
+P-040	Area 4, the game step's per-frame work (Round 2)	(performance, structure) The step has no worker parallelism, and the shared state that blocks it is named here, so a plan can start from it.
+P-041	Area 8, console-era behaviour (Round 2)	(console-era remnant) Several host and renderer timers count frames or presents but are written and named as time, so they run 2-4x faster at 120-240 Hz and 2x slower at 30.
+P-042	Area 8, console-era behaviour (Round 2)	(console-era remnant, a decision for the owner) The default frame-rate setting is 60, the game step, on every platform.
+P-043	Area 10, tests and verify scripts (Round 2)	(untested) This extends P-023 with two facts it did not have. The three code checks are enforced only by one machine's local hook. The SDL and Apple builds do not even compile the unit tests.
+P-044	Area 10, tests and verify scripts (Round 2)	(untested) The engine's riskiest shared code has no unit test: the game arena, the frame-list writer, the draw walker, the display clocks and the Android Java/Kotlin layer.
+P-045	Area 5, services (Round 2, what was reached)	(wrong behaviour, rare) After a dump request times out, the next request can take the previous dump's answer as its own.
+P-046	R3.1 draw_walker.cpp 1-1080 (read completely; with Round 1's 1080-2213	(performance, small) Ring-run merging patches matrix numbers and indices in place in write-combined upload memory, the access pattern the walker avoids everywhere else.
+P-047	R3.1 draw_walker.cpp 1-1080 (read completely; with Round 1's 1080-2213	(maintainability) A pointer into `walk_lerped_` is valid only until the next walk_material_rows call. walk_same_material carries a comment-enforced workaround (:725-727), and any new caller that holds two results is a use-after-fr
+P-048	R3.2 renderer_d3d12.cpp (now read completely, 1-7501)	(performance) The D3D12 sampler heap is drained with a full GPU wait when it fills. Sampler keys include the dynamic-resolution line ratio and the upscaler's bias, so play with dynamic resolution or a temporal upscaler keeps minti
+P-049	R3.2 renderer_d3d12.cpp (now read completely, 1-7501)	(performance) DLSS is created on the render thread inside begin_frame, after a full GPU wait, while FSR 3 and XeSS are created on a worker.
+P-050	R3.2 renderer_d3d12.cpp (now read completely, 1-7501)	(performance) The FSR 3 frame-generation context is recreated mid-frame, with the command list open, after a full GPU wait.
+P-051	R3.2 renderer_d3d12.cpp (now read completely, 1-7501)	(wrong behaviour, diagnostics only) The scene capture decodes with the frame size at read time, not at copy time.
+P-052	R3.2 renderer_d3d12.cpp (now read completely, 1-7501)	(performance, first use) Utility pipelines are compiled on the render thread at first use, outside the pipeline cache.
+P-053	R3.2 renderer_d3d12.cpp (now read completely, 1-7501)	(performance, MSAA) A resolve is recorded for each consumer even when nothing was drawn since the last resolve.
+P-054	R3.3 vk/renderer_vk_frame.cpp (now read completely, 1-3951)	(performance) Vulkan waits for the GPU in the middle of a frame whenever it makes a scene-sized target set. It records one barrier into a separate command buffer, submits it, and blocks until it finishes.
+P-055	R3.3 vk/renderer_vk_frame.cpp (now read completely, 1-3951)	(same finding as Round 1's P-006, given here with exact lines; count it once, as P-006) Every Vulkan scene render pass stores colour, depth and stencil at its end, including the multisampled colour and depth with MSAA. There is no
+P-056	R3.3 vk/renderer_vk_frame.cpp (now read completely, 1-3951)	(performance) When the sampler array fills, the Vulkan reset waits for the last submitted frame. On drivers with a 4000-sampler limit, it also destroys every sampler once half the limit is made, then makes them again.
+P-057	R3.3 vk/renderer_vk_frame.cpp (now read completely, 1-3951)	(performance) Vulkan creates DLSS synchronously on the render thread, as D3D12 does (P-049). SGSR 2 is made there too, by design (:995-997).
+P-058	R3.3b vk/renderer_vk.cpp and vk/vk_context.cpp (both now read complete	(maintainability, small) VMA is told Vulkan 1.1 even when the device and instance are 1.2 or 1.3 without ray tracing.
+P-059	R3.4 texture_store.cpp (read completely, 1-1526)	(performance, loading) Every texture record with authored-looking levels is analysed on the game thread when it is registered, and again on every budget resize and every update. The analysis allocates about 17 bytes of floats per 
+P-060	R3.5 D3D11 (renderer_d3d11.cpp 1-1396 and renderer_d3d11_scene.cpp 1-1	performance: every recorded draw renames the root constant buffer with Map(WRITE_DISCARD)
+P-061	R3.5 D3D11 (renderer_d3d11.cpp 1-1396 and renderer_d3d11_scene.cpp 1-1	performance (and a limit that can fail): the D3D11 sampler cache is never trimmed, and dynamic resolution keeps adding keys
+P-062	R3.5 D3D11 (renderer_d3d11.cpp 1-1396 and renderer_d3d11_scene.cpp 1-1	crash: three D3D11 in-frame allocations throw std::runtime_error on failure
+P-063	R3.5 D3D11 (renderer_d3d11.cpp 1-1396 and renderer_d3d11_scene.cpp 1-1	performance (D3D11 parity): D3D11 scene AA always copies the scene; D3D12 and Vulkan trade the image instead
+P-064	R3.5 D3D11 (renderer_d3d11.cpp 1-1396 and renderer_d3d11_scene.cpp 1-1	performance: D3D11 upload_written scans every upload buffer on every flush, allocates 32 KB each time, and copies each written page into every video-memory copy of the buffer
+P-065	R3.6 Metal	performance (hitches; Metal): the renderer's own shaders are compiled from MSL source on the render thread the first time each is used
+P-066	R3.6 Metal	performance: Metal waits for the GPU whenever its sampler array nears full, and in bound-table mode its sampler cache never shrinks; dynamic resolution keeps adding keys (P-048/P-056/P-061 on Metal)
+P-067	R4.1 native/host/host_main.cpp (read in order; notes written as each p	wrong behaviour. On Linux, macOS and Android the crash and die() paths flush achievements and stats inline with no bound, so a crash on a thread that holds one of their locks hangs the process instead of ending it.
+P-068	R4.1 native/host/host_main.cpp (read in order; notes written as each p	untested (a diagnostic that cannot answer its question). The SDL "[pacing] frame work … longest" line reports the largest CPU time of any registered thread between two frame waits, so it cannot say whether the game step or the ren
+P-069	R4.1 native/host/host_main.cpp (read in order; notes written as each p	performance. Android's performance-hint session is told the busiest thread's CPU time as the "actual work duration". The API asks for the wall time of the work. Blocked time (GPU fences, the vsync, locks) is left out, so the sessi
+P-070	R4.1 native/host/host_main.cpp (read in order; notes written as each p	performance. Every host log line does fprintf(stdout) plus fflush(stdout) on the calling thread, and the game thread is a caller (svc_log, context and presence changes, achievements). The game step then waits on the log's write.
+P-071	R4.2 Audio	wrong behaviour. On SDL hosts (Linux, Android) and Apple, a movie's picture runs ahead of its sound by the audio the device and SDL's stream still hold.
+P-072	R4.2 Audio	wrong behaviour (audible). The Windows output starts at one engine period and lowers the fill again after 10 quiet seconds. A machine that needs two periods therefore glitches, raises, lowers 10 s later and glitches again. The rai
+P-073	R4.3 Input	wrong behaviour. On Windows the left stick has a per-axis (square) dead zone for both XInput and HID pads, while the SDL hosts use a radial one. A small diagonal push snaps to a straight line on Windows.
+P-074	R4.3 Input	wrong behaviour. A Wii Remote's Nunchuk stick takes its centre from the first report after connecting, not from the Nunchuk's calibration. A stick that is off centre at that moment (held, or drifting) stays offset until the next c
+P-075	R4.3 Input	wrong behaviour. Short controller presses can be lost. Buttons are carried as levels, the newest sample replaces the last, and nothing latches a press that came and went between two game reads.
+P-076	R4.3 Input	platform gap (the host half of the mouse-held look). The look's mouse motion is unusable or differs between platforms:
+P-077	R4.3 Input	performance. The Windows HID worker registers a new thread-pool wait for every report: UnregisterWait, then RegisterWaitForSingleObject with WT_EXECUTEONLYONCE. Each report so costs:
+P-078	R4.3 Input	wrong behaviour (suspected). The star pointer and the mod look are sampled once per game step. Above 60 Hz the pointer the player aims with moves at 60 Hz, plus the interpolation delay, while the system cursor is hidden over the p
+P-079	R4.4 Saves and import	wrong behaviour (data loss after a downgrade). A Nebula.sav written by a newer Nebula (version above 4) is reported to the player as damaged. The player is then offered the damaged-save path, and the next saves overwrite it.
+P-080	R4.4 Saves and import	performance. SaveDataHandler::waitRequest spins the game thread with a pause/yield loop, without sleeping, while an earlier save request is in flight. requestLoadSaveData and requestSaveSaveData both call it first.
+P-081	R4.4 Saves and import	wrong behaviour (rare data loss). A whole-save import moves the existing files aside and then moves the new ones in, one rename at a time, with no journal. A crash or power loss between the two leaves the save folder without a sav
+P-082	R4.4 Saves and import	wrong behaviour (suspected). The in-game import's write is not ordered against the game's own save worker. The merged file is built from the save as the game read it. It is then placed by a detached thread with renames (native_set
+P-083	R5.1 Round 4 leftovers	performance (input stalls on Windows). The HID worker's own comment says it never stalls on a busy radio (controller_hid.cpp:1193-1196). Several paths on that worker thread still do synchronous device I/O with timeouts of 30-200 m
+P-084	R5.1 Round 4 leftovers	wrong behaviour (it widens P-073 to every platform). On every host, every stick source goes through a second per-axis dead zone and per-axis clamp before the game sees it. That applies to pads, keys and SDL's radial result alike. 
+P-085	R5.1 Round 4 leftovers	performance. A Mii import holds the library mutex while it reads every chosen file (up to 64 MB each), copies each into the Miis folder, and writes the library. Meanwhile the game thread's mii_record and mii_count calls wait on th
+P-086	R5.2 Settings and UI	wrong behaviour. Some host texts shown in the settings menu have no NebulaText entry, so they appear in English capitals in every language.
+P-087	R5.2 Settings and UI	platform gap (the P-032 pattern; a complete list for the pages read so far). These options are offered where the active platform or renderer cannot do them:
+P-088	P-088 performance: the open settings menu rebuilds its page twice a fr	performance: the open settings menu rebuilds its page twice a frame on the game thread, and the CONTROLS page rebuilds its row list several times per row
+P-089	P-089 wrong behaviour: the benchmark's FPS, lows and "SMOOTH AT 60 FPS	wrong behaviour: the benchmark's FPS, lows and "SMOOTH AT 60 FPS" verdict count Nebula's interpolated pictures, so a device that cannot run the game at 60 steps a second can still be told it is smooth
+P-090	P-090 wrong behaviour: the GPU times behind the recommendation average	wrong behaviour: the GPU times behind the recommendation average the interpolated pictures' cheap GPU frames in with the scene's, so the probe prices and the worst stage's cost are understated and the recommendation can pick setti
+P-091	P-091 wrong behaviour: the settings menu offers a benchmark's recommen	wrong behaviour: the settings menu offers a benchmark's recommendation on a renderer other than the one it was measured on
+P-092	P-092 wrong behaviour: an install of a beta is never offered the final	wrong behaviour: an install of a beta is never offered the final release that follows it, on Windows, Linux, macOS or Android
+P-093	R6.1 Android app	(wrong behaviour) The launcher and the game write the same SharedPreferences file from two processes, so the launcher's stale copy undoes the game's changes.
+P-094	R6.1 Android app	(wrong behaviour) Setting up again deletes the installed game before the new one is built, so a failure, a full device or Cancel leaves no game.
+P-095	R6.1 Android app	(wrong behaviour) A full device during setup ends with an untranslated OS error, and setup killed midway can leave a 3.9 GB orphan that blocks the next setup.
+P-096	R6.1 Android app	(wrong behaviour) Mod imports never check free space, show a raw ENOSPC text when the device fills, and their staging folders are never swept after a killed import.
+P-097	R6.1 Android app	(wrong behaviour) In the Phone input mode a controller press hides the touch controls for good, because the field it checks is never set.
+P-098	R6.1 Android app	(crash, suspected) GameActivity handles every configuration change but colorMode, touchscreen, mcc and mnc. One of those recreates it inside a process whose native game cannot start twice.
+P-099	R6.1 Android app	(wrong behaviour) The restart's CLEAR_TASK removes the launcher from the task, so after a restarted game ends the player lands on the home screen and the launcher's last-run report waits.
+P-100	R6.1 Android app	(wrong behaviour, suspected) A launcher opened by "Open with" or Share while the game runs can import mods into, or delete, files the running game is using.
+P-101	R6.1 Android app	(performance) The launcher's sky is redrawn every display frame for as long as the launcher is open, and it jumps every two minutes.
+P-102	R6.2 SDL host (Linux and Android)	(platform gap, suspected) On Android a mouse's buttons never reach the game: the touch overlay takes every click as a finger.
+P-103	R6.2 SDL host (Linux and Android)	(platform gap) On Linux the Display page offers Windowed or Borderless and a window size, but the SDL host never applies either. There is no full screen on desktop Linux.
+P-104	R6.3 Apple host (macOS; iOS)	(platform gap): iOS and iPadOS have no host that can build.
+P-105	R6.3 Apple host (macOS; iOS)	(wrong behaviour): full screen entered or left through the system is never written back to the display setting.
+P-106	R6.3 Apple host (macOS; iOS)	(wrong behaviour): the Mac app's own texts are English only, while the game ships 14 languages and NebulaText.tsv already holds most of these strings.
+P-107	R6.3 Apple host (macOS; iOS)	(wrong behaviour): two screens with the same name cannot be told apart.
+P-108	R6.3 Apple host (macOS; iOS)	(maintainability, suspected thread fault): settings_monitors reads NSScreen off the main thread.
+P-109	R6.3 Apple host (macOS; iOS)	(wrong behaviour, suspected): rumble stops for good after a haptic-engine reset, and the reset handler races the main thread.
+P-110	R6.4 Windows window and start	(wrong behaviour): on the Direct3D 11 renderer, display changes made during play never reach the window, and neither do monitor changes.
+P-111	R6.4 Windows window and start	(wrong behaviour): after the player resizes the window by dragging its edge, or drags it onto a monitor with a different scale, the window jumps back to the centre of the monitor named in the settings.
+P-112	R6.4 Windows window and start	(wrong behaviour, small): the settings' window-size change uses the system DPI, not the window's.
+P-113	R6.5 Leftovers	(wrong behaviour, data loss): in Windows Setup, answering "No" to "Uninstall Nebula?" uninstalls Nebula and also deletes every save and setting.
+P-114	R6.5 Leftovers	(wrong behaviour): the uninstall runs on Setup's window thread, so the window stops responding while it deletes.
+P-115	R6.5 Leftovers	(wrong behaviour): Setup declares per-monitor DPI awareness but lays out everything at the system DPI, and never handles WM_DPICHANGED.
+P-116	R6.5 Leftovers	(platform gap): HD replacement movies play only on Windows, and AV1 movies do not decode on macOS.
+P-117	R6.5 Leftovers	(performance, suspected): AV1 movie decode is plain C and can stall the render thread.
+P-118	R6.5 Leftovers	(console-era remnant): the THP movie decoder keeps the SDK's IDCT column swap on purpose.
+P-119	R6.5 Leftovers	(wrong behaviour): save export and import carry the game's save files only, not achievements or stats.
+P-120	R6.5 Leftovers	(platform gap): Windows Setup refuses any install folder that is not on NTFS.
+P-121	R6.5 Leftovers	(maintainability): small faults in the Windows Setup's helpers.
+P-122	R7.1 FactoryGalaxy scenario 4 (item 1, the coordinator's failing stop)	(wrong behaviour, suspected soft lock): FactoryGalaxy scenario 4 (the fast-foe comet) never gives control to the player after its opening flight.
+P-123	R7.1 FactoryGalaxy scenario 4 (item 1, the coordinator's failing stop)	(maintainability): the comet time limit is converted between seconds and steps three times, and the default is right only because two conversions cancel.
+P-124	R7.4 Verify scripts that depend on the test plug-in or on run.log (ite	(untested): every verify script that starts the game goes through run.sh, so all of them depend on the refused plug-in. Each needs the plug-in for its tour or events, or reads run.log lines the plug-in writes.
+P-125	R7.5 Leftovers (item 5)	(platform gap): the in-game update installs itself only on Windows. On macOS and Linux, as released, it can only name the new version.
+P-126	R7.5 Leftovers (item 5)	(wrong behaviour, small): the Linux install.sh and uninstall.sh have rough edges.
+P-127	R8.1 Game step: findings	(performance, small): GameScene::draw does work every game frame that the shipping build never uses.
+P-128	R8.1 Game step: findings	(performance, small): each CategoryList call fetches the list executor through two pointer hops and the draw pass walks about 25 category lists per frame, most of them empty in a given galaxy.
+P-129	R8.1 Game step: findings	(performance, medium): every collision query walks every part in the global zone and in each overlapping zone; there is no spatial index over parts, so the cost is actors × parts per step.
+P-130	R8.1 Game step: findings	(performance, small): a moving part whose sphere touches its zone's box edge recomputes the whole zone's bounds every step.
+P-131	R8.1 Game step: findings	(performance, medium): once any ball or line query has filled 64 hits, every later query allocates three heap arrays per part tested, for the rest of the scene.
+P-132	R8.1 Game step: findings	(performance, small): ball queries against a moving part invert the part's previous matrix and take the inverse matrix's scale (three square roots) on every query, instead of once when the part moves.
+P-133	R8.1 Game step: findings	(performance, small): prism lists deduplicate by linear search over the hits found so far, and a prism that misses is retested in every block it appears in.
+P-134	R8.1 Game step: findings	(performance, small; console-era remnant): each collision prism stores one vertex plus normals, and the other two vertices are rebuilt at every use with a cross product and a divide.
+P-135	R8.1 Game step: findings	(performance, small): the clipping pass is linear and cheap, but it calls MR::getClippingJudge (a scene-object lookup) once per target actor per step, and for every clipped actor also re-tests the drawn-while-clipped frustum each 
+P-136	R8.1 Game step: findings	(performance, small): looking up a sensor by name hashes the string on every call, and actors ask by name in their per-step code.
+P-137	R8.1 Game step: findings	(performance, small): picking a free actor from a pool scans the pool from the start every time.
+P-138	R8.1 Game step: findings	(performance, small): a bound actor that does not move runs the same map query twice per step.
+P-139	R8.1 Game step: findings	(performance, medium): gravity is found by testing every registered gravity for every actor and every shadow every step; there is no spatial filter.
+P-140	R8.1 Game step: findings	(performance, medium): every moving actor asks for its shadow to be recomputed every step, and each recompute is a gravity search plus a map line query, even when nothing under the actor moved.
+P-141	R8.1 Game step: findings	(performance, small): the emitter pool is walked in full, empty slots included, up to three times per step.
+P-142	R8.1 Game step: findings	(performance, small; console-era remnant): lights are loaded per object draw in the console's eight-register model, with each world light moved into view space on the CPU at every load.
+P-143	R8.1 Game step: findings	(performance, small; console-era remnant): each shadow volume is drawn twice, front faces then back faces, with the shape's vertices rebuilt and emitted for each pass.
+P-144	R8.1 Game step: findings	(performance, small): each animated model's joint matrices are copied twice per frame after the skeleton is evaluated: into the model's pose, then into the frame list.
+P-145	R8.1 Game step: findings	(performance, small): the scenario-select and mod mesh draw buffers merge same-material entries by scanning every entry already in the buffer, so entry is quadratic in draws per buffer.
+P-146	R8.1 Game step: findings	(maintainability, small): frame-list building, skeleton evaluation and collision results live in file-scope or member state that only one caller at a time may use; each is the first thing that stops the work running on more than o
+P-147	R8.1 Game step: findings	(console-era remnant, small): the mod log notice counts its line lifetimes in game frames, not in time.
+P-148	R8.4 Console-era design by behaviour (item 2)	(console-era remnant, wrong behaviour possible): a sensor's list of touching sensors is fixed at its group size and drops any more without a word.
+P-149	R9.1 Particle simulation	(performance, medium on phones; console-era remnant): every particle is built as a matrix in eye space on the CPU, multiplied back to world space, and written to the frame as three 3x4 matrices.
+P-150	R9.1 Particle simulation	(console-era remnant, small): the particle material copies GX alpha-compare, combiner-stage and indirect-matrix settings into a constant array on every emitter draw, and the primary and environment colours carry over from one emit
+P-151	R9.3 Render/Material.cpp (now read completely)	(console-era remnant, performance on phones): the material path keeps the console's per-draw register model: texture matrices, the two ambient registers, fog, alpha compare, material colours and the combiner colour registers are s
+P-152	R9.4 Lights (LightDirector, LightDataHolder, LightZoneDataHolder, Ligh	(performance, small; same family as P-139): every visible actor scans every light area every step to find which one it stands in.
+P-153	R9.4 Lights (LightDirector, LightDataHolder, LightZoneDataHolder, Ligh	(wrong behaviour when the option changes; maintainability): which light record a "shadow" light set returns depends on the ray-tracing option, but the answer is fixed when an actor enters an area, so changing the option in the men
+P-154	R9.5 Render/Clip.cpp, Render/TypedDraw.cpp (read completely)	(console-era remnant, performance on phones): the "site" draws (effects, shadows, 2D, gauges, glows) still work as the console's immediate mode: each draw copies its material constants into the frame arena, asks the host for a tex
+P-155	R9.6 Render/Transform.cpp, ModelData.cpp, RenderTexture.cpp, GameTextu	(console-era remnant, small; performance on phones): a texture is still known by the address of its bytes and described by the console's texture header, so every textured draw hashes an address to find the host texture, and the co
+P-156	R9.8 Area 8, engine side (runtime/src/render/core: registries.cpp read	(performance on high frame rates and phones; console-era remnant): every presented picture recomputes, on the CPU, the eye-space position and normal matrix of every draw matrix of every model, including skinned envelopes, and re-b
+P-157	R9.8 Area 8, engine side (runtime/src/render/core: registries.cpp read	(console-era remnant, maintainability): the imported material format still stores the console's register layout (combiner colour registers as signed 16-bit, constant colours, material colours, alpha-compare codes and reference byt
+P-158	R10.1 Small System/Nebula*.cpp files (read completely: NebulaSystemSet	(wrong behaviour on slow devices): a cutscene skip stops after 15 seconds of wall time even if the cutscene has not ended. On a phone, where fewer extra steps fit in each frame, a long cutscene is therefore only partly skipped, an
+P-159	R10.2 The Vulkan present path, and what a hidden window changes (rende	(wrong measurement; platform gap): on a hidden window, Direct3D 12 and Direct3D 11 draw every picture but present none, while Vulkan acquires and presents every picture. The benchmark therefore compares two renderers that skip pre
+P-160	R11.1 Screen/NebulaSettingsMenu.cpp (5,755 lines)	(wrong behaviour: text shows in English): host texts are translated by building an id from the English words, so any change to a host string drops that string to English in all 13 other languages without any error.
+P-161	R11.1 Screen/NebulaSettingsMenu.cpp (5,755 lines)	maintainability (a latent dead end; it would strand the player): if the menu could not make a row or page button while it is open, the game would stay frozen and silent with no menu drawn. Checked afterwards: makeGroup, makeWindow
+P-162	R11.1 Screen/NebulaSettingsMenu.cpp (5,755 lines)	wrong behaviour (text fitting): long translations are squeezed past readability or run out of their boxes, with different floors in each place.
+P-163	R11.1 Screen/NebulaSettingsMenu.cpp (5,755 lines)	performance (input latency, small): the menu reads the mouse, touch and wheel once per system step, so on a fast display the pointer's hover, drag and slider follow at the step rate, one step behind.
+P-164	R11.1 Screen/NebulaSettingsMenu.cpp (5,755 lines)	wrong behaviour (late unlock): the Prankster Comet, Daredevil, Cosmic, Speedy, purple coin and hidden-star achievements do not unlock with the star that completes them, but at the next stage start.
+P-165	R11.1 Screen/NebulaSettingsMenu.cpp (5,755 lines)	performance (small): every NebulaText lookup is a linear scan of the 1,292-row table, and NebulaText::get with a growing buffer expands each text twice (measure, then get, :431-435).
+P-166	R12.4 Findings	Binder keeps every plane, so Mario's push-out and ground can differ from the console's
+P-167	R12.4 Findings	The hip drop no longer marks a digital jump when the actor's gravity is zero
+P-168	R12.4 Findings	Collision and movement arithmetic rounds differently from the console
+P-169	R12.4 Findings	A normal import does not prove the cooked collision octree reaches the same prisms
+P-170	R13.0 FactoryGalaxy scenario 4: the settled observation and what the c	A starter without a rail strands the player in space instead of failing
+P-171	R13.0 FactoryGalaxy scenario 4: the settled observation and what the c	The port loads layer folders past LayerP that the console never loads
+P-172	R13.1 Area 8: engine side and the importer; the modernisation map for 	The engine reads a glowing or water material's live rows at positions taken from the unlit form, so with pixel lighting it can read the wrong row
+P-173	R13.1 Area 8: engine side and the importer; the modernisation map for 	A material touched once never returns to its registered slot
+P-174	R13.2 Area 2: upscalers, frame generation and their combinations	One slow stretch turns native interpolation off for the rest of the session when a temporal upscaler is on
+P-175	R13.2 Area 2: upscalers, frame generation and their combinations	FSR 3 runs with a moving render size but is never told the size moves
+P-176	R13.2 Area 2: upscalers, frame generation and their combinations	SGSR 2 and MetalFX temporal get wide (HDR) scene colour with no HDR mode
+P-177	R13.3 Round 11 item 2 remainder: effects, gravity, view groups, shadow	A view-group cube with a negative group number writes before the start of the group table
+P-178	R13.3 Round 11 item 2 remainder: effects, gravity, view groups, shadow	A flat-model shadow hands the renderer joint matrices it never wrote
+P-179	R13.3 Round 11 item 2 remainder: effects, gravity, view groups, shadow	Effects marked as lit by their area never take the area's light
+P-180	R13.3 Round 11 item 2 remainder: effects, gravity, view groups, shadow	A wire gravity has no point at the rail's end
+P-181	R13.3 Round 11 item 2 remainder: effects, gravity, view groups, shadow	Shadow shapes are rebuilt on the CPU every draw, and the oval surface shadow draws its model three times
+P-182	R13.3 Round 11 item 2 remainder: effects, gravity, view groups, shadow	View groups special-case one galaxy by name
+P-183	R13.3 Round 11 item 2 remainder: effects, gravity, view groups, shadow	The creator index is built lazily with no lock, and NameObjAdaptor leaks a replaced functor
+I-001	L. Findings	wrong behaviour (T1). The game step follows the display, not 60 Hz, whenever the display is near a multiple of 60.
+I-002	L. Findings	design gap (T3, T6). On vblanks, the real picture of a step is almost never shown, and every step costs one extra unseen walk.
+I-003	L. Findings	performance (T3). Each in-between picture is a full CPU walk and a full GPU frame.
+I-004	L. Findings	wrong behaviour (T4). Interpolation adds about one to two steps of latency, and neither camera nor pointer is sampled at present time.
+I-005	L. Findings	wrong behaviour (T2, T7). Linux has no display clock.
+I-006	L. Findings	wrong behaviour (T2), suspected. Metal drops a picture when `nextDrawable` waited more than 1.5 ms.
+I-007	L. Findings	wrong behaviour (T2), suspected. VRR detection and slot timing.
+I-008	L. Findings	wrong behaviour (T6). Rates fit to whole vblanks halve the rate instead of degrading gently.
+I-009	L. Findings	wrong behaviour (T6). A temporal-upscaler suspend turns interpolation off for the session.
+I-010	L. Findings	design gap (T6), suspected. Two governors act on the same GPU time without knowing of each other.
+I-011	L. Findings	console-era remnant (T5). Counts in presents and pictures remain.
+I-012	L. Findings	design gap (T7). Only Android Vulkan presents at a requested time; only Windows has frame telemetry and the timeline.
+I-013	L. Findings	wrong behaviour (minor), suspected. FramePhase measures the wrong work under interpolation.
+I-014	L. Findings	wrong behaviour (T2), suspected. Game-declared camera cuts come from two places only.
+I-015	L. Findings	maintainability. Stale or wrong comments and dead parts.
+I-016	L. Findings	gap in tests. The scheduler is not under test (J.8): the arrival clock, `vblanks_per_slot`, both governors, supersede, `interp_walk_time`, the platform clocks' lock rules, `present_sync_interval`, the Metal drop rule and VRR detec

@@ -1,0 +1,43 @@
+You are Agent 1 of two on Nebula v2. You work alone, for as long as it takes, and the owner will mostly not be there. A second agent (Agent 2, the mod system) works at the same time on the same machine. Neither of you starts sub-agents.
+
+THE GOAL
+Nebula v2 as a completely modernised, professionally built game on every platform it ships on, mods included:
+- Stable: it does not crash, it cannot lose a player's data, and a mod cannot bring it down.
+- Smooth: even pictures at every display rate, with as little delay as the method allows.
+- Fast: from a phone to a high-end PC, with no work done that the picture does not need.
+- Proven: every one of these is shown by tests, measurements and arithmetic that run without a person. Nothing is assumed.
+- Best practice everywhere: where a part is built the old console way or patched together, rebuild it the way a modern engine does. Rewrites are allowed wherever they make the result stronger.
+The release date does not matter. Ray tracing is outside the work, except removing its code from main.
+The finish line: you can say "Nebula v2 is perfect now; nothing more can be built to improve it" for your side, and show why.
+
+YOUR SIDE
+The gate, the engine and the port: the test gate that proves everything, data safety, crashes, the render data path (a rewrite), the frame (an overhaul), in-between pictures and the frame-rate unlock, pacing, the game step's speed, the four renderers (Direct3D 12, Vulkan, Direct3D 11, Metal), audio, input, menus, the Android app, Windows, Linux and Mac.
+
+READ FIRST, IN THIS ORDER, WHOLE
+1. C:\Users\<user>\Documents\MarioGalaxyRecomp\NEBULA-V2-PLAN\00-READ-FIRST.md  (the goal, the owner's decisions, what done means, the rules, who owns which files)
+2. C:\Users\<user>\Documents\MarioGalaxyRecomp\NEBULA-V2-PLAN\01-AGENT-1-ENGINE.md  (your order of work, package by package)
+3. C:\Users\<user>\Documents\MarioGalaxyRecomp\NEBULA-V2-PLAN\03-LEDGER.md  (all 376 findings; 199 are yours)
+4. The audit: C:\Users\<user>\Documents\MarioGalaxyRecomp\NEBULA-AUDIT-2026-11-17\  files 00, B, C, D, E, F whole, and the scripts folder.
+Also read this project's memory index on your first turn; it holds the owner's standing rules and facts about this machine.
+
+YOUR FIRST ACTION
+Package E0, step E0.1: the baseline. The newest work is 79 uncommitted files in D:\NebulaWork\MarioGalaxyRecomp\Nebula-Clean. Read every diff, commit them in small commits by subject, run the unit tests and the audit's tour, add the plan and the audit under docs/, fast-forward main, push, and write "MAIN-MOVED <commit>: baseline" on the board at D:\NebulaWork\plan\BOARD.md. Agent 2 cannot branch until you have done this. Then build the rest of the gate before anything else.
+
+HOW YOU WORK
+- Follow the order in file 01. Finish a package before the next. A crash or a data-loss fault found at any time is fixed at once.
+- A fix without a test is not a fix. The test goes into the gate and must fail on the code before the fix. A change to game source is proved by the step-hash replay. A change to a renderer is proved by pictures on every tour stop and every renderer. A performance claim is a measurement with the machine idle.
+- Find the cause and fix the cause. One system, not patches. Write the Vulkan, Direct3D 11 and Metal side with every Direct3D 12 change. No fix names a device, a galaxy or a mod.
+- A finding is a lead with evidence, not an order. Read the cited lines in the tree as it is now before you fix it. If it is wrong, close it as not-a-fault with the proof.
+- The ledger is the contract. A row is closed only as fixed (commit and test), not-a-fault (proof), decided (the owner's words) or out-of-scope (named in file 00). New faults you find become new rows.
+- If a target cannot be met, do not lower it and do not go quiet: write the measurements and the arithmetic that show the floor, add a ledger row for the owner, and go on.
+- Git: small commits, plain messages from a message file, no attribution lines of any kind, the repository's configured identity only. Your branch is engine/work in your own work tree. Main moves only by fast-forward from a rebased branch on which the full gate passed. Never rewrite main.
+- Two agents, one machine: stay in the files file 00 gives you; use the board for anything that crosses; take D:\NebulaWork\plan\measure.lock before any timed run and tablet.lock before using the tablet.
+- The tablet (R52WA0FXE5J) may be used. Never touch the owner's installed game on it (dev.nebula.galaxy); use the test package and remove it when a run of work is over. Never change the tablet's or the PC's system settings.
+- Functional test runs: hidden window, no sound. Pacing measurements: a visible window is allowed, no sound.
+- Everything a person reads is plain, short and exact, in all 14 languages.
+- Do not stop because something is hard or long. If a decision is truly the owner's, write the question on the board with your recommendation and go on with everything that does not depend on it.
+
+WHEN YOU ARE DONE
+Only when every row of yours in the ledger is closed, the full gate is green on main from a clean checkout, every measure in file 00 section 4.3 is green with its measured value written down, and you have read what the audit did not (package E14): write the closing sentence for your side with the evidence beside it, in docs/plan/PROGRESS-AGENT-1.md and on the board.
+
+Begin now with the reading, then E0.1.
