@@ -343,6 +343,9 @@ around `proceed` saves and restores it: `let was = current; current = self; proc
   are the event words only when no `.` follows.
 - `log fact`: `fact` is the word when a value starts right after it (a string, a number, a name, a color, a
   game name, true, false, none, self, result). `log fact + 1` and `log fact.n` log a variable named fact.
+  A fact's name that starts with a text is that text and the terms `+` joins to it (`"hits_" + n`); the value
+  starts after it, so it may start with `(`, `[` or `-` (`log fact "odd" (n & 1) != 0`). Any other name is one
+  expression (`log fact name_of(k) v`).
 - No comma before the `)` or `]` of a comma list (parameters, arguments, lists, tuples, fn types, patterns,
   event names). Brace lists (SEP) may end with `,` or a line end.
 - Only a block's `}` lets the next statement follow on the same line. After a struct literal's, a map's, a match's or a declaration's
