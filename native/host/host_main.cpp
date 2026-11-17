@@ -89,8 +89,6 @@
 #if defined(_WIN32)
 #include "galaxy/windows_power.h"
 #endif
-#include "galaxy/platform_time.h"
-#include "galaxy/precise_wait.h"
 #include "galaxy/input/controls_engine.h"
 #include "galaxy/input/wiimote_motion.h"
 #include "galaxy/achievements.h"
@@ -128,6 +126,10 @@
 #include "galaxy/virtual_keys.h"
 #endif
 #endif
+// Every host, the headless one too.
+#include "galaxy/content_viewport.h"
+#include "galaxy/platform_time.h"
+#include "galaxy/precise_wait.h"
 #if !defined(NEBULA_HOST_RENDERER)
 namespace galaxy::host {
 // The headless host gives the platform no performance hints.
