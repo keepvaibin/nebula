@@ -595,6 +595,16 @@ galaxy_test(galaxy_os_hdr_tests SOURCES ${rt}/render/os_hdr_tests.cpp LIBS galax
 galaxy_test(galaxy_window_owner_tests SOURCES ${render_src}/window_owner_tests.cpp ${render_src}/window_owner.cpp)
 target_link_libraries(galaxy_window_owner_tests PRIVATE dwmapi)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
+# The frame counts' shared memory for outside readers (frame_telemetry.cpp: Windows only; elsewhere it publishes nothing).
+galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp ${rt}/frame_telemetry.cpp)
+# Renderer core code that reads the GPU types (galaxy/render/gpu_types.h: Direct3D 12's here, with no backend chosen).
+galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.cpp ${render_src}/core/pairing.cpp
+    ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
+target_include_directories(galaxy_core_pairing_tests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src" "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
+galaxy_test(galaxy_rt_geometry_tests SOURCES ${render_src}/rt/rt_geometry_tests.cpp ${render_src}/rt/rt_geometry.cpp
+    ${render_src}/rt/rt_scene.cpp ${render_src}/rt/rt_backend_fake.cpp)
+target_include_directories(galaxy_rt_geometry_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src")
 
 # Additions a build asks for at configure, as a list of CMake files (-DNEBULA_EXTRA_CMAKE=<file>;...), each included
 # here after the product's targets and galaxy_test. A build that passes none builds the product and its unit tests only.

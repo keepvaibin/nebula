@@ -4,9 +4,17 @@
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/content_viewport.h"
 
+#if defined(_WIN32)
 #include "galaxy/windows_api.h"
+#else
+#include <csignal>
+#include <cstdlib>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <iostream>
@@ -40,8 +48,8 @@ bool expect(bool condition, std::string_view message) {
     return condition;
 }
 
-constexpr DWORD kExpectedSequenceExhaustionExitCode = 90u;
-constexpr DWORD kUnexpectedSequenceExhaustionReturnExitCode = 91u;
+constexpr std::uint32_t kExpectedSequenceExhaustionExitCode = 90u;
+constexpr std::uint32_t kUnexpectedSequenceExhaustionReturnExitCode = 91u;
 HostPointerSnapshot* s_exhaustion_snapshot = nullptr;
 std::uint64_t s_expected_exhaustion_event_sequence = 0;
 std::uint64_t s_expected_exhaustion_absolute_sequence = 0;
@@ -53,13 +61,20 @@ std::uint64_t s_expected_exhaustion_absolute_sequence = 0;
             s_expected_exhaustion_event_sequence &&
         s_exhaustion_snapshot->absolute_sequence ==
             s_expected_exhaustion_absolute_sequence;
-    ExitProcess(no_partial_advance ? kExpectedSequenceExhaustionExitCode : 94u);
+    const std::uint32_t code = no_partial_advance ? kExpectedSequenceExhaustionExitCode : 94u;
+#if defined(_WIN32)
+    ExitProcess(code);
+#else
+    std::_Exit(static_cast<int>(code));
+#endif
 }
 
 int run_sequence_exhaustion_child(std::string_view category) {
+#if defined(_WIN32)
     SetErrorMode(
         SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX |
         SEM_NOOPENFILEERRORBOX);
+#endif
     std::set_terminate(&exit_expected_sequence_exhaustion);
     const std::uint64_t maximum = std::numeric_limits<std::uint64_t>::max();
     HostPointerSnapshot snapshot{};
@@ -132,6 +147,35 @@ int run_sequence_exhaustion_child(std::string_view category) {
 }
 
 bool sequence_exhaustion_case_hard_fails(std::string_view category) {
+    const std::string message =
+        "sequence exhaustion hard-fails without wrapping: " +
+        std::string(category);
+#if !defined(_WIN32)
+    // The child is this process forked: it runs the case and leaves with the terminate handler's code.
+    std::cout.flush();
+    std::cerr.flush();
+    const pid_t child = fork();
+    if (child < 0) {
+        return expect(false, "sequence exhaustion child process launches");
+    }
+    if (child == 0) {
+        std::_Exit(run_sequence_exhaustion_child(category));
+    }
+    int status = 0;
+    pid_t waited = 0;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while ((waited = waitpid(child, &status, WNOHANG)) == 0 && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (waited == 0) {
+        (void)kill(child, SIGKILL);
+        (void)waitpid(child, &status, 0);
+    }
+    return expect(
+        waited == child && WIFEXITED(status) &&
+            static_cast<std::uint32_t>(WEXITSTATUS(status)) == kExpectedSequenceExhaustionExitCode,
+        message);
+#else
     wchar_t executable[MAX_PATH]{};
     const DWORD executable_length = GetModuleFileNameW(
         nullptr, executable, static_cast<DWORD>(MAX_PATH));
@@ -173,13 +217,11 @@ bool sequence_exhaustion_case_hard_fails(std::string_view category) {
     }
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
-    const std::string message =
-        "sequence exhaustion hard-fails without wrapping: " +
-        std::string(category);
     return expect(
         wait_result == WAIT_OBJECT_0 &&
             exit_code == kExpectedSequenceExhaustionExitCode,
         message);
+#endif
 }
 
 HostPointerCoordinates coordinates(
