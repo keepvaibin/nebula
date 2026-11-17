@@ -143,6 +143,7 @@ include(cmake/runtime_libs.cmake)
 add_library(galaxy_native_host STATIC
     runtime/src/game_paths.cpp
     runtime/src/hidden_start.cpp
+    runtime/src/whole_lines.cpp
     runtime/src/input/host_input.cpp
     runtime/src/input/controls_engine.cpp
     runtime/src/input/live_controls_engine.cpp

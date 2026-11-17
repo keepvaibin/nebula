@@ -18,6 +18,7 @@
 #endif
 #include "galaxy/frame_phase.h"
 #include "galaxy/profiled_threads.h"
+#include "galaxy/whole_lines.h"
 #include "galaxy/render/present_clock.h"
 #include <nebula_cooked_texture.h>
 #include <nebula_game_api.h>
@@ -5766,6 +5767,8 @@ void use_console(bool own) {
 #endif
 
 int main(int argc, char** argv) {
+    // Before any thread writes: every line of the log whole (galaxy/whole_lines.h).
+    galaxy::whole_lines::install();
 #if !defined(_WIN32)
     gArgv = argv;
     galaxy::luma_guard::set_crash_line(crash_line_from_signal);

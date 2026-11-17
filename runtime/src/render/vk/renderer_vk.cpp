@@ -6,6 +6,7 @@
 #include "galaxy/benchmark.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
+#include "galaxy/whole_lines.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #if defined(_WIN32)
 #include "galaxy/render/streamline_bridge.h"
@@ -2178,23 +2179,24 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
                          static_cast<double>(gpu_window_.passes) / gpu_window_.recorded,
                          static_cast<double>(gpu_window_.copies) / gpu_window_.recorded, scene_extent_.width,
                          scene_extent_.height, swapchain_.image.width, swapchain_.image.height);
-            std::fprintf(stderr, "[vk-gpu] scene target opened a frame (closed by > opened by):");
+            galaxy::whole_lines::Line line;
+            line.add("[vk-gpu] scene target opened a frame (closed by > opened by):");
             for (const GpuWindow::Open& open : gpu_window_.opens) {
                 if (open.count != 0u) {
-                    std::fprintf(stderr, " %s > %s%s %.2f;", open.closed, open.opened, open.cleared ? " (clear)" : "",
-                                 static_cast<double>(open.count) / gpu_window_.recorded);
+                    line.add(" %s > %s%s %.2f;", open.closed, open.opened, open.cleared ? " (clear)" : "",
+                             static_cast<double>(open.count) / gpu_window_.recorded);
                 }
             }
-            std::fprintf(stderr, "\n");
+            line.write(stderr);
         }
         if (!trace_present_stats_enabled() && profile_samples_ != 0u) {
             static constexpr const char* names[] = {"scene", "resolve", "frame-read", "display-copy", "bloom", "scene-aa",
                                                     "scene-ao", "upscale", "rt", "present", "camera",
                                                     "ao-distance", "ao-occlusion", "ao-denoise", "ao-upsample", "ao-apply"};
-            std::fprintf(stderr, "[gpu-profile] %u sampled submissions; GPU ms:", profile_samples_);
-            for (std::size_t p = 0; p < std::size(names); ++p)
-                std::fprintf(stderr, " %s=%.3f", names[p], pass_ms_[p] / profile_samples_);
-            std::fprintf(stderr, "\n");
+            galaxy::whole_lines::Line line;
+            line.add("[gpu-profile] %u sampled submissions; GPU ms:", profile_samples_);
+            for (std::size_t p = 0; p < std::size(names); ++p) line.add(" %s=%.3f", names[p], pass_ms_[p] / profile_samples_);
+            line.write(stderr);
             pass_ms_.fill(0.0);
             profile_samples_ = 0;
         }

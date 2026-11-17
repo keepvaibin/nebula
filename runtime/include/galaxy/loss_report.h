@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <cstdio>
 
+#include "galaxy/whole_lines.h"
+
 namespace galaxy::loss {
 
 enum class Kind : unsigned { DrawNoMaterial, DrawNoPipeline, BlankTexture, SoundRead, Count };
@@ -35,13 +37,15 @@ inline void filled(Kind kind) noexcept {
     counters[static_cast<unsigned>(kind)].fetch_sub(1u, std::memory_order_relaxed);
 }
 
+// One line, written in one call: the harness reads it whole.
 inline void report() noexcept {
-    std::fprintf(stderr, "[loss]");
+    whole_lines::Line line;
+    line.add("[loss]");
     for (unsigned i = 0; i < counters.size(); ++i) {
-        std::fprintf(stderr, " %s=%llu", name(static_cast<Kind>(i)),
-                     static_cast<unsigned long long>(counters[i].load(std::memory_order_relaxed)));
+        line.add(" %s=%llu", name(static_cast<Kind>(i)),
+                 static_cast<unsigned long long>(counters[i].load(std::memory_order_relaxed)));
     }
-    std::fprintf(stderr, "\n");
+    line.write(stderr);
 }
 
 }  // namespace galaxy::loss

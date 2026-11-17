@@ -27,6 +27,9 @@ endfunction()
 set(rt "${galaxy_rt}")
 set(render_src "${galaxy_rt}/render")
 
+# The process's output: every line whole, whichever threads write.
+galaxy_test(galaxy_whole_lines_tests SOURCES ${rt}/whole_lines_tests.cpp ${rt}/whole_lines.cpp)
+
 # Files and saves.
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
 galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
