@@ -31,3 +31,6 @@ native_test(native_name_text_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_text_
 native_test(native_formatted_name_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/formatted_name_tests.cpp"
     "${game_src}/Util/StringUtil.cpp" "${game_src}/Util/TextString.cpp" "${game_src}/System/NebulaFormat.c")
 native_test(native_name_index_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_index_tests.cpp" "${game_src}/Util/HashUtil.cpp")
+# The game's arenas, on the host's address services as the host gives them.
+native_test(native_arena_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/arena_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c"
+    "${game_src}/System/NebulaArena.cpp")

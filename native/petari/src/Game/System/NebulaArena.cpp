@@ -246,6 +246,10 @@ void* NebulaArena::takeBlock(u32 bytes) {
 }
 
 void* NebulaArena::alloc(u32 size, int alignment) {
+    // A power of two, which the mask below needs (the console's heaps took a negative one to mean "from the top").
+    if (alignment <= 0 || (alignment & (alignment - 1)) != 0) {
+        NEBULA_PANIC("an allocation aligned to %d bytes", alignment);
+    }
     // At least 16-byte aligned, as a native allocator's memory is.
     u32 align = static_cast< u32 >(alignment);
     if (align < 16) {
@@ -299,11 +303,15 @@ void NebulaArena::destroyOwned() {
 }
 
 void* NebulaArena::alloc(u32 size, int alignment, NebulaArena* pArena) {
-    if (pArena != nullptr) {
-        return pArena->alloc(size, alignment);
+    if (pArena == nullptr) {
+        pArena = sCurrent;
     }
-
-    return sCurrent != nullptr ? sCurrent->alloc(size, alignment) : nullptr;
+    // Before GameSystem makes the root there is nowhere to put a block (a static's constructor, say): a null from new
+    // would be written through later, far from here.
+    if (pArena == nullptr) {
+        NEBULA_PANIC("an allocation of %u bytes before the first arena", size);
+    }
+    return pArena->alloc(size, alignment);
 }
 
 void NebulaArena::free(void* pData, NebulaArena* pArena) {
