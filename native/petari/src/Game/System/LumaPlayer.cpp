@@ -1,6 +1,7 @@
 #include "Game/System/LumaPlayer.hpp"
 
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
+#include "Game/Player/MarioAccess.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioHolder.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -42,6 +43,15 @@ namespace luma {
             const LumaServiceKernel* sKernel = nullptr;
             Extra sExtras[LUMA_PLAYER_MOST_EXTRA];
             u32 sLive = 0;  // extra players standing
+
+            // set_drawn: the players a mod draws only part of (the game's own and each extra), its mod the newest to set
+            // them; drawn whole again at the mod's end. A slot goes with its player's memory (released).
+            struct Drawn {
+                const LumaMod* mod;  // null: a free slot
+                MarioActor* actor;
+            };
+            Drawn sDrawn[1 + LUMA_PLAYER_MOST_EXTRA];
+            u32 sDrawnLive = 0;
 
             void report(const LumaMod* pMod, const char* pWhere, u32 code, const char* pArg0, const char* pArg1,
                         const char* pArg2) {
@@ -207,10 +217,79 @@ namespace luma {
                 return LUMA_OK;
             }
 
+            // A player standing in the scene: the game's own or a standing extra one.
+            MarioActor* standingPlayer(LumaActor player) {
+                if (player == nullptr) {
+                    return nullptr;
+                }
+                if (MR::isExistSceneObj(SceneObj_MarioHolder) && MarioAccess::getPlayerActor() == player) {
+                    return static_cast< MarioActor* >(player);
+                }
+                for (const Extra& rExtra : sExtras) {
+                    if (rExtra.mod != nullptr && rExtra.actor == player) {
+                        return rExtra.actor;
+                    }
+                }
+                return nullptr;
+            }
+
+            int32_t svcSetDrawn(const LumaMod* pMod, LumaActor player, uint32_t parts) {
+                const char* const pWhere = "player.set_drawn";
+                if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                    return status;
+                }
+                MarioActor* const pActor = standingPlayer(player);
+                if (pActor == nullptr) {
+                    report(pMod, pWhere, 101u, "player", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                if ((parts & ~LUMA_PLAYER_DRAWN_ALL) != 0) {
+                    report(pMod, pWhere, 101u, "parts", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                u8 hidden = 0;
+                if ((parts & LUMA_PLAYER_DRAWN_BODY) == 0) {
+                    hidden |= kModHiddenBody;
+                }
+                if ((parts & LUMA_PLAYER_DRAWN_SHADOW) == 0) {
+                    hidden |= kModHiddenShadow;
+                }
+                pActor->mModHidden = static_cast< u8 >((pActor->mModHidden & kModHiddenAttached) | hidden);
+                Drawn* pSlot = nullptr;
+                for (Drawn& rDrawn : sDrawn) {
+                    if (rDrawn.mod != nullptr && rDrawn.actor == pActor) {
+                        pSlot = &rDrawn;
+                        break;
+                    }
+                }
+                if (hidden == 0) {
+                    if (pSlot != nullptr) {
+                        *pSlot = Drawn{};
+                        sDrawnLive--;
+                    }
+                    return LUMA_OK;
+                }
+                if (pSlot == nullptr) {
+                    for (Drawn& rDrawn : sDrawn) {
+                        if (rDrawn.mod == nullptr) {
+                            pSlot = &rDrawn;
+                            sDrawnLive++;
+                            break;
+                        }
+                    }
+                }
+                if (pSlot != nullptr) {  // one slot a player, and no more players than slots
+                    pSlot->mod = pMod;
+                    pSlot->actor = pActor;
+                }
+                return LUMA_OK;
+            }
+
             const LumaPlayerService cTable = {
                 {sizeof(LumaPlayerService), LUMA_PLAYER_MAJOR, LUMA_PLAYER_MINOR},
                 svcMake,
                 svcRemove,
+                svcSetDrawn,
             };
 
             // ---- The provider ----
@@ -218,6 +297,16 @@ namespace luma {
             // The mod's stop (or its taking out): its extra players go as remove takes them.
             void modGone(void* pUser, const LumaMod* pMod) {
                 (void)pUser;
+                // Its players drawn whole again (before its extra ones go: they are still standing here).
+                for (Drawn& rDrawn : sDrawn) {
+                    if (rDrawn.mod == pMod) {
+                        if (standingPlayer(rDrawn.actor) != nullptr) {
+                            rDrawn.actor->mModHidden &= kModHiddenAttached;
+                        }
+                        rDrawn = Drawn{};
+                        sDrawnLive--;
+                    }
+                }
                 for (Extra& rExtra : sExtras) {
                     if (rExtra.mod == pMod) {
                         rExtra.actor->endExtra();
@@ -247,6 +336,16 @@ namespace luma {
         }  // namespace
 
         void released(const void* pStart, const void* pEnd) {
+            if (sDrawnLive != 0) {
+                for (Drawn& rDrawn : sDrawn) {
+                    const char* const pAt = static_cast< const char* >(static_cast< const void* >(rDrawn.actor));
+                    if (rDrawn.mod != nullptr && pAt >= static_cast< const char* >(pStart) &&
+                        pAt < static_cast< const char* >(pEnd)) {
+                        rDrawn = Drawn{};
+                        sDrawnLive--;
+                    }
+                }
+            }
             if (sLive == 0) {
                 return;
             }

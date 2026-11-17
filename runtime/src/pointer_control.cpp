@@ -73,6 +73,19 @@ StickVector apply_radial_deadzone(float x, float y, float deadzone) noexcept {
     return {x / magnitude * scaled, y / magnitude * scaled};
 }
 
+LookTurn look_turn(const LookMotion& motion) noexcept {
+    const auto finite = [](float value) { return std::isfinite(value) ? value : 0.0f; };
+    const float dt = std::clamp(finite(motion.dt), 0.0f, 0.05f);
+    LookTurn turn;
+    turn.yaw = finite(motion.mouse_x) * kLookMouseRadiansPerCount +
+               (finite(motion.stick_x) + finite(motion.keys_x)) * dt * kLookRadiansPerPointerUnit +
+               finite(motion.gyro_x) * kLookGyroRadiansPerUnit + finite(motion.touch_x) * kLookTouchRadiansPerUnit;
+    turn.pitch = -finite(motion.mouse_y) * kLookMouseRadiansPerCount +
+                 (finite(motion.stick_y) + finite(motion.keys_y)) * dt * kLookRadiansPerPointerUnit +
+                 finite(motion.gyro_y) * kLookGyroRadiansPerUnit - finite(motion.touch_y) * kLookTouchRadiansPerUnit;
+    return turn;
+}
+
 StickVector stick_pointer_velocity(StickVector stick, float speed) noexcept {
     const float magnitude = std::sqrt(stick.x * stick.x + stick.y * stick.y);
     if (!(magnitude > 0.0f) || !std::isfinite(speed)) {

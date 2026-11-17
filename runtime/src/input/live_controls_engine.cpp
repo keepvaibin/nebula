@@ -359,6 +359,43 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
         gyro_x *= mod_choice.gyro_scale;
         gyro_y *= mod_choice.gyro_scale;
     }
+    // A mod's first-person look (input 1.4 look_mode). While it holds the controls (in play, the window in front, no
+    // host menu, no text being typed) every pointer source turns the view instead of moving the pointer, the window
+    // holds the mouse, and the pointer stays at the picture's middle below: the game's crosshair.
+    const galaxy::luma_input::LookChoice look_choice = galaxy::luma_input::look_choice();
+    const LookSample look_sample = host.look();
+    const bool look_holding = look_choice.on && window_focused && !frame.host_menu &&
+                              play_context == galaxy::input::PlayContext::Play && !galaxy::luma_input::text_open();
+    if (look_choice.on) {
+        galaxy::input::LookMotion motion{};
+        std::uint32_t look_device = 0u;
+        if (look_holding) {
+            if (use_keyboard && !drop_injected_mouse) {
+                motion.mouse_x = look_sample.mouse_x;
+                motion.mouse_y = look_sample.mouse_y;
+                motion.keys_x = keyboard_pointer_x * keyboard_speed;
+                motion.keys_y = keyboard_pointer_y * keyboard_speed;
+            }
+            motion.stick_x = stick_velocity.x;
+            motion.stick_y = stick_velocity.y;
+            if (pad_gyro_pointing) {
+                motion.gyro_x = gyro_x;
+                motion.gyro_y = gyro_y;
+            }
+            motion.touch_x = touch_x + look_sample.finger_x;
+            motion.touch_y = touch_y + look_sample.finger_y;
+            motion.dt = dt;
+            const bool by_mouse = motion.mouse_x != 0.0f || motion.mouse_y != 0.0f || motion.keys_x != 0.0f ||
+                                  motion.keys_y != 0.0f;
+            const bool by_finger = look_sample.finger_x != 0.0f || look_sample.finger_y != 0.0f;
+            const bool by_pad = motion.stick_x != 0.0f || motion.stick_y != 0.0f || motion.gyro_x != 0.0f ||
+                                motion.gyro_y != 0.0f || touch_x != 0.0f || touch_y != 0.0f;
+            look_device = by_mouse ? 1u : by_finger ? 3u : by_pad ? 2u : 0u;  // LUMA_INPUT_DEVICE_*
+        }
+        const galaxy::input::LookTurn turn = galaxy::input::look_turn(motion);
+        galaxy::luma_input::look_sample(turn.yaw, turn.pitch, look_device, look_holding);
+    }
+    result.mouse_look = look_holding && use_keyboard && allow_absolute_pointer;
     const float gyro_motion = std::sqrt(gyro_x * gyro_x + gyro_y * gyro_y);
     galaxy::input::PointerActivity activity{};
     activity.mouse = mouse_moved;
@@ -469,6 +506,11 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
                                      play_context == galaxy::input::PlayContext::Play,
                                  mouse_moved || mouse_button_held, now_us)) {
         pointer_active = false;
+    }
+    if (look_holding) {
+        s_pointer_x = 0.0f;
+        s_pointer_y = 0.0f;
+        pointer_active = true;
     }
     if (script.has_pointer &&
         (frame.script_pointer_force || !live_mouse_recent ||

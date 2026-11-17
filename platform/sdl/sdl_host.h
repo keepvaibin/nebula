@@ -152,6 +152,9 @@ void set_menu_context(bool menu) noexcept;
 void set_title_screen(bool title) noexcept;
 // Nebula's menu is open: a finger is its mouse (native_game_input), so a swipe is no wheel.
 void set_direct_touch(bool direct) noexcept;
+// A mod's first-person look holds the mouse (any thread; the window's thread applies it at its next pump): the cursor
+// hidden and kept still, its moves into InputState::mouse_dx/dy. Given up while the window is not in front.
+void set_mouse_look(bool hold) noexcept;
 // Rumble on the gamepad with this SDL id (0: none) at `strength` (0..1). Any thread: SDL's thread applies it.
 void rumble(std::uint32_t pad_id, float strength) noexcept;
 

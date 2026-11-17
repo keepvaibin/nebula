@@ -8,7 +8,13 @@
    drawn lines and shapes, 2-D, the ray tracer's light (a view is drawn as with ray tracing off), and what the game's
    clipping left out of this frame for its own camera (a view shows what the game draws this frame). Drawn once a frame
    before the scene, so a view's texture drawn at a world point or on the HUD shows this frame. A view the mod has not
-   given a camera draws nothing; its texture stays as last drawn (black at first). */
+   given a camera draws nothing; its texture stays as last drawn (black at first).
+
+   The main camera (main_eye, main_rig 1.1): the picture's own camera. Each frame LumaCore puts the game's own view back
+   before the game's camera works (so the game's camera works out its pose from its own, never from the mod's), then sets
+   the main camera right after the game's camera has moved, before anything reads it (the player's stick directions,
+   clipping, the pointer, sound), and again before the scene's models take their poses (a rig on this frame's joints).
+   Import 1.1 for main_rig: LUMA_SERVICE(slot, "draw.view", "1.1"). */
 #ifndef LUMA_DRAW_VIEW_H
 #define LUMA_DRAW_VIEW_H
 
@@ -24,13 +30,15 @@ extern "C" {
 
 #define LUMA_DRAW_VIEW_NAME "draw.view"
 #define LUMA_DRAW_VIEW_MAJOR 1u
-#define LUMA_DRAW_VIEW_MINOR 0u
+#define LUMA_DRAW_VIEW_MINOR 1u
 
 /* Views one mod has at once, and all mods together. */
 #define LUMA_DRAW_VIEWS_MOST 2u
 #define LUMA_DRAW_VIEWS_ALL_MOST 8u
 /* A view's texture: at most this wide and high (pixels). */
 #define LUMA_DRAW_VIEW_SIDE_MOST 1024u
+/* The farthest main_rig moves the eye along its look (LumaDrawViewLook.ahead), game units. */
+#define LUMA_DRAW_VIEW_AHEAD_MOST 1000.0f
 /* A camera's vertical field of view: above 1 degree, under 179. */
 #define LUMA_DRAW_VIEW_FOV_LEAST 1.0f
 #define LUMA_DRAW_VIEW_FOV_MOST 179.0f
@@ -70,6 +78,13 @@ typedef struct LumaDrawViewCamera {
     char joint[32];     /* JOINT: a joint of the actor's model, NUL-terminated */
     float near_z;       /* JOINT: the near plane in game units, above 0; 0 elsewhere: the game's */
 } LumaDrawViewCamera;
+
+/* 1.1. The way the main camera looks on a rig (main_rig): the mod turns the view, the rig places the eye. */
+typedef struct LumaDrawViewLook {
+    float look[3];  /* the way the eye looks, world axes, not zero (any length) */
+    float up[3];    /* the picture's up, world axes, not zero, not along look */
+    float ahead;    /* the eye moved this far along look from the rig's eye, 0 to LUMA_DRAW_VIEW_AHEAD_MOST */
+} LumaDrawViewLook;
 
 typedef struct LumaDrawViewService {
     LumaServiceTable base;
@@ -111,14 +126,26 @@ typedef struct LumaDrawViewService {
        Arguments as rig, a null out: LUMA_E_ARGUMENT, reported. The rig's actor dead: LUMA_E_STATE, not reported (the
        caller keeps its last eye). Never needs a view. */
     int32_t (*eye_of)(const LumaMod* mod, const LumaDrawViewCamera* camera, LumaDrawViewEye* out);
-    /* 1.0. Game thread. The main camera at `eye` (null: the game's own again) from now on: each frame, before the
-       scene's models take their poses, the scene's view and field of view are set from it, so it holds while the
-       scene's update is held (a pause, a cutscene's hold) and what reads the camera until the game's camera moves again
-       (clipping, the stick's directions, sound) reads it; the game's camera keeps working out its own pose underneath
-       and has it back at once on null. The newest mod to call holds it; one mod's null gives back only its own. LUMA_OK.
-       An eye not finite, `at` at the eye, `up` along the look or zero, fov out of range: LUMA_E_ARGUMENT, reported.
-       Ends with the mod. */
+    /* 1.0. Game thread. The main camera at `eye` (null: the game's own again) from now on: each frame, right after the
+       game's camera moves and again before the scene's models take their poses, the scene's view and field of view are
+       set from it (the header's first comment), so everything that reads the camera reads it: the player's stick
+       directions, clipping, the pointer, sound, the picture. It holds while the scene's update is held (a pause, a
+       cutscene's hold); the game's camera keeps working out its own pose underneath and has it back at once on null.
+       The newest mod to call main_eye or main_rig holds it; one mod's null gives back only its own. LUMA_OK. An eye not
+       finite, `at` at the eye, `up` along the look or zero, fov out of range: LUMA_E_ARGUMENT, reported. Ends with the
+       mod. */
     int32_t (*main_eye)(const LumaMod* mod, const LumaDrawViewEye* eye);
+    /* 1.1. Game thread. The main camera on `camera` (null: the game's own again) from now on, as main_eye, its eye
+       worked out by LumaCore at both of main_eye's times: right after the game's camera moves (the rig on the poses the
+       frame starts with) and before the picture (on this frame's poses, so an eye on a joint never lags it).
+       `look` (null: the rig's own look and up) turns the view to its `look` and
+       `up` (a first-person mod's turn from input's look) and moves the eye `ahead` along the look. The field of view is camera's fov_y; a JOINT rig's near_z is the
+       main camera's near plane (the game's again on null). Calling it each frame with a new look is the way to turn
+       the view. When the rig's actor dies or leaves the game (its scene ends) the game's own camera shows again, as
+       on null. LUMA_OK. A rig's field out of range, a dead actor, a joint the actor's model lacks: LUMA_E_ARGUMENT
+       naming it, reported; a look or up not finite or zero, an up along the look, an ahead out of range:
+       LUMA_E_ARGUMENT naming it, reported. Ends with the mod. */
+    int32_t (*main_rig)(const LumaMod* mod, const LumaDrawViewCamera* camera, const LumaDrawViewLook* look);
 } LumaDrawViewService;
 
 #ifdef __cplusplus

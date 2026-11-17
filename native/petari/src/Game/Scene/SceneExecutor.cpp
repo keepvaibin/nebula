@@ -8,6 +8,7 @@
 #include "Game/Scene/SceneNameObjMovementController.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Scene/StopSceneController.hpp"
+#include "Game/System/LumaDrawView.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -27,8 +28,10 @@ void SceneFunction::executeMovementList() {
 
     MR::getSceneNameObjMovementController()->movement();
     pStopScene->movementDelayRequests();
+    luma::draw::view::mainCameraBeforeGame();  // a mod's main camera: the game's own view under its camera (one load with none)
     CategoryList::execute(MR::MovementType_Camera);
     CategoryList::execute(MR::MovementType_MirrorCamera);
+    luma::draw::view::mainCameraAfterGame();  // a mod's main camera before anything reads the camera (one load with none)
     MR::setStarPointerCameraMtxAtGameScene();
     MR::loadViewMtx();
     CategoryList::execute(MR::MovementType_ClippingDirector);

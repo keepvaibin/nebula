@@ -13,9 +13,19 @@ namespace luma {
             // each live view drawn into its texture. One load while no view lives.
             void render();
             // GameScene::calcAnim, before the models take their poses (SceneFunction::executeCalcViewAndEntryList): the
-            // main camera a mod holds (main_eye) into the scene's camera context. One load while none is held.
+            // main camera a mod holds (main_eye, main_rig on this frame's joints) into the scene's camera context. One
+            // load while none is held.
             void mainCamera();
-            // NebulaArena::destroy: views following an actor in [pStart, pEnd) stop following (the camera stays).
+            // SceneFunction::executeMovementList, before the scene's cameras move (MovementType_Camera): the game's own
+            // view, field of view and near plane back in the context, so its camera works from its own pose. One load
+            // while none is held.
+            void mainCameraBeforeGame();
+            // SceneFunction::executeMovementList, right after the scene's cameras move, before anything reads them (the
+            // pointer's camera, the view load, clipping, the player's stick directions): the held main camera, on the
+            // poses the frame starts with. One load while none is held.
+            void mainCameraAfterGame();
+            // NebulaArena::destroy: views following an actor in [pStart, pEnd) stop following (the camera stays); a
+            // main rig on one gives the game its camera back at the next apply.
             void released(const void* pStart, const void* pEnd);
             // The service's provider, registered by luma::services::provideOwn.
             const LumaServiceProvider* provider();

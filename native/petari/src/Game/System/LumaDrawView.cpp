@@ -75,6 +75,19 @@ namespace luma {
                 Pos3f sGameView;
                 f32 sGameFov = 45.0f;
                 const CameraContext* sGameContext = nullptr;
+                // main_rig: the rig (its actor's pose read at each apply; a null actor: it left the game), the mod's look
+                // and up (none: the rig's), the eye moved `ahead` along the look, the main near plane (0: the game's).
+                bool sMainOnRig = false;
+                LumaDrawViewCamera sMainRig;
+                bool sMainHasLook = false;
+                Vec3f sMainLook;
+                Vec3f sMainUp;
+                f32 sMainAhead = 0.0f;
+                f32 sMainNear = 0.0f;
+                // The field of view and near plane set last (a change from them is the game's own) and the game's own.
+                f32 sAppliedFov = 0.0f;
+                f32 sAppliedNear = 0.0f;
+                f32 sGameNear = 100.0f;
                 u32 sHigh = 0;
                 u32 sLive = 0;
                 LumaHandle sNextHandle = 0;
@@ -586,33 +599,92 @@ namespace luma {
                                : nullptr;
                 }
 
-                // The main camera given back: the game's last view and field of view, in the same scene's context.
+                // The main camera given back: the game's last view, field of view and near plane, in the same scene's
+                // context.
                 void mainGiveBack() {
                     CameraContext* const pContext = cameraContext();
                     if (pContext != nullptr && pContext == sGameContext) {
                         MR::setCameraViewMtx(sGameView);
                         pContext->setFovy(sGameFov);
+                        pContext->setNearZ(sGameNear);
                     }
                     sMainMod = nullptr;
                     sGameContext = nullptr;
+                    sMainOnRig = false;
+                    sMainNear = 0.0f;
                 }
 
-                // Before the models take their poses: the held main camera's view and field of view in the scene's
-                // context.
+                // The main rig's camera now into sMainView: false once its actor is dead or has left the game (the
+                // game's camera then). A joint the model lost (a changed model) or an eye straight along its up keeps
+                // the last view.
+                bool mainRigNow() {
+                    Vec3f eye, at, up;
+                    if (sMainRig.rig == LUMA_DRAW_VIEW_RIG_FIXED) {
+                        eye.set(sMainRig.eye[0], sMainRig.eye[1], sMainRig.eye[2]);
+                        at.set(sMainRig.at[0], sMainRig.at[1], sMainRig.at[2]);
+                        up.set(sMainRig.up[0], sMainRig.up[1], sMainRig.up[2]);
+                    } else {
+                        const LiveActor* const pActor = static_cast< const LiveActor* >(sMainRig.actor);
+                        if (pActor == nullptr || MR::isDead(pActor)) {
+                            return false;
+                        }
+                        if (!actorEye(pActor, static_cast< u32 >(sMainRig.rig),
+                                      Vec3f(sMainRig.offset[0], sMainRig.offset[1], sMainRig.offset[2]), sMainRig.joint, &eye,
+                                      &at, &up)) {
+                            return true;
+                        }
+                    }
+                    f32 lx = at.x - eye.x, ly = at.y - eye.y, lz = at.z - eye.z;
+                    if (sMainHasLook) {
+                        lx = sMainLook.x;
+                        ly = sMainLook.y;
+                        lz = sMainLook.z;
+                        up.set(sMainUp.x, sMainUp.y, sMainUp.z);
+                    }
+                    const f32 length = __builtin_sqrtf(lx * lx + ly * ly + lz * lz);
+                    if (!(length > 1e-6f)) {
+                        return true;
+                    }
+                    lx /= length;
+                    ly /= length;
+                    lz /= length;
+                    eye.set(eye.x + lx * sMainAhead, eye.y + ly * sMainAhead, eye.z + lz * sMainAhead);
+                    Mtx camera;
+                    if (lookAt(camera, eye, Vec3f(eye.x + lx * 100.0f, eye.y + ly * 100.0f, eye.z + lz * 100.0f), up)) {
+                        sMainView.setInline(camera);
+                    }
+                    return true;
+                }
+
+                // The held main camera into the scene's context: its view, field of view and near plane (the game's
+                // own when the mod gives none), the game's own taken first from whatever it changed since the last set.
                 void mainApply() {
                     CameraContext* const pContext = cameraContext();
                     if (pContext == nullptr) {
                         return;
                     }
-                    const Pos3f& rNow = MR::getCameraViewMtx();
-                    if (pContext != sGameContext || memcmp(&rNow, &sApplied, sizeof(Pos3f)) != 0) {
-                        sGameView.set(rNow);  // the game moved its camera since: that is its own now
-                        sGameFov = pContext->mFovy;
-                        sGameContext = pContext;
+                    if (sMainOnRig && !mainRigNow()) {
+                        mainGiveBack();  // the rig's actor died or left the game: the game's camera, as on null
+                        return;
                     }
+                    const bool fresh = pContext != sGameContext;
+                    const Pos3f& rNow = MR::getCameraViewMtx();
+                    if (fresh || memcmp(&rNow, &sApplied, sizeof(Pos3f)) != 0) {
+                        sGameView.set(rNow);  // the game moved its camera since: that is its own now
+                    }
+                    if (fresh || pContext->mFovy != sAppliedFov) {
+                        sGameFov = pContext->mFovy;
+                    }
+                    if (fresh || pContext->mNearZ != sAppliedNear) {
+                        sGameNear = pContext->mNearZ;  // the game's own (its first-person camera sets one)
+                    }
+                    sGameContext = pContext;
                     MR::setCameraViewMtx(sMainView);
                     pContext->setFovy(sMainFov);
+                    pContext->setNearZ(sMainNear > 0.0f ? sMainNear : sGameNear);
                     sApplied.set(sMainView);
+                    sAppliedFov = pContext->mFovy;
+                    sAppliedNear = pContext->mNearZ;
                 }
 
                 int32_t svcMainEye(const LumaMod* pMod, const LumaDrawViewEye* pEye) {
@@ -640,6 +712,61 @@ namespace luma {
                     sMainView.setInline(camera);
                     sMainFov = pEye->fov_y;
                     sMainMod = pMod;
+                    sMainOnRig = false;
+                    sMainNear = 0.0f;
+                    return LUMA_OK;
+                }
+
+                f32 length3(const float* pValues) {
+                    return __builtin_sqrtf(pValues[0] * pValues[0] + pValues[1] * pValues[1] + pValues[2] * pValues[2]);
+                }
+
+                int32_t svcMainRig(const LumaMod* pMod, const LumaDrawViewCamera* pCamera, const LumaDrawViewLook* pLook) {
+                    const char* const pWhere = "draw.view.main_rig";
+                    if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
+                        return status;
+                    }
+                    if (pCamera == nullptr) {
+                        if (sMainMod == pMod) {
+                            mainGiveBack();
+                        }
+                        return LUMA_OK;
+                    }
+                    bool dead = false;
+                    if (const char* const pFault = rigFault(pCamera, &dead); pFault != nullptr) {
+                        return badArgument(pMod, pWhere, pFault);
+                    }
+                    if (dead) {
+                        return badArgument(pMod, pWhere, "actor");  // as rig: a main camera never starts on a dead actor
+                    }
+                    if (pLook != nullptr) {
+                        if (!finiteArray(pLook->look) || !(length3(pLook->look) > 1e-6f)) {
+                            return badArgument(pMod, pWhere, "look");
+                        }
+                        if (!finiteArray(pLook->up) || !(length3(pLook->up) > 1e-6f)) {
+                            return badArgument(pMod, pWhere, "up");
+                        }
+                        Mtx along;
+                        if (!lookAt(along, Vec3f(0.0f, 0.0f, 0.0f), Vec3f(pLook->look[0], pLook->look[1], pLook->look[2]),
+                                    Vec3f(pLook->up[0], pLook->up[1], pLook->up[2]))) {
+                            return badArgument(pMod, pWhere, "up");  // along the look
+                        }
+                        if (!finite(pLook->ahead) || pLook->ahead < 0.0f || pLook->ahead > LUMA_DRAW_VIEW_AHEAD_MOST) {
+                            return badArgument(pMod, pWhere, "ahead");
+                        }
+                    }
+                    sMainRig = *pCamera;  // the joint's name ends inside its bytes (rigFault)
+                    sMainHasLook = pLook != nullptr;
+                    if (sMainHasLook) {
+                        sMainLook.set(pLook->look[0], pLook->look[1], pLook->look[2]);
+                        sMainUp.set(pLook->up[0], pLook->up[1], pLook->up[2]);
+                    }
+                    sMainAhead = sMainHasLook ? pLook->ahead : 0.0f;
+                    sMainFov = pCamera->fov_y;
+                    sMainNear = pCamera->rig == LUMA_DRAW_VIEW_RIG_JOINT ? pCamera->near_z : 0.0f;
+                    sMainOnRig = true;
+                    sMainMod = pMod;
+                    (void)mainRigNow();  // the view from the poses now; worked out again at each apply
                     return LUMA_OK;
                 }
 
@@ -654,6 +781,7 @@ namespace luma {
                     svcRig,
                     svcEyeOf,
                     svcMainEye,
+                    svcMainRig,
                 };
 
                 // ---- The provider ----
@@ -701,6 +829,32 @@ namespace luma {
                 }
             }
 
+            void mainCameraBeforeGame() {
+                if (sMainMod == nullptr) {
+                    return;
+                }
+                CameraContext* const pContext = cameraContext();
+                if (pContext == nullptr || pContext != sGameContext) {
+                    return;
+                }
+                // What is still the main camera's goes back to the game's own; what the game changed since stays.
+                if (memcmp(&MR::getCameraViewMtx(), &sApplied, sizeof(Pos3f)) == 0) {
+                    MR::setCameraViewMtx(sGameView);
+                }
+                if (pContext->mFovy == sAppliedFov) {
+                    pContext->setFovy(sGameFov);
+                }
+                if (pContext->mNearZ == sAppliedNear) {
+                    pContext->setNearZ(sGameNear);
+                }
+            }
+
+            void mainCameraAfterGame() {
+                if (sMainMod != nullptr) {
+                    mainApply();
+                }
+            }
+
             void render() {
                 if (sLive == 0) {
                     return;
@@ -731,6 +885,10 @@ namespace luma {
             }
 
             void released(const void* pStart, const void* pEnd) {
+                // The main rig's actor gone with its memory: the next apply gives the game its camera back.
+                if (sMainOnRig && sMainRig.actor != nullptr && inRange(sMainRig.actor, pStart, pEnd)) {
+                    sMainRig.actor = nullptr;
+                }
                 if (sLive == 0) {
                     return;
                 }

@@ -48,6 +48,8 @@ constexpr std::uint32_t kStateLeast = static_cast<std::uint32_t>(sizeof(LumaInpu
 static_assert(sizeof(LumaInputState) == 24u, "LumaInputState 1.0 is 24 bytes (luma_input.h)");
 constexpr std::uint32_t kGameLeast = static_cast<std::uint32_t>(sizeof(LumaInputGame));
 static_assert(sizeof(LumaInputGame) == 28u, "LumaInputGame 1.1 is 28 bytes (luma_input.h)");
+constexpr std::uint32_t kLookLeast = static_cast<std::uint32_t>(sizeof(LumaInputLook));
+static_assert(sizeof(LumaInputLook) == 20u, "LumaInputLook 1.4 is 20 bytes (luma_input.h)");
 constexpr std::uint32_t kTextRequestLeast = static_cast<std::uint32_t>(sizeof(LumaInputTextRequest));
 static_assert(sizeof(LumaInputTextRequest) == 24u, "LumaInputTextRequest 1.1 is 24 bytes (luma_input.h)");
 constexpr std::uint32_t kDeviceInfoLeast = static_cast<std::uint32_t>(sizeof(LumaInputDeviceInfo));
@@ -1109,6 +1111,76 @@ std::int32_t input_pointer_source(const LumaMod* mod, LumaInputPad pad, LumaInpu
     return LUMA_OK;
 }
 
+// ---- input 1.4: a first-person look ---------------------------------------------------------------------------------
+
+// The mod whose look holds (game thread), whether one is on and its scale (the live controls read them at each sample),
+// the turn the live controls gathered since the game's last read of the main player, and the frame's (the game's read).
+const LumaMod* g_look_mod = nullptr;
+std::atomic<bool> g_look_on{false};
+std::atomic<float> g_look_scale{1.0f};
+std::mutex g_look_mutex;
+float g_look_yaw = 0.0f;    // g_look_mutex
+float g_look_pitch = 0.0f;  // g_look_mutex
+std::uint32_t g_look_device = 0u;  // g_look_mutex
+bool g_look_holding = false;       // g_look_mutex
+LumaInputLook g_look_frame{};      // game thread
+
+void look_off() {
+    g_look_on.store(false, std::memory_order_release);
+    g_look_mod = nullptr;
+    const std::lock_guard<std::mutex> lock(g_look_mutex);
+    g_look_yaw = g_look_pitch = 0.0f;
+    g_look_holding = false;
+    g_look_frame = LumaInputLook{};
+}
+
+std::int32_t input_look_mode(const LumaMod* mod, LumaInputPad pad, std::int32_t on, float scale) {
+    const char* const where = "input.look_mode";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (pad != LUMA_INPUT_PAD_MAIN) {
+        return argument(mod, where, "pad");
+    }
+    if (on == 0) {
+        if (g_look_mod == mod) {
+            look_off();
+        }
+        return LUMA_OK;
+    }
+    if (!(scale > 0.0f && scale <= 8.0f)) {
+        return argument(mod, where, "scale");
+    }
+    if (!g_look_on.load(std::memory_order_acquire)) {
+        const std::lock_guard<std::mutex> lock(g_look_mutex);
+        g_look_yaw = g_look_pitch = 0.0f;  // a look starts from still
+    }
+    g_look_scale.store(scale, std::memory_order_relaxed);
+    g_look_mod = mod;
+    g_look_on.store(true, std::memory_order_release);
+    return LUMA_OK;
+}
+
+std::int32_t input_look(const LumaMod* mod, LumaInputPad pad, LumaInputLook* out) {
+    const char* const where = "input.look";
+    if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
+        return status;
+    }
+    if (pad != LUMA_INPUT_PAD_MAIN) {
+        return argument(mod, where, "pad");
+    }
+    if (out == nullptr) {
+        return argument(mod, where, "out");
+    }
+    if (out->size < kLookLeast) {
+        return struct_size(mod, where, "LumaInputLook", out->size, kLookLeast);
+    }
+    const std::uint32_t size = out->size;
+    std::memcpy(out, &g_look_frame, kLookLeast);
+    out->size = size;
+    return LUMA_OK;
+}
+
 // ---- input.inject 1.0 ------------------------------------------------------------------------------------------------
 
 Injection* injection_of(const LumaMod* mod, LumaHandle handle) {
@@ -1394,6 +1466,9 @@ void mod_begin(void*, const LumaMod*) {
 // Game thread, after the mod's stop: its watch, rumble, injections, text request and devices end (the inject and dev
 // providers have no hooks of their own: this one, which every mod with either also has, ends them all).
 void mod_gone(void*, const LumaMod* mod) {
+    if (g_look_mod == mod) {
+        look_off();  // the mouse goes back to the window's pointer at the next sample
+    }
     if (g_pointer_mod == mod) {
         // Its choice of the pointer's source ends with it: the player's controls choose again.
         g_pointer_source.store(0u, std::memory_order_release);
@@ -1458,6 +1533,8 @@ const LumaInputService kInput = {
     input_rumble,
     input_pointer_source,
     input_user_action,
+    input_look_mode,
+    input_look,
 };
 
 const LumaInputInjectService kInject = {
@@ -1500,6 +1577,16 @@ std::span<const LumaServiceProvider* const> providers(void (*log)(const char*)) 
 void game_read(std::uint32_t player, NebulaInputSample* sample, std::uint32_t device, bool motor) noexcept {
     if (!g_mods.load(std::memory_order_acquire) || player >= LUMA_INPUT_PLAYERS || sample == nullptr) {
         return;  // no mod: nothing asks
+    }
+    if (player == 0u && g_look_on.load(std::memory_order_acquire)) {
+        // The look this read carries: what the live controls gathered since the last, times the mod's scale.
+        const float scale = g_look_scale.load(std::memory_order_relaxed);
+        const std::lock_guard<std::mutex> lock(g_look_mutex);
+        g_look_frame.yaw = g_look_holding ? g_look_yaw * scale : 0.0f;
+        g_look_frame.pitch = g_look_holding ? g_look_pitch * scale : 0.0f;
+        g_look_frame.on = g_look_holding ? 1u : 0u;
+        g_look_frame.device = g_look_device;
+        g_look_yaw = g_look_pitch = 0.0f;
     }
     PlayerRead& read = g_players[player];
     const std::uint32_t before = read.device;
@@ -1550,6 +1637,24 @@ PointerChoice pointer_choice() noexcept {
 }
 
 void set_pointer_sources(std::uint32_t bits) noexcept { g_pointer_sources.store(bits, std::memory_order_release); }
+
+LookChoice look_choice() noexcept {
+    LookChoice choice;
+    choice.on = g_look_on.load(std::memory_order_acquire);
+    return choice;
+}
+
+void look_sample(float yaw, float pitch, std::uint32_t device, bool holding) noexcept {
+    const std::lock_guard<std::mutex> lock(g_look_mutex);
+    if (std::isfinite(yaw) && std::isfinite(pitch)) {
+        g_look_yaw += yaw;
+        g_look_pitch += pitch;
+    }
+    if (device != 0u) {
+        g_look_device = device;
+    }
+    g_look_holding = holding;
+}
 
 std::uint8_t mod_rumble(std::uint32_t player) noexcept {
     if (player >= LUMA_INPUT_PLAYERS || !g_active.load(std::memory_order_acquire)) {

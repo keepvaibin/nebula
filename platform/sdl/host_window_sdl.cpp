@@ -1158,6 +1158,21 @@ void run_requests() {
 
 void pump_events(int timeout_ms) noexcept {
     SDL_Event event;
+    // A mod's first-person look: the window holds the mouse while it is in front (SDL's relative mode hides the cursor
+    // and gives motion only).
+    if (g_window != nullptr) {
+        bool focused = false;
+        {
+            const std::lock_guard<std::mutex> lock(g_input_mutex);
+            focused = g_input.window_focused;
+        }
+        const bool hold = g_mouse_look_wanted.load(std::memory_order_acquire) && focused;
+        if (hold != g_mouse_look_held && SDL_SetWindowRelativeMouseMode(g_window, hold)) {
+            g_mouse_look_held = hold;
+            const std::lock_guard<std::mutex> lock(g_input_mutex);
+            g_input.mouse_dx = g_input.mouse_dy = 0.0f;
+        }
+    }
     // A mod's text option being typed in, or LumaCore's text request (input.text_request) open: SDL's text events, and
     // the system's on-screen keyboard where there is one.
     if (g_window != nullptr) {
@@ -1274,6 +1289,14 @@ void pump_events(int timeout_ms) noexcept {
                          event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED);
             break;
         case SDL_EVENT_MOUSE_MOTION: {
+            if (g_mouse_look_held) {
+                // Held for a first-person look: the mouse's own motion (SDL's relative mode), not a place.
+                g_input.mouse_dx += event.motion.xrel;
+                g_input.mouse_dy += event.motion.yrel;
+                g_input.mouse_pointer = true;
+                g_input.mouse_inside = true;
+                break;
+            }
             // SDL's mouse is in window units; the picture is in pixels (two a unit on a Retina display).
             const float density = g_window != nullptr ? SDL_GetWindowPixelDensity(g_window) : 1.0f;
             g_input.finger_x = event.motion.x * (density > 0.0f ? density : 1.0f);
@@ -1485,7 +1508,12 @@ InputState take_input_state() noexcept {
         motion.gyro_x = motion.gyro_y = 0.0f;
         motion.touch_dx = motion.touch_dy = 0.0f;
     }
+    g_input.mouse_dx = g_input.mouse_dy = 0.0f;
     return state;
+}
+
+void set_mouse_look(bool hold) noexcept {
+    g_mouse_look_wanted.store(hold, std::memory_order_release);
 }
 
 void rumble(std::uint32_t pad_id, float strength) noexcept {

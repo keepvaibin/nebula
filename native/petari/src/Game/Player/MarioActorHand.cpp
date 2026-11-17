@@ -96,6 +96,9 @@ void MarioActor::updateHand() {
     if (mDarkMaskOn) {
         hideHands = true;
     }
+    if ((mModHidden & kModHiddenBody) != 0) {
+        hideHands = true;
+    }
 
     if (MR::isHiddenModel(this) || isHidden() || hideHands) {
         mHandsHidden = true;

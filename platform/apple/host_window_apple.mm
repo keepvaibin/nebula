@@ -222,6 +222,14 @@ void mouse_at(NSEvent* event) {
     const NSSize pixels = [view convertSizeToBacking:view.bounds.size];
     const bool inside = NSPointInRect([view convertPoint:event.locationInWindow fromView:nil], view.bounds);
     const std::lock_guard<std::mutex> lock(g_input_mutex);
+    if (g_mouse_look_held) {
+        // Held for a first-person look: the cursor stays where it is; its motion is the look's (points, y down).
+        g_input.mouse_dx += static_cast<float>(event.deltaX);
+        g_input.mouse_dy += static_cast<float>(event.deltaY);
+        g_input.mouse_pointer = true;
+        g_input.mouse_inside = true;
+        return;
+    }
     g_input.finger_x = static_cast<float>(place.x);
     g_input.finger_y = static_cast<float>(pixels.height - place.y);
     g_input.finger_ms = galaxy::steady_ms();
@@ -239,8 +247,17 @@ void update_cursor() {
         inside = g_input.mouse_inside;
         focused = g_input.window_focused;
     }
-    const bool hide = inside && focused && NSApp.active && g_panels.load(std::memory_order_relaxed) == 0 &&
-                      g_window != nil && g_window.keyWindow;
+    const bool front = focused && NSApp.active && g_panels.load(std::memory_order_relaxed) == 0 && g_window != nil &&
+                       g_window.keyWindow;
+    // A mod's first-person look holds the mouse while the window is in front: the cursor detached from the mouse.
+    const bool hold = front && g_mouse_look_wanted.load(std::memory_order_acquire);
+    if (hold != g_mouse_look_held) {
+        g_mouse_look_held = hold;
+        (void)CGAssociateMouseAndMouseCursorPosition(hold ? false : true);
+        const std::lock_guard<std::mutex> lock(g_input_mutex);
+        g_input.mouse_dx = g_input.mouse_dy = 0.0f;
+    }
+    const bool hide = ((inside && front) || hold);
     if (hide != g_cursor_hidden) {
         g_cursor_hidden = hide;
         if (hide) {
@@ -1168,7 +1185,12 @@ InputState take_input_state() noexcept {
         motion.gyro_x = motion.gyro_y = 0.0f;
         motion.touch_dx = motion.touch_dy = 0.0f;
     }
+    g_input.mouse_dx = g_input.mouse_dy = 0.0f;
     return state;
+}
+
+void set_mouse_look(bool hold) noexcept {
+    g_mouse_look_wanted.store(hold, std::memory_order_release);
 }
 
 void rumble(std::uint32_t pad_id, float strength) noexcept {

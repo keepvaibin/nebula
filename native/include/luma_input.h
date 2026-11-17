@@ -11,6 +11,8 @@
      it changes, text typed with the system keyboard, and rumble (1.1).
    - What aims the main player's pointer (1.2).
    - The actions of a mod that needs this one, found by their ids (1.3).
+   - A first-person look (1.4): the window holds the mouse, every pointer source turns the view, the pointer stays at
+     the picture's middle.
 
    `input.inject` 1.0, permission "input.inject" (the Mods page says the mod moves the player): the mod supplies a
    player's controller.
@@ -29,7 +31,7 @@ extern "C" {
 
 #define LUMA_INPUT_NAME "input"
 #define LUMA_INPUT_MAJOR 1u
-#define LUMA_INPUT_MINOR 3u
+#define LUMA_INPUT_MINOR 4u
 
 /* The most actions one mod has (its key options; luma-format allows 64 options of every kind). */
 #define LUMA_INPUT_ACTIONS_MOST 64u
@@ -108,6 +110,15 @@ typedef struct LumaInputGame {
     uint8_t device;         /* LUMA_INPUT_DEVICE_*; read only (inject ignores it) */
     uint8_t injected;       /* 1: a mod supplied it (input.inject); read only */
 } LumaInputGame;            /* 1.1: 28 bytes */
+
+/* 1.4. The main player's look in one game frame (look). */
+typedef struct LumaInputLook {
+    uint32_t size;     /* sizeof(LumaInputLook) as the mod was built */
+    float yaw;         /* radians the view turned right this frame (left negative), the mod's scale applied */
+    float pitch;       /* radians it turned up (down negative) */
+    uint32_t on;       /* 1: the look holds the controls this frame (look_mode on, in play, the window in front, no menu) */
+    uint32_t device;   /* LUMA_INPUT_DEVICE_* that turned it last; 0 before any */
+} LumaInputLook;       /* 1.4: 20 bytes */
 
 /* What a text request takes. */
 enum {
@@ -202,6 +213,20 @@ typedef struct LumaInputService {
        LUMA_E_NOT_FOUND when `of` has no key option of that key (an answer, not reported); any other `of`:
        LUMA_E_DENIED, reported (Mods.KitNotNeeded); a null id or out: LUMA_E_ARGUMENT, reported. */
     int32_t (*user_action)(const LumaMod* mod, uint64_t of, const char* id, LumaInputAction* out);
+    /* 1.4. Game thread. A first-person look for `pad` (LUMA_INPUT_PAD_MAIN) on (`on` 1) or off (0). While on and the game
+       is in play with its window in front and no menu over it (a pause, the HOME menu, the settings, text being typed):
+       - the window holds the mouse: its cursor hidden and kept inside, its moves turning the view by their own counts;
+       - the pointer stick and the pointer keys turn it at the player's pointer speed, a controller's gyro (when it
+         points) as far as the controller turns, a controller's touch surface and a phone's finger by their travel;
+       - the pointer stays at the picture's middle: the game's pointer is the crosshair (Star Bits are aimed by looking).
+       A menu or the window losing focus gives the mouse back until play resumes. `scale` (above 0, at most 8) times
+       every turn: a mod's sensitivity option. The newest mod's on holds; it ends with off or the mod. LUMA_OK; a pad
+       other than LUMA_INPUT_PAD_MAIN, a scale out of range with on: LUMA_E_ARGUMENT, reported. */
+    int32_t (*look_mode)(const LumaMod* mod, LumaInputPad pad, int32_t on, float scale);
+    /* 1.4. Game thread. The main player's look this game frame (the turn the game's read of the controller carries):
+       LUMA_OK and *out; yaw and pitch 0 while no look is on or nothing turned it. A pad other than LUMA_INPUT_PAD_MAIN,
+       a null out: LUMA_E_ARGUMENT, reported; an out smaller than 1.4's: LUMA_E_ARGUMENT, reported (Service.StructSize). */
+    int32_t (*look)(const LumaMod* mod, LumaInputPad pad, LumaInputLook* out);
 } LumaInputService;
 
 /* ---- input.inject 1.0 (permission "input.inject") ---------------------------------------------------------------- */

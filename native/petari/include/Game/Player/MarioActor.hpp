@@ -67,6 +67,11 @@ enum PlayerMode {
 
 extern bool gIsLuigi;  // set by MarioActor::init2 from MR::isPlayerLuigi
 
+// MarioActor::mModHidden's bits (player.set_drawn; luma_player.h LUMA_PLAYER_DRAWN_*).
+const u8 kModHiddenBody = 1;
+const u8 kModHiddenShadow = 2;
+const u8 kModHiddenAttached = 4;
+
 class MarioActor : public LiveActor {
 public:
     // extra: an extra player of LumaCore's player service (not the scene's player: no HUD, camera or game over).
@@ -689,7 +694,10 @@ public:
     u8 mHiddenByDemo;  // hidden (isAllHidden, the shadow, the silhouette) (?)
     bool mHidden;  // the model is hidden (init2, the black hole)
     bool mMorphHidden;  // the model is hidden during the morph
-    bool mModHidden;  // a plugin hid the model (show_model): no model, shadow or silhouette; he still moves and plays effects
+    // What a mod does not draw of him (player.set_drawn): kModHiddenBody, kModHiddenShadow; kModHiddenAttached is
+    // LumaCore's note that it hid his attachments (the Bee's fur and wings, what he carries, the Rainbow's glow). He
+    // still moves, animates and plays effects; his reflection stays.
+    u8 mModHidden;
     Vec3f mThrowProbePos;  // the throw vector's probe point (updateThrowVector)
     f32 mTakingWobble;  // the taken item's wobble phase
     FixedPosition* mTakingFixedPos;  // the hand point the taken item follows

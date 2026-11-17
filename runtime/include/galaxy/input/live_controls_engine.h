@@ -45,9 +45,19 @@ struct PointerSample {
     galaxy::input::NativeMousePointerProjection projected{};
     bool raw_motion = false;
 };
+// The window's look motion since the last sample (first-person look): the mouse's own counts while the window holds it,
+// and a phone's finger's travel on the picture (pointer units, y down).
+struct LookSample {
+    float mouse_x = 0.0f;
+    float mouse_y = 0.0f;
+    float finger_x = 0.0f;
+    float finger_y = 0.0f;
+};
 class LiveControlsHost {
 public:
     virtual ~LiveControlsHost() = default;
+    // Taken at every sample (so motion from before a look never arrives late); none by default.
+    virtual LookSample look() { return {}; }
     virtual std::uint64_t now_ms() = 0;
     virtual std::uint64_t now_us() = 0;
     virtual bool injected(bool button) = 0;
@@ -88,6 +98,9 @@ struct LiveControlsResult {
     galaxy::input::PlayerInput input{};
     RumbleSelection rumble{};
     galaxy::input::PointerSource pointer_owner = galaxy::input::PointerSource::None;
+    // A mod's first-person look holds the controls with the keyboard and mouse in use: the window holds the mouse (its
+    // cursor kept inside and hidden, its counts read) until this is false again.
+    bool mouse_look = false;
 };
 class LiveControlsEngine {
 public:

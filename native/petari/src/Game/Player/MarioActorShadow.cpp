@@ -280,7 +280,7 @@ void MarioActor::calcViewWallShadowModel() {
 }
 
 void MarioActor::drawShadow() const {
-    bool hidden = mHidden || mHiddenByDemo || mModHidden;
+    bool hidden = mHidden || mHiddenByDemo || (mModHidden & kModHiddenShadow) != 0;
     if (hidden) {
         return;
     }

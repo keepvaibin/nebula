@@ -1988,7 +1988,7 @@ void MarioActor::calcAnim() {
         MR::updateModelDiffMaterials(this);
     }
 
-    if (MR::isHiddenModel(this) && mHidden == 0 && !mModHidden) {
+    if (MR::isHiddenModel(this) && mHidden == 0) {
         MR::showModel(this);
     }
 

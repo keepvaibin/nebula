@@ -11,6 +11,7 @@
 #include "galaxy/input/co_star.h"
 #include "galaxy/input/controls_engine.h"
 #include "galaxy/input/live_controls_engine.h"
+#include "galaxy/input/raw_mouse_win32.h"
 #include "galaxy/input/key_positions.h"
 #include "galaxy/input/key_positions_win32.h"
 #include "galaxy/input/keyboard_state.h"
@@ -992,6 +993,14 @@ public:
                 position.absolute_sequence, buttons.transition_sequence, projected,
                 false};
     }
+    LookSample look() override {
+        // The mouse's own counts since the last sample (WM_INPUT): taken always, used only while a look holds it.
+        const galaxy::input::RawMouseMotion motion = sample_native_raw_mouse();
+        LookSample sample;
+        sample.mouse_x = static_cast<float>(motion.x);
+        sample.mouse_y = static_cast<float>(motion.y);
+        return sample;
+    }
     galaxy::input::NativeMousePointerProjection cursor() override {
         POINT position{};
         HWND window = window_;
@@ -1011,6 +1020,34 @@ private:
     HWND window_;
     bool focused_;
 };
+
+// A mod's first-person look holds the mouse (LiveControlsResult::mouse_look): the cursor kept in the middle of the
+// window's picture (Windows gives up a clip whenever the window loses the front, so it is set again each sample while
+// held); the window already hides it over the picture. Its counts come from WM_INPUT (raw_mouse_win32).
+void hold_mouse_for_look(HWND window, bool hold) {
+    static bool s_held = false;
+    if (hold && window != nullptr) {
+        RECT client{};
+        POINT centre{};
+        if (GetClientRect(window, &client)) {
+            centre.x = (client.left + client.right) / 2;
+            centre.y = (client.top + client.bottom) / 2;
+            if (ClientToScreen(window, &centre)) {
+                const RECT box{centre.x - 8, centre.y - 8, centre.x + 8, centre.y + 8};
+                RECT now{};
+                if (!s_held || !GetClipCursor(&now) || !EqualRect(&now, &box)) {
+                    (void)ClipCursor(&box);
+                }
+                s_held = true;
+                return;
+            }
+        }
+    }
+    if (s_held) {
+        (void)ClipCursor(nullptr);
+        s_held = false;
+    }
+}
 
 // The live controls as the player's input: the bindings of every connected controller and of the keyboard and mouse,
 // the pointer from whichever source moved last, tilt, shake and the scripted test input.
@@ -1145,6 +1182,7 @@ galaxy::input::PlayerInput build_live_input(
     static LiveControlsEngine engine;
     WindowLiveControlsHost host(focused_window, window_focused);
     auto result = engine.sample(frame, host);
+    hold_mouse_for_look(focused_window, result.mouse_look && window_focused);
     g_rumble_host = {};
     g_rumble_host.focused = result.rumble.focused;
     g_rumble_host.strength = result.rumble.strength;

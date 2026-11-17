@@ -124,6 +124,37 @@ struct RecenterHold {
 // bubble, 24 base, 25 game. Menus are the modes of screens with a Back action
 // (0-9, 16, 17); everything else, and an unreadable mode, is play.
 inline constexpr std::uint32_t kStarPointerModeCount = 26;
+// A first-person look (LumaCore input 1.4 look_mode): each pointer source's motion as a view's turn, in radians, yaw
+// right and pitch up positive. A pointer unit is the pointer's (2: the picture's width).
+// - The stick and the pointer keys as fast as they move the pointer: at the default pointer speed (1.6 units a second)
+//   full deflection turns 3.5 radians (200 degrees) a second, and the player's pointer speed scales it.
+// - The gyro as far as the controller turns (at gyro sensitivity 1 a picture's width is 40 degrees of turn).
+// - A touch surface (a controller's, a phone's screen) by its travel: across the picture is half a turn.
+// - The mouse by its own counts (raw, not the system's pointer curve): 0.063 degrees a count, 50 degrees an inch at
+//   800 counts an inch.
+inline constexpr float kLookRadiansPerPointerUnit = 2.19f;
+inline constexpr float kLookGyroRadiansPerUnit = 0.349066f;
+inline constexpr float kLookTouchRadiansPerUnit = 1.570796f;
+inline constexpr float kLookMouseRadiansPerCount = 0.0011f;
+struct LookMotion {
+    float mouse_x = 0.0f;  // counts this sample, y down
+    float mouse_y = 0.0f;
+    float stick_x = 0.0f;  // pointer units a second (stick_pointer_velocity), y up
+    float stick_y = 0.0f;
+    float keys_x = 0.0f;   // pointer units a second, y up
+    float keys_y = 0.0f;
+    float gyro_x = 0.0f;   // pointer units this sample, y up
+    float gyro_y = 0.0f;
+    float touch_x = 0.0f;  // pointer units this sample, y down
+    float touch_y = 0.0f;
+    float dt = 0.0f;       // seconds since the last sample
+};
+struct LookTurn {
+    float yaw = 0.0f;
+    float pitch = 0.0f;
+};
+[[nodiscard]] LookTurn look_turn(const LookMotion& motion) noexcept;
+
 enum class PlayContext : std::uint8_t { Menu, Play };
 [[nodiscard]] PlayContext play_context_from_star_pointer_mode(std::uint32_t mode) noexcept;
 

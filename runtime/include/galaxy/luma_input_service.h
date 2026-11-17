@@ -33,6 +33,15 @@ struct PointerChoice {
 [[nodiscard]] PointerChoice pointer_choice() noexcept;
 // The live controls, at each sample: what could aim the main player's pointer now (bits 1 << PointerSource).
 void set_pointer_sources(std::uint32_t bits) noexcept;
+// A mod's first-person look (input 1.4 look_mode), for the live controls at each sample: whether one is on.
+struct LookChoice {
+    bool on = false;
+};
+[[nodiscard]] LookChoice look_choice() noexcept;
+// The live controls, at each sample while a look is on: the view's turn since the last sample (radians, yaw right and
+// pitch up; the mod's scale is the service's), the LUMA_INPUT_DEVICE_* that turned it (0: none), whether the look holds
+// the controls now (in play, the window in front, no menu). The game's next read of player 1's controller takes it.
+void look_sample(float yaw, float pitch, std::uint32_t device, bool holding) noexcept;
 
 // Text entry. The host that has it says so once (a window host at its window's creation); without it text_request
 // answers LUMA_E_ABSENT. The rest from the window's thread (any thread): text_open while a request is open, then each

@@ -416,6 +416,16 @@ void MarioActor::calcViewAndEntry() {
         calcFogLighting();
     }
 
+    // A mod's hidden body (player.set_drawn): his attachments hidden each frame (the game shows new ones as they come:
+    // a morph's wings, a taken shell), shown once when the body is drawn again.
+    if ((mModHidden & kModHiddenBody) != 0) {
+        hideBeeFur();
+        mModHidden |= kModHiddenAttached;
+    } else if ((mModHidden & kModHiddenAttached) != 0) {
+        mModHidden &= static_cast< u8 >(~kModHiddenAttached);
+        showBeeFur();
+    }
+
     switch (mCurrModel) {
     case 0:
         swapTexture("EyeLid_v", static_cast< u8 >(mEyeLidFrame));
@@ -579,7 +589,7 @@ void MarioActor::drawMarioModel() const {
 
 bool MarioActor::isAllHidden() const {
     bool hidden = false;
-    if (mHidden || mMorphHidden || mHiddenByDemo || mModHidden) {
+    if (mHidden || mMorphHidden || mHiddenByDemo || (mModHidden & kModHiddenBody) != 0) {
         hidden = true;
     }
 
@@ -845,7 +855,8 @@ void MarioActor::drawIndirectModel() const {
 }
 
 void MarioActor::drawReflectModel() const {
-    if (isAllHidden()) {
+    // A mod's hidden body still shows in mirrors and water (a first-person camera's player sees himself there).
+    if (mHidden || mMorphHidden || mHiddenByDemo) {
         return;
     }
 
