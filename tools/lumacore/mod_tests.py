@@ -210,16 +210,17 @@ def facts_lines(folder, ignored=()):
     return [line for line in path.read_text(encoding="utf-8").splitlines() if json.loads(line).get("key") not in ignored]
 
 
-def run_origin(args, prefix, copy, source, run_root, work, build_failed):
-    """The rows of every suite under `copy` (this tree's tests/mods, or LumaLink's tests/game): each suite's tests as
-    its suite.json in `source` lists them, run on args.renderer, judged."""
+def run_origin(args, prefix, copy, run_root, work, build_failed):
+    """The rows of every suite under `copy` (the copy of this tree's tests/mods, or of LumaLink's tests/game): each
+    suite's tests as the copy's suite.json lists them, run on args.renderer, judged. The checkouts are not read again:
+    a test added there while a run goes on is in the next run's copy."""
     rows = []
     for suite_json in sorted(copy.glob("*/suite.json")):
         suite = suite_json.parent
         label = prefix + suite.name
         if args.only and not any(o == label or o.startswith(label + "/") for o in args.only):
             continue
-        listed = json.loads((source / suite.name / "suite.json").read_text(encoding="utf-8"))["tests"]
+        listed = json.loads(suite_json.read_text(encoding="utf-8"))["tests"]
         to_run, once, twice = [], {}, []
         for name in listed:
             if args.only and label not in args.only and "%s/%s" % (label, name) not in args.only:
@@ -382,16 +383,15 @@ def main():
         for mod, why in sorted(build_failed.items()):
             print("build-failed %s: %s" % (mod.relative_to(tree).as_posix(), why))
         return 0 if not build_failed else 1
-    # (label prefix, the copy's suites, the source's suites, the runs' folder)
-    origins = [("", tree / "tests" / "mods", TESTS, work / args.renderer)]
+    # (label prefix, the copy's suites, the runs' folder)
+    origins = [("", tree / "tests" / "mods", work / args.renderer)]
     rows = []
     if ll_tree is not None:
-        origins.append(("lumalink/", tree / "lumalink" / "tests" / "game", ll_tree / "tests" / "game",
-                        work / args.renderer / "lumalink"))
+        origins.append(("lumalink/", tree / "lumalink" / "tests" / "game", work / args.renderer / "lumalink"))
     elif not args.only or any(o.startswith("lumalink/") for o in args.only):
         rows.append(("lumalink", "-", "not-run", "no LUMALINK_TREE, and LUMALINK was built in no LumaLink checkout: LumaLink's tests/game did not run"))
-    for prefix, copy, source, run_root in origins:
-        rows += run_origin(args, prefix, copy, source, run_root, work, build_failed)
+    for prefix, copy, run_root in origins:
+        rows += run_origin(args, prefix, copy, run_root, work, build_failed)
     for suite, name, verdict, reason in rows:
         print("%-40s %-7s %-14s %s" % ("%s/%s" % (suite, name), args.renderer, verdict, reason))
     passed = sum(1 for r in rows if r[2] == "pass")
