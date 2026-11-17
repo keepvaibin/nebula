@@ -1730,6 +1730,9 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
         walk_target_end(target_channels);
     }
     // A generated frame asks nothing: its depth is the scene at t, and the points are the camera's at t = 1.
+    if (!now.probes_done && !walk_.between) {
+        probes_walked(now.list->game_frame);
+    }
     now.probes_done = now.probes_done || !walk_.between;
 }
 

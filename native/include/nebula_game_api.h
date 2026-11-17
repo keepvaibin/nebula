@@ -1068,8 +1068,9 @@ typedef struct NebulaHostServices {
     uint32_t (*pipeline_register)(void* user, const NebulaPipelineDesc* desc, const NebulaLayoutInput* inputs);
     /* The frame's list. The renderer owns it until it sets `released`; nothing waits. */
     void (*submit_frame)(void* user, NebulaFrameList* list);
-    /* `channel`'s latest finished probes with their values, at most `capacity`; how many (0 before any has finished).
-       Never waits for the GPU. */
+    /* `channel`'s probes with their values as this frame's list of two frames before asked them (or the newest list
+       before that which asked some), at most `capacity`; how many (0 when none). The same answers at the same frame
+       whatever the GPU's speed: it waits for them when the GPU has not finished that frame yet. */
     uint32_t (*probe_results)(void* user, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity);
     /* The players input_read serves (0 to this - 1), fixed for the session. */
     uint32_t (*input_players)(void* user);

@@ -2,6 +2,7 @@
 // The host's frame core over synthetic frames: compose's rows, pairing by identity, joints between two frames. No GPU.
 #include "render/core/compose.h"
 #include "render/core/frame_core.h"
+#include "render/core/probe_book.h"
 
 #include <nebula_frame_list.h>
 #include <nebula_model.h>
@@ -10,6 +11,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <vector>
 
 using namespace galaxy::render;
@@ -365,6 +367,119 @@ void test_probes_asked_on_the_real_walk() {
     check(!list.probes_due(true), "a generated frame after the real walk asks none");
 }
 
+// The probe book: the answers a frame reads are its list's of two frames before, whatever the GPU's speed.
+NebulaScreenProbe probe_with(float value) {
+    NebulaScreenProbe p{};
+    p.value = value;
+    return p;
+}
+
+float read_at(const ProbeBook& book, std::uint32_t channel, std::uint32_t frame) {
+    NebulaScreenProbe out{};
+    out.value = -1.0f;
+    return book.answers(channel, frame, &out, 1u) == 1u ? out.value : -1.0f;
+}
+
+// Frames 1 to 12 each ask one probe on channel 7, answered with the frame's own number. `gpu_lag` frames after its
+// real walk the GPU's answer comes back. Returns what each frame from 3 on reads once it is ready.
+std::vector<float> play_probes(std::uint32_t gpu_lag) {
+    ProbeBook book;
+    std::vector<float> read;
+    std::deque<std::uint32_t> on_gpu;
+    for (std::uint32_t frame = 1; frame <= 12u; ++frame) {
+        // The game reads first (its draw), waiting as screen_probe_results does: the GPU finishes what is asked.
+        while (!book.ready(frame)) {
+            if (on_gpu.empty()) {
+                read.push_back(-2.0f);  // would wait forever
+                return read;
+            }
+            const NebulaScreenProbe answer = probe_with(static_cast<float>(on_gpu.front()));
+            book.answered(on_gpu.front(), 7u, &answer, 1u);
+            on_gpu.pop_front();
+        }
+        if (frame >= 3u) read.push_back(read_at(book, 7u, frame));
+        // Then its list is queued and walked; earlier answers come back as the GPU gets to them.
+        book.expect(frame);
+        book.flight(frame);
+        book.walked(frame);
+        on_gpu.push_back(frame);
+        while (on_gpu.size() > gpu_lag) {
+            const NebulaScreenProbe answer = probe_with(static_cast<float>(on_gpu.front()));
+            book.answered(on_gpu.front(), 7u, &answer, 1u);
+            on_gpu.pop_front();
+        }
+    }
+    return read;
+}
+
+void test_probe_answers_by_frame() {
+    // Before the fix the game read the newest answer back: a fast GPU gave frame F - 1's, a slow one F - 3's.
+    const std::vector<float> fast = play_probes(0u);
+    const std::vector<float> slow = play_probes(1u);
+    const std::vector<float> slower = play_probes(2u);
+    check(fast.size() == 10u && fast == slow && fast == slower, "every GPU speed gives each frame the same answers");
+    bool two_before = fast.size() == 10u;
+    for (std::size_t i = 0; i < fast.size(); ++i) {
+        two_before = two_before && fast[i] == static_cast<float>(i + 1u);  // frame i + 3 reads frame i + 1's
+    }
+    check(two_before, "frame F reads the answers its list of frame F - 2 asked");
+
+    ProbeBook book;
+    check(book.ready(1u) && read_at(book, 7u, 1u) == -1.0f, "the first frames have nothing to read and wait for nothing");
+    book.expect(5u);
+    book.flight(5u);
+    check(book.ready(6u), "frame 6 does not wait for frame 5");
+    check(!book.ready(7u), "frame 7 waits for frame 5's walk and answers");
+    book.walked(5u);
+    check(!book.ready(7u), "walked with its flight still on the GPU: frame 7 still waits");
+    const NebulaScreenProbe five = probe_with(5.0f);
+    book.answered(5u, 7u, &five, 1u);
+    check(book.ready(7u) && read_at(book, 7u, 7u) == 5.0f, "answered: frame 7 reads frame 5's");
+    check(read_at(book, 7u, 6u) == -1.0f, "frame 6 never reads frame 5's");
+    check(read_at(book, 8u, 7u) == -1.0f, "another channel has none");
+
+    // A frame with no probes asked reads the newest frame before it that asked some.
+    check(read_at(book, 7u, 9u) == 5.0f, "frames 6 and 7 asked none: frame 9 reads frame 5's");
+
+    // A list that leaves unwalked is settled without answers.
+    book.expect(8u);
+    check(!book.ready(10u), "frame 10 waits for frame 8");
+    book.released(8u);
+    check(book.ready(10u) && read_at(book, 7u, 10u) == 5.0f, "frame 8 released unwalked: frame 10 reads frame 5's");
+
+    // A frame's two flights on two channels: settled when both are back.
+    book.expect(9u);
+    book.flight(9u);
+    book.flight(9u);
+    book.walked(9u);
+    const NebulaScreenProbe nine = probe_with(9.0f);
+    book.answered(9u, 7u, &nine, 1u);
+    check(!book.ready(11u), "one of frame 9's two flights back: frame 11 waits");
+    book.answered(9u, 3u, &nine, 1u);
+    check(book.ready(11u) && read_at(book, 3u, 11u) == 9.0f && read_at(book, 7u, 11u) == 9.0f,
+          "both back: frame 11 reads frame 9's on each channel");
+
+    // A lost device: everything settles; frame numbers going back start the book again.
+    book.expect(12u);
+    book.flight(12u);
+    book.settle_all();
+    check(book.ready(14u), "the device's state dropped: nothing is waited for");
+    book.expect(2u);
+    check(read_at(book, 7u, 100u) == -1.0f, "a new game's frames read none of the old game's answers");
+
+    // Only the newest kKept answers per channel stay.
+    ProbeBook many;
+    for (std::uint32_t f = 1; f <= 20u; ++f) {
+        many.expect(f);
+        many.flight(f);
+        many.walked(f);
+        const NebulaScreenProbe a = probe_with(static_cast<float>(f));
+        many.answered(f, 7u, &a, 1u);
+    }
+    check(read_at(many, 7u, 22u) == 20.0f && read_at(many, 7u, 15u) == 13.0f, "recent frames read their own");
+    check(read_at(many, 7u, 5u) == -1.0f, "answers older than the kept ones are gone");
+}
+
 }  // namespace
 
 int main() {
@@ -397,6 +512,7 @@ int main() {
     test_joints_between_frames();
     test_teleport_shows_this_frame();
     test_probes_asked_on_the_real_walk();
+    test_probe_answers_by_frame();
     if (failures != 0) {
         std::printf("%d failed\n", failures);
         return 1;

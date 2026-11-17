@@ -2760,7 +2760,8 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
 }
 uint32_t svc_probe_results(void*, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity) {
     static_assert(sizeof(NebulaScreenProbe) == sizeof(galaxy::render::ScreenProbe));
-    return galaxy::render::screen_probe_results(channel, reinterpret_cast<galaxy::render::ScreenProbe*>(probes), capacity);
+    return galaxy::render::screen_probe_results(channel, reinterpret_cast<galaxy::render::ScreenProbe*>(probes), capacity,
+                                                gGameFrames.load(std::memory_order_relaxed));
 }
 // draw.post (docs/modding/reference/services/draw.md): the program compiled for the running renderer (mod_post.cpp).
 static_assert(int{galaxy::render::kModPostOk} == NEBULA_POST_OK && int{galaxy::render::kModPostCompile} == NEBULA_POST_COMPILE &&

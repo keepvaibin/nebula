@@ -574,6 +574,12 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
     chunk.list = std::exchange(producer_list_, nullptr);
     if (chunk.list != nullptr) {
         galaxy::bench::note_frame_list(chunk.list->item_count);
+        const NebulaFrameList& list = *chunk.list;
+        if (std::any_of(list.passes, list.passes + list.pass_count,
+                        [](const NebulaFramePass& pass) { return pass.kind == NEBULA_PASS_PROBE; })) {
+            const std::lock_guard guard(probe_answers_lock_);
+            probe_book_.expect(list.game_frame);
+        }
         const auto hold = device_gate_.hold();
         chunk.device_epoch = device_gate_.epoch();
         // Registries first: a table taken here names textures whose work is taken too.
@@ -1629,6 +1635,12 @@ void RenderCore::drop_device_state() {
     probe_flights_ = {};
     free_probe_slots_.clear();
     next_probe_slot_ = 0u;
+    {
+        // Nothing asked before comes back: every frame waited for is settled as it stands.
+        const std::lock_guard guard(probe_answers_lock_);
+        probe_book_.settle_all();
+    }
+    probe_answers_cv_.notify_all();
     reset_monotonic_cadence(picture_made_cadence_);
     reset_monotonic_cadence(new_picture_shown_cadence_);
     last_presented_display_stamp_.store(~std::uint64_t{0}, std::memory_order_relaxed);
@@ -1852,6 +1864,7 @@ void RenderCore::render_loop() {
                 }
             } else if (frame_queue_.front().list != nullptr && frame_queue_.front().device_epoch != device_gate_.epoch()) {
                 // Made for the card that was lost.
+                probes_released(frame_queue_.front().list->game_frame);
                 frame_queue_.front().list->released = 1u;
                 frame_queue_.pop_front();
                 queue_space_cv_.notify_all();
@@ -1974,14 +1987,37 @@ void RenderCore::render_loop() {
     }
 }
 
-std::uint32_t RenderCore::screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity) {
-    const std::lock_guard guard(probe_answers_lock_);
-    const auto found = probe_answers_.find(channel);
-    if (found == probe_answers_.end()) return 0u;
-    const ScreenProbeAnswers& answers = found->second;
-    const std::uint32_t count = std::min(answers.count, capacity);
-    std::memcpy(probes, answers.probes.data(), count * sizeof(ScreenProbe));
-    return count;
+// The answers of a fixed frame before this one (ProbeBook), so a fixed-step run reads the same answers at the same
+// step whatever the GPU's speed. Frame F - 2's list has been walked by the time frame F asks (the render thread walks
+// each list for real at its sequence's end, or when the next list, F - 1, supersedes it): the wait is for its GPU
+// work alone. Bounded, so a render thread that stopped never holds the game.
+std::uint32_t RenderCore::screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity,
+                                               std::uint32_t game_frame) {
+    std::unique_lock lock(probe_answers_lock_);
+    if (!probe_book_.ready(game_frame) &&
+        !probe_answers_cv_.wait_for(lock, std::chrono::seconds(2), [&] { return probe_book_.ready(game_frame); }) &&
+        probe_waits_logged_ < 4u) {
+        ++probe_waits_logged_;
+        std::fprintf(stderr, "[render] frame %u: the probes of frame %u were not back within 2 s; the answers before them are used\n",
+                     game_frame, probe_book_.oldest_pending());
+    }
+    return probe_book_.answers(channel, game_frame, probes, capacity);
+}
+
+void RenderCore::probes_walked(std::uint32_t game_frame) {
+    {
+        const std::lock_guard guard(probe_answers_lock_);
+        probe_book_.walked(game_frame);
+    }
+    probe_answers_cv_.notify_all();
+}
+
+void RenderCore::probes_released(std::uint32_t game_frame) {
+    {
+        const std::lock_guard guard(probe_answers_lock_);
+        probe_book_.released(game_frame);
+    }
+    probe_answers_cv_.notify_all();
 }
 
 void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* probes, std::uint32_t count, bool compared) {
@@ -1989,10 +2025,15 @@ void RenderCore::record_screen_probes(std::uint32_t channel, const ScreenProbe* 
     ScreenProbeFlight flight;
     flight.channel = channel;
     flight.count = count;
+    flight.game_frame = walk_.now->list->game_frame;
     flight.slot = free_probe_slots_.empty() ? next_probe_slot_++ : free_probe_slots_.back();
     if (!free_probe_slots_.empty()) free_probe_slots_.pop_back();
     flight.probes.assign(probes, probes + count);
     if (renderer_.record_screen_probes(flight.slot, flight.probes, compared)) {
+        {
+            const std::lock_guard guard(probe_answers_lock_);
+            probe_book_.flight(flight.game_frame);
+        }
         probe_flights_.push_back(std::move(flight));
     } else {
         free_probe_slots_.push_back(flight.slot);
@@ -2011,10 +2052,9 @@ void RenderCore::poll_screen_probes() {
         }
         {
             const std::lock_guard guard(probe_answers_lock_);
-            ScreenProbeAnswers& answers = probe_answers_[flight.channel];
-            answers.count = flight.count;
-            answers.probes = flight.probes;
+            probe_book_.answered(flight.game_frame, flight.channel, flight.probes.data(), flight.count);
         }
+        probe_answers_cv_.notify_all();
         free_probe_slots_.push_back(flight.slot);
         probe_flights_.pop_front();
     }
@@ -2173,6 +2213,7 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
     while (lists_.size() > 1u && lists_.front().get() != entry.before && lists_.front().get() != &entry) {
         // The game writes the list's memory again once it sees the flag: every read of it comes first, on every CPU.
         std::atomic_thread_fence(std::memory_order_release);
+        probes_released(lists_.front()->data.list->game_frame);
         lists_.front()->data.list->released = 1u;
         lists_[1]->before = nullptr;
         free_lists_.push_back(std::move(lists_.front()));
