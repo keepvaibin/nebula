@@ -1,0 +1,124 @@
+{
+  "harness": 1,
+  "name": "1646-library-chain",
+  "about": "guard-chain-a calls guard-chain-l1's l1.go, which calls guard-chain-l2's l2.fault, which faults. The need walk climbs: l1 needs l2, a needs l1, so guard-chain-a is off; both libraries stay, each told its cut (l2's l2.fault called by l1, l1's l1.go called by a)",
+  "proves": [
+    "kernel.guard.need_walk",
+    "kernel.guard.cut"
+  ],
+  "mods": [
+    "../mods/guard-chain-l2",
+    "../mods/guard-chain-l1",
+    "../mods/guard-chain-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1646
+      ]
+    },
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1645
+      ],
+      "after": {
+        "fact": "takeout.guard-chain-a",
+        "exists": true
+      },
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-chain-a.entered",
+      "count": 1
+    },
+    {
+      "fact": "mod.guard-chain-a.survived",
+      "absent": true
+    },
+    {
+      "fact": "mod.guard-chain-l1.going",
+      "count": 1
+    },
+    {
+      "log": "\\[mod guard-chain-a\\] GUARD: its call into guard-chain-l1 \\(in guard-chain-l2's code\\) failed \\(after hook: MR::getRandom\\): a memory access it may not make at guard-chain-l2/[a-z_]+\\.[a-z]+\\+0x[0-9a-f]+, address 0x[0-9a-f]+\\. It is off until the next start; what it was changing may be half done\\. guard-chain-l2 stays on\\."
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "guard-chain-a",
+        "source": "guard",
+        "row": "Guard.CaughtInDeeper"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.guard-chain-l2.cut",
+      "count": 1
+    },
+    {
+      "fact": "mod.guard-chain-l2.cut_function",
+      "is": "l2.fault"
+    },
+    {
+      "fact": "mod.guard-chain-l2.cut_caller",
+      "is": "guard-chain-l1"
+    },
+    {
+      "fact": "mod.guard-chain-l1.cut",
+      "count": 1
+    },
+    {
+      "fact": "mod.guard-chain-l1.cut_function",
+      "is": "l1.go"
+    },
+    {
+      "fact": "mod.guard-chain-l1.cut_caller",
+      "is": "guard-chain-a"
+    },
+    {
+      "fact": "mod.guard-chain-l1.cut_off",
+      "is": "guard-chain-a"
+    },
+    {
+      "fact": "mod.guard-chain-l1.cut_faulted",
+      "is": "guard-chain-l2"
+    },
+    {
+      "fact": "takeout.guard-chain-a",
+      "exists": true
+    },
+    {
+      "fact": "takeout.guard-chain-l1",
+      "absent": true
+    },
+    {
+      "fact": "takeout.guard-chain-l2",
+      "absent": true
+    }
+  ],
+  "faults": [
+    {
+      "mod": "guard-chain-a"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "guard-cb-lib",
+  "name": "guard-cb-lib",
+  "summary": "guard-cb-lib (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "harness": 1,
+  "name": "1648-two-callers",
+  "about": "guard-lib's gl.fault faults under guard-lib-user's call, then under guard-lib-user2's: each caller is off; at the second, guard-lib is named the common place (log, mod log Guard.CommonPlace, fact guard.under.guard-lib with the count and both callers); guard-lib stays on",
+  "proves": [
+    "kernel.guard.need_walk",
+    "kernel.guard.common_place"
+  ],
+  "mods": [
+    "../mods/guard-lib",
+    "../mods/guard-lib-user",
+    "../mods/guard-lib-user2"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1643
+      ]
+    },
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1648
+      ],
+      "after": {
+        "fact": "takeout.guard-lib-user",
+        "exists": true
+      }
+    },
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1645
+      ],
+      "after": {
+        "fact": "takeout.guard-lib-user2",
+        "exists": true
+      },
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "\\[mod guard-lib\\] GUARD: its code failed under two mods' calls, guard-lib-user's and guard-lib-user2's: the fault is likely its own\\."
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "guard-lib",
+        "source": "guard",
+        "row": "Guard.CommonPlace"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "guard.under.guard-lib",
+      "has": {
+        "count": 2,
+        "first": "guard-lib-user",
+        "second": "guard-lib-user2"
+      }
+    },
+    {
+      "fact": "takeout.guard-lib-user",
+      "exists": true
+    },
+    {
+      "fact": "takeout.guard-lib-user2",
+      "exists": true
+    },
+    {
+      "fact": "takeout.guard-lib",
+      "absent": true
+    }
+  ],
+  "faults": [
+    {
+      "mod": "guard-lib-user"
+    },
+    {
+      "mod": "guard-lib-user2"
+    }
+  ]
+}

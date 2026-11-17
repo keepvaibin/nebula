@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "guard-cb-checker",
+  "name": "guard-cb-checker",
+  "summary": "guard-cb-checker (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "guard-cb-lib"
+    }
+  ]
+}

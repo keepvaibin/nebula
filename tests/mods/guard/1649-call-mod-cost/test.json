@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "1649-call-mod-cost",
+  "about": "LumaCore.call_mod's cost: guard-cb-lib calls guard-cb-good's callback 20000 times plainly and 20000 times through call_mod, in the clock's ticks (kernel.guard_cost gives ps per tick); the progress file keeps the result per platform",
+  "proves": [
+    "kernel.guard.callback_cost"
+  ],
+  "mods": [
+    "../mods/guard-cb-lib",
+    "../mods/guard-cb-good"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1649
+      ],
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-cb-lib.cost_count",
+      "is": 20000
+    },
+    {
+      "fact": "mod.guard-cb-lib.cost_plain",
+      "exists": true
+    },
+    {
+      "fact": "mod.guard-cb-lib.cost_guarded",
+      "exists": true
+    },
+    {
+      "fact": "kernel.guard_cost",
+      "exists": true
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "harness": 1,
+  "name": "1652-common-place-page",
+  "about": "After guard-lib is named the common place of guard-lib-user's and guard-lib-user2's faults, the Mods page asks about it first (common.shown.guard-lib); right and Space are Turn them on again: both callers are loaded again this session (reload.<id> ok) and guard-lib stays on",
+  "proves": [
+    "kernel.guard.common_place"
+  ],
+  "mods": [
+    "../mods/guard-lib",
+    "../mods/guard-lib-user",
+    "../mods/guard-lib-user2"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1643
+      ]
+    },
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1648
+      ],
+      "after": {
+        "fact": "takeout.guard-lib-user",
+        "exists": true
+      }
+    },
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1645
+      ],
+      "after": {
+        "fact": "takeout.guard-lib-user2",
+        "exists": true
+      },
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "after",
+        "exists": true
+      },
+      "settings": "mods"
+    },
+    {
+      "at": 240,
+      "key": "right"
+    },
+    {
+      "at": 300,
+      "key": "space"
+    },
+    {
+      "after": {
+        "fact": "reload.guard-lib-user2",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "common.shown.guard-lib",
+      "has": {
+        "first": "guard-lib-user",
+        "second": "guard-lib-user2"
+      }
+    },
+    {
+      "fact": "common.answer.guard-lib",
+      "has": {
+        "answer": "on"
+      }
+    },
+    {
+      "fact": "reload.guard-lib-user",
+      "has": {
+        "ok": true
+      }
+    },
+    {
+      "fact": "reload.guard-lib-user2",
+      "has": {
+        "ok": true
+      }
+    },
+    {
+      "fact": "takeout.guard-lib",
+      "absent": true
+    }
+  ],
+  "faults": [
+    {
+      "mod": "guard-lib-user"
+    },
+    {
+      "mod": "guard-lib-user2"
+    }
+  ]
+}

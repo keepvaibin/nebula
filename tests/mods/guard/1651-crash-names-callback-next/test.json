@@ -1,0 +1,35 @@
+{
+  "harness": 1,
+  "name": "1651-crash-names-callback-next",
+  "about": "The next start after 1650: guard-cb-bad is off for it; guard-cb-lib starts",
+  "proves": [
+    "mods.after_crash.named"
+  ],
+  "continue_from": "1650-crash-names-callback",
+  "mods": [
+    "../mods/guard-cb-lib",
+    {
+      "path": "../mods/guard-cb-bad",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "mods: the last run crashed in the mod guard-cb-bad: it is off for this start"
+    },
+    {
+      "fact": "mod.guard-cb-lib.started",
+      "exists": true
+    },
+    {
+      "fact": "mod.guard-cb-bad.started",
+      "absent": true
+    }
+  ]
+}

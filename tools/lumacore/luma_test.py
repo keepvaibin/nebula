@@ -2202,11 +2202,12 @@ def evaluate(test, renderer, run_folder, ran):
             add("the mod %s loaded" % mod_id, value is True, value)
     # A guard event is the mod log's entry from the guard (LumaModLog source "guard", LumaGuard.cpp caught()): a mod
     # whose code faulted and was caught. A test passes with one only when it names that mod in faults, and a mod it
-    # names there must have faulted.
+    # names there must have faulted. The guard's rows written to a mod that stays on (its call cut short, Guard.CutUntold;
+    # a library named the common place of two callers' faults, Guard.CommonPlace) are not its faults.
     guarded = {}
     for f in by_key.get("modlog", []):
         v = f.get("value")
-        if isinstance(v, dict) and v.get("source") == "guard":
+        if isinstance(v, dict) and v.get("source") == "guard" and v.get("row") not in ("Guard.CutUntold", "Guard.CommonPlace"):
             guarded.setdefault(str(v.get("mod")), v.get("text"))
     for mod, said in sorted(guarded.items()):
         add("guard event in %s is listed in faults" % mod, mod in test["faults"], said)

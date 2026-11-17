@@ -1,10 +1,11 @@
 {
   "harness": 1,
   "name": "1643-library-fault",
-  "about": "guard-lib-user's after hook on MR::getRandom calls guard-lib's gl.fine (7), then gl.fault, which writes through a null pointer in guard-lib's code: caught at guard-lib-user's boundary like a fault in its own code, guard-lib-user off and taken out at the next frame, GUARD in the log naming a library mod's code, the game goes on; guard-lib stays and guard-lib-other's call of gl.fine after it gives 7",
+  "about": "guard-lib-user's after hook on MR::getRandom calls guard-lib's gl.fine (7), then gl.fault, which writes through a null pointer in guard-lib's code. The need walk: guard-lib-user needs guard-lib, so guard-lib-user is off and taken out at the next frame; the log, the mod log and the place name both mods and the place as guard-lib's file+offset; guard-lib stays and is told it was cut (it has no cut: the log says its state may be half done); guard-lib-other's call of gl.fine after it gives 7",
   "proves": [
     "kernel.guard.resume",
-    "kernel.guard.library"
+    "kernel.guard.library",
+    "kernel.guard.need_walk"
   ],
   "mods": [
     "../mods/guard-lib",
@@ -26,16 +27,16 @@
       ]
     },
     {
-      "after": {
-        "fact": "takeout.guard-lib-user",
-        "exists": true
-      },
       "call": "MR::getRandom",
       "signature": "s32(s32, s32)",
       "args": [
         0,
         1644
       ],
+      "after": {
+        "fact": "takeout.guard-lib-user",
+        "exists": true
+      },
       "fact": "after"
     },
     {
@@ -64,7 +65,29 @@
       "absent": true
     },
     {
-      "log": "\\[mod guard-lib-user\\] GUARD: its code failed \\(after hook: MR::getRandom\\): a memory access it may not make at a library mod's code 0x[0-9a-f]+, address 0x[0-9a-f]+\\. It is off until the next start; what it was changing may be half done\\."
+      "log": "\\[mod guard-lib-user\\] GUARD: its call into guard-lib failed \\(after hook: MR::getRandom\\): a memory access it may not make at guard-lib/[a-z_]+\\.[a-z]+\\+0x[0-9a-f]+, address 0x[0-9a-f]+\\. It is off until the next start; what it was changing may be half done\\. guard-lib stays on\\."
+    },
+    {
+      "log": "\\[mod guard-lib\\] a fault in guard-lib's code cut gl\\.fault short \\(at guard-lib/[a-z_]+\\.[a-z]+\\+0x[0-9a-f]+, called by guard-lib-user\\)\\. It has no cut, so what that call was changing may be half done; it stays on\\."
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "guard-lib-user",
+        "source": "guard",
+        "level": "error",
+        "row": "Guard.CaughtIn"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "guard-lib",
+        "source": "guard",
+        "row": "Guard.CutUntold"
+      },
+      "when": "any"
     },
     {
       "fact": "takeout.guard-lib-user",

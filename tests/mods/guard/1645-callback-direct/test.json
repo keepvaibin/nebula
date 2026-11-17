@@ -1,0 +1,120 @@
+{
+  "harness": 1,
+  "name": "1645-callback-direct",
+  "about": "guard-cb-lib's after hook calls its callbacks plainly (no call_mod): guard-cb-bad's faults under guard-cb-lib's boundary. The need walk: guard-cb-lib does not need guard-cb-bad, so guard-cb-bad is off, not guard-cb-lib; guard-cb-lib's cut is told (the game called it, at its after hook); guard-cb-good's callback, after the fault in the same call, does not run then and runs at the next call",
+  "proves": [
+    "kernel.guard.need_walk",
+    "kernel.guard.cut"
+  ],
+  "mods": [
+    "../mods/guard-cb-lib",
+    "../mods/guard-cb-bad",
+    "../mods/guard-cb-good"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1645
+      ]
+    },
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1645
+      ],
+      "after": {
+        "fact": "takeout.guard-cb-bad",
+        "exists": true
+      },
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-cb-bad.entered",
+      "count": 1
+    },
+    {
+      "fact": "mod.guard-cb-bad.survived",
+      "absent": true
+    },
+    {
+      "log": "\\[mod guard-cb-bad\\] GUARD: its code failed \\(after hook: MR::getRandom, in guard-cb-lib's call\\): a memory access it may not make at .+\\+0x[0-9a-f]+, address 0x[0-9a-f]+\\. It is off until the next start; what it was changing may be half done\\."
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "guard-cb-bad",
+        "source": "guard",
+        "row": "Guard.CaughtUnder"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.guard-cb-lib.cut",
+      "count": 1
+    },
+    {
+      "fact": "mod.guard-cb-lib.cut_caller",
+      "is": ""
+    },
+    {
+      "fact": "mod.guard-cb-lib.cut_where",
+      "is": "MR::getRandom"
+    },
+    {
+      "fact": "mod.guard-cb-lib.cut_off",
+      "is": "guard-cb-bad"
+    },
+    {
+      "fact": "mod.guard-cb-lib.cut_faulted",
+      "is": "guard-cb-bad"
+    },
+    {
+      "fact": "mod.guard-cb-lib.cut_boundary",
+      "is": 1
+    },
+    {
+      "fact": "mod.guard-cb-lib.ran_all",
+      "count": 1
+    },
+    {
+      "fact": "mod.guard-cb-good.ran",
+      "count": 1
+    },
+    {
+      "fact": "takeout.guard-cb-bad",
+      "exists": true
+    },
+    {
+      "fact": "takeout.guard-cb-lib",
+      "absent": true
+    },
+    {
+      "fact": "takeout.guard-cb-good",
+      "absent": true
+    }
+  ],
+  "faults": [
+    {
+      "mod": "guard-cb-bad"
+    }
+  ]
+}

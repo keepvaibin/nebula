@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "guard-chain-l1",
+  "name": "guard-chain-l1",
+  "summary": "guard-chain-l1 (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "guard-chain-l2"
+    }
+  ]
+}

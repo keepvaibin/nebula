@@ -1,0 +1,46 @@
+{
+  "harness": 1,
+  "name": "1650-crash-names-callback",
+  "about": "guard-cb-lib's after hook calls guard-cb-bad's callback plainly; the callback passes a null actor to MR::isDead, so the game's code faults: not resumed, the game ends. The crash note and the record name guard-cb-bad (the need walk over the frames past the game's code), not guard-cb-lib, whose boundary it was",
+  "proves": [
+    "kernel.guard.need_walk",
+    "mods.after_crash.named"
+  ],
+  "ends": "crash",
+  "mods": [
+    "../mods/guard-cb-lib",
+    "../mods/guard-cb-bad"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1650
+      ]
+    },
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-cb-bad.entered_game",
+      "exists": true
+    },
+    {
+      "fact": "mod.guard-cb-bad.survived_game",
+      "absent": true
+    },
+    {
+      "log": "crash: guard: the code of the mod guard-cb-lib failed \\(after hook: MR::getRandom\\): a memory access it may not make at 0x[0-9a-f]+; not resumed: the fault is outside the mods' code .+; turned off: guard-cb-bad; the fault outside the mods' code, called from guard-cb-bad's code at guard-cb-bad/[a-z_]+\\.[a-z]+\\+0x[0-9a-f]+"
+    }
+  ]
+}

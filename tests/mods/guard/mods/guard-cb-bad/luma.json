@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "guard-cb-bad",
+  "name": "guard-cb-bad",
+  "summary": "guard-cb-bad (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "guard-cb-lib"
+    }
+  ]
+}

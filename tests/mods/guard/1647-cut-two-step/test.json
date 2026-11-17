@@ -1,0 +1,95 @@
+{
+  "harness": 1,
+  "name": "1647-cut-two-step",
+  "about": "guard-cb-stepper calls guard-cb-lib's cb.step(5, f): cb.step sets the first half of its state, calls f (guard-cb-stepper's own code), which faults, so the second half is never set. guard-cb-stepper is off (guard-cb-lib does not need it); guard-cb-lib's cut is told (cb.step, called by guard-cb-stepper) and puts the state right: guard-cb-checker's cb.check after it finds it whole",
+  "proves": [
+    "kernel.guard.cut"
+  ],
+  "mods": [
+    "../mods/guard-cb-lib",
+    "../mods/guard-cb-stepper",
+    "../mods/guard-cb-checker"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1647
+      ]
+    },
+    {
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1657
+      ],
+      "after": {
+        "fact": "takeout.guard-cb-stepper",
+        "exists": true
+      },
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-cb-stepper.entered",
+      "is": 5
+    },
+    {
+      "fact": "mod.guard-cb-stepper.survived",
+      "absent": true
+    },
+    {
+      "fact": "mod.guard-cb-stepper.after_step",
+      "absent": true
+    },
+    {
+      "fact": "mod.guard-cb-lib.cut",
+      "count": 1
+    },
+    {
+      "fact": "mod.guard-cb-lib.cut_function",
+      "is": "cb.step"
+    },
+    {
+      "fact": "mod.guard-cb-lib.cut_caller",
+      "is": "guard-cb-stepper"
+    },
+    {
+      "fact": "mod.guard-cb-lib.whole",
+      "is": 1
+    },
+    {
+      "fact": "mod.guard-cb-checker.checked",
+      "is": 1
+    },
+    {
+      "fact": "takeout.guard-cb-stepper",
+      "exists": true
+    },
+    {
+      "fact": "takeout.guard-cb-lib",
+      "absent": true
+    }
+  ],
+  "faults": [
+    {
+      "mod": "guard-cb-stepper"
+    }
+  ]
+}
