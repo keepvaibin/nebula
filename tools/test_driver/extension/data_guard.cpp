@@ -41,8 +41,8 @@ const char* error(int argc, const ArgChar* const* argv, Environment environment,
             return "tests require private settings, saves, app data and crash paths inside NEBULA_WORK";
         }
     }
-    // Folders and files this extension writes to when a run names them: each is private too.
-    for (const ArgChar* name : {NEBULA_ARG_TEXT("GALAXY_AUDIO_WAV_DUMP"), NEBULA_ARG_TEXT("GALAXY_PRESENT_SNAPSHOT_DIR")}) {
+    // The file this extension writes to when a run names it: private too.
+    for (const ArgChar* name : {NEBULA_ARG_TEXT("GALAXY_AUDIO_WAV_DUMP")}) {
         const ArgText text = environment(name);
         const fs::path path(text);
         if (!text.empty() && (!path_is_within(path, work) || path_is_within(path, protected_root))) {

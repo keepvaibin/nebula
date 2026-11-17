@@ -27,8 +27,8 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 EXTENSION = ROOT / "tools" / "test_driver" / "extension"
-SOURCES = [EXTENSION / n for n in ("test_extension.cpp", "harness.cpp", "test_services.cpp", "test_plugin.cpp",
-                                   "data_guard.cpp")] + [ROOT / "runtime" / "src" / "hidden_start.cpp"]
+SOURCES = [EXTENSION / n for n in ("test_extension.cpp", "harness.cpp", "test_services.cpp", "data_guard.cpp")] + [
+    ROOT / "runtime" / "src" / "hidden_start.cpp"]
 RUNNER = ["tools/lumacore/luma_test.py", "tools/lumacore/capabilities.json", "tools/verify/settings_args.py",
           "runtime/include/galaxy/store_version.inc"]
 

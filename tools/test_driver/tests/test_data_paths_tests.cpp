@@ -82,7 +82,7 @@ int main() {
         }
         check(test_guard::error(5, private_run.data(), environment, player.wstring()) != nullptr,
               "a run without --crash-dumps rejected");
-        for (const auto* name : {L"GALAXY_AUDIO_WAV_DUMP", L"GALAXY_PRESENT_SNAPSHOT_DIR"}) {
+        for (const auto* name : {L"GALAXY_AUDIO_WAV_DUMP"}) {
             g_environment[name] = (root / "out" / name).wstring();
             check(test_guard::error(private_run.count(), private_run.data(), environment, player.wstring()) == nullptr,
                   "private output path accepted");
