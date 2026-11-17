@@ -42,3 +42,22 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   LumaKit's camera.now read a mixed camera. tests/mods/world 2471-view.
 - LumaLink M-035, M-153, M-163, M-164 fixed (6039139, 50e28b7, 183ce97), each with a unit test that fails before.
 - Open from M5: N-2020 (a mod gets no call when the game quits).
+
+## 2026-11-17 M2 Call safety (first part)
+
+- M-014, M-113 fixed (959dc09b1): the build finds what each of the 27,116 game functions needs (scene objects
+  reached through MR::getSceneObj< T >, to a fixed point over the callers); 11,338 need something. A mod's call
+  whose needs are missing is not made: it gives the empty value and the mod log says Call.NotNow in 14 languages.
+  needs_fixture_test.py (11 planted functions, 4 planted faults); tests/mods/needs 6801 (crashed before).
+- A refused call that returns a reference gives a zeroed object, never null (50d2f1714): LumaKit's camera.now read
+  through the null. LumaLink kit-boot and kit-boot-menus call LumaKit at the first boot frames.
+- M-173 fixed: lifecycle.md says what a call in the boot frames gives.
+- M-001 fixed (5fd2e8768, 553600e16): a fault in a library mod's code (LumaKit) ended the game. It is now resumed at
+  the calling mod's boundary; the caller is turned off, the library and its other users go on. tests/mods/guard 1643.
+  Decided: the caller is charged, not the library (board).
+- M-015, M-111 fixed (eff71d620, 54d490ab5): a new events service gives the game's 28 events to mod code at the
+  next frame's start, where it may do anything. The events' return-value promises are gone (nebula_mod_api.h 5);
+  events.md names the function that raises each, for a mod that must act at the moment. tests/mods/events 6901,
+  6902; LumaLink s-events; tools/gate/tests/events_page_test.py.
+- Open in M2: N-2023 (LumaScript proves needs at build time), N-2024 (safe handlers), M-038, M-045, M-049, M-076,
+  M-077 (LumaKit at any time).

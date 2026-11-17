@@ -1,5 +1,5 @@
 id	agent	package	state	proof	title	note
-M-001	2	M1 kernel	open		crash: a fault inside a library mod's code (LumaKit) called by another mod is never resumed; the game ends	
+M-001	2	M1 kernel	fixed	5fd2e8768, 553600e16; tests/mods/guard 1643-library-fault (the game ended before)	crash: a fault inside a library mod's code (LumaKit) called by another mod is never resumed; the game ends	Decided: the fault is charged to the calling mod (its boundary resumes, it is turned off); the library and its other users go on, as 1643 checks. A library's fault always happens inside some mod's call, so the caller is the one whose call can be refused.
 M-002	2	M1 kernel	open		wrong behaviour: the hook-chain grace covers hooks only; a mod with no published hook is freed at once, with no grace, while its service callbacks may	
 M-003	2	M1 kernel	open		wrong behaviour: a block header overwrite by a mod (buffer underflow) stops the whole game instead of turning the mod off	
 M-004	2	M11 documentation	open		docs wrong: luma.h says an out-of-memory `new` "stops the game"; inside any boundary the trap is a mod fault the guard resumes	
@@ -12,8 +12,8 @@ M-010	2	M1 kernel	open		maintainability: kMaxClasses (1024) class rows are never
 M-011	2	M3 services	open		crash: every pointer a mod gives a service is read in kernel or host code; a bad pointer ends the game, not the mod	
 M-012	2	M12 platforms for mods	open		missing feature: the microphone and camera services have backends only on Windows and Android	
 M-013	2	M1 kernel	open		wrong behaviour: draw.native's take-out waits without limit for a mod function running on the render thread	
-M-014	2	M2 call safety	open		crash: a game function a mod calls when its state is missing (no scene, no player) faults in game code and ends the game; the rows carry no preconditi	Run by the coordinator: the crash is at boot frames, not on the title.
-M-015	2	M2 call safety	open		missing feature: the 29 NEBULA_MOD_EVENT_* events never reach mod code; only the host's achievement rows subscribe, so their "return to cancel / retur	
+M-014	2	M2 call safety	fixed	959dc09b1, b51bfb2db, 50d2f1714; tools/lumacore/needs_fixture_test.py; tests/mods/needs 6801-call-not-now (the first boot-frame call crashed before, NEB-M03); LumaLink tests/game kit kit-boot, kit-boot-menus	crash: a game function a mod calls when its state is missing (no scene, no player) faults in game code and ends the game; the rows carry no preconditi	Run by the coordinator: the crash is at boot frames, not on the title. The crash is gone: a call whose scene objects are missing is not made (Call.NotNow, the empty value). The build-time proof in LumaScript is N-2023.
+M-015	2	M2 call safety	fixed	eff71d620; tests/mods/events 6901-events-told (fails before: no events service), 6902-achievement-events; LumaLink tests/game/script s-events	missing feature: the 29 NEBULA_MOD_EVENT_* events never reach mod code; only the host's achievement rows subscribe, so their "return to cancel / retur	
 M-016	2	M11 documentation	open		docs wrong: events.md links docs/modding/EVENTS.md, which does not exist	
 M-017	2	M11 documentation	open		docs wrong: detailed-rules.md promises a build warning for hooking a function that runs off the game thread, from a self-description mark that does no	
 M-018	2	M1 kernel	open		see the finding's own text	
@@ -109,9 +109,9 @@ M-107	2	M9 mod manager	open		wrong behaviour: on Linux, macOS and Android, impor
 M-108	2	M9 mod manager	open		docs wrong (translation): two strings on a mod's page have no translation	
 M-109	2	M3 services	open		docs wrong: luma_modlog.h says an entry's count is at most LUMA_MODLOG_ARGS, but the host sends ARGS + 1 on purpose	
 M-110	2	M1 kernel	open		maintainability: a game class the header scanner misses gets class id 0 ("unknown") with no build error	
-M-111	2	M2 call safety	open		docs wrong / maintainability: the events' return-value contracts have no possible user, and the events page is stale	
+M-111	2	M2 call safety	fixed	eff71d620, 54d490ab5; tools/gate/tests/events_page_test.py (40 faults on the tree before)	docs wrong / maintainability: the events' return-value contracts have no possible user, and the events page is stale	
 M-112	2	M1 kernel	open		wrong behaviour (cost): an achievement on a frequent event does string work for every achievement on every raise, for the whole session	
-M-113	2	M2 call safety	open		maintainability: the only call lists the build keeps drop template callees, so a needs pass built on them would see no scene reach at all	
+M-113	2	M2 call safety	fixed	959dc09b1; tools/lumacore/needs_fixture_test.py (MR::getSceneObj< T >(id) through templates and callers)	maintainability: the only call lists the build keeps drop template callees, so a needs pass built on them would see no scene reach at all	
 M-114	2	M7 compiler	open		wrong behaviour: texts given to the game and closures given to services are kept until the mod stops, one per distinct value; a mod that does either e	
 M-115	2	M11 documentation	open		docs wrong: detailed-rules.md tells modders to write `if let p = MarioAccess::getPlayerActor { ... }`, which the compiler refuses	
 M-116	2	M7 compiler	open		wrong behaviour (compatibility): a mod asks each service at the SDK's newest minor version, not the lowest one that has the functions it calls, so a m	
@@ -171,7 +171,7 @@ M-169	2	M6 files from strangers	open		crash (memory exhaustion): a mod's cooked 
 M-170	2	M11 documentation	open		docs wrong: code blocks the compiler refuses	
 M-171	2	M11 documentation	open		docs wrong: features documented as working that the compiler refuses with S0800	
 M-172	2	M11 documentation	open		docs missing: 80 of the compiler's build-time codes appear on no page, including S0012 and S0800	
-M-173	2	M2 call safety	open		docs missing: no page warns about calls that crash on the first `on frame`	
+M-173	2	M2 call safety	fixed	b51bfb2db, 50d2f1714; docs/modding/reference/lumascript/lifecycle.md (what a call in the boot frames gives); tests/mods/needs 6801-call-not-now proves it	docs missing: no page warns about calls that crash on the first `on frame`	
 M-174	2	M0 mod tests into the gate	open		missing feature (tests): behaviours no test proves, most likely to be hit first (extends M-036 and M-117)	
 M-175	2	M10 camera, look and first person	open		docs wrong (misleading): kit.camera promises the player's body stays hidden while a first-person rig holds the camera; it is hidden once and comes bac	
 M-176	2	M11 documentation	open		docs wrong: three service pages tell C modders to import an older version than the header provides	
@@ -443,3 +443,5 @@ N-2019	2	M3 services	fixed	ecdf110eb; tests/mods/fs 2313-write-at-end, 2314-writ
 N-2020	2	M3 services	open		missing feature: a mod gets no call when the game quits (on stop runs only at a reload or a take-out, lifecycle.md), so a mod that keeps data in memory (a replay, a split timer) cannot write it at the end	
 N-2021	2	M0 mod tests into the gate	fixed	af6be4c9e, fe204003b; gate --full mods/d3d12, mods/vulkan, mods/d3d11 (0 of 0 before)	untested: the gate runs Python with -I, so mod_tests.py could not import harness_self; and it had no --commit, which the gate passes. The gate's mods rows ran no test	
 N-2022	2	M0 mod tests into the gate	open		wrong look: the game's placeholder model (a mod's missing model, a missing class) draws with no pipeline: tests/mods models/3202-model-missing and refs/3132-missing-class fail the loss check (draws-no-pipeline) on every renderer. The program set is Agent 1's: fixed on engine/next e3a2026ed (the placeholder's pixel program joins the set); closes when it reaches main	
+N-2023	2	M2 call safety	open		missing feature: LumaScript does not refuse at build time a call whose needs (luma_functions.json needs) are not proved at that place, nor say what would prove them; at run time the call is only not made (M-014)	
+N-2024	2	M2 call safety	open		missing feature: no handlers that guarantee what calls inside them need (a frame of play, any stage ready, a stage ended, the player ready); a mod tests by hand	
