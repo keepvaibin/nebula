@@ -32,7 +32,9 @@ import subprocess
 import sys
 import time
 
-import harness_self
+# Its neighbours by path: the gate runs Python isolated (-I), which leaves the script's own folder off the path.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import harness_self  # noqa: E402
 
 TREE = pathlib.Path(__file__).resolve().parents[2]
 TESTS = TREE / "tests" / "mods"
