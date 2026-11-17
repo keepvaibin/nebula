@@ -4,7 +4,7 @@
 # The test runs' extension (--extension): runs the harness's plan (tools/lumacore/luma_test.py) and keeps the sound.
 set(test_extension ${CMAKE_CURRENT_LIST_DIR}/extension)
 add_library(nebula_test_extension MODULE ${test_extension}/test_extension.cpp ${test_extension}/harness.cpp
-    ${test_extension}/test_services.cpp ${test_extension}/data_guard.cpp
+    ${test_extension}/test_services.cpp ${test_extension}/data_guard.cpp ${test_extension}/process_memory.cpp
     ${rt}/hidden_start.cpp)
 target_link_libraries(nebula_test_extension PRIVATE galaxy_runtime_abi)
 if(WIN32)

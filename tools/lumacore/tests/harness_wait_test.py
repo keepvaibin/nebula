@@ -18,7 +18,8 @@ import sys
 import tempfile
 
 TREE = pathlib.Path(__file__).resolve().parents[3]
-SOURCES = [TREE / "tools/test_driver/extension/harness.cpp", TREE / "tools/test_driver/extension/harness_selftest.cpp"]
+SOURCES = [TREE / "tools/test_driver/extension/harness.cpp", TREE / "tools/test_driver/extension/harness_selftest.cpp",
+           TREE / "tools/test_driver/extension/process_memory.cpp"]
 INCLUDES = [TREE / "native/include", TREE / "runtime/include", TREE / "tools/test_driver/extension"]
 
 

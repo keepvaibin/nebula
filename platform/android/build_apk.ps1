@@ -141,7 +141,7 @@ foreach ($abi in $Abis -split ",") {
         Invoke-Logged "$Work\test-extension-$abi.log" {
             & "$llvm\${triple}31-clang++.cmd" -std=c++20 -O2 -fPIC -shared -static-libstdc++ "-Wl,--no-undefined" `
                 -Wall -Wextra -Werror "-I$root/runtime/include" "-I$root/native/include" `
-                "$ext/test_extension.cpp" "$ext/harness.cpp" "$ext/test_services.cpp" "$ext/data_guard.cpp" `
+                "$ext/test_extension.cpp" "$ext/harness.cpp" "$ext/test_services.cpp" "$ext/data_guard.cpp" "$ext/process_memory.cpp" `
                 "$root/runtime/src/hidden_start.cpp" -ldl -llog -o "$testBin/libnebula_test_extension.so"
         }
         Invoke-Logged "$Work\test-half-$abi.log" {

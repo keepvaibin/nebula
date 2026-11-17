@@ -260,7 +260,7 @@ def read_test(folder, types=None):
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
                        "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh", "window",
-                       "time", "visible", "settings", "diagnostics", "disc"})
+                       "time", "visible", "settings", "diagnostics", "disc", "memory"})
     for key in ("harness", "name", "about", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -290,6 +290,11 @@ def read_test(folder, types=None):
     clock = text(t, "time", "") if "time" in t else "steps"
     if clock not in ("steps", "real"):
         raise HarnessError("time is steps or real")
+    # "memory": seconds (1 to 3600): the fact process.memory {"seconds", "bytes"} at frame 0 and each that many seconds
+    # of wall time after it, the process's own memory (tools/test_driver/extension/process_memory.h); a soak run's.
+    memory = whole(t, "memory", "", 1) if "memory" in t else None
+    if memory is not None and memory > 3600:
+        raise HarnessError("memory is 1 to 3600 seconds")
     # A visible window (pacing measurements only; every other run is hidden).
     visible = boolean(t, "visible", "") if "visible" in t else False
     # Settings for the run, as tools/verify/settings_args.py takes them (GALAXY_VSYNC_INTERVAL=1), and the test
@@ -447,7 +452,7 @@ def read_test(folder, types=None):
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
             "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
             "time": clock, "visible": visible, "settings": run_settings, "diagnostics": diagnostics,
-            "starts": starts, "fresh": fresh, "not_here": not_here, "disc": disc}
+            "starts": starts, "fresh": fresh, "not_here": not_here, "disc": disc, "memory": memory}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -1339,6 +1344,8 @@ def plan_text(test, out):
         lines.append("device pad")
     if test.get("time", "steps") == "real":
         lines.append("time real")
+    if test.get("memory"):
+        lines.append("memory %d" % test["memory"])
     lines += test["setup"]
     for s in test["steps"]:
         if s["at"] is not None:
