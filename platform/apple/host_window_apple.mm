@@ -99,6 +99,7 @@ bool g_cursor_hidden = false;
 unsigned g_applied_mode = ~0u;
 // The system refused the last change to full screen (the main thread's).
 bool g_full_screen_owed = false;
+double g_wheel_carry = 0.0;  // the wheel's turn short of a 120th of a notch (pump_events, the main thread)
 
 // Keys the settings menu takes from other threads and from the pads, in order, on the main thread.
 std::mutex g_menu_keys_mutex;
@@ -1046,11 +1047,14 @@ void pump_events(int timeout_ms) noexcept {
                 break;
             }
             case NSEventTypeScrollWheel: {
-                // In 120ths of a notch, positive away from the player (Windows' WHEEL_DELTA), as the game takes it: a
-                // wheel's lines, or a trackpad's points at ten to a notch.
-                const double turned = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY / 10.0 : event.scrollingDeltaY;
-                const double notches = event.directionInvertedFromDevice ? -turned : turned;
-                menu_wheel += static_cast<int>(std::lround(notches * 120.0));
+                // In 120ths of a notch, positive scrolling back up the page (Windows' WHEEL_DELTA), as the game takes
+                // it: a wheel's lines, or a trackpad's points at ten to a notch. The turn as the system gives it: with
+                // natural scrolling on the list moves the way every other page does. Parts of a notch add up (the carry).
+                const double notches = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY / 10.0 : event.scrollingDeltaY;
+                g_wheel_carry += notches * 120.0;
+                const double whole = std::trunc(g_wheel_carry);
+                g_wheel_carry -= whole;
+                menu_wheel += static_cast<int>(whole);
                 break;
             }
             default:

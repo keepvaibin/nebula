@@ -3952,13 +3952,18 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
             overList = i;
         }
     }
-    if (wheel != 0.0f && overList >= 0 && !mDragging) {
-        mModGlide[overList] = 0.0f;
-        if (!mModFree[overList]) {
-            mModFree[overList] = true;
-            mModFreeScroll[overList] = mModScroll[overList];
+    // The wheel scrolls the list under the pointer; away from both lists, the list that holds the selection.
+    s32 wheelList = overList;
+    if (wheelList < 0 && rView.selected < rView.total_rows) {
+        wheelList = mItemList[rView.selected];
+    }
+    if (wheel != 0.0f && wheelList >= 0 && wheelList < 2 && !mDragging) {
+        mModGlide[wheelList] = 0.0f;
+        if (!mModFree[wheelList]) {
+            mModFree[wheelList] = true;
+            mModFreeScroll[wheelList] = mModScroll[wheelList];
         }
-        mModFreeScroll[overList] -= wheel;
+        mModFreeScroll[wheelList] -= wheel;
         mPointerMode = true;  // the list stays where the wheel left it until the keys move the selection
     }
     s32 hovered = -1;

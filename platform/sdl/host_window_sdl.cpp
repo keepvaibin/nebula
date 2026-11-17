@@ -96,6 +96,7 @@ std::atomic<bool> g_background{false};
 std::atomic<bool> g_low_memory{false};
 std::atomic<bool> g_menu_context{false};
 std::atomic<bool> g_title_screen{false};
+float g_wheel_carry = 0.0f;  // the wheel's turn short of a 120th of a notch (pump_events, the event thread)
 std::atomic<bool> g_direct_touch{false};
 
 // SDL's thread, the only one that calls SDL's window, gamepad and Java functions. The game's threads run on stacks of
@@ -1279,9 +1280,14 @@ void pump_events(int timeout_ms) noexcept {
             break;
         }
         case SDL_EVENT_MOUSE_WHEEL: {
-            // In 120ths of a notch, positive away from the player (Windows' WHEEL_DELTA), as the game takes it.
-            const float notches = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y;
-            menu_wheel += static_cast<int>(std::lround(notches * 120.0f));
+            // In 120ths of a notch, positive scrolling back up the page (Windows' WHEEL_DELTA), as the game takes it. The
+            // turn as the system gives it: with natural scrolling on (SDL_MOUSEWHEEL_FLIPPED) the list moves the way every
+            // other page on the system does. A high-resolution wheel's or a touchpad's parts of a notch add up (the
+            // carry), so a slow turn scrolls as far as a quick one.
+            g_wheel_carry += event.wheel.y * 120.0f;
+            const float whole = std::trunc(g_wheel_carry);
+            g_wheel_carry -= whole;
+            menu_wheel += static_cast<int>(whole);
             break;
         }
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
