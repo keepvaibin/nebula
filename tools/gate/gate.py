@@ -33,6 +33,11 @@ QUICK_STOPS = [
     "SandClockGalaxy 1", "IceVolcanoGalaxy 1", "HellProminenceGalaxy 1", "TeresaMario2DGalaxy 1",
     "SurfingLv1Galaxy 1", "CannonFleetGalaxy 1", "OceanPhantomCaveGalaxy 4", "FactoryGalaxy 1",
 ]
+# The other regions' discs: their tours run on Direct3D 12 only, since a region changes the game's data (text,
+# layouts, fonts), not what a renderer does with it. --quick plays two of their stops (a hub and the heaviest);
+# --full all of them.
+REGION_DISCS = ("RMGP01", "RMGJ01")
+QUICK_REGION_STOPS = ["HoneyBeeKingdomGalaxy 1", "OceanPhantomCaveGalaxy 4"]
 RENDERERS = ("d3d12", "vulkan", "d3d11")
 
 
@@ -231,12 +236,14 @@ DESCRIPTION_SELF = sorted((TREE / "tools" / "lumacore").glob("*_fixture_test.py"
 
 
 def harness(g, suite, renderer, label):
-    """One harness suite on one renderer. Passes when every test in it passed."""
+    """One harness suite on one renderer. Passes when every test in it passed (a test whose disc has no pak is
+    not-run, which is not a pass)."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
         code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools/lumacore/luma_test.py", "run", suite,
                     "--bin", g.bin, "--work", work, "--who", "gate", "--lock", g.work / "harness.lock",
-                    "--commit", g.commit, "--renderer", renderer], log, cwd=g.args.build_root)
+                    "--commit", g.commit, "--renderer", renderer], log, env={"LUMA_TEST_PAKS": g.args.paks},
+                   cwd=g.args.build_root)
         # The run's copies of the programs are not evidence: removed so the drive does not fill.
         for d in work.rglob("bin"):
             if d.is_dir():
@@ -335,6 +342,10 @@ def main():
     tour = gate_tour.write(g.work / "tour", stops)
     for r in renderers:
         g.check("tour/%s" % r, harness(g, tour, r, "tour"))
+    region_stops = QUICK_REGION_STOPS if args.mode == "quick" else None
+    for disc in REGION_DISCS:
+        region = gate_tour.write(g.work / ("tour-%s" % disc), region_stops, disc)
+        g.check("tour-%s/d3d12" % disc, harness(g, region, "d3d12", "tour-%s" % disc))
 
     if args.mode == "full":
         for name, why in (

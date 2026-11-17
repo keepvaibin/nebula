@@ -5,7 +5,14 @@ takes a picture on arrival and one at the end, and ends. It passes when the game
 stop in frames and no mod fault (the harness's own checks). The seeds are the audit's (20261116 + the stop's index),
 so a stop plays the same input as it did in docs/audit-2026-11-17.
 
-    python -X utf8 -I tools/gate/gate_tour.py OUT [STAGE SCENARIO ...]
+The input starts when the player has control: the game half's stage setup waits, up to 7,200 frames, until the
+opening camera, the scenario starter and any demo are over and Mario takes input (luma_test.c stage_ready), and the
+steps count from there. A stage with a long opening sequence is played as long as any other.
+
+With a disc (RMGP01, RMGJ01), every test carries it (the harness's "disc") and its name the disc's prefix, so the
+tour runs on that disc's game.pak, whose data (text, layouts, fonts) is its own.
+
+    python -X utf8 -I tools/gate/gate_tour.py OUT [--disc DISC] [STAGE SCENARIO ...]
 """
 import json
 import pathlib
@@ -23,7 +30,7 @@ def stops():
     return [(i, l.split()[0], int(l.split()[1])) for i, l in enumerate(lines)]
 
 
-def test_for(index, stage, scenario):
+def test_for(index, stage, scenario, disc=None):
     r = random.Random(20261116 + index)
     steps = [{"at": 30, "picture": "arrive"}]
     at = 40
@@ -45,28 +52,33 @@ def test_for(index, stage, scenario):
     steps.append({"at": FRAMES - 20, "picture": "after"})
     steps.append({"at": FRAMES, "end": True})
     steps.sort(key=lambda s: s["at"])
-    name = "%03d-%s-%d" % (index + 1, stage, scenario)
-    return name, {"harness": 1, "name": name,
-                  "about": "%s scenario %d: %d frames of seeded random play" % (stage, scenario, FRAMES),
-                  "save": {"spin": True}, "stage": {"name": stage, "scenario": scenario},
-                  "limit_seconds": 240, "steps": steps, "expect": []}
+    name = "%s%03d-%s-%d" % ("%s-" % disc if disc else "", index + 1, stage, scenario)
+    test = {"harness": 1, "name": name,
+            "about": "%s scenario %d%s: %d frames of seeded random play" % (stage, scenario, " on %s" % disc if disc else "",
+                                                                             FRAMES),
+            "save": {"spin": True}, "stage": {"name": stage, "scenario": scenario},
+            "limit_seconds": 240, "steps": steps, "expect": []}
+    if disc:
+        test["disc"] = disc
+    return name, test
 
 
-def write(out, only=None):
-    """Writes the tour (or the stops named in only, as "Stage scenario") under out; returns its suite.json."""
+def write(out, only=None, disc=None):
+    """Writes the tour (or the stops named in only, as "Stage scenario") under out, for disc when given (else the
+    run's own pak); returns its suite.json."""
     out = pathlib.Path(out)
     want = None if only is None else {tuple(s.split()) for s in only}
     names = []
     for index, stage, scenario in stops():
         if want is not None and (stage, str(scenario)) not in want:
             continue
-        name, test = test_for(index, stage, scenario)
+        name, test = test_for(index, stage, scenario, disc)
         folder = out / name
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "test.json").write_text(json.dumps(test, indent=2) + "\n", encoding="utf-8")
         names.append(name)
     if want is not None and len(names) != len(want):
-        found = {tuple(n.split("-")[1:]) for n in names}
+        found = {tuple(n.split("-")[-2:]) for n in names}
         raise ValueError("not in the tour list: %s" % sorted(" ".join(w) for w in want - found))
     suite = out / "suite.json"
     suite.write_text(json.dumps({"harness": 1, "tests": names}, indent=2) + "\n", encoding="utf-8")
@@ -75,7 +87,12 @@ def write(out, only=None):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+    disc = None
+    if "--disc" in args:
+        i = args.index("--disc")
+        disc = args[i + 1]
+        del args[i:i + 2]
     if not args:
         sys.exit(__doc__)
     pairs = [" ".join(args[i:i + 2]) for i in range(1, len(args), 2)] or None
-    print(write(args[0], pairs))
+    print(write(args[0], pairs, disc))
