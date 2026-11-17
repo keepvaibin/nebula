@@ -67,10 +67,14 @@ Any key that is not on this page, anywhere in the file, stops the test with an e
 | `continue_from` | No | The name of an earlier test in the same suite. This test starts with the saves, settings and mods that test left, and needs that test to have passed. |
 | `device` | No | `keyboard` (the default) or `pad`. With `pad`, the controller's rumble is recorded as the fact `input.motor`. |
 | `faults` | No | Mods that are expected to fault, as `[{"mod": "ID"}]`. Without it, any fault in a mod fails the test. |
-| `ends` | No | `end` (the default) or `crash`. With `crash`, the game must crash before the `end` step, and the test needs a `log` check whose pattern starts with `crash: `. |
+| `ends` | No | `end` (the default), `crash` or `crash-at-stop`. With `crash`, the game must crash before the `end` step. With `crash-at-stop`, the run must reach its `end` step and the game must then crash while it stops (a mod's stop function runs then); a crash before the `end` step fails the test. Both need a `log` check whose pattern starts with `crash: `. |
 | `starts` | No | How many times the game process must have started during the run, when a step restarts the game. |
 | `safe_start` | No | `asked` starts the game in safe mode. `crash` starts it as after a crash with mods on that named no mod while no mod's code ran: every mod is off for the start, and the **Mods** page says why. `crash-code` starts it as after such a crash while mods' code ran: every mod's code is off for the start. To test the start after a crash that names your mod, end one test with `"ends": "crash"` and continue from it (`continue_from`). |
 | `fresh` | No | `true` starts with no shader cache, as on a first start. |
+| `time` | No | `steps` (the default) or `real`. See [The test clock](#the-test-clock). |
+| `visible` | No | `true` shows the game's window. The default is a hidden window. Use it only to measure how pictures are shown. |
+| `settings` | No | Game settings for the run, as a list of `"GALAXY_NAME=value"` (`"GALAXY_VSYNC_INTERVAL=1"`). Each name must be one the game's settings file takes; the list is `tools/verify/settings_args.py` in Nebula's source. Any other name stops the test with a harness error. |
+| `diagnostics` | No | The game's own records for the run, as a list of the names its `--diagnostics` option takes (`present-stats`, `frame-times`, `timeline`; the list is `runtime/include/galaxy/launch_args.h`). With `timeline`, the record is the run folder's `timeline.bin`. |
 | `bare` | No | `true` runs the game with no test code in it. Only `wait`, `picture`, `key`, `text`, `settings` and `end` steps are allowed, and only log, picture and sound checks. A bare test has no mods. |
 | `hide_game_files` | No | Paths inside the game's folder that the run's copy of the game leaves out. |
 
@@ -132,6 +136,8 @@ Applied after the stage is ready, then read back.
 
 Frame 0 is the first game frame after every setup item is set and read back. The clock counts game frames, one fixed step each, so a test runs the same on a slow computer and a fast one. A test with no `stage` starts its clock on the first frame of the title screen.
 
+With `"time": "real"`, the game steps on the computer's own clock, as when you play, and the display paces the pictures. Steps still count game frames, but two runs no longer match frame for frame. Use it only to measure pacing.
+
 ## Steps
 
 Each step has `at` (a frame) or `after` (a condition), and exactly one action. Steps on the same frame run in the order written. Input steps can overlap: the buttons held are all the buttons of every input step that is running.
@@ -170,6 +176,8 @@ A fact condition takes any check from [Fact checks](#fact-checks). With `"when":
 | `reload` | `{"reload": "gold-throw"}` | Reloads a running mod's code from its installed folder, as dev mode does. The next step waits until the reload ends, up to 600 frames, unless the step has `"wait": false`. The fact `reload.MOD-ID` holds the result. |
 | `forget` | `{"forget": "gold-throw"}` | Presses **FORGET** on a removed mod in the **MODS** page. |
 | `wait` | `{"wait": true}` | Does nothing. Use it to hang an `after` on. |
+| `window` | `{"window": [960, 540]}` | Resizes the inside of the game's window, as a player dragging its edge does: `[width, height]` in pixels, each 1 to 65535. |
+| `lose_device` | `{"lose_device": true}` | Loses the graphics device at the renderer's next frame, as a driver reset does. The game must make it again and go on. |
 | `end` | `{"end": true}` | Ends the test on this frame. |
 
 ### Calling game functions
@@ -272,8 +280,10 @@ Every test also checks, without being told:
 * Every mod in `mods` loaded, except those with `"loads": false`.
 * No mod faulted, except those in `faults`.
 * Every setup item was set and read back.
+* Nothing the game asked for was lost: the counts the game logs at its exit on its `[loss]` line (a draw with no material, a texture drawn blank, a sound read past its end) are all 0.
+* Every refusal of a mod's file was given in words, not only as a code.
 
-With `"ends": "crash"`, these become: the game crashed before the `end` step, wrote a crash dump, and quit with a code other than 0.
+With `"ends": "crash"`, these become: the game crashed before the `end` step, wrote a crash dump, and quit with a code other than 0. With `"ends": "crash-at-stop"`: the run reached its `end` step, then the game crashed before it quit, with a code other than 0. The `[loss]` check is made only for `"ends": "end"`.
 
 ## Results
 
