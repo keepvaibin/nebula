@@ -34,3 +34,5 @@ native_test(native_name_index_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_inde
 # The game's arenas, on the host's address services as the host gives them.
 native_test(native_arena_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/arena_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c"
     "${game_src}/System/NebulaArena.cpp")
+# The frame-list writer, against the list the renderer reads.
+native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")

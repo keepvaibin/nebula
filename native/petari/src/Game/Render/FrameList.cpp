@@ -174,6 +174,16 @@ namespace {
         return nebula_host();
     }
 
+    // The host's heap, which a frame's list cannot do without: no memory stops the game, naming what it was for.
+    void* heapRealloc(void* pData, size_t bytes, const char* pWhat) {
+        void* const pNew = pData != nullptr || bytes == 0 ? host()->heap_realloc(host()->user, pData, bytes)
+                                                          : host()->heap_alloc(host()->user, bytes);
+        if (pNew == nullptr && bytes != 0) {
+            NEBULA_PANIC("out of memory: %llu bytes for %s", static_cast< unsigned long long >(bytes), pWhat);
+        }
+        return pNew;
+    }
+
     template < class T >
     struct Grown {
         T* mData;
@@ -202,7 +212,7 @@ namespace {
         }
 
         void reserve(u32 room) {
-            mData = static_cast< T* >(host()->heap_realloc(host()->user, mData, room * sizeof(T)));
+            mData = static_cast< T* >(heapRealloc(mData, static_cast< size_t >(room) * sizeof(T), "a frame's list"));
             mRoom = room;
         }
     };
@@ -217,6 +227,14 @@ namespace {
     };
 
     const u32 cPageBytes = 1u << 20;
+
+    // The offset in the page of its next free byte aligned to `align` (a power of two): aligned by address, as a page is
+    // only as aligned as the host's heap.
+    u32 alignedOffset(const Page* pPage, u32 align) {
+        const uintptr_t start = reinterpret_cast< uintptr_t >(pPage);
+        const uintptr_t next = (start + pPage->mUsed + (align - 1)) & ~static_cast< uintptr_t >(align - 1);
+        return static_cast< u32 >(next - start);
+    }
 
     // A frame's list and everything it points to. The renderer holds on to two or three at a time; a list it let go is
     // written again, and when none is free there is one more.
@@ -358,7 +376,7 @@ namespace {
             }
         }
         if (pFree == nullptr) {
-            pFree = static_cast< Store* >(host()->heap_alloc(host()->user, sizeof(Store)));
+            pFree = static_cast< Store* >(heapRealloc(nullptr, sizeof(Store), "a frame's list"));
             memset(pFree, 0, sizeof(Store));
             pFree->mNext = sStores;
             sStores = pFree;
@@ -422,7 +440,7 @@ namespace {
     SitePipeline& siteEntry(u64 key, u32 state) {
         if (sSiteCount * 4 >= sSiteRoom * 3) {
             const u32 room = sSiteRoom != 0 ? sSiteRoom * 2 : 1024;
-            auto* pNew = static_cast< SitePipeline* >(host()->heap_alloc(host()->user, room * sizeof(SitePipeline)));
+            auto* pNew = static_cast< SitePipeline* >(heapRealloc(nullptr, room * sizeof(SitePipeline), "the pipeline table"));
             memset(pNew, 0, room * sizeof(SitePipeline));
             for (u32 i = 0; i < sSiteRoom; i++) {
                 const SitePipeline& rOld = sSitePipelines[i];
@@ -537,17 +555,26 @@ namespace Frame {
     }
 
     void* arena(u32 bytes, u32 align) {
+        // A length past this is a bad count; with the page's header and the alignment it would wrap.
+        if (bytes > 0x7FFFFF00u || align > 4096u || (align & (align - 1)) != 0) {
+            NEBULA_PANIC("frame memory of %u bytes aligned to %u", bytes, align);
+        }
+        if (align == 0) {
+            align = 1;
+        }
         Store* pStore = store();
         Page* pPage = pStore->mPage;
         u32 at = 0;
         if (pPage != nullptr) {
-            at = (pPage->mUsed + (align - 1)) & ~(align - 1);
+            at = alignedOffset(pPage, align);
         }
         while (pPage == nullptr || at + bytes > pPage->mRoom) {
             Page* pNext = pPage != nullptr ? pPage->mNext : nullptr;
             if (pNext == nullptr) {
-                const u32 room = bytes + 64 > cPageBytes ? bytes + 64 : cPageBytes;
-                pNext = static_cast< Page* >(host()->heap_alloc(host()->user, room));
+                // Room for the block after the header at any address the heap gives.
+                const u32 need = bytes + static_cast< u32 >(sizeof(Page)) + align;
+                const u32 room = need > cPageBytes ? need : cPageBytes;
+                pNext = static_cast< Page* >(heapRealloc(nullptr, room, "a frame's memory"));
                 pNext->mNext = nullptr;
                 pNext->mRoom = room;
                 pNext->mUsed = sizeof(Page);
@@ -558,7 +585,7 @@ namespace Frame {
                 }
             }
             pPage = pNext;
-            at = (pPage->mUsed + (align - 1)) & ~(align - 1);
+            at = alignedOffset(pPage, align);
         }
         pPage->mUsed = at + bytes;
         pStore->mPage = pPage;
@@ -1371,7 +1398,7 @@ namespace FrameRing {
             while (at + bytes > room) {
                 room *= 2;
             }
-            pStore->mRingVertices = static_cast< u8* >(host()->heap_realloc(host()->user, pStore->mRingVertices, room));
+            pStore->mRingVertices = static_cast< u8* >(heapRealloc(pStore->mRingVertices, room, "a frame's ring"));
             pStore->mRingRoom = room;
         }
         pStore->mRingBytes = at + bytes;
