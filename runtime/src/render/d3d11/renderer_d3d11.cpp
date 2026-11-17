@@ -2,6 +2,7 @@
 // The Direct3D 11 renderer (d3d11/renderer_d3d11.h): device, swap chain, frames, present, the draws' replay, samplers and
 // tables. The scene target, its passes, copies, pictures, probes and the renderer's parts are renderer_d3d11_scene.cpp.
 #include "galaxy/render/d3d11/renderer_d3d11.h"
+#include "../dxgi_pacing.h"
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/display_aspect.h"
@@ -702,6 +703,8 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
             throw std::runtime_error("the Direct3D 11 device was lost at present");
         }
         swap_present_qpc_ = end;
+        std::int64_t vblank = 0, period = 0;
+        report_dxgi_present(swap_chain_.Get(), hr == S_OK, vblank_grid(vblank, period) ? period : 0);
     }
     surface_lock_ = {};
     const std::uint64_t fence = d3d11::Context::get().signal();

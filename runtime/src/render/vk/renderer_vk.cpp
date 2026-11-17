@@ -3,6 +3,7 @@
 // copies and screen probes are renderer_vk_frame.cpp.
 
 #include "renderer_vk_internal.h"
+#include "galaxy/pacing_recorder.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
@@ -1087,6 +1088,32 @@ bool RendererVk::create_swapchain() {
             info.pNext = &switch_info;
         }
     }
+    // Present timing (the pacing recorder's display reports) where the device and this surface take it; not under AMD's
+    // wrapped swap chain, which presents on its own.
+    VkPresentStageFlagsEXT timing_stage = 0;
+    if (!fsr && context.present_timing()) {
+        VkPhysicalDeviceSurfaceInfo2KHR surface_info{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SURFACE_INFO_2_KHR};
+        surface_info.surface = surface_;
+        VkPresentTimingSurfaceCapabilitiesEXT timing_caps{VK_STRUCTURE_TYPE_PRESENT_TIMING_SURFACE_CAPABILITIES_EXT};
+        VkSurfaceCapabilitiesPresentId2KHR id2_caps{VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR};
+        VkSurfaceCapabilitiesPresentWait2KHR wait2_caps{VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_WAIT_2_KHR};
+        id2_caps.pNext = &wait2_caps;
+        wait2_caps.pNext = &timing_caps;
+        VkSurfaceCapabilities2KHR caps2{VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR};
+        caps2.pNext = &id2_caps;
+        if (vkGetPhysicalDeviceSurfaceCapabilities2KHR(context.physical_device(), &surface_info, &caps2) == VK_SUCCESS &&
+            id2_caps.presentId2Supported == VK_TRUE && wait2_caps.presentWait2Supported == VK_TRUE &&
+            timing_caps.presentTimingSupported == VK_TRUE) {
+            // The moment the picture is first seen, else the moment its first pixel leaves for the display.
+            timing_stage = (timing_caps.presentStageQueries & VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT) != 0u
+                               ? VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT
+                               : timing_caps.presentStageQueries & VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_OUT_BIT_EXT;
+        }
+        if (timing_stage != 0u) {
+            info.flags |= VK_SWAPCHAIN_CREATE_PRESENT_ID_2_BIT_KHR | VK_SWAPCHAIN_CREATE_PRESENT_WAIT_2_BIT_KHR |
+                          VK_SWAPCHAIN_CREATE_PRESENT_TIMING_BIT_EXT;
+        }
+    }
     VkSwapchainKHR handle = VK_NULL_HANDLE;
     if (swapchain_fsr_) {
         vkDeviceWaitIdle(device);
@@ -1132,6 +1159,56 @@ bool RendererVk::create_swapchain() {
     swapchain_.mode = mode;
     swapchain_.vsync = vsync;
     swapchain_.relaxed = relaxed;
+    swapchain_.ids2 = !amd && timing_stage != 0u;
+    swapchain_.timed = false;
+    swapchain_.local_clock = false;
+    std::string time_domains;  // the swap chain's, logged where none is usable
+    swapchain_.timing_stage = timing_stage;
+    swapchain_.refresh_qpc = 0;
+    swapchain_.timing_properties_counter = ~std::uint64_t{0};
+    swapchain_.timing_outstanding = 0u;
+    if (swapchain_.ids2) {
+        // The results' queue, and the time domain that is the runtime's own clock.
+        (void)vkSetSwapchainPresentTimingQueueSizeEXT(device, handle, 32u);
+        VkSwapchainTimeDomainPropertiesEXT domains{VK_STRUCTURE_TYPE_SWAPCHAIN_TIME_DOMAIN_PROPERTIES_EXT};
+        std::uint64_t domains_counter = 0;
+        if (vkGetSwapchainTimeDomainPropertiesEXT(device, handle, &domains, &domains_counter) == VK_SUCCESS &&
+            domains.timeDomainCount != 0u) {
+            std::vector<VkTimeDomainKHR> kinds(domains.timeDomainCount);
+            std::vector<std::uint64_t> ids(domains.timeDomainCount);
+            domains.pTimeDomains = kinds.data();
+            domains.pTimeDomainIds = ids.data();
+            if (vkGetSwapchainTimeDomainPropertiesEXT(device, handle, &domains, &domains_counter) >= VK_SUCCESS) {
+                // The runtime's clock first (no mapping), then the present stage's own clock, then the swap chain's.
+                // Apple's runtime clock (CLOCK_UPTIME_RAW) is no Vulkan domain: there the swap chain is not timed.
+                const auto rank = [](VkTimeDomainKHR kind) {
+#if defined(_WIN32)
+                    if (kind == VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR) return 0;
+#elif !defined(__APPLE__)
+                    if (kind == VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR) return 0;
+#endif
+                    if (kind == VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT) return 1;
+                    if (kind == VK_TIME_DOMAIN_SWAPCHAIN_LOCAL_EXT) return 2;
+                    return 3;
+                };
+                std::uint32_t best = domains.timeDomainCount;
+                for (std::uint32_t i = 0; i < domains.timeDomainCount; ++i) {
+                    time_domains += (time_domains.empty() ? "" : ",") + std::to_string(static_cast<int>(kinds[i]));
+                    if (rank(kinds[i]) < 3 && (best == domains.timeDomainCount || rank(kinds[i]) < rank(kinds[best]))) {
+                        best = i;
+                    }
+                }
+#if !defined(__APPLE__)
+                if (best != domains.timeDomainCount) {
+                    swapchain_.time_domain = kinds[best];
+                    swapchain_.time_domain_id = ids[best];
+                    swapchain_.local_clock = rank(kinds[best]) != 0;
+                    swapchain_.timed = !swapchain_.local_clock || calibrate_present_clock();
+                }
+#endif
+            }
+        }
+    }
     swapchain_.hdr_asked = hdr_asked;
     swapchain_.hdr = hdr_made;
     last_present_id_ = 0u;  // present ids belong to a swap chain: nothing to wait for on the new one
@@ -1139,8 +1216,17 @@ bool RendererVk::create_swapchain() {
     swapchain_calls_.get_images(device, handle, &count, nullptr);
     swapchain_.images.resize(count);
     swapchain_calls_.get_images(device, handle, &count, swapchain_.images.data());
-    std::fprintf(stderr, "[vulkan] swapchain %ux%u transform=%u images=%u\n", extent.width, extent.height,
-                 static_cast<unsigned>(transform), count);
+    std::fprintf(stderr, "[vulkan] swapchain %ux%u transform=%u images=%u; display reports: %s\n", extent.width,
+                 extent.height, static_cast<unsigned>(transform), count,
+                 swapchain_.timed
+                     ? (swapchain_.timing_stage == VK_PRESENT_STAGE_IMAGE_FIRST_PIXEL_VISIBLE_BIT_EXT
+                            ? (swapchain_.local_clock ? "present timing, first pixel seen, its clock calibrated"
+                                                      : "present timing, first pixel seen")
+                            : (swapchain_.local_clock ? "present timing, first pixel out, its clock calibrated"
+                                                      : "present timing, first pixel out"))
+                 : context.display_timing() ? "display timing"
+                 : swapchain_.ids2          ? ("none (present timing's clocks " + time_domains + " not usable)").c_str()
+                                            : "none");
     if (count != logged_swap_images_ || mode != logged_swap_mode_) {
         // Once, and again only when the count or the mode changes (VSync toggled).
         logged_swap_images_ = count;
@@ -1157,7 +1243,7 @@ bool RendererVk::create_swapchain() {
                        : offer == VK_PRESENT_MODE_FIFO_RELAXED_KHR ? " PRESENT_MODE_FIFO_RELAXED"
                                                                    : " other";
         }
-        const bool waits = context.present_wait() && mode == VK_PRESENT_MODE_FIFO_KHR && !amd;
+        const bool waits = (context.present_wait() || swapchain_.ids2) && mode == VK_PRESENT_MODE_FIFO_KHR && !amd;
         std::fprintf(stderr, "[vk] swap chain: %u images, %s (offered:%s); late frames %s; frame latency by %s\n", count, name,
                      offered.c_str(), relaxed ? "present as FIFO_RELAXED" : "wait for the next refresh",
                      waits ? "present wait (the last frame must show before the next is queued, on the interpolation's slot clock the one before it; 100 ms at most)" : "the frame fences");
@@ -2245,23 +2331,57 @@ void RendererVk::present_swapchain_image() {
     // that one shown, a refresh late now and then on some drivers: the presents would switch between landing in their
     // slot's refresh and the one after, each switch showing a refresh twice. Where the device has no present wait, or under
     // frame generation (whose presents are the library's), the frame fences bound the queue.
-    const bool ids = context.present_wait() && swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR && !swapchain_fsr_ &&
-                     !frame_generation_running();
+    const bool ids = (context.present_wait() || swapchain_.ids2) && swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR &&
+                     !swapchain_fsr_ && !frame_generation_running();
     const std::uint64_t wait_id = present_moment_ != 0 ? present_id_before_last_ : last_present_id_;
     if (ids && wait_id != 0u) {
-        const VkResult waited = vkWaitForPresentKHR(context.device(), swapchain_.handle, wait_id, 100'000'000ull);
+        VkResult waited = VK_SUCCESS;
+        if (swapchain_.ids2) {
+            VkPresentWait2InfoKHR wait{VK_STRUCTURE_TYPE_PRESENT_WAIT_2_INFO_KHR};
+            wait.presentId = wait_id;
+            wait.timeout = 100'000'000ull;
+            waited = vkWaitForPresent2KHR(context.device(), swapchain_.handle, &wait);
+        } else {
+            waited = vkWaitForPresentKHR(context.device(), swapchain_.handle, wait_id, 100'000'000ull);
+        }
         if (waited == VK_TIMEOUT && ++present_wait_timeouts_ <= 4u) {
             std::fprintf(stderr, "[present] the previous frame was not shown within 100 ms\n");
         }
     }
     std::uint64_t this_present_id = 0u;
     VkPresentIdKHR present_id_info{VK_STRUCTURE_TYPE_PRESENT_ID_KHR};
-    if (ids) {
+    VkPresentId2KHR present_id2_info{VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR};
+    // A swap chain made for present timing: every present has an id (its timing result names it), in id 2's form.
+    // Never more asked for than the results' queue holds (32, create_swapchain): a full queue would fail the present,
+    // and presents that do not finish (a hidden window) leave their results unread. Only while the window is shown: a
+    // present of a window never shown (a hidden test run) that asks for its timing never finishes, and every present
+    // wait after it runs out its time (measured: 15 steps a second instead of 60).
+    const bool timed_present =
+        swapchain_.timed && window_shown_ && !frame_generation_running() && swapchain_.timing_outstanding < 31u;
+    if (ids || timed_present) {
         this_present_id = ++present_id_counter_;
-        present_id_info.swapchainCount = 1;
-        present_id_info.pPresentIds = &this_present_id;
-        present_id_info.pNext = info.pNext;
-        info.pNext = &present_id_info;
+        if (swapchain_.ids2) {
+            present_id2_info.swapchainCount = 1;
+            present_id2_info.pPresentIds = &this_present_id;
+            present_id2_info.pNext = info.pNext;
+            info.pNext = &present_id2_info;
+        } else {
+            present_id_info.swapchainCount = 1;
+            present_id_info.pPresentIds = &this_present_id;
+            present_id_info.pNext = info.pNext;
+            info.pNext = &present_id_info;
+        }
+    }
+    // When it reached the display: one stage's time in the runtime's clock, read back by report_present_times.
+    VkPresentTimingInfoEXT timing_info{VK_STRUCTURE_TYPE_PRESENT_TIMING_INFO_EXT};
+    VkPresentTimingsInfoEXT timings_info{VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT};
+    if (timed_present) {
+        timing_info.timeDomainId = swapchain_.time_domain_id;
+        timing_info.presentStageQueries = swapchain_.timing_stage;
+        timings_info.swapchainCount = 1;
+        timings_info.pTimingInfos = &timing_info;
+        timings_info.pNext = info.pNext;
+        info.pNext = &timings_info;
     }
     // A frame that comes a refresh late (the time since the previous present is over a quarter longer than the rate asks for)
     // is shown at once rather than held for the next refresh.
@@ -2359,6 +2479,15 @@ void RendererVk::present_swapchain_image() {
     }
     vk::streamline_vk::mark_present_end();
     const bool queued = ids && (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR);
+    // The pacing recorder: the present's id where its moment on the display will be reported (present timing's, or
+    // the display timing's).
+    {
+        const bool shown = result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
+        galaxy::pacing::presented(!shown ? 0u
+                                  : timed_present ? this_present_id
+                                  : present_times.swapchainCount != 0u ? present_time.presentID
+                                                                       : 0u);
+    }
     present_id_before_last_ = queued ? last_present_id_ : 0u;
     last_present_id_ = queued ? this_present_id : 0u;
     streamline_frame_open_ = false;
@@ -2405,6 +2534,14 @@ void RendererVk::present_swapchain_image() {
         measured_present_count_ = 0u;
     }
     report_present_stats();
+    if (timed_present) {
+        if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) {
+            ++swapchain_.timing_outstanding;
+        }
+    }
+    if (swapchain_.timed && swapchain_.timing_outstanding != 0u) {
+        report_present_times();
+    }
     // Android keeps only the last few frames' timings: read them often.
     if (context.display_timing() && present_timing_.next_id % 4u == 0u) {
         report_present_timing();
@@ -2412,6 +2549,100 @@ void RendererVk::present_swapchain_image() {
     if (!window_shown_ && window_ != nullptr && !host_window::hidden_window_mode_enabled()) {
         window_shown_ = true;
         host_window::show_window(window_);
+    }
+}
+
+// The swap chain's own present clock and the runtime's, read together: a result's time t (nanoseconds) is then
+// calibration_qpc + (t - calibration_local) in the runtime's ticks. Read again every second, so neither clock's drift
+// adds up.
+bool RendererVk::calibrate_present_clock() {
+#if defined(__APPLE__)
+    return false;
+#else
+#if defined(_WIN32)
+    constexpr VkTimeDomainKHR runtime_clock = VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_KHR;
+#else
+    constexpr VkTimeDomainKHR runtime_clock = VK_TIME_DOMAIN_CLOCK_MONOTONIC_KHR;
+#endif
+    VkSwapchainCalibratedTimestampInfoEXT swap{VK_STRUCTURE_TYPE_SWAPCHAIN_CALIBRATED_TIMESTAMP_INFO_EXT};
+    swap.swapchain = swapchain_.handle;
+    swap.presentStage =
+        swapchain_.time_domain == VK_TIME_DOMAIN_PRESENT_STAGE_LOCAL_EXT ? swapchain_.timing_stage : VkPresentStageFlagsEXT{0};
+    swap.timeDomainId = swapchain_.time_domain_id;
+    std::array<VkCalibratedTimestampInfoKHR, 2> infos{};
+    infos[0].sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR;
+    infos[0].pNext = &swap;
+    infos[0].timeDomain = swapchain_.time_domain;
+    infos[1].sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR;
+    infos[1].timeDomain = runtime_clock;
+    std::array<std::uint64_t, 2> times{};
+    std::uint64_t deviation = 0;
+    if (vkGetCalibratedTimestampsKHR(vk::Context::get().device(), 2u, infos.data(), times.data(), &deviation) !=
+        VK_SUCCESS) {
+        return false;
+    }
+    swapchain_.calibration_local = times[0];
+    swapchain_.calibration_qpc = static_cast<std::int64_t>(times[1]);
+    return true;
+#endif
+}
+
+// Present timing's results (VK_EXT_present_timing): each finished present's moment at the swap chain's stage, in the
+// runtime's clock, to the pacing recorder; the refresh duration when the swap chain's timing properties change.
+void RendererVk::report_present_times() {
+    const VkDevice device = vk::Context::get().device();
+    if (swapchain_.local_clock && galaxy::qpc_now() - swapchain_.calibration_qpc > galaxy::qpc_frequency()) {
+        (void)calibrate_present_clock();  // a failed read keeps the last
+    }
+    constexpr std::uint32_t kResults = 16u;
+    std::array<VkPresentStageTimeEXT, kResults> stages{};
+    std::array<VkPastPresentationTimingEXT, kResults> results{};
+    for (std::uint32_t i = 0; i < kResults; ++i) {
+        results[i].sType = VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_EXT;
+        results[i].presentStageCount = 1u;
+        results[i].pPresentStages = &stages[i];
+    }
+    VkPastPresentationTimingInfoEXT info{VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_INFO_EXT};
+    info.flags = VK_PAST_PRESENTATION_TIMING_ALLOW_OUT_OF_ORDER_RESULTS_BIT_EXT;
+    info.swapchain = swapchain_.handle;
+    VkPastPresentationTimingPropertiesEXT properties{VK_STRUCTURE_TYPE_PAST_PRESENTATION_TIMING_PROPERTIES_EXT};
+    properties.presentationTimingCount = kResults;
+    properties.pPresentationTimings = results.data();
+    if (vkGetPastPresentationTimingEXT(device, &info, &properties) < VK_SUCCESS) {
+        return;
+    }
+    if (properties.timingPropertiesCounter != swapchain_.timing_properties_counter) {
+        VkSwapchainTimingPropertiesEXT timing{VK_STRUCTURE_TYPE_SWAPCHAIN_TIMING_PROPERTIES_EXT};
+        std::uint64_t counter = 0;
+        if (vkGetSwapchainTimingPropertiesEXT(device, swapchain_.handle, &timing, &counter) == VK_SUCCESS) {
+            swapchain_.timing_properties_counter = counter;
+            // Nanoseconds to the runtime's ticks; 0 where the refresh varies.
+            swapchain_.refresh_qpc = static_cast<std::int64_t>(static_cast<double>(timing.refreshDuration) *
+                                                               static_cast<double>(galaxy::qpc_frequency()) / 1e9);
+        }
+    }
+    const std::uint32_t count = std::min(properties.presentationTimingCount, kResults);
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const VkPastPresentationTimingEXT& r = results[i];
+        if (r.reportComplete != VK_TRUE) {
+            continue;
+        }
+        swapchain_.timing_outstanding -= swapchain_.timing_outstanding != 0u ? 1u : 0u;
+        if (r.timeDomainId != swapchain_.time_domain_id) {
+            continue;
+        }
+        if (r.presentStageCount == 0u || stages[i].time == 0u) {
+            galaxy::pacing::not_shown(r.presentId);  // complete with no time: it never reached the display
+        } else if (swapchain_.local_clock) {
+            const double since_ns =
+                static_cast<double>(static_cast<std::int64_t>(stages[i].time - swapchain_.calibration_local));
+            galaxy::pacing::displayed(r.presentId,
+                                      swapchain_.calibration_qpc +
+                                          std::llround(since_ns * static_cast<double>(galaxy::qpc_frequency()) / 1e9),
+                                      swapchain_.refresh_qpc);
+        } else {
+            galaxy::pacing::displayed(r.presentId, static_cast<std::int64_t>(stages[i].time), swapchain_.refresh_qpc);
+        }
     }
 }
 
@@ -2437,6 +2668,9 @@ void RendererVk::report_present_timing() {
     const std::int64_t half_vsync = (timing.vsync_ns != 0 ? timing.vsync_ns : kGameStepNs / 2) / 2;
     for (std::uint32_t i = 0; i < count; ++i) {
         const auto actual = static_cast<std::int64_t>(past[i].actualPresentTime);
+        if (!swapchain_.timed) {  // present timing's reports, where it is there, are the recorder's
+            galaxy::pacing::displayed(past[i].presentID, actual, timing.refresh_ns != 0 ? timing.refresh_ns : timing.vsync_ns);
+        }
         const auto at = past[i].presentID % timing.requested.size();
         const bool identified = timing.requested_id[at] == past[i].presentID;
         const std::int64_t requested = identified ? timing.requested[at] : 0;

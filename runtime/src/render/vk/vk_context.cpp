@@ -398,6 +398,15 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         surface_maintenance_khr_ = std::strcmp(surface_maintenance, "VK_KHR_surface_maintenance1") == 0;
         surface_maintenance_ = true;
     }
+    // Surface capabilities 2 wherever the instance has it: present timing's surface queries (create_swapchain) need it.
+    if (has_instance_extension(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME)) {
+        if (std::none_of(instance_extensions.begin(), instance_extensions.end(), [](const char* have) {
+                return std::strcmp(have, VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME) == 0;
+            })) {
+            instance_extensions.push_back(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME);
+        }
+        surface_capabilities2_ = true;
+    }
     // The surface's HDR formats (HDR10 ST 2084, scRGB) are listed only with this on the instance.
     if (has_instance_extension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME)) {
         if (std::none_of(instance_extensions.begin(), instance_extensions.end(),
@@ -911,6 +920,36 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         present_id.pNext = nullptr;
         present_wait.pNext = nullptr;
     }
+    // When each present reached the display (the pacing recorder's report, renderer_vk.cpp report_present_times):
+    // VK_EXT_present_timing, which needs present id 2, calibrated timestamps and surface capabilities 2; its swap chains
+    // wait with present wait 2.
+    VkPhysicalDevicePresentId2FeaturesKHR present_id2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_ID_2_FEATURES_KHR};
+    VkPhysicalDevicePresentWait2FeaturesKHR present_wait2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR};
+    VkPhysicalDevicePresentTimingFeaturesEXT present_timing{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_TIMING_FEATURES_EXT};
+    if (surface_capabilities2_ && has_device_extension(physical_, VK_KHR_PRESENT_ID_2_EXTENSION_NAME) &&
+        has_device_extension(physical_, VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME) &&
+        has_device_extension(physical_, VK_EXT_PRESENT_TIMING_EXTENSION_NAME) &&
+        has_device_extension(physical_, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)) {
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &present_id2;
+        present_id2.pNext = &present_wait2;
+        present_wait2.pNext = &present_timing;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        present_timing_ = present_id2.presentId2 == VK_TRUE && present_wait2.presentWait2 == VK_TRUE &&
+                          present_timing.presentTiming == VK_TRUE;
+        if (present_timing_) {
+            for (const char* name : {VK_KHR_PRESENT_ID_2_EXTENSION_NAME, VK_KHR_PRESENT_WAIT_2_EXTENSION_NAME,
+                                     VK_EXT_PRESENT_TIMING_EXTENSION_NAME, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME}) {
+                device_extensions.push_back(name);
+            }
+        }
+        present_id2.pNext = nullptr;
+        present_wait2.pNext = nullptr;
+        present_timing.pNext = nullptr;
+        // Only the reports: no present at a time asked for.
+        present_timing.presentAtAbsoluteTime = VK_FALSE;
+        present_timing.presentAtRelativeTime = VK_FALSE;
+    }
     // A present mode per present (the surface side was enabled on the instance): swapchain maintenance 1 and its feature.
     VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT swap_maintenance{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT};
     if (surface_maintenance_) {
@@ -1093,6 +1132,12 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         present_wait.pNext = const_cast<void*>(device_info.pNext);
         present_id.pNext = &present_wait;
         device_info.pNext = &present_id;
+    }
+    if (present_timing_) {
+        present_timing.pNext = const_cast<void*>(device_info.pNext);
+        present_wait2.pNext = &present_timing;
+        present_id2.pNext = &present_wait2;
+        device_info.pNext = &present_id2;
     }
     if (present_mode_switching_) {
         swap_maintenance.pNext = const_cast<void*>(device_info.pNext);

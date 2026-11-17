@@ -530,6 +530,22 @@ private:
         bool hdr = false;       // the images are HDR10 (a 10-bit format in the ST 2084 colour space)
         bool relaxed = false;   // made with {FIFO, FIFO_RELAXED}: a late present may ask for the second (present_swapchain_image)
         bool copyable = false;  // transfer source (test snapshots of the backbuffer)
+        // Made for present timing (Context::present_timing and the surface's support): its presents carry present
+        // id 2 (waited for with present wait 2) and ask when they reach the display at `timing_stage`, in the time
+        // domain `time_domain_id`: the runtime's clock (QueryPerformanceCounter, or CLOCK_MONOTONIC) where the swap
+        // chain offers it, else its own (present stage or swap chain local, in nanoseconds), mapped to the runtime's
+        // clock by the two read together (vkGetCalibratedTimestampsKHR: `calibration_local` with `calibration_qpc`).
+        bool ids2 = false;
+        bool timed = false;
+        std::uint64_t time_domain_id = 0;
+        VkTimeDomainKHR time_domain = VK_TIME_DOMAIN_DEVICE_KHR;
+        bool local_clock = false;
+        std::uint64_t calibration_local = 0;
+        std::int64_t calibration_qpc = 0;
+        VkPresentStageFlagsEXT timing_stage = 0;
+        std::int64_t refresh_qpc = 0;               // the swap chain's refresh duration (0: variable or unknown)
+        std::uint64_t timing_properties_counter = 0;
+        std::uint32_t timing_outstanding = 0;       // presents asked for timing whose results are not read yet
         std::vector<VkImage> images;
         std::vector<VkImageView> views;
         std::vector<VkFramebuffer> framebuffers;
@@ -1126,6 +1142,10 @@ private:
     // last one and the one before it that went in on this swap chain (0: none, nothing to wait for); present_swapchain_image
     // waits for one of them to show before queueing the next frame, 100 ms at most.
     std::uint64_t present_id_counter_ = 0;
+    // The pacing recorder's display reports from present timing (VK_EXT_present_timing).
+    void report_present_times();
+    // The swap chain's own present clock read with the runtime's (local_clock); false where the device cannot.
+    bool calibrate_present_clock();
     std::uint64_t last_present_id_ = 0;
     std::uint64_t present_id_before_last_ = 0;
     unsigned present_wait_timeouts_ = 0u;

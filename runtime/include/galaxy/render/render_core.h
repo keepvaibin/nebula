@@ -824,6 +824,7 @@ private:
         // render loop presents the real frame before anything else.
         bool flush_requested = false;
         ListEntry* entry = nullptr;
+        std::int64_t step_qpc = 0;        // the moment its frame's step began (the step clock), 0 unknown
     };
     const ListEntry* interp_shown_list_ = nullptr;
     std::uint64_t interp_shown_serial_ = 0;
@@ -986,6 +987,10 @@ private:
     const NebulaFrameList* walk_picture_list_ = nullptr;
     std::uint32_t walk_picture_frame_ = 0u;
     std::uint32_t walk_picture_ = 0u;
+    // A present-only chunk's times (FrameChunk::present_asked_qpc, step_moment_qpc) for the pacing recorder's
+    // description of the picture it shows again (present_cached_display_on_thread).
+    std::int64_t cached_present_asked_qpc_ = 0;
+    std::int64_t cached_present_step_qpc_ = 0;
     bool producer_movie_content_{},render_movie_content_{};
     MovieFrameMark producer_movie_frame_{}, render_movie_frame_{};
     // The step clock's moment for the step now running (set_step_moment); 0 none.

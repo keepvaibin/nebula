@@ -840,6 +840,7 @@ private:
         std::uint64_t count = 0;
     };
     std::shared_ptr<Shown> shown_ = std::make_shared<Shown>();
+    std::uint64_t pacing_present_id_ = 0;  // the pacing recorder's id for each present
     void choose_first_start_scale();
     // The layer's line of pictures (present): a frame that waited this long for a drawable waited for a refresh, the
     // line full; whether the last frame's picture was held back for it; and how many have been.

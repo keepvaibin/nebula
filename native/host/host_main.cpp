@@ -63,6 +63,7 @@
 #include "galaxy/pointer_control.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/display_aspect.h"
+#include "galaxy/pacing_recorder.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/calibration_scene.h"
 #include "galaxy/ui/benchmark_menu.h"
@@ -1109,6 +1110,9 @@ void apply_power_wish(bool background, bool minimised) {
 // frame follows the display's own vsync (every second one at 120 Hz), so frames never drift against it and each
 // stays on screen for the same time; the host's clock takes over where the display gives none.
 void svc_frame_wait(void*) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::pacing::step_done();  // the game thread is back: the step's own work ends here
+#endif
     const auto display_period = std::chrono::nanoseconds(galaxy::kGameStepNs);
     static auto period = gBootFast.load(std::memory_order_relaxed) ? std::chrono::nanoseconds(kBootPeriod) : display_period;
     static auto next = Clock::now() + period;
@@ -1210,6 +1214,7 @@ void svc_frame_wait(void*) {
 #endif
 #if defined(NEBULA_HOST_RENDERER)
         galaxy::render::set_step_moment(due_qpc);
+        galaxy::pacing::step(due_qpc);
 #else
         (void)due_qpc;
 #endif

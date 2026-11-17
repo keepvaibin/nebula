@@ -183,6 +183,9 @@ public:
     [[nodiscard]] bool display_timing() const noexcept { return display_timing_; }
     // VK_KHR_present_wait with VK_KHR_present_id, enabled: vkWaitForPresentKHR waits until a presented frame is on the screen.
     [[nodiscard]] bool present_wait() const noexcept { return present_wait_; }
+    // VK_EXT_present_timing with present id 2 and present wait 2 (and surface capabilities 2 on the instance), enabled:
+    // a swap chain made for it reports when each present reached the display (renderer_vk.cpp report_present_times).
+    [[nodiscard]] bool present_timing() const noexcept { return present_timing_; }
     // VK_EXT_swapchain_colorspace on the instance (the surface can list HDR10 formats) and VK_EXT_hdr_metadata on the device
     // (vkSetHdrMetadataEXT), each where it is here.
     [[nodiscard]] bool swapchain_colorspace() const noexcept { return swapchain_colorspace_; }
@@ -342,6 +345,8 @@ private:
     mutable std::uint64_t memory_budget_bytes_ = 0u;
     bool display_timing_ = false;  // VK_GOOGLE_display_timing
     bool present_wait_ = false;             // VK_KHR_present_wait and present_id, enabled
+    bool present_timing_ = false;           // VK_EXT_present_timing, present_id2 and present_wait2, enabled
+    bool surface_capabilities2_ = false;    // VK_KHR_get_surface_capabilities2 on the instance
     bool pipeline_libraries_ = false;       // VK_EXT_graphics_pipeline_library, enabled, fast linking
     bool present_mode_switching_ = false;   // swapchain maintenance 1, enabled
     bool surface_maintenance_ = false;      // the instance has the surface extension of that kind (decided in initialize)

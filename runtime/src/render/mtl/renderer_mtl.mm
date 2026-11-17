@@ -2,6 +2,7 @@
 // The Metal renderer (mtl/renderer_mtl.h): device, the window's layer, frames and present. The scene target, draws,
 // copies and screen probes are renderer_mtl_scene.mm and renderer_mtl_draw.mm.
 #include "renderer_mtl_internal.h"
+#include "galaxy/pacing_recorder.h"
 
 #include "galaxy/benchmark.h"
 #include "galaxy/content_viewport.h"
@@ -766,8 +767,23 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
                     ++shown->count;
                 }];
             }
+            // The pacing recorder: when the drawable reached the display, or that it never did.
+            const std::uint64_t pacing_id = ++pacing_present_id_;
+            {
+                const std::int64_t refresh_qpc =
+                    display_refresh_hz_ > 1.0 ? static_cast<std::int64_t>(std::llround(1e9 / static_cast<double>(display_refresh_hz_))) : 0;
+                [(__bridge id<CAMetalDrawable>)drawable_ addPresentedHandler:^(id<MTLDrawable> drawable) {
+                    const double at = drawable.presentedTime;
+                    if (at <= 0.0) {
+                        galaxy::pacing::not_shown(pacing_id);
+                    } else {
+                        galaxy::pacing::displayed(pacing_id, static_cast<std::int64_t>(std::llround(at * 1e9)), refresh_qpc);
+                    }
+                }];
+            }
             // Shown as soon as the frame's commands are scheduled: never at a time asked for.
             [commands_of(frame.lists.back()) presentDrawable:(__bridge id<CAMetalDrawable>)drawable_];
+            galaxy::pacing::presented(pacing_id);
         }
         for (std::size_t i = 0; i + 1u < frame.lists.size(); ++i) {
             (void)context.commit(frame.lists[i]);

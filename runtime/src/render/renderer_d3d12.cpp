@@ -1,5 +1,6 @@
 // RendererD3D12: device and swap chain, scene targets and copies, presentation.
 #include "galaxy/render/utility_shaders.h"
+#include "dxgi_pacing.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -4307,6 +4308,11 @@ void RendererD3D12::present_to_swap_chain() {
     if (FAILED(present_hr)) {
         dump_device_removal(device_.Get());
         d3d_check(present_hr, "Present");
+    }
+    {
+        std::int64_t vblank = 0, period = 0;
+        report_dxgi_present(swap_chain_.Get(), !generating && !fsr_swap_chain_ && present_hr == S_OK,
+                            vblank_grid(vblank, period) ? period : 0);
     }
     {
         LARGE_INTEGER now{};

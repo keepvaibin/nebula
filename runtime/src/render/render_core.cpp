@@ -17,6 +17,7 @@
 #endif
 #endif
 #include "galaxy/benchmark.h"
+#include "galaxy/pacing_recorder.h"
 #include "galaxy/profiled_threads.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/crash_report.h"
@@ -806,6 +807,7 @@ void RenderCore::start_interp_sequence() {
     }
     std::int64_t arrival = seen;
     const std::int64_t moment = std::exchange(interp_step_moment_qpc_, 0);
+    interp_sequence_.step_qpc = moment > 0 && moment <= seen ? moment : 0;
     if (moment > 0 && moment <= seen && seen - moment < interp_frame_period_qpc_) {
         // A step clock's moment: the frame's own time, exact. Its pictures are shown a delay after it, the same for
         // every frame, so the content's time runs on the wall clock's (t linear in the present's moment across frames,
@@ -1194,6 +1196,17 @@ void RenderCore::interp_wait_until(std::int64_t due_qpc) {
     galaxy::PreciseWait::for_this_thread().until(due_qpc);
 }
 
+namespace {
+
+// The game time a picture shows, on the step clock: t steps on from the moment its frame's step began (t = 1: the
+// frame itself), or when that moment is unknown, the moment the picture is asked for.
+std::int64_t content_moment_qpc(std::int64_t step_qpc, double t, std::int64_t asked_qpc) {
+    static const double period = static_cast<double>(galaxy::qpc_frequency()) / kGameStepRate;
+    return step_qpc != 0 ? step_qpc + static_cast<std::int64_t>(std::llround(t * period)) : asked_qpc;
+}
+
+}  // namespace
+
 void RenderCore::advance_interp_sequence(bool flush) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     flush = flush || interp_sequence_.flush_requested;
@@ -1236,6 +1249,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
             const std::int64_t generated_start = galaxy::qpc_now();
             // The picture shows the slot's moment (a vblank where they are timed): presentation times show it there.
             renderer_.set_present_moment(slot);
+            galaxy::pacing::describe(slot, content_moment_qpc(sequence.step_qpc, t, slot), sequence.step_qpc, true);
             const bool presented = render_generated_frame(static_cast<float>(t));
             renderer_.set_present_moment(0);
             skip_slot_for_depth();
@@ -1258,6 +1272,10 @@ void RenderCore::advance_interp_sequence(bool flush) {
         if (!flush) content_moment(1.0);
         interp_presenting_real_ = true;
         renderer_.set_present_moment(flush ? 0 : slot);
+        {
+            const std::int64_t asked = flush ? now : slot;
+            galaxy::pacing::describe(asked, content_moment_qpc(sequence.step_qpc, 1.0, asked), sequence.step_qpc, false);
+        }
         render_generated_frame(1.0f);
         renderer_.set_present_moment(0);
         note_present_vblank(slot);
@@ -1882,6 +1900,8 @@ void RenderCore::render_loop() {
                         start_interp_sequence();
                         advance_interp_sequence(false);
                     } else if (!interp_sequence_.active) {
+                        cached_present_asked_qpc_ = chunk.present_asked_qpc;
+                        cached_present_step_qpc_ = chunk.step_moment_qpc;
                         present_cached_display_on_thread(false, false);
                     } else {
                         ++interp_present_skipped_;
@@ -2033,6 +2053,8 @@ void RenderCore::present_cached_display_on_thread(
     bool sleep_if_missing,
     bool count_game_display_present,
     std::optional<std::uint32_t> slot) {
+    const std::int64_t asked = std::exchange(cached_present_asked_qpc_, 0);
+    const std::int64_t step = std::exchange(cached_present_step_qpc_, 0);
     if (black) {
         if (count_game_display_present) {
             present_black_picture(false);
@@ -2072,6 +2094,10 @@ void RenderCore::present_cached_display_on_thread(
     }
     renderer_.set_present_game_frame(game_frame_only);
     renderer_.begin_frame();
+    if (count_game_display_present) {
+        const std::int64_t when = asked != 0 ? asked : galaxy::qpc_now();
+        galaxy::pacing::describe(when, content_moment_qpc(step, 1.0, when), step, false);
+    }
     // Present-only frames acquire no display picture textures, so DisplayPictures retirement advances with
     // render frames only; otherwise render-then-present would age pictures twice per frame.
     (void)renderer_.present(selected, !snapshot_path.empty());
@@ -2079,6 +2105,7 @@ void RenderCore::present_cached_display_on_thread(
         renderer_.set_debug_capture_paths({}, {});
     }
     renderer_.end_frame();
+    galaxy::pacing::drop_description();
     if (count_game_display_present) {
         note_picture_shown(*selected);
         last_presented_slot_.store(selected->slot, std::memory_order_relaxed);
@@ -2523,7 +2550,9 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
     render_movie_frame_ = entry.movie_frame;
     begin_walk_frame(entry);
     galaxy::timeline::record(galaxy::timeline::Event::WalkBegin, entry.data.serial, time.generated ? 1u : 0u);
+    galaxy::pacing::walk_began();
     walk_list(entry.data, entry.before != nullptr ? &entry.before->data : nullptr, time);
+    galaxy::pacing::walk_ended();
     galaxy::timeline::record(galaxy::timeline::Event::WalkEnd, entry.data.serial, 0u);
     const bool real = time.t >= 1.0f;
     const DisplayTexture* selected = present ? display_pictures_.latest() : nullptr;
@@ -2547,6 +2576,7 @@ void RenderCore::walk_frame(ListEntry& entry, const core::WalkTime& time, bool p
             galaxy::timeline::record(galaxy::timeline::Event::RenderSubmitted, 0u, fence_value);
         },
         nullptr, time.generated);
+    galaxy::pacing::drop_description();
     if (selected != nullptr && real) {
         note_picture_shown(*selected);
         last_presented_slot_.store(selected->slot, std::memory_order_relaxed);
@@ -2640,7 +2670,9 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     begin_walk_frame(entry);
     const std::int64_t walk_began = calibration_.stage != 0u ? galaxy::qpc_now() : 0;
     galaxy::timeline::record(galaxy::timeline::Event::WalkBegin, entry.data.serial, 0u);
+    galaxy::pacing::walk_began();
     walk_list(entry.data, entry.before != nullptr ? &entry.before->data : nullptr, core::WalkTime{});
+    galaxy::pacing::walk_ended();
     galaxy::timeline::record(galaxy::timeline::Event::WalkEnd, entry.data.serial, 0u);
     if (calibration_.stage != 0u) [[unlikely]] {
         calibrate_first_start((list.flags & NEBULA_FRAME_HAS_SCENE) != 0u,
@@ -2674,6 +2706,11 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
         }
+        {
+            const std::int64_t asked = chunk.present_asked_qpc != 0 ? chunk.present_asked_qpc : galaxy::qpc_now();
+            galaxy::pacing::describe(asked, content_moment_qpc(chunk.step_moment_qpc, 1.0, asked), chunk.step_moment_qpc,
+                                     false);
+        }
         renderer_.present(selected_display, !snapshot_path.empty());
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, {});
@@ -2687,6 +2724,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             galaxy::timeline::record(galaxy::timeline::Event::RenderSubmitted, 0u, fence_value);
         },
         nullptr);
+    galaxy::pacing::drop_description();
     if (presents && present_swap_chain && selected_display != nullptr) {
         note_picture_shown(*selected_display);
         last_presented_slot_.store(selected_display->slot, std::memory_order_relaxed);
