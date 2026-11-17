@@ -1,0 +1,359 @@
+{
+  "harness": 1,
+  "name": "pace-rate-60",
+  "about": "Pacing in real time at 60 pictures a second (no in-between pictures), VSync on: Mario walks round the compass and jumps in the Honeyhive for 80 s; tools/gate/pace.py reads the game's [pace] lines.",
+  "time": "real",
+  "visible": true,
+  "settings": [
+    "GALAXY_MAX_FPS=60",
+    "GALAXY_VSYNC_INTERVAL=1"
+  ],
+  "stage": {
+    "name": "HoneyBeeKingdomGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 420,
+  "steps": [
+    {
+      "at": 60,
+      "stick": [
+        0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 210,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 260,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 360,
+      "stick": [
+        0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 510,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 660,
+      "stick": [
+        -0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 660,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 810,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 960,
+      "stick": [
+        0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1060,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 1110,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1260,
+      "stick": [
+        0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1410,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1460,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 1560,
+      "stick": [
+        0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1710,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1860,
+      "stick": [
+        -0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1860,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 2010,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2160,
+      "stick": [
+        0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2260,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 2310,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2460,
+      "stick": [
+        0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2610,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2660,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 2760,
+      "stick": [
+        0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2910,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3060,
+      "stick": [
+        -0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3060,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 3210,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3360,
+      "stick": [
+        0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3460,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 3510,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3660,
+      "stick": [
+        0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3810,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3860,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 3960,
+      "stick": [
+        0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4110,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4260,
+      "stick": [
+        -0.9,
+        0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4260,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 4410,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4560,
+      "stick": [
+        0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4660,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 4800,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "\\[pace\\] seconds="
+    }
+  ]
+}

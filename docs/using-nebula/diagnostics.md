@@ -55,6 +55,22 @@ To dump the game's textures, turn on **Dump textures** in the **Graphics** setti
 
 Every start logs its steps as `boot:` lines, in milliseconds since the process was created: the game's data, the module, the renderer, the game, its first frame and the title screen. The renderer logs its own steps as `[boot] renderer` lines, in milliseconds for each step.
 
+## Pacing
+
+Every ten seconds of play the log has a `[pace]` line, on every platform and renderer, from what the game knows of its steps and the pictures it shows:
+
+| Field | What |
+|---|---|
+| `steps_per_second` | The game's speed: steps over the window's own time. |
+| `pictures`, `displayed`, `generated` | Pictures presented, those the renderer reported reaching the display, and in-between ones. |
+| `on_time`, `missed`, `doubled` | Pictures shown the number of refreshes after the one before that was asked for; refreshes a picture stayed on longer; pictures never seen. |
+| `animation_within_1ms`, `animation_p99_us` | The game time each picture shows against the moment it reached the display, against the window's usual gap. |
+| `delay_avg_us`, `delay_p99_us` | From the start of the step a picture shows to its moment on the display. |
+| `render_*`, `generated_render_*` | The render thread's time on each picture. |
+| `step_work_*` | Each step's own work, from its start until the game waits for the next. |
+
+The display's moments come from the swap chain's frame statistics on Direct3D 12 and 11, from present timing (or display timing on Android) on Vulkan, and from each drawable's presented time on Metal. Where a renderer cannot tell, `displayed` stays below `pictures`. `tools/gate/pace.py run` runs the pacing tests (`tests/pace`) in real time and writes each measure against its target.
+
 ## Testing
 
 Every check that starts the game is a harness test: a `test.json` that `tools/lumacore/luma_test.py` runs with the test extension (`--extension`), hidden and without sound. The steps give the input, menu keys, pictures, window sizes and device losses; the game's facts and log lines are checked against the test's `expect`. `tools/gate/gate.py` runs them all. None of this is needed to play.

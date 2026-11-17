@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "rate-60",
+    "rate-120"
+  ]
+}

@@ -480,6 +480,10 @@ void write_fact(const std::string& key, const std::string& json, std::optional<s
 void set_base(std::uint64_t game_frame) {
     g.base = game_frame;
     write_fact("harness.clock", "{\"game_frame\":" + std::to_string(game_frame) + "}", 0);
+    // In the log too, among the game's own lines: what the log says after it is the test's (tools/gate/pace.py).
+    if (g.log != nullptr) {
+        g.log("harness: frame 0 is game frame " + std::to_string(game_frame));
+    }
 }
 
 // Ends the run: the end step, or a failure the runner names.
