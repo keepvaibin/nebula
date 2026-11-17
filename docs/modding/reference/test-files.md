@@ -89,7 +89,7 @@ A mod in `mods` can be an object instead of a path:
 | `permissions` | `"allow"` | `"allow"` or `"deny"` for every permission the mod asks for, or an object with one answer per permission, such as `{"net.internet": "deny"}`. Naming a permission the mod does not ask for is an error. |
 | `install` | `"placed"` | `"placed"` puts the mod straight into the mods folder. `"import"` sends it through the game's own import, as a file dropped on the window, so the import screen's checks run. |
 | `loads` | `true` | `false` means the mod is expected not to start. The test must then check the message the game gives, for example `{"log": "gold-flower not started: "}`. |
-| `enabled` | `true` | `false` installs the mod switched off. |
+| `enabled` | `true` | `false` installs the mod switched off. For a mod kept from the test named in `continue_from`, `true` or `false` switches it on or off; without `enabled`, it stays as that test left it, so a player's choice saved then holds. |
 | `remove` | `false` | `true` removes a mod kept from the test named in `continue_from`, as a player deleting it. The entry has only `path` and `remove`. |
 | `folder` | The mod's ID | The folder the mod is placed in. Lowercase letters, digits, `-` and `.`, up to 64 characters. |
 

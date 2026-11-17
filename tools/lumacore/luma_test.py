@@ -327,9 +327,11 @@ def read_test(folder, types=None):
                    "install": "placed", "permissions": "allow", "options": {}, "folder": None, "enabled": True,
                    "remove": False}
             # "enabled": false: installed and switched off, as the Mods screen keeps a mod turned off (enabled=0 in
-            # its mods.ini section); a kept mod (continue_from) is switched off or on in place. "remove": true: a mod
+            # its mods.ini section); a kept mod (continue_from) is switched off or on in place when the entry says so,
+            # else its switch stays as the test before left it (a player's choice saved then). "remove": true: a mod
             # kept from the test before is taken away as a player deleting its folder. Neither starts, so neither is
             # among the mods every run checks as loaded.
+            mod["enabled_given"] = "enabled" in entry
             if "enabled" in entry:
                 mod["enabled"] = boolean(entry, "enabled", path)
             if "remove" in entry:
@@ -1218,7 +1220,9 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     permissions: "allow", "deny" or {name: "allow"|"deny"}: each declared permission's answer, as the consent screen
     records a player's (consent.md 1.2; a name the object leaves out is allowed).
     broken_ok: a mod the test expects not to load (loads false) may have a luma.json that is not JSON on purpose: it is
-    placed as it is, under its folder's name, as the game names a mod whose manifest cannot be read (mod-log 1)."""
+    placed as it is, under its folder's name, as the game names a mod whose manifest cannot be read (mod-log 1).
+    enabled: None for a kept mod whose switch stays as the test before left it."""
+    switch = True if enabled is None else enabled
     try:
         manifest = load_json(mod_folder / "luma.json")
     except HarnessError:
@@ -1259,7 +1263,8 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
         if kept:
             if options:
                 keep_options(settings / "mods.ini", place, option_lines(mod_folder, manifest, options))
-            keep_enabled(settings / "mods.ini", place, enabled)
+            if enabled is not None:
+                keep_enabled(settings / "mods.ini", place, enabled)
             return mod_id
         raise HarnessError("two mods have the id %s (a second copy takes \"folder\")" % mod_id)
     shutil.copytree(mod_folder, target)
@@ -1269,9 +1274,9 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
         # it hold again, as for a player putting the folder back; only its options and switch are this test's.
         if options:
             keep_options(ini, place, option_lines(mod_folder, manifest, options))
-        keep_enabled(ini, place, enabled)
+        keep_enabled(ini, place, switch)
         return mod_id
-    lines = "[%s]\nenabled=%d\norder=%d\n" % (place, 1 if enabled else 0, order)
+    lines = "[%s]\nenabled=%d\norder=%d\n" % (place, 1 if switch else 0, order)
     if code_allowed and libraries:
         lines += "code_ok=%s\n" % code_token(target / libraries[0])
     # The player's answers as the consent screen records them (consent.md 1.2): every declared permission answered.
@@ -1416,7 +1421,7 @@ def place_mods(test, settings, previous, frozen, ports=None):
                          permissions="ask" if m["code"] == "ask" else m["permissions"],
                          broken_ok=not m["loads"] and m["enabled"], folder=m["folder"],
                          options=with_ports(m["options"], ports),
-                         enabled=m["enabled"])
+                         enabled=m["enabled"] if m["enabled_given"] or previous is None else None)
         # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
         # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
         try:
