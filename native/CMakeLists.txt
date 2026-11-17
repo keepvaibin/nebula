@@ -272,8 +272,20 @@ target_compile_definitions(smg_game_common INTERFACE $<$<PLATFORM_ID:Linux,Andro
     # Apple's headers turn memcpy, strcpy and the like into checking macros that call the system's library: the module
     # defines those functions itself (math/src/nebula_libc.c) and calls its own.
     $<$<PLATFORM_ID:Darwin,iOS>:_FORTIFY_SOURCE=0>)
+# The game's math functions whose results are rounded (math/src/nebula_libm.c): the compiler treats none of them as the
+# C library's. With -fno-math-errno it would otherwise make intrinsics of them: fold a call with a constant using the
+# build computer's own library, and join a sinf and a cosf of one angle into one sincosf (ELF) or __sincosf_stret
+# (Apple) answered by the system's library, so a device's game steps differed from the PC's (Android's sincosf). The
+# exact ones (sqrt, floor, ceil, trunc, round, fmod) stay the compiler's: single instructions, the same everywhere.
+# cmake/check_module_imports.cmake, at each module's link, fails on any math function taken from the system.
+set(game_math sin cos tan asin acos atan atan2 pow)
+set(game_math_flags "")
+foreach(name IN LISTS game_math)
+    list(APPEND game_math_flags -fno-builtin-${name} -fno-builtin-${name}f)
+endforeach()
 target_compile_options(smg_game_common INTERFACE
     -ffp-contract=off  # the same results on every CPU (A-10)
+    ${game_math_flags}
     $<$<NOT:$<PLATFORM_ID:Windows>>:-fms-extensions>
     -fno-strict-aliasing -fno-strict-float-cast-overflow -fno-math-errno -fno-stack-protector
     $<$<NOT:$<PLATFORM_ID:Windows,Darwin,iOS>>:-fno-plt>
@@ -338,6 +350,15 @@ else()
     if(NOT ANDROID)  # Android's C library holds the threads
         target_link_libraries(smg_game_common INTERFACE pthread)
     endif()
+endif()
+if(NOT WIN32)
+    # Windows' module has no C runtime to take anything from; elsewhere the system's library is there to bind to.
+    foreach(module IN LISTS game_modules)
+        add_custom_command(TARGET ${module} POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" "-DNM=${CMAKE_NM}" "-DMODULE=$<TARGET_FILE:${module}>"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/check_module_imports.cmake"
+            VERBATIM)
+    endforeach()
 endif()
 
 # A build for players: ThinLTO with the profile of a tour (native/pgo/game.profdata; the script that made it went with
