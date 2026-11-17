@@ -1,4 +1,5 @@
 #include "Game/System/LumaLoader.hpp"
+#include "Game/System/LumaNeeds.hpp"
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/System/LumaCore.hpp"
@@ -147,6 +148,9 @@ struct LumaMod {
     // The mods it imported functions from (kind 6), each once, in bind order: told `dependent_gone` when it goes.
     LumaMod** uses;
     u32 useCount;
+    // Every mod it needs, directly or through others, sorted (LumaNeeds.hpp): made when its imports are bound.
+    LumaMod** needsAll;
+    u32 needsAllCount;
     // How it ended (reload.md 3, the takeout.<id> fact) and where its code is now (keep and kept, reload.md 4).
     bool takenOut;      // taken out while the game runs (luma_take_out_request)
     bool startRefused;  // its start answered non-zero
@@ -1417,6 +1421,7 @@ namespace luma {
             }
             ::free(pMod->granted);
             ::free(pMod->uses);
+            ::free(pMod->needsAll);
             ::free(pMod->hostId);
             ::free(pMod->hostFile);
             ::free(pMod->chosen);
@@ -1481,23 +1486,10 @@ namespace luma {
         return false;
     }
 
-    namespace {
-        // A mod starts after every mod it uses, so `uses` has no cycle; the depth bound is only a guard against a
-        // corrupted list read from a fault handler.
-        bool usesWithin(const LumaMod* pUser, const LumaMod* pUsed, u32 depth) {
-            if (pUser == nullptr || depth > cMaxMods) {
-                return false;
-            }
-            for (u32 i = 0; i < pUser->useCount; i++) {
-                if (pUser->uses[i] == pUsed || usesWithin(pUser->uses[i], pUsed, depth + 1)) {
-                    return true;
-                }
-            }
-            return false;
-        }
+    // By the set made at its bind (LumaNeeds.hpp): a binary search, whatever the shape of the need graph.
+    bool modUsesThrough(const LumaMod* pUser, const LumaMod* pUsed) {
+        return pUser != nullptr && luma::needs::has(pUser->needsAll, pUser->needsAllCount, pUsed);
     }
-
-    bool modUsesThrough(const LumaMod* pUser, const LumaMod* pUsed) { return usesWithin(pUser, pUsed, 0); }
 
     const char* modExportAt(const LumaMod* pMod, uintptr_t function) {
         const LumaModInfo* const pInfo = pMod->info;
@@ -1549,8 +1541,33 @@ namespace luma {
                     }
                 }
                 pOther->useCount = kept;
+                pOther->needsAllCount = luma::needs::drop(pOther->needsAll, pOther->needsAllCount, pMod);
             }
             endMod(pMod);
+        }
+
+        // Every mod pMod needs, directly or through others: its `uses` and each one's set (each was bound before it).
+        // Fixed from here: a mod a waiting one needs that goes takes it out of the set (dropMod drops the waiting one).
+        void closeNeeds(LumaMod* pMod) {
+            u32 room = pMod->useCount;
+            for (u32 i = 0; i < pMod->useCount; i++) {
+                room += pMod->uses[i]->needsAllCount;
+            }
+            if (room == 0) {
+                return;
+            }
+            LumaMod** const pAll = static_cast<LumaMod**>(zeroed(room, sizeof(LumaMod*)));
+            if (pAll == nullptr) {
+                NEBULA_PANIC("LumaCore: no memory to keep which mods %s needs", pMod->name);
+            }
+            pMod->needsAllCount = luma::needs::close(
+                pMod->uses, pMod->useCount,
+                [](LumaMod* pUse, LumaMod* const** ppSet, u32* pCount) {
+                    *ppSet = pUse->needsAll;
+                    *pCount = pUse->needsAllCount;
+                },
+                pAll, room);
+            pMod->needsAll = pAll;
         }
 
         // A begun mod that waits for its start and will replace `pFunction` (its hooks are published only at its start):
@@ -1978,6 +1995,7 @@ namespace luma {
                 *static_cast<s32*>(rImport.slot) = found ? number : -1;
             }
         }
+        closeNeeds(pMod);
         luma::guard::measureForHarness();
         luma::services::modBegin(pMod, pMod->name, order, pMod->granted, pMod->grantedCount);
         if (covers(pInfo, offsetof(LumaModInfo, begin) + sizeof(pInfo->begin)) && pInfo->begin != nullptr) {

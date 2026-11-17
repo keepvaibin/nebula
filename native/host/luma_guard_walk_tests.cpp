@@ -1,6 +1,8 @@
 // Tests for the guard's need walk (native/include/luma_guard_walk.h: which mod a caught fault turns off), its table
 // of mods' code (luma_guard_spans.h: it grows past any count of libraries, M-001) and its reading of a mod library's
-// unwind tables (luma_guard_unwind.h: hostile bytes give 0, never a read outside them).
+// unwind tables (luma_guard_unwind.h: hostile bytes give 0, never a read outside them), and the kernel's set of the mods
+// a mod needs (LumaNeeds.hpp: the need walk's "needs through", one binary search whatever the graph's shape).
+#include "Game/System/LumaNeeds.hpp"
 #include "luma_guard_spans.h"
 #include "luma_guard_unwind.h"
 
@@ -252,12 +254,104 @@ bool unwind() {
     return ok;
 }
 
+// A mod as the kernel keeps its needs: the mods it imports from, and the set made at its bind.
+struct NeedMod {
+    std::vector<NeedMod*> uses;
+    std::vector<NeedMod*> set;
+};
+
+void bind(NeedMod& mod) {
+    std::size_t room = mod.uses.size();
+    for (NeedMod* use : mod.uses) room += use->set.size();
+    mod.set.assign(room, nullptr);
+    const auto count = luma::needs::close(
+        mod.uses.data(), static_cast<std::uint32_t>(mod.uses.size()),
+        [](NeedMod* use, NeedMod* const** set, std::uint32_t* n) {
+            *set = use->set.data();
+            *n = static_cast<std::uint32_t>(use->set.size());
+        },
+        mod.set.data(), static_cast<std::uint32_t>(room));
+    mod.set.resize(count);
+}
+
+bool has(const NeedMod& user, const NeedMod* used) {
+    return luma::needs::has(user.set.data(), static_cast<std::uint32_t>(user.set.size()), used);
+}
+
+bool needs() {
+    bool ok = true;
+    // Forty layers of two mods, each needing both of the layer below: 2^39 paths from the top to the bottom, and a
+    // set of 2k mods at layer k.
+    constexpr unsigned kLayers = 40;
+    std::vector<NeedMod> mods(kLayers * 2);
+    for (unsigned layer = 0; layer < kLayers; ++layer) {
+        for (unsigned side = 0; side < 2; ++side) {
+            NeedMod& mod = mods[layer * 2 + side];
+            if (layer != 0) mod.uses = {&mods[(layer - 1) * 2], &mods[(layer - 1) * 2 + 1]};
+            bind(mod);
+            ok &= expect(mod.set.size() == layer * 2u, "layer " + std::to_string(layer) + "'s set has its " +
+                                                          std::to_string(layer * 2u) + " mods (" + std::to_string(mod.set.size()) + ")");
+        }
+    }
+    const NeedMod& top = mods[kLayers * 2 - 1];
+    unsigned found = 0;
+    for (unsigned i = 0; i < (kLayers - 1) * 2; ++i) found += has(top, &mods[i]) ? 1u : 0u;
+    ok &= expect(found == (kLayers - 1) * 2, "the top needs every mod below it");
+    ok &= expect(!has(top, &mods[kLayers * 2 - 2]) && !has(top, &top), "the top needs not its own layer nor itself");
+    ok &= expect(!has(mods[0], &mods[1]) && !has(top, nullptr), "the bottom needs nothing; null is never needed");
+    // A use taken out of a set (a needed mod went before a waiting one started).
+    NeedMod spare = mods[6];
+    spare.set.resize(luma::needs::drop(spare.set.data(), static_cast<std::uint32_t>(spare.set.size()), &mods[0]));
+    ok &= expect(!has(spare, &mods[0]) && has(spare, &mods[1]) && spare.set.size() == 5u, "drop takes one mod out");
+
+    // Random graphs, each mod needing up to four earlier ones (a mod loads after what it needs): the set answers as a
+    // search of the graph does, for every pair.
+    std::uint64_t state = 0x2545F4914F6CDD1Dull;
+    const auto next = [&state] {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        return static_cast<unsigned>(state >> 20);
+    };
+    unsigned wrong = 0;
+    for (unsigned round = 0; round < 8; ++round) {
+        constexpr unsigned kMods = 200;
+        std::vector<NeedMod> graph(kMods);
+        for (unsigned i = 0; i < kMods; ++i) {
+            const unsigned n = i == 0 ? 0 : next() % 5;
+            for (unsigned k = 0; k < n; ++k) {
+                NeedMod* const use = &graph[next() % i];
+                bool known = false;
+                for (NeedMod* u : graph[i].uses) known = known || u == use;
+                if (!known) graph[i].uses.push_back(use);
+            }
+            bind(graph[i]);
+        }
+        for (unsigned a = 0; a < kMods; ++a) {
+            std::vector<bool> seen(kMods, false);
+            std::vector<unsigned> todo;
+            for (NeedMod* u : graph[a].uses) todo.push_back(static_cast<unsigned>(u - graph.data()));
+            while (!todo.empty()) {
+                const unsigned at = todo.back();
+                todo.pop_back();
+                if (seen[at]) continue;
+                seen[at] = true;
+                for (NeedMod* u : graph[at].uses) todo.push_back(static_cast<unsigned>(u - graph.data()));
+            }
+            for (unsigned b = 0; b < kMods; ++b) wrong += has(graph[a], &graph[b]) != seen[b] ? 1u : 0u;
+        }
+    }
+    ok &= expect(wrong == 0, "the sets answer as a search of the graph (" + std::to_string(wrong) + " wrong)");
+    return ok;
+}
+
 }  // namespace
 
 int main() {
     bool ok = walks();
     ok &= spans();
     ok &= unwind();
+    ok &= needs();
     if (!ok) return 1;
     std::cout << "luma_guard_walk_tests: the need walk and the growing table hold\n";
     return 0;
