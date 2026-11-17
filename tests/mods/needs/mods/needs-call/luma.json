@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "needs-call",
+  "name": "needs-call",
+  "summary": "needs-call (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

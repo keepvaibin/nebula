@@ -80,6 +80,8 @@ Header: `native/include/luma.h`.
 
 A function of the game. `invoke` calls it: args[0] is `this` (null for a function without one), args[1..] point at the arguments, and `result` is where what it returns is put. Hooks on the function run. A parameter of reference type is the object itself: its args[n] is the object's address (for `const Vec3f &`, a `Vec3f *`); a pointer parameter's args[n] points at the pointer.
 
+Some functions read a scene object (the player's holder, the camera's context, the scene's results) with no test that it is there; the build finds them from the game's source and lists them in luma_functions.json (`needs`). When one of those objects is not there (at boot, between stages, on a title screen), a mod's `invoke` does not call the function: `result` gets its type's empty value (0, null, a default-made record; zero bytes for a record that has no default constructor or has a destructor; nothing for void), and the mod's log gets 8 `Call.NotNow` (found: the function, need: the object), once per function and object, then counted. The game's own calls of the function are not checked.
+
 | Name | Description |
 |---|---|
 | `const char* name` | "Kuribo::exeWander"; "Game/Enemy/Kuribo.cpp#name" for one only its file sees. |
@@ -190,7 +192,7 @@ A table of the game's data as LumaCore.table gives it.
 
 ### `LumaExport`
 
-The kernel's own, said for a mod by LumaCore (not passed to report): 2 `Hook.NoResult` and 3 `Hook.SkipRefused` (a hook's result), 4 `Hook.ServiceNotGranted`, and the objects contract's 5 `Object.NoRow` (found: the class's type_info name as the ABI writes it), 6 `Object.NotReadable` (where: the call), 7 `Object.Ambiguous` (where, found: the class). One function a library mod gives the mods that need it. Names "<module>.<fn>" and the signature form are described in [The compiled form](lumascript/compiled-form.md); the kernel compares both strings and nothing else. Sorted by name.
+The kernel's own, said for a mod by LumaCore (not passed to report): 2 `Hook.NoResult` and 3 `Hook.SkipRefused` (a hook's result), 4 `Hook.ServiceNotGranted`, and the objects contract's 5 `Object.NoRow` (found: the class's type_info name as the ABI writes it), 6 `Object.NotReadable` (where: the call), 7 `Object.Ambiguous` (where, found: the class), and 8 `Call.NotNow` (found: the function, need: the scene object that is not there; see `LumaFunction`). One function a library mod gives the mods that need it. Names "<module>.<fn>" and the signature form are described in [The compiled form](lumascript/compiled-form.md); the kernel compares both strings and nothing else. Sorted by name.
 
 | Name | Description |
 |---|---|

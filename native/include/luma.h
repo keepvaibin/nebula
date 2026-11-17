@@ -355,7 +355,8 @@ typedef struct LumaCore {
 #define LUMA_REPORT_OUT_OF_MEMORY 1u /* Hook.OutOfMemory: args[0] the size; luma.h's `new` then stops the game */
 /* The kernel's own, said for a mod by LumaCore (not passed to report): 2 Hook.NoResult and 3 Hook.SkipRefused (a hook's
    result), 4 Hook.ServiceNotGranted, and the objects contract's 5 Object.NoRow (found: the class's type_info name as
-   the ABI writes it), 6 Object.NotReadable (where: the call), 7 Object.Ambiguous (where, found: the class). */
+   the ABI writes it), 6 Object.NotReadable (where: the call), 7 Object.Ambiguous (where, found: the class), 8 Call.NotNow (found: the function,
+   need: a scene object it reads that is not there now; the call was not made and its result is the empty value). */
 
 /* One function a library mod gives the mods that need it. Names "<module>.<fn>" and the signature form are
    docs/modding/reference/lumascript/compiled-form.md's ("A mod's functions for other mods"); the kernel compares both strings and

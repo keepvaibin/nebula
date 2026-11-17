@@ -1,0 +1,88 @@
+{
+  "harness": 1,
+  "name": "6801-call-not-now",
+  "about": "needs-call calls six game functions that read scene objects with no test (MarioAccess::validateSensor, MR::incPlayerLife, MR::incCoin, MR::getPlayerPos, MR::isPlayerDead, MR::getCamPos) at boot frame 1, with no scene: none is made, each gives its empty value (null, false, a zero vector), the mod's log says Call.NotNow, and the game goes on; in play the same calls are made (the player's position is there). Before M2 the first call ended the game",
+  "proves": [
+    "call.needs",
+    "call.not_now"
+  ],
+  "mods": [
+    "../mods/needs-call"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        6801
+      ]
+    },
+    {
+      "at": 150,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.needs-call.on_frame",
+      "is": 0
+    },
+    {
+      "fact": "mod.needs-call.boot_called",
+      "is": 6,
+      "when": "last"
+    },
+    {
+      "fact": "mod.needs-call.boot_pos",
+      "is": 0
+    },
+    {
+      "fact": "mod.needs-call.boot_dead",
+      "is": 0
+    },
+    {
+      "fact": "mod.needs-call.boot_cam_zero",
+      "is": 1
+    },
+    {
+      "fact": "mod.needs-call.boot_survived",
+      "is": 1
+    },
+    {
+      "fact": "mod.needs-call.play_called",
+      "is": 6,
+      "when": "last"
+    },
+    {
+      "fact": "mod.needs-call.play_pos",
+      "is": 1
+    },
+    {
+      "fact": "mod.needs-call.play_dead",
+      "is": 0
+    },
+    {
+      "fact": "mod.needs-call.play_survived",
+      "is": 1
+    },
+    {
+      "fact": "guard.needs-call",
+      "absent": true
+    },
+    {
+      "log": "needs-call: MarioAccess::validateSensor void\\(\\) was not called: it needs MarioHolder, which the game does not have now\\."
+    },
+    {
+      "no_log": "needs-call: MR::getPlayerPos "
+    },
+    {
+      "log": "needs-call: MR::getCamPos const Vec3f\\(\\) was not called: it needs CameraContext, which the game does not have now\\."
+    }
+  ]
+}

@@ -156,6 +156,8 @@
     "ui.pane": "ui finds a pane of an open screen by its exact name; the same pane is the same handle",
     "ui.text": "ui sets a text pane's text from UTF-8, kept as given in every script",
     "ui.open.boot": "ui.open asked for from a mod's start and each frame after answers LUMA_E_BUSY until a scene runs with the system archive's fonts, never a screen on the boot font; the screen made then is live on the stage with its text",
+    "call.needs": "A game function that reads a scene object with no test that it is there (the build finds them in the game's source: luma_functions.json needs) is called by a mod only when every object it needs is there; one that only may give null (null_when) is called",
+    "call.not_now": "A mod's call of a function whose need is missing is not made: its result is the empty value (null, false, zero) and the mod's log says Call.NotNow with the function and the missing object; the game goes on",
     "ui.no_scene": "ui.open with no scene running, or before the game's fonts are loaded, answers LUMA_E_BUSY and says Ui.NoScene",
     "ui.no_glyph": "A text holding a character its pane's font cannot draw is set, LUMA_OK, and Ui.NoGlyph names the character and its code",
     "ui.mod_font": "A text pane of a mod's layout draws in the mod's own font (Luma/<id>/<path>.brfnt): its kerning between pairs, its fallback game font for a character it lacks at its height on its baseline; a font the store lacks is said (Content.MissingFont) and the message font stands in",
