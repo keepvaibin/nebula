@@ -1,0 +1,70 @@
+{
+  "harness": 1,
+  "name": "2234-taken-out",
+  "about": "set, get and a link answered at frame 10, the mod taken out before frame 11's deliveries: no event, the link's Note stays (harness r7 take_out; reload H-RL2)",
+  "proves": [
+    "services.system.clipboard",
+    "services.system.links"
+  ],
+  "mods": [
+    "../mods/sys-takeout"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 10,
+      "take_out": "sys-takeout"
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-takeout.set",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-takeout.get",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-takeout.open",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-takeout.ev_kind",
+      "absent": true
+    },
+    {
+      "fact": "takeout.sys-takeout",
+      "has": {
+        "blocks": 0,
+        "bytes": 0,
+        "stopped": true,
+        "finished": true
+      }
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "sys-takeout",
+        "source": "code",
+        "level": "note",
+        "code": 140,
+        "file": "example.org",
+        "count": 1
+      },
+      "when": "any"
+    }
+  ]
+}

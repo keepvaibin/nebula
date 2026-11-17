@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-rep2",
+  "name": "lt-rep2",
+  "summary": "lt-rep2 (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

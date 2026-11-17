@@ -1,0 +1,38 @@
+{
+  "harness": 1,
+  "name": "04b-spin-withheld",
+  "about": "With the spin not granted, the same gesture makes no spin",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/spinwatch"
+  ],
+  "save": {
+    "spin": false
+  },
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "shake": 10
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "setup.save.spin",
+      "is": false
+    },
+    {
+      "fact": "mod.spinwatch.spins",
+      "is": 0
+    }
+  ]
+}

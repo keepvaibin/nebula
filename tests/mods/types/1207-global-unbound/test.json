@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "1207-global-unbound",
+  "about": "A global of internal linkage is refused with its reason (Name.GlobalUnbound)",
+  "proves": [
+    "kernel.refusal",
+    "kernel.bind"
+  ],
+  "mods": [
+    {
+      "path": "../mods/tt-unb-global",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tt-unb-global.started",
+      "absent": true
+    },
+    {
+      "log": "tt-unb-global: .*global variable \"Angle::cRadian090\" a mod can bind \\(internal linkage"
+    }
+  ]
+}

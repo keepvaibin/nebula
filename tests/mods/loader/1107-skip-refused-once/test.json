@@ -1,0 +1,58 @@
+{
+  "harness": 1,
+  "name": "1107-skip-refused-once",
+  "about": "A before asking to skip a fixed-result function is not taken: it runs, said once",
+  "proves": [
+    "kernel.hook.before"
+  ],
+  "mods": [
+    "../mods/lt-skipref"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4245
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 70,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4245
+      ],
+      "fact": "ran_again"
+    },
+    {
+      "at": 80,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ran",
+      "is": 3
+    },
+    {
+      "fact": "ran_again",
+      "is": 3
+    },
+    {
+      "log": "lt-skipref: a hook asked to skip GameDataFunction::makeGalaxyScenarioAccessor.*so the function ran",
+      "times": 1
+    },
+    {
+      "no_log": "asked to skip .*makeGalaxyScenarioAccessor.*seen"
+    }
+  ]
+}

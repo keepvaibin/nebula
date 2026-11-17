@@ -1,0 +1,6 @@
+{
+  "verdict": "pass",
+  "facts": {
+    "setup.save.spin": true
+  }
+}

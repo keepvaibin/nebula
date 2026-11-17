@@ -1,0 +1,20 @@
+{
+  "harness": 1,
+  "name": "08-bare-boot",
+  "about": "A bare test boots to the title and ends by its end step",
+  "proves": [
+    "harness.self"
+  ],
+  "bare": true,
+  "steps": [
+    {
+      "at": 60,
+      "picture": "title"
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": []
+}

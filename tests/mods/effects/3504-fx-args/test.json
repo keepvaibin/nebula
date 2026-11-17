@@ -1,0 +1,94 @@
+{
+  "harness": 1,
+  "name": "3504-fx-args",
+  "about": "je-fx-args: every refusal of content.fx 1.0 (null actor, empty name, null out, a 4-byte LumaPlace, bytes that are no actor, a model handle before models 7, unknown handles, a scale of 0 and NaN) answers its status and writes no handle; the one good start is handle 1 and ends with stop now",
+  "proves": [
+    "fx.refusals"
+  ],
+  "mods": [
+    "../mods/je-fx-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3501
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.je-fx-args.null_actor",
+      "is": -1
+    },
+    {
+      "fact": "mod.je-fx-args.empty_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.je-fx-args.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.je-fx-args.small_place",
+      "is": -1
+    },
+    {
+      "fact": "mod.je-fx-args.not_actor",
+      "is": -1
+    },
+    {
+      "fact": "mod.je-fx-args.on_model",
+      "is": -3
+    },
+    {
+      "fact": "mod.je-fx-args.stop_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.je-fx-args.tint_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.je-fx-args.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.je-fx-args.good",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-args.tint_zero",
+      "is": -1
+    },
+    {
+      "fact": "mod.je-fx-args.tint_nan",
+      "is": -1
+    },
+    {
+      "fact": "mod.je-fx-args.stop_now",
+      "is": 0
+    },
+    {
+      "fact": "fx.end.1",
+      "is": {
+        "why": "stop"
+      }
+    },
+    {
+      "fact": "fx.start.2",
+      "absent": true
+    }
+  ]
+}

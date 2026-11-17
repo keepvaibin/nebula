@@ -1,0 +1,9 @@
+{
+  "harness": 1,
+  "tests": [
+    "1140-take-out-held",
+    "1141-take-out-none",
+    "1142-take-out-dependents",
+    "1143-take-out-cxx"
+  ]
+}

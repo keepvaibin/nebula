@@ -1,0 +1,7 @@
+{
+  "verdict": "harness-error",
+  "reason_has": [
+    "colour",
+    "steps"
+  ]
+}

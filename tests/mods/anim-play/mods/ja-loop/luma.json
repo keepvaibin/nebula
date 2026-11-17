@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ja-loop",
+  "name": "ja-loop",
+  "version": "1.0.0",
+  "summary": "J's test mod ja-loop.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

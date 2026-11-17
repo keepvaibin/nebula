@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "2901-kit-data",
+    "2902-kit-data-no-schema"
+  ]
+}

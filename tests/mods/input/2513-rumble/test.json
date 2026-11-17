@@ -1,0 +1,165 @@
+{
+  "harness": 1,
+  "name": "2513-rumble",
+  "about": "in-rumble on a controller: the device is a PAD; strength past 1, seconds below 0 or past 10 and player 2 refused; the co-star has no motor (ABSENT); 0.5 for a second drives the motor at 128 and stops it a second on; 1.0 drives it at 255 until strength 0 stops it",
+  "proves": [
+    "services.input"
+  ],
+  "mods": [
+    "../mods/in-rumble"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "device": "pad",
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2521
+      ]
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2522
+      ]
+    },
+    {
+      "at": 230,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2523
+      ]
+    },
+    {
+      "at": 260,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-rumble.device_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-rumble.device_kind",
+      "is": 2
+    },
+    {
+      "fact": "mod.in-rumble.strong_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-rumble.negative_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-rumble.long_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-rumble.player2_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-rumble.costar_status",
+      "is": -6
+    },
+    {
+      "fact": "mod.in-rumble.half_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-rumble.full_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-rumble.stop_status",
+      "is": 0
+    },
+    {
+      "fact": "input.motor",
+      "is": 128,
+      "when": "any",
+      "frames": [
+        60,
+        63
+      ]
+    },
+    {
+      "fact": "input.motor",
+      "is": 0,
+      "when": "any",
+      "frames": [
+        119,
+        124
+      ]
+    },
+    {
+      "fact": "input.motor",
+      "is": 255,
+      "when": "any",
+      "frames": [
+        200,
+        203
+      ]
+    },
+    {
+      "fact": "input.motor",
+      "is": 0,
+      "when": "any",
+      "frames": [
+        230,
+        233
+      ]
+    },
+    {
+      "fact": "input.motor",
+      "count": 4,
+      "frames": [
+        0,
+        260
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "in-rumble",
+        "code": 101,
+        "file": "input.rumble",
+        "text": "in-rumble: input.rumble was given a wrong strength; it did nothing."
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "in-rumble",
+        "code": 101,
+        "file": "input.rumble",
+        "text": "in-rumble: input.rumble was given a wrong seconds; it did nothing."
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "in-rumble",
+        "code": 101,
+        "file": "input.rumble",
+        "text": "in-rumble: input.rumble was given a wrong player; it did nothing."
+      },
+      "when": "any"
+    }
+  ]
+}

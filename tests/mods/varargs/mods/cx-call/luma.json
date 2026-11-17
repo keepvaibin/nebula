@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "cx-call",
+  "name": "cx-call",
+  "summary": "cx-call (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

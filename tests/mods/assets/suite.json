@@ -1,0 +1,12 @@
+{
+  "harness": 1,
+  "tests": [
+    "2801-assets-read",
+    "2802-assets-mistakes",
+    "2803-assets-own",
+    "2804-assets-provide",
+    "2805-assets-provide-mistakes",
+    "2806-assets-provide-two",
+    "2807-assets-cook"
+  ]
+}

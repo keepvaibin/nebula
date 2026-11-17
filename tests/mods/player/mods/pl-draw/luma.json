@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "pl-draw",
+  "name": "pl-draw",
+  "summary": "pl-draw (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

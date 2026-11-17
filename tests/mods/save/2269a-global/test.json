@@ -1,0 +1,72 @@
+{
+  "harness": 1,
+  "name": "2269a-global",
+  "about": "save.global: set and get with no game save; unset LUMA_E_NOT_FOUND (not reported); a wrong key and a 65 KiB value reported; the file's own values do not hold it",
+  "proves": [
+    "services.save.global",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/save-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4258
+      ]
+    },
+    {
+      "at": 130,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-a.gset",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.gget",
+      "is": 8809
+    },
+    {
+      "fact": "mod.save-a.gget_none",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-a.gremove_none",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-a.gbad_key",
+      "is": -1
+    },
+    {
+      "fact": "mod.save-a.gover_value",
+      "is": -4
+    },
+    {
+      "fact": "mod.save-a.gfile_value",
+      "is": -7
+    },
+    {
+      "log": "save-a: save\\.global\\.set was given a wrong key; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "save-a: save\\.global\\.set reached its limit of 65536; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "no_log": "save-a: save\\.global\\.(get|remove) "
+    }
+  ]
+}

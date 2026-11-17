@@ -1,0 +1,189 @@
+{
+  "harness": 1,
+  "name": "2704-udp",
+  "about": "UDP (1.1): a udp_open socket and a udp_connect socket over loopback: \"ping\" and an empty datagram one way, \"pong:ping\" back with send_to to the sender; the sender's address and port; SENT on each; the mistakes (send on udp_open, send_to on udp_connect, take on UDP, take_datagram outside a call: HANDLE; a far or v6 host: ARGUMENT; 65508 bytes: TOO_LARGE; net.internet udp_open and send_to: DENIED; its udp_connect to a loopback name: ERROR DENIED)",
+  "proves": [
+    "services.net.local",
+    "services.net.internet",
+    "services.net.udp",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/net-udp"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4501
+      ]
+    },
+    {
+      "at": 400,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4502
+      ]
+    },
+    {
+      "at": 420,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-udp.open_a",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-udp.port_a",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-udp.port_given",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.connect_b",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.send_on_open",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-udp.send_to_on_tied",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-udp.send_to_far",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-udp.send_to_v6",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-udp.too_large",
+      "is": -16
+    },
+    {
+      "fact": "mod.net-udp.take_datagram_outside",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-udp.internet_udp_open",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-udp.internet_send_to",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-udp.internet_connect",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.b_connected",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.send_ping",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-udp.send_empty",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-udp.a_events_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.take_on_udp",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-udp.a_taken",
+      "is": 2
+    },
+    {
+      "fact": "mod.net-udp.a_ping",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.a_empty",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.a_from_loopback",
+      "is": 2
+    },
+    {
+      "fact": "mod.net-udp.a_last_take",
+      "is": -7
+    },
+    {
+      "fact": "mod.net-udp.answer",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-udp.b_events",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.b_pong",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.b_from_a",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.close_b",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-udp.sent_a_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.sent_b_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.errors_far",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-udp.far_status",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-udp.others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-udp.close_a",
+      "is": 0
+    },
+    {
+      "log": "net-udp: net\\.local\\.send_to was given a wrong host; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "net-udp",
+        "english": "net-udp: net.local.send_to was given a wrong host; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    }
+  ]
+}

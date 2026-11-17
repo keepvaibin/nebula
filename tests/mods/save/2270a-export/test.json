@@ -1,0 +1,193 @@
+{
+  "harness": 1,
+  "name": "2270a-export",
+  "about": "save.game granted: export_file of file 1 (a value set just before, not saved) and of file 2 (not created); the EXPORT event at the next frame's start: take once (a second take LUMA_E_HANDLE), the form NSAV 1 with 3 parts framed to its length and the unsaved value in it; file 2 LUMA_E_NOT_FOUND; the 5th open request LUMA_E_LIMIT; two cancelled: no event, cancelled again LUMA_E_HANDLE; take outside the event LUMA_E_HANDLE; file 0 and 7, a null fn LUMA_E_ARGUMENT (the first said, the rest counted); offer of a file not in the data folder LUMA_E_NOT_FOUND, a path out of the data folder LUMA_E_ARGUMENT; one Note Save.Exported",
+  "proves": [
+    "services.save.game",
+    "services.permissions",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/save-g"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4267
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-g.set_inexport",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.export1",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.export2",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.export3",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.export4",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.export5",
+      "is": -4
+    },
+    {
+      "fact": "mod.save-g.cancel3",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.cancel4",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.cancel_again",
+      "is": -3
+    },
+    {
+      "fact": "mod.save-g.take_outside",
+      "is": -3
+    },
+    {
+      "fact": "mod.save-g.export_0",
+      "is": -1
+    },
+    {
+      "fact": "mod.save-g.export_7",
+      "is": -1
+    },
+    {
+      "fact": "mod.save-g.export_nofn",
+      "is": -1
+    },
+    {
+      "fact": "mod.save-g.offer",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-g.offer_up",
+      "is": -1
+    },
+    {
+      "fact": "mod.save-g.events",
+      "is": 2
+    },
+    {
+      "fact": "mod.save-g.other_event",
+      "absent": true
+    },
+    {
+      "fact": "mod.save-g.e1_kind",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.e1_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-g.e1_take",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.e1_retake",
+      "is": -3
+    },
+    {
+      "fact": "mod.save-g.magic_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.version",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.parts",
+      "is": 3
+    },
+    {
+      "fact": "mod.save-g.part0",
+      "more": 0
+    },
+    {
+      "fact": "mod.save-g.part1",
+      "more": 0
+    },
+    {
+      "fact": "mod.save-g.part2",
+      "more": 0
+    },
+    {
+      "fact": "mod.save-g.frame_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.has_value",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-g.e2_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-g.e2_value",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "save-g",
+        "source": "code",
+        "level": "note",
+        "code": 181,
+        "count": 1
+      },
+      "when": "any"
+    },
+    {
+      "log": "save-g: save\\.game\\.export_file reached its limit of 4; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "save-g: save\\.game\\.export_file was given a wrong file; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "save-g: save\\.game\\.export_file was given a wrong fn",
+      "times": 1
+    },
+    {
+      "log": "save-g: save\\.game\\.cancel was given a handle that is closed or not its own\\.",
+      "times": 1
+    },
+    {
+      "log": "save-g: save\\.game\\.take was given a handle that is closed or not its own\\.",
+      "times": 1
+    },
+    {
+      "log": "save-g: save\\.game\\.offer was given a wrong path; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

@@ -1,0 +1,206 @@
+{
+  "harness": 1,
+  "name": "3814-ui-position",
+  "about": "ju-position (ui 1.3): its own layout JuStack holds Stack at -150,0 and two copies of one button at 40,20 in it, A red and B blue; set_position puts A at 0,60 and B at 0,-60, which replace the layout's place (pane facts: found at x 40, y 20; ui.position x 0, y 60 and x 0, y -60), so the copies stand one above the other on the left of the picture: red 60 up and blue 60 down from Stack's origin (layout -150,60 and -150,-60 on the 608 by 456 canvas drawn 1280 by 720: centres near 324,265 and 324,455; the boxes take the copies' left halves, which an offset from 40,20 would not reach). After the picture: NaN, infinite, 5000 and -4097 are refused (LUMA_E_ARGUMENT, Service.Argument) and move nothing; 4096 either way is taken; a handle never given and the closed screen's pane LUMA_E_HANDLE",
+  "proves": [
+    "ui.position"
+  ],
+  "mods": [
+    "../mods/ju-position"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 110,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3802
+      ]
+    },
+    {
+      "at": 130,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3803
+      ]
+    },
+    {
+      "at": 150,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-position.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-position.pane_a",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-position.pane_b",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-position.move_a",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-position.move_b",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-position.nan",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-position.far",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-position.inf",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-position.far_neg",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-position.edge",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-position.back",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-position.unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-position.close",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-position.closed",
+      "is": -3
+    },
+    {
+      "fact": "ui.pane.2",
+      "has": {
+        "pane": "A",
+        "x": 40,
+        "y": 20
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.pane.3",
+      "has": {
+        "pane": "B",
+        "x": 40,
+        "y": 20
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.position.2",
+      "has": {
+        "pane": "A",
+        "x": 4096,
+        "y": -4096
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.position.2",
+      "has": {
+        "pane": "A",
+        "x": 0,
+        "y": 60
+      },
+      "when": "last"
+    },
+    {
+      "fact": "ui.position.3",
+      "has": {
+        "pane": "B",
+        "x": 0,
+        "y": -60
+      },
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-position",
+        "code": 101
+      },
+      "exists": true
+    },
+    {
+      "picture": "f90",
+      "box": [
+        250,
+        252,
+        60,
+        26
+      ],
+      "mean_rgb": [
+        255,
+        0,
+        0
+      ],
+      "within": 24
+    },
+    {
+      "picture": "f90",
+      "box": [
+        250,
+        442,
+        60,
+        26
+      ],
+      "mean_rgb": [
+        0,
+        0,
+        255
+      ],
+      "within": 24
+    },
+    {
+      "picture": "f90",
+      "like": "3814-f90",
+      "box": [
+        200,
+        200,
+        260,
+        320
+      ],
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

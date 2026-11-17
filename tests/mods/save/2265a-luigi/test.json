@@ -1,0 +1,105 @@
+{
+  "harness": 1,
+  "name": "2265a-luigi",
+  "about": "Luigi's game data of file 1: a value set and saved; file says Luigi",
+  "proves": [
+    "services.save"
+  ],
+  "mods": [
+    "../mods/save-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4255
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4259
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.confirm_ready",
+        "is": 1
+      },
+      "hold": [
+        "RIGHT"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.focused",
+        "is": 1
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.done_ready",
+        "is": 1
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.saved",
+        "is": 1
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-a.asked",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.saved",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.save_ok",
+      "is": 1
+    },
+    {
+      "fact": "setup.save.character",
+      "is": "luigi"
+    },
+    {
+      "fact": "mod.save-a.set_who",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.who_file",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.who_character",
+      "is": 1
+    }
+  ],
+  "save": {
+    "character": "luigi"
+  }
+}

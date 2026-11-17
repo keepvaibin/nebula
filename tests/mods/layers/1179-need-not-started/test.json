@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "1179-need-not-started",
+  "about": "ly-dep-no needs ly-lib-no, which chooses a and whose start refuses: ly-dep-no was begun and is dropped, named; one start-again for ly-lib-no's first answer",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ly-lib-no",
+      "loads": false
+    },
+    {
+      "path": "../mods/ly-dep-no",
+      "loads": false
+    }
+  ],
+  "starts": 2,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-lib-no.asked",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-lib-no.a_on",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-lib-no.b_on",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-dep-no.started",
+      "absent": true
+    },
+    {
+      "log": "\\[mod ly-dep-no\\] begun and not started: a mod it needs did not start"
+    },
+    {
+      "log": "ly-dep-no \\(mod\\.[a-z]+\\) not started: it needs ly-lib-no, which did not start"
+    },
+    {
+      "log": "host: restart",
+      "times": 1
+    }
+  ]
+}

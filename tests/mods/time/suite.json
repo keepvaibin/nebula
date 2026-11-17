@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "tests": [
+    "2201-now",
+    "2202-rate-2000",
+    "2203-rate-500",
+    "2204-rates-three",
+    "2204-rates-three-reordered",
+    "2204-rates-two",
+    "2205-hold",
+    "2206-step",
+    "2207-step-not-held",
+    "2208-step-two-holders",
+    "2209-arguments",
+    "2210-timer-frames",
+    "2210-timer-steps-rate",
+    "2211-timer-held",
+    "2212-cancel",
+    "2213-timer-limit",
+    "2214-on-frame-order",
+    "2214-on-frame-order-reversed",
+    "2215-holder-taken-out",
+    "2216-clocks",
+    "2217-struct-size",
+    "2218-let-go"
+  ]
+}

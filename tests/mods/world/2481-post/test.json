@@ -1,0 +1,327 @@
+{
+  "harness": 1,
+  "name": "2481-post",
+  "about": "fp-post: fp_tint in WORLD turns the 3-D picture red (f70), its params green (f110); fp_left in FRAME paints the frame's left half blue over the HUD, the right half still green (f150); both slots emptied, params on an empty slot E_STATE; fp_depth (reads depth) in WORLD: grey by distance (f190); the refusals, each reported: null and empty names, a null out, fp_none E_NOT_FOUND (540), fp_bad the compiler's error (541), fp_motion E_ABSENT with no motion vectors (542), stage 2, program 999, 17 params, null values, a NaN, program_free 999, a ninth program E_LIMIT; program_free of fp_depth empties its slot (f240 the game's picture)",
+  "proves": [
+    "draw.post"
+  ],
+  "mods": [
+    "../mods/fp-post"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2481
+      ]
+    },
+    {
+      "at": 70,
+      "picture": "f70"
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2482
+      ]
+    },
+    {
+      "at": 110,
+      "picture": "f110"
+    },
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2483
+      ]
+    },
+    {
+      "at": 150,
+      "picture": "f150"
+    },
+    {
+      "at": 160,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2484
+      ]
+    },
+    {
+      "at": 190,
+      "picture": "f190"
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2485
+      ]
+    },
+    {
+      "at": 210,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2486
+      ]
+    },
+    {
+      "at": 240,
+      "picture": "f240"
+    },
+    {
+      "at": 250,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fp-post.tint",
+      "is": 0
+    },
+    {
+      "fact": "mod.fp-post.set_world",
+      "is": 0
+    },
+    {
+      "fact": "mod.fp-post.params",
+      "is": 0
+    },
+    {
+      "fact": "mod.fp-post.left",
+      "is": 0
+    },
+    {
+      "fact": "mod.fp-post.set_frame",
+      "is": 0
+    },
+    {
+      "fact": "mod.fp-post.world_empty",
+      "is": 0
+    },
+    {
+      "fact": "mod.fp-post.frame_empty",
+      "is": 0
+    },
+    {
+      "fact": "mod.fp-post.params_empty",
+      "is": -18
+    },
+    {
+      "fact": "mod.fp-post.depth",
+      "is": 0
+    },
+    {
+      "fact": "mod.fp-post.set_depth",
+      "is": 0
+    },
+    {
+      "fact": "mod.fp-post.null_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.fp-post.empty_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.fp-post.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.fp-post.missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.fp-post.bad",
+      "is": -1
+    },
+    {
+      "fact": "mod.fp-post.motion",
+      "is": -6
+    },
+    {
+      "fact": "mod.fp-post.stage",
+      "is": -1
+    },
+    {
+      "fact": "mod.fp-post.set_bad",
+      "is": -3
+    },
+    {
+      "fact": "mod.fp-post.params_many",
+      "is": -1
+    },
+    {
+      "fact": "mod.fp-post.params_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.fp-post.params_nan",
+      "is": -1
+    },
+    {
+      "fact": "mod.fp-post.free_bad",
+      "is": -3
+    },
+    {
+      "fact": "mod.fp-post.more",
+      "is": 5
+    },
+    {
+      "fact": "mod.fp-post.ninth",
+      "is": -4
+    },
+    {
+      "fact": "mod.fp-post.free_depth",
+      "is": 0
+    },
+    {
+      "picture": "f70",
+      "box": [
+        480,
+        240,
+        320,
+        200
+      ],
+      "mean_rgb": [
+        255,
+        0,
+        0
+      ],
+      "within": 3
+    },
+    {
+      "picture": "f110",
+      "box": [
+        480,
+        240,
+        320,
+        200
+      ],
+      "mean_rgb": [
+        0,
+        255,
+        0
+      ],
+      "within": 3
+    },
+    {
+      "picture": "f150",
+      "box": [
+        16,
+        16,
+        600,
+        688
+      ],
+      "mean_rgb": [
+        0,
+        0,
+        255
+      ],
+      "within": 3
+    },
+    {
+      "picture": "f150",
+      "box": [
+        700,
+        240,
+        300,
+        200
+      ],
+      "mean_rgb": [
+        0,
+        255,
+        0
+      ],
+      "within": 3
+    },
+    {
+      "picture": "f190",
+      "like": "refs/{renderer}/f190.png",
+      "within": {
+        "rmse": 6.0
+      }
+    },
+    {
+      "picture": "f240",
+      "like": "refs/{renderer}/f240.png",
+      "within": {
+        "rmse": 6.0
+      }
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fp-post",
+        "code": 540
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fp-post",
+        "code": 541
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fp-post",
+        "code": 542
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fp-post",
+        "code": 543
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fp-post",
+        "code": 101
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fp-post",
+        "code": 102
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fp-post",
+        "code": 104
+      },
+      "when": "any"
+    }
+  ]
+}

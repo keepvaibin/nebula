@@ -1,0 +1,51 @@
+{
+  "harness": 1,
+  "name": "1632-not-resumed-deep",
+  "about": "guard-deep: a stack overflow (unbounded recursion in its after hook) is not resumed: the game ends with a crash line naming the mod, never silently; its minidump is written by the crash watcher on Windows; on Linux and macOS the crash line names the signal",
+  "proves": [
+    "kernel.guard.not_resumed"
+  ],
+  "ends": "crash",
+  "mods": [
+    "../mods/guard-deep"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-deep.entered",
+      "exists": true
+    },
+    {
+      "fact": "mod.guard-deep.survived",
+      "absent": true
+    },
+    {
+      "log": "crash: guard: the code of the mod guard-deep failed \\(after hook: MarioActor::control\\): .+; not resumed: "
+    },
+    {
+      "log": "crash: minidump nebula-native-[0-9]{8}-[0-9]{6}-[0-9]+[.]dmp$",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "log": "crash: SIG(SEGV|BUS|ILL|FPE) at ",
+      "systems": [
+        "linux",
+        "macos"
+      ]
+    },
+    {
+      "no_log": "\\[mod guard-deep\\] GUARD:"
+    }
+  ]
+}

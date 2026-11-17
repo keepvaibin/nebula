@@ -1,0 +1,48 @@
+{
+  "harness": 1,
+  "name": "3872-sound-refused",
+  "about": "gs-sfx-bad's Wide.sound.json names a three-channel WAV: it is refused naming the file and the channel count (Cook.Sound.Channels, rule 804), nothing of it is in the store, and the stage plays",
+  "proves": [
+    "sound.effect"
+  ],
+  "mods": [
+    {
+      "path": "../mods/gs-sfx-bad",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "gs-sfx-bad",
+        "level": "error",
+        "code": 804
+      },
+      "when": "any"
+    },
+    {
+      "fact": "cook.sound",
+      "matching": {
+        "mod": "gs-sfx-bad"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

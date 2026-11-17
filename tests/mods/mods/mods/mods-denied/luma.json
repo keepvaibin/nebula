@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "mods-denied",
+  "name": "mods-denied",
+  "summary": "mods-denied (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

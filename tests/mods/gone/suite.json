@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "1405-gone",
+    "1406-gone-old"
+  ]
+}

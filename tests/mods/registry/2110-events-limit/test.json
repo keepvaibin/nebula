@@ -1,0 +1,75 @@
+{
+  "harness": 1,
+  "name": "2110-events-limit",
+  "about": "300 events posted from another thread in one frame: 256 given in a frame, the other 44 in the very next, in order",
+  "proves": [
+    "services.events"
+  ],
+  "mods": [
+    "../mods/reg-events"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4260
+      ]
+    },
+    {
+      "at": 31,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4261
+      ]
+    },
+    {
+      "at": 32,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4263
+      ]
+    },
+    {
+      "at": 33,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4264
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-events.post",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-events.given_1",
+      "is": 256
+    },
+    {
+      "fact": "mod.reg-events.given_2",
+      "is": 300
+    },
+    {
+      "fact": "mod.reg-events.given_3",
+      "is": 300
+    },
+    {
+      "fact": "mod.reg-events.in_order",
+      "is": 1
+    }
+  ]
+}

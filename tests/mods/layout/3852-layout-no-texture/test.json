@@ -1,0 +1,48 @@
+{
+  "harness": 1,
+  "name": "3852-layout-no-texture",
+  "about": "gl-hud-bad's picture names the texture Moon, which the mod does not have: the layout is refused naming the pane's texture and the file it would be (Cook.Layout.NoTexture, rule 804), nothing of it is in the store, and the stage plays",
+  "proves": [
+    "layout.cook"
+  ],
+  "mods": [
+    {
+      "path": "../mods/gl-hud-bad",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "gl-hud-bad",
+        "level": "error",
+        "code": 804
+      },
+      "when": "any"
+    },
+    {
+      "fact": "cook.layout",
+      "matching": {
+        "mod": "gl-hud-bad"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

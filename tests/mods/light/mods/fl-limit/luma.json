@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fl-limit",
+  "name": "fl-limit",
+  "version": "1.0.0",
+  "summary": "J's test mod fl-limit.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

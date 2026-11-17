@@ -1,0 +1,36 @@
+{
+  "harness": 1,
+  "name": "1104-order-reversed",
+  "about": "The same hooks with the mods swapped: 2 1, wraps 4 3, 5 6, afters 7 8",
+  "proves": [
+    "kernel.hook.before",
+    "kernel.hook.wrap",
+    "kernel.hook.after"
+  ],
+  "mods": [
+    "../mods/lt-ord2",
+    "../mods/lt-ord1"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4242
+      ],
+      "fact": "trace"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "trace",
+      "is": 21435678
+    }
+  ]
+}

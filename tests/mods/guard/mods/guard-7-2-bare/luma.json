@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "guard-7-2-bare",
+  "name": "guard-7-2-bare",
+  "summary": "guard-7-2 with no unwind data (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

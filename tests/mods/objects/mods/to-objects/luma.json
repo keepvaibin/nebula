@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "to-objects",
+  "name": "to-objects",
+  "summary": "to-objects (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

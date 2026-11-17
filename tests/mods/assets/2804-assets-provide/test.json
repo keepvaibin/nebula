@@ -1,0 +1,136 @@
+{
+  "harness": 1,
+  "name": "2804-assets-provide",
+  "about": "a file at a path new to the game, found in any spelling, its bytes, GAME_ONLY nothing, replaced by the mod's second provide, withdrawn; the Goomba's archive copied from the game's own and given back as the mod's (its entries and bytes, the game's still under it); FORMAT inside an archive, at a plain folder, under a provided archive and a file where an archive is",
+  "proves": [
+    "services.assets.provide"
+  ],
+  "mods": [
+    "../mods/assets-provide"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.assets-provide.file_provide",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-provide.file_find",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-provide.file_from_mod",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-provide.file_size",
+      "is": 17
+    },
+    {
+      "fact": "mod.assets-provide.file_bytes",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-provide.file_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-provide.file_game_only",
+      "is": -7
+    },
+    {
+      "fact": "mod.assets-provide.file_again",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-provide.file_again_bytes",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-provide.file_again_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-provide.withdraw",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-provide.withdrawn_find",
+      "is": -7
+    },
+    {
+      "fact": "mod.assets-provide.withdraw_again",
+      "is": -7
+    },
+    {
+      "fact": "mod.assets-provide.arc_copied",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-provide.arc_provide",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-provide.arc_find",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-provide.arc_mine",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-provide.arc_entry",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-provide.arc_entry_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-provide.arc_file_bytes",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-provide.arc_file_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-provide.arc_game_kept",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-provide.inside_archive",
+      "is": -15
+    },
+    {
+      "fact": "mod.assets-provide.plain_folder",
+      "is": -15
+    },
+    {
+      "fact": "mod.assets-provide.own_file_to_archive",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-provide.under_file",
+      "is": -15
+    },
+    {
+      "fact": "mod.assets-provide.archive_over_file",
+      "is": -15
+    }
+  ]
+}

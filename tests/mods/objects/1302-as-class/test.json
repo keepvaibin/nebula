@@ -1,0 +1,62 @@
+{
+  "harness": 1,
+  "name": "1302-as-class",
+  "about": "as_class to NameObj and LiveActor gives the player's address, to Kuribo null; is_a agrees",
+  "proves": [
+    "kernel.objects.as_class",
+    "kernel.objects.is_a"
+  ],
+  "mods": [
+    "../mods/to-objects"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ran",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.player",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.as_nameobj_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.as_live_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.as_kuribo_null",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.is_a_live",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.is_a_kuribo",
+      "is": 0
+    }
+  ]
+}

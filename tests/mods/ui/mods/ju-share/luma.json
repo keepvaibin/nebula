@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ju-share",
+  "name": "ju-share",
+  "version": "1.0.0",
+  "summary": "J's test mod ju-share.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

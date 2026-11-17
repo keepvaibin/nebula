@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "1163-number-port-kept",
+  "about": "the port option with 20000 kept in mods.ini reads 20000 (written 20000, not 2e+04)",
+  "proves": [
+    "services.mods"
+  ],
+  "mods": [
+    {
+      "path": "../mods/k1-port",
+      "options": {
+        "port": 20000
+      }
+    }
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4462
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.k1-port.status",
+      "is": 5
+    },
+    {
+      "fact": "mod.k1-port.port",
+      "is": 20000
+    },
+    {
+      "fact": "mod.k1-port.len",
+      "is": 5
+    }
+  ]
+}

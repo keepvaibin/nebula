@@ -1,0 +1,17 @@
+{
+  "harness": 1,
+  "tests": [
+    "1122-mod-function",
+    "1123-mod-function-reversed",
+    "1124-dependent-gone",
+    "1125-mod-function-missing",
+    "1126-mod-function-signature",
+    "1127-mod-function-optional",
+    "1128-needs-missing",
+    "1129-needs-cycle",
+    "1130-signature-has",
+    "1131-signature-has-japanese",
+    "1132-method-has",
+    "1133-signature-many"
+  ]
+}

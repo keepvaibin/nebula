@@ -1,0 +1,34 @@
+{
+  "panes": [
+    {
+      "name": "Title",
+      "type": "text",
+      "size": [
+        600,
+        64
+      ],
+      "position": [
+        0,
+        120
+      ],
+      "text": "LUMA FONT 0123",
+      "font": "Luma/gl-font/fonts/GlTitle",
+      "font_size": 48
+    },
+    {
+      "name": "Small",
+      "type": "text",
+      "size": [
+        600,
+        32
+      ],
+      "position": [
+        0,
+        40
+      ],
+      "text": "TOTAL 1230 Ω",
+      "font": "Luma/gl-font/fonts/GlTitle",
+      "font_size": 24
+    }
+  ]
+}

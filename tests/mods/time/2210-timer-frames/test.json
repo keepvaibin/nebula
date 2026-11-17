@@ -1,0 +1,58 @@
+{
+  "harness": 1,
+  "name": "2210-timer-frames",
+  "about": "A FRAMES timer after 10: one event exactly 10 frames later, value 1",
+  "proves": [
+    "services.time.timers"
+  ],
+  "mods": [
+    "../mods/tm-tframes"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4224
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-tframes.timer",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-tframes.events",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-tframes.delay",
+      "is": 10
+    },
+    {
+      "fact": "mod.tm-tframes.tv",
+      "is": 1,
+      "when": "all"
+    }
+  ]
+}

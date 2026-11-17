@@ -1,0 +1,49 @@
+{
+  "harness": 1,
+  "name": "1165-number-port-off-step",
+  "about": "80.5 kept for the port option is off its steps: it reads its default 16834",
+  "proves": [
+    "services.mods"
+  ],
+  "mods": [
+    {
+      "path": "../mods/k1-port",
+      "options": {
+        "port": 80.5
+      }
+    }
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4462
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.k1-port.status",
+      "is": 5
+    },
+    {
+      "fact": "mod.k1-port.port",
+      "is": 16834
+    },
+    {
+      "fact": "mod.k1-port.len",
+      "is": 5
+    },
+    {
+      "log": "k1-port: the value kept for its option port \\(80\\.5\\) is not one of its values; it reads 16834",
+      "times": 1
+    }
+  ]
+}

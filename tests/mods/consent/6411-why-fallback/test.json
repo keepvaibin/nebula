@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "6411-why-fallback",
+  "about": "The same mod played in Spanish, which its text block does not give: the manifest's own why",
+  "proves": [
+    "consent.screen"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jc-why",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "language": "UsSpanish",
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "consent.shown.jc-why",
+      "has": {
+        "rows": [
+          {
+            "name": "net.internet",
+            "label": "Internet",
+            "required": false,
+            "new": false,
+            "why": "Sends your best times to the board.",
+            "text": "Se conecta a internet: api.example.org, *.example.net.",
+            "roots": ""
+          }
+        ]
+      },
+      "when": "any"
+    }
+  ]
+}

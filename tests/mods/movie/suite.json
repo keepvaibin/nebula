@@ -1,0 +1,10 @@
+{
+  "harness": 1,
+  "tests": [
+    "3101-movie-play",
+    "3102-movie-args",
+    "3103-movie-subtitles",
+    "3104-movie-skip",
+    "3105-movie-sound-ends"
+  ]
+}

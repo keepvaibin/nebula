@@ -1,0 +1,11 @@
+{
+  "verdict_one_of": [
+    "fail",
+    "crashed"
+  ],
+  "note": "fail naming guard.faulter after 1.6; crashed (dump path and last log lines) before",
+  "reason_has_any": [
+    "faulter",
+    "dmp"
+  ]
+}

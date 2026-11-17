@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "reg-ask",
+  "name": "reg-ask",
+  "summary": "reg-ask (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

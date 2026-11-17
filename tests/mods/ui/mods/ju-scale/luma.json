@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "ju-scale",
+  "name": "ju-scale",
+  "version": "1.0.0",
+  "summary": "J's test mod ju-scale.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

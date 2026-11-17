@@ -1,0 +1,150 @@
+{
+  "harness": 1,
+  "name": "3206-model-show",
+  "about": "jm-show attaches Coin 200 up from the player's base (gap 200), hides it, shows it, detaches it (model.end detach), detaches it again (LUMA_E_HANDLE), attaches it again: handle 2 on the same part (reused)",
+  "proves": [
+    "model.place",
+    "model.show",
+    "model.detach",
+    "model.reuse"
+  ],
+  "mods": [
+    "../mods/jm-show"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3202
+      ]
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3203
+      ]
+    },
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3204
+      ]
+    },
+    {
+      "at": 130,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3205
+      ]
+    },
+    {
+      "at": 140,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3206
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-show.attach",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-show.hide",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-show.show",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-show.detach",
+      "is": 0
+    },
+    {
+      "fact": "mod.jm-show.detach2",
+      "is": -3
+    },
+    {
+      "fact": "mod.jm-show.again",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "follow": "actor",
+        "joint": "",
+        "reused": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.pose.1",
+      "field": "gap",
+      "at_least": 199.0,
+      "when": "any"
+    },
+    {
+      "fact": "model.pose.1",
+      "field": "gap",
+      "at_most": 201.0,
+      "when": "any"
+    },
+    {
+      "fact": "model.pose.1",
+      "field": "shown",
+      "is": false,
+      "when": "any"
+    },
+    {
+      "fact": "model.end.1",
+      "is": {
+        "why": "detach"
+      }
+    },
+    {
+      "fact": "model.attach.2",
+      "has": {
+        "reused": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.pose.2",
+      "field": "shown",
+      "is": true,
+      "when": "last"
+    }
+  ]
+}

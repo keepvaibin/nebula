@@ -1,0 +1,62 @@
+{
+  "harness": 1,
+  "name": "1167-fault-in-body",
+  "about": "a mod's before on MR::getRandom() faults while MR::getRandom(1.5, 4267.5)'s own code calls it: the guard resumes at that boundary inside the body, the body returns as usual, and the next call of the outer function runs its hooks (another mod's before counts 2)",
+  "proves": [
+    "kernel.guard.resume"
+  ],
+  "mods": [
+    "../mods/k1-fault",
+    "../mods/k1-count"
+  ],
+  "faults": [
+    {
+      "mod": "k1-fault"
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "f32(f32, f32)",
+      "args": [
+        1.5,
+        4267.5
+      ]
+    },
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "f32(f32, f32)",
+      "args": [
+        1.5,
+        4267.5
+      ]
+    },
+    {
+      "at": 50,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.k1-fault.armed",
+      "is": 1
+    },
+    {
+      "fact": "mod.k1-fault.survived",
+      "absent": true
+    },
+    {
+      "log": "\\[mod k1-fault\\] GUARD: its code failed \\(before hook: MR::getRandom\\)"
+    },
+    {
+      "fact": "mod.k1-count.count",
+      "count": 2
+    },
+    {
+      "fact": "mod.k1-count.count",
+      "is": 2
+    }
+  ]
+}

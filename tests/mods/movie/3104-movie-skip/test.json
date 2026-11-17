@@ -1,0 +1,88 @@
+{
+  "harness": 1,
+  "name": "3104-movie-skip",
+  "about": "jv-skip plays movies/intro (\"skip\" left true): + during it asks the game's skip question, the pointer on Yes (its button at 0.643, 0.8 of the screen) and A take it, and the movie ends as the game's skipped movies end: its end comes LUMA_OK once (why skip) and the stage goes on: 60 frames on the black screen, then the fade opens in its 30 (picture f330: the stage)",
+  "proves": [
+    "movie.skip",
+    "movie.play"
+  ],
+  "mods": [
+    "../mods/jv-skip"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3101
+      ]
+    },
+    {
+      "at": 80,
+      "hold": [
+        "PLUS"
+      ],
+      "frames": 2
+    },
+    {
+      "at": 100,
+      "pointer": [
+        0.643,
+        0.8
+      ],
+      "frames": 60
+    },
+    {
+      "at": 130,
+      "hold": [
+        "A"
+      ],
+      "frames": 2
+    },
+    {
+      "at": 330,
+      "picture": "f330"
+    },
+    {
+      "at": 350,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jv-skip.play",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-skip.end",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-skip.ends",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "movie.end.1",
+      "has": {
+        "why": "skip"
+      },
+      "when": "any"
+    },
+    {
+      "picture": "f330",
+      "like": "3104-f330",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

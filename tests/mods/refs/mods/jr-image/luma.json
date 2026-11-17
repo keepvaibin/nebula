@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jr-image",
+  "version": "1.0.0",
+  "name": "jr-image",
+  "summary": "jr-image (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

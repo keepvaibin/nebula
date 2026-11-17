@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-methodhas",
+  "name": "lt-methodhas",
+  "summary": "lt-methodhas (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

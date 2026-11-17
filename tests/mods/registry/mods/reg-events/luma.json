@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "reg-events",
+  "name": "reg-events",
+  "summary": "reg-events (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tt-unb-global",
+  "name": "tt-unb-global",
+  "summary": "tt-unb-global (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

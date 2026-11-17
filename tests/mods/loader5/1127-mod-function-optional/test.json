@@ -1,0 +1,28 @@
+{
+  "harness": 1,
+  "name": "1127-mod-function-optional",
+  "about": "An optional export the needed mod lacks leaves the slot null and the mod on",
+  "proves": [
+    "kernel.bind"
+  ],
+  "mods": [
+    "../../loader/mods/lt-lib",
+    "../../loader/mods/lt-uses-opt"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-uses-opt.slot",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-uses-opt.started",
+      "is": 1
+    }
+  ]
+}

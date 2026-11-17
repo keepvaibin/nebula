@@ -1,0 +1,65 @@
+{
+  "harness": 1,
+  "name": "1141-take-out-none",
+  "about": "lt-none (holding nothing) and lt-timer (one frames timer open) taken out: both 0 blocks, 0 bytes; the time service freed the timer's block at the mod's end",
+  "proves": [
+    "kernel.reload.take_out"
+  ],
+  "mods": [
+    "../../loader/mods/lt-none",
+    "../../loader/mods/lt-timer"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "take_out": "lt-none",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.lt-none",
+        "exists": true
+      },
+      "take_out": "lt-timer",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.lt-timer",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-timer.timer_open",
+      "is": 1
+    },
+    {
+      "fact": "takeout.lt-none",
+      "is": {
+        "blocks": 0,
+        "bytes": 0,
+        "stopped": true,
+        "finished": true
+      }
+    },
+    {
+      "fact": "takeout.lt-timer",
+      "is": {
+        "blocks": 0,
+        "bytes": 0,
+        "stopped": true,
+        "finished": true
+      }
+    },
+    {
+      "no_log": "\\[mod lt-(none|timer)\\] held "
+    }
+  ]
+}

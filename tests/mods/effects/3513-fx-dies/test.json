@@ -1,0 +1,105 @@
+{
+  "harness": 1,
+  "name": "3513-fx-dies",
+  "about": "je-fx-dies starts TicoTouchGlow00 on the first Goomba of Good Egg 1 the game animates, then kills it with its own kill (as a stomp does): the handle ends \"actor\" once, as the Goomba's own effects; stopping the ended handle is LUMA_E_HANDLE and a start on the dead Goomba LUMA_E_ARGUMENT, nothing written (the glow on a Goomba, then its death smoke: a person's look)",
+  "proves": [
+    "fx.actor_end"
+  ],
+  "mods": [
+    "../mods/je-fx-dies"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3501
+      ]
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3502
+      ]
+    },
+    {
+      "at": 220,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3503
+      ]
+    },
+    {
+      "at": 260,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.je-fx-dies.seen",
+      "is": 1
+    },
+    {
+      "fact": "mod.je-fx-dies.start",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-dies.kill",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-dies.stop",
+      "is": -3
+    },
+    {
+      "fact": "mod.je-fx-dies.dead",
+      "is": -1
+    },
+    {
+      "fact": "mod.je-fx-dies.none_written",
+      "is": 1
+    },
+    {
+      "fact": "fx.start.1",
+      "has": {
+        "mod": "je-fx-dies",
+        "name": "TicoTouchGlow00",
+        "placeholder": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "fx.end.1",
+      "is": {
+        "why": "actor"
+      }
+    },
+    {
+      "fact": "fx.end.1",
+      "count": 1
+    },
+    {
+      "fact": "fx.start.2",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-fx-dies",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

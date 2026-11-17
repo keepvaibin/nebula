@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jm-hand",
+  "name": "jm-hand",
+  "version": "1.0.0",
+  "summary": "J's test mod jm-hand.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

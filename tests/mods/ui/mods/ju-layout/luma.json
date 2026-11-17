@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "ju-layout",
+  "name": "ju-layout",
+  "version": "1.0.0",
+  "summary": "J's test mod ju-layout.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

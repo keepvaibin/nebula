@@ -1,0 +1,28 @@
+{
+  "harness": 1,
+  "name": "12b-save-continue",
+  "about": "continue_from starts with the save the earlier test left",
+  "proves": [
+    "harness.self"
+  ],
+  "continue_from": "12a-save-write",
+  "mods": [
+    "../mods/saveprobe"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.saveprobe.found",
+      "is": 4660
+    }
+  ]
+}

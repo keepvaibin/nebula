@@ -1,0 +1,127 @@
+{
+  "harness": 1,
+  "name": "2263-copy-erase",
+  "about": "file 1 saved with a value, copied to file 2 by the game's copy (as the file select): file 2 loaded has it (2263); file 2 erased by the game's erase, loaded again: LUMA_E_NOT_FOUND; file 1 loaded again: the value (2264)",
+  "proves": [
+    "services.save"
+  ],
+  "mods": [
+    "../mods/save-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4251
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4259
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.confirm_ready",
+        "is": 1
+      },
+      "hold": [
+        "RIGHT"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.focused",
+        "is": 1
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.done_ready",
+        "is": 1
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.saved",
+        "is": 1
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4254
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.chain_done",
+        "is": 1
+      },
+      "timeout": 1800,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-a.asked",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.saved",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.save_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.copy_get",
+      "is": 8802
+    },
+    {
+      "fact": "mod.save-a.copy_file",
+      "is": 2
+    },
+    {
+      "fact": "mod.save-a.copy_character",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.erased_get",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-a.kept_get",
+      "is": 8802
+    },
+    {
+      "fact": "mod.save-a.kept_file",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.kept_character",
+      "is": 0
+    }
+  ]
+}

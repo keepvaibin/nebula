@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "2254-watch-stopped",
+  "about": "mods.watch_mods: mw-watcher watches from its start; the run takes mw-stops out; one STOPPED event comes, kind 2, LUMA_OK, its data the stopped mod's id with its length",
+  "proves": [
+    "services.mods",
+    "services.mods.stopped"
+  ],
+  "mods": [
+    "../mods/mw-watcher",
+    "../mods/mw-stops"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "take_out": "mw-stops"
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mw-watcher.watch",
+      "is": 0
+    },
+    {
+      "fact": "mod.mw-watcher.stopped_kind",
+      "is": 2
+    },
+    {
+      "fact": "mod.mw-watcher.stopped_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.mw-watcher.stopped_named",
+      "is": 1
+    },
+    {
+      "fact": "mod.mw-watcher.stopped_count",
+      "is": 1
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "harness": 1,
+  "tests": [
+    "2461-light",
+    "2462-light-args",
+    "2463-light-limit"
+  ]
+}

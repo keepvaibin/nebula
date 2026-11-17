@@ -1,0 +1,65 @@
+{
+  "harness": 1,
+  "name": "2233-read-noted",
+  "about": "get_text twice: one System.ClipboardRead entry, count 2, log only",
+  "proves": [
+    "services.system.clipboard"
+  ],
+  "mods": [
+    "../mods/sys-clip-twice"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4242
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4243
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-clip-twice.get_1",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-clip-twice.get_2",
+      "is": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "sys-clip-twice",
+        "source": "code",
+        "level": "note",
+        "code": 141,
+        "count": 2
+      },
+      "when": "any"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "harness": 1,
+  "name": "1131-noresult-wrap",
+  "about": "A wrap on a reference result binds; one that neither proceeds nor writes: the function runs, said once",
+  "proves": [
+    "kernel.hook.wrap"
+  ],
+  "mods": [
+    "../mods/lt-noresult-wrap"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4246
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 70,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4246
+      ],
+      "fact": "ran_again"
+    },
+    {
+      "at": 80,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-noresult-wrap.started",
+      "is": 1
+    },
+    {
+      "fact": "ran",
+      "is": 3
+    },
+    {
+      "fact": "ran_again",
+      "is": 3
+    },
+    {
+      "log": "lt-noresult-wrap: a hook on CameraLocalUtil::getVecReg.*gave no result, so the game's own function ran",
+      "times": 1
+    },
+    {
+      "no_log": "a hook on .*getVecReg.*seen"
+    }
+  ]
+}

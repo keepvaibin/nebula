@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "kd-other",
+  "name": "kd-other",
+  "summary": "kd-other (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

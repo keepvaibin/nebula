@@ -1,0 +1,31 @@
+{
+  "harness": 1,
+  "name": "1132-method-has",
+  "about": "A virtual call asked with another signature: L505 lists the virtuals with a row (Name.MethodHas)",
+  "proves": [
+    "kernel.bind",
+    "kernel.refusal",
+    "kernel.bind.method"
+  ],
+  "mods": [
+    {
+      "path": "../../loader/mods/lt-methodhas",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-methodhas.started",
+      "absent": true
+    },
+    {
+      "log": "lt-methodhas: .*virtual function \"LiveActor::calcAndSetBaseMtx\" with the signature \"int\\(\\)\" \\(its signatures: \"void\\(\\)\"\\)"
+    }
+  ]
+}

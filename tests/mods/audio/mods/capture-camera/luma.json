@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "capture-camera",
+  "name": "capture-camera",
+  "summary": "capture-camera (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "capture.camera",
+      "why": "The capture test asks for it."
+    }
+  ]
+}

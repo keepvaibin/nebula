@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "ju-label",
+  "name": "ju-label",
+  "version": "1.0.0",
+  "summary": "J's test mod ju-label.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

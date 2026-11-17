@@ -1,0 +1,163 @@
+{
+  "harness": 1,
+  "name": "1503-tables-by-name",
+  "about": "nm-tables at start: a table of the game's data by its name (EventUtil.cpp's cCometNames): its type, count, size and data; set_table writes the mod's own name in place 1 and the game's two functions that read the table give and find it; a table of whole numbers and a record read by name; each refusal said",
+  "proves": [
+    "kernel.tables.by_name",
+    "kernel.tables.set",
+    "kernel.tables.refusals"
+  ],
+  "mods": [
+    "../mods/nm-tables"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.nm-tables.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.found",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.type_char_pointer",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.count",
+      "is": 5
+    },
+    {
+      "fact": "mod.nm-tables.size",
+      "is": 40
+    },
+    {
+      "fact": "mod.nm-tables.first_red",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.call_before",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.set",
+      "is": 0
+    },
+    {
+      "fact": "mod.nm-tables.data_after",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.call_after",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.id_after",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.ghost_gone",
+      "is": 0
+    },
+    {
+      "fact": "mod.nm-tables.whole_found",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.whole_type",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.whole_count",
+      "is": 16
+    },
+    {
+      "fact": "mod.nm-tables.whole_9",
+      "is": 400
+    },
+    {
+      "fact": "mod.nm-tables.record_found",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.record_type",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.record_count",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.record_size",
+      "is": 16
+    },
+    {
+      "fact": "mod.nm-tables.record_second",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.r_table_no_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.nm-tables.r_table_no_such",
+      "is": -1
+    },
+    {
+      "fact": "mod.nm-tables.r_table_cleared",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables.r_set_no_such",
+      "is": -1
+    },
+    {
+      "fact": "mod.nm-tables.r_set_past_end",
+      "is": -2
+    },
+    {
+      "fact": "mod.nm-tables.r_set_straddle",
+      "is": -2
+    },
+    {
+      "fact": "mod.nm-tables.r_set_none",
+      "is": -2
+    },
+    {
+      "fact": "mod.nm-tables.r_set_null",
+      "is": -2
+    },
+    {
+      "fact": "mod.nm-tables.r_kept",
+      "is": 1
+    },
+    {
+      "log": "\\[mod nm-tables\\] table:\\ no\\ name"
+    },
+    {
+      "log": "\\[mod nm-tables\\] table\\ Game/Util/EventUtil\\.cpp\\#noSuchTable:\\ the\\ game\\ has\\ no\\ such\\ table"
+    },
+    {
+      "log": "\\[mod nm-tables\\] set_table\\ noSuchTable:\\ the\\ game\\ has\\ no\\ such\\ table"
+    },
+    {
+      "log": "\\[mod nm-tables\\] set_table\\ Game/Util/EventUtil\\.cpp\\#cCometNames:\\ 8\\ bytes\\ at\\ 40\\ are\\ not\\ inside\\ its\\ 40"
+    },
+    {
+      "log": "\\[mod nm-tables\\] set_table\\ Game/Util/EventUtil\\.cpp\\#cCometNames:\\ 8\\ bytes\\ at\\ 36\\ are\\ not\\ inside\\ its\\ 40"
+    },
+    {
+      "log": "\\[mod nm-tables\\] set_table\\ Game/Util/EventUtil\\.cpp\\#cCometNames:\\ 0\\ bytes\\ at\\ 0\\ are\\ not\\ inside\\ its\\ 40"
+    }
+  ]
+}

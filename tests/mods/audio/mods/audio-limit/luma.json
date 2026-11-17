@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "audio-limit",
+  "name": "audio-limit",
+  "summary": "audio-limit (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

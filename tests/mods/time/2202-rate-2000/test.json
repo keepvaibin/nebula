@@ -1,0 +1,109 @@
+{
+  "harness": 1,
+  "name": "2202-rate-2000",
+  "about": "Rate 2000: 2 world steps a frame, on_step twice a frame at places 0 and 1, the sound at 2000",
+  "proves": [
+    "services.time",
+    "services.time.handlers"
+  ],
+  "mods": [
+    "../mods/tm-r2000"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-r2000.set",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-r2000.df",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r2000.ds",
+      "is": 2,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r2000.steps",
+      "is": 2,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r2000.rate",
+      "is": 2000,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r2000.calls",
+      "is": 2,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r2000.sif",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r2000.sound",
+      "is": 2000,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    }
+  ]
+}

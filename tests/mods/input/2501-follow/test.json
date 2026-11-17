@@ -1,0 +1,81 @@
+{
+  "harness": 1,
+  "name": "2501-follow",
+  "about": "in-follow's key option jump2 (default \"a\") goes down while the game's A is held 30 frames: one press, one release, at least 25 frames down; spin2 reads unbound; the start's checks answer as the header says",
+  "proves": [
+    "services.input"
+  ],
+  "mods": [
+    "../mods/in-follow"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.in-follow.spin2_bound",
+        "exists": true
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 30
+    },
+    {
+      "after": {
+        "fact": "mod.in-follow.released",
+        "at_least": 1
+      },
+      "end": true,
+      "timeout": 2400
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-follow.jump2_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-follow.spin2_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-follow.nope_not_found",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-follow.small_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-follow.zero_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-follow.first_up",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-follow.pressed",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-follow.released",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-follow.longest",
+      "at_least": 25
+    },
+    {
+      "fact": "mod.in-follow.spin2_bound",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-follow.read_failed",
+      "absent": true
+    }
+  ]
+}

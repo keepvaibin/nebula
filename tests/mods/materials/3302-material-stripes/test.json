@@ -1,0 +1,66 @@
+{
+  "harness": 1,
+  "name": "3302-material-stripes",
+  "about": "jt-stripes attaches its glTF sphere beside the player, its material drawn through the mod's own surface shader shaders/Stripes (plan 3.4: cooked at install by G's cook, its programs built here, their flags from the cook's flags.tsv): white with still blue bands 25 units high, lit by the stage as the game's own models are (the lit flag: shading and a highlight on both colours, the bands' blue darker on the shadowed side), not the placeholder and not flat (a person's look, then the reference)",
+  "proves": [
+    "material.shader",
+    "material.shader_lit"
+  ],
+  "mods": [
+    "../mods/jt-stripes"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3301
+      ]
+    },
+    {
+      "at": 120,
+      "picture": "front"
+    },
+    {
+      "at": 140,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jt-stripes.stripes",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "mod": "jt-stripes",
+        "model": "jt-stripes:stripes",
+        "placeholder": false,
+        "drawn": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jt-stripes",
+        "source": "content"
+      },
+      "absent": true
+    },
+    {
+      "picture": "front",
+      "like": "3302-front",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "harness": 1,
+  "name": "3123-repeat-ja",
+  "about": "3123 in the played language (UsFrench: RMGE01 has no Japanese): the entry's text is the French row, its english the English row",
+  "proves": [
+    "modlog.text"
+  ],
+  "mods": [
+    "../mods/jl-repeat"
+  ],
+  "language": "UsFrench",
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jl-repeat",
+        "code": 901,
+        "count": 1000,
+        "english": "jl.example was called off the game thread, so this hook did not run there"
+      },
+      "when": "last",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "text": "jl.example was called off the game thread, so this hook did not run there"
+      },
+      "absent": true
+    }
+  ]
+}

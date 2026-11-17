@@ -1,0 +1,22 @@
+{
+  "harness": 1,
+  "tests": [
+    "3801-ui-open",
+    "3802-ui-args",
+    "3803-ui-text",
+    "3804-ui-again",
+    "3805-ui-limit",
+    "3806-ui-anim",
+    "3807-ui-layout",
+    "3808-ui-font",
+    "3809-ui-font-missing",
+    "3810-ui-scale-alive",
+    "3811-ui-menu",
+    "3812-ui-boot",
+    "3813-ui-paused",
+    "3814-ui-position",
+    "3815-ui-share",
+    "3816-ui-label",
+    "3817-ui-play-pane"
+  ]
+}

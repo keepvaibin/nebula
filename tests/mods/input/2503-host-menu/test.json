@@ -1,0 +1,60 @@
+{
+  "harness": 1,
+  "name": "2503-host-menu",
+  "about": "A held 60 frames with Settings open gives in-follow no press; after Esc closes it, A held 30 frames gives exactly one",
+  "proves": [
+    "services.input"
+  ],
+  "mods": [
+    "../mods/in-follow"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.in-follow.spin2_bound",
+        "exists": true
+      },
+      "settings": "controls"
+    },
+    {
+      "at": 600,
+      "hold": [
+        "A"
+      ],
+      "frames": 60
+    },
+    {
+      "at": 720,
+      "key": "esc"
+    },
+    {
+      "at": 840,
+      "hold": [
+        "A"
+      ],
+      "frames": 30
+    },
+    {
+      "after": {
+        "fact": "mod.in-follow.released",
+        "at_least": 1
+      },
+      "end": true,
+      "timeout": 1200
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-follow.pressed",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-follow.released",
+      "is": 1
+    }
+  ]
+}

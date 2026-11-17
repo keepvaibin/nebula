@@ -1,0 +1,64 @@
+{
+  "harness": 1,
+  "name": "2117-library-acts",
+  "about": "A library acting for its caller: ka-lib (granted net.local) opens a udp socket naming ka-user (which asks no permission) and one naming itself; the caller's socket is not the library's (close naming the library: LUMA_E_HANDLE); after ka-user is taken out, the library's own socket is still open (close: LUMA_OK)",
+  "proves": [
+    "services.registry",
+    "services.registry.acting"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ka-lib",
+      "permissions": {
+        "net.local": "allow"
+      }
+    },
+    "../mods/ka-user"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4270
+      ]
+    },
+    {
+      "at": 12,
+      "take_out": "ka-user"
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4271
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ka-user.for",
+      "is": 0
+    },
+    {
+      "fact": "mod.ka-user.self",
+      "is": 0
+    },
+    {
+      "fact": "mod.ka-lib.for_not_lib",
+      "is": -3
+    },
+    {
+      "fact": "mod.ka-lib.self_after",
+      "is": 0
+    }
+  ]
+}

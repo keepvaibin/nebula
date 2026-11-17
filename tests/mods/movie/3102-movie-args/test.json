@@ -1,0 +1,95 @@
+{
+  "harness": 1,
+  "name": "3102-movie-args",
+  "about": "jv-args: every refusal of movie 1.0 answers its status and writes no handle: a movie in no store (LUMA_E_NOT_FOUND, Content.MissingMovie once), a null name and a null out (LUMA_E_ARGUMENT), stop of a handle never given (LUMA_E_HANDLE); a movie played and stopped at once: LUMA_OK, its end LUMA_E_CANCELLED once; a second stop and position after it LUMA_E_HANDLE",
+  "proves": [
+    "movie.play"
+  ],
+  "mods": [
+    "../mods/jv-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3101
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jv-args.missing",
+      "is": -7,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-args.null_name",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-args.null_out",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-args.stop_unknown",
+      "is": -3,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-args.none_written",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-args.play",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-args.stop",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-args.stop_again",
+      "is": -3,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-args.position_ended",
+      "is": -3,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-args.end",
+      "is": -12,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-args.ends",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jv-args",
+        "code": 673
+      },
+      "count": 1
+    }
+  ]
+}

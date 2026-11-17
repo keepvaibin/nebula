@@ -1,0 +1,64 @@
+{
+  "harness": 1,
+  "name": "2246-ids-meet",
+  "about": "n00e263ff68 and n7254c5c586 derive the same number (17707348): the first asked gets it, the second the next, Mods.IdMoved once naming both",
+  "proves": [
+    "services.mods.ids"
+  ],
+  "mods": [
+    "../mods/mods-a"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4252
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4253
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-a.breath1",
+      "is": 18409466
+    },
+    {
+      "fact": "mod.mods-a.c1",
+      "is": 17707348
+    },
+    {
+      "fact": "mod.mods-a.c2",
+      "is": 17707349
+    },
+    {
+      "fact": "mod.mods-a.ka",
+      "is": 33489625
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "mods-a",
+        "source": "code",
+        "level": "note",
+        "code": 160,
+        "count": 1
+      },
+      "when": "any"
+    }
+  ]
+}

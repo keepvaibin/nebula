@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "name": "11-import-matches-check",
+  "about": "A broken .luma imported by the game shows LumaLink check's lines",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    {
+      "path": "../fixtures/broken.luma",
+      "install": "import",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 60,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "import.broken.luma",
+      "exists": true
+    }
+  ]
+}

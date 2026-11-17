@@ -1,0 +1,62 @@
+{
+  "harness": 1,
+  "name": "3853-font-cooked",
+  "about": "gl-font (no code) brings assets/fonts/GlTitle.font.json and GlTitle.ttf: the cook makes Luma/gl-font/fonts/GlTitle.brfnt (13 glyphs on 1 sheet), its .kern (2 pairs) and .fallback (MessageFont26) (cook.font), notes the omega the font lacks (Cook.Font.Missing), cooks GlFont's layout naming the font, and the stage plays. Drawing it is J's picture test (ui contract 10)",
+  "proves": [
+    "layout.font"
+  ],
+  "mods": [
+    {
+      "path": "../mods/gl-font",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "cook.font",
+      "has": {
+        "mod": "gl-font",
+        "other": "MessageFont26",
+        "glyphs": 13,
+        "sheets": 1,
+        "kern": 2,
+        "size": 48,
+        "missing": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "cook.layout",
+      "has": {
+        "mod": "gl-font",
+        "other": "LayoutData/GlFont.arc/blyt/GlFont.brlyt",
+        "texts": 2
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "gl-font",
+        "level": "error"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

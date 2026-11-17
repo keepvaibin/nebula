@@ -1,0 +1,16 @@
+{
+  "format": "1.0",
+  "version": "1.0.0",
+  "summary": "J's import test: takes over jv-old.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "id": "jv-takes",
+  "name": "jv-takes",
+  "takes_over": [
+    "jv-old"
+  ]
+}

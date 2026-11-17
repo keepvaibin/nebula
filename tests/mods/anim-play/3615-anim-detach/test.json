@@ -1,0 +1,67 @@
+{
+  "harness": 1,
+  "name": "3615-anim-detach",
+  "about": "ja-detach plays Sway on its model, then detaches the model: the play ends (LUMA_E_CANCELLED, actor)",
+  "proves": [
+    "anim.end"
+  ],
+  "mods": [
+    "../mods/ja-detach"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3601
+      ]
+    },
+    {
+      "at": 90,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3602
+      ]
+    },
+    {
+      "at": 160,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ja-detach.play",
+      "is": 0
+    },
+    {
+      "fact": "mod.ja-detach.detach",
+      "is": 0
+    },
+    {
+      "fact": "anim.end.1",
+      "is": {
+        "why": "actor"
+      }
+    },
+    {
+      "fact": "mod.ja-detach.ev1_end_status",
+      "is": -12
+    },
+    {
+      "fact": "mod.ja-detach.ev1_end_why",
+      "is": 3
+    },
+    {
+      "fact": "mod.ja-detach.ev1_ends",
+      "is": 1
+    }
+  ]
+}

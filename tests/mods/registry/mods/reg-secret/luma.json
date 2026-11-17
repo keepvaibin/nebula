@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "reg-secret",
+  "name": "reg-secret",
+  "summary": "reg-secret (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "test.secret",
+      "why": "The registry test asks for it."
+    }
+  ]
+}

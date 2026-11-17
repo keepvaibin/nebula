@@ -1,0 +1,50 @@
+{
+  "harness": 1,
+  "name": "1122-mod-function",
+  "about": "A kind 6 import binds a needed mod's export; the needed mod loads first, hooks keep the list's order",
+  "proves": [
+    "kernel.bind"
+  ],
+  "mods": [
+    "../../loader/mods/lt-uses",
+    "../../loader/mods/lt-lib"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4253
+      ],
+      "fact": "trace"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-uses.slot",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-uses.sum",
+      "is": 5
+    },
+    {
+      "fact": "mod.lt-uses.lib_ready",
+      "is": 1
+    },
+    {
+      "fact": "trace",
+      "is": 12
+    },
+    {
+      "fact": "mod.lt-lib.gone",
+      "absent": true
+    }
+  ]
+}

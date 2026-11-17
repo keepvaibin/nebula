@@ -1,0 +1,75 @@
+{
+  "harness": 1,
+  "name": "2504-controls-row",
+  "about": "in-follow's spin2 follows its control (bound 0) until its row in Settings > Controls is given Tab and applied: then it is bound (1)",
+  "proves": [
+    "services.input"
+  ],
+  "mods": [
+    "../mods/in-follow"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.in-follow.spin2_bound",
+        "exists": true
+      },
+      "settings": "controls"
+    },
+    {
+      "at": 600,
+      "key": "up"
+    },
+    {
+      "at": 610,
+      "key": "up"
+    },
+    {
+      "at": 620,
+      "key": "up"
+    },
+    {
+      "at": 630,
+      "key": "up"
+    },
+    {
+      "at": 650,
+      "key": "enter"
+    },
+    {
+      "at": 670,
+      "key": "tab"
+    },
+    {
+      "at": 690,
+      "key": "space"
+    },
+    {
+      "at": 710,
+      "key": "esc"
+    },
+    {
+      "after": {
+        "fact": "mod.in-follow.spin2_bound",
+        "is": 1
+      },
+      "end": true,
+      "timeout": 1200
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-follow.spin2_bound",
+      "is": 0,
+      "when": "first"
+    },
+    {
+      "fact": "mod.in-follow.spin2_bound",
+      "is": 1
+    }
+  ]
+}

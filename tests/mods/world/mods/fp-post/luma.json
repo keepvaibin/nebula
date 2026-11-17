@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "fp-post",
+  "name": "fp-post",
+  "version": "1.0.0",
+  "summary": "J's test mod fp-post.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "saveprobe",
+  "version": "1.0.0",
+  "name": "saveprobe",
+  "summary": "saveprobe (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

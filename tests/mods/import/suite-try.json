@@ -1,0 +1,10 @@
+{
+  "harness": 1,
+  "tests": [
+    "6101-import-good",
+    "6102-import-refused",
+    "6103-import-needs",
+    "6104-import-already",
+    "6105-import-takes-over"
+  ]
+}

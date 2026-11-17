@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "mt-reader",
+  "name": "mt-reader",
+  "summary": "mt-reader (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

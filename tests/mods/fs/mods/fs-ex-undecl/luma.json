@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fs-ex-undecl",
+  "name": "fs-ex-undecl",
+  "summary": "fs-ex-undecl (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

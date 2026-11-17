@@ -1,0 +1,61 @@
+{
+  "harness": 1,
+  "name": "3141-no-compiler",
+  "about": "The shader compiler moved away: one Start.PartMissing line, every mod off, the title reached",
+  "proves": [
+    "startcheck.part",
+    "startcheck.allmodsoff"
+  ],
+  "mods": [
+    {
+      "path": "../../materials/mods/jt-stripes",
+      "loads": false
+    }
+  ],
+  "renderers": [
+    "d3d12"
+  ],
+  "hide_game_files": [
+    "dxc/dxc.exe"
+  ],
+  "steps": [
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "startcheck",
+      "has": {
+        "part": "Start.Part.Compiler"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog",
+      "count": 1,
+      "matching": {
+        "mod": "nebula",
+        "source": "cook",
+        "level": "error",
+        "code": 0,
+        "text": "The shader compiler is missing or damaged, so mods are off this time."
+      }
+    },
+    {
+      "fact": "modlog.notice",
+      "has": {
+        "row": "ModLog.Summary",
+        "count": 1
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "mod.jt-stripes.loaded",
+      "absent": true
+    }
+  ]
+}

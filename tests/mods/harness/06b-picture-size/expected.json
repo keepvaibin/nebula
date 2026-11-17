@@ -1,0 +1,7 @@
+{
+  "verdict": "fail",
+  "reason_has": [
+    "16x16"
+  ],
+  "reason_has_pattern": "[0-9]+x[0-9]+.*16x16|16x16.*[0-9]+x[0-9]+"
+}

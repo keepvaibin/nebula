@@ -1,0 +1,79 @@
+{
+  "harness": 1,
+  "name": "2463-light-limit",
+  "about": "fl-limit: 16 lights of one mod, each LUMA_OK; the 17th LUMA_E_LIMIT (Service.Limit once); one removed, one added again",
+  "proves": [
+    "draw.light.limit"
+  ],
+  "mods": [
+    "../mods/fl-limit"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2461
+      ]
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2462
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fl-limit.ok",
+      "is": 16
+    },
+    {
+      "fact": "mod.fl-limit.over",
+      "is": -4
+    },
+    {
+      "fact": "mod.fl-limit.remove",
+      "is": 0
+    },
+    {
+      "fact": "mod.fl-limit.again",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fl-limit",
+        "code": 104
+      },
+      "count": 1
+    },
+    {
+      "fact": "draw.light.end.1",
+      "has": {
+        "why": "removed"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "draw.light.add.17",
+      "has": {
+        "mod": "fl-limit"
+      },
+      "when": "any"
+    }
+  ]
+}

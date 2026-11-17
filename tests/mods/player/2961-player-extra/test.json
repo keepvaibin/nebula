@@ -1,0 +1,68 @@
+{
+  "harness": 1,
+  "name": "2961-player-extra",
+  "about": "player: make before a scene LUMA_E_STATE; on the stage three extra players with no input, the fourth LUMA_E_LIMIT, a wrong pad and a small init LUMA_E_ARGUMENT, remove LUMA_OK then LUMA_E_HANDLE, a make after it LUMA_OK",
+  "proves": [
+    "services.player"
+  ],
+  "mods": [
+    "../mods/pl-extra"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4290
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.pl-extra.start_make",
+      "is": -18
+    },
+    {
+      "fact": "mod.pl-extra.made",
+      "is": 3
+    },
+    {
+      "fact": "mod.pl-extra.fourth",
+      "is": -4
+    },
+    {
+      "fact": "mod.pl-extra.bad_pad",
+      "is": -1
+    },
+    {
+      "fact": "mod.pl-extra.small",
+      "is": -1
+    },
+    {
+      "fact": "mod.pl-extra.remove",
+      "is": 0
+    },
+    {
+      "fact": "mod.pl-extra.remove_again",
+      "is": -3
+    },
+    {
+      "fact": "mod.pl-extra.again",
+      "is": 0
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "harness": 1,
+  "name": "3602-walk-not-a-joint",
+  "about": "ga-walk-bad's animation also turns Hat, no joint of the Goomba: the file is refused naming the animation, the node and the model (Cook.Anim.NotAJoint, rule 804), no clip is made, and the stage plays with the game's own walk",
+  "proves": [
+    "anim.replace"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ga-walk-bad",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "ga-walk-bad",
+        "level": "error",
+        "code": 804
+      },
+      "when": "any"
+    },
+    {
+      "fact": "cook.model",
+      "matching": {
+        "mod": "ga-walk-bad"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "harness": 1,
+  "name": "3205-model-skeleton",
+  "about": "jm-skeleton attaches Luigi following the player's skeleton: LUMA_OK, Luigi's joints mapped to the player's of their names, each on it every frame (worst under 1 unit), shown (Luigi's body over Mario's, moving with him: a person's look)",
+  "proves": [
+    "model.skeleton_follow"
+  ],
+  "mods": [
+    "../mods/jm-skeleton"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-skeleton.attach",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "mod": "jm-skeleton",
+        "model": "Luigi",
+        "follow": "skeleton",
+        "placeholder": false,
+        "drawn": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.attach.1",
+      "field": "mapped",
+      "more": 0,
+      "when": "any"
+    },
+    {
+      "fact": "model.pose.1",
+      "field": "worst",
+      "at_most": 1.0,
+      "when": "all"
+    },
+    {
+      "fact": "model.pose.1",
+      "field": "shown",
+      "is": true,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-skeleton",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "verdict": "setup-failed",
+  "reason_has": [
+    "no live object of class Kuribo",
+    "99"
+  ]
+}

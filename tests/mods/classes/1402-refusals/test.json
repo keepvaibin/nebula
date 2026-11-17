@@ -1,0 +1,119 @@
+{
+  "harness": 1,
+  "name": "1402-refusals",
+  "about": "define_class refuses each kind of wrong definition with its number and words, and defines the right ones",
+  "proves": [
+    "kernel.classes.refusals"
+  ],
+  "mods": [
+    "../mods/lc-refuse"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 90,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-refuse.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-refuse.r_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.lc-refuse.r_small",
+      "is": -1
+    },
+    {
+      "fact": "mod.lc-refuse.r_no_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.lc-refuse.r_long_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.lc-refuse.r_no_base",
+      "is": -1
+    },
+    {
+      "log": "define_class LcR0: base NoSuchClass is no class the game has a row for"
+    },
+    {
+      "fact": "mod.lc-refuse.r_align",
+      "is": -1
+    },
+    {
+      "fact": "mod.lc-refuse.r_name_game_class",
+      "is": -2
+    },
+    {
+      "fact": "mod.lc-refuse.r_name_factory",
+      "is": -2
+    },
+    {
+      "fact": "mod.lc-refuse.r_no_virtual",
+      "is": -4
+    },
+    {
+      "log": "define_class LcR0: override JetTurtle::noSuchFunction void\\(\\) names no virtual function the game declares"
+    },
+    {
+      "fact": "mod.lc-refuse.r_not_base",
+      "is": -4
+    },
+    {
+      "fact": "mod.lc-refuse.r_no_hook",
+      "is": -4
+    },
+    {
+      "fact": "mod.lc-refuse.r_no_maker",
+      "is": -5
+    },
+    {
+      "log": "define_class LcR0: the factory has no row NoSuchMaker to make its base"
+    },
+    {
+      "fact": "mod.lc-refuse.r_no_placement",
+      "is": -5
+    },
+    {
+      "fact": "mod.lc-refuse.r_one",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-refuse.r_one_named",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-refuse.r_again",
+      "is": -2
+    },
+    {
+      "fact": "mod.lc-refuse.r_two",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-refuse.r_replaced_twice",
+      "is": -2
+    },
+    {
+      "log": "define_class LcR3: SignBoard is replaced by another class already"
+    },
+    {
+      "fact": "mod.lc-refuse.r_name_is_replaced",
+      "is": -2
+    },
+    {
+      "fact": "mod.lc-refuse.r_unknown_number",
+      "is": -1
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "harness": 1,
+  "tests": [
+    "3871-sound-cooked",
+    "3872-sound-refused",
+    "3873-sound-replace"
+  ]
+}

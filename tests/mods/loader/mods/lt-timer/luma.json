@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-timer",
+  "name": "lt-timer",
+  "summary": "lt-timer (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

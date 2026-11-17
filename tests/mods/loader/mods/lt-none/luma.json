@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-none",
+  "name": "lt-none",
+  "summary": "lt-none (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

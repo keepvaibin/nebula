@@ -1,0 +1,29 @@
+{
+  "harness": 1,
+  "name": "20b-class-none-live",
+  "about": "A known class with no n-th live object fails naming class and number",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "read": "NameObj.mName",
+      "of": "class:Kuribo#99",
+      "type": "const char *",
+      "fact": "kuribo.name"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": []
+}

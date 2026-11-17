@@ -1,0 +1,84 @@
+{
+  "harness": 1,
+  "name": "3616-anim-again",
+  "about": "ja-again plays Sway, then Nod on the same model: Sway ends replaced (LUMA_E_CANCELLED), Nod plays to its end",
+  "proves": [
+    "anim.end"
+  ],
+  "mods": [
+    "../mods/ja-again"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3601
+      ]
+    },
+    {
+      "at": 90,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3602
+      ]
+    },
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ja-again.play",
+      "is": 0
+    },
+    {
+      "fact": "mod.ja-again.nod",
+      "is": 0
+    },
+    {
+      "fact": "anim.end.1",
+      "is": {
+        "why": "replaced"
+      }
+    },
+    {
+      "fact": "mod.ja-again.ev1_end_why",
+      "is": 2
+    },
+    {
+      "fact": "anim.play.2",
+      "has": {
+        "clip": "Nod"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "anim.end.2",
+      "is": {
+        "why": "end"
+      }
+    },
+    {
+      "fact": "mod.ja-again.ev2_end_why",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ja-again",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

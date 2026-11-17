@@ -1,0 +1,78 @@
+{
+  "harness": 1,
+  "name": "3105-movie-sound-ends",
+  "about": "jv-sound (jv-play's code, case 1) plays movies/intro that has sound (an Ogg track named by its .movie.json, 240 frames, cooked with audio_seconds 8): its end comes LUMA_OK once (LUMA_MOVIE_EVENT_ENDED, why end)",
+  "proves": [
+    "movie.play",
+    "movie.av1"
+  ],
+  "mods": [
+    "../mods/jv-sound"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 120,
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3101
+      ]
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3102
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.jv-sound.ends",
+        "is": 1
+      },
+      "end": true,
+      "timeout": 1500
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jv-sound.play",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-sound.frames",
+      "more": 0
+    },
+    {
+      "fact": "mod.jv-sound.end",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-sound.ends",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-sound.end_kind",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "movie.end.1",
+      "has": {
+        "why": "end"
+      },
+      "when": "any"
+    }
+  ]
+}

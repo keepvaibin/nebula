@@ -1,0 +1,70 @@
+{
+  "harness": 1,
+  "name": "3503-fx-joint",
+  "about": "je-fx-joint starts TicoTouchGlow00 at JeNoJoint, a joint the player's model lacks: LUMA_OK, the effect at the base with particles, Content.MissingJoint once",
+  "proves": [
+    "fx.joint"
+  ],
+  "mods": [
+    "../mods/je-fx-joint"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3501
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.je-fx-joint.start",
+      "is": 0
+    },
+    {
+      "fact": "fx.start.1",
+      "has": {
+        "mod": "je-fx-joint",
+        "name": "TicoTouchGlow00",
+        "joint": "JeNoJoint",
+        "placeholder": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "fx.alive.1",
+      "field": "particles",
+      "more": 0,
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "je-fx-joint",
+        "source": "content",
+        "level": "error",
+        "code": 626
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-fx-joint",
+        "code": 626
+      },
+      "count": 1
+    }
+  ]
+}

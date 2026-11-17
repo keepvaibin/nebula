@@ -1,0 +1,8 @@
+{
+  "harness": 1,
+  "tests": [
+    "6604-block",
+    "6605-blocked-after",
+    "6606-unblock"
+  ]
+}

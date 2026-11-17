@@ -1,0 +1,4 @@
+{
+  "verdict": "pass",
+  "note": "before the fix the after-cond never held: timeout"
+}

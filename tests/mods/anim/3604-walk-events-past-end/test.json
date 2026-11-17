@@ -1,0 +1,48 @@
+{
+  "harness": 1,
+  "name": "3604-walk-events-past-end",
+  "about": "ga-events-bad puts an event at frame 40 of the Goomba's walk, whose last frame is 39: the file is refused naming the place, the frame, the clip and its last frame (Cook.Events.PastEnd, rule 804), no events file is made, and the stage plays",
+  "proves": [
+    "anim.events"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ga-events-bad",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "ga-events-bad",
+        "level": "error",
+        "code": 804
+      },
+      "when": "any"
+    },
+    {
+      "fact": "cook.events",
+      "matching": {
+        "mod": "ga-events-bad"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

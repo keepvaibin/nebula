@@ -1,0 +1,38 @@
+{
+  "harness": 1,
+  "name": "6402b-escape",
+  "about": "Escape on the question is NOT NOW (consent 2.4)",
+  "proves": [
+    "consent.notnow"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jc-net",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 180,
+      "key": "esc"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "consent.answer.jc-net",
+      "has": {
+        "code": "no"
+      },
+      "when": "any"
+    }
+  ]
+}

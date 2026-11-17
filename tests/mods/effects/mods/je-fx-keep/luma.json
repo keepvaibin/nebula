@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "je-fx-keep",
+  "name": "je-fx-keep",
+  "version": "1.0.0",
+  "summary": "J's test mod je-fx-keep.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

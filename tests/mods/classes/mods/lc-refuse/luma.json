@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lc-refuse",
+  "name": "lc-refuse",
+  "summary": "lc-refuse (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

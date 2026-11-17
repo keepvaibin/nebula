@@ -1,0 +1,74 @@
+{
+  "harness": 1,
+  "name": "3511-table-missing-particle",
+  "about": "A mod's AutoEffectList patch row in Kuribo's group names particles no resource has (list form). Effects contract G-E6: the cook refuses the patch (L804 Cook.Effect.TableUnknown) as je-miss's, naming its patch file, once; the table stays the game's, so the game never meets the words (no fx.particle_missing for them); the stage plays on (the Goombas of Good Egg 1 walk, are stomped, their own effects show: a person's look)",
+  "proves": [
+    "fx.particle_missing",
+    "modlog.entry"
+  ],
+  "mods": [
+    {
+      "path": "../mods/je-miss",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "je-miss",
+        "source": "cook",
+        "level": "error",
+        "code": 804,
+        "file": "layers/base/patches/ParticleData/Effect.arc/AutoEffectList.bcsv.json"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-miss",
+        "code": 804
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "code": 804,
+        "mod": ""
+      },
+      "absent": true
+    },
+    {
+      "fact": "fx.particle_missing",
+      "matching": {
+        "word": "je-miss:nothing00"
+      },
+      "absent": true
+    },
+    {
+      "fact": "fx.particle_missing",
+      "matching": {
+        "word": "JeNoSuchParticle00"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

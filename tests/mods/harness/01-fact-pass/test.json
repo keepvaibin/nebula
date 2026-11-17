@@ -1,0 +1,23 @@
+{
+  "harness": 1,
+  "name": "01-fact-pass",
+  "about": "A mod's logged fact reaches facts.jsonl under its id",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.hello.hello",
+      "is": 1
+    }
+  ]
+}

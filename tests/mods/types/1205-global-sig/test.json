@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "1205-global-sig",
+  "about": "A global asked with another type text is refused (Z-4, Name.GlobalSig)",
+  "proves": [
+    "kernel.refusal",
+    "kernel.bind"
+  ],
+  "mods": [
+    {
+      "path": "../mods/tt-sig-global",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tt-sig-global.started",
+      "absent": true
+    },
+    {
+      "log": "tt-sig-global: .*global variable \"CubeCameraArea::sCubeCategory\" of type \"u32\""
+    }
+  ]
+}

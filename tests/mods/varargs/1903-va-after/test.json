@@ -1,0 +1,33 @@
+{
+  "harness": 1,
+  "name": "1903-va-after",
+  "about": "An after hook on a function with `...` is refused at start (Hook.Variadic) and the mod stays off",
+  "proves": [
+    "kernel.varargs.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../mods/va-after",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "va-after: .*luma_mod cannot be used: \"MR::tryCreateCsvParser\" takes a variable number of arguments, so it takes before hooks only"
+    },
+    {
+      "fact": "mod.va-after.after_ran",
+      "absent": true
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "1130-signature-has",
+  "about": "A hook asked with a signature the game spells otherwise: L505 lists the game's (Name.FunctionSigHas)",
+  "proves": [
+    "kernel.bind",
+    "kernel.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../../loader/mods/lt-sighas",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-sighas.started",
+      "absent": true
+    },
+    {
+      "log": "lt-sighas: .*no function \"MR::getPlayerLeft\" with the signature \"int\\(\\)\" \\(its signatures: \"s32\\(\\)\"\\)"
+    }
+  ]
+}

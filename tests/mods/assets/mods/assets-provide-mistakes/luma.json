@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "assets-provide-mistakes",
+  "name": "assets-provide-mistakes",
+  "summary": "assets-provide-mistakes (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

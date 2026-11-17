@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "1405-gone",
+  "about": "a class's gone runs once for each object made, with that object's own data, before the kernel frees it: the first scene's objects go when the next scene is made, and the game goes on",
+  "proves": [
+    "kernel.classes.gone"
+  ],
+  "mods": [
+    "../mods/lc-gone"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 2
+      }
+    },
+    {
+      "at": 700,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-gone.defined",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-gone.made",
+      "at_least": 1,
+      "when": "first"
+    },
+    {
+      "fact": "mod.lc-gone.gone",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-gone.gone_data_ok",
+      "is": 1,
+      "when": "all"
+    },
+    {
+      "fact": "mod.lc-gone.gone_once",
+      "is": 1,
+      "when": "all"
+    }
+  ]
+}

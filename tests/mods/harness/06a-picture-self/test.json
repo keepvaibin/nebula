@@ -1,0 +1,28 @@
+{
+  "harness": 1,
+  "name": "06a-picture-self",
+  "about": "A picture compared with itself as reference passes",
+  "proves": [
+    "harness.self"
+  ],
+  "bare": true,
+  "steps": [
+    {
+      "at": 300,
+      "picture": "title"
+    },
+    {
+      "at": 330,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "picture": "title",
+      "like": "refs/{renderer}/title.png",
+      "within": {
+        "rmse": 0.5
+      }
+    }
+  ]
+}

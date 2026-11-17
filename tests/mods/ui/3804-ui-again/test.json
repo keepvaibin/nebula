@@ -1,0 +1,91 @@
+{
+  "harness": 1,
+  "name": "3804-ui-again",
+  "about": "ju-again: a screen closed and opened again by the same mod is the same screen (reused), its pane shown again as the layout has it",
+  "proves": [
+    "ui.open",
+    "ui.reuse"
+  ],
+  "mods": [
+    "../mods/ju-again"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3802
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-again.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-again.hide",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-again.close",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-again.again",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-again.pane2",
+      "is": 0
+    },
+    {
+      "fact": "ui.end.1",
+      "has": {
+        "why": "close"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.open.3",
+      "has": {
+        "layout": "CoinCounter",
+        "reused": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.pane.4",
+      "has": {
+        "pane": "Counter",
+        "visible": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.screen.3",
+      "field": "drawn",
+      "is": true,
+      "when": "last"
+    }
+  ]
+}

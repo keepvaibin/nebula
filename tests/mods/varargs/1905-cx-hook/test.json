@@ -1,0 +1,29 @@
+{
+  "harness": 1,
+  "name": "1905-cx-hook",
+  "about": "A hook on a constexpr function is refused at start (Hook.Constexpr)",
+  "proves": [
+    "kernel.varargs.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../mods/cx-hook",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "cx-hook: .*luma_mod cannot be used: \"Game/Gravity/CubeGravity.cpp#encodeCorner\" is constexpr"
+    },
+    {
+      "fact": "mod.cx-hook.hook_ran",
+      "absent": true
+    }
+  ]
+}

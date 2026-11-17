@@ -1,0 +1,796 @@
+{
+  "harness": 1,
+  "name": "2707-net-http",
+  "about": "HTTP (1.3): the mod serves HTTP on a tcp_listen and a tls_listen and requests from them: Content-Length with a header, chunked with an extension and a trailer, gzip undone and RAW, a 302 followed, an answer to the connection's end, HEAD, a 100 then 204, a POST echoed back whole (Host, User-Agent Nebula/<version> <mod id>, Accept-Encoding, Connection, Content-Length, the mod's header, the body), a 303 after a POST as a GET, https against the mod's root, NO_REDIRECT; 6 redirects LIMIT, a redirect to a far host and from https to http DENIED (Net.RedirectRefused), a body past 64 MiB TOO_LARGE, 400 ms without an answer TIMEOUT, not HTTP FORMAT; the mistakes ARGUMENT, a host luma.json does not name DENIED, requests to LUMA_NET_REQUESTS_MOST with the net.internet one still open (both services count: 7 more) then LIMIT, send on a request HANDLE",
+  "proves": [
+    "services.net.local",
+    "services.net.internet",
+    "services.net.http",
+    "services.net.tls",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/net-http"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4501
+      ]
+    },
+    {
+      "at": 300,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4502
+      ]
+    },
+    {
+      "at": 600,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4506
+      ]
+    },
+    {
+      "at": 720,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4503
+      ]
+    },
+    {
+      "at": 840,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4504
+      ]
+    },
+    {
+      "at": 1020,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4505
+      ]
+    },
+    {
+      "at": 1040,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-http.listen",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.listen_tls",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.null_request",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-http.wrong_size",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-http.ftp_url",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-http.far_host",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-http.trace",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-http.host_header",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-http.cr_in_value",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-http.timeout_most",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-http.unknown_flag",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-http.internet_not_named",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-http.internet_loopback",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.requests_pending",
+      "is": 7
+    },
+    {
+      "fact": "mod.net-http.request_9",
+      "is": -4
+    },
+    {
+      "fact": "mod.net-http.send_on_request",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-http.plain_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.plain_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.plain_status",
+      "is": 200
+    },
+    {
+      "fact": "mod.net-http.plain_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.plain_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.plain_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.plain_done_value",
+      "is": 5
+    },
+    {
+      "fact": "mod.net-http.chunked_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.chunked_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.chunked_status",
+      "is": 200
+    },
+    {
+      "fact": "mod.net-http.chunked_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.chunked_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.chunked_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.chunked_done_value",
+      "is": 12
+    },
+    {
+      "fact": "mod.net-http.gzip_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.gzip_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.gzip_status",
+      "is": 200
+    },
+    {
+      "fact": "mod.net-http.gzip_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.gzip_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.gzip_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.gzip_done_value",
+      "is": 12
+    },
+    {
+      "fact": "mod.net-http.gzip_raw_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.gzip_raw_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.gzip_raw_status",
+      "is": 200
+    },
+    {
+      "fact": "mod.net-http.gzip_raw_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.gzip_raw_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.gzip_raw_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.gzip_raw_done_value",
+      "is": 32
+    },
+    {
+      "fact": "mod.net-http.redirect_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.redirect_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.redirect_status",
+      "is": 200
+    },
+    {
+      "fact": "mod.net-http.redirect_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.redirect_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.redirect_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.redirect_done_value",
+      "is": 5
+    },
+    {
+      "fact": "mod.net-http.toend_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.toend_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.toend_status",
+      "is": 200
+    },
+    {
+      "fact": "mod.net-http.toend_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.toend_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.toend_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.toend_done_value",
+      "is": 10
+    },
+    {
+      "fact": "mod.net-http.head_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.head_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.head_status",
+      "is": 200
+    },
+    {
+      "fact": "mod.net-http.head_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.head_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.head_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.head_done_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.nocontent_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.nocontent_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.nocontent_status",
+      "is": 204
+    },
+    {
+      "fact": "mod.net-http.nocontent_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.nocontent_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.nocontent_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.nocontent_done_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.echo_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_status",
+      "is": 200
+    },
+    {
+      "fact": "mod.net-http.echo_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.echo_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.see_other_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.see_other_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.see_other_status",
+      "is": 200
+    },
+    {
+      "fact": "mod.net-http.see_other_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.see_other_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.see_other_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.https_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.https_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.https_status",
+      "is": 200
+    },
+    {
+      "fact": "mod.net-http.https_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.https_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.https_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.https_done_value",
+      "is": 5
+    },
+    {
+      "fact": "mod.net-http.no_redirect_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.no_redirect_headers",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.no_redirect_status",
+      "is": 302
+    },
+    {
+      "fact": "mod.net-http.no_redirect_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.no_redirect_error",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.no_redirect_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.no_redirect_done_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.loop_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.loop_headers",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.loop_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.loop_done",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.loop_error",
+      "is": -4
+    },
+    {
+      "fact": "mod.net-http.loop_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.loop_done_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.far_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.far_headers",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.far_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.far_done",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.far_error",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-http.far_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.far_done_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.tohttp_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.tohttp_headers",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.tohttp_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.tohttp_done",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.tohttp_error",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-http.tohttp_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.tohttp_done_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.big_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.big_headers",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.big_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.big_done",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.big_error",
+      "is": -16
+    },
+    {
+      "fact": "mod.net-http.big_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.big_done_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.slow_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.slow_headers",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.slow_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.slow_done",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.slow_error",
+      "is": -10
+    },
+    {
+      "fact": "mod.net-http.slow_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.slow_done_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.garbage_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.garbage_headers",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.garbage_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.garbage_done",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.garbage_error",
+      "is": -15
+    },
+    {
+      "fact": "mod.net-http.garbage_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.garbage_done_value",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.plain_body",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.plain_x_test",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.chunked_body",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.gzip_body",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.gzip_raw_body",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.redirect_body",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.toend_body",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_line",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_host",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_agent",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_gzip",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_close",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_length",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_mod_header",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.echo_body",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.see_other_get",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.https_body",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.close_listeners",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-http.dead_errors",
+      "is": 7
+    },
+    {
+      "fact": "mod.net-http.dead_unreachable",
+      "is": 7
+    },
+    {
+      "fact": "mod.net-http.dead_status",
+      "is": -17
+    },
+    {
+      "fact": "mod.net-http.inet_status",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-http.inet_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.server_others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-http.open_conns",
+      "is": 0
+    },
+    {
+      "log": "net-http: net\\.local\\.http was redirected to http://8\\.8\\.8\\.8/, which it may not reach"
+    },
+    {
+      "log": "net-http: net\\.local\\.http was redirected to http://127\\.0\\.0\\.1:[0-9]+/plain, which it may not reach"
+    },
+    {
+      "log": "net-http: net\\.local\\.http reached its limit of 8; it did nothing\\."
+    },
+    {
+      "log": "net-http: net\\.internet\\.http was given the host example\\.org,"
+    },
+    {
+      "log": "net-http: net\\.local\\.http was given a wrong request; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "net-http",
+        "english": "net-http: net.local.http was given a wrong request; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "net-http: net\\.local\\.http was given a wrong url; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "net-http",
+        "english": "net-http: net.local.http was given a wrong url; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "net-http: net\\.local\\.http was given a wrong method; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "net-http: net\\.local\\.http was given a wrong headers; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "net-http",
+        "english": "net-http: net.local.http was given a wrong headers; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "net-http: net\\.local\\.send was given a handle that is closed or not its own\\.",
+      "times": 1
+    }
+  ]
+}

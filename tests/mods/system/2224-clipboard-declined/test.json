@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "2224-clipboard-declined",
+  "about": "system.clipboard declared, required, declined: off before the start check, Consent.OffDeclined names it, no code started",
+  "proves": [
+    "services.permissions",
+    "services.system.clipboard"
+  ],
+  "mods": [
+    {
+      "path": "../mods/sys-clip-declined",
+      "loads": false,
+      "permissions": {
+        "system.clipboard": "deny"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-clip-declined.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "sys-clip-declined",
+        "source": "loader",
+        "level": "note",
+        "row": "Consent.OffDeclined"
+      },
+      "when": "any"
+    },
+    {
+      "no_log": "L506"
+    }
+  ]
+}

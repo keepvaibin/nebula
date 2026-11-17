@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "3851-layout-cooked",
+  "about": "gl-hud (no code) brings LayoutData/GlHud.arc/GlHud.layout.json and timg/Star.png: the cook makes the archive's blyt/GlHud.brlyt with 6 panes, 2 pictures, 2 texts, 1 texture and 1 group (cook.layout), refuses nothing, and the stage plays",
+  "proves": [
+    "layout.cook"
+  ],
+  "mods": [
+    {
+      "path": "../mods/gl-hud",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "cook.layout",
+      "has": {
+        "mod": "gl-hud",
+        "other": "LayoutData/GlHud.arc/blyt/GlHud.brlyt",
+        "panes": 6,
+        "pictures": 2,
+        "texts": 2,
+        "textures": 1,
+        "groups": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "gl-hud",
+        "level": "error"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

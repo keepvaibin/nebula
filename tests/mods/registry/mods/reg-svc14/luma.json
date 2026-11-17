@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "reg-svc14",
+  "name": "reg-svc14",
+  "summary": "reg-svc14 (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jm-missing",
+  "name": "jm-missing",
+  "version": "1.0.0",
+  "summary": "J's test mod jm-missing.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

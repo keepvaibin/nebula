@@ -1,0 +1,46 @@
+{
+  "harness": 1,
+  "name": "3135-start-conflict",
+  "about": "jv-y can't run with jv-x and both are on: L801 refuses both (the validator decides, not the list's order)",
+  "proves": [
+    "validator.start.refuse"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jv-x",
+      "loads": false
+    },
+    {
+      "path": "../mods/jv-y",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-x",
+        "source": "validator",
+        "level": "error",
+        "code": 801
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-y",
+        "source": "validator",
+        "level": "error",
+        "code": 801
+      },
+      "when": "any"
+    }
+  ]
+}

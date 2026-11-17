@@ -1,0 +1,29 @@
+{
+  "format": "1.0",
+  "id": "net-http",
+  "name": "net-http",
+  "summary": "net-http (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "net.local",
+      "why": "The net test asks for it.",
+      "roots": [
+        "certs/root.pem"
+      ]
+    },
+    {
+      "name": "net.internet",
+      "why": "The net test asks for it.",
+      "hosts": [
+        "localhost"
+      ]
+    }
+  ]
+}

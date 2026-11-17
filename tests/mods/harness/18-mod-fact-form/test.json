@@ -1,0 +1,31 @@
+{
+  "harness": 1,
+  "name": "18-mod-fact-form",
+  "about": "A mod's fact is mod.<id>.<key>; `loaded` and a key with a dot are refused as harness.bad_fact naming them, which fails the test (harness 4)",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/badfacts"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.badfacts.good_key",
+      "is": 7
+    },
+    {
+      "fact": "mod.badfacts.loaded",
+      "is": true
+    },
+    {
+      "fact": "harness.bad_fact",
+      "exists": true
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "verdict": "fail",
+  "facts": {
+    "mod.badfacts.good_key": 7,
+    "mod.badfacts.loaded": true
+  },
+  "facts_lack": [
+    "badfacts.good_key",
+    "mod.badfacts.a.b",
+    "mod.badfacts.a"
+  ],
+  "fact_mentions": {
+    "harness.bad_fact": [
+      "badfacts",
+      "loaded",
+      "a.b"
+    ]
+  },
+  "note": "harness 4: a harness.bad_fact fails the test (G-H6-1 writes one per refused key); mod.badfacts.loaded is the game half's true, never the mod's 1",
+  "reason_has": [
+    "loaded"
+  ]
+}

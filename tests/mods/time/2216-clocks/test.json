@@ -1,0 +1,96 @@
+{
+  "harness": 1,
+  "name": "2216-clocks",
+  "about": "monotonic_ns from another thread and the game's: at least 1, not decreasing; wall: offset 0, the host's calendar",
+  "proves": [
+    "services.time.real"
+  ],
+  "mods": [
+    "../mods/tm-clocks"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-clocks.made",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-clocks.off_m_least",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-clocks.off_m_order",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-clocks.off_wall",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-clocks.off_year",
+      "is": 2025
+    },
+    {
+      "fact": "mod.tm-clocks.m_least",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-clocks.m_order",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-clocks.wall",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-clocks.offset",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-clocks.year",
+      "is": 2025
+    },
+    {
+      "fact": "mod.tm-clocks.month",
+      "is": 12
+    },
+    {
+      "fact": "mod.tm-clocks.day",
+      "is": 31
+    },
+    {
+      "fact": "mod.tm-clocks.weekday",
+      "is": 3
+    },
+    {
+      "fact": "mod.tm-clocks.hour",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-clocks.utc_s",
+      "at_least": 1767139200
+    },
+    {
+      "fact": "mod.tm-clocks.utc_s",
+      "less": 1767142800
+    }
+  ]
+}

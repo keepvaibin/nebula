@@ -1,0 +1,75 @@
+{
+  "harness": 1,
+  "name": "3208-model-metre",
+  "about": "jm-metre attaches its own model jm-metre:metre (G's 1 m glTF, joint 0 one metre over its origin, cooked to Luma/jm-metre/metre.arc) at the player's base: LUMA_OK, not the placeholder, drawn, and its joint 0 stands 100 units (1 m) over the player's base every frame (a yellow 1 m cube over Mario's head: a person's look)",
+  "proves": [
+    "model.mod_model"
+  ],
+  "mods": [
+    "../../models/mods/jm-metre"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-metre.attach",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "mod": "jm-metre",
+        "model": "jm-metre:metre",
+        "follow": "actor",
+        "placeholder": false,
+        "drawn": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.pose.1",
+      "field": "gap",
+      "at_least": 99.0,
+      "when": "all"
+    },
+    {
+      "fact": "model.pose.1",
+      "field": "gap",
+      "at_most": 101.0,
+      "when": "all"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-metre",
+        "code": 621
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-metre",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

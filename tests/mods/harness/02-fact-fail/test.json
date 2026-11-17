@@ -1,0 +1,23 @@
+{
+  "harness": 1,
+  "name": "02-fact-fail",
+  "about": "A fact check that does not hold fails, naming the check and the value found",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.hello.hello",
+      "is": 2
+    }
+  ]
+}

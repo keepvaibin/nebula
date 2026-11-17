@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "2253-option-read",
+    "2255-option-mistakes"
+  ]
+}

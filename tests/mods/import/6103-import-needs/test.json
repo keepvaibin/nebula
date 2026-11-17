@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "6103-import-needs",
+  "about": "jv-needs (needs jv-gone, on no list) imported beside jv-good: checked against the placed mods, L800 refuses it (NOT IMPORTED); jv-good, placed, has no error",
+  "proves": [
+    "import.against_placed"
+  ],
+  "mods": [
+    {
+      "path": "../../startval/mods/jv-good",
+      "loads": false
+    },
+    {
+      "path": "../../startval/mods/jv-needs",
+      "install": "import",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "import.jv-needs",
+      "has": {
+        "line": 1,
+        "text": "NOT IMPORTED",
+        "id": "",
+        "refused": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "import.jv-needs",
+      "has": {
+        "code": 800,
+        "error": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jv-good",
+        "level": "error"
+      },
+      "absent": true
+    }
+  ]
+}

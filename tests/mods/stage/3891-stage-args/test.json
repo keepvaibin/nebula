@@ -1,0 +1,75 @@
+{
+  "harness": 1,
+  "name": "3891-stage-args",
+  "about": "gs-stage adds two BigFans to EggStarGalaxy by a patch of its objinfo: the first gives WindLength 3000 and WindSpeed 25 by name, the second nothing; the live first fan has mWindLength 3000 and mWindSpeed 25 (Obj_arg0 and 1), and no mod error is logged",
+  "proves": [
+    "stage.args"
+  ],
+  "mods": [
+    {
+      "path": "../mods/gs-stage",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "read": "BigFan.mWindLength",
+      "of": "class:BigFan#0",
+      "type": "f32",
+      "fact": "fan0.length"
+    },
+    {
+      "at": 120,
+      "read": "BigFan.mWindSpeed",
+      "of": "class:BigFan#0",
+      "type": "f32",
+      "fact": "fan0.speed"
+    },
+    {
+      "at": 120,
+      "read": "BigFan.mWindLength",
+      "of": "class:BigFan#1",
+      "type": "f32",
+      "fact": "fan1.length"
+    },
+    {
+      "at": 150,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "fan0.length",
+      "near": 3000,
+      "within": 0.001
+    },
+    {
+      "fact": "fan0.speed",
+      "near": 25,
+      "within": 0.001
+    },
+    {
+      "fact": "fan1.length",
+      "exists": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "gs-stage",
+        "level": "error"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "6305a-list",
+    "6305b-bind"
+  ]
+}

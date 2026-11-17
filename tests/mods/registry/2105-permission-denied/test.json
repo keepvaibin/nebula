@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "2105-permission-denied",
+  "about": "A required import of test.secret, its permission declined: the mod is off before it starts, Consent.OffDeclined naming it (start-check 1a), no L506",
+  "proves": [
+    "kernel.refusal",
+    "services.permissions"
+  ],
+  "mods": [
+    {
+      "path": "../mods/reg-secret",
+      "loads": false,
+      "permissions": {
+        "test.secret": "deny"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-secret.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "reg-secret",
+        "source": "loader",
+        "level": "note",
+        "row": "Consent.OffDeclined"
+      },
+      "when": "any"
+    },
+    {
+      "no_log": "reg-secret uses test\\.secret without asking"
+    }
+  ]
+}

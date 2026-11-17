@@ -1,0 +1,96 @@
+{
+  "harness": 1,
+  "name": "2450-world",
+  "about": "fw-world draws at world.after: a red line3 from the player's feet 300 up (8 wide, facing the camera), a tri3 red/green/blue 100 over the player, a 4x4 yellow/blue checker on an 80x80 billboard 250 over the player; each LUMA_OK; at(world.after, null) and they are gone (pictures: f50 the stage as it is, f110 the three over Mario, hidden where the world stands in front of them; f170 as f50: a person's look)",
+  "proves": [
+    "draw.line3",
+    "draw.tri3",
+    "draw.billboard",
+    "draw.world_depth"
+  ],
+  "mods": [
+    "../mods/fw-world"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 50,
+      "picture": "f50"
+    },
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2450
+      ]
+    },
+    {
+      "at": 110,
+      "picture": "f110"
+    },
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2451
+      ]
+    },
+    {
+      "at": 170,
+      "picture": "f170"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fw-world.pixels",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-world.at",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-world.line3",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-world.tri3",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-world.billboard",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-world.off",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fw-world",
+        "code": 101
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fw-world",
+        "code": 470
+      },
+      "absent": true
+    }
+  ]
+}

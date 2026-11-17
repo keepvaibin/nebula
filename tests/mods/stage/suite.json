@@ -1,0 +1,8 @@
+{
+  "harness": 1,
+  "tests": [
+    "3891-stage-args",
+    "3892-stage-args-refused",
+    "3901-stage-placed"
+  ]
+}

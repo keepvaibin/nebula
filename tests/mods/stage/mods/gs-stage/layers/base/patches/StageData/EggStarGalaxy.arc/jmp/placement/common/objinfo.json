@@ -1,0 +1,38 @@
+{
+  "patch": 1,
+  "key": [
+    "l_id"
+  ],
+  "add": [
+    {
+      "name": "BigFan",
+      "l_id": 9001,
+      "pos_x": -1264.6,
+      "pos_y": -13081.3,
+      "pos_z": -15332.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0,
+      "args": {
+        "WindLength": 3000,
+        "WindSpeed": 25
+      }
+    },
+    {
+      "name": "BigFan",
+      "l_id": 9002,
+      "pos_x": -664.5999999999999,
+      "pos_y": -13081.3,
+      "pos_z": -15332.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    }
+  ]
+}

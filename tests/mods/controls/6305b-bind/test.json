@@ -1,0 +1,224 @@
+{
+  "harness": 1,
+  "name": "6305b-bind",
+  "about": "Enter on spin2's row, then Tab: the draft shows Tab; Space applies it and the mod reads spin2 bound",
+  "proves": [
+    "controls.mod_actions"
+  ],
+  "mods": [
+    "../../input/mods/in-follow"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.in-follow.spin2_bound",
+        "exists": true
+      },
+      "settings": "controls"
+    },
+    {
+      "at": 600,
+      "key": "down"
+    },
+    {
+      "at": 615,
+      "key": "down"
+    },
+    {
+      "at": 630,
+      "key": "down"
+    },
+    {
+      "at": 645,
+      "key": "down"
+    },
+    {
+      "at": 660,
+      "key": "down"
+    },
+    {
+      "at": 675,
+      "key": "down"
+    },
+    {
+      "at": 690,
+      "key": "down"
+    },
+    {
+      "at": 705,
+      "key": "down"
+    },
+    {
+      "at": 720,
+      "key": "down"
+    },
+    {
+      "at": 735,
+      "key": "down"
+    },
+    {
+      "at": 750,
+      "key": "down"
+    },
+    {
+      "at": 765,
+      "key": "down"
+    },
+    {
+      "at": 780,
+      "key": "down"
+    },
+    {
+      "at": 795,
+      "key": "down"
+    },
+    {
+      "at": 810,
+      "key": "down"
+    },
+    {
+      "at": 825,
+      "key": "down"
+    },
+    {
+      "at": 840,
+      "key": "down"
+    },
+    {
+      "at": 855,
+      "key": "down"
+    },
+    {
+      "at": 870,
+      "key": "down"
+    },
+    {
+      "at": 885,
+      "key": "down"
+    },
+    {
+      "at": 900,
+      "key": "down"
+    },
+    {
+      "at": 915,
+      "key": "down"
+    },
+    {
+      "at": 930,
+      "key": "down"
+    },
+    {
+      "at": 945,
+      "key": "down"
+    },
+    {
+      "at": 960,
+      "key": "down"
+    },
+    {
+      "at": 975,
+      "key": "down"
+    },
+    {
+      "at": 990,
+      "key": "down"
+    },
+    {
+      "at": 1005,
+      "key": "down"
+    },
+    {
+      "at": 1020,
+      "key": "down"
+    },
+    {
+      "at": 1065,
+      "key": "enter"
+    },
+    {
+      "at": 1110,
+      "key": "tab"
+    },
+    {
+      "at": 1155,
+      "key": "space"
+    },
+    {
+      "at": 1200,
+      "key": "esc"
+    },
+    {
+      "after": {
+        "fact": "mod.in-follow.spin2_bound",
+        "at_least": 1
+      },
+      "end": true,
+      "timeout": 1735
+    }
+  ],
+  "expect": [
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "spin2"
+      },
+      "field": "row",
+      "is": 29,
+      "when": "last",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "spin2"
+      },
+      "field": "row",
+      "is": 28,
+      "when": "last",
+      "systems": [
+        "linux",
+        "macos",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "spin2"
+      },
+      "field": "value",
+      "is": "Tab",
+      "when": "last"
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "spin2"
+      },
+      "field": "inputs",
+      "is": true,
+      "when": "last"
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "jump2"
+      },
+      "field": "value",
+      "is": "Same as A",
+      "when": "last"
+    },
+    {
+      "fact": "mod.in-follow.spin2_bound",
+      "is": 1
+    }
+  ]
+}

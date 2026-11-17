@@ -1,0 +1,7 @@
+{
+  "6403-update-host": "a harness way to replace an installed mod between two runs (continue_from and new files), and F's start half (the menu opened on MODS at the title)",
+  "6404-update-why": "as 6403",
+  "6405-update-code": "as 6403",
+  "6407-native": "a mod with extra libraries (luma-format native) built by build_mod.sh; checks: native the first row, value Consent.Required, help saying full access (no colour, consent 2.7)",
+  "6408-input-pictures": "pictures in English and Japanese on Direct3D 12 and Vulkan (refs after a person looked), pad, mouse and touch steps in the harness"
+}

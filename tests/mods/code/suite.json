@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "2281-code-entry",
+    "2282-code-elsewhere"
+  ]
+}

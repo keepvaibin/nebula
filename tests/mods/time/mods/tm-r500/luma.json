@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tm-r500",
+  "name": "tm-r500",
+  "summary": "tm-r500 (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

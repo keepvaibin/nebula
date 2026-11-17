@@ -1,0 +1,244 @@
+{
+  "harness": 1,
+  "name": "2268a-limits",
+  "about": "a, b, c fill their 256 KiB exactly (3 x 64 KiB + 65508 bytes), one byte more LUMA_E_LIMIT; a 65 KiB value LUMA_E_LIMIT (counted, a's first limit said); d's fourth value reaches the chunk's 1 MiB, e's 64 KiB too, e's 100 bytes fit: 960 KiB of mods' data, saved by the game",
+  "proves": [
+    "services.save",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/save-a",
+    "../mods/save-b",
+    "../mods/save-c",
+    "../mods/save-d",
+    "../mods/save-e"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4261
+      ]
+    },
+    {
+      "at": 12,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4262
+      ]
+    },
+    {
+      "at": 14,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4263
+      ]
+    },
+    {
+      "at": 16,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4264
+      ]
+    },
+    {
+      "at": 18,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4265
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4259
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.confirm_ready",
+        "is": 1
+      },
+      "hold": [
+        "RIGHT"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.focused",
+        "is": 1
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.done_ready",
+        "is": 1
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.saved",
+        "is": 1
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-a.asked",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.saved",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.save_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.fill0",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.fill1",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.fill2",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.fill3",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.over_mod",
+      "is": -4
+    },
+    {
+      "log": "save-a: save\\.set reached its limit of 262144; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "mod.save-b.fill0",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-b.fill1",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-b.fill2",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-b.fill3",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-b.over_mod",
+      "is": -4
+    },
+    {
+      "log": "save-b: save\\.set reached its limit of 262144; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "mod.save-c.fill0",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-c.fill1",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-c.fill2",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-c.fill3",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-c.over_mod",
+      "is": -4
+    },
+    {
+      "log": "save-c: save\\.set reached its limit of 262144; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "mod.save-a.over_value",
+      "is": -4
+    },
+    {
+      "log": "save-a: save\\.set reached its limit of 65536",
+      "times": 1
+    },
+    {
+      "fact": "mod.save-d.fill0",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-d.fill1",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-d.fill2",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-d.over_chunk",
+      "is": -4
+    },
+    {
+      "fact": "mod.save-e.over_chunk",
+      "is": -4
+    },
+    {
+      "fact": "mod.save-e.small",
+      "is": 0
+    },
+    {
+      "log": "save-d: save\\.set reached its limit of 1048576; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "save-e: save\\.set reached its limit of 1048576; it did nothing\\.",
+      "times": 1
+    }
+  ],
+  "save": {
+    "values": {
+      "MessageAlreadyRead": 4660
+    }
+  }
+}

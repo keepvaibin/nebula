@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jv-sound",
+  "name": "jv-sound",
+  "version": "1.0.0",
+  "summary": "jv-play's code with a movie that has sound (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "harness": 1,
+  "tests": [
+    "2601-audio-play",
+    "2602-audio-limit",
+    "2603-audio-stream",
+    "2604-audio-mistakes",
+    "2605-audio-tap",
+    "2606-capture-mic",
+    "2607-capture-camera",
+    "2608-audio-place",
+    "2609-audio-game",
+    "2610-audio-replace",
+    "2611-audio-placeholder"
+  ]
+}

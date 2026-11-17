@@ -1,0 +1,146 @@
+{
+  "harness": 1,
+  "name": "6305a-list",
+  "about": "CONTROLS lists in-follow's two actions after the game's bindings, by their names, each following its game control",
+  "proves": [
+    "controls.mod_actions"
+  ],
+  "mods": [
+    "../../input/mods/in-follow"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.in-follow.spin2_bound",
+        "exists": true
+      },
+      "settings": "controls"
+    },
+    {
+      "at": 900,
+      "wait": true
+    },
+    {
+      "at": 960,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "jump2"
+      },
+      "field": "row",
+      "is": 28,
+      "when": "last",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "jump2"
+      },
+      "field": "row",
+      "is": 27,
+      "when": "last",
+      "systems": [
+        "linux",
+        "macos",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "jump2"
+      },
+      "field": "label",
+      "is": "Second jump",
+      "when": "last"
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "jump2"
+      },
+      "field": "value",
+      "is": "Same as A",
+      "when": "last"
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "jump2"
+      },
+      "field": "inputs",
+      "is": false,
+      "when": "last"
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "spin2"
+      },
+      "field": "row",
+      "is": 29,
+      "when": "last",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "spin2"
+      },
+      "field": "row",
+      "is": 28,
+      "when": "last",
+      "systems": [
+        "linux",
+        "macos",
+        "android",
+        "ios"
+      ]
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "spin2"
+      },
+      "field": "label",
+      "is": "Second spin",
+      "when": "last"
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "spin2"
+      },
+      "field": "value",
+      "is": "Same as B",
+      "when": "last"
+    },
+    {
+      "fact": "controls.in-follow",
+      "matching": {
+        "action": "spin2"
+      },
+      "field": "inputs",
+      "is": false,
+      "when": "last"
+    },
+    {
+      "fact": "mod.in-follow.spin2_bound",
+      "is": 0
+    }
+  ]
+}

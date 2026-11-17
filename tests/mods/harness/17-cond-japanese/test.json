@@ -1,0 +1,37 @@
+{
+  "harness": 1,
+  "name": "17-cond-japanese",
+  "about": "A cond and a check on a Japanese string hold (H-3: \\u escapes decoded, the plan written in UTF-8)",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "read": "NameObj.mName",
+      "of": "object:カメラコンテキスト#0",
+      "type": "const char *",
+      "fact": "ctx.name"
+    },
+    {
+      "after": {
+        "fact": "ctx.name",
+        "is": "カメラコンテキスト"
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ctx.name",
+      "is": "カメラコンテキスト"
+    }
+  ]
+}

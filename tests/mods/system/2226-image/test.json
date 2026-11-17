@@ -1,0 +1,76 @@
+{
+  "harness": 1,
+  "name": "2226-image",
+  "about": "set_image 3x2 then get_image: value 3 << 32 | 2, the same 24 bytes; a buffer of 23 to take_image or to set_image: LUMA_E_ARGUMENT size, reported",
+  "proves": [
+    "services.system.clipboard"
+  ],
+  "mods": [
+    "../mods/sys-clip-image"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4242
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-clip-image.set_bad_size",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-clip-image.set",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-clip-image.get",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-clip-image.ev_width",
+      "is": 3
+    },
+    {
+      "fact": "mod.sys-clip-image.ev_height",
+      "is": 2
+    },
+    {
+      "fact": "mod.sys-clip-image.take_small",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-clip-image.take",
+      "is": 0
+    },
+    {
+      "fact": "mod.sys-clip-image.take_same",
+      "is": 1
+    },
+    {
+      "log": "sys-clip-image: system\\.clipboard\\.take_image was given a wrong size; it did nothing\\."
+    },
+    {
+      "log": "sys-clip-image: system\\.clipboard\\.set_image was given a wrong size; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

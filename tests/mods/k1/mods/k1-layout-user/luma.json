@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "k1-layout-user",
+  "name": "k1-layout-user",
+  "summary": "k1-layout-user (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "k1-layout-lib"
+    }
+  ]
+}

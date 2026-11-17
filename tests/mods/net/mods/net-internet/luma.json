@@ -1,0 +1,29 @@
+{
+  "format": "1.0",
+  "id": "net-internet",
+  "name": "net-internet",
+  "summary": "net-internet (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "net.local",
+      "why": "The net test asks for it."
+    },
+    {
+      "name": "net.internet",
+      "why": "The net test asks for it.",
+      "hosts": [
+        "localhost",
+        "127.0.0.1",
+        "nothing.invalid",
+        "*.named.invalid"
+      ]
+    }
+  ]
+}

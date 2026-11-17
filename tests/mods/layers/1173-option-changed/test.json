@@ -1,0 +1,50 @@
+{
+  "harness": 1,
+  "name": "1173-option-changed",
+  "about": "The player sets pick to b after 1172: the answer differs from the record, one start-again, b on and a off",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ly-option",
+      "options": {
+        "pick": "b"
+      }
+    }
+  ],
+  "continue_from": "1172-option-first",
+  "starts": 2,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-option.asked",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-option.a_on",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-option.b_on",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-option.started",
+      "is": 1
+    },
+    {
+      "log": "host: restart",
+      "times": 1
+    },
+    {
+      "log": "mods: the code of ly-option chose other layers than the content was cooked with: the game starts again with them",
+      "times": 1
+    }
+  ]
+}

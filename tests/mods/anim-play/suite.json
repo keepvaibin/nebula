@@ -1,0 +1,15 @@
+{
+  "harness": 1,
+  "tests": [
+    "3401-param-refusals",
+    "3611-anim-once",
+    "3612-anim-loop",
+    "3613-anim-colour",
+    "3614-anim-args",
+    "3615-anim-detach",
+    "3616-anim-again",
+    "3617-anim-game-walk",
+    "3618-anim-replaced-walk",
+    "3619-anim-events"
+  ]
+}

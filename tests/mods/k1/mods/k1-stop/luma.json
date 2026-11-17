@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "k1-stop",
+  "name": "k1-stop",
+  "summary": "k1-stop (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

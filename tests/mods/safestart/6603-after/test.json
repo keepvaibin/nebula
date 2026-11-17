@@ -1,0 +1,42 @@
+{
+  "harness": 1,
+  "name": "6603-after",
+  "about": "The start after a safe one is not safe: no top row, jc-none on",
+  "proves": [
+    "mods.safe_start.crash"
+  ],
+  "mods": [
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "continue_from": "6602-crash",
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modscreen.nebula",
+      "absent": true,
+      "scope": "installation"
+    },
+    {
+      "fact": "modscreen.jc-none",
+      "has": {
+        "line": 0,
+        "list": "on"
+      },
+      "when": "any",
+      "scope": "installation"
+    }
+  ]
+}

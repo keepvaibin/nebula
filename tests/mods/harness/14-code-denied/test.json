@@ -1,0 +1,19 @@
+{
+  "harness": 1,
+  "name": "14-code-denied",
+  "about": "A mod whose code is not allowed does not start, and the test says so",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "code": "deny",
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": []
+}

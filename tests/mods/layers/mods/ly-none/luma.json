@@ -1,0 +1,27 @@
+{
+  "format": "1.0",
+  "id": "ly-none",
+  "name": "ly-none",
+  "summary": "ly-none (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "a",
+      "when": {
+        "code": true
+      }
+    },
+    {
+      "name": "b",
+      "when": {
+        "code": true
+      }
+    }
+  ]
+}

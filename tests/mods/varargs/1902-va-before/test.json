@@ -1,0 +1,35 @@
+{
+  "harness": 1,
+  "name": "1902-va-before",
+  "about": "A before hook on MR::tryCreateCsvParser(const ResourceHolder *, const char *, ...) runs at the stage's load and reads the \"%s\" argument from a LUMA_VA_COPY of args[3]",
+  "proves": [
+    "kernel.varargs.before"
+  ],
+  "mods": [
+    "../mods/va-before"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.va-before.read",
+        "at_least": 1
+      },
+      "end": true,
+      "timeout": 1800
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.va-before.seen",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.va-before.read",
+      "at_least": 1
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "harness": 1,
+  "name": "2212-cancel",
+  "about": "Cancel before due: no event; cancel again: LUMA_E_HANDLE, Service.Handle said",
+  "proves": [
+    "services.time.timers"
+  ],
+  "mods": [
+    "../mods/tm-cancel"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 15,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4222
+      ]
+    },
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4225
+      ]
+    },
+    {
+      "at": 45,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-cancel.timer",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-cancel.cancel_1",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-cancel.cancel_2",
+      "is": -3
+    },
+    {
+      "fact": "mod.tm-cancel.events",
+      "is": 0
+    },
+    {
+      "log": "tm-cancel: time\\.cancel was given a handle that is closed or not its own\\."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "ju-paused",
+  "name": "ju-paused",
+  "version": "1.0.0",
+  "summary": "J's test mod ju-paused.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1,0 +1,195 @@
+{
+  "harness": 1,
+  "name": "2510-text",
+  "about": "in-text: the refusals; a NAME request of 8 starts \"Gold Mar\"; a second request ends it CANCELLED; A held while open reaches neither the game nor the mod; cancel; then a NUMBER request of 6 typed \"-12.5a3x\", Backspace, \"9\", Enter gives \"-12.59\"; A after it reaches the game",
+  "proves": [
+    "services.input"
+  ],
+  "mods": [
+    "../mods/in-text"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.in-text.running",
+        "exists": true
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 60
+    },
+    {
+      "after": {
+        "fact": "mod.in-text.third_request",
+        "exists": true
+      },
+      "text": "-12.5a3x"
+    },
+    {
+      "after": {
+        "fact": "mod.in-text.third_request",
+        "exists": true
+      },
+      "key": "backspace"
+    },
+    {
+      "after": {
+        "fact": "mod.in-text.third_request",
+        "exists": true
+      },
+      "text": "9"
+    },
+    {
+      "after": {
+        "fact": "mod.in-text.third_request",
+        "exists": true
+      },
+      "key": "enter"
+    },
+    {
+      "after": {
+        "fact": "mod.in-text.third_status",
+        "exists": true
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 30
+    },
+    {
+      "after": {
+        "fact": "mod.in-text.a_after",
+        "at_least": 1
+      },
+      "end": true,
+      "timeout": 1200
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-text.zero_length_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.long_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.kind_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.not_utf8_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.null_fn_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.small_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.first_request",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.peek_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-text.peek_length",
+      "is": 8
+    },
+    {
+      "fact": "mod.in-text.peek_caret",
+      "is": 8
+    },
+    {
+      "fact": "mod.in-text.peek_text_length",
+      "is": 8
+    },
+    {
+      "fact": "mod.in-text.small_peek_length",
+      "is": 3
+    },
+    {
+      "fact": "mod.in-text.small_peek_whole",
+      "is": 8
+    },
+    {
+      "fact": "mod.in-text.second_request",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.first_peek_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.first_status",
+      "is": -12
+    },
+    {
+      "fact": "mod.in-text.a_while_open",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-text.cancel_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.cancel_again_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.second_status",
+      "is": -12
+    },
+    {
+      "fact": "mod.in-text.second_data_null",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.third_request",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.third_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-text.third_bytes",
+      "is": 6
+    },
+    {
+      "fact": "mod.in-text.third_points",
+      "is": 6
+    },
+    {
+      "fact": "mod.in-text.third_text_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-text.events",
+      "is": 3
+    },
+    {
+      "fact": "mod.in-text.a_after",
+      "at_least": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "in-text",
+        "code": 101
+      },
+      "when": "any"
+    }
+  ]
+}

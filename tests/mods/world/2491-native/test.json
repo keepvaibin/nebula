@@ -1,0 +1,130 @@
+{
+  "harness": 1,
+  "name": "2491-native",
+  "about": "fn-native (native granted): backend names D3D12 or Vulkan, a null out and point 99 refused; its function at PRESENT clears every picture green with the device's own command list (f70 green whole); removed, the game's picture again (f110); the render thread saw frames of the struct's size, the backend's, at PRESENT, 1280x720",
+  "proves": [
+    "draw.native"
+  ],
+  "mods": [
+    "../mods/fn-native"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2491
+      ]
+    },
+    {
+      "at": 70,
+      "picture": "f70"
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2492
+      ]
+    },
+    {
+      "at": 110,
+      "picture": "f110"
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fn-native.backend_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fn-native.backend_known",
+      "is": 1
+    },
+    {
+      "fact": "mod.fn-native.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.fn-native.bad_point",
+      "is": -1
+    },
+    {
+      "fact": "mod.fn-native.at",
+      "is": 0
+    },
+    {
+      "fact": "mod.fn-native.off",
+      "is": 0
+    },
+    {
+      "fact": "mod.fn-native.same_backend",
+      "is": 1
+    },
+    {
+      "fact": "mod.fn-native.sized",
+      "is": 1
+    },
+    {
+      "fact": "mod.fn-native.at_present",
+      "is": 1
+    },
+    {
+      "fact": "mod.fn-native.width",
+      "is": 1280
+    },
+    {
+      "fact": "mod.fn-native.height",
+      "is": 720
+    },
+    {
+      "fact": "mod.fn-native.calls",
+      "at_least": 20
+    },
+    {
+      "picture": "f70",
+      "box": [
+        16,
+        16,
+        1248,
+        688
+      ],
+      "mean_rgb": [
+        0,
+        255,
+        0
+      ],
+      "within": 3
+    },
+    {
+      "picture": "f110",
+      "like": "refs/{renderer}/f110.png",
+      "within": {
+        "rmse": 6.0
+      }
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fn-native",
+        "code": 101
+      },
+      "when": "any"
+    }
+  ],
+  "renderers": [
+    "d3d12"
+  ]
+}

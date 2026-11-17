@@ -1,0 +1,29 @@
+{
+  "harness": 1,
+  "name": "2106-permission-granted",
+  "about": "The same mod with test.secret allowed binds and calls it",
+  "proves": [
+    "kernel.service",
+    "services.permissions"
+  ],
+  "mods": [
+    {
+      "path": "../mods/reg-secret",
+      "permissions": {
+        "test.secret": "allow"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-secret.ping",
+      "is": 0
+    }
+  ]
+}

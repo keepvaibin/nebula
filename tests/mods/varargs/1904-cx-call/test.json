@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "name": "1904-cx-call",
+  "about": "A mod calls CubeGravity.cpp's constexpr encodeCorner(-1, 0, 1) by name: 21, as the source says",
+  "proves": [
+    "kernel.varargs.constexpr"
+  ],
+  "mods": [
+    "../mods/cx-call"
+  ],
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.cx-call.corner",
+        "exists": true
+      },
+      "end": true,
+      "timeout": 600
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.cx-call.corner",
+      "is": 21
+    }
+  ]
+}

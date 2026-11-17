@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "2109-off-thread",
+  "about": "A game-thread function called off it returns LUMA_E_THREAD; Service.Thread said once, counted",
+  "proves": [
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/reg-thread"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4260
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-thread.made",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-thread.off_first",
+      "is": -2
+    },
+    {
+      "fact": "mod.reg-thread.off_second",
+      "is": -2
+    },
+    {
+      "log": "reg-thread called test\\.svc\\.echo off the game thread",
+      "times": 1
+    }
+  ]
+}

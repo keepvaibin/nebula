@@ -1,0 +1,93 @@
+{
+  "harness": 1,
+  "name": "3502-fx-missing",
+  "about": "je-fx-missing starts JeNoSuchParticle00 (in no store) twice: LUMA_OK both times, the placeholder in its place, Content.MissingEffect one entry in the mod's log counted twice, never Content.EffectEmpty",
+  "proves": [
+    "fx.missing"
+  ],
+  "mods": [
+    "../mods/je-fx-missing"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3501
+      ]
+    },
+    {
+      "at": 90,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3502
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.je-fx-missing.start1",
+      "is": 0
+    },
+    {
+      "fact": "mod.je-fx-missing.start2",
+      "is": 0
+    },
+    {
+      "fact": "fx.start.1",
+      "has": {
+        "mod": "je-fx-missing",
+        "name": "nebula:placeholder/effect",
+        "placeholder": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "fx.start.2",
+      "has": {
+        "placeholder": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "je-fx-missing",
+        "source": "content",
+        "level": "error",
+        "code": 623
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-fx-missing",
+        "code": 623
+      },
+      "field": "count",
+      "is": 2,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-fx-missing",
+        "code": 640
+      },
+      "absent": true
+    }
+  ]
+}

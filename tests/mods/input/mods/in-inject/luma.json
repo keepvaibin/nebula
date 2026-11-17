@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "in-inject",
+  "name": "in-inject",
+  "summary": "in-inject (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "input.inject",
+      "why": "The input test asks for it."
+    }
+  ]
+}

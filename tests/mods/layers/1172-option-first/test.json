@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "1172-option-first",
+  "about": "ly-option chooses its option pick (default a): one start-again, a on",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    "../mods/ly-option"
+  ],
+  "starts": 2,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-option.asked",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-option.a_on",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-option.b_on",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-option.started",
+      "is": 1
+    },
+    {
+      "log": "host: restart",
+      "times": 1
+    }
+  ]
+}

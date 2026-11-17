@@ -1,0 +1,41 @@
+{
+  "harness": 1,
+  "name": "6409-no-code",
+  "about": "A mod without code that declares a permission: never asked (the validator's Note L218 is the log's)",
+  "proves": [
+    "consent.nocode"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "consent.shown.jc-none",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jc-none",
+        "source": "validator",
+        "level": "note",
+        "code": 218
+      },
+      "when": "any"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "harness": 1,
+  "tests": [
+    "2221-facts",
+    "2222-display",
+    "2223-struct-size",
+    "2224-clipboard-declined",
+    "2224b-clipboard-undeclared",
+    "2225-text",
+    "2226-image",
+    "2227-empty",
+    "2228-text-mistakes",
+    "2229-limit",
+    "2230-cancel",
+    "2231-links",
+    "2231b-links-refused",
+    "2232-links-declined",
+    "2232b-links-undeclared",
+    "2233-read-noted",
+    "2234-taken-out"
+  ]
+}

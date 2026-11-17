@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jm-lod",
+  "name": "jm-lod",
+  "version": "1.0.0",
+  "summary": "J's test mod jm-lod.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

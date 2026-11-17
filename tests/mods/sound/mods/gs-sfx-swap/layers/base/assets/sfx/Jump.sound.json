@@ -1,0 +1,5 @@
+{
+  "kind": "effect",
+  "file": "jump.wav",
+  "replace": "SE_PM_JUMP"
+}

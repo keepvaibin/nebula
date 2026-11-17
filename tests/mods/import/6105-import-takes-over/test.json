@@ -1,0 +1,41 @@
+{
+  "harness": 1,
+  "name": "6105-import-takes-over",
+  "about": "jv-takes (takes_over jv-old, which no mod in the folder is) imported: IMPORTED, and the line under it says it takes over what jv-old kept (services-save 6: installing is the answer)",
+  "proves": [
+    "import.takes_over"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jv-takes",
+      "install": "import",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "import.jv-takes",
+      "has": {
+        "line": 1,
+        "text": "IMPORTED",
+        "id": "jv-takes"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "import.jv-takes",
+      "has": {
+        "line": 2,
+        "text": "Uses the saved data of jv-old",
+        "takes_over": "jv-old"
+      },
+      "when": "any"
+    }
+  ]
+}

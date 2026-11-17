@@ -1,0 +1,52 @@
+{
+  "harness": 1,
+  "name": "2217-struct-size",
+  "about": "now and wall with structs of 8 bytes: LUMA_E_ARGUMENT, Service.StructSize with 8 and 64, 8 and 32",
+  "proves": [
+    "services.time",
+    "services.time.real",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/tm-struct"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-struct.now_8",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-struct.wall_8",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-struct.now_whole",
+      "is": 0
+    },
+    {
+      "log": "tm-struct: time\\.now was given a LumaTimeNow of 8 bytes; it needs at least 64\\."
+    },
+    {
+      "log": "tm-struct: time\\.wall was given a LumaTimeWall of 8 bytes; it needs at least 32\\."
+    }
+  ]
+}

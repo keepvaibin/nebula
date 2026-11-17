@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-api0",
+  "name": "lt-api0",
+  "summary": "lt-api0 (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

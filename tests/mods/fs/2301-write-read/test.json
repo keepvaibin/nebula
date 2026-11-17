@@ -1,0 +1,122 @@
+{
+  "harness": 1,
+  "name": "2301-write-read",
+  "about": "write twice in two letter cases: one file, 5 then 6 bytes; read through a third case: READ value 6, the length asked with a null buffer, the bytes, a second take LUMA_E_HANDLE",
+  "proves": [
+    "services.fs"
+  ],
+  "mods": [
+    "../mods/fs-data"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.e16_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.e24_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4303
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.events",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-data.w1",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-data.w2",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-data.r3",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-data.e1_kind",
+      "is": 2
+    },
+    {
+      "fact": "mod.fs-data.e1_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e1_value",
+      "is": 5
+    },
+    {
+      "fact": "mod.fs-data.e2_kind",
+      "is": 2
+    },
+    {
+      "fact": "mod.fs-data.e2_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e2_value",
+      "is": 6
+    },
+    {
+      "fact": "mod.fs-data.e3_kind",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-data.e3_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e3_value",
+      "is": 6
+    },
+    {
+      "fact": "mod.fs-data.e3_len",
+      "is": 6
+    },
+    {
+      "fact": "mod.fs-data.e3_take",
+      "is": 6
+    },
+    {
+      "fact": "mod.fs-data.e3_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-data.e3_again",
+      "is": -3
+    }
+  ]
+}

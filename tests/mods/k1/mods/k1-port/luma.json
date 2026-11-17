@@ -1,0 +1,24 @@
+{
+  "format": "1.0",
+  "id": "k1-port",
+  "name": "k1-port",
+  "summary": "k1-port (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "options": [
+    {
+      "key": "port",
+      "kind": "number",
+      "name": "Port",
+      "default": 16834,
+      "min": 1,
+      "max": 65535,
+      "step": 1
+    }
+  ]
+}

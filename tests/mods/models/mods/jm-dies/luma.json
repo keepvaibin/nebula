@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jm-dies",
+  "name": "jm-dies",
+  "version": "1.0.0",
+  "summary": "J's test mod jm-dies.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

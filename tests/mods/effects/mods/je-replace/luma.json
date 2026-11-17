@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "je-replace",
+  "name": "je-replace",
+  "version": "1.0.0",
+  "summary": "J's test mod je-replace.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "format": "1.0",
+  "id": "jc-choose",
+  "name": "jc-choose",
+  "version": "1.0.0",
+  "summary": "J's test mod jc-choose.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "hosts": [
+        "api.example.org"
+      ],
+      "why": "Sends your best times.",
+      "name": "net.internet"
+    },
+    {
+      "why": "Copies a time to share.",
+      "name": "system.clipboard"
+    }
+  ]
+}

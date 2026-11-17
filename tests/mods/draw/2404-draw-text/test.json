@@ -1,0 +1,86 @@
+{
+  "harness": 1,
+  "name": "2404-draw-text",
+  "about": "jd-text draws in each game font found by name (MessageFont26, MenuFont64, NumberFont digits, CinemaFont26), Japanese in MessageFont26 (LUMA_OK; with English played its kana are stand-ins and Draw.NoGlyph names the first), a line wrapped at 200 units (text_measure: at least two lines high), and text under a transform scaled 2 (picture: the four fonts down the left, the wrapped block at 300,40, a large x2 at 300,220)",
+  "proves": [
+    "draw.text",
+    "draw.clip"
+  ],
+  "mods": [
+    "../mods/jd-text"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2401
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jd-text.font_failed",
+      "absent": true
+    },
+    {
+      "fact": "mod.jd-text.wrap_h",
+      "at_least": 2,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-text.at",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-text.message",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-text.japanese",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-text.wrap",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-text.scaled",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jd-text",
+        "code": 471
+      },
+      "absent": true
+    },
+    {
+      "picture": "f90",
+      "like": "2404-f90",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

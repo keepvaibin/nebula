@@ -1,0 +1,17 @@
+{
+  "harness": 1,
+  "tests": [
+    "1170-choose-first",
+    "1171-choose-again",
+    "1172-option-first",
+    "1173-option-changed",
+    "1174-unknown-name",
+    "1175-no-layers-call",
+    "1176-layers-fault",
+    "1177-begin-fault",
+    "1178-need-not-begun",
+    "1179-need-not-started",
+    "1180-unstable",
+    "1181-hand-over"
+  ]
+}

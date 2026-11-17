@@ -1,0 +1,28 @@
+{
+  "harness": 1,
+  "name": "1631-cost-none",
+  "about": "No test mod, only the harness's game half: the boundary's cost measured once, no GUARD line (contract guard 1: a mod's cost only where a mod runs)",
+  "proves": [
+    "kernel.guard.cost"
+  ],
+  "mods": [],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "kernel.guard_cost",
+      "count": 1
+    },
+    {
+      "no_log": "GUARD:"
+    }
+  ]
+}

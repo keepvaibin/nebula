@@ -1,0 +1,53 @@
+{
+  "harness": 1,
+  "name": "10-same-twice",
+  "about": "The same test run twice gives the same facts",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/spinwatch"
+  ],
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "seed": 7,
+  "steps": [
+    {
+      "at": 60,
+      "shake": 10
+    },
+    {
+      "at": 120,
+      "stick": [
+        1,
+        0
+      ],
+      "frames": 60
+    },
+    {
+      "at": 200,
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "fact": "pos"
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "setup.seed",
+      "is": 7
+    },
+    {
+      "fact": "pos",
+      "exists": true
+    }
+  ]
+}

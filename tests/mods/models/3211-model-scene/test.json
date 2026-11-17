@@ -1,0 +1,66 @@
+{
+  "harness": 1,
+  "name": "3211-model-scene",
+  "about": "jm-hand's coin at HandR, then the stage changes (EggStarGalaxy scenario 2): the handle ends \"scene\" once, nothing of it is drawn or touched in the new scene, and no new attach appears",
+  "proves": [
+    "model.scene_end"
+  ],
+  "mods": [
+    "../mods/jm-hand"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 120,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 2
+      }
+    },
+    {
+      "at": 420,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-hand.attach",
+      "is": 0
+    },
+    {
+      "fact": "model.end.1",
+      "has": {
+        "why": "scene"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.end.1",
+      "count": 1
+    },
+    {
+      "fact": "model.attach.2",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-hand",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

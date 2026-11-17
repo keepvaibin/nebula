@@ -1,0 +1,14 @@
+{
+  "params": [
+    {
+      "name": "tint",
+      "type": "float3",
+      "default": [
+        1.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "reads": []
+}

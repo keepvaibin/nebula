@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "audio-place",
+  "name": "audio-place",
+  "summary": "audio-place (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

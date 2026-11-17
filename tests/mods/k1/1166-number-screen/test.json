@@ -1,0 +1,93 @@
+{
+  "harness": 1,
+  "name": "1166-number-screen",
+  "about": "k1-port's page shows its number option of 65535 values as one row, Port, at its kept value 20000",
+  "proves": [
+    "services.mods"
+  ],
+  "mods": [
+    {
+      "path": "../mods/k1-port",
+      "options": {
+        "port": 20000
+      }
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 180,
+      "key": "up"
+    },
+    {
+      "at": 240,
+      "key": "up"
+    },
+    {
+      "at": 300,
+      "key": "up"
+    },
+    {
+      "at": 360,
+      "key": "down"
+    },
+    {
+      "at": 420,
+      "key": "down"
+    },
+    {
+      "at": 480,
+      "key": "down"
+    },
+    {
+      "at": 540,
+      "key": "left"
+    },
+    {
+      "at": 600,
+      "key": "left"
+    },
+    {
+      "at": 660,
+      "key": "left"
+    },
+    {
+      "at": 720,
+      "key": "left"
+    },
+    {
+      "at": 780,
+      "key": "right"
+    },
+    {
+      "at": 840,
+      "key": "right"
+    },
+    {
+      "at": 900,
+      "key": "space"
+    },
+    {
+      "at": 1000,
+      "picture": "number-page"
+    },
+    {
+      "at": 1140,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modscreen.k1-port",
+      "has": {
+        "page": "page",
+        "label": "Port",
+        "value": "20000"
+      },
+      "when": "any"
+    }
+  ]
+}

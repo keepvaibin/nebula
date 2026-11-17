@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tm-nothold",
+  "name": "tm-nothold",
+  "summary": "tm-nothold (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

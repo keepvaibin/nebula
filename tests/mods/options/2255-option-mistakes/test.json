@@ -1,0 +1,81 @@
+{
+  "harness": 1,
+  "name": "2255-option-mistakes",
+  "about": "an unknown key, another mod's key, a null key: NOT_FOUND, DENIED, NOT_FOUND, each its row; a short buf: TOO_LARGE naming 7, nothing written; a null buf with a size: ARGUMENT; length + 1 fits",
+  "proves": [
+    "services.mods",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/opt-mistakes"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4401
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.opt-mistakes.unknown",
+      "is": -7
+    },
+    {
+      "fact": "mod.opt-mistakes.not_own",
+      "is": -5
+    },
+    {
+      "fact": "mod.opt-mistakes.null_key",
+      "is": -7
+    },
+    {
+      "fact": "mod.opt-mistakes.short",
+      "is": -16
+    },
+    {
+      "fact": "mod.opt-mistakes.untouched",
+      "is": 1
+    },
+    {
+      "fact": "mod.opt-mistakes.null_buf",
+      "is": -1
+    },
+    {
+      "fact": "mod.opt-mistakes.exact",
+      "is": 6
+    },
+    {
+      "fact": "mod.opt-mistakes.exact_nul",
+      "is": 1
+    },
+    {
+      "fact": "mod.opt-mistakes.watch",
+      "is": 0
+    },
+    {
+      "log": "opt-mistakes asked for an option it does not have: nope\\.",
+      "times": 1
+    },
+    {
+      "log": "opt-mistakes asked for opt-read/lives, another mod's option; a mod reads only its own\\.",
+      "times": 1
+    },
+    {
+      "log": "opt-mistakes gave 6 bytes for its option label, which needs 7\\.",
+      "times": 1
+    },
+    {
+      "log": "opt-mistakes: mods\\.option was given a wrong buf; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

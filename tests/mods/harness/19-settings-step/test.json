@@ -1,0 +1,59 @@
+{
+  "harness": 1,
+  "name": "19-settings-step",
+  "about": "A settings step opens the host's Settings on a page; keys move in it (from Import file, right x6 to Log; space opens it)",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 180,
+      "key": "right"
+    },
+    {
+      "at": 240,
+      "key": "right"
+    },
+    {
+      "at": 300,
+      "key": "right"
+    },
+    {
+      "at": 360,
+      "key": "right"
+    },
+    {
+      "at": 420,
+      "key": "right"
+    },
+    {
+      "at": 480,
+      "key": "right"
+    },
+    {
+      "at": 540,
+      "key": "space"
+    },
+    {
+      "at": 600,
+      "picture": "log"
+    },
+    {
+      "at": 660,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog.page",
+      "exists": true
+    }
+  ]
+}

@@ -1,0 +1,139 @@
+{
+  "harness": 1,
+  "name": "2265b-mario",
+  "about": "the next run, Mario's game data of file 1: not Luigi's value; Mario's set and saved; Luigi's loaded by the game's load: its own 2, file says Luigi; Mario's loaded again: 1",
+  "proves": [
+    "services.save"
+  ],
+  "mods": [
+    "../mods/save-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4256
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4259
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.confirm_ready",
+        "is": 1
+      },
+      "hold": [
+        "RIGHT"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.focused",
+        "is": 1
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.done_ready",
+        "is": 1
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 4
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.saved",
+        "is": 1
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4257
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.save-a.back_character",
+        "is_not": "none"
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-a.asked",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.saved",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.save_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.mario_who",
+      "is": -7
+    },
+    {
+      "fact": "mod.save-a.mario_file",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.mario_character",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.set_mario_who",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-a.luigi_who",
+      "is": 2
+    },
+    {
+      "fact": "mod.save-a.luigi_file",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.luigi_character",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.back_who",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.back_file",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.back_character",
+      "is": 0
+    }
+  ],
+  "continue_from": "2265a-luigi"
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fi-gold",
+  "name": "fi-gold",
+  "version": "1.0.0",
+  "summary": "J's test mod fi-gold.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

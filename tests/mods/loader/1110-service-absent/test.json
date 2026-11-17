@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "1110-service-absent",
+  "about": "A required service the game does not have refuses the mod, naming it (L505)",
+  "proves": [
+    "kernel.service",
+    "kernel.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../mods/lt-svc-none",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-svc-none.started",
+      "absent": true
+    },
+    {
+      "log": "lt-svc-none: .*lt\\.absent"
+    }
+  ]
+}

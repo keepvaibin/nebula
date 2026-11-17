@@ -1,0 +1,57 @@
+{
+  "harness": 1,
+  "name": "2230-cancel",
+  "about": "cancel before the answer: no event; cancel again: LUMA_E_HANDLE, reported",
+  "proves": [
+    "services.system.clipboard",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/sys-clip-cancel"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4243
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-clip-cancel.get",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-clip-cancel.cancel_1",
+      "is": 0
+    },
+    {
+      "fact": "mod.sys-clip-cancel.cancel_2",
+      "is": -3
+    },
+    {
+      "fact": "mod.sys-clip-cancel.events",
+      "is": 0
+    },
+    {
+      "log": "sys-clip-cancel: system\\.clipboard\\.cancel was given a handle that is closed or not its own\\."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tm-r1001b",
+  "name": "tm-r1001b",
+  "summary": "tm-r1001b (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

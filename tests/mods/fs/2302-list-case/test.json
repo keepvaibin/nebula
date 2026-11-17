@@ -1,0 +1,102 @@
+{
+  "harness": 1,
+  "name": "2302-list-case",
+  "about": "list: one line a file or folder, folders ending '/', byte order, recursive; the case the file had kept by a write in another case; a move that changes only the case renames it",
+  "proves": [
+    "services.fs"
+  ],
+  "mods": [
+    "../mods/fs-data"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.e16_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.e24_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4303
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-data.events",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-data.e4_kind",
+      "is": 5
+    },
+    {
+      "fact": "mod.fs-data.e4_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e4_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-data.e9_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e9_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-data.e10_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e10_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-data.e11_kind",
+      "is": 4
+    },
+    {
+      "fact": "mod.fs-data.e11_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e12_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-data.e12_same",
+      "is": 1
+    }
+  ]
+}

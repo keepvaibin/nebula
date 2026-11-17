@@ -1,0 +1,78 @@
+{
+  "harness": 1,
+  "name": "1140-take-out-held",
+  "about": "lt-hold taken out while the game runs, holding 3 blocks (100, 200, 300 bytes): takeout.lt-hold says so, the log line names them, and a later call of its hooked function no longer reaches it",
+  "proves": [
+    "kernel.reload.take_out"
+  ],
+  "mods": [
+    "../../loader/mods/lt-hold"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4247
+      ],
+      "fact": "first"
+    },
+    {
+      "at": 150,
+      "take_out": "lt-hold",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.lt-hold",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4247
+      ],
+      "fact": "second"
+    },
+    {
+      "after": {
+        "fact": "second",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-hold.held",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-hold.hooked",
+      "count": 1
+    },
+    {
+      "fact": "mod.lt-hold.stopped",
+      "is": 1
+    },
+    {
+      "fact": "takeout.lt-hold",
+      "is": {
+        "blocks": 3,
+        "bytes": 600,
+        "stopped": true,
+        "finished": true
+      }
+    },
+    {
+      "log": "\\[mod lt-hold\\] held 3 blocks \\(600 bytes\\) when it ended; the game freed them"
+    }
+  ]
+}

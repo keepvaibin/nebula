@@ -1,0 +1,31 @@
+{
+  "harness": 1,
+  "name": "2103-svc-newer-minor",
+  "about": "An import of 1.4 (newer than the provider's 1.3) is refused with L505 naming test.svc 1.4",
+  "proves": [
+    "kernel.service",
+    "kernel.refusal",
+    "services.registry"
+  ],
+  "mods": [
+    {
+      "path": "../mods/reg-svc14",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-svc14.started",
+      "absent": true
+    },
+    {
+      "log": "reg-svc14: .*test\\.svc.*1\\.4"
+    }
+  ]
+}

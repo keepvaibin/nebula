@@ -1,0 +1,21 @@
+{
+  "format": "1.0",
+  "id": "kd-user",
+  "name": "kd-user",
+  "summary": "kd-user (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "kd-lib"
+    }
+  ],
+  "kit": {
+    "kd-lib.player.form": 1
+  }
+}

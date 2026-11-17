@@ -1,0 +1,142 @@
+{
+  "harness": 1,
+  "name": "2452-inst-gold",
+  "about": "fi-gold: draw.inst on the player: gold (0xFFC83CFF over every material colour), the joint HandR hidden, drawn 1.5 times about his base, released (pictures: f50 Mario as he is, f110 gold Mario, f170 gold without his right hand, f230 gold and larger, his feet where they were, f300 as f50: a person's look); the game's own animation goes on under the colour",
+  "proves": [
+    "draw.inst.of",
+    "draw.inst.set_colour",
+    "draw.inst.set_visible",
+    "draw.inst.set_scale",
+    "draw.inst.release"
+  ],
+  "mods": [
+    "../mods/fi-gold"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 50,
+      "picture": "f50"
+    },
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2450
+      ]
+    },
+    {
+      "at": 110,
+      "picture": "f110"
+    },
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2451
+      ]
+    },
+    {
+      "at": 170,
+      "picture": "f170"
+    },
+    {
+      "at": 180,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2452
+      ]
+    },
+    {
+      "at": 230,
+      "picture": "f230"
+    },
+    {
+      "at": 240,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2453
+      ]
+    },
+    {
+      "at": 300,
+      "picture": "f300"
+    },
+    {
+      "at": 320,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fi-gold.of",
+      "is": 0
+    },
+    {
+      "fact": "mod.fi-gold.colour",
+      "is": 0
+    },
+    {
+      "fact": "mod.fi-gold.hide",
+      "is": 0
+    },
+    {
+      "fact": "mod.fi-gold.scale",
+      "is": 0
+    },
+    {
+      "fact": "mod.fi-gold.release",
+      "is": 0
+    },
+    {
+      "fact": "draw.inst.1",
+      "field": "colour",
+      "is": 4291312895,
+      "when": "any"
+    },
+    {
+      "fact": "draw.inst.1",
+      "field": "hidden",
+      "at_least": 1,
+      "when": "any"
+    },
+    {
+      "fact": "draw.inst.1",
+      "field": "sx",
+      "is": 1.5,
+      "when": "any"
+    },
+    {
+      "fact": "draw.inst.1",
+      "field": "materials",
+      "at_least": 1,
+      "when": "any"
+    },
+    {
+      "fact": "draw.inst.end.1",
+      "has": {
+        "why": "released"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fi-gold",
+        "code": 101
+      },
+      "absent": true
+    }
+  ]
+}

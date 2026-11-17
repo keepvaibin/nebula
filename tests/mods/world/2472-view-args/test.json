@@ -1,0 +1,156 @@
+{
+  "harness": 1,
+  "name": "2472-view-args",
+  "about": "fv-args: draw.view's refusals, each reported: sizes 0 and past 1024, a null out, a third view (E_LIMIT), a camera at its eye, up along the look, fov 1 and 179, a NaN eye, follow a null actor or a zero offset, texture with a null out, texture_free of a view's texture, rig null, rig 7, a joint the player lacks, a JOINT rig with near 0, eye_of with a null out, main_eye with a NaN, set_on and camera on handle 999 (E_HANDLE)",
+  "proves": [
+    "draw.view"
+  ],
+  "mods": [
+    "../mods/fv-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2471
+      ]
+    },
+    {
+      "at": 60,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fv-args.zero",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.wide",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.first",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-args.second",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-args.third",
+      "is": -4
+    },
+    {
+      "fact": "mod.fv-args.at_eye",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.up_along",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.fov_low",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.fov_high",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.nan",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.follow_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.follow_zero",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.texture_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.free_view",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.rig_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.rig_unknown",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.rig_joint",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.rig_near",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.eye_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.main_nan",
+      "is": -1
+    },
+    {
+      "fact": "mod.fv-args.on_bad",
+      "is": -3
+    },
+    {
+      "fact": "mod.fv-args.camera_bad",
+      "is": -3
+    },
+    {
+      "fact": "mod.fv-args.release_first",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-args.release_second",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fv-args",
+        "code": 101
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fv-args",
+        "code": 104
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fv-args",
+        "code": 102
+      },
+      "when": "any"
+    }
+  ]
+}

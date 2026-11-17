@@ -1,0 +1,37 @@
+{
+  "harness": 1,
+  "name": "1128-needs-missing",
+  "about": "A mod whose needed mod is not installed does not start, and the log names what it needs",
+  "proves": [
+    "kernel.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../../loader/mods/lt-uses",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-uses.started",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-uses",
+        "source": "validator",
+        "level": "error",
+        "code": 800,
+        "text": "lt-uses needs lt-lib: it is not installed."
+      },
+      "when": "any"
+    }
+  ]
+}

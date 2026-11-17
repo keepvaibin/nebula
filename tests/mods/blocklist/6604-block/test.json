@@ -1,0 +1,124 @@
+{
+  "harness": 1,
+  "name": "6604-block",
+  "about": "BLOCK on jc-none's page: off at once, the button reads UNBLOCK",
+  "proves": [
+    "mods.blocklist"
+  ],
+  "mods": [
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 180,
+      "key": "up"
+    },
+    {
+      "at": 240,
+      "key": "up"
+    },
+    {
+      "at": 300,
+      "key": "up"
+    },
+    {
+      "at": 360,
+      "key": "down"
+    },
+    {
+      "at": 420,
+      "key": "down"
+    },
+    {
+      "at": 480,
+      "key": "down"
+    },
+    {
+      "at": 540,
+      "key": "left"
+    },
+    {
+      "at": 600,
+      "key": "left"
+    },
+    {
+      "at": 660,
+      "key": "left"
+    },
+    {
+      "at": 720,
+      "key": "left"
+    },
+    {
+      "at": 780,
+      "key": "right"
+    },
+    {
+      "at": 840,
+      "key": "right"
+    },
+    {
+      "at": 900,
+      "key": "space"
+    },
+    {
+      "at": 960,
+      "key": "up"
+    },
+    {
+      "at": 1020,
+      "key": "right"
+    },
+    {
+      "at": 1080,
+      "key": "right"
+    },
+    {
+      "at": 1140,
+      "key": "space"
+    },
+    {
+      "at": 1260,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modscreen.jc-none",
+      "has": {
+        "page": "page",
+        "value": "ABOUT|REMOVE|BLOCK|DONE"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modscreen.jc-none",
+      "has": {
+        "page": "page",
+        "value": "ABOUT|REMOVE|UNBLOCK|DONE"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modscreen.jc-none",
+      "has": {
+        "line": 1,
+        "page": "page",
+        "label": "STATUS",
+        "value": "OFF"
+      },
+      "when": "any",
+      "scope": "installation"
+    }
+  ]
+}

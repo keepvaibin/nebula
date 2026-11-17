@@ -1,0 +1,9 @@
+{
+  "harness": 1,
+  "tests": [
+    "1701-plain-bare",
+    "1702-rows-code",
+    "1703-safe-start-asked",
+    "1704-safe-start-crash"
+  ]
+}

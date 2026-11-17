@@ -1,0 +1,78 @@
+{
+  "harness": 1,
+  "name": "2204-rates-two",
+  "about": "Two mods at 500 and 4000: the world at 2000, 2 steps a frame",
+  "proves": [
+    "services.time"
+  ],
+  "mods": [
+    "../mods/tm-r500",
+    "../mods/tm-r4000"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-r500.rate",
+      "is": 2000,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r500.steps",
+      "is": 2,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r500.ds",
+      "is": 2,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-r4000.rate",
+      "is": 2000,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    }
+  ]
+}

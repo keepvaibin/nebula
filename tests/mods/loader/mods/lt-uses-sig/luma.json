@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "lt-uses-sig",
+  "name": "lt-uses-sig",
+  "summary": "lt-uses-sig (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "lt-lib"
+    }
+  ]
+}

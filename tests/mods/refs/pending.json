@@ -1,0 +1,7 @@
+{
+  "3133-missing-joint": "3.2 joints and 3.5 effects bound to joints",
+  "3134-lifted-typo": "references 5.2 (LumaModInfo.refs, F; the compiler's lifting, G) and 3.5",
+  "3135-built-name": "3.5 (LumaKit's effects start answering a missing name with the placeholder)",
+  "3136-missing-text": "F-S1: the host's added [<mod>:<id>] lines",
+  "3137-no-placeholder-data": "3.13's check of nebula:placeholder/* in the store"
+}

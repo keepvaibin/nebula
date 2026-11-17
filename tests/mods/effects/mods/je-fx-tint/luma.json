@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "je-fx-tint",
+  "name": "je-fx-tint",
+  "version": "1.0.0",
+  "summary": "J's test mod je-fx-tint.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

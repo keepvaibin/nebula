@@ -1,0 +1,80 @@
+{
+  "harness": 1,
+  "name": "2806-assets-provide-two",
+  "about": "one path, two mods: the second is answered EXISTS and cannot withdraw the first's, and reads the first's bytes; once the first withdraws, the second's provide is taken",
+  "proves": [
+    "services.assets.provide"
+  ],
+  "mods": [
+    "../mods/assets-first",
+    "../mods/assets-second"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 12,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4802
+      ]
+    },
+    {
+      "at": 14,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4803
+      ]
+    },
+    {
+      "at": 16,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4804
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.assets-first.first_provide",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-second.second_exists",
+      "is": -8
+    },
+    {
+      "fact": "mod.assets-second.second_withdraw",
+      "is": -7
+    },
+    {
+      "fact": "mod.assets-second.second_sees_first",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-first.first_withdraw",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-second.second_provide",
+      "is": 0
+    }
+  ]
+}

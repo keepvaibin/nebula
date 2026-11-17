@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "3301-material-spheres",
+    "3302-material-stripes"
+  ]
+}

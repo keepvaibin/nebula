@@ -1,0 +1,8 @@
+{
+  "file": "GlTitle.ttf",
+  "size": 96,
+  "glyphs": {
+    "chars": "Ω"
+  },
+  "fallback": "MessageFont26"
+}

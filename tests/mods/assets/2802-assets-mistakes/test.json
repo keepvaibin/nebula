@@ -1,0 +1,95 @@
+{
+  "harness": 1,
+  "name": "2802-assets-mistakes",
+  "about": "a null path, a path of 1024 bytes, flags 2, a null out, out->size 4, a null data, a null name with a size: ARGUMENT, each said in the mod log",
+  "proves": [
+    "services.assets",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/assets-mistakes"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.assets-mistakes.null_path",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-mistakes.long_path",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-mistakes.bad_flags",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-mistakes.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-mistakes.tiny_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-mistakes.null_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-mistakes.null_name",
+      "is": -1
+    },
+    {
+      "log": "assets-mistakes: assets\\.find was given a wrong path; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "assets-mistakes",
+        "english": "assets-mistakes: assets.find was given a wrong path; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "assets-mistakes: assets\\.find was given a wrong flags; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "assets-mistakes: assets\\.find was given a wrong out; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "assets-mistakes",
+        "english": "assets-mistakes: assets.find was given a wrong out; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "assets-mistakes: assets\\.bytes was given a wrong data; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "assets-mistakes: assets\\.entry was given a wrong name; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

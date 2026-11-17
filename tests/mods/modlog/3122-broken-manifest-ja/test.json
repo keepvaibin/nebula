@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "3122-broken-manifest-ja",
+  "about": "Host half. 3122 in the played language (UsFrench: RMGE01 has no Japanese): the entry's text is the validator's French words",
+  "proves": [
+    "modlog.validator",
+    "modlog.text"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jl-broken",
+      "loads": false
+    }
+  ],
+  "language": "UsFrench",
+  "steps": [
+    {
+      "at": 60,
+      "picture": "title"
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jl-broken",
+        "code": 201
+      },
+      "when": "any"
+    },
+    {
+      "picture": "title",
+      "like": "refs/{renderer}/title-fr.png",
+      "within": {
+        "rmse": 6.0
+      }
+    }
+  ]
+}

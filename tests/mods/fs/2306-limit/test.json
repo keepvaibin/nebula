@@ -1,0 +1,61 @@
+{
+  "harness": 1,
+  "name": "2306-limit",
+  "about": "a 33rd open request: LUMA_E_LIMIT, Service.Limit with 32; the 32 answered NOT_FOUND",
+  "proves": [
+    "services.fs",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/fs-limit"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-limit.e31_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-limit.events",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-limit.made",
+      "is": 32
+    },
+    {
+      "fact": "mod.fs-limit.last",
+      "is": -4
+    },
+    {
+      "fact": "mod.fs-limit.events",
+      "is": 32
+    },
+    {
+      "log": "fs-limit: fs\\.read reached its limit of 32; it did nothing\\."
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "2709-net-address",
+  "about": "address (1.4): this machine's local-network IPv4 address, the length asked equal to the length given, dotted, not loopback (or NOT_FOUND on a machine without one); a buf too short TOO_LARGE; a null buf with a size ARGUMENT, reported",
+  "proves": [
+    "services.net.local"
+  ],
+  "mods": [
+    "../mods/net-echo"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4503
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-echo.address_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.address_short",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-echo.address_null_buf",
+      "is": -1
+    },
+    {
+      "log": "net-echo: net\\.local\\.address was given a wrong buf; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

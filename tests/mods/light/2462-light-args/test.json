@@ -1,0 +1,135 @@
+{
+  "harness": 1,
+  "name": "2462-light-args",
+  "about": "fl-args: every refusal of draw.light 1.0 answers its status and writes no handle: a null desc or out, NaN or far position, colour over 1, candela 0 or over 5000, radius under 5 or over 400, an unknown flag (-1, Service.Argument); a 4-byte desc (-1, Service.StructSize); move with null or NaN (-1); an unknown or removed handle (-3, Service.Handle); set with a bad desc (-1)",
+  "proves": [
+    "draw.light.refusals"
+  ],
+  "mods": [
+    "../mods/fl-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2461
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fl-args.null_desc",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.small",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.nan_position",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.far_position",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.bright_colour",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.no_candela",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.many_candela",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.small_radius",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.large_radius",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.bad_flags",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.fl-args.good",
+      "is": 0
+    },
+    {
+      "fact": "mod.fl-args.move_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.move_nan",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.move_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.fl-args.set_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.fl-args.set_bad",
+      "is": -1
+    },
+    {
+      "fact": "mod.fl-args.remove",
+      "is": 0
+    },
+    {
+      "fact": "mod.fl-args.remove2",
+      "is": -3
+    },
+    {
+      "fact": "mod.fl-args.move_removed",
+      "is": -3
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fl-args",
+        "code": 103
+      },
+      "count": 1
+    },
+    {
+      "fact": "draw.light.add.2",
+      "absent": true
+    },
+    {
+      "fact": "draw.light.end.1",
+      "has": {
+        "why": "removed"
+      },
+      "when": "any"
+    }
+  ]
+}

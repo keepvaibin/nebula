@@ -1,0 +1,62 @@
+{
+  "harness": 1,
+  "name": "1301-own-class",
+  "about": "own_class of the player through a LiveActor pointer is MarioActor's number, the rows' index (1355 since int0406 added MR::PlayerChannelScope before it)",
+  "proves": [
+    "kernel.objects.own_class",
+    "kernel.objects.number"
+  ],
+  "mods": [
+    "../mods/to-objects"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ran",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.player",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.own",
+      "is": 1355
+    },
+    {
+      "fact": "mod.to-objects.mario_number",
+      "is": 1355
+    },
+    {
+      "fact": "mod.to-objects.live_number",
+      "is": 1097
+    },
+    {
+      "fact": "mod.to-objects.own_is_mario",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.class_of_same",
+      "is": 1
+    }
+  ]
+}

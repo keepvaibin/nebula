@@ -1,0 +1,49 @@
+{
+  "harness": 1,
+  "name": "1176-layers-fault",
+  "about": "ly-fault faults in its layers call: refused as a fault in its start, GUARD names layers",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ly-fault",
+      "loads": false
+    }
+  ],
+  "starts": 1,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-fault.entered",
+      "count": 1
+    },
+    {
+      "fact": "mod.ly-fault.survived",
+      "absent": true
+    },
+    {
+      "fact": "mod.ly-fault.started",
+      "absent": true
+    },
+    {
+      "log": "\\[mod ly-fault\\] GUARD: its code failed \\(start: layers\\): "
+    },
+    {
+      "log": "ly-fault.*its begin or start failed and the guard stopped it"
+    },
+    {
+      "no_log": "host: restart"
+    }
+  ],
+  "faults": [
+    {
+      "mod": "ly-fault"
+    }
+  ]
+}

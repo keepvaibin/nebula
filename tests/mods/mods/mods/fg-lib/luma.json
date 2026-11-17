@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fg-lib",
+  "name": "fg-lib",
+  "summary": "fg-lib (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

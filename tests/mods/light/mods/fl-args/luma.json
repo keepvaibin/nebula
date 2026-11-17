@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fl-args",
+  "name": "fl-args",
+  "version": "1.0.0",
+  "summary": "J's test mod fl-args.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "harness": 1,
+  "name": "2218-let-go",
+  "about": "LET GO on the mod's Mods page: from the next frame its hold is gone (holders 0), the Note Time.LetGo (code 121) in the mod log",
+  "proves": [
+    "services.time"
+  ],
+  "mods": [
+    "../mods/tm-hold"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 20,
+      "settings": "mods"
+    },
+    {
+      "at": 80,
+      "key": "up"
+    },
+    {
+      "at": 140,
+      "key": "up"
+    },
+    {
+      "at": 200,
+      "key": "up"
+    },
+    {
+      "at": 260,
+      "key": "down"
+    },
+    {
+      "at": 320,
+      "key": "down"
+    },
+    {
+      "at": 380,
+      "key": "down"
+    },
+    {
+      "at": 440,
+      "key": "left"
+    },
+    {
+      "at": 500,
+      "key": "left"
+    },
+    {
+      "at": 560,
+      "key": "left"
+    },
+    {
+      "at": 620,
+      "key": "left"
+    },
+    {
+      "at": 680,
+      "key": "right"
+    },
+    {
+      "at": 740,
+      "key": "right"
+    },
+    {
+      "at": 800,
+      "key": "space"
+    },
+    {
+      "at": 860,
+      "key": "down"
+    },
+    {
+      "at": 920,
+      "key": "space"
+    },
+    {
+      "at": 1000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-hold.hold",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-hold.holders",
+      "is": 1,
+      "when": "all",
+      "frames": [
+        13,
+        19
+      ]
+    },
+    {
+      "fact": "mod.tm-hold.holders",
+      "is": 0,
+      "when": "all",
+      "frames": [
+        930,
+        990
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "tm-hold",
+        "source": "code",
+        "level": "note",
+        "code": 121
+      },
+      "when": "any"
+    }
+  ]
+}

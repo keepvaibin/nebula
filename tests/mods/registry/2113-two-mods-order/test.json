@@ -1,0 +1,63 @@
+{
+  "harness": 1,
+  "name": "2113-two-mods-order",
+  "about": "Two mods' events in one frame, the lower mod's posted first: the higher mod's given first",
+  "proves": [
+    "services.events"
+  ],
+  "mods": [
+    "../mods/reg-order-a",
+    "../mods/reg-order-b"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4266
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4265
+      ]
+    },
+    {
+      "at": 33,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4262
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-order-a.post",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-order-b.post",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-order-a.a_first",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-order-b.a_first",
+      "is": 1
+    }
+  ]
+}

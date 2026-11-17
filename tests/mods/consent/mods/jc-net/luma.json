@@ -1,0 +1,23 @@
+{
+  "format": "1.0",
+  "id": "jc-net",
+  "name": "jc-net",
+  "version": "1.0.0",
+  "summary": "J's test mod jc-net.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "hosts": [
+        "api.example.org",
+        "*.example.net"
+      ],
+      "why": "Sends your best times to the board.",
+      "name": "net.internet"
+    }
+  ]
+}

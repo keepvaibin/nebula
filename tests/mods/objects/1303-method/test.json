@@ -1,0 +1,66 @@
+{
+  "harness": 1,
+  "name": "1303-method",
+  "about": "The kind 8 import of a virtual runs the own class's function and its hooks; getBaseMtx as its row",
+  "proves": [
+    "kernel.objects.method",
+    "kernel.bind.method"
+  ],
+  "mods": [
+    "../mods/to-objects"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ran",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.player",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.base_row_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.base_method_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.method_by_name_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.method_unhookable",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.calc_method_runs",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.hook_on_method_refused",
+      "is": -1
+    }
+  ]
+}

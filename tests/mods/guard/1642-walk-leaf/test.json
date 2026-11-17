@@ -1,0 +1,80 @@
+{
+  "harness": 1,
+  "name": "1642-walk-leaf",
+  "about": "guard-walk-3: its after hook's leaf function (no frame) faults: resumed, the mod off, the game goes on",
+  "proves": [
+    "kernel.guard.resume"
+  ],
+  "mods": [
+    "../mods/guard-walk-3"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "takeout.guard-walk-3",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1642
+      ],
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-walk-3.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.guard-walk-3.survived",
+      "absent": true
+    },
+    {
+      "fact": "mod.guard-walk-3.again",
+      "absent": true
+    },
+    {
+      "log": "\\[mod guard\\-walk\\-3\\] GUARD: its code failed \\(after hook: MarioActor::control\\): a memory access it may not make at .+\\+0x[0-9a-f]+, address 0x[0-9a-f]+\\. It is off until the next start; what it was changing may be half done\\."
+    },
+    {
+      "no_log": "not resumed"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "guard-walk-3",
+        "source": "guard",
+        "level": "error",
+        "code": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "takeout.guard-walk-3",
+      "exists": true
+    },
+    {
+      "fact": "after",
+      "exists": true
+    }
+  ],
+  "faults": [
+    {
+      "mod": "guard-walk-3"
+    }
+  ]
+}

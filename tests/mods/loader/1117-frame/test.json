@@ -1,0 +1,23 @@
+{
+  "harness": 1,
+  "name": "1117-frame",
+  "about": "A mod with no imports and a 64 KiB frame loads and runs (luma.h's stack probe)",
+  "proves": [
+    "kernel.bind"
+  ],
+  "mods": [
+    "../mods/lt-frame"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-frame.sum",
+      "is": 8189175
+    }
+  ]
+}

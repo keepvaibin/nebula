@@ -1,0 +1,60 @@
+{
+  "harness": 1,
+  "name": "1210-same-twice",
+  "about": "The same imports in two mods bind to the same rows and call the same function: equal answers",
+  "proves": [
+    "kernel.bind"
+  ],
+  "mods": [
+    "../mods/tt-shape",
+    "../mods/tt-shape2"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tt-shape.pos_size",
+      "is": 48
+    },
+    {
+      "fact": "mod.tt-shape.xyz_at",
+      "is": 408
+    },
+    {
+      "fact": "mod.tt-shape.m03",
+      "is": 1500
+    },
+    {
+      "fact": "mod.tt-shape.m23",
+      "is": 3000
+    },
+    {
+      "fact": "mod.tt-shape.untouched",
+      "is": 1
+    },
+    {
+      "fact": "mod.tt-shape2.pos_size",
+      "is": 48
+    },
+    {
+      "fact": "mod.tt-shape2.xyz_at",
+      "is": 408
+    },
+    {
+      "fact": "mod.tt-shape2.m03",
+      "is": 1500
+    },
+    {
+      "fact": "mod.tt-shape2.m23",
+      "is": 3000
+    },
+    {
+      "fact": "mod.tt-shape2.untouched",
+      "is": 1
+    }
+  ]
+}

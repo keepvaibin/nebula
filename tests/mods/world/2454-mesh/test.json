@@ -1,0 +1,88 @@
+{
+  "harness": 1,
+  "name": "2454-mesh",
+  "about": "fw-mesh draws its own model (layers/base/assets/metre.gltf cooked to Luma/fw-mesh/metre, the 1 m cube) with draw.mesh at world.after, 150 to the player's +x at his feet: LUMA_OK, the cube in its own material beside Mario (f90, a person's look); a model the mod lacks is E_NOT_FOUND with Content.MissingModel; off, the cube gone (f130)",
+  "proves": [
+    "draw.world",
+    "draw.world_depth"
+  ],
+  "mods": [
+    "../mods/fw-mesh"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2450
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2451
+      ]
+    },
+    {
+      "at": 130,
+      "picture": "f130"
+    },
+    {
+      "at": 140,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fw-mesh.at",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-mesh.mesh",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-mesh.missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.fw-mesh.off",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "fw-mesh",
+        "code": 621
+      },
+      "when": "any"
+    },
+    {
+      "picture": "f90",
+      "like": "refs/{renderer}/f90.png",
+      "within": {
+        "rmse": 6.0
+      }
+    },
+    {
+      "picture": "f130",
+      "like": "refs/{renderer}/f130.png",
+      "within": {
+        "rmse": 6.0
+      }
+    }
+  ]
+}

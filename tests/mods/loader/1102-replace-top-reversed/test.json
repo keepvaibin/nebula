@@ -1,0 +1,42 @@
+{
+  "harness": 1,
+  "name": "1102-replace-top-reversed",
+  "about": "The same two replaces the other way round: the other mod holds it",
+  "proves": [
+    "kernel.hook.replace",
+    "kernel.refusal"
+  ],
+  "mods": [
+    "../mods/lt-rep2",
+    {
+      "path": "../mods/lt-rep1",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getPlayerLeft",
+      "signature": "s32()",
+      "args": [],
+      "fact": "left"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "left",
+      "is": 200
+    },
+    {
+      "fact": "mod.lt-rep1.started",
+      "absent": true
+    },
+    {
+      "log": "lt-rep1: .*replaces \"MR::getPlayerLeft\" .*which lt-rep2 replaces already"
+    }
+  ]
+}

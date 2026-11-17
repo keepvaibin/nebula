@@ -1,0 +1,74 @@
+{
+  "harness": 1,
+  "name": "1504-tables-taken-out",
+  "about": "nm-tables taken out while the game runs: only the bytes it wrote are undone (comet 1 is \"Ghost\" again), the game's own later change to comet 0 stays, said in the log",
+  "proves": [
+    "kernel.tables.taken_out"
+  ],
+  "mods": [
+    "../mods/nm-tables",
+    "../mods/nm-tables-watch"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1502
+      ],
+      "fact": "game_write"
+    },
+    {
+      "at": 120,
+      "take_out": "nm-tables",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.nm-tables",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1503
+      ],
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "mod.nm-tables-watch.after_game_kept",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.nm-tables.call_after",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables-watch.game_wrote",
+      "is": 1
+    },
+    {
+      "log": "\\[mod nm-tables\\] the bytes it wrote are the game's again, or another mod's \\(1 tables\\)"
+    },
+    {
+      "fact": "mod.nm-tables-watch.after_ghost",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-tables-watch.after_game_kept",
+      "is": 1
+    }
+  ]
+}

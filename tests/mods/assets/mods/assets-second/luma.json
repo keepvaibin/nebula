@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "assets-second",
+  "name": "assets-second",
+  "summary": "assets-second (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

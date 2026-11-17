@@ -1,0 +1,100 @@
+{
+  "harness": 1,
+  "name": "2451-world-args",
+  "about": "fw-args: line3 outside a point (-18, Draw.Outside); at world.after: a NaN end, thickness 0, tri3 null, a billboard of size -1, mesh with an empty name (-1, Service.Argument); a freed texture's billboard (-3, Service.Handle, the checker drawn); mesh \"Coin\" at the player (LUMA_OK: the game's coin drawn), mesh \"FwNoModel\" (-7, Content.MissingModel)",
+  "proves": [
+    "draw.world_refusals"
+  ],
+  "mods": [
+    "../mods/fw-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2450
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fw-args.outside",
+      "is": -18
+    },
+    {
+      "fact": "mod.fw-args.free",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-args.at",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-args.nan",
+      "is": -1
+    },
+    {
+      "fact": "mod.fw-args.thin",
+      "is": -1
+    },
+    {
+      "fact": "mod.fw-args.tri_null",
+      "is": -1
+    },
+    {
+      "fact": "mod.fw-args.freed",
+      "is": -3
+    },
+    {
+      "fact": "mod.fw-args.size",
+      "is": -1
+    },
+    {
+      "fact": "mod.fw-args.mesh_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.fw-args.mesh",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-args.no_model",
+      "is": -7
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fw-args",
+        "code": 621
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fw-args",
+        "code": 470
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fw-args",
+        "code": 102
+      },
+      "count": 1
+    }
+  ]
+}

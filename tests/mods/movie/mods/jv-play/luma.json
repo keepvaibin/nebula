@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jv-play",
+  "name": "jv-play",
+  "version": "1.0.0",
+  "summary": "J's test mod jv-play.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

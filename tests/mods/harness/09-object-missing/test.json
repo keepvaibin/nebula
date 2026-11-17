@@ -1,0 +1,25 @@
+{
+  "harness": 1,
+  "name": "09-object-missing",
+  "about": "player.at an object not in the stage is setup-failed naming it",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "player": {
+    "at": "NoSuchObject#0"
+  },
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": []
+}

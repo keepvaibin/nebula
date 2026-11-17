@@ -1,0 +1,185 @@
+{
+  "harness": 1,
+  "name": "2268b-limits-next",
+  "about": "the next run loads the 960 KiB file (past the old read buffer): every value back byte for byte, the file's own game data (an event value set by the harness) loaded, no damaged-save screen",
+  "proves": [
+    "services.save"
+  ],
+  "mods": [
+    "../mods/save-a",
+    "../mods/save-b",
+    "../mods/save-c",
+    "../mods/save-d",
+    "../mods/save-e"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "GameDataFunction::getGameEventValue",
+      "signature": "u32(const char *)",
+      "args": [
+        "MessageAlreadyRead"
+      ],
+      "fact": "game.message_read"
+    },
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4266
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "setup.file",
+      "is": "loaded"
+    },
+    {
+      "fact": "game.message_read",
+      "is": 4660
+    },
+    {
+      "no_log": "could not be read|too big"
+    },
+    {
+      "fact": "mod.save-a.len_k0",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-a.ok_k0",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.len_k1",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-a.ok_k1",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.len_k2",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-a.ok_k2",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-a.len_k3",
+      "is": 65508
+    },
+    {
+      "fact": "mod.save-a.ok_k3",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-b.len_k0",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-b.ok_k0",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-b.len_k1",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-b.ok_k1",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-b.len_k2",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-b.ok_k2",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-b.len_k3",
+      "is": 65508
+    },
+    {
+      "fact": "mod.save-b.ok_k3",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-c.len_k0",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-c.ok_k0",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-c.len_k1",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-c.ok_k1",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-c.len_k2",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-c.ok_k2",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-c.len_k3",
+      "is": 65508
+    },
+    {
+      "fact": "mod.save-c.ok_k3",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-d.len_k0",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-d.ok_k0",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-d.len_k1",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-d.ok_k1",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-d.len_k2",
+      "is": 65536
+    },
+    {
+      "fact": "mod.save-d.ok_k2",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-e.len_k1",
+      "is": 100
+    },
+    {
+      "fact": "mod.save-e.ok_k1",
+      "is": 1
+    }
+  ],
+  "continue_from": "2268a-limits"
+}

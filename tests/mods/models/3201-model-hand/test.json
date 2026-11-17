@@ -1,0 +1,74 @@
+{
+  "harness": 1,
+  "name": "3201-model-hand",
+  "about": "jm-hand attaches the game's Coin at the player's joint HandR: LUMA_OK, drawn, its joint 0 on the hand every frame (gap under 1 unit) and shown (a coin in Mario's right hand as he stands: a person's look)",
+  "proves": [
+    "model.attach",
+    "model.joint_follow"
+  ],
+  "mods": [
+    "../mods/jm-hand"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-hand.attach",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "mod": "jm-hand",
+        "model": "Coin",
+        "follow": "joint",
+        "joint": "HandR",
+        "placeholder": false,
+        "drawn": true,
+        "reused": false
+      },
+      "when": "any"
+    },
+    {
+      "fact": "model.pose.1",
+      "field": "gap",
+      "at_most": 1.0,
+      "when": "all"
+    },
+    {
+      "fact": "model.pose.1",
+      "field": "shown",
+      "is": true,
+      "when": "last"
+    },
+    {
+      "fact": "model.end.1",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-hand",
+        "source": "content"
+      },
+      "absent": true
+    }
+  ]
+}

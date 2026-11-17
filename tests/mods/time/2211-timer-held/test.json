@@ -1,0 +1,89 @@
+{
+  "harness": 1,
+  "name": "2211-timer-held",
+  "about": "A STEPS timer while the world is held: no event; after release: due",
+  "proves": [
+    "services.time.timers",
+    "services.time"
+  ],
+  "mods": [
+    "../mods/tm-theld"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 12,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4222
+      ]
+    },
+    {
+      "at": 25,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4224
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4223
+      ]
+    },
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4225
+      ]
+    },
+    {
+      "at": 45,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-theld.hold",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-theld.timer",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-theld.events_held",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-theld.release",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-theld.events_after",
+      "is": 1
+    }
+  ]
+}

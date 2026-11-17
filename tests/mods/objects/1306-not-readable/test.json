@@ -1,0 +1,60 @@
+{
+  "harness": 1,
+  "name": "1306-not-readable",
+  "about": "A pointer one byte into the player gives -3 with one Object.NotReadable; null gives -1",
+  "proves": [
+    "kernel.objects.own_class",
+    "kernel.report"
+  ],
+  "mods": [
+    "../mods/to-objects"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ran",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.player",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.misaligned",
+      "is": -3
+    },
+    {
+      "fact": "mod.to-objects.misaligned_again",
+      "is": -3
+    },
+    {
+      "fact": "mod.to-objects.null_object",
+      "is": -1
+    },
+    {
+      "log": "to-objects: own_class was given something that is not a game object\\."
+    },
+    {
+      "no_log": "Object\\.NoRow|has no row a mod can use"
+    }
+  ]
+}

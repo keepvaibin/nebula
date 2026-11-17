@@ -1,0 +1,50 @@
+{
+  "harness": 1,
+  "name": "1124-dependent-gone",
+  "about": "A mod that imported from a library and then goes (its start refused) is told to the library",
+  "proves": [
+    "kernel.bind"
+  ],
+  "mods": [
+    "../../loader/mods/lt-lib",
+    {
+      "path": "../../loader/mods/lt-uses-fail",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-uses-fail.slot",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-uses-fail.sum",
+      "is": 5
+    },
+    {
+      "fact": "mod.lt-uses-fail.lib_ready",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-lib.gone",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-lib.gone_remembered",
+      "is": 1
+    },
+    {
+      "log": "\\[mod lt-lib\\] told: a mod that used it is gone",
+      "times": 1
+    },
+    {
+      "log": "lt-uses-fail.*returned 7"
+    }
+  ]
+}

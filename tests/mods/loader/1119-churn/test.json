@@ -1,0 +1,41 @@
+{
+  "harness": 1,
+  "name": "1119-churn",
+  "about": "Hook and unhook every frame for 600 frames: every change answers 0, the game runs on",
+  "proves": [
+    "kernel.unhook"
+  ],
+  "mods": [
+    "../mods/lt-churn"
+  ],
+  "steps": [
+    {
+      "at": 650,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4250
+      ],
+      "fact": "changes"
+    },
+    {
+      "at": 660,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "changes",
+      "is": 600
+    },
+    {
+      "fact": "mod.lt-churn.frames",
+      "is": 600
+    },
+    {
+      "fact": "mod.lt-churn.failures",
+      "is": 0
+    }
+  ]
+}

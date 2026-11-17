@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "save-g",
+  "name": "save-g",
+  "summary": "save-g (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "save.game",
+      "why": "The save test asks for it."
+    }
+  ]
+}

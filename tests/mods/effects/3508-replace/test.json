@@ -1,0 +1,49 @@
+{
+  "harness": 1,
+  "name": "3508-replace",
+  "about": "je-replace (no code) replaces the game's particle DeathSmokeS00 (of the effect DeathSmokeS), a Goomba's death smoke, in red: the cook says it replaced the game's particle (cook.effect, replaced 1) and refuses nothing; the stage plays with the game's own table starting it (a stomped Goomba's red smoke: a person's look)",
+  "proves": [
+    "fx.replace"
+  ],
+  "mods": [
+    {
+      "path": "../mods/je-replace",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "cook.effect",
+      "has": {
+        "mod": "je-replace",
+        "other": "DeathSmokeS00",
+        "replaced": 1
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "je-replace",
+        "level": "error"
+      },
+      "absent": true
+    },
+    {
+      "fact": "stage.ready",
+      "has": {
+        "name": "EggStarGalaxy"
+      }
+    }
+  ]
+}

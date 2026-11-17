@@ -1,0 +1,30 @@
+{
+  "patch": 1,
+  "key": [
+    "#"
+  ],
+  "add": [
+    {
+      "GroupName": "Kuribo",
+      "AnimName": "",
+      "ContinueAnimEnd": "",
+      "UniqueName": "JeMiss",
+      "EffectName": "JeNoSuchParticle00 je-miss:nothing00",
+      "ParentName": "",
+      "JointName": "",
+      "OffsetX": 0.0,
+      "OffsetY": 0.0,
+      "OffsetZ": 0.0,
+      "StartFrame": 0,
+      "EndFrame": -1,
+      "Affect": "",
+      "Follow": "",
+      "ScaleValue": 1.0,
+      "RateValue": 1.0,
+      "PrmColor": "",
+      "EnvColor": "",
+      "LightAffectValue": 0.0,
+      "DrawOrder": ""
+    }
+  ]
+}

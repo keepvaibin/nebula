@@ -1,0 +1,24 @@
+{
+  "harness": 1,
+  "name": "13-language",
+  "about": "The language setting is applied and read back (a language of the bin's disc: RMGE01 has UsEnglish, UsFrench, UsSpanish)",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "language": "UsFrench",
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "setup.language",
+      "is": "UsFrench"
+    }
+  ]
+}

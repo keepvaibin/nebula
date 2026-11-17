@@ -1,0 +1,47 @@
+{
+  "harness": 1,
+  "name": "20a-class-arg",
+  "about": "class:<Class>#<n> names the n-th live object of that class",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "read": "NameObj.mName",
+      "of": "class:Kuribo#0",
+      "type": "const char *",
+      "fact": "kuribo.name"
+    },
+    {
+      "at": 120,
+      "call": "MR::isDead",
+      "signature": "bool(const LiveActor *)",
+      "args": [
+        "class:Kuribo#0"
+      ],
+      "fact": "kuribo.dead"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "kuribo.name",
+      "exists": true
+    },
+    {
+      "fact": "kuribo.dead",
+      "exists": true
+    }
+  ]
+}

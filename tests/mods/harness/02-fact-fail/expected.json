@@ -1,0 +1,7 @@
+{
+  "verdict": "fail",
+  "reason_has": [
+    "mod.hello.hello"
+  ],
+  "check_actual": 1
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-noresult-wrap",
+  "name": "lt-noresult-wrap",
+  "summary": "lt-noresult-wrap (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

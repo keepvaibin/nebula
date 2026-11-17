@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "name": "1111-service-optional",
+  "about": "An optional service the game does not have leaves the slot null and the mod on",
+  "proves": [
+    "kernel.service"
+  ],
+  "mods": [
+    "../mods/lt-svc-opt"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-svc-opt.slot",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-svc-opt.agrees",
+      "is": 1
+    }
+  ]
+}

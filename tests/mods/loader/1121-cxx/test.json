@@ -1,0 +1,31 @@
+{
+  "harness": 1,
+  "name": "1121-cxx",
+  "about": "A C++ mod: globals built in priority then source order, new and delete, a virtual call",
+  "proves": [
+    "kernel.cxx"
+  ],
+  "mods": [
+    "../mods/lt-cxx"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-cxx.order",
+      "is": 1234
+    },
+    {
+      "fact": "mod.lt-cxx.virtual",
+      "is": 4
+    },
+    {
+      "fact": "mod.lt-cxx.array",
+      "is": 999
+    }
+  ]
+}

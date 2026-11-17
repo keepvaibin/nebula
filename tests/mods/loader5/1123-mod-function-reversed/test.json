@@ -1,0 +1,46 @@
+{
+  "harness": 1,
+  "name": "1123-mod-function-reversed",
+  "about": "The same two mods with the library above: the list's order again",
+  "proves": [
+    "kernel.bind"
+  ],
+  "mods": [
+    "../../loader/mods/lt-lib",
+    "../../loader/mods/lt-uses"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4253
+      ],
+      "fact": "trace"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-uses.sum",
+      "is": 5
+    },
+    {
+      "fact": "mod.lt-uses.lib_ready",
+      "is": 1
+    },
+    {
+      "fact": "trace",
+      "is": 21
+    },
+    {
+      "fact": "mod.lt-lib.gone",
+      "absent": true
+    }
+  ]
+}

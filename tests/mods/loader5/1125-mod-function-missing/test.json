@@ -1,0 +1,76 @@
+{
+  "harness": 1,
+  "name": "1125-mod-function-missing",
+  "about": "An export the needed mod does not have refuses the mod (L505 Name.ModFunction); the start's check refuses it first (the kept report has the library's exports), so the loader's own bind line is not reached",
+  "proves": [
+    "kernel.bind",
+    "kernel.refusal"
+  ],
+  "mods": [
+    "../../loader/mods/lt-lib",
+    {
+      "path": "../../loader/mods/lt-uses-none",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-uses-none.started",
+      "absent": true
+    },
+    {
+      "log": "mods: lt-uses-none: THIS MOD HAS ERRORS"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-uses-none",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "lt-uses-none: code/windows-x64/mod.dll: the game has no function \"lt-lib/lt.nothing\" of a mod that is on."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-uses-none",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "lt-uses-none: code/linux-x64/mod.so: the game has no function \"lt-lib/lt.nothing\" of a mod that is on."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-uses-none",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/macos-arm64/mod.dylib",
+        "text": "lt-uses-none: code/macos-arm64/mod.dylib: the game has no function \"lt-lib/lt.nothing\" of a mod that is on."
+      },
+      "when": "any",
+      "systems": [
+        "macos"
+      ]
+    }
+  ]
+}

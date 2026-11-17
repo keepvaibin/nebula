@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "lt-tuse",
+  "name": "lt-tuse",
+  "summary": "lt-tuse (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "lt-tlib"
+    }
+  ]
+}

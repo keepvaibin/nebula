@@ -1,0 +1,55 @@
+{
+  "harness": 1,
+  "name": "3123-repeat",
+  "about": "One (file, line, code) reported 1000 times at start: one entry counted 1000, one summary notice at the title; the kernel's log lines at 1, 10, 100, 1000 and none written by the mod log",
+  "proves": [
+    "modlog.keep",
+    "modlog.notice.summary"
+  ],
+  "mods": [
+    "../mods/jl-repeat"
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jl-repeat",
+        "source": "code",
+        "level": "error",
+        "code": 901,
+        "file": "jl_repeat.lumi",
+        "line": 12,
+        "count": 1000
+      },
+      "when": "last",
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "count": 1,
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "has": {
+        "row": "ModLog.Summary",
+        "count": 1
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "log": "\\[mod jl-repeat\\] jl_repeat\\.lumi:12: .*\\(seen 1000 times\\)"
+    },
+    {
+      "log": "\\[mod jl-repeat\\] jl_repeat\\.lumi:12: ",
+      "times": 4
+    }
+  ]
+}

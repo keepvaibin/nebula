@@ -1,0 +1,73 @@
+{
+  "harness": 1,
+  "name": "1203-global",
+  "about": "A global by its address: what the game writes, called by the mod or by its own caller, is read there",
+  "proves": [
+    "kernel.global",
+    "kernel.call",
+    "kernel.hook.after"
+  ],
+  "mods": [
+    "../mods/tt-global"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4311
+      ],
+      "fact": "first"
+    },
+    {
+      "at": 31,
+      "call": "CubeCameraArea::setCurrentCategory",
+      "signature": "void(s32)",
+      "args": [
+        5
+      ]
+    },
+    {
+      "at": 32,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4312
+      ],
+      "fact": "second"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "first",
+      "is": 1
+    },
+    {
+      "fact": "second",
+      "is": 1
+    },
+    {
+      "fact": "mod.tt-global.mod_call3",
+      "is": 8
+    },
+    {
+      "fact": "mod.tt-global.own_write",
+      "is": 30583
+    },
+    {
+      "fact": "mod.tt-global.game_call5",
+      "is": 32
+    },
+    {
+      "fact": "mod.tt-global.restored",
+      "is": 1
+    }
+  ]
+}

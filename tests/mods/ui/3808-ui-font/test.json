@@ -1,0 +1,96 @@
+{
+  "harness": 1,
+  "name": "3808-ui-font",
+  "about": "ju-font opens its own layout GlFont: Title \"LUMA FONT 0123\" at 48 and Small at 24 draw in the mod's font GlTitle (loaded once, its kerning pairs, fallback MessageFont26); Small set to \"TOTAL 1230 \" and an Omega the font lacks, drawn by MessageFont26 at the font's height on its baseline, so no Ui.NoGlyph (picture: both lines in the block font, T and O drawn closer than other pairs, the Omega in the message font the same height: a person's look, then the reference)",
+  "proves": [
+    "ui.mod_font",
+    "ui.mod_layout",
+    "ui.open"
+  ],
+  "mods": [
+    "../mods/ju-font"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 140,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-font.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-font.small",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-font.text",
+      "is": 0
+    },
+    {
+      "fact": "font.1",
+      "has": {
+        "name": "Luma/ju-font/fonts/GlTitle.brfnt",
+        "loaded": true,
+        "fallback": "MessageFont26"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "font.1",
+      "field": "kerns",
+      "at_least": 2,
+      "when": "any"
+    },
+    {
+      "fact": "ui.text.2",
+      "has": {
+        "pane": "Small",
+        "text": "TOTAL 1230 Ω"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-font",
+        "code": 577
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-font",
+        "code": 672
+      },
+      "absent": true
+    },
+    {
+      "picture": "f90",
+      "like": "3808-f90",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

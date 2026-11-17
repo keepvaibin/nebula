@@ -1,0 +1,163 @@
+{
+  "harness": 1,
+  "name": "3802-ui-args",
+  "about": "ju-args: every refusal of ui 1.0 answers its status and writes no handle: a null or empty layout, layer 2, a null out (-1), a layout in no store (-7, Ui.MissingLayout), a pane of no such name (-7, Ui.MissingPane), an unknown screen or pane (-3), a pane with no text box in or under it (GlHud's picture Icon: -1, Ui.NotText), bytes that are not UTF-8 (-1, Ui.NotUtf8), a null text (-1); close ends the screen and its panes",
+  "proves": [
+    "ui.refusals"
+  ],
+  "mods": [
+    "../mods/ju-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-args.null_layout",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-args.empty_layout",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-args.bad_layer",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-args.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-args.missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.ju-args.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.ju-args.good",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-args.no_pane",
+      "is": -7
+    },
+    {
+      "fact": "mod.ju-args.pane_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-args.null_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-args.no_pane_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.ju-args.hud",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-args.box",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-args.not_text",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-args.pane",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-args.not_utf8",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-args.null_text",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-args.text_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-args.visible_unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-args.close",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-args.close2",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-args.pane_closed",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-args.text_closed",
+      "is": -3
+    },
+    {
+      "fact": "ui.end.1",
+      "has": {
+        "why": "close"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-args",
+        "code": 570
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-args",
+        "code": 571
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-args",
+        "code": 573
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-args",
+        "code": 575
+      },
+      "count": 1
+    }
+  ]
+}

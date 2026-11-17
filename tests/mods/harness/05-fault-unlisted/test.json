@@ -1,0 +1,22 @@
+{
+  "harness": 1,
+  "name": "05-fault-unlisted",
+  "about": "A mod that faults in a hook, with no faults listed, does not pass",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/faulter"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": []
+}

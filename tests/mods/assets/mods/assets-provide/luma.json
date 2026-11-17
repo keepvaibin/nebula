@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "assets-provide",
+  "name": "assets-provide",
+  "summary": "assets-provide (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

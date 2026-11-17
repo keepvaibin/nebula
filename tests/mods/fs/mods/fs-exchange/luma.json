@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "fs-exchange",
+  "name": "fs-exchange",
+  "summary": "fs-exchange (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "fs.exchange",
+      "why": "The fs test asks for it."
+    }
+  ]
+}

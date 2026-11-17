@@ -1,0 +1,7 @@
+{
+  "3142-cook-fails": "the device cook's L804 per file (G's cooker, F's host start order 1-5)",
+  "3143-cook-twice": "the cook's cache facts (G, F) and 3142",
+  "3144-no-ray-tracing": "the harness's renderer option for a device without ray tracing (F) and L806 (G, rev 4)",
+  "3146-refused-after-cook": "step 6 refusals at bind and the next start's cook-out (F)",
+  "3147-refused-shared-message": "3146 and the cook run again before the first scene (F, G)"
+}

@@ -1,0 +1,27 @@
+{
+  "harness": 1,
+  "name": "1109-service-present",
+  "about": "A service import is filled before start and agrees with core->service",
+  "proves": [
+    "kernel.service"
+  ],
+  "mods": [
+    "../mods/lt-svc"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-svc.slot",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-svc.agrees",
+      "is": 1
+    }
+  ]
+}

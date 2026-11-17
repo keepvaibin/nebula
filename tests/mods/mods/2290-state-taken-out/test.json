@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "2290-state-taken-out",
+  "about": "mods.find follows a take-out: mt-reader reads mt-gone RUNNING at its start; the run takes mt-gone out; at mt-gone's STOPPED event mt-reader reads it TAKEN_OUT (4)",
+  "proves": [
+    "services.mods"
+  ],
+  "mods": [
+    "../mods/mt-reader",
+    "../mods/mt-gone"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "take_out": "mt-gone"
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mt-reader.start_found",
+      "is": 0
+    },
+    {
+      "fact": "mod.mt-reader.start_state",
+      "is": 0
+    },
+    {
+      "fact": "mod.mt-reader.watch",
+      "is": 0
+    },
+    {
+      "fact": "mod.mt-reader.stopped_found",
+      "is": 0
+    },
+    {
+      "fact": "mod.mt-reader.stopped_state",
+      "is": 4
+    }
+  ]
+}

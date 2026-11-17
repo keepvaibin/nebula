@@ -1,0 +1,91 @@
+{
+  "harness": 1,
+  "name": "3212-model-level-refused",
+  "about": "jm-levels attaches its own model jm-levels:lv (LUMA_OK, drawn, not the placeholder), then the level block jm-levels:lvLow: LUMA_E_ARGUMENT, no handle written, Service.Argument (101) for \"model\" in the mod log, no second attach and no missing-model entry (a level is drawn as a level of its model, never attached alone)",
+  "proves": [
+    "model.level_refused"
+  ],
+  "mods": [
+    "../../models/mods/jm-levels"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3201
+      ]
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3202
+      ]
+    },
+    {
+      "at": 160,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jm-levels.attach",
+      "is": 0
+    },
+    {
+      "fact": "model.attach.1",
+      "has": {
+        "mod": "jm-levels",
+        "model": "jm-levels:lv",
+        "placeholder": false,
+        "drawn": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "mod.jm-levels.level",
+      "is": -1
+    },
+    {
+      "fact": "mod.jm-levels.none_written",
+      "is": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jm-levels",
+        "code": 101
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-levels",
+        "code": 101
+      },
+      "count": 1
+    },
+    {
+      "fact": "model.attach.2",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jm-levels",
+        "code": 621
+      },
+      "absent": true
+    }
+  ]
+}

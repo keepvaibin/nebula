@@ -1,0 +1,104 @@
+{
+  "harness": 1,
+  "name": "3803-ui-text",
+  "about": "ju-text: on GlHud's Title (a text box of 255), 300 characters are cut to 255 (LUMA_OK, Ui.TextCut once), Japanese is kept as given, an empty text empties the pane",
+  "proves": [
+    "ui.text",
+    "ui.text_cut"
+  ],
+  "mods": [
+    "../mods/ju-text"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 70,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3802
+      ]
+    },
+    {
+      "at": 80,
+      "picture": "f80"
+    },
+    {
+      "at": 90,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3803
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-text.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-text.pane",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-text.long",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-text.japanese",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-text.empty",
+      "is": 0
+    },
+    {
+      "fact": "ui.text.2",
+      "has": {
+        "text": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "when": "first"
+    },
+    {
+      "fact": "ui.text.2",
+      "has": {
+        "text": "マリオ 12"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "ui.text.2",
+      "has": {
+        "text": ""
+      },
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-text",
+        "code": 572
+      },
+      "count": 1
+    }
+  ]
+}

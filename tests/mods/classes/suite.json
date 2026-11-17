@@ -1,0 +1,10 @@
+{
+  "harness": 1,
+  "tests": [
+    "1401-made-taken-thrown",
+    "1402-refusals",
+    "1403-taken-out",
+    "1404-scene-again",
+    "1408-slots"
+  ]
+}

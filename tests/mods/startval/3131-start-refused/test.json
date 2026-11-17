@@ -1,0 +1,32 @@
+{
+  "harness": 1,
+  "name": "3131-start-refused",
+  "about": "A mod the validator finds an Error in (summary past 200 characters, L204) is refused at the start; the finding is in its log",
+  "proves": [
+    "validator.start.refuse"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jv-bad",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-bad",
+        "source": "validator",
+        "level": "error",
+        "code": 204
+      },
+      "when": "any"
+    }
+  ]
+}

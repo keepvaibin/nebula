@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "cm-tex-bad",
+  "name": "cm-tex-bad",
+  "version": "1.0.0",
+  "summary": "cm-tex-bad (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

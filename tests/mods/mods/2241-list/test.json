@@ -1,0 +1,165 @@
+{
+  "harness": 1,
+  "name": "2241-list",
+  "about": "count and at over the game half and three mods: order 1-4, ids, names from luma.json, versions, kind .luma, has_code 1, 1, 1, 0, all RUNNING; at past the end LUMA_E_NOT_FOUND",
+  "proves": [
+    "services.mods"
+  ],
+  "mods": [
+    "../mods/mods-a",
+    "../mods/mods-b",
+    {
+      "path": "../mods/mods-c",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4251
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-a.count",
+      "is": 4
+    },
+    {
+      "fact": "mod.mods-a.id0",
+      "is": 1036571639
+    },
+    {
+      "fact": "mod.mods-a.order0",
+      "is": 1
+    },
+    {
+      "fact": "mod.mods-a.state0",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.code0",
+      "is": 1
+    },
+    {
+      "fact": "mod.mods-a.at1",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.order1",
+      "is": 2
+    },
+    {
+      "fact": "mod.mods-a.kind1",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.state1",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.code1",
+      "is": 1
+    },
+    {
+      "fact": "mod.mods-a.reserved1",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.id1",
+      "is": 1054395602
+    },
+    {
+      "fact": "mod.mods-a.name1",
+      "is": 1054395602
+    },
+    {
+      "fact": "mod.mods-a.version1",
+      "is": 4011613804
+    },
+    {
+      "fact": "mod.mods-a.at2",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.order2",
+      "is": 3
+    },
+    {
+      "fact": "mod.mods-a.kind2",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.state2",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.code2",
+      "is": 1
+    },
+    {
+      "fact": "mod.mods-a.reserved2",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.id2",
+      "is": 1037617983
+    },
+    {
+      "fact": "mod.mods-a.name2",
+      "is": 1037617983
+    },
+    {
+      "fact": "mod.mods-a.version2",
+      "is": 4011613804
+    },
+    {
+      "fact": "mod.mods-a.at3",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.order3",
+      "is": 4
+    },
+    {
+      "fact": "mod.mods-a.kind3",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.state3",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.code3",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.reserved3",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-a.id3",
+      "is": 1020840364
+    },
+    {
+      "fact": "mod.mods-a.name3",
+      "is": 2336194258
+    },
+    {
+      "fact": "mod.mods-a.version3",
+      "is": 4011613804
+    },
+    {
+      "fact": "mod.mods-a.at_past",
+      "is": -7
+    }
+  ]
+}

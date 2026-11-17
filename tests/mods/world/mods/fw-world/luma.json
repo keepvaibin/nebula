@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fw-world",
+  "name": "fw-world",
+  "version": "1.0.0",
+  "summary": "J's test mod fw-world.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

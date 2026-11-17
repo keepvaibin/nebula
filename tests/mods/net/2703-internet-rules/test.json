@@ -1,0 +1,160 @@
+{
+  "harness": 1,
+  "name": "2703-internet-rules",
+  "about": "net.internet without a public host: a host luma.json does not name and a \"*.\" entry's parent: DENIED with Net.HostNotNamed; a wrong letter, port 0, null host: ARGUMENT; the 16 sockets count both services; a net.local handle is not net.internet's (HANDLE); net.internet does not listen (DENIED); a name whose addresses are this machine's and a loopback address: ERROR DENIED; a name that does not exist, also through a \"*.\" entry with a final dot: ERROR NOT_FOUND; no other event",
+  "proves": [
+    "services.net.local",
+    "services.net.internet",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/net-internet"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4501
+      ]
+    },
+    {
+      "at": 760,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4502
+      ]
+    },
+    {
+      "at": 780,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-internet.not_named",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-internet.wild_parent",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-internet.bad_letter",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-internet.port_zero",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-internet.null_host",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-internet.listeners_made",
+      "is": 16
+    },
+    {
+      "fact": "mod.net-internet.limit_shared",
+      "is": -4
+    },
+    {
+      "fact": "mod.net-internet.send_other_service",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-internet.close_other_service",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-internet.port_other_service",
+      "is": -3
+    },
+    {
+      "fact": "mod.net-internet.listen_internet",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-internet.listeners_closed",
+      "is": 16
+    },
+    {
+      "fact": "mod.net-internet.loopback_name",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-internet.loopback_address",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-internet.none",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-internet.wild",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-internet.loopback_name_status",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-internet.loopback_address_status",
+      "is": -5
+    },
+    {
+      "fact": "mod.net-internet.none_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.net-internet.wild_status",
+      "is": -7
+    },
+    {
+      "fact": "mod.net-internet.errors",
+      "is": 4
+    },
+    {
+      "fact": "mod.net-internet.others",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-internet.close_after_error",
+      "is": -3
+    },
+    {
+      "log": "net-internet: net\\.internet\\.tcp_connect was given the host example\\.org, which luma\\.json does not name for net\\.internet; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "net-internet: net\\.internet\\.tcp_connect was given the host named\\.invalid, which luma\\.json does not name for net\\.internet; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "net-internet: net\\.internet\\.tcp_connect was given a wrong host; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "net-internet",
+        "english": "net-internet: net.internet.tcp_connect was given a wrong host; it did nothing.",
+        "count": 2
+      },
+      "when": "any"
+    },
+    {
+      "log": "net-internet: net\\.internet\\.tcp_connect was given a wrong port; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "net-internet: net\\.internet\\.tcp_connect reached its limit of 16; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

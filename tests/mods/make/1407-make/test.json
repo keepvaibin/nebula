@@ -1,0 +1,137 @@
+{
+  "harness": 1,
+  "name": "1407-make",
+  "about": "LumaCore.make (contract classes, make): eight Kuribo made while the scene makes its objects, each at its place with its Obj_arg0, of class Kuribo and alive; one more made dead that appears later; a refusal before any scene (start), one made during play, refusals for an unknown name, a count of 0 and an unknown flag, each said; names fold case as the factory's (make \"kuribo\", a class name or a replaced name differing by case only).",
+  "proves": [
+    "kernel.classes.make"
+  ],
+  "mods": [
+    "../mods/mk-make"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 150,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1407
+      ],
+      "fact": "checked"
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mk-make.outside_start",
+      "is": -3
+    },
+    {
+      "fact": "mod.mk-make.made8",
+      "is": 8
+    },
+    {
+      "fact": "mod.mk-make.pos_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.scale_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.arg_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.class_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.alive_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.made_dead",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.dead_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.unknown",
+      "is": -1
+    },
+    {
+      "fact": "mod.mk-make.unknown_none",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.bad_count",
+      "is": -4
+    },
+    {
+      "fact": "mod.mk-make.bad_flag",
+      "is": -4
+    },
+    {
+      "fact": "mod.mk-make.outside_frame",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.appear_call",
+      "is": 0
+    },
+    {
+      "fact": "mod.mk-make.appeared",
+      "is": 1
+    },
+    {
+      "log": "make LcNoSuchObject: the factory makes nothing by that name"
+    },
+    {
+      "log": "make Kuribo: only while the scene makes its objects or once it is made"
+    },
+    {
+      "log": "make Kuribo: the count is not 1 to 1024"
+    },
+    {
+      "log": "make Kuribo: a flag luma.h does not define"
+    },
+    {
+      "fact": "mod.mk-make.lower_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.lower_class",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.case_one",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.case_taken",
+      "is": -2
+    },
+    {
+      "fact": "mod.mk-make.case_named",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.case_replaces",
+      "is": 1
+    },
+    {
+      "fact": "mod.mk-make.case_replaced_twice",
+      "is": -2
+    }
+  ]
+}

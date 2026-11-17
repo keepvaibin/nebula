@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-churn",
+  "name": "lt-churn",
+  "summary": "lt-churn (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

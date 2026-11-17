@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "guard-walk-2",
+  "name": "guard-walk-2",
+  "summary": "guard-walk-2 (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "harness": 1,
+  "name": "2113-two-mods-order-reversed",
+  "about": "The same two mods the other way round (list and post order swapped): the other's first",
+  "proves": [
+    "services.events"
+  ],
+  "mods": [
+    "../mods/reg-order-b",
+    "../mods/reg-order-a"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4265
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4266
+      ]
+    },
+    {
+      "at": 33,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4262
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-order-a.post",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-order-b.post",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-order-a.a_first",
+      "is": 0
+    },
+    {
+      "fact": "mod.reg-order-b.a_first",
+      "is": 0
+    }
+  ]
+}

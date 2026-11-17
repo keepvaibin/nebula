@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jm-limit",
+  "name": "jm-limit",
+  "version": "1.0.0",
+  "summary": "J's test mod jm-limit.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

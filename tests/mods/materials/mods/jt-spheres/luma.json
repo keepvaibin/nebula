@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jt-spheres",
+  "name": "jt-spheres",
+  "version": "1.0.0",
+  "summary": "J's test mod jt-spheres.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

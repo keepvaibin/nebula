@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "jl-repeat",
+  "name": "jl-repeat",
+  "version": "1.0.0",
+  "summary": "J's test mod jl-repeat.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

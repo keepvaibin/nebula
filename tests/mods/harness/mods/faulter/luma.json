@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "faulter",
+  "version": "1.0.0",
+  "name": "faulter",
+  "summary": "faulter (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

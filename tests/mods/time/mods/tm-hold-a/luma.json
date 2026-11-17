@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tm-hold-a",
+  "name": "tm-hold-a",
+  "summary": "tm-hold-a (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

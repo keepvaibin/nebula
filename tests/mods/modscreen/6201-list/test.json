@@ -1,0 +1,42 @@
+{
+  "harness": 1,
+  "name": "6201-list",
+  "about": "jc-none (no code) on: the Mods tab shows its line in the ENABLED list, as a fact",
+  "proves": [
+    "modscreen.list"
+  ],
+  "mods": [
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modscreen.jc-none",
+      "has": {
+        "line": 0,
+        "page": "list",
+        "list": "on"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modscreen.jc-none",
+      "count": 1,
+      "scope": "installation"
+    }
+  ]
+}

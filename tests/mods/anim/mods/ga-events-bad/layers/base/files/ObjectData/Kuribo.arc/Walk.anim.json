@@ -1,0 +1,16 @@
+{
+  "events": [
+    {
+      "frame": 12,
+      "event": "step_right"
+    },
+    {
+      "frame": 0,
+      "event": "start"
+    },
+    {
+      "frame": 40,
+      "event": "step_left"
+    }
+  ]
+}

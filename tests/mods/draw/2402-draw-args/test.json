@@ -1,0 +1,187 @@
+{
+  "harness": 1,
+  "name": "2402-draw-args",
+  "about": "jd-args: every refusal of draw 1.0 answers its status and writes no handle: a rectangle outside a point (LUMA_E_STATE, Draw.Outside), point 7 (LUMA_E_ARGUMENT), a font of no such name (LUMA_E_NOT_FOUND, Content.MissingFont), a texture in no store (Content.MissingTexture), 8192 pixels wide (LUMA_E_TOO_LARGE), screen with a null out; a texture freed twice (LUMA_E_HANDLE); at hud.after once: a pop with nothing pushed (Draw.NothingPushed), text that is not UTF-8 (Draw.NotUtf8), a NaN rectangle, line3 at a 2-D point (LUMA_E_STATE), the freed texture drawn (LUMA_E_HANDLE, the checker drawn), 20,000 primitives LUMA_OK and the 20,001st LUMA_E_LIMIT (Service.Limit once); the next frame draws again (picture: the magenta checker at 40,40)",
+  "proves": [
+    "draw.limits",
+    "draw.image"
+  ],
+  "mods": [
+    "../mods/jd-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2401
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jd-args.outside",
+      "is": -18,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.bad_point",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.no_font",
+      "is": -7,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.no_texture",
+      "is": -7,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.too_large",
+      "is": -16,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.none_written",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.screen_null",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.make",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.free",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.free_again",
+      "is": -3,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.at",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.pop",
+      "is": -18,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.not_utf8",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.nan",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.line3",
+      "is": -18,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.freed",
+      "is": -3,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.drawn",
+      "is": 20000,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.over",
+      "is": -4,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jd-args.next",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jd-args",
+        "code": 470
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jd-args",
+        "code": 471
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jd-args",
+        "code": 474
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jd-args",
+        "code": 672
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jd-args",
+        "code": 622
+      },
+      "count": 1
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "jd-args",
+        "code": 104
+      },
+      "count": 1
+    },
+    {
+      "picture": "f90",
+      "like": "2402-f90",
+      "within": {
+        "rmse": 12
+      }
+    }
+  ]
+}

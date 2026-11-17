@@ -1,0 +1,150 @@
+{
+  "harness": 1,
+  "name": "2461-light",
+  "about": "fl-light adds a red light (800 cd, casting) 150 units over the player: LUMA_OK, a lamp of the scene each frame and, not traced, the game's one point light (chosen); set blue with radius 40, moved 300 over the player, removed (pictures: f50 the stage as it is, f110 Mario lit red from above, f170 blue, f230 the light higher and fainter, f300 as f50 after the game's half-second fade: a person's look)",
+  "proves": [
+    "draw.light.add",
+    "draw.light.set",
+    "draw.light.move",
+    "draw.light.remove",
+    "draw.light.game_light"
+  ],
+  "mods": [
+    "../mods/fl-light"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 50,
+      "picture": "f50"
+    },
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2461
+      ]
+    },
+    {
+      "at": 110,
+      "picture": "f110"
+    },
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2462
+      ]
+    },
+    {
+      "at": 170,
+      "picture": "f170"
+    },
+    {
+      "at": 180,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2463
+      ]
+    },
+    {
+      "at": 230,
+      "picture": "f230"
+    },
+    {
+      "at": 240,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2464
+      ]
+    },
+    {
+      "at": 300,
+      "picture": "f300"
+    },
+    {
+      "at": 320,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fl-light.add",
+      "is": 0
+    },
+    {
+      "fact": "mod.fl-light.set",
+      "is": 0
+    },
+    {
+      "fact": "mod.fl-light.move",
+      "is": 0
+    },
+    {
+      "fact": "mod.fl-light.remove",
+      "is": 0
+    },
+    {
+      "fact": "draw.light.add.1",
+      "has": {
+        "mod": "fl-light",
+        "candela": 800.0,
+        "radius": 25.0,
+        "casts": true
+      },
+      "when": "any"
+    },
+    {
+      "fact": "draw.light.add.1",
+      "field": "half",
+      "at_least": 461.0,
+      "when": "last"
+    },
+    {
+      "fact": "draw.light.1",
+      "field": "chosen",
+      "is": true,
+      "when": "any"
+    },
+    {
+      "fact": "draw.light.1",
+      "field": "radius",
+      "is": 40.0,
+      "when": "any"
+    },
+    {
+      "fact": "draw.light.end.1",
+      "has": {
+        "why": "removed"
+      },
+      "when": "any"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fl-light",
+        "code": 101
+      },
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fl-light",
+        "code": 102
+      },
+      "absent": true
+    }
+  ]
+}

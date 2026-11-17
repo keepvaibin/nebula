@@ -1,0 +1,49 @@
+{
+  "harness": 1,
+  "name": "1634-code-time",
+  "about": "guard-nest-a's after hook on MarioActor::control runs every frame: its code time over its first 120 frames, as luma_guard_cost gives it from the seqlock, is in the fact kernel.guard_time (found 0); the game half has its own",
+  "proves": [
+    "kernel.guard.time"
+  ],
+  "mods": [
+    "../mods/guard-nest-a"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.guard-nest-a.a_calls",
+        "at_least": 200
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-nest-a.a_calls",
+      "at_least": 200
+    },
+    {
+      "fact": "kernel.guard_time",
+      "has": {
+        "mod": "guard-nest-a",
+        "found": 0
+      },
+      "when": "any"
+    },
+    {
+      "fact": "kernel.guard_time",
+      "has": {
+        "mod": "luma-test",
+        "found": 0
+      },
+      "when": "any"
+    },
+    {
+      "no_log": "no host clock"
+    }
+  ]
+}

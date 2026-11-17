@@ -1,0 +1,86 @@
+{
+  "harness": 1,
+  "name": "2210-timer-steps-rate",
+  "about": "A STEPS timer every 1 at rate 4000: an event a frame, value 4",
+  "proves": [
+    "services.time.timers",
+    "services.time"
+  ],
+  "mods": [
+    "../mods/tm-tsteps"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 15,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4222
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-tsteps.set",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-tsteps.timer",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-tsteps.tv",
+      "is": 4,
+      "when": "all",
+      "frames": [
+        20,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-tsteps.ds",
+      "is": 4,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    },
+    {
+      "fact": "mod.tm-tsteps.steps",
+      "is": 4,
+      "when": "all",
+      "frames": [
+        14,
+        38
+      ]
+    }
+  ]
+}

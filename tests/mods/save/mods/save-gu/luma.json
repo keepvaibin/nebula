@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "save-gu",
+  "name": "save-gu",
+  "summary": "save-gu (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

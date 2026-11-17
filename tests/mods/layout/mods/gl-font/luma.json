@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "gl-font",
+  "version": "1.0.0",
+  "name": "gl-font",
+  "summary": "gl-font (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

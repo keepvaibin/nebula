@@ -1,0 +1,86 @@
+{
+  "harness": 1,
+  "name": "1629-nested-illegal",
+  "about": "Nested boundaries: guard-nest-a's after hook on MarioActor::control calls MR::getRandom(777, 778), where guard-nest-b-2's before hook faults (illegal). The innermost boundary names guard-nest-b-2, which is taken out; guard-nest-a goes on calling, never taken out",
+  "proves": [
+    "kernel.guard.resume",
+    "kernel.guard.nested"
+  ],
+  "mods": [
+    "../mods/guard-nest-a",
+    "../mods/guard-nest-b-2"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "takeout.guard-nest-b-2",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1629
+      ],
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "mod.guard-nest-a.a_calls",
+        "at_least": 120
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-nest-b-2.entered",
+      "count": 1
+    },
+    {
+      "fact": "mod.guard-nest-b-2.survived",
+      "absent": true
+    },
+    {
+      "fact": "mod.guard-nest-b-2.again",
+      "absent": true
+    },
+    {
+      "log": "\\[mod guard-nest-b-2\\] GUARD: its code failed \\(before hook: MR::getRandom\\): an instruction the processor refuses at .+\\+0x[0-9a-f]+, address 0x[0-9a-f]+\\. It is off until the next start; what it was changing may be half done\\."
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "guard-nest-b-2",
+        "source": "guard",
+        "level": "error",
+        "code": 2
+      },
+      "when": "any"
+    },
+    {
+      "fact": "takeout.guard-nest-b-2",
+      "exists": true
+    },
+    {
+      "fact": "takeout.guard-nest-a",
+      "absent": true
+    },
+    {
+      "fact": "mod.guard-nest-a.a_calls",
+      "at_least": 120
+    },
+    {
+      "no_log": "\\[mod guard-nest-a\\] GUARD"
+    }
+  ],
+  "faults": [
+    {
+      "mod": "guard-nest-b-2"
+    }
+  ]
+}

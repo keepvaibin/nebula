@@ -1,0 +1,8 @@
+{
+  "verdict": "pass",
+  "references": {
+    "d3d12": "8c2fd72cc0195037 (looked at by Agent 2 2026-11-17: the same title, with the version label v2.0.0 at the bottom right)",
+    "vulkan": "943d7aef5ee1ca0c (run 19, looked at by G 2026-11-11)"
+  },
+  "note": "Passes against refs/<renderer>/title.png; a renderer without one is a harness-error naming it, until `luma_test.py refs` writes it after a person looked at the run's picture."
+}

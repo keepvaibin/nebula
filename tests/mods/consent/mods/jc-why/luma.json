@@ -1,0 +1,30 @@
+{
+  "format": "1.0",
+  "id": "jc-why",
+  "name": "jc-why",
+  "version": "1.0.0",
+  "summary": "J's test mod jc-why.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "hosts": [
+        "api.example.org",
+        "*.example.net"
+      ],
+      "why": "Sends your best times to the board.",
+      "name": "net.internet"
+    }
+  ],
+  "text": {
+    "UsFrench": {
+      "permissions": {
+        "net.internet": "Envoie tes meilleurs temps au tableau."
+      }
+    }
+  }
+}

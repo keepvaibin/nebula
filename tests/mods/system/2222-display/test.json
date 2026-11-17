@@ -1,0 +1,56 @@
+{
+  "harness": 1,
+  "name": "2222-display",
+  "about": "display: a window of some size, the safe area inside it, at least one snapshot, in front",
+  "proves": [
+    "services.system"
+  ],
+  "mods": [
+    "../mods/sys-facts"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-facts.display",
+      "is": 0
+    },
+    {
+      "fact": "mod.sys-facts.width_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-facts.height_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-facts.safe_inside",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-facts.changes_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-facts.focused",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-facts.scale_some",
+      "is": 1
+    }
+  ]
+}

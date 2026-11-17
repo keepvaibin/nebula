@@ -1,0 +1,32 @@
+{
+  "harness": 1,
+  "name": "3145-no-mod",
+  "about": "No mod: none of the game's parts is checked, no line, no notice (start-check 2)",
+  "proves": [
+    "startcheck.nocost"
+  ],
+  "mods": [],
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "startcheck",
+      "absent": true,
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog",
+      "absent": true,
+      "scope": "installation"
+    },
+    {
+      "fact": "modlog.notice",
+      "absent": true,
+      "scope": "installation"
+    }
+  ]
+}

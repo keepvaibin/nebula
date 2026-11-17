@@ -1,0 +1,76 @@
+{
+  "harness": 1,
+  "name": "2803-assets-own",
+  "about": "a mod's own assets (layers/base/assets) as <id>:<path> and as Luma/<id>/<path>: a mod's, its bytes, GAME_ONLY finds nothing, its folder's entries and a file in a sub folder",
+  "proves": [
+    "services.assets"
+  ],
+  "mods": [
+    "../mods/assets-own"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.assets-own.own_find",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-own.own_from_mod",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-own.own_size",
+      "is": 10
+    },
+    {
+      "fact": "mod.assets-own.own_bytes",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-own.own_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-own.own_store_path",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-own.own_game_only",
+      "is": -7
+    },
+    {
+      "fact": "mod.assets-own.own_folder",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-own.own_folder_entries",
+      "is": 2
+    },
+    {
+      "fact": "mod.assets-own.deep_entry",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-own.deep_name",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-own.deep_size",
+      "is": 15
+    }
+  ]
+}

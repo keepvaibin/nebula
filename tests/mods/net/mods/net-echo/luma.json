@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "net-echo",
+  "name": "net-echo",
+  "summary": "net-echo (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "net.local",
+      "why": "The net test asks for it."
+    }
+  ]
+}

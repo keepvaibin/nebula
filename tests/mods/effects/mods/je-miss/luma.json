@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "je-miss",
+  "name": "je-miss",
+  "version": "1.0.0",
+  "summary": "J's test mod je-miss.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "harness": 1,
+  "name": "1202-bits",
+  "about": "A bit-field the game reads: digitalJump set and cleared by the mod, Mario::isDigitalJump sees each; no other bit moves",
+  "proves": [
+    "kernel.field",
+    "kernel.call"
+  ],
+  "mods": [
+    "../mods/tt-bits"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4321
+      ],
+      "fact": "probed"
+    },
+    {
+      "at": 130,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "probed",
+      "is": 1
+    },
+    {
+      "fact": "mod.tt-bits.player",
+      "is": 1
+    },
+    {
+      "fact": "mod.tt-bits.mario",
+      "is": 1
+    },
+    {
+      "fact": "mod.tt-bits.set1",
+      "is": 1
+    },
+    {
+      "fact": "mod.tt-bits.set0",
+      "is": 0
+    },
+    {
+      "fact": "mod.tt-bits.others_kept",
+      "is": 1
+    },
+    {
+      "fact": "mod.tt-bits.position",
+      "is": 13
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "harness": 1,
+  "name": "1406-gone-old",
+  "about": "a definition whose size ends before gone (a mod built for a LumaClassDef without it) is taken, its objects made, and its gone never called, through a scene change",
+  "proves": [
+    "kernel.classes.gone"
+  ],
+  "mods": [
+    "../mods/lc-gone-old"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 2
+      }
+    },
+    {
+      "at": 700,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-gone-old.defined",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-gone-old.made",
+      "more": 1
+    },
+    {
+      "fact": "mod.lc-gone-old.gone",
+      "absent": true
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{
+  "harness": 1,
+  "name": "2603-audio-stream",
+  "about": "a stream: NEED at once with the ring's room, a push takes what fits, NEED again once the mix played it down, samples that are not numbers play as silence (reported), the 5th stream LIMIT, close with drain, a push after close HANDLE",
+  "proves": [
+    "services.audio",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/audio-stream"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4802
+      ]
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4803
+      ]
+    },
+    {
+      "at": 90,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.audio-stream.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-stream.first_need",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-stream.first_room",
+      "is": 24000
+    },
+    {
+      "fact": "mod.audio-stream.push",
+      "is": 24000
+    },
+    {
+      "fact": "mod.audio-stream.push_full",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-stream.need_again",
+      "is": 1
+    },
+    {
+      "fact": "mod.audio-stream.push_broken",
+      "is": 4
+    },
+    {
+      "fact": "mod.audio-stream.opened_3",
+      "is": 3
+    },
+    {
+      "fact": "mod.audio-stream.open_5th",
+      "is": -4
+    },
+    {
+      "fact": "mod.audio-stream.close_drain",
+      "is": 0
+    },
+    {
+      "fact": "mod.audio-stream.push_closed",
+      "is": -3
+    },
+    {
+      "fact": "mod.audio-stream.closed_3",
+      "is": 3
+    },
+    {
+      "fact": "mod.audio-stream.others",
+      "is": 0
+    },
+    {
+      "log": "audio-stream: audio\\.stream_push was given 4 samples that are not numbers; they play as silence\\.",
+      "times": 1
+    },
+    {
+      "log": "audio-stream: audio\\.stream_open reached its limit of 4; it did nothing\\.",
+      "times": 1
+    }
+  ]
+}

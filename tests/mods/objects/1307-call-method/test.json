@@ -1,0 +1,73 @@
+{
+  "harness": 1,
+  "name": "1307-call-method",
+  "about": "call_method on the player runs as the kind 8 import: the hook counts one, the same answer",
+  "proves": [
+    "kernel.objects.call_method"
+  ],
+  "mods": [
+    "../mods/to-objects"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ran",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.player",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.call_calc",
+      "is": 0
+    },
+    {
+      "fact": "mod.to-objects.call_calc_runs",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.call_base",
+      "is": 0
+    },
+    {
+      "fact": "mod.to-objects.call_base_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.call_unknown",
+      "is": -1
+    },
+    {
+      "fact": "mod.to-objects.call_null_args",
+      "is": 0
+    },
+    {
+      "fact": "mod.to-objects.call_null_args_runs",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.call_null_args_params",
+      "is": -1
+    }
+  ]
+}

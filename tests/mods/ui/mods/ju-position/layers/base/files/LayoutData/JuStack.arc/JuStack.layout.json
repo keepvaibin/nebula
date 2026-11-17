@@ -1,0 +1,50 @@
+{
+  "panes": [
+    {
+      "name": "Stack",
+      "type": "pane",
+      "position": [
+        -150,
+        0
+      ],
+      "children": [
+        {
+          "name": "A",
+          "type": "picture",
+          "size": [
+            80,
+            40
+          ],
+          "position": [
+            40,
+            20
+          ],
+          "corners": [
+            "ff0000ff",
+            "ff0000ff",
+            "ff0000ff",
+            "ff0000ff"
+          ]
+        },
+        {
+          "name": "B",
+          "type": "picture",
+          "size": [
+            80,
+            40
+          ],
+          "position": [
+            40,
+            20
+          ],
+          "corners": [
+            "0000ffff",
+            "0000ffff",
+            "0000ffff",
+            "0000ffff"
+          ]
+        }
+      ]
+    }
+  ]
+}

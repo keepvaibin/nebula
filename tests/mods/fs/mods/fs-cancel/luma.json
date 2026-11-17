@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fs-cancel",
+  "name": "fs-cancel",
+  "summary": "fs-cancel (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

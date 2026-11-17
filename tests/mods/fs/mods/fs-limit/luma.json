@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fs-limit",
+  "name": "fs-limit",
+  "summary": "fs-limit (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

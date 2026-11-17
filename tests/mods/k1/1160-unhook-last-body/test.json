@@ -1,0 +1,49 @@
+{
+  "harness": 1,
+  "name": "1160-unhook-last-body",
+  "about": "a before takes out the last hooks of MR::getRandom(s32, s32), so its own code runs with the flag clear; the call's own after (from the chain it started with) hooks a wrap and calls the function at once: the wrap runs (rehooked -5), with no stale body mark skipping it",
+  "proves": [
+    "kernel.unhook"
+  ],
+  "mods": [
+    "../mods/k1-body"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4247
+      ],
+      "fact": "first"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.k1-body.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.k1-body.unhook_self",
+      "is": 0
+    },
+    {
+      "fact": "mod.k1-body.unhook_after",
+      "is": 0
+    },
+    {
+      "fact": "mod.k1-body.hook_again",
+      "is": 0
+    },
+    {
+      "fact": "mod.k1-body.rehooked",
+      "is": -5
+    }
+  ]
+}

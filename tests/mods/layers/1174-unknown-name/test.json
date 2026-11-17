@@ -1,0 +1,47 @@
+{
+  "harness": 1,
+  "name": "1174-unknown-name",
+  "about": "ly-unknown chooses a and zzz: zzz is left out and said (Layers.Unknown), a on",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    "../mods/ly-unknown"
+  ],
+  "starts": 2,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-unknown.a_on",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-unknown.b_on",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-unknown.started",
+      "is": 1
+    },
+    {
+      "log": "mods: ly-unknown: its code chose the layer \"zzz\", which is not one of its code layers; it is left out"
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "ly-unknown",
+        "code": 170
+      },
+      "when": "any"
+    },
+    {
+      "log": "host: restart",
+      "times": 1
+    }
+  ]
+}

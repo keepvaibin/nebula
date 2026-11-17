@@ -1,0 +1,103 @@
+{
+  "harness": 1,
+  "name": "2453-inst-args",
+  "about": "fi-args: draw.inst's refusals: of a null actor or into a null out (-1, Service.Argument); of the player twice is one handle; a parameter name not of the list, a value of 2, a material of no such name (-7), a joint of no such name (-7), a scale of 0 (-1); set_texture (-6 in 1.0's game); release, then release and set_colour on the ended one (-3, Service.Handle)",
+  "proves": [
+    "draw.inst.refusals"
+  ],
+  "mods": [
+    "../mods/fi-args"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2450
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fi-args.null_actor",
+      "is": -1
+    },
+    {
+      "fact": "mod.fi-args.null_out",
+      "is": -1
+    },
+    {
+      "fact": "mod.fi-args.of",
+      "is": 0
+    },
+    {
+      "fact": "mod.fi-args.again",
+      "is": 1
+    },
+    {
+      "fact": "mod.fi-args.bad_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.fi-args.bad_value",
+      "is": -1
+    },
+    {
+      "fact": "mod.fi-args.no_material",
+      "is": -7
+    },
+    {
+      "fact": "mod.fi-args.param",
+      "is": 0
+    },
+    {
+      "fact": "mod.fi-args.no_part",
+      "is": -7
+    },
+    {
+      "fact": "mod.fi-args.zero_scale",
+      "is": -1
+    },
+    {
+      "fact": "mod.fi-args.texture",
+      "is": -6
+    },
+    {
+      "fact": "mod.fi-args.release",
+      "is": 0
+    },
+    {
+      "fact": "mod.fi-args.release2",
+      "is": -3
+    },
+    {
+      "fact": "mod.fi-args.colour_ended",
+      "is": -3
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "fi-args",
+        "code": 102
+      },
+      "count": 2
+    },
+    {
+      "fact": "draw.inst.end.1",
+      "has": {
+        "why": "released"
+      },
+      "when": "any"
+    }
+  ]
+}

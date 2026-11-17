@@ -1,0 +1,23 @@
+{
+  "format": "1.0",
+  "id": "sys-takeout",
+  "name": "sys-takeout",
+  "summary": "sys-takeout (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "system.clipboard",
+      "why": "The system test asks for it."
+    },
+    {
+      "name": "system.links",
+      "why": "The system test asks for it."
+    }
+  ]
+}

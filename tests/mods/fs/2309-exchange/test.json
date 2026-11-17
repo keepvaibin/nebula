@@ -1,0 +1,106 @@
+{
+  "harness": 1,
+  "name": "2309-exchange",
+  "about": "fs.exchange granted: write, read, list in the Exchange folder; remove \"\": LUMA_E_ARGUMENT, reported (the folder is the player's); remove the mod's folder: 1 file; then NOT_FOUND",
+  "proves": [
+    "services.fs.exchange",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/fs-exchange"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-exchange.e6_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-exchange.events",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-exchange.w1",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-exchange.d_root",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-exchange.events",
+      "is": 5
+    },
+    {
+      "log": "fs-exchange: fs\\.exchange\\.remove was given a wrong path; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "fact": "mod.fs-exchange.e1_kind",
+      "is": 2
+    },
+    {
+      "fact": "mod.fs-exchange.e1_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-exchange.e1_value",
+      "is": 6
+    },
+    {
+      "fact": "mod.fs-exchange.e2_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-exchange.e2_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-exchange.e3_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-exchange.e3_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-exchange.e5_kind",
+      "is": 3
+    },
+    {
+      "fact": "mod.fs-exchange.e5_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-exchange.e5_value",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-exchange.e6_status",
+      "is": -7
+    }
+  ]
+}

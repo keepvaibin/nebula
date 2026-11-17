@@ -1,0 +1,98 @@
+{
+  "harness": 1,
+  "name": "1305-unit-record",
+  "about": "own_class of the last Kuribo's nerve, an NrvKuribo record Kuribo.cpp defines (LumaUnitRows), is its number; the player's nerve (a header's record) too",
+  "proves": [
+    "kernel.objects.own_class",
+    "kernel.objects.unit"
+  ],
+  "mods": [
+    "../mods/to-objects"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 180,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ran",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.player",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.nerve_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.nerve_not_base",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.nerve_is_a_nerve",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.nerve_as_nerve_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.nerve_class",
+      "at_least": 0
+    },
+    {
+      "fact": "mod.to-objects.kuribos_made",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.to-objects.kuribo_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.kuribo_is_kuribo",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.kuribo_nerve_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.kuribo_nerve_is_a_nerve",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.kuribo_nerve_as_nerve_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.kuribo_nerve_class",
+      "at_least": 0
+    },
+    {
+      "fact": "mod.to-objects.kuribo_nerves_named",
+      "is": 14
+    },
+    {
+      "fact": "mod.to-objects.kuribo_nerve_is_kuribos",
+      "is": 1
+    }
+  ]
+}

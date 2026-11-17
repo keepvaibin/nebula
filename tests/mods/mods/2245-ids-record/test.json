@@ -1,0 +1,41 @@
+{
+  "harness": 1,
+  "name": "2245-ids-record",
+  "about": "the next run with 2246's record, asked in the other order: n7254c5c586 keeps 17707349, n00e263ff68 17707348, breath 18409466 (the record, not the order)",
+  "proves": [
+    "services.mods.ids"
+  ],
+  "mods": [
+    "../mods/mods-a"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4257
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-a.r_c2",
+      "is": 17707349
+    },
+    {
+      "fact": "mod.mods-a.r_c1",
+      "is": 17707348
+    },
+    {
+      "fact": "mod.mods-a.r_breath",
+      "is": 18409466
+    }
+  ],
+  "continue_from": "2246-ids-meet"
+}

@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "audio-tap",
+  "name": "audio-tap",
+  "summary": "audio-tap (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

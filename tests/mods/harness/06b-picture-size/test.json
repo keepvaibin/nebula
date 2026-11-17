@@ -1,0 +1,28 @@
+{
+  "harness": 1,
+  "name": "06b-picture-size",
+  "about": "A reference of another size fails, naming both sizes",
+  "proves": [
+    "harness.self"
+  ],
+  "bare": true,
+  "steps": [
+    {
+      "at": 60,
+      "picture": "title"
+    },
+    {
+      "at": 90,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "picture": "title",
+      "like": "refs/small.png",
+      "within": {
+        "rmse": 6.0
+      }
+    }
+  ]
+}

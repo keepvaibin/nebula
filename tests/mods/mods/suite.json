@@ -1,0 +1,21 @@
+{
+  "harness": 1,
+  "tests": [
+    "2241-list",
+    "2242-states",
+    "2243-struct-size",
+    "2244-ids-get",
+    "2245-ids-record",
+    "2245b-ids-new-record",
+    "2246-ids-meet",
+    "2247-ids-kept",
+    "2248-ids-of",
+    "2249-ids-mistakes",
+    "2251-install-no-file",
+    "2253-of-mod",
+    "2254-watch-stopped",
+    "2290-state-taken-out",
+    "2291a-forget-write",
+    "2291b-forget"
+  ]
+}

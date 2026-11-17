@@ -1,0 +1,31 @@
+{
+  "harness": 1,
+  "name": "2104-svc-other-major",
+  "about": "An import of 2.0 (another major) is refused with L505 naming test.svc 2.0",
+  "proves": [
+    "kernel.service",
+    "kernel.refusal",
+    "services.registry"
+  ],
+  "mods": [
+    {
+      "path": "../mods/reg-svc20",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-svc20.started",
+      "absent": true
+    },
+    {
+      "log": "reg-svc20: .*test\\.svc.*2\\.0"
+    }
+  ]
+}

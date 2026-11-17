@@ -1,0 +1,28 @@
+{
+  "harness": 1,
+  "name": "2102-svc-older-minor",
+  "about": "An import of 1.1 binds the same table a 1.3 request gets",
+  "proves": [
+    "kernel.service",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/reg-svc11"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-svc11.slot",
+      "is": 1
+    },
+    {
+      "fact": "mod.reg-svc11.same",
+      "is": 1
+    }
+  ]
+}

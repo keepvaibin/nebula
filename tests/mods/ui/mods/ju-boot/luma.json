@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "ju-boot",
+  "name": "ju-boot",
+  "version": "1.0.0",
+  "summary": "J's test mod ju-boot.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

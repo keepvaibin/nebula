@@ -1,0 +1,57 @@
+{
+  "harness": 1,
+  "name": "2231b-links-refused",
+  "about": "ftp, a userinfo part, a host not ASCII: LUMA_E_ARGUMENT url, reported; no event",
+  "proves": [
+    "services.system.links",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/sys-links-bad"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4242
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-links-bad.ftp",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-links-bad.userinfo",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-links-bad.unicode_host",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-links-bad.events",
+      "is": 0
+    },
+    {
+      "log": "sys-links-bad: system\\.links\\.open was given a wrong url; it did nothing\\."
+    }
+  ]
+}

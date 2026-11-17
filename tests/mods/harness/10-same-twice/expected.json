@@ -1,0 +1,11 @@
+{
+  "verdict": "pass",
+  "twice_same_facts": {
+    "except": [
+      "kernel.guard_cost",
+      "kernel.guard_time"
+    ]
+  },
+  "on_difference": "a finding against determinism, recorded; the test stays",
+  "note": "kernel.guard_cost and kernel.guard_time are measured times; every other fact must be the same in both runs."
+}

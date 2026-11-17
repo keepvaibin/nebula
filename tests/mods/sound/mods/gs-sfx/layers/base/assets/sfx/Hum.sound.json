@@ -1,0 +1,10 @@
+{
+  "kind": "effect",
+  "file": "hum.flac",
+  "loop": true,
+  "distance": [
+    200,
+    2000
+  ],
+  "priority": 40
+}

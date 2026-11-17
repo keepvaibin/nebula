@@ -1,0 +1,121 @@
+{
+  "harness": 1,
+  "name": "2505-game",
+  "about": "in-game reads player 0 as the game read it (A held 30 frames shows in buttons), the device kind (keyboard and mouse, the harness's default), no rumble on a keyboard, and the refusals",
+  "proves": [
+    "services.input"
+  ],
+  "mods": [
+    "../mods/in-game"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.in-game.running",
+        "exists": true
+      },
+      "hold": [
+        "A"
+      ],
+      "frames": 30
+    },
+    {
+      "after": {
+        "fact": "mod.in-game.a_frames",
+        "at_least": 25
+      },
+      "end": true,
+      "timeout": 1200
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-game.watch_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.start_device_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-game.game_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-game.game_device",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.game_injected",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-game.costar_status",
+      "exists": true
+    },
+    {
+      "fact": "mod.in-game.player2_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.small_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.device_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-game.device_kind",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.device_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.device_null_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.rumble_status",
+      "is": -6
+    },
+    {
+      "fact": "mod.in-game.rumble_nan_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.rumble_long_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.rumble_player_refused",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-game.a_frames",
+      "at_least": 25
+    },
+    {
+      "fact": "mod.in-game.raw_differs",
+      "absent": true
+    },
+    {
+      "fact": "mod.in-game.device_events",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "in-game",
+        "code": 101
+      },
+      "when": "any"
+    }
+  ]
+}

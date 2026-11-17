@@ -1,0 +1,12 @@
+{
+  "harness": 1,
+  "tests": [
+    "1301-own-class",
+    "1302-as-class",
+    "1303-method",
+    "1304-overrider",
+    "1305-unit-record",
+    "1306-not-readable",
+    "1307-call-method"
+  ]
+}

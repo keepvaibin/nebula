@@ -1,0 +1,61 @@
+{
+  "harness": 1,
+  "name": "1142-take-out-dependents",
+  "about": "lt-tlib taken out while lt-tuse, which needs it, is on: lt-tuse goes first (its stop calls lt.note before lt-tlib's stop), both facts written, no panic",
+  "proves": [
+    "kernel.reload.take_out"
+  ],
+  "mods": [
+    "../../loader/mods/lt-tlib",
+    "../../loader/mods/lt-tuse"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "take_out": "lt-tlib",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.lt-tlib",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-tuse.bound",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-tuse.stopped",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-tlib.dependent_first",
+      "is": 1
+    },
+    {
+      "fact": "takeout.lt-tuse",
+      "has": {
+        "stopped": true,
+        "finished": true
+      }
+    },
+    {
+      "fact": "takeout.lt-tlib",
+      "has": {
+        "stopped": true,
+        "finished": true
+      }
+    },
+    {
+      "no_log": "panic|PANIC"
+    }
+  ]
+}

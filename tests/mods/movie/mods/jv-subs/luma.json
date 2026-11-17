@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jv-subs",
+  "name": "jv-subs",
+  "version": "1.0.0",
+  "summary": "J's test mod jv-subs.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

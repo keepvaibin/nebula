@@ -1,0 +1,86 @@
+{
+  "harness": 1,
+  "name": "1403-taken-out",
+  "about": "lc-shell taken out while its objects live: its class ends, its objects are plain JetTurtles again (own_class says so), and the game goes on",
+  "proves": [
+    "kernel.classes.taken_out"
+  ],
+  "mods": [
+    "../mods/lc-shell",
+    "../mods/lc-watch"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1403
+      ],
+      "fact": "before"
+    },
+    {
+      "at": 150,
+      "take_out": "lc-shell",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.lc-shell",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1404
+      ],
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "mod.lc-watch.number_after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-shell.defined",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-shell.made",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-watch.number_before",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-watch.own_is_shell_before",
+      "is": 1
+    },
+    {
+      "log": "\\[mod lc-shell\\] its 1 classes ended; their [1-9][0-9]* objects are the game's own now"
+    },
+    {
+      "fact": "mod.lc-watch.number_after",
+      "is": -1
+    },
+    {
+      "fact": "mod.lc-watch.own_is_base_after",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-watch.own_is_shell_after",
+      "is": 0
+    }
+  ]
+}

@@ -1,0 +1,156 @@
+{
+  "harness": 1,
+  "name": "1501-set-by-name",
+  "about": "nm-numbers at start: a number in a game function's code by its function's name, signature and place (MR::getMaxElementIndex's `return 2;`), its kind and value, the game's function returning it, set to 7 and the function returning 7; a float by its address; a file's constant by its name; each refusal said",
+  "proves": [
+    "kernel.numbers.by_name",
+    "kernel.numbers.set",
+    "kernel.numbers.refusals"
+  ],
+  "mods": [
+    "../mods/nm-numbers"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.nm-numbers.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-numbers.found",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-numbers.kind",
+      "is": 8
+    },
+    {
+      "fact": "mod.nm-numbers.value",
+      "is": 2
+    },
+    {
+      "fact": "mod.nm-numbers.call_before",
+      "is": 2
+    },
+    {
+      "fact": "mod.nm-numbers.set",
+      "is": 0
+    },
+    {
+      "fact": "mod.nm-numbers.value_after",
+      "is": 7
+    },
+    {
+      "fact": "mod.nm-numbers.call_after",
+      "is": 7
+    },
+    {
+      "fact": "mod.nm-numbers.null_signature_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-numbers.float_kind",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-numbers.float_game",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-numbers.float_set",
+      "is": 0
+    },
+    {
+      "fact": "mod.nm-numbers.float_after",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-numbers.constant_kind",
+      "is": 6
+    },
+    {
+      "fact": "mod.nm-numbers.constant_value",
+      "is": 128
+    },
+    {
+      "fact": "mod.nm-numbers.constant_by_empty_signature",
+      "is": 1
+    },
+    {
+      "fact": "mod.nm-numbers.r_no_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.nm-numbers.r_no_such",
+      "is": -1
+    },
+    {
+      "fact": "mod.nm-numbers.r_no_such_place",
+      "is": -1
+    },
+    {
+      "fact": "mod.nm-numbers.r_wrong_signature",
+      "is": -1
+    },
+    {
+      "fact": "mod.nm-numbers.r_fraction",
+      "is": -2
+    },
+    {
+      "fact": "mod.nm-numbers.r_negative_unsigned",
+      "is": -2
+    },
+    {
+      "fact": "mod.nm-numbers.r_u16_range",
+      "is": -2
+    },
+    {
+      "fact": "mod.nm-numbers.r_float_range",
+      "is": -2
+    },
+    {
+      "fact": "mod.nm-numbers.r_value_kept",
+      "is": 7
+    },
+    {
+      "fact": "mod.nm-numbers.r_number_no_such",
+      "is": 1
+    },
+    {
+      "log": "\\[mod nm-numbers\\] set_number: no name"
+    },
+    {
+      "log": "\\[mod nm-numbers\\] set_number\\ MR::noSuchFunction\\.1:\\ the\\ game's\\ code\\ has\\ no\\ such\\ number"
+    },
+    {
+      "log": "\\[mod nm-numbers\\] set_number\\ MR::getMaxElementIndex\\ u32\\(const\\ Vec3f\\ \\&\\)\\.99:\\ the\\ game's\\ code\\ has\\ no\\ such\\ number"
+    },
+    {
+      "log": "\\[mod nm-numbers\\] set_number\\ MR::getMaxElementIndex\\ u32\\(Vec3f\\)\\.1:\\ the\\ game's\\ code\\ has\\ no\\ such\\ number"
+    },
+    {
+      "log": "\\[mod nm-numbers\\] set_number\\ MR::getMaxElementIndex\\ u32\\(const\\ Vec3f\\ \\&\\)\\.1:\\ 2\\.500000\\ is\\ no\\ whole\\ number\\ \\(u32\\)"
+    },
+    {
+      "log": "\\[mod nm-numbers\\] set_number\\ MR::getMaxElementIndex\\ u32\\(const\\ Vec3f\\ \\&\\)\\.1:\\ the\\ value\\ is\\ out\\ of\\ u32's\\ range"
+    },
+    {
+      "log": "\\[mod nm-numbers\\] set_number\\ Game/MapObj/SnowFloor\\.cpp\\#sTextureSize\\.0:\\ the\\ value\\ is\\ out\\ of\\ u16's\\ range"
+    },
+    {
+      "log": "\\[mod nm-numbers\\] set_number\\ CameraContext::getRenderFovy\\ f32\\(\\)\\ const\\.3:\\ the\\ value\\ is\\ out\\ of\\ f32's\\ range"
+    },
+    {
+      "log": "\\[mod nm-numbers\\] number\\ MR::noSuchFunction\\.1:\\ the\\ game's\\ code\\ has\\ no\\ such\\ number"
+    }
+  ]
+}

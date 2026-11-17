@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "2223-struct-size",
+  "about": "facts and display with structs of 8 bytes: LUMA_E_ARGUMENT, Service.StructSize with 8 and 320, 8 and 56",
+  "proves": [
+    "services.system",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/sys-struct"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-struct.facts_8",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-struct.display_8",
+      "is": -1
+    },
+    {
+      "log": "sys-struct: system\\.facts was given a LumaSystemFacts of 8 bytes; it needs at least 320\\."
+    },
+    {
+      "log": "sys-struct: system\\.display was given a LumaSystemDisplay of 8 bytes; it needs at least 56\\."
+    }
+  ]
+}

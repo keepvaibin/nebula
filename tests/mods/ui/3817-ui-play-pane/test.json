@@ -1,0 +1,211 @@
+{
+  "harness": 1,
+  "name": "3817-ui-play-pane",
+  "about": "ju-light opens the game's own layout PauseMenu on the HUD with both buttons brought in (Appear, then ButtonAppear on each with play_pane), then plays ButtonSelectIn on NBackUp only: the upper button lights and the lower one does not (two picture boxes, each against a kept reference: before at f100, after at f150). The play's end comes once, LUMA_OK, kind ANIMATION_END, its handle the pane. After the pictures, refused: a handle never given and another screen's pane (LUMA_E_HANDLE), no such animation (LUMA_E_NOT_FOUND, Ui.MissingAnimation), a null name (LUMA_E_ARGUMENT). A second play_pane on NBackDown cancels the first (its end LUMA_E_CANCELLED)",
+  "proves": [
+    "ui.play_pane"
+  ],
+  "mods": [
+    "../mods/ju-light"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3801
+      ]
+    },
+    {
+      "at": 100,
+      "picture": "before"
+    },
+    {
+      "at": 110,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3802
+      ]
+    },
+    {
+      "at": 150,
+      "picture": "lit"
+    },
+    {
+      "at": 170,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3803
+      ]
+    },
+    {
+      "at": 200,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ju-light.open",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.pane_up",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.pane_down",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.appear",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.appear_up",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.appear_down",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.light",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.unknown",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-light.open_other",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.pane_other",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.other_screen",
+      "is": -3
+    },
+    {
+      "fact": "mod.ju-light.missing",
+      "is": -7
+    },
+    {
+      "fact": "mod.ju-light.null_name",
+      "is": -1
+    },
+    {
+      "fact": "mod.ju-light.ends",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.ju-light.end",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.end_is_up",
+      "is": 1
+    },
+    {
+      "fact": "mod.ju-light.end_kind",
+      "is": 1
+    },
+    {
+      "fact": "mod.ju-light.light_down",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.out_down",
+      "is": 0
+    },
+    {
+      "fact": "mod.ju-light.end_down",
+      "is": -12
+    },
+    {
+      "fact": "mod.ju-light.end_down_is_down",
+      "is": 1
+    },
+    {
+      "fact": "ui.play_pane.2",
+      "has": {
+        "animation": "ButtonSelectIn",
+        "loop": false
+      },
+      "when": "last"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "ju-light",
+        "code": 576
+      },
+      "exists": true
+    },
+    {
+      "picture": "before",
+      "like": "3817-{renderer}-before.png",
+      "box": [
+        290,
+        270,
+        700,
+        100
+      ],
+      "within": {
+        "rmse": 12
+      }
+    },
+    {
+      "picture": "lit",
+      "like": "3817-{renderer}-lit.png",
+      "box": [
+        290,
+        270,
+        700,
+        100
+      ],
+      "within": {
+        "rmse": 12
+      }
+    },
+    {
+      "picture": "lit",
+      "like": "3817-{renderer}-before.png",
+      "box": [
+        290,
+        425,
+        700,
+        100
+      ],
+      "within": {
+        "rmse": 12
+      }
+    },
+    {
+      "picture": "lit",
+      "unlike": "3817-{renderer}-before.png",
+      "box": [
+        290,
+        270,
+        700,
+        100
+      ],
+      "beyond": {
+        "rmse": 6
+      }
+    }
+  ]
+}

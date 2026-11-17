@@ -1,0 +1,41 @@
+{
+  "harness": 1,
+  "name": "1177-begin-fault",
+  "about": "ly-begin faults in a global constructor (its begin): refused as a fault in its start",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    {
+      "path": "../mods/ly-begin",
+      "loads": false
+    }
+  ],
+  "starts": 1,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-begin.started",
+      "absent": true
+    },
+    {
+      "log": "\\[mod ly-begin\\] GUARD: its code failed \\(start: begin\\): "
+    },
+    {
+      "log": "ly-begin.*its begin or start failed and the guard stopped it"
+    },
+    {
+      "no_log": "host: restart"
+    }
+  ],
+  "faults": [
+    {
+      "mod": "ly-begin"
+    }
+  ]
+}

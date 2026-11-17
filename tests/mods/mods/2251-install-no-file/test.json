@@ -1,0 +1,57 @@
+{
+  "harness": 1,
+  "name": "2251-install-no-file",
+  "about": "install.request of a .luma its data folder does not hold: LUMA_E_NOT_FOUND, no screen, no event; a path with .. or not ending .luma LUMA_E_ARGUMENT reported (said once, the second counted); cancel of no request LUMA_E_HANDLE reported",
+  "proves": [
+    "services.mods.install",
+    "services.registry"
+  ],
+  "mods": [
+    "../mods/mods-a"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4256
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-a.install",
+      "is": -7
+    },
+    {
+      "fact": "mod.mods-a.install_up",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-a.install_kind",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-a.install_cancel",
+      "is": -3
+    },
+    {
+      "fact": "mod.mods-a.event",
+      "absent": true
+    },
+    {
+      "log": "mods-a: mods\\.install\\.request was given a wrong path; it did nothing\\.",
+      "times": 1
+    },
+    {
+      "log": "mods-a: mods\\.install\\.cancel was given a handle that is closed or not its own\\.",
+      "times": 1
+    }
+  ]
+}

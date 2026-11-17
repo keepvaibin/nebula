@@ -1,0 +1,138 @@
+{
+  "patch": 1,
+  "key": [
+    "l_id"
+  ],
+  "add": [
+    {
+      "name": "Coin",
+      "l_id": 9101,
+      "pos_x": -2864.6,
+      "pos_y": -12981.3,
+      "pos_z": -15332.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    },
+    {
+      "name": "Coin",
+      "l_id": 9102,
+      "pos_x": -2981.8,
+      "pos_y": -12981.3,
+      "pos_z": -15049.2,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    },
+    {
+      "name": "Coin",
+      "l_id": 9103,
+      "pos_x": -3264.6,
+      "pos_y": -12981.3,
+      "pos_z": -14932.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    },
+    {
+      "name": "Coin",
+      "l_id": 9104,
+      "pos_x": -3547.4,
+      "pos_y": -12981.3,
+      "pos_z": -15049.2,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    },
+    {
+      "name": "Coin",
+      "l_id": 9105,
+      "pos_x": -3664.6,
+      "pos_y": -12981.3,
+      "pos_z": -15332.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    },
+    {
+      "name": "Coin",
+      "l_id": 9106,
+      "pos_x": -3547.4,
+      "pos_y": -12981.3,
+      "pos_z": -15614.8,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    },
+    {
+      "name": "Coin",
+      "l_id": 9107,
+      "pos_x": -3264.6,
+      "pos_y": -12981.3,
+      "pos_z": -15732.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    },
+    {
+      "name": "Coin",
+      "l_id": 9108,
+      "pos_x": -2981.8,
+      "pos_y": -12981.3,
+      "pos_z": -15614.8,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    },
+    {
+      "name": "Kuribo",
+      "l_id": 9111,
+      "pos_x": -2364.6,
+      "pos_y": -13081.3,
+      "pos_z": -15332.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    },
+    {
+      "name": "Kuribo",
+      "l_id": 9112,
+      "pos_x": -4164.6,
+      "pos_y": -13081.3,
+      "pos_z": -15332.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 1.0,
+      "scale_y": 1.0,
+      "scale_z": 1.0
+    }
+  ]
+}

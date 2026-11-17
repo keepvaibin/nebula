@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "1133-signature-many",
+  "about": "A function named without a signature that the game has three of: L505 names them (Name.FunctionMany)",
+  "proves": [
+    "kernel.bind",
+    "kernel.refusal"
+  ],
+  "mods": [
+    {
+      "path": "../../loader/mods/lt-sigmany",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-sigmany.started",
+      "absent": true
+    },
+    {
+      "log": "lt-sigmany: .*single function \"MR::getRandom\": the import names no signature and it has several \\(\"f32\\(\\)\", \"f32\\(f32, f32\\)\", \"s32\\(s32, s32\\)\"\\)"
+    }
+  ]
+}

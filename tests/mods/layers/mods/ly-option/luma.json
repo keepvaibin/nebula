@@ -1,0 +1,43 @@
+{
+  "format": "1.0",
+  "id": "ly-option",
+  "name": "ly-option",
+  "summary": "ly-option (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "options": [
+    {
+      "key": "pick",
+      "kind": "choice",
+      "default": "a",
+      "values": [
+        "a",
+        "b"
+      ],
+      "name": "Pick",
+      "value_names": {
+        "a": "A",
+        "b": "B"
+      }
+    }
+  ],
+  "layers": [
+    {
+      "name": "a",
+      "when": {
+        "code": true
+      }
+    },
+    {
+      "name": "b",
+      "when": {
+        "code": true
+      }
+    }
+  ]
+}

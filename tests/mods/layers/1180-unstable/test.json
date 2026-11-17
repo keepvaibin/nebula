@@ -1,0 +1,52 @@
+{
+  "harness": 1,
+  "name": "1180-unstable",
+  "about": "ly-unstable answers differently each start: one start-again, then the cooked layers stay and Layers.Unstable is said; no loop",
+  "proves": [
+    "kernel.layers"
+  ],
+  "mods": [
+    "../mods/ly-unstable"
+  ],
+  "starts": 2,
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ly-unstable.asked",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-unstable.a_on",
+      "is": 1
+    },
+    {
+      "fact": "mod.ly-unstable.b_on",
+      "is": 0
+    },
+    {
+      "fact": "mod.ly-unstable.started",
+      "is": 1
+    },
+    {
+      "log": "host: restart",
+      "times": 1
+    },
+    {
+      "log": "mods: ly-unstable: its code chose other layers again after the game started again for them; the cooked ones stay",
+      "times": 1
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "ly-unstable",
+        "code": 171
+      },
+      "when": "any"
+    }
+  ]
+}
