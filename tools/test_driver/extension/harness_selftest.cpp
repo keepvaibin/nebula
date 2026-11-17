@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The host half's after-step waits, without the game (tools/lumacore/tests/harness_wait_test.py builds and runs it).
 //
-// harness_selftest <plan> <frames> [[@<frame>:]<log line> ...]: reads the plan as the host does, then runs up to
+// harness_selftest [--host] <plan> <frames> [[@<frame>:]<log line> ...]: reads the plan as the host does, then runs up to
 // <frames> game frames or until the half ends the run. Each log line (a mod's fact is "game: [mod <id>] fact <key>
 // <JSON>") is given before the first frame, or before game frame <frame> when it starts "@<frame>:". The facts go to
 // the plan's out folder; the test reads them. The first line on standard output is the plan's clock: "clock steps" or
-// "clock real" (tools/lumacore/tests/harness_time_test.py).
+// "clock real" (tools/lumacore/tests/harness_time_test.py). With --host before the plan, the half is given a host
+// that sizes its window and loses its device by printing "window <w> <h>" and "lose_device" (harness_steps_test.py);
+// without it, no host.
 #include "harness.h"
 
+#include <nebula_host_extension.h>
+
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -25,14 +30,32 @@ void quit() {
     g_quit = true;
 }
 
+void resize_window(void*, std::uint32_t width, std::uint32_t height) {
+    std::printf("window %u %u\n", width, height);
+    std::fflush(stdout);
+}
+
+void lose_gpu_device(void*) {
+    std::printf("lose_device\n");
+    std::fflush(stdout);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
+    const bool with_host = argc > 1 && std::string(argv[1]) == "--host";
+    if (with_host) {
+        --argc;
+        ++argv;
+    }
     if (argc < 3) {
-        std::fprintf(stderr, "usage: harness_selftest <plan> <frames> [<log line> ...]\n");
+        std::fprintf(stderr, "usage: harness_selftest [--host] <plan> <frames> [<log line> ...]\n");
         return 2;
     }
-    if (!harness::start(nullptr, argv[1], log, quit)) {
+    static NebulaHostForExtension host{NEBULA_HOST_EXTENSION_VERSION, sizeof(NebulaHostForExtension)};
+    host.resize_window = resize_window;
+    host.lose_gpu_device = lose_gpu_device;
+    if (!harness::start(with_host ? &host : nullptr, argv[1], log, quit)) {
         return 1;
     }
     std::printf("clock %s\n", harness::real_time() ? "real" : "steps");

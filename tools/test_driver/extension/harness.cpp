@@ -366,7 +366,8 @@ std::string json_string(std::string_view text) {
 
 // --- The plan ------------------------------------------------------------------------------------------------------
 
-enum class Action { Hold, Stick, Shake, Pointer, Key, Text, Settings, Picture, Wait, End, Game, TakeOut, Reload, Forget };
+enum class Action { Hold, Stick, Shake, Pointer, Key, Text, Settings, Picture, Wait, End, Game, TakeOut, Reload, Forget,
+                    Window, LoseDevice };
 
 struct Cond {
     bool log = false;
@@ -387,6 +388,7 @@ struct Step {
     std::uint32_t buttons = 0u;
     float x = 0.0f, y = 0.0f;
     std::uint32_t key = 0u;
+    std::uint32_t width = 0u, height = 0u;  // window's
     std::int64_t frames = 0;
     std::vector<Cond> conds;
     std::int64_t timeout = 600;
@@ -714,6 +716,20 @@ bool read_line(const std::string& line, std::string& why) {
             // The Mods page's FORGET of a removed mod (services/mods.md 8), as the player chooses it.
             s.action = Action::Forget;
             s.mod = args[0];
+        } else if (a == "window" && args.size() == 2u) {
+            // The window's inside resized to width x height pixels, as the player drags it.
+            double height = 0.0;
+            if (!number(args[0], value) || !number(args[1], height) || value < 1.0 || height < 1.0 || value > 65535.0 ||
+                height > 65535.0 || value != std::floor(value) || height != std::floor(height)) {
+                why = "step " + std::to_string(s.number) + ": window takes a width and a height in pixels, 1 to 65535";
+                return false;
+            }
+            s.action = Action::Window;
+            s.width = static_cast<std::uint32_t>(value);
+            s.height = static_cast<std::uint32_t>(height);
+        } else if (a == "lose_device" && args.empty()) {
+            // The graphics device lost at the renderer's next frame, as a driver reset loses it.
+            s.action = Action::LoseDevice;
         } else {
             why = "step " + std::to_string(s.number) + ": not an action this host half knows: " + a;
             return false;
@@ -879,9 +895,25 @@ void run_step(Step& s, std::int64_t now) {
     // The plan's pointer is in 0..1 of the screen; the host's in -1..1.
     case Action::Pointer: g.inputs.push_back({now, s.frames, 0u, false, false, true, s.x * 2.0f - 1.0f, s.y * 2.0f - 1.0f}); break;
     case Action::Key:
-        if (g.host != nullptr && g.host->menu_key != nullptr) {
-            g.host->menu_key(g.host->host, s.key);
+        if (g.host == nullptr || g.host->menu_key == nullptr) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": this host takes no menu keys");
+            return;
         }
+        g.host->menu_key(g.host->host, s.key);
+        break;
+    case Action::Window:
+        if (g.host == nullptr || g.host->resize_window == nullptr) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": this host cannot size its window");
+            return;
+        }
+        g.host->resize_window(g.host->host, s.width, s.height);
+        break;
+    case Action::LoseDevice:
+        if (g.host == nullptr || g.host->lose_gpu_device == nullptr) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": this host cannot lose its graphics device");
+            return;
+        }
+        g.host->lose_gpu_device(g.host->host);
         break;
     case Action::Text:
         if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, type_text) + sizeof(g.host->type_text) ||

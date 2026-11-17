@@ -214,6 +214,21 @@ CLASSES = None
 # None: the game's own choice. run_tests sets it from --gpu.
 GPU = None
 
+# The test extension's hooks the host reads when it starts (tools/test_driver/extension/test_extension.cpp reads them
+# from the environment): a test names them among its settings, and they go to the game's environment. Everything else a
+# test does is a step of its plan. harness_settings_test.py keeps this list equal to the extension's.
+TEST_HOOKS = ("GALAXY_TEST_VRAM_BUDGET_MB", "GALAXY_TEST_DISC_DELAY_US", "GALAXY_TEST_MODS_SCREEN",
+              "GALAXY_TEST_MODS_CHANGED")
+
+
+def setting_names():
+    """The names a run's settings file takes (tools/verify/settings_args.py's tables)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("settings_args", TREE / "tools" / "verify" / "settings_args.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return {name for table in module.FILES.values() for name, _ in table}
+
 
 def object_ref(value, path, classes):
     """`object:<name>#<n>` or `class:<Class>#<n>`; a class the types file lacks is a harness-error."""
@@ -277,11 +292,18 @@ def read_test(folder, types=None):
         raise HarnessError("time is steps or real")
     # A visible window (pacing measurements only; every other run is hidden).
     visible = boolean(t, "visible", "") if "visible" in t else False
-    # Settings for the run, as tools/verify/settings_args.py takes them (GALAXY_VSYNC_INTERVAL=1).
+    # Settings for the run, as tools/verify/settings_args.py takes them (GALAXY_VSYNC_INTERVAL=1), and the test
+    # extension's hooks (TEST_HOOKS), which go to the game's environment. Any other name is an error: the game would
+    # never read it.
     run_settings = t.get("settings", [])
     if not isinstance(run_settings, list) or not all(
             isinstance(a, str) and re.fullmatch(r"GALAXY_[A-Z0-9_]+=[^\s]*", a) for a in run_settings):
         raise HarnessError("settings must be a list of GALAXY_NAME=value")
+    known = setting_names()
+    for a in run_settings:
+        name = a.partition("=")[0]
+        if name not in known and name not in TEST_HOOKS:
+            raise HarnessError("settings: %s is neither a setting the game reads nor a test hook" % name)
     # The game's own records for the run (--diagnostics), as a list of names; a timeline goes to the run's folder.
     diagnostics = t.get("diagnostics", [])
     if not isinstance(diagnostics, list) or not all(isinstance(d, str) and re.fullmatch(r"[a-z-]+", d) for d in diagnostics):
@@ -545,7 +567,8 @@ def read_steps(t, bare, classes):
     ends = 0
     pictures = set()
     actions = {"hold", "stick", "shake", "pointer", "key", "text", "settings", "picture", "call", "read", "stage", "wait",
-               "end", "take_out", "reload", "forget", "copy_file", "load_file", "erase_file", "new_file"}
+               "end", "take_out", "reload", "forget", "copy_file", "load_file", "erase_file", "new_file", "window",
+               "lose_device"}
     for i, s in enumerate(steps):
         path = "steps[%d]" % i
         if not isinstance(s, dict):
@@ -598,8 +621,8 @@ def read_steps(t, bare, classes):
         for key in needs:
             if key not in s:
                 raise HarnessError("%s: %s needs %s" % (path, action, key))
-        if bare and action not in ("wait", "picture", "key", "text", "settings", "end"):
-            raise HarnessError("%s: a bare test has only wait, picture, key, text, settings and end steps" % path)
+        if bare and action not in ("wait", "picture", "key", "text", "settings", "window", "lose_device", "end"):
+            raise HarnessError("%s: a bare test has only wait, picture, key, text, settings, window, lose_device and end steps" % path)
         v = s[action]
         if action == "hold":
             if not isinstance(v, list) or not v or not all(isinstance(b, str) and b in BUTTONS for b in v):
@@ -636,6 +659,16 @@ def read_steps(t, bare, classes):
             pictures.add(name)
             step["line"] = "picture %s" % name
             step["picture"] = name
+        elif action == "window":
+            # The window's inside resized as the player drags it, [width, height] in pixels.
+            if not (isinstance(v, list) and len(v) == 2 and all(isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= 65535 for n in v)):
+                raise HarnessError("%s.window is [width, height] in pixels, each 1 to 65535" % path)
+            step["line"] = "window %d %d" % (v[0], v[1])
+        elif action == "lose_device":
+            # The graphics device lost at the renderer's next frame, as a driver reset loses it.
+            if v is not True:
+                raise HarnessError("%s.lose_device takes true" % path)
+            step["line"] = "lose_device"
         elif action in ("wait", "end"):
             if v is not True:
                 raise HarnessError("%s.%s takes true" % (path, action))
@@ -1391,7 +1424,7 @@ def write_run_settings(test, settings):
         assignments.append("GALAXY_LANGUAGE=%s" % LANGUAGES[test["language"]])
     if GPU is not None:
         assignments.append("GALAXY_GPU=%s" % GPU)
-    assignments += test.get("settings", [])
+    assignments += [a for a in test.get("settings", []) if a.partition("=")[0] not in TEST_HOOKS]
     subprocess.run([sys.executable, "-I", str(TREE / "tools" / "verify" / "settings_args.py"), str(settings)] + assignments,
                    check=True, capture_output=True)
 
@@ -1571,6 +1604,10 @@ def run_one(test, renderer, args, run_folder, previous):
         "GALAXY_AUDIO_WAV_DUMP_SECONDS": str(int(math.ceil(test["limit"]))),
         "LUMA_HARNESS_PLAN": str(plan),
     })
+    for a in test.get("settings", []):
+        name, _, value = a.partition("=")
+        if name in TEST_HOOKS:
+            env[name] = value
     if platform.system() == "Linux":
         # The game's data folder ($XDG_DATA_HOME/Nebula, platform_paths.h) in the run's, as LOCALAPPDATA on Windows.
         env["XDG_DATA_HOME"] = str(run_folder / "appdata")
@@ -1580,8 +1617,6 @@ def run_one(test, renderer, args, run_folder, previous):
     if platform.system() == "Linux":
         # The importer's library is opened by name (dlopen "libnebula_import.so"), SDL's beside the game.
         env["LD_LIBRARY_PATH"] = os.pathsep.join([str(run_folder / "bin")] + [p for p in [os.environ.get("LD_LIBRARY_PATH")] if p])
-    for name in ("GALAXY_PRESENT_SNAPSHOT_DIR", "GALAXY_INPUT_AUTOPRESS_SCRIPT", "GALAXY_TEST_DETERMINISTIC"):
-        env.pop(name, None)
     command = [str(run_folder / "bin" / exe.name), "--pak", pak, "--saves", str(run_folder / "saves"),
                "--seconds", str(int(math.ceil(test["limit"]))), "--settings", str(settings),
                "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / HOST["extension"])] + imports
@@ -2090,6 +2125,13 @@ def evaluate(test, renderer, run_folder, ran):
     # library did not load or has no luma_validate_message. Every refusal of the run is then codes only.
     coded = [line for line in log_lines if "refusals are given as codes" in line]
     add("refusals are given in words", not coded, coded)
+    if test["ends"] != "crash" and end:
+        # Nothing the game asked for was lost (galaxy/loss_report.h): the [loss] counts the host logs at its exit (a draw
+        # with no material or pipeline, a texture drawn blank, a sound read past its memory) are all 0.
+        report = [line for line in log_lines if line.startswith("[loss] ") and not line.startswith("[loss] first")]
+        counts = re.findall(r"([\w-]+)=(\d+)", report[-1]) if report else []
+        add("nothing the game asked for was lost", bool(report) and bool(counts) and all(v == "0" for _, v in counts),
+            report[-1] if report else "no [loss] report at the exit")
     for bad in by_key.get("harness.bad_fact", []):
         add("every fact is well formed (JSON, a key a mod may log)", False, bad["value"])
     if not test["bare"]:
