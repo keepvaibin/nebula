@@ -77,6 +77,11 @@ namespace luma {
                 const CameraContext* sGameContext = nullptr;
                 // main_rig: the rig (its actor's pose read at each apply; a null actor: it left the game), the mod's look
                 // and up (none: the rig's), the eye moved `ahead` along the look, the main near plane (0: the game's).
+                // The point the held main camera looks at (main_eye's at, a rig's actor place or joint look) and whether
+                // the held camera is in the context now (from its apply after the game's camera moves until the game's
+                // own view goes back before the next): MR::getCameraWatchPos reads it then.
+                Vec3f sMainAt;
+                bool sMainApplied = false;
                 bool sMainOnRig = false;
                 LumaDrawViewCamera sMainRig;
                 bool sMainHasLook = false;
@@ -610,6 +615,7 @@ namespace luma {
                     }
                     sMainMod = nullptr;
                     sGameContext = nullptr;
+                    sMainApplied = false;
                     sMainOnRig = false;
                     sMainNear = 0.0f;
                 }
@@ -635,6 +641,7 @@ namespace luma {
                         }
                     }
                     f32 lx = at.x - eye.x, ly = at.y - eye.y, lz = at.z - eye.z;
+                    const f32 reach = __builtin_sqrtf(lx * lx + ly * ly + lz * lz);  // the eye to the point looked at
                     if (sMainHasLook) {
                         lx = sMainLook.x;
                         ly = sMainLook.y;
@@ -652,6 +659,8 @@ namespace luma {
                     Mtx camera;
                     if (lookAt(camera, eye, Vec3f(eye.x + lx * 100.0f, eye.y + ly * 100.0f, eye.z + lz * 100.0f), up)) {
                         sMainView.setInline(camera);
+                        // The rig's point when the rig looks (unturned, not moved ahead); else as far along the look.
+                        sMainAt.set(eye.x + lx * reach, eye.y + ly * reach, eye.z + lz * reach);
                     }
                     return true;
                 }
@@ -685,6 +694,7 @@ namespace luma {
                     sApplied.set(sMainView);
                     sAppliedFov = pContext->mFovy;
                     sAppliedNear = pContext->mNearZ;
+                    sMainApplied = true;
                 }
 
                 int32_t svcMainEye(const LumaMod* pMod, const LumaDrawViewEye* pEye) {
@@ -710,6 +720,7 @@ namespace luma {
                         return badArgument(pMod, pWhere, "up");
                     }
                     sMainView.setInline(camera);
+                    sMainAt.set(pEye->at[0], pEye->at[1], pEye->at[2]);
                     sMainFov = pEye->fov_y;
                     sMainMod = pMod;
                     sMainOnRig = false;
@@ -833,6 +844,7 @@ namespace luma {
                 if (sMainMod == nullptr) {
                     return;
                 }
+                sMainApplied = false;  // the game's camera works on its own watch point too
                 CameraContext* const pContext = cameraContext();
                 if (pContext == nullptr || pContext != sGameContext) {
                     return;
@@ -853,6 +865,10 @@ namespace luma {
                 if (sMainMod != nullptr) {
                     mainApply();
                 }
+            }
+
+            const Vec3f* mainWatchPos() {
+                return sMainApplied && sMainMod != nullptr ? &sMainAt : nullptr;
             }
 
             void render() {

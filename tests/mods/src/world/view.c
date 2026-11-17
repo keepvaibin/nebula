@@ -7,7 +7,9 @@
                 the texture keeps its picture. k 4 set_on 1 ("on"), a WORLD rig at the player, offset (0, 150, 400), fov
                 50 ("rig"); eye_of that rig: "eye_dx", "eye_dy", "eye_dz" (the eye less the player's place, rounded),
                 "at_d2" (|at - place| squared, rounded), "eye_status". k 5 main_eye 600 to the player's side and 200 up, looking at
-                him ("main"). k 6 main_eye null ("main_back"). k 7 release ("release"), again ("release2": E_HANDLE); the
+                him ("main"). k 6 the game's MR::getCameraWatchPos is the point that main camera looks at ("main_watch_d2": the
+                distance squared, rounded), then main_eye null ("main_back"); k 7 the watch point is the game's camera's
+                again, away from that point ("back_watch_d2" over 100). k 7 release ("release"), again ("release2": E_HANDLE); the
                 draw of its texture after: E_HANDLE ("image_after").
    fv-args (2) 2472: the refusals at k 1, each reported: create 0 wide ("zero": E_ARGUMENT), past 1024 ("wide"), a null
                 out ("null_out"); two views ("first", "second"), a third ("third": E_LIMIT); camera at the eye
@@ -36,6 +38,16 @@ static const LumaDrawService* draw;
 static const LumaDrawViewService* view;
 static const LumaFunction* get_player_pos; /* Vec3f* MR::getPlayerPos() */
 static const LumaFunction* player_of;      /* LiveActor* MR::getPlayerDemoActor() */
+static const LumaFunction* watch_pos;      /* const Vec3f& MR::getCameraWatchPos() */
+
+__attribute__((unused)) static float watch_d2(Vec3 to) {
+    const Vec3* at = 0;
+    void* none[] = {0};
+    watch_pos->invoke(none, &at);
+    if (at == 0) return -1.0f;
+    const float dx = at->x - to.x, dy = at->y - to.y, dz = at->z - to.z;
+    return dx * dx + dy * dy + dz * dz;
+}
 
 static Vec3 player_pos(void) {
     const Vec3* at = 0;
@@ -62,6 +74,7 @@ static LumaDrawViewRegion region;
 static LumaDrawTexture shown;
 static int frames;
 static int released;
+static Vec3 main_at; /* the point the main camera of k 5 looks at */
 
 static void paint(void* user, const LumaDrawScreen* screen) {
     (void)user;
@@ -119,10 +132,15 @@ static int32_t trigger(LumaCall* call, void* user) {
     }
     if (k == 5) {
         const LumaDrawViewEye eye = {{p.x + 600.0f, p.y + 200.0f, p.z}, {p.x, p.y + 80.0f, p.z}, {0.0f, 1.0f, 0.0f}, 50.0f};
+        main_at = (Vec3){eye.at[0], eye.at[1], eye.at[2]};
         lt_fact("main", view->main_eye(lt_mod, &eye));
     }
-    if (k == 6) lt_fact("main_back", view->main_eye(lt_mod, 0));
+    if (k == 6) {
+        lt_fact("main_watch_d2", rounded(watch_d2(main_at)));
+        lt_fact("main_back", view->main_eye(lt_mod, 0));
+    }
     if (k == 7) {
+        lt_fact("back_watch_d2", rounded(watch_d2(main_at)));
         lt_fact("release", view->release(lt_mod, region));
         lt_fact("release2", view->release(lt_mod, region));
         released = 1;
@@ -183,6 +201,7 @@ static const LumaImport imports[] = {
     LUMA_SERVICE(view, LUMA_DRAW_VIEW_NAME, "1.0"),
     LUMA_FUNCTION(player_of, "MR::getPlayerDemoActor", "LiveActor *()"),
     LUMA_FUNCTION(get_player_pos, "MR::getPlayerPos", "Vec3f *()"),
+    LUMA_FUNCTION(watch_pos, "MR::getCameraWatchPos", "const Vec3f &()"),
     LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
 };
 
