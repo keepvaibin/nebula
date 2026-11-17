@@ -55,7 +55,8 @@ Any key that is not on this page, anywhere in the file, stops the test with an e
 | `proves` | No | A list of IDs from `capabilities.json`, recorded in the result. Nebula's own tests use it to track what each test covers. |
 | `mods` | No | The mods to install, in load order. Each is a path to a mod folder or `.luma` file, or an object. See [Mod entries](#mod-entries). A test in `tests/NAME/` names its own mod as `"../.."`. |
 | `code` | No | `allow` (the default), `deny` or `ask`: the answer to the question about running the mods' code. `ask` leaves the question on the screen. |
-| `language` | No | A language of the game's discs, by its name in the game: `UsEnglish`, `UsSpanish`, `UsFrench`, `EuEnglish`, `EuSpanish`, `EuFrench`, `EuGerman`, `EuItalian`, `EuDutch` or `JpJapanese`. The default is the disc's first language. |
+| `language` | No | A language of the game's discs, by its name in the game: `UsEnglish`, `UsSpanish`, `UsFrench`, `EuEnglish`, `EuSpanish`, `EuFrench`, `EuGerman`, `EuItalian`, `EuDutch` or `JpJapanese`. The default is the disc's first language. A language that only one disc has also needs `disc`. |
+| `disc` | No | The disc the test needs: `RMGE01` (USA), `RMGP01` (Europe) or `RMGJ01` (Japan). The test runs on the run's game when it is of that disc, else on the game `--pak-for DISC=PATH` or the `LUMA_TEST_PAKS` environment variable (`DISC=PATH` pairs joined by `;`) names for it. With neither, its result is `not-run`, naming the disc, and the run does not pass. |
 | `window` | No | The window's size in pixels as `[width, height]`, whole numbers from 64 to 16384. The default is `[1280, 720]`. A picture has this size. |
 | `seed` | No | A number that seeds the game's random numbers. The default is `0`, so a test gives the same random numbers each run. |
 | `renderers` | No | Any of `d3d12`, `vulkan` and `d3d11`. The test runs once for each. The default is `["d3d12"]`. |
@@ -293,6 +294,7 @@ Each test and renderer leaves a folder in the work folder, `TEST/RENDERER/`:
 | `pass` | Every check held. |
 | `fail` | A check did not hold. The first failed check is the reason, and every check is listed. |
 | `setup-failed` | A setup item did not take. The test shows nothing either way. |
+| `not-run` | The test needs another disc's game (`disc`) and none was given. The run does not pass. |
 | `crashed` | The game crashed. The result names the dump and the last lines of the log. |
 | `timeout` | The run reached `limit_seconds`. |
 | `harness-error` | The test file is wrong, or the runner had a problem. Never the mod's fault. |
