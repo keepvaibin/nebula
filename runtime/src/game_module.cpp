@@ -28,8 +28,9 @@ std::filesystem::path choose(const std::filesystem::path& rows_module, const std
     if (need_rows) {
         reason = "--luma-describe reads the rows";
     } else if (!mods_folder.empty()) {
-        std::error_code error;
-        const bool crashed = std::filesystem::exists(mods_folder / ".code_crashed", error);
+        // What the last run's crash left (galaxy::mods::take_safe_start, taken before this choice).
+        const bool crashed = galaxy::mods::code_off_after_crash();
+        const std::string crashed_mod = galaxy::mods::crashed_mod().id;
         galaxy::mods::set_mods_folder(mods_folder, mods_file, game_id);
         const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods(game_id);
         // A library no mod that is on needs is not loaded (galaxy::mods::libraries_of): its code needs no rows.
@@ -40,7 +41,9 @@ std::filesystem::path choose(const std::filesystem::path& rows_module, const std
             if (mod.luma && idle.count(mod.luma->id) != 0u) continue;
             // The last run crashed with mods' code on: it stays off for this run (host_main.cpp svc_mods_start), so
             // the code needs no rows; a dev mod's stays on.
-            if (crashed && !dev) continue;
+            if (crashed && !dev && !galaxy::mods::harness_half(mod.id)) continue;
+            // The mod the last run's crash named is off for this run (host_main.cpp).
+            if (mod.id == crashed_mod) continue;
             // A safe start turns every mod off for this start (host_main.cpp), all but `kept`.
             if (safe && mod.id != kept) continue;
             reason = safe ? "safe start: only mod " + mod.id + "'s code starts" : "mod " + mod.id + " has code";

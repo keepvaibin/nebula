@@ -418,11 +418,12 @@ def read_test(folder, types=None):
         for i, f in enumerate(t["faults"]):
             keys_known(f, "faults[%d]" % i, {"mod"})
             faults.append(text(f, "mod", "faults[%d]" % i))
-    # A safe start: "asked" starts with --safe-start 1; "crash" leaves mods/.safe_start empty, as a crash
-    # with mods on does, before the start.
+    # A safe start: "asked" starts with --safe-start 1. "crash" and "crash-code" leave the crash record a crash with
+    # mods on leaves when it can name no mod (mods/.crash, runtime/include/galaxy/mod_crash.h): "crash" with no mod's
+    # code running (every mod is off for the start), "crash-code" with mods' code running (every mod's code is off).
     safe_start = t.get("safe_start")
-    if safe_start not in (None, "asked", "crash"):
-        raise HarnessError("safe_start must be \"asked\" or \"crash\"")
+    if safe_start not in (None, "asked", "crash", "crash-code"):
+        raise HarnessError("safe_start must be \"asked\", \"crash\" or \"crash-code\"")
     hidden = []
     if "hide_game_files" in t:
         if not isinstance(t["hide_game_files"], list):
@@ -1433,9 +1434,10 @@ def place_mods(test, settings, previous, frozen, ports=None):
             frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
     if test["safe_start"] == "asked":
         imports += ["--safe-start", "1"]
-    elif test["safe_start"] == "crash":
+    elif test["safe_start"] in ("crash", "crash-code"):
         (settings / "mods").mkdir(parents=True, exist_ok=True)
-        (settings / "mods" / ".safe_start").write_bytes(b"")
+        code = b"1" if test["safe_start"] == "crash-code" else b"0"
+        (settings / "mods" / ".crash").write_bytes(b"nebula crash 1\nphase play\ncode " + code + b"\n")
     return mod_ids, imports
 
 

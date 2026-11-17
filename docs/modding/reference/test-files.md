@@ -69,7 +69,7 @@ Any key that is not on this page, anywhere in the file, stops the test with an e
 | `faults` | No | Mods that are expected to fault, as `[{"mod": "ID"}]`. Without it, any fault in a mod fails the test. |
 | `ends` | No | `end` (the default) or `crash`. With `crash`, the game must crash before the `end` step, and the test needs a `log` check whose pattern starts with `crash: `. |
 | `starts` | No | How many times the game process must have started during the run, when a step restarts the game. |
-| `safe_start` | No | `asked` starts the game in safe mode. `crash` starts it as after a crash with mods on, so the safe-start question shows. |
+| `safe_start` | No | `asked` starts the game in safe mode. `crash` starts it as after a crash with mods on that named no mod while no mod's code ran: every mod is off for the start, and the **Mods** page says why. `crash-code` starts it as after such a crash while mods' code ran: every mod's code is off for the start. To test the start after a crash that names your mod, end one test with `"ends": "crash"` and continue from it (`continue_from`). |
 | `fresh` | No | `true` starts with no shader cache, as on a first start. |
 | `bare` | No | `true` runs the game with no test code in it. Only `wait`, `picture`, `key`, `text`, `settings` and `end` steps are allowed, and only log, picture and sound checks. A bare test has no mods. |
 | `hide_game_files` | No | Paths inside the game's folder that the run's copy of the game leaves out. |

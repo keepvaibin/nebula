@@ -1927,7 +1927,7 @@ bool NebulaSettingsScreen::build() {
         setTextStyle(mModTitles[i], cHeadingSize, cAccent, cAccent, 3);
         setTextStyle(mModEmpty[i], cFooterSize, cSubText, cSubText, 4);
     }
-    mModNotice = makeText(mKits, mPage, "NsModNotice", 160);
+    mModNotice = makeText(mKits, mPage, "NsModNotice", 320);
     if (mModNotice == nullptr) {
         return false;
     }

@@ -1,0 +1,94 @@
+{
+  "harness": 1,
+  "name": "6709-play-crash-not-twice",
+  "about": "Two crashes in play are not two at the start: off for this start only; Escape closes the question with nothing changed",
+  "proves": [
+    "mods.after_crash.named",
+    "mods.after_crash.question"
+  ],
+  "continue_from": "6708-play-crash-again",
+  "mods": [
+    {
+      "path": "../../guard-crash/mods/guard-deep",
+      "loads": false
+    }
+  ],
+  "language": "UsFrench",
+  "window": [
+    720,
+    960
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 180,
+      "picture": "question-fr"
+    },
+    {
+      "at": 200,
+      "key": "esc"
+    },
+    {
+      "at": 260,
+      "picture": "notice-fr"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "mods: the last run crashed in the mod guard-deep: it is off for this start"
+    },
+    {
+      "fact": "crash.shown.guard-deep",
+      "has": {
+        "twice": false,
+        "enabled": true
+      }
+    },
+    {
+      "fact": "crash.answer.guard-deep",
+      "has": {
+        "answer": "closed"
+      }
+    },
+    {
+      "fact": "modscreen.nebula",
+      "has": {
+        "line": 0,
+        "page": "list",
+        "label": "guard-deep a fermé Nebula de manière inattendue. Il est désactivé pour ce démarrage."
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modscreen.guard-deep",
+      "has": {
+        "line": 0,
+        "list": "on"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "picture": "question-fr",
+      "like": "refs/{renderer}/question-fr.png",
+      "within": {
+        "rmse": 0.5
+      }
+    },
+    {
+      "picture": "notice-fr",
+      "like": "refs/{renderer}/notice-fr.png",
+      "within": {
+        "rmse": 0.5
+      }
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "harness": 1,
+  "name": "6704-start-crash-twice",
+  "about": "At two of its starts running: off until turned on (saved); the question says so; Space keeps it off; the lists' notice says it too and it is in DISABLED",
+  "proves": [
+    "mods.after_crash.twice",
+    "mods.after_crash.question"
+  ],
+  "continue_from": "6703-start-crash-again",
+  "mods": [
+    {
+      "path": "../mods/crash-start",
+      "loads": false
+    },
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 200,
+      "key": "space"
+    },
+    {
+      "at": 260,
+      "picture": "notice"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "mods: the last run crashed in the mod crash-start, at two of its starts running: it is off until it is turned on"
+    },
+    {
+      "fact": "mod.crash-start.started",
+      "absent": true
+    },
+    {
+      "fact": "crash.shown.crash-start",
+      "has": {
+        "twice": true,
+        "enabled": false,
+        "text": "crash-start closed Nebula unexpectedly at two starts in a row. It is off until you turn it on."
+      }
+    },
+    {
+      "fact": "crash.answer.crash-start",
+      "has": {
+        "answer": "off"
+      }
+    },
+    {
+      "fact": "modscreen.nebula",
+      "has": {
+        "line": 0,
+        "page": "list",
+        "label": "crash-start closed Nebula unexpectedly at two starts in a row. It is off until you turn it on."
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modscreen.crash-start",
+      "has": {
+        "line": 0,
+        "list": "off"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "picture": "notice",
+      "like": "refs/{renderer}/notice.png",
+      "within": {
+        "rmse": 0.5
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "harness": 1,
+  "name": "6710-code-crash",
+  "about": "The last run crashed with mods' code on and named no mod: hello's code stays off for this start",
+  "proves": [
+    "mods.after_crash.code"
+  ],
+  "safe_start": "crash-code",
+  "mods": [
+    {
+      "path": "../../harness/mods/hello",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "the last run crashed with mods' code on: it stays off for this run"
+    },
+    {
+      "fact": "mod.hello.hello",
+      "absent": true
+    }
+  ]
+}

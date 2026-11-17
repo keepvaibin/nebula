@@ -13,6 +13,7 @@
 #include "galaxy/luma.h"
 #include "galaxy/test_temp.h"
 #include "galaxy/mod_xml.h"
+#include "galaxy/mod_crash.h"
 #include "galaxy/mods.h"
 
 #include <archive.h>
@@ -25,6 +26,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <limits>
 #include <set>
 #include <string>
@@ -887,6 +889,160 @@ bool texture_names() {
 
 namespace {
 
+// The crash record (mod_crash.h): its text both ways, every other text refused, write() as a fault handler uses it,
+// mc::take() and the next start's reading of it (mods.h take_safe_start, crashed_mod, note_start_done).
+std::string read_text(const fs::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+bool crash_record_text() {
+    namespace mc = galaxy::mod_crash;
+    using mc::kModMax;
+    using mc::Phase;
+    using mc::Record;
+    bool ok = true;
+    for (const Phase phase : {Phase::kStart, Phase::kPlay}) {
+        for (const bool code : {false, true}) {
+            for (const char* mod : {"", "a", "some.mod-id_2", "0123456789012345678901234567890123456789012345678901234567890123"}) {
+                const Record record{phase, code, mod};
+                const std::optional<Record> back = mc::parse(mc::format(record));
+                ok &= expect(back && back->phase == phase && back->code_on == code && back->mod == mod, "a record's text reads back");
+            }
+        }
+    }
+    ok &= expect(mc::format(Record{Phase::kStart, true, "m.one"}) == "nebula crash 1\nphase start\ncode 1\nmod m.one\n",
+                 "the record's text as mod_crash.h gives it");
+    static const char kNul[] = "nebula crash 1\nphase start\ncode 0\nmod a\0b\n";  // a NUL in the id
+    for (const std::string_view bad : {
+             std::string_view(""), std::string_view("\n"), std::string_view("nebula crash 1\n"),
+             std::string_view("nebula crash 1\nphase start\n"),
+             std::string_view("nebula crash 1\nphase start\ncode 0"),            // the last line not ended
+             std::string_view("nebula crash 2\nphase start\ncode 0\n"),          // another form
+             std::string_view("nebula crash 1\r\nphase start\r\ncode 0\r\n"),    // other line ends
+             std::string_view("nebula crash 1\nphase stop\ncode 0\n"),
+             std::string_view("nebula crash 1\nphase start\ncode 2\n"),
+             std::string_view("nebula crash 1\ncode 0\nphase start\n"),           // out of order
+             std::string_view("nebula crash 1\nphase start\ncode 0\nmod \n"),     // no id
+             std::string_view("nebula crash 1\nphase start\ncode 0\nmod Big\n"),  // a character an id cannot hold
+             std::string_view("nebula crash 1\nphase start\ncode 0\nmod a b\n"),
+             std::string_view("nebula crash 1\nphase start\ncode 0\nmod ../x\n"),
+             std::string_view("nebula crash 1\nphase start\ncode 0\nmode x\n"),
+             std::string_view("nebula crash 1\nphase start\ncode 0\nmod x\nmod y\n"),
+             std::string_view("nebula crash 1\nphase start\ncode 0\nmod x\n\n"),
+             std::string_view(" nebula crash 1\nphase start\ncode 0\n"),
+             std::string_view("nebula crash 1\nphase start\ncode 0\nmod 01234567890123456789012345678901234567890123456789012345678901234\n"),
+             std::string_view(kNul, sizeof(kNul) - 1u)}) {
+        ok &= expect(!mc::parse(bad), "a text that is not a record is refused");
+    }
+    // Fuzz: changed, cut and lengthened records never fault, and what is taken as a record is exactly its own text.
+    std::uint32_t seed = 0x6d6f6463u;
+    const auto next = [&seed] {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        return seed;
+    };
+    const std::string seeds[] = {mc::format(Record{Phase::kStart, false, ""}), mc::format(Record{Phase::kPlay, true, "m.one"}),
+                                 mc::format(Record{Phase::kStart, true, std::string(64, 'z')})};
+    const char alphabet[] = "\n\r\0 abcz019.-_/mod phase start play code nebula crash";
+    bool canonical = true;
+    for (int round = 0; round < 200000; ++round) {
+        std::string text = seeds[next() % 3u];
+        const int edits = 1 + static_cast<int>(next() % 4u);
+        for (int e = 0; e < edits; ++e) {
+            const std::size_t at = text.empty() ? 0u : next() % (text.size() + 1u);
+            const char c = alphabet[next() % (sizeof(alphabet) - 1u)];
+            switch (next() % 4u) {
+            case 0: if (at < text.size()) text[at] = c; break;
+            case 1: text.insert(at, 1u, c); break;
+            case 2: if (at < text.size()) text.erase(at, 1u); break;
+            default: text.resize(at); break;
+            }
+        }
+        if (const std::optional<Record> got = mc::parse(text)) canonical = canonical && mc::format(*got) == text;
+    }
+    ok &= expect(canonical, "fuzz: a text taken as a record is its record's own text");
+    return ok;
+}
+
+bool crash_record_files() {
+    namespace mc = galaxy::mod_crash;
+    using mc::kModMax;
+    using mc::Phase;
+    using mc::Record;
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_crash");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root / "mods");
+    const fs::path file = root / "mods" / ".crash";
+
+    // Not armed: nothing written.
+    mc::disarm();
+    mc::write("m.one");
+    ok &= expect(!fs::exists(file), "a crash before the record is armed writes nothing");
+
+    // Armed: the crash with no mod, then named by the guard; a later write without a mod (the platform's handler after
+    // the guard's) keeps the name.
+    mc::arm(file, false);
+    ok &= expect(mc::armed() && mc::phase() == Phase::kStart, "armed, at the start");
+    mc::write(nullptr);
+    ok &= expect(read_text(file) == "nebula crash 1\nphase start\ncode 0\n", "a crash naming no mod");
+    mc::set_code_on(true);
+    mc::write("m.one");
+    ok &= expect(read_text(file) == "nebula crash 1\nphase start\ncode 1\nmod m.one\n", "a crash naming its mod");
+    mc::set_phase(Phase::kPlay);
+    mc::write(nullptr);
+    mc::write("");
+    mc::write("Big");
+    ok &= expect(read_text(file) == "nebula crash 1\nphase start\ncode 1\nmod m.one\n", "a named record stays as written");
+
+    // Armed again: a new record. Characters an id cannot hold end it; an id longer than any is cut to the longest.
+    mc::arm(file, false);
+    mc::write("m.two\nmod evil");
+    ok &= expect(read_text(file) == "nebula crash 1\nphase start\ncode 0\nmod m.two\n", "a name ends at a character an id cannot hold");
+    mc::arm(file, false);
+    mc::set_phase(Phase::kPlay);
+    const std::string long_id(100, 'q');
+    mc::write(long_id.c_str());
+    const std::optional<Record> cut = mc::parse(read_text(file));
+    ok &= expect(cut && cut->phase == Phase::kPlay && cut->mod == std::string(kModMax, 'q'), "a long name is cut to the longest id");
+
+    // take: read and removed; a file that is no record is removed too; none is none.
+    const std::optional<Record> taken = mc::take(file);
+    ok &= expect(taken && taken->mod == std::string(kModMax, 'q') && !fs::exists(file), "take reads the record and removes it");
+    ok &= expect(!mc::take(file), "no record: none");
+    write(root / "mods" / ".crash", std::string(300, 'x'));
+    ok &= expect(!mc::take(file) && !fs::exists(file), "a file too long for a record is removed, not read");
+    write(root / "mods" / ".crash", "nebula crash 1\nphase start\ncode 0\nmod BAD\n");
+    ok &= expect(!mc::take(file) && !fs::exists(file), "a changed record is removed, not used");
+    mc::disarm();
+    mc::arm(root / std::string(2000, 'p'), false);
+    ok &= expect(!mc::armed(), "a path too long for the handler's copy arms nothing");
+
+    // The next start: a crash at a mod's start, which crashed at its last start too, leaves it off until turned on;
+    // the mods it named before stay listed until a start of theirs is done.
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    write(root / "mods" / ".crash", "nebula crash 1\nphase start\ncode 1\nmod m.one\n");
+    write(root / "mods" / ".crashed_at_start", "m.one\nm.two\nNot An Id\n");
+    const galaxy::mods::SafeStart safe = galaxy::mods::take_safe_start(false);
+    const galaxy::mods::CrashedMod crashed = galaxy::mods::crashed_mod();
+    ok &= expect(safe == galaxy::mods::SafeStart::kNo && !galaxy::mods::code_off_after_crash(),
+                 "a crash that named its mod leaves the rest on");
+    ok &= expect(crashed.id == "m.one" && crashed.twice, "the mod, at two of its starts running");
+    ok &= expect(!fs::exists(file) && read_text(root / "mods" / ".crashed_at_start") == "m.two\n",
+                 "the record taken; the mod counted once");
+    const std::string started[] = {"m.two", "m.three"};
+    galaxy::mods::note_start_done(started);
+    ok &= expect(!fs::exists(root / "mods" / ".crashed_at_start"), "a start done clears its mods");
+    ok &= expect(galaxy::mods::take_safe_start(true) == galaxy::mods::SafeStart::kNo, "taken once a process");
+
+    mc::disarm();
+    fs::remove_all(root, ec);
+    return ok;
+}
+
 // A text option's value as mods.ini keeps it (services/mods.md 8.4): UTF-8, no control character, at most max_length
 // code points.
 bool text_options() {
@@ -913,7 +1069,8 @@ int main() {
     test_texture_categories();
     // Every test runs, whichever fail.
     const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), patches_by_key_in_the_plan(), layer_only_mods(), layer_assets(), libraries_load_when_needed(), libraries_act_with_their_users_permissions(), galaxy_saves(),
-                            luma_rules(), luma_import(), text_options()};
+                            luma_rules(), luma_import(), text_options(), crash_record_text(),
+                            crash_record_files()};
     bool ok = true;
     for (const bool passed : results) ok = ok && passed;
     std::cout << (ok ? "mods tests passed" : "mods tests FAILED") << '\n';

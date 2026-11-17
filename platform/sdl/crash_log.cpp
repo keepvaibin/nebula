@@ -7,6 +7,8 @@
 
 #include "sdl_host.h"
 
+#include "galaxy/mod_crash.h"
+
 #if defined(__linux__)
 #include <dlfcn.h>
 #include <signal.h>
@@ -144,6 +146,9 @@ void report(int signal, const siginfo_t* info, const void* context) {
 
 void on_fatal(int signal, siginfo_t* info, void* context) {
     if (!g_reporting.exchange(true)) {
+        // While mods change the game, the record for the next start (mod_crash.h); the guard's handler, before this
+        // one, named the mod when it was a mod's fault.
+        galaxy::mod_crash::write(nullptr);
         report(signal, info, context);
     }
     // The handler that was there before (debuggerd's on Android), as if this one had not been: it ends the process.

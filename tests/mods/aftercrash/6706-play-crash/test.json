@@ -1,0 +1,31 @@
+{
+  "harness": 1,
+  "name": "6706-play-crash",
+  "about": "guard-deep overflows its stack in play: the game crashes naming it",
+  "proves": [
+    "mods.after_crash.named"
+  ],
+  "ends": "crash",
+  "mods": [
+    "../../guard-crash/mods/guard-deep"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-deep.entered",
+      "exists": true
+    },
+    {
+      "log": "crash: guard: the code of the mod guard-deep failed "
+    }
+  ]
+}

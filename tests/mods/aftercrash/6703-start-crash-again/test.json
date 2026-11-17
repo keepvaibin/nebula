@@ -1,0 +1,36 @@
+{
+  "harness": 1,
+  "name": "6703-start-crash-again",
+  "about": "Not kept off, crash-start starts again at the start after and crashes again",
+  "proves": [
+    "mods.after_crash.named"
+  ],
+  "continue_from": "6702-start-crash-next",
+  "ends": "crash",
+  "mods": [
+    {
+      "path": "../mods/crash-start",
+      "loads": false
+    },
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.crash-start.entered",
+      "exists": true
+    },
+    {
+      "log": "crash: guard: the code of the mod crash-start failed "
+    }
+  ]
+}

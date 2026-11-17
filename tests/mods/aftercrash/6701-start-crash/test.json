@@ -1,0 +1,39 @@
+{
+  "harness": 1,
+  "name": "6701-start-crash",
+  "about": "crash-start's start overflows its stack: the game crashes naming it; the crash record names it",
+  "proves": [
+    "mods.after_crash.named"
+  ],
+  "ends": "crash",
+  "mods": [
+    {
+      "path": "../mods/crash-start",
+      "loads": false
+    },
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 600,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.crash-start.entered",
+      "exists": true
+    },
+    {
+      "fact": "mod.crash-start.survived",
+      "absent": true
+    },
+    {
+      "log": "crash: guard: the code of the mod crash-start failed "
+    }
+  ]
+}

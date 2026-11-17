@@ -165,20 +165,35 @@ void set_mods_folder(const std::filesystem::path& folder, const std::filesystem:
 [[nodiscard]] std::filesystem::path mods_folder();
 // The file given to set_mods_folder for the player's choices (empty before); its folder is the settings folder.
 [[nodiscard]] std::filesystem::path mods_settings_file();
-// Mod code was turned off after a crash in this run; the Mods page says so.
+// Every mod's code is off for this run after a crash that named no mod with code on (take_safe_start); the Mods page
+// says so on each mod with code. A dev mod's stays on.
 void set_code_off_after_crash() noexcept;
-// Safe start: every mod off for one start, the player's choices kept as they are. kAsked: --safe-start 1, or
-// Shift held as Nebula starts (Windows); kAfterCrash: the last run crashed while mods changed the game and no mod's code
-// was on (a crash with code on leaves only the code off first: .code_crashed).
+[[nodiscard]] bool code_off_after_crash() noexcept;
+// Safe start: every mod off for one start, the player's choices kept as they are. kAsked: --safe-start 1, Shift held
+// as Nebula starts (Windows), or the mods folder's .safe_start; kAfterCrash: the last run crashed while mods changed
+// the game, no mod's code was on and no mod was named (mod_crash.h).
 enum class SafeStart : std::uint8_t { kNo, kAsked, kAfterCrash };
-// The file whose presence makes the next start safe (in the mods folder; empty before set_mods_folder). A crash writes
-// it empty (kAfterCrash); anything else in it is kAsked.
+// The file whose presence asks for a safe start (in the mods folder; empty before set_mods_folder).
 [[nodiscard]] std::filesystem::path safe_start_file();
-// At the start, after set_mods_folder: whether this start is safe (`asked` from the launch, else the file), removing
-// the file so the start after is not. Remembered for safe_start(); a later call returns the first call's answer.
+// The crash record's file (mod_crash.h; in the mods folder, empty before set_mods_folder).
+[[nodiscard]] std::filesystem::path crash_file();
+// At the start, after set_mods_folder: whether this start is safe, and what the last run's crash left (the crash
+// record, taken: crashed_mod, code_off_after_crash). Both files are removed so the start after is neither. Remembered;
+// a later call returns the first call's answer.
 SafeStart take_safe_start(bool asked);
 // This run's safe start (kNo before take_safe_start).
 [[nodiscard]] SafeStart safe_start() noexcept;
+// The mod the last run's crash named (empty: none): off for this start, the player's choice kept unless `twice`. With
+// `twice` its code crashed the game at two of its starts running, and it stays off until the player turns it on (the
+// host saves the choice).
+struct CrashedMod {
+    std::string id;
+    bool twice = false;
+};
+[[nodiscard]] CrashedMod crashed_mod();
+// The start went well (the first scene's first frame): these mods, whose code ran at it, leave the list of mods that
+// crashed at their last start.
+void note_start_done(std::span<const std::string> code_mods);
 // The player's blocklist: mod ids that never start, in mods-blocked.txt beside the file of the player's
 // choices, kept whether or not the mod is in the folder (it is blocked again when it comes back). A blocked mod scans
 // off with the reason, cannot be turned on, and its page offers UNBLOCK. Any thread.
@@ -209,6 +224,10 @@ void set_shipped_mods(std::set<std::string> ids);
 void set_dev_mods(std::vector<std::string> ids);
 [[nodiscard]] const std::vector<std::string>& dev_mods();
 [[nodiscard]] bool dev_mod(std::string_view id);
+// The harness's own game half (luma-test, placed by tools/lumacore/luma_test.py in a harness run, which sets
+// LUMA_HARNESS_PLAN): the test's instrument, not a player's mod. A start that turns mods or their code off (a safe start,
+// a missing part, a crash) leaves it on, or no such start could be run as a test (it gives the steps and ends the run).
+[[nodiscard]] bool harness_half(std::string_view id);
 [[nodiscard]] bool built_in(const ModInfo& mod);
 // A library acts for the mods that need it: each of `libraries` among `plugins` is given the permissions the player
 // gave the mods that need it (through a library they need, its own needs get them too), and asks the player for none

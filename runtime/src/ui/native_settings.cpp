@@ -2520,6 +2520,14 @@ bool s_consent_choosing = false;
 bool s_consent_focus = false;
 std::map<std::string, bool> s_consent_chosen;
 std::string s_consent_facts_for;
+// The question after a crash that named a mod (when-a-mod-fails.md, "The next start after a crash"): keep it off, turn it on again or
+// remove it. Shown instead of the lists the first time they would show this run; `asked`: answered or closed (not
+// again this run); `showing`: the page built last was the question; `focus`: the focus goes to Keep it off when it
+// next builds; `facts`: its harness fact was written. Under s_mods_mutex.
+bool s_crash_asked = false;
+bool s_crash_showing = false;
+bool s_crash_focus = true;
+bool s_crash_facts = false;
 
 // The Mods screen's lines about each mod as the harness facts `modscreen.<id>` (test-harness.md 4): its line in its
 // list, and each row of its page while that shows, written when what they say changes (a page each time it opens).
@@ -2871,6 +2879,63 @@ void commit_mods_locked(bool ask) {
 void commit_mods_draft() {
     const std::lock_guard<std::mutex> lock(s_mods_mutex);
     commit_mods_locked(true);
+}
+
+// With s_mods_mutex held: the mod the last run's crash named (mods.h crashed_mod), as the lists hold it; null when
+// none was named or it is gone (removed since).
+galaxy::mods::ModInfo* crashed_mod_locked() {
+    const galaxy::mods::CrashedMod crashed = galaxy::mods::crashed_mod();
+    if (crashed.id.empty()) return nullptr;
+    for (galaxy::mods::ModInfo& mod : s_mods) {
+        if (mod.id == crashed.id && !galaxy::mods::built_in(mod)) return &mod;
+    }
+    return nullptr;
+}
+
+void ask_mod_remove();
+void select_mods_row(const RenderConfig& render, const std::string& key);
+
+enum class CrashAnswer { KeepOff, TurnOn, Remove, Closed };
+
+// The player's answer to the crash question. Keep it off: off in the saved mods (it stays off at the next start).
+// Turn it on again: on in the saved mods (the restart is offered: it starts with the next start). Remove: the mod's
+// page with REMOVE's question. Closed (Escape): nothing changes. Not asked again this run. The lists come back with
+// that mod selected.
+void answer_crash(CrashAnswer answer) {
+    std::string id;
+    bool remove = false;
+    {
+        const std::lock_guard<std::mutex> lock(s_mods_mutex);
+        s_crash_asked = true;
+        s_crash_showing = false;
+        galaxy::mods::ModInfo* const mod = crashed_mod_locked();
+        if (mod == nullptr) return;
+        id = mod->id;
+        if (answer == CrashAnswer::KeepOff || answer == CrashAnswer::TurnOn) {
+            const bool on = answer == CrashAnswer::TurnOn;
+            if (mod->enabled != on) {
+                mod->enabled = on;
+                save_mods();
+            }
+            if (galaxy::mods::mods_differ_from_session(s_mods)) {
+                s_mods_restart_ask.store(true, std::memory_order_release);
+            }
+            s_mods_scanned = false;
+        } else if (answer == CrashAnswer::Remove) {
+            s_mod_options = id;
+            remove = true;
+        }
+    }
+    const char* const said = answer == CrashAnswer::KeepOff  ? "off"
+                             : answer == CrashAnswer::TurnOn ? "on"
+                             : answer == CrashAnswer::Remove ? "remove"
+                                                             : "closed";
+    galaxy::modlog::fact("crash.answer." + id, std::string("{\"answer\":\"") + said + "\"}");
+    if (remove) {
+        ask_mod_remove();
+        return;
+    }
+    select_mods_row(s_settings_draft, "mod:" + id);
 }
 
 void revert_mods_draft() {
@@ -3746,6 +3811,48 @@ std::vector<SettingsRow> consent_page(const galaxy::mods::ModInfo& mod) {
     return rows;
 }
 
+// The question after a crash that named `mod` (when-a-mod-fails.md, "The next start after a crash"): its name, what happened, what the
+// next start does, then Keep it off (the focus), Turn it on again and Remove. With s_mods_mutex held.
+std::vector<SettingsRow> crash_page(const galaxy::mods::ModInfo& mod) {
+    std::vector<SettingsRow> rows;
+    const bool twice = galaxy::mods::crashed_mod().twice;
+    const std::string title = mod_title(mod);
+    const auto line = [&rows](std::string text) {
+        SettingsRow row{std::move(text), {}, nullptr, {}, true};
+        row.names = 1u;
+        rows.push_back(std::move(row));
+    };
+    line(title);
+    line(galaxy::modlog::row_words(twice ? "Mods.CrashedTwice" : "Mods.Crashed", mod.id, {{"mod", title}}));
+    line(galaxy::modlog::row_words(twice ? "Mods.CrashedAskTwice" : "Mods.CrashedAskOnce", mod.id, {}));
+    const std::vector<std::string> buttons = {"KEEP IT OFF", "TURN IT ON AGAIN", "REMOVE"};
+    SettingsRow choice = button_row({}, buttons,
+                                    [](RenderConfig&, unsigned pressed) {
+                                        constexpr CrashAnswer kAnswers[] = {CrashAnswer::KeepOff, CrashAnswer::TurnOn,
+                                                                            CrashAnswer::Remove};
+                                        if (pressed < std::size(kAnswers)) answer_crash(kAnswers[pressed]);
+                                    },
+                                    {});
+    choice.key = "crash-buttons";
+    rows.push_back(std::move(choice));
+    if (s_crash_focus) {
+        s_crash_focus = false;
+        s_native_settings_row.store(static_cast<unsigned>(rows.size() - 1u), std::memory_order_relaxed);
+        select_settings_button(0u);
+    }
+    if (!s_crash_facts) {
+        s_crash_facts = true;
+        std::string json = std::string("{\"twice\":") + (twice ? "true" : "false") + ",\"enabled\":" +
+                           (mod.enabled ? "true" : "false") + ",\"text\":";
+        galaxy::modlog::append_json_text(json, rows[1].label);
+        json += ",\"focus\":";
+        galaxy::modlog::append_json_text(json, buttons.front());
+        json += '}';
+        s_modscreen_pending.emplace_back("crash.shown." + mod.id, std::move(json));
+    }
+    return rows;
+}
+
 // A world clock's rate as the page writes it, in thousandths: "2X", "0.5X", "1.25X" (S.#X words it in each language).
 std::string clock_rate_text(std::uint32_t rate) {
     std::string text = std::to_string(rate / 1000u);
@@ -4418,7 +4525,9 @@ bool screens_screen_up() {
         if (s_install_ask || s_offer_ask) return true;
     }
     const std::lock_guard<std::mutex> lock(s_mods_mutex);
-    return s_consent_open;
+    const bool on_mods = s_native_settings_visible.load(std::memory_order_relaxed) &&
+                         s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount == kModsTab;
+    return s_consent_open || (s_crash_showing && on_mods);
 }
 
 // The menu on MODS over the paused game, on `row` of the request's page.
@@ -4516,6 +4625,15 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
     if (s_import_page_open.load(std::memory_order_acquire)) {
         return import_page();
     }
+    // The crash question, as the lists would first show (nothing drafted, no mod's page open): before the consent
+    // question, which the crashed mod's answer may change.
+    s_crash_showing = false;
+    if (!s_crash_asked && !s_mod_log_open && s_mod_options.empty() && mods_draft_changes_locked() == 0u) {
+        if (const galaxy::mods::ModInfo* crashed = crashed_mod_locked()) {
+            s_crash_showing = true;
+            return crash_page(*crashed);
+        }
+    }
     if (s_consent_open) {
         if (galaxy::mods::ModInfo* asked = first_code_to_allow_locked()) return consent_page(*asked);
         s_consent_open = false;  // answered elsewhere (turned off, removed)
@@ -4537,6 +4655,16 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
     // choices for the next start; the log has the notice too.
     if (const galaxy::mods::SafeStart safe = galaxy::mods::safe_start(); safe != galaxy::mods::SafeStart::kNo) {
         rows.push_back(SettingsRow{safe_start_notice(safe), {}, nullptr, {}, true});
+        modscreen_facts_locked("nebula", "list", &rows.back(), 1u);
+    } else if (const galaxy::mods::ModInfo* crashed = crashed_mod_locked()) {
+        // The mod the last run's crash named is off for this start (off until turned on when it crashed at two of
+        // its starts running and is still off).
+        const bool twice = galaxy::mods::crashed_mod().twice && !crashed->enabled;
+        SettingsRow notice{galaxy::modlog::row_words(twice ? "Mods.CrashedTwice" : "Mods.Crashed", crashed->id,
+                                                     {{"mod", mod_title(*crashed)}}),
+                           {}, nullptr, {}, true};
+        notice.names = 1u;
+        rows.push_back(std::move(notice));
         modscreen_facts_locked("nebula", "list", &rows.back(), 1u);
     }
     SettingsRow off{"DISABLED", {}, nullptr, {}, true};
@@ -4660,10 +4788,18 @@ bool mods_page_key(std::uintptr_t key, bool accept, bool was_down) {
             if (!was_down) close_import_page(s_settings_draft);
             return true;
         }
+        bool crash = false;
         bool asking = false;
         {
             const std::lock_guard<std::mutex> lock(s_mods_mutex);
+            crash = s_crash_showing;
             asking = s_consent_open;
+        }
+        if (crash) {
+            // The crash question: Escape, Backspace or B closes it, nothing changed; the rest are the rows' own.
+            if (key != VK_ESCAPE && key != VK_BACK) return false;
+            if (!was_down) answer_crash(CrashAnswer::Closed);
+            return true;
         }
         if (asking) {
             // The consent question: Escape, Backspace or B is Not now (consent.md 2.4); the rest are the rows' own.

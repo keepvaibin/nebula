@@ -1,0 +1,66 @@
+{
+  "harness": 1,
+  "name": "6705-twice-stays-off",
+  "about": "The start after: crash-start stays off, jc-none stays on, nothing is asked, no notice",
+  "proves": [
+    "mods.after_crash.twice"
+  ],
+  "continue_from": "6704-start-crash-twice",
+  "mods": [
+    {
+      "path": "../mods/crash-start",
+      "loads": false
+    },
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.crash-start.started",
+      "absent": true
+    },
+    {
+      "fact": "crash.shown.crash-start",
+      "absent": true
+    },
+    {
+      "fact": "modscreen.nebula",
+      "absent": true,
+      "scope": "installation"
+    },
+    {
+      "fact": "modscreen.crash-start",
+      "has": {
+        "line": 0,
+        "list": "off"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "fact": "modscreen.jc-none",
+      "has": {
+        "line": 0,
+        "list": "on"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "no_log": "the last run crashed"
+    }
+  ]
+}
