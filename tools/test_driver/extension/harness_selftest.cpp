@@ -4,7 +4,8 @@
 // harness_selftest <plan> <frames> [[@<frame>:]<log line> ...]: reads the plan as the host does, then runs up to
 // <frames> game frames or until the half ends the run. Each log line (a mod's fact is "game: [mod <id>] fact <key>
 // <JSON>") is given before the first frame, or before game frame <frame> when it starts "@<frame>:". The facts go to
-// the plan's out folder; the test reads them.
+// the plan's out folder; the test reads them. The first line on standard output is the plan's clock: "clock steps" or
+// "clock real" (tools/lumacore/tests/harness_time_test.py).
 #include "harness.h"
 
 #include <cstdio>
@@ -34,6 +35,8 @@ int main(int argc, char** argv) {
     if (!harness::start(nullptr, argv[1], log, quit)) {
         return 1;
     }
+    std::printf("clock %s\n", harness::real_time() ? "real" : "steps");
+    std::fflush(stdout);
     struct Line {
         long before;
         std::string text;

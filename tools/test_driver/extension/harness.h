@@ -30,6 +30,9 @@ void log_line(const char* tag, const char* text);
 const void* service(const char* name, std::uint32_t major, std::uint32_t minor);
 // After start: the plan's controls are a controller's (`device pad`).
 [[nodiscard]] bool as_pad();
+// After start: the plan keeps the host's clocks (`time real`): the game steps in real time, the display paces the
+// pictures, and frame numbers in the plan are game steps as they come. Without it the run takes fixed steps.
+[[nodiscard]] bool real_time();
 // Game thread: the controller's motor strength at a change (the fact input.motor).
 void motor(std::uint8_t strength);
 // Game thread: the setup is not done yet (frame 0 not fixed), so a menu the boot hid stays hidden: the setup's save and

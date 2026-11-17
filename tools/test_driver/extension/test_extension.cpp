@@ -865,7 +865,7 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
     NebulaHostExtension& e = g_extension;
     e.version = NEBULA_HOST_EXTENSION_VERSION;
     e.size = sizeof(e);
-    e.flags = (in_harness || env_flag("GALAXY_TEST_DETERMINISTIC") ? NEBULA_EXT_FIXED_STEPS : 0u) |
+    e.flags = ((in_harness && !harness::real_time()) || env_flag("GALAXY_TEST_DETERMINISTIC") ? NEBULA_EXT_FIXED_STEPS : 0u) |
               (env_flag("GALAXY_AUDIO_WAV_DUMP_ONLY") ? NEBULA_EXT_NO_SOUND_DEVICE : 0u) |
               (env("GALAXY_TEST_MODS_SCREEN").has_value() ? NEBULA_EXT_MODS_SCREEN : 0u) |
               (in_harness && harness::as_pad() ? NEBULA_EXT_CONTROLS_PAD : 0u);

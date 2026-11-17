@@ -241,7 +241,8 @@ def read_test(folder, types=None):
     t = load_json(folder / "test.json")
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
-                       "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh", "window"})
+                       "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh", "window",
+                       "time", "visible", "settings", "diagnostics"})
     for key in ("harness", "name", "about", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -266,6 +267,22 @@ def read_test(folder, types=None):
     device = text(t, "device", "") if "device" in t else "keyboard"
     if device not in ("keyboard", "pad"):
         raise HarnessError("device is keyboard or pad")
+    # The game's clock: fixed steps (the default; two runs match frame for frame) or real time, where the game steps on
+    # the host's clock and the display paces the pictures (pacing is measured in these).
+    clock = text(t, "time", "") if "time" in t else "steps"
+    if clock not in ("steps", "real"):
+        raise HarnessError("time is steps or real")
+    # A visible window (pacing measurements only; every other run is hidden).
+    visible = boolean(t, "visible", "") if "visible" in t else False
+    # Settings for the run, as tools/verify/settings_args.py takes them (GALAXY_VSYNC_INTERVAL=1).
+    run_settings = t.get("settings", [])
+    if not isinstance(run_settings, list) or not all(
+            isinstance(a, str) and re.fullmatch(r"GALAXY_[A-Z0-9_]+=[^\s]*", a) for a in run_settings):
+        raise HarnessError("settings must be a list of GALAXY_NAME=value")
+    # The game's own records for the run (--diagnostics), as a list of names; a timeline goes to the run's folder.
+    diagnostics = t.get("diagnostics", [])
+    if not isinstance(diagnostics, list) or not all(isinstance(d, str) and re.fullmatch(r"[a-z-]+", d) for d in diagnostics):
+        raise HarnessError("diagnostics must be a list of names (present-stats, timeline, ...)")
     code = text(t, "code", "") if "code" in t else "allow"
     if code not in ("allow", "deny", "ask"):
         raise HarnessError("code must be allow, deny or ask")
@@ -398,6 +415,7 @@ def read_test(folder, types=None):
             "language": language, "seed": seed, "renderers": renderers, "limit": limit, "window": window,
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
             "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
+            "time": clock, "visible": visible, "settings": run_settings, "diagnostics": diagnostics,
             "starts": starts, "fresh": fresh, "not_here": not_here}
 
 
@@ -1255,6 +1273,8 @@ def plan_text(test, out):
         lines.append("clock title")
     if test.get("device", "keyboard") == "pad":
         lines.append("device pad")
+    if test.get("time", "steps") == "real":
+        lines.append("time real")
     lines += test["setup"]
     for s in test["steps"]:
         if s["at"] is not None:
@@ -1363,6 +1383,7 @@ def write_run_settings(test, settings):
         assignments.append("GALAXY_LANGUAGE=%s" % LANGUAGES[test["language"]])
     if GPU is not None:
         assignments.append("GALAXY_GPU=%s" % GPU)
+    assignments += test.get("settings", [])
     subprocess.run([sys.executable, "-I", str(TREE / "tools" / "verify" / "settings_args.py"), str(settings)] + assignments,
                    check=True, capture_output=True)
 
@@ -1509,11 +1530,17 @@ def run_one(test, renderer, args, run_folder, previous):
     command = [str(run_folder / "bin" / exe.name), "--pak", pak, "--saves", str(run_folder / "saves"),
                "--seconds", str(int(math.ceil(test["limit"]))), "--settings", str(settings),
                "--crash-dumps", str(run_folder), "--extension", str(run_folder / "bin" / HOST["extension"])] + imports
-    if args.diagnostics:
+    diagnostics = [d for d in (args.diagnostics or "").split(",") if d] + [
+        d for d in test.get("diagnostics", []) if d not in (args.diagnostics or "").split(",")]
+    if diagnostics:
         # A stress or record the whole run is made under (--diagnostics ring-stress): the game's own switch.
-        command += ["--diagnostics", args.diagnostics]
+        command += ["--diagnostics", ",".join(diagnostics)]
+        if "timeline" in diagnostics:
+            command += ["--timeline", str(run_folder / "timeline.bin")]
     hidden = {}
-    if platform.system() == "Windows":
+    if test.get("visible"):
+        pass
+    elif platform.system() == "Windows":
         startup = subprocess.STARTUPINFO()
         startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startup.wShowWindow = subprocess.SW_HIDE

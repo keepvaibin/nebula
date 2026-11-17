@@ -420,6 +420,7 @@ struct State {
     bool bare = false;
     bool clock_title = false;     // frame 0 waits for the title screen
     bool as_pad = false;          // `device pad`
+    bool real_time = false;       // `time real`: the host's own clocks, not fixed steps
     bool title_seen = false;
     bool setup_finished = false;  // "setup done" answered
     std::string out;
@@ -596,6 +597,14 @@ bool read_line(const std::string& line, std::string& why) {
             return false;
         }
         g.as_pad = true;
+        return true;
+    }
+    if (w[0] == "time") {
+        if (w.size() != 2u || (w[1] != "real" && w[1] != "steps")) {
+            why = "a time line is `time real` or `time steps`";
+            return false;
+        }
+        g.real_time = w[1] == "real";
         return true;
     }
     if (w[0] == "bare") {
@@ -1352,6 +1361,10 @@ const void* service(const char* name, std::uint32_t major, std::uint32_t minor) 
 
 bool as_pad() {
     return g.on && g.as_pad;
+}
+
+bool real_time() {
+    return g.on && g.real_time;
 }
 
 void motor(std::uint8_t strength) {
