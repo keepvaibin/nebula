@@ -191,6 +191,15 @@ struct CodeTime {
     std::uint64_t worst_ns = 0;
 };
 [[nodiscard]] std::optional<CodeTime> code_time(std::string_view mod);
+// The faults in a mod's code that turned another mod off (when-a-mod-fails.md, "A library that fails under two mods";
+// the module's luma_guard_faults): their count and the first two mods it faulted under ("" when fewer). Any thread.
+// Empty when the module lacks the export or the mod's code never ran.
+struct FaultsUnder {
+    std::uint32_t count = 0;
+    std::string first;
+    std::string second;
+};
+[[nodiscard]] std::optional<FaultsUnder> faults_under(std::string_view mod);
 // The page's "Let go" (services-time 10): the module clears the mod's rate, hold and owed steps at the next frame's
 // start (luma_time_let_go); then the Note Time.LetGo is in the log. False when the module did not take it (the mod
 // unknown, or 8 already waiting); any thread.

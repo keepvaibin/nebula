@@ -3,6 +3,7 @@
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaModLog.hpp"
 #include <luma_guard.h>
+#include <luma_guard_walk.h>
 #include <nebula_game_api.h>
 #include <nebula_format.h>
 #include <nebula_module.h>
@@ -21,6 +22,9 @@ __attribute__((returns_twice)) int luma_guard_call(LumaGuardFrame* frame);
 void luma_guard_resume(LumaGuardFrame* frame);
 extern const char luma_guard_call_return[];
 NEBULA_GAME_API int32_t luma_guard_cost(const char* mod, uint64_t* avg_ns, uint64_t* worst_ns);
+NEBULA_GAME_API int32_t luma_guard_blame(const LumaGuardThread* thread, const LumaGuardFrame* frame, char* mod, uint32_t mod_size,
+                                         char* text, uint32_t text_size);
+NEBULA_GAME_API int32_t luma_guard_faults(const char* mod, uint32_t* count, char* callers, uint32_t callers_size);
 }
 
 static_assert(offsetof(LumaGuardFrame, fn) == 256 && offsetof(LumaGuardFrame, args) == 264 && offsetof(LumaGuardFrame, result) == 296,
@@ -317,6 +321,11 @@ namespace luma {
                 u32 filled;
                 u64 sumTicks;      // over the ring
                 u64 worstTicks;
+                // Faults in this mod's code under other mods' calls this session (the need walk turned the caller off),
+                // and the first two callers it faulted under (luma_guard_faults; the Mods page). Game thread writes.
+                u32 faultsUnder;
+                u32 commonSaid;    // the "common place" notice was given
+                char callers[2][72];
             };
             // Zero, so no page of it is touched until a mod loads.
             CostSlot sCostSlots[cCostSlots];
@@ -335,10 +344,11 @@ namespace luma {
             }
 
             const char* const cBoundaryRows[LUMA_GUARD_BOUNDARY_COUNT] = {
-                "R:Guard.Boundary.Before", "R:Guard.Boundary.After", "R:Guard.Boundary.Wrap",  "R:Guard.Boundary.Tell",
-                "R:Guard.Boundary.Start",  "R:Guard.Boundary.Stop",  "R:Guard.Boundary.Event", "R:Guard.Boundary.Class"};
-            const char* const cBoundaryWords[LUMA_GUARD_BOUNDARY_COUNT] = {"before hook", "after hook", "wrap hook", "hook",
-                                                                           "start",       "stop",       "service event", "class"};
+                "R:Guard.Boundary.Before", "R:Guard.Boundary.After", "R:Guard.Boundary.Wrap",     "R:Guard.Boundary.Tell",
+                "R:Guard.Boundary.Start",  "R:Guard.Boundary.Stop",  "R:Guard.Boundary.Event",    "R:Guard.Boundary.Class",
+                "R:Guard.Boundary.Callback", "R:Guard.Boundary.Cut"};
+            const char* const cBoundaryWords[LUMA_GUARD_BOUNDARY_COUNT] = {"before hook", "after hook", "wrap hook", "hook", "start",
+                                                                           "stop", "service event", "class", "call from another mod", "cut"};
 
             const char* faultRow(u32 fault) {
                 switch (fault) {
@@ -386,32 +396,142 @@ namespace luma {
                 pDst[at] = 0;
             }
 
-            // After a resume, on the faulting thread, with the frame already off the stack: the mod off, said, taken out.
-            void caught(LumaMod* pMod, const LumaGuardFrame& rFrame) {
-                __atomic_store_n(modFaulted(pMod), 1u, __ATOMIC_RELEASE);
-                const u32 kind = rFrame.boundary < LUMA_GUARD_BOUNDARY_COUNT ? rFrame.boundary : LUMA_GUARD_START;
-                uintptr_t base = 0, begin = 0, end = 0;
-                modCode(pMod, &base, &begin, &end);
-                char place[160];
-                if (rFrame.pc >= begin && rFrame.pc < end) {
-                    placeOf(place, sizeof(place), modFile(pMod), rFrame.pc - base);
-                } else {
-                    // Another mod's library, which it called: named by the address.
-                    const char cLibrary[] = "a library mod's code ";
-                    __builtin_memcpy(place, cLibrary, sizeof(cLibrary) - 1);
-                    placeOf(place + sizeof(cLibrary) - 1, sizeof(place) - (sizeof(cLibrary) - 1), "", rFrame.pc);
+            // Appends text at *pAt within size, NUL-ended; only what a fault handler may use.
+            void append(char* pDst, u32 size, u32* pAt, const char* pText) {
+                for (; pText != nullptr && *pText != 0 && *pAt + 1 < size; pText++) {
+                    pDst[(*pAt)++] = *pText;
                 }
+                pDst[*pAt < size ? *pAt : size - 1] = 0;
+            }
+
+            void copyId(char* pDst, u32 size, const char* pText) {
+                u32 at = 0;
+                pDst[0] = 0;
+                append(pDst, size, &at, pText);
+            }
+
+            // ---- The need walk (luma_guard_walk.h; when-a-mod-fails.md, "A fault in another mod's code") ----
+            // What the walk found for one fault: the mods the chain passed through, innermost first, and the boundary's
+            // mod last; which of them is turned off; whose code faulted.
+            struct Blame {
+                LumaMod* pMods[LUMA_GUARD_CHAIN + 1];
+                uintptr_t pcs[LUMA_GUARD_CHAIN + 1];  // the chain's address of each; 0: the boundary's mod, added
+                uintptr_t outers[LUMA_GUARD_CHAIN + 1];  // the outermost frame's address of each run (chain_outer)
+                u32 count;
+                u32 gap;
+                u32 offAt;
+                LumaMod* pOff;      // never null: the boundary's mod when the walk names none
+                LumaMod* pFaulted;  // null: the fault is in code the kernel cannot name
+                uintptr_t pc;       // the fault
+                bool outside;       // the fault is outside the mods' code: pFaulted's code called the code that faulted
+            };
+
+            bool needs(const LumaMod* pUser, const LumaMod* pUsed) { return modUses(pUser, pUsed); }
+            bool needsThrough(const LumaMod* pUser, const LumaMod* pUsed) { return modUsesThrough(pUser, pUsed); }
+
+            // Whether `pc` is in pMod's code.
+            bool inCode(const LumaMod* pMod, uintptr_t pc) {
+                uintptr_t base = 0, begin = 0, end = 0;
+                if (pMod == nullptr) {
+                    return false;
+                }
+                modCode(pMod, &base, &begin, &end);
+                return pc >= begin && pc < end;
+            }
+
+            // The mod whose code holds `pc`: a listed one (modAt), else the boundary's own mod, which is in no list while
+            // the loader runs its begin, start, stop or finish.
+            LumaMod* modOf(uintptr_t pc, LumaMod* pBoundary) {
+                LumaMod* const pMod = modAt(pc);
+                return pMod != nullptr ? pMod : inCode(pBoundary, pc) ? pBoundary : nullptr;
+            }
+
+            // From the chain the host wrote (LumaGuardThread.chain) and the boundary's mod. Reads only: the host's
+            // handler calls it, through luma_guard_blame, for a fault it does not resume.
+            void blameOf(const LumaGuardThread& rThread, LumaMod* pBoundary, uintptr_t faultPc, Blame* pOut) {
+                u32 n = 0;
+                const u32 count = rThread.chain_count <= LUMA_GUARD_CHAIN ? rThread.chain_count : LUMA_GUARD_CHAIN;
+                for (u32 i = 0; i < count; i++) {
+                    pOut->pMods[n] = modOf(rThread.chain[i], pBoundary);
+                    pOut->pcs[n] = rThread.chain[i];
+                    pOut->outers[n] = rThread.chain_outer[i] != 0 ? rThread.chain_outer[i] : rThread.chain[i];
+                    n++;
+                }
+                u32 gap = rThread.chain_gap;
+                if (n == 0 && faultPc != 0) {
+                    // No chain (the fault was not in mods' code): the fault alone, followed by nothing.
+                    pOut->pMods[0] = modOf(faultPc, pBoundary);
+                    pOut->pcs[0] = faultPc;
+                    pOut->outers[0] = faultPc;
+                    n = 1;
+                    gap = 0;
+                }
+                if (pBoundary != nullptr && (n == 0 || pOut->pMods[n - 1] != pBoundary)) {
+                    pOut->pMods[n] = pBoundary;
+                    pOut->pcs[n] = 0;
+                    pOut->outers[n] = 0;
+                    n++;
+                }
+                pOut->count = n;
+                pOut->gap = gap;
+                pOut->outside = rThread.chain_pc != 0 && (count == 0 || rThread.chain[0] != rThread.chain_pc);
+                pOut->pc = pOut->outside ? rThread.chain_pc : n != 0 ? pOut->pcs[0] : faultPc;
+                pOut->pFaulted = n != 0 ? pOut->pMods[0] : nullptr;
+                u32 at = n != 0 ? luma_guard_walk(pOut->pMods, n, gap, needs, needsThrough) : 0;
+                if (n == 0 || pOut->pMods[at] == nullptr) {
+                    at = n != 0 ? n - 1 : 0;
+                }
+                pOut->offAt = at;
+                pOut->pOff = n != 0 && pOut->pMods[at] != nullptr ? pOut->pMods[at] : pBoundary;
+            }
+
+            // The place of `pc` in its mod's library ("lib.dll+0x1a2b"), or "0x<pc>" when no mod holds it.
+            void placeIn(char* pDst, u32 size, const LumaMod* pMod, uintptr_t pc) {
+                uintptr_t base = 0, begin = 0, end = 0;
+                if (pMod != nullptr) {
+                    modCode(pMod, &base, &begin, &end);
+                }
+                if (pMod != nullptr && pc >= begin && pc < end) {
+                    // "<mod>/<file>": a mod's library has the same file name in every mod's folder.
+                    char file[128];
+                    nebula_snprintf(file, sizeof(file), "%s/%s", modId(pMod), modFile(pMod));
+                    placeOf(pDst, size, file, pc - base);
+                } else {
+                    placeOf(pDst, size, "", pc);
+                }
+            }
+
+            // The mod the turned-off one called on the way to the fault (the library it called into), or null.
+            LumaMod* calledBy(const Blame& rBlame) { return rBlame.offAt > 0 ? rBlame.pMods[rBlame.offAt - 1] : nullptr; }
+
+            // After a resume, on the faulting thread, with the frame already off the stack: the mod the walk names off,
+            // said, taken out; the library whose code faulted under it counted.
+            void caught(LumaMod* pBoundary, const LumaGuardFrame& rFrame, const Blame& rBlame) {
+                LumaMod* const pOff = rBlame.pOff;
+                __atomic_store_n(modFaulted(pOff), 1u, __ATOMIC_RELEASE);
+                const u32 kind = rFrame.boundary < LUMA_GUARD_BOUNDARY_COUNT ? rFrame.boundary : LUMA_GUARD_START;
+                const char* const pOffId = modId(pOff);
+                char place[160];
+                placeIn(place, sizeof(place), rBlame.pFaulted, rBlame.pc);
                 char address[24];
                 placeOf(address, sizeof(address), "", rFrame.address);
-                nebula_log("[mod %s] GUARD: its code failed (%s: %s): %s at %s, address %s. It is off until the next start; "
-                           "what it was changing may be half done.\n",
-                           rFrame.mod, cBoundaryWords[kind], rFrame.where, faultWords(rFrame.fault), place, address);
+                // Whose call it was, when not the turned-off mod's own boundary: a library's hook that called its code.
+                char under[120];
+                u32 at = 0;
+                under[0] = 0;
+                if (pBoundary != nullptr && pBoundary != pOff) {
+                    append(under, sizeof(under), &at, ", in ");
+                    append(under, sizeof(under), &at, modId(pBoundary));
+                    append(under, sizeof(under), &at, "'s call");
+                }
+                LumaMod* const pCalled = calledBy(rBlame);
+                const char* const pFaultedId = rBlame.pFaulted != nullptr ? modId(rBlame.pFaulted) : "";
                 LumaModLogEntry entry = {};
                 entry.size = sizeof(entry);
                 entry.source = LUMA_MODLOG_GUARD;
                 entry.level = LUMA_MODLOG_ERROR;
                 entry.code = rFrame.fault;
-                entry.mod = rFrame.mod;
+                entry.mod = pOffId;
                 entry.file = rFrame.where;
                 entry.names[0] = "boundary";
                 entry.values[0] = cBoundaryRows[kind];
@@ -421,13 +541,158 @@ namespace luma {
                 entry.values[2] = faultRow(rFrame.fault);
                 entry.names[3] = "address";
                 entry.values[3] = place;
-                entry.count = 4;
-                luma::modlog::add(entry, "Guard.Caught");
-                // Its hooks go at the next frame's start, with the mods that use it; its stop and finish do not run. A
-                // fault in begin or start: the loader refuses it there and then; in stop or finish: it is going already.
-                if (!(kind == LUMA_GUARD_START || (kind == LUMA_GUARD_STOP && (same(rFrame.where, "stop") || same(rFrame.where, "finish"))))) {
-                    requestTakeOut(rFrame.mod);
+                entry.names[4] = "under";
+                entry.values[4] = pBoundary != nullptr && pBoundary != pOff ? modId(pBoundary) : "";
+                entry.count = 5;
+                if (pCalled == nullptr || rBlame.pFaulted == nullptr || rBlame.pFaulted == pOff) {
+                    // Its own code faulted.
+                    nebula_log("[mod %s] GUARD: its code failed (%s: %s%s): %s at %s, address %s. It is off until the next start; "
+                               "what it was changing may be half done.\n",
+                               pOffId, cBoundaryWords[kind], rFrame.where, under, faultWords(rFrame.fault), place, address);
+                    luma::modlog::add(entry, pBoundary != nullptr && pBoundary != pOff ? "Guard.CaughtUnder" : "Guard.Caught");
+                } else {
+                    // Code of a mod it needs faulted under its call: it is turned off; the library stays.
+                    char called[120];
+                    at = 0;
+                    called[0] = 0;
+                    append(called, sizeof(called), &at, modId(pCalled));
+                    if (pCalled != rBlame.pFaulted) {
+                        append(called, sizeof(called), &at, " (in ");
+                        append(called, sizeof(called), &at, pFaultedId);
+                        append(called, sizeof(called), &at, "'s code)");
+                    }
+                    nebula_log("[mod %s] GUARD: its call into %s failed (%s: %s%s): %s at %s, address %s. It is off until the next "
+                               "start; what it was changing may be half done. %s stays on.\n",
+                               pOffId, called, cBoundaryWords[kind], rFrame.where, under, faultWords(rFrame.fault), place, address,
+                               pFaultedId);
+                    entry.names[5] = "library";
+                    entry.values[5] = modId(pCalled);
+                    entry.names[6] = "faulted";
+                    entry.values[6] = pFaultedId;
+                    entry.count = 7;
+                    luma::modlog::add(entry, pCalled != rBlame.pFaulted ? "Guard.CaughtInDeeper" : "Guard.CaughtIn");
                 }
+                // Its hooks go at the next frame's start, with the mods that use it; its stop and finish do not run. A
+                // fault in its own begin or start: the loader refuses it there and then; in its stop or finish: it is going
+                // already.
+                const bool ownLifecycle = pOff == pBoundary && (kind == LUMA_GUARD_START ||
+                                                                (kind == LUMA_GUARD_STOP && (same(rFrame.where, "stop") || same(rFrame.where, "finish"))));
+                if (!ownLifecycle) {
+                    requestTakeOut(pOffId);
+                }
+                // A library whose code faulted under another mod's call: counted; under a second caller, the common place.
+                if (rBlame.pFaulted != nullptr && rBlame.pFaulted != pOff) {
+                    CostSlot* const pSlot = costSlotOf(rBlame.pFaulted);
+                    if (pSlot != nullptr) {
+                        pSlot->faultsUnder++;
+                        if (pSlot->callers[0][0] == 0) {
+                            copyId(pSlot->callers[0], sizeof(pSlot->callers[0]), pOffId);
+                        } else if (!same(pSlot->callers[0], pOffId) && pSlot->callers[1][0] == 0) {
+                            copyId(pSlot->callers[1], sizeof(pSlot->callers[1]), pOffId);
+                        }
+                        if (luma::modlog::facts()) {
+                            // guard.under.<mod>: the count and the first two callers (a test reads them).
+                            char key[96];
+                            nebula_snprintf(key, sizeof(key), "guard.under.%s", pFaultedId);
+                            char json[256];
+                            nebula_snprintf(json, sizeof(json), "{\"count\": %u, \"first\": \"%s\", \"second\": \"%s\"}",
+                                            pSlot->faultsUnder, pSlot->callers[0], pSlot->callers[1]);
+                            luma::modlog::fact(key, json);
+                        }
+                        if (pSlot->callers[1][0] != 0 && pSlot->commonSaid == 0) {
+                            pSlot->commonSaid = 1;
+                            nebula_log("[mod %s] GUARD: its code failed under two mods' calls, %s's and %s's: the fault is likely its "
+                                       "own. Both are off; it stays on. On the Mods page it can be turned off, or they on again.\n",
+                                       pFaultedId, pSlot->callers[0], pSlot->callers[1]);
+                            LumaModLogEntry common = {};
+                            common.size = sizeof(common);
+                            common.source = LUMA_MODLOG_GUARD;
+                            common.level = LUMA_MODLOG_ERROR;
+                            common.code = rFrame.fault;
+                            common.mod = pFaultedId;
+                            common.file = "";
+                            common.names[0] = "first";
+                            common.values[0] = pSlot->callers[0];
+                            common.names[1] = "second";
+                            common.values[1] = pSlot->callers[1];
+                            common.count = 2;
+                            luma::modlog::add(common, "Guard.CommonPlace");
+                        }
+                    }
+                }
+            }
+
+            // Every mod that stays on with code on the cut stack is told (LumaModInfo.cut), the innermost first, each
+            // once: its innermost cut function and place, and who called it there. A mod that uses the one turned off goes
+            // with it at the next frame and is not told. Runs after `handling` is cleared: a fault in a cut is caught as any.
+            void tellCut(const LumaGuardFrame& rFrame, const Blame& rBlame) {
+                const char* const pOffId = modId(rBlame.pOff);
+                const char* const pFaultedId = rBlame.pFaulted != nullptr ? modId(rBlame.pFaulted) : "";
+                for (u32 i = 0; i < rBlame.count; i++) {
+                    LumaMod* const pMod = rBlame.pMods[i];
+                    if (pMod == nullptr || rBlame.pcs[i] == 0 || pMod == rBlame.pOff || faulted(pMod) || modUsesThrough(pMod, rBlame.pOff)) {
+                        continue;
+                    }
+                    bool told = false;
+                    for (u32 j = 0; j < i && !told; j++) {
+                        told = rBlame.pMods[j] == pMod;
+                    }
+                    if (told) {
+                        continue;
+                    }
+                    LumaMod* const pCaller = i + 1 < rBlame.count && rBlame.pcs[i + 1] != 0 ? rBlame.pMods[i + 1] : nullptr;
+                    char place[160];
+                    placeIn(place, sizeof(place), pMod, rBlame.pcs[i]);
+                    LumaCut cut = {};
+                    cut.size = sizeof(cut);
+                    cut.boundary = rFrame.boundary;
+                    cut.where = rFrame.where;
+                    cut.stack = static_cast<uintptr_t>(rFrame.regs[LUMA_GUARD_SP]);
+                    // Named by the function its caller entered (the run's outermost frame): an export, or "".
+                    cut.function = modExportAt(pMod, sHost != nullptr ? sHost->function_at(rBlame.outers[i]) : 0);
+                    cut.place = place;
+                    cut.caller = pCaller;
+                    cut.caller_id = pCaller != nullptr ? modId(pCaller) : "";
+                    cut.off = pOffId;
+                    cut.faulted = pFaultedId;
+                    const LumaModInfo* const pInfo = modInfo(pMod);
+                    const bool hasCut = pInfo != nullptr && pInfo->size >= offsetof(LumaModInfo, cut) + sizeof(pInfo->cut) && pInfo->cut != nullptr;
+                    const char* const pFunction = *cut.function != 0 ? cut.function : "its code";
+                    if (hasCut) {
+                        nebula_log("[mod %s] a fault in %s's code cut %s short (at %s, called by %s); its cut is told\n", modId(pMod),
+                                   *pFaultedId != 0 ? pFaultedId : "a mod", pFunction, place, pCaller != nullptr ? cut.caller_id : "the game");
+                        run(pMod, LUMA_GUARD_CUT, "cut", reinterpret_cast<const void*>(pInfo->cut), reinterpret_cast<uintptr_t>(&cut), 0, 0, 0,
+                            nullptr);
+                    } else {
+                        nebula_log("[mod %s] a fault in %s's code cut %s short (at %s, called by %s). It has no cut, so what that call "
+                                   "was changing may be half done; it stays on.\n",
+                                   modId(pMod), *pFaultedId != 0 ? pFaultedId : "a mod", pFunction, place,
+                                   pCaller != nullptr ? cut.caller_id : "the game");
+                        LumaModLogEntry entry = {};
+                        entry.size = sizeof(entry);
+                        entry.source = LUMA_MODLOG_GUARD;
+                        entry.level = LUMA_MODLOG_ERROR;
+                        entry.code = rFrame.fault;
+                        entry.mod = modId(pMod);
+                        entry.file = rFrame.where;
+                        entry.names[0] = "faulted";
+                        entry.values[0] = pFaultedId;
+                        entry.names[1] = "address";
+                        entry.values[1] = place;
+                        entry.count = 2;
+                        luma::modlog::add(entry, "Guard.CutUntold");
+                    }
+                }
+            }
+
+            // run()'s resume, out of run's own frame so every boundary's frame stays small.
+            __attribute__((noinline)) void afterFault(LumaMod* pMod, LumaGuardThread* pThread, const LumaGuardFrame& rFrame) {
+                Blame blame;
+                blameOf(*pThread, pMod, rFrame.pc, &blame);
+                // The chain is read: a fault from here (in a cut) is caught as any other.
+                pThread->handling = 0u;
+                caught(pMod, rFrame, blame);
+                tellCut(rFrame, blame);
             }
         }  // namespace
 
@@ -502,11 +767,41 @@ namespace luma {
                 }
                 return true;
             }
-            // Resumed: the host wrote the fault into the frame and set `handling`.
+            // Resumed: the host wrote the fault into the frame and the chain into the thread, and set `handling`.
             pThread->top = frame.outer;
-            caught(pMod, frame);
-            pThread->handling = 0u;
+            afterFault(pMod, pThread, frame);
             return false;
+        }
+
+        int32_t callMod(const LumaMod* pCaller, const void* fn, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t* pResult) {
+            if (pResult != nullptr) {
+                *pResult = 0;
+            }
+            LumaMod* const pGiver = fn != nullptr ? modAt(reinterpret_cast<uintptr_t>(fn)) : nullptr;
+            if (pCaller == nullptr || pGiver == nullptr) {
+                nebula_log("[mod %s] call_mod: %p is in no running mod's code; it was not called\n",
+                           pCaller != nullptr ? modId(pCaller) : "(none)", fn);
+                return -4;
+            }
+            if (pGiver == pCaller || modUsesThrough(pCaller, pGiver)) {
+                // A call down into its own code or a library it needs: no boundary (a fault there is the caller's).
+                const uint64_t result = reinterpret_cast<uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t)>(const_cast<void*>(fn))(a0, a1, a2, a3);
+                if (pResult != nullptr) {
+                    *pResult = result;
+                }
+                return 0;
+            }
+            if (faulted(pGiver)) {
+                return -2;
+            }
+            u64 result = 0;
+            if (!run(pGiver, LUMA_GUARD_CALLBACK, modId(pCaller), fn, a0, a1, a2, a3, &result)) {
+                return faulted(pGiver) ? -1 : -2;
+            }
+            if (pResult != nullptr) {
+                *pResult = result;
+            }
+            return 0;
         }
 
         LumaMod* current() { return tMod; }
@@ -721,6 +1016,87 @@ namespace luma {
 extern "C" {
 NEBULA_GAME_API int32_t luma_guard_install(const LumaGuardHost* host) {
     return luma::guard::install(host) ? 1 : 0;
+}
+
+// A fault the host does not resume: the mod the next start turns off and the words the crash note carries. Reads only.
+NEBULA_GAME_API int32_t luma_guard_blame(const LumaGuardThread* thread, const LumaGuardFrame* frame, char* mod, uint32_t mod_size,
+                                         char* text, uint32_t text_size) {
+    using namespace luma::guard;
+    if (mod == nullptr || text == nullptr || mod_size == 0 || text_size == 0) {
+        return 0;
+    }
+    mod[0] = 0;
+    text[0] = 0;
+    if (thread == nullptr || frame == nullptr) {
+        return 0;
+    }
+    // The boundary's mod: by its code, or (in its begin, start, stop or finish, when no list holds it) the thread's
+    // current mod, which run() set for this boundary.
+    LumaMod* pBoundary = frame->code_begin != 0 ? luma::modAt(frame->code_begin) : nullptr;
+    if (pBoundary == nullptr && inCode(current(), frame->code_begin)) {
+        pBoundary = current();
+    }
+    Blame blame;
+    blameOf(*thread, pBoundary, thread->chain_pc, &blame);
+    if (blame.pOff == nullptr) {
+        return 0;
+    }
+    copyId(mod, mod_size, luma::modId(blame.pOff));
+    char place[160];
+    u32 at = 0;
+    append(text, text_size, &at, "turned off: ");
+    append(text, text_size, &at, luma::modId(blame.pOff));
+    if (blame.outside && blame.count != 0 && blame.pcs[0] != 0 && blame.pFaulted != nullptr) {
+        // The game's or the system's code faulted, called from a mod's.
+        placeIn(place, sizeof(place), blame.pFaulted, blame.pcs[0]);
+        append(text, text_size, &at, "; the fault outside the mods' code, called from ");
+        append(text, text_size, &at, luma::modId(blame.pFaulted));
+        append(text, text_size, &at, "'s code at ");
+    } else {
+        placeIn(place, sizeof(place), blame.pFaulted, blame.pc);
+        append(text, text_size, &at, "; the fault in ");
+        append(text, text_size, &at, blame.pFaulted != nullptr ? luma::modId(blame.pFaulted) : "code no mod's");
+        append(text, text_size, &at, blame.pFaulted != nullptr ? "'s code at " : " at ");
+    }
+    append(text, text_size, &at, place);
+    return 1;
+}
+
+// Faults in a mod's code under other mods' calls this session (when-a-mod-fails.md): their count, and the first two
+// callers' ids, each NUL-ended, into callers (an empty one: none). 0: found; -1: no such mod this session. Game thread.
+NEBULA_GAME_API int32_t luma_guard_faults(const char* mod, uint32_t* count, char* callers, uint32_t callers_size) {
+    using namespace luma::guard;
+    if (count != nullptr) {
+        *count = 0;
+    }
+    if (callers != nullptr && callers_size != 0) {
+        callers[0] = 0;
+    }
+    if (mod == nullptr) {
+        return -1;
+    }
+    const u32 used = __atomic_load_n(&sCostUsed, __ATOMIC_ACQUIRE);
+    for (u32 s = 0; s < used; s++) {
+        const CostSlot& rSlot = sCostSlots[s];
+        if (!same(rSlot.id, mod)) {
+            continue;
+        }
+        if (count != nullptr) {
+            *count = rSlot.faultsUnder;
+        }
+        if (callers != nullptr && callers_size != 0) {
+            u32 at = 0;
+            append(callers, callers_size, &at, rSlot.callers[0]);
+            if (at + 1 < callers_size) {
+                callers[at++] = 0;
+                callers[at] = 0;
+                u32 second = 0;
+                append(callers + at, callers_size - at, &second, rSlot.callers[1]);
+            }
+        }
+        return 0;
+    }
+    return -1;
 }
 
 // Any thread: a seqlock read of the mod's slot (written on the game thread only).

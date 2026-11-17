@@ -12,6 +12,7 @@
 // there before (the default one ends the process), after one line on stderr naming the mod.
 #include "galaxy/luma_guard_host.h"
 #include "galaxy/mod_crash.h"
+#include "luma_guard_spans.h"
 #include "luma_guard_words.h"
 
 #include <luma_guard.h>
@@ -54,40 +55,72 @@ Range g_game;  // the game module's code
 Range g_host;  // the executable's code (or, on Android, the host library's)
 bool g_installed = false;
 
-// Every mod library's code while it is loaded (add_library, remove_library). A handler reads it with no lock: a slot's
-// end is written before its begin and cleared after it, so a reader that sees a begin sees its end; a slot being
-// cleared is seen whole or not at all (begin read 0, or both still set). Writers take g_libraries_writer.
-constexpr std::size_t kLibraries = 512;
-std::atomic<std::uintptr_t> g_library_begin[kLibraries];
-std::atomic<std::uintptr_t> g_library_end[kLibraries];
-std::atomic<std::uint32_t> g_libraries_writer{0};
-static_assert(std::atomic<std::uintptr_t>::is_always_lock_free, "the libraries' spans are read in a signal handler");
+// Every mod library's code while it is loaded (add_library, remove_library), as many as there are
+// (luma_guard_spans.h); a handler reads it with no lock.
+Spans g_spans;
+
+// The kernel's need walk for a fault that is not resumed (luma_guard.h, LumaGuardBlame); null: a game module without it.
+LumaGuardBlame g_blame = nullptr;
 
 // Whether `pc` is in a loaded mod library's code (any mod's: a library mod's function another mod called).
-bool in_mod_library(std::uintptr_t pc) noexcept {
-    for (std::size_t i = 0; i < kLibraries; ++i) {
-        const std::uintptr_t begin = g_library_begin[i].load(std::memory_order_acquire);
-        if (begin != 0 && pc >= begin && pc < g_library_end[i].load(std::memory_order_relaxed)) return true;
-    }
-    return false;
-}
+bool in_mod_library(std::uintptr_t pc) noexcept { return g_spans.has(pc); }
 
 // The mod's own code (the boundary's) or any mod library's: a fault there is a mod's fault.
 bool in_mod_code(const LumaGuardFrame* frame, std::uintptr_t pc) noexcept {
     return (frame->code_begin != 0 && pc >= frame->code_begin && pc < frame->code_end) || in_mod_library(pc);
 }
 
+// The fault's call chain as the kernel reads it (LumaGuardThread.chain): one address for each run of frames in one mod
+// library's code, innermost first. Written on the faulting thread, before the kernel can look.
+class Chain {
+public:
+    Chain(LumaGuardThread* thread, const LumaGuardFrame* frame, std::uintptr_t pc) noexcept : thread_(thread), frame_(frame) {
+        thread_->chain_count = 0;
+        thread_->chain_gap = LUMA_GUARD_CHAIN;
+        thread_->chain_pc = pc;
+    }
+    // A frame whose code is at `pc`: recorded when it is a mod's and not the same library as the frame before it.
+    void add(std::uintptr_t pc) noexcept {
+        std::uintptr_t span = g_spans.span_of(pc);
+        if (span == 0 && frame_->code_begin != 0 && pc >= frame_->code_begin && pc < frame_->code_end) span = frame_->code_begin;
+        if (span == 0) return;
+        if (thread_->chain_count != 0 && span == last_) {
+            thread_->chain_outer[thread_->chain_count - 1] = pc;  // the same run, one frame further out
+            return;
+        }
+        last_ = span;
+        if (thread_->chain_count < LUMA_GUARD_CHAIN) {
+            thread_->chain_outer[thread_->chain_count] = pc;
+            thread_->chain[thread_->chain_count++] = pc;
+            return;
+        }
+        // More runs than the chain holds: the outermost one so far takes the last place, the ones before it are dropped.
+        thread_->chain[LUMA_GUARD_CHAIN - 1] = pc;
+        thread_->chain_outer[LUMA_GUARD_CHAIN - 1] = pc;
+        if (thread_->chain_gap > LUMA_GUARD_CHAIN - 2) thread_->chain_gap = LUMA_GUARD_CHAIN - 2;
+    }
+    // The frames after the last one recorded were not followed.
+    void broken() noexcept {
+        if (thread_->chain_count != 0 && thread_->chain_gap > thread_->chain_count - 1) thread_->chain_gap = thread_->chain_count - 1;
+    }
+
+private:
+    LumaGuardThread* thread_;
+    const LumaGuardFrame* frame_;
+    std::uintptr_t last_ = 0;
+};
+
 // The last fault the guard did not resume, for the crash report: written once (the first), on the faulting thread.
 // Lock-free atomics, so a signal handler may use them (and MSVC, which builds the Windows host, has no __atomic).
-char g_note[384];
+char g_note[640];
 char g_note_mod[96];
 std::uintptr_t g_note_pc = 0;
 std::atomic<std::uint32_t> g_note_claimed{0};
 std::atomic<std::uint32_t> g_noted{0};
 static_assert(std::atomic<std::uint32_t>::is_always_lock_free, "the note's flags are used in a signal handler");
 
-const char* const kBoundaryWords[LUMA_GUARD_BOUNDARY_COUNT] = {"before hook", "after hook", "wrap hook", "hook",
-                                                              "start",       "stop",       "service event", "class"};
+const char* const kBoundaryWords[LUMA_GUARD_BOUNDARY_COUNT] = {"before hook", "after hook", "wrap hook", "hook", "start",
+                                                              "stop", "service event", "class", "call from another mod", "cut"};
 
 // Async-signal-safe text: appends `text` at *at within `size`.
 void put(char* out, std::size_t size, std::size_t* at, const char* text) noexcept {
@@ -160,10 +193,11 @@ unsigned frame_register(DWORD64 image, const RUNTIME_FUNCTION* entry) noexcept {
 // word it reads is inside the thread's stack: the stack pointer stays between the fault's and the boundary's, and a
 // frame register must point into the stack, or the walk stops (not resumed). Resumed only when every frame up to the
 // one that returns into luma_guard_call is the mod's own.
-const char* why_not_frames(const LumaGuardFrame* frame, const CONTEXT* fault_context) noexcept {
+const char* why_not_frames(const LumaGuardFrame* frame, const CONTEXT* fault_context, Chain& chain) noexcept {
     const std::uintptr_t top = static_cast<std::uintptr_t>(frame->regs[LUMA_GUARD_SP]);
     const std::uintptr_t lowest = static_cast<std::uintptr_t>(fault_context->Rsp);
     const auto stack_base = reinterpret_cast<std::uintptr_t>(reinterpret_cast<const NT_TIB*>(NtCurrentTeb())->StackBase);
+    chain.add(static_cast<std::uintptr_t>(fault_context->Rip));
     if (top < kCallReturnSlot) return kUnreadable;
     CONTEXT context = *fault_context;
     for (unsigned n = 0; n < kMostFrames; ++n) {
@@ -193,8 +227,50 @@ const char* why_not_frames(const LumaGuardFrame* frame, const CONTEXT* fault_con
         if (!in_mod_code(frame, pc)) {
             return "other code (the system's or a library's that is no mod's) is between the boundary and the fault";
         }
+        chain.add(pc);
     }
     return kUnreadable;
+}
+
+// For a fault the guard does not resume, the chain the kernel names the mods by (luma_guard_blame): the frames from the
+// fault followed as why_not_frames follows them, except that code which is no mod's at the start (the game's or the
+// system's, which the mod's code called) is passed over, and the walk ends at the first such frame after a mod's (the
+// frames past it are not followed). It only reads the stack, inside the bounds why_not_frames keeps.
+void chain_for_report(const LumaGuardFrame* frame, const CONTEXT* fault_context, Chain& chain) noexcept {
+    const std::uintptr_t top = static_cast<std::uintptr_t>(frame->regs[LUMA_GUARD_SP]);
+    const std::uintptr_t lowest = static_cast<std::uintptr_t>(fault_context->Rsp);
+    const auto stack_base = reinterpret_cast<std::uintptr_t>(reinterpret_cast<const NT_TIB*>(NtCurrentTeb())->StackBase);
+    CONTEXT context = *fault_context;
+    bool in_mods = false;
+    for (unsigned n = 0; n < kMostFrames && top >= kCallReturnSlot; ++n) {
+        const std::uintptr_t pc = static_cast<std::uintptr_t>(context.Rip);
+        if (n != 0 && pc == frame->call_return) return;  // the boundary: every frame was followed
+        if (in_mod_code(frame, pc)) {
+            chain.add(pc);
+            in_mods = true;
+        } else if (in_mods) {
+            break;
+        }
+        const std::uintptr_t sp = static_cast<std::uintptr_t>(context.Rsp);
+        if (sp < lowest || sp > top - kCallReturnSlot || (sp & 7u) != 0u) break;
+        DWORD64 image = 0;
+        PRUNTIME_FUNCTION const entry = RtlLookupFunctionEntry(context.Rip, &image, nullptr);
+        if (entry == nullptr) {
+            if (n != 0u) break;
+            context.Rip = *reinterpret_cast<const DWORD64*>(sp);
+            context.Rsp = sp + 8u;
+        } else {
+            if (const unsigned reg = frame_register(image, entry); reg != 0u) {
+                const auto value = static_cast<std::uintptr_t>((&context.Rax)[reg]);
+                if (value < lowest || value >= stack_base) break;
+            }
+            void* handler_data = nullptr;
+            DWORD64 establisher = 0;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER, image, context.Rip, entry, &context, &handler_data, &establisher, nullptr);
+        }
+        if (static_cast<std::uintptr_t>(context.Rsp) <= sp) break;
+    }
+    chain.broken();
 }
 
 // Whether the image holding `pc` (the mod's library) carries unwind data (an exception directory). A library built
@@ -226,12 +302,17 @@ bool has_unwind_data(std::uintptr_t pc) noexcept {
     return "the stack between the fault and the mod's boundary is not one the guard can read";
 }
 
-// The note the crash report carries, written without allocating (the faulting thread may hold the heap's lock).
-void note(const LumaGuardFrame* frame, std::uint32_t fault, std::uintptr_t pc, const char* why) noexcept {
+// The note the crash report carries, written without allocating (the faulting thread may hold the heap's lock). The
+// mod it names is the one the kernel's need walk turns off (the boundary's mod when the module has no walk); the
+// kernel's words name the mod whose code faulted and the place.
+void note(const LumaGuardThread* thread, const LumaGuardFrame* frame, std::uint32_t fault, std::uintptr_t pc, const char* why) noexcept {
     if (g_note_claimed.exchange(1u, std::memory_order_acq_rel) != 0u) return;
     g_note_pc = pc;
+    char blamed[96] = {};
+    char blame_text[224] = {};
+    const bool named = g_blame != nullptr && g_blame(thread, frame, blamed, sizeof(blamed), blame_text, sizeof(blame_text)) == 1;
     std::size_t at = 0;
-    put(g_note_mod, sizeof(g_note_mod), &at, frame->mod);
+    put(g_note_mod, sizeof(g_note_mod), &at, named ? blamed : frame->mod);
     at = 0;
     const std::uint32_t kind = frame->boundary < LUMA_GUARD_BOUNDARY_COUNT ? frame->boundary : 0u;
     put(g_note, sizeof(g_note), &at, "the code of the mod ");
@@ -246,6 +327,10 @@ void note(const LumaGuardFrame* frame, std::uint32_t fault, std::uintptr_t pc, c
     put_hex(g_note, sizeof(g_note), &at, pc);
     put(g_note, sizeof(g_note), &at, "; not resumed: ");
     put(g_note, sizeof(g_note), &at, why);
+    if (named) {
+        put(g_note, sizeof(g_note), &at, "; ");
+        put(g_note, sizeof(g_note), &at, blame_text);
+    }
     g_noted.store(1u, std::memory_order_release);
 }
 
@@ -335,6 +420,100 @@ Range code_at(const void* address) noexcept {
 }
 #endif
 
+#if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
+std::uintptr_t function_at(std::uintptr_t pc) {
+    DWORD64 image = 0;
+    const RUNTIME_FUNCTION* entry = RtlLookupFunctionEntry(pc, &image, nullptr);
+    // A function's later parts chain to its first entry, whose begin is the function's.
+    for (unsigned depth = 0; entry != nullptr && depth < 32; ++depth) {
+        const auto* info = reinterpret_cast<const std::uint8_t*>(image + entry->UnwindData);
+        if (((info[0] >> 3) & UNW_FLAG_CHAININFO) == 0u) return static_cast<std::uintptr_t>(image + entry->BeginAddress);
+        const unsigned codes = (info[2] + 1u) & ~1u;
+        entry = reinterpret_cast<const RUNTIME_FUNCTION*>(info + 4 + codes * 2u);
+    }
+    return 0;
+}
+#elif defined(_WIN32) || defined(__APPLE__)
+// Windows on ARM64 has no guard yet; the Mac's compact unwind is not read: the cut names no function.
+std::uintptr_t function_at(std::uintptr_t) { return 0; }
+#else
+// .eh_frame_hdr (the image's PT_GNU_EH_FRAME): a table of each function's first byte, sorted, which the linker writes for
+// the unwinder. Read as the unwinder reads it: the largest start at or below pc.
+struct EhFind {
+    std::uintptr_t pc;
+    std::uintptr_t begin;
+};
+
+bool read_encoded(const std::uint8_t*& at, std::uint8_t encoding, std::uintptr_t data, std::uintptr_t* out) noexcept {
+    const std::uintptr_t here = reinterpret_cast<std::uintptr_t>(at);
+    std::int64_t value = 0;
+    switch (encoding & 0x0Fu) {
+    case 0x03: {  // udata4
+        std::uint32_t v;
+        std::memcpy(&v, at, 4);
+        value = v;
+        at += 4;
+        break;
+    }
+    case 0x0B: {  // sdata4
+        std::int32_t v;
+        std::memcpy(&v, at, 4);
+        value = v;
+        at += 4;
+        break;
+    }
+    default: return false;
+    }
+    switch (encoding & 0x70u) {
+    case 0x00: *out = static_cast<std::uintptr_t>(value); return true;
+    case 0x10: *out = here + static_cast<std::uintptr_t>(value); return true;  // pcrel
+    case 0x30: *out = data + static_cast<std::uintptr_t>(value); return true;  // datarel
+    default: return false;
+    }
+}
+
+std::uintptr_t function_at(std::uintptr_t pc) {
+    EhFind find{pc, 0};
+    dl_iterate_phdr(
+        [](dl_phdr_info* info, std::size_t, void* data) -> int {
+            auto* f = static_cast<EhFind*>(data);
+            const ElfW(Phdr)* hdr_segment = nullptr;
+            bool here = false;
+            for (ElfW(Half) i = 0; i < info->dlpi_phnum; ++i) {
+                const ElfW(Phdr)& header = info->dlpi_phdr[i];
+                if (header.p_type == PT_GNU_EH_FRAME) hdr_segment = &header;
+                if (header.p_type == PT_LOAD && f->pc >= info->dlpi_addr + header.p_vaddr &&
+                    f->pc < info->dlpi_addr + header.p_vaddr + header.p_memsz) {
+                    here = true;
+                }
+            }
+            if (!here) return 0;
+            if (hdr_segment == nullptr) return 1;
+            const auto* hdr = reinterpret_cast<const std::uint8_t*>(info->dlpi_addr + hdr_segment->p_vaddr);
+            const auto data = reinterpret_cast<std::uintptr_t>(hdr);
+            if (hdr[0] != 1u || hdr[3] != 0x3Bu) return 1;  // version 1, a table of datarel sdata4 pairs
+            const std::uint8_t* at = hdr + 4;
+            std::uintptr_t eh_frame = 0, count = 0;
+            if (hdr[1] == 0xFFu || !read_encoded(at, hdr[1], data, &eh_frame)) return 1;
+            if (hdr[2] == 0xFFu || !read_encoded(at, hdr[2], data, &count)) return 1;
+            const auto* table = reinterpret_cast<const std::int32_t*>(at);
+            std::size_t low = 0, high = count;  // the first entry whose start is above pc
+            while (low < high) {
+                const std::size_t mid = low + (high - low) / 2;
+                if (data + static_cast<std::uintptr_t>(static_cast<std::intptr_t>(table[mid * 2])) <= f->pc) {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
+            }
+            if (low != 0) f->begin = data + static_cast<std::uintptr_t>(static_cast<std::intptr_t>(table[(low - 1) * 2]));
+            return 1;
+        },
+        &find);
+    return find.begin;
+}
+#endif
+
 int32_t code_range(void* library, std::uintptr_t* base, std::uintptr_t* begin, std::uintptr_t* end) {
 #if defined(_WIN32)
     const Range range = code_of(static_cast<HMODULE>(library));
@@ -377,12 +556,34 @@ LONG CALLBACK on_fault(EXCEPTION_POINTERS* info) {
     if (frame == nullptr) return EXCEPTION_CONTINUE_SEARCH;
     CONTEXT* const context = info->ContextRecord;
     const auto pc = reinterpret_cast<std::uintptr_t>(info->ExceptionRecord->ExceptionAddress);
+    // A second fault while the first is handled: the chain the kernel is reading stays as it is.
+    if (thread->handling != 0u) {
+        note(thread, frame, fault, pc, "a second fault came while the first was handled");
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    Chain chain(thread, frame, pc);
     const char* why = why_not_here(thread, frame, fault, pc, static_cast<std::uintptr_t>(context->Rsp));
+    const bool unwind = has_unwind_data(pc);
     if (why == nullptr) {
-        why = has_unwind_data(pc) ? why_not_frames(frame, context) : why_not_words(frame, static_cast<std::uintptr_t>(context->Rsp), 0);
+        if (unwind) {
+            why = why_not_frames(frame, context, chain);
+        } else {
+            // No unwind data: the frames are read word by word, so only the fault is in the chain.
+            chain.add(pc);
+            chain.broken();
+            why = why_not_words(frame, static_cast<std::uintptr_t>(context->Rsp), 0);
+        }
     }
     if (why != nullptr) {
-        note(frame, fault, pc, why);
+        // Not resumed: the chain for the crash record, from the fault through the code that is no mod's.
+        Chain report(thread, frame, pc);
+        if (unwind) {
+            chain_for_report(frame, context, report);
+        } else {
+            report.add(pc);
+            report.broken();
+        }
+        note(thread, frame, fault, pc, why);
         return EXCEPTION_CONTINUE_SEARCH;
     }
     frame->fault = fault;
@@ -432,20 +633,55 @@ int32_t thread_enter(LumaGuardThread* thread) {
 }
 
 struct Registers {
-    std::uintptr_t pc, sp, lr;
+    std::uintptr_t pc, sp, lr, fp;
 };
 
 Registers registers_of(const ucontext_t* context) noexcept {
 #if defined(__APPLE__) && defined(__x86_64__)
-    return {context->uc_mcontext->__ss.__rip, context->uc_mcontext->__ss.__rsp, 0};
+    return {context->uc_mcontext->__ss.__rip, context->uc_mcontext->__ss.__rsp, 0, context->uc_mcontext->__ss.__rbp};
 #elif defined(__APPLE__) && defined(__aarch64__)
-    return {context->uc_mcontext->__ss.__pc, context->uc_mcontext->__ss.__sp, context->uc_mcontext->__ss.__lr};
+    return {context->uc_mcontext->__ss.__pc, context->uc_mcontext->__ss.__sp, context->uc_mcontext->__ss.__lr,
+            context->uc_mcontext->__ss.__fp};
 #elif defined(__x86_64__)
     return {static_cast<std::uintptr_t>(context->uc_mcontext.gregs[REG_RIP]),
-            static_cast<std::uintptr_t>(context->uc_mcontext.gregs[REG_RSP]), 0};
+            static_cast<std::uintptr_t>(context->uc_mcontext.gregs[REG_RSP]), 0,
+            static_cast<std::uintptr_t>(context->uc_mcontext.gregs[REG_RBP])};
 #elif defined(__aarch64__)
-    return {context->uc_mcontext.pc, context->uc_mcontext.sp, context->uc_mcontext.regs[30]};
+    return {context->uc_mcontext.pc, context->uc_mcontext.sp, context->uc_mcontext.regs[30], context->uc_mcontext.regs[29]};
 #endif
+}
+
+// The chain on POSIX, by the frame records the mods are built with (LumaLink builds every mod with frame pointers):
+// each record holds the record of the frame that called it and the return address into that frame's code (aarch64:
+// x29 and x30 as stp stores them; x86-64: rbp and the return address the call pushed above it). A record outside the
+// mod's stack, one that does not move up the stack, or a return address into no mod's code ends the walk, and the
+// chain says the frames past it were not followed. The word scan still decides whether the fault is resumed.
+// A fault outside the mods' code (the game's or the system's, called by a mod; not resumed): the records of that code
+// before the first mod frame are passed over, for the crash record's chain.
+void chain_by_records(Chain& chain, const LumaGuardFrame* frame, const Registers& regs) noexcept {
+    bool in_mods = in_mod_code(frame, regs.pc);
+    if (in_mods) chain.add(regs.pc);
+    if (regs.lr != 0 && in_mod_code(frame, regs.lr)) {  // a leaf's caller (or the function itself)
+        chain.add(regs.lr);
+        in_mods = true;
+    }
+    const std::uintptr_t top = static_cast<std::uintptr_t>(frame->regs[LUMA_GUARD_SP]);
+    std::uintptr_t record = regs.fp;
+    for (unsigned n = 0; n < 4096; ++n) {
+        if (record < regs.sp || record + 16u > top || (record & 7u) != 0u) break;
+        const std::uintptr_t ret = reinterpret_cast<const std::uintptr_t*>(record)[1];
+        if (ret == frame->call_return) return;  // the boundary: every frame was followed
+        if (in_mod_code(frame, ret)) {
+            chain.add(ret);
+            in_mods = true;
+        } else if (in_mods) {
+            break;
+        }
+        const std::uintptr_t next = reinterpret_cast<const std::uintptr_t*>(record)[0];
+        if (next <= record) break;
+        record = next;
+    }
+    chain.broken();
 }
 
 void resume_at(ucontext_t* context, LumaGuardFrame* frame) noexcept {
@@ -550,12 +786,23 @@ void on_signal(int signal, siginfo_t* info, void* raw) {
         pass_on(signal, info, raw);
         return;
     }
+    if (thread->handling != 0u) {
+        // A second fault while the first is handled: the chain the kernel is reading stays as it is.
+        note(thread, frame, fault, regs.pc, "a second fault came while the first was handled");
+        report_fault(signal, info, raw);
+        galaxy::mod_crash::write(g_note_mod);
+        pass_on(signal, info, raw);
+        return;
+    }
+    Chain chain(thread, frame, regs.pc);
+    chain_by_records(chain, frame, regs);
     const char* why = why_not_here(thread, frame, fault, regs.pc, regs.sp);
     if (why == nullptr) why = why_not_words(frame, regs.sp, regs.lr);
     if (why != nullptr) {
         // Not resumed: the game ends, so its crash lines go out now, whichever handler ends it, and the crash record
         // names the mod (mod_crash.h: the platform's handler after this one leaves it).
-        note(frame, fault, regs.pc, why);
+        chain.broken();
+        note(thread, frame, fault, regs.pc, why);
         report_fault(signal, info, raw);
         galaxy::mod_crash::write(g_note_mod);
         pass_on(signal, info, raw);
@@ -569,7 +816,7 @@ void on_signal(int signal, siginfo_t* info, void* raw) {
 }
 #endif
 
-const LumaGuardHost kHost = {sizeof(LumaGuardHost), thread_enter, code_range};
+const LumaGuardHost kHost = {sizeof(LumaGuardHost), thread_enter, code_range, function_at};
 
 }  // namespace
 
@@ -583,6 +830,7 @@ bool install(void* (*find_symbol)(const char*)) noexcept {
     if (give == nullptr) return false;
     g_game = code_at(reinterpret_cast<const void*>(give));
     g_host = code_at(reinterpret_cast<const void*>(&install));
+    g_blame = reinterpret_cast<LumaGuardBlame>(find_symbol("luma_guard_blame"));
 #if defined(_WIN32)
     g_slot = TlsAlloc();
     if (g_slot == TLS_OUT_OF_INDEXES) return false;
@@ -612,43 +860,24 @@ const char* note_mod() noexcept {
     return g_noted.load(std::memory_order_acquire) != 0u ? g_note_mod : nullptr;
 }
 
-namespace {
-struct LibrariesWriter {
-    LibrariesWriter() noexcept {
-        std::uint32_t free = 0u;
-        while (!g_libraries_writer.compare_exchange_weak(free, 1u, std::memory_order_acquire)) free = 0u;
-    }
-    ~LibrariesWriter() { g_libraries_writer.store(0u, std::memory_order_release); }
-};
-}  // namespace
-
 void add_library(void* library) noexcept {
     std::uintptr_t base = 0, begin = 0, end = 0;
     if (library == nullptr || code_range(library, &base, &begin, &end) != 0) return;
-    LibrariesWriter writer;
-    for (std::size_t i = 0; i < kLibraries; ++i) {
-        if (g_library_begin[i].load(std::memory_order_relaxed) == begin) return;  // loaded twice: one span
+    if (!g_spans.add(begin, end)) {
+        // No memory for a chunk of the table: said; this library's faults are then resumed only under its own boundary.
+        static const char kNoRoom[] = "guard: no memory to keep a mod library's code; a fault in it under another mod's call ends the game\n";
+#if defined(_WIN32)
+        OutputDebugStringA(kNoRoom);
+#else
+        (void)!write(2, kNoRoom, sizeof(kNoRoom) - 1);
+#endif
     }
-    for (std::size_t i = 0; i < kLibraries; ++i) {
-        if (g_library_begin[i].load(std::memory_order_relaxed) == 0) {
-            g_library_end[i].store(end, std::memory_order_relaxed);
-            g_library_begin[i].store(begin, std::memory_order_release);
-            return;
-        }
-    }
-    // More than kLibraries mod libraries at once: this one's faults are resumed only under its own boundary.
 }
 
 void remove_library(void* library) noexcept {
     std::uintptr_t base = 0, begin = 0, end = 0;
     if (library == nullptr || code_range(library, &base, &begin, &end) != 0) return;
-    LibrariesWriter writer;
-    for (std::size_t i = 0; i < kLibraries; ++i) {
-        if (g_library_begin[i].load(std::memory_order_relaxed) == begin) {
-            g_library_begin[i].store(0, std::memory_order_release);
-            g_library_end[i].store(0, std::memory_order_relaxed);
-        }
-    }
+    g_spans.remove(begin);
 }
 
 void set_crash_line(CrashLine line) noexcept {

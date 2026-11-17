@@ -47,4 +47,13 @@ namespace luma {
     u32* modFaulted(LumaMod* pMod);
     // Its code-time slot in the guard (LumaGuard.cpp): 0 none, else the slot's index + 1.
     u32* modCostSlot(LumaMod* pMod);
+    const LumaModInfo* modInfo(const LumaMod* pMod);
+    // The need walk's view (LumaGuard.cpp; luma_guard_walk.h). Each only reads, so a fault handler may call it. modAt:
+    // the mod whose library's code holds `pc` (running, waiting to start, or in its grace), or null. modUses: pUser
+    // imported functions from pUsed (kind 6). modUsesThrough: that, or through the mods pUser uses. modExportAt: the
+    // name of the mod's export whose function begins at `function`, or "".
+    LumaMod* modAt(uintptr_t pc);
+    bool modUses(const LumaMod* pUser, const LumaMod* pUsed);
+    bool modUsesThrough(const LumaMod* pUser, const LumaMod* pUsed);
+    const char* modExportAt(const LumaMod* pMod, uintptr_t pc);
 }

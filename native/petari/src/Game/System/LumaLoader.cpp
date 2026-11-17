@@ -1144,7 +1144,7 @@ namespace luma {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
             apiKeep, apiKept, apiDefineClass, apiClassData, apiNumber, apiSetNumber, apiTable, apiSetTable, apiMake,
-            apiAliasClass, apiPlacementOf, apiPlacedAt, apiMakeGravity,
+            apiAliasClass, apiPlacementOf, apiPlacedAt, apiMakeGravity, luma::guard::callMod,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,
@@ -1449,6 +1449,65 @@ namespace luma {
     }
     u32* modFaulted(LumaMod* pMod) { return &pMod->faulted; }
     u32* modCostSlot(LumaMod* pMod) { return &pMod->costSlot; }
+    const LumaModInfo* modInfo(const LumaMod* pMod) { return pMod->info; }
+
+    // Reads only (the guard's need walk may run in a fault handler that does not resume): the running mods, the waiting
+    // ones and the ones in their grace, whose code can still be on a stack.
+    LumaMod* modAt(uintptr_t pc) {
+        for (u32 i = 0; i < sModCount; i++) {
+            if (pc >= sMods[i]->codeBegin && pc < sMods[i]->codeEnd) {
+                return sMods[i];
+            }
+        }
+        for (u32 i = 0; i < sWaitingCount; i++) {
+            if (pc >= sWaiting[i]->codeBegin && pc < sWaiting[i]->codeEnd) {
+                return sWaiting[i];
+            }
+        }
+        for (LumaMod* pMod = sGone; pMod != nullptr; pMod = pMod->nextGone) {
+            if (pc >= pMod->codeBegin && pc < pMod->codeEnd) {
+                return pMod;
+            }
+        }
+        return nullptr;
+    }
+
+    bool modUses(const LumaMod* pUser, const LumaMod* pUsed) {
+        for (u32 i = 0; pUser != nullptr && i < pUser->useCount; i++) {
+            if (pUser->uses[i] == pUsed) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    namespace {
+        // A mod starts after every mod it uses, so `uses` has no cycle; the depth bound is only a guard against a
+        // corrupted list read from a fault handler.
+        bool usesWithin(const LumaMod* pUser, const LumaMod* pUsed, u32 depth) {
+            if (pUser == nullptr || depth > cMaxMods) {
+                return false;
+            }
+            for (u32 i = 0; i < pUser->useCount; i++) {
+                if (pUser->uses[i] == pUsed || usesWithin(pUser->uses[i], pUsed, depth + 1)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    bool modUsesThrough(const LumaMod* pUser, const LumaMod* pUsed) { return usesWithin(pUser, pUsed, 0); }
+
+    const char* modExportAt(const LumaMod* pMod, uintptr_t function) {
+        const LumaModInfo* const pInfo = pMod->info;
+        for (u32 i = 0; function != 0 && pInfo != nullptr && pInfo->exports != nullptr && i < pInfo->export_count; i++) {
+            if (reinterpret_cast<uintptr_t>(pInfo->exports[i].address) == function && pInfo->exports[i].name != nullptr) {
+                return pInfo->exports[i].name;
+            }
+        }
+        return "";
+    }
 
     void frame() {
         luma::guard::frameEnd();

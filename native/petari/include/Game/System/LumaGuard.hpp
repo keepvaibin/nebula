@@ -21,6 +21,11 @@ namespace luma {
         bool run(LumaMod* pMod, u32 kind, const char* pWhere, const void* fn, uintptr_t a0, uintptr_t a1, uintptr_t a2, uintptr_t a3,
                  u64* pResult);
 
+        // LumaCore.call_mod (luma.h): fn, in the giver's library, under a boundary of the giver, or plainly when the
+        // caller needs the giver. 0 returned; -1 the giver's code failed (it is off); -2 not called, the giver is off;
+        // -4 fn is no running mod's code (said). Any thread.
+        int32_t callMod(const LumaMod* pCaller, const void* fn, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t* pResult);
+
         // A fault was caught in the mod's code this session: none of its code runs again until the next start.
         bool faulted(const LumaMod* pMod);
 

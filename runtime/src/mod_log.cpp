@@ -54,6 +54,9 @@ std::atomic<LumaTimeLetGo> g_let_go{nullptr};
 // The guard's code time (guard 3b; LumaGuardCost in native/include/luma_guard.h), found with g_add; any thread.
 using LumaGuardCost = std::int32_t (*)(const char* mod, std::uint64_t* avg_ns, std::uint64_t* worst_ns);
 std::atomic<LumaGuardCost> g_cost{nullptr};
+// The faults in a mod's code under other mods' calls (LumaGuard.cpp luma_guard_faults): the two callers NUL-separated.
+using LumaGuardFaults = std::int32_t (*)(const char* mod, std::uint32_t* count, char* callers, std::uint32_t callers_size);
+std::atomic<LumaGuardFaults> g_faults{nullptr};
 
 // The harness's fact writer, when this run has the harness (its service exists only then).
 LumaModLogFact harness_fact() {
@@ -127,6 +130,7 @@ void begin(void* (*find_symbol)(const char*), std::uint32_t mods_on) {
     g_clock_of.store(reinterpret_cast<LumaTimeClockOf>(find_symbol("luma_time_clock_of")), std::memory_order_release);
     g_let_go.store(reinterpret_cast<LumaTimeLetGo>(find_symbol("luma_time_let_go")), std::memory_order_release);
     g_cost.store(reinterpret_cast<LumaGuardCost>(find_symbol("luma_guard_cost")), std::memory_order_release);
+    g_faults.store(reinterpret_cast<LumaGuardFaults>(find_symbol("luma_guard_faults")), std::memory_order_release);
     if (session != nullptr) session(mods_on, harness_fact());
     begun();
 }
@@ -360,6 +364,23 @@ std::optional<CodeTime> code_time(std::string_view mod) {
     CodeTime time;
     if (cost(id.c_str(), &time.average_ns, &time.worst_ns) != 0) return std::nullopt;
     return time;
+}
+
+std::optional<FaultsUnder> faults_under(std::string_view mod) {
+    const LumaGuardFaults faults = g_faults.load(std::memory_order_acquire);
+    if (faults == nullptr) return std::nullopt;
+    const std::string id(mod);
+    char callers[160] = {};
+    FaultsUnder under;
+    if (faults(id.c_str(), &under.count, callers, sizeof(callers)) != 0) return std::nullopt;
+    callers[sizeof(callers) - 1] = 0;
+    under.first = callers;
+    const std::size_t at = under.first.size() + 1u;
+    if (at < sizeof(callers) - 1u) {
+        callers[sizeof(callers) - 1] = 0;
+        under.second = callers + at;
+    }
+    return under;
 }
 
 bool let_go(std::string_view mod) {

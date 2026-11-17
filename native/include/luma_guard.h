@@ -27,7 +27,9 @@ typedef enum LumaGuardBoundary {
     LUMA_GUARD_STOP = 5,   /* stop, finish, dependent_gone */
     LUMA_GUARD_EVENT = 6,  /* a service's event or timer */
     LUMA_GUARD_CLASS = 7,  /* a made class: made, its hooks, an override */
-    LUMA_GUARD_BOUNDARY_COUNT = 8
+    LUMA_GUARD_CALLBACK = 8, /* a library mod's call of code another mod gave it (LumaCore.call_mod) */
+    LUMA_GUARD_CUT = 9,      /* the mod's `cut`: a fault cut a call of its code short (LumaModInfo.cut) */
+    LUMA_GUARD_BOUNDARY_COUNT = 10
 } LumaGuardBoundary;
 
 /* What the host caught. Only the first three are resumed. */
@@ -63,12 +65,30 @@ typedef struct LumaGuardFrame {
     uintptr_t call_return; /* the address right after luma_guard_call's call of fn (a value the mod's frames hold) */
 } LumaGuardFrame;
 
+/* The most mods' code a fault's call chain records (LumaGuardThread.chain). */
+#define LUMA_GUARD_CHAIN 32
+
 /* One per thread that ever ran a mod's code (the module's thread_local), given to the host once (thread_enter). */
 typedef struct LumaGuardThread {
     LumaGuardFrame* volatile top; /* the innermost boundary; null outside every one */
     volatile uint32_t handling;   /* 1 from a resume until the kernel finished with that fault: a fault meanwhile is
                                      not resumed */
     uint32_t entered;             /* the module's own: thread_enter was asked */
+    /* Written by the host at a fault inside a boundary, before it resumes or reports it: the mods' code the fault's call
+       chain passed through between the fault and the innermost boundary, one address for each run of frames in one
+       mod library's code, innermost first. chain[0] is the faulting instruction; each next one the return address into
+       the code that called the run before it. A mod library is a span of the host's (add_library), the boundary's own
+       code included. chain_count entries; chain_gap: the index after which frames were not followed one by one (more
+       runs than LUMA_GUARD_CHAIN, whose middle is dropped, or a stack read word by word, where only the fault is
+       recorded), else LUMA_GUARD_CHAIN. For a fault outside the mods' code (in the game's or the system's, which a
+       mod's code called), chain[0] is the innermost mod frame's return address instead and chain_pc tells them apart.
+       chain_pc: the faulting instruction. chain_outer[i]: the run's outermost frame's address (the function its caller
+       entered: an export, a callback), chain[i]'s own for a run of one frame. */
+    uintptr_t chain[LUMA_GUARD_CHAIN];
+    uint32_t chain_count;
+    uint32_t chain_gap;
+    uintptr_t chain_pc;
+    uintptr_t chain_outer[LUMA_GUARD_CHAIN];
 } LumaGuardThread;
 
 /* The host's half, given once by luma_guard_install before any mod loads. */
@@ -82,6 +102,10 @@ typedef struct LumaGuardHost {
        code, the first byte and the byte past the last of its executable part. 0: found; -1: not (that mod's faults are
        never resumed). */
     int32_t (*code_range)(void* library, uintptr_t* base, uintptr_t* begin, uintptr_t* end);
+    /* The first byte of the function whose code holds `pc`, from its image's unwind data (Windows: the function table;
+       Linux and Android: .eh_frame_hdr's table), or 0 when the platform's data cannot tell. The kernel names a cut
+       function by it (LumaCut.function). Any thread; not from a fault handler. */
+    uintptr_t (*function_at)(uintptr_t pc);
 } LumaGuardHost;
 
 /* Where the stack pointer saved in regs is: the index per calling convention (MSVC names x64 _M_X64).
@@ -102,6 +126,14 @@ typedef struct LumaGuardHost {
 
 /* The game module's export "luma_guard_install": 1 taken; 0 not (a host struct too small). */
 typedef int32_t (*LumaGuardInstall)(const LumaGuardHost* host);
+
+/* The game module's export "luma_guard_blame", for a fault the host does not resume (the game ends): from the chain the
+   host wrote into `thread` and the innermost frame, the mod the next start turns off (the need walk, luma_guard_walk.h)
+   into `mod` (its id, NUL-ended, at most mod_size bytes), and into `text` the words naming it, the mod whose code
+   faulted and the place as that mod's file+offset. Only what a fault handler may use: it reads, never locks or
+   allocates. 1: named; 0: no mod could be named (both empty). */
+typedef int32_t (*LumaGuardBlame)(const LumaGuardThread* thread, const LumaGuardFrame* frame, char* mod, uint32_t mod_size,
+                                  char* text, uint32_t text_size);
 
 /* The game module's export "luma_guard_cost" (CODE TIME on a mod's page in Mods): the time
    the mod's code took per frame over its last 120 frames (each boundary's own time, less the boundaries nested in it:

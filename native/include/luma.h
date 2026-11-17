@@ -349,7 +349,40 @@ typedef struct LumaCore {
        (no such live class, not a gravity class, no scene with gravities, no memory, a null place or one smaller than
        LumaGravityPlace, a range that is not a number, a type bit above 8). */
     void* (*make_gravity)(const LumaMod* mod, const char* class_name, const LumaGravityPlace* place);
+
+    /* A library's call of code another mod gave it (a callback it keeps: an `on_frame`, a handler, a gravity's vector),
+       made as the game's calls of a mod's code are (docs/modding/concepts/when-a-mod-fails.md): fn(a0, a1, a2, a3), a
+       function in a mod's library with up to four integer or pointer arguments, its integer result in *result (may be
+       null). The mod whose library holds fn (the giver) runs under a boundary of its own, so when its code fails the
+       giver is turned off and the call returns here: the caller goes on, to its next user in the same frame. When fn
+       is `mod`'s own code, or the code of a mod `mod` needs, it is a plain call (a fault there is the calling mod's).
+       0: called, it returned; -1: its code failed, the giver is off for the session (*result 0); -2: not called, the
+       giver is off already or being taken out (*result 0); -4: fn is in no running mod's code, or mod is null (said in
+       the log; not called). Any thread. Its cost per call is in docs/plan/PROGRESS-AGENT-2.md. */
+    int32_t (*call_mod)(const LumaMod* mod, const void* fn, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3,
+                        uint64_t* result);
 } LumaCore;
+
+/* What a mod's `cut` is told (LumaModInfo.cut; docs/modding/concepts/when-a-mod-fails.md, "Code cut short"): a fault in
+   another mod's code ended a call that had this mod's code on its stack, and this mod stays on. Its frames below
+   `stack` on the thread the cut runs on were left without returning: whatever it records of calls in progress there
+   (a depth, a "busy" flag, a caller it set) is to be put back, and a change it was making may be half done. Strings
+   live until `cut` returns. */
+typedef struct LumaCut {
+    uint32_t size;       /* sizeof(LumaCut) as the kernel knows it */
+    uint32_t boundary;   /* where the cut call began (luma_guard.h LumaGuardBoundary: 0 before hook ... 8 a call from a library) */
+    const char* where;   /* that boundary's function, service or class ("MR::getRandom") */
+    uintptr_t stack;     /* the boundary's stack pointer: this mod's frames below it on this thread were cut */
+    const char* function; /* the innermost cut function of this mod, by its export's name when it is in one, else "" */
+    const char* place;   /* that place as this mod's file+offset ("my-lib/mod.dll+0x1a2b") */
+    const LumaMod* caller; /* the mod whose code called this mod's cut code there; null: the game called it (the boundary) */
+    const char* caller_id; /* that mod's id, or "" */
+    const char* off;     /* the id of the mod turned off for the fault */
+    const char* faulted; /* the id of the mod whose code faulted */
+} LumaCut;
+
+/* This luma.h has LumaCore.call_mod and LumaModInfo.cut (code that also builds against an older one tests it). */
+#define LUMA_CALL_MOD 1
 
 /* report's own codes (docs/modding/concepts/how-nebula-loads-mods.md, `report`). */
 #define LUMA_REPORT_OUT_OF_MEMORY 1u /* Hook.OutOfMemory: args[0] the size; luma.h's `new` then stops the game */
@@ -405,6 +438,11 @@ typedef struct LumaModInfo {
        another mod's functions (kind 6) is refused when both numbers are non-zero and differ (L513), and an optional
        such import stays null: the older mod is rebuilt with a current LumaLink. Read only when `size` covers it. */
     uint32_t runtime_layout;
+    /* The mod is told that a fault in another mod's code cut a call of its code short, while it stays on (LumaCut):
+       right after the fault, on the faulting thread, before any other code of it runs there. It puts back what it
+       records of calls in progress and what the cut call was changing. A fault in it turns it off. Null: none; the log
+       then says its state may be half done. Read only when `size` covers it. */
+    void (*cut)(const LumaCut* cut);
 } LumaModInfo;
 
 #if defined(_WIN32)
@@ -689,6 +727,11 @@ typedef void (*LumaCtor)(void);
 #define LUMA_LIBRARY_MOD(imports, start, stop, exports, dependent_gone) \
     LUMA_RUNTIME                                                        \
     LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, exports, sizeof(exports) / sizeof(exports[0]), dependent_gone, 0, 0}
+
+/* LUMA_MOD and LUMA_LIBRARY_MOD with a `cut` (LumaModInfo.cut): the mod is told when a fault in another mod's code
+   cut a call of its code short. */
+#define LUMA_MOD_CUT(imports, start, stop, cut)     LUMA_RUNTIME                                    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, 0, 0, 0, 0, 0, cut}
+#define LUMA_LIBRARY_MOD_CUT(imports, start, stop, exports, dependent_gone, cut)     LUMA_RUNTIME                                                                     LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, exports, sizeof(exports) / sizeof(exports[0]), dependent_gone, 0, 0, cut}
 
 /* An argument of a hooked call, and its result. */
 #define LUMA_ARG(call, n, type) (*(type*)(call)->args[n])
