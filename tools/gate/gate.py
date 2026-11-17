@@ -296,6 +296,29 @@ def harness(g, suite, renderer, label, device=None):
     return fn
 
 
+def start_soak(g):
+    """The soak (tools/gate/soak.py, file 00 section 4.2): two hours of random input on each renderer, in processes of
+    its own, started so it runs beside the Android part. Returns the process and its log."""
+    log = g.work / "soak.log"
+    out = log.open("wb")
+    process = subprocess.Popen([sys.executable, "-X", "utf8", "-I", str(HERE / "soak.py"), "run", "--bin", str(g.bin),
+                                "--pak", g.args.pak, "--work", str(g.work / "soak"), "--minutes", str(g.args.soak_minutes),
+                                "--who", "gate"], stdout=out, stderr=subprocess.STDOUT, cwd=g.args.build_root)
+    out.close()
+    return process, log
+
+
+def soak_result(process, soak_log):
+    """The soak's verdict once it ends: one line per renderer (soak.py run)."""
+    def fn(log):
+        code = process.wait()
+        text = soak_log.read_text(encoding="utf-8", errors="replace")
+        shutil.copyfile(soak_log, log)
+        lines = [l.strip() for l in text.splitlines() if l.strip()]
+        return code == 0, "; ".join(lines[-3:]) if lines else "no output (exit %d)" % code
+    return fn
+
+
 def replays(g, label, renderer, against=None):
     """The step-hash replay (tools/verify/step_hash.py check): a tour's runs, hashed at every step, against the
     recorded stops (tests/replays), or against another tour's runs (`against`: (label, renderer)) of the same tests.
@@ -557,6 +580,8 @@ def main():
                    help="--full: the board the lock's lines go to ('' for none)")
     p.add_argument("--who", default=os.environ.get("NEBULA_GATE_WHO", "gate.py"), help="who runs it, for the board")
     p.add_argument("--covers", default="", help="--full: what the run answers for (commits, packages), for the board")
+    p.add_argument("--soak-minutes", type=int, default=int(os.environ.get("NEBULA_GATE_SOAK_MINUTES", "120")),
+                   help="--full: the soak's minutes on each renderer (0: not run, a failure)")
     p.add_argument("--without-quick", action="store_true",
                    help="--full: run without a passed quick gate of the same commit (the result says so)")
     args = p.parse_args()
@@ -635,6 +660,7 @@ def run_checks(args):
         g.check("tour-%s/d3d12" % disc, harness(g, region, "d3d12", "tour-%s" % disc))
         g.check("pictures/tour-%s/d3d12" % disc, pictures(g, "tour-%s" % disc, "d3d12"))
 
+    soak = start_soak(g) if args.mode == "full" and args.soak_minutes > 0 else None
     if args.mode == "full":
         # The Android test app, and on a named device its tests and the tour (Vulkan, the device's renderer).
         g.android_bin = str(pathlib.Path(args.build_root) / "android" / "test-bin-arm64-v8a")
@@ -682,9 +708,12 @@ def run_checks(args):
             ("hostile-files", "the bad-file corpus is not in the gate yet (mods M6)"),
             ("two-mods", "the two-mod tests are not in the gate yet (mods M2)"),
             ("sanitizers", "sanitizer builds not in the gate yet (E0.14)"),
-            ("soak", "the soak run is not in the gate yet (E0.14)"),
         ):
             g.missing(name, why)
+        if soak is None:
+            g.missing("soak", "--soak-minutes 0")
+        else:
+            g.check("soak", soak_result(*soak))
     return 0 if g.write() else 1
 
 
