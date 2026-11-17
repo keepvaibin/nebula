@@ -577,7 +577,7 @@ def read_steps(t, bare, classes):
     out = []
     ends = 0
     pictures = set()
-    actions = {"hold", "stick", "shake", "pointer", "key", "text", "settings", "picture", "call", "read", "stage", "wait",
+    actions = {"hold", "stick", "shake", "pointer", "key", "text", "settings", "picture", "call", "read", "stage", "wait", "hash",
                "end", "take_out", "reload", "forget", "copy_file", "load_file", "erase_file", "new_file", "window",
                "lose_device"}
     for i, s in enumerate(steps):
@@ -752,6 +752,12 @@ def read_steps(t, bare, classes):
             if ty not in READ_TYPES:
                 raise HarnessError("%s.type %s: the harness reads %s" % (path, ty, ", ".join(sorted(READ_TYPES))))
             step["line"] = "game read %s %s %s %s" % (plain(s["fact"], path + ".fact"), of, field, ty)
+        elif action == "hash":
+            # The step hash (tools/verify/step_hash.py): "on" from this step, a fact hash.step after every step; "detail"
+            # one fact hash.actor per actor at this step.
+            if v not in ("on", "detail"):
+                raise HarnessError("%s.hash is on or detail" % path)
+            step["line"] = "game hash %s" % v
         elif action == "stage":
             st = v
             keys_known(st, path + ".stage", {"name", "scenario"})

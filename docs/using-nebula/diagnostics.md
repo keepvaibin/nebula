@@ -105,6 +105,7 @@ These scripts work on files a run or the importer left; each prints its argument
 | `tools/verify/audio_compare.py`, `audio_bands.py`, `wavdiff.py`, `wavdrift.py`, `wavlag.py`, `wavshift.py` | Compare two runs' sound. |
 | `tools/verify/store_check.py`, `pakfiles.py`, `pak_compressed.py`, `audiocheck.py`, `moviecheck.py`, `gstcheck.py` | Check a game.pak against another or against its source. |
 | `tools/verify/objdiff.py`, `pe_sections.py` | Compare two builds' objects or DLLs. |
+| `tools/verify/step_hash.py` | Plays the tour on two builds with the step hash on and names the first step and actor where they differ (`replay`), or compares two runs' hashes (`compare`). A test turns the hash on with a step `"hash": "on"`: after every step the fact `hash.step` hashes every live actor's name, position, rotation, scale, velocity, gravity and state step. `"hash": "detail"` writes each actor's values at that step (`hash.actor`). |
 | `tools/perf/threadprof.py` | Samples one thread's busiest functions from outside the process, with its PDB file. |
 
 A fatal error logs its stack, and a thread dump logs each thread's stack at its last wait, as module offsets. Use the game module's link map to name them.

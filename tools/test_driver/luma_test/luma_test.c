@@ -67,6 +67,11 @@ static const LumaFunction* get_seed;        /* u32 MR::getFixedRandomSeed() */
 static int32_t field_name = -1;      /* NameObj.mName */
 static int32_t field_position = -1; /* LiveActor.mPosition */
 static int32_t field_gravity = -1;  /* LiveActor.mGravity */
+static int32_t field_rotation = -1; /* LiveActor.mRotation (the step hash) */
+static int32_t field_scale = -1;    /* LiveActor.mScale */
+static int32_t field_velocity = -1; /* LiveActor.mVelocity */
+static int32_t field_spine = -1;    /* LiveActor.mSpine */
+static int32_t field_spine_step = -1; /* Spine.mStep: the steps in the actor's present state */
 static int32_t field_is_mario = -1; /* GameDataHolder.mIsMario */
 static int32_t field_user = -1;     /* GameDataHolder.mUser */
 static int32_t field_handler = -1; /* SaveDataHandleSequence.mSaveDataHandler (optional: file copy) */
@@ -1353,6 +1358,104 @@ static void do_read(const Words* w) {
     finish(1, 0);
 }
 
+/* --- The step hash (tools/verify/step_hash.py) --------------------------------------------------------------------
+   With "hash on", after every step one fact hash.step = {"h":"<16 hex>","actors":N}: FNV-1a 64 over every live actor in
+   the order the game made them, each its name's bytes and its position, rotation, scale, velocity and gravity (the
+   floats' bits) and its spine's step. No addresses: two builds of the same game give the same hash, so a change to the
+   game's source that changes nothing the game does keeps every step's hash. "hash detail" writes one fact hash.actor
+   per actor at that step: its place in the order, its name, its own hash and its values, so the first actor two runs
+   differ in can be named. */
+
+static int hashing;
+static int32_t hashed_frame = -1;
+
+static uint64_t fnv(uint64_t h, const void* bytes, uint32_t size) {
+    const unsigned char* const b = (const unsigned char*)bytes;
+    for (uint32_t i = 0; i < size; i++) {
+        h ^= b[i];
+        h *= 1099511628211ull;
+    }
+    return h;
+}
+
+static uint64_t actor_hash(const char* actor) {
+    uint64_t h = 14695981039346656037ull;
+    const char* const name = *(const char* const*)(actor + field_name);
+    if (name != 0) {
+        h = fnv(h, name, length(name));
+    }
+    h = fnv(h, "", 1u); /* the name's end: "ab" + "c" is not "a" + "bc" */
+    h = fnv(h, actor + field_position, 12u);
+    h = fnv(h, actor + field_rotation, 12u);
+    h = fnv(h, actor + field_scale, 12u);
+    h = fnv(h, actor + field_velocity, 12u);
+    h = fnv(h, actor + field_gravity, 12u);
+    const char* const spine = *(const char* const*)(actor + field_spine);
+    const int32_t step = spine != 0 ? *(const int32_t*)(spine + field_spine_step) : -1;
+    return fnv(h, &step, 4u);
+}
+
+static void put_hex(Out* out, uint64_t value) {
+    char hex[17];
+    for (int i = 15; i >= 0; i--) {
+        hex[i] = "0123456789abcdef"[value & 15u];
+        value >>= 4u;
+    }
+    hex[16] = 0;
+    put_string(out, hex);
+}
+
+static void hash_step(int detail) {
+    uint64_t h = 14695981039346656037ull;
+    uint32_t actors = 0;
+    for (uint32_t i = 0; i < object_count; i++) {
+        const char* const actor = (const char*)objects[i];
+        if (actor == 0 || !object_is(actor, class_live_actor)) {
+            continue;
+        }
+        const uint64_t own = actor_hash(actor);
+        h = fnv(h, &own, 8u);
+        if (detail) {
+            static Out each;
+            out_empty(&each);
+            put(&each, "{\"i\":");
+            put_int(&each, actors);
+            put(&each, ",\"name\":");
+            const char* const name = *(const char* const*)(actor + field_name);
+            put_string(&each, name != 0 ? name : "");
+            put(&each, ",\"h\":");
+            put_hex(&each, own);
+            put(&each, ",\"pos\":");
+            put_vec(&each, (const Vec3*)(actor + field_position));
+            put(&each, ",\"rot\":");
+            put_vec(&each, (const Vec3*)(actor + field_rotation));
+            put(&each, ",\"scale\":");
+            put_vec(&each, (const Vec3*)(actor + field_scale));
+            put(&each, ",\"vel\":");
+            put_vec(&each, (const Vec3*)(actor + field_velocity));
+            put(&each, ",\"grav\":");
+            put_vec(&each, (const Vec3*)(actor + field_gravity));
+            put(&each, ",\"step\":");
+            const char* const spine = *(const char* const*)(actor + field_spine);
+            put_int(&each, spine != 0 ? *(const int32_t*)(spine + field_spine_step) : -1);
+            put(&each, "}");
+            fact("hash.actor", &each);
+        }
+        actors++;
+    }
+    if (detail) {
+        return; /* the step's own hash comes after its lines (on_frame) */
+    }
+    static Out o;
+    out_empty(&o);
+    put(&o, "{\"h\":");
+    put_hex(&o, h);
+    put(&o, ",\"actors\":");
+    put_int(&o, actors);
+    put(&o, "}");
+    fact("hash.step", &o);
+}
+
 static void do_line(const char* line) {
     static Words w;
     split(&w, line, ' ');
@@ -1433,6 +1536,18 @@ static void do_line(const char* line) {
         do_read(&w);
         return;
     }
+    if (same(w.word[0], "hash") && w.count == 2u) {
+        if (same(w.word[1], "on")) {
+            hashing = 1;
+            finish(1, 0);
+        } else if (same(w.word[1], "detail")) {
+            hash_step(1);
+            finish(1, 0);
+        } else {
+            finish(0, "hash is on or detail");
+        }
+        return;
+    }
     finish(0, "not a line the game half knows");
 }
 
@@ -1469,6 +1584,11 @@ static int32_t on_frame(LumaCall* call, void* user) {
             break;
         }
         do_line(line);
+    }
+    /* Once a step, after its lines: the state the step left. */
+    if (hashing && frame_now >= 0 && frame_now != hashed_frame) {
+        hashed_frame = frame_now;
+        hash_step(0);
     }
     return 0;
 }
@@ -1526,6 +1646,11 @@ static const LumaImport imports[] = {
     LUMA_FIELD(field_name, "NameObj.mName", "const char *"),
     LUMA_FIELD(field_position, "LiveActor.mPosition", "Vec3f"),
     LUMA_FIELD(field_gravity, "LiveActor.mGravity", "Vec3f"),
+    LUMA_FIELD(field_rotation, "LiveActor.mRotation", "Vec3f"),
+    LUMA_FIELD(field_scale, "LiveActor.mScale", "Vec3f"),
+    LUMA_FIELD(field_velocity, "LiveActor.mVelocity", "Vec3f"),
+    LUMA_FIELD(field_spine, "LiveActor.mSpine", "Spine *"),
+    LUMA_FIELD(field_spine_step, "Spine.mStep", "s32"),
     /* Optional: a class outside the game's object tree may have no fields by name yet; the item
        that needs one then fails, naming it. */
     {LUMA_IMPORT_FIELD, LUMA_OPTIONAL, "GameDataHolder.mIsMario", "bool", &field_is_mario, 0, 0, 0},
