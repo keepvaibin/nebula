@@ -16,10 +16,10 @@ LumaKit loads only when a mod that is on needs it. One copy serves every mod tha
 1. Add LumaKit to your mod's needs.
 
    ```shell
-   lumalink add need lumakit MOD-FOLDER
+   lumalink add need lumakit MOD-FOLDER --version ^1.0.0
    ```
 
-   Replace MOD-FOLDER with your mod's folder. This adds `{ "id": "lumakit", "version": "^1" }` to `needs` in `luma.json`.
+   Replace MOD-FOLDER with your mod's folder. This adds `{ "id": "lumakit", "version": "^1.0.0" }` to `needs` in `luma.json`: any LumaKit 1 from 1.0.0 on. Without `--version` the need takes any version (`*`).
 
 1. In your code, bring in each module you use with `use kit.MODULE`.
 

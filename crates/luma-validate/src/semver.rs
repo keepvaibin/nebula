@@ -1,6 +1,7 @@
 //! Semantic versions (`MAJOR.MINOR.PATCH` with an optional `-pre` and `+build`) and the ranges `nebula` and `needs`
 //! use: comparators `>=`, `>`, `<=`, `<`, `=`, a bare version (exactly it), `^` (same major; for 0.x the same minor),
-//! `~` (same minor), `*` (any), joined by spaces (all must hold) and ` || ` (any group). Precedence as semver 2.0.0.
+//! `~` (same minor), `*` (any), joined by spaces (all must hold) and ` || ` (any group). A version with its minor or
+//! patch left out stands for all of them, as npm and Cargo read it (`^1`, `~1.2`, `1.2`). Precedence as semver 2.0.0.
 
 use std::cmp::Ordering;
 
@@ -132,9 +133,29 @@ impl Range {
                     .iter()
                     .find_map(|p| word.strip_prefix(p).map(|rest| (*p, rest)))
                     .unwrap_or(("", word));
-                let v = Version::parse(rest)?;
                 // The lowest pre-release of a version: below every other build of it.
                 let floor = |major, minor| Version { major, minor, patch: 0, pre: vec!["0".into()] };
+                if let Some((major, minor)) = partial(rest) {
+                    // A version with its patch or minor left out stands for all of them (as npm and Cargo read it):
+                    // `^1` and `1` are 1.x.x, `~1.2` and `1.2` are 1.2.x, `>1.2` is above every 1.2.x.
+                    let low = Version { major, minor: minor.unwrap_or(0), patch: 0, pre: Vec::new() };
+                    let past = match minor {
+                        Some(m) if prefix != "^" || major == 0 => floor(major, m + 1),
+                        _ => floor(major + 1, 0),
+                    };
+                    match prefix {
+                        ">=" => comparators.push((Op::Ge, low)),
+                        "<" => comparators.push((Op::Lt, Version { pre: vec!["0".into()], ..low })),
+                        ">" => comparators.push((Op::Ge, past)),
+                        "<=" => comparators.push((Op::Lt, past)),
+                        _ => {
+                            comparators.push((Op::Ge, low));
+                            comparators.push((Op::Lt, past));
+                        }
+                    }
+                    continue;
+                }
+                let v = Version::parse(rest)?;
                 match prefix {
                     ">=" => comparators.push((Op::Ge, v)),
                     "<=" => comparators.push((Op::Le, v)),
@@ -168,6 +189,22 @@ impl Range {
                 Op::Eq => v == bound,
             })
         })
+    }
+}
+
+/// `MAJOR` or `MAJOR.MINOR` (no pre-release, no build): the parts given; none for a whole version or anything else.
+fn partial(text: &str) -> Option<(u64, Option<u64>)> {
+    let number = |p: &str| -> Option<u64> {
+        if p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()) || (p.len() > 1 && p.starts_with('0')) {
+            return None;
+        }
+        p.parse().ok()
+    };
+    let parts: Vec<&str> = text.split('.').collect();
+    match parts.as_slice() {
+        [major] => Some((number(major)?, None)),
+        [major, minor] => Some((number(major)?, Some(number(minor)?))),
+        _ => None,
     }
 }
 
@@ -206,5 +243,33 @@ mod tests {
         assert!(r.holds(&v("1.5.0")) && r.holds(&v("3.0.0")) && !r.holds(&v("2.5.0")));
         assert!(Range::parse("").is_none() && Range::parse(">= 1.0.0").is_none() && Range::parse("1.x").is_none());
         assert!(Range::parse("*").unwrap().holds(&v("0.0.1")));
+    }
+
+    #[test]
+    fn partial_ranges() {
+        let holds = |r: &str, yes: &[&str], no: &[&str]| {
+            let range = Range::parse(r).unwrap_or_else(|| panic!("{r} not read"));
+            for s in yes {
+                assert!(range.holds(&v(s)), "{r} should hold {s}");
+            }
+            for s in no {
+                assert!(!range.holds(&v(s)), "{r} should not hold {s}");
+            }
+        };
+        holds("^1", &["1.0.0", "1.9.3"], &["0.9.0", "2.0.0", "2.0.0-pre"]);
+        holds("^1.0", &["1.0.0", "1.4.0"], &["0.9.9", "2.0.0"]);
+        holds("^1.2", &["1.2.0", "1.9.0"], &["1.1.9", "2.0.0"]);
+        holds("^0.2", &["0.2.0", "0.2.9"], &["0.1.9", "0.3.0"]);
+        holds("^0", &["0.0.1", "0.9.0"], &["1.0.0"]);
+        holds("~1.2", &["1.2.0", "1.2.7"], &["1.3.0", "1.1.0"]);
+        holds("~1", &["1.0.0", "1.8.0"], &["2.0.0"]);
+        holds("1", &["1.0.0", "1.5.2"], &["2.0.0", "0.9.0"]);
+        holds("1.2", &["1.2.0", "1.2.4"], &["1.3.0"]);
+        holds(">=1.2", &["1.2.0", "3.0.0"], &["1.1.9"]);
+        holds(">1.2", &["1.3.0"], &["1.2.9"]);
+        holds("<1.2", &["1.1.9"], &["1.2.0", "1.2.0-pre"]);
+        holds("<=1.2", &["1.2.9"], &["1.3.0"]);
+        holds("^1 || ^3", &["1.2.0", "3.0.0"], &["2.0.0"]);
+        assert!(Range::parse("^1.").is_none() && Range::parse("^01").is_none() && Range::parse("^1.2-pre").is_none());
     }
 }
