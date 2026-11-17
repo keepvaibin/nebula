@@ -213,7 +213,8 @@ static int32_t trigger(LumaCall* call, void* user) {
 #elif CASE == 5
     if (k == 1) {
         lt_fact("r1", fs->read_package(lt_mod, "luma.json", T(1)));
-        expect[2] = "code/\nluma.json\n";
+        /* The package as installed: the test mods are placed as their folders, the source with the code. */
+        expect[2] = "code/\nluma.json\nsource/\n";
         lt_fact("l2", fs->list_package(lt_mod, "", 0, T(2)));
         /* The package holds the library of the target this library was built for (build.sh, one target). */
 #if defined(_WIN32) && defined(__aarch64__)
@@ -241,7 +242,7 @@ static int32_t trigger(LumaCall* call, void* user) {
 #define FS_CODE "code/linux-x64/"
 #define FS_LIB "mod.so"
 #endif
-        expect[3] = "code/\n" FS_CODE "\n" FS_CODE FS_LIB "\nluma.json\n";
+        expect[3] = "code/\n" FS_CODE "\n" FS_CODE FS_LIB "\nluma.json\nsource/\nsource/fs-package.c\n";
         lt_fact("l3", fs->list_package(lt_mod, "", 1, T(3)));
         lt_fact("r4", fs->read_package(lt_mod, "nope.json", T(4)));
         lt_fact("r5", fs->read(lt_mod, "luma.json", T(5)));
