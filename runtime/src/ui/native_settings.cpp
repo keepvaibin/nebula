@@ -684,8 +684,9 @@ unsigned pending_settings_changes() {
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
     changes += d.curved_surfaces != live.curved_surfaces;
     changes += lighting_mode(d) != lighting_mode(live);
-    changes += d.ambient_occlusion != live.ambient_occlusion;
-    changes += d.ambient_occlusion_ssao != live.ambient_occlusion_ssao;
+    // One row (off, SSAO, GTAO): one change.
+    changes += d.ambient_occlusion != live.ambient_occlusion ||
+        (d.ambient_occlusion && d.ambient_occlusion_ssao != live.ambient_occlusion_ssao);
     changes += d.bloom != live.bloom;
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.hud_internal_resolution != live.hud_internal_resolution;
