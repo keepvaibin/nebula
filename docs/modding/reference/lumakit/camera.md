@@ -33,7 +33,7 @@ The module's source is `lumakit/source/camera.lum`.
 | [`alive`](#alive) | Function |  |
 | [`follow`](#follow) | Function | A camera `distance` behind the target and `height` above it, looking at it, turning with it. |
 | [`eye`](#eye) | Function | First person: the eye at the actor's joint, looking along its front, the near plane `near` (the player's own model hidden while the main camera holds it). |
-| [`side`](#side) | Function | A side camera for 2D sections: `distance` from the player along `normal` (world axes), looking at the player. Called while a scene has a player (a rig's actor cannot be empty: a service struct's field cannot be none). |
+| [`side`](#side) | Function | A side camera for 2D sections: `distance` from the player along `normal` (world axes), looking at the player. `none` while there is no player (the boot, the title, a load): a rig's actor cannot be empty. |
 | [`stereo`](#stereo) | Function | Two rigs `eye_distance` apart across the rig's look (left, right), for a pair of views (VR). A fixed rig moves its eye and the point it looks at; a follow or world rig its offset (a follow rig's x is the actor's side). A joint rig's pair is the joint's one eye (draw.view has no side offset for a joint). |
 | [`mirror`](#mirror) | Function | The picture and the stick's x flipped, or not. |
 | [`fov`](#fov) | Function | The main camera's vertical field of view in degrees (1 to 179); none: the game's own (or a control's rig's). |
@@ -105,10 +105,10 @@ First person: the eye at the actor's joint, looking along its front, the near pl
 ### `side`
 
 ```lumascript
-pub fn side(normal: vec3, distance: f32) -> view.Camera
+pub fn side(normal: vec3, distance: f32) -> view.Camera?
 ```
 
-A side camera for 2D sections: `distance` from the player along `normal` (world axes), looking at the player. Called while a scene has a player (a rig's actor cannot be empty: a service struct's field cannot be none).
+A side camera for 2D sections: `distance` from the player along `normal` (world axes), looking at the player. `none` while there is no player (the boot, the title, a load): a rig's actor cannot be empty.
 
 ### `stereo`
 

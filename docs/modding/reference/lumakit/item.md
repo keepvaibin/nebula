@@ -30,7 +30,7 @@ The module's source is `lumakit/source/item.lum`.
 | [`Item`](#item) | Struct |  |
 | [`ItemId`](#itemid) | Struct | An item's handle: its number, 0 for none. Its functions are also module functions (`item.spawn(i, at)`). |
 | [`GivesData`](#givesdata) | Enum | An item as its data file writes it: content by name (the mod's own), what it gives without code. |
-| [`give`](#give) | Function | Gives `g` to the player now: coins and star bits counted as the game counts its own, a life each, health as the game's heart pickups give it, a form through kit.player.form, a mod's function with the player. Carry is counted by the item that gives it (give_item, a pickup); given bare it is nothing. |
+| [`give`](#give) | Function | Gives `g` to the player now: coins and star bits counted as the game counts its own, a life each (99 at most, the game's most), health as the game's heart pickups give it, a form through kit.player.form, a mod's function with the player. Carry is counted by the item that gives it (give_item, a pickup); given bare it is nothing. |
 | [`save_key`](#save_key) | Function | The one form of every kit save key (kit.item, kit.progress, kit.shop, kit.talk): "<mod id>/kit.<module>.<kind>.<id>", a value a library keeps for another mod (svc.save: the owner's id, '/', a name of 1 to 64 of a-z 0-9 _ - .). The owner by its id (stable across starts and reloads), never by its caller() number (the kernel's pointer to the running mod, another at every start); the value's own id as hashes. A forgotten mod's "<id>/..." values go with it, in every file. none for a mod that is not running: nothing is read or written for it. |
 | [`owns_key`](#owns_key) | Function | Whether `key` is a value of `owner`'s for this module and kind (a save_key of its): what a public setter checks before it writes a key a mod handed in. |
 | [`kept`](#kept) | Function | The kit's saves: one rule for every mod's kit value. LumaKit saves it itself, in its own part of the save file (a library's service calls name the library), under the owning mod's id (save_key), whether the owner has code or only data and wherever the kit was entered from. |
@@ -104,7 +104,7 @@ An item as its data file writes it: content by name (the mod's own), what it giv
 pub fn give(g: Gives)
 ```
 
-Gives `g` to the player now: coins and star bits counted as the game counts its own, a life each, health as the game's heart pickups give it, a form through kit.player.form, a mod's function with the player. Carry is counted by the item that gives it (give_item, a pickup); given bare it is nothing.
+Gives `g` to the player now: coins and star bits counted as the game counts its own, a life each (99 at most, the game's most), health as the game's heart pickups give it, a form through kit.player.form, a mod's function with the player. Carry is counted by the item that gives it (give_item, a pickup); given bare it is nothing.
 
 ### `save_key`
 

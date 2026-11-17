@@ -61,7 +61,7 @@ The module's source is `lumakit/source/actor.lum`.
 pub struct Kind {
     name: text                                // the class name stages place it by
     base: text = "LiveActor"                  // a derivable game class; KitActor's is LiveActor
-    look: model? = none
+    look: model? = none                       // none: not drawn; no idle action, no "Down"
     idle_action: text? = none                 // started when it appears
     sensors: list<Sensor> = []
     on_ground: bool = true                    // stands on the ground as the game's walkers do: falls onto it, stays

@@ -31,7 +31,7 @@ The module's source is `lumakit/source/replay.lum`.
 | [`Recorder`](#recorder) | Struct |  |
 | [`Puppet`](#puppet) | Struct |  |
 | [`Rewind`](#rewind) | Struct |  |
-| [`current_pose`](#current_pose) | Function | The pose of `w` now. An actor that is gone, and What.Inputs (which has no pose): a script error. |
+| [`current_pose`](#current_pose) | Function | The pose of `w` now; `none` with no player (the boot, the title, a load, a movie), for an actor that is gone, and for What.Inputs (inputs have no pose: record them and read the track). |
 | [`pose_at`](#pose_at) | Function | The pose of step `frame` of a pose track; none past its end, for an input track or a freed one. |
 | [`free`](#free) | Function | The track's data given up now (it goes with its mod otherwise). |
 | [`pose_encode`](#pose_encode) | Function | A pose as bytes (a track of one pose), and back; none when the bytes are no pose. |
@@ -44,7 +44,7 @@ The module's source is `lumakit/source/replay.lum`.
 | [`puppet`](#puppet) | Function | A puppet showing `look`, for the calling mod; at most 15 at once for all mods: past that, and when the stage cannot make one, an empty handle whose alive() is false and whose other calls do nothing. |
 | [`set_pose`](#set_pose) | Function | The puppet placed as the pose says: its place, its turn, its animation at the pose's frame (started when the name changes and the puppet's model has it). |
 | [`pose`](#pose) | Function | The puppet at a track's step; hidden past the track's end (shown again by a step inside it). |
-| [`view`](#view) | Function | The puppet's object, for a mod that draws on it (draw.inst opacity) or reads it. After remove(): a script error . |
+| [`view`](#view) | Function | The puppet's object, for a mod that draws on it (draw.inst opacity) or reads it; `none` after remove(), once its scene ended, or for an empty handle or another mod's. |
 | [`alive`](#alive) | Function |  |
 | [`remove`](#remove) | Function | The puppet killed with the game's own kill; may be called again. |
 | [`play_inputs`](#play_inputs) | Task | An input track played back for the calling mod: each world step reads the track's next step instead of the player's controls. Ends at the track's end; an input track playing before ends first. The calling mod needs the permission input.inject. |
@@ -95,7 +95,7 @@ pub struct Puppet {
     id: u32
     fn pose(self, t: Track, frame: u32) { pose(self, t, frame) }
     fn set_pose(self, p: Pose) { set_pose(self, p) }
-    fn view(self) -> LiveActor { return view(self) }
+    fn view(self) -> LiveActor? { return view(self) }
     fn remove(self) { remove(self) }
     fn alive(self) -> bool { return alive(self) }
 }
@@ -114,10 +114,10 @@ pub struct Rewind {
 ### `current_pose`
 
 ```lumascript
-pub fn current_pose(w: What) -> Pose
+pub fn current_pose(w: What) -> Pose?
 ```
 
-The pose of `w` now. An actor that is gone, and What.Inputs (which has no pose): a script error.
+The pose of `w` now; `none` with no player (the boot, the title, a load, a movie), for an actor that is gone, and for What.Inputs (inputs have no pose: record them and read the track).
 
 ### `pose_at`
 
@@ -216,10 +216,10 @@ The puppet at a track's step; hidden past the track's end (shown again by a step
 ### `view`
 
 ```lumascript
-pub fn view(p: Puppet) -> LiveActor
+pub fn view(p: Puppet) -> LiveActor?
 ```
 
-The puppet's object, for a mod that draws on it (draw.inst opacity) or reads it. After remove(): a script error .
+The puppet's object, for a mod that draws on it (draw.inst opacity) or reads it; `none` after remove(), once its scene ended, or for an empty handle or another mod's.
 
 ### `alive`
 
