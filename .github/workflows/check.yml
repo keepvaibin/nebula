@@ -1,8 +1,9 @@
 name: Check
 
-# Every push and pull request: every platform builds, the unit tests run on Windows and Linux, the Rust tests run, and
-# each built program starts on the runner's software renderer. What needs a real GPU, the game's data or the tablet
-# runs in the local gate (tools/gate/gate.py), whose results are kept in docs/plan/gate-runs.
+# Every push and pull request: every platform builds, the unit tests run on Windows, the Rust tests run, and the
+# Direct3D 12, Direct3D 11, Linux (Vulkan) and Mac (Metal) programs start without game data (--start-check). What needs
+# a real GPU, the game's data or the tablet runs in the local gate (tools/gate/gate.py), whose results are kept in
+# docs/plan/gate-runs.
 on:
   push:
     branches: ['**']
@@ -42,6 +43,23 @@ jobs:
           . .\tools\enter_msvc_environment.ps1 | Out-Null
           ctest --test-dir (Join-Path $env:RUNNER_TEMP 'host') --output-on-failure --timeout 600
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # Each program starts without game data (host_main.cpp run_start_check): its window and renderer on the runner's
+      # software adapter, 300 frames drawn and shown. A crash, a renderer that does not start or no picture fails it.
+      - name: Start check (Direct3D 12 and Direct3D 11)
+        shell: pwsh
+        run: |
+          $build = Join-Path $env:RUNNER_TEMP 'host'
+          foreach ($exe in 'Nebula', 'NebulaD11') {
+            $d = Join-Path $env:RUNNER_TEMP "start-$exe"
+            New-Item -ItemType Directory -Force "$d/data", "$d/settings" | Out-Null
+            $p = Start-Process (Join-Path $build "$exe.exe") -WindowStyle Hidden -PassThru `
+              -ArgumentList '--start-check', '300', '--data', "$d/data", '--settings', "$d/settings", '--crash-dumps', $d `
+              -RedirectStandardOutput "$d/out.txt" -RedirectStandardError "$d/err.txt"
+            $null = $p.Handle
+            if (-not $p.WaitForExit(300000)) { $p.Kill(); Write-Output "${exe}: no end in 5 minutes"; exit 1 }
+            Get-Content "$d/out.txt", "$d/err.txt" | Select-String 'start check|\[gpu\] adapter'
+            if ($p.ExitCode -ne 0) { Write-Output "${exe}: exit $($p.ExitCode)"; Get-Content "$d/err.txt" -Tail 30; exit 1 }
+          }
 
   windows-game:
     name: Windows game modules
@@ -107,6 +125,13 @@ jobs:
         run: sh tools/fetch_build_deps.sh "$RUNNER_TEMP/deps"
       - name: Build Nebula
         run: sh platform/linux/build_linux.sh -d "$RUNNER_TEMP/deps" -l "$RUNNER_TEMP/llvm" -w "$RUNNER_TEMP/work"
+      - name: Start check (Vulkan on Mesa's software renderer, on a virtual display)
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mesa-vulkan-drivers xvfb xauth
+          d="$RUNNER_TEMP/start"
+          mkdir -p "$d/data" "$d/settings"
+          SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a "$RUNNER_TEMP/work/bin/nebula" --start-check 300 \
+            --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
 
   macos:
     name: Mac
@@ -156,6 +181,13 @@ jobs:
           mkdir -p "$RUNNER_TEMP/shipped"
           cp installer/lumakit/lumakit.luma "$RUNNER_TEMP/shipped/"
           sh platform/apple/build_macos.sh -t "$TOOLS" -w "$WORK" -a arm64 -m "$RUNNER_TEMP/shipped"
+      - name: Start check (Metal)
+        timeout-minutes: 5
+        run: |
+          d="$RUNNER_TEMP/start"
+          mkdir -p "$d/data" "$d/settings"
+          "$WORK/Nebula.app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" \
+            --crash-dumps "$d"
 
   android:
     name: Android

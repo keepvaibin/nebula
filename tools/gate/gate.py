@@ -157,6 +157,35 @@ def rust_tests(g):
     return fn
 
 
+EXES = {"d3d12": "Nebula.exe", "vulkan": "NebulaVk.exe", "d3d11": "NebulaD11.exe"}
+
+
+def start_check(g, renderer):
+    """The program's start without game data (host_main.cpp run_start_check): window, renderer, 300 frames shown."""
+    def fn(log):
+        out = g.work / ("start-" + renderer)
+        for sub in ("data", "settings"):
+            (out / sub).mkdir(parents=True, exist_ok=True)
+        hidden = {}
+        if os.name == "nt":
+            info = subprocess.STARTUPINFO()
+            info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            info.wShowWindow = 0  # SW_HIDE: a test's start
+            hidden = {"startupinfo": info}
+        with open(log, "wb") as f:
+            try:
+                code = subprocess.run([str(pathlib.Path(g.bin) / EXES[renderer]), "--start-check", "300",
+                                       "--data", str(out / "data"), "--settings", str(out / "settings"),
+                                       "--crash-dumps", str(out)], stdout=f, stderr=subprocess.STDOUT, timeout=300,
+                                      **hidden).returncode
+            except subprocess.TimeoutExpired:
+                code = 124
+        said = [l for l in pathlib.Path(log).read_text(encoding="utf-8", errors="replace").splitlines()
+                if l.startswith("start check")]
+        return code == 0, "exit %d: %s" % (code, said[-1] if said else "(no start check line)")
+    return fn
+
+
 def scripts(g, paths, extra=()):
     """Python self-tests without the game, each with its own work folder: passes when every one exits 0."""
     def fn(log):
@@ -258,6 +287,8 @@ def main():
         if not g.check("build/windows", build_windows(g)):
             return 0 if g.write() else 1
     g.check("unit/windows", unit_tests(g))
+    for r in RENDERERS:
+        g.check("start/%s" % r, start_check(g, r))
     g.check("rust", rust_tests(g))
     g.check("harness/self", scripts(g, HARNESS_SELF, ("--work", "{out}")))
     commands = pathlib.Path(args.build_root) / "game" / "compile_commands.json"
