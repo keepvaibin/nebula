@@ -154,6 +154,8 @@ public:
     bool wait(std::uint64_t value, std::uint64_t timeout_ns = UINT64_MAX);
     // A command buffer ended with an error since the last take (the device was lost, the system took the GPU away).
     [[nodiscard]] bool take_failure(std::string& what);
+    // An extension's lose_gpu_device: the next committed command buffer ends as a lost device's.
+    void simulate_device_loss() noexcept { simulated_loss_.store(true, std::memory_order_release); }
     // Runs `destroy` once the GPU has passed the next frame's commit, which carries any commands being encoded now.
     void defer(std::function<void()> destroy);
     // Runs the deferred destructions the GPU has passed (the render thread, once a frame).
@@ -211,6 +213,7 @@ private:
     std::atomic<std::uint64_t> completed_{0};
     std::mutex wait_mutex_;
     std::condition_variable wait_wake_;
+    std::atomic<bool> simulated_loss_{false};  // simulate_device_loss: asked, not yet committed
     bool failed_ = false;       // under wait_mutex_
     std::string failed_what_;
     std::mutex deferred_mutex_;

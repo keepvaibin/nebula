@@ -2576,8 +2576,9 @@ void RenderCore::flush_waiting_list() {
 }
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
-    // An extension's lose_gpu_device: Direct3D 12 removes its device; Vulkan has no call for that, so its next submission
-    // reports VK_ERROR_DEVICE_LOST. Both go on through the loss recovery below.
+    // An extension's lose_gpu_device: Direct3D 12 removes its device; the others have no call for that, so Vulkan's next
+    // submission reports VK_ERROR_DEVICE_LOST, Direct3D 11's next present DXGI_ERROR_DEVICE_REMOVED and Metal's next
+    // command buffer a lost device. All go on through the loss recovery below.
     if (g_lose_device.exchange(false, std::memory_order_acq_rel)) [[unlikely]] {
         asked_loss_frame_ = frame_index_;
         std::cerr << "[gpu] device lost (asked) at frame " << frame_index_ << '\n';

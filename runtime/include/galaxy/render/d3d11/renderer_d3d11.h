@@ -148,6 +148,7 @@ public:
     [[nodiscard]] bool occluded() const noexcept { return occluded_; }
     void probe_occlusion() noexcept;
 
+    // An extension's lose_gpu_device, on the render thread: the next present reports a removed device.
     void lose_device();
     void begin_frame();
     std::uint64_t end_frame(bool present_swap_chain = true, SubmissionCallback on_submitted = nullptr,
@@ -488,6 +489,7 @@ private:
     bool window_shown_ = false;
     bool keep_window_ = false;
     bool occluded_ = false;
+    bool loss_asked_ = false;  // lose_device, until the present that reports it
     TextureStore* mirrored_store_ = nullptr;
 
     // The swap chain.

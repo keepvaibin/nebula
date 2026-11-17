@@ -17,6 +17,24 @@
 
 namespace galaxy::render::mtl {
 
+namespace {
+
+// A failed command buffer's words. Metal's description of an error is the system's text, so the error's code decides:
+// a device removed, its access revoked by the system, or a hang the system reset leads with "device lost", which the
+// render core's recovery answers with a new device (crash_report.cpp gpu_lost) as it does Direct3D's and Vulkan's.
+std::string failure_text(NSError* error) {
+    const char* const words = error != nil ? error.localizedDescription.UTF8String : nullptr;
+    std::string text = words != nullptr ? words : "no description";
+    if (error != nil && [error.domain isEqualToString:MTLCommandBufferErrorDomain] &&
+        (error.code == MTLCommandBufferErrorDeviceRemoved || error.code == MTLCommandBufferErrorAccessRevoked ||
+         error.code == MTLCommandBufferErrorTimeout)) {
+        text = "device lost (Metal command buffer error " + std::to_string(static_cast<long>(error.code)) + "): " + text;
+    }
+    return text;
+}
+
+}  // namespace
+
 // Format's numbers are Metal's.
 static_assert(static_cast<std::uint32_t>(Format::R8) == MTLPixelFormatR8Unorm);
 static_assert(static_cast<std::uint32_t>(Format::Rg8) == MTLPixelFormatRG8Unorm);
@@ -291,10 +309,18 @@ std::uint64_t Context::commit_with(Object command_buffer, bool frame) {
     id<MTLCommandBuffer> const commands = (__bridge id<MTLCommandBuffer>)command_buffer;
     // One committing thread (the render thread): the values rise in commit order.
     const std::uint64_t value = submitted_.load(std::memory_order_relaxed) + 1u;
-    [commands addCompletedHandler:^(id<MTLCommandBuffer> done) {
-        const bool failed = done.status == MTLCommandBufferStatusError;
-        Context::get().completed(value, failed, failed ? std::string(done.error.localizedDescription.UTF8String ?: "") : std::string());
-    }];
+    if (simulated_loss_.exchange(false, std::memory_order_acq_rel)) {
+        // An extension's lose_gpu_device: Metal has no call that removes a device, so this buffer's end is reported as
+        // a lost device's, and the same recovery runs.
+        [commands addCompletedHandler:^(id<MTLCommandBuffer>) {
+            Context::get().completed(value, true, "device lost (asked)");
+        }];
+    } else {
+        [commands addCompletedHandler:^(id<MTLCommandBuffer> done) {
+            const bool failed = done.status == MTLCommandBufferStatusError;
+            Context::get().completed(value, failed, failed ? failure_text(done.error) : std::string());
+        }];
+    }
     if (frame) {
         const std::lock_guard<std::mutex> lock(deferred_mutex_);
         for (Deferred& entry : deferred_) {

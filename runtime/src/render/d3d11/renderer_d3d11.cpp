@@ -51,8 +51,10 @@ constexpr const char* kPassStatNames[] = {"scene", "resolve", "frame-read", "dis
 // FSR 3 frame generation is not built on Direct3D 11 (its interface is Direct3D 12's and Vulkan's).
 bool fsr_frame_generation_compiled() noexcept { return false; }
 
+// Direct3D 11 has no call that removes its device: the next present reports DXGI_ERROR_DEVICE_REMOVED instead of
+// presenting, which goes through the same recovery as a real removal (render_core.cpp restart_device).
 void RendererD3D11::lose_device() {
-    std::cerr << "[Renderer] Direct3D 11 has no device loss to rehearse\n";
+    loss_asked_ = true;
 }
 
 bool RendererD3D11::initialize(int window_width, int window_height, const FrameMap& frame) {
@@ -682,7 +684,12 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
         HRESULT hr = S_OK;
         {
             const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Present);
-            hr = swap_chain_->Present(vsync, flags);
+            if (loss_asked_) {
+                loss_asked_ = false;  // lose_device: as the driver reports a removed device
+                hr = DXGI_ERROR_DEVICE_REMOVED;
+            } else {
+                hr = swap_chain_->Present(vsync, flags);
+            }
         }
         if (timeline_present) {
             galaxy::timeline::record(galaxy::timeline::Event::PresentEnd, timeline_present_ordinal);

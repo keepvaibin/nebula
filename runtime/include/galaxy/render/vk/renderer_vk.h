@@ -269,7 +269,7 @@ public:
     [[nodiscard]] bool occluded() const noexcept { return false; }
     void probe_occlusion() noexcept {}
 
-    // Test only (GALAXY_TEST_DEVICE_LOST): the next submission reports a lost device (vk::Context::simulate_device_loss).
+    // An extension's lose_gpu_device: the next submission reports a lost device (vk::Context::simulate_device_loss).
     void lose_device();
     void begin_frame();
     // D3D12 waits for its swap chain's frame latency here (a frame begun without a present that presents after all);

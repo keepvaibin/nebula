@@ -7,6 +7,7 @@
 #include "galaxy/content_viewport.h"
 #include "galaxy/display_aspect.h"
 #include "galaxy/launch_args.h"
+#include "galaxy/whole_lines.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/texture_store.h"
@@ -44,7 +45,7 @@ unsigned vendor_of(const std::string& name) {
 }  // namespace
 
 void RendererMtl::lose_device() {
-    std::cerr << "[Renderer] Metal has no device loss to rehearse\n";
+    mtl::Context::get().simulate_device_loss();
 }
 
 bool RendererMtl::initialize(int window_width, int window_height, const FrameMap& frame) {
@@ -845,23 +846,25 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
                          gpu_window_.ms / frames, gpu_window_.max_ms, static_cast<double>(gpu_window_.passes) / gpu_window_.recorded,
                          static_cast<double>(gpu_window_.copies) / gpu_window_.recorded, scene_extent_.width, scene_extent_.height, layer_.width,
                          layer_.height);
-            std::fprintf(stderr, "[metal-gpu] scene target opened a frame (closed by > opened by):");
+            galaxy::whole_lines::Line line;
+            line.add("[metal-gpu] scene target opened a frame (closed by > opened by):");
             for (const GpuWindow::Open& open : gpu_window_.opens) {
                 if (open.count != 0u) {
-                    std::fprintf(stderr, " %s > %s%s %.2f;", open.closed, open.opened, open.cleared ? " (clear)" : "",
-                                 static_cast<double>(open.count) / gpu_window_.recorded);
+                    line.add(" %s > %s%s %.2f;", open.closed, open.opened, open.cleared ? " (clear)" : "",
+                             static_cast<double>(open.count) / gpu_window_.recorded);
                 }
             }
-            std::fprintf(stderr, "\n");
+            line.write(stderr);
         }
         if (pass_window_frames_ != 0u) {
-            std::fprintf(stderr, "[metal-gpu] passes, ms a frame:");
+            galaxy::whole_lines::Line line;
+            line.add("[metal-gpu] passes, ms a frame:");
             for (std::size_t pass = 0u; pass < pass_window_ms_.size(); ++pass) {
                 if (pass_window_ms_[pass] > 0.0) {
-                    std::fprintf(stderr, " %s=%.3f", kPassTimeNames[pass], pass_window_ms_[pass] / pass_window_frames_);
+                    line.add(" %s=%.3f", kPassTimeNames[pass], pass_window_ms_[pass] / pass_window_frames_);
                 }
             }
-            std::fprintf(stderr, "\n");
+            line.write(stderr);
         }
         {
             std::uint64_t compiled[5]{};
