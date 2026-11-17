@@ -76,7 +76,7 @@
       "absent": true
     },
     {
-      "log": "needs-call: MarioAccess::validateSensor void\\(\\) was not called: it needs MarioHolder, which the game does not have now\\."
+      "log": "needs-call: MarioAccess::validateSensor void\\(\\) was not called: it needs MarioActor, which the game does not have now\\."
     },
     {
       "no_log": "needs-call: MR::getPlayerPos "
