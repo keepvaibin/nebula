@@ -230,7 +230,8 @@ def scripts(g, paths, extra=()):
 # The harness's own tests (the runner and the host half, without the game).
 HARNESS_SELF = sorted([*(TREE / "tools" / "lumacore").glob("harness_*_test.py"),
                        *(TREE / "tools" / "lumacore" / "tests").glob("harness_*_test.py"),
-                       *(TREE / "tools" / "test_driver" / "tests").glob("*_test.py")])
+                       *(TREE / "tools" / "test_driver" / "tests").glob("*_test.py"),
+                       *(TREE / "tools" / "gate" / "tests").glob("*_test.py")])
 # The game description's tools on their fixtures, with the game build's compile commands.
 DESCRIPTION_SELF = sorted((TREE / "tools" / "lumacore").glob("*_fixture_test.py"))
 
@@ -250,6 +251,22 @@ def harness(g, suite, renderer, label):
                 shutil.rmtree(d, ignore_errors=True)
         detail = summarize(log, renderer)
         return code == 0 and not detail.startswith("0 of 0") and "; not:" not in detail, detail
+    return fn
+
+
+def pictures(g, label, renderer):
+    """The pictures a harness suite's runs took against the approved ones (tools/gate/pictures.py, tolerance none).
+    --full also fails on an approved picture its runs did not take."""
+    def fn(log):
+        work = g.work / ("runs-%s-%s" % (label, renderer))
+        code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools" / "gate" / "pictures.py", "check", "--runs", work,
+                    "--renderer", renderer] + (["--complete"] if g.args.mode == "full" else []), log, cwd=TREE)
+        lines = pathlib.Path(log).read_text(encoding="utf-8", errors="replace").splitlines()
+        summary = next((l for l in reversed(lines) if l.startswith("pictures: ")), "no summary")
+        others = [l.split()[0] + " " + l.split()[1] for l in lines if l.split() and l.split()[0] in ("changed", "new", "missing", "machine")]
+        review = next((l for l in lines if l.startswith("review: ")), "")
+        detail = summary[len("pictures: "):] + ("; not: " + ", ".join(others[:8]) + (" ..." if len(others) > 8 else "") if others else "")
+        return code == 0, detail + ("; " + review if review else "")
     return fn
 
 
@@ -337,15 +354,18 @@ def main():
     # The engine's own tests (tests/engine): start, device loss, window shapes and sizes, stage loads, save files.
     for r in renderers:
         g.check("engine/%s" % r, harness(g, TREE / "tests" / "engine" / "suite.json", r, "engine"))
+        g.check("pictures/engine/%s" % r, pictures(g, "engine", r))
 
     stops = QUICK_STOPS if args.mode == "quick" else None
     tour = gate_tour.write(g.work / "tour", stops)
     for r in renderers:
         g.check("tour/%s" % r, harness(g, tour, r, "tour"))
+        g.check("pictures/tour/%s" % r, pictures(g, "tour", r))
     region_stops = QUICK_REGION_STOPS if args.mode == "quick" else None
     for disc in REGION_DISCS:
         region = gate_tour.write(g.work / ("tour-%s" % disc), region_stops, disc)
         g.check("tour-%s/d3d12" % disc, harness(g, region, "d3d12", "tour-%s" % disc))
+        g.check("pictures/tour-%s/d3d12" % disc, pictures(g, "tour-%s" % disc, "d3d12"))
 
     if args.mode == "full":
         for name, why in (
@@ -356,7 +376,6 @@ def main():
             ("unit/android", "runs in the push workflow only: JUnit is not on this computer (board ask, E0.4)"),
             ("mods/android", "the Android runner is not in the gate yet (E0.13)"),
             ("tour/tablet", "the Android runner is not in the gate yet (E0.13)"),
-            ("pictures", "approved pictures not in the gate yet (E0.7)"),
             ("replays", "the step-hash replay not in the gate yet (E0.10)"),
             ("hostile-files", "the bad-file corpus is not in the gate yet (mods M6)"),
             ("two-mods", "the two-mod tests are not in the gate yet (mods M2)"),
