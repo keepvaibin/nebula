@@ -284,6 +284,7 @@
     "kit.player.character": "kit.player.character conformance: a character defined, chosen and played; a second player made and removed (lumakit 2.3)",
     "kit.player.form": "kit.player.form conformance: a form defined, taken, timed, ended, and exclusive with the game's forms (lumakit 2.1)",
     "kit.player.state": "kit.player.state conformance: a mod's move entered, run and left; tuning applied and ended (lumakit 2.2)",
+    "kit.safe_any_time": "LumaKit's calls that read the running game (camera, pointer, items, shop, cutscene) return at any time, the boot frames too, with no scene, player or camera: none ends the game",
     "kit.pointer": "kit.pointer conformance: where the pointer points on screen and in the world, a mod's throw and its cost (lumakit 2.22)",
     "kit.progress": "kit.progress conformance: stars, flags and numbers of a mod kept on the save file and read back (lumakit 2.17)",
     "kit.projectile": "kit.projectile conformance: a shot thrown, bouncing, hitting, bursting and ending (lumakit 2.5)",

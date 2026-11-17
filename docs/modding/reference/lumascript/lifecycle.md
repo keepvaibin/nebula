@@ -48,6 +48,10 @@ on layers -> list<text> { return [] }           // which `when.code` layers are 
   says so once. Code that needs the running game (its objects, its scene, the player) belongs in `on stage`, or in a
   hook on the game function that makes the thing it needs.
 
+- A call to a game function whose scene objects do not exist yet is not made: it returns its type's empty value
+  (0, `none`, an empty record) and the mod log says `Call.NotNow` once, naming the function and what it needs. LumaKit
+  is safe at any time for the same reason: in the boot frames and the title screen its calls return empty values.
+
 - Content of the mod is named by its path in `layers/` or its key, checked when building against the mod's own
   files and resolved when the mod loads: `model "GoldBall"`, `effect "Burst"`, `sound "Throw"`,
   `layout "Timer"`, `text "Timer.Title"`, `font "Lyrics"`, `movie "Trailer"`, `data "lyrics.json"` (a data file of

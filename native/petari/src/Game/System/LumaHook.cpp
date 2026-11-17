@@ -384,6 +384,16 @@ namespace luma {
 
     void (*gNotNow)(const Function* pFunction, const char* pNeed) = nullptr;
 
+    namespace {
+        // A refused call's reference result (luma_hook.h emptyObject): zero-initialized, so no runtime init.
+        alignas(64) thread_local unsigned char tEmpty[kEmptyBytes];
+    }  // namespace
+
+    void* emptyObject() {
+        __builtin_memset(tEmpty, 0, sizeof(tEmpty));
+        return tEmpty;
+    }
+
     bool present(const Function* pFunction, unsigned short needs) {
         // Only a mod's call is checked: the host and the harness call rows too (GameSystem::update each frame), and
         // they call each one where the game does.

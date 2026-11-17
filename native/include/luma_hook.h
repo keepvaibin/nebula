@@ -115,11 +115,20 @@ namespace luma {
             return static_cast<R&&>(*p);
         }
     };
+    // A refused call's reference result (Result<R&>::none): an object of zero bytes, this thread's, zeroed again for
+    // each refused call, so reading it gives zeros and writing it touches nothing of the game's. kEmptyBytes: its size.
+    enum : unsigned long { kEmptyBytes = 4096 };
+    void* emptyObject();
+    template <class T, class = void> struct ObjectBytes { static constexpr unsigned long kBytes = 0; };  // incomplete
+    template <class T> struct ObjectBytes<T, decltype(void(sizeof(T)))> { static constexpr unsigned long kBytes = sizeof(T); };
+
     template <class R> struct Result<R&> {
         static constexpr unsigned kKind = kReference;
+        static_assert(ObjectBytes<R>::kBytes <= kEmptyBytes, "a refused call's empty object is too small for this type");
         R* p = nullptr;
         template <class F> static void put(void* r, F&& f) { *static_cast<R**>(r) = &f(); }
-        static void none(void* r) { *static_cast<R**>(r) = nullptr; }
+        // Never null: the caller reads through a reference with no test (LumaKit's camera.now reads getCameraWatchPos).
+        static void none(void* r) { *static_cast<R**>(r) = static_cast<R*>(::luma::emptyObject()); }
         R& take() { return *p; }
     };
     template <> struct Result<void> {
