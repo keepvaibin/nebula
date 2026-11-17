@@ -41,6 +41,7 @@
 #include "render/core/gpu_encoder.h"
 #include "render/core/draw_record.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/present_slots.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/mod_post.h"
@@ -648,6 +649,10 @@ public:
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     // The display's vblanks (host_window::vblank_grid): the latest and the interval, on galaxy::qpc_now()'s clock.
     [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept;
+    // What the swap chain keeps of the pictures presented (present_slots.h): every one with VSync; VSync off tears here.
+    [[nodiscard]] SwapQueue swap_queue() const noexcept {
+        return get_render_config().vsync_interval != 0u ? SwapQueue::EveryPicture : SwapQueue::Tearing;
+    }
     // The moment the next present shows (RenderCore's interpolation slots): this API has no presentation times, so
     // the presents pace themselves (PresentPacer, the swap chain's vblanks).
     void set_present_moment(std::int64_t) noexcept {}

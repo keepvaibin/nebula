@@ -15,6 +15,30 @@
 
 namespace galaxy::render {
 
+// What a swap chain keeps of the pictures presented to it. Every renderer names its own (swap_queue()) and follows the
+// two rules below from it; present_slots_tests.cpp shows each on a simulated display.
+enum class SwapQueue : std::uint8_t {
+    EveryPicture,   // every picture is shown, in order, each from a refresh on (FIFO: VSync)
+    NewestPicture,  // one picture waits and the next present replaces it; shown whole from a refresh on (MAILBOX: VSync
+                    // off where the surface cannot tear, as on Android)
+    Tearing,        // shown at once, part way down a refresh (IMMEDIATE, ALLOW_TEARING: VSync off)
+};
+
+// Presentation times (a slot each picture waits for) only where the queue keeps every picture. Where it keeps the newest
+// alone, a picture waiting for a slot ahead is replaced by the next present: pictures thrown away, the depth raised for
+// the misses, more thrown away, down to a few shown a second and pauses of seconds.
+[[nodiscard]] constexpr bool presents_timed(SwapQueue queue) noexcept {
+    return queue == SwapQueue::EveryPicture;
+}
+
+// Interpolated pictures on the display's refreshes wherever every picture shows whole from a refresh on. A slot clock
+// of its own beats against the refreshes there: two pictures in one refresh (one never seen), then a refresh shown
+// twice, over and over. Only a tearing queue shows a picture between refreshes, so only there is a clock of its own
+// worth anything.
+[[nodiscard]] constexpr bool pictures_on_refreshes(SwapQueue queue) noexcept {
+    return queue != SwapQueue::Tearing;
+}
+
 // What a present is timed by, every time on CLOCK_MONOTONIC nanoseconds.
 struct PresentClock {
     bool by_moment = false;        // `moment` given: a picture timed by its moment on the vsync grid

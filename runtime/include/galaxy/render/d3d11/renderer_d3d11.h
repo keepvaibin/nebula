@@ -29,6 +29,7 @@
 #include "galaxy/render/mod_post.h"
 #include "galaxy/render/post_process_settings.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/present_slots.h"
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/rt/rt_backend.h"
 #include "galaxy/render/rt/rt_denoiser.h"
@@ -308,6 +309,10 @@ public:
     [[nodiscard]] void* pipeline_backend() noexcept { return this; }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept;
+    // What the swap chain keeps of the pictures presented (present_slots.h): every one with VSync; VSync off tears here.
+    [[nodiscard]] SwapQueue swap_queue() const noexcept {
+        return get_render_config().vsync_interval != 0u ? SwapQueue::EveryPicture : SwapQueue::Tearing;
+    }
     // The moment the next present shows (RenderCore's interpolation slots): this API has no presentation times, so
     // the presents pace themselves (PresentPacer, the swap chain's vblanks).
     void set_present_moment(std::int64_t) noexcept {}

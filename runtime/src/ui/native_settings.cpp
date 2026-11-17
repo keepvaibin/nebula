@@ -308,8 +308,9 @@ bool row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
         "POST-PROCESS", "RAY TRACING HARDWARE", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
 #if defined(__ANDROID__)
-        // MONITOR, DISPLAY MODE and RESOLUTION: the display page has none on a phone (fullscreen_only).
-        "REFRESH RATE", "VSYNC", "DISCORD STATUS",
+        // MONITOR, DISPLAY MODE and RESOLUTION: the display page has none on a phone (fullscreen_only). VSYNC stays: off,
+        // the swap chain keeps only the newest picture (mailbox) and runs uncapped; on, it shows every picture.
+        "REFRESH RATE", "DISCORD STATUS",
 #endif
     };
     for (const char* hidden : kHidden) {
