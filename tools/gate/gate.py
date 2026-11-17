@@ -369,9 +369,9 @@ def main():
     mode.add_argument("--full", dest="mode", action="store_const", const="full")
     p.add_argument("--build-root", default=os.environ.get("NEBULA_GATE_BUILD", "D:/NebulaWork/build/gate-%s" % TREE.name),
                    help="where the builds go (kept between runs, so builds are incremental)")
-    p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", "D:/NebulaWork/build/all1-pak-34/game.pak"))
+    p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", "D:/NebulaWork/build/all1-pak-35/game.pak"))
     p.add_argument("--paks", default=os.environ.get("NEBULA_GATE_PAKS", os.pathsep.join((
-                   "RMGP01=D:/NebulaWork/build/a2-pak-pal/game.pak", "RMGJ01=D:/NebulaWork/build/a2-pak-jp/game.pak"))),
+                   "RMGP01=D:/NebulaWork/build/a1-pak-pal-35/game.pak", "RMGJ01=D:/NebulaWork/build/a1-pak-jp-35/game.pak"))),
                    help="the other discs' game.paks, DISC=path joined by the path separator: the tests with a \"disc\"")
     p.add_argument("--work", default=os.environ.get("NEBULA_GATE_WORK", "D:/NebulaWork/build/gate-runs"))
     p.add_argument("--out", help="the result file (default: result.json in the run's work folder)")
