@@ -1,0 +1,6 @@
+{
+  "harness": 1,
+  "tests": [
+    "3301-c-alone-hook"
+  ]
+}
