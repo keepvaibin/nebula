@@ -9,8 +9,15 @@
 
 It writes one result (JSON and text, side by side) and exits 1 when any check failed, 0 when all passed, 2 when it
 could not start (bad options, a lock held). Checks run one after another; each records its time and its log.
+
+--full runs one at a time on this computer (the board's gate rule of 2026-11-17 13:06): it takes the gate lock
+(--gate-lock, a folder, as measure.lock and tablet.lock are) before its first check and frees it when it ends, with a
+board line for each (--board, --who). While another holds the lock it refuses, or waits --wait minutes for it; a lock
+whose holder's process has ended is taken over and the board says so. Before the lock it needs a quick gate of the same
+commit whose build, unit, start and engine checks passed (--without-quick says it ran without one).
 """
 import argparse
+import ctypes
 import datetime
 import json
 import os
@@ -41,6 +48,9 @@ QUICK_STOPS = [
 REGION_DISCS = ("RMGP01", "RMGJ01")
 QUICK_REGION_STOPS = ["HoneyBeeKingdomGalaxy 1", "OceanPhantomCaveGalaxy 4"]
 RENDERERS = ("d3d12", "vulkan", "d3d11")
+# The checks of a quick gate that a full gate of the same commit needs passed first: the build, the pak and the flags
+# are right before hours are spent.
+QUICK_FIRST = ("build/windows", "unit/windows", "start/d3d12", "engine/d3d12")
 
 
 class Gate:
@@ -351,6 +361,90 @@ def device_step(g, step):
     return fn
 
 
+def process_alive(pid):
+    """Whether a process of this id runs (Windows: OpenProcess and its exit code; elsewhere signal 0)."""
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+    kernel = ctypes.windll.kernel32
+    handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return ctypes.GetLastError() == 5  # access denied: it runs, as another user
+    try:
+        code = ctypes.c_ulong()
+        return bool(kernel.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def lock_holder(lock):
+    """(text, pid) of a held lock folder: its holder.txt, and the process id it names (pid N), None when none."""
+    holder = pathlib.Path(lock) / "holder.txt"
+    text = holder.read_text(encoding="utf-8", errors="replace").strip() if holder.exists() else "unknown"
+    words = text.split()
+    pid = next((int(words[i + 1]) for i, w in enumerate(words[:-1]) if w == "pid" and words[i + 1].isdigit()), None)
+    return text, pid
+
+
+def board_line(board, text):
+    if board:
+        with open(board, "a", encoding="utf-8") as f:
+            f.write("%s %s\n" % (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), text))
+
+
+def take_gate_lock(path, holder, wait_minutes, board, who, alive=process_alive, sleep=time.sleep, poll=30.0):
+    """Takes the gate lock for `holder` (a line naming the run, with "pid N"): None when taken, else why not. Waits
+    up to wait_minutes while another holds it; a holder whose process has ended loses it, and the board says so."""
+    lock = pathlib.Path(path)
+    deadline = time.time() + 60.0 * wait_minutes
+    said_waiting = False
+    while True:
+        try:
+            lock.mkdir()
+        except FileExistsError:
+            text, pid = lock_holder(lock)
+            if pid is not None and not alive(pid):
+                board_line(board, "%s NOTICE: the gate lock held by a process that has ended (%s) is taken over." % (who, text))
+                shutil.rmtree(lock, ignore_errors=True)
+                continue
+            if time.time() >= deadline:
+                return "the gate lock %s is held: %s" % (lock, text)
+            if not said_waiting:
+                print("gate.py: the gate lock is held (%s); waiting up to %g minutes" % (text, wait_minutes), flush=True)
+                said_waiting = True
+            sleep(poll)
+            continue
+        (lock / "holder.txt").write_text("%s %s\n" % (holder, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                                         encoding="utf-8")
+        board_line(board, "%s LOCK: gate.lock taken by gate.py: %s." % (who, holder))
+        return None
+
+
+def free_gate_lock(path, holder, board, who, summary):
+    """Frees the gate lock when this run holds it (its holder line is this run's), with the run's summary."""
+    text, _ = lock_holder(path)
+    if text.startswith(holder):
+        shutil.rmtree(path, ignore_errors=True)
+        board_line(board, "%s FREE: gate.lock freed by gate.py: %s; %s." % (who, holder, summary))
+
+
+def quick_passed(work, commit):
+    """The newest quick gate of this commit in the work folder whose QUICK_FIRST checks all passed, else None."""
+    for folder in sorted(pathlib.Path(work).glob("*-%s-quick" % commit), reverse=True):
+        try:
+            rows = {r["check"]: r["passed"] for r in json.loads((folder / "result.json").read_text(encoding="utf-8"))["checks"]}
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+        if all(rows.get(c) for c in QUICK_FIRST):
+            return folder
+    return None
+
+
 def take_device_lock(path, who):
     """The device's lock (tools/lumacore/luma_test_android.py's): None when taken, else who holds it."""
     lock = pathlib.Path(path)
@@ -445,8 +539,42 @@ def main():
     p.add_argument("--tablet-lock", default=os.environ.get("NEBULA_GATE_TABLET_LOCK", "D:/NebulaWork/plan/tablet.lock"))
     p.add_argument("--android-deps", default=os.environ.get("NEBULA_GATE_ANDROID_DEPS", "D:/NebulaWork/deps"),
                    help="build_apk.ps1 -Deps: SDL, Vulkan-Headers, volk, VMA and glslang's sources")
+    p.add_argument("--gate-lock", default=os.environ.get("NEBULA_GATE_LOCK", "D:/NebulaWork/plan/gate.lock"),
+                   help="--full: the lock one full gate at a time holds")
+    p.add_argument("--wait", type=float, default=0.0, help="--full: minutes to wait for a held gate lock (0: refuse)")
+    p.add_argument("--board", default=os.environ.get("NEBULA_GATE_BOARD", "D:/NebulaWork/plan/BOARD.md"),
+                   help="--full: the board the lock's lines go to ('' for none)")
+    p.add_argument("--who", default=os.environ.get("NEBULA_GATE_WHO", "gate.py"), help="who runs it, for the board")
+    p.add_argument("--covers", default="", help="--full: what the run answers for (commits, packages), for the board")
+    p.add_argument("--without-quick", action="store_true",
+                   help="--full: run without a passed quick gate of the same commit (the result says so)")
     args = p.parse_args()
 
+    if args.mode != "full":
+        return run_checks(args)
+    commit = git("rev-parse", "--short", "HEAD")
+    quick = quick_passed(args.work, commit)
+    if quick is None and not args.without_quick:
+        print("gate.py: no quick gate of %s passed %s in %s: run --quick first (or --without-quick)" % (
+            commit, ", ".join(QUICK_FIRST), args.work), file=sys.stderr)
+        return 2
+    holder = "full gate of %s@%s pid %d%s%s" % (TREE.name, commit, os.getpid(),
+                                               ("; covers " + args.covers) if args.covers else "",
+                                               "; quick gate " + quick.name if quick else "; WITHOUT a quick gate")
+    held = take_gate_lock(args.gate_lock, holder, args.wait, args.board, args.who)
+    if held is not None:
+        print("gate.py: %s" % held, file=sys.stderr)
+        return 2
+    code, summary = 2, "it ended before writing a result"
+    try:
+        code = run_checks(args)
+        summary = "all checks passed" if code == 0 else "checks failed (exit %d)" % code
+    finally:
+        free_gate_lock(args.gate_lock, holder, args.board, args.who, summary)
+    return code
+
+
+def run_checks(args):
     g = Gate(args)
     g.bin = str(pathlib.Path(args.build_root) / "bins")
     renderers = ("d3d12",) if args.mode == "quick" else RENDERERS
