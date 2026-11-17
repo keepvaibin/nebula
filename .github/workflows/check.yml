@@ -20,6 +20,8 @@ concurrency:
 env:
   LLVM_VERSION: '22.1.6'
   ANDROID_NDK: '28.2.13676358'
+  MESA_WIN_VERSION: '26.2.7'
+  VULKAN_LOADER_TAG: 'vulkan-sdk-1.4.363.0'
 
 jobs:
   windows:
@@ -51,11 +53,34 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       # Each program starts without game data (host_main.cpp run_start_check): its window and renderer on the runner's
       # software adapter, 300 frames drawn and shown. A crash, a renderer that does not start or no picture fails it.
-      - name: Start check (Direct3D 12 and Direct3D 11)
+      # The runner has no Vulkan driver: Mesa's software one (lavapipe, the Linux job's too) and the Khronos loader,
+      # both pinned, beside NebulaVk.exe only for this check.
+      - name: Vulkan on the CPU (Mesa lavapipe and the Vulkan loader)
+        shell: pwsh
+        run: |
+          . .\tools\enter_msvc_environment.ps1 | Out-Null
+          $t = Join-Path $env:RUNNER_TEMP 'vk'
+          New-Item -ItemType Directory -Force $t | Out-Null
+          curl.exe -fsSL --retry 3 -o "$t/mesa.7z" "https://github.com/pal1000/mesa-dist-win/releases/download/$env:MESA_WIN_VERSION/mesa3d-$env:MESA_WIN_VERSION-release-msvc.7z"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          7z x "$t/mesa.7z" "-o$t/mesa" x64 | Out-Null
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git clone -q --depth 1 -b $env:VULKAN_LOADER_TAG https://github.com/KhronosGroup/Vulkan-Loader "$t/loader-src"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake -S "$t/loader-src" -B "$t/loader" -G Ninja -DCMAKE_BUILD_TYPE=Release -DUPDATE_DEPS=ON -DBUILD_TESTS=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build "$t/loader"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $dll = Get-ChildItem -Recurse "$t/loader" -Filter vulkan-1.dll | Select-Object -First 1
+          if (-not $dll) { Write-Output "the loader build made no vulkan-1.dll"; exit 1 }
+          Copy-Item $dll.FullName (Join-Path $env:RUNNER_TEMP 'host')
+          $icd = (Resolve-Path "$t/mesa/x64/lvp_icd.x86_64.json").Path
+          "VK_DRIVER_FILES=$icd" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Start check (Direct3D 12, Vulkan and Direct3D 11)
         shell: pwsh
         run: |
           $build = Join-Path $env:RUNNER_TEMP 'host'
-          foreach ($exe in 'Nebula', 'NebulaD11') {
+          foreach ($exe in 'Nebula', 'NebulaVk', 'NebulaD11') {
             $d = Join-Path $env:RUNNER_TEMP "start-$exe"
             New-Item -ItemType Directory -Force "$d/data", "$d/settings" | Out-Null
             $p = Start-Process (Join-Path $build "$exe.exe") -WindowStyle Hidden -PassThru `
