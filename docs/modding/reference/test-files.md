@@ -151,7 +151,7 @@ Each step has `at` (a frame) or `after` (a condition), and exactly one action. S
 { "after": { "log": "boss defeated" }, "end": true }
 ```
 
-A fact condition takes any check from [Fact checks](#fact-checks). With `"when": "next"`, only a value written after the wait began counts. `timeout` is in frames, 600 by default. A condition that does not hold in time fails the test and names the step.
+A fact condition takes any check from [Fact checks](#fact-checks) except `far`. With `"when": "next"`, only a value written after the wait began counts. `timeout` is in frames, 600 by default. A condition that does not hold in time fails the test and names the step.
 
 ### Actions
 
@@ -236,14 +236,18 @@ The runner checks `expect` after the run, from the files the run left.
 | `is_not` | Does not equal VALUE. |
 | `less`, `at_most`, `more`, `at_least` | Compares with the number VALUE. |
 | `near` | Is within `within` of VALUE: a number, or `[x, y, z]` by distance. |
+| `far` | Is more than `beyond` from VALUE: a number, or `[x, y, z]` by distance. Not in `after`. |
 | `has` | Is an object that holds every key of VALUE with the same value. |
 | `exists` | Was written at all (VALUE is `true`). |
 | `absent` | Was never written (VALUE is `true`). |
 | `count` | Was written exactly VALUE times. |
 
+For `near` and `far`, a value that is not a number or `[x, y, z]` is neither near nor far, so the check fails.
+
 | Key | Description |
 |---|---|
 | `when` | `last` (the default), `first`, `any` or `all` of the writes. Not used with `count`. |
+| `within`, `beyond` | The distance for `near` and for `far`. Each goes only with its own check. |
 | `frames` | Only writes from frame A to frame B count. |
 | `matching` | Only writes whose value holds this object count, as `has` reads it. |
 | `field` | Reads one member of each write's object, as a dotted path such as `"at.x"`. |
