@@ -11,7 +11,7 @@ A mod's code is LumaScript, and it can also include C or C++ files. Use C when y
 
 LumaLink compiles your C into the same library as the mod's LumaScript, for every platform the mod lists. Nothing is interpreted while the game runs.
 
-A mod can't be C alone. It needs at least one `.lum` file, which starts the C code. For more information on LumaScript, see [About LumaScript](../concepts/lumascript.md).
+A mod can also be C alone, with no `.lum` file. Its C then declares the mod's entry with `LUMA_MOD` from `luma.h`: what it asks the game for, and its start and stop functions. For more information, see [Writing a mod in C alone](#writing-a-mod-in-c-alone). For more information on LumaScript, see [About LumaScript](../concepts/lumascript.md).
 
 ## Prerequisites
 
@@ -187,6 +187,41 @@ To find a function's name and signature, look in the game description. For more 
 
 In LumaScript, `before`, `after` and `wrap` hook the game's functions with less code. Use C hooks when the rest of the work is in C.
 
+## Writing a mod in C alone
+
+A mod needs no LumaScript. Its C declares the mod's entry with `LUMA_MOD(imports, start, stop)` from `luma.h`:
+
+* `imports` lists what the mod asks the game for by name: functions, fields, hooks and services. The game fills each before `start` runs. A name the game doesn't have stops the mod from loading, and the **Mods** page names it.
+* `start` runs when the mod starts. Return 0, or non-zero to stop the mod.
+* `stop` runs when the mod stops, or is 0.
+
+This mod doubles every star bit Mario collects, with no `.lum` file:
+
+```c
+#include <luma.h>
+
+/* Runs before the game adds star bits, and doubles how many. */
+static int32_t more_bits(LumaCall* call, void* user) {
+    (void)user;
+    int* count = (int*)call->args[1];
+    *count *= 2;
+    return 0;
+}
+
+static int32_t start(const LumaCore* core, const LumaMod* mod) {
+    core->log(mod, "double-bits: on");
+    return 0;
+}
+
+static const LumaImport imports[] = {
+    LUMA_HOOK_ON("GameDataFunction::addStockedStarPiece", "void(int)", LUMA_BEFORE, more_bits),
+};
+
+LUMA_MOD(imports, start, 0);
+```
+
+A mod that asks for nothing by name uses `LUMA_MOD_NO_IMPORTS(start, stop)`. For every kind of import, see [LumaCore C API](../reference/lumacore-c-api.md).
+
 ## Building and checking
 
 ```shell
@@ -202,7 +237,7 @@ lumalink check double-bits
 
 | Message | What to do |
 |---|---|
-| ... has no LumaScript: no source/**/*.lum | Add a `.lum` file that calls your C. |
+| ... has no code: no .lum, .c or .cpp file in source/ | Put the mod's `.lum`, `.c` or `.cpp` files in `source`. |
 | The compiler's own error, with a file and line | Fix the C. |
 | A type that can't cross | Use a type from the table in [Calling C from LumaScript](#calling-c-from-lumascript). |
 
