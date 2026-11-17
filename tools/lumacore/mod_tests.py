@@ -341,6 +341,7 @@ def main():
                         help="a path (or LUMA_TEST_WAIT_WHILE): no suite starts while it exists (another's measuring lock)")
     parser.add_argument("--lumalink-cache", default=os.environ.get("LUMALINK_CACHE", "lumalink-pin"),
                         help="the pinned LumaLink's checkout and build when LUMALINK is not given (or LUMALINK_CACHE)")
+    parser.add_argument("--commit", help="the commit the results are recorded under (default: the tree's HEAD)")
     args = parser.parse_args()
     lumalink = os.environ.get("LUMALINK")
     if not lumalink:
@@ -353,8 +354,9 @@ def main():
     work.mkdir(parents=True, exist_ok=True)
     args.bin = str(pathlib.Path(args.bin).resolve())
     args.lock = args.lock or str(work / "run.lock")
-    r = subprocess.run(["git", "-C", str(TREE), "rev-parse", "--short=9", "HEAD"], capture_output=True, text=True)
-    args.commit = r.stdout.strip() or "unknown"
+    if not args.commit:
+        r = subprocess.run(["git", "-C", str(TREE), "rev-parse", "--short=9", "HEAD"], capture_output=True, text=True)
+        args.commit = r.stdout.strip() or "unknown"
     if not args.pak and (pathlib.Path(args.bin) / "pak.path").exists():
         args.pak = (pathlib.Path(args.bin) / "pak.path").read_text(encoding="utf-8").strip()
     if args.pak:
