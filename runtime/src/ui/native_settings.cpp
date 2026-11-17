@@ -5801,6 +5801,16 @@ void open_native_settings(unsigned page) {
     set_native_settings_visible(true);
 }
 
+bool open_native_settings_for_waiting_code() {
+    {
+        const std::lock_guard<std::mutex> lock(s_mods_mutex);
+        (void)mods_list();
+        if (first_code_to_allow_locked() == nullptr) return false;
+    }
+    open_native_settings(kModsTab);
+    return true;
+}
+
 void open_native_settings_results(const std::filesystem::path& result) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     open_native_settings(kSystemTab);

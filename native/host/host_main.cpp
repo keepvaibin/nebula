@@ -2111,6 +2111,14 @@ void svc_presence(void*, const uint16_t* galaxy, const uint16_t* star, int32_t p
             if (!reached) {
                 reached = true;
                 boot_mark("title screen");
+#if defined(NEBULA_HOST_RENDERER)
+                // A mod on with code the player hasn't answered for (imported outside the game): its question now,
+                // rather than its code staying off with nothing said. Never in a test's hidden start.
+                if (!::galaxy::launch_args().started_hidden && !deterministic_mode() &&
+                    galaxy::render::host_window::open_native_settings_for_waiting_code()) {
+                    log_line("mods:", "a mod's code waits for the player's answer: the Mods page asks");
+                }
+#endif
             }
         } else if (activity.state.empty()) {
             activity.state = std::to_string(power_stars) + (power_stars == 1 ? " Power Star" : " Power Stars");

@@ -93,6 +93,10 @@ void set_state_wake(void* event) noexcept;
 void native_settings_present();
 // Opens the settings menu on that page (a tab's number), its first row chosen.
 void open_native_settings(unsigned page);
+// The settings menu on MODS, whose question then asks about the first mod that is on with code the player hasn't
+// answered for (one imported outside the game: Android's launcher, the mods folder). False, and nothing opens, when
+// none waits.
+bool open_native_settings_for_waiting_code();
 // The settings menu on SYSTEM with the benchmark's results window for `result` (a result file, or the results folder
 // for its newest): the start after a benchmark.
 void open_native_settings_results(const std::filesystem::path& result);
