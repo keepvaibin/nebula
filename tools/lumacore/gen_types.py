@@ -1560,8 +1560,13 @@ def merge_functions(folder, records, left_records):
 #              scene object read without MR::isExistSceneObj ("scene"), and every callee's needs
 #   needs_why  for each need, the first place that adds it: "file:line callee" (or the scene object)
 # A call through a virtual function adds the named row's needs only (each override keeps its own). The hand table
-# (tools/lumacore/needs.json) adds what the pass cannot see; a row it names that does not exist stops the build.
+# (tools/lumacore/needs.json) adds what the pass cannot see; a row it names that does not exist stops the build. Its
+# rows name one function (name, signature) or a class (class, except): each member function of the class but the
+# named ones (all their overloads; each must exist) gets the row's needs. Besides the scene objects and "scene", a
+# need may be one of the game system's objects (luma_hook.h; SYSTEM_NEEDS).
 NEEDS_TABLE = pathlib.Path(__file__).resolve().parent / "needs.json"
+SYSTEM_NEEDS = {"scene": "luma::kNeedScene", "UserFile": "luma::kNeedUserFile",
+                "CometScheduler": "luma::kNeedCometScheduler", "MarioActor": "luma::kNeedMarioActor"}
 
 
 def merge_needs(folder, functions, table_path):
@@ -1582,15 +1587,28 @@ def merge_needs(folder, functions, table_path):
         for e in entries:
             facts[(e["name"], e["signature"])] = (source, e)
     table = json.loads(pathlib.Path(table_path).read_text(encoding="utf-8")) if table_path is not None else {"rows": []}
-    added = {}
+    added = []  # (key, row)
     for row in table.get("rows", []):
+        if "class" in row:
+            prefix = row["class"] + "::"
+            members = [k for k in by_key if k[0].startswith(prefix) and "::" not in k[0][len(prefix):]]
+            names = {k[0][len(prefix):] for k in members}
+            if not members:
+                wrong.append("needs.json: class %s has no function rows" % row["class"])
+            for name in row.get("except", []):
+                if name not in names:
+                    wrong.append("needs.json: class %s has no function %s" % (row["class"], name))
+            if not row.get("why"):
+                wrong.append("needs.json: class %s has no why" % row["class"])
+            added += [(k, row) for k in members if k[0][len(prefix):] not in row.get("except", [])]
+            continue
         key = (row["name"], row["signature"])
         if key not in by_key:
             wrong.append("needs.json: %s %s is no function row" % key)
             continue
         if not row.get("why"):
             wrong.append("needs.json: %s %s has no why" % key)
-        added[key] = row
+        added.append((key, row))
     if wrong:
         return wrong
 
@@ -1632,7 +1650,7 @@ def merge_needs(folder, functions, table_path):
                 needs[key].setdefault(r["id"], why)
             if not r["checked"]:
                 needs[key].setdefault("scene", why)
-    for key, row in added.items():
+    for key, row in added:
         for need in row.get("needs", []):
             needs[key].setdefault(need, "needs.json: " + row["why"])
         for need in row.get("null_when", []):
@@ -1689,7 +1707,7 @@ def needs_rows(functions):
     for f in functions:
         if not f.get("needs"):
             continue
-        ids = ", ".join("luma::kNeedScene" if n == "scene" else "SceneObj_" + n for n in f["needs"])
+        ids = ", ".join(SYSTEM_NEEDS.get(n, "SceneObj_" + n) for n in f["needs"])
         lines.append("const unsigned char kNd%d[] = {%s, luma::kNeedsEnd};" % (count, ids))
         names = "".join(n + "\\0" for n in f["needs"])
         lines.append('LUMA_NEEDS_SECTION const luma::NeedsRow kNr%d = {%s, %s, kNd%d, "%s"};' % (

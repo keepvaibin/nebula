@@ -29,10 +29,21 @@ namespace luma {
     static_assert(sizeof(Flag) == 4, "a flag is 4 bytes");
 
     // What a function needs (tools/lumacore/gen_types.py needs_rows, in the lumand section): its row's name and
-    // signature and the scene objects whose absence makes it fault: their SceneObj ids (0xFF: the scene's holder of
-    // them), ended by 0xFE, and their names in the same order, each ended by a NUL. 32 bytes aligned to 32, so a
+    // signature and the objects whose absence makes it fault: their SceneObj ids (below 0xF0), or one of the ids
+    // below, ended by 0xFE, and their names in the same order, each ended by a NUL. 32 bytes aligned to 32, so a
     // linker's pad between objects is whole records (with a null name).
-    enum : unsigned char { kNeedScene = 0xFF, kNeedsEnd = 0xFE };
+    //   kNeedScene           the scene's holder of the scene objects
+    //   kNeedUserFile        the save sequence's user files, windows and save icon (made once the system archive is
+    //                        loaded, some frames after a mod's start)
+    //   kNeedCometScheduler  the game sequence's comet scheduler (made then too)
+    //   kNeedMarioActor      the player's actor in the scene's MarioHolder (set some way into the scene's making)
+    enum : unsigned char {
+        kNeedScene = 0xFF,
+        kNeedsEnd = 0xFE,
+        kNeedUserFile = 0xFD,
+        kNeedCometScheduler = 0xFC,
+        kNeedMarioActor = 0xFB
+    };
     struct alignas(32) NeedsRow {
         const char* name;
         const char* signature;

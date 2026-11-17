@@ -61,3 +61,19 @@ NdObj* ndCounter() {
 int ndPlain(int x) {
     return x + 1;
 }
+
+// A class whose part is made after it: by the hand table's class row, its use needs the file; its making does not.
+NdFile::NdFile() : data(nullptr) {}
+
+void NdFile::init() {
+    data = new int(0);
+}
+
+int NdFile::use() {
+    return *data;
+}
+
+// A caller of the class's use: the same need.
+int ndCallsFile(NdFile* pFile) {
+    return pFile->use();
+}

@@ -1,11 +1,48 @@
 {
- "about": "What the needs pass (gen_types.py merge_needs) cannot see in a function's code, each with why. A need is a scene object by its SceneObj_ name without the prefix, or scene (the scene's holder of those objects). A row named here that is not a function row stops the build.",
+ "about": "What the needs pass (gen_types.py merge_needs) cannot see in a function's code, each with why. A need is a scene object by its SceneObj_ name without the prefix, scene (the scene's holder of those objects), or another object the game makes later than the scene's objects (UserFile, CometScheduler, MarioActor: luma_hook.h). A row names one function (name, signature) or a class (class, except: each member function but the named ones). A row that names no function stops the build.",
  "rows": [
   {
    "name": "MR::getSceneObjHolder",
    "signature": "SceneObjHolder *()",
-   "needs": ["scene"],
+   "needs": [
+    "scene"
+   ],
    "why": "it reads GameSystem's scene controller with no test (SceneObjHolder.cpp); the controller is null before the first scene"
+  },
+  {
+   "class": "SaveDataHandleSequence",
+   "except": [
+    "SaveDataHandleSequence",
+    "initAfterResourceLoaded"
+   ],
+   "needs": [
+    "UserFile"
+   ],
+   "why": "its user files, save handler, windows and save icon are made by initAfterResourceLoaded, once the system archive is loaded (some frames after a mod's start), and its functions use them with no test (SaveDataHandleSequence.cpp); GameDataFunction reaches the current file through getCurrentUserFile"
+  },
+  {
+   "name": "GameSequenceProgress::getGalaxyCometScheduler",
+   "signature": "GalaxyCometScheduler *()",
+   "null_when": [
+    "CometScheduler"
+   ],
+   "why": "it gives mGalaxyCometScheduler, null until GameSequenceProgress::initAfterResourceLoaded"
+  },
+  {
+   "name": "GameSequenceProgress::requestGalaxyMove",
+   "signature": "void(const GalaxyMoveArgument &)",
+   "needs": [
+    "CometScheduler"
+   ],
+   "why": "it calls mGalaxyCometScheduler->syncWithFlags() with no test (GameSequenceProgress.cpp)"
+  },
+  {
+   "name": "MarioHolder::getMarioActor",
+   "signature": "MarioActor *() const",
+   "null_when": [
+    "MarioActor"
+   ],
+   "why": "it gives mActor, null from the holder's making until MarioHolder::setMarioActor, some way into the scene's making (MarioActor::init)"
   }
  ]
 }

@@ -6,9 +6,11 @@ unit's flags (Game/System/LumaLoader.cpp's command):
   2. gen_types.py (--tree the fixture, --defined the copy's folder) writes luma_functions.json: each function's needs,
      null_when and makes are the expected ones exactly, and the module's needs rows (luma_types_table.cpp) name each
      function that needs something, with its needs in order, and no other;
-  3. a hand table (--needs) adds its needs to its row;
+  3. a hand table (--needs) adds its needs to its row, and a class row to each member function but the excepted
+     ones, to their callers, and to the needs rows as the game system's id (luma::kNeedUserFile);
   4. gen_types.py stops, naming the fault, on planted ones: a hand row that is no function, a hand row with no why,
-     a unit without .needs, a .needs that is not its .rows row for row.
+     a class with no functions, a class's except that is no function of it, a unit without .needs, a .needs that is
+     not its .rows row for row.
 Exit 0 only when all four hold.
 """
 import json
@@ -43,6 +45,18 @@ EXPECTED = {
     ("ndCallsMakes", "void()"): (["scene"], [], ["Made"]),
     ("ndCounter", "NdObj *()"): (["scene"], ["Counter"], []),
     ("ndPlain", "int(int)"): ([], [], []),
+    ("NdFile::NdFile", "()"): ([], [], []),
+    ("NdFile::init", "void()"): ([], [], []),
+    ("NdFile::use", "int()"): ([], [], []),
+    ("ndCallsFile", "int(NdFile *)"): ([], [], []),
+}
+# With the hand table of step 3: (name, signature) -> needs
+HAND = {
+    ("ndPlain", "int(int)"): ["Counter"],
+    ("NdFile::NdFile", "()"): [],
+    ("NdFile::init", "void()"): [],
+    ("NdFile::use", "int()"): ["UserFile"],
+    ("ndCallsFile", "int(NdFile *)"): ["UserFile"],
 }
 
 
@@ -108,16 +122,25 @@ def main():
 
     # 3. A hand table's row adds its needs
     table = out / "needs.json"
-    table.write_text(json.dumps({"rows": [{"name": "ndPlain", "signature": "int(int)", "needs": ["Counter"],
-                                           "why": "the fixture's hand row"}]}), encoding="utf-8")
+    table.write_text(json.dumps({"rows": [
+        {"name": "ndPlain", "signature": "int(int)", "needs": ["Counter"], "why": "the fixture's hand row"},
+        {"class": "NdFile", "except": ["NdFile", "init"], "needs": ["UserFile"], "why": "the fixture's class row"},
+    ]}), encoding="utf-8")
     code, so, se = run(generate + ["--needs", str(table)])
     if code != 0:
         failed.append("gen_types.py failed with a good hand table: " + se[-400:])
     else:
-        plain = next(f for f in json.loads((out / "gen" / "luma_functions.json").read_text(encoding="utf-8"))["functions"]
-                     if f["name"] == "ndPlain")
-        if plain.get("needs") != ["Counter"] or "needs.json: the fixture's hand row" not in plain.get("needs_why", {}).get("Counter", ""):
-            failed.append("the hand row's needs are not ndPlain's: %s" % plain)
+        hand = {(f["name"], f["signature"]): f for f in
+                json.loads((out / "gen" / "luma_functions.json").read_text(encoding="utf-8"))["functions"]}
+        plain = hand[("ndPlain", "int(int)")]
+        if "needs.json: the fixture's hand row" not in plain.get("needs_why", {}).get("Counter", ""):
+            failed.append("the hand row's why is not ndPlain's: %s" % plain)
+        for key, needs in HAND.items():
+            if hand.get(key, {}).get("needs") != needs:
+                failed.append("with the hand table %s %s needs %s, not %s" % (key + (hand.get(key, {}).get("needs"), needs)))
+        table_text = (out / "gen" / "luma_types_table.cpp").read_text(encoding="utf-8")
+        if "luma::kNeedUserFile" not in table_text or "SceneObj_UserFile" in table_text:
+            failed.append("the needs rows do not give UserFile as the game system's id luma::kNeedUserFile")
 
     # 4. planted faults, each named
     good = needs_file.read_text(encoding="utf-8")
@@ -128,6 +151,11 @@ def main():
          "needs.json: ndNothing void() is no function row"),
         ("a hand row with no why", None, {"rows": [{"name": "ndPlain", "signature": "int(int)", "needs": ["Counter"]}]},
          "needs.json: ndPlain int(int) has no why"),
+        ("a class with no functions", None, {"rows": [{"class": "NdNothing", "needs": ["UserFile"], "why": "planted"}]},
+         "needs.json: class NdNothing has no function rows"),
+        ("a class's except that is no function of it", None,
+         {"rows": [{"class": "NdFile", "except": ["make"], "needs": ["UserFile"], "why": "planted"}]},
+         "needs.json: class NdFile has no function make"),
         ("a unit without .needs", "", None, "needs_fixture.cpp: %d rows and no .needs" % len(entries)),
         ("a .needs that is not its .rows", json.dumps(entries[1:] + entries[:1]), None,
          "needs_fixture.cpp: its .needs is not its .rows, row for row"),

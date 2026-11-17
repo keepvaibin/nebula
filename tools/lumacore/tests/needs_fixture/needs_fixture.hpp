@@ -17,6 +17,13 @@ struct NdActor {
 struct NdHolder {
     NdActor* actor;
 };
+// A game system object whose parts are made after it (SaveDataHandleSequence): the hand table's class row.
+struct NdFile {
+    int* data;
+    NdFile();
+    void init();
+    int use();
+};
 
 namespace MR {
     void* getSceneObjHolder();

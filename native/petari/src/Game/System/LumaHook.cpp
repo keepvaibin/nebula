@@ -1,6 +1,10 @@
 #include "Game/System/LumaHook.hpp"
 
 #include "Game/System/GameSystem.hpp"
+#include "Game/System/GameSequenceDirector.hpp"
+#include "Game/System/GameSequenceProgress.hpp"
+#include "Game/System/SaveDataHandleSequence.hpp"
+#include "Game/Player/MarioHolder.hpp"
 #include "Game/System/LumaGuard.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
@@ -272,6 +276,33 @@ namespace luma {
             return pController != nullptr && pController->isExistSceneObjHolder();
         }
 
+        // Whether the player's actor is in the scene's MarioHolder (luma_hook.h kNeedMarioActor): the holder is made
+        // with the scene's objects, the actor set into it later in the making.
+        bool marioActorThere() {
+            return sceneHolderThere() && MR::isExistSceneObj(SceneObj_MarioHolder) &&
+                   MR::getSceneObj< MarioHolder >(SceneObj_MarioHolder)->mActor != nullptr;
+        }
+
+        // Whether the game system's object a need names (luma_hook.h, kNeedUserFile and kNeedCometScheduler) is there:
+        // made by GameSequenceDirector::initAfterResourceLoaded, once the system archive is loaded. The last one each
+        // makes, so an object half made (a hook inside its making) is not there.
+        bool systemThere(u32 id) {
+            const GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+            const GameSequenceDirector* const pDirector = pSystem != nullptr ? pSystem->mSequenceDirector : nullptr;
+            if (pDirector == nullptr) {
+                return false;
+            }
+            if (id == kNeedUserFile) {
+                const SaveDataHandleSequence* const pSave = pDirector->mSaveDataHandleSequence;
+                return pSave != nullptr && pSave->mCurrentUserFile != nullptr && pSave->mSaveIcon != nullptr;
+            }
+            if (id == kNeedCometScheduler) {
+                const GameSequenceProgress* const pProgress = pDirector->mGameSequenceProgress;
+                return pProgress != nullptr && pProgress->mGalaxyCometScheduler != nullptr;
+            }
+            return false;
+        }
+
         const char* nameAt(const char* pNames, u32 index) {
             for (; index > 0; index--) {
                 while (*pNames != 0) {
@@ -401,10 +432,13 @@ namespace luma {
             return true;
         }
         const NeedsSet& rSet = sNeedsSets[needs - 1];
-        const bool holder = sceneHolderThere();  // every object is the holder's: none is there without it
+        const bool holder = sceneHolderThere();  // every scene object is the holder's: none is there without it
         for (u32 i = 0; rSet.ids[i] != kNeedsEnd; i++) {
             const u32 id = rSet.ids[i];
-            if (!holder || (id != kNeedScene && !MR::isExistSceneObj(static_cast<int>(id)))) {
+            const bool there = id == kNeedUserFile || id == kNeedCometScheduler ? systemThere(id)
+                               : id == kNeedMarioActor                         ? marioActorThere()
+                                                                               : holder && (id == kNeedScene || MR::isExistSceneObj(static_cast<int>(id)));
+            if (!there) {
                 if (gNotNow != nullptr) {
                     gNotNow(pFunction, nameAt(rSet.names, i));
                 }
