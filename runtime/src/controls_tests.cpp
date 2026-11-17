@@ -12,8 +12,15 @@
 #include "galaxy/switch_controller.h"
 #include "galaxy/tilt.h"
 
-#include "galaxy/windows_api.h"
+#include "galaxy/virtual_keys.h"
+#if defined(_WIN32)
 #include <Xinput.h>
+#else
+// The pad's button bits are XInput's on every platform (input_bindings.h kSouthBit and the rest); Xinput.h's values.
+constexpr unsigned XINPUT_GAMEPAD_LEFT_SHOULDER = 0x0100u;
+constexpr unsigned XINPUT_GAMEPAD_A = 0x1000u;
+constexpr int XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE = 7849;
+#endif
 
 #include <algorithm>
 #include <array>

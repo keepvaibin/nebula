@@ -3,7 +3,12 @@
 #include "galaxy/test_temp.h"
 #include "galaxy/input_bindings.h"
 
+#if defined(_WIN32)
 #include "galaxy/windows_api.h"
+#else
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 #include <cstdlib>
 #include <clocale>
@@ -32,6 +37,7 @@ private:
     std::filesystem::path old_;
 };
 
+#if defined(_WIN32)
 class ScopedNumericLocale {
 public:
     ScopedNumericLocale() : old_thread_mode_(_configthreadlocale(_ENABLE_PER_THREAD_LOCALE)) {
@@ -58,6 +64,23 @@ public:
 private:
     int old_thread_mode_;
     std::string old_value_;
+#else
+// The test runs on one thread: the process's numeric locale is kept and put back.
+class ScopedNumericLocale {
+public:
+    ScopedNumericLocale() {
+        const char* previous = std::setlocale(LC_NUMERIC, nullptr);
+        if (previous == nullptr) {
+            throw std::runtime_error("cannot snapshot test numeric locale");
+        }
+        old_value_ = previous;
+    }
+    ~ScopedNumericLocale() { (void)std::setlocale(LC_NUMERIC, old_value_.c_str()); }
+    ScopedNumericLocale(const ScopedNumericLocale&) = delete;
+    ScopedNumericLocale& operator=(const ScopedNumericLocale&) = delete;
+private:
+    std::string old_value_;
+#endif
 };
 
 bool expect(bool condition, const char* message) {
@@ -325,6 +348,7 @@ int main() {
         "auto transition advances exactly one coherent generation");
 
     write_text(settings_path, "sentinel=old\n");
+#if defined(_WIN32)
     HANDLE locked = CreateFileW(
         settings_path.c_str(),
         GENERIC_READ,
@@ -343,6 +367,20 @@ int main() {
     if (locked != INVALID_HANDLE_VALUE) {
         (void)CloseHandle(locked);
     }
+#else
+    // A folder that cannot be written to: the new file cannot be made beside the old one (root may write anyway).
+    if (geteuid() != 0) {
+        const std::string folder = settings_path.parent_path().string();
+        passed &= expect(chmod(folder.c_str(), 0555) == 0, "the settings folder can be made read-only");
+        passed &= expect(
+            !galaxy::save_runtime_settings_to_file() &&
+                read_text(settings_path) == "sentinel=old\n",
+            "runtime settings replace failure preserves the complete old file");
+        (void)chmod(folder.c_str(), 0755);
+    } else {
+        std::cout << "SKIP: a read-only folder does not stop root\n";
+    }
+#endif
     passed &= expect(
         galaxy::save_runtime_settings_to_file() &&
             read_text(settings_path).find("input_mode=auto") !=
@@ -382,7 +420,7 @@ int main() {
     {
         const ScopedNumericLocale locale_scope;
         bool comma_locale = false;
-        for (const char* candidate : {"de-DE", "German_Germany.1252", "fr-FR"}) {
+        for (const char* candidate : {"de-DE", "German_Germany.1252", "fr-FR", "de_DE.UTF-8", "fr_FR.UTF-8", "de_DE"}) {
             if (std::setlocale(LC_NUMERIC, candidate) != nullptr) {
                 comma_locale = true;
                 break;
@@ -455,18 +493,31 @@ int main() {
         "an overlong line gives the defaults and replaces the older .unreadable file");
 
     write_text(settings_path, "input_mode=real_wiimote\n");
+#if defined(_WIN32)
     HANDLE unreadable = CreateFileW(
         settings_path.c_str(), GENERIC_READ, 0u, nullptr, OPEN_EXISTING,
         FILE_ATTRIBUTE_NORMAL, nullptr);
     passed &= expect(unreadable != INVALID_HANDLE_VALUE, "settings read failure fixture is locked");
-    if (unreadable != INVALID_HANDLE_VALUE) {
+    const bool fixture = unreadable != INVALID_HANDLE_VALUE;
+#else
+    // A file that cannot be opened for reading (root reads it anyway).
+    const bool fixture = geteuid() != 0 && chmod(settings_path.string().c_str(), 0) == 0;
+    if (!fixture) {
+        std::cout << "SKIP: an unreadable file cannot be made here\n";
+    }
+#endif
+    if (fixture) {
         bool read_rejected = false;
         try {
             galaxy::load_runtime_settings_from_file();
         } catch (const std::exception&) {
             read_rejected = true;
         }
+#if defined(_WIN32)
         (void)CloseHandle(unreadable);
+#else
+        (void)chmod(settings_path.string().c_str(), 0644);
+#endif
         passed &= expect(
             read_rejected &&
                 galaxy::get_runtime_input_mode_state().generation == after_unreadable.generation,
@@ -502,7 +553,7 @@ int main() {
     }
 
     {
-        const auto unicode_folder = root / L"\u6e38\u620f";
+        const auto unicode_folder = root / std::filesystem::path(u8"\u6e38\u620f");
         std::filesystem::create_directories(unicode_folder);
         const auto unicode_path = unicode_folder / "runtime_settings.ini";
         write_text(unicode_path, "audio_master_gain=0.375\n");
@@ -515,8 +566,9 @@ int main() {
     }
 
     {
-        // No fixed path length: a folder past the old 260-character limit is a path like any other.
-        const ScopedSettingsFolder long_settings(root / std::wstring(300u, L'x'));
+        // No fixed path length: a folder past the old 260-character limit is a path like any other (two names, each
+        // under the 255 characters a name may have on every file system).
+        const ScopedSettingsFolder long_settings(root / std::string(150u, 'x') / std::string(150u, 'y'));
         bool long_override_read = true;
         try {
             galaxy::load_runtime_settings_from_file();

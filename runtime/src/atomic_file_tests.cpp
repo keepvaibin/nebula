@@ -1,8 +1,13 @@
-// Tests for galaxy/atomic_file.h: name collisions, a locked destination, an invalid parent.
+// Tests for galaxy/atomic_file.h: name collisions, a destination that cannot be replaced (Windows: held open without
+// sharing; elsewhere: a folder in its place), an invalid parent. Both branches of atomic_file.cpp.
 #include "galaxy/atomic_file.h"
 #include "galaxy/test_temp.h"
 
+#if defined(_WIN32)
 #include "galaxy/windows_api.h"
+#else
+#include <unistd.h>
+#endif
 
 #include <filesystem>
 #include <fstream>
@@ -12,6 +17,15 @@
 #include <string>
 
 namespace {
+
+// The writer's temporary names hold the process id (atomic_file.cpp make_sibling_temp_path).
+std::string process_id_text() {
+#if defined(_WIN32)
+    return std::to_string(GetCurrentProcessId());
+#else
+    return std::to_string(getpid());
+#endif
+}
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -31,9 +45,7 @@ bool test_collision_exception_preserves_unowned_sibling(
     const std::filesystem::path& root) {
     // This runs before the ordinary writer uses sequence 1 in this process.
     const auto target = root / "collision-settings.ini";
-    const auto collided = root /
-        (L"collision-settings.ini.tmp." +
-         std::to_wstring(GetCurrentProcessId()) + L".1");
+    const auto collided = root / ("collision-settings.ini.tmp." + process_id_text() + ".1");
     std::filesystem::create_directories(root);
     {
         std::ofstream destination(target, std::ios::binary);
@@ -81,6 +93,7 @@ int main() {
         galaxy::io::write_file_atomically(target, "version=old\n"),
         "initial atomic write succeeds");
 
+#if defined(_WIN32)
     HANDLE locked = CreateFileW(
         target.c_str(),
         GENERIC_READ,
@@ -97,6 +110,16 @@ int main() {
     if (locked != INVALID_HANDLE_VALUE) {
         (void)CloseHandle(locked);
     }
+#else
+    // rename over an open file succeeds here; over a folder holding a file it fails, and the folder stays.
+    const auto occupied = root / "occupied.ini";
+    std::filesystem::create_directories(occupied / "inside");
+    passed &= expect(
+        !galaxy::io::write_file_atomically(occupied, "version=new\n") &&
+            std::filesystem::is_directory(occupied / "inside"),
+        "replace failure leaves what is at the destination");
+    std::filesystem::remove_all(occupied);
+#endif
 
     std::size_t temporary_count = 0u;
     for (const auto& entry : std::filesystem::directory_iterator(root)) {
