@@ -1,0 +1,65 @@
+{
+  "harness": 1,
+  "name": "2314-written-at-end",
+  "about": "The start after: the four files fs-last asked in the last frame are there, whole",
+  "proves": [
+    "services.fs"
+  ],
+  "continue_from": "2313-write-at-end",
+  "mods": [
+    "../mods/fs-last"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-last.e14_status",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-last.e11_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-last.e11_value",
+      "is": 67108864
+    },
+    {
+      "fact": "mod.fs-last.e12_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-last.e12_value",
+      "is": 67108864
+    },
+    {
+      "fact": "mod.fs-last.e13_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-last.e13_value",
+      "is": 67108864
+    },
+    {
+      "fact": "mod.fs-last.e14_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-last.e14_value",
+      "is": 67108864
+    }
+  ]
+}

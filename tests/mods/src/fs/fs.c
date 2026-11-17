@@ -16,6 +16,8 @@
    fs-reader     (9)  2311: k 2 reads same.txt (its own data folder: not there) and pass/note.txt in the Exchange folder.
    fs-quota      (10) 2312: four files of 64 MiB at k 1 to 4, one byte at k 5 (the 256 MiB full), remove "" at k 6.
                       (One byte over 64 MiB is fs-args': the kernel says fs.write's Service.Limit once a session.)
+   fs-last       (11) 2313: four files of 64 MiB at k 1, in the test's last frame (the game ends at once).
+                      2314: k 2 reads them, in the start after.
    Run steps call MR::getRandom(0, 4300 + k) and the hook gives 1. */
 #include "../loader/lt.h"
 #include <luma_fs.h>
@@ -95,7 +97,7 @@ __attribute__((unused)) static void on_event(void* user, const LumaEvent* event)
 
 #define T(n) on_event, (void*)(intptr_t)(n), &handle
 
-#if CASE == 10
+#if CASE == 10 || CASE == 11
 static uint8_t big[64u << 20u];
 #endif
 
@@ -280,6 +282,22 @@ static int32_t trigger(LumaCall* call, void* user) {
     }
     if (k == 5) lt_fact("w5", fs->write(lt_mod, "small.bin", "x", 1, T(5)));
     if (k == 6) lt_fact("d6", fs->remove(lt_mod, "", T(6)));
+#elif CASE == 11
+    if (k == 1) {
+        for (uint32_t i = 0; i < sizeof(big); i++) big[i] = (uint8_t)(i * 7u + (i >> 16));
+        for (int32_t n = 1; n <= 4; n++) {
+            char name[] = "lastN.bin";
+            name[4] = (char)('0' + n);
+            tag_fact(n, "made", fs->write(lt_mod, name, big, sizeof(big), T(n)));
+        }
+    }
+    if (k == 2) {
+        for (int32_t n = 1; n <= 4; n++) {
+            char name[] = "lastN.bin";
+            name[4] = (char)('0' + n);
+            tag_fact(10 + n, "asked", fs->read(lt_mod, name, T(10 + n)));
+        }
+    }
 #endif
     LUMA_RESULT(call, int32_t) = 1;
     return 0;

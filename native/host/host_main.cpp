@@ -46,6 +46,7 @@
 #include "galaxy/discord_presence.h"
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
+#include "galaxy/luma_fs_service.h"
 #include "galaxy/luma_input_service.h"
 #include "galaxy/luma_mods_service.h"
 #include "galaxy/mods.h"
@@ -4738,6 +4739,10 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
 #endif
     // The record of mods' numbers (services/mods.md 7), written off the game thread.
     galaxy::luma_mods::flush_ids(2000u);
+    // The mods' file requests still queued (services/fs.md: a write is done even when the game ends after it).
+    if (const std::size_t left = galaxy::luma_fs::finish(10000u); left != 0u) {
+        log_line("host:", ("mods' file requests not done at the end: " + std::to_string(left)).c_str());
+    }
     // The extensions' files complete (a test's sound dump); the start that takes over is told it is one, by its count.
     galaxy::extensions::ending(restart);
     if (restart) {

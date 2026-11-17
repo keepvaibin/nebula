@@ -1,0 +1,47 @@
+{
+  "harness": 1,
+  "name": "2313-write-at-end",
+  "about": "fs-last asks four writes of 64 MiB in the test's last frame; the game ends the frame after, before the worker is done",
+  "proves": [
+    "services.fs"
+  ],
+  "mods": [
+    "../mods/fs-last"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "at": 11,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-last.e1_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-last.e2_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-last.e3_made",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-last.e4_made",
+      "is": 1
+    },
+    {
+      "no_log": "mods' file requests not done at the end"
+    }
+  ]
+}
