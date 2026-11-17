@@ -362,9 +362,11 @@ if(NOT WIN32)
     endforeach()
 endif()
 
-# A build for players: ThinLTO with the profile of a tour (native/pgo/game.profdata; the script that made it went with
-# run.sh, and a profile job replaces it, plan E0.15, P-014): the game's CPU falls about
-# 17 %. A profile older than the code still applies to what has not changed.
+# A build for players: ThinLTO with the profile of a tour (native/pgo/game.profdata, made by tools/gate/pgo.py make,
+# what made it in game.profdata.txt): the game's CPU falls about 17 %. A profile older than the code still applies to
+# what has not changed; the build says how much has (the two warnings below stay on, not as errors) and
+# tools/gate/pgo.py check fails a build with more than 5 % of its functions out of date or a file the profile does
+# not know (P-014).
 # The profile names functions as the Windows build mangles them (the Microsoft C++ ABI): on Android, Linux and Apple
 # (the Itanium ABI) no function would find its counts, so those builds take ThinLTO alone, NEBULA_LTO: about 7 % of the
 # game's CPU by itself on Windows (the same table). -ffp-contract=off holds the results bit for bit through either.
@@ -378,7 +380,10 @@ endif()
 if(NEBULA_PGO)
     set(game_profile "${CMAKE_CURRENT_SOURCE_DIR}/pgo/game.profdata")
     target_compile_options(smg_game_common INTERFACE -flto=thin "-fprofile-instr-use=${game_profile}"
-                           -Wno-profile-instr-unprofiled -Wno-profile-instr-out-of-date -Wno-backend-plugin)
+                           -Wprofile-instr-unprofiled -Wprofile-instr-out-of-date -Wno-error=profile-instr-unprofiled
+                           -Wno-error=profile-instr-out-of-date -Wno-backend-plugin)
+    # The line tools/gate/pgo.py check knows a profile build's log by.
+    message(STATUS "Nebula game profile: ${game_profile}")
     target_link_options(smg_game_common INTERFACE -flto=thin "-fprofile-instr-use=${game_profile}")
 elseif(NEBULA_LTO)
     # CMake links a small library and program with the toolchain's ThinLTO first: a linker that cannot read the

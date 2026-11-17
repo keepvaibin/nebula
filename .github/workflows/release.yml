@@ -181,10 +181,15 @@ jobs:
           $llvm = Join-Path $env:RUNNER_TEMP 'llvm\bin'
           # The players' build: ThinLTO with the profile in native/pgo. Both modules, the self-description and the
           # services list, for both CPU levels.
+          # The build's log: tools/gate/pgo.py check reads how much of the profile is out of date (P-014).
+          $log = Join-Path $env:RUNNER_TEMP 'game-build.log'
           foreach ($target in 'smg_game', 'smg_game_plain', 'luma_self_description', 'luma_services_file') {
-            & .\native\build.ps1 -Petari native\petari -Build $build -Pgo -Llvm $llvm -Target $target
+            & .\native\build.ps1 -Petari native\petari -Build $build -Pgo -Llvm $llvm -Target $target *>&1 |
+              Tee-Object -Append -FilePath $log
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+          python -X utf8 -I tools/gate/pgo.py check $log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $out = Join-Path $env:RUNNER_TEMP 'out'
           $names = Join-Path $out 'names'
           New-Item -ItemType Directory -Force (Join-Path $out 'bin\x86-64-v2'), (Join-Path $names 'luma_types') | Out-Null
