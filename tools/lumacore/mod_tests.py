@@ -3,9 +3,12 @@
     mod_tests.py --renderer d3d12|vulkan|d3d11 --bin <folder> --work <folder> [--only suite[/test]] [--lock <file>]
                  [--jobs n] [--pak <file>]
 
-LUMALINK names the lumalink program, built from the LumaLink commit in tools/lumacore/lumalink.commit, and
-LUMALINK_TREE that commit's checkout: its tests/game (the tests of LumaKit and LumaScript) run here too, with its own
-lumakit/ as the kit under test. Without LUMALINK_TREE only this tree's tests run, and a row says so.
+The lumalink program and LumaLink's tree are the LumaLink commit in tools/lumacore/lumalink.commit: without LUMALINK,
+that commit is fetched into a checkout of its own (--lumalink-cache, default ./lumalink-pin, kept between runs so the
+build is incremental; the repository is LUMALINK_REPO, default github.com/keepvaibin/lumalink) and built there, and its
+tests/game (the tests of LumaKit and LumaScript) run here too, with its own lumakit/ as the kit under test.
+LUMALINK names another lumalink program instead (a LumaLink tree under work), with LUMALINK_TREE its checkout; without
+LUMALINK_TREE then, only this tree's tests run, and a row says so.
 
 The tests are copied into <work>/tree (never built in the source tree), every mod there with a source/ folder is built
 with `lumalink build` for the platforms its luma.json's "code" names (else this system's), and every suite.json is run
@@ -271,6 +274,55 @@ def run_origin(args, prefix, copy, source, run_root, work, build_failed):
     return rows
 
 
+LUMALINK_PIN = TREE / "tools" / "lumacore" / "lumalink.commit"
+
+
+def pinned_lumalink(cache):
+    """The lumalink program built from the pinned LumaLink commit in `cache` (fetched there when it is not), and the
+    checkout: (program, checkout). The checkout is reset to the pin each time; its target/ stays for the next build."""
+    pin = LUMALINK_PIN.read_text(encoding="utf-8").strip()
+    if len(pin) != 40 or any(c not in "0123456789abcdef" for c in pin):
+        raise SystemExit("%s holds no full commit: %r" % (LUMALINK_PIN, pin))
+    repo = os.environ.get("LUMALINK_REPO", "https://github.com/keepvaibin/lumalink.git")
+
+    def git(*a, check=True):
+        r = subprocess.run(["git", "-C", str(cache), *a], capture_output=True, text=True)
+        if check and r.returncode != 0:
+            raise SystemExit("git %s in %s: %s" % (" ".join(a), cache, (r.stderr or r.stdout).strip()[-400:]))
+        return r
+
+    if not (cache / ".git").is_dir():
+        cache.mkdir(parents=True, exist_ok=True)
+        git("init", "-q")
+        git("remote", "add", "origin", repo)
+    if git("cat-file", "-e", pin + "^{commit}", check=False).returncode != 0:
+        print("mod_tests: fetching LumaLink %s from %s" % (pin[:9], repo), flush=True)
+        git("fetch", "-q", "--depth", "1", "origin", pin)
+    # nebula/: LumaLink builds Nebula's validator and cooker from it (its README, "Building"); here it is a link to
+    # this tree, so the pinned LumaLink checks mods as the tree under test does. The link goes before the clean, so
+    # the clean never walks into this tree, and comes back after it.
+    link = cache / "nebula"
+    if link.is_symlink() or (hasattr(link, "is_junction") and link.is_junction()):
+        os.rmdir(link) if os.name == "nt" else link.unlink()
+    elif link.exists():
+        raise SystemExit("%s is a folder, not a link to a Nebula tree: move it away" % link)
+    git("checkout", "-q", "--force", "--detach", pin)
+    git("clean", "-q", "-d", "-f", "-x", "-e", "target/")
+    if os.name == "nt":
+        r = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(TREE)], capture_output=True, text=True)
+        if r.returncode != 0:
+            raise SystemExit("linking %s to %s failed: %s" % (link, TREE, (r.stderr or r.stdout).strip()))
+    else:
+        link.symlink_to(TREE, target_is_directory=True)
+    exe = cache / "target" / "release" / ("lumalink.exe" if os.name == "nt" else "lumalink")
+    print("mod_tests: building LumaLink %s (cargo build --release -p lumalink)" % pin[:9], flush=True)
+    r = subprocess.run(["cargo", "build", "--release", "--locked", "-p", "lumalink"], cwd=str(cache),
+                       capture_output=True, text=True)
+    if r.returncode != 0 or not exe.is_file():
+        raise SystemExit("building the pinned LumaLink failed: %s" % (r.stderr or r.stdout).strip()[-800:])
+    return exe, cache
+
+
 def main():
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="backslashreplace")
@@ -285,10 +337,15 @@ def main():
     parser.add_argument("--build-only", action="store_true", help="copy and build the test mods, run nothing")
     parser.add_argument("--wait-while", default=os.environ.get("LUMA_TEST_WAIT_WHILE"),
                         help="a path (or LUMA_TEST_WAIT_WHILE): no suite starts while it exists (another's measuring lock)")
+    parser.add_argument("--lumalink-cache", default=os.environ.get("LUMALINK_CACHE", "lumalink-pin"),
+                        help="the pinned LumaLink's checkout and build when LUMALINK is not given (or LUMALINK_CACHE)")
     args = parser.parse_args()
     lumalink = os.environ.get("LUMALINK")
-    if not lumalink or not pathlib.Path(lumalink).is_file():
-        raise SystemExit("LUMALINK must name the lumalink program (built from tools/lumacore/lumalink.commit)")
+    if not lumalink:
+        lumalink, ll_checkout = pinned_lumalink(pathlib.Path(args.lumalink_cache).resolve())
+        os.environ["LUMALINK_TREE"] = str(ll_checkout)
+    if not pathlib.Path(lumalink).is_file():
+        raise SystemExit("LUMALINK names no file: %s" % lumalink)
     lumalink = pathlib.Path(lumalink).resolve()
     work = pathlib.Path(args.work).resolve()
     work.mkdir(parents=True, exist_ok=True)
