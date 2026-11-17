@@ -51,6 +51,7 @@ void fnOut(LUMA_OUT FnVec* out);
 void fnIn(LUMA_IN const float* value);
 void fnInout(LUMA_INOUT FnColor* color);
 void fnKept(LUMA_KEPT int* registered);
+void fnKeptOrNone(LUMA_KEPT LUMA_NULLABLE float (*matrix)[4]);
 void fnCount(LUMA_IN LUMA_COUNT(n) const float* p, int n, LUMA_OUT LUMA_NULLABLE FnVec* out);
 void fnFixed(LUMA_OUT LUMA_COUNT_FIXED(12) float* m);
 void fnInside(const LUMA_IN FnV2<float>* p, LUMA_INOUT FnVec4* q);  // a mark inside the parameter's own text

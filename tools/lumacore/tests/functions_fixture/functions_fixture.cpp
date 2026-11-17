@@ -29,6 +29,7 @@ void fnOut(FnVec* out) { out->x = 1; }
 void fnIn(const float* value) { (void)value; }
 void fnInout(FnColor* color) { *color = FnBlue; }
 void fnKept(int* registered) { (void)registered; }
+void fnKeptOrNone(float (*matrix)[4]) { (void)matrix; }
 void fnCount(const float* p, int n, FnVec* out) {
     if (out) {
         out->x = p[n - 1];
