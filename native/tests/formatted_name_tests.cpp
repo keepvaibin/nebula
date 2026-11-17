@@ -1,6 +1,7 @@
 // MR::FormattedName, MR::Text16 and the name helpers built on them: names far longer than their inline room; and
 // MR::GrowBuffer, the room of the achievement pop-up queue, past the 40 entries its old fixed array held.
 // StringUtil.cpp is linked with the few game functions it calls given below.
+#include "Game/Screen/ReplaceTagProcessor.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/DueRing.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -27,6 +28,13 @@ void* operator new[](size_t size, NebulaArena*, int) {
 void* NebulaArena::alloc(u32 size, int, NebulaArena*) {
     return malloc(size);
 }
+
+// StringUtil.cpp's time strings fill a message's tags; no test here reaches them.
+namespace ReplaceTagFunction {
+    u32 ReplaceArgs(char16_t*, s32, const char16_t*, u32, ...) {
+        NEBULA_PANIC("the test reached the message system (ReplaceArgs), which it leaves out");
+    }
+}  // namespace ReplaceTagFunction
 
 namespace MR {
     const char16_t* getGameMessageDirect(const char*) {

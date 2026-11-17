@@ -117,7 +117,12 @@ namespace MR {
 
         // The entry named pOld takes the name pNew, keeping its value; false when pOld is not held or pNew is.
         bool rename(const char* pOld, const char* pNew) {
-            const s32 slot = slotOf(pOld, Key::hash(pOld));
+            return rename(pOld, Key::hash(pOld), pNew);
+        }
+
+        // The same for an entry added with its own hash (add(pName, hash, value)): pNew goes in with its name's hash.
+        bool rename(const char* pOld, u32 oldHash, const char* pNew) {
+            const s32 slot = slotOf(pOld, oldHash);
             if (slot < 0 || find(pNew) != cNoValue) {
                 return false;
             }

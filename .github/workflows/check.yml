@@ -83,6 +83,11 @@ jobs:
           $llvm = Join-Path $env:RUNNER_TEMP 'llvm\bin'
           & .\native\build.ps1 -Petari native\petari -Build $build -Llvm $llvm -Target all
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: The game's unit tests
+        shell: pwsh
+        run: |
+          ctest --test-dir (Join-Path $env:RUNNER_TEMP 'game') --output-on-failure --timeout 600
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   rust:
     name: Rust tests (${{ matrix.os }})
@@ -124,6 +129,14 @@ jobs:
             "-DCMAKE_TOOLCHAIN_FILE=$PWD/platform/linux/llvm-toolchain.cmake"
           cmake --build "$RUNNER_TEMP/unit" -- -k 0
           ctest --test-dir "$RUNNER_TEMP/unit" --output-on-failure --timeout 600
+      - name: The game's unit tests
+        env:
+          NEBULA_LLVM: ${{ runner.temp }}/llvm
+        run: |
+          cmake -S native -B "$RUNNER_TEMP/game" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            "-DCMAKE_TOOLCHAIN_FILE=$PWD/platform/linux/llvm-toolchain.cmake"
+          cmake --build "$RUNNER_TEMP/game" --target native_tests
+          ctest --test-dir "$RUNNER_TEMP/game" --output-on-failure --timeout 600
 
   linux:
     name: Linux

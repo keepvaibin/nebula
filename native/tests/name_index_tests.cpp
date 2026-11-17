@@ -2,8 +2,20 @@
 #include "Game/Util/NameIndex.hpp"
 #include "Game/Util/HashUtil.hpp"
 
+#include "Game/System/NebulaArena.hpp"
+
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+
+// HashUtil.cpp's tables come from the arenas: the C library's memory here.
+NebulaArena* NebulaArena::findFromRoot(void*) {
+    return nullptr;
+}
+
+void* operator new[](size_t size, NebulaArena*, int) {
+    return malloc(size);
+}
 
 // StringUtil.cpp's two compares, as they are there.
 namespace MR {
@@ -71,8 +83,10 @@ int main() {
     expect(shared.findHash(hash) == 10, "findHash first of a hash after growth");
     expect(shared.find("b", hash) == 11 && shared.find("c", hash) == 12, "shared hash names apart after growth");
 
-    // Rename keeps the value; the old name is gone and the rest of its probe run is still found.
-    expect(shared.rename("a", "z"), "rename");
+    // Rename keeps the value; the old name is gone and the rest of its probe run is still found. A name added with
+    // its own hash is renamed by that hash; by its name's hash it is not found.
+    expect(!shared.rename("a", "z"), "rename by the name's hash finds no name added with another");
+    expect(shared.rename("a", hash, "z"), "rename");
     expect(shared.find("a", hash) == MR::NameIndex::cNoValue, "old name gone");
     expect(shared.find("z") == 10, "new name keeps value");
     expect(shared.find("b", hash) == 11 && shared.find("c", hash) == 12, "run intact after removal");

@@ -145,6 +145,17 @@ def unit_tests(g):
     return fn
 
 
+def game_tests(g):
+    """The game's own unit tests (native/tests), built with the game modules."""
+    def fn(log):
+        code = run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", HERE / "ctest.ps1",
+                    "-Dir", pathlib.Path(g.args.build_root) / "game"], log)
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        summary = next((l.strip() for l in text.splitlines() if "tests passed" in l), last_line(text))
+        return code == 0, summary
+    return fn
+
+
 def rust_tests(g):
     def fn(log):
         env = {"CARGO_TARGET_DIR": str(pathlib.Path(g.args.build_root) / "cargo-test")}
@@ -287,6 +298,7 @@ def main():
         if not g.check("build/windows", build_windows(g)):
             return 0 if g.write() else 1
     g.check("unit/windows", unit_tests(g))
+    g.check("unit/game", game_tests(g))
     for r in RENDERERS:
         g.check("start/%s" % r, start_check(g, r))
     g.check("rust", rust_tests(g))

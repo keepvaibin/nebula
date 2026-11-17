@@ -163,14 +163,24 @@ Put `Nebula.exe` and `smg_game.dll` in one folder, then run:
 
 ### Run the tests
 
+Every check, from one command (`--quick` for the short form; it needs `game.pak` for the runs in the game):
+
+```powershell
+python tools/gate/gate.py --full --pak D:\nebula\content\game.pak
+```
+
+The unit tests alone:
+
 ```powershell
 cmake -S . -B build\host -DNEBULA_EXTRA_CMAKE=tools/test_driver/test_driver.cmake
 cmake --build build\host
 ctest --test-dir build\host --output-on-failure
-cargo test -p nebula-import
-sh native/tests/run_tests.sh
-.\tools\audit_repo.ps1
+.\native\build.ps1 -Petari native\petari -Build build\game -Target native_tests
+ctest --test-dir build\game --output-on-failure
+cargo test -p nebula-import -p luma-validate
 ```
+
+On Linux and macOS, `cmake -S tests/unit -B build/unit` builds the same unit tests.
 
 ### Build the packages
 

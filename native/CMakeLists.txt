@@ -429,3 +429,9 @@ if(NEBULA_SANITIZE)
     target_compile_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE} -fno-omit-frame-pointer)
     target_link_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE})
 endif()
+
+# The game's unit tests (native/tests/CMakeLists.txt), where the build runs its own programs.
+option(NEBULA_NATIVE_TESTS "Build the game's unit tests" ON)
+if(NEBULA_NATIVE_TESTS AND NOT ANDROID AND NOT IOS AND NOT CMAKE_CROSSCOMPILING)
+    include(tests/CMakeLists.txt)
+endif()
