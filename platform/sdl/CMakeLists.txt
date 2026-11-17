@@ -163,6 +163,8 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/rt/rt_scene.cpp
     ${rt}/frame_telemetry.cpp
     ${rt}/perf_hint.cpp
+    ${rt}/pacing.cpp
+    ${rt}/pacing_recorder.cpp
     ${rt}/render/vk/vk_context.cpp
     ${rt}/render/vk/device_quirks_vk.cpp
     ${rt}/render/vk/vk_libraries.cpp

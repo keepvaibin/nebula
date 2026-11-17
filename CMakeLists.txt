@@ -470,6 +470,8 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/core/pipelines_d3d12.cpp
     runtime/src/frame_telemetry.cpp
     runtime/src/perf_hint.cpp
+    runtime/src/pacing.cpp
+    runtime/src/pacing_recorder.cpp
 )
 target_include_directories(galaxy_render PUBLIC runtime/src)
 target_include_directories(galaxy_render PRIVATE "${galaxy_utility_shader_dir}" "${galaxy_rt_shader_dir}" runtime/src/render)
@@ -712,6 +714,8 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/streamline_bridge.cpp
         runtime/src/frame_telemetry.cpp
         runtime/src/perf_hint.cpp
+        runtime/src/pacing.cpp
+        runtime/src/pacing_recorder.cpp
         runtime/src/render/vk/vk_context.cpp
         runtime/src/render/vk/device_quirks_vk.cpp
         runtime/src/render/vk/vk_libraries.cpp
@@ -874,6 +878,8 @@ if(NEBULA_D3D11)
         runtime/src/render/xess_library.cpp
         runtime/src/frame_telemetry.cpp
         runtime/src/perf_hint.cpp
+        runtime/src/pacing.cpp
+        runtime/src/pacing_recorder.cpp
         runtime/src/render/mod_shaders.cpp
         runtime/src/render/mod_shader_build.cpp
         runtime/src/render/mod_post.cpp
