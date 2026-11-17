@@ -1,11 +1,14 @@
 # SDL's Java half is called from libSDL3.so by name.
 -keep class org.libsdl.app.** { *; }
 
-# Called from libmain.so and libnebula_import.so by name.
+# Called from libmain.so and libnebula_import.so by name (platform/sdl/host_window_sdl.cpp call_activity). A method
+# with parameters is named here with them: R8 removes one it does not see called from Java, and the native call then
+# finds nothing (build_apk.ps1 checks every name the native code calls against the built APK).
 -keep class dev.nebula.galaxy.GameActivity {
     native <methods>;
     public void *();
     public void pickFiles(int);
+    public void restartGame(int);
 }
 # The real Wii Remote's USB link (platform/sdl/wiimote_link_android.cpp) calls these by name.
 -keep class dev.nebula.galaxy.WiimoteUsb {

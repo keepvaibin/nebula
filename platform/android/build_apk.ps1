@@ -166,6 +166,43 @@ foreach ($name in $texts.Keys) {
     [IO.File]::WriteAllText((Join-Path $licenses $name), ($parts -join "`n`n"), [Text.UTF8Encoding]::new($false))
 }
 
+# Every activity method the native code calls by name (platform/sdl: call_activity("name"), ActivityCall{"name", ...})
+# is in the built APK's GameActivity: R8 removes what Java never calls, and the native call then finds nothing.
+function Test-ActivityCalls([string]$Apk) {
+    $names = [System.Collections.Generic.SortedSet[string]]::new()
+    foreach ($file in Get-ChildItem (Join-Path $root "platform\sdl") -Filter *.cpp) {
+        $text = [IO.File]::ReadAllText($file.FullName)
+        foreach ($m in [regex]::Matches($text, 'call_activity\("([A-Za-z_]\w*)"\)|ActivityCall\{"([A-Za-z_]\w*)"')) {
+            [void]$names.Add($(if ($m.Groups[1].Success) { $m.Groups[1].Value } else { $m.Groups[2].Value }))
+        }
+    }
+    if ($names.Count -eq 0) { throw "No activity calls found in platform/sdl: the check would pass on nothing." }
+    $buildTools = Get-ChildItem (Join-Path $sdk "build-tools") -Directory | Sort-Object { [version]($_.Name -replace '[^\d.].*$', '') } | Select-Object -Last 1
+    $dexdump = Join-Path $buildTools.FullName "dexdump.exe"
+    if (-not (Test-Path $dexdump)) { throw "dexdump not found under $($buildTools.FullName)" }
+    $dex = Join-Path $Work "dexcheck"
+    Remove-Item $dex -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force $dex | Out-Null
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($Apk)
+    try {
+        foreach ($entry in $zip.Entries | Where-Object { $_.FullName -match '^classes\d*\.dex$' }) {
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $dex $entry.FullName), $true)
+        }
+    } finally { $zip.Dispose() }
+    $found = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($file in Get-ChildItem $dex -Filter *.dex) {
+        $inActivity = $false
+        foreach ($line in & $dexdump $file.FullName) {
+            if ($line -match "^  Class descriptor\s*: '(.*)'") { $inActivity = $Matches[1] -eq 'Ldev/nebula/galaxy/GameActivity;' }
+            elseif ($inActivity -and $line -match "^\s+name\s*: '(\w+)'") { [void]$found.Add($Matches[1]) }
+        }
+    }
+    $missing = @($names | Where-Object { -not $found.Contains($_) })
+    if ($missing.Count) { throw "The APK's GameActivity lacks methods the native code calls by name: $($missing -join ', ') (platform/android/app/proguard-rules.pro)." }
+    "activity calls: all $($names.Count) in the APK"
+}
+
 # Gradle, with Android Studio's JDK when no other is set.
 if (-not $env:JAVA_HOME) { $env:JAVA_HOME = "${env:ProgramFiles}\Android\Android Studio\jbr" }
 $env:ANDROID_HOME = $sdk
@@ -184,11 +221,13 @@ try {
 if ($Unsigned) {
     # installer/sign-release.ps1 signs it and then writes its .sig: one written now would not match the signed file.
     $apk = Join-Path $android "app\build\outputs\apk\release\app-release-unsigned.apk"
+    Test-ActivityCalls $apk
     Copy-Item $apk (Join-Path $Work "Nebula-unsigned.apk") -Force
     "apk: $(Join-Path $Work 'Nebula-unsigned.apk') ($([math]::Round((Get-Item $apk).Length / 1MB, 1)) MB, not signed)"
     return
 }
 $apk = Join-Path $android "app\build\outputs\apk\release\app-release.apk"
+Test-ActivityCalls $apk
 Copy-Item $apk (Join-Path $Work "Nebula.apk") -Force
 "apk: $(Join-Path $Work 'Nebula.apk') ($([math]::Round((Get-Item $apk).Length / 1MB, 1)) MB)"
 # The release-key signature over the whole APK (RSA SHA-256, base64), as build-native-setup.ps1 signs the setup.

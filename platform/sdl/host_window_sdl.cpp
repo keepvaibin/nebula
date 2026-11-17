@@ -300,14 +300,18 @@ void call_activity_now(const ActivityCall& call) {
         return;
     }
     jclass type = env->GetObjectClass(activity);
-    if (jmethodID id = env->GetMethodID(type, call.method, call.has_argument ? "(I)V" : "()V"); id != nullptr) {
-        if (call.has_argument) {
-            env->CallVoidMethod(activity, id, static_cast<jint>(call.argument));
-        } else {
-            env->CallVoidMethod(activity, id);
-        }
+    jmethodID id = env->GetMethodID(type, call.method, call.has_argument ? "(I)V" : "()V");
+    if (id == nullptr) {
+        // A method the build left out (R8: platform/android/app/proguard-rules.pro): said, never silent.
+        std::fprintf(stderr, "[android] the activity has no method %s%s: the call is lost\n", call.method,
+                     call.has_argument ? "(int)" : "()");
+    } else if (call.has_argument) {
+        env->CallVoidMethod(activity, id, static_cast<jint>(call.argument));
+    } else {
+        env->CallVoidMethod(activity, id);
     }
     if (env->ExceptionCheck()) {
+        if (id != nullptr) std::fprintf(stderr, "[android] the activity's %s threw\n", call.method);
         env->ExceptionClear();
     }
     env->DeleteLocalRef(type);

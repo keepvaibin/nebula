@@ -4731,6 +4731,7 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
         // The activity ends this process once the new one is on its way.
         galaxy::render::host_window::start_again(static_cast<galaxy::render::host_window::Restart>(gRestartKind));
         std::this_thread::sleep_for(std::chrono::seconds(5));
+        log_line("host:", "the app did not start the game again: it ends instead");
     }
 #elif !(defined(__APPLE__) && TARGET_OS_IPHONE)
     if (restart && gArgv != nullptr) {
