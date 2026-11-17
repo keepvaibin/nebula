@@ -119,6 +119,16 @@ def run(cmd, log, env=None, cwd=None, timeout=None):
 # Checks ---------------------------------------------------------------------------------------------------------
 
 
+def repo_audit(g):
+    """The tracked files (tools/audit_repo.ps1): no game content, build outputs, oversized files or credentials."""
+    def fn(log):
+        code = run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", TREE / "tools" / "audit_repo.ps1"],
+                   log)
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        return code == 0, last_line(text)
+    return fn
+
+
 def build_windows(g):
     """The game modules (clang) and every Windows program with the unit tests and the test extension (MSVC), into the
     build root; then the bin folder the harness runs."""
@@ -294,6 +304,7 @@ def main():
     g = Gate(args)
     g.bin = str(pathlib.Path(args.build_root) / "bins")
     renderers = ("d3d12",) if args.mode == "quick" else RENDERERS
+    g.check("repo/audit", repo_audit(g))
     if not args.no_build:
         if not g.check("build/windows", build_windows(g)):
             return 0 if g.write() else 1

@@ -27,6 +27,11 @@ jobs:
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v7
+      - name: Repository audit (no game content, build outputs, oversized files or credentials)
+        shell: pwsh
+        run: |
+          ./tools/audit_repo.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build Nebula, NebulaVk, NebulaD11 and the unit tests
         shell: pwsh
         run: |

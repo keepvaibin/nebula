@@ -3,7 +3,7 @@
 #   - Nintendo game files and containers (.dol, .arc, .rso, .iso, .rvz, .wbfs, .szs, .thp and the rest below);
 #   - build outputs: modules, programs, objects, libraries, debug databases;
 #   - diagnostics, frame dumps, shader caches, saves, build trees and launch logs (ignored, so tracked ones fail);
-#   - files over 5 MiB (the shader-cache seed, which Nebula generates, may be 16 MiB);
+#   - files over 5 MiB (the shader-cache seed, the game's profile and LumaKit may be 16 MiB);
 #   - credentials;
 #   - a C runtime fma call in the runtime.
 # game.pak is packed from the user's own disc on the user's computer: never tracked, attached to a release or
@@ -62,14 +62,19 @@ foreach ($RelativePath in $TrackedFiles) {
         if ($File.Length -gt 16MB) { $Failures.Add("Shader-cache seed larger than 16 MiB: $($File.FullName)") }
         continue
     }
+    # The mod validator's test inputs (crates/luma-validate/tests/data): programs built from lib.c by build.sh and
+    # synthetic saves written by saves/make.py, none of them game content.
+    $ValidatorInput = $RelativePath -like 'crates/luma-validate/tests/data/*'
     if ($File.Extension.ToLowerInvariant() -in $ForbiddenExtensions -and
-        $RelativePath -notin $AllowedBinaries) {
+        $RelativePath -notin $AllowedBinaries -and -not $ValidatorInput) {
         $Failures.Add("Forbidden game-content extension: $($File.FullName)")
     }
-    if ($File.Extension.ToLowerInvariant() -in $ForbiddenBuildExtensions) {
+    if ($File.Extension.ToLowerInvariant() -in $ForbiddenBuildExtensions -and -not $ValidatorInput) {
         $Failures.Add("Forbidden tracked build/binary output: $($File.FullName)")
     }
-    if ($File.Length -gt 5MB -and $RelativePath -ne "native/pgo/game.profdata") {
+    # The game's profile, and LumaKit (built from LumaLink's source; tools/build_lumakit.py checks it is that build).
+    $SizeLimit = if ($RelativePath -in @("native/pgo/game.profdata", "installer/lumakit/lumakit.luma")) { 16MB } else { 5MB }
+    if ($File.Length -gt $SizeLimit) {
         $Failures.Add("Unexpected tracked file larger than 5 MiB: $($File.FullName)")
     }
 
