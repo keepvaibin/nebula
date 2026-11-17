@@ -344,7 +344,7 @@ P-165	1	E7 game step speed	open		performance (small): every NebulaText lookup is
 P-166	1	E8 console limits and gameplay rules	open		Binder keeps every plane, so Mario's push-out and ground can differ from the console's	Owner: keep the port's behaviour.
 P-167	1	E8 console limits and gameplay rules	open		The hip drop no longer marks a digital jump when the actor's gravity is zero	Owner: restore the console's rule.
 P-168	1	E8 console limits and gameplay rules	open		Collision and movement arithmetic rounds differently from the console	Owner: a small difference is fine where it is faster. Keep unless a faster form is measured; replays must still match.
-P-169	1	E0 gate	open		A normal import does not prove the cooked collision octree reaches the same prisms	
+P-169	1	E0 gate	fixed	5e6d7b0df; every import walks both octrees of each collision model and stops on a difference (the import summary counts them); nebula-import tests an_import_proves_every_collision_model and a_cooked_model_that_reaches_other_prisms_is_refused; gate import/collision/<disc>: US, PAL and Japanese discs, 1016 models, 691,761 leaves agreeing each	A normal import does not prove the cooked collision octree reaches the same prisms	
 P-170	1	E2 crashes and wrong behaviour	open		A starter without a rail strands the player in space instead of failing	
 P-171	1	E2 crashes and wrong behaviour	open		The port loads layer folders past LayerP that the console never loads	
 P-172	1	E2 crashes and wrong behaviour	open		The engine reads a glowing or water material's live rows at positions taken from the unlit form, so with pixel lighting it can read the wrong row	
