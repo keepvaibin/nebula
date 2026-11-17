@@ -1,14 +1,15 @@
 {
   "harness": 1,
   "name": "1643-library-fault",
-  "about": "guard-lib-user's after hook on MR::getRandom calls guard-lib's gl.fine (7), then gl.fault, which writes through a null pointer in guard-lib's code: caught at guard-lib-user's boundary like a fault in its own code, guard-lib-user off and taken out at the next frame, GUARD in the log naming a library mod's code, the game goes on; guard-lib stays",
+  "about": "guard-lib-user's after hook on MR::getRandom calls guard-lib's gl.fine (7), then gl.fault, which writes through a null pointer in guard-lib's code: caught at guard-lib-user's boundary like a fault in its own code, guard-lib-user off and taken out at the next frame, GUARD in the log naming a library mod's code, the game goes on; guard-lib stays and guard-lib-other's call of gl.fine after it gives 7",
   "proves": [
     "kernel.guard.resume",
     "kernel.guard.library"
   ],
   "mods": [
     "../mods/guard-lib",
-    "../mods/guard-lib-user"
+    "../mods/guard-lib-user",
+    "../mods/guard-lib-other"
   ],
   "stage": {
     "name": "EggStarGalaxy",
@@ -71,6 +72,14 @@
     },
     {
       "fact": "takeout.guard-lib",
+      "absent": true
+    },
+    {
+      "fact": "mod.guard-lib-other.fine",
+      "is": 7
+    },
+    {
+      "fact": "takeout.guard-lib-other",
       "absent": true
     },
     {

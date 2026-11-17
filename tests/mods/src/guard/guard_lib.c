@@ -3,7 +3,9 @@
    -DCASE=1, mod guard-lib: exports "gl.fault" (writes through a null pointer) and "gl.fine".
    -DCASE=2, mod guard-lib-user: needs guard-lib; an after hook on MR::getRandom(0, 1643) calls gl.fine (fact
    "fine" 7), then gl.fault: facts "entered" 1 before it, "survived" never. A second call (MR::getRandom(0, 1644))
-   finds the mod taken out: no fact "again". */
+   finds the mod taken out: no fact "again".
+   -DCASE=3, mod guard-lib-other: needs guard-lib; an after hook on MR::getRandom(0, 1644), after guard-lib-user is
+   out, calls gl.fine: fact "fine" 7, the library still serves its other users. */
 #include "../loader/lt.h"
 
 #if CASE == 1
@@ -30,6 +32,22 @@ static const LumaImport imports[] = {
 
 LT_START((void)0)
 LUMA_LIBRARY_MOD(imports, start, 0, exports, 0);
+#elif CASE == 3
+static const void* fine_fn;
+
+static int32_t after(LumaCall* call, void* user) {
+    (void)user;
+    if (LUMA_ARG(call, 2, int32_t) == 1644) lt_fact("fine", ((int32_t (*)(int32_t))fine_fn)(1));
+    return 0;
+}
+
+static const LumaImport imports[] = {
+    LUMA_MOD_FUNCTION(fine_fn, "guard-lib/gl.fine", "lumi1:0000000000001643"),
+    LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, after),
+};
+
+LT_START((void)0)
+LUMA_MOD(imports, start, 0);
 #else
 static const void* fault_fn;
 static const void* fine_fn;
