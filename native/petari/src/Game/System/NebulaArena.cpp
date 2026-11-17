@@ -246,8 +246,9 @@ void* NebulaArena::takeBlock(u32 bytes) {
 }
 
 void* NebulaArena::alloc(u32 size, int alignment) {
-    // A power of two, which the mask below needs (the console's heaps took a negative one to mean "from the top").
-    if (alignment <= 0 || (alignment & (alignment - 1)) != 0) {
+    // 0 (the game's "any": new (pArena, 0)) or a power of two, which the mask below needs; never negative (the console's
+    // heaps took a negative one to mean "from the top").
+    if (alignment < 0 || (alignment & (alignment - 1)) != 0) {
         NEBULA_PANIC("an allocation aligned to %d bytes", alignment);
     }
     // At least 16-byte aligned, as a native allocator's memory is.

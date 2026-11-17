@@ -169,7 +169,7 @@ int main() {
     // Every class (16-byte steps to 1 KiB, then four to a doubling) at each alignment: aligned, inside, writable, disjoint.
     NebulaArena* const pScene = NebulaArena::create(pRoot);
     {
-        static const u32 cAlign[] = {1, 4, 16, 32, 64, 256, 4096};
+        static const u32 cAlign[] = {0, 1, 4, 16, 32, 64, 256, 4096};  // 0: the game's "any"
         static void* sBlocks[2048];
         static u32 sSizes[2048];
         u32 count = 0;
@@ -229,7 +229,7 @@ int main() {
     // A size past the largest block (a corrupt length) and an alignment that is not a power of two panic.
     expect(NEBULA_TEST_PANICS(pScene->alloc(0x7FFFFFF0u, 16)), "a size past the largest block panics");
     expect(NEBULA_TEST_PANICS(pScene->alloc(32, 24)), "alignment 24 panics");
-    expect(NEBULA_TEST_PANICS(pScene->alloc(32, 0)), "alignment 0 panics");
+    expect(!NEBULA_TEST_PANICS(pScene->alloc(32, 0)), "alignment 0 is the game's any: 16");
     expect(NEBULA_TEST_PANICS(pScene->alloc(32, -4)), "a negative alignment panics");
 
     // Plain new goes to the current arena; a scope makes another current and gives the first back.
