@@ -414,7 +414,9 @@ message(STATUS "Nebula game module CPU level: ${NEBULA_CPU_LEVEL}")
 # Sanitizer builds (tests only): e.g. -DNEBULA_SANITIZE=address for the module and the host.
 set(NEBULA_SANITIZE "" CACHE STRING "Sanitizers for a test build (clang -fsanitize=...)")
 if(NEBULA_SANITIZE)
-    target_compile_options(smg_game_common INTERFACE -fsanitize=${NEBULA_SANITIZE} -fno-omit-frame-pointer)
+    # A finding ends the run (no recovery): the harness and ctest see it as the crash it is.
+    target_compile_options(smg_game_common INTERFACE -fsanitize=${NEBULA_SANITIZE} -fno-sanitize-recover=all
+                           -fno-omit-frame-pointer)
     # The module's operator new/delete are NebulaArena's; the sanitizer runtime's own definitions give way.
     target_link_options(smg_game_common INTERFACE -fsanitize=${NEBULA_SANITIZE} $<$<PLATFORM_ID:Windows>:LINKER:/force:multiple>)
     if(NEBULA_SANITIZE MATCHES "address")
@@ -449,7 +451,8 @@ target_link_libraries(nebula_native_host PRIVATE nebula_bssl_ssl nebula_zinflate
 target_compile_definitions(nebula_native_host PRIVATE _CRT_SECURE_NO_WARNINGS)
 add_dependencies(nebula_native_host ${game_modules})
 if(NEBULA_SANITIZE)
-    target_compile_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE} -fno-omit-frame-pointer)
+    target_compile_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE} -fno-sanitize-recover=all
+                           -fno-omit-frame-pointer)
     target_link_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE})
 endif()
 

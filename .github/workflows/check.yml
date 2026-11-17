@@ -169,6 +169,52 @@ jobs:
           cmake --build "$RUNNER_TEMP/game" --target native_tests
           ctest --test-dir "$RUNNER_TEMP/game" --output-on-failure --timeout 600
 
+  # The unit tests under the address and undefined-behaviour sanitizers, and under the thread sanitizer (file 00
+  # section 4.2); the game's own tests under the first (its arenas poison what is free, NebulaArena.cpp). A finding
+  # ends the test that made it (no recovery), so ctest fails. The tour under the sanitizers runs in the local gate.
+  linux-sanitizers:
+    name: Linux sanitizers (${{ matrix.sanitize }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitize: ['address,undefined', 'thread']
+    env:
+      NEBULA_LLVM: ${{ github.workspace }}/../llvm
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:strict_string_checks=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+    steps:
+      - uses: actions/checkout@v7
+      - name: LLVM
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ninja-build
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/llvm.tar.xz" \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/LLVM-$LLVM_VERSION-Linux-X64.tar.xz"
+          mkdir -p "$NEBULA_LLVM"
+          tar -xJf "$RUNNER_TEMP/llvm.tar.xz" -C "$NEBULA_LLVM" --strip-components=1
+          rm "$RUNNER_TEMP/llvm.tar.xz"
+      - name: Unit tests
+        run: |
+          s='${{ matrix.sanitize }}'
+          flags="-fsanitize=$s -fno-omit-frame-pointer -fno-sanitize-recover=all -g"
+          cmake -S tests/unit -B "$RUNNER_TEMP/unit" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            "-DCMAKE_TOOLCHAIN_FILE=$PWD/platform/linux/llvm-toolchain.cmake" \
+            "-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags" \
+            "-DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -fsanitize=$s" "-DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld -fsanitize=$s" \
+            "-DCMAKE_MODULE_LINKER_FLAGS=-fuse-ld=lld -fsanitize=$s"
+          cmake --build "$RUNNER_TEMP/unit" -- -k 0
+          ctest --test-dir "$RUNNER_TEMP/unit" --output-on-failure --timeout 1200
+      - name: The game's unit tests
+        if: matrix.sanitize == 'address,undefined'
+        run: |
+          cmake -S native -B "$RUNNER_TEMP/game" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            "-DCMAKE_TOOLCHAIN_FILE=$PWD/platform/linux/llvm-toolchain.cmake" '-DNEBULA_SANITIZE=${{ matrix.sanitize }}'
+          cmake --build "$RUNNER_TEMP/game" --target native_tests
+          ctest --test-dir "$RUNNER_TEMP/game" --output-on-failure --timeout 1200
+
   linux:
     name: Linux
     runs-on: ubuntu-24.04

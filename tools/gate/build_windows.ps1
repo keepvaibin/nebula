@@ -6,6 +6,10 @@
 #   ROOT\cargo  nebula-import
 # Prints each step's result; any FAILED line or non-zero exit ends it with exit 1. Nothing here reads the
 # environment of the person running it beyond the tools' locations.
+#
+# -Sanitize address,undefined: the game modules built with those sanitizers (native/CMakeLists.txt NEBULA_SANITIZE),
+# their runtime (LLVM's clang_rt.asan_dynamic) in the bin folder. The programs stay as they are: one AddressSanitizer
+# runtime serves a process, and Microsoft's compiler would bring its own. Use a ROOT of its own.
 param(
     [Parameter(Mandatory = $true)][string]$Tree,
     [Parameter(Mandatory = $true)][string]$Root,
@@ -17,7 +21,9 @@ param(
     [int]$Jobs = 12,
     # A configured build folder whose compiled shader stages (generated/*.bin.stages, keyed by content) start a new
     # build's, so the first build does not compile every program again.
-    [string]$SeedFrom = ""
+    [string]$SeedFrom = "",
+    # Sanitizers for the game modules (clang -fsanitize=...), e.g. address,undefined; empty for none.
+    [string]$Sanitize = ""
 )
 $ErrorActionPreference = "Stop"
 $Tree = (Resolve-Path $Tree).Path.Replace("\", "/")
@@ -59,8 +65,13 @@ $game = "$Root/game"
 if (-not (Test-Path "$game/build.ninja")) {
     Step "game configure" ("`"$cmake`" -S `"$Tree/native`" -B `"$game`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$ninja`" " +
         "-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=`"$Llvm/clang.exe`" -DCMAKE_CXX_COMPILER=`"$Llvm/clang++.exe`" " +
-        "-DCMAKE_RC_COMPILER=`"$Llvm/llvm-rc.exe`" -DNEBULA_PETARI_DIR=`"$Tree/native/petari`"") "$Root/game.configure.log"
+        "-DCMAKE_RC_COMPILER=`"$Llvm/llvm-rc.exe`" -DNEBULA_PETARI_DIR=`"$Tree/native/petari`" " +
+        "-DNEBULA_SANITIZE=`"$Sanitize`"") "$Root/game.configure.log"
 }
+$configured = (Select-String -Path "$game/CMakeCache.txt" -Pattern '^NEBULA_SANITIZE:STRING=(.*)$' -ErrorAction SilentlyContinue |
+    Select-Object -First 1)
+$have = if ($configured) { $configured.Matches[0].Groups[1].Value } else { "" }
+if ($have -ne $Sanitize) { "game: $game was configured with NEBULA_SANITIZE='$have', asked for '$Sanitize'"; exit 1 }
 # The game and the MSVC build run side by side, each with half the jobs.
 $half = [Math]::Max(2, [int]($Jobs / 2))
 $gameWatch = [Diagnostics.Stopwatch]::StartNew()
@@ -115,6 +126,13 @@ if ("$pv" -ne $tv) { "bins: $Pak is store version $pv, the tree's is $tv"; exit 
 if (Test-Path $Bin) { Remove-Item -Recurse -Force $Bin }
 New-Item -ItemType Directory -Force "$Bin/luma" | Out-Null
 Copy-Item "$game/smg_game.dll", "$game/smg_game_plain.dll", "$game/smg_game.luma-placement.json" $Bin
+if ($Sanitize) {
+    # The sanitizers' runtime the modules import, from the compiler that built them.
+    $rt = Get-ChildItem "$Llvm/../lib/clang/*/lib/windows/clang_rt.asan_dynamic-x86_64.dll" | Select-Object -First 1
+    if (-not $rt) { "bins: no clang_rt.asan_dynamic-x86_64.dll beside $Llvm"; exit 1 }
+    Copy-Item $rt.FullName $Bin
+    Set-Content -Path "$Bin/sanitize.txt" -Value $Sanitize -Encoding ascii
+}
 Copy-Item "$msvc/Nebula.exe", "$msvc/NebulaVk.exe", "$msvc/NebulaD11.exe", "$msvc/nebula_test_extension.dll" $Bin
 if (Test-Path "$msvc/D3D12") { Copy-Item -Recurse "$msvc/D3D12" "$Bin/D3D12" }
 Copy-Item "$Root/luma-test.dll" "$Bin/luma-test.dll"
