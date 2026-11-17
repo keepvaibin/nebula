@@ -45,8 +45,12 @@ public:
     void exeTalk();
     void exeClose();
     void exeOpen();
+    void keepBodyOnScreen();
 
     u32 mInterval;
+    // The body's and text's panes' own places across the layout (keepBodyOnScreen moves them from there), read once.
+    f32 mBodyPlaces[4];
+    bool mBodyPlacesRead;
 };
 
 class TalkBalloonEvent : public TalkBalloon {

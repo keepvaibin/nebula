@@ -1,0 +1,24 @@
+{
+  "harness": 1,
+  "name": "talk-balloon-edge",
+  "about": "A speech balloon whose speaker stands near the right edge stays inside the screen, its beak on the speaker (N-1022: the Luma's call on arriving in CosmosGardenGalaxy 4 ran past the edge). The picture is judged by the gate's approved pictures (tools/gate/pictures.py), outside the repository: a picture of the game is the game's content.",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "CosmosGardenGalaxy",
+    "scenario": 4
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 30,
+      "picture": "arrive"
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": []
+}

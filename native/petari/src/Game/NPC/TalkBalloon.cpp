@@ -20,6 +20,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
+#include "Game/Screen/LayoutManager.hpp"
 #include "Game/Ui/Pane.hpp"
 #include "Game/System/LumaCore.hpp"
 
@@ -166,7 +167,7 @@ void TalkBalloon::pauseOff() {
     MR::requestMovementOn(this);
 }
 
-TalkBalloonShort::TalkBalloonShort(const char* pName) : TalkBalloon(pName), mInterval() {
+TalkBalloonShort::TalkBalloonShort(const char* pName) : TalkBalloon(pName), mInterval(), mBodyPlaces(), mBodyPlacesRead(false) {
     lumacore::setClass(this, lumacore::kClassId< TalkBalloonShort >);
     initNerve(GET_NERVE(TalkBalloonShort, TalkBalloonShortNrvOpen));
 }
@@ -225,6 +226,103 @@ void TalkBalloonShort::updateBalloon() {
     }
 
     setTrans(Vec2f(mMessageCtrl->mBalloonPos.x, mMessageCtrl->mBalloonPos.y));
+    keepBodyOnScreen();
+}
+
+namespace {
+    // A short balloon's body (its window and the window's shadow) and its text (and the text's shadow), as the
+    // balloon layouts name them (TalkBalloonStretch, TalkBalloonLetter).
+    const char* const cBodyPanes[] = {"WinBalloon", "ShaBalloon", "TxtText", "ShaText"};
+    const s32 cBodyWindows = 2;
+
+    // A pane's horizontal place in its layout's root pane and the scale its parents give it.
+    void placeInRoot(const Ui::Pane* pPane, const Ui::Pane* pRoot, f32* pX, f32* pParentScale) {
+        f32 x = pPane->mTranslate.x;
+        f32 scale = 1.0f;
+        for (const Ui::Pane* parent = pPane->GetParent(); parent != nullptr && parent != pRoot; parent = parent->GetParent()) {
+            x = parent->mTranslate.x + parent->mScale.x * x;
+            scale *= parent->mScale.x;
+        }
+        *pX = x;
+        *pParentScale = scale;
+    }
+}  // namespace
+
+// The balloon stands on its speaker's place on the screen; a speaker near an edge put half the body past it and cut
+// the text (N-1022). The body and its text move along the line, inside the screen's margin, and the beak stays on the
+// speaker: the body never moves so far that the beak leaves it. The layout's animations size the body and place the
+// text's parent; none moves these panes along the line.
+void TalkBalloonShort::keepBodyOnScreen() {
+    LayoutManager* manager = getLayoutManager();
+    Ui::Pane* panes[4];
+    for (s32 i = 0; i < 4; i++) {
+        panes[i] = manager->findPaneByName(cBodyPanes[i]);
+        if (panes[i] == nullptr) {
+            return;
+        }
+    }
+    if (!mBodyPlacesRead) {
+        for (s32 i = 0; i < 4; i++) {
+            mBodyPlaces[i] = panes[i]->mTranslate.x;
+        }
+        mBodyPlacesRead = true;
+    }
+    for (s32 i = 0; i < 4; i++) {
+        panes[i]->mTranslate.x = mBodyPlaces[i];
+    }
+
+    // The body's extent across the root, in layout units, at the size the animations gave it this frame.
+    const Ui::Pane* root = MR::getRootPane(this);
+    f32 left = 0.0f;
+    f32 right = 0.0f;
+    for (s32 i = 0; i < cBodyWindows; i++) {
+        f32 x;
+        f32 parentScale;
+        placeInRoot(panes[i], root, &x, &parentScale);
+        const f32 width = panes[i]->GetDrawSize().width * panes[i]->mScale.x * parentScale;
+        const s32 horizontal = panes[i]->mBasePosition % 3;  // left, centre, right
+        const f32 low = horizontal == 0 ? x : horizontal == 1 ? x - width * 0.5f : x - width;
+        left = i == 0 ? low : (low < left ? low : left);
+        right = i == 0 ? low + width : (low + width > right ? low + width : right);
+    }
+
+    // The screen inside the game's margin, in the same units; the root stands on the speaker.
+    const f32 margin = static_cast< f32 >(MR::getScreenMargin());
+    Vec2f low;
+    Vec2f high;
+    Vec2f speaker;
+    MR::convertScreenPosToLayoutPos(&low, Vec2f(margin, 0.0f));
+    MR::convertScreenPosToLayoutPos(&high, Vec2f(static_cast< f32 >(MR::getScreenWidth()) - margin, 0.0f));
+    MR::convertScreenPosToLayoutPos(&speaker, Vec2f(mMessageCtrl->mBalloonPos.x, mMessageCtrl->mBalloonPos.y));
+
+    f32 shift = 0.0f;
+    if (right - left >= high.x - low.x) {
+        shift = (low.x + high.x) * 0.5f - (speaker.x + (left + right) * 0.5f);
+    } else if (speaker.x + right > high.x) {
+        shift = high.x - (speaker.x + right);
+    } else if (speaker.x + left < low.x) {
+        shift = low.x - (speaker.x + left);
+    }
+
+    // The beak (at the root's line) keeps a beak's width of body on each side of it.
+    if (const Ui::Pane* beak = manager->findPaneByName("PicBeak")) {
+        f32 x;
+        f32 parentScale;
+        placeInRoot(beak, root, &x, &parentScale);
+        const f32 inset = beak->GetDrawSize().width * beak->mScale.x * parentScale;
+        const f32 most_left = x + inset - right;
+        const f32 most_right = x - inset - left;
+        shift = most_left > most_right ? 0.0f : (shift < most_left ? most_left : (shift > most_right ? most_right : shift));
+    }
+    if (shift == 0.0f) {
+        return;
+    }
+    for (s32 i = 0; i < 4; i++) {
+        f32 x;
+        f32 parentScale;
+        placeInRoot(panes[i], root, &x, &parentScale);
+        panes[i]->mTranslate.x = mBodyPlaces[i] + shift / parentScale;
+    }
 }
 
 void TalkBalloonShort::initInterval() {
