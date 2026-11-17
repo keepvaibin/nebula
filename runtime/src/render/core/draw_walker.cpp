@@ -9,6 +9,7 @@
 #include "galaxy/loss_report.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/scene_camera_shape.h"
+#include "render/core/walk_plan.h"
 
 #include <algorithm>
 #include <bit>
@@ -54,6 +55,20 @@ constexpr bool state_color_write(std::uint32_t s) noexcept { return (s & NEBULA_
 inline bool same_material(const NebulaFrameList& list, std::uint32_t a, std::uint32_t b) noexcept {
     return a == b || (list.constants[a].slot != NEBULA_NONE32 && list.constants[a].slot == list.constants[b].slot);
 }
+
+// What the walk's plans (render/core/walk_plan.h) read of the registries.
+struct PlanLookup {
+    core::Registries& registries;
+    [[nodiscard]] std::uint32_t state(std::uint32_t pipeline) const noexcept { return registries.pipeline(pipeline).desc.state; }
+    template <class Fn>
+    void textures(std::uint32_t table, Fn&& fn) const {
+        const core::TextureTable& entry = registries.table(table);
+        for (std::uint32_t t = 0; t < entry.count; ++t) {
+            fn(entry.list[t].texture);
+        }
+    }
+    [[nodiscard]] static bool is_target(std::uint32_t texture) noexcept { return TextureStore::is_target(texture); }
+};
 
 inline Affine34 affine_of(const float (*rows)[4]) noexcept {
     Affine34 out;
@@ -1661,202 +1676,6 @@ void RenderCore::walk_target_end(std::uint32_t channels) {
 // A target pass breaks the frame's pass where it stands: on a tiled GPU the frame target's colour, depth and stencil are
 // stored and loaded again around it (about 100 MB at 2960x1848). One that reads nothing the list makes before it, whose
 // picture nothing before it reads, and that reads no frame, is drawn first: its picture is the same, the frame unbroken.
-void RenderCore::plan_early_targets(ListData& now) {
-    now.targets_planned = true;
-    now.early_targets.clear();
-    const NebulaFrameList& list = *now.list;
-    bool any = false;
-    for (std::uint32_t p = 0; p < list.pass_count && !any; ++p) {
-        const NebulaFramePass& pass = list.passes[p];
-        any = pass.kind == NEBULA_PASS_DRAW && pass.layer == NEBULA_LAYER_TARGET && pass.load != 0u &&
-              pass.over_frame_texture == 0u && pass.over_frame_depth == 0u;
-    }
-    if (!any) {
-        return;
-    }
-    // Pictures made by the passes that stay in place, and the pictures their draws read, so far.
-    std::vector<std::uint32_t> written, read, run_read;
-    const auto has = [](const std::vector<std::uint32_t>& keys, std::uint32_t key) {
-        return std::find(keys.begin(), keys.end(), key) != keys.end();
-    };
-    const auto note_reads = [&](const NebulaFramePass& pass, std::vector<std::uint32_t>& into) {
-        const std::uint32_t end = pass.first_item + pass.item_count;
-        for (std::uint32_t i = pass.first_item; i < end; ++i) {
-            const core::TextureTable& table = registries_.table(list.items[i].textures);
-            for (std::uint32_t t = 0; t < table.count; ++t) {
-                const std::uint32_t texture = table.list[t].texture;
-                if (TextureStore::is_target(texture) && !has(into, texture)) {
-                    into.push_back(texture);
-                }
-            }
-        }
-    };
-    std::uint32_t scene = NEBULA_NONE32;
-    for (std::uint32_t p = 0; p < list.pass_count;) {
-        const NebulaFramePass& pass = list.passes[p];
-        if (pass.kind == NEBULA_PASS_DRAW && pass.layer == NEBULA_LAYER_TARGET && pass.load != 0u) {
-            // The run walk_list draws with the target open: through the next pass outside it, or the next target's start.
-            std::uint32_t end = p + 1u;
-            while (end < list.pass_count && list.passes[end].layer == NEBULA_LAYER_TARGET &&
-                   !(list.passes[end].kind == NEBULA_PASS_DRAW && list.passes[end].load != 0u)) {
-                ++end;
-            }
-            bool early = pass.over_frame_texture == 0u && pass.over_frame_depth == 0u && !has(written, pass.target) &&
-                         !has(read, pass.target);
-            run_read.clear();
-            for (std::uint32_t q = p; q < end; ++q) {
-                if (list.passes[q].kind == NEBULA_PASS_DRAW) {
-                    note_reads(list.passes[q], run_read);
-                } else if (list.passes[q].kind != NEBULA_PASS_CLEAR) {
-                    early = false;
-                }
-            }
-            for (const std::uint32_t key : run_read) {
-                early = early && !has(written, key);
-            }
-            if (early) {
-                now.early_targets.push_back(core::ListData::EarlyTargets{p, end, scene});
-            } else {
-                written.push_back(pass.target);
-                if (pass.over_frame_texture != 0u) {
-                    written.push_back(pass.over_frame_texture);
-                }
-                if (pass.over_frame_depth != 0u) {
-                    written.push_back(pass.over_frame_depth);
-                }
-                for (const std::uint32_t key : run_read) {
-                    if (!has(read, key)) {
-                        read.push_back(key);
-                    }
-                }
-            }
-            p = end;
-            continue;
-        }
-        switch (pass.kind) {
-        case NEBULA_PASS_DRAW:
-            note_reads(pass, read);
-            break;
-        case NEBULA_PASS_COPY_FRAME:
-        case NEBULA_PASS_TAKE_FRAME:
-            written.push_back(pass.target);
-            break;
-        case NEBULA_PASS_SCENE_BEGIN:
-            scene = p;
-            break;
-        case NEBULA_PASS_SCENE_END:
-            scene = NEBULA_NONE32;
-            break;
-        default:
-            break;
-        }
-        ++p;
-    }
-}
-
-// A probe answers with the scene depth where the game asked it. Asked while the scene pass is open, it waits for the
-// pass's end, or ends it at the next draw or clear that changes the depth: a store and a load of the whole target on a
-// tiled GPU. When nothing between the frame copy before it and the probe writes or clears the scene's depth, the depth
-// right after that copy is the same, and the scene pass is closed there anyway: the probe is asked there.
-void RenderCore::plan_early_probes(ListData& now) {
-    now.early_probes.clear();
-    const NebulaFrameList& list = *now.list;
-    constexpr std::uint32_t depth_write = (1u << 10u) | (1u << 14u);
-    const auto keeps_depth = [&](const NebulaFramePass& pass) {
-        switch (pass.kind) {
-        case NEBULA_PASS_PROBE:
-        case NEBULA_PASS_TRACED_DRAW:  // draws nothing
-            return true;
-        case NEBULA_PASS_CLEAR:
-            return pass.layer == NEBULA_LAYER_TARGET || (pass.clear_channels & 4u) == 0u;
-        case NEBULA_PASS_DRAW: {
-            if (pass.layer == NEBULA_LAYER_TARGET) {
-                return true;  // into a target's own depth
-            }
-            const std::uint32_t end = pass.first_item + pass.item_count;
-            for (std::uint32_t i = pass.first_item; i < end; ++i) {
-                if ((registries_.pipeline(list.items[i].pipeline).desc.state & depth_write) == depth_write) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        default:
-            return false;
-        }
-    };
-    for (std::uint32_t p = 0; p < list.pass_count; ++p) {
-        if (list.passes[p].kind != NEBULA_PASS_PROBE) {
-            continue;
-        }
-        // Back to the scene's end if nothing between changes its depth (frame copies do not): asked there, the scene's
-        // own depth is still the bound one (before an upscaler or the resolve trades the targets). Else after the
-        // nearest frame copy, where the scene pass is closed anyway.
-        std::uint32_t copy = NEBULA_NONE32;
-        for (std::uint32_t q = p; q-- > 0u;) {
-            const NebulaFramePass& pass = list.passes[q];
-            if (pass.kind == NEBULA_PASS_SCENE_END) {
-                copy = q;
-                break;
-            }
-            if (pass.kind == NEBULA_PASS_COPY_FRAME || pass.kind == NEBULA_PASS_TAKE_FRAME) {
-                if (copy == NEBULA_NONE32) {
-                    copy = q;
-                }
-                continue;
-            }
-            if (!keeps_depth(pass)) {
-                break;
-            }
-        }
-        if (copy != NEBULA_NONE32) {
-            now.early_probes.push_back(core::ListData::EarlyProbe{copy, p});
-        }
-    }
-}
-
-// A clear of the scene's depth that no later pass of the list reads or writes (the HUD's, before 2D draws that leave
-// depth alone) is only seen by what comes after the list: the renderer may clear it as the next pass opens instead
-// (defer_scene_depth_clear), where held probes would otherwise end the scene pass for it.
-void RenderCore::plan_late_depth_clears(ListData& now) {
-    now.late_depth_clears.clear();
-    const NebulaFrameList& list = *now.list;
-    const auto leaves_depth = [&](const NebulaFramePass& pass) {
-        const std::uint32_t end = pass.first_item + pass.item_count;
-        for (std::uint32_t i = pass.first_item; i < end; ++i) {
-            const std::uint32_t state = registries_.pipeline(list.items[i].pipeline).desc.state;
-            const bool depth = (state & (1u << 10u)) != 0u &&
-                               (((state >> 11u) & 7u) != 7u || (state & (1u << 14u)) != 0u);  // a test, or a write
-            if (depth || ((state >> 20u) & 3u) != 0u) {
-                return false;
-            }
-        }
-        return true;
-    };
-    for (std::uint32_t p = 0; p < list.pass_count; ++p) {
-        const NebulaFramePass& clear = list.passes[p];
-        if (clear.kind != NEBULA_PASS_CLEAR || clear.layer == NEBULA_LAYER_TARGET || (clear.clear_channels & 4u) == 0u) {
-            continue;
-        }
-        bool late = true;
-        for (std::uint32_t q = p + 1u; q < list.pass_count && late; ++q) {
-            const NebulaFramePass& pass = list.passes[q];
-            if (pass.layer == NEBULA_LAYER_TARGET) {
-                late = false;
-            } else if (pass.kind == NEBULA_PASS_CLEAR && (pass.clear_channels & 4u) != 0u) {
-                break;  // the whole depth again
-            } else if (pass.kind == NEBULA_PASS_DRAW) {
-                late = leaves_depth(pass);
-            } else if (pass.kind != NEBULA_PASS_CLEAR && pass.kind != NEBULA_PASS_SHOW && pass.kind != NEBULA_PASS_TRACED_DRAW) {
-                late = false;
-            }
-        }
-        if (late) {
-            now.late_depth_clears.push_back(p);
-        }
-    }
-}
-
 void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time) {
     prepare_walk(now, before, time);
     const NebulaFrameList& list = *now.list;
@@ -1872,9 +1691,11 @@ void RenderCore::walk_list(ListData& now, ListData* before, const WalkTime& time
     }
     std::uint32_t target_channels = 0u;
     if (!now.targets_planned) {
-        plan_early_targets(now);
-        plan_early_probes(now);
-        plan_late_depth_clears(now);
+        now.targets_planned = true;
+        const PlanLookup lookup{registries_};
+        core::plan_early_targets(list, lookup, now.early_targets);
+        core::plan_early_probes(list, lookup, now.early_probes);
+        core::plan_late_depth_clears(list, lookup, now.late_depth_clears);
     }
     for (const core::ListData::EarlyTargets& run : now.early_targets) {
         if (run.scene != NEBULA_NONE32) {

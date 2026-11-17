@@ -127,6 +127,9 @@ target_include_directories(galaxy_core_pairing_tests PRIVATE "${galaxy_root}/run
 galaxy_test(galaxy_present_slots_tests SOURCES ${render_src}/present_slots_tests.cpp ${render_src}/present_slots.cpp)
 galaxy_test(galaxy_core_world_lights_tests SOURCES ${render_src}/core/world_lights_tests.cpp ${render_src}/core/world_lights.cpp)
 target_include_directories(galaxy_core_world_lights_tests PRIVATE "${galaxy_root}/runtime/src" "${galaxy_root}/native/include")
+# The draw walker's plans for a list (header-only).
+galaxy_test(galaxy_walk_plan_tests SOURCES ${render_src}/core/walk_plan_tests.cpp)
+target_include_directories(galaxy_walk_plan_tests PRIVATE "${galaxy_root}/runtime/src" "${galaxy_root}/native/include")
 galaxy_test(galaxy_rt_geometry_tests SOURCES ${render_src}/rt/rt_geometry_tests.cpp ${render_src}/rt/rt_geometry.cpp
     ${render_src}/rt/rt_scene.cpp ${render_src}/rt/rt_backend_fake.cpp)
 target_include_directories(galaxy_rt_geometry_tests PRIVATE "${galaxy_root}/runtime/src")

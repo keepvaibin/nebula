@@ -13,6 +13,7 @@
 #include "galaxy/render/renderer_common.h"
 #include "render/core/compose.h"
 #include "render/core/gpu_encoder.h"
+#include "render/core/walk_plan.h"
 
 #include <nebula_frame_list.h>
 #include <nebula_game_api.h>
@@ -240,20 +241,14 @@ struct ListData {
     [[nodiscard]] bool probes_due(bool between) const noexcept { return !probes_done && !between; }
     std::vector<EyeMotion> eye_motions;        // an eye-space block's joints, in `joint_motion`'s place
 
-    // Target passes drawn before the list's other passes (plan_early_targets): passes [first, end), and the
-    // SCENE_BEGIN they sit after in the list, or none.
-    struct EarlyTargets {
-        std::uint32_t first = 0u, end = 0u, scene = NEBULA_NONE32;
-    };
+    // The walk's plans (render/core/walk_plan.h), made at the list's first walk: target passes drawn before the list's
+    // other passes, probes asked right after an earlier pass (in list order), and clears of the scene's depth that
+    // nothing after them in the list reads or writes.
+    using EarlyTargets = core::EarlyTargets;
+    using EarlyProbe = core::EarlyProbe;
     bool targets_planned = false;
     std::vector<EarlyTargets> early_targets;
-    // Probes asked right after an earlier pass (plan_early_probes), in list order; `after` a SCENE_END: asked as the
-    // scene ends, before walk_scene_end trades the targets.
-    struct EarlyProbe {
-        std::uint32_t after = 0u, probe = 0u;
-    };
     std::vector<EarlyProbe> early_probes;
-    // Clears of the scene's depth that nothing after them in the list reads or writes (plan_late_depth_clears).
     std::vector<std::uint32_t> late_depth_clears;
 
     // Read once from the list.
