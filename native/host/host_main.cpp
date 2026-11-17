@@ -71,6 +71,7 @@
 #include "galaxy/diag_report.h"
 #endif
 #include "galaxy/frame_timeline.h"
+#include "galaxy/input/host_input.h"
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
 #include "galaxy/controller_hid.h"
 #endif
@@ -2430,7 +2431,6 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
 int32_t svc_benchmark_state(void*, NebulaBenchmarkState* state) {
 #if defined(NEBULA_HOST_RENDERER)
     static_assert(static_cast<uint32_t>(galaxy::bench::Part::Yours) == NEBULA_BENCHMARK_PART_YOURS &&
-                      static_cast<uint32_t>(galaxy::bench::Part::Standard) == NEBULA_BENCHMARK_PART_STANDARD &&
                       static_cast<uint32_t>(galaxy::bench::Part::Probe) == NEBULA_BENCHMARK_PART_PROBE &&
                       static_cast<uint32_t>(galaxy::bench::Part::Again) == NEBULA_BENCHMARK_PART_AGAIN,
                   "the benchmark's parts are numbered alike");
@@ -2798,6 +2798,21 @@ int32_t svc_pointer_wheel(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     return galaxy::render::take_pointer_wheel();
 #else
+    return 0;
+#endif
+}
+
+// The finger on a touch screen for Nebula's menus (host_input.h menu_finger).
+int32_t svc_menu_finger(void*, NebulaMenuFinger* finger) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::host::MenuFinger now;
+    if (finger == nullptr || !galaxy::host::menu_finger(now)) {
+        return 0;
+    }
+    *finger = {now.touch, now.down ? 1u : 0u, now.moved ? 1u : 0u, now.x, now.y, now.land_x, now.land_y, now.vx, now.vy};
+    return 1;
+#else
+    (void)finger;
     return 0;
 #endif
 }
@@ -3239,11 +3254,14 @@ uint32_t svc_option(void*, uint32_t what) {
             return mods;
         }
 #if defined(NEBULA_HOST_RENDERER)
-        // The title waits once for the pipeline list; what a later settings change adds prepares behind the game.
+        // The title waits once for the pipeline list, the first run and after the programs, the driver or the settings
+        // changed; what a later settings change adds prepares behind the game. Not when the driver's cache from an earlier
+        // run holds the whole list (warm): each is then a load, made behind the title, or by the draw that first needs it.
         // Deterministic test mode doesn't: how long the workers take is the machine's, so the frames waited would differ
         // run to run, and a draw makes its own pipeline when it isn't made yet.
         if (!gPipelinesPrepared) {
-            gPipelinesPrepared = deterministic_mode() || galaxy::render::pipeline_progress().left == 0u;
+            const galaxy::render::PipelineProgress progress = galaxy::render::pipeline_progress();
+            gPipelinesPrepared = deterministic_mode() || progress.left == 0u || progress.warm;
         }
         return gPipelinesPrepared ? 0u : 2u;
 #else
@@ -6166,6 +6184,7 @@ int main(int argc, char** argv) {
     services.button_icons = svc_button_icons;
     services.layer_2d_lines = svc_layer_2d_lines;
     services.pointer_wheel = svc_pointer_wheel;
+    services.menu_finger = svc_menu_finger;
     services.galaxy_select_stage = svc_galaxy_select_stage;
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
     services.galaxy_select_name = svc_galaxy_select_name;

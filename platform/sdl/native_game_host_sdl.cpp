@@ -203,6 +203,40 @@ bool touch_target_at(float x, float y) noexcept {
     return touch_target_under(sdl::input_state(), x, y, target);
 }
 
+// The finger mapped onto the picture as project_native_mouse_pointer maps it, but neither clamped nor dropped outside:
+// a drag that leaves the picture's edge still moves what it holds. The slop where the system gives none: Android's
+// default, 8 density-independent units.
+bool menu_finger(MenuFinger& out) noexcept {
+    const sdl::InputState state = sdl::input_state();
+    if (state.mouse_pointer || state.finger_touches == 0u) {
+        return false;
+    }
+    const auto content = galaxy::g_presentation_content.read();
+    if (!content || content->surface_width != state.window_width || content->surface_height != state.window_height ||
+        content->viewport.width <= 1 || content->viewport.height <= 1) {
+        return false;
+    }
+    const float left = static_cast<float>(content->viewport.left);
+    const float top = static_cast<float>(content->viewport.top);
+    const float per_x = 2.0f / static_cast<float>(content->viewport.width - 1);
+    const float per_y = 2.0f / static_cast<float>(content->viewport.height - 1);
+    float slop = state.touch_slop_px;
+    if (slop <= 0.0f) {
+        const unsigned dp = window_width_dp();
+        slop = dp != 0u ? 8.0f * static_cast<float>(state.window_width) / static_cast<float>(dp) : 8.0f;
+    }
+    out.touch = state.finger_touches;
+    out.down = state.finger_down;
+    out.moved = state.finger_travel_px > slop;
+    out.x = (state.finger_x - left) * per_x - 1.0f;
+    out.y = (state.finger_y - top) * per_y - 1.0f;
+    out.land_x = (state.finger_land_x - left) * per_x - 1.0f;
+    out.land_y = (state.finger_land_y - top) * per_y - 1.0f;
+    out.vx = state.finger_vx * per_x;
+    out.vy = state.finger_vy * per_y;
+    return true;
+}
+
 void note_corner_buttons(std::uint32_t foot) noexcept {
     std::lock_guard<std::mutex> lock(g_touch_targets_mutex);
     const std::uint32_t value = foot > 4095u ? 4095u : foot;

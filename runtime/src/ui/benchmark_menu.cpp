@@ -101,14 +101,13 @@ void read_results(State& state) {
     }
 }
 
-// The frame-time graph of the shown run's main part (the player's settings, else the standard): empty when its frame
-// lists are missing or unreadable.
+// The frame-time graph of the shown run's stages at the player's settings: empty when its frame lists are missing or
+// unreadable.
 void draw_graph(State& state) {
     state.graph_picture.reset();
     state.graph = {};
     if (state.shown >= state.runs.size()) return;
-    const bench::ResultView& run = state.runs[state.shown];
-    const unsigned part = run.yours.present || !run.standard.present ? 0u : 1u;
+    constexpr unsigned part = 0u;  // the frame lists' part at the player's settings (benchmark.cpp frame_lists)
     const std::string bytes = file_text(bench::frames_file(state.files[state.shown]), kMostFrameBytes);
     std::vector<bench::FrameList> lists;
     if (!bench::decode_frame_lists(bytes, lists)) return;

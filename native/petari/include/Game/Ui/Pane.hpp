@@ -123,6 +123,11 @@ namespace Ui {
             detail::SetBit(&mFlag, 0, visible);
         }
 
+        // The pane and everything under it are new things to the frame interpolation from their next draw (their draw
+        // slots, MotionSignal::drawObject): a pane reused to show something else is never drawn moving from what it
+        // showed before (a pooled button handed to another row, a list showing another page).
+        void RenewDrawIdentity();
+
         bool IsVisible() const {
             return detail::TestBit(mFlag, 0);
         }

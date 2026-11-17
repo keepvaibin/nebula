@@ -259,6 +259,11 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             return;
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // No touch boost (Android 15): a touch would raise the panel to its fastest rate and the idle timer drop it
+        // again, a refresh-rate switch each time, while the game's rate is the frame-rate setting's either way.
+        if (android.os.Build.VERSION.SDK_INT >= 35) {
+            getWindow().setFrameRateBoostOnTouchEnabled(false);
+        }
         WiimoteUsb.init(this);
         reportPanelRate();
         nativeTouchSlop(ViewConfiguration.get(this).getScaledTouchSlop());

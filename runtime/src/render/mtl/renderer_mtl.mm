@@ -727,10 +727,12 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
         }];
         if (presenting) {
             // On a variable refresh display with VSync on the pacer holds presents under the refresh
-            // (paced_present_rate); a frame under the cap goes out as soon as it is ready.
+            // (paced_present_rate); a frame under the cap goes out as soon as it is ready. Interpolated pictures are paced
+            // by their slot clock (RenderCore), as on Direct3D.
             const RenderConfig cfg = get_render_config();
             const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
-            pace_wait_ms = present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
+            pace_wait_ms = interpolation_mode() ? 0.0
+                                                : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
             present_start = galaxy::qpc_now();
             if (trace_present_stats_enabled()) {
                 // Where in a refresh the picture is handed over.

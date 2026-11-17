@@ -108,6 +108,11 @@ namespace NebulaHost {
         return nebula_host()->pointer_wheel(nebula_host()->user);
     }
 
+    // The finger on a touch screen while it is the pointer (NebulaMenuFinger): true and `pFinger` filled.
+    inline bool menuFinger(NebulaMenuFinger* pFinger) {
+        return nebula_host()->menu_finger(nebula_host()->user, pFinger) != 0;
+    }
+
     inline int galaxySelectStage(u32 index, char* pId, u32 capacity, u32* pStars) {
         return nebula_host()->galaxy_select_stage(nebula_host()->user, index, pId, capacity, pStars);
     }

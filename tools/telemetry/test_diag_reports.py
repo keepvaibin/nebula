@@ -16,7 +16,7 @@ FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testdata", "
 
 
 def bench(gpu, vendor, shared, budget, backend, low, passes, limiter, stutter_cause=None, render_parts=None):
-    """The fixture as one device's result: both parts' scenes get `low` as their 1% low (the second scene twice it),
+    """The fixture as one device's result: its scenes get `low` as their 1% low (the second scene twice it),
     the GPU passes `passes` (name: ms) with their shares, and `limiter`; with `stutter_cause`, each scene's first slow
     frame becomes a 40 ms stutter with that cause; with `render_parts`, each scene's first slow frame has those."""
     with open(FIXTURE, encoding="ascii") as handle:
@@ -51,8 +51,8 @@ class Summary(unittest.TestCase):
 
     def test_groups_and_slowest_first(self):
         text, rows = diag_reports.summarise(self.reports)
-        self.assertEqual(len(rows), 12)  # three reports, two parts, two scenes each
-        self.assertTrue(text.startswith("3 reports, 12 scenes (6 at the standard settings)"), text)
+        self.assertEqual(len(rows), 6)  # three reports, two scenes each
+        self.assertTrue(text.startswith("3 reports, 6 scenes (6 at the player's settings)"), text)
         lines = text.splitlines()
         by = lines.index(next(l for l in lines if l.startswith("By GPU class")))
         groups = lines[by + 1:by + 3]
@@ -64,10 +64,10 @@ class Summary(unittest.TestCase):
         self.assertIn("limited by game thread", groups[1])
         costs = lines[lines.index(next(l for l in lines if l.startswith("Top costs"))) + 1:]
         self.assertTrue(costs[0].startswith("  Intel integrated <2GB / d3d12: passes scene 78%, bloom 22%"), costs[0])
-        self.assertIn("stutters pipeline built 4", costs[0])
+        self.assertIn("stutters pipeline built 2", costs[0])
         self.assertIn("slowest frames not timed", costs[0])
         self.assertIn("stutters none", costs[1])
-        self.assertIn("slowest frames texture create 4", costs[1])
+        self.assertIn("slowest frames texture create 2", costs[1])
         slowest = lines[lines.index(next(l for l in lines if l.startswith("Slowest"))) + 1:]
         self.assertEqual(len(slowest), 3)
         self.assertIn("Intel HD 500", slowest[0])
@@ -82,7 +82,7 @@ class Summary(unittest.TestCase):
             diag_reports.write_csv(rows, path)
             with open(path, encoding="utf-8") as handle:
                 read = list(csv.DictReader(handle))
-        self.assertEqual(len(read), 12)
+        self.assertEqual(len(read), 6)
         self.assertNotIn("passes", read[0])
         first = read[0]
         self.assertEqual(first["gpu_class"], "Intel integrated <2GB")

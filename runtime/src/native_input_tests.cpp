@@ -61,18 +61,20 @@ bool settings_pad_toggles_navigates_and_hides_buttons() {
     ok &= expect(s.key_count == 0u && s.game_neutral, "a held chord does not repeat");
     s = step(0u, true, 60u);
     s = step(pad::kDown, true, 100u);
-    ok &= expect(only_key(s, pad::kKeyDown) && s.game_neutral, "D-pad moves inside the overlay");
+    ok &= expect(only_key(s, pad::kKeyDown) && s.game_neutral && s.repeats == 0u,
+                 "D-pad moves inside the overlay, a press (the rows go round at their ends)");
     s = step(pad::kDown, true, 450u);
     ok &= expect(s.key_count == 0u, "no repeat before the delay");
     s = step(pad::kDown, true, 500u);
-    ok &= expect(only_key(s, pad::kKeyDown), "held direction repeats after the delay");
+    ok &= expect(only_key(s, pad::kKeyDown) && s.repeats == 1u,
+                 "held direction repeats after the delay, marked a repeat (the rows stop at their ends)");
     s = step(pad::kDown, true, 560u);
     ok &= expect(s.key_count == 0u, "repeat waits for its interval");
     s = step(pad::kDown, true, 610u);
-    ok &= expect(only_key(s, pad::kKeyDown), "repeat continues at its interval");
+    ok &= expect(only_key(s, pad::kKeyDown) && s.repeats == 1u, "repeat continues at its interval");
     s = step(0u, true, 620u);
     s = step(0u, true, 630u, -0.9f, 0.0f);
-    ok &= expect(only_key(s, pad::kKeyLeft), "left stick adjusts inside the overlay");
+    ok &= expect(only_key(s, pad::kKeyLeft) && s.repeats == 0u, "left stick adjusts inside the overlay");
     s = step(0u, true, 640u);
     s = step(pad::kA, true, 650u);
     ok &= expect(only_key(s, pad::kKeyAccept), "A changes the selected setting (the overlay reads it as Right)");

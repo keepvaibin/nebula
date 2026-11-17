@@ -24,6 +24,7 @@
 #include "galaxy/render/rt/rt_backend.h"
 #include "galaxy/render/rt/rt_denoiser.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/present_slots.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/vk/ambient_occlusion_vk.h"
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
@@ -445,6 +446,12 @@ public:
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     // The display's vblanks (host_window::vblank_grid): the latest and the interval, on galaxy::qpc_now()'s clock.
     [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept;
+    // What the swap chain keeps of the pictures presented (present_slots.h): its present mode's.
+    [[nodiscard]] SwapQueue swap_queue() const noexcept {
+        return swapchain_.mode == VK_PRESENT_MODE_FIFO_KHR      ? SwapQueue::EveryPicture
+             : swapchain_.mode == VK_PRESENT_MODE_MAILBOX_KHR   ? SwapQueue::NewestPicture
+                                                                : SwapQueue::Tearing;
+    }
     // The moment the next present shows, on galaxy::qpc_now()'s clock (RenderCore's interpolation slot, a vblank); 0
     // when it has none. With presentation times (VK_GOOGLE_display_timing) the picture is shown at that moment and a
     // pipeline depth (PresentTiming).

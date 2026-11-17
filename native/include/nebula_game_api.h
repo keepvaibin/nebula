@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 158u
+#define NEBULA_GAME_API_VERSION 159u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -735,6 +735,18 @@ typedef struct NebulaSettingsRow {
     uint16_t slider_at;
 } NebulaSettingsRow;
 
+/* The finger on a touch screen as Nebula's menus take it (menu_finger): the picture from -1 to 1 each way, left and top
+   -1, as the pointer's (MR::getPointerPastPos). A touch that came and went between two reads shows as a new `touch` with
+   `down` 0: a tap where it was lifted, or a flick. */
+typedef struct NebulaMenuFinger {
+    uint32_t touch;  /* counts the touches: a new value is a finger come down */
+    uint32_t down;   /* 1 while it is on the screen */
+    uint32_t moved;  /* 1 once it went past the display's touch slop since it came down: a drag, never a tap */
+    float x, y;      /* where it is, or where it was lifted */
+    float land_x, land_y; /* where it came down */
+    float vx, vy;    /* its speed as it was lifted, in the same units a second (0 when it held still first) */
+} NebulaMenuFinger;
+
 typedef struct NebulaSettingsView {
     uint32_t open;
     uint32_t page;
@@ -784,7 +796,6 @@ typedef struct NebulaSettingsView {
 /* What a benchmark step measures (NebulaBenchmarkState). */
 enum {
     NEBULA_BENCHMARK_PART_YOURS = 0, /* the player's settings */
-    NEBULA_BENCHMARK_PART_STANDARD,  /* the standard settings (1920x1080, High), the same on every device */
     NEBULA_BENCHMARK_PART_PROBE,     /* one optional pass, alone, to price it */
     NEBULA_BENCHMARK_PART_AGAIN,     /* the first stage again, the device warmed up */
 };
@@ -794,7 +805,7 @@ typedef struct NebulaBenchmarkState {
     uint32_t step;       /* the step running, from 1 */
     uint32_t steps;      /* the run's steps */
     uint32_t part;       /* NEBULA_BENCHMARK_PART_* */
-    uint32_t showing;    /* 1 while the step's stage is on screen (its opening, warming up or measured); 0 while it
+    uint32_t showing;    /* 1 while the step's stage is on screen (under the cover until play, warming up or measured); 0 while it
                             loads */
     uint32_t fps_tenths; /* pictures shown a second (every present) over the last second, in tenths; 0 not known */
     uint32_t progress;   /* the whole run, 0 to 10000, never going back */
@@ -1078,6 +1089,9 @@ typedef struct NebulaHostServices {
     /* While a benchmark runs (Nebula --benchmark 1): `state` filled, 1; else 0 and nothing written. The game shows its
        run panel from it; the host takes the stop (Escape, a controller's B, Android's back). Game thread. */
     int32_t (*benchmark_state)(void* user, NebulaBenchmarkState* state);
+    /* The finger on a touch screen, for Nebula's menus (NebulaMenuFinger): 1 and `finger` filled while a finger is the
+       pointer, 0 while a mouse moved last or none has touched. Game thread. */
+    int32_t (*menu_finger)(void* user, NebulaMenuFinger* finger);
 } NebulaHostServices;
 
 

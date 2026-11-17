@@ -430,13 +430,6 @@ bool save_render_config_to_file();
 [[nodiscard]] unsigned first_start_internal_height(bool shared_memory, unsigned output_lines) noexcept;
 // The PERFORMANCE preset: the 3D scene and the 2D layer at 480 lines and one enlarge at present, every optional pass off.
 void apply_performance_preset(RenderConfig& cfg) noexcept;
-// The benchmark's standard settings, the same on every device so their results compare: the scene at 1920 x 1080 (16:9
-// at 1080 lines, whatever the window's shape), MSAA 4x, SMAA high, ambient occlusion, enhanced and per-pixel lighting,
-// bloom and 16x anisotropic filtering; no upscaler, dynamic resolution, frame generation, ray tracing
-// or HDR, and the benchmark's presenting (apply_benchmark_presenting). The window, display and GPU stay as they are.
-inline constexpr unsigned kBenchmarkStandardLines = 1080u;
-inline constexpr unsigned kBenchmarkStandardAspect = 4u;  // kAspectRatios: 16:9
-void apply_benchmark_standard(RenderConfig& cfg) noexcept;
 // How the benchmark presents, at every step: the game at its own pace and Nebula's interpolated frames between its
 // frames as fast as the device makes them, without VSync (kUnlimitedFrameRate). While a benchmark runs the GPU's
 // generated-frame budget is not applied (RenderCore::interp_gpu_governor): each picture shows the moment it is drawn

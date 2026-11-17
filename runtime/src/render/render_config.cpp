@@ -635,34 +635,6 @@ void apply_performance_preset(RenderConfig& cfg) noexcept {
     cfg.max_fps = 0.0f;
 }
 
-void apply_benchmark_standard(RenderConfig& cfg) noexcept {
-    static_assert(kAspectRatios[kBenchmarkStandardAspect][0] == 16u && kAspectRatios[kBenchmarkStandardAspect][1] == 9u);
-    cfg.internal_height = kBenchmarkStandardLines;
-    cfg.aspect_mode = kBenchmarkStandardAspect;
-    cfg.upscaler = 0u;
-    cfg.dynamic_resolution = false;
-    cfg.frame_generation = 0u;
-    cfg.sharpness = 0u;
-    cfg.msaa_samples = 4u;
-    cfg.aa_mode = 1u;
-    cfg.smaa_quality = 2u;
-    cfg.ambient_occlusion = true;
-    cfg.ambient_occlusion_ssao = false;
-    cfg.enhanced_lighting = true;
-    cfg.per_pixel_lighting = true;
-    cfg.wide_scene = true;
-    cfg.curved_surfaces = true;
-    cfg.bloom = 100u;
-    cfg.post_process = true;
-    cfg.anisotropic_filtering = 16u;
-    cfg.texture_lod_bias = 0u;
-    cfg.hud_output_resolution = false;
-    cfg.hud_internal_resolution = false;
-    cfg.ray_tracing_enabled = false;
-    cfg.hdr = false;
-    apply_benchmark_presenting(cfg);
-}
-
 void apply_benchmark_presenting(RenderConfig& cfg) noexcept {
     cfg.vsync_interval = 0u;
     cfg.frame_generation = 0u;

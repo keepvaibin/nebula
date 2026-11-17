@@ -119,6 +119,16 @@ namespace {
     const s32 cRowButtonsFirst = 6;  // the launcher's buttons made with the screen; more when a row has more
     const f32 cModsGap = 26.0f;      // the MODS page: between its two lists
     const f32 cDragStart = 5.0f;     // how far the pointer moves something held down before it is dragged
+    // A finger held still on a mod this long picks it up to move it (Android's long press, 0.4 s); moved sooner, it
+    // scrolls the list.
+    const s32 cPickUpFrames = 24;
+    // A list let go by a flicking finger glides on, slowing as iOS's lists do (0.998 of its speed each millisecond), and
+    // stops once slower than cGlideStop. A flick slower than cGlideMin does not glide; none glides faster than cGlideMax.
+    // In the menu's units a second.
+    const f32 cGlideDecay = 2.002f;  // -ln(0.998) * 1000: the speed's fall a second, as an exponent
+    const f32 cGlideMin = 40.0f;
+    const f32 cGlideStop = 12.0f;
+    const f32 cGlideMax = 6000.0f;
     const f32 cEdgeScrollRows = 8.0f;  // a list under a dragged mod at its edge scrolls this many rows a second at most
     const s32 cRowChipsFirst = 48;   // the rows' buttons made with the screen; more when the rows in sight need them
 
@@ -1249,11 +1259,15 @@ private:
     void fillHome(s32 homeView);
     void fillLauncher(s32 view);
     void readPointer(const NebulaSettingsView& rView);
+    bool readInput(f32* pX, f32* pY);
+    void toMenu(f32 pointerX, f32 pointerY, f32* pX, f32* pY) const;
+    void glideList();
     void readHomePointer(f32 x, f32 y);
-    void clickRow(const NebulaSettingsView& rView, s32 row);
+    void clickRow(const NebulaSettingsView& rView, s32 row, s32 button);
     void dragSlider(const NebulaSettingsView& rView, f32 x);
     void edgeScroll(s32 list, f32 y);
-    RowChip& useRowChip(s32 index, s32 row, s32 button, u32 version, const char16_t* pWord);
+    RowChip& useRowChip(s32 row, s32 button, u32 version, const char16_t* pWord);
+    bool rowChipWanted(const NebulaSettingsView& rView, const RowChip& rPooled) const;
     void placeChip(Chip& rChip, f32 x, f32 y, f32 width, f32 height, bool focused);
     void placeRowBox(RowChip& rPooled, f32 x, f32 y, f32 width, f32 height, f32 radius, bool focused, bool off);
     void placeButton(Button& rButton, f32 x, f32 y, f32 width);
@@ -1261,7 +1275,7 @@ private:
     void placeRows(const NebulaSettingsView& rView);
     void placeMods(const NebulaSettingsView& rView);
     void showMods(bool shown);
-    void readModsPointer(const NebulaSettingsView& rView, f32 x, f32 y);
+    void readModsPointer(const NebulaSettingsView& rView, f32 x, f32 y, f32 wheel);
     void fitStatus(f32 room);
     void place(const NebulaSettingsView& rView);
     void placeHome();
@@ -1402,6 +1416,7 @@ private:
     s32 mCellBoxesMade;
     MR::GrowBuffer< TableCell > mCells;
     s32 mCellCount;
+    u32 mTableHash = 0;  // the table last read (readTable): another renews its cells' identity
     MR::GrowBuffer< u8 > mLineKinds;
     MR::GrowBuffer< f32 > mLineTops;
     s32 mTableLines;
@@ -1484,6 +1499,7 @@ private:
     bool mScrollDrag;
     s32 mSwipeFrames;  // a finger's swipe just moved the list: the row under it is not chosen yet
     s32 mDraggedAt;  // the selection when the list was last let go; it stays where it was dragged until another is chosen
+    s32 mPlacedSelected = -1;  // the selection the rows were last placed for: the list follows the selection only when it moves
     s32 mHoverArrow;    // the hovered row's arrow under the pointer: -1 back, 1 on; 0 none
     bool mHoverSlider;  // the hovered row's slider under the pointer
     s32 mHeldArrow;     // an arrow held down, stepping again while it is (-1, 1; 0 none)
@@ -1491,6 +1507,35 @@ private:
     s32 mSliderRow;  // the slider held down, following the pointer; -1 none
     s32 mHoverRowButton;  // the hovered row's button under the pointer; -1 none
     Button* mHoverButton;
+    s32 mPressButton = -1;  // the row's button under the pointer when the list was held down; -1 none
+
+    // The pointer's input this step (readInput), whichever gives it: A (the remote, a controller's, the mouse's button)
+    // where the star pointer is, or a finger (NebulaHost::menuFinger) as itself.
+    bool mPressed = false;  // came down this step
+    bool mHeld = false;     // down
+    bool mTapped = false;   // what the buttons answer: A pressed, or a finger lifted this step without having moved
+    // The finger, while it is the pointer: the touch taken last, whether this menu has it down, whether it was lifted
+    // before this menu saw it down (it is lifted at the next step), whether it went past the touch slop (a drag, never a
+    // tap), whether it came down on a gliding list (it stops the list and does nothing else), its speed as it was lifted
+    // (the menu's units a second, up positive).
+    bool mTouch = false;
+    u32 mTouchSeen = 0;
+    bool mTouchDown = false;
+    bool mTouchLiftDue = false;
+    bool mTouchMoved = false;
+    bool mTouchCaught = false;
+    f32 mTouchSpeedY = 0.0f;
+    // The page's list gliding after a flick: its speed (the menu's units a second; more scroll positive) and the time of
+    // the last step that moved it; the list's furthest scroll at the last placing.
+    f32 mGlide = 0.0f;
+    u64 mGlideNs = 0;
+    f32 mMaxScroll = 0.0f;
+    // The MODS page's lists alike; a mod held by a finger (the frames it has been held still), and whether a finger's
+    // swipe on a list moves it yet (past the slop).
+    f32 mModGlide[2] = {0.0f, 0.0f};
+    f32 mModMaxScroll[2] = {0.0f, 0.0f};
+    s32 mModHoldFrames = 0;
+    bool mModSwipeLive = false;
 
     // The layout, again whenever the screen's shape changes.
     f32 mScaleX;
@@ -2554,6 +2599,8 @@ void NebulaSettingsScreen::setQuestion(s32 question) {
         Button& rChoice = mChoices[i];
         rChoice.mChip.mRoot->SetVisible(i < mChoiceCount);
         rChoice.mChip.mFocusLevel = 0.0f;
+        // Another question's answer: never drawn moving from the last question's button in its place.
+        rChoice.mChip.mRoot->RenewDrawIdentity();
         if (i < mChoiceCount) {
             fillButton(rChoice, cQuestions[question].mWords[i]);
             rChoice.mAction = cQuestions[question].mActions[i];
@@ -3059,8 +3106,18 @@ void NebulaSettingsScreen::fillResults(const NebulaSettingsView& rView) {
 // The page's table (settings_benchmark_page.h): its cells, each in the played language in a box of its own and measured
 // at cTableSize; the lines' kinds; two groups or one.
 void NebulaSettingsScreen::readTable(const char* pTable) {
+    // Another table (another page of the results): its cells are new things, never drawn moving from the last one's.
+    u32 hash = 2166136261u;
+    for (const char* p = pTable != nullptr ? pTable : ""; *p != 0; p++) {
+        hash = (hash ^ static_cast< u8 >(*p)) * 16777619u;
+    }
+    const bool another = hash != mTableHash;
+    mTableHash = hash;
     for (s32 i = 0; i < mCellBoxesMade; i++) {
         mCellBoxes[i]->SetVisible(false);
+        if (another) {
+            mCellBoxes[i]->RenewDrawIdentity();
+        }
     }
     mCellCount = 0;
     mTableLines = 0;
@@ -3453,8 +3510,136 @@ void NebulaSettingsScreen::placeGraph(f32 top, f32 width, f32 height) {
     }
 }
 
+// A place on the picture as the pointer gives it (-1 to 1 each way, left and top -1) in the menu's units.
+void NebulaSettingsScreen::toMenu(f32 pointerX, f32 pointerY, f32* pX, f32* pY) const {
+    Vec2f screen;
+    screen.x = (pointerX + 1.0f) * MR::getScreenWidth() * 0.5f;
+    screen.y = (pointerY + 1.0f) * static_cast< s32 >(NebulaFrameClock::cScreenLines) * 0.5f;
+    Vec2f layout;
+    MR::convertScreenPosToLayoutPos(&layout, screen);
+    *pX = layout.x / (mScaleX * mZoom);
+    *pY = layout.y / mZoom - mMenu->mTranslate.y;
+}
+
+// The pointer's input this step, in the menu's units: false while there is none on the picture.
+// A finger is taken as itself, not as a pointer with A: down at the place it landed, so what it pressed is what it
+// touched however fast it moves on; past the display's touch slop it drags and never taps, however short the drag; let
+// go, the buttons answer only a finger that never moved (a tap), and a flick's speed is the list's glide. A touch that
+// came and went between two steps is pressed at this one and lifted at the next. A finger that lands on a gliding list
+// only stops it.
+bool NebulaSettingsScreen::readInput(f32* pX, f32* pY) {
+    mPressed = false;
+    mTapped = false;
+    NebulaMenuFinger finger;
+    mTouch = NebulaHost::menuFinger(&finger);
+    if (mTouch) {
+        f32 fingerX = finger.x;
+        f32 fingerY = finger.y;
+        if (finger.touch != mTouchSeen) {
+            mTouchSeen = finger.touch;
+            mTouchDown = true;
+            mTouchLiftDue = finger.down == 0;
+            mTouchMoved = false;
+            mTouchCaught = mGlide != 0.0f || mModGlide[0] != 0.0f || mModGlide[1] != 0.0f;
+            mGlide = 0.0f;
+            mModGlide[0] = 0.0f;
+            mModGlide[1] = 0.0f;
+            mPressed = true;
+            fingerX = finger.land_x;
+            fingerY = finger.land_y;
+        } else if (mTouchDown && (mTouchLiftDue || finger.down == 0)) {
+            mTouchDown = false;
+            mTouchLiftDue = false;
+            mTouchMoved = mTouchMoved || finger.moved != 0;
+            mTapped = !mTouchMoved && !mTouchCaught;
+            f32 x0, y0, x1, y1;
+            toMenu(finger.x, finger.y, &x0, &y0);
+            toMenu(finger.x + finger.vx * 0.01f, finger.y + finger.vy * 0.01f, &x1, &y1);
+            mTouchSpeedY = (y1 - y0) * 100.0f;
+        } else if (mTouchDown && !mPressed) {
+            mTouchMoved = mTouchMoved || finger.moved != 0;
+        }
+        mHeld = mTouchDown;
+        toMenu(fingerX, fingerY, pX, pY);
+        return true;
+    }
+    mTouchDown = false;
+    mTouchLiftDue = false;
+    if (!MR::isPointerInScreen(PLAYER_1)) {
+        mHeld = false;
+        return false;
+    }
+    // The player's pointer as StarPointerController maps it to the screen.
+    Vec2f pointer;
+    MR::getPointerPastPos(&pointer, 0, PLAYER_1);
+    toMenu(pointer.x, pointer.y, pX, pY);
+    mPressed = MR::isPressedJump(PLAYER_1);
+    mHeld = MR::isHeldJump(PLAYER_1);
+    mTapped = mPressed;
+    return true;
+}
+
+// One glide's step: the distance it goes in `seconds`, its speed slowed for them (0 once it stops).
+static f32 glideStep(f32* pSpeed, f32 seconds) {
+    if (*pSpeed == 0.0f || seconds <= 0.0f) {
+        return 0.0f;
+    }
+    // e^(-kt) by its series: kt is at most 0.2 (a step counts 0.1 s at most), where five terms are exact to 1e-6. The
+    // game has no C library to call.
+    const f32 x = cGlideDecay * seconds;
+    const f32 fall = 1.0f - x * (1.0f - x * (0.5f - x * (1.0f / 6.0f - x * (1.0f / 24.0f))));
+    // The distance is the speed's integral over the step: v (1 - e^(-kt)) / k.
+    const f32 distance = *pSpeed * (1.0f - fall) / cGlideDecay;
+    *pSpeed *= fall;
+    if (__builtin_fabsf(*pSpeed) < cGlideStop) {
+        *pSpeed = 0.0f;
+    }
+    return distance;
+}
+
+// A flick's speed as a list takes it: none under cGlideMin, at most cGlideMax.
+static f32 glideOf(f32 speed) {
+    if (__builtin_fabsf(speed) < cGlideMin) {
+        return 0.0f;
+    }
+    return clamp(speed, -cGlideMax, cGlideMax);
+}
+
+// The lists gliding after a flick, by the time since the last step: alike at any frame rate. Each stops at its ends.
+void NebulaSettingsScreen::glideList() {
+    const u64 now = NebulaHost::clockNs();
+    f32 seconds = mGlideNs != 0u && now > mGlideNs ? static_cast< f32 >(now - mGlideNs) * 1.0e-9f : 0.0f;
+    seconds = seconds < 0.1f ? seconds : 0.1f;
+    mGlideNs = now;
+    if (mGlide != 0.0f) {
+        mScrollTarget += glideStep(&mGlide, seconds);
+        if (mScrollTarget <= 0.0f || mScrollTarget >= mMaxScroll) {
+            mScrollTarget = clamp(mScrollTarget, 0.0f, mMaxScroll);
+            mGlide = 0.0f;
+        }
+        mDraggedAt = static_cast< s32 >(mShown.selected);
+    }
+    for (s32 l = 0; l < 2; l++) {
+        if (mModGlide[l] == 0.0f) {
+            continue;
+        }
+        if (!mModFree[l]) {
+            mModFree[l] = true;
+            mModFreeScroll[l] = mModScroll[l];
+        }
+        mModFreeScroll[l] += glideStep(&mModGlide[l], seconds);
+        if (mModFreeScroll[l] <= 0.0f || mModFreeScroll[l] >= mModMaxScroll[l]) {
+            mModFreeScroll[l] = clamp(mModFreeScroll[l], 0.0f, mModMaxScroll[l]);
+            mModGlide[l] = 0.0f;
+        }
+    }
+}
+
 // The pointer, in the menu's units: over a page's button, a row (its buttons, its arrows, its slider), the footer's
-// buttons or the question's. Moving it picks the row under it; A chooses what it is over.
+// buttons or the question's. A mouse or a remote moving picks the row under it, and A chooses what it is over. A finger
+// picks nothing on its way: held and moved it scrolls the list (a slider's row, moved along the slider, takes the
+// slider), let go it glides on, and a tap chooses what it touched. A row the pointer picks never scrolls the list: it is
+// in sight under the pointer already.
 void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
     mHoverRow = -1;
     mHoverTab = -1;
@@ -3463,24 +3648,33 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
     mHoverSlider = false;
     mHoverButton = nullptr;
     mHoverModButton = -1;
-    // A finger's swipe (host_window_sdl: a tenth of the window's height to a notch): the list follows the finger.
-    const s32 swipe = NebulaHost::pointerWheel();
+    glideList();
     if (mSwipeFrames > 0) {
         mSwipeFrames--;
     }
-    if (swipe != 0 && mFrame > 1 && !mHome) {
+    // The wheel's (and a touchpad's) turn, in the menu's units: a notch, a tenth of the screen's height. It scrolls the
+    // list, never the selection, and the list stops at its ends.
+    f32 wheel = 0.0f;
+    const s32 turn = NebulaHost::pointerWheel();
+    if (turn != 0 && mFrame > 1 && !mHome && mQuestionShown < 0) {
         Vec2f edge, top, bottom;
         edge.x = 0.0f;
         edge.y = 0.0f;
         MR::convertScreenPosToLayoutPos(&top, edge);
         edge.y = static_cast< s32 >(NebulaFrameClock::cScreenLines);
         MR::convertScreenPosToLayoutPos(&bottom, edge);
-        mScrollTarget -= static_cast< f32 >(swipe) * __builtin_fabsf(bottom.y - top.y) / 1200.0f;
-        mDraggedAt = static_cast< s32 >(rView.selected);
-        mSwipeFrames = cSwipeHoverFrames;
+        wheel = static_cast< f32 >(turn) * __builtin_fabsf(bottom.y - top.y) / 1200.0f;
+        if (!hasModLists(rView)) {
+            mGlide = 0.0f;
+            mScrollTarget -= wheel;
+            mDraggedAt = static_cast< s32 >(rView.selected);
+            mSwipeFrames = cSwipeHoverFrames;
+        }
     }
+    f32 x = mPointerX;
+    f32 y = mPointerY;
     // A binding that waits for an input takes the mouse's buttons itself, wherever the pointer is.
-    if (!MR::isPointerInScreen(PLAYER_1) || rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_KEY ||
+    if (!readInput(&x, &y) || rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_KEY ||
         rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_PAD) {
         mDragRow = -1;
         mDragging = false;
@@ -3491,16 +3685,8 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         mSliderRow = -1;
         return;
     }
-    // The player's pointer as StarPointerController maps it to the screen.
-    Vec2f screen;
-    MR::getPointerPastPos(&screen, 0, PLAYER_1);
-    screen.x = (screen.x + 1.0f) * MR::getScreenWidth() * 0.5f;
-    screen.y = (screen.y + 1.0f) * static_cast< s32 >(NebulaFrameClock::cScreenLines) * 0.5f;
-    Vec2f layout;
-    MR::convertScreenPosToLayoutPos(&layout, screen);
-    const f32 x = layout.x / (mScaleX * mZoom);
-    const f32 y = layout.y / mZoom - mMenu->mTranslate.y;
-    if (__builtin_fabsf(x - mPointerX) > 0.5f || __builtin_fabsf(y - mPointerY) > 0.5f) {
+    // A mouse or a remote moving takes the selection; a finger only by what it presses.
+    if (mTouch ? mPressed : (__builtin_fabsf(x - mPointerX) > 0.5f || __builtin_fabsf(y - mPointerY) > 0.5f)) {
         mPointerMode = true;
     }
     mPointerX = x;
@@ -3525,13 +3711,13 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         mHdrHover = hdr && mHoverButton == nullptr && x >= mHdrSliderLeft - cKnobSize * 0.5f * scale &&
                     x <= mHdrSliderRight + cKnobSize * 0.5f * scale && __builtin_fabsf(y - mHdrSliderY) <= cKnobSize * 0.5f * scale + cReach;
         if (mHdrDragging) {
-            if (hdr && MR::isHeldJump(PLAYER_1)) {
+            if (hdr && mHeld) {
                 dragHdr(rView, x);
                 return;
             }
             mHdrDragging = false;
         }
-        if (mHdrHover && MR::isPressedJump(PLAYER_1)) {
+        if (mHdrHover && mPressed) {
             mPointerMode = true;
             mHdrDragging = true;
             dragHdr(rView, x);
@@ -3549,7 +3735,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
             }
         }
         if (hasModLists(rView)) {
-            readModsPointer(rView, x, y);
+            readModsPointer(rView, x, y, wheel);
         } else if (x >= mLeft && x <= mRight && y <= mListTop && y >= mListBottom && !mScrollDrag && mSwipeFrames == 0) {
             const s32 row = static_cast< s32 >((mListTop - y + mScroll) / cRowHeight);
             const NebulaSettingsRow* pData = row >= 0 ? rowAt(rView, static_cast< u32 >(row)) : nullptr;
@@ -3573,16 +3759,27 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         }
     }
 
+    // A finger lifted points at nothing: what it last touched does not stay lit.
+    if (mTouch && !mHeld && !mTapped) {
+        mHoverRow = -1;
+        mHoverTab = -1;
+        mHoverRowButton = -1;
+        mHoverArrow = 0;
+        mHoverSlider = false;
+        mHoverButton = nullptr;
+        mHoverModButton = -1;
+        mHdrHover = false;
+    }
     // A slider held down follows the pointer along it; an arrow held down steps again and again, stopping at the end.
     if (mSliderRow >= 0) {
-        if (MR::isHeldJump(PLAYER_1)) {
+        if (mHeld) {
             dragSlider(rView, x);
             return;
         }
         mSliderRow = -1;
     }
     if (mHeldArrow != 0) {
-        if (MR::isHeldJump(PLAYER_1)) {
+        if (mHeld && !(mTouch && mTouchMoved)) {
             mHeldFrames++;
             if (mHoverArrow == mHeldArrow && mHoverRow == static_cast< s32 >(rView.selected) && mHeldFrames >= cRepeatDelay &&
                 (mHeldFrames - cRepeatDelay) % cRepeatEvery == 0) {
@@ -3592,33 +3789,47 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         }
         mHeldArrow = 0;
     }
-    if (mPointerMode && mHoverRow >= 0 && mHoverRow != static_cast< s32 >(rView.selected)) {
+    if (!mTouch && mPointerMode && mHoverRow >= 0 && mHoverRow != static_cast< s32 >(rView.selected)) {
         mPointerRow = mHoverRow;
+        mDraggedAt = mHoverRow;
         NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mHoverRow);
     }
-    // The list held down: what the press does waits for the pointer's first move, so a finger scrolling the list over
-    // an arrow or a slider changes nothing. Up or down past cDragStart drags the list; along a slider, the slider
-    // follows; held still on an arrow, it steps and goes on stepping. Let go where it was pressed, what is there is
-    // clicked: an arrow steps (going round at its ends), a slider takes the step under the pointer, a row its own.
+    // The list held down: what the press does waits, so a swipe over an arrow or a slider changes nothing. Moved up or
+    // down (a finger: past its slop), the list follows; along a slider, the slider follows; held still on an arrow, it
+    // steps and goes on stepping. Let go without moving, what was pressed is clicked: an arrow steps (going round at its
+    // ends), a slider takes the step under the pointer, a row its own. A finger let go while it drags the list leaves it
+    // gliding.
     if (mPressing) {
-        if (MR::isHeldJump(PLAYER_1)) {
+        if (mHeld) {
             const f32 across = __builtin_fabsf(x - mPressX);
             const f32 along = __builtin_fabsf(y - mPressY);
-            if (!mScrollDrag && mPressSlider && across > cDragStart && across >= along) {
+            const bool moved = mTouch ? mTouchMoved : across > cDragStart || along > cDragStart;
+            if (!mScrollDrag && moved && mPressSlider && across >= along) {
                 mPressing = false;
                 mSliderRow = mPressRow;
                 dragSlider(rView, x);
                 return;
             }
-            if (!mScrollDrag && along > cDragStart) {
+            if (!mScrollDrag && (mTouch ? moved : along > cDragStart)) {
                 mScrollDrag = true;
+                if (mTouch) {
+                    // The list takes the finger from here, not from where it landed: it does not jump by the slop.
+                    mPressY = y;
+                    mPressScroll = mScroll;
+                }
             }
             if (mScrollDrag) {
                 mScrollTarget = mPressScroll + (y - mPressY);
+                mDraggedAt = static_cast< s32 >(rView.selected);
                 return;
             }
-            if (mPressArrow != 0 && ++mHeldFrames >= cRepeatDelay) {
+            if (mPressArrow != 0 && !moved && ++mHeldFrames >= cRepeatDelay) {
                 mPressing = false;
+                if (mTouch) {
+                    mPointerRow = mPressRow;
+                    mDraggedAt = mPressRow;
+                    NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mPressRow);
+                }
                 NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, mPressArrow * 2);
                 mHeldArrow = mPressArrow;
                 mHeldFrames = cRepeatDelay;
@@ -3626,9 +3837,19 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
             return;
         }
         mPressing = false;
-        if (!mScrollDrag && mPressRow >= 0 && mPressRow == mHoverRow) {
+        if (mScrollDrag || (mTouch && mTouchMoved)) {
+            if (mTouch) {
+                mGlide = glideOf(mTouchSpeedY);
+            }
+            mDraggedAt = static_cast< s32 >(rView.selected);
+        } else if (mPressRow >= 0 && (mTouch ? mTapped : mPressRow == mHoverRow)) {
+            if (mTouch) {
+                mPointerRow = mPressRow;
+                mDraggedAt = mPressRow;
+                NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mPressRow);
+            }
             if (mPressArrow != 0) {
-                if (mHoverArrow == mPressArrow) {
+                if (mTouch || mHoverArrow == mPressArrow) {
                     NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, mPressArrow * 2);
                 }
             } else if (mPressSlider) {
@@ -3636,41 +3857,41 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
                 dragSlider(rView, mPressX);
                 mSliderRow = -1;
             } else {
-                clickRow(rView, mPressRow);
+                clickRow(rView, mPressRow, mPressButton);
             }
-        } else if (mScrollDrag) {
-            mDraggedAt = static_cast< s32 >(rView.selected);
         }
         mScrollDrag = false;
         return;
     }
-    if (!MR::isPressedJump(PLAYER_1)) {
-        return;
-    }
-    if (mHoverButton != nullptr) {
+    if (mTapped && mHoverButton != nullptr) {
         NebulaHost::settingsInput(mHoverButton->mAction, 0);
-    } else if (mHoverTab >= 0) {
+    } else if (mTapped && mHoverTab >= 0) {
         NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_PAGE, mHoverTab);
-    } else if (!hasModLists(rView) && x >= mLeft && x <= mRight && y <= mListTop && y >= mListBottom) {
+    } else if (mPressed && !hasModLists(rView) && mQuestionShown < 0 && x >= mLeft && x <= mRight && y <= mListTop &&
+               y >= mListBottom) {
         mPressing = true;
         mPressRow = mHoverRow;
         mPressArrow = mHoverRow >= 0 ? mHoverArrow : 0;
         mPressSlider = mHoverRow >= 0 && mHoverSlider;
+        mPressButton = mHoverRow >= 0 ? mHoverRowButton : -1;
         mPressX = x;
         mPressY = y;
         mPressScroll = mScroll;
+        mScrollTarget = mScroll;  // a list still settling holds under the pointer
         mHeldFrames = 0;
-        if (mPressArrow != 0 || mPressSlider) {
+        if (!mTouch && (mPressArrow != 0 || mPressSlider)) {
             mPointerMode = true;
             mPointerRow = mHoverRow;
+            mDraggedAt = mHoverRow;
             NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mHoverRow);
         }
+        // A touch lifted before this step saw it down is let go at the next: nothing more now.
     }
 }
 
-// A row clicked: its button (a row with one anywhere along it), or a setting stepped on as its right arrow does (a
-// binding waits for an input). A slider's row takes the slider itself.
-void NebulaSettingsScreen::clickRow(const NebulaSettingsView& rView, s32 row) {
+// A row clicked: its button `button` (a row with one anywhere along it), or a setting stepped on as its right arrow
+// does (a binding waits for an input). A slider's row takes the slider itself.
+void NebulaSettingsScreen::clickRow(const NebulaSettingsView& rView, s32 row, s32 button) {
     const NebulaSettingsRow* pData = rowAt(rView, static_cast< u32 >(row));
     if (pData == nullptr) {
         return;
@@ -3678,9 +3899,10 @@ void NebulaSettingsScreen::clickRow(const NebulaSettingsView& rView, s32 row) {
     const Row& rRow = mRows[row];
     mPointerMode = true;
     mPointerRow = row;
-    if (hasButtons(pData) && (mHoverRowButton >= 0 || rRow.mButtonCount == 1)) {
+    mDraggedAt = row;
+    if (hasButtons(pData) && (button >= 0 || rRow.mButtonCount == 1)) {
         NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, row);
-        NebulaHost::settingsInput(NEBULA_SETTINGS_PRESS, mHoverRowButton >= 0 ? mHoverRowButton : 0);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_PRESS, button >= 0 ? button : 0);
     } else if ((pData->flags & NEBULA_SETTINGS_ROW_CHANGES) != 0 && !hasSlider(*pData)) {
         NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, row);
         NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, hasArrows(*pData) ? 2 : 1);
@@ -3709,11 +3931,13 @@ void NebulaSettingsScreen::dragSlider(const NebulaSettingsView& rView, f32 x) {
     }
 }
 
-// The pointer over the MODS page's lists and buttons. A mod under it is selected; held down and moved (a finger, the
-// mouse or A), it is dragged at once, and let go over a list it lands there (the line shows where). Held at a list's top
-// or bottom edge, the list scrolls under it. Held down on a list's free space and moved, the list scrolls; a click on a
-// button presses it.
-void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 x, f32 y) {
+// The pointer over the MODS page's lists and buttons. A mod under a mouse or a remote is selected; held down and moved,
+// it is dragged at once. A finger's touch on a mod selects it; held still on it (cPickUpFrames), the mod is picked up
+// and then follows the finger; moved sooner, the finger scrolls the list. Let go over a list, a dragged mod lands there
+// (the line shows where). Held at a list's top or bottom edge, the list scrolls under it. Held down on a list's free space
+// and moved, the list scrolls (a finger's flick leaves it gliding); the wheel scrolls the list under the pointer. A click
+// on a button presses it.
+void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 x, f32 y, f32 wheel) {
     const Row* const pButtonsRow = mModButtonsRow >= 0 ? &mRows[mModButtonsRow] : nullptr;
     for (s32 i = 0; i < mModButtonCount; i++) {
         if (!(pButtonsRow != nullptr && pButtonsRow->mButtons[i].mOff) && isOnButton(x, y, mModButtons[i].mX, mModButtonsY, mModButtons[i].mWidth, cButtonHeight, 8.0f)) {
@@ -3728,6 +3952,15 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
             overList = i;
         }
     }
+    if (wheel != 0.0f && overList >= 0 && !mDragging) {
+        mModGlide[overList] = 0.0f;
+        if (!mModFree[overList]) {
+            mModFree[overList] = true;
+            mModFreeScroll[overList] = mModScroll[overList];
+        }
+        mModFreeScroll[overList] -= wheel;
+        mPointerMode = true;  // the list stays where the wheel left it until the keys move the selection
+    }
     s32 hovered = -1;
     if (overList >= 0 && y <= mModItemsTop && y >= mModItemsBottom) {
         const s32 place = static_cast< s32 >((mModItemsTop - y + mModScroll[overList]) / cModHeight);
@@ -3740,18 +3973,67 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
     if (!mDragging) {
         mHoverRow = hovered;
     }
-    // The pointer moving on a list's free space scrolls that list; let go, it stays there.
+    // The pointer moving on a list's free space (or a finger's swipe begun on a mod) scrolls that list; let go, it stays
+    // there, or glides on after a finger's flick.
     if (mModSwipeList >= 0) {
-        if (MR::isHeldJump(PLAYER_1)) {
+        if (mHeld) {
+            if (mTouch && !mModSwipeLive) {
+                if (!mTouchMoved) {
+                    return;
+                }
+                // The list takes the finger from here, not from where it landed: it does not jump by the slop.
+                mModSwipeLive = true;
+                mModSwipeFrom = mModScroll[mModSwipeList];
+                mDragFromY = y;
+            }
             mModFree[mModSwipeList] = true;
             mModFreeScroll[mModSwipeList] = mModSwipeFrom + (y - mDragFromY);
             return;
         }
+        if (mTouch && mTouchMoved) {
+            mModFree[mModSwipeList] = true;
+            mModGlide[mModSwipeList] = glideOf(mTouchSpeedY);
+        }
         mModSwipeList = -1;
+        mModSwipeLive = false;
         return;
     }
     if (mDragRow >= 0) {
         const s32 index = mDragRow;
+        if (mTouch && !mDragging) {
+            const s32 list = index >= 0 && index < static_cast< s32 >(rView.total_rows) ? mItemList[index] : -1;
+            if (mHeld && mTouchMoved) {
+                // Moved before it was picked up: the swipe scrolls the mod's list.
+                mDragRow = -1;
+                if (list >= 0) {
+                    mModSwipeList = list;
+                    mModSwipeLive = true;
+                    mModSwipeFrom = mModScroll[list];
+                    mDragFromY = y;
+                }
+                return;
+            }
+            if (!mHeld) {
+                // Let go without moving: a tap, which selects the mod (a tap that stopped a gliding list does nothing).
+                if (mTapped) {
+                    mPointerRow = index;
+                    NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, index);
+                }
+                mDragRow = -1;
+                return;
+            }
+            if (++mModHoldFrames < cPickUpFrames) {
+                return;
+            }
+            // Held still: picked up, and moved from here.
+            mPointerRow = index;
+            NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, index);
+            mDragging = true;
+            mDragFromX = x;
+            mDragFromY = y;
+            mEdgeScrollNs = 0u;
+            MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
+        }
         const bool moved = __builtin_fabsf(x - mDragFromX) > cDragStart || __builtin_fabsf(y - mDragFromY) > cDragStart;
         if (!mDragging && moved) {
             mDragging = true;
@@ -3768,7 +4050,7 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
             const s32 place = static_cast< s32 >((mModItemsTop - y + mModScroll[mDropList]) / cModHeight + 0.5f);
             mDropPlace = place < 0 ? 0 : place > mModCounts[mDropList] ? mModCounts[mDropList] : place;
         }
-        if (!MR::isHeldJump(PLAYER_1)) {
+        if (!mHeld) {
             // Let go: into the list under the pointer at the line's place (counted without the mod itself).
             if (mDragging && mDropList >= 0 && index >= 0 && index < static_cast< s32 >(rView.total_rows)) {
                 s32 place = mDropPlace;
@@ -3805,24 +4087,32 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
         }
         return;
     }
-    if (!MR::isPressedJump(PLAYER_1)) {
+    if (mHoverModButton >= 0 && mModButtonsRow >= 0) {
+        if (mTapped) {
+            NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mModButtonsRow);
+            NebulaHost::settingsInput(NEBULA_SETTINGS_PRESS, mHoverModButton);
+        }
         return;
     }
-    if (mHoverModButton >= 0 && mModButtonsRow >= 0) {
-        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mModButtonsRow);
-        NebulaHost::settingsInput(NEBULA_SETTINGS_PRESS, mHoverModButton);
-    } else if (hovered >= 0) {
-        // Held down: dragged once it moves.
+    if (!mPressed) {
+        return;
+    }
+    if (hovered >= 0) {
+        // Held down: a mouse's or a remote's mod is selected and dragged once it moves; a finger's waits (above).
         mPointerMode = true;
-        mPointerRow = hovered;
-        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, hovered);
+        if (!mTouch) {
+            mPointerRow = hovered;
+            NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, hovered);
+        }
         mDragRow = hovered;
         mDragFromX = x;
         mDragFromY = y;
+        mModHoldFrames = 0;
     } else if (overList >= 0) {
         // Held down on the list's free space: moved, the list follows.
         mPointerMode = true;
         mModSwipeList = overList;
+        mModSwipeLive = !mTouch;
         mModSwipeFrom = mModScroll[overList];
         mDragFromY = y;
     }
@@ -3856,9 +4146,12 @@ void NebulaSettingsScreen::edgeScroll(s32 list, f32 y) {
     mModScroll[list] = mModFreeScroll[list];
 }
 
-// The pointer over the HOME Menu's answers: moving onto one selects it (the host's selection, as the keys move it), A
-// chooses it. The host's menu plays its sounds.
+// The pointer over the HOME Menu's answers: a mouse or a remote moving onto one selects it (the host's selection, as the
+// keys move it), A chooses it; a finger's tap chooses it. The host's menu plays its sounds.
 void NebulaSettingsScreen::readHomePointer(f32 x, f32 y) {
+    if (mTouch && !mHeld && !mTapped) {
+        return;  // a finger lifted points at nothing
+    }
     s32 hovered = -1;
     for (s32 i = 0; i < mChoiceCount; i++) {
         const Chip& rChip = mChoices[i].mChip;
@@ -3870,10 +4163,10 @@ void NebulaSettingsScreen::readHomePointer(f32 x, f32 y) {
     if (hovered < 0) {
         return;
     }
-    if (mPointerMode && hovered != (mHomeView & 0xFF)) {
+    if (!mTouch && mPointerMode && hovered != (mHomeView & 0xFF)) {
         NebulaHomeMenu::point(hovered);
     }
-    if (MR::isPressedJump(PLAYER_1)) {
+    if (mTapped) {
         NebulaHomeMenu::choose(hovered);
     }
 }
@@ -4031,7 +4324,10 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
             target = top + cModHeight + room > target + inner ? top + cModHeight + room - inner : target;
         }
         target = clamp(target, 0.0f, maxScroll);
-        mModScroll[l] = mFrame <= 1 ? target : mModScroll[l] + (target - mModScroll[l]) * 0.35f;
+        mModMaxScroll[l] = maxScroll;
+        // Under a finger or gliding, the list is where it is taken to; otherwise it eases there.
+        const bool taken = mModFree[l] && ((mModSwipeList == l && mModSwipeLive) || mModGlide[l] != 0.0f);
+        mModScroll[l] = mFrame <= 1 || taken ? target : mModScroll[l] + (target - mModScroll[l]) * 0.35f;
     }
 
     // The mods in their lists; the dragged one under the pointer.
@@ -4179,12 +4475,51 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
     mThumb->SetVisible(false);
 }
 
-// The pool's button `index` as row `row`'s `button` (ChipLess... for a setting's own), its word set when it was
-// another's.
-RowChip& NebulaSettingsScreen::useRowChip(s32 index, s32 row, s32 button, u32 version, const char16_t* pWord) {
-    while (mRowChipCount <= index && addRowChip()) {
+// Whether the pool's button still shows what it showed: its row in sight with that button (a setting's arrows, a
+// slider's knob, a row's own button).
+bool NebulaSettingsScreen::rowChipWanted(const NebulaSettingsView& rView, const RowChip& rPooled) const {
+    if (rPooled.mRow < 0 || rPooled.mRow >= static_cast< s32 >(rView.total_rows)) {
+        return false;
     }
-    RowChip& rPooled = mRowChips[index < mRowChipCount ? index : mRowChipCount - 1];
+    const Row& rRow = mRows[rPooled.mRow];
+    if (!rRow.mRoot->IsVisible()) {
+        return false;
+    }
+    if (rPooled.mButton == ChipLess || rPooled.mButton == ChipMore) {
+        return rRow.mArrows;
+    }
+    if (rPooled.mButton == ChipKnob) {
+        return rRow.mSliderRight > rRow.mSliderLeft;
+    }
+    return rPooled.mButton >= 0 && rPooled.mButton < rRow.mButtonCount;
+}
+
+// The pool's button for row `row`'s `button` (ChipLess... for a setting's own): the one that showed it the frame before,
+// so it moves with its row; else a free one, new to the frame interpolation (it is never drawn moving from the row or
+// the button it showed before). Its word set when it was another's or its words changed.
+RowChip& NebulaSettingsScreen::useRowChip(s32 row, s32 button, u32 version, const char16_t* pWord) {
+    s32 index = -1;
+    s32 free = -1;
+    for (s32 i = 0; i < mRowChipCount; i++) {
+        const RowChip& rKept = mRowChips[i];
+        if (rKept.mRow == row && rKept.mButton == button) {
+            index = i;
+            break;
+        }
+        if (free < 0 && rKept.mRow < 0) {
+            free = i;
+        }
+    }
+    if (index < 0) {
+        if (free < 0 && addRowChip()) {
+            free = mRowChipCount - 1;
+        }
+        // None left to make: the last serves.
+        index = free >= 0 ? free : mRowChipCount - 1;
+        mRowChips[index].mChip.mRoot->RenewDrawIdentity();
+        mRowChips[index].mRow = -1;
+    }
+    RowChip& rPooled = mRowChips[index];
     Chip& rChip = rPooled.mChip;
     if (rPooled.mRow != row || rPooled.mButton != button || rPooled.mVersion != version) {
         rPooled.mRow = row;
@@ -4206,12 +4541,18 @@ RowChip& NebulaSettingsScreen::useRowChip(s32 index, s32 row, s32 button, u32 ve
     return rPooled;
 }
 
-// The rows' own buttons on the rows in sight, the pool's going to them in order: a row of buttons right to left from
-// the row's end, a setting's arrows, a slider's knob. Focused: the selected row's selected button, what is under the
-// pointer, what it holds.
+// The rows' own buttons on the rows in sight, each kept by the pool's button that showed it before: a row of buttons
+// right to left from the row's end, a setting's arrows, a slider's knob. Focused: the selected row's selected button,
+// what is under the pointer, what it holds.
 void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
     const bool asking = mQuestionShown >= 0;
-    s32 next = 0;
+    // What no row in sight shows any more is free for the rows that came into sight.
+    for (s32 k = 0; k < mRowChipCount; k++) {
+        if (!rowChipWanted(rView, mRowChips[k])) {
+            mRowChips[k].mRow = -1;
+            mRowChips[k].mChip.mRoot->SetVisible(false);
+        }
+    }
     for (s32 i = 0; i < static_cast< s32 >(rView.total_rows); i++) {
         Row& rRow = mRows[i];
         const f32 y = rRow.mRoot->mTranslate.y;
@@ -4224,7 +4565,7 @@ void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
             // The ▲ turned to point back or on, its ink centred on the button whatever the glyph's own margins: turned
             // a quarter (90 back, -90 on), its ink's offset turns with it.
             const s32 button = a == 0 ? ChipLess : ChipMore;
-            RowChip& rPooled = useRowChip(next++, i, button, 0, u"\u25B2");
+            RowChip& rPooled = useRowChip(i, button, 0, u"\u25B2");
             const s32 direction = a == 0 ? -1 : 1;
             const bool focused = !asking && ((row == mHoverRow && mHoverArrow == direction) ||
                                              (row == static_cast< s32 >(rView.selected) && mHeldArrow == direction));
@@ -4235,7 +4576,7 @@ void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
             rPooled.mChip.mText->mTranslate = Vec3f(turn * dy, -turn * dx, 0.0f);
         }
         if (rRow.mSliderRight > rRow.mSliderLeft) {
-            RowChip& rPooled = useRowChip(next++, i, ChipKnob, 0, u"");
+            RowChip& rPooled = useRowChip(i, ChipKnob, 0, u"");
             const f32 at = static_cast< f32 >(rData.slider_at) / static_cast< f32 >(rData.slider_steps > 0 ? rData.slider_steps : 1);
             const bool focused = !asking && (row == mSliderRow || (row == mHoverRow && mHoverSlider));
             placeRowBox(rPooled, rRow.mSliderLeft + (rRow.mSliderRight - rRow.mSliderLeft) * at, y, cKnobSize, cKnobSize, cKnobSize * 0.5f,
@@ -4243,7 +4584,7 @@ void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
         }
         f32 x = mRight - 8.0f;
         for (s32 b = rRow.mButtonCount - 1; b >= 0; b--) {
-            RowChip& rPooled = useRowChip(next++, i, b, rRow.mButtonsVersion, rRow.mButtons[b].mWord.mItems);
+            RowChip& rPooled = useRowChip(i, b, rRow.mButtonsVersion, rRow.mButtons[b].mWord.mItems);
             Chip& rChip = rPooled.mChip;
             const f32 word = rChip.mText->mSize.width;
             const f32 width = word + 40.0f > cRowButtonMin ? word + 40.0f : cRowButtonMin;
@@ -4260,10 +4601,6 @@ void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
             x -= width * 0.5f + cRowButtonGap;
         }
     }
-    for (; next < mRowChipCount; next++) {
-        mRowChips[next].mRow = -1;
-        mRowChips[next].mChip.mRoot->SetVisible(false);
-    }
 }
 
 // The page's rows, scrolled so that the selection keeps a row of room above and below it (a row the pointer picked is
@@ -4278,7 +4615,11 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
     const f32 selectedTop = rView.selected * cRowHeight;
     // A row kept on each side of the selection, when the list has room for all three.
     const f32 room = mPointerMode || listHeight < cRowHeight * 3.0f ? 0.0f : cRowHeight;
-    if (!mScrollDrag && static_cast< s32 >(rView.selected) != mDraggedAt) {
+    // The list follows a selection that moved, and only one the keys or a controller moved: a row the pointer chose is
+    // where the pointer is. The view a pick is sent from still shows the selection before it: no move, nothing followed.
+    const bool selectionMoved = static_cast< s32 >(rView.selected) != mPlacedSelected;
+    mPlacedSelected = static_cast< s32 >(rView.selected);
+    if (!mScrollDrag && selectionMoved && static_cast< s32 >(rView.selected) != mDraggedAt) {
         mDraggedAt = -1;
         if (selectedTop - room < mScrollTarget) {
             mScrollTarget = selectedTop - room;
@@ -4287,8 +4628,10 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
             mScrollTarget = selectedTop + cRowHeight + room - listHeight;
         }
     }
+    mMaxScroll = maxScroll;
     mScrollTarget = clamp(mScrollTarget, 0.0f, maxScroll);
-    mScroll = mFrame <= 1 || mScrollDrag ? mScrollTarget : mScroll + (mScrollTarget - mScroll) * 0.35f;
+    // Under the pointer or gliding, the list is where it is taken to; moved by the keys or the wheel, it eases there.
+    mScroll = mFrame <= 1 || mScrollDrag || mGlide != 0.0f ? mScrollTarget : mScroll + (mScrollTarget - mScroll) * 0.35f;
     for (s32 i = 0; i < static_cast< s32 >(rView.total_rows); i++) {
         Row& rRow = mRows[i];
         const NebulaSettingsRow& rData = rView.rows[i];
@@ -4776,6 +5119,18 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
             mPressing = false;
             mScrollDrag = false;
             mDraggedAt = -1;
+            mPlacedSelected = -1;
+            // The touch that opened the menu (a button tapped, still held) is none of the menu's: it waits for the next.
+            {
+                NebulaMenuFinger finger;
+                mTouchSeen = NebulaHost::menuFinger(&finger) ? finger.touch : mTouchSeen;
+                mTouchDown = false;
+                mTouchLiftDue = false;
+            }
+            mGlide = 0.0f;
+            mModGlide[0] = 0.0f;
+            mModGlide[1] = 0.0f;
+            mModSwipeList = -1;
             mHeldArrow = 0;
             mSliderRow = -1;
             mHoverButton = nullptr;
@@ -4868,18 +5223,28 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
             MR::startSystemSE("SE_SY_GALAMAP_PAGE_CHANGE");
             mScrollTarget = 0.0f;
             mFrame = 1;  // the new page's rows and highlight start in place
+            // The list's rows and buttons show the new page: none is drawn moving from the old page's place.
+            mList->RenewDrawIdentity();
             // What the pointer held belongs to the old page.
             mHeldArrow = 0;
             mSliderRow = -1;
             mPressing = false;
             mScrollDrag = false;
             mDraggedAt = -1;
+            mPlacedSelected = -1;  // the new page's selection is followed into view
             mDragRow = -1;
             mDragging = false;
+            mModSwipeList = -1;
+            mGlide = 0.0f;
+            mModGlide[0] = 0.0f;
+            mModGlide[1] = 0.0f;
         } else if (rView.selected != mShown.selected) {
             // Moving through the rows is silent; a change or a press sounds.
             if (static_cast< s32 >(rView.selected) != mPointerRow) {
                 mPointerMode = false;  // the keys or a controller moved it: the pointer waits until it moves
+                mGlide = 0.0f;         // and the list follows the selection, not a flick
+                mModGlide[0] = 0.0f;
+                mModGlide[1] = 0.0f;
             }
         } else {
             const NebulaSettingsRow* pNow = rowAt(rView, rView.selected);
@@ -5062,7 +5427,7 @@ namespace {
     const u32 cRunTrack = NEBULA_RGBA(0xCB, 0xD6, 0xEB, 0xFF);
     const u32 cRunFill = 0x6FA6EAFF;
     // What a step measures (NEBULA_BENCHMARK_PART_*), as the host's texts name it.
-    const char* const cRunParts[] = {"YOUR SETTINGS", "STANDARD SETTINGS", "EACH EFFECT ALONE", "FIRST STAGE AGAIN"};
+    const char* const cRunParts[] = {"YOUR SETTINGS", "EACH EFFECT ALONE", "FIRST STAGE AGAIN"};
 
     // `rText` cut with an ellipsis until `pBox` (at its size, drawn `squeeze` wide) is no wider than `room`.
     void fitLine(TextBox* pBox, MR::Text16& rText, f32 room, f32 squeeze, f32* pWidth) {

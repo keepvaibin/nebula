@@ -746,13 +746,15 @@ void RenderCore::start_interp_sequence() {
     const RenderConfig cfg = get_render_config();
     double rate = std::max(kGameStepRate + 1.0, present_frame_rate(
         presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
-    // VSync with the display's vblanks timed: every slot is a vblank (every n-th for a rate below the refresh, kept
-    // above 60), so each picture's moment is the one its vblank shows. The game's 60 Hz is not locked to the
-    // display, so content time follows the slots (no lead).
+    // Pictures shown whole from a refresh on (VSync, or a swap chain that cannot tear) with the display's vblanks timed:
+    // every slot is a vblank (every n-th for a rate below the refresh, kept above 60), so each picture's moment is the
+    // one its vblank shows. A slot clock of its own would beat against the refreshes there: two pictures in one refresh
+    // (one never seen) and a refresh shown twice, over and over. The game's 60 Hz is not locked to the display, so
+    // content time follows the slots (no lead). An unlimited rate with VSync off keeps no slots.
     std::int64_t vblank = 0;
     std::int64_t vblank_period = 0;
-    const bool on_vblanks =
-        cfg.vsync_interval != 0u && renderer_.vblank_grid(vblank, vblank_period);
+    const bool on_vblanks = pictures_on_refreshes(renderer_.swap_queue()) &&
+                            (cfg.vsync_interval != 0u || std::isfinite(rate)) && renderer_.vblank_grid(vblank, vblank_period);
     std::int64_t vblanks_per_slot = 1;
     const auto fit_rate_to_vblanks = [&] {
         const double refresh = static_cast<double>(frequency) / static_cast<double>(vblank_period);
@@ -1103,7 +1105,8 @@ void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
 }
 
 // The present rate with `generated` generated frames per game frame (start_interp_sequence): with all of them the target,
-// else 60 a second for the frame and each generated frame; with VSync on timed vblanks, a whole number of vblanks a slot.
+// else 60 a second for the frame and each generated frame; on timed vblanks (start_interp_sequence's on_vblanks), a whole
+// number of vblanks a slot.
 double RenderCore::interp_rate_with(unsigned generated) const {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     if (generated == 0u) {
@@ -1115,7 +1118,8 @@ double RenderCore::interp_rate_with(unsigned generated) const {
         : std::max(kGameStepRate + 1.0, present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
     std::int64_t vblank = 0;
     std::int64_t vblank_period = 0;
-    if (cfg.vsync_interval != 0u && renderer_.vblank_grid(vblank, vblank_period) && vblank_period > 0) {
+    if (pictures_on_refreshes(renderer_.swap_queue()) && (cfg.vsync_interval != 0u || std::isfinite(rate)) &&
+        renderer_.vblank_grid(vblank, vblank_period) && vblank_period > 0) {
         const double refresh = static_cast<double>(frequency) / static_cast<double>(vblank_period);
         rate = refresh / static_cast<double>(vblanks_per_slot(refresh, rate));
     }

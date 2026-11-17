@@ -2,12 +2,15 @@
 // The benchmark (benchmark.h): its stages, the run on the game thread, the per-frame measurements, and the result file
 // with its frame lists (benchmark_results.h). The arithmetic is benchmark_stats.h's.
 //
-// A run measures each stage twice, at the player's settings and then at the standard settings (render_config.h
-// apply_benchmark_standard), then the probe (each optional pass alone) and the first stage again for the heat check.
-// A step on the stage the step before measured stays there: only its settings change. Settings change only under full
-// black (the run's cover, LiveState::cover, faded in before and out after), never on a picture the player sees. A
-// travel's stage is shown from its scene's start, its opening and Mario's arrival, but measured only from play
-// (NEBULA_CONTEXT_SCENE_PLAY), so every window of a stage measures the same scene. Before each window the game runs
+// A run measures each stage at the player's settings, uncapped, in the list's order, with the probe (each optional pass
+// alone) right after the stage it is measured on, and the first stage again for the heat check where the list asks for
+// it. A step on the stage the step before measured stays there: only its settings change.
+// Settings change only under full black (the run's cover, LiveState::cover, faded in before and out after), never on a
+// picture the player sees. The cover is black from the start, while the game goes back to its title and travels to the
+// first stage, and the sound fades with it (benchmark_cover.h): the run shows and plays only its stages. A
+// travel's stage stays under the cover until play (NEBULA_CONTEXT_SCENE_PLAY): the game skips its opening tour and the
+// scenes before play while the cover is full (NebulaCutsceneSkip), Mario's arrival plays unseen, and the picture fades
+// in on play, so every window of a stage measures the same scene. Before each window the game runs
 // at its own pace, as in play, until the scene has made what it shows (its textures and pipelines): a stage's first
 // seconds load, and a window that counted them would measure the load, not the frames a player sees for the rest of
 // it. Each window then lasts a fixed time. The game keeps its own pace throughout, as in play; the pictures are its
@@ -22,6 +25,7 @@
 #include "galaxy/benchmark_recommend.h"
 #include "galaxy/benchmark_results.h"
 #include "galaxy/benchmark_stats.h"
+#include "galaxy/benchmark_cover.h"
 #include "galaxy/cpu_count.h"
 #include "galaxy/memory_saves.h"
 #include "galaxy/platform_paths.h"
@@ -75,16 +79,21 @@ namespace {
 
 // ---- the stages ----------------------------------------------------------------------------------------------------
 
-// Stage, scenario, kind (stage: measured at the player's settings and at the standard settings; grand6: the same with
-// the Observatory's six Grand Stars, so its domes are built; probe: the stage the probe measures each configuration
-// on) and measured seconds per window. Why each: one per cost class (open planets, bloom, water, particles, the hub).
-// 15 seconds at each setting, 30 a stage: about three minutes of measured frames in all.
+// Stage, scenario, kind and measured seconds per window. Kinds: stage, measured at the player's settings; grand6, the
+// same with the Observatory's six Grand Stars, so all its domes are built; probe, the stage the probe measures each
+// configuration on (right after that stage's own window, else after the last); again, the first stage measured once
+// more at the end for the heat check. In this order: the Comet Observatory whole (the hub), Gusty Garden (open
+// planets), Beach Bowl (water), Dusty Dune (sand and particles), Buoy Base (water, far view), Freezeflame (ice and
+// lava), Battlerock (the most objects; the probe's), Honeyhive (foliage) last.
 constexpr const char* kBuiltInStages =
-    "CosmosGardenGalaxy\t1\tstage\t15\n"
-    "BattleShipGalaxy\t1\tstage\t15\n"
-    "HeavenlyBeachGalaxy\t1\tstage\t15\n"
-    "HellProminenceGalaxy\t1\tstage\t15\n"
-    "AstroGalaxy\t1\tgrand6\t15\n"
+    "AstroGalaxy\t1\tgrand6\t13\n"
+    "CosmosGardenGalaxy\t1\tstage\t13\n"
+    "HeavenlyBeachGalaxy\t1\tstage\t13\n"
+    "SandClockGalaxy\t1\tstage\t13\n"
+    "OceanFloaterLandGalaxy\t1\tstage\t13\n"
+    "IceVolcanoGalaxy\t1\tstage\t13\n"
+    "BattleShipGalaxy\t1\tstage\t13\n"
+    "HoneyBeeKingdomGalaxy\t1\tstage\t12\n"
     "BattleShipGalaxy\t1\tprobe\t3\n";
 
 // The warm-up before each window, paced as in play: at least kWarmFrames, then until kQuietFrames in a row made no
@@ -135,11 +144,13 @@ bool known_stage(const std::string& id, std::uint32_t scenario) {
     return false;
 }
 
-// The rows; the probe's stage separately. Rows naming no stage the galaxy select knows are left out.
-bool parse_stages(const std::string& text, std::vector<Stage>& stages, Stage& probe) {
+// The rows; the probe's stage separately, and whether the first stage is measured again at the end. Rows naming no
+// stage the galaxy select knows are left out.
+bool parse_stages(const std::string& text, std::vector<Stage>& stages, Stage& probe, bool& again) {
     std::istringstream in(text);
     std::string line;
     bool have_probe = false;
+    again = false;
     while (std::getline(in, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty() || line[0] == '#') continue;
@@ -153,6 +164,8 @@ bool parse_stages(const std::string& text, std::vector<Stage>& stages, Stage& pr
         if (kind == "probe") {
             probe = s;
             have_probe = true;
+        } else if (kind == "again") {
+            again = true;
         } else if (kind == "stage" || kind == "grand6") {
             s.grand = kind == "grand6";
             stages.push_back(s);
@@ -394,7 +407,7 @@ std::size_t pass_slot(const char* name) {
 
 // ---- the run -------------------------------------------------------------------------------------------------------
 
-enum class Kind { Scene, Standard, Probe, Thermal };
+enum class Kind { Scene, Probe, Thermal };
 
 // A probe configuration: the optional passes off at a height, or one pass on alone.
 enum class ProbeCase : unsigned { Small, Large, Ao, Msaa, Smaa, Bloom, Enhanced, Count };
@@ -465,7 +478,7 @@ struct Run {
     std::uint32_t asks = 0u;
     std::string stage_at_ask;
     bool saw_start = false;  // a scene started since the ask (scene_started): a travel to the stage it is on arrived
-    bool arrived = false;    // the asked stage's scene started: shown, its opening playing, not yet measured
+    bool arrived = false;    // the asked stage's scene started: under the cover until play, not yet measured
     // The cover (LiveState::cover): a fade from cover_from to cover_to that began at cover_ns.
     std::uint8_t cover_from = 0u, cover_to = 0u;
     std::int64_t cover_ns = 0;
@@ -483,7 +496,6 @@ struct Run {
     bool settings_held = false;     // the run's settings in use (hold_settings), the player's kept in `chosen`
     render::RenderConfig chosen;    // the player's, put back at the end
     render::RenderConfig yours;     // the player's settings as measured (no frame pacing, no frame generation)
-    render::RenderConfig standard;  // the standard settings (apply_benchmark_standard)
     RuntimeSettings runtime;        // the player's runtime settings, put back at the end
     bool gpu_timing_was_on = false; // GPU timing before the run, put back at the end
 
@@ -652,8 +664,6 @@ render::RenderConfig item_config(const Item& item) {
     switch (item.kind) {
     case Kind::Probe:
         return probe_config(item.probe);
-    case Kind::Standard:
-        return g_run.standard;
     case Kind::Scene:
     case Kind::Thermal:
         break;
@@ -1215,13 +1225,13 @@ double refresh_rate() {
                : 0.0;
 }
 
-// The frame lists beside the result (benchmark_stats.h): each measured stage of both parts.
+// The frame lists beside the result (benchmark_stats.h): each stage measured at the player's settings.
 std::string frame_lists(const std::vector<Analysis>& analyses) {
     std::vector<FrameList> lists;
     for (std::size_t i = 0; i < analyses.size(); ++i) {
         const Kind kind = g_run.items[i].kind;
-        if (kind != Kind::Scene && kind != Kind::Standard) continue;
-        lists.push_back({kind == Kind::Scene ? 0u : 1u, g_run.items[i].stage.id, analyses[i].frame_ms});
+        if (kind != Kind::Scene) continue;
+        lists.push_back({0u, g_run.items[i].stage.id, analyses[i].frame_ms});
     }
     return encode_frame_lists(lists);
 }
@@ -1285,13 +1295,11 @@ void write_result(bool complete) {
     write_settings(j, "settings", run.chosen);
 
     // What the numbers mean, for whoever reads the file.
-    std::vector<const Analysis*> yours, standard;
+    std::vector<const Analysis*> yours;
     for (std::size_t i = 0; i < analyses.size(); ++i) {
         if (run.items[i].kind == Kind::Scene) yours.push_back(&analyses[i]);
-        if (run.items[i].kind == Kind::Standard) standard.push_back(&analyses[i]);
     }
     const PartTotals yours_totals = part_totals(yours, refresh);
-    const PartTotals standard_totals = part_totals(standard, refresh);
     const auto note = [&j](std::string_view line) { j.text({}, line, kNoteBytes); };
     j.begin_array("limits");
     note("frame times are the time between shown pictures with frame pacing off: the frame rate is what the device can "
@@ -1310,7 +1318,7 @@ void write_result(bool complete) {
         note("the output size changed during the run: its windows were measured at different sizes, so there is no "
              "recommendation");
     }
-    if (yours_totals.display_limited || standard_totals.display_limited) {
+    if (yours_totals.display_limited) {
         note("the frame rate stood at a rate it cannot pass (the display's refresh rate, the benchmark's cap, or the "
              "game's own 60 where the renderer makes no frames between them): the device has more to give than measured");
     }
@@ -1334,7 +1342,6 @@ void write_result(bool complete) {
         j.end_object();
     };
     write_part("yours", Kind::Scene, run.yours, yours_totals);
-    write_part("standard", Kind::Standard, run.standard, standard_totals);
     j.end_array();
 
     const Measured m = measured_inputs(analyses);
@@ -1449,9 +1456,6 @@ void write_result(bool complete) {
                                              : 0.0);
     j.text("limiter", yours_totals.limiter);
     j.text("worst_stage", worst_stage);
-    j.number("standard_average_fps", standard_totals.frames.average_fps);
-    j.number("standard_low_10_fps", standard_totals.frames.low_10_fps);
-    j.number("standard_low_1_fps", standard_totals.frames.low_1_fps);
     j.end_object();
     j.end_object();
 
@@ -1484,8 +1488,6 @@ void hold_settings() {
     r.yours.frame_generation = 0u;
     r.yours.ray_tracing_enabled = false;
     render::apply_benchmark_presenting(r.yours);
-    r.standard = r.chosen;
-    render::apply_benchmark_standard(r.standard);
     render::set_render_config(r.yours);
 }
 
@@ -1530,6 +1532,7 @@ void finish(bool complete) {
     g_gpu_frame_hook.store(nullptr, std::memory_order_release);
     g_audio_hook.store(nullptr, std::memory_order_release);
     g_ending.store(true, std::memory_order_release);
+    g_cover_level.store(0u, std::memory_order_relaxed);
     g_running.store(false, std::memory_order_release);
     g_resets_asked.fetch_add(1u, std::memory_order_release);
     std::printf("[benchmark] ended: the game goes back to its title\n");
@@ -1560,8 +1563,6 @@ const char* item_label(const Item& item) {
     switch (item.kind) {
     case Kind::Probe:
         return kProbeNames[static_cast<std::size_t>(item.probe)];
-    case Kind::Standard:
-        return "standard";
     case Kind::Thermal:
         return "again";
     case Kind::Scene:
@@ -1670,23 +1671,37 @@ bool start(const Options& options) {
         all << in.rdbuf();
         std::vector<Stage> stages;
         Stage probe;
-        if (parse_stages(all.str(), stages, probe)) {
+        bool again = false;
+        if (parse_stages(all.str(), stages, probe, again)) {
             text = all.str();
         } else {
             std::printf("[benchmark] benchmark.tsv has no usable stage or probe row: the built-in stages run\n");
         }
     }
-    (void)parse_stages(text, r.stages, r.probe_stage);
-    // Each stage at your settings and then at the standard settings, the probe, then the first stage again.
+    bool again = false;
+    (void)parse_stages(text, r.stages, r.probe_stage, again);
+    // Each stage at your settings in the list's order, the probe right after the stage it measures on (no travel: only
+    // the settings change), else after the last; the first stage again at the end where the list asks for it.
+    const auto add_probe = [&r] {
+        for (unsigned p = 0; p < static_cast<unsigned>(ProbeCase::Count); ++p) {
+            r.items.push_back({Kind::Probe, r.probe_stage, static_cast<ProbeCase>(p)});
+        }
+    };
+    bool probed = false;
     for (const Stage& s : r.stages) {
         r.items.push_back({Kind::Scene, s, ProbeCase::Small});
-        r.items.push_back({Kind::Standard, s, ProbeCase::Small});
+        if (!probed && same_scene(s, r.probe_stage)) {
+            add_probe();
+            probed = true;
+        }
     }
-    for (unsigned p = 0; p < static_cast<unsigned>(ProbeCase::Count); ++p) {
-        r.items.push_back({Kind::Probe, r.probe_stage, static_cast<ProbeCase>(p)});
-    }
-    r.items.push_back({Kind::Thermal, r.stages.front(), ProbeCase::Small});
+    if (!probed) add_probe();
+    if (again) r.items.push_back({Kind::Thermal, r.stages.front(), ProbeCase::Small});
     r.windows.reserve(r.items.size());
+    // Black from the start: the title the game goes back to and the travel to the first stage are not the run's to show.
+    r.cover_from = r.cover_to = 255u;
+    r.cover_ns = steady_ns();
+    g_cover_level.store(255u, std::memory_order_relaxed);
     g_here.store(options.here, std::memory_order_relaxed);
     g_picture_hook.store(on_picture, std::memory_order_release);
     g_gpu_frame_hook.store(on_gpu_frame, std::memory_order_release);
@@ -1754,6 +1769,7 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
     }
     const std::int64_t now = steady_ns();
     ++r.phase_frames;
+    g_cover_level.store(cover_at(r, now), std::memory_order_relaxed);
     switch (r.phase) {
     case Phase::Reset:
         break;
@@ -1782,8 +1798,10 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
     case Phase::Arrive: {
         const std::string& target = r.items[r.index].stage.id;
         if (r.arrived) {
-            // Its opening and Mario's arrival play, shown and not measured: the windows measure play.
+            // Under the cover until play: the game skips its opening tour (NebulaCutsceneSkip), Mario's arrival plays
+            // unseen. The picture fades in on play, and the warm-up waits for the fade: the windows measure play.
             if (g_play.load(std::memory_order_relaxed)) {
+                fade_cover(r, 0u, now);
                 enter_warm();
             } else if (r.phase_frames >= kPlayFrames) {
                 r.failure = "the game did not reach play in " + target;
@@ -1806,7 +1824,6 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
             r.here_known = true;
             r.arrived = true;
             r.phase_frames = 0u;  // from here, the wait for play
-            fade_cover(r, 0u, now);
         } else if (r.phase_frames >= kArriveFrames) {
             if (r.asks >= kAsks) {
                 r.failure = "the game did not enter " + target;
@@ -1923,8 +1940,7 @@ bool live_state(LiveState& out) {
     const Item& item = r.items[index];
     out.step = static_cast<std::uint32_t>(index + 1u);
     out.steps = static_cast<std::uint32_t>(r.items.size());
-    out.part = item.kind == Kind::Standard ? Part::Standard
-               : item.kind == Kind::Probe  ? Part::Probe
+    out.part = item.kind == Kind::Probe  ? Part::Probe
                : item.kind == Kind::Thermal ? Part::Again
                                             : Part::Yours;
     out.showing = r.phase == Phase::Leave || (r.phase == Phase::Arrive && r.arrived) || r.phase == Phase::Warm ||

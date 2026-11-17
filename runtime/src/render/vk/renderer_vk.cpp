@@ -2209,9 +2209,11 @@ void RendererVk::present_swapchain_image() {
     vk::Context& context = vk::Context::get();
     const RenderConfig cfg = get_render_config();
     // On a variable refresh display with VSync on the pacer holds presents under the refresh (paced_present_rate); a frame
-    // under the cap goes out as soon as it is ready.
+    // under the cap goes out as soon as it is ready. Interpolated pictures are paced by their slot clock (RenderCore), as
+    // on Direct3D: a second wait after the slot would carry a picture past the refresh it was drawn for.
     const float paced_fps = paced_present_rate(presented_max_fps(cfg), cfg.vsync_interval, variable_refresh_, display_refresh_hz_);
-    const double pace_wait_ms = present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
+    const double pace_wait_ms =
+        interpolation_mode() ? 0.0 : present_pacer_.pace(variable_refresh_ ? 0u : cfg.vsync_interval, paced_fps);
     const std::int64_t present_start = galaxy::qpc_now();
     {
         // The target rate: dynamic multi frame generation reaches it, a fixed multiplier is the largest multiple of 60 at or
@@ -2288,9 +2290,12 @@ void RendererVk::present_swapchain_image() {
     // An interpolated picture is timed by its moment on the display's vsync grid, at any refresh rate; the game's own
     // frames by the game's frame slots, which follow the vsyncs where the refresh rate is a multiple of 60.
     // qpc_now() is CLOCK_MONOTONIC nanoseconds off Windows: the presentation times' clock.
+    // Timed only where the swap chain keeps every picture (present_slots.h presents_timed): MAILBOX on Android is the
+    // BufferQueue's async mode, whose next present replaces a picture held for its slot.
+    const bool timed = context.display_timing() && presents_timed(swap_queue());
     std::int64_t grid = 0;
-    const bool by_moment = context.display_timing() && moment != 0 && vblank_grid(grid, vsync);
-    const bool by_frames = !by_moment && context.display_timing() && host_window::present_grid(frame_start, period, vsync, now);
+    const bool by_moment = timed && moment != 0 && vblank_grid(grid, vsync);
+    const bool by_frames = !by_moment && timed && host_window::present_grid(frame_start, period, vsync, now);
     if ((by_moment || by_frames) && step >= vsync - vsync / 16) {
         PresentTiming& timing = present_timing_;
         if (by_moment) {

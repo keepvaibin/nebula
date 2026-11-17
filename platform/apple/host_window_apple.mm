@@ -1081,7 +1081,7 @@ void pump_events(int timeout_ms) noexcept {
                     galaxy::ui::launcher_visible() || galaxy::bench::running(),
                 galaxy::steady_ms());
             for (std::size_t i = 0; i < step.key_count; ++i) {
-                galaxy::render::native_settings_post_key(step.keys[i]);
+                galaxy::render::native_settings_post_key(step.keys[i] | (((step.repeats >> i) & 1u) != 0u ? galaxy::render::kMenuKeyRepeat : 0u));
             }
             break;
         }

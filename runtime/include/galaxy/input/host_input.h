@@ -132,6 +132,22 @@ void reset_touch_controls_places() noexcept;
 void note_touch_target(std::uint32_t circle) noexcept;
 // A finger landing at x, y (window pixels) lands on something the pointer grabs.
 [[nodiscard]] bool touch_target_at(float x, float y) noexcept;
+// The finger on a touch screen as Nebula's menus take it (NebulaMenuFinger): the picture from -1 to 1 each way, left
+// and top -1, as the pointer's. `touch` counts the touches (a new value: a finger came down); `moved`: it went past the
+// display's touch slop since then (a drag, never a tap). x, y where it is or was lifted; vx, vy its speed as it was
+// lifted, in the same units a second. False while a mouse moved last or no finger has touched.
+struct MenuFinger {
+    std::uint32_t touch = 0;
+    bool down = false;
+    bool moved = false;
+    float x = 0.0f;
+    float y = 0.0f;
+    float land_x = 0.0f;
+    float land_y = 0.0f;
+    float vx = 0.0f;
+    float vy = 0.0f;
+};
+[[nodiscard]] bool menu_finger(MenuFinger& out) noexcept;
 // NEBULA_CONTEXT_CORNER_BUTTONS: the game's own buttons in the screen's top corners reach `foot` (0..4095) down the
 // picture this frame. corner_buttons_foot: their lowest edge in window pixels, -1 while there are none.
 void note_corner_buttons(std::uint32_t foot) noexcept;

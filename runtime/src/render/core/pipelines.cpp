@@ -327,6 +327,22 @@ bool added_prepass_draws(std::uint32_t state) noexcept {
 
 void Pipelines::prepare(const std::vector<Prepared>& entries, const std::vector<unsigned>& variants, bool motion, bool layer,
                         bool one_pass, bool traced) {
+    // The start's settings, which the targets file keeps (decide_warm): the first list's targets and passes. Set before its
+    // jobs are queued, so the worker that takes one sees it.
+    if (start_settings_.load(std::memory_order_relaxed) == 0u) {
+        std::uint64_t settings = 14695981039346656037ull;
+        const auto add_word = [&settings](std::uint64_t word) {
+            for (unsigned b = 0; b < 8u; ++b) {
+                settings = (settings ^ ((word >> (8u * b)) & 0xFFu)) * 1099511628211ull;
+            }
+        };
+        for (const unsigned variant : variants) {
+            add_word(variant);
+        }
+        add_word((motion ? 1u : 0u) | (layer ? 2u : 0u) | (one_pass ? 4u : 0u) | (traced ? 8u : 0u));
+        std::uint64_t none = 0u;
+        (void)start_settings_.compare_exchange_strong(none, settings != 0u ? settings : 1u, std::memory_order_release);
+    }
     std::vector<Job> now;
     std::vector<Job> later;
     for (const Prepared& prepared : entries) {
@@ -451,6 +467,9 @@ void Pipelines::worker() {
             job = std::move(from.front());
             from.pop_front();
         }
+        if (!warm_decided_.load(std::memory_order_acquire)) {
+            decide_warm();
+        }
         try {
             std::atomic<gpu::Pipeline*>* at = cell(job.id, job.variant, job.aux);
             // A texture target's form, where the targets file is kept: its key in the file's sets (0, prepared as any other,
@@ -552,6 +571,11 @@ void Pipelines::drained() noexcept {
         stored = stored_forms();
     } catch (...) {
     }
+    {
+        // Every cache written from here holds the start's set: the targets file says so (decide_warm, a later run).
+        std::lock_guard guard(targets_lock_);
+        start_drained_ = true;
+    }
     const std::size_t written = unsaved_.exchange(false, std::memory_order_acq_rel) ? save_cache() : 0u;
     save_targets(stored);
     {
@@ -572,10 +596,15 @@ void Pipelines::drained() noexcept {
 
 namespace {
 
-// The targets file: the magic, the hash of the cache data it goes with, the counts of the two sets, then the stored forms' keys
-// and the drawn forms' keys, eight bytes each.
-constexpr char kTargetsMagic[8] = {'N', 'B', 'T', 'G', 'T', 'S', '0', '1'};
-constexpr std::size_t kTargetsHeader = 8u + 8u + 4u + 4u;
+// The targets file: the magic, the hash of the cache data it goes with, the counts of the two sets, the writing run's programs
+// (program_set_identity) and start's settings (prepare), its flags (kTargetsComplete), four bytes kept zero, then the stored
+// forms' keys and the drawn forms' keys, eight bytes each. A file of the first form (01) has neither identity nor flags.
+constexpr char kTargetsMagic[8] = {'N', 'B', 'T', 'G', 'T', 'S', '0', '2'};
+constexpr char kTargetsMagicFirst[8] = {'N', 'B', 'T', 'G', 'T', 'S', '0', '1'};
+constexpr std::size_t kTargetsHeader = 8u + 8u + 4u + 4u + 8u + 8u + 4u + 4u;
+constexpr std::size_t kTargetsHeaderFirst = 8u + 8u + 4u + 4u;
+// The writing run's start's set had drained: the cache data named holds all of it.
+constexpr std::uint32_t kTargetsComplete = 1u;
 // More keys than the game has pipelines is a file from something else.
 constexpr std::uint32_t kTargetsMost = 1u << 20u;
 
@@ -616,28 +645,39 @@ bool Pipelines::targets_open() {
         return true;
     }
     const auto length = static_cast<std::size_t>(in.tellg());
-    if (length < kTargetsHeader) {
+    if (length < kTargetsHeaderFirst) {
         return true;
     }
     std::vector<char> bytes(length);
     in.seekg(0);
     in.read(bytes.data(), static_cast<std::streamsize>(length));
-    if (!in || std::memcmp(bytes.data(), kTargetsMagic, sizeof(kTargetsMagic)) != 0) {
+    const bool first = in && std::memcmp(bytes.data(), kTargetsMagicFirst, sizeof(kTargetsMagicFirst)) == 0;
+    if (!in || (!first && (length < kTargetsHeader || std::memcmp(bytes.data(), kTargetsMagic, sizeof(kTargetsMagic)) != 0))) {
         return true;
     }
+    const std::size_t header = first ? kTargetsHeaderFirst : kTargetsHeader;
     std::uint64_t hash = 0u;
     std::uint32_t stored = 0u, drawn = 0u;
     std::memcpy(&hash, bytes.data() + 8u, 8u);
     std::memcpy(&stored, bytes.data() + 16u, 4u);
     std::memcpy(&drawn, bytes.data() + 20u, 4u);
-    targets_hash_ = hash;
     if (stored > kTargetsMost || drawn > kTargetsMost ||
-        length != kTargetsHeader + (std::size_t{stored} + std::size_t{drawn}) * 8u) {
+        length != header + (std::size_t{stored} + std::size_t{drawn}) * 8u) {
         return true;
     }
+    // The first form is written again in the second (save_targets: a hash it does not name).
+    targets_hash_ = first ? 0u : hash;
+    if (!first) {
+        std::uint32_t flags = 0u;
+        std::memcpy(&file_programs_, bytes.data() + 24u, 8u);
+        std::memcpy(&file_settings_, bytes.data() + 32u, 8u);
+        std::memcpy(&flags, bytes.data() + 40u, 4u);
+        file_complete_ = (flags & kTargetsComplete) != 0u;
+    }
+    file_names_cache_ = accepted != 0u && hash == accepted;
     const auto key_at = [&](std::size_t i) {
         std::uint64_t key;
-        std::memcpy(&key, bytes.data() + kTargetsHeader + i * 8u, 8u);
+        std::memcpy(&key, bytes.data() + header + i * 8u, 8u);
         return key;
     };
     // What a target pass drew stands whatever the cache; what the cache holds only if it is the data the driver took.
@@ -694,6 +734,37 @@ std::uint64_t Pipelines::form_key(const PipelineEntry& entry, unsigned variant, 
     const std::uint64_t values[] = {program, variant, aux, program_hash(vs), program_hash(ps)};
     hash = mix(hash, values, sizeof(values));
     return hash != 0u ? hash : 1u;
+}
+
+void Pipelines::decide_warm() noexcept {
+    try {
+        const bool kept = targets_open();
+        const std::uint64_t settings = start_settings_.load(std::memory_order_acquire);
+        if (settings == 0u) {
+            return;  // a draw's own job before the first list: the next job decides
+        }
+        std::lock_guard guard(targets_lock_);
+        if (warm_decided_.load(std::memory_order_relaxed)) {
+            return;
+        }
+        const std::uint64_t programs = program_set_identity();
+        const bool warm = kept && file_names_cache_ && file_complete_ && programs != 0u && file_programs_ == programs &&
+                          file_settings_ == settings;
+        if (!warm && kept) {
+            targets_unsaved_ = true;  // written again for this run's programs and settings once its start's set drains
+        }
+        warm_.store(warm, std::memory_order_release);
+        warm_decided_.store(true, std::memory_order_release);
+        std::fprintf(stderr, "[pipelines] %s\n",
+                     warm ? "the driver's cache holds the start's set: loaded behind the game, nothing waits for it"
+                          : !kept ? "no cache file of the renderer's own: the start's set is prepared before play"
+                          : !file_names_cache_ ? "the driver's cache is new or was refused: the start's set is prepared before play"
+                          : file_programs_ != programs ? "the cache is another build's programs': the start's set is prepared before play"
+                          : file_settings_ != settings ? "the cache is other settings': the start's set is prepared before play"
+                                                       : "the cache was written before the start's set was whole: prepared before play");
+    } catch (...) {
+        warm_decided_.store(true, std::memory_order_release);
+    }
 }
 
 bool Pipelines::left_to_cache(std::uint64_t form) {
@@ -762,12 +833,18 @@ void Pipelines::save_targets(const std::vector<std::uint64_t>& stored) noexcept 
             }
             const auto stored_count = static_cast<std::uint32_t>(stored.size());
             const auto drawn_count = static_cast<std::uint32_t>(target_drawn_.size());
-            bytes.resize(kTargetsHeader + (std::size_t{stored_count} + std::size_t{drawn_count}) * 8u);
+            const std::uint64_t programs = program_set_identity();
+            const std::uint64_t settings = start_settings_.load(std::memory_order_acquire);
+            const std::uint32_t flags = start_drained_ ? kTargetsComplete : 0u;
+            bytes.assign(kTargetsHeader + (std::size_t{stored_count} + std::size_t{drawn_count}) * 8u, '\0');
             char* at = bytes.data();
             std::memcpy(at, kTargetsMagic, sizeof(kTargetsMagic));
             std::memcpy(at + 8u, &hash, 8u);
             std::memcpy(at + 16u, &stored_count, 4u);
             std::memcpy(at + 20u, &drawn_count, 4u);
+            std::memcpy(at + 24u, &programs, 8u);
+            std::memcpy(at + 32u, &settings, 8u);
+            std::memcpy(at + 40u, &flags, 4u);
             at += kTargetsHeader;
             for (const std::uint64_t key : stored) {
                 std::memcpy(at, &key, 8u);

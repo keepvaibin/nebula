@@ -110,6 +110,14 @@ struct InputState {
     float finger_land_y = 0.0f;
     // Since it came down, the finger has gone past the system's touch slop (a still fingertip's tremor stays inside).
     bool finger_moved = false;
+    // For Nebula's menus (menu_finger): the pointer's touches counted (one more each time its finger comes down), the
+    // furthest the finger has gone from where it came down (window pixels), and its speed as it was lifted (window pixels
+    // a second; 0 when it held still before lifting). The display's touch slop in window pixels (0: none given).
+    std::uint32_t finger_touches = 0;
+    float finger_travel_px = 0.0f;
+    float finger_vx = 0.0f;
+    float finger_vy = 0.0f;
+    float touch_slop_px = 0.0f;
     // The pointer's place (finger_x, finger_y) came from a mouse: it points wherever it is over the window, as on
     // Windows, with none of a finger's rules (shown only while it touches and a moment after; a menu's pointer only
     // from a tap). `mouse_inside`: the mouse is over the window.

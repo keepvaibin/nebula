@@ -90,7 +90,8 @@ public:
         // Registered counts from the moment the game names a pipeline: the cook's list, registered at the start, is
         // still to make before the render thread has been handed it (the title's wait asks in those first frames).
         const std::uint32_t count = registries_.registered_pipeline_count();
-        return {static_cast<std::uint32_t>(pipelines_.created()), pipelines_.pending() + (count > queued ? count - queued : 0u)};
+        return {static_cast<std::uint32_t>(pipelines_.created()), pipelines_.pending() + (count > queued ? count - queued : 0u),
+                pipelines_.warm()};
     }
     [[nodiscard]] TextureStore& textures() noexcept { return texture_store_; }
     // The list the next render_frame hands over.

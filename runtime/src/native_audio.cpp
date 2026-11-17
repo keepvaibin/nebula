@@ -6,6 +6,7 @@
 
 #include "galaxy/audio_device.h"
 #include "galaxy/audio_mixer.h"
+#include "galaxy/benchmark_cover.h"
 #include "galaxy/luma_audio_service.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/wiimote_speaker.h"
@@ -222,9 +223,10 @@ void NativeGameAudio::frame() {
             s.device->set_surround(s.sound_output == galaxy::SoundOutput::Surround);
         }
     }
-    // Muted in the background: the mix goes on at full pace and the master ramps to silence, so nothing clicks.
+    // Muted in the background: the mix goes on at full pace and the master ramps to silence, so nothing clicks. Under
+    // the benchmark's cover the master fades with it (benchmark_cover.h).
     const bool muted = galaxy::background_muted();
-    const float target = (muted || audio.master < 0.0f) ? 0.0f : std::min(audio.master, 4.0f);
+    const float target = (muted || audio.master < 0.0f) ? 0.0f : std::min(audio.master, 4.0f) * galaxy::bench::cover_audible();
     const float start = s.master_started ? s.master : target;
     s.master_started = true;
     s.master = target;
