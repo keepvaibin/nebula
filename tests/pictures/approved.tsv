@@ -35,6 +35,9 @@ picture	engine	luigi-stages	d3d12	third	1280	720	b9c0c35b8ae6b234c91aa092649a5d4
 picture	engine	luigi-stages	vulkan	first	1280	720	80c5b923bc4877edb6b3cd00a575a6eacffda751276fdb2f6878e350d97bb9d6
 picture	engine	luigi-stages	vulkan	second	1280	720	c18e86c1d0254edd4a27fced51e58f45145eb18e95b27338e1db2a4b85914e92
 picture	engine	luigi-stages	vulkan	third	1280	720	246f2556bf0a4d3b56714ab93b42e580541802e05caddef09f647fc4628f6d8e
+picture	engine	menu-key-icons	d3d11	menu	1280	720	c5fa2327f60ee346329cc42f147dfa09d73dc10fe729fa2b0ecbb18947f1a2eb
+picture	engine	menu-key-icons	d3d12	menu	1280	720	1452c2ec359b5e3d7be0f81bb340d1e953e98dc408f0a08d8c53b37897a567d5
+picture	engine	menu-key-icons	vulkan	menu	1280	720	ec1afd6f3cc75bfbda4ed59f0e37c889a5bfd04a9a310243e76b33c8f5843326
 picture	engine	window-4k	d3d11	play	3840	2160	5a523d65124bbcec8b0c10c5a3b8db4e58e119b70597531bc29edad335946000
 picture	engine	window-4k	d3d12	play	3840	2160	d56163e2c52d560edf8082b06f100af4aadb5fd188fafee3c8dabdc4d38e1c22
 picture	engine	window-4k	vulkan	play	3840	2130	970c2d28b01d6662afa58628eba2a0f0f649564c2306a9118cd1d9b9eb9d7171
@@ -374,7 +377,7 @@ picture	tour	050-HoneyBeeKingdomGalaxy-3	d3d12	after	1280	720	0ddba7250d84b578b5
 picture	tour	050-HoneyBeeKingdomGalaxy-3	d3d12	arrive	1280	720	3981b842defc075f351d7e96ee6e2b7ca531f15eaf7d50a6e6449752c39c75ab
 picture	tour	050-HoneyBeeKingdomGalaxy-3	vulkan	after	1280	720	6af376ea605538536daa3b5021296ac91b1752045f9387f09a2e16bdc051711a
 picture	tour	050-HoneyBeeKingdomGalaxy-3	vulkan	arrive	1280	720	689f5360ffefdb1005af06f2b1b2f448f72a50087a1403f0e49756a7fe813ce6
-picture	tour	051-HoneyBeeKingdomGalaxy-4	d3d11	after	1280	720	c6b8a81de470ae9da532f291acc51c0d877fceb0b0ddefad2d9a716a31c30338
+picture	tour	051-HoneyBeeKingdomGalaxy-4	d3d11	after	1280	720	58ecf75edb8b548113771be432172394c1fd8b845c58867b6c62df5d2ab1376c
 picture	tour	051-HoneyBeeKingdomGalaxy-4	d3d11	arrive	1280	720	ecf4ff0f463f787e8437ec0371a7595289a9a582f5fd5d185652c7d346aab500
 picture	tour	051-HoneyBeeKingdomGalaxy-4	d3d12	after	1280	720	f8c120613ac340b7e3075ebdb3dc2b553d9eb15726b3a505ea58866fb699b55c
 picture	tour	051-HoneyBeeKingdomGalaxy-4	d3d12	arrive	1280	720	4edab42b25241775a9554a31fbe6911267dcd22448c59ae4c8254c6ccb0ad834
@@ -441,11 +444,11 @@ picture	tour	061-KoopaJrShipLv1Galaxy-1	d3d12	arrive	1280	720	3760b18cbed40608f9
 picture	tour	061-KoopaJrShipLv1Galaxy-1	vulkan	after	1280	720	c904037d94471e3f48d0da5c504d99c39225fb3f8cf99253fb50cd10e9b1b8e8
 picture	tour	061-KoopaJrShipLv1Galaxy-1	vulkan	arrive	1280	720	23b273ac22fc832191ce94215cf4c3a54be4c45ba8806f2c6f723be19d77e442
 picture	tour	062-OceanFloaterLandGalaxy-1	d3d11	after	1280	720	ba9f1e5bc465445ef2edafa7ed606d2a5f87e0c005a26fcd56888f9f50cbd717
-picture	tour	062-OceanFloaterLandGalaxy-1	d3d11	arrive	1280	720	b903c8f526a740f57921d6aea35bce3a33a50fb25d74a05c48e5e7ff882aef70
+picture	tour	062-OceanFloaterLandGalaxy-1	d3d11	arrive	1280	720	771f493589f2ce1331c76c4b16a67143baa9d2bc214d1a63ad35300fc1bc509d
 picture	tour	062-OceanFloaterLandGalaxy-1	d3d12	after	1280	720	7f34c383f3a68ffba35afef5652894e2471e18ea2852dcd180d11c556a683aca
-picture	tour	062-OceanFloaterLandGalaxy-1	d3d12	arrive	1280	720	d7ce4377c2f2d6c5fcfe41b2a48749998213b647a895ae7bdaf140d08e7f9914
+picture	tour	062-OceanFloaterLandGalaxy-1	d3d12	arrive	1280	720	771f493589f2ce1331c76c4b16a67143baa9d2bc214d1a63ad35300fc1bc509d
 picture	tour	062-OceanFloaterLandGalaxy-1	vulkan	after	1280	720	557c70c6e8cf25c96b16606e239d3a7cd2c919dbed50e2338649912a0268e2cb
-picture	tour	062-OceanFloaterLandGalaxy-1	vulkan	arrive	1280	720	ae9fde09b7c73950521b7b1749e0100f63be1485fbfc6546b32a0aaf7a0191fd
+picture	tour	062-OceanFloaterLandGalaxy-1	vulkan	arrive	1280	720	74265ee0a868d7f54605346aa31aaba6810ce4253dd986a5698e46850b16eda9
 picture	tour	063-OceanPhantomCaveGalaxy-1	d3d11	after	1280	720	0c9ade5ebc4f9340838f711cbbb0a0e07dce96cace5d85e64a260a28b33c5cc1
 picture	tour	063-OceanPhantomCaveGalaxy-1	d3d11	arrive	1280	720	b374e0e8716390d5cf42e717415f6c4e453761531f57ce01ff093dea54e58a0a
 picture	tour	063-OceanPhantomCaveGalaxy-1	d3d12	after	1280	720	0c9ade5ebc4f9340838f711cbbb0a0e07dce96cace5d85e64a260a28b33c5cc1
@@ -513,11 +516,11 @@ picture	tour	073-PhantomGalaxy-1	d3d12	arrive	1280	720	8bd963b291c7a87a50a7b8b58
 picture	tour	073-PhantomGalaxy-1	vulkan	after	1280	720	e62d5f54798870f6320ac639a7564c9d7a4361e11b398db3fbd1f72da10f20ed
 picture	tour	073-PhantomGalaxy-1	vulkan	arrive	1280	720	674e8a10318b88a2b690cf75a7b3dcc6ba966cf14c1620930351b7fd0d0d6ebd
 picture	tour	074-PhantomGalaxy-3	d3d11	after	1280	720	83184cc33169832794525c2febb07e590b30bdb6ca77534652ceb7eca9dc9755
-picture	tour	074-PhantomGalaxy-3	d3d11	arrive	1280	720	41bf2943c1b4ccda305568dc12be18a41288a5511881419e4d6718bad04150eb
+picture	tour	074-PhantomGalaxy-3	d3d11	arrive	1280	720	8c3bf68b010d5fa1b748c59160063be8585ee541dbb494938619960b2c8309c7
 picture	tour	074-PhantomGalaxy-3	d3d12	after	1280	720	f5ae82d0e509b45ae422e17cc5da3e79718a38aafac725bfbb74e4fae671abbc
-picture	tour	074-PhantomGalaxy-3	d3d12	arrive	1280	720	a95c38f6cd75ac180fba92786bee28ea240f4488ee1f762fa5321d66230aaec7
+picture	tour	074-PhantomGalaxy-3	d3d12	arrive	1280	720	c3e3b6a482f44121a2ad762f5a58ebf291b6159ae592d0366aa44f5d0e7f1cac
 picture	tour	074-PhantomGalaxy-3	vulkan	after	1280	720	ff7a91c0bf741e0e981506c1dad0e4245f8c06ea8d13a6a9382bf1e267e37fc9
-picture	tour	074-PhantomGalaxy-3	vulkan	arrive	1280	720	facdfc0ca4da9aa619fc9c9bfb247d9591388b9359f78bb200fb0d97a3229d0f
+picture	tour	074-PhantomGalaxy-3	vulkan	arrive	1280	720	f39d5270f8ae825ae6cd0c5b63090cfc052febbe1b995779a97a08c89725226d
 picture	tour	075-PhantomGalaxy-2	d3d11	after	1280	720	282b27f4d13b0effeedc126fa8d6e71689ba81cf77d71f8e23692b4401903c42
 picture	tour	075-PhantomGalaxy-2	d3d11	arrive	1280	720	81ba08e0de026357ae5a7548c5709c7f91922023d2ebd0a03fe60fa095e7342d
 picture	tour	075-PhantomGalaxy-2	d3d12	after	1280	720	d035b31c0964afac553b5eb512adc29adbf06ce27b54b987aabb67ce9eae735a
@@ -566,7 +569,7 @@ picture	tour	082-ReverseKingdomGalaxy-5	d3d12	after	1280	720	15b5aa9611c5d3bf004
 picture	tour	082-ReverseKingdomGalaxy-5	d3d12	arrive	1280	720	5b65bbc27f3aba078d5ee7bf8f6b8644c280abe5323d3cf0b59b8b910f015c03
 picture	tour	082-ReverseKingdomGalaxy-5	vulkan	after	1280	720	2b604c61ce66ea0016aa3c45389e47d033958bb3308a234a46b679f2c5e843f8
 picture	tour	082-ReverseKingdomGalaxy-5	vulkan	arrive	1280	720	1431b807af75f0d9fdc8af30b26e7547557ab9880992198b06282b17fbea92f5
-picture	tour	083-SandClockGalaxy-2	d3d11	after	1280	720	687987cc1d212754ef34051725385a7f5c5e22c7347ddcabfd6e5f9f614d9a5b
+picture	tour	083-SandClockGalaxy-2	d3d11	after	1280	720	93212f445c1f904bf83b54a2b73966c3abfc9ef2706fa530c8cb2da31d236a97
 picture	tour	083-SandClockGalaxy-2	d3d11	arrive	1280	720	b82c17075a307a06607ddd7d6686a3227c2cd882f14f11b9591b5170d19feead
 picture	tour	083-SandClockGalaxy-2	d3d12	after	1280	720	93212f445c1f904bf83b54a2b73966c3abfc9ef2706fa530c8cb2da31d236a97
 picture	tour	083-SandClockGalaxy-2	d3d12	arrive	1280	720	b82c17075a307a06607ddd7d6686a3227c2cd882f14f11b9591b5170d19feead
@@ -615,7 +618,7 @@ picture	tour	090-StarDustGalaxy-1	d3d12	arrive	1280	720	9f4fc3679e85069f82b1fd69
 picture	tour	090-StarDustGalaxy-1	vulkan	after	1280	720	8f021df6b8633713995af705dfac3007e343edefcd05060e307d7b249065f5fc
 picture	tour	090-StarDustGalaxy-1	vulkan	arrive	1280	720	8e1beb0cb597831cbfc3d15fa994216f08746911f717d9027ea00d77e292c7da
 picture	tour	091-StarDustGalaxy-2	d3d11	after	1280	720	72b134f13635c577276eb1e7a9dd3b47b957ce7b210e6a3da6bb82016f8b07ea
-picture	tour	091-StarDustGalaxy-2	d3d11	arrive	1280	720	3a3b7bf35c40a373c2bf914c595c41558e52f5576720490ee7c6b9204e7d3f39
+picture	tour	091-StarDustGalaxy-2	d3d11	arrive	1280	720	1d441ce45b428e7f03bcfc411061fb39a1f65297bb92d00ab94b2ec95b44d7a3
 picture	tour	091-StarDustGalaxy-2	d3d12	after	1280	720	e606029a8c196a4c995c57cc1d47453631190ff5060b09e1d8a3632ff80ff23b
 picture	tour	091-StarDustGalaxy-2	d3d12	arrive	1280	720	16c1e85cb765ba550138a668b9c6799bddf2ca3298c808e3ccf2b8c5cdbe5b6f
 picture	tour	091-StarDustGalaxy-2	vulkan	after	1280	720	9d1d28eb9f98e37cc27e4f4df250106c8e4a1ccdb77460564d4fb6078317dda6
@@ -807,7 +810,7 @@ picture	tour-RMGJ01	RMGJ01-060-KoopaBattleVs3Galaxy-1	d3d12	arrive	1280	720	c898
 picture	tour-RMGJ01	RMGJ01-061-KoopaJrShipLv1Galaxy-1	d3d12	after	1280	720	c904037d94471e3f48d0da5c504d99c39225fb3f8cf99253fb50cd10e9b1b8e8
 picture	tour-RMGJ01	RMGJ01-061-KoopaJrShipLv1Galaxy-1	d3d12	arrive	1280	720	bec93d9a45772b580150ba82bf4ab7288f85da0ad3b4b06d536ee30d7e57b391
 picture	tour-RMGJ01	RMGJ01-062-OceanFloaterLandGalaxy-1	d3d12	after	1280	720	7f34c383f3a68ffba35afef5652894e2471e18ea2852dcd180d11c556a683aca
-picture	tour-RMGJ01	RMGJ01-062-OceanFloaterLandGalaxy-1	d3d12	arrive	1280	720	4047ccf1a7be39dde4007c14fb47b02e37b2c2e1fb0f4a68568529f34570f4a3
+picture	tour-RMGJ01	RMGJ01-062-OceanFloaterLandGalaxy-1	d3d12	arrive	1280	720	a4d86a04603fa25fa3423d77fe3645cea434b055729dae57f0bae2f050035d5d
 picture	tour-RMGJ01	RMGJ01-063-OceanPhantomCaveGalaxy-1	d3d12	after	1280	720	0c9ade5ebc4f9340838f711cbbb0a0e07dce96cace5d85e64a260a28b33c5cc1
 picture	tour-RMGJ01	RMGJ01-063-OceanPhantomCaveGalaxy-1	d3d12	arrive	1280	720	daf3266d5222c613b5a2ffc05012e946f2cfbbddf900628f742b7985b639c1d8
 picture	tour-RMGJ01	RMGJ01-064-OceanPhantomCaveGalaxy-2	d3d12	after	1280	720	629f7ca1f2770286cbc41108ad0803b47de5c5789cfd0041c0b4bbc3e385726e
@@ -831,7 +834,7 @@ picture	tour-RMGJ01	RMGJ01-072-OceanRingGalaxy-5	d3d12	arrive	1280	720	9f8fbc2d8
 picture	tour-RMGJ01	RMGJ01-073-PhantomGalaxy-1	d3d12	after	1280	720	76e6d7cc7844a3da8f39eb1445e607a5b11e405b6d30e911577b2c13f184be1b
 picture	tour-RMGJ01	RMGJ01-073-PhantomGalaxy-1	d3d12	arrive	1280	720	792f016357834d847dd32559f57818c1e77ecb53f2164315425927664b5d2735
 picture	tour-RMGJ01	RMGJ01-074-PhantomGalaxy-3	d3d12	after	1280	720	f5ae82d0e509b45ae422e17cc5da3e79718a38aafac725bfbb74e4fae671abbc
-picture	tour-RMGJ01	RMGJ01-074-PhantomGalaxy-3	d3d12	arrive	1280	720	644d3fecac30891ed0faefeaa27a9d2266426bbb04067a5a79d2454f96905052
+picture	tour-RMGJ01	RMGJ01-074-PhantomGalaxy-3	d3d12	arrive	1280	720	ad23f987c734391e9b6e483d3655c01ebd80bc9c00203349af4eadb5adfb4912
 picture	tour-RMGJ01	RMGJ01-075-PhantomGalaxy-2	d3d12	after	1280	720	d035b31c0964afac553b5eb512adc29adbf06ce27b54b987aabb67ce9eae735a
 picture	tour-RMGJ01	RMGJ01-075-PhantomGalaxy-2	d3d12	arrive	1280	720	7bba17a430f041263a54a1ee3a21dfff950e225de86cb5a9610a85d848811f44
 picture	tour-RMGJ01	RMGJ01-076-PhantomGalaxy-4	d3d12	after	1280	720	3e216c10a74d5dcbc48f33322c17c188ebf2d3d1b932141c33a9b9a7b4af23ee
@@ -1009,7 +1012,7 @@ picture	tour-RMGP01	RMGP01-060-KoopaBattleVs3Galaxy-1	d3d12	arrive	1280	720	c898
 picture	tour-RMGP01	RMGP01-061-KoopaJrShipLv1Galaxy-1	d3d12	after	1280	720	c904037d94471e3f48d0da5c504d99c39225fb3f8cf99253fb50cd10e9b1b8e8
 picture	tour-RMGP01	RMGP01-061-KoopaJrShipLv1Galaxy-1	d3d12	arrive	1280	720	3760b18cbed40608f940a8931f1f0f10f9af5cedb34d14ec47e532f0bd896efd
 picture	tour-RMGP01	RMGP01-062-OceanFloaterLandGalaxy-1	d3d12	after	1280	720	7f34c383f3a68ffba35afef5652894e2471e18ea2852dcd180d11c556a683aca
-picture	tour-RMGP01	RMGP01-062-OceanFloaterLandGalaxy-1	d3d12	arrive	1280	720	d7ce4377c2f2d6c5fcfe41b2a48749998213b647a895ae7bdaf140d08e7f9914
+picture	tour-RMGP01	RMGP01-062-OceanFloaterLandGalaxy-1	d3d12	arrive	1280	720	771f493589f2ce1331c76c4b16a67143baa9d2bc214d1a63ad35300fc1bc509d
 picture	tour-RMGP01	RMGP01-063-OceanPhantomCaveGalaxy-1	d3d12	after	1280	720	0c9ade5ebc4f9340838f711cbbb0a0e07dce96cace5d85e64a260a28b33c5cc1
 picture	tour-RMGP01	RMGP01-063-OceanPhantomCaveGalaxy-1	d3d12	arrive	1280	720	b374e0e8716390d5cf42e717415f6c4e453761531f57ce01ff093dea54e58a0a
 picture	tour-RMGP01	RMGP01-064-OceanPhantomCaveGalaxy-2	d3d12	after	1280	720	629f7ca1f2770286cbc41108ad0803b47de5c5789cfd0041c0b4bbc3e385726e
@@ -1033,7 +1036,7 @@ picture	tour-RMGP01	RMGP01-072-OceanRingGalaxy-5	d3d12	arrive	1280	720	4c3c1b997
 picture	tour-RMGP01	RMGP01-073-PhantomGalaxy-1	d3d12	after	1280	720	76e6d7cc7844a3da8f39eb1445e607a5b11e405b6d30e911577b2c13f184be1b
 picture	tour-RMGP01	RMGP01-073-PhantomGalaxy-1	d3d12	arrive	1280	720	8bd963b291c7a87a50a7b8b58833b17568596ab7b220aa02d7572f1db221ac00
 picture	tour-RMGP01	RMGP01-074-PhantomGalaxy-3	d3d12	after	1280	720	f5ae82d0e509b45ae422e17cc5da3e79718a38aafac725bfbb74e4fae671abbc
-picture	tour-RMGP01	RMGP01-074-PhantomGalaxy-3	d3d12	arrive	1280	720	a95c38f6cd75ac180fba92786bee28ea240f4488ee1f762fa5321d66230aaec7
+picture	tour-RMGP01	RMGP01-074-PhantomGalaxy-3	d3d12	arrive	1280	720	c3e3b6a482f44121a2ad762f5a58ebf291b6159ae592d0366aa44f5d0e7f1cac
 picture	tour-RMGP01	RMGP01-075-PhantomGalaxy-2	d3d12	after	1280	720	d035b31c0964afac553b5eb512adc29adbf06ce27b54b987aabb67ce9eae735a
 picture	tour-RMGP01	RMGP01-075-PhantomGalaxy-2	d3d12	arrive	1280	720	c2e03b6a2c0cb158a9e39b1116f684669e87ec1e56001c154c7d55998ea1430f
 picture	tour-RMGP01	RMGP01-076-PhantomGalaxy-4	d3d12	after	1280	720	3e216c10a74d5dcbc48f33322c17c188ebf2d3d1b932141c33a9b9a7b4af23ee
