@@ -138,10 +138,13 @@ Instead of a fixed frame, a step can wait for a fact or a log line:
 | Set your mod's options | `"mods": [{ "path": "../..", "options": { "Speed": 2 } }]` |
 | Deny a permission | `"mods": [{ "path": "../..", "permissions": { "net.internet": "deny" } }]` |
 | Use another language | `"language": "EuGerman"` |
+| Use another disc's game | `"disc": "RMGJ01"` with `"language": "JpJapanese"` |
 
 Each item is read back from the game before frame 0. An item that did not take ends the test as `setup-failed`, so a test never passes on a setup that did not happen.
 
 The window is 1280 x 720 unless the test sets `"window": [width, height]`, for example `[1920, 360]` for 48:9.
+
+A test with `"disc"` runs only on that disc's game. When your game is another disc's, import that disc too and set `LUMA_TEST_PAKS` to its `game.pak`, as `RMGJ01=PATH` (pairs joined by `;`). Without it, the test's result is `not-run` and names the disc it needs.
 
 ## Pressing buttons in menus
 
@@ -180,6 +183,7 @@ Each run leaves a folder, `TEST/RENDERER/`, in the work folder. By default, the 
 |---|---|
 | `fail` | A check did not hold. Look at what it found, and at the pictures. |
 | `setup-failed` | The start did not take. The reason names the item, such as a stage name the game does not have. |
+| `not-run` | The test needs another disc's game (`disc`). Set `LUMA_TEST_PAKS`. |
 | `crashed` | The game crashed. The result names the crash dump and the last lines of the log. |
 | `timeout` | The run took longer than `limit_seconds`. A step's `after` may never have held. |
 | `harness-error` | The test file is wrong. The reason names the key and its place. |
