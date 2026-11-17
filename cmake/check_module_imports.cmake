@@ -1,5 +1,5 @@
 # The game module's imports, checked at its link (native/CMakeLists.txt, every platform but Windows, whose module has no
-# C runtime to import from): no math function may come from the system's library. The game's math is its own
+# C runtime to import from): no rounded math function may come from the system's library. The game's math is its own
 # (native/math/src/nebula_libm.c), the same bits on every platform; one call answered by the system's library (Android's
 # sincosf, which the compiler made of a sinf and a cosf of one angle) gives another platform other results, and the
 # game steps of a device no longer match the PC's.
@@ -19,7 +19,9 @@ foreach(line IN LISTS lines)
     string(STRIP "${name}" name)
     string(REGEX REPLACE "@.*$" "" name "${name}")
     string(REGEX REPLACE "^_+" "" name "${name}")
-    if(name MATCHES "^(sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|sincos|sincospi|sinpi|cospi|tanpi|pow|exp|exp2|exp10|expm1|log|log2|log10|log1p|cbrt|hypot|sqrt|fmod|remainder|floor|ceil|trunc|round|lround|llround|rint|lrint|nearbyint|ldexp|frexp|modf|fma|fmin|fmax|erf|erfc|tgamma|lgamma)(f|l)?(_stret)?$")
+    # The rounded functions only: an exact one (sqrt, floor, ceil, trunc, round, fmod, fma) gives the same bits from
+    # any library.
+    if(name MATCHES "^(sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|sincos|sincospi|sinpi|cospi|tanpi|pow|exp|exp2|exp10|expm1|log|log2|log10|log1p|cbrt|hypot|erf|erfc|tgamma|lgamma)(f|l)?(_stret)?$")
         list(APPEND found "${name}")
     endif()
 endforeach()
