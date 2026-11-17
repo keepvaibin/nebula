@@ -40,6 +40,9 @@ import harness_self  # noqa: E402
 TREE = pathlib.Path(__file__).resolve().parents[2]
 TESTS = TREE / "tests" / "mods"
 RUNNER = TREE / "tools" / "lumacore" / "luma_test.py"
+# Beside each suite.json of the copy, its list as copied: run_suite rewrites suite.json to the tests one run takes (the
+# runner reads a suite by that name), so a later run of the same copy reads what the suite holds from here.
+COPIED = "suite.copied.json"
 # Files outside tests/mods that the tests' sources include, by their path in the tree.
 INCLUDED = ["tools/test_driver/extension/luma_test_services.h"]
 HOST_PLATFORM = {"Windows": "windows-x64", "Linux": "linux-x64"}.get(platform.system(), "windows-x64")
@@ -136,6 +139,8 @@ def prepare(args, lumalink, work, ll_tree):
             shutil.copy2(source, tree / place)
         else:
             shutil.copytree(source, tree / place)
+    for listed in tree.rglob("suite.json"):
+        shutil.copy2(listed, listed.with_name(COPIED))
     logs = work / "build-logs"
     if logs.exists():
         shutil.rmtree(logs)
@@ -212,15 +217,16 @@ def facts_lines(folder, ignored=()):
 
 def run_origin(args, prefix, copy, run_root, work, build_failed):
     """The rows of every suite under `copy` (the copy of this tree's tests/mods, or of LumaLink's tests/game): each
-    suite's tests as the copy's suite.json lists them, run on args.renderer, judged. The checkouts are not read again:
-    a test added there while a run goes on is in the next run's copy."""
+    suite's tests as the copy lists them (COPIED: its suite.json as copied, not as an earlier run of the same copy
+    rewrote it), run on args.renderer, judged. The checkouts are not read again: a test added there while a run goes
+    on is in the next run's copy."""
     rows = []
     for suite_json in sorted(copy.glob("*/suite.json")):
         suite = suite_json.parent
         label = prefix + suite.name
         if args.only and not any(o == label or o.startswith(label + "/") for o in args.only):
             continue
-        listed = json.loads(suite_json.read_text(encoding="utf-8"))["tests"]
+        listed = json.loads((suite / COPIED).read_text(encoding="utf-8"))["tests"]
         to_run, once, twice = [], {}, []
         for name in listed:
             if args.only and label not in args.only and "%s/%s" % (label, name) not in args.only:
