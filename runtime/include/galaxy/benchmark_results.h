@@ -47,6 +47,7 @@ struct SettingsView {
 struct StageView {
     std::string stage;  // the game's stage name (CosmosGardenGalaxy)
     double average_fps = 0.0, low_10_fps = 0.0, low_1_fps = 0.0, p99_ms = 0.0;
+    double steps_per_s = 0.0, steps_low_1 = 0.0;  // the game's own steps a second and their 1% low
     double gpu_ms = -1.0, game_ms = -1.0, render_ms = -1.0;  // per frame, < 0 when not known
     double load_ms = 0.0;
     std::uint32_t stutters = 0u;
@@ -57,6 +58,7 @@ struct StageView {
 struct PartView {
     bool present = false;
     double average_fps = 0.0, low_10_fps = 0.0, low_1_fps = 0.0, low_01_fps = 0.0, average_ms = 0.0, p99_ms = 0.0;
+    double steps_per_s = 0.0, steps_low_1 = 0.0;  // the game's own steps a second and their 1% low
     std::uint32_t stutters = 0u;
     std::string limiter;            // "gpu", "render thread", "game thread", "display", "game frames", "waiting"
     bool display_limited = false;   // the frame rate stood at a rate it cannot pass (benchmark.cpp ceiling_of)
@@ -88,7 +90,7 @@ struct ResultView {
     bool thermal_judged = false;
     double thermal_slowdown = 1.0;  // the GPU's time at the end over its time at the start
 };
-// The result in `file` (schema 2); false for a file that cannot be read or is not one.
+// The result in `file` (schema 3); false for a file that cannot be read or is not one.
 [[nodiscard]] bool read_result(const std::filesystem::path& file, ResultView& out);
 // The same from the file's text.
 [[nodiscard]] bool parse_result(std::string_view text, ResultView& out);

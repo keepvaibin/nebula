@@ -3764,7 +3764,8 @@ void RendererD3D12::begin_frame() {
                     pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f, std::memory_order_relaxed);
                 }
             }
-            galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(), std::min(std::size(kPassTimeNames), frame_ms.size()));
+            galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(), std::min(std::size(kPassTimeNames), frame_ms.size()),
+                                          frame_scene_drawn_[frame_slot_] && !frame_generated_[frame_slot_]);
             const D3D12_RANGE no_write{0, 0};
             pass_readback_->Unmap(0, &no_write);
         }

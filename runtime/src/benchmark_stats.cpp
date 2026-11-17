@@ -181,4 +181,10 @@ bool decode_frame_lists(std::string_view bytes, std::vector<FrameList>& lists) {
     return true;
 }
 
+const char* verdict_of(const FrameStats& pictures, const FrameStats& steps, bool thread_bound) noexcept {
+    if (pictures.frames == 0u || steps.frames == 0u) return "none";
+    if (pictures.low_1_fps >= kFitsLowFps && steps.low_1_fps >= kFitsLowFps) return "fits";
+    return thread_bound ? "cpu_bound" : "below_target";
+}
+
 }  // namespace galaxy::bench

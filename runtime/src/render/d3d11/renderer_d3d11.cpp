@@ -855,7 +855,8 @@ void RendererD3D11::read_pass_times(Frame& frame, UINT64 frequency, UINT64 frame
             pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f, std::memory_order_relaxed);
         }
     }
-    galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(), std::min(std::size(kPassTimeNames), frame_ms.size()));
+    galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(), std::min(std::size(kPassTimeNames), frame_ms.size()),
+                                  frame.scene_drawn && !frame.generated);
 }
 
 std::size_t RendererD3D11::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {

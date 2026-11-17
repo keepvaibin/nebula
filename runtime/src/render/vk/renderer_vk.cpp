@@ -2902,7 +2902,8 @@ void RendererVk::read_gpu_passes() {
                 pass_ema_ms_[pass].store(before == 0.0f ? value : before + (value - before) * 0.1f, std::memory_order_relaxed);
             }
         }
-        galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(), std::min(std::size(kPassTimeNames), frame_ms.size()));
+        galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(), std::min(std::size(kPassTimeNames), frame_ms.size()),
+                                      frame_scene_drawn_[frame_slot_] && !frame_generated_[frame_slot_]);
     }
     pass_mark_count_[frame_slot_] = 0u;
     std::array<std::uint64_t, 4> counts{};
@@ -3224,6 +3225,12 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
         host_window::surface_withdrawn.load(std::memory_order_acquire)) {
         surface_lock_ = {};
         return false;  // remade at the next frame boundary
+    }
+    if (!capture_backbuffer && unseen_.now(window_, window_shown_)) {
+        // No image while the window cannot be seen (a hidden start, minimised, cloaked): the frame is drawn, nothing is
+        // presented, as Direct3D's on DXGI_STATUS_OCCLUDED. A frame that takes a test picture still presents.
+        surface_lock_ = {};
+        return false;
     }
     std::uint32_t image = 0;
     // A second at most: an image the presentation engine never returns (a surface going away) skips the frame.

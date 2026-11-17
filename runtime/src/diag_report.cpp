@@ -151,6 +151,7 @@ const Rule& benchmark_schema() {
             {"low_01_fps", n},
             {"frame_ms", object({{"average", n}, {"p50", n}, {"p95", n}, {"p99", n}, {"p999", n}, {"worst", n}})},
             {"stutters", integer()},
+            {"game_steps", object({{"steps", integer()}, {"average_per_s", n}, {"low_1_per_s", n}, {"worst_ms", n}})},
         };
         // benchmark.h RenderPart: the render thread's time by part.
         const Rule part_name = one_of({"frame wait", "acquire", "submit", "present", "resource free", "texture create",
@@ -234,7 +235,8 @@ const Rule& benchmark_schema() {
                                                         {"recommended", integer()}}),
                                                 16)}}))},
             {"summary", object({{"verdict", one_of({"fits", "cpu_bound", "below_target", "none"})},
-                                {"average_fps", n}, {"low_10_fps", n}, {"low_1_fps", n}, {"spare_percent", n},
+                                {"average_fps", n}, {"low_10_fps", n}, {"low_1_fps", n}, {"game_steps_per_s", n},
+                                {"game_steps_low_1_per_s", n}, {"spare_percent", n},
                                 {"limiter", limiter}, {"worst_stage", text(64)}})},
         });
     }();

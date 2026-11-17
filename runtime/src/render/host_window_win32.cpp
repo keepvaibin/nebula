@@ -622,6 +622,14 @@ void show_window(NativeWindow window) noexcept {
     (void)PostMessageW(window, kUncloakMessage, 0, 0);
 }
 
+bool window_unseen(NativeWindow window) noexcept {
+    if (window == nullptr || !IsWindowVisible(window) || IsIconic(window)) {
+        return true;
+    }
+    DWORD cloaked = 0;
+    return SUCCEEDED(DwmGetWindowAttribute(window, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked != 0;
+}
+
 bool present_grid(std::int64_t&, std::int64_t&, std::int64_t&, std::int64_t&) noexcept {
     return false;  // the presents pace themselves (present_pacer)
 }

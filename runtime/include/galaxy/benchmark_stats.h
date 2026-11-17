@@ -21,7 +21,7 @@ namespace galaxy::bench {
 
 // The result file's schema (benchmark.cpp write_result; benchmark_results.h, benchmark_recommend.h and diag_report.cpp
 // read it).
-inline constexpr unsigned kResultSchema = 2u;
+inline constexpr unsigned kResultSchema = 3u;
 
 inline constexpr double kStutterMs = 25.0;
 
@@ -38,6 +38,14 @@ struct FrameStats {
 };
 // Frame times in milliseconds (any order; zero and negative ones left out).
 [[nodiscard]] FrameStats frame_stats(const std::vector<double>& frame_ms);
+
+// A 1% low this high holds 60 a second (a 3% allowance for timer noise).
+inline constexpr double kFitsLowFps = 58.0;
+// The result's headline from the shown pictures' and the game steps' times: "none" without either; "fits" when both
+// 1% lows hold kFitsLowFps (interpolation keeps pictures coming while the game's steps fall behind, so the pictures
+// alone cannot say the game is smooth); else "cpu_bound" when a thread bounds them (`thread_bound`), "below_target"
+// when not.
+[[nodiscard]] const char* verdict_of(const FrameStats& pictures, const FrameStats& steps, bool thread_bound) noexcept;
 
 // The nearest-rank percentile `p` (0 to 1) of `sorted` (ascending); 0 when empty.
 [[nodiscard]] double percentile(const std::vector<double>& sorted, double p) noexcept;

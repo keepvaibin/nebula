@@ -75,6 +75,8 @@ namespace {
 std::mutex g_input_mutex;
 InputState g_input;  // guarded by g_input_mutex
 NSWindow* g_window = nil;       // the main thread's
+// The window cannot be seen (minimised, or no part of it visible on a screen): window_unseen, for the render thread.
+std::atomic<bool> g_unseen{false};
 NebulaView* g_view = nil;
 id g_delegate = nil;
 std::vector<std::filesystem::path> g_opened_early;  // files opened before the window (the main thread's)
@@ -805,11 +807,17 @@ void files_opened(NSArray<NSURL*>* urls) {
 // A minimised window: the host stops the game's clocks and sound as for an app out of sight.
 - (void)windowDidMiniaturize:(NSNotification*)notification {
     galaxy::sdl::g_background.store(true, std::memory_order_release);
+    galaxy::sdl::g_unseen.store(true, std::memory_order_release);
     [self lumaDisplayChanged];
 }
 - (void)windowDidDeminiaturize:(NSNotification*)notification {
     galaxy::sdl::g_background.store(false, std::memory_order_release);
+    galaxy::sdl::g_unseen.store(!(galaxy::sdl::g_window.occlusionState & NSWindowOcclusionStateVisible), std::memory_order_release);
     [self lumaDisplayChanged];
+}
+- (void)windowDidChangeOcclusionState:(NSNotification*)notification {
+    galaxy::sdl::g_unseen.store(galaxy::sdl::g_window.isMiniaturized || !(galaxy::sdl::g_window.occlusionState & NSWindowOcclusionStateVisible),
+                   std::memory_order_release);
 }
 - (void)windowDidBecomeKey:(NSNotification*)notification {
     {
@@ -1314,6 +1322,10 @@ void show_window(NativeWindow) noexcept {
     on_main(^{
         [g_window setAlphaValue:1.0];
     });
+}
+
+bool window_unseen(NativeWindow window) noexcept {
+    return window == nullptr || galaxy::sdl::g_unseen.load(std::memory_order_acquire);
 }
 
 // The display link's rate where it is known (display_clock_apple.mm), to the whole Hz; else the screen's own.

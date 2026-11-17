@@ -116,6 +116,7 @@ void benchmark_rows(std::vector<SettingsRow>& rows, const BenchmarkView& view) {
     const char* const apply_help = view.apply == BenchmarkApply::Offer    ? "THE SETTINGS THE BENCHMARK RECOMMENDS, AS CHANGES TO APPLY"
                                    : view.apply == BenchmarkApply::InUse  ? "THE RECOMMENDED SETTINGS ARE IN USE"
                                    : view.apply == BenchmarkApply::OtherGpu ? "THE LAST RESULT IS FROM ANOTHER GRAPHICS CARD"
+                                   : view.apply == BenchmarkApply::OtherRenderer ? "THE LAST RESULT IS FROM ANOTHER RENDERER"
                                                                           : "THE LAST RUN DID NOT FINISH";
     rows.push_back(button_row("APPLY RECOMMENDED", {offered ? "APPLY" : "-APPLY"},
                               [recommend, offered](RenderConfig&, unsigned) { if (offered && recommend) recommend(); },

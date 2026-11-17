@@ -610,7 +610,8 @@ void RendererMtl::begin_frame() {
                     }
                 }
                 galaxy::bench::note_gpu_frame(kPassTimeNames, frame_ms.data(),
-                                              std::min(frame_ms.size(), frame.pass_time->size()));
+                                              std::min(frame_ms.size(), frame.pass_time->size()),
+                                              frame_scene_drawn_[frame_slot_] && !frame_generated_[frame_slot_]);
                 ++pass_window_frames_;
             }
             stats_.gpu_ms += gpu_ms;
@@ -1168,6 +1169,12 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
     if (layer_dirty_ || layer_.layer == nullptr || host_window::surface_withdrawn.load(std::memory_order_acquire)) {
         surface_lock_ = {};
         return false;  // followed at the next frame boundary
+    }
+    if (!capture_backbuffer && unseen_.now(window_, window_shown_)) {
+        // No drawable while the window cannot be seen (a hidden start, minimised, covered): the frame is drawn, nothing
+        // is presented, as Direct3D's on DXGI_STATUS_OCCLUDED. A frame that takes a test picture still presents.
+        surface_lock_ = {};
+        return false;
     }
     const mtl::Texture& shown = *source->texture;
     if (capture_backbuffer && !present_black_) {

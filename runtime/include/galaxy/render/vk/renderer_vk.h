@@ -38,6 +38,7 @@
 #include "render/core/gpu_encoder.h"
 #include "render/core/draw_record.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/render/unseen_window.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/mod_post.h"
@@ -729,6 +730,7 @@ private:
     WindowOwner* window_owner_ = nullptr;
     host_window::NativeWindow window_ = nullptr;
     bool window_shown_ = false;
+    UnseenWindow unseen_;  // while the window cannot be seen, no image is acquired or presented
     bool keep_window_ = false;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     Swapchain swapchain_;

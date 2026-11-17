@@ -45,7 +45,7 @@ std::string hex_of(const std::array<std::uint8_t, N>& b) {
     return diag::hex(b.data(), N);
 }
 
-// A result as benchmark.cpp writes it (schema 2, from a real run): tools/telemetry/testdata/benchmark.json, which the
+// A result as benchmark.cpp writes it (schema 3, from a real run): tools/telemetry/testdata/benchmark.json, which the
 // telemetry tool's tests read too. Read by main before the tests run.
 std::string kBenchmark;
 
@@ -197,29 +197,24 @@ void schema() {
           "an unknown field is refused");
     check(!diag::schema_error(replaced(kBenchmark, "\"stage\":\"CosmosGardenGalaxy\"", "\"stage\":\"CosmosGardenGalaxy\",\"path\":\"C:/x\"")).empty(),
           "an unknown field deep inside is refused");
-    // The render thread's time by part (benchmark.h RenderPart), on a slow frame and on a stage.
-    const std::string slow_parts = replaced(kBenchmark, "\"cause\":\"waiting\"}",
-                                            "\"cause\":\"waiting\",\"render_parts\":{\"texture create\":21.5,\"submit\":0.2}}");
-    check(diag::schema_error(slow_parts).empty(), "a slow frame's render parts pass");
-    check(!diag::schema_error(replaced(kBenchmark, "\"cause\":\"waiting\"}", "\"cause\":\"waiting\",\"render_parts\":{\"C:/x\":1}}"))
-               .empty(),
+    // The render thread's time by part (benchmark.h RenderPart), on a slow frame and on a stage: the run's result has
+    // both, and passes (above).
+    const std::string slow_part = "\"cause\":\"waiting\",\"render_parts\":{";
+    check(diag::schema_error(replaced(kBenchmark, slow_part, slow_part + "\"texture create\":21.5,")).empty(),
+          "a slow frame's further render part passes");
+    check(!diag::schema_error(replaced(kBenchmark, slow_part, slow_part + "\"C:/x\":1,")).empty(),
           "a render part that is not one is refused");
-    check(!diag::schema_error(replaced(kBenchmark, "\"cause\":\"waiting\"}", "\"cause\":\"waiting\",\"render_parts\":{\"submit\":\"x\"}}"))
-               .empty(),
+    check(!diag::schema_error(replaced(kBenchmark, slow_part, slow_part + "\"texture create\":\"x\",")).empty(),
           "a render part's time that is no number is refused");
-    check(diag::schema_error(replaced(kBenchmark, "\"read_mb\":0.0},\"gpu_memory_peak_mb\"",
-                                      "\"read_mb\":0.0},\"render_parts\":{\"present\":{\"average\":0.1,\"p99\":0.3,\"worst\":2.0}},"
-                                      "\"gpu_memory_peak_mb\""))
-              .empty(),
-          "a stage's render parts pass");
-    check(!diag::schema_error(replaced(kBenchmark, "\"read_mb\":0.0},\"gpu_memory_peak_mb\"",
-                                       "\"read_mb\":0.0},\"render_parts\":{\"present\":{\"average\":0.1,\"name\":\"x\"}},"
-                                       "\"gpu_memory_peak_mb\""))
-               .empty(),
+    const std::string stage_part = "\"render_parts\":{\"frame wait\":{";
+    check(!diag::schema_error(replaced(kBenchmark, stage_part, stage_part + "\"name\":\"x\",")).empty(),
           "an unknown field in a stage's render part is refused");
-    check(!diag::schema_error(replaced(kBenchmark, "\"schema\":2", "\"schema\":1")).empty(), "another schema version");
-    check(!diag::schema_error(replaced(kBenchmark, "\"logical_cores\":12", "\"logical_cores\":\"12\"")).empty(), "a wrong type");
-    check(!diag::schema_error(replaced(kBenchmark, "\"logical_cores\":12", "\"logical_cores\":12.5")).empty(), "a fraction");
+    check(!diag::schema_error(replaced(kBenchmark, stage_part, "\"render_parts\":{\"C:/x\":{\"average\":0.1},\"frame wait\":{"))
+               .empty(),
+          "a stage's render part that is not one is refused");
+    check(!diag::schema_error(replaced(kBenchmark, "\"schema\":3", "\"schema\":1")).empty(), "another schema version");
+    check(!diag::schema_error(replaced(kBenchmark, "\"logical_cores\":32", "\"logical_cores\":\"32\"")).empty(), "a wrong type");
+    check(!diag::schema_error(replaced(kBenchmark, "\"logical_cores\":32", "\"logical_cores\":32.5")).empty(), "a fraction");
     check(!diag::schema_error(replaced(kBenchmark, "\"status\":\"complete\"", "\"status\":\"other\"")).empty(),
           "an unknown status");
     check(!diag::schema_error(replaced(kBenchmark, "\"failure\":\"\"", "\"failure\":\"" + std::string(97u, 'a') + "\"")).empty(),
@@ -369,7 +364,7 @@ int main() {
             check(diag::report_preview(file, false, preview).exit == diag::kOk &&
                       preview == diag::make_report(kBenchmark, {}, false),
                   "the preview is the report that would be sealed");
-            { std::ofstream(file, std::ios::binary) << replaced(kBenchmark, "\"schema\":2", "\"schema\":2,\"x\":1"); }
+            { std::ofstream(file, std::ios::binary) << replaced(kBenchmark, "\"schema\":3", "\"schema\":3,\"x\":1"); }
             check(diag::report_preview(file, false, preview).exit == diag::kInvalid && preview.empty(),
                   "a refused result has no preview");
             std::filesystem::remove(file);

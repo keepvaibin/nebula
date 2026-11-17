@@ -2,6 +2,7 @@
 // benchmark_menu.h: the settings menu's benchmark rows, questions and results window.
 #include "galaxy/ui/benchmark_menu.h"
 
+#include "galaxy/benchmark.h"
 #include "galaxy/benchmark_recommend.h"
 #include "galaxy/benchmark_results.h"
 #include "galaxy/native_settings_pad.h"
@@ -214,6 +215,8 @@ BenchmarkView rows(const render::RenderConfig& draft, std::string_view adapter,
         view.apply = BenchmarkApply::NoResult;
     } else if (!last.gpu.empty() && !adapter.empty() && last.gpu != adapter) {
         view.apply = BenchmarkApply::OtherGpu;
+    } else if (!last.backend.empty() && last.backend != bench::running_backend()) {
+        view.apply = BenchmarkApply::OtherRenderer;
     } else if (recommended == draft) {
         view.apply = BenchmarkApply::InUse;
     } else {

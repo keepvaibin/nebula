@@ -130,6 +130,9 @@ PartView part_of(const Value& run) {
     part.average_ms = number_at(frame_ms, "average");
     part.p99_ms = number_at(frame_ms, "p99");
     part.stutters = whole_at(summary, "stutters");
+    const Value* steps = summary != nullptr ? summary->find("game_steps") : nullptr;
+    part.steps_per_s = number_at(steps, "average_per_s");
+    part.steps_low_1 = number_at(steps, "low_1_per_s");
     part.limiter = text_at(summary, "limiter");
     part.display_limited = bool_at(summary, "display_limited");
     part.settings = settings_of(run.find("measured_with"));
@@ -145,6 +148,8 @@ PartView part_of(const Value& run) {
             stage.low_1_fps = number_at(&scene, "low_1_fps");
             stage.p99_ms = number_at(scene.find("frame_ms"), "p99");
             stage.stutters = whole_at(&scene, "stutters");
+            stage.steps_per_s = number_at(scene.find("game_steps"), "average_per_s");
+            stage.steps_low_1 = number_at(scene.find("game_steps"), "low_1_per_s");
             stage.settings_held = bool_at(&scene, "settings_held");
             stage.load_ms = number_at(scene.find("load"), "ms");
             stage.gpu_ms = average_of(scene.find("gpu_ms"));

@@ -16,15 +16,18 @@ FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "testdata", "
 
 
 def bench(gpu, vendor, shared, budget, backend, low, passes, limiter, stutter_cause=None, render_parts=None):
-    """The fixture as one device's result: its scenes get `low` as their 1% low (the second scene twice it),
+    """The fixture (a real run's result) as one device's result, its first two scenes kept: they get `low` as their
+    1% low (the second scene twice it),
     the GPU passes `passes` (name: ms) with their shares, and `limiter`; with `stutter_cause`, each scene's first slow
-    frame becomes a 40 ms stutter with that cause; with `render_parts`, each scene's first slow frame has those."""
+    frame becomes a 40 ms stutter with that cause; with `render_parts`, each scene's first slow frame has those (and
+    without, no slow frame has any)."""
     with open(FIXTURE, encoding="ascii") as handle:
         doc = json.load(handle)
     doc["device"].update(gpu=gpu, vendor_id=vendor, shared_memory=shared, gpu_budget_mb=budget)
     doc["backend"] = backend
     total = sum(passes.values())
     for run in doc["runs"]:
+        run["scenes"] = run["scenes"][:2]
         for index, scene in enumerate(run["scenes"]):
             scene["low_1_fps"] = low * (index + 1)
             scene["average_fps"] = low * (index + 1) * 2
@@ -34,6 +37,8 @@ def bench(gpu, vendor, shared, budget, backend, low, passes, limiter, stutter_ca
                                    for name, ms in passes.items()}
             if stutter_cause:
                 scene["slowest_frames"][0].update(ms=40.0, cause=stutter_cause)
+            for frame in scene["slowest_frames"]:
+                frame.pop("render_parts", None)
             if render_parts:
                 scene["slowest_frames"][0]["render_parts"] = dict(render_parts)
     return doc
@@ -59,7 +64,7 @@ class Summary(unittest.TestCase):
         self.assertTrue(groups[0].startswith("  Intel integrated <2GB / d3d12: 2 devices, median 1% low 40.0 FPS"),
                         groups[0])
         self.assertIn("limited by gpu in 4 of 4 scenes", groups[0])
-        self.assertIn("worst scene CosmosGardenGalaxy, 1% low 20.0 FPS", groups[0])
+        self.assertIn("worst scene AstroGalaxy, 1% low 20.0 FPS", groups[0])
         self.assertTrue(groups[1].startswith("  NVIDIA discrete 8GB+ / vulkan: 1 devices"), groups[1])
         self.assertIn("limited by game thread", groups[1])
         costs = lines[lines.index(next(l for l in lines if l.startswith("Top costs"))) + 1:]
@@ -91,7 +96,7 @@ class Summary(unittest.TestCase):
         self.assertEqual(first["top_pass_share"], "0.75")
         self.assertEqual(first["stutter_causes"], "pipeline built=1")
         self.assertEqual(first["slow_frame_parts"], "")
-        self.assertEqual(first["verdict"], "fits")
+        self.assertEqual(first["verdict"], "cpu_bound")  # the run's own: its game steps' 1% low fell below 58
 
     def test_csv_hostile_strings(self):
         reports = [("h", bench('=HYPERLINK("http://x","y")', 0x8086, True, 1024, "d3d12", 30.0, {"scene": 9.0}, "gpu")),

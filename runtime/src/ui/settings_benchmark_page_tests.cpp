@@ -36,6 +36,8 @@ bench::PartView part(double fps, std::size_t stages) {
     p.low_1_fps = fps * 0.7;
     p.p99_ms = 1000.0 / (fps * 0.6);
     p.stutters = 3u;
+    p.steps_per_s = 59.96;
+    p.steps_low_1 = 58.4;
     p.limiter = "gpu";
     p.gpu_passes = {{"opaque", 4.0}, {"bloom", 1.0}, {"scene ao", 0.5}, {"ao denoise", 0.25}, {"present", 0.001}};
     p.game_ms = 2.0;
@@ -105,6 +107,9 @@ int main() {
         check_marks(pages[0].table, 2u, "summary marks");
         check(pages[0].table.find("RESULT\tSMOOTH AT 60 FPS") != std::string::npos, "the outcome");
         check(pages[0].table.find("AVERAGE\t143 FPS") != std::string::npos, "whole above 100 FPS");
+        check(pages[0].table.find("GAME STEPS A SECOND\t60.0") != std::string::npos &&
+                  pages[0].table.find("GAME STEPS, 1% LOW\t58.4") != std::string::npos,
+              "the game's own steps beside the pictures");
 
         // Stages: the stage column left aligned, a stage named by its id, each part's heading spanning.
         check_marks(pages[1].table, 6u, "stage marks");

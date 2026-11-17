@@ -116,7 +116,7 @@ int main() {
         }
         {
             // The result reader takes what write_result writes, and nothing else.
-            const std::string head = "{\"schema\":2,\"app\":{\"version\":\"2.0.0\",\"commit\":null},\"status\":\"complete\",";
+            const std::string head = "{\"schema\":3,\"app\":{\"version\":\"2.0.0\",\"commit\":null},\"status\":\"complete\",";
             const std::string rec =
                 "\"recommendation\":{\"budget_ms\":13.333,\"predicted_ms\":11.000,\"fits\":true,\"cpu_bound\":false,"
                 "\"cpu_thread\":null,\"height_left_out\":false,\"settings\":[{\"key\":\"internal_height\",\"current\":0,"
@@ -141,7 +141,7 @@ int main() {
             check(!bench::parse_recommendation(odd, d) && d.internal_height == before.internal_height,
                   "a height that is not a value refuses the whole result");
             std::string other = head + rec;
-            other.replace(other.find("\"schema\":2"), 10, "\"schema\":1");
+            other.replace(other.find("\"schema\":3"), 10, "\"schema\":1");
             check(!bench::parse_recommendation(other, d), "another schema is not read");
             const std::string whole = head + rec;
             check(!bench::parse_recommendation(whole.substr(0, whole.size() - 1u), d), "a cut file is not read");

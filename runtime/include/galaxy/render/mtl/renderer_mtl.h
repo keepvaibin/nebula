@@ -22,6 +22,7 @@
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/host_window.h"
+#include "galaxy/render/unseen_window.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/mtl/draw_types.h"
 #include "galaxy/render/mtl/fx_mtl.h"
@@ -516,6 +517,7 @@ private:
     WindowOwner* window_owner_ = nullptr;
     host_window::NativeWindow window_ = nullptr;
     bool window_shown_ = false;
+    UnseenWindow unseen_;  // while the window cannot be seen, no drawable is taken or presented
     bool keep_window_ = false;
     Layer layer_;
     bool layer_dirty_ = false;

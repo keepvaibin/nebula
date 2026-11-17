@@ -117,7 +117,6 @@ constexpr std::uint32_t kSettleFrames = 10u;     // frames after a settings chan
 constexpr std::int64_t kArriveTimeoutNs = 120'000'000'000;
 
 constexpr double kTargetFps = 60.0;
-constexpr double kFitsLowFps = 58.0;          // a 1% low this high holds 60 FPS (a 3% allowance for timer noise)
 constexpr double kDisplayTolerance = 0.03;    // a frame rate this close to the refresh rate is the display's
 constexpr double kHeatJudgedGpuMs = 1.0;      // below this, a GPU's clocks rise and fall with load: no heat verdict
 constexpr std::size_t kSlowestFrames = 10u;   // slow frames kept per stage, with their causes
@@ -384,11 +383,13 @@ struct Picture {
 };
 
 // One frame's GPU time as read back: the number of pictures shown before it arrived, the total and each pass's
-// milliseconds by slot (pass_names).
+// milliseconds by slot (pass_names); `game`: it drew the scene for a game step (note_gpu_frame), not an interpolated
+// picture between steps, whose cheaper GPU frames would dilute the scene's cost.
 struct GpuFrame {
     std::uint32_t picture = 0u;
     double total_ms = 0.0;
     std::array<float, kPassSlots> pass_ms{};
+    bool game = true;
 };
 
 // The passes' names by slot, as the renderer gives them (static text): the same names keep their slot for the run.
@@ -434,6 +435,7 @@ struct Window {
     std::int64_t audio_start = -1, audio_end = -1;  // fine units
     std::int64_t start_ns = 0;                      // steady_ns when the window began
     std::uint32_t game_frames = 0u;                 // the game frames it measured
+    std::vector<std::int64_t> steps;                // steady_ns of each game step it measured (scene_frame)
     std::uint64_t gpu_memory_peak = 0u, process_peak = 0u;
     double pixels = 0.0;                    // the scene's pixels at the item's settings and the output below
     unsigned output_w = 0u, output_h = 0u;  // the output (back buffer) when the window began
@@ -594,11 +596,12 @@ void on_picture(std::uint64_t ns) {
     }
 }
 
-void on_gpu_frame(const char* const* names, const double* ms, std::size_t count) {
+void on_gpu_frame(const char* const* names, const double* ms, std::size_t count, bool game_frame) {
     if (!g_measuring.load(std::memory_order_relaxed)) return;
     const std::lock_guard<std::mutex> lock(g_picture_mutex);
     GpuFrame frame;
     frame.picture = static_cast<std::uint32_t>(g_pictures.size());
+    frame.game = game_frame;
     for (std::size_t i = 0; i < count; ++i) {
         if (!(ms[i] >= 0.0) || !std::isfinite(ms[i])) continue;
         frame.total_ms += ms[i];
@@ -752,7 +755,9 @@ std::array<double, kRenderParts> parts_ms(const Picture& before, const Picture& 
 struct Analysis {
     std::vector<double> frame_ms;  // each frame's time, in order (the frame list)
     FrameStats frames;
-    Spread gpu, render, game;      // count 0: not measured
+    std::vector<double> step_ms;   // the time between the game's steps, in order
+    FrameStats steps;              // the game's own steps a second: what "holds 60" is judged on
+    Spread gpu, render, game;      // count 0: not measured; gpu: the game steps' frames alone
     std::array<Spread, kRenderParts> parts;  // the render thread's time by part, per frame
     double audio_ms = -1.0;        // the mixing thread's CPU per game frame
     std::vector<PassCost> passes;  // heaviest first
@@ -782,6 +787,14 @@ const char* limiter_of(double frame_ms, double gpu_ms, double render_ms, double 
     if (game_ms >= busiest) name = "game thread";
     return name;
 }
+
+}  // namespace
+
+const char* running_backend() noexcept {
+    return backend_name();
+}
+
+namespace {
 
 bool at_refresh(double fps, double refresh_hz) {
     return refresh_hz > 0.0 && fps > 0.0 && std::abs(fps - refresh_hz) <= kDisplayTolerance * refresh_hz;
@@ -824,14 +837,24 @@ Analysis analyse(const Window& w, double scale, double refresh_hz) {
         a.audio_ms = audio >= 0.0 ? audio / static_cast<double>(w.game_frames) : -1.0;
     }
 
+    for (std::size_t i = 1; i < w.steps.size(); ++i) {
+        if (w.steps[i] > w.steps[i - 1u]) a.step_ms.push_back(static_cast<double>(w.steps[i] - w.steps[i - 1u]) / 1e6);
+    }
+    a.steps = frame_stats(a.step_ms);
+
+    // The GPU's cost of a game step's frame: interpolated pictures and frames without the scene left out (P-090).
     std::vector<double> gpu_ms;
     gpu_ms.reserve(w.gpu.size());
-    for (const GpuFrame& f : w.gpu) gpu_ms.push_back(f.total_ms);
+    for (const GpuFrame& f : w.gpu) {
+        if (f.game) gpu_ms.push_back(f.total_ms);
+    }
     a.gpu = spread(gpu_ms);
     for (std::size_t slot = 0; slot < g_pass_count; ++slot) {
         std::vector<double> values;
         values.reserve(w.gpu.size());
-        for (const GpuFrame& f : w.gpu) values.push_back(f.pass_ms[slot]);
+        for (const GpuFrame& f : w.gpu) {
+            if (f.game) values.push_back(f.pass_ms[slot]);
+        }
         PassCost cost{g_pass_names[slot], spread(values), 0.0};
         if (cost.ms.average <= 0.0) continue;
         cost.share = a.gpu.average > 0.0 ? cost.ms.average / a.gpu.average : 0.0;
@@ -1009,6 +1032,16 @@ void write_spread(JsonWriter& j, std::string_view key, const Spread& s) {
     j.end_object();
 }
 
+// The game's steps: how many, their rate and its 1% low, the longest between two.
+void write_steps(JsonWriter& j, const FrameStats& s) {
+    j.begin_object("game_steps");
+    j.whole("steps", s.frames);
+    j.number("average_per_s", s.average_fps);
+    j.number("low_1_per_s", s.low_1_fps);
+    j.number("worst_ms", s.worst_ms);
+    j.end_object();
+}
+
 void write_frame_summary(JsonWriter& j, const FrameStats& f) {
     j.whole("frames", f.frames);
     j.number("seconds", f.seconds);
@@ -1050,6 +1083,7 @@ void write_scene(JsonWriter& j, const Item& item, const Window& w, const Analysi
         j.end_object();
     }
     write_frame_summary(j, a.frames);
+    write_steps(j, a.steps);
     j.text("limiter", a.limiter);
     write_spread(j, "gpu_ms", a.gpu);
     j.begin_object("gpu_passes");
@@ -1110,19 +1144,21 @@ void write_scene(JsonWriter& j, const Item& item, const Window& w, const Analysi
 // One part's frames and costs over its stages: every frame of every stage together, and the costs weighted by frames.
 struct PartTotals {
     FrameStats frames;
+    FrameStats steps;
     const char* limiter = "waiting";
     bool display_limited = false;
 };
 
 PartTotals part_totals(const std::vector<const Analysis*>& scenes, double refresh_hz) {
     PartTotals t;
-    std::vector<double> all;
+    std::vector<double> all, steps;
     double gpu = 0.0, render = 0.0, game = 0.0;
     std::size_t gpu_n = 0u, render_n = 0u, game_n = 0u;
     bool generated = false;
     for (const Analysis* a : scenes) {
         generated = generated || a->generated;
         all.insert(all.end(), a->frame_ms.begin(), a->frame_ms.end());
+        steps.insert(steps.end(), a->step_ms.begin(), a->step_ms.end());
         gpu += a->gpu.average * static_cast<double>(a->gpu.count);
         gpu_n += a->gpu.count;
         render += a->render.average * static_cast<double>(a->render.count);
@@ -1131,6 +1167,7 @@ PartTotals part_totals(const std::vector<const Analysis*>& scenes, double refres
         game_n += a->game.count;
     }
     t.frames = frame_stats(all);
+    t.steps = frame_stats(steps);
     const char* ceiling = ceiling_of(t.frames, refresh_hz, generated);
     t.display_limited = ceiling != nullptr;
     const auto mean = [](double sum, std::size_t n) { return n != 0u ? sum / static_cast<double>(n) : -1.0; };
@@ -1237,6 +1274,8 @@ std::string frame_lists(const std::vector<Analysis>& analyses) {
 }
 
 // With g_run_mutex held.
+const char* item_label(const Item& item);
+
 void write_result(bool complete) {
     Run& run = g_run;
     if (run.finished) return;
@@ -1247,7 +1286,13 @@ void write_result(bool complete) {
     const double scale = fine_scale();
     std::vector<Analysis> analyses;
     analyses.reserve(finished_items());
-    for (std::size_t i = 0; i < finished_items(); ++i) analyses.push_back(analyse(run.windows[i], scale, refresh));
+    for (std::size_t i = 0; i < finished_items(); ++i) {
+        analyses.push_back(analyse(run.windows[i], scale, refresh));
+        const Analysis& a = analyses.back();
+        std::printf("[benchmark] %s %s: %zu pictures (%.1f a second), %zu game steps (%.1f a second), GPU times for %zu\n",
+                    run.items[i].stage.id.c_str(), item_label(run.items[i]), a.frames.frames, a.frames.average_fps,
+                    a.steps.frames, a.steps.average_fps, a.gpu.count);
+    }
 
     const render::RenderAdapter adapter = render::render_adapter();
     const std::uint64_t budget = g_gpu_budget.load(std::memory_order_relaxed);
@@ -1302,8 +1347,10 @@ void write_result(bool complete) {
     const PartTotals yours_totals = part_totals(yours, refresh);
     const auto note = [&j](std::string_view line) { j.text({}, line, kNoteBytes); };
     j.begin_array("limits");
-    note("frame times are the time between shown pictures with frame pacing off: the frame rate is what the device can "
-         "render, not the frame limit");
+    note("frame times are the time between shown pictures, interpolated ones included, with frame pacing off: the frame "
+         "rate is what the device can render, not the frame limit");
+    note("game_steps are the game's own steps: the verdict fits only when both they and the pictures hold 60 a second");
+    note("gpu_ms and the probes' prices count the frames that drew a game step's scene, not the pictures between");
     note("each stage's window holds its entry (intro camera, star name) without a split: the game does not report when "
          "the intro ends");
     note("a slow frame's gpu_ms is the longest GPU frame read back within 4 frames of it");
@@ -1331,6 +1378,7 @@ void write_result(bool complete) {
         write_settings(j, "measured_with", with);
         j.begin_object("summary");
         write_frame_summary(j, totals.frames);
+        write_steps(j, totals.steps);
         j.text("limiter", totals.limiter);
         j.boolean("display_limited", totals.display_limited);
         j.end_object();
@@ -1431,14 +1479,15 @@ void write_result(bool complete) {
     }
 
     // The results screen's headline: whether the player's settings hold 60 FPS, the room left at the slow end
-    // (the 99th percentile frame against a 60 FPS frame), what limits the frame, the heaviest stage.
+    // (the 99th percentile frame against a 60 FPS frame), what limits the frame, the heaviest stage. Smooth needs the
+    // game's own steps at 60 as well as the pictures: interpolation keeps pictures coming while the steps fall behind,
+    // and steps that fall behind while the pictures keep up are the processor's.
     const FrameStats& f = yours_totals.frames;
-    const bool thread_bound =
-        std::strcmp(yours_totals.limiter, "game thread") == 0 || std::strcmp(yours_totals.limiter, "render thread") == 0;
-    const char* verdict = f.frames == 0u                ? "none"
-                          : f.low_1_fps >= kFitsLowFps ? "fits"
-                          : thread_bound               ? "cpu_bound"
-                                                       : "below_target";
+    const FrameStats& s = yours_totals.steps;
+    const bool thread_bound = std::strcmp(yours_totals.limiter, "game thread") == 0 ||
+                              std::strcmp(yours_totals.limiter, "render thread") == 0 ||
+                              (s.frames != 0u && s.low_1_fps < kFitsLowFps && f.low_1_fps >= kFitsLowFps);
+    const char* verdict = verdict_of(f, s, thread_bound);
     std::string worst_stage;
     double worst_fps = 0.0;
     for (std::size_t i = 0; i < analyses.size(); ++i) {
@@ -1452,6 +1501,8 @@ void write_result(bool complete) {
     j.number("average_fps", f.average_fps);
     j.number("low_10_fps", f.low_10_fps);
     j.number("low_1_fps", f.low_1_fps);
+    j.number("game_steps_per_s", s.average_fps);
+    j.number("game_steps_low_1_per_s", s.low_1_fps);
     j.number("spare_percent", f.p99_ms > 0.0 ? std::clamp(100.0 * (1.0 - f.p99_ms * kTargetFps / 1000.0), -100.0, 100.0)
                                              : 0.0);
     j.text("limiter", yours_totals.limiter);
@@ -1864,11 +1915,14 @@ int scene_frame(std::string_view current_stage, char* stage, std::uint32_t capac
             const double rate = std::max(render::host_window::measured_present_hz.load(std::memory_order_relaxed),
                                          static_cast<double>(kGameStepsPerSecond));
             const double expected = std::min(rate * item.stage.seconds * 1.25 + 256.0, static_cast<double>(kMostReservedPictures));
+            window.steps.reserve(static_cast<std::size_t>(item.stage.seconds) *
+                                 static_cast<std::size_t>(kGameStepsPerSecond) * 5u / 4u + 64u);
             begin_window(window, static_cast<std::size_t>(expected));
             enter(Phase::Measure);
         }
         break;
     case Phase::Measure:
+        r.windows.back().steps.push_back(now);
         if (r.restarted) {
             // The scene began again (the player character lost a life): the window no longer measures one scene.
             end_window(r.windows.back());

@@ -18,7 +18,30 @@ bool near(double a, double b, double tolerance = 1e-9) {
 }
 }  // namespace
 
+// The headline judges the game's own steps as well as the pictures (P-089): with interpolation the pictures keep
+// coming at a high rate while the game's steps fall behind, and the pictures alone said "fits".
+void verdict_tests() {
+    namespace bench = galaxy::bench;
+    bench::FrameStats pictures;
+    pictures.frames = 1000u;
+    pictures.low_1_fps = 140.0;
+    bench::FrameStats steps;
+    steps.frames = 600u;
+    steps.low_1_fps = 59.5;
+    check(std::string(bench::verdict_of(pictures, steps, false)) == "fits", "pictures and steps at 60: fits");
+    steps.low_1_fps = 45.0;
+    check(std::string(bench::verdict_of(pictures, steps, true)) == "cpu_bound",
+          "interpolated pictures at 140 while the steps fall to 45: not fits, the processor's");
+    check(std::string(bench::verdict_of(pictures, steps, false)) == "below_target", "not fits, not a thread's: below");
+    steps.low_1_fps = 59.5;
+    pictures.low_1_fps = 50.0;
+    check(std::string(bench::verdict_of(pictures, steps, false)) == "below_target", "steps at 60, pictures below: below");
+    steps.frames = 0u;
+    check(std::string(bench::verdict_of(pictures, steps, false)) == "none", "no steps counted: none");
+}
+
 int main() {
+    verdict_tests();
     namespace bench = galaxy::bench;
     try {
         {

@@ -124,6 +124,11 @@ BenchmarkPage summary_page(const bench::ResultView& r, const BenchmarkClock& clo
         line(page.table, {"AVERAGE", fps(part.average_fps)});
         if (part.low_10_fps > 0.0) line(page.table, {"10% LOW", fps(part.low_10_fps)});
         line(page.table, {"1% LOW", fps(part.low_1_fps)});
+        // The game's own steps: interpolated pictures can hold the frame rate while the game falls behind.
+        if (part.steps_per_s > 0.0) {
+            line(page.table, {"GAME STEPS A SECOND", fixed(part.steps_per_s, 1u)});
+            line(page.table, {"GAME STEPS, 1% LOW", fixed(part.steps_low_1, 1u)});
+        }
         line(page.table, {"99TH PERCENTILE FRAME TIME", ms(part.p99_ms)});
         line(page.table, {"STUTTERS (OVER 25 MS)", std::to_string(part.stutters)});
         line(page.table, {"LIMITED BY", limiter_text(part.limiter)});

@@ -99,7 +99,7 @@ def open_folder(folder, out, opener):
     return counts
 
 
-SCHEMA = 2  # benchmark_stats.h kResultSchema: reports of another schema are counted and left out
+SCHEMA = 3  # benchmark_stats.h kResultSchema: reports of another schema are counted and left out
 
 
 def load_reports(folder):
@@ -175,6 +175,8 @@ def scene_rows(report_id, bench):
                 "p95_ms": frame_ms.get("p95"),
                 "p99_ms": frame_ms.get("p99"),
                 "stutters": scene.get("stutters"),
+                "steps_per_s": (scene.get("game_steps") or {}).get("average_per_s"),
+                "steps_low_1": (scene.get("game_steps") or {}).get("low_1_per_s"),
                 "limiter": scene.get("limiter", ""),
                 "gpu_ms": average(scene.get("gpu_ms")),
                 "top_pass": top_pass,
@@ -223,7 +225,8 @@ def summarise(reports, top=20):
             f"  {klass} / {backend}: {devices} devices, median 1% low {group_low(((klass, backend), members)):.1f} FPS,"
             f" median average {statistics.median(number(r['average_fps']) for r in members):.1f} FPS;"
             f" limited by {limiter} in {limiters[limiter]} of {len(members)} scenes;"
-            f" worst scene {worst['stage']}, 1% low {number(worst['low_1_fps']):.1f} FPS"
+            f" worst scene {worst['stage']}, 1% low {number(worst['low_1_fps']):.1f} FPS,"
+            f" game steps 1% low {number(worst['steps_low_1']):.1f} a second"
         )
 
     lines.append("")

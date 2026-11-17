@@ -1770,6 +1770,14 @@ void show_window(NativeWindow window) noexcept {
         window, false);
 }
 
+bool window_unseen(NativeWindow window) noexcept {
+    if (window == nullptr) {
+        return true;
+    }
+    return (SDL_GetWindowFlags(static_cast<SDL_Window*>(window)) &
+            (SDL_WINDOW_HIDDEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_OCCLUDED)) != 0u;
+}
+
 // The system's vsync rate where there is one (Android: SDL's display mode can lag a refresh-rate switch), to the
 // whole Hz.
 double display_refresh_hz(NativeWindow window) noexcept {

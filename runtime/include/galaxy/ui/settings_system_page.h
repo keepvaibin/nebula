@@ -53,6 +53,7 @@ enum class BenchmarkSend : unsigned {
 enum class BenchmarkApply : unsigned {
     NoResult,      // no finished run with recommended settings
     OtherGpu,      // the last result is from another graphics card
+    OtherRenderer, // the last result is from another renderer: its costs and limits are not this one's
     InUse,         // the settings in use (with the changes waiting) are the recommended ones
     Offer,
 };

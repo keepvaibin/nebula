@@ -75,6 +75,10 @@ struct OpenedWindow {
 void close_game_window(WindowOwner& owner) noexcept;
 // The window's first picture is presented: the player sees the window from now (open_game_window). Any thread.
 void show_window(NativeWindow window) noexcept;
+// A shown window the player cannot see now: hidden, minimised or cloaked (Windows), hidden or minimised (SDL), not
+// visible on any screen (macOS). The Vulkan and Metal renderers skip acquiring and presenting while it holds, as
+// Direct3D does on DXGI_STATUS_OCCLUDED; they ask at most every 100 ms. Any thread.
+[[nodiscard]] bool window_unseen(NativeWindow window) noexcept;
 // The refresh rate of the display the window is on, or 0 when unknown.
 [[nodiscard]] double display_refresh_hz(NativeWindow window) noexcept;
 // The display's vblanks: the latest and the interval between them, on galaxy::qpc_now()'s clock (Windows: timed on
