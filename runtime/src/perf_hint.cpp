@@ -49,8 +49,10 @@ using ThreadClock = clockid_t;
 struct FrameThread {
     ThreadClock clock;
     std::int64_t cpu_ns;
+    const char* name;
+    std::int64_t last_ns = -1;  // its CPU time in the window the last perf_hint_frame_done closed
 #if defined(__ANDROID__)
-    std::int32_t tid;
+    std::int32_t tid = 0;
 #endif
 };
 
@@ -143,7 +145,7 @@ void report(std::int64_t work_ns) {
 
 }  // namespace
 
-void perf_hint_add_current_thread() noexcept {
+void perf_hint_add_current_thread(const char* name) noexcept {
 #if defined(__APPLE__)
     // The frame's threads are what the player waits on: the system's highest class for them, so their timers are not
     // gathered with others' (a frame's wake-up a few milliseconds late is a picture a display refresh late) and, on
@@ -157,12 +159,12 @@ void perf_hint_add_current_thread() noexcept {
     }
 #endif
     std::lock_guard<std::mutex> lock(g_mutex);
+    FrameThread thread{clock, cpu_time(clock), name};
 #if defined(__ANDROID__)
-    g_threads.push_back({clock, cpu_time(clock), static_cast<std::int32_t>(gettid())});
+    thread.tid = static_cast<std::int32_t>(gettid());
     g_session_stale = true;  // made again with every thread at the next report
-#else
-    g_threads.push_back({clock, cpu_time(clock)});
 #endif
+    g_threads.push_back(thread);
 }
 
 void perf_hint_set_target(std::int64_t target_ns) noexcept {
@@ -188,9 +190,8 @@ std::int64_t perf_hint_frame_done() noexcept {
     std::int64_t work = 0;
     for (FrameThread& thread : g_threads) {
         const std::int64_t now = cpu_time(thread.clock);
-        if (now >= 0 && thread.cpu_ns >= 0 && now > thread.cpu_ns) {
-            work = std::max(work, now - thread.cpu_ns);
-        }
+        thread.last_ns = now >= 0 && thread.cpu_ns >= 0 ? std::max<std::int64_t>(now - thread.cpu_ns, 0) : -1;
+        work = std::max(work, thread.last_ns);
         thread.cpu_ns = now;
     }
 #if defined(__ANDROID__)
@@ -201,15 +202,28 @@ std::int64_t perf_hint_frame_done() noexcept {
     return work;
 }
 
+std::size_t perf_hint_last_work(ThreadWork* out, std::size_t capacity) noexcept {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    const std::size_t n = std::min(capacity, g_threads.size());
+    for (std::size_t i = 0; i < n; ++i) {
+        out[i] = {g_threads[i].name, g_threads[i].last_ns};
+    }
+    return n;
+}
+
 #else
 
 namespace {
 std::atomic<bool> g_on_battery{false};
 }  // namespace
 
-void perf_hint_add_current_thread() noexcept {}
+void perf_hint_add_current_thread(const char*) noexcept {}
 
 void perf_hint_set_target(std::int64_t) noexcept {}
+
+std::size_t perf_hint_last_work(ThreadWork*, std::size_t) noexcept {
+    return 0;
+}
 
 std::int64_t perf_hint_frame_done() noexcept {
     // Every two seconds (by the clock, not by the game's frame count): the power state is looked at, a change said once.

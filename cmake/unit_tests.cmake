@@ -29,6 +29,11 @@ set(render_src "${galaxy_rt}/render")
 
 # The process's output: every line whole, whichever threads write.
 galaxy_test(galaxy_whole_lines_tests SOURCES ${rt}/whole_lines_tests.cpp ${rt}/whole_lines.cpp)
+# The frame threads' CPU time by thread (the pacing line). Windows reads no thread's CPU time there (perf_hint.cpp's
+# Windows half looks at the power state, which needs the Windows host's power code).
+if(NOT WIN32)
+    galaxy_test(galaxy_perf_hint_tests SOURCES ${rt}/perf_hint_tests.cpp ${rt}/perf_hint.cpp)
+endif()
 
 # Files and saves.
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)

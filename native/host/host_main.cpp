@@ -134,9 +134,14 @@
 #if !defined(NEBULA_HOST_RENDERER)
 namespace galaxy::host {
 // The headless host gives the platform no performance hints.
-inline void perf_hint_add_current_thread() noexcept {}
+struct ThreadWork {
+    const char* name;
+    std::int64_t cpu_ns;
+};
+inline void perf_hint_add_current_thread(const char*) noexcept {}
 inline void perf_hint_set_target(int64_t) noexcept {}
 inline int64_t perf_hint_frame_done() noexcept { return 0; }
+inline std::size_t perf_hint_last_work(ThreadWork*, std::size_t) noexcept { return 0; }
 inline bool perf_hint_on_battery() noexcept { return false; }
 }  // namespace galaxy::host
 #endif
@@ -1111,8 +1116,17 @@ void svc_frame_wait(void*) {
     static int64_t vsync_ns = 0;
     static uint32_t on_vsync = 0;
     static uint32_t frames = 0;
-    static int64_t work_sum = 0;
-    static int64_t work_max = 0;
+    static uint64_t steps = 0;  // since the start: a longest frame's number in the pacing line
+    static auto window_began = Clock::now();
+    // Each frame thread's CPU time over the window: its sum, its longest frame and that frame's number.
+    struct ThreadWindow {
+        const char* name = nullptr;
+        int64_t sum = 0;
+        int64_t longest = 0;
+        uint64_t longest_step = 0;
+    };
+    static constexpr std::size_t kThreads = 4;
+    static ThreadWindow threads[kThreads];
 #endif
     for (;;) {
         // The step's moment on the runtime's clock: the display's vsync it waited for, else the host clock's due time,
@@ -1161,15 +1175,37 @@ void svc_frame_wait(void*) {
             next = now + period;  // the host's clock continues from the display's
             ++on_vsync;
         }
-        // Every 10 s: how the frames were paced, and the frame work (the busier of the game and render threads).
-        work_sum += work;
-        work_max = std::max(work_max, work);
+        // Every 600 frames: how they were paced (the window's wall time, how many began on the display's vsync) and
+        // each frame thread's CPU time (average, and the longest with its frame's number), so a slow frame is the game
+        // step's or the render thread's.
+        galaxy::host::ThreadWork work_now[kThreads];
+        const std::size_t thread_count = galaxy::host::perf_hint_last_work(work_now, kThreads);
+        ++steps;
+        for (std::size_t i = 0; i < thread_count; ++i) {
+            ThreadWindow& t = threads[i];
+            t.name = work_now[i].name;
+            if (work_now[i].cpu_ns < 0) continue;
+            t.sum += work_now[i].cpu_ns;
+            if (work_now[i].cpu_ns > t.longest) {
+                t.longest = work_now[i].cpu_ns;
+                t.longest_step = steps;
+            }
+        }
         if (++frames == 600u) {
-            std::fprintf(stderr, "[pacing] %u frames, %u on the display's vsync (%.1f Hz); frame work %.2f ms average, "
-                         "%.2f ms longest\n", frames, on_vsync, galaxy::sdl::display_refresh_hz(),
-                         static_cast<double>(work_sum) / frames / 1e6, static_cast<double>(work_max) / 1e6);
+            const double wall_ms = std::chrono::duration<double, std::milli>(now - window_began).count();
+            galaxy::whole_lines::Line line;
+            line.add("[pacing] %u frames in %.1f ms (%.3f ms a frame), %u on the display's vsync (%.1f Hz)", frames,
+                     wall_ms, wall_ms / frames, on_vsync, galaxy::sdl::display_refresh_hz());
+            for (std::size_t i = 0; i < thread_count; ++i) {
+                ThreadWindow& t = threads[i];
+                line.add("; %s CPU %.2f ms average, %.2f ms longest (frame %llu)", t.name != nullptr ? t.name : "thread",
+                         static_cast<double>(t.sum) / frames / 1e6, static_cast<double>(t.longest) / 1e6,
+                         static_cast<unsigned long long>(t.longest_step));
+                t = ThreadWindow{};
+            }
+            line.write(stderr);
             frames = on_vsync = 0u;
-            work_sum = work_max = 0;
+            window_began = now;
         }
 #endif
 #if defined(NEBULA_HOST_RENDERER)
@@ -6444,7 +6480,7 @@ int main(int argc, char** argv) {
 #endif
     std::thread game([] {
         name_thread(L"Nebula Game");
-        galaxy::host::perf_hint_add_current_thread();
+        galaxy::host::perf_hint_add_current_thread("game");
         gModule.run();
     });
 #if defined(_WIN32)

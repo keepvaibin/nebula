@@ -1514,7 +1514,7 @@ void RenderCore::present_cached_display(
 void RenderCore::render_thread_main() {
     galaxy::host::name_current_thread(L"Nebula Render");
     galaxy::profiled_threads::add_current("render");
-    galaxy::host::perf_hint_add_current_thread();
+    galaxy::host::perf_hint_add_current_thread("render");
 #if defined(_WIN32)
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 #endif
