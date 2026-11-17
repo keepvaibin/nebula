@@ -4294,6 +4294,25 @@ void extension_open_settings(void*, uint32_t page) {
 }
 void extension_resize_window(void*, uint32_t width, uint32_t height) {
     galaxy::render::host_window::resize_window_client(width, height);
+    if (!deterministic_mode()) {
+        return;
+    }
+    // The window's own thread sizes it a moment later. With fixed steps the game runs on meanwhile, so the step at
+    // which it sees the new shape (the aspect latch after this step) would be whatever step was running then: two runs
+    // would differ. The step waits for the size, bounded so a window the system will not size never holds the game.
+    const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    for (;;) {
+        const auto client = galaxy::render::current_host_client_extent();
+        if (client.width == static_cast<int>(width) && client.height == static_cast<int>(height)) {
+            return;
+        }
+        if (std::chrono::steady_clock::now() >= until) {
+            std::fprintf(stderr, "[window] not %ux%u within 2 s (it is %dx%d): the shape is latched when it comes\n",
+                         width, height, client.width, client.height);
+            return;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
 }
 void extension_lose_gpu_device(void*) {
     galaxy::render::lose_gpu_device();
