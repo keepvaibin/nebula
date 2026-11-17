@@ -322,9 +322,13 @@ namespace luma {
                 u64 sumTicks;      // over the ring
                 u64 worstTicks;
                 // Faults in this mod's code under other mods' calls this session (the need walk turned the caller off),
-                // and the first two callers it faulted under (luma_guard_faults; the Mods page). Game thread writes.
+                // and the first two callers it faulted under (luma_guard_faults; the Mods page). caught() writes them on the
+                // faulting thread, whichever it is; any thread reads. The count is atomic; a caller's id is written while
+                // `writing` is held and published by `callersSet` (release): a reader reads only the ids below it.
                 u32 faultsUnder;
-                u32 commonSaid;    // the "common place" notice was given
+                u32 commonSaid;    // the "common place" notice was given (claimed by exchange)
+                u32 writing;
+                u32 callersSet;
                 char callers[2][72];
             };
             // Zero, so no page of it is touched until a mod loads.
@@ -584,26 +588,34 @@ namespace luma {
                 if (rBlame.pFaulted != nullptr && rBlame.pFaulted != pOff) {
                     CostSlot* const pSlot = costSlotOf(rBlame.pFaulted);
                     if (pSlot != nullptr) {
-                        pSlot->faultsUnder++;
-                        if (pSlot->callers[0][0] == 0) {
-                            copyId(pSlot->callers[0], sizeof(pSlot->callers[0]), pOffId);
-                        } else if (!same(pSlot->callers[0], pOffId) && pSlot->callers[1][0] == 0) {
-                            copyId(pSlot->callers[1], sizeof(pSlot->callers[1]), pOffId);
+                        const u32 count = __atomic_add_fetch(&pSlot->faultsUnder, 1u, __ATOMIC_RELAXED);
+                        while (__atomic_exchange_n(&pSlot->writing, 1u, __ATOMIC_ACQUIRE) != 0u) {
                         }
+                        const u32 had = __atomic_load_n(&pSlot->callersSet, __ATOMIC_RELAXED);
+                        if (had == 0u) {
+                            copyId(pSlot->callers[0], sizeof(pSlot->callers[0]), pOffId);
+                            __atomic_store_n(&pSlot->callersSet, 1u, __ATOMIC_RELEASE);
+                        } else if (had == 1u && !same(pSlot->callers[0], pOffId)) {
+                            copyId(pSlot->callers[1], sizeof(pSlot->callers[1]), pOffId);
+                            __atomic_store_n(&pSlot->callersSet, 2u, __ATOMIC_RELEASE);
+                        }
+                        __atomic_store_n(&pSlot->writing, 0u, __ATOMIC_RELEASE);
+                        const u32 set = __atomic_load_n(&pSlot->callersSet, __ATOMIC_ACQUIRE);
+                        const char* const pFirst = set >= 1u ? pSlot->callers[0] : "";
+                        const char* const pSecond = set >= 2u ? pSlot->callers[1] : "";
                         if (luma::modlog::facts()) {
                             // guard.under.<mod>: the count and the first two callers (a test reads them).
                             char key[96];
                             nebula_snprintf(key, sizeof(key), "guard.under.%s", pFaultedId);
                             char json[256];
-                            nebula_snprintf(json, sizeof(json), "{\"count\": %u, \"first\": \"%s\", \"second\": \"%s\"}",
-                                            pSlot->faultsUnder, pSlot->callers[0], pSlot->callers[1]);
+                            nebula_snprintf(json, sizeof(json), "{\"count\": %u, \"first\": \"%s\", \"second\": \"%s\"}", count,
+                                            pFirst, pSecond);
                             luma::modlog::fact(key, json);
                         }
-                        if (pSlot->callers[1][0] != 0 && pSlot->commonSaid == 0) {
-                            pSlot->commonSaid = 1;
+                        if (set >= 2u && __atomic_exchange_n(&pSlot->commonSaid, 1u, __ATOMIC_ACQ_REL) == 0u) {
                             nebula_log("[mod %s] GUARD: its code failed under two mods' calls, %s's and %s's: the fault is likely its "
                                        "own. Both are off; it stays on. On the Mods page it can be turned off, or they on again.\n",
-                                       pFaultedId, pSlot->callers[0], pSlot->callers[1]);
+                                       pFaultedId, pFirst, pSecond);
                             LumaModLogEntry common = {};
                             common.size = sizeof(common);
                             common.source = LUMA_MODLOG_GUARD;
@@ -612,9 +624,9 @@ namespace luma {
                             common.mod = pFaultedId;
                             common.file = "";
                             common.names[0] = "first";
-                            common.values[0] = pSlot->callers[0];
+                            common.values[0] = pFirst;
                             common.names[1] = "second";
-                            common.values[1] = pSlot->callers[1];
+                            common.values[1] = pSecond;
                             common.count = 2;
                             luma::modlog::add(common, "Guard.CommonPlace");
                         }
@@ -1063,7 +1075,7 @@ NEBULA_GAME_API int32_t luma_guard_blame(const LumaGuardThread* thread, const Lu
 }
 
 // Faults in a mod's code under other mods' calls this session (when-a-mod-fails.md): their count, and the first two
-// callers' ids, each NUL-ended, into callers (an empty one: none). 0: found; -1: no such mod this session. Game thread.
+// callers' ids, each NUL-ended, into callers (an empty one: none). 0: found; -1: no such mod this session. Any thread.
 NEBULA_GAME_API int32_t luma_guard_faults(const char* mod, uint32_t* count, char* callers, uint32_t callers_size) {
     using namespace luma::guard;
     if (count != nullptr) {
@@ -1082,16 +1094,17 @@ NEBULA_GAME_API int32_t luma_guard_faults(const char* mod, uint32_t* count, char
             continue;
         }
         if (count != nullptr) {
-            *count = rSlot.faultsUnder;
+            *count = __atomic_load_n(&rSlot.faultsUnder, __ATOMIC_RELAXED);
         }
         if (callers != nullptr && callers_size != 0) {
+            const u32 set = __atomic_load_n(&rSlot.callersSet, __ATOMIC_ACQUIRE);
             u32 at = 0;
-            append(callers, callers_size, &at, rSlot.callers[0]);
+            append(callers, callers_size, &at, set >= 1u ? rSlot.callers[0] : "");
             if (at + 1 < callers_size) {
                 callers[at++] = 0;
                 callers[at] = 0;
                 u32 second = 0;
-                append(callers + at, callers_size - at, &second, rSlot.callers[1]);
+                append(callers + at, callers_size - at, &second, set >= 2u ? rSlot.callers[1] : "");
             }
         }
         return 0;
