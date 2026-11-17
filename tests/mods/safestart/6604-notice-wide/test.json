@@ -1,0 +1,58 @@
+{
+  "harness": 1,
+  "name": "6604-notice-wide",
+  "about": "The safe-start notice over the Mods lists, French in a 48:9 window: one line, the lists under it",
+  "proves": [
+    "mods.safe_start"
+  ],
+  "mods": [
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "safe_start": "asked",
+  "language": "UsFrench",
+  "window": [
+    1920,
+    360
+  ],
+  "renderers": [
+    "d3d12",
+    "vulkan",
+    "d3d11"
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 240,
+      "picture": "mods"
+    },
+    {
+      "at": 270,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modscreen.nebula",
+      "has": {
+        "line": 0,
+        "page": "list"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "picture": "mods",
+      "like": "refs/{renderer}/mods.png",
+      "within": {
+        "rmse": 0.5
+      }
+    }
+  ]
+}

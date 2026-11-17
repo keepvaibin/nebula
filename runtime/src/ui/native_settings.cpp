@@ -3505,6 +3505,13 @@ void add_log_rows(std::vector<SettingsRow>& rows, const std::vector<galaxy::modl
     }
 }
 
+// A safe start's notice, on the Mods lists and on the log's page: every mod is off for this start, and why.
+const char* safe_start_notice(galaxy::mods::SafeStart safe) {
+    return safe == galaxy::mods::SafeStart::kAsked
+               ? "SAFE START: EVERY MOD IS OFF UNTIL THE NEXT START"
+               : "NEBULA CLOSED UNEXPECTEDLY WITH MODS ON. EVERY MOD IS OFF UNTIL THE NEXT START";
+}
+
 // The log page (the LOG button): a safe start's notice, what removed mods keep (add_kept_rows_locked), then the entries
 // grouped under each mod, in the MODS lists' order (the mods the lists do not have, a .luma that could not be read or
 // Nebula's own lines, after them, in the log's order); Done goes back. In a harness
@@ -3513,10 +3520,7 @@ std::vector<SettingsRow> log_page(const std::vector<galaxy::mods::ModInfo>& mods
     std::vector<SettingsRow> rows;
     // A safe start on top: every mod is off for this start, and why; the lists keep the player's choices.
     if (const galaxy::mods::SafeStart safe = galaxy::mods::safe_start(); safe != galaxy::mods::SafeStart::kNo) {
-        rows.push_back(SettingsRow{safe == galaxy::mods::SafeStart::kAsked
-                                       ? "SAFE START: EVERY MOD IS OFF UNTIL THE NEXT START"
-                                       : "NEBULA CLOSED UNEXPECTEDLY WITH MODS ON. EVERY MOD IS OFF UNTIL THE NEXT START",
-                                   {}, nullptr, {}, true});
+        rows.push_back(SettingsRow{safe_start_notice(safe), {}, nullptr, {}, true});
         modscreen_facts_locked("nebula", "log", rows.data(), rows.size());
     }
     add_kept_rows_locked(rows);
@@ -4529,6 +4533,12 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
     for (auto it = s_modscreen_shown.begin(); it != s_modscreen_shown.end();) {
         it = it->first.compare(0u, 5u, "page:") == 0 ? s_modscreen_shown.erase(it) : std::next(it);
     }
+    // A safe start says so over both lists: every mod is off for this start, and why. The lists keep the player's
+    // choices for the next start; the log has the notice too.
+    if (const galaxy::mods::SafeStart safe = galaxy::mods::safe_start(); safe != galaxy::mods::SafeStart::kNo) {
+        rows.push_back(SettingsRow{safe_start_notice(safe), {}, nullptr, {}, true});
+        modscreen_facts_locked("nebula", "list", &rows.back(), 1u);
+    }
     SettingsRow off{"DISABLED", {}, nullptr, {}, true};
     off.list = 1u;
     rows.push_back(std::move(off));
@@ -4536,10 +4546,7 @@ std::vector<SettingsRow> mods_page_rows(const RenderConfig&) {
     for (const galaxy::mods::ModInfo& mod : mods) {
         if (!mod.enabled && !galaxy::mods::built_in(mod)) rows.push_back(mod_row(mod));
     }
-    // A safe start says so over the mods on, which stay the player's choice for the next start; the log says why.
-    SettingsRow on{galaxy::mods::safe_start() != galaxy::mods::SafeStart::kNo ? "ENABLED (OFF UNTIL THE NEXT START)"
-                                                                              : "ENABLED (TOP HAS PRIORITY)",
-                   {}, nullptr, {}, true};
+    SettingsRow on{"ENABLED (TOP HAS PRIORITY)", {}, nullptr, {}, true};
     on.list = 2u;
     rows.push_back(std::move(on));
     for (const galaxy::mods::ModInfo& mod : mods) {
