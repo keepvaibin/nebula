@@ -14,6 +14,7 @@ Each page lists a service's limits, types, events and functions as its C header 
 | Service | Page | What it does |
 |---|---|---|
 | `time` | [time](time.md) | Frames, world steps, clocks, timers and the world clock's speed. |
+| `events` | [events](events.md) | The game's events (a coin, a star, a stage starting), told at the next frame's start. |
 | `system` | [system](system.md) | Facts about the platform and display, the clipboard and opening links. |
 | `system.clipboard` | [system](system.md) | Read and write the clipboard. |
 | `system.links` | [system](system.md) | Open a web page in the player's browser. |

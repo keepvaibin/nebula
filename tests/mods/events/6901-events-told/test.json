@@ -1,0 +1,143 @@
+{
+  "harness": 1,
+  "name": "6901-events-told",
+  "about": "ev-watch, ev-stop and ev-fault watch the game's events (the events service). ev-watch is told STAGE_START (EggStarGalaxy, mission 1) and ACTOR_APPEAR (with an object, all raised on the game thread, the stage's load too); its hook's MR::incCoin(7) is told one frame later as COIN 7, and the MR::incCoin(1) its function makes at the frame's start is told at the next as COIN 1. ev-stop is told the first COIN and stops watching. ev-fault's function faults at the first COIN: the guard takes it out and the others go on. watch refuses bit 0 and bit 30",
+  "proves": [
+    "events.watch",
+    "events.later",
+    "events.refused_kinds"
+  ],
+  "mods": [
+    "../mods/ev-watch",
+    "../mods/ev-stop",
+    "../mods/ev-fault"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        6901
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.ev-watch.coin",
+        "is": 1
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.ev-watch.watch_bit0",
+      "is": -1
+    },
+    {
+      "fact": "mod.ev-watch.watch_bit30",
+      "is": -1
+    },
+    {
+      "fact": "mod.ev-watch.watch_stop_unwatched",
+      "is": 0
+    },
+    {
+      "fact": "mod.ev-watch.watch",
+      "is": 0
+    },
+    {
+      "fact": "mod.ev-watch.stage_name",
+      "is": 1
+    },
+    {
+      "fact": "mod.ev-watch.stage_mission",
+      "is": 1
+    },
+    {
+      "fact": "mod.ev-watch.appear_actor",
+      "is": 1
+    },
+    {
+      "fact": "mod.ev-watch.other_thread",
+      "absent": true
+    },
+    {
+      "fact": "mod.ev-watch.coin",
+      "is": 7,
+      "when": "first"
+    },
+    {
+      "fact": "mod.ev-watch.coin",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.ev-watch.coin",
+      "count": 2
+    },
+    {
+      "fact": "mod.ev-watch.coin_later",
+      "is": 1
+    },
+    {
+      "fact": "mod.ev-watch.coin_status",
+      "is": 0,
+      "when": "all"
+    },
+    {
+      "fact": "mod.ev-watch.coin_actor",
+      "is": 0,
+      "when": "all"
+    },
+    {
+      "fact": "mod.ev-stop.watch",
+      "is": 0
+    },
+    {
+      "fact": "mod.ev-stop.coin",
+      "is": 7
+    },
+    {
+      "fact": "mod.ev-stop.coin",
+      "count": 1
+    },
+    {
+      "fact": "mod.ev-stop.stopped",
+      "is": 0
+    },
+    {
+      "fact": "mod.ev-fault.entered",
+      "count": 1
+    },
+    {
+      "fact": "mod.ev-fault.survived",
+      "absent": true
+    },
+    {
+      "fact": "takeout.ev-fault",
+      "exists": true
+    },
+    {
+      "fact": "takeout.ev-watch",
+      "absent": true
+    },
+    {
+      "fact": "takeout.ev-stop",
+      "absent": true
+    },
+    {
+      "log": "ev-watch: events\\.watch was given a wrong kinds; it did nothing\\."
+    }
+  ],
+  "faults": [
+    {
+      "mod": "ev-fault"
+    }
+  ]
+}

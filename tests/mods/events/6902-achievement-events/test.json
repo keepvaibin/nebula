@@ -1,0 +1,51 @@
+{
+  "harness": 1,
+  "name": "6902-achievement-events",
+  "about": "ev-ach (no code) has three luma.json achievements on the game's events: stage_start named EggStarGalaxy, coin of 5 and coin of 9. The stage's start unlocks the first; the test's MR::incCoin(5) unlocks the second; the coin of 9 never comes. The events' callbacks only read (NebulaModCallback returns nothing): the coins counted are the 5 given",
+  "proves": [
+    "events.achievement"
+  ],
+  "mods": [
+    "../mods/ev-ach"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::incCoin",
+      "signature": "void(int)",
+      "args": [
+        5
+      ]
+    },
+    {
+      "at": 62,
+      "call": "MR::getCoinNum",
+      "signature": "s32()",
+      "args": [],
+      "fact": "coins"
+    },
+    {
+      "at": 150,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "achievement: mod:ev-ach/stage-egg"
+    },
+    {
+      "log": "achievement: mod:ev-ach/coin-five"
+    },
+    {
+      "no_log": "achievement: mod:ev-ach/coin-nine"
+    },
+    {
+      "fact": "coins",
+      "is": 5
+    }
+  ]
+}

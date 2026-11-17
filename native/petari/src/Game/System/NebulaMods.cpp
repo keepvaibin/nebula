@@ -1,6 +1,7 @@
 #include "Game/System/NebulaMods.hpp"
 #include "nebula_text_tags.h"
 #include "Game/System/NebulaArena.hpp"
+#include "Game/System/LumaEvents.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
@@ -109,6 +110,8 @@ namespace {
     };
 
     List< Subscriber > sSubscribers[NEBULA_MOD_EVENT_COUNT];
+    // The events service's (setWatched): some mod watches the event.
+    bool sWatched[NEBULA_MOD_EVENT_COUNT];
     struct HungryLuma {
         s32 mSlot;
         s32 mPrice;
@@ -157,7 +160,7 @@ namespace {
         if (static_cast< u32 >(event) >= NEBULA_MOD_EVENT_COUNT || callback == nullptr) {
             return -1;
         }
-        Subscriber subscriber = {callback, user};
+        const Subscriber subscriber = {callback, user};
         sSubscribers[event].add(subscriber);
         NebulaMods::sWanted[event] = true;
         return 0;
@@ -553,13 +556,22 @@ namespace NebulaMods {
         return sAskedForApi;
     }
 
-    s32 dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName) {
-        const List< Subscriber >& rSubscribers = sSubscribers[event];
-        NebulaModEventData data = {value, static_cast< NebulaActor* >(pActor), pName};
-        for (int i = 0; i < rSubscribers.mCount; i++) {
-            data.value = rSubscribers.mItems[i].mCallback(&data, rSubscribers.mItems[i].mUser);
+    void setWatched(u32 event, bool watched) {
+        if (event < NEBULA_MOD_EVENT_COUNT) {
+            sWatched[event] = watched;
+            sWanted[event] = watched || sSubscribers[event].mCount != 0;
         }
-        return data.value;
+    }
+
+    void dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName) {
+        const List< Subscriber >& rSubscribers = sSubscribers[event];
+        const NebulaModEventData data = {value, static_cast< NebulaActor* >(pActor), pName};
+        for (int i = 0; i < rSubscribers.mCount; i++) {
+            rSubscribers.mItems[i].mCallback(&data, rSubscribers.mItems[i].mUser);
+        }
+        if (sWatched[event]) {
+            luma::events::raise(static_cast< u32 >(event), value, pActor, pName);
+        }
     }
 
     void stageFrame() {

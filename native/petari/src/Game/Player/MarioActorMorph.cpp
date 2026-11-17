@@ -34,7 +34,7 @@ bool MarioActor::canTakePowerUp(s32 playerMode) const {
 
 void MarioActor::setPlayerMode(u16 playerMode, bool withMorph) {
     if (!mExtra) {
-        playerMode = static_cast< u16 >(NebulaMods::fire(NEBULA_MOD_EVENT_POWER_UP, playerMode));
+        NebulaMods::fire(NEBULA_MOD_EVENT_POWER_UP, playerMode);
     }
 
     // A mod's power-up: the player is in the game's form it acts like, so every table read by his form sees one of the

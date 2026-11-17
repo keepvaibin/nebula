@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "ev-fault",
+  "name": "ev-fault",
+  "summary": "ev-fault (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

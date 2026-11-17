@@ -14,6 +14,7 @@
 #include "Game/System/LumaDrawNative.hpp"
 #include "Game/System/LumaDrawPost.hpp"
 #include "Game/System/LumaDrawView.hpp"
+#include "Game/System/LumaEvents.hpp"
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaSave.hpp"
 #include "Game/System/LumaTime.hpp"
@@ -47,6 +48,7 @@ namespace luma {
             // service once that service is defined; none is yet.
             const CatalogRow cCatalog[] = {
                 {"time", 1, 0, nullptr, "services-time"},
+                {"events", 1, 0, nullptr, "services-events"},
                 {"system", 1, 0, nullptr, "services-system"},
                 {"system.clipboard", 1, 0, LUMA_SYSTEM_CLIPBOARD_PERMISSION, "services-system"},
                 {"system.links", 1, 0, LUMA_SYSTEM_LINKS_PERMISSION, "services-system"},
@@ -677,6 +679,7 @@ namespace luma {
             // The module's own services, each once it is defined: time (services/time.md), content.fx (effects),
             // content.model (models).
             (void)provide(luma::time::provider());
+            (void)provide(luma::events::provider());
             (void)provide(luma::content::fx::provider());
             (void)provide(luma::content::model::provider());
             (void)provide(luma::ui::provider());

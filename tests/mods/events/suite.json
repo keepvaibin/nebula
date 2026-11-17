@@ -1,0 +1,7 @@
+{
+  "harness": 1,
+  "tests": [
+    "6901-events-told",
+    "6902-achievement-events"
+  ]
+}

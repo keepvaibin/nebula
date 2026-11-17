@@ -1,0 +1,41 @@
+{
+  "format": "1.0",
+  "id": "ev-ach",
+  "name": "ev-ach",
+  "summary": "ev-ach (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "pre_standard": {
+    "achievements": [
+      {
+        "id": "coin-five",
+        "name": "Five coins",
+        "when": {
+          "event": "coin",
+          "value": 5
+        }
+      },
+      {
+        "id": "stage-egg",
+        "name": "Good Egg",
+        "when": {
+          "event": "stage_start",
+          "name": "EggStarGalaxy"
+        }
+      },
+      {
+        "id": "coin-nine",
+        "name": "Nine coins",
+        "when": {
+          "event": "coin",
+          "value": 9
+        }
+      }
+    ]
+  }
+}

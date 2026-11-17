@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "ev-watch",
+  "name": "ev-watch",
+  "summary": "ev-watch (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

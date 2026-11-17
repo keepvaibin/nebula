@@ -26,6 +26,7 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaMods.hpp"
 #include "Game/System/LumaClasses.hpp"
+#include "Game/System/LumaEvents.hpp"
 
 
 namespace {
@@ -185,6 +186,7 @@ void GameSystemSceneController::destroyScene() {
     // Mods' objects went with the scene (docs/modding/reference/lumascript/defining-classes.md): forgotten, their data freed. Nothing when
     // there are none.
     luma::classes::sceneGone();
+    luma::events::sceneGone();  // an actor a mod's event names from the scene is given as 0 from now
 }
 
 bool GameSystemSceneController::isStopSound() const {

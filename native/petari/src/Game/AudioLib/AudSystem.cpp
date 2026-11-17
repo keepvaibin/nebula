@@ -201,17 +201,13 @@ bool AudSystem::startSound(SoundID soundID, SoundHandle* pHandle, const Vec3f* p
         soundID = NebulaMods::soundFor(soundID, mSceneMgr != nullptr && mSceneMgr->isPlayerModeLuigi());
     }
 
-    if (NebulaMods::sWanted[NEBULA_MOD_EVENT_SOUND_START]) {
-        const s32 played = NebulaMods::dispatch(NEBULA_MOD_EVENT_SOUND_START, static_cast< s32 >(static_cast< u32 >(soundID)), nullptr,
-                                                NebulaMods::soundName(soundID));
-        if (played < 0) {
-            return false;
-        }
-        soundID = SoundID(static_cast< u32 >(played));
-    }
-
     if (mIsResetReady && soundID.getGroupID() != AudGroup_HomeSe) {
         return false;
+    }
+
+    if (NebulaMods::sWanted[NEBULA_MOD_EVENT_SOUND_START]) {
+        NebulaMods::dispatch(NEBULA_MOD_EVENT_SOUND_START, static_cast< s32 >(static_cast< u32 >(soundID)), nullptr,
+                             NebulaMods::soundName(soundID));
     }
 
     if (mIsReset) {
@@ -252,17 +248,13 @@ bool AudSystem::startLevelSound(SoundID soundID, SoundHandle* pHandle, const Vec
         soundID = NebulaMods::soundFor(soundID, mSceneMgr != nullptr && mSceneMgr->isPlayerModeLuigi());
     }
 
-    if (NebulaMods::sWanted[NEBULA_MOD_EVENT_SOUND_START]) {
-        const s32 played = NebulaMods::dispatch(NEBULA_MOD_EVENT_SOUND_START, static_cast< s32 >(static_cast< u32 >(soundID)), nullptr,
-                                                NebulaMods::soundName(soundID));
-        if (played < 0) {
-            return false;
-        }
-        soundID = SoundID(static_cast< u32 >(played));
-    }
-
     if (mIsResetReady && soundID.getGroupID() != AudGroup_HomeSe) {
         return false;
+    }
+
+    if (NebulaMods::sWanted[NEBULA_MOD_EVENT_SOUND_START]) {
+        NebulaMods::dispatch(NEBULA_MOD_EVENT_SOUND_START, static_cast< s32 >(static_cast< u32 >(soundID)), nullptr,
+                             NebulaMods::soundName(soundID));
     }
 
     if (mIsReset) {

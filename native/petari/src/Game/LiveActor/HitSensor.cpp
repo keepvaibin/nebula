@@ -14,10 +14,8 @@ HitSensor::HitSensor(u32 type, u32 groupSize, f32 radius, LiveActor* pHost)
 }
 
 bool HitSensor::receiveMessage(u32 msg, HitSensor* pSender) {
-    // A plugin may refuse it: the host acts as if it never came.
-    if (NebulaMods::sWanted[NEBULA_MOD_EVENT_ACTOR_MESSAGE] &&
-        NebulaMods::dispatch(NEBULA_MOD_EVENT_ACTOR_MESSAGE, static_cast< s32 >(msg), mHost, mHost->mName) < 0) {
-        return false;
+    if (NebulaMods::sWanted[NEBULA_MOD_EVENT_ACTOR_MESSAGE]) {
+        NebulaMods::dispatch(NEBULA_MOD_EVENT_ACTOR_MESSAGE, static_cast< s32 >(msg), mHost, mHost->mName);
     }
     return mHost->receiveMessage(msg, pSender, this);
 }

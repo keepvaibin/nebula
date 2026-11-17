@@ -90,7 +90,7 @@ bool unlock_achievement_at(std::size_t index) {
 }
 
 // An event some achievement's "when" names: each one it matches is unlocked. What the event carries is not changed.
-int32_t achievement_event(const NebulaModEventData* data, void* user) {
+void achievement_event(const NebulaModEventData* data, void* user) {
     const int event = static_cast<int>(reinterpret_cast<std::intptr_t>(user));
     for (std::size_t i = 0; i < g_achievements.size(); ++i) {
         const AchievementToAdd& achievement = g_achievements[i];
@@ -99,7 +99,6 @@ int32_t achievement_event(const NebulaModEventData* data, void* user) {
         if (achievement.has_value && achievement.event_value != data->value) continue;
         (void)unlock_achievement_at(i);
     }
-    return data->value;
 }
 
 void say(const std::string& text) {

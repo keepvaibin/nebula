@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "ev-stop",
+  "name": "ev-stop",
+  "summary": "ev-stop (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -17,13 +17,14 @@ extern "C" {
 #endif
 
 /* The table's layout: the host and the game module are built together, so a different number is refused. */
-#define NEBULA_MOD_API_VERSION 4u
+#define NEBULA_MOD_API_VERSION 5u
 
 /* An object in the game (a LiveActor in the game's code), as an event names it. */
 typedef struct NebulaActor NebulaActor;
 
-/* Callbacks run on the thread where the event happens: objects created while a stage loads are reported on the
-   loading thread, everything else on the game thread. */
+/* The game's events. An achievement waits for one (luma.json); a mod's code watches them with the events service
+   (luma_events.h), which tells it at the next frame's start; to act at the moment itself, a mod hooks the function
+   that raises the event. Callbacks run on the thread that raises the event: the game thread, where stages load too. */
 typedef enum NebulaModEvent {
     /* Every frame, in every scene including menus. */
     NEBULA_MOD_EVENT_FRAME = 0,
@@ -31,15 +32,15 @@ typedef enum NebulaModEvent {
     NEBULA_MOD_EVENT_STAGE_FRAME,
     /* A stage started. name: the stage. value: the mission. */
     NEBULA_MOD_EVENT_STAGE_START,
-    /* The player is about to lose one health. Return 0 to cancel the hit. */
+    /* The player lost one health. */
     NEBULA_MOD_EVENT_PLAYER_DAMAGE,
-    /* The player is about to die. value: the cause (0 is falling out of the level). Return -1 to cancel. */
+    /* The player lost a life. value: the cause (0 is falling out of the level). */
     NEBULA_MOD_EVENT_PLAYER_MISS,
-    /* The player's power-up is about to change. value: the new one (NEBULA_POWER_UP_*). The return value is used. */
+    /* The player's power-up changed. value: the new one (NEBULA_POWER_UP_*). */
     NEBULA_MOD_EVENT_POWER_UP,
-    /* Coins are about to be added. value: how many. The return value is added instead. */
+    /* Coins were added. value: how many. */
     NEBULA_MOD_EVENT_COIN,
-    /* Star bits are about to be added. value: how many. The return value is added instead. */
+    /* Star bits were added. value: how many. */
     NEBULA_MOD_EVENT_STAR_BIT,
     /* A star was collected. name: the galaxy. value: the star number. */
     NEBULA_MOD_EVENT_STAR_GET,
@@ -58,7 +59,7 @@ typedef enum NebulaModEvent {
     NEBULA_MOD_EVENT_PAUSE,
     /* The stage is ending; all its actors and layouts are destroyed after this. name: the stage. */
     NEBULA_MOD_EVENT_STAGE_END,
-    /* The game is about to write the save. */
+    /* The game wrote the save. */
     NEBULA_MOD_EVENT_GAME_SAVE,
     /* A power star appeared in the stage. value: its number. */
     NEBULA_MOD_EVENT_POWER_STAR_APPEAR,
@@ -73,8 +74,7 @@ typedef enum NebulaModEvent {
     /* The camera changed. value: 0 for an area camera (also when the last event camera ends), 1 for an event camera.
        name: its id in the stage's camera table. */
     NEBULA_MOD_EVENT_CAMERA_CHANGE,
-    /* A sound effect is about to play. value: its number. name: its name. The returned number plays instead (the same,
-       another sound's, or -1 for silence). Costs one call per sound. */
+    /* A sound effect started. value: its number. name: its name. Costs one call per sound. */
     NEBULA_MOD_EVENT_SOUND_START,
     /* An object started an effect. actor: the object. name: the effect's name in the object's effect table. */
     NEBULA_MOD_EVENT_EFFECT_START,
@@ -82,7 +82,7 @@ typedef enum NebulaModEvent {
        the game's code. */
     NEBULA_MOD_EVENT_SCREEN,
     /* An object received a message from another: an attack, a stomp, a push, a grab (numbers in
-       docs/modding/reference/events.md). actor: the receiver. name: its name. value: the message. Return -1 to cancel it. */
+       docs/modding/reference/events.md). actor: the receiver. name: its name. value: the message. */
     NEBULA_MOD_EVENT_ACTOR_MESSAGE,
     /* The player started an action: swimming, hanging, sliding, falling (numbers in docs/modding/reference/events.md).
        value: the action. */
@@ -96,9 +96,9 @@ typedef struct NebulaModEventData {
     const char* name;
 } NebulaModEventData;
 
-/* Callbacks subscribed to the same event run in the order they subscribed; each receives the previous one's return
-   value. Return data->value to change nothing. */
-typedef int32_t (*NebulaModCallback)(const NebulaModEventData* data, void* user);
+/* Callbacks subscribed to the same event run in the order they subscribed. They are told; nothing they do changes
+   the event. */
+typedef void (*NebulaModCallback)(const NebulaModEventData* data, void* user);
 
 /* The player's power-ups. */
 typedef enum NebulaPowerUp {
@@ -176,8 +176,7 @@ typedef struct NebulaModApi {
     uint32_t size;
     uint32_t version;
 
-    /* Calls `callback` at each `event` (NEBULA_MOD_EVENT_*). Its return value matters where the event says so;
-       otherwise it returns data->value. */
+    /* Calls `callback` at each `event` (NEBULA_MOD_EVENT_*). */
     int32_t (*subscribe)(NebulaModEvent event, NebulaModCallback callback, void* user);
     /* Adds a galaxy. -2: no scenario archive (StageData/<name>/<name>Scenario.arc in the mod, StageData/<name>Scenario
        in the store), so it is skipped; -1: any other problem (its name is already one of the game's). */

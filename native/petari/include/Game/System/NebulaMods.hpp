@@ -7,16 +7,22 @@ class LiveActor;
 
 // The game's side of the mods' rows (nebula_mod_api.h). An event nothing waits for is one load and one branch.
 namespace NebulaMods {
+    // An event the host's rows wait for (an achievement's) or a mod watches (the events service): raised.
     extern bool sWanted[NEBULA_MOD_EVENT_COUNT];
+    // The events service (LumaEvents.cpp), game thread: whether some mod watches `event` now.
+    void setWatched(u32 event, bool watched);
     // Whether any mod has rows: a scene then makes what it otherwise only makes when its story needs it.
     bool hasCode();
 
-    s32 dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName);
+    // The event to the host's rows that wait for it, then to the mods that watch it (at the next frame's start).
+    void dispatch(NebulaModEvent event, s32 value, void* pActor, const char* pName);
     // A sound effect's name by its number (NEBULA_MOD_EVENT_SOUND_START), or null.
     const char* soundName(u32 id);
 
-    inline s32 fire(NebulaModEvent event, s32 value = 0, void* pActor = nullptr, const char* pName = nullptr) {
-        return sWanted[event] ? dispatch(event, value, pActor, pName) : value;
+    inline void fire(NebulaModEvent event, s32 value = 0, void* pActor = nullptr, const char* pName = nullptr) {
+        if (sWanted[event]) {
+            dispatch(event, value, pActor, pName);
+        }
     }
 
     // Each frame of a stage (GameScene::update), before its objects move: the player's spin, jump and landing, then

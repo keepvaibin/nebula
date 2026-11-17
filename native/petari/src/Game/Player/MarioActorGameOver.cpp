@@ -93,10 +93,7 @@ void MarioActor::forceKill(u32 type) {
         return;
     }
 
-    // -1: a plugin keeps the player alive (and moves them, and gives life back, as its rule says).
-    if (NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_MISS, static_cast< s32 >(type)) == -1) {
-        return;
-    }
+    NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_MISS, static_cast< s32 >(type));
 
     mBlurState = 0;
 

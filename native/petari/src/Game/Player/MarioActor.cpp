@@ -1457,9 +1457,8 @@ void MarioActor::decLife(u16 amt) {
         return;
     }
 
-    if (!mExtra && NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_DAMAGE, 1) == 0) {
-        mLifeDamageQueue = 0;
-        return;
+    if (!mExtra) {
+        NebulaMods::fire(NEBULA_MOD_EVENT_PLAYER_DAMAGE, 1);
     }
 
     if (mHealth) {

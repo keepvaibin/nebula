@@ -357,7 +357,7 @@ namespace MR {
     }
 
     void incCoin(int term) {
-        term = NebulaMods::fire(NEBULA_MOD_EVENT_COIN, term);
+        NebulaMods::fire(NEBULA_MOD_EVENT_COIN, term);
         ::getScenePlayingResult()->incCoin(term);
         incPlayerLife(term);
     }

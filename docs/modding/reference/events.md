@@ -10,41 +10,45 @@ contentType: reference
 This page lists the events the game raises, with what each one carries. An achievement can wait for one, and a mod's code can hook the function that raises it.
 
 An achievement's `when` (luma.json `pre_standard.achievements`) names one of these events by its lower-case name
-(`star_get`), with the `name` and `value` it must carry. A mod's code hooks the game function that raises it
-(LumaScript `hook before` or `hook after`; see [Hooks](lumascript/hooks.md); in C, `luma.h`). An event nothing
-waits for costs the game one load and one branch.
+(`star_get`), with the `name` and `value` it must carry.
 
-| Event | When, and what it carries |
-|---|---|
-| `NEBULA_MOD_EVENT_FRAME` | Every frame, in every scene including menus. |
-| `NEBULA_MOD_EVENT_STAGE_FRAME` | Every frame of a stage, before objects move. |
-| `NEBULA_MOD_EVENT_STAGE_START` | A stage started. name: the stage. value: the mission. |
-| `NEBULA_MOD_EVENT_PLAYER_DAMAGE` | The player is about to lose one health. Return 0 to cancel the hit. |
-| `NEBULA_MOD_EVENT_PLAYER_MISS` | The player is about to die. value: the cause (0 is falling out of the level). Return -1 to cancel. |
-| `NEBULA_MOD_EVENT_POWER_UP` | The player's power-up is about to change. value: the new one (NEBULA_POWER_UP_*). The return value is used. |
-| `NEBULA_MOD_EVENT_COIN` | Coins are about to be added. value: how many. The return value is added instead. |
-| `NEBULA_MOD_EVENT_STAR_BIT` | Star bits are about to be added. value: how many. The return value is added instead. |
-| `NEBULA_MOD_EVENT_STAR_GET` | A star was collected. name: the galaxy. value: the star number. |
-| `NEBULA_MOD_EVENT_CUTSCENE_START` | A cutscene started or ended. name: the cutscene. |
-| `NEBULA_MOD_EVENT_CUTSCENE_END` | A cutscene started or ended. name: the cutscene. |
-| `NEBULA_MOD_EVENT_ACTOR_APPEAR` | An object appeared or was killed. actor: the object. name: its name. Costs one call per object. |
-| `NEBULA_MOD_EVENT_ACTOR_KILL` | An object appeared or was killed. actor: the object. name: its name. Costs one call per object. |
-| `NEBULA_MOD_EVENT_PLAYER_SPIN` | The player started a spin. |
-| `NEBULA_MOD_EVENT_PLAYER_JUMP` | The player jumped off the ground, or landed. |
-| `NEBULA_MOD_EVENT_PLAYER_LAND` | The player jumped off the ground, or landed. |
-| `NEBULA_MOD_EVENT_PAUSE` | The pause menu opened (value 1) or closed (value 0). |
-| `NEBULA_MOD_EVENT_STAGE_END` | The stage is ending; all its actors and layouts are destroyed after this. name: the stage. |
-| `NEBULA_MOD_EVENT_GAME_SAVE` | The game is about to write the save. |
-| `NEBULA_MOD_EVENT_POWER_STAR_APPEAR` | A power star appeared in the stage. value: its number. |
-| `NEBULA_MOD_EVENT_TALK_LINE` | A line of dialogue opened in its balloon. actor: the speaker. name: the message id, as luma.json "text" uses it (null for a line without an id). |
-| `NEBULA_MOD_EVENT_TALK_CHOICE` | The player answered a yes/no question. value: 1 yes, 0 no. actor: who asked. name: the question's message id. |
-| `NEBULA_MOD_EVENT_CUTSCENE_PART` | A part of a cutscene started. value: the part's index, from 0. name: the part's name in the cutscene's time sheet. |
-| `NEBULA_MOD_EVENT_CAMERA_CHANGE` | The camera changed. value: 0 for an area camera (also when the last event camera ends), 1 for an event camera. name: its id in the stage's camera table. |
-| `NEBULA_MOD_EVENT_SOUND_START` | A sound effect is about to play. value: its number. name: its name. The returned number plays instead (the same, another sound's, or -1 for silence). Costs one call per sound. |
-| `NEBULA_MOD_EVENT_EFFECT_START` | An object started an effect. actor: the object. name: the effect's name in the object's effect table. |
-| `NEBULA_MOD_EVENT_SCREEN` | A screen layout (a counter, a menu, a message box) was shown (value 1) or removed (value 0). name: its name in the game's code. |
-| `NEBULA_MOD_EVENT_ACTOR_MESSAGE` | An object received a message from another: an attack, a stomp, a push, a grab (numbers in docs/modding/EVENTS.md). actor: the receiver. name: its name. value: the message. Return -1 to cancel it. |
-| `NEBULA_MOD_EVENT_PLAYER_ACTION` | The player started an action: swimming, hanging, sliding, falling (numbers in docs/modding/EVENTS.md). value: the action. |
+A mod's code watches them with the events service: it is told at the start of the next frame, where it may do
+anything (see [events](services/events.md)). To act at the moment itself (cancel a hit, change a count, play
+another sound), it hooks the function that raises the event, named below (LumaScript `hook before` or
+`hook after`; see [Hooks](lumascript/hooks.md); in C, `luma.h`). An event nothing waits for costs the game one
+load and one branch.
+
+| Event | When, and what it carries | Raised in |
+|---|---|---|
+| `NEBULA_MOD_EVENT_FRAME` | Every frame, in every scene including menus. | `GameSystem::update` |
+| `NEBULA_MOD_EVENT_STAGE_FRAME` | Every frame of a stage, before objects move. | `NebulaMods::stageFrame` |
+| `NEBULA_MOD_EVENT_STAGE_START` | A stage started. name: the stage. value: the mission. | `GameScene::start` |
+| `NEBULA_MOD_EVENT_PLAYER_DAMAGE` | The player lost one health. | `MarioActor::decLife` |
+| `NEBULA_MOD_EVENT_PLAYER_MISS` | The player lost a life. value: the cause (0 is falling out of the level). | `MarioActor::forceKill` |
+| `NEBULA_MOD_EVENT_POWER_UP` | The player's power-up changed. value: the new one (NEBULA_POWER_UP_*). | `MarioActor::setPlayerMode` |
+| `NEBULA_MOD_EVENT_COIN` | Coins were added. value: how many. | `MR::incCoin` |
+| `NEBULA_MOD_EVENT_STAR_BIT` | Star bits were added. value: how many. | `MR::addStarPiece` |
+| `NEBULA_MOD_EVENT_STAR_GET` | A star was collected. name: the galaxy. value: the star number. | `GameDataFunction::setGameFlagPowerStarSuccess` |
+| `NEBULA_MOD_EVENT_CUTSCENE_START` | A cutscene started or ended. name: the cutscene. | `DemoDirector::startDemoProgrammable` |
+| `NEBULA_MOD_EVENT_CUTSCENE_END` | A cutscene started or ended. name: the cutscene. | `AstroDomeGalaxySelector::exeDemoJumpOut`, `DemoDirector::endDemo` |
+| `NEBULA_MOD_EVENT_ACTOR_APPEAR` | An object appeared or was killed. actor: the object. name: its name. Costs one call per object. | `LiveActor::makeActorAppeared` |
+| `NEBULA_MOD_EVENT_ACTOR_KILL` | An object appeared or was killed. actor: the object. name: its name. Costs one call per object. | `LiveActor::makeActorDead` |
+| `NEBULA_MOD_EVENT_PLAYER_SPIN` | The player started a spin. | `NebulaMods::stageFrame` |
+| `NEBULA_MOD_EVENT_PLAYER_JUMP` | The player jumped off the ground, or landed. | `NebulaMods::stageFrame` |
+| `NEBULA_MOD_EVENT_PLAYER_LAND` | The player jumped off the ground, or landed. | `NebulaMods::stageFrame` |
+| `NEBULA_MOD_EVENT_PAUSE` | The pause menu opened (value 1) or closed (value 0). | `GamePauseSequence::deactivate`, `GamePauseSequence::startPause` |
+| `NEBULA_MOD_EVENT_STAGE_END` | The stage is ending; all its actors and layouts are destroyed after this. name: the stage. | `GameScene::~GameScene` |
+| `NEBULA_MOD_EVENT_GAME_SAVE` | The game wrote the save. | `GameSequenceFunction::startGameDataSaveSequence` |
+| `NEBULA_MOD_EVENT_POWER_STAR_APPEAR` | A power star appeared in the stage. value: its number. | `PowerStarHolder::requestAppearPowerStar` |
+| `NEBULA_MOD_EVENT_TALK_LINE` | A line of dialogue opened in its balloon. actor: the speaker. name: the message id, as luma.json "text" uses it (null for a line without an id). | `TalkDirector::exeTalk` |
+| `NEBULA_MOD_EVENT_TALK_CHOICE` | The player answered a yes/no question. value: 1 yes, 0 no. actor: who asked. name: the question's message id. | `TalkDirector::exeSlct` |
+| `NEBULA_MOD_EVENT_CUTSCENE_PART` | A part of a cutscene started. value: the part's index, from 0. name: the part's name in the cutscene's time sheet. | `DemoTimeKeeper::setCurrentPart`, `DemoTimeKeeper::start`, `DemoTimeKeeper::update` |
+| `NEBULA_MOD_EVENT_CAMERA_CHANGE` | The camera changed. value: 0 for an area camera (also when the last event camera ends), 1 for an event camera. name: its id in the stage's camera table. | `CameraDirector::endEvent`, `CameraDirector::startEvent`, `CameraManGame::setChunk` |
+| `NEBULA_MOD_EVENT_SOUND_START` | A sound effect started. value: its number. name: its name. Costs one call per sound. | `AudSystem::startLevelSound`, `AudSystem::startSound` |
+| `NEBULA_MOD_EVENT_EFFECT_START` | An object started an effect. actor: the object. name: the effect's name in the object's effect table. | `MR::emitEffect`, `MR::emitEffectWithEmitterCallBack` |
+| `NEBULA_MOD_EVENT_SCREEN` | A screen layout (a counter, a menu, a message box) was shown (value 1) or removed (value 0). name: its name in the game's code. | `LayoutActor::appear`, `LayoutActor::kill` |
+| `NEBULA_MOD_EVENT_ACTOR_MESSAGE` | An object received a message from another: an attack, a stomp, a push, a grab (numbers in docs/modding/reference/events.md). actor: the receiver. name: its name. value: the message. | `HitSensor::receiveMessage` |
+| `NEBULA_MOD_EVENT_PLAYER_ACTION` | The player started an action: swimming, hanging, sliding, falling (numbers in docs/modding/reference/events.md). value: the action. | `Mario::changeStatus` |
 
 ## Messages (NEBULA_MOD_EVENT_ACTOR_MESSAGE)
 

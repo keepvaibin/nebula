@@ -93,7 +93,7 @@ namespace MR {
     }
 
     void addStarPiece(int num) {
-        num = NebulaMods::fire(NEBULA_MOD_EVENT_STAR_BIT, num);
+        NebulaMods::fire(NEBULA_MOD_EVENT_STAR_BIT, num);
         if (MR::isStageAstroLocation()) {
             GameDataFunction::addStockedStarPiece(num);
         } else {
