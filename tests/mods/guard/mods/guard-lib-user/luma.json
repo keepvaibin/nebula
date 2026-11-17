@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "guard-lib-user",
+  "name": "guard-lib-user",
+  "summary": "guard-lib-user (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "guard-lib"
+    }
+  ]
+}

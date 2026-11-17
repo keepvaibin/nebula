@@ -234,6 +234,7 @@
     "kernel.guard.cost": "No mod: no boundary runs and nothing is measured; with a mod, a boundary's cost against a plain call is measured in a harness run",
     "kernel.guard.nested": "Boundaries nest per thread: a mod's hook calls the game, whose function another mod hooks; a fault names the innermost mod, the outer goes on",
     "kernel.guard.not_resumed": "A stack overflow, or a fault in the game's code under a mod's call, is not resumed: the game ends with a report naming the mod, never silently",
+    "kernel.guard.library": "A fault in a library mod's code, reached by another mod's call, is caught at the calling mod's boundary as a fault in its own code: the calling mod is off and taken out, the library mod stays, the game goes on",
     "kernel.guard.resume": "A fault in a mod's code (an access it may not make, an illegal instruction, a division by zero) is caught at the boundary: the game goes on as if the code did nothing, the mod is off and taken out, the player told on screen and in the mod log",
     "kernel.guard.time": "Each mod's code time per frame (its boundaries' own time, less the nested ones), the average and the worst of its last 120 frames, read from any thread by luma_guard_cost",
     "material.environment": "A glTF material reflects the stage's light (sky, ground) along the mirrored view, the traced scene where tracing owns the pixel",

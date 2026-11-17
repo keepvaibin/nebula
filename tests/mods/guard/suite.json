@@ -38,6 +38,7 @@
     "1634-code-time",
     "1640-walk-after-host-call",
     "1641-walk-two-frames",
-    "1642-walk-leaf"
+    "1642-walk-leaf",
+    "1643-library-fault"
   ]
 }

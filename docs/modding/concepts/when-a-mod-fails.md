@@ -13,6 +13,8 @@ Nebula runs every piece of mod code inside a guard: hooks, starts and stops, ser
 * An illegal instruction.
 * An integer division by zero, or an integer division that overflows.
 
+A fault in a library mod's code that another mod called is that calling mod's fault: the guard stops the call at the calling mod's boundary and turns the calling mod off. The library mod stays on. The log names the place as `a library mod's code` and its address.
+
 Nothing of the guard runs when no mod with code is on.
 
 ## What happens after a fault
@@ -36,7 +38,7 @@ The game's log and the mod log record the fault with the mod's name, where it ha
 The guard returns to the game only when it is certain the game's state is whole. In these cases the game ends, and the crash report names the mod:
 
 * The fault is a stack overflow.
-* The fault happened outside mod code, or outside a guarded call.
+* The fault happened outside mods' code (in the game, the host or the system), or outside a guarded call.
 * A second fault happened while the first one was being handled.
 * The mod called the game and the game called the mod again, so returning would skip game code that is half done.
 

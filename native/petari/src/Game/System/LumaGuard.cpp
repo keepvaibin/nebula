@@ -393,7 +393,14 @@ namespace luma {
                 uintptr_t base = 0, begin = 0, end = 0;
                 modCode(pMod, &base, &begin, &end);
                 char place[160];
-                placeOf(place, sizeof(place), modFile(pMod), rFrame.pc - base);
+                if (rFrame.pc >= begin && rFrame.pc < end) {
+                    placeOf(place, sizeof(place), modFile(pMod), rFrame.pc - base);
+                } else {
+                    // Another mod's library, which it called: named by the address.
+                    const char cLibrary[] = "a library mod's code ";
+                    __builtin_memcpy(place, cLibrary, sizeof(cLibrary) - 1);
+                    placeOf(place + sizeof(cLibrary) - 1, sizeof(place) - (sizeof(cLibrary) - 1), "", rFrame.pc);
+                }
                 char address[24];
                 placeOf(address, sizeof(address), "", rFrame.address);
                 nebula_log("[mod %s] GUARD: its code failed (%s: %s): %s at %s, address %s. It is off until the next start; "

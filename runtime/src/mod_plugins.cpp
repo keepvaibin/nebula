@@ -109,10 +109,12 @@ void say(const std::string& text) {
 void* open_library(const std::filesystem::path& path) {
 #if defined(_WIN32)
     // Beside it first, for what it brings; the game module is found already loaded.
-    return LoadLibraryExW(path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+    void* const library = LoadLibraryExW(path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
 #else
-    return dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
+    void* const library = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
 #endif
+    galaxy::luma_guard::add_library(library);  // a fault in its code, called by any mod, is a mod's
+    return library;
 }
 
 // The library a plugin runs from. On Windows, a copy of its folder's files (mods/.cooked/code/<process>-<n>): Windows
@@ -150,6 +152,7 @@ std::filesystem::path running_copy(const std::filesystem::path& library, std::si
 }
 
 void close_library(void* module) {
+    galaxy::luma_guard::remove_library(module);
 #if defined(_WIN32)
     FreeLibrary(static_cast<HMODULE>(module));
 #else

@@ -14,6 +14,12 @@ bool install(void* (*find_symbol)(const char*)) noexcept;
 [[nodiscard]] const char* note_text(const void* pc) noexcept;
 [[nodiscard]] const char* note_mod() noexcept;
 
+// A mod's library loaded (mod_plugins.cpp open_library) and about to be unloaded (close_library): while it is loaded, a
+// fault in its code under any mod's boundary is a mod's fault (a library mod's function another mod called), resumed
+// at that boundary as a fault in that mod's own code. Any thread; never from a fault handler.
+void add_library(void* library) noexcept;
+void remove_library(void* library) noexcept;
+
 // Linux and macOS: the host's writer of a crash report line (its log's form, "[time] <tag> <text>"), called from the
 // fault handler for a fault no other handler takes, so it may only use what a signal handler may. Without one the
 // lines go to standard error. The default action of the signal follows the report (the process ends with it).

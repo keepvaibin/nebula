@@ -54,6 +54,29 @@ Range g_game;  // the game module's code
 Range g_host;  // the executable's code (or, on Android, the host library's)
 bool g_installed = false;
 
+// Every mod library's code while it is loaded (add_library, remove_library). A handler reads it with no lock: a slot's
+// end is written before its begin and cleared after it, so a reader that sees a begin sees its end; a slot being
+// cleared is seen whole or not at all (begin read 0, or both still set). Writers take g_libraries_writer.
+constexpr std::size_t kLibraries = 512;
+std::atomic<std::uintptr_t> g_library_begin[kLibraries];
+std::atomic<std::uintptr_t> g_library_end[kLibraries];
+std::atomic<std::uint32_t> g_libraries_writer{0};
+static_assert(std::atomic<std::uintptr_t>::is_always_lock_free, "the libraries' spans are read in a signal handler");
+
+// Whether `pc` is in a loaded mod library's code (any mod's: a library mod's function another mod called).
+bool in_mod_library(std::uintptr_t pc) noexcept {
+    for (std::size_t i = 0; i < kLibraries; ++i) {
+        const std::uintptr_t begin = g_library_begin[i].load(std::memory_order_acquire);
+        if (begin != 0 && pc >= begin && pc < g_library_end[i].load(std::memory_order_relaxed)) return true;
+    }
+    return false;
+}
+
+// The mod's own code (the boundary's) or any mod library's: a fault there is a mod's fault.
+bool in_mod_code(const LumaGuardFrame* frame, std::uintptr_t pc) noexcept {
+    return (frame->code_begin != 0 && pc >= frame->code_begin && pc < frame->code_end) || in_mod_library(pc);
+}
+
 // The last fault the guard did not resume, for the crash report: written once (the first), on the faulting thread.
 // Lock-free atomics, so a signal handler may use them (and MSVC, which builds the Windows host, has no __atomic).
 char g_note[384];
@@ -100,8 +123,8 @@ constexpr const char* kGameBetween = "the game's or the host's code is between t
                          std::uintptr_t sp) noexcept {
     if (fault == LUMA_GUARD_STACK) return "the stack overflowed";
     if (thread->handling != 0u) return "a second fault came while the first was handled";
-    if (frame->code_begin == 0 || !(pc >= frame->code_begin && pc < frame->code_end)) {
-        return "the fault is outside the mod's code (in the game, the host or the system, called by the mod)";
+    if (frame->code_begin == 0 || !in_mod_code(frame, pc)) {
+        return "the fault is outside the mods' code (in the game, the host or the system, called by the mod)";
     }
     const std::uintptr_t top = static_cast<std::uintptr_t>(frame->regs[LUMA_GUARD_SP]);
     if (sp > top || top - sp > (std::uintptr_t{1} << 22)) return "the stack between the fault and the mod's boundary is not one the guard can read";
@@ -167,8 +190,8 @@ const char* why_not_frames(const LumaGuardFrame* frame, const CONTEXT* fault_con
         if (up <= sp) return kUnreadable;  // a frame that does not move up the stack is not one
         if (pc == frame->call_return) return up == top - kCallReturnSp ? nullptr : kUnreadable;
         if (g_game.has(pc) || g_host.has(pc)) return kGameBetween;
-        if (!(pc >= frame->code_begin && pc < frame->code_end)) {
-            return "other code (the system's or another library's) is between the boundary and the fault";
+        if (!in_mod_code(frame, pc)) {
+            return "other code (the system's or a library's that is no mod's) is between the boundary and the fault";
         }
     }
     return kUnreadable;
@@ -587,6 +610,45 @@ const char* note_text(const void* pc) noexcept {
 
 const char* note_mod() noexcept {
     return g_noted.load(std::memory_order_acquire) != 0u ? g_note_mod : nullptr;
+}
+
+namespace {
+struct LibrariesWriter {
+    LibrariesWriter() noexcept {
+        std::uint32_t free = 0u;
+        while (!g_libraries_writer.compare_exchange_weak(free, 1u, std::memory_order_acquire)) free = 0u;
+    }
+    ~LibrariesWriter() { g_libraries_writer.store(0u, std::memory_order_release); }
+};
+}  // namespace
+
+void add_library(void* library) noexcept {
+    std::uintptr_t base = 0, begin = 0, end = 0;
+    if (library == nullptr || code_range(library, &base, &begin, &end) != 0) return;
+    LibrariesWriter writer;
+    for (std::size_t i = 0; i < kLibraries; ++i) {
+        if (g_library_begin[i].load(std::memory_order_relaxed) == begin) return;  // loaded twice: one span
+    }
+    for (std::size_t i = 0; i < kLibraries; ++i) {
+        if (g_library_begin[i].load(std::memory_order_relaxed) == 0) {
+            g_library_end[i].store(end, std::memory_order_relaxed);
+            g_library_begin[i].store(begin, std::memory_order_release);
+            return;
+        }
+    }
+    // More than kLibraries mod libraries at once: this one's faults are resumed only under its own boundary.
+}
+
+void remove_library(void* library) noexcept {
+    std::uintptr_t base = 0, begin = 0, end = 0;
+    if (library == nullptr || code_range(library, &base, &begin, &end) != 0) return;
+    LibrariesWriter writer;
+    for (std::size_t i = 0; i < kLibraries; ++i) {
+        if (g_library_begin[i].load(std::memory_order_relaxed) == begin) {
+            g_library_begin[i].store(0, std::memory_order_release);
+            g_library_end[i].store(0, std::memory_order_relaxed);
+        }
+    }
 }
 
 void set_crash_line(CrashLine line) noexcept {
