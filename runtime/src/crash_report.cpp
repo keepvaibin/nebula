@@ -31,7 +31,7 @@ std::int64_t now_ms() noexcept {
 void copy(char* out, std::size_t size, std::string_view text) noexcept {
     if (size == 0u) return;
     const std::size_t n = std::min(size - 1u, text.size());
-    std::memcpy(out, text.data(), n);
+    if (n != 0u) std::memcpy(out, text.data(), n);  // an empty view's data() may be null, which memcpy may not take
     out[n] = '\0';
 }
 

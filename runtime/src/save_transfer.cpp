@@ -2140,7 +2140,9 @@ Error read_zip(std::span<const std::byte> zip, std::vector<ZipEntry>* entries) n
                 if (packed != size) {
                     return Error::kDamaged;
                 }
-                std::memcpy(entry.bytes.data(), zip.data() + data, size);
+                if (size != 0u) {  // an empty file: an empty vector's data() may be null, which memcpy may not take
+                    std::memcpy(entry.bytes.data(), zip.data() + data, size);
+                }
             } else {
                 z_stream stream{};
                 if (inflateInit2(&stream, -MAX_WBITS) != Z_OK) {

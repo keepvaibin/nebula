@@ -102,7 +102,7 @@ void step_done() noexcept {
     const std::int64_t work = galaxy::qpc_now() - r.last_step;
     r.last_step = 0;
     const std::lock_guard<std::mutex> lock(r.mutex);
-    r.window.add_step_work(work * 1'000'000'000 / galaxy::qpc_frequency());
+    r.window.add_step_work(galaxy::qpc_to_ns(work));
 }
 
 void walk_began() noexcept {
@@ -112,7 +112,7 @@ void walk_began() noexcept {
 void walk_ended() noexcept {
     Recorder& r = recorder();
     if (r.walk_start == 0) return;
-    r.walk_ns = (galaxy::qpc_now() - r.walk_start) * 1'000'000'000 / galaxy::qpc_frequency();
+    r.walk_ns = galaxy::qpc_to_ns(galaxy::qpc_now() - r.walk_start);
     r.walk_start = 0;
 }
 

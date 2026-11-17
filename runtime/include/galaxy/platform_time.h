@@ -43,6 +43,13 @@ namespace galaxy {
 #endif
 }
 
+// Ticks of the clock as nanoseconds, a span or a moment, either sign. Whole seconds and the rest apart: ticks times
+// 10^9 overflows 64 bits past 9.2 seconds where a tick is a nanosecond (everywhere but Windows).
+[[nodiscard]] inline std::int64_t qpc_to_ns(std::int64_t ticks) noexcept {
+    const std::int64_t frequency = qpc_frequency();
+    return ticks / frequency * 1000000000 + ticks % frequency * 1000000000 / frequency;
+}
+
 // Milliseconds since an arbitrary start (GetTickCount64 on Windows).
 [[nodiscard]] inline std::uint64_t steady_ms() noexcept {
 #if defined(_WIN32)

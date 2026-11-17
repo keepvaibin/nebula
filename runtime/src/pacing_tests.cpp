@@ -136,6 +136,15 @@ int main() {
         ok &= expect(s.pictures == 11 && s.displayed == 10 && s.doubled_pictures == 1, "never shown: doubled");
     }
 
+    // Ticks as nanoseconds past the 9.2 seconds where ticks times 10^9 leaves 64 bits (the recorder's step and walk
+    // times: a step that long, a stage's load, overflowed; the address and undefined-behaviour job found it).
+    {
+        const std::int64_t f = galaxy::qpc_frequency();
+        ok &= expect(galaxy::qpc_to_ns(20 * f) == 20'000'000'000 && galaxy::qpc_to_ns(-10 * f) == -10'000'000'000 &&
+                         galaxy::qpc_to_ns(3600 * f + f / 2) == 3'600'500'000'000 && galaxy::qpc_to_ns(f / 1000) == 1'000'000,
+                     "ticks as nanoseconds: 20 s, -10 s, an hour and a half second, 1 ms");
+    }
+
     // Step work: its average, 99th percentile and longest.
     {
         galaxy::pacing::Window w;
