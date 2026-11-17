@@ -118,6 +118,7 @@ namespace {
     const s32 cHintsMax = 3;
     const s32 cRowButtonsFirst = 6;  // the launcher's buttons made with the screen; more when a row has more
     const f32 cModsGap = 26.0f;      // the MODS page: between its two lists
+    const f32 cModButtonsGap = 8.0f;  // the MODS page: between its buttons, and between their two rows
     const f32 cDragStart = 5.0f;     // how far the pointer moves something held down before it is dragged
     // A finger held still on a mod this long picks it up to move it (Android's long press, 0.4 s); moved sooner, it
     // scrolls the list.
@@ -1274,6 +1275,9 @@ private:
     void placeRowButtons(const NebulaSettingsView& rView);
     void placeRows(const NebulaSettingsView& rView);
     void placeMods(const NebulaSettingsView& rView);
+    // The MODS page's buttons: each one's width with `perRow` to a row, and button `i`'s centre (its row's).
+    f32 modButtonWidth(s32 perRow) const;
+    f32 modButtonY(s32 i) const;
     void showMods(bool shown);
     void readModsPointer(const NebulaSettingsView& rView, f32 x, f32 y, f32 wheel);
     void fitStatus(f32 room);
@@ -1323,11 +1327,18 @@ private:
     TextBox* mModTitles[2];
     f32 mModTitleWidths[2];  // each title's width as set, unscaled
     TextBox* mModEmpty[2];
+    // A line over both lists that is in neither (a safe start's notice): its box, its text whole, the width it was
+    // broken at and the height from its first capitals' tops to its last baseline.
+    TextBox* mModNotice;
+    MR::Text16 mModNoticeText;
+    f32 mModNoticeLimit;
+    f32 mModNoticeInk;
     Window* mDropLine;
     MR::GrowBuffer< Chip > mModButtons;  // made as the launcher's row has buttons
     s32 mModButtonsMade;
     u32 mModButtonsVersion;  // the words they show (Row::mButtonsVersion)
     s32 mModButtonCount;
+    s32 mModButtonsPerRow;  // all of them, or half (the first row the odd one) when one row narrows a word too far
     s32 mModButtonsRow;  // the buttons' row; -1 none
     MR::GrowBuffer< s32 > mItemList;   // each row's list (-1 none) and place in it, room for every row
     MR::GrowBuffer< s32 > mItemPlace;
@@ -1599,6 +1610,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     mDropLine = nullptr;
     mModButtonsVersion = ~0u;
     mModButtonCount = 0;
+    mModButtonsPerRow = 0;
     mModButtonsRow = -1;
     mModWidth = 0.0f;
     mModItemsTop = 0.0f;
@@ -1622,6 +1634,9 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     mDropPlace = 0;
     mClipTop = 0.0f;
     mClipBottom = 0.0f;
+    mModNotice = nullptr;
+    mModNoticeLimit = -1.0f;
+    mModNoticeInk = 0.0f;
     memset(mHints, 0, sizeof(mHints));
     memset(mFooter, 0, sizeof(mFooter));
     memset(mChoices, 0, sizeof(mChoices));
@@ -1912,6 +1927,11 @@ bool NebulaSettingsScreen::build() {
         setTextStyle(mModTitles[i], cHeadingSize, cAccent, cAccent, 3);
         setTextStyle(mModEmpty[i], cFooterSize, cSubText, cSubText, 4);
     }
+    mModNotice = makeText(mKits, mPage, "NsModNotice", 160);
+    if (mModNotice == nullptr) {
+        return false;
+    }
+    setTextStyle(mModNotice, cHeadingSize, cAccent, cAccent, 3);
     mList = makeGroup(mPage, "NsList");
     mHighlight = mList != nullptr ? makeWindow(mKits, mList, "NsHighlight") : nullptr;
     if (mHighlight == nullptr) {
@@ -2203,6 +2223,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     }
     const bool samePage = pShown != nullptr && pShown->page == rView.page && pShown->input == rView.input;
     s32 onPlace = 0;  // the mods on, counted
+    const bool modLists = hasModLists(rView);
     for (s32 i = 0; i < mRowsMade; i++) {
         Row& rRow = mRows[i];
         const bool modOn = i < static_cast< s32 >(rView.total_rows) && modList(rView.rows[i]) == 1 &&
@@ -2227,6 +2248,12 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
             f32 height = 0.0f;
             setText(pTitle, text.c_str());
             measure(pTitle, 4000.0f, &mModTitleWidths[modList(rData)], &height);
+        }
+        if (heading && modList(rData) < 0 && modLists) {
+            // The line over the lists (a safe start's notice): broken to the window's width where the lists are placed.
+            const u32 units = static_cast< u32 >(MR::textLength(text.c_str())) + 1;
+            MR::copyText(mModNoticeText.room(units), text.c_str(), units);
+            mModNoticeLimit = -1.0f;
         }
         if (modOn) {
             // Its place before its name, as the launcher's list numbers it: the name moves on, the digits take its place.
@@ -3944,7 +3971,7 @@ void NebulaSettingsScreen::dragSlider(const NebulaSettingsView& rView, f32 x) {
 void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 x, f32 y, f32 wheel) {
     const Row* const pButtonsRow = mModButtonsRow >= 0 ? &mRows[mModButtonsRow] : nullptr;
     for (s32 i = 0; i < mModButtonCount; i++) {
-        if (!(pButtonsRow != nullptr && pButtonsRow->mButtons[i].mOff) && isOnButton(x, y, mModButtons[i].mX, mModButtonsY, mModButtons[i].mWidth, cButtonHeight, 8.0f)) {
+        if (!(pButtonsRow != nullptr && pButtonsRow->mButtons[i].mOff) && isOnButton(x, y, mModButtons[i].mX, modButtonY(i), mModButtons[i].mWidth, cButtonHeight, 8.0f)) {
             mHoverModButton = i;
         }
     }
@@ -4265,10 +4292,19 @@ void NebulaSettingsScreen::showMods(bool shown) {
         mModTitles[i]->SetVisible(shown);
         mModEmpty[i]->SetVisible(shown);
     }
+    mModNotice->SetVisible(false);  // placeMods shows it when the page has one
     for (s32 i = 0; i < mModButtonsMade; i++) {
         mModButtons[i].mRoot->SetVisible(shown && i < mModButtonCount);
     }
     mDropLine->SetVisible(false);
+}
+
+f32 NebulaSettingsScreen::modButtonWidth(s32 perRow) const {
+    return perRow > 0 ? (mRight - mLeft - cModButtonsGap * (perRow - 1)) / perRow : 0.0f;
+}
+
+f32 NebulaSettingsScreen::modButtonY(s32 i) const {
+    return mModButtonsY - (mModButtonsPerRow > 0 ? i / mModButtonsPerRow : 0) * (cButtonHeight + cModButtonsGap);
 }
 
 // The MODS page as the launcher's Mods tab: the mods off on the left and on on the right in their frames under their
@@ -4278,15 +4314,28 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
     mModWidth = (mRight - mLeft - cModsGap) * 0.5f;
     mModLeft[0] = mLeft;
     mModLeft[1] = mRight - mModWidth;
-    const f32 titleY = mListTop - cHeadingSize * 0.5f;
-    const f32 frameTop = mListTop - cHeadingSize - 8.0f;
-    mModButtonsY = mListBottom + cButtonHeight * 0.5f;
-    const f32 frameBottom = mModButtonsY + cButtonHeight * 0.5f + 10.0f;
-    mModItemsTop = frameTop - 5.0f;
-    mModItemsBottom = frameBottom + 5.0f;
-    mClipTop = mModItemsTop;
-    mClipBottom = mModItemsBottom;
-    const f32 inner = mModItemsTop - mModItemsBottom;
+    // A line over both lists that is in neither (a safe start's notice): across the window in lines that fit, the lists
+    // under it.
+    bool notice = false;
+    for (s32 i = 0; i < static_cast< s32 >(rView.total_rows) && !notice; i++) {
+        notice = (rView.rows[i].flags & NEBULA_SETTINGS_ROW_HEADING) != 0 && modList(rView.rows[i]) < 0;
+    }
+    f32 noticeRoom = 0.0f;
+    mModNotice->SetVisible(notice && mModNoticeText.c_str()[0] != 0);
+    if (mModNotice->IsVisible()) {
+        const f32 limit = mRight - mLeft - 8.0f;
+        if (limit != mModNoticeLimit) {
+            f32 width = 0.0f;
+            f32 height = 0.0f;
+            breakLines(mModNotice, mModNoticeText.c_str(), limit, &width, &height);
+            mModNoticeLimit = limit;
+            mModNoticeInk = height - (cCapTop + 1.0f - cBaseline) * cHeadingSize;
+        }
+        mModNotice->mTranslate = Vec3f(mLeft + 4.0f, textCentre(mListTop - mModNoticeInk * 0.5f, cHeadingSize), 0.0f);
+        noticeRoom = mModNoticeInk + cHeadingSize;
+    }
+    const f32 titleY = mListTop - noticeRoom - cHeadingSize * 0.5f;
+    const f32 frameTop = mListTop - noticeRoom - cHeadingSize - 8.0f;
 
     // Each row's list and place (in the whole list); the selection's.
     mModCounts[0] = static_cast< s32 >(rView.mod_list_count[0]);
@@ -4315,7 +4364,40 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
         }
     }
 
-    // Each list scrolled to keep the selection in sight (a row of room past it when the keys move it).
+    // The buttons under the lists: their words, and their rows. One row shares the window's width; when a word would
+    // be narrowed past the narrowest a text is drawn, two rows (the first holds the odd one).
+    const Row* pButtons = mModButtonsRow >= 0 ? &mRows[mModButtonsRow] : nullptr;
+    mModButtonCount = pButtons != nullptr ? pButtons->mButtonCount : 0;
+    if (!addModButtons(mModButtonCount) && mModButtonCount > mModButtonsMade) {
+        mModButtonCount = mModButtonsMade;
+    }
+    if (pButtons != nullptr && pButtons->mButtonsVersion != mModButtonsVersion) {
+        mModButtonsVersion = pButtons->mButtonsVersion;
+        for (s32 i = 0; i < mModButtonCount; i++) {
+            f32 height = 0.0f;
+            setText(mModButtons[i].mText, pButtons->mButtons[i].mWord.mItems);
+            measure(mModButtons[i].mText, 4000.0f, &mModButtons[i].mText->mSize.width, &height);
+        }
+    }
+    mModButtonsPerRow = mModButtonCount;
+    for (s32 i = 0; i < mModButtonCount; i++) {
+        if (mModButtons[i].mText->mSize.width * cMinSqueeze > modButtonWidth(mModButtonCount) - 20.0f) {
+            mModButtonsPerRow = (mModButtonCount + 1) / 2;
+            break;
+        }
+    }
+    const s32 buttonRows = mModButtonsPerRow > 0 ? (mModButtonCount + mModButtonsPerRow - 1) / mModButtonsPerRow : 1;
+    mModButtonsY = mListBottom + cButtonHeight * 0.5f + (buttonRows - 1) * (cButtonHeight + cModButtonsGap);
+    const f32 frameBottom = mModButtonsY + cButtonHeight * 0.5f + 10.0f;
+    mModItemsTop = frameTop - 5.0f;
+    mModItemsBottom = frameBottom + 5.0f;
+    mClipTop = mModItemsTop;
+    mClipBottom = mModItemsBottom;
+    const f32 inner = mModItemsTop - mModItemsBottom;
+
+    // Each list scrolled to keep the selection in sight: when the keys move it, a row of room past it, or as much of
+    // one as the list's height has beside the selection (a list lower than three rows).
+    const f32 spare = (inner - cModHeight) * 0.5f;
     for (s32 l = 0; l < 2; l++) {
         const f32 content = mModCounts[l] * cModHeight;
         const f32 maxScroll = content > inner ? content - inner : 0.0f;
@@ -4328,7 +4410,7 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
             target = mModFreeScroll[l];
         } else if (l == selectedList && !mDragging) {
             const f32 top = selectedPlace * cModHeight;
-            const f32 room = mPointerMode ? 0.0f : cModHeight;
+            const f32 room = mPointerMode || spare <= 0.0f ? 0.0f : spare < cModHeight ? spare : cModHeight;
             target = top - room < target ? top - room : target;
             target = top + cModHeight + room > target + inner ? top + cModHeight + room - inner : target;
         }
@@ -4441,22 +4523,8 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
         shape(mDropLine, mModLeft[mDropList] + mModWidth * 0.5f, lineY, mModWidth - 16.0f, 3.0f, 1.5f);
     }
 
-    // The buttons, the window's width shared, words narrowed to fit.
-    const Row* pButtons = mModButtonsRow >= 0 ? &mRows[mModButtonsRow] : nullptr;
-    mModButtonCount = pButtons != nullptr ? pButtons->mButtonCount : 0;
-    if (!addModButtons(mModButtonCount) && mModButtonCount > mModButtonsMade) {
-        mModButtonCount = mModButtonsMade;
-    }
-    if (pButtons != nullptr && pButtons->mButtonsVersion != mModButtonsVersion) {
-        mModButtonsVersion = pButtons->mButtonsVersion;
-        for (s32 i = 0; i < mModButtonCount; i++) {
-            f32 height = 0.0f;
-            setText(mModButtons[i].mText, pButtons->mButtons[i].mWord.mItems);
-            measure(mModButtons[i].mText, 4000.0f, &mModButtons[i].mText->mSize.width, &height);
-        }
-    }
-    const f32 gap = 8.0f;
-    const f32 width = mModButtonCount > 0 ? (mRight - mLeft - gap * (mModButtonCount - 1)) / mModButtonCount : 0.0f;
+    // The buttons in their rows, each row's width shared, words narrowed to fit; a shorter last row centred.
+    const f32 width = modButtonWidth(mModButtonsPerRow);
     for (s32 i = 0; i < mModButtonsMade; i++) {
         Chip& rChip = mModButtons[i];
         rChip.mRoot->SetVisible(i < mModButtonCount);
@@ -4467,7 +4535,11 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
                               !mPointerMode) ||
                              i == mHoverModButton;
         const bool off = pButtons->mButtons[i].mOff;
-        placeChip(rChip, mLeft + width * 0.5f + i * (width + gap), mModButtonsY, width, cButtonHeight, focused);
+        const s32 row = i / mModButtonsPerRow;
+        const s32 inRow = row == buttonRows - 1 ? mModButtonCount - row * mModButtonsPerRow : mModButtonsPerRow;
+        const f32 x = mLeft + (mModButtonsPerRow - inRow) * (width + cModButtonsGap) * 0.5f + width * 0.5f +
+                      (i - row * mModButtonsPerRow) * (width + cModButtonsGap);
+        placeChip(rChip, x, modButtonY(i), width, cButtonHeight, focused);
         setTextColor(rChip.mText, off ? cDisabled : cButtonText, off ? cDisabled : cButtonText);
         const f32 word = rChip.mText->mSize.width;
         const f32 room = width - 20.0f;

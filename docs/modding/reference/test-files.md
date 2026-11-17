@@ -56,6 +56,7 @@ Any key that is not on this page, anywhere in the file, stops the test with an e
 | `mods` | No | The mods to install, in load order. Each is a path to a mod folder or `.luma` file, or an object. See [Mod entries](#mod-entries). A test in `tests/NAME/` names its own mod as `"../.."`. |
 | `code` | No | `allow` (the default), `deny` or `ask`: the answer to the question about running the mods' code. `ask` leaves the question on the screen. |
 | `language` | No | A language of the game's discs, by its name in the game: `UsEnglish`, `UsSpanish`, `UsFrench`, `EuEnglish`, `EuSpanish`, `EuFrench`, `EuGerman`, `EuItalian`, `EuDutch` or `JpJapanese`. The default is the disc's first language. |
+| `window` | No | The window's size in pixels as `[width, height]`, whole numbers from 64 to 16384. The default is `[1280, 720]`. A picture has this size. |
 | `seed` | No | A number that seeds the game's random numbers. The default is `0`, so a test gives the same random numbers each run. |
 | `renderers` | No | Any of `d3d12`, `vulkan` and `d3d11`. The test runs once for each. The default is `["d3d12"]`. |
 | `limit_seconds` | No | The longest the run may take, in seconds. The default is 180. |

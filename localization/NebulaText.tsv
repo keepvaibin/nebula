@@ -477,7 +477,6 @@ S.DONE	Done		Terminé	Terminé	Listo	Listo	Fertig	Fatto	Klaar	Concluído	完了	
 S.FAILED	Failed		Échec	Échec	Error	Error	Fehlgeschlagen	Non riuscita	Mislukt	Falhou	失敗	실패	失败	失敗
 S.SOME_FAILED	Some failed		Échecs partiels	Échecs partiels	Algunos fallaron	Algunos fallaron	Teilweise fehlgeschlagen	Alcune non riuscite	Deels mislukt	Alguns falharam	一部失敗	일부 실패	部分失败	部分失敗
 S.ENABLED_(TOP_HAS_PRIORITY)	On (the higher one wins)		Activés (le plus haut prime)	Activés (le plus haut prime)	Activados (el de arriba manda)	Activados (el de arriba manda)	An (die obere gewinnt)	Attive (vince la più in alto)	Aan (de bovenste wint)	Ligados (o de cima vence)	オン（上のものが優先）	켜짐 (위쪽이 우선)	已启用（上方优先）	已啟用（上方優先）
-S.ENABLED_(OFF_UNTIL_THE_NEXT_START)	On (off until the next start)		Activés (désactivés jusqu'au prochain démarrage)	Activés (désactivés jusqu'au prochain démarrage)	Activados (desactivados hasta el próximo inicio)	Activados (desactivados hasta el próximo inicio)	An (bis zum nächsten Start aus)	Attive (disattivate fino al prossimo avvio)	Aan (uit tot de volgende start)	Ligados (desligados até o próximo início)	オン（次の起動までオフ）	켜짐 (다음 시작까지 꺼짐)	已启用（下次启动前关闭）	已啟用（下次啟動前關閉）
 S.DISABLED	Off		Désactivés	Désactivés	Desactivados	Desactivados	Aus	Disattivate	Uit	Desligados	オフ	꺼짐	已停用	已停用
 S.RIIVOLUTION	Riivolution		Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution
 S.FILES	files		fichiers	fichiers	archivos	archivos	Dateien	file	bestanden	arquivos	ファイル	파일	文件	檔案
