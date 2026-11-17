@@ -1,0 +1,36 @@
+{
+  "harness": 1,
+  "name": "menu-key-icons",
+  "about": "The settings menu's key pictures, painted at the size they are drawn, look the same on every renderer as on Direct3D 12.",
+  "bare": true,
+  "limit_seconds": 120,
+  "steps": [
+    {
+      "at": 400,
+      "settings": "display"
+    },
+    {
+      "at": 520,
+      "picture": "menu"
+    },
+    {
+      "at": 560,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "picture": "menu",
+      "like": "refs/d3d12/menu.png",
+      "box": [
+        60,
+        630,
+        1160,
+        38
+      ],
+      "within": {
+        "rmse": 0.5
+      }
+    }
+  ]
+}

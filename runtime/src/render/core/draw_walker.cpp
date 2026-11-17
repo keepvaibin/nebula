@@ -947,7 +947,9 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
             }
             table.textures_revision = texture_store_.revision();
         }
-        if (samplers_stale || has_target) {
+        // A sampler depends on its texture as well (levels, generated levels, a replacement's shift), so new textures
+        // take new samplers: a painted replacement kept its original's single level before (N-1032).
+        if (stale || samplers_stale || has_target) {
             std::vector<SamplerKey>& keys = walk_keys_;
             keys.assign(count, SamplerKey{});
             for (std::uint32_t i = 0; i < count; ++i) {
