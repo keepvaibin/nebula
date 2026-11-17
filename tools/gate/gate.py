@@ -246,14 +246,16 @@ HARNESS_SELF = sorted([*(TREE / "tools" / "lumacore").glob("harness_*_test.py"),
 DESCRIPTION_SELF = sorted((TREE / "tools" / "lumacore").glob("*_fixture_test.py"))
 
 
-def harness(g, suite, renderer, label):
-    """One harness suite on one renderer. Passes when every test in it passed (a test whose disc has no pak is
-    not-run, which is not a pass)."""
+def harness(g, suite, renderer, label, device=None):
+    """One harness suite on one renderer, on this computer or on an Android device (its serial; the test app
+    prepared and the device's lock held by the gate). Passes when every test in it passed (a test whose disc has no
+    pak is not-run, which is not a pass)."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
-        code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools/lumacore/luma_test.py", "run", suite,
-                    "--bin", g.bin, "--work", work, "--who", "gate", "--lock", g.work / "harness.lock",
-                    "--commit", g.commit, "--renderer", renderer], log, env={"LUMA_TEST_PAKS": g.args.paks},
+        on_device = ["--device", device, "--bin", g.android_bin] if device else ["--bin", g.bin]
+        code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools/lumacore/luma_test.py", "run", suite]
+                   + on_device + ["--work", work, "--who", "gate", "--lock", g.work / "harness.lock",
+                                  "--commit", g.commit, "--renderer", renderer], log, env={"LUMA_TEST_PAKS": g.args.paks},
                    cwd=g.args.build_root)
         # The run's copies of the programs are not evidence: removed so the drive does not fill.
         for d in work.rglob("bin"):
@@ -262,6 +264,48 @@ def harness(g, suite, renderer, label):
         detail = summarize(log, renderer)
         return code == 0 and not detail.startswith("0 of 0") and "; not:" not in detail, detail
     return fn
+
+
+def build_android(g):
+    """The test app for a device (platform/android/build_apk.ps1 -Debuggable -Harness: dev.nebula.galaxy.test beside
+    the player's game) and the runner's bin folder for arm64 devices. Its shader tools are the MSVC build's."""
+    def fn(log):
+        work = pathlib.Path(g.args.build_root) / "android"
+        code = run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                    TREE / "platform" / "android" / "build_apk.ps1", "-Deps", g.args.android_deps, "-Work", work,
+                    "-HostTools", pathlib.Path(g.args.build_root) / "msvc", "-Abis", "arm64-v8a", "-Debuggable",
+                    "-Harness", TREE / "tools" / "test_driver" / "android" / "java", "-ReleaseKey", ""], log)
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        apk = work / "Nebula.apk"
+        ok = code == 0 and apk.is_file() and (work / "test-bin-arm64-v8a" / "libnebula_test_extension.so").is_file()
+        return ok, ("%s (%.1f MB)" % (apk, apk.stat().st_size / 1e6)) if ok else last_line(text)
+    return fn
+
+
+def device_step(g, step):
+    """luma_test_android.py prepare (install the test app, copy the pak in) or remove, on the gate's tablet."""
+    def fn(log):
+        args = [sys.executable, "-X", "utf8", "-I", TREE / "tools" / "lumacore" / "luma_test_android.py", step,
+                "--device", g.args.tablet]
+        if step == "prepare":
+            args += ["--apk", pathlib.Path(g.args.build_root) / "android" / "Nebula.apk", "--pak", g.args.pak,
+                     "--who", "gate"]
+        code = run(args, log, timeout=3600)
+        return code == 0, last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
+    return fn
+
+
+def take_device_lock(path, who):
+    """The device's lock (tools/lumacore/luma_test_android.py's): None when taken, else who holds it."""
+    lock = pathlib.Path(path)
+    try:
+        lock.mkdir()
+    except FileExistsError:
+        holder = lock / "holder.txt"
+        return holder.read_text(encoding="utf-8", errors="replace").strip() if holder.exists() else "unknown"
+    (lock / "holder.txt").write_text("%s %s\n" % (who, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+                                     encoding="utf-8")
+    return None
 
 
 def pictures(g, label, renderer):
@@ -337,6 +381,12 @@ def main():
     p.add_argument("--seed-from", default=os.environ.get("NEBULA_GATE_SEED", ""),
                    help="a configured MSVC build folder whose compiled shader stages seed a new build (content-keyed)")
     p.add_argument("--lumalink", default=os.environ.get("LUMALINK", ""), help="the lumalink program the mod tests use")
+    p.add_argument("--tablet", default=os.environ.get("NEBULA_GATE_TABLET", ""),
+                   help="--full: an Android device's serial: the test app goes on it, tests/android and the tour run "
+                        "there, and the test app is removed again")
+    p.add_argument("--tablet-lock", default=os.environ.get("NEBULA_GATE_TABLET_LOCK", "D:/NebulaWork/plan/tablet.lock"))
+    p.add_argument("--android-deps", default=os.environ.get("NEBULA_GATE_ANDROID_DEPS", "D:/NebulaWork/deps"),
+                   help="build_apk.ps1 -Deps: SDL, Vulkan-Headers, volk, VMA and glslang's sources")
     args = p.parse_args()
 
     g = Gate(args)
@@ -379,14 +429,38 @@ def main():
         g.check("pictures/tour-%s/d3d12" % disc, pictures(g, "tour-%s" % disc, "d3d12"))
 
     if args.mode == "full":
+        # The Android test app, and on a named device its tests and the tour (Vulkan, the device's renderer).
+        g.android_bin = str(pathlib.Path(args.build_root) / "android" / "test-bin-arm64-v8a")
+        built = args.no_build or g.check("build/android", build_android(g))
+        if not args.tablet:
+            for name in ("android/tablet", "tour/tablet"):
+                g.missing(name, "no device named (--tablet SERIAL)")
+        elif not built:
+            for name in ("android/tablet", "tour/tablet"):
+                g.missing(name, "the Android build failed")
+        else:
+            held = take_device_lock(args.tablet_lock, "gate %s" % g.name)
+            if held is not None:
+                for name in ("android/tablet", "tour/tablet"):
+                    g.missing(name, "the device's lock %s is held: %s" % (args.tablet_lock, held))
+            else:
+                try:
+                    if g.check("tablet/prepare", device_step(g, "prepare")):
+                        g.check("android/tablet", harness(g, TREE / "tests" / "android" / "suite.json", "vulkan",
+                                                          "android", args.tablet))
+                        g.check("tour/tablet", harness(g, gate_tour.write(g.work / "tour-tablet", None), "vulkan",
+                                                       "tour-tablet", args.tablet))
+                finally:
+                    g.check("tablet/remove", device_step(g, "remove"))
+                    shutil.rmtree(args.tablet_lock, ignore_errors=True)
+        g.missing("pictures/tablet", "approved pictures are kept per renderer for one adapter; a device's own set is "
+                                     "not in pictures.py yet")
         for name, why in (
-            ("build/android", "the Android build is not in the gate yet (E0.3)"),
             ("build/linux", "runs in the push workflow only (E0.3); no Linux on this computer"),
             ("build/macos", "runs in the push workflow only (E0.3)"),
             ("unit/linux", "runs in the push workflow only (E0.3, E0.4)"),
             ("unit/android", "runs in the push workflow only: JUnit is not on this computer (board ask, E0.4)"),
-            ("mods/android", "the Android runner is not in the gate yet (E0.13)"),
-            ("tour/tablet", "the Android runner is not in the gate yet (E0.13)"),
+            ("mods/android", "the mod tests on a device are not in the gate yet (mods M0, tools/lumacore/mod_tests.py)"),
             ("replays", "the step-hash replay not in the gate yet (E0.10)"),
             ("hostile-files", "the bad-file corpus is not in the gate yet (mods M6)"),
             ("two-mods", "the two-mod tests are not in the gate yet (mods M2)"),
