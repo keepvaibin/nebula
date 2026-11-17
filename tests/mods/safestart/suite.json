@@ -3,6 +3,8 @@
   "tests": [
     "6601-asked",
     "6602-crash",
-    "6603-after"
+    "6603-after",
+    "6604-notice-wide",
+    "6605-notice-narrow"
   ]
 }
