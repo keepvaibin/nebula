@@ -1,0 +1,59 @@
+{
+  "harness": 1,
+  "name": "6607-notice-long-words",
+  "about": "The after-crash notice over the Mods lists in German (long words) in a 3:4 window: broken into lines, the lists under it",
+  "proves": [
+    "mods.safe_start.crash"
+  ],
+  "mods": [
+    {
+      "path": "../../consent/mods/jc-none",
+      "code": "ask",
+      "loads": false
+    }
+  ],
+  "safe_start": "crash",
+  "language": "EuGerman",
+  "disc": "RMGP01",
+  "window": [
+    720,
+    960
+  ],
+  "renderers": [
+    "d3d12",
+    "vulkan",
+    "d3d11"
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 240,
+      "picture": "mods"
+    },
+    {
+      "at": 270,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modscreen.nebula",
+      "has": {
+        "line": 0,
+        "page": "list"
+      },
+      "when": "any",
+      "scope": "installation"
+    },
+    {
+      "picture": "mods",
+      "like": "refs/{renderer}/mods.png",
+      "within": {
+        "rmse": 0.5
+      }
+    }
+  ]
+}

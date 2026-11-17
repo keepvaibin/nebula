@@ -5,6 +5,8 @@
     "6602-crash",
     "6603-after",
     "6604-notice-wide",
-    "6605-notice-narrow"
+    "6605-notice-narrow",
+    "6606-notice-unspaced",
+    "6607-notice-long-words"
   ]
 }
