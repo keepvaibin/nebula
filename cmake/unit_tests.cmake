@@ -41,6 +41,9 @@ galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS gala
 galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
 target_include_directories(galaxy_save_format_tests PRIVATE "${galaxy_root}/native/petari/include")
 galaxy_test(galaxy_launch_args_tests SOURCES ${rt}/launch_args_tests.cpp)
+# The guard's word scan (native/host/luma_guard_words.h) on stacks laid out as luma_guard_call lays them out (M-027).
+galaxy_test(galaxy_luma_guard_words_tests SOURCES "${galaxy_root}/native/host/luma_guard_words_tests.cpp")
+target_include_directories(galaxy_luma_guard_words_tests PRIVATE "${galaxy_root}/native/host" "${galaxy_root}/native/include")
 galaxy_test(galaxy_save_transfer_tests SOURCES ${rt}/save_transfer_tests.cpp LIBS galaxy_save_transfer galaxy_mii_formats)
 galaxy_test(galaxy_asset_store_tests SOURCES ${rt}/asset_store_tests.cpp ${rt}/luma_game_store.cpp LIBS galaxy_asset_store)
 target_include_directories(galaxy_asset_store_tests PRIVATE "${galaxy_root}/crates/nebula-import/include")
