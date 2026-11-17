@@ -2,12 +2,15 @@
 
     luma_test.py run <test folder | suite.json> --bin <folder> [--renderer r] [--work <folder>] [--who F|G]
                  [--module hooks|plain] [--gpu vendor:device:subsystem] [--extension <file>] [--half <file>]
+                 [--pak <game.pak>] [--pak-for RMGP01=<game.pak> ...]
     luma_test.py refs <test folder> --run <run folder> --looked
 
 `run` reads each test strictly, gives it a private run folder, installs the game half first and then the test's mods,
 starts the game hidden and silent with the plan for the host half (tools/test_driver/extension/harness.cpp), waits,
 checks the run's files against the test's `expect` and the checks every test has, and writes result.json. One line per
-test and renderer; exit 0 only when every verdict is `pass`.
+test and renderer; exit 0 only when every verdict is `pass`. A test with a "disc" (RMGE01, RMGP01 or RMGJ01: one that
+needs that release's languages or files) runs on --pak when that pak is of its disc, else on the pak --pak-for (or
+LUMA_TEST_PAKS, DISC=path joined by the path separator) names for it, else its verdict is `not-run`, naming the disc.
 
 `refs` writes a run's pictures as the references a test names, after the person running it has looked at them.
 
@@ -242,7 +245,7 @@ def read_test(folder, types=None):
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
                        "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh", "window",
-                       "time", "visible", "settings", "diagnostics"})
+                       "time", "visible", "settings", "diagnostics", "disc"})
     for key in ("harness", "name", "about", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -356,6 +359,11 @@ def read_test(folder, types=None):
         language = text(t, "language", "")
         if language not in LANGUAGES:
             raise HarnessError("language %s is not one of %s" % (language, ", ".join(LANGUAGES)))
+    disc = None
+    if "disc" in t:
+        disc = text(t, "disc", "")
+        if disc not in DISCS:
+            raise HarnessError("disc %s is not one of %s" % (disc, ", ".join(DISCS)))
     seed = whole(t, "seed", "", 0) if "seed" in t else 0
     # The window's size in pixels (the picture's shape: 48:9 is [1920, 360]).
     window = [1280, 720]
@@ -416,7 +424,7 @@ def read_test(folder, types=None):
             "continue_from": continue_from, "faults": faults, "setup": setup, "steps": steps, "expect": expect,
             "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
             "time": clock, "visible": visible, "settings": run_settings, "diagnostics": diagnostics,
-            "starts": starts, "fresh": fresh, "not_here": not_here}
+            "starts": starts, "fresh": fresh, "not_here": not_here, "disc": disc}
 
 
 def read_setup(t, bare, seed, language, classes):
@@ -1397,6 +1405,56 @@ def pak_of(args, bin_folder):
     return pathlib.Path(bin_folder.joinpath("pak.path").read_text(encoding="utf-8").strip())
 
 
+# The releases a game.pak may be imported from, by their discs' ids.
+DISCS = ("RMGE01", "RMGP01", "RMGJ01")
+
+
+def pak_header(pak):
+    """A game.pak's 64-byte header (crates/nebula-import/src/cook/store.rs, write_index): the magic, the store version,
+    the index's places, then the disc's six-character id at byte 48."""
+    try:
+        with open(pak, "rb") as f:
+            return f.read(64)
+    except OSError as error:
+        raise HarnessError("the game %s does not open: %s" % (pak, error))
+
+
+def pak_disc(pak):
+    """The disc a game.pak was imported from (RMGE01, RMGP01, RMGJ01), or None when the header has none."""
+    head = pak_header(pak)
+    disc = head[48:54].decode("ascii", "replace") if len(head) == 64 else ""
+    return disc if disc in DISCS else None
+
+
+def paks_for(args):
+    """The paks named per disc: --pak-for DISC=path (repeated), else LUMA_TEST_PAKS (DISC=path, joined by os.pathsep)."""
+    given = list(getattr(args, "pak_for", None) or [])
+    if not given and os.environ.get("LUMA_TEST_PAKS"):
+        given = [g for g in os.environ["LUMA_TEST_PAKS"].split(os.pathsep) if g]
+    paks = {}
+    for g in given:
+        disc, eq, path = g.partition("=")
+        if not eq or disc not in DISCS or not path:
+            raise HarnessError("--pak-for %s: give DISC=<game.pak>, DISC one of %s" % (g, ", ".join(DISCS)))
+        paks[disc] = pathlib.Path(path)
+    return paks
+
+
+def pak_for(test, args, bin_folder):
+    """The game.pak this test runs on: the run's own (pak_of) unless the test needs another disc, then the one named
+    for that disc; with none, NotRun."""
+    pak = pak_of(args, bin_folder)
+    disc = test.get("disc")
+    if disc is None or pak_disc(pak) == disc:
+        return pak
+    other = paks_for(args).get(disc)
+    if other is None:
+        raise NotRun("needs disc %s: this run's game is %s; give --pak-for %s=<its game.pak>" % (disc, pak_disc(pak) or "of no known disc", disc))
+    if pak_disc(other) != disc:
+        raise HarnessError("--pak-for %s names %s, a game of %s" % (disc, other, pak_disc(other) or "no known disc"))
+    return other
+
+
 def described(bin_folder, name):
     """A file of the game's self-description: at the bin folder's top (a build folder) or in its luma/ folder (an
     installed version)."""
@@ -1424,13 +1482,10 @@ def run_one(test, renderer, args, run_folder, previous):
         if not need.is_file():
             raise HarnessError("the bin folder has no %s" % need.name)
     # The pak must be of this tree's store version (the host refuses another at its start: "need importing again").
-    pak = pak_of(args, bin_folder)
+    pak_path = pak_for(test, args, bin_folder)
+    pak = pak_path
     wanted = int((TREE / "runtime" / "include" / "galaxy" / "store_version.inc").read_text(encoding="utf-8").strip())
-    try:
-        with open(pak, "rb") as f:
-            head = f.read(12)
-    except OSError as error:
-        raise HarnessError("the game %s does not open: %s" % (pak, error))
+    head = pak_header(pak)
     if head[:8] != b"NBSTORE" + bytes(1) or int.from_bytes(head[8:12], "little") != wanted:
         raise HarnessError("the game %s is of store version %s; this runner's is %d: import the game again with this "
                            "version's nebula-import or name another pak" % (pak, int.from_bytes(head[8:12], "little") if head[:8] == b"NBSTORE" + bytes(1) else "none (not a store)", wanted))
@@ -1498,7 +1553,7 @@ def run_one(test, renderer, args, run_folder, previous):
     write_run_settings(test, settings)
     plan = run_folder / "plan.txt"
     plan.write_text(plan_text(test, run_folder.as_posix()), encoding="utf-8", newline="\n")
-    pak = str(pak_of(args, bin_folder))
+    pak = str(pak_path)
     env = dict(os.environ)
     # The test extension's data guard (tools/test_driver/extension/data_guard.cpp) declines to start unless the run
     # names its own work folder and every private folder lies inside it, away from the player's data.
@@ -2254,6 +2309,8 @@ def run_tests(args):
                     verdict, reason, checks, facts, pictures, ran = "harness-error", str(error), [], [], [], {}
                 except SetupFailed as error:
                     verdict, reason, checks, facts, pictures, ran = "setup-failed", str(error), [], [], [], {}
+                except NotRun as error:
+                    verdict, reason, checks, facts, pictures, ran = "not-run", str(error), [], [], [], {}
                 if verdict == "pass":
                     passed[(test["name"], renderer)] = run_folder
                 else:
@@ -2279,6 +2336,10 @@ def run_tests(args):
 
 class SetupFailed(Exception):
     pass
+
+
+class NotRun(Exception):
+    """The test cannot run here (its disc's game is not given): verdict `not-run`, which is not a pass."""
 
 
 def report(run_folder, name, proves, renderer, verdict, reason, checks, args, extra):
@@ -2334,6 +2395,8 @@ def main():
     run.add_argument("target")
     run.add_argument("--bin", required=True)
     run.add_argument("--pak", help="the game.pak each run starts (default: the one the bin folder's pak.path names)")
+    run.add_argument("--pak-for", action="append", metavar="DISC=PAK",
+                     help="the game.pak of another disc, for the tests whose \"disc\" it is (or LUMA_TEST_PAKS)")
     run.add_argument("--renderer")
     run.add_argument("--work")
     run.add_argument("--who", default="?")

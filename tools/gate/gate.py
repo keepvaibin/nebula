@@ -255,6 +255,7 @@ def mod_tests(g, renderer):
     def fn(log):
         work = g.work / ("runs-mods-%s" % renderer)
         env = {"LUMALINK": g.args.lumalink} if g.args.lumalink else {}
+        env["LUMA_TEST_PAKS"] = g.args.paks
         code = run([sys.executable, "-X", "utf8", "-I", MOD_TESTS, "--bin", g.bin, "--work", work,
                     "--renderer", renderer, "--lock", g.work / "harness.lock", "--commit", g.commit], log, env=env,
                    cwd=g.args.build_root)
@@ -291,6 +292,9 @@ def main():
     p.add_argument("--build-root", default=os.environ.get("NEBULA_GATE_BUILD", "D:/NebulaWork/build/gate-%s" % TREE.name),
                    help="where the builds go (kept between runs, so builds are incremental)")
     p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", "D:/NebulaWork/build/all1-pak-34/game.pak"))
+    p.add_argument("--paks", default=os.environ.get("NEBULA_GATE_PAKS", os.pathsep.join((
+                   "RMGP01=D:/NebulaWork/build/a2-pak-pal/game.pak", "RMGJ01=D:/NebulaWork/build/a2-pak-jp/game.pak"))),
+                   help="the other discs' game.paks, DISC=path joined by the path separator: the tests with a \"disc\"")
     p.add_argument("--work", default=os.environ.get("NEBULA_GATE_WORK", "D:/NebulaWork/build/gate-runs"))
     p.add_argument("--out", help="the result file (default: result.json in the run's work folder)")
     p.add_argument("--jobs", default=str(max(4, (os.cpu_count() or 8) - 4)))
