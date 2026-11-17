@@ -14,6 +14,7 @@
     "2270a-export",
     "2270b-export-declined",
     "2270c-export-undeclared",
-    "2271-offer"
+    "2271-offer",
+    "2272-export-at-boot"
   ]
 }

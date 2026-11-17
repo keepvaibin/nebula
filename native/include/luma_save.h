@@ -88,8 +88,9 @@ typedef struct LumaSaveGameService {
     LumaServiceTable base;
     /* 1.0. Game thread. Asks for user file `file` as the game would write it now (its game data for the character
        last played, then its config). LUMA_PENDING with the request in *out; an EXPORT event follows at the next
-       frame's start, closed after its event; a Note Save.Exported in the mod log. file: 1 to 6, else
-       LUMA_E_ARGUMENT; a null fn or out: LUMA_E_ARGUMENT; a 5th open request: LUMA_E_LIMIT; all reported. */
+       frame's start (in the boot, the first one after the game has read its user files), closed after its event; a
+       Note Save.Exported in the mod log. file: 1 to 6, else LUMA_E_ARGUMENT; a null fn or out: LUMA_E_ARGUMENT; a 5th
+       open request: LUMA_E_LIMIT; all reported. */
     int32_t (*export_file)(const LumaMod* mod, uint32_t file, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.0. Game thread, inside the EXPORT event's call for that handle, once. Copies min(value, size) bytes into buf
        and returns value (the file's whole length). Outside the call, another handle or a second time: LUMA_E_HANDLE,
@@ -98,9 +99,10 @@ typedef struct LumaSaveGameService {
     /* 1.0. Game thread. Offers the file at `path` (in the mod's data folder; an export_file's bytes) to replace a
        user file: the player picks one on Nebula's offer screen and confirms. LUMA_PENDING with the request in *out;
        an OFFER event follows, closed after its event; the old file's bytes are kept in the save folder first. Another
-       offer open (any mod's), a screen waiting on the player, a time hold or a cutscene: LUMA_E_BUSY; a path naming
-       no file: LUMA_E_NOT_FOUND; both answers, not reported; LUMA_E_IO: the file could not be read; LUMA_E_ABSENT: a
-       host without the offer screen; a path outside the data folder, a null fn or out: LUMA_E_ARGUMENT, reported. */
+       offer open (any mod's), a screen waiting on the player, a time hold, a cutscene, or the boot before the game
+       has read its user files: LUMA_E_BUSY; a path naming no file: LUMA_E_NOT_FOUND; both answers, not reported;
+       LUMA_E_IO: the file could not be read; LUMA_E_ABSENT: a host without the offer screen; a path outside the data
+       folder, a null fn or out: LUMA_E_ARGUMENT, reported. */
     int32_t (*offer)(const LumaMod* mod, const char* path, LumaEventFn fn, void* user, LumaHandle* out);
     /* 1.0. Game thread. Ends a request: no event for it after this returns; an open question closes as no, nothing
        replaced (a REPLACE the player already gave still goes through). LUMA_OK; a handle that is not this mod's open

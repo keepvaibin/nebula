@@ -842,6 +842,21 @@ namespace luma {
                 }
             }
 
+            // The game's save sequence once the boot has read the user files into memory (BootScene::exeMountGameData
+            // starts the read on the one way past the system archive; exePreLoad leaves state 0 on every path), else
+            // null: before it the handler is not made (M-076) or the files in memory are all empty (M-077).
+            SaveDataHandleSequence* filesRead() {
+                GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+                if (pSystem == nullptr || pSystem->mSequenceDirector == nullptr) {
+                    return nullptr;
+                }
+                SaveDataHandleSequence* const pSequence = pSystem->mSequenceDirector->mSaveDataHandleSequence;
+                if (pSequence == nullptr || pSequence->mSaveDataHandler == nullptr || pSequence->getPreLoadState() == 0) {
+                    return nullptr;
+                }
+                return pSequence;
+            }
+
             void freeExport(ExportRequest* pRequest) {
                 pRequest->mHandle = 0;
                 pRequest->mFn = nullptr;
@@ -851,7 +866,8 @@ namespace luma {
                 pRequest->mCancelled = false;
             }
 
-            // The frame's start after the request: the file as the game would write it now, given in the event's call,
+            // The frame's start after the request, or during the boot the first one after the game read the user files
+            // (posted again each frame until then): the file as the game would write it now, given in the event's call,
             // then freed with the request.
             void exportDeliver(LumaEventNode* pNode) {
                 ExportRequest* const pRequest = reinterpret_cast< ExportRequest* >(pNode);
@@ -859,8 +875,13 @@ namespace luma {
                     freeExport(pRequest);
                     return;
                 }
-                SaveDataHandleSequence* const pSequence =
-                    SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence;
+                SaveDataHandleSequence* const pSequence = filesRead();
+                if (pSequence == nullptr) {
+                    if (sKernel->post(pNode) != LUMA_OK) {
+                        freeExport(pRequest);  // the mod is gone: no event
+                    }
+                    return;
+                }
                 const UserFile* pLoaded = pSequence->getCurrentUserFile();
                 if (loadedHolder() == nullptr || pLoaded->mGameDataHolder != loadedHolder() ||
                     pLoaded->mGameDataHolder->getFileId().mUser != static_cast< s32 >(pRequest->mFile)) {
@@ -1289,13 +1310,12 @@ namespace luma {
                     pFacts->data_file == nullptr || pFacts->ask_offer == nullptr || pFacts->close_offer == nullptr) {
                     return LUMA_E_ABSENT;  // a host without the offer's half
                 }
-                GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
-                if (pSystem == nullptr || pSystem->mSequenceDirector == nullptr ||
-                    pSystem->mSequenceDirector->mSaveDataHandleSequence == nullptr ||
-                    pSystem->mSequenceDirector->mSaveDataHandleSequence->mSaveDataHandler == nullptr) {
-                    return LUMA_E_ABSENT;
+                // Before the boot read the user files the screen would show them all empty: not now (M-077).
+                SaveDataHandleSequence* const pSequence = filesRead();
+                if (pSequence == nullptr) {
+                    return LUMA_E_BUSY;
                 }
-                SaveDataHandler* const pHandler = pSystem->mSequenceDirector->mSaveDataHandleSequence->mSaveDataHandler;
+                SaveDataHandler* const pHandler = pSequence->mSaveDataHandler;
                 if ((sOffer != nullptr && sOffer->mStage != Offer_None) || luma::time::isWorldHeld() ||
                     (MR::isExistSceneObj(SceneObj_DemoDirector) && MR::isDemoActive())) {
                     return LUMA_E_BUSY;

@@ -189,7 +189,7 @@ wait game.export_file(file: u32) -> bytes?
 |---|---|---|
 | `file` | `u32` | The user file, 1 to 6. |
 
-Game thread. Returns `LUMA_PENDING` with the request. An `EXPORT` event follows at the next frame's start, and the request is closed after it. The mod log gets the note `Save.Exported`.
+Game thread. Returns `LUMA_PENDING` with the request. An `EXPORT` event follows at the next frame's start, and the request is closed after it. During the boot, the event waits for the first frame's start after the game has read its user files, so a mod may ask from its start. The mod log gets the note `Save.Exported`.
 
 A `file` outside 1 to 6, or a null `fn` or `out`, is `LUMA_E_ARGUMENT`. A fifth open request is `LUMA_E_LIMIT`. Both are reported.
 
@@ -238,7 +238,7 @@ Before replacing, the old file's bytes are written to `luma/replaced/<date>-file
 | Returns | LumaScript | When |
 |---|---|---|
 | `LUMA_PENDING` | The request | The file is offered. |
-| `LUMA_E_BUSY` | `none` | Another offer is open (any mod's), a screen waits on the player, a mod holds the world, or a cutscene plays. |
+| `LUMA_E_BUSY` | `none` | Another offer is open (any mod's), a screen waits on the player, a mod holds the world, a cutscene plays, or the game has not yet read its user files (the first frames of the boot). |
 | `LUMA_E_NOT_FOUND` | `none` | No file at `path`. |
 | `LUMA_E_IO` | `none` | The file could not be read. |
 | `LUMA_E_ABSENT` | `none` | This game has no offer screen. |

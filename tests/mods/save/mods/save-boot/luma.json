@@ -1,0 +1,19 @@
+{
+  "format": "1.0",
+  "id": "save-boot",
+  "name": "save-boot",
+  "summary": "save-boot (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "save.game",
+      "why": "The save test asks for it."
+    }
+  ]
+}

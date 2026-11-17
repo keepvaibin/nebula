@@ -1,0 +1,67 @@
+{
+  "harness": 1,
+  "name": "2272-export-at-boot",
+  "about": "save.game from a mod's start, before the game has read its user files, on a save whose file 1 holds game data (2262a-save): export_file(1) LUMA_PENDING and its EXPORT event once the files are read, status 0, NSAV with Mario's game data; offer LUMA_E_BUSY (the screen would show every file empty). Before the fix the export's delivery ended the game (M-076) or gave LUMA_E_NOT_FOUND (M-077).",
+  "proves": [
+    "services.save.game"
+  ],
+  "mods": [
+    "../mods/save-boot"
+  ],
+  "continue_from": "2262a-save",
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.save-boot.export",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-boot.offer",
+      "is": -14
+    },
+    {
+      "fact": "mod.save-boot.events",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-boot.e_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.save-boot.e_frame_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-boot.magic_ok",
+      "is": 1
+    },
+    {
+      "fact": "mod.save-boot.mario",
+      "more": 0
+    },
+    {
+      "fact": "mod.save-boot.offer_event",
+      "absent": true
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "save-boot",
+        "source": "code",
+        "level": "note",
+        "code": 181,
+        "count": 1
+      },
+      "when": "any"
+    }
+  ]
+}
