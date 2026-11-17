@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "3127-page-keys",
-  "about": "Mods > Log reached by keys: the page lists jl-repeat's entry with its place and count, once",
+  "about": "Mods > Log reached by keys (down to the buttons, right to LOG): the page lists jl-repeat's entry with its place and count, once",
   "proves": [
     "modlog.page"
   ],
@@ -14,27 +14,39 @@
       "settings": "mods"
     },
     {
+      "at": 140,
+      "key": "down"
+    },
+    {
+      "at": 160,
+      "key": "down"
+    },
+    {
       "at": 180,
-      "key": "up"
+      "key": "right"
+    },
+    {
+      "at": 210,
+      "key": "right"
     },
     {
       "at": 240,
-      "key": "up"
+      "key": "right"
+    },
+    {
+      "at": 270,
+      "key": "right"
     },
     {
       "at": 300,
-      "key": "up"
+      "key": "right"
     },
     {
-      "at": 360,
-      "key": "down"
+      "at": 330,
+      "key": "right"
     },
     {
-      "at": 420,
-      "key": "down"
-    },
-    {
-      "at": 480,
+      "at": 380,
       "key": "space"
     },
     {
