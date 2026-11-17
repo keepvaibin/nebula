@@ -1,7 +1,8 @@
 name: Check
 
 # Every push and pull request: every platform builds, the unit tests run on Windows and Linux, the Rust tests run, and the
-# Direct3D 12, Direct3D 11, Linux (Vulkan) and Mac (Metal) programs start without game data (--start-check). What needs
+# Direct3D 12, Direct3D 11, Linux (Vulkan), Mac (Metal) and Android (Vulkan, on an x86_64 emulator) programs start
+# without game data (--start-check). What needs
 # a real GPU, the game's data or the tablet runs in the local gate (tools/gate/gate.py), whose results are kept in
 # docs/plan/gate-runs.
 on:
@@ -285,3 +286,61 @@ jobs:
           Copy-Item installer\lumakit\lumakit.luma $shipped
           .\platform\android\build_apk.ps1 -Deps (Join-Path $temp 'deps') -Work (Join-Path $temp 'apk') `
             -HostTools (Join-Path $temp 'host-tools') -ShippedMods $shipped -Unsigned -ReleaseKey '' -UnitTests
+      # The test app (dev.nebula.galaxy.test, debuggable, with the test runner's Harness.java) for the start check,
+      # x86_64 only: the same build folder, so the native code built above is not built again.
+      - name: Build the test app (x86_64)
+        shell: pwsh
+        run: |
+          $temp = $env:RUNNER_TEMP
+          .\platform\android\build_apk.ps1 -Deps (Join-Path $temp 'deps') -Work (Join-Path $temp 'apk') `
+            -HostTools (Join-Path $temp 'host-tools') -Abis x86_64 -Debuggable `
+            -Harness (Join-Path $PWD 'tools/test_driver/android/java') `
+            -ReleaseKey ''
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-test-app
+          path: ${{ runner.temp }}/apk/Nebula.apk
+          retention-days: 1
+
+  android-start:
+    name: Android start check (x86_64 emulator)
+    needs: android
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      SYSTEM_IMAGE: system-images;android-34;google_apis;x86_64
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: android-test-app
+          path: ${{ runner.temp }}/app
+      - name: KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: The emulator and its system image
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install emulator platform-tools "$SYSTEM_IMAGE" > /dev/null
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force -n start -k "$SYSTEM_IMAGE"
+      - name: Start the emulator
+        run: |
+          nohup "$ANDROID_HOME/emulator/emulator" -avd start -no-window -no-audio -no-boot-anim -no-snapshot \
+            -gpu swiftshader_indirect -camera-back none -camera-front none > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          adb="$ANDROID_HOME/platform-tools/adb"
+          timeout 600 "$adb" -s emulator-5554 wait-for-device
+          for i in $(seq 1 120); do
+            [ "$("$adb" -s emulator-5554 shell getprop sys.boot_completed | tr -d '\r')" = "1" ] && exit 0
+            sleep 5
+          done
+          echo "the emulator did not finish starting in 10 minutes"
+          tail -50 "$RUNNER_TEMP/emulator.log"
+          exit 1
+      - name: Start check (Vulkan)
+        run: |
+          python3 -X utf8 -I tools/lumacore/luma_test_android.py start-check --device emulator-5554 \
+            --apk "$RUNNER_TEMP/app/Nebula.apk" --frames 300 --limit 300
+      - name: The emulator's log
+        if: failure()
+        run: tail -100 "$RUNNER_TEMP/emulator.log"
