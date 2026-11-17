@@ -38,6 +38,9 @@ picture	engine	luigi-stages	vulkan	third	1280	720	246f2556bf0a4d3b56714ab93b42e5
 picture	engine	menu-key-icons	d3d11	menu	1280	720	c5fa2327f60ee346329cc42f147dfa09d73dc10fe729fa2b0ecbb18947f1a2eb
 picture	engine	menu-key-icons	d3d12	menu	1280	720	1452c2ec359b5e3d7be0f81bb340d1e953e98dc408f0a08d8c53b37897a567d5
 picture	engine	menu-key-icons	vulkan	menu	1280	720	ec1afd6f3cc75bfbda4ed59f0e37c889a5bfd04a9a310243e76b33c8f5843326
+picture	engine	talk-balloon-edge	d3d11	arrive	1280	720	8e979441b92196feacc4c8f504e755adb23d5f6b9c4c865ee6419707058b0673
+picture	engine	talk-balloon-edge	d3d12	arrive	1280	720	c02beed569f34db65f5e0e87eea5b8507f8dcfe5acb8240af0a80c3a275cf2c0
+picture	engine	talk-balloon-edge	vulkan	arrive	1280	720	f6bf7c021d231fd4605d3af41b600fb54dcf0ce75eae95c2238e7ca9c10dbd79
 picture	engine	window-4k	d3d11	play	3840	2160	5a523d65124bbcec8b0c10c5a3b8db4e58e119b70597531bc29edad335946000
 picture	engine	window-4k	d3d12	play	3840	2160	d56163e2c52d560edf8082b06f100af4aadb5fd188fafee3c8dabdc4d38e1c22
 picture	engine	window-4k	vulkan	play	3840	2130	970c2d28b01d6662afa58628eba2a0f0f649564c2306a9118cd1d9b9eb9d7171
