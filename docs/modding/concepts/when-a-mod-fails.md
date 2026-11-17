@@ -13,9 +13,33 @@ Nebula runs every piece of mod code inside a guard: hooks, starts and stops, ser
 * An illegal instruction.
 * An integer division by zero, or an integer division that overflows.
 
-A fault in a library mod's code that another mod called is that calling mod's fault: the guard stops the call at the calling mod's boundary and turns the calling mod off. The library mod stays on. The log names the place as `a library mod's code` and its address.
-
 Nothing of the guard runs when no mod with code is on.
+
+## A fault in another mod's code
+
+Mods call each other: a mod calls the functions a library mod exports, and a library calls functions that mods gave it (callbacks). When the code that fails belongs to another mod than the one whose call the guard stopped, the guard decides by need which mod to turn off:
+
+1. It starts at the mod whose code failed.
+2. While the mod that called it needs it (lists it in its `needs`, directly or through another library), it moves to that caller.
+3. The mod it stops at is turned off.
+
+A mod that calls a library takes the library's faults as its own, because it chose to need it. The library stays on. For example, when mod A calls library L1, L1 calls library L2 and L2's code fails, A is turned off and both libraries stay on.
+
+A library never needs the mods that use it. When a library calls a function a mod gave it, the call goes through a boundary of that mod (`LumaCore.call_mod` in C; every call of a function value of another mod in LumaScript). When that function fails, the mod that gave it is turned off, the call returns with nothing done, and the library goes on to its next user in the same frame.
+
+The log names three things: the mod turned off, the mod whose code failed, and the place as the mod's file and offset, for example `guard-lib.dll+0x1a2b`.
+
+### Code cut short
+
+The mods whose code was running between the fault and the stopped call, and that stay on, had their calls cut short. Each one is told: its `cut` function (in C, `LumaModInfo.cut`; in LumaScript, `on mods.cut(c)`) runs once, after the fault, with the function that was cut, the mod that called it, the mod turned off and the mod whose code failed. It can put right what the call left half done. A mod without a `cut` function stays on, and the log says that what the call was changing may be half done.
+
+Nebula itself holds nothing across a cut: no kernel code runs between a guarded call and the mod code under it, and the kernel's per-call values (the running mod, the nesting depth, a start or stop in progress) are put back by the guarded call itself.
+
+### A library that fails under two mods
+
+The guard counts, for each mod, the faults in its code that turned another mod off. When a library's code fails under the calls of two different mods, the log says the fault is likely the library's own. The **Mods** page shows it, and offers to turn the library off, or to turn the two mods on again.
+
+In a test, the fact `guard.under.ID` gives the count and the first two mods (`count`, `first`, `second`).
 
 ## What happens after a fault
 
@@ -38,7 +62,7 @@ The game's log and the mod log record the fault with the mod's name, where it ha
 The guard returns to the game only when it is certain the game's state is whole. In these cases the game ends, and the crash report names the mod:
 
 * The fault is a stack overflow.
-* The fault happened outside mods' code (in the game, the host or the system), or outside a guarded call.
+* The fault happened outside mods' code (in the game, the host or the system), or outside a guarded call. The crash report still names the mod whose code called the code that failed, and the place in it.
 * A second fault happened while the first one was being handled.
 * The mod called the game and the game called the mod again, so returning would skip game code that is half done.
 

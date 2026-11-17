@@ -618,10 +618,19 @@ the word.
   world step before the scene's update, so 0 times in a held frame and up to 16 in a fast one.
   `now` is the handler's own: its `step` and `step_in_frame` are this step's. A second `on step` in a mod is S0109
   (`Script.On.Twice`: `a second "on {what}"; the first is at line {line}`), as is a second `on load` or `on layers` in
-  a mod, and a second `on frame`, `on start`, `on stop` or `on mods.stopped` in one module.
+  a mod, and a second `on frame`, `on start`, `on stop`, `on mods.stopped` or `on mods.cut` in one module.
 - `on mods.stopped(gone)` with its parameter untyped or `u64` is always the LumaKit rule for stopped mods (a mod that called this
   library's exports is gone); svc.mods' STOPPED event is `on mods.stopped(e: mods.StoppedEvent)`, its record type
   written.
+- `on mods.cut(name)` with its parameter untyped or `text` runs when a fault in another mod's code ended a call of
+  this mod's code and this mod stays on (LumaModInfo.cut; when-a-mod-fails.md, "Code cut short"): once, on the
+  faulting thread, before any other code of the mod runs there. `name` is the export the cut call was in, or "". The
+  runtime has already put back its own calls in progress (the mod its reports go to, its scratch); the handler puts
+  back the mod's own state. It may not wait. Each module's runs, in module order.
+- A call of a function value another mod made goes to its maker through LumaCore.call_mod (the maker's entry for
+  the value's type), not as a plain C call: a fault in its code turns the maker off, and the call ends with the
+  result type's empty value; a script error in it is reported in the maker's log and ends the call the same way.
+  The caller goes on. A value the mod made itself is a plain call, as before.
 - `on step` may not wait (S0105 `Script.Wait.Where`), and it is never a task. It may start one.
 
 ## `wait N frames` and `wait N seconds`

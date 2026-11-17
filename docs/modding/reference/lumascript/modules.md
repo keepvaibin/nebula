@@ -32,6 +32,8 @@ A library mod offers modules to other mods. A mod uses one with `use <mod id>.<m
 * A name the library declares `pub` is visible to the mods that use the module.
 * A library's `pub task` is exported. The caller gets the task's handle, and `wait` copies the result into the caller's memory.
 * The library's service calls are its own. A request made inside an export is answered to the library.
+* A function value a mod passes to a library (a callback) is called by the library through a boundary of that mod. When its code fails, that mod is turned off, the call gives the empty value of its result type, and the library goes on.
+* `on mods.cut(name)`, with its parameter untyped or `text`, runs in the library when a fault in another mod's code ended a call of its exports and it stays on. `name` is the export that was cut, or `""`. Use it to put back what that call was changing. For more information, see [When a mod fails](../../concepts/when-a-mod-fails.md).
 * `on mods.stopped(gone)`, with its parameter untyped or `u64`, runs in the library when a mod that called its exports stops. Use it to end what that mod started. The `mods` service's own STOPPED event is written `on mods.stopped(e: mods.StoppedEvent)`.
 * A library that reads data from the mods that use it (their `kit/<module>/<name>.json` files, read with `mods.kit_names` and `mods.kit_read`) gives that data's schema in its own folder at `code/<library id>.kit/<module>/<version>.json`. The validator checks each mod's data against the version its `luma.json` names in `kit`. For more information, see [luma.json](../luma-json.md).
 

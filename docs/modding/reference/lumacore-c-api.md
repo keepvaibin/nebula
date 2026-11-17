@@ -217,6 +217,24 @@ The kernel's own, said for a mod by LumaCore (not passed to report): 2 `Hook.NoR
 | `void (*dependent_gone)(const LumaMod* dependent)` | A library mod is told that `dependent`, which imported from it, is being taken out: after the dependent's stop, before its grace, on the game thread. It drops what it keeps for that mod (callbacks into its code). May be null. |
 | `int64_t (*layers)(const LumaCore* core, const LumaMod* mod, char* buf, uint64_t size)` | Which of the mod's layers with `"when": {"code": true}` are on. Called once a start, on the game thread, after every mod's begin and before any mod's start; not called when the mod is loaded again while the game runs. Writes the chosen layer names into buf, each with its NUL, and returns the bytes they need; first called with buf null and size 0, and when size is too small it writes nothing and is called again with the size it returned. 0 or less: none chosen. A name that is not one of the mod's code layers is left out and said in the mod log. The game's content is cooked with the answer: an answer that differs from the one the content was cooked with starts the game again once, before it reads any content. Null: none of its code layers is on. |
 | `uint32_t runtime_layout` | The layout of the data LumaScript's runtime passes between mods (text, lists), as the LumaLink that built the mod numbers it; 0: the mod has no LumaScript runtime or was built before this field. A mod that calls another mod's functions (kind 6) is refused when both numbers are non-zero and differ, and an optional such import stays null: the older mod is rebuilt with a current LumaLink. Read only when `size` covers it. |
+| `void (*cut)(const LumaCut* cut)` | The mod is told that a fault in another mod's code cut a call of its code short, and it stays on: once, right after the fault, on the faulting thread, before any other code of it runs there. It puts back what it records of calls in progress and what the cut call was changing. A fault in it turns it off. Null: none; the log then says its state may be half done. Read only when `size` covers it. Set it with `LUMA_MOD_CUT(imports, start, stop, cut)` or `LUMA_LIBRARY_MOD_CUT(imports, start, stop, exports, dependent_gone, cut)`. For more information, see [When a mod fails](../concepts/when-a-mod-fails.md). |
+
+### `LumaCut`
+
+What a mod's `cut` is told. The mod's frames below `stack` on the thread `cut` runs on were left without returning. Strings live until `cut` returns.
+
+| Name | Description |
+|---|---|
+| `uint32_t size` | `sizeof(LumaCut)` as the game knows it. |
+| `uint32_t boundary` | Where the cut call began (`LumaGuardBoundary` in `luma_guard.h`: 0 a before hook, ..., 8 a call from a library). |
+| `const char* where` | That boundary's function, service or class, for example `MR::getRandom`. |
+| `uintptr_t stack` | The boundary's stack pointer. |
+| `const char* function` | The innermost cut function of this mod, by its export's name when it is one, else `""`. |
+| `const char* place` | That place as the mod's file and offset, for example `my-lib/mod.dll+0x1a2b`. |
+| `const LumaMod* caller` | The mod whose code called this mod's cut code; null when the game called it. |
+| `const char* caller_id` | That mod's ID, or `""`. |
+| `const char* off` | The ID of the mod turned off for the fault. |
+| `const char* faulted` | The ID of the mod whose code failed. |
 
 ## LumaCore functions
 
@@ -482,8 +500,26 @@ void* make_gravity(const LumaMod* mod, const char* class_name, const LumaGravity
 
 A gravity of the live mod class `class_name`, whose base is PlanetGravity (classes contract, "gravity"): made with `place`'s fields, its data zeroed and its `made` run, then registered with the scene's gravity manager, which asks its calcOwnGravityVector (the class's override: pDest the pull's direction, pScalar the distance it falls off with) at every point any object asks its gravity at. It lives as long as the scene (`gone` with a null object when the scene goes); when its mod goes it pulls nowhere. Null: not on the game thread, or said (no such live class, not a gravity class, no scene with gravities, no memory, a null place or one smaller than `LumaGravityPlace`, a range that is not a number, a type bit above 8).
 
+### `call_mod`
+
+```c
+int32_t call_mod(const LumaMod* mod, const void* fn, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t* result);
+```
+
+A library's call of code another mod gave it (a callback it keeps). `fn(a0, a1, a2, a3)` is a function in a mod's library with up to four integer or pointer arguments; its integer result goes to `*result` (may be null). The mod whose library holds `fn` runs under a boundary of its own, so when its code fails that mod is turned off and the call returns: the library goes on to its next user in the same frame. When `fn` is `mod`'s own code, or the code of a mod `mod` needs, it is a plain call.
+
+| Result | Meaning |
+|---|---|
+| `0` | Called; it returned. |
+| `-1` | Its code failed; the mod that gave it is off until the next start (`*result` 0). |
+| `-2` | Not called; the mod that gave it is off already or being taken out (`*result` 0). |
+| `-4` | `fn` is in no running mod's code, or `mod` is null (said in the log; not called). |
+
+Any thread. A call costs a guarded call's boundary more than a plain call; the measured cost is in `docs/plan/PROGRESS-AGENT-2.md`.
+
 ## Further reading
 
+* [When a mod fails](../concepts/when-a-mod-fails.md)
 * [Writing code in C](../how-tos/writing-code-in-c.md)
 * [Calling services](services/calling-services.md)
 * [Defining classes](lumascript/defining-classes.md)

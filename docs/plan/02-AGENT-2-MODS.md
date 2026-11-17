@@ -86,7 +86,7 @@ A mod can call any of 27,095 game functions at any moment. The game's code assum
 
 The kernel's design stays (binding by name and signature, hook chains, offsets resolved at load, a guard that recovers only where it is safe). Fix the listed faults:
 
-- **A fault inside a library mod reached from another mod** ends the game, because the guard only recovers inside the calling mod's own code (M-001). Calls between mods go through a boundary of their own, so the fault is contained and charged to the mod whose code faulted.
+- **A fault inside a library mod reached from another mod** ends the game, because the guard only recovers inside the calling mod's own code (M-001). Decided 2026-11-17 (board, Planner, on the owner's word): the guard resumes at the outermost boundary; a mod's call down into a library it needs has no boundary of its own. The mod turned off is found by need: start at the mod whose code faulted and move to its caller while that caller needs it. A library's call up into code a mod gave it (a callback) goes through a boundary of the giving mod, so the library goes on. Every mod left on with code on the cut stack is told, and the log, the notice and the crash record name the mod turned off, the mod whose code faulted and the place.
 - **A mod that overwrites the header in front of its own memory block** stops the whole game (M-003): turn it into that mod's fault.
 - **The timer path** recovers only because of how the compiler happens to arrange one call (M-027, M-028). Make it recoverable by construction, for mods with and without unwind data.
 - **Class rows** are never reused in a session, so reloads use them up (M-010): reuse them. This is the owner's rule again: nothing has a fixed size.
