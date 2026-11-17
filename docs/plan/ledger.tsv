@@ -375,3 +375,15 @@ I-013	1	E6 pacing and in-between pictures	open		wrong behaviour (minor), suspect
 I-014	1	E6 pacing and in-between pictures	open		wrong behaviour (T2), suspected. Game-declared camera cuts come from two places only.	
 I-015	1	E6 pacing and in-between pictures	open		maintainability. Stale or wrong comments and dead parts.	
 I-016	1	E6 pacing and in-between pictures	open		gap in tests. The scheduler is not under test (J.8): the arrival clock, `vblanks_per_slot`, both governors, supersede, `interp_walk_time`, the platfor	
+N-1001	1	E0 gate	fixed	6181b8a06; repo/audit (gate) and the Windows job's first step	(untested) tools/audit_repo.ps1 ran nowhere: no workflow or gate step called it, and it had failed since 11-14 (validator inputs, lumakit.luma's size).	
+N-1002	1	E0 gate	fixed	e7bcd827e; unit/game (gate), the Windows game and Linux jobs	(untested) native/tests had no build: its tests compiled in no target and ran nowhere.	
+N-1003	1	E0 gate	fixed	e7bcd827e; native_name_index_tests	wrong behaviour: NameIndex renamed an entry by its hash, so two names with one hash renamed the wrong one.	
+N-1004	1	E0 gate	fixed	c3cfd99c4, fde4f52c6; native_arena_tests	crash: a new before the first arena returned null and the caller wrote through it; now a panic that names the size.	
+N-1005	1	E0 gate	fixed	c3cfd99c4, fde4f52c6; native_arena_tests	wrong behaviour: an arena allocation whose alignment is not a power of two (or negative) gave a misaligned block; now a panic. 0 stays the game's any (76 callers).	
+N-1006	1	E0 gate	fixed	6c07f9028; native_frame_list_tests	wrong behaviour: Frame::arena aligned the offset in its page, not the address, so a block aligned to more than the page's own alignment was misaligned.	
+N-1007	1	E0 gate	fixed	6c07f9028; native_frame_list_tests (hung before the fix)	crash (hang): a frame-arena block larger than a page made pages without end.	
+N-1008	1	E0 gate	fixed	6c07f9028; native_frame_list_tests	crash: the frame list wrote through a null heap reallocation when memory ran out; now a panic that names the size and the list.	
+N-1009	1	E0 gate	fixed	0aa8e3a6f; galaxy_vsync_grid_tests (8 checks fail on the old Apple rule)	wrong behaviour: the Android and Apple display clocks took skipped vsync callbacks for the interval (Apple) or held a changed rate only after it smoothed in; one grid now serves both.	
+N-1010	1	E0 gate	open		(untested) The Android start check is not in any workflow: the Android job builds the APK only.	E0.13
+N-1011	1	E0 gate	open		(untested) The Windows runner has no Vulkan driver, so the push workflow starts D3D12 and D3D11 only.	E0.3
+N-1012	1	E0 gate	open		(untested) The launcher's JVM tests (Updates, SaveTransfer) run in the push workflow only: JUnit and org.json are not on this computer, and downloading them needs the owner's permission.	board ask 11-17
