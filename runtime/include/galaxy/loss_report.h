@@ -1,6 +1,6 @@
 // What the game asked for and the player did not get: a draw with no material or pipeline, a texture drawn blank, a sound read
-// past its memory. Never silent: each kind is logged the first time, every count at exit, and tools/verify/losscheck.py fails a
-// run where any is above zero.
+// past its memory. Never silent: each kind is logged the first time, every count at exit, and the test harness
+// (luma_test.py, "nothing the game asked for was lost") fails a run where any is above zero.
 #pragma once
 
 #include <array>

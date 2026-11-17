@@ -1,5 +1,5 @@
 // --diagnostics scene-loads: a line at each press and each change of who has the screen, the times the load measurements
-// read (tools/verify/loads.py).
+// read.
 #include "Game/System/NebulaLoadTrace.hpp"
 
 #include <nebula_module.h>

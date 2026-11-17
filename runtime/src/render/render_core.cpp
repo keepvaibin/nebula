@@ -118,8 +118,7 @@ std::uint32_t g_drawn_game_frame = 0u;
 
 // The file an extension keeps this present of the game's picture in (host_extension.h), or none. `kind` is a
 // NEBULA_EXT_PICTURE_*: the picture the game made shown for the first time, shown again, or a frame generated between
-// two of the game's, so a capture with interpolation on compares with one with it off by its game frames alone
-// (tools/verify/interp_real.sh).
+// two of the game's, so a capture with interpolation on compares with one with it off by its game frames alone.
 std::string present_snapshot_path(std::uint32_t kind) {
     if (!galaxy::extensions::keeps_pictures()) {
         return {};

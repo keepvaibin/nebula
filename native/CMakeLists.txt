@@ -340,7 +340,8 @@ else()
     endif()
 endif()
 
-# A build for players: ThinLTO with the profile of a tour (native/pgo/game.profdata, tools/verify/pgo_profile.sh): the game's CPU falls about
+# A build for players: ThinLTO with the profile of a tour (native/pgo/game.profdata; the script that made it went with
+# run.sh, and a profile job replaces it, plan E0.15, P-014): the game's CPU falls about
 # 17 %. A profile older than the code still applies to what has not changed.
 # The profile names functions as the Windows build mangles them (the Microsoft C++ ABI): on Android, Linux and Apple
 # (the Itanium ABI) no function would find its counts, so those builds take ThinLTO alone, NEBULA_LTO: about 7 % of the
