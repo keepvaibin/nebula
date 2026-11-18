@@ -28,9 +28,11 @@ struct Block {
     DWORD snapshot;    // PssCaptureSnapshot's answer: 0, the dump read a snapshot; else why not (it read the live process)
     ULONG64 out;       // the game's standard output, a handle of the game's (0: none)
     LONG64 log_zero;   // the game's log clock's zero, steady_clock nanoseconds (one clock for every process)
+    LONG request;      // the request's number (1, 2, ...), set by the game before it asks
+    LONG answered;     // the number of the request the watcher answered last, set after its answer
     wchar_t path[1024];
 };
-constexpr DWORD kVersion = 3u;
+constexpr DWORD kVersion = 4u;
 
 // The game's side.
 HANDLE g_process = nullptr;  // the watcher
@@ -42,6 +44,9 @@ wchar_t g_folder[1024];  // where dumps go, kept from the start (no heap at the 
 // One request at a time: the block and the two events are one request's. A crash while the stall's dump is written
 // (or the reverse) waits for it, within its own wait.
 volatile LONG g_asking = 0;
+// The requests made (the last one's number). A request that gave up waiting is still the watcher's until it answers:
+// the next one waits for that answer before it writes the block, and takes as its own only an answer with its number.
+LONG g_requests = 0;
 
 void name_of(wchar_t* out, std::size_t size, const wchar_t* base, const wchar_t* what) {
     std::swprintf(out, size, L"%ls-%ls", base, what);
@@ -185,6 +190,7 @@ int run(int argc, char** argv) {
             }
             return 0;
         }
+        const LONG number = InterlockedCompareExchange(&block->request, 0, 0);
         block->path[sizeof(block->path) / sizeof(block->path[0]) - 1] = 0;
         const std::filesystem::path path(block->path);
         std::error_code ignored;
@@ -209,6 +215,7 @@ int run(int argc, char** argv) {
         block->snapshot = snapshot;
         block->written = ok ? 1 : 0;
         dumps += ok ? 1u : 0u;
+        InterlockedExchange(&block->answered, number);  // after the answer: the game reads it once this is its number
         SetEvent(done);
     }
 }
@@ -292,6 +299,22 @@ Result write_dump(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wch
 
 static Result ask(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wchar_t* path, std::size_t size, DWORD* error,
                   DWORD* snapshot, DWORD wait_ms, const wchar_t* kind) noexcept {
+    const ULONGLONG started = GetTickCount64();
+    const auto left = [started, wait_ms]() -> DWORD {
+        const ULONGLONG waited = GetTickCount64() - started;
+        return waited >= wait_ms ? 0u : wait_ms - static_cast<DWORD>(waited);
+    };
+    const auto answered = [] { return InterlockedCompareExchange(&g_block->answered, 0, 0); };
+    const HANDLE waits[2] = {g_done, g_process};
+    // The last request gave up before its answer (its dump outlasted its wait): the watcher still reads the block, and
+    // its answer is not this request's. Its answer first, within this request's wait.
+    while (answered() != g_requests) {
+        const DWORD woke = WaitForMultipleObjects(2, waits, FALSE, left());
+        if (woke != WAIT_OBJECT_0 && answered() != g_requests) {
+            *error = woke == WAIT_TIMEOUT ? ERROR_BUSY : ERROR_PROCESS_ABORTED;
+            return Result::kFailed;
+        }
+    }
     // The file name is fixed width (the kind, a date, a time and a process id); the folder is any length.
     SYSTEMTIME now;
     GetLocalTime(&now);
@@ -315,12 +338,16 @@ static Result ask(DWORD thread, EXCEPTION_POINTERS* pointers, unsigned type, wch
         path[0] = 0;
         append(path, size, &copied, g_block->path);
     }
+    const LONG number = ++g_requests;
+    InterlockedExchange(&g_block->request, number);
     SetEvent(g_ask);
-    const HANDLE waits[2] = {g_done, g_process};
-    const DWORD woke = WaitForMultipleObjects(2, waits, FALSE, wait_ms);
-    if (woke != WAIT_OBJECT_0) {
-        *error = woke == WAIT_TIMEOUT ? WAIT_TIMEOUT : ERROR_PROCESS_ABORTED;
-        return Result::kFailed;
+    // Woken by an answer with another number (none can come now, but the event is the watcher's to set): waits on.
+    while (answered() != number) {
+        const DWORD woke = WaitForMultipleObjects(2, waits, FALSE, left());
+        if (woke != WAIT_OBJECT_0 && answered() != number) {
+            *error = woke == WAIT_TIMEOUT ? WAIT_TIMEOUT : ERROR_PROCESS_ABORTED;
+            return Result::kFailed;
+        }
     }
     *error = g_block->error;
     *snapshot = g_block->snapshot;

@@ -123,6 +123,9 @@ galaxy_test(galaxy_renderer_choice_tests SOURCES ${render_src}/renderer_choice_t
 galaxy_test(galaxy_settings_benchmark_page_tests SOURCES ${rt}/ui/settings_benchmark_page_tests.cpp
     ${rt}/ui/settings_benchmark_page.cpp ${rt}/benchmark_results.cpp ${rt}/benchmark_stats.cpp ${rt}/strict_json.cpp)
 if(WIN32)
+    # The crash watcher (native/host/crash_watch.cpp): the test program is its own watcher process.
+    galaxy_test(galaxy_crash_watch_tests SOURCES "${galaxy_root}/native/host/crash_watch.cpp"
+        "${galaxy_root}/native/host/crash_watch_tests.cpp")
     target_link_libraries(galaxy_settings_benchmark_page_tests PRIVATE shell32)
 endif()
 galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.cpp ${rt}/discord_presence.cpp)
