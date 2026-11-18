@@ -187,32 +187,12 @@ struct ViewRows {
     float motion[4];
     float raster[4];
     float sky_up[3];          // the player's up in eye space (unit), else the view's up
-    std::uint32_t view_flags; // bit 0 sky up known, bit 1 enhanced, bit 2 wide target, bit 3 traced light (`traced`), bit 4 shown
+    std::uint32_t view_flags; // bit 0 sky up known, bit 1 enhanced, bit 2 wide target
     float scale[4];
-    float traced[4];  // with view_flags bit 3: the light image's place among the textures, the added light's, the mirror's,
-                      // the facing picture's
-    float stage_a[4]; // with view_flags bit 3: the stage's ambient colour A (rgb), w kShadowTint (program.hlsli)
-    float stage_k[4]; // with view_flags bit 3: the stage's key colour K (rgb)
-    float volume[3][4];  // with view_flags bit 3, the scene's view (the light volume: program.hlsli traced_air): the
-                         // depth's eye terms (rt_eye_z), the viewport it spans, its picture's and sampler's places and 1
-    float transmit[4];  // with view_flags bit 3, the scene's view: x picture 6's place (T, rt_pass_transmit), y 1
-                        // where the pass drew this walk
-    float blend_guide[4];  // with view_flags bit 3, the scene's view (program.hlsli traced_by_air,
-                           // traced_mirror_own): x the guide blended draws compare with, y 1 the second layer's
-                           // (picture 9), 2 the opaque layer's (picture 8), 0 none
-    float look[4];  // with view_flags bit 3: the painted composite's look (program.hlsli traced_painted; RenderCore
-                    // rt_look_): kForm, the sun's height over the player's up (at least 0.5), kDebake, kAmbientLook
-    float dev[2][4];  // with view_flags bit 3: the programs' development tunables (rt_dev.h from BaseFloor): [0] the
-                      // values, [1] 1 where the run gave one
-    float relight[4][4];  // with view_flags bit 3: the relight's view constants (program.hlsli view_relight):
-                          // lin(A) and luma(held), sky' E, key sun_strength E, held / luma(held)
 };
 // The cbuffer's packing: view_sky_up and view_flags share one 16-byte row.
 static_assert(offsetof(ViewRows, sky_up) == 128 && offsetof(ViewRows, view_flags) == 140 &&
-              offsetof(ViewRows, scale) == 144 && offsetof(ViewRows, traced) == 160 && offsetof(ViewRows, stage_a) == 176 && offsetof(ViewRows, stage_k) == 192 &&
-              offsetof(ViewRows, volume) == 208 &&
-              offsetof(ViewRows, transmit) == 256 && offsetof(ViewRows, blend_guide) == 272 && offsetof(ViewRows, look) == 288 &&
-              offsetof(ViewRows, dev) == 304 && offsetof(ViewRows, relight) == 336 && sizeof(ViewRows) == 400);
+              offsetof(ViewRows, scale) == 144 && sizeof(ViewRows) == 160);
 
 // Everything one list needs that lasts as long as the list.
 struct ListData {

@@ -786,7 +786,7 @@ void RenderCore::walk_tables(std::uint32_t id, gpu::Address& lists, std::uint32_
             mode.min_lod = t.min_lod;
             mode.max_lod = t.max_lod;
             const TextureHandle& handle = walk_handles_[i];
-            // The cook's generated levels are ray tracing's alone: a draw keeps to the game's first level.
+            // A draw keeps to the game's first level: the cook's generated levels are not the game's.
             if (handle.generated_mips) {
                 mode.min_lod = 0.0f;
                 mode.max_lod = 0.0f;
@@ -890,7 +890,7 @@ void RenderCore::walk_bound_tables(std::uint32_t id, gpu::Table& textures, gpu::
                 mode.min_lod = t.min_lod;
                 mode.max_lod = t.max_lod;
                 const TextureHandle& handle = handles[i];
-                // The cook's generated levels are ray tracing's alone: a draw keeps to the game's first level.
+                // A draw keeps to the game's first level: the cook's generated levels are not the game's.
                 if (handle.generated_mips) {
                     mode.min_lod = 0.0f;
                     mode.max_lod = 0.0f;

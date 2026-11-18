@@ -22,9 +22,8 @@
 namespace {
 
 constexpr std::size_t kHeader = 64u;
-constexpr unsigned kStored = 16u;       // kProgramStored
+constexpr unsigned kStored = 10u;       // kProgramStored
 constexpr unsigned kBoundOffset = 5u;   // kProgramBoundOffset: a pixel program's bound-table forms, 5 to 9
-constexpr unsigned kTracedOffset = 10u; // kProgramPrepass: the traced forms, 10 to 15 (array forms)
 constexpr std::size_t kRow = 16u + 8u * kStored;
 
 std::uint32_t word(const std::vector<unsigned char>& bytes, std::size_t at) {
@@ -50,7 +49,7 @@ int main(int argc, char** argv) {
     const bool ios = std::strcmp(argv[3], "ios") == 0;
     std::ifstream input(argv[1], std::ios::binary);
     std::vector<unsigned char> in((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    if (in.size() < kHeader || std::memcmp(in.data(), "NBPROG03", 8u) != 0) {
+    if (in.size() < kHeader || std::memcmp(in.data(), "NBPROG04", 8u) != 0) {
         std::fprintf(stderr, "%s is not a programs file\n", argv[1]);
         return 1;
     }
@@ -80,7 +79,7 @@ int main(int argc, char** argv) {
                 stage.offset = offset;
                 stage.size = size;
                 stage.pixel = pixel;
-                stage.bound = pixel && variant >= kBoundOffset && variant < kTracedOffset;
+                stage.bound = pixel && variant >= kBoundOffset;
                 stages.push_back(std::move(stage));
             }
         }

@@ -68,7 +68,7 @@ inline constexpr ULONG_PTR kImportCopyData = 0x4E42494Du;  // "NBIM"
 // The window's outer rect for a windowed client size on a monitor.
 [[nodiscard]] RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width, unsigned height);
 
-// The settings the D3D12 renderer reads (temporal upscaling and interpolation, ray tracing).
+// The settings the D3D12 renderer reads (temporal upscaling and interpolation).
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 }  // namespace galaxy::render::host_window

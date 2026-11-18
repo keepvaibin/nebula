@@ -13,8 +13,8 @@ namespace galaxy::render::core {
 // cores from them anyway: a worker for each would add a compile in flight and no compile throughput.
 inline constexpr unsigned kPipelineReservedCores = 2u;
 // The memory one compile in flight is taken to hold at its peak. The drivers' compilers are closed, so this is a stated
-// bound, not a measurement: the forms' DXIL averages 8 KB with ray tracing off and 14 KB on (56 MB for 6,706 forms,
-// 1,048 MB for 76,799), and an optimising compiler's working set for one program is that many times over, tens of MB.
+// bound, not a measurement: the forms' DXIL averages about 8 KB (56 MB for 6,706 forms), and an
+// optimising compiler's working set for one program is that many times over, tens of MB.
 inline constexpr std::uint64_t kPipelineCompileBytes = 64ull << 20u;
 // The share of the physical memory free at the start (read once) that the compiles in flight may hold together: the
 // game, its textures and the driver's own pools keep the rest.

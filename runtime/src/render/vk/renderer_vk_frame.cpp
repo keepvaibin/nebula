@@ -2042,7 +2042,7 @@ void RendererVk::record_wide_end() {
     // The drawn part of the wide set: what the camera meters and writes. After a load or a long pause the eye starts open.
     const VkExtent2D part = scene_part();
     scene_camera_.meter(commands_, *wide, *scene_.depth, kDepthSampleLayout, part.width, part.height,
-                        seconds > 1.0f ? -1.0f : seconds, 0u, allocate);
+                        seconds > 1.0f ? -1.0f : seconds, allocate);
     image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                   VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
@@ -2068,7 +2068,7 @@ void RendererVk::record_wide_end() {
     begin_scene_pass_with(0u, nullptr, true);
     scene_camera_.draw(commands_, draw_layout_.pass_for(scene_variant(), false), scene_samples_log2(),
                        resolve_output || per_sample ? *wide_ms : *wide, part.width, part.height, per_sample, allocate,
-                       resolve_output, 0u);
+                       resolve_output);
     reset_draw_bindings();
 }
 

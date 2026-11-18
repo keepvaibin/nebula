@@ -25,15 +25,7 @@ enum ProgramVariant : unsigned {
     // A Vulkan device without descriptor indexing runs each pixel program in a second form, reading its draw's bound table
     // (program.hlsli NEBULA_BOUND_TABLES): stored beside the others at this offset.
     kProgramBoundOffset = 5u,
-    // Ray tracing's forms of a pixel program, after the bound-table forms and never in one: its prepass (its item and
-    // depth, nothing else) and its traced forms (its colour and lights by the light pass's shares).
-    kProgramPrepass = 10u,
-    kProgramTraced = 11u,
-    kProgramTracedMotion = 12u,
-    kProgramTracedReactive = 13u,  // a blended draw's: + the reactive mask
-    kProgramTracedLayer = 14u,     // + the reactive mask and the effects layer's targets
-    kProgramPrepassItem = 15u,     // the prepass naming its item only (Vulkan without geometry shaders: D11)
-    kProgramStored = 16u,
+    kProgramStored = 10u,
 };
 
 // A scene draw's "aux": the targets it writes beside the colour (0 none, 1 the motion, 2 the reactive mask, 3 that and
