@@ -1,0 +1,34 @@
+name: Compiler cache
+description: >-
+  sccache in front of every compiler CMake drives (CMAKE_C_COMPILER_LAUNCHER and CMAKE_CXX_COMPILER_LAUNCHER, which
+  CMake takes from the environment) and of rustc, its cache restored from this job's newest run on this branch or on
+  main. The job saves it again with actions/cache/save at its end (key: this step's output `key`).
+inputs:
+  name:
+    description: The cache's name, one per job (and matrix leg).
+    required: true
+outputs:
+  key:
+    description: The key the job saves the cache under.
+    value: ${{ steps.key.outputs.key }}
+runs:
+  using: composite
+  steps:
+    - uses: mozilla-actions/sccache-action@v0.0.9
+    - id: key
+      shell: bash
+      run: |
+        echo "key=sccache-${{ inputs.name }}-${{ runner.os }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+        dir="$(cd "$RUNNER_TEMP" && pwd -W 2>/dev/null || pwd)/sccache"
+        {
+          echo "SCCACHE_DIR=$dir"
+          echo "SCCACHE_CACHE_SIZE=6G"
+          echo "CMAKE_C_COMPILER_LAUNCHER=sccache"
+          echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache"
+          echo "RUSTC_WRAPPER=sccache"
+        } >> "$GITHUB_ENV"
+    - uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/sccache
+        key: sccache-${{ inputs.name }}-${{ runner.os }}-${{ github.sha }}
+        restore-keys: sccache-${{ inputs.name }}-${{ runner.os }}-
