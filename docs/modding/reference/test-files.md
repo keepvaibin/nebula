@@ -164,7 +164,7 @@ A fact condition takes any check from [Fact checks](#fact-checks) except `far`. 
 | `stick` | `{"stick": [0, 1], "frames": 30}` | Tilts the main stick. Each value is from -1 to 1. |
 | `shake` | `{"shake": 10}` | Shakes for a number of frames, which spins. |
 | `pointer` | `{"pointer": [0.5, 0.5], "frames": 30}` | Moves the pointer, from 0 to 1 across the screen. |
-| `key` | `{"key": "enter"}` | Presses a key in Nebula's own menus: `up`, `down`, `left`, `right`, `enter`, `esc`, `tab`, `space` or `backspace`. While a mod's text box is open, `enter`, `esc`, `backspace`, `left` and `right` edit it. |
+| `key` | `{"key": "enter"}` | Presses a key in Nebula's own menus: `up`, `down`, `left`, `right`, `enter`, `esc`, `tab`, `space` or `backspace`. While a mod's text box is open, `enter`, `esc`, `backspace`, `left` and `right` edit it. The steps after it wait until the menus have taken the key, however busy the window is. |
 | `text` | `{"text": "Gold Mario"}` | Types into the open text box, 1 to 256 characters. |
 | `settings` | `{"settings": "mods"}` | Opens Nebula's settings on a page: `display`, `graphics`, `controls`, `audio`, `general`, `mods`, `system` or `advanced`. Then `key` steps move in it. |
 | `picture` | `{"picture": "after-spin"}` | Saves the next frame shown as `pictures/NAME.png`. Each name is used once in a test. |
@@ -181,6 +181,7 @@ A fact condition takes any check from [Fact checks](#fact-checks) except `far`. 
 | `wait` | `{"wait": true}` | Does nothing. Use it to hang an `after` on. |
 | `window` | `{"window": [960, 540]}` | Resizes the inside of the game's window, as a player dragging its edge does: `[width, height]` in pixels, each 1 to 65535. |
 | `lose_device` | `{"lose_device": true}` | Loses the graphics device at the renderer's next frame, as a driver reset does. The game must make it again and go on. |
+| `busy_window` | `{"busy_window": 1500}` | Keeps the window's thread busy that many milliseconds (1 to 10000), as a loaded machine's is. Windows only. |
 | `end` | `{"end": true}` | Ends the test on this frame. |
 
 ### Calling game functions

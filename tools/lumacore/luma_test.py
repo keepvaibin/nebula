@@ -633,7 +633,7 @@ def read_steps(t, bare, classes):
     pictures = set()
     actions = {"hold", "stick", "shake", "pointer", "key", "text", "settings", "picture", "call", "read", "stage", "wait", "hash",
                "end", "take_out", "reload", "forget", "copy_file", "load_file", "erase_file", "new_file", "window",
-               "lose_device"}
+               "lose_device", "busy_window"}
     for i, s in enumerate(steps):
         path = "steps[%d]" % i
         if not isinstance(s, dict):
@@ -734,6 +734,11 @@ def read_steps(t, bare, classes):
             if v is not True:
                 raise HarnessError("%s.lose_device takes true" % path)
             step["line"] = "lose_device"
+        elif action == "busy_window":
+            # The window's thread busy that many milliseconds, as a loaded machine's is.
+            if not (isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 10000):
+                raise HarnessError("%s.busy_window is milliseconds, 1 to 10000" % path)
+            step["line"] = "busy_window %d" % v
         elif action in ("wait", "end"):
             if v is not True:
                 raise HarnessError("%s.%s takes true" % (path, action))

@@ -129,6 +129,12 @@ typedef struct NebulaHostForExtension {
     /* The pipelines still being prepared behind the game (the Settings status line's "Preparing graphics"); 0 when none
        is. Null in a host without a renderer. */
     uint32_t (*pipelines_left)(void* host);
+    /* The menu keys given (menu_key) that the menus have not taken yet: the window's thread takes them in turn, later
+       than the frame that gave them when it is busy. Null in a host whose menus take a key as it is given. */
+    uint32_t (*menu_keys_waiting)(void* host);
+    /* The window's thread busy for `ms` milliseconds from when it comes to it, as a slow or loaded machine's is (what
+       waits on it waits). Null in a host without a window thread of its own. */
+    void (*busy_window)(void* host, uint32_t ms);
 } NebulaHostForExtension;
 
 /* What the extension offers. Each function may be null. */

@@ -213,6 +213,10 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
 // Delivers a keyboard key to the window thread, as the keyboard gives it (a harness's `key` step): a keyboard binding
 // waiting for its key takes it, which a controller's key never does.
 void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept;
+// The keys posted by the two above that the window thread has not handled yet; 0 with no window.
+[[nodiscard]] std::uint32_t native_settings_keys_waiting() noexcept;
+// The window thread busy for `ms` milliseconds when it comes to it (a harness's busy_window step).
+void busy_window(std::uint32_t ms) noexcept;
 // The bit the SDL and Apple hosts' menu-key queues mark a keyboard key with (above every key code).
 inline constexpr std::uintptr_t kMenuKeyKeyboard = std::uintptr_t{1} << 30;
 // The bit a controller's menu key carries when it is a held direction's repeat (native_settings_pad_step), not a press.

@@ -4251,6 +4251,8 @@ void extension_menu_key(void*, uint32_t key) {
     }
 }
 uint32_t extension_pipelines_left(void*) { return galaxy::render::pipeline_progress().left; }
+uint32_t extension_menu_keys_waiting(void*) { return galaxy::render::native_settings_keys_waiting(); }
+void extension_busy_window(void*, uint32_t ms) { galaxy::render::busy_window(ms); }
 uint32_t extension_menu_open(void*) {
     if (galaxy::render::home_menu_visible()) {
         return NEBULA_EXT_MENU_HOME;
@@ -4338,6 +4340,8 @@ void attach_extensions() {
     host.menu_key = extension_menu_key;
     host.menu_open = extension_menu_open;
     host.pipelines_left = extension_pipelines_left;
+    host.menu_keys_waiting = extension_menu_keys_waiting;
+    host.busy_window = extension_busy_window;
     host.open_settings = extension_open_settings;
     host.resize_window = extension_resize_window;
     host.lose_gpu_device = extension_lose_gpu_device;

@@ -205,10 +205,14 @@ using host_window::kSettingsKeyMessage;
 using host_window::kWindowStyle;
 using host_window::kPlaceWindowMessage;
 using host_window::kResizeClientMessage;
+using host_window::kBusyWindowMessage;
 using host_window::WindowPlacement;
 
 namespace {
 
+// Menu keys posted to the window thread, and handled there (native_settings_keys_waiting).
+std::atomic<std::uint32_t> s_settings_keys_posted{0u};
+std::atomic<std::uint32_t> s_settings_keys_taken{0u};
 std::atomic<bool> s_pointer_focused{false};
 galaxy::host::HostPointerSnapshotCache s_pointer_snapshot;
 std::atomic<int> s_pointer_last_cursor_poll_x{std::numeric_limits<int>::min()};
@@ -725,6 +729,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         } else {
             (void)native_settings_pad_key(wp);
         }
+        s_settings_keys_taken.fetch_add(1u, std::memory_order_release);
         return 0;
     }
     if (msg == WM_DISPLAYCHANGE) {
@@ -741,6 +746,10 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             s_window_monitor = now;
             monitor_changed.store(true, std::memory_order_release);
         }
+    }
+    if (msg == kBusyWindowMessage) {
+        Sleep(static_cast<DWORD>(wp));
+        return 0;
     }
     if (msg == kResizeClientMessage) {
         RECT rect{0, 0, static_cast<LONG>(wp), static_cast<LONG>(lp)};
@@ -1457,21 +1466,37 @@ poll_host_pointer_transition(std::uint64_t after_sequence) noexcept {
     return s_pointer_transitions.read_after(after_sequence);
 }
 
-void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
+namespace {
+
+// Keys posted to the window thread and handled there (native_settings_keys_waiting): the posted count moves first, so
+// the difference is never below the keys still in the queue.
+void post_settings_key(std::uintptr_t virtual_key, LPARAM keyboard) noexcept {
     const HWND window = reinterpret_cast<HWND>(
         host_window::settings_window.load(std::memory_order_acquire));
     if (window != nullptr) {
-        (void)PostMessageW(window, kSettingsKeyMessage,
-                           static_cast<WPARAM>(virtual_key), 0);
+        s_settings_keys_posted.fetch_add(1u, std::memory_order_relaxed);
+        if (!PostMessageW(window, kSettingsKeyMessage, static_cast<WPARAM>(virtual_key), keyboard)) {
+            s_settings_keys_taken.fetch_add(1u, std::memory_order_release);
+        }
     }
 }
 
+}  // namespace
+
+void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
+    post_settings_key(virtual_key, 0);
+}
+
 void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept {
-    const HWND window = reinterpret_cast<HWND>(
-        host_window::settings_window.load(std::memory_order_acquire));
-    if (window != nullptr) {
-        (void)PostMessageW(window, kSettingsKeyMessage, static_cast<WPARAM>(virtual_key), 1);
+    post_settings_key(virtual_key, 1);
+}
+
+std::uint32_t native_settings_keys_waiting() noexcept {
+    if (host_window::settings_window.load(std::memory_order_acquire) == 0u) {
+        return 0u;
     }
+    const std::uint32_t taken = s_settings_keys_taken.load(std::memory_order_acquire);
+    return s_settings_keys_posted.load(std::memory_order_relaxed) - taken;
 }
 
 namespace host_window {
@@ -1500,6 +1525,13 @@ std::vector<SettingsMonitor> settings_monitors() {
 
 bool window_modal_active() noexcept {
     return s_system_menu_active.load(std::memory_order_acquire) || move_size_active.load(std::memory_order_acquire);
+}
+
+void busy_window(std::uint32_t ms) noexcept {
+    const HWND window = reinterpret_cast<HWND>(settings_window.load(std::memory_order_acquire));
+    if (window != nullptr) {
+        (void)PostMessageW(window, kBusyWindowMessage, static_cast<WPARAM>(ms), 0);
+    }
 }
 
 void resize_window_client(unsigned width, unsigned height) noexcept {

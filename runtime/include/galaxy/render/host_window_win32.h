@@ -28,6 +28,8 @@ inline constexpr UINT kSettingsKeyMessage = WM_USER + 0x43;
 inline constexpr UINT kPlaceWindowMessage = WM_USER + 0x44;
 // resize_window_client: the client area resized to wParam x lParam, as a drag of the window's edge would.
 inline constexpr UINT kResizeClientMessage = WM_USER + 0x45;
+// busy_window: the window thread waits wParam milliseconds, as a loaded machine's does (a harness's busy_window step).
+inline constexpr UINT kBusyWindowMessage = WM_USER + 0x46;
 // A second start of the game asks the running one to come forward (show_existing_instance): the window restores itself if it is
 // minimised and takes the foreground.
 inline constexpr UINT kShowInstanceMessage = WM_USER + 0x46;

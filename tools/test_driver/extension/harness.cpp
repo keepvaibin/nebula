@@ -373,7 +373,7 @@ std::string json_string(std::string_view text) {
 // --- The plan ------------------------------------------------------------------------------------------------------
 
 enum class Action { Hold, Stick, Shake, Pointer, Key, Text, Settings, Picture, Wait, End, Game, TakeOut, Reload, Forget,
-                    Window, LoseDevice };
+                    Window, LoseDevice, BusyWindow };
 
 struct Cond {
     bool log = false;
@@ -395,6 +395,7 @@ struct Step {
     float x = 0.0f, y = 0.0f;
     std::uint32_t key = 0u;
     std::uint32_t width = 0u, height = 0u;  // window's
+    std::uint32_t ms = 0u;                  // busy_window's
     std::int64_t frames = 0;
     std::vector<Cond> conds;
     std::int64_t timeout = 600;
@@ -428,7 +429,8 @@ constexpr std::uint32_t kPictureSettlePresents = 10u;
 struct State {
     const NebulaHostForExtension* host = nullptr;
     std::uint32_t presents_clear = kPictureSettlePresents;  // presents since a menu showed pipelines left
-    std::optional<std::int64_t> held_from;  // the test frame the steps began to wait for a held picture
+    std::optional<std::int64_t> held_from;  // the test frame the steps began to wait for a held picture or menu key
+    std::optional<std::chrono::steady_clock::time_point> keys_held;  // since when a menu key is waiting
     void (*log)(const std::string&) = nullptr;
     void (*quit)() = nullptr;
     bool on = false;
@@ -471,6 +473,16 @@ struct State {
 
 std::recursive_mutex g_lock;
 LumaHarness g_service{};
+
+// Menu keys given that the host's menus have not taken yet (0 from a host that does not say).
+std::uint32_t menu_keys_waiting() {
+    const NebulaHostForExtension* const h = g.host;
+    if (h == nullptr || h->size < offsetof(NebulaHostForExtension, menu_keys_waiting) + sizeof(h->menu_keys_waiting) ||
+        h->menu_keys_waiting == nullptr) {
+        return 0u;
+    }
+    return h->menu_keys_waiting(h->host);
+}
 
 std::int64_t test_frame() {
     return g.base ? static_cast<std::int64_t>(g.game_frame) - static_cast<std::int64_t>(*g.base) : -1;
@@ -758,6 +770,14 @@ bool read_line(const std::string& line, std::string& why) {
         } else if (a == "lose_device" && args.empty()) {
             // The graphics device lost at the renderer's next frame, as a driver reset loses it.
             s.action = Action::LoseDevice;
+        } else if (a == "busy_window" && args.size() == 1u) {
+            // The window's thread busy that many milliseconds, as a loaded machine's is.
+            if (!number(args[0], value) || value < 1.0 || value > 10000.0 || value != std::floor(value)) {
+                why = "step " + std::to_string(s.number) + ": busy_window takes milliseconds, 1 to 10000";
+                return false;
+            }
+            s.action = Action::BusyWindow;
+            s.ms = static_cast<std::uint32_t>(value);
         } else {
             why = "step " + std::to_string(s.number) + ": not an action this host half knows: " + a;
             return false;
@@ -942,6 +962,14 @@ void run_step(Step& s, std::int64_t now) {
             return;
         }
         g.host->lose_gpu_device(g.host->host);
+        break;
+    case Action::BusyWindow:
+        if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, busy_window) + sizeof(g.host->busy_window) ||
+            g.host->busy_window == nullptr) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": this host has no window thread to keep busy");
+            return;
+        }
+        g.host->busy_window(g.host->host, s.ms);
         break;
     case Action::Text:
         if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, type_text) + sizeof(g.host->type_text) ||
@@ -1274,8 +1302,21 @@ void frame(std::uint64_t game_frames) {
     sample_memory();
     // A picture held for the menu's pipelines (picture_path) holds the steps after it: what it shows is what the steps
     // before it left, however long this machine takes to make them (a run beside others takes longer). The frames held
-    // count toward no step's wait (N-2062).
-    if (!g.pictures.empty() && g.pictures.front().held && g.game_frame >= g.pictures.front().game_frame) {
+    // count toward no step's wait (N-2062). So does a menu key the window's thread has not taken yet: a key step's
+    // effect is there for every step after it, however busy the window's thread (6709 beside other runs).
+    const bool keys = menu_keys_waiting() != 0u;
+    if (keys) {
+        const auto wall = std::chrono::steady_clock::now();
+        if (!g.keys_held) {
+            g.keys_held = wall;
+        } else if (wall - *g.keys_held > std::chrono::seconds(120)) {
+            finish("fail", "the host's menus did not take a menu key within 120 s");
+            return;
+        }
+    } else {
+        g.keys_held.reset();
+    }
+    if (keys || (!g.pictures.empty() && g.pictures.front().held && g.game_frame >= g.pictures.front().game_frame)) {
         if (!g.held_from) {
             g.held_from = now;
         }

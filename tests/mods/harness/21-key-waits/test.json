@@ -1,0 +1,78 @@
+{
+  "harness": 1,
+  "name": "21-key-waits",
+  "about": "Key steps on a busy window: the window's thread is kept busy 1.5 s, then 19-settings-step's keys are given and a picture asked one frame later; the picture waits until the menus took every key, so it shows the Log page",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "settings": "mods"
+    },
+    {
+      "at": 140,
+      "busy_window": 1500
+    },
+    {
+      "at": 141,
+      "key": "down"
+    },
+    {
+      "at": 141,
+      "key": "down"
+    },
+    {
+      "at": 141,
+      "key": "right"
+    },
+    {
+      "at": 141,
+      "key": "right"
+    },
+    {
+      "at": 141,
+      "key": "right"
+    },
+    {
+      "at": 141,
+      "key": "right"
+    },
+    {
+      "at": 141,
+      "key": "right"
+    },
+    {
+      "at": 141,
+      "key": "right"
+    },
+    {
+      "at": 141,
+      "key": "space"
+    },
+    {
+      "at": 142,
+      "picture": "log"
+    },
+    {
+      "at": 160,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog.page",
+      "exists": true
+    },
+    {
+      "picture": "log",
+      "like": "refs/{renderer}/log.png",
+      "within": {
+        "rmse": 0.5
+      }
+    }
+  ]
+}

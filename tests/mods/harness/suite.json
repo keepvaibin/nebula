@@ -29,6 +29,7 @@
     "19-settings-step",
     "20a-class-arg",
     "20b-class-none-live",
-    "20c-class-unknown"
+    "20c-class-unknown",
+    "21-key-waits"
   ]
 }
