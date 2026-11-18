@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "2258c-dotted-forget",
+  "about": "M-093: the start after 2258b with dot.ids removed: it is on the REMOVED MODS line and FORGET takes it (Mods.Forgotten), not \"nothing to forget\"",
+  "proves": [
+    "services.mods",
+    "services.fs"
+  ],
+  "continue_from": "2258b-dotted-data-next",
+  "mods": [
+    {
+      "path": "../mods/dot.ids",
+      "remove": true
+    }
+  ],
+  "steps": [
+    {
+      "at": 20,
+      "forget": "dot.ids"
+    },
+    {
+      "after": {
+        "fact": "modlog",
+        "has": {
+          "row": "Mods.Forgotten"
+        }
+      },
+      "timeout": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "matching": {
+        "row": "Mods.Forgotten",
+        "mod": "dot.ids"
+      },
+      "count": 1
+    },
+    {
+      "no_log": "nothing to forget"
+    }
+  ]
+}

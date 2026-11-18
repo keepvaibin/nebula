@@ -41,7 +41,7 @@ constexpr std::uint32_t kLow = 0x01000000u;  // every 1.0 space's mods' range (s
 constexpr std::uint32_t kHigh = 0x01FFFFFFu;
 constexpr std::uint64_t kSpan = std::uint64_t{kHigh} - kLow + 1u;
 constexpr std::size_t kNameMost = 64u;        // a name: 1 to 64 of a-z 0-9 _ - . (item 5)
-constexpr std::size_t kModIdMost = 64u;       // a .luma's id (luma.cpp valid_id)
+constexpr std::size_t kModIdMost = 64u;       // a .luma's id (luma.h valid_mod_id)
 constexpr std::size_t kOptionKeyMost = 64u;   // an option's key (the manifest's key rule)
 constexpr std::size_t kInstallPathMost = 255u;  // bytes of a path (fs's path rule)
 constexpr std::uint64_t kRecordMost = 16u << 20u;  // a record bigger than this is not ours
@@ -280,11 +280,9 @@ bool valid_name(std::string_view name) noexcept {
     });
 }
 
+// luma.h's one rule (a '.' inside an id too: M-093).
 bool valid_mod_id(std::string_view id) noexcept {
-    if (id.empty() || id.size() > kModIdMost) {
-        return false;
-    }
-    return std::all_of(id.begin(), id.end(), [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-'; });
+    return galaxy::luma::valid_mod_id(id);
 }
 
 // A key `<mod id>/<name>` as the record holds it.

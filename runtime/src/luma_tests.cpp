@@ -95,6 +95,11 @@ int main() {
     }
     check(parse_manifest(one_form("a-1", R"(,"layers":[])")).has_value(), "a good id");
     check(parse_manifest(one_form("my.mod-2", R"(,"layers":[])")).has_value(), "an id with a dot");
+    // The same rule for every reader of an id (valid_mod_id: the ids record, the data folders; M-093, M-083).
+    for (const char* bad : {"../up", "a/b", "UPPER", "", "ab", "1ab", "-ab", "a..b", "abc.", "con", "com1", "con.mod"}) {
+        check(!valid_mod_id(bad), bad);
+    }
+    check(valid_mod_id("a-1") && valid_mod_id("my.mod-2") && valid_mod_id("speedrun.timer"), "valid_mod_id takes a dot inside an id");
     const std::optional<Manifest> read = parse_manifest(kGood);
     check(read.has_value(), "a good file reads");
     if (!read) return 1;

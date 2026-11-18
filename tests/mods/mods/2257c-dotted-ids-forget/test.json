@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "2257c-dotted-ids-forget",
+  "about": "M-093: the start after 2257a with dot.ids removed: the ids record holds dot.ids/dot-title, so it is on the REMOVED MODS line and FORGET takes it (Mods.Forgotten), not \"nothing to forget\"",
+  "proves": [
+    "services.mods"
+  ],
+  "continue_from": "2257a-dotted-ids",
+  "mods": [
+    {
+      "path": "../mods/dot.ids",
+      "remove": true
+    }
+  ],
+  "steps": [
+    {
+      "at": 20,
+      "forget": "dot.ids"
+    },
+    {
+      "after": {
+        "fact": "modlog",
+        "has": {
+          "row": "Mods.Forgotten"
+        }
+      },
+      "timeout": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "matching": {
+        "row": "Mods.Forgotten",
+        "mod": "dot.ids"
+      },
+      "count": 1
+    },
+    {
+      "no_log": "nothing to forget"
+    }
+  ]
+}

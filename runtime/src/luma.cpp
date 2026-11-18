@@ -253,21 +253,6 @@ std::string text_field(const Value& value, std::string_view key) {
     return text != nullptr ? *text : std::string();
 }
 
-// The validator's id (id_ok, luma.md 4): 3 to 64 of a-z 0-9 - ., a letter first, no "..", no "." at the end. It
-// names a folder on every device, so neither may its first part be a name Windows keeps for itself (con, com1...): a
-// gap the validator does not check yet (named to G).
-bool valid_id(std::string_view id) {
-    if (id.size() < 3u || id.size() > 64u || !(id.front() >= 'a' && id.front() <= 'z') || id.back() == '.') return false;
-    for (const char c : id) {
-        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.')) return false;
-    }
-    if (id.find("..") != std::string_view::npos) return false;
-    const std::string_view first = id.substr(0, id.find('.'));
-    if (first == "con" || first == "prn" || first == "aux" || first == "nul") return false;
-    if (first.size() == 4u && (first.starts_with("com") || first.starts_with("lpt")) && first[3] >= '0' && first[3] <= '9') return false;
-    return true;
-}
-
 // pre_standard's ids (an achievement's, a save tag): lower-case letters, digits and dashes, 1 to 64, and none of the
 // names Windows keeps for itself, as the previous engine read them.
 bool old_id(std::string_view id) {
@@ -885,6 +870,19 @@ void read_options(const Value& root, Manifest& out) {
 
 }  // namespace
 
+// luma.h. Windows' own names are a gap the validator does not check yet (named to G).
+bool valid_mod_id(std::string_view id) noexcept {
+    if (id.size() < 3u || id.size() > 64u || !(id.front() >= 'a' && id.front() <= 'z') || id.back() == '.') return false;
+    for (const char c : id) {
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.')) return false;
+    }
+    if (id.find("..") != std::string_view::npos) return false;
+    const std::string_view first = id.substr(0, id.find('.'));
+    if (first == "con" || first == "prn" || first == "aux" || first == "nul") return false;
+    if (first.size() == 4u && (first.starts_with("com") || first.starts_with("lpt")) && first[3] >= '0' && first[3] <= '9') return false;
+    return true;
+}
+
 const std::string& Text::in(std::string_view language) const {
     if (const auto it = languages.find(std::string(language)); it != languages.end()) return it->second;
     const std::size_t dash = language.find('-');
@@ -995,7 +993,7 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     Manifest out;
     if (!read_format(root->get("format"), out.format, out.format_minor)) return std::nullopt;
     out.id = text_field(*root, "id");
-    if (!valid_id(out.id)) return std::nullopt;
+    if (!valid_mod_id(out.id)) return std::nullopt;
     // A newer format's other fields may mean anything: its format and id are all a reader can say of it (L205).
     if (out.format > kFormat || (out.format == kFormat && out.format_minor > kFormatMinor)) return out;
     const Value* words = root->get("text");

@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "2257b-dotted-ids-next",
+  "about": "the start after 2257a: the ids record that holds dot.ids/dot-title is read, not moved aside as unreadable (no Mods.IdsUnreadable); dot.ids gets its number again",
+  "proves": [
+    "services.mods.ids"
+  ],
+  "mods": [
+    "../mods/dot.ids"
+  ],
+  "continue_from": "2257a-dotted-ids",
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4297
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.dot.ids.id_status_2",
+        "exists": true
+      },
+      "timeout": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.dot.ids.id_status_2",
+      "is": 0
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "row": "Mods.IdsUnreadable"
+      },
+      "absent": true
+    }
+  ]
+}

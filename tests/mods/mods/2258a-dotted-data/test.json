@@ -1,0 +1,40 @@
+{
+  "harness": 1,
+  "name": "2258a-dotted-data",
+  "about": "M-083: dot.ids, a mod whose id has a '.', writes its message number to dot/number.txt in its data folder (LUMA_PENDING, then WRITE LUMA_OK)",
+  "proves": [
+    "services.fs"
+  ],
+  "mods": [
+    "../mods/dot.ids"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4298
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.dot.ids.written",
+        "exists": true
+      },
+      "timeout": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.dot.ids.write",
+      "is": 1
+    },
+    {
+      "fact": "mod.dot.ids.written",
+      "is": 0
+    }
+  ]
+}

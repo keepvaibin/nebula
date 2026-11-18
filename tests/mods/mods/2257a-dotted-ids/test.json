@@ -1,0 +1,36 @@
+{
+  "harness": 1,
+  "name": "2257a-dotted-ids",
+  "about": "M-093: dot.ids, a mod whose id has a '.', asks mods.ids for a message number (LUMA_OK); the ids record is written with the key dot.ids/dot-title",
+  "proves": [
+    "services.mods.ids"
+  ],
+  "mods": [
+    "../mods/dot.ids"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4296
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.dot.ids.id_status",
+        "exists": true
+      },
+      "timeout": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.dot.ids.id_status",
+      "is": 0
+    }
+  ]
+}

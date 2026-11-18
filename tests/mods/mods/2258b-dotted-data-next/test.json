@@ -1,0 +1,45 @@
+{
+  "harness": 1,
+  "name": "2258b-dotted-data-next",
+  "about": "the start after 2258a: dot.ids reads dot/number.txt back from its data folder (LUMA_PENDING, READ LUMA_OK): its number",
+  "proves": [
+    "services.fs"
+  ],
+  "mods": [
+    "../mods/dot.ids"
+  ],
+  "continue_from": "2258a-dotted-data",
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4299
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.dot.ids.same_number",
+        "exists": true
+      },
+      "timeout": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.dot.ids.read",
+      "is": 1
+    },
+    {
+      "fact": "mod.dot.ids.read_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.dot.ids.same_number",
+      "is": 1
+    }
+  ]
+}

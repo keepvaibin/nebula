@@ -17,6 +17,13 @@
     "2290-state-taken-out",
     "2291a-forget-write",
     "2291b-forget",
-    "2255-bad-pointers"
+    "2255-bad-pointers",
+    "2257a-dotted-ids",
+    "2257b-dotted-ids-next",
+    "2257c-dotted-ids-forget",
+    "2258a-dotted-data",
+    "2258b-dotted-data-next",
+    "2258c-dotted-forget",
+    "2258d-dotted-after-forget"
   ]
 }

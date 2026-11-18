@@ -4,6 +4,7 @@
 // worker thread in the order made (started at the first request, services/registry.md 10), and answered at a frame's
 // start.
 
+#include "galaxy/luma.h"
 #include "galaxy/luma_fs_service.h"
 #include "galaxy/luma_mod_memory.h"
 
@@ -40,7 +41,6 @@ namespace stdfs = std::filesystem;
 constexpr std::size_t kPathMost = 255u;              // bytes of a path (the path rule)
 constexpr std::size_t kPartsMost = 16u;              // parts of a path
 constexpr std::size_t kPartMost = 64u;               // bytes of a part
-constexpr std::size_t kIdMost = 64u;                 // a .luma's id (luma.cpp valid_id)
 constexpr std::uint64_t kFileMost = LUMA_FS_FILE_MOST;
 constexpr std::uint64_t kDataSpace = 256ull << 20u;  // a mod's data folder
 constexpr std::uint64_t kExchangeSpace = 1ull << 30u; // the Exchange folder
@@ -136,11 +136,9 @@ bool split_path(std::string_view path, bool empty_ok, std::vector<std::string>* 
     }
 }
 
+// A mod's id, by luma.h's one rule (a '.' inside an id too: M-083).
 bool valid_id(std::string_view id) noexcept {
-    if (id.empty() || id.size() > kIdMost) {
-        return false;
-    }
-    return std::all_of(id.begin(), id.end(), [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-'; });
+    return galaxy::luma::valid_mod_id(id);
 }
 
 // ---- The disk (worker thread) --------------------------------------------------------------------------------------

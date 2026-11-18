@@ -369,4 +369,9 @@ struct Situation {
 // "where" columns. Invalid JSON gives no keys.
 [[nodiscard]] std::vector<std::string> merge_keys(std::string_view path, std::string_view json);
 
+// A mod's id as luma.json gives it (the validator's id_ok, luma.md 4): 3 to 64 of a-z 0-9 - ., a letter first, no "..",
+// no "." at the end, and no first part Windows keeps for itself (con, com1...), so it names a folder on every device.
+// The one rule for every reader of a mod's id: the package, the ids record (mods.ids), the data folders (fs).
+[[nodiscard]] bool valid_mod_id(std::string_view id) noexcept;
+
 }  // namespace galaxy::luma

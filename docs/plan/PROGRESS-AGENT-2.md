@@ -367,3 +367,15 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   at termination is the case left; no iOS device here.
 - LumaLink pin 4aeb8cf (mods/m2-w, on f329a8b); installer/lumakit/lumakit.luma packed with it and the merge's
   self-description (store 37); build_lumakit --verify passes.
+
+## 2026-11-18 mods/m2-w: M-093, M-083 (a mod id with a '.')
+
+- luma.md 4 lets a mod id hold a '.' (speedrun.timer), and the manifest reader takes one. mods.ids' record reader,
+  its kept() list and fs's data folder each had their own id rule without '.': such a mod's ids key made the whole
+  record unreadable at the next start (moved to mod-ids.json.bad), FORGET found nothing to forget, and fs gave it no
+  data folder (write -6). The rule is now one function, galaxy::luma::valid_mod_id (luma.h), which every reader of a
+  mod id uses; runtime luma_tests checks it.
+- New tests, mods suite, with mod dot.ids: 2257a-c (ids number, the next start reads the record, FORGET takes it)
+  and 2258a-d (data file written, read back at the next start, forgotten, gone). Before, on bins a2w2: 2257b fails
+  (Mods.IdsUnreadable), 2257c fails ("dot.ids is not on the REMOVED MODS line: nothing to forget"), 2258a fails
+  (write -6).

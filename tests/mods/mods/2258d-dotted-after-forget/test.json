@@ -1,0 +1,41 @@
+{
+  "harness": 1,
+  "name": "2258d-dotted-after-forget",
+  "about": "the start after 2258c with dot.ids back: dot/number.txt is gone from its data folder (READ LUMA_E_NOT_FOUND), so forgetting took its data",
+  "proves": [
+    "services.fs"
+  ],
+  "continue_from": "2258c-dotted-forget",
+  "mods": [
+    "../mods/dot.ids"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4300
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.dot.ids.gone_status",
+        "exists": true
+      },
+      "timeout": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.dot.ids.gone_read",
+      "is": 1
+    },
+    {
+      "fact": "mod.dot.ids.gone_status",
+      "is": -7
+    }
+  ]
+}
