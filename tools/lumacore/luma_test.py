@@ -225,8 +225,8 @@ GPU = None
 # The test extension's hooks the host reads when it starts (tools/test_driver/extension/test_extension.cpp reads them
 # from the environment): a test names them among its settings, and they go to the game's environment. Everything else a
 # test does is a step of its plan. harness_settings_test.py keeps this list equal to the extension's.
-TEST_HOOKS = ("GALAXY_TEST_VRAM_BUDGET_MB", "GALAXY_TEST_DISC_DELAY_US", "GALAXY_TEST_MODS_SCREEN",
-              "GALAXY_TEST_MODS_CHANGED")
+TEST_HOOKS = ("GALAXY_TEST_VRAM_BUDGET_MB", "GALAXY_TEST_DISC_DELAY_US", "GALAXY_TEST_SAVE_DELAY_US",
+              "GALAXY_TEST_MODS_SCREEN", "GALAXY_TEST_MODS_CHANGED")
 
 
 def setting_names():
