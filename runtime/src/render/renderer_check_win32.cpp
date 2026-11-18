@@ -6,6 +6,7 @@
 
 #include "galaxy/render/renderer_check.h"
 
+#include "galaxy/host_extension.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/windows_paths.h"
@@ -412,9 +413,12 @@ RendererCheck renderer_check() {
                     done.result.cards = std::move(cards);
                     done.result.done = true;
                 }
-                // The System page's RENDERER row shows the answers from now (a test's picture of it waits for this line).
-                std::cerr << "[renderers] checked: " << count << " card" << (count == 1u ? "" : "s") << " in "
-                          << std::chrono::duration_cast<std::chrono::milliseconds>(took).count() << " ms\n";
+                // The System page's RENDERER row shows the answers from now: the log's line, and the extensions' (a test
+                // waits for it).
+                const std::string line = "checked: " + std::to_string(count) + (count == 1u ? " card in " : " cards in ") +
+                                         std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(took).count()) + " ms";
+                std::cerr << "[renderers] " << line << '\n';
+                galaxy::extensions::log_line("[renderers]", line.c_str());
             }).detach();
         } catch (const std::system_error&) {
             state.result.done = true;  // no thread: nothing known
