@@ -396,32 +396,41 @@ std::vector<CardRenderers> check_renderers_now(unsigned limit_ms) {
     return parse_renderer_check(run_check_process(limit_ms));
 }
 
+// The check's run and its answers in the shared state: the System page's RENDERER row shows them from then on.
+static void run_check() {
+    const auto started = std::chrono::steady_clock::now();
+    std::vector<CardRenderers> cards = check_renderers_now(15000u);
+    const std::size_t count = cards.size();
+    const auto took = std::chrono::steady_clock::now() - started;
+    {
+        CheckState& done = check_state();
+        const std::lock_guard<std::mutex> finished(done.lock);
+        done.result.cards = std::move(cards);
+        done.result.done = true;
+    }
+    const std::string line = "checked: " + std::to_string(count) + (count == 1u ? " card in " : " cards in ") +
+                             std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(took).count()) + " ms";
+    std::cerr << "[renderers] " << line << '\n';
+    galaxy::extensions::log_line("[renderers]", line.c_str());
+}
+
 RendererCheck renderer_check() {
     CheckState& state = check_state();
-    const std::lock_guard<std::mutex> lock(state.lock);
+    std::unique_lock<std::mutex> lock(state.lock);
     if (!state.started) {
         state.started = true;
-        try {
-            std::thread([] {
-                const auto started = std::chrono::steady_clock::now();
-                std::vector<CardRenderers> cards = check_renderers_now(15000u);
-                const std::size_t count = cards.size();
-                const auto took = std::chrono::steady_clock::now() - started;
-                {
-                    CheckState& done = check_state();
-                    const std::lock_guard<std::mutex> finished(done.lock);
-                    done.result.cards = std::move(cards);
-                    done.result.done = true;
-                }
-                // The System page's RENDERER row shows the answers from now: the log's line, and the extensions' (a test
-                // waits for it).
-                const std::string line = "checked: " + std::to_string(count) + (count == 1u ? " card in " : " cards in ") +
-                                         std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(took).count()) + " ms";
-                std::cerr << "[renderers] " << line << '\n';
-                galaxy::extensions::log_line("[renderers]", line.c_str());
-            }).detach();
-        } catch (const std::system_error&) {
-            state.result.done = true;  // no thread: nothing known
+        if ((galaxy::extensions::flags() & NEBULA_EXT_FIXED_STEPS) != 0u) {
+            // A run on fixed steps (a test) has the answers inside this call, as its disc reads finish inside theirs:
+            // the System page then shows the same answers at the same frame in every run, whatever the machine's load.
+            lock.unlock();
+            run_check();
+            lock.lock();
+        } else {
+            try {
+                std::thread(run_check).detach();
+            } catch (const std::system_error&) {
+                state.result.done = true;  // no thread: nothing known
+            }
         }
     }
     return state.result;
