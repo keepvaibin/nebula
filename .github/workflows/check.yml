@@ -309,6 +309,9 @@ jobs:
     timeout-minutes: 60
     env:
       SYSTEM_IMAGE: system-images;android-34;google_apis;x86_64
+      # Where avdmanager writes the device and the emulator reads it: without it they did not agree ("Unknown AVD
+      # name").
+      ANDROID_AVD_HOME: ${{ github.workspace }}/../avd
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
