@@ -685,7 +685,6 @@ private:
     // The display's rate for pacing; `read_mode`: the mode's rate read again (the display changed).
     void refresh_display_rate(bool read_mode);
     void wait_for_gpu();            // shutdown, resize and finish_pictures only
-    void drain_mid_frame(const char* what);  // wait_for_gpu while a frame records, logged
     // Applies a pending window resize (the extent mailbox in renderer_d3d12.cpp).
     // Called only from begin_frame(), between command-list recordings.
     void apply_pending_resize();
@@ -963,6 +962,20 @@ private:
         std::size_t conv_ring = ~std::size_t{0};  // the conv_scene_tables_ entry its views are in after a swap_scene_color
     };
     SceneTargetSet alt_scene_;
+    // A target made again at another size while frames are in flight (P-028): its resources wait in
+    // retired_targets_[frame_slot_] and its persistent views in retired_persistent_ until the frames that could still
+    // read them are done, in place of a GPU drain. The open command list may name them too: they outlive it.
+    // `own_depth_view`: the set's multisampled depth view is its own (a wide set shares the scene's).
+    void retire_scene_set(SceneTargetSet& set, bool own_depth_view);
+    void retire_persistent(std::optional<DescriptorRing::Persistent>& table, unsigned count);
+    // `count` persistent descriptors: a retired table no frame can read any more, else new ones.
+    [[nodiscard]] DescriptorRing::Persistent fresh_persistent(unsigned count);
+    struct RetiredPersistent {
+        DescriptorRing::Persistent table;
+        unsigned count = 0u;
+        std::uint64_t free_from = 0u;  // the frame index from which no frame in flight reads it
+    };
+    std::vector<RetiredPersistent> retired_persistent_;
     // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes
     // ( its colour shared with its picture), dropped after kIdleSteps game steps (idle_clock.h) unused. A picture is sampled
     // through its own view slot (TextureStore::allocate_view) reading the pass's channels.
