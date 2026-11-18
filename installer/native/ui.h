@@ -121,6 +121,10 @@ int Run(Form& main);
 void SetMessageFilter(std::function<bool(MSG&)> filter);
 
 int Message(Form* owner, const wstring& text, const wstring& caption, UINT flags = MB_OK);
+// A question with Yes and No (a task dialog): true for Yes. `yesDefault` picks the button Enter presses. With `check`,
+// an unticked box under the text, its state at the answer in *ticked. Closing the dialog is No.
+bool Ask(Form* owner, const wstring& caption, const wstring& question, const wstring& text, bool yesDefault,
+         const wstring& check = L"", bool* ticked = nullptr);
 std::optional<wstring> OpenFileDialog(Form* owner, const wstring& title, const std::vector<std::pair<wstring, wstring>>& filters);
 std::optional<wstring> FolderDialog(Form* owner, const wstring& title);
 

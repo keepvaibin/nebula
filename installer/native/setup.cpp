@@ -8,6 +8,7 @@
 #include "setup_engine.h"
 #include "text.h"
 #include "ui.h"
+#include "uninstall_choice.h"
 
 #include <shlobj.h>
 
@@ -76,6 +77,7 @@ private:
     void Finished(std::optional<wstring> failure, bool canceled);
     void Warn(const wstring& message) { Message(this, message, Of(L"Nebula Setup"), MB_OK | MB_ICONWARNING); }
     void CheckForUpdate();
+    void Uninstall();
     void Downloaded(const wstring& exe);
     void UpdateEnded();
     void ShowChoose(bool visible);
@@ -101,6 +103,8 @@ private:
     std::unique_ptr<CancelToken> cancel_;
     std::unique_ptr<InstallEngine> engine_;
     std::atomic<bool> working_{false};
+    // An uninstall runs on its thread: it cannot stop half way, so the window stays open until it ends.
+    bool uninstalling_ = false;
     bool finished_ = false;
     ULONGLONG clockStart_ = 0;
 };
@@ -130,6 +134,7 @@ SetupForm::SetupForm(const Options& options)
         }
     };
     onClosing = [this] {
+        if (uninstalling_) return false;
         if (!working_) return true;
         // Closing during work cancels it; the window closes once the work has stopped.
         if (Message(this, Of(L"Cancel setup?"), Of(L"Nebula Setup"), MB_YESNO | MB_ICONQUESTION) != IDYES) return false;
@@ -305,13 +310,7 @@ void SetupForm::BuildWorkPage() {
 void SetupForm::OnStart() {
     try {
         if (installed_ && modeUninstall_ && Checked(modeUninstall_)) {
-            int answer = Message(this, (portableInstalled_ ? Of(L"Remove this portable copy of Nebula?") : Of(L"Uninstall Nebula?")) + L"\r\n\r\n" +
-                                           Of(L"Saves and settings in {0} are kept. Choose No to delete them too.", {paths::DataRoot()}),
-                                 portableInstalled_ ? Of(L"Remove portable Nebula") : Of(L"Uninstall Nebula"), MB_YESNOCANCEL | MB_ICONQUESTION);
-            if (answer == IDCANCEL) return;
-            integration::Uninstall(layout_, answer == IDNO);
-            Message(this, portableInstalled_ ? Of(L"Portable Nebula was removed.") : Of(L"Nebula was uninstalled."), Of(L"Nebula Setup"));
-            Close();
+            Uninstall();
             return;
         }
         if (installed_ && modeRestore_ && Checked(modeRestore_)) {
@@ -428,6 +427,59 @@ void SetupForm::Finished(std::optional<wstring> failure, bool canceled) {
     }
     SetText(step_, canceled ? Of(L"Canceled.") : Of(L"Setup failed."));
     if (!canceled) Message(this, *failure, Of(L"Nebula Setup"), MB_OK | MB_ICONERROR);
+}
+
+// The uninstall's questions (uninstall_choice.h: the saves and settings go only when the box is ticked and the second
+// question is answered Yes), then the uninstall on a thread of its own with the work page showing it, so the window
+// keeps answering while files are deleted.
+void SetupForm::Uninstall() {
+    const wstring caption = portableInstalled_ ? Of(L"Remove portable Nebula") : Of(L"Uninstall Nebula");
+    const wstring data = paths::DataRoot();
+    UninstallAnswers answers;
+    answers.uninstall = Ask(this, caption, portableInstalled_ ? Of(L"Remove this portable copy of Nebula?") : Of(L"Uninstall Nebula?"),
+                            Of(L"Saves and settings in {0} are kept.", {data}), true, Of(L"Also delete the saves and settings"),
+                            &answers.deleteTicked);
+    if (answers.uninstall && answers.deleteTicked) {
+        answers.deleteConfirmed = Ask(this, caption, Of(L"Delete the saves and settings?"),
+                                      Of(L"Everything in {0} is deleted, saves and settings included. This cannot be undone.", {data}),
+                                      false);
+    }
+    const UninstallChoice choice = ChooseUninstall(answers);
+    if (choice == UninstallChoice::Cancel) return;
+    ShowChoose(false);
+    Visible(log_, false);
+    Visible(openLog_, false);
+    SetText(step_, portableInstalled_ ? Of(L"Removing portable Nebula…") : Of(L"Uninstalling Nebula…"));
+    SetText(elapsed_, L"");
+    SetMarquee(stepBar_, true);
+    SetProgress(overall_, 0);
+    Enable(cancelButton_, false);
+    uninstalling_ = true;
+    working_ = true;
+    const bool removeData = choice == UninstallChoice::RemoveData;
+    std::thread([this, removeData] {
+        std::optional<wstring> failure;
+        try {
+            integration::Uninstall(layout_, removeData);
+        } catch (const std::exception& error) {
+            failure = ErrorText(error);
+        }
+        Post([this, failure] {
+            working_ = false;
+            uninstalling_ = false;
+            SetMarquee(stepBar_, false);
+            if (failure) {
+                finished_ = true;
+                SetText(step_, Of(L"Uninstall failed."));
+                SetText(cancelButton_, Of(L"Close"));
+                Enable(cancelButton_, true);
+                Message(this, *failure, Of(L"Nebula Setup"), MB_OK | MB_ICONERROR);
+                return;
+            }
+            Message(this, portableInstalled_ ? Of(L"Portable Nebula was removed.") : Of(L"Nebula was uninstalled."), Of(L"Nebula Setup"));
+            Close();
+        });
+    }).detach();
 }
 
 // The check and the download run off the window's thread; the work page shows them.
