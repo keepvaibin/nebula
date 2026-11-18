@@ -186,8 +186,9 @@ bool RendererD3D11::create_states() {
     constants.Usage = D3D11_USAGE_DYNAMIC;
     constants.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     constants.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-    constants.ByteWidth = 32u;  // a DrawRoot (program.hlsli cbuffer Draw), padded to 16-byte steps
+    constants.ByteWidth = kRootSlots * 256u;  // DrawRoots (program.hlsli cbuffer Draw), one a 256-byte slot
     check(device->CreateBuffer(&constants, nullptr, &root_constants_), "draw constants");
+    root_next_ = kRootSlots;
     constants.ByteWidth = 256u;
     check(device->CreateBuffer(&constants, nullptr, &utility_constants_), "utility constants");
 
@@ -1023,10 +1024,18 @@ void RendererD3D11::flush_draws() {
     scene_.color_dirty |= scene_.samples > 1u;
     ID3D11DeviceContext1* const ctx = context();
     ID3D11Buffer* const root = root_constants_.Get();
-    ctx->VSSetConstantBuffers(3u, 1u, &root);
-    ctx->PSSetConstantBuffers(3u, 1u, &root);
+    const auto bind_root = [ctx, root](unsigned slot) {
+        const UINT first = slot * 16u, count = 16u;
+        ctx->VSSetConstantBuffers1(3u, 1u, &root, &first, &count);
+        ctx->PSSetConstantBuffers1(3u, 1u, &root, &first, &count);
+    };
+    // The pass starts with the last root bound (a draw before the pass's first Root keeps it), then each Root its slot.
+    root_slots_.assign(pass_ops_.size(), 0u);
+    std::size_t written = write_roots(0u, true);
+    bind_root(root_carried_slot_);
     D3D11_PRIMITIVE_TOPOLOGY topology = D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
-    for (const gpu::DrawOp& op : pass_ops_) {
+    for (std::size_t index = 0; index < pass_ops_.size(); ++index) {
+        const gpu::DrawOp& op = pass_ops_[index];
         switch (op.kind) {
         case gpu::DrawOp::Kind::Pipeline: {
             const auto* pipeline = reinterpret_cast<const d3d11::Pipeline*>(static_cast<std::uintptr_t>(op.a[0]));
@@ -1063,14 +1072,12 @@ void RendererD3D11::flush_draws() {
             ctx->PSSetConstantBuffers1(1u, 2u, buffers, first, count);
             break;
         }
-        case gpu::DrawOp::Kind::Root: {
-            D3D11_MAPPED_SUBRESOURCE mapped{};
-            if (SUCCEEDED(ctx->Map(root, 0u, D3D11_MAP_WRITE_DISCARD, 0u, &mapped))) {
-                std::memcpy(mapped.pData, op.w, sizeof(gpu::DrawRoot));
-                ctx->Unmap(root, 0u);
+        case gpu::DrawOp::Kind::Root:
+            if (index >= written) {
+                written = write_roots(index, false);  // the ring ran out: the next run (DISCARD), after the draws before
             }
+            bind_root(root_slots_[index]);
             break;
-        }
         case gpu::DrawOp::Kind::Tables: {
             const auto* textures = reinterpret_cast<const d3d11::BoundTable*>(static_cast<std::uintptr_t>(op.a[0]));
             const auto* samplers = reinterpret_cast<const d3d11::BoundTable*>(static_cast<std::uintptr_t>(op.a[1]));
@@ -1125,6 +1132,50 @@ void RendererD3D11::flush_draws() {
         }
     }
     pass_ops_.clear();
+}
+
+std::size_t RendererD3D11::write_roots(std::size_t from, bool carried) {
+    std::size_t roots = carried ? 1u : 0u;
+    for (std::size_t i = from; i < pass_ops_.size(); ++i) {
+        roots += pass_ops_[i].kind == gpu::DrawOp::Kind::Root ? 1u : 0u;
+    }
+    if (roots == 0u) {
+        return pass_ops_.size();
+    }
+    // Appended where the device can map a constant buffer NO_OVERWRITE and the run fits; else the ring starts again
+    // (DISCARD: the driver keeps what the draws already recorded read).
+    const bool append = d3d11::Context::get().caps().no_overwrite_constants && root_next_ < kRootSlots &&
+                        roots <= kRootSlots - root_next_;
+    if (!append) {
+        root_next_ = 0u;
+    }
+    ID3D11DeviceContext1* const ctx = context();
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    if (FAILED(ctx->Map(root_constants_.Get(), 0u, append ? D3D11_MAP_WRITE_NO_OVERWRITE : D3D11_MAP_WRITE_DISCARD, 0u,
+                        &mapped))) {
+        return pass_ops_.size();  // no roots this pass: its draws read what the slots held
+    }
+    auto* const base = static_cast<std::byte*>(mapped.pData);
+    const auto put = [&](const void* words) {
+        std::memcpy(base + static_cast<std::size_t>(root_next_) * 256u, words, sizeof(gpu::DrawRoot));
+        return static_cast<std::uint16_t>(root_next_++);
+    };
+    if (carried) {
+        root_carried_slot_ = put(&root_carried_);
+    }
+    std::size_t i = from;
+    for (; i < pass_ops_.size(); ++i) {
+        if (pass_ops_[i].kind != gpu::DrawOp::Kind::Root) {
+            continue;
+        }
+        if (root_next_ == kRootSlots) {
+            break;
+        }
+        root_slots_[i] = put(pass_ops_[i].w);
+        std::memcpy(&root_carried_, pass_ops_[i].w, sizeof(gpu::DrawRoot));
+    }
+    ctx->Unmap(root_constants_.Get(), 0u);
+    return i;
 }
 
 // A chunk of a recorded pass replayed inline, as the walker would have drawn it.

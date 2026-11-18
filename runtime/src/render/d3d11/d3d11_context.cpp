@@ -162,6 +162,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         caps_.vendor = desc.VendorId;
         caps_.dedicated_bytes = desc.DedicatedVideoMemory;
         caps_.unified_memory = unified_memory(desc.DedicatedVideoMemory);
+        caps_.no_overwrite_constants = options.MapNoOverwriteOnDynamicConstantBuffer != FALSE;
         // The debug layer's messages, read back each frame (report_messages): Direct3D 11 has no callback.
         if ((flags & D3D11_CREATE_DEVICE_DEBUG) != 0u && SUCCEEDED(device1.As(&info_queue_))) {
             info_queue_->SetMessageCountLimit(4096u);
