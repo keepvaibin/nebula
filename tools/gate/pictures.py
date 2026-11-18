@@ -1,19 +1,21 @@
 """pictures.py: the approved pictures of the harness's tests, checked and approved.
 
-    python -X utf8 -I tools/gate/pictures.py check   --runs <work folder> [--renderer R] [--complete] [--out <folder>]
-    python -X utf8 -I tools/gate/pictures.py approve --runs <work folder> [--renderer R] [--only TEST[/PICTURE] ...]
+    python -X utf8 -I tools/gate/pictures.py check   --runs <work folder> [--place P] [--renderer R] [--complete] [--out <folder>]
+    python -X utf8 -I tools/gate/pictures.py approve --runs <work folder> [--place P] [--renderer R] [--only TEST[/PICTURE] ...]
 
 A test's pictures are the shown pictures its "picture" steps took (pictures/<name>.png in each run folder of a
 luma_test.py work folder; the internal display copies, *.display.png, are not judged). An approved picture is named
-in tests/pictures/approved.tsv by its suite, test, renderer and picture name, with the hash of its pixels (SHA-256 of
+in tests/pictures/approved.tsv by its place, suite, test, renderer and picture name, with the hash of its pixels (SHA-256 of
 "W H\\n" and the RGB rows). Its pixels are in the picture store, outside the repository, since a picture of the game is
 the game's content: NEBULA_PICTURES or --store, default D:/NebulaWork/pictures, one PNG per hash.
 
 The tolerance is none: a picture passes when its pixels are the approved picture's, bit for bit. A fixed-step run
 draws the same pixels each time on one adapter and driver (measured: every tour picture of two gate runs identical on
 Direct3D 12, Vulkan and Direct3D 11), so any changed pixel is a change in what the game shows. The approved pictures
-belong to one adapter and driver per renderer (the manifest's "machine" rows): a run on another one is a failure that
-says so, as its pixels may differ for that reason alone.
+belong to one adapter and driver per place and renderer (the manifest's "machine" rows): a run on another one is a
+failure that says so, as its pixels may differ for that reason alone. The place is where the runs were drawn (--place,
+default pc; the tablet's runs are tablet), so the tablet's Vulkan pictures are approved against its own GPU and driver
+beside the PC's (N-1040). Rows written before places existed have no place column and are the PC's.
 
 check: one row per picture: same, changed (how many pixels, the largest channel difference), new (none approved), or
 missing (approved, but the run took none: only with --complete, as a quick run takes fewer). Changed and new pictures
@@ -39,8 +41,8 @@ MANIFEST = TREE / "tests" / "pictures" / "approved.tsv"
 STORE = os.environ.get("NEBULA_PICTURES", "D:/NebulaWork/pictures")
 HEADER = ("# The approved pictures of the harness's tests (tools/gate/pictures.py). Each picture row names the SHA-256 of\n"
           "# its pixels; the pixels are in the picture store (NEBULA_PICTURES), outside the repository.\n"
-          "# machine  renderer  adapter  driver\n"
-          "# picture  suite  test  renderer  picture  width  height  sha256\n")
+          "# machine  place  renderer  adapter  driver\n"
+          "# picture  place  suite  test  renderer  picture  width  height  sha256\n")
 
 
 def load_image(path):
@@ -68,18 +70,21 @@ def read_manifest(path):
             if not line.strip() or line.startswith("#"):
                 continue
             cols = line.split("\t")
-            if cols[0] == "machine" and len(cols) == 4:
-                machines[cols[1]] = (cols[2], cols[3])
-            elif cols[0] == "picture" and len(cols) == 8:
-                pictures[tuple(cols[1:5])] = (int(cols[5]), int(cols[6]), cols[7])
+            # A row without its place (4 and 8 columns) was written before places existed: the PC's.
+            if cols[0] in ("machine", "picture") and len(cols) in (4, 8):
+                cols.insert(1, "pc")
+            if cols[0] == "machine" and len(cols) == 5:
+                machines[(cols[1], cols[2])] = (cols[3], cols[4])
+            elif cols[0] == "picture" and len(cols) == 9:
+                pictures[tuple(cols[1:6])] = (int(cols[6]), int(cols[7]), cols[8])
             else:
                 raise SystemExit("%s line %d: not a machine or picture row" % (path, n))
     return machines, pictures
 
 
 def write_manifest(path, machines, pictures):
-    rows = ["machine\t%s\t%s\t%s" % (r, a, d) for r, (a, d) in sorted(machines.items())]
-    rows += ["picture\t%s\t%s\t%s\t%s\t%d\t%d\t%s" % (k + v) for k, v in sorted(pictures.items())]
+    rows = ["machine\t%s\t%s\t%s\t%s" % (k + v) for k, v in sorted(machines.items())]
+    rows += ["picture\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%s" % (k + v) for k, v in sorted(pictures.items())]
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\r\n") as f:
         f.write(HEADER + "\n".join(rows) + "\n")
@@ -118,9 +123,9 @@ def check(args):
     runs = runs_in(args.runs, args.renderer)
     for renderer in sorted({r[2] for r in runs}):
         here = {(adapter_of(res), res.get("driver", "")) for _, _, rr, _, res in runs if rr == renderer}
-        want = machines.get(renderer)
+        want = machines.get((args.place, renderer))
         if want is None:
-            rows.append(("machine", renderer, "no approved pictures for this renderer"))
+            rows.append(("machine", renderer, "no approved pictures for this renderer at %s" % args.place))
             bad += 1
         elif here != {want}:
             rows.append(("machine", renderer, "approved on %s driver %s; these runs: %s" % (
@@ -132,7 +137,7 @@ def check(args):
             seen.add(key)
             w, h, rgb = load_image(png)
             sha = pixel_hash(w, h, rgb)
-            have = approved.get(key)
+            have = approved.get((args.place,) + key)
             if have is not None and have[2] == sha:
                 rows.append(("same", "/".join(key), ""))
                 continue
@@ -159,8 +164,9 @@ def check(args):
     if args.complete:
         renderers = {r[2] for r in runs}
         suites = {r[0] for r in runs}
-        for key in sorted(approved):
-            if key[0] in suites and key[2] in renderers and key not in seen:
+        for place, *rest in sorted(approved):
+            key = tuple(rest)
+            if place == args.place and key[0] in suites and key[2] in renderers and key not in seen:
                 rows.append(("missing", "/".join(key), "approved, but the runs took no such picture"))
                 bad += 1
     for row in rows:
@@ -220,11 +226,12 @@ def approve(args):
             refused.append("%s/%s: the run did not pass (%s)" % (test, renderer, result.get("verdict")))
             continue
         here = (adapter_of(result), result.get("driver", ""))
-        if machines.get(renderer, here) != here and not args.new_machine:
-            refused.append("%s/%s: drawn on %s driver %s, the approved pictures are of %s driver %s (--new-machine "
-                           "replaces them)" % (test, renderer, here[0], here[1], *machines[renderer]))
+        if machines.get((args.place, renderer), here) != here and not args.new_machine:
+            refused.append("%s/%s: drawn on %s driver %s, the approved pictures at %s are of %s driver %s "
+                           "(--new-machine replaces them)" % (test, renderer, here[0], here[1], args.place,
+                                                              *machines[(args.place, renderer)]))
             continue
-        machines[renderer] = here
+        machines[(args.place, renderer)] = here
         for png in chosen:
             w, h, rgb = load_image(png)
             sha = pixel_hash(w, h, rgb)
@@ -232,11 +239,11 @@ def approve(args):
             if not target.exists():
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(png, target)
-            key = (suite, test, renderer, png.stem)
+            key = (args.place, suite, test, renderer, png.stem)
             if approved.get(key, (0, 0, ""))[2] != sha:
                 approved[key] = (w, h, sha)
                 taken += 1
-                print("approved %s" % "/".join(key))
+                print("approved %s" % "/".join(key[1:]))
     write_manifest(args.manifest, machines, approved)
     for r in refused:
         print("refused  %s" % r)
@@ -249,6 +256,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("command", choices=("check", "approve"))
     p.add_argument("--runs", required=True, help="a luma_test.py work folder")
+    p.add_argument("--place", default="pc", help="where the runs were drawn: pc (default) or tablet")
     p.add_argument("--renderer", help="only this renderer's runs")
     p.add_argument("--manifest", type=pathlib.Path, default=MANIFEST)
     p.add_argument("--store", default=STORE)

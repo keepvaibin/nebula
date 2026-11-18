@@ -98,6 +98,33 @@ def main():
     code, out = tool("check", *common)
     check(code == 0, "approved on the new driver, they pass", out)
 
+    # Places (N-1040): the same runs drawn on the tablet are checked against the tablet's rows, never the PC's.
+    make_run(work, "001-A-1", {}, driver="tablet 1")
+    make_run(work, "002-B-1", {(1, 1): (200, 0, 0)}, driver="tablet 1")
+    code, out = tool("check", *common, "--place", "tablet")
+    check(code == 1 and "no approved pictures for this renderer at tablet" in out,
+          "a tablet run checked where only the PC's rows are fails by machine", out)
+    code, out = tool("approve", *common, "--place", "tablet")
+    check(code == 0 and "approved 4 pictures" in out, "approve --place tablet takes them beside the PC's", out)
+    code, out = tool("check", *common, "--place", "tablet", "--complete")
+    check(code == 0 and "pictures: 4 of 4 the same" in out, "against the tablet's rows they pass", out)
+    code, out = tool("check", *common)
+    check(code == 1 and "approved on Test GPU driver 9.9.9" in out,
+          "the PC's rows are untouched: tablet runs checked as the PC's fail by machine", out)
+    rows = manifest.read_text(encoding="utf-8").splitlines()
+    check(any(r.startswith("machine\tpc\td3d12\tTest GPU\t9.9.9") for r in rows)
+          and any(r.startswith("machine\ttablet\td3d12\tTest GPU\ttablet 1") for r in rows),
+          "one machine row per place and renderer", "\n".join(rows[:8]))
+
+    # A manifest written before places existed (no place column) is the PC's.
+    old = root / "old.tsv"
+    old.write_text("".join(r.replace("\tpc\t", "\t", 1) + "\n" for r in rows
+                           if r.startswith(("machine\tpc\t", "picture\tpc\t"))), encoding="utf-8")
+    make_run(work, "001-A-1", {}, driver="9.9.9")
+    make_run(work, "002-B-1", {(1, 1): (200, 0, 0)}, driver="9.9.9")
+    code, out = tool("check", "--runs", work, "--store", store, "--manifest", old, "--complete")
+    check(code == 0 and "pictures: 4 of 4 the same" in out, "rows without a place read as the PC's", out)
+
     print("\n".join(failed) if failed else "pictures: every case holds")
     return 1 if failed else 0
 
