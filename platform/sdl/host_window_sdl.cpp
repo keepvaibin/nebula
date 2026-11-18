@@ -45,6 +45,7 @@ namespace galaxy::render::vk {
 #include "galaxy/path_text.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/thermal_state.h"
 #include "galaxy/virtual_keys.h"
 
 #include <SDL3/SDL.h>
@@ -1343,6 +1344,8 @@ bool start() noexcept {
         std::fprintf(stderr, "[sdl] SDL_Init failed: %s\n", SDL_GetError());
         return false;
     }
+    // The system's heat, logged as it changes (Android; Linux reports none).
+    galaxy::host::thermal_watch_start();
     return true;
 }
 

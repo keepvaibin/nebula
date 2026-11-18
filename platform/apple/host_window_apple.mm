@@ -37,6 +37,7 @@
 #include "galaxy/runtime_settings.h"
 #include "galaxy/steam_controller.h"
 #include "galaxy/switch_controller.h"
+#include "galaxy/thermal_state.h"
 #include "galaxy/ui/launcher.h"
 #include "galaxy/virtual_keys.h"
 #include "apple_host.h"
@@ -1221,6 +1222,15 @@ bool start() noexcept {
         for (GCMouse* mouse in GCMouse.mice) {
             open_mouse(mouse);
         }
+        // The system's heat, logged as it changes (thermal_state.h).
+        galaxy::host::thermal_watch_start();
+        [center addObserverForName:NSProcessInfoThermalStateDidChangeNotification
+                            object:nil
+                             queue:nil
+                        usingBlock:^(NSNotification* note) {
+                            (void)note;
+                            galaxy::host::thermal_heat_changed();
+                        }];
         // A screen added, taken away or set to another size: the DISPLAY page's list and the window follow.
         [center addObserverForName:NSApplicationDidChangeScreenParametersNotification
                             object:nil
