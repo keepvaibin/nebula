@@ -23,7 +23,12 @@ param(
     # build's, so the first build does not compile every program again.
     [string]$SeedFrom = "",
     # Sanitizers for the game modules (clang -fsanitize=...), e.g. address,undefined; empty for none.
-    [string]$Sanitize = ""
+    [string]$Sanitize = "",
+    # The compiler cache in front of clang and cl (N-1049): one cache for every tree and build folder beside these,
+    # their paths taken out of what it hashes (SCCACHE_BASEDIRS), so a file another tree compiled the same way is not
+    # compiled again. Empty, or no such program: none.
+    [string]$Sccache = "D:/NebulaWork/tools/sccache/sccache.exe",
+    [string]$SccacheDir = "D:/NebulaWork/sccache"
 )
 $ErrorActionPreference = "Stop"
 $Tree = (Resolve-Path $Tree).Path.Replace("\", "/")
@@ -35,6 +40,30 @@ $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
 $cmake = Join-Path $vs "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 $ninja = (Get-Command ninja).Source.Replace("\", "/")
 $failed = 0
+
+# The compiler cache: its server starts with the first build and reads these then (it stops after 10 idle minutes).
+$launch = ""
+$cacheBefore = $null
+if ($Sccache -and (Test-Path $Sccache)) {
+    $Sccache = (Resolve-Path $Sccache).Path.Replace("\", "/")
+    $env:SCCACHE_DIR = $SccacheDir
+    $env:SCCACHE_CACHE_SIZE = "60G"
+    # Every tree beside this one and every build folder beside this one's: the longest that starts a path is taken out.
+    $bases = @($Tree, $Root) + @(Get-ChildItem (Split-Path $Tree) -Directory | ForEach-Object { $_.FullName.Replace("\", "/") }) +
+        @(Get-ChildItem (Split-Path $Root) -Directory | Where-Object { (Test-Path "$($_.FullName)/msvc") -or (Test-Path "$($_.FullName)/game") } |
+          ForEach-Object { $_.FullName.Replace("\", "/") })
+    $env:SCCACHE_BASEDIRS = ($bases | Select-Object -Unique) -join ";"
+    $launch = "-DCMAKE_C_COMPILER_LAUNCHER=`"$Sccache`" -DCMAKE_CXX_COMPILER_LAUNCHER=`"$Sccache`" "
+    $cacheBefore = (& $Sccache --show-stats --stats-format json 2>$null | ConvertFrom-Json)
+}
+# A build folder configured with another launcher (or none) is configured again with this one.
+function Launcher-Differs([string]$Folder) {
+    if (-not (Test-Path "$Folder/CMakeCache.txt")) { return $false }
+    $line = Select-String -Path "$Folder/CMakeCache.txt" -Pattern '^CMAKE_CXX_COMPILER_LAUNCHER:[A-Z]+=(.*)$' | Select-Object -First 1
+    $have = if ($line) { $line.Matches[0].Groups[1].Value } else { "" }
+    $want = if ($launch) { $Sccache } else { "" }
+    return $have -ne $want
+}
 
 # A step: its command in the build environment, its output in its log. Start returns the running process; Finish
 # waits for it and judges it (a FAILED line or a non-zero exit fails the build); Step does both.
@@ -62,8 +91,8 @@ function Step([string]$Name, [string]$Command, [string]$Log) {
 
 # The game modules (both), the headless host, the self-description and the services list.
 $game = "$Root/game"
-if (-not (Test-Path "$game/build.ninja")) {
-    Step "game configure" ("`"$cmake`" -S `"$Tree/native`" -B `"$game`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$ninja`" " +
+if (-not (Test-Path "$game/build.ninja") -or (Launcher-Differs $game)) {
+    Step "game configure" ("`"$cmake`" -S `"$Tree/native`" -B `"$game`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$ninja`" $launch" +
         "-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=`"$Llvm/clang.exe`" -DCMAKE_CXX_COMPILER=`"$Llvm/clang++.exe`" " +
         "-DCMAKE_RC_COMPILER=`"$Llvm/llvm-rc.exe`" -DNEBULA_PETARI_DIR=`"$Tree/native/petari`" " +
         "-DNEBULA_SANITIZE=`"$Sanitize`"") "$Root/game.configure.log"
@@ -90,8 +119,8 @@ if ($SeedFrom -and (Test-Path "$SeedFrom/generated")) {
         if (-not (Test-Path "$msvc/generated/$($_.Name)")) { Copy-Item -Recurse $_.FullName "$msvc/generated/$($_.Name)" }
     }
 }
-if (-not (Test-Path "$msvc/build.ninja")) {
-    Step "msvc configure" ("`"$cmake`" -G Ninja -S `"$Tree`" -B `"$msvc`" -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=ON " +
+if (-not (Test-Path "$msvc/build.ninja") -or (Launcher-Differs $msvc)) {
+    Step "msvc configure" ("`"$cmake`" -G Ninja -S `"$Tree`" -B `"$msvc`" -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=ON $launch" +
         "-DNEBULA_D3D11=ON -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DFETCHCONTENT_SOURCE_DIR_FIDELITYFX_SDK=$Ffx " +
         "`"-DNEBULA_EXTRA_CMAKE=$Tree/tools/test_driver/test_driver.cmake`"") "$Root/msvc.configure.log"
 }
@@ -111,6 +140,17 @@ Step "luma-test" ("`"$Llvm/clang.exe`" --target=x86_64-pc-windows-msvc -O2 -shar
 Step "nebula-import" ("cd /d `"$Tree`" && set CARGO_TARGET_DIR=$Root/cargo&& cargo build --release --locked --offline " +
     "-p nebula-import --bin nebula-import --lib") "$Root/cargo.log"
 
+# What the cache gave, this build's share of the server's counts (another build at the same time is counted too).
+if ($launch) {
+    $after = (& $Sccache --show-stats --stats-format json 2>$null | ConvertFrom-Json)
+    if ($after -and $cacheBefore) {
+        $sum = { param($c) $n = 0; if ($c) { $c.PSObject.Properties | ForEach-Object { $n += [int64]$_.Value } }; $n }
+        $hits = (& $sum $after.stats.cache_hits.counts) - (& $sum $cacheBefore.stats.cache_hits.counts)
+        $misses = (& $sum $after.stats.cache_misses.counts) - (& $sum $cacheBefore.stats.cache_misses.counts)
+        $other = $after.stats.requests_not_cacheable - $cacheBefore.stats.requests_not_cacheable
+        "sccache: $hits hits, $misses misses, $other not cacheable; cache $([int]($after.cache_size / 1MB)) MB in $SccacheDir"
+    }
+}
 if ($failed -ne 0) { "build failed"; exit 1 }
 
 # The bin folder: what luma_test.py runs (the programs, the game modules, the game half, the importer, the
