@@ -109,3 +109,10 @@ One dated entry per package step. Newest last.
   looped for ever when a step was refused), N-3016 (a hanging Mario's ceiling probe repeated for ever), N-3017 (the
   sequence check did not bound port numbers; the game indexes 16 ports by them), N-3018 (the running rabbit's turn up
   from the map). Notes of everything read: a3-prof/e14-notes.md.
+- The red 'Android start check (x86_64 emulator)' on ba1d9e259 (run 44312244458): the game process ends with status 3,
+  the start check's 'settings or renderer failed'; its reason line was lost. Android's stdout and stderr reach logcat
+  through a pipe that a thread reads, and std::_Exit came before the thread had read it: the log stops after the first
+  of five [vulkan] lines written together. N-3019 (4b52a1205): host_window::finish_output drains the pipe before every
+  std::_Exit. The earlier failure of that job on app/work (f6cdc4f58) was the emulator's AVD, not the game.
+- N-3003 closed: the Mac and both Android jobs are green on run 44312244458. P-019 owes only the tablet run (the test
+  binary and a game run showing the heat).
