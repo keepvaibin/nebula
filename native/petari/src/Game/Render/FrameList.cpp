@@ -370,7 +370,7 @@ namespace {
         }
         Store* pFree = nullptr;
         for (Store* p = sStores; p != nullptr; p = p->mNext) {
-            if (p->mList.released != 0) {
+            if (nebula_frame_list_released(&p->mList) != 0) {
                 pFree = p;
                 break;
             }

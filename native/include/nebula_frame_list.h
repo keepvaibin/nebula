@@ -443,7 +443,8 @@ typedef struct NebulaFrameList {
     const NebulaFrameClipVolume* clip_volumes; /* the clip areas' volumes this frame, clip_volume_count of them */
     uint32_t clip_volume_count;
     uint32_t clip_rule;        /* NEBULA_CLIP_RULE_*: where the clipped map parts show */
-    /* Set by the renderer when it no longer reads this list. */
+    /* Set by the renderer when it no longer reads this list: written with nebula_frame_list_release, read with
+       nebula_frame_list_released (the game's other writes come before submit_frame). */
     volatile uint32_t released;
     uint32_t reserved;
     const NebulaCall* native_calls; /* NEBULA_PASS_NATIVE's calls */
@@ -478,6 +479,36 @@ typedef struct NebulaPipelineDesc {
    read them with memcpy. */
 #define NEBULA_PIPELINE_FILE_MAGIC "NBPIPEL2"
 enum { NEBULA_PIPELINE_FILE_HEADER_BYTES = 16, NEBULA_PIPELINE_RECORD_BYTES = 28, NEBULA_LAYOUT_INPUT_BYTES = 12 };
+
+/* A list let go of (P-005): the renderer's reads of it come before the store of `released` (release), and the game's
+   reuse of its memory after a load that sees it (acquire), on every processor, ARM's included. */
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
+static __forceinline void nebula_frame_list_release(NebulaFrameList* list) {
+#if defined(_M_ARM64)
+    __stlr32((unsigned __int32 volatile*)&list->released, 1u);
+#else
+    _ReadWriteBarrier(); /* x86 and x64: stores are not reordered with earlier loads and stores */
+    list->released = 1u;
+#endif
+}
+static __forceinline uint32_t nebula_frame_list_released(const NebulaFrameList* list) {
+#if defined(_M_ARM64)
+    return __ldar32((unsigned __int32 volatile*)&list->released);
+#else
+    const uint32_t released = list->released;
+    _ReadWriteBarrier(); /* x86 and x64: loads are not reordered with later loads and stores */
+    return released;
+#endif
+}
+#else
+static inline void nebula_frame_list_release(NebulaFrameList* list) {
+    __atomic_store_n(&list->released, 1u, __ATOMIC_RELEASE);
+}
+static inline uint32_t nebula_frame_list_released(const NebulaFrameList* list) {
+    return __atomic_load_n(&list->released, __ATOMIC_ACQUIRE);
+}
+#endif
 
 #ifdef __cplusplus
 }

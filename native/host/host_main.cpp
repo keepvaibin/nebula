@@ -2046,7 +2046,7 @@ int run_start_check(unsigned frames) {
         galaxy::render::pump_messages();
         NebulaFrameList& list = lists[frame % 3u];
         const auto asked = std::chrono::steady_clock::now();
-        while (list.released == 0u) {
+        while (nebula_frame_list_released(&list) == 0u) {
             if (std::chrono::steady_clock::now() - asked > std::chrono::seconds(10)) {
                 std::fprintf(stderr, "start check: frame %u was not let go of in 10 seconds\n", frame - 3u);
                 return 5;
@@ -2802,7 +2802,7 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
         end_boot_fast("first 3D scene");
         if (!gStartDone) note_start_done();
     }
-    list->released = 1u;
+    nebula_frame_list_release(list);
 }
 uint32_t svc_probe_results(void*, uint32_t, NebulaScreenProbe*, uint32_t) {
     return 0u;

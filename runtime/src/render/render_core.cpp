@@ -1595,7 +1595,7 @@ void RenderCore::drop_device_state() {
         const std::lock_guard<std::mutex> lock(queue_mutex_);
         for (const FrameChunk& queued : frame_queue_) {
             if (queued.list != nullptr) {
-                queued.list->released = 1u;
+                nebula_frame_list_release(queued.list);
             }
         }
         frame_queue_.clear();
@@ -1603,11 +1603,11 @@ void RenderCore::drop_device_state() {
         queue_space_cv_.notify_all();
     }
     if (in_hand_list_ != nullptr) {
-        in_hand_list_->released = 1u;
+        nebula_frame_list_release(in_hand_list_);
         in_hand_list_ = nullptr;
     }
     for (const std::unique_ptr<ListEntry>& entry : lists_) {
-        entry->data.list->released = 1u;
+        nebula_frame_list_release(entry->data.list);
     }
     lists_.clear();
     free_lists_.clear();
@@ -1866,7 +1866,7 @@ void RenderCore::render_loop() {
             } else if (frame_queue_.front().list != nullptr && frame_queue_.front().device_epoch != device_gate_.epoch()) {
                 // Made for the card that was lost.
                 probes_released(frame_queue_.front().list->game_frame);
-                frame_queue_.front().list->released = 1u;
+                nebula_frame_list_release(frame_queue_.front().list);
                 frame_queue_.pop_front();
                 queue_space_cv_.notify_all();
                 continue;
@@ -2215,7 +2215,7 @@ void RenderCore::release_lists_before(const ListEntry& entry) noexcept {
         // The game writes the list's memory again once it sees the flag: every read of it comes first, on every CPU.
         std::atomic_thread_fence(std::memory_order_release);
         probes_released(lists_.front()->data.list->game_frame);
-        lists_.front()->data.list->released = 1u;
+        nebula_frame_list_release(lists_.front()->data.list);
         lists_[1]->before = nullptr;
         free_lists_.push_back(std::move(lists_.front()));
         lists_.pop_front();
