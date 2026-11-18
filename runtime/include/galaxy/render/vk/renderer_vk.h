@@ -682,14 +682,6 @@ private:
     // The window's mode (windowed or borderless fullscreen), monitor and windowed size from the settings, at a frame
     // boundary: as RendererD3D12::reconcile_display_state. The swap chain follows through the window's size message.
     void reconcile_display_state();
-    struct AppliedDisplay {
-        bool valid = false;
-        unsigned mode = 0;
-        std::array<char, 64> monitor{};
-        unsigned window_width = 0;
-        unsigned window_height = 0;
-    };
-    AppliedDisplay applied_display_{};
 #endif
     void report_present_stats();
 

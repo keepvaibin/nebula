@@ -48,6 +48,8 @@ endif()
 galaxy_test(galaxy_frame_timeline_tests SOURCES ${rt}/frame_timeline_tests.cpp)
 # A frame thread's work as wall time between its marks (P-069), on every platform.
 galaxy_test(galaxy_busy_window_tests SOURCES ${rt}/busy_window_tests.cpp)
+# When the window is placed again for the display setting, and a placement by hand kept (P-110, P-111).
+galaxy_test(galaxy_display_reconcile_tests SOURCES ${render_src}/display_reconcile_tests.cpp)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # The Linux package's install.sh with a stand-in package (P-126).
     add_test(NAME nebula_linux_install_tests

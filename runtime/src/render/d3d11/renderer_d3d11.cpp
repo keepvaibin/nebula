@@ -921,6 +921,8 @@ void RendererD3D11::follow_window_and_resize() {
     if (host_window::surface_withdrawn.load(std::memory_order_acquire)) {
         return;
     }
+    // The display setting (mode, monitor, size) brought to the window; its size message reaches the swap chain below.
+    (void)host_window::reconcile_display(window_);
     const std::uint64_t extent = host_window::pending_resize_extent.exchange(0u, std::memory_order_acq_rel);
     if (extent != 0u) {
         const auto width = static_cast<std::uint32_t>(extent >> 32u);

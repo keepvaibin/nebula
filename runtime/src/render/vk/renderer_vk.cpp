@@ -2937,52 +2937,11 @@ bool RendererVk::wants_vsync() const {
 
 #if defined(_WIN32)
 void RendererVk::reconcile_display_state() {
-    if (window_ == nullptr || host_window::hidden_window_mode_enabled()) {
-        return;
-    }
-    const RenderConfig cfg = get_render_config();
-    const unsigned mode = std::min(cfg.display_mode, kDisplayBorderless);
-    AppliedDisplay& applied = applied_display_;
-    const bool same_display = !host_window::display_changed.exchange(false, std::memory_order_acq_rel) && applied.valid &&
-                              applied.mode == mode && applied.monitor == cfg.monitor;
-    if (same_display) {
-        if (mode != kDisplayWindowed ||
-            (applied.window_width == cfg.window_width && applied.window_height == cfg.window_height) ||
-            host_window::move_size_active.load(std::memory_order_acquire)) {
-            return;
-        }
-    }
-    const std::vector<MonitorInfo> monitors = enumerate_monitors();
-    const MonitorInfo* monitor = find_monitor(monitors, widen_utf8(cfg.monitor.data()));
-    if (monitor == nullptr) {
-        return;
-    }
-    host_window::WindowPlacement placement{};
-    if (mode == kDisplayWindowed) {
-        placement.style = host_window::kWindowStyle;
-        placement.rect = host_window::windowed_rect_on_monitor(*monitor, cfg.window_width, cfg.window_height);
-        placement.borderless = false;
-    } else {
-        placement.style = WS_POPUP;
-        placement.rect = monitor->bounds;
-        placement.borderless = true;
-    }
-    DWORD_PTR result = 0u;
-    if (SendMessageTimeoutW(window_, host_window::kPlaceWindowMessage, 0u, reinterpret_cast<LPARAM>(&placement), SMTO_NORMAL,
-                            2000u, &result) == 0) {
-        std::cerr << "[Renderer] display change: the window did not respond\n";
-        return;
-    }
     // The size message of the placement reaches the swap chain through pending_resize_extent; a surface whose size did
     // not change is remade only if the monitor or transform did (surface_changed).
-    swapchain_dirty_ = true;
-    applied.valid = true;
-    applied.mode = mode;
-    applied.monitor = cfg.monitor;
-    applied.window_width = cfg.window_width;
-    applied.window_height = cfg.window_height;
-    std::cout << "[Renderer] display " << (mode == kDisplayWindowed ? "windowed" : "borderless") << ' '
-              << narrow_utf8(monitor->device) << '\n';
+    if (host_window::reconcile_display(window_)) {
+        swapchain_dirty_ = true;
+    }
 }
 #endif
 

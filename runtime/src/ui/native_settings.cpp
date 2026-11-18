@@ -6581,13 +6581,19 @@ bool native_settings_launch_imports_taken() noexcept {
     return s_launch_imports_taken.load(std::memory_order_acquire);
 }
 
-// A size the player drags the window to becomes the windowed size. Saved now, not when the game closes: Nebula Settings
-// reads the file meanwhile.
-void native_settings_window_resized(unsigned width, unsigned height) {
+// Where the player placed the window by hand (its size, the monitor it is on) becomes the setting. Saved now, not when
+// the game closes: Nebula Settings reads the file meanwhile.
+void native_settings_window_placed(unsigned width, unsigned height, const char* monitor) {
     RenderConfig render = get_render_config_chosen();
-    if (render.window_width != width || render.window_height != height) {
+    const bool moved = monitor != nullptr && monitor[0] != '\0' &&
+                       std::strncmp(render.monitor.data(), monitor, render.monitor.size()) != 0;
+    if (render.window_width != width || render.window_height != height || moved) {
         render.window_width = width;
         render.window_height = height;
+        if (moved) {
+            render.monitor.fill('\0');
+            std::snprintf(render.monitor.data(), render.monitor.size(), "%s", monitor);
+        }
         set_render_config(render);
         s_settings_save.dirty.store(true, std::memory_order_release);
         if (!s_native_settings_visible.load(std::memory_order_relaxed)) {

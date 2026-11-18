@@ -846,15 +846,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Fence> fence_;
     std::array<std::uint64_t, kFramesInFlight> fence_values_{};
     HANDLE fence_event_ = nullptr;
-    // The display the window and swap chain were last brought to.
-    struct AppliedDisplay {
-        bool valid = false;
-        unsigned mode = 0;
-        std::array<char, 64> monitor{};
-        unsigned window_width = 0;
-        unsigned window_height = 0;
-    };
-    AppliedDisplay applied_display_{};
     Microsoft::WRL::ComPtr<ID3D12QueryHeap> timestamp_query_heap_;
     Microsoft::WRL::ComPtr<ID3D12Resource> timestamp_readback_;
     std::array<bool, kFramesInFlight> timestamp_pending_{};
