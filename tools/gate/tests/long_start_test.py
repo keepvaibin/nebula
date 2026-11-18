@@ -107,6 +107,34 @@ if start is not None:
         check(cmd is None and len(started) == 2, "a long run in history 3 hours ago stops a start: %s" % what)
         sh(git, "-C", str(source), "worktree", "remove", "--force", str(long_tree))
 
+# After a move, the measure: the moved build copied (two copies before it kept), then measure.py started detached on
+# the copy with the gate lock, the board and the tablet (07-BASE-FIRST stage 1 item 1).
+with tempfile.TemporaryDirectory() as m:
+    m = pathlib.Path(m)
+    (m / "bins").mkdir()
+    (m / "bins" / "Nebula.exe").write_text("x", encoding="utf-8")
+    (m / "android").mkdir()
+    (m / "android" / "app.apk").write_text("y", encoding="utf-8")
+    store = m / "measure-bins"
+    for i, old in enumerate(("aaa", "bbb", "ccc")):
+        (store / old).mkdir(parents=True)
+        os.utime(store / old, (1000 + i, 1000 + i))
+    g = type("G", (), {"bin": str(m / "bins"), "android_bin": str(m / "android"), "name": "run-9"})()
+    margs = type("A", (), {"work": str(m / "work"), "paks": "P", "who": "Agent 1", "tablet": "SERIAL",
+                           "tablet_lock": "T.lock", "gate_lock": "G.lock", "board": "B.md"})()
+    (m / "work").mkdir()
+    started = []
+    what = gate.start_measure("0123456789abcdef", g, margs, popen=lambda cmd, **k: started.append(cmd), bins=store)
+    copy = store / "012345678"
+    check(len(started) == 1 and (copy / "bin" / "Nebula.exe").is_file() and (copy / "android" / "app.apk").is_file(),
+          "the build and the Android build copied, one start: %s %s" % (what, started))
+    cmd = started[0] if started else []
+    check(str(gate.MEASURE) in cmd and cmd[cmd.index("--bin") + 1] == str(copy / "bin")
+          and cmd[cmd.index("--gate-lock") + 1] == "G.lock" and cmd[cmd.index("--board") + 1] == "B.md"
+          and cmd[cmd.index("--runs") + 1].endswith(",tablet") and cmd[cmd.index("--device") + 1] == "SERIAL",
+          "measure.py on the copy, with the gate lock, the board and the tablet: %s" % cmd)
+    check(sorted(p.name for p in store.iterdir()) == ["012345678", "bbb", "ccc"], "the two copies before it kept")
+
 if failures:
     print("long_start_test.py: FAILED:\n  " + "\n  ".join(failures))
     sys.exit(1)

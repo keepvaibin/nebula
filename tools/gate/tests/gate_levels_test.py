@@ -155,16 +155,16 @@ def main():
         check({"tour/vulkan", "tour/d3d11", "replays/tablet", "tour/tablet-pc", "github", "build/android",
                "tour-RMGP01/d3d12", "pictures/tablet"} <= m and "soak" not in m and "tour-RMGP01/vulkan" not in m,
               "main: %s" % sorted(m))
-        check({"soak", "tour-asan/d3d12", "mods-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage", "measure/short"} <= lg
+        check({"soak", "tour-asan/d3d12", "mods-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage", "measure/route"} <= lg
               and "github" not in lg and "unit/windows" not in lg and "pictures/tablet" not in lg, "long: %s" % sorted(lg))
         # The sanitizer build runs the mod tests too (N-1041): a check of its own after that build, not a planned one.
         check(tuple(long_needs.get("mods-asan/d3d12", ())) == ("build/windows-asan",),
               "long: the mod tests on the sanitizer build: %s" % (long_needs.get("mods-asan/d3d12"),))
-        # The short measurement set runs at the long run's end (N-1043): a check of its own, not a planned one.
+        # The play route measure runs at the long run's end (N-1043): a check of its own, not a planned one.
         check(tuple(long_needs.get("coverage", ())) == ("build/windows-coverage",) and "build/windows-coverage" in lg,
               "long: the coverage build's report runs: %s" % (long_needs.get("coverage"),))
-        check(tuple(long_needs.get("measure/short", ())) == ("build/windows",),
-              "long: the short measurement set runs: %s" % (long_needs.get("measure/short"),))
+        check(tuple(long_needs.get("measure/route", ())) == ("build/windows",),
+              "long: the play route measure runs: %s" % (long_needs.get("measure/route"),))
         check((m | lg) <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))
         chosen = gate.select(main_needs, ["replays/vulkan"])
         check(chosen == {"replays/vulkan", "tour/vulkan", "tour/d3d12", "build/windows"}, "--only and its needs: %s" % sorted(chosen))
@@ -243,7 +243,8 @@ def main():
                     seen.append((name, getattr(gate.LANE, "below_normal", False)))
 
             cpu_lane(CpuGate(), ("RMGE01",))()
-            check([n for n, _ in seen] == ["rust", "lumalink", "import/collision/RMGE01", "harness/self", "description/self"]
+            check([n for n, _ in seen] == ["rust", "lumalink", "docs", "import/collision/RMGE01", "harness/self",
+                                    "description/self"]
                   and all(low for _, low in seen) and not getattr(gate.LANE, "below_normal", False),
                   "the lane's checks run in order at below-normal priority, and the lane gives the flag back")
             if os.name == "nt":
