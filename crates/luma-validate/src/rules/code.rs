@@ -737,6 +737,19 @@ mod types_tests {
     }
 
     #[test]
+    fn a_field_s_nullable_mark_is_read() {
+        // N-4004: the types file writes "nullable": true only on a field LUMA_NULLABLE marks.
+        let file = |rest: &str| {
+            format!(r#"{{"types": [{{"kind": "struct", "name": "A", "size": 8, "align": 4, "polymorphic": false, "abstract": false, "trivial_copy": true, "trivial_destroy": true, "no_copy": false, "bases": [], "fields": [{{"name": "p", "type": "LiveActor *", "offset": 0, "count": 1, "extents": null, "access": "public", "bits": null{rest}}}], "reachable": []}}], "globals": [], "left_out": []}}"#)
+        };
+        let nullable = |rest: &str| Types::from_json(file(rest).as_bytes()).unwrap().records["A"].own[0].nullable;
+        assert!(nullable(r#", "nullable": true"#));
+        assert!(!nullable(""));
+        assert!(!nullable(r#", "nullable": false"#));
+        assert_eq!(Types::from_json(file(r#", "nullable": 1"#).as_bytes()).unwrap_err().to_string(), "types[0].fields[0].nullable: not true or false");
+    }
+
+    #[test]
     fn a_types_file_not_in_the_form_is_refused_naming_the_row() {
         let refused = |json: &str| Types::from_json(json.as_bytes()).unwrap_err().to_string();
         assert!(refused("{").starts_with("line 1 column ") && refused("{").contains(": not JSON ("), "{}", refused("{"));

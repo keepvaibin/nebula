@@ -14,7 +14,9 @@
 //   LUMA_COUNT(param)    with a way: an array whose element count is the integer parameter `param`
 //   LUMA_COUNT_FIXED(n)  with a way: an array of exactly n elements (1 to 4096)
 //   LUMA_NULLABLE        with any way: the function accepts null there (with LUMA_KEPT: it reads the kept address only
-//                        when it was given one)
+//                        when it was given one). Alone before a pointer field (`LUMA_NULLABLE LiveActor* mHost;`): the
+//                        game reads the field only after testing it, so a mod may store null there; the types file
+//                        gives the field "nullable": true (N-4004)
 //
 // Except under LUMA_KEPT, the pointer is to a number, an enum or a vector (2 to 4 floats x, y, z, w).
 // A `const char *` takes no mark: instrument.py proves from the function's code, and every function it reaches, whether

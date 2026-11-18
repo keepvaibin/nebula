@@ -283,7 +283,8 @@ def set_target(raw):
 def parse(api, index, args):
     tu = c_void_p()
     encoded = (c_char_p * len(args))(*[a.encode() for a in args])
-    code = api.parse(index, None, encoded, len(args), None, 0, 0, byref(tu))  # with bodies: a virtual's calls
+    # With bodies (a virtual's calls) and the macro expansions (the marks, LumaMarks.hpp).
+    code = api.parse(index, None, encoded, len(args), None, 0, I.PARSE_OPTIONS, byref(tu))
     if code != 0 or not tu:
         sys.exit(f"gen_types.py: the headers could not be parsed (libclang error {code})")
     errors = []
@@ -311,6 +312,7 @@ class Reader:
             unit.api = api
             unit.tu = tu
             unit.label = None  # no file: a local function (identity()'s "file#...") has no row name here
+            unit.read_field_marks()  # the fields' marks (N-4004)
         self.unit = unit
         self.foreign = {}   # typedefs outside the game's trees at file scope (<stdint.h>'s): name -> cursor
         self.named_instances = set()  # unit pass: the instances (and their members) its types name
@@ -723,6 +725,8 @@ class Reader:
             field = {"name": prefix + spelled, "type": text, "count": count,
                      "extents": extents if len(extents) > 1 else None, "access": ACCESS.get(self.api.access(m)),
                      "offset": at_bits // 8, "bits": None}
+            if self.unit.field_nullable(m):
+                field["nullable"] = True  # LUMA_NULLABLE (N-4004): the game tests it; written only when marked
             if bits is not None:
                 if bits > 32:
                     self.left.append(("field", row["name"] + "." + prefix + spelled, row["file"], row["line"], R_WIDE_BITS))

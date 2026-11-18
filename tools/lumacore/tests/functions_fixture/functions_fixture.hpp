@@ -59,6 +59,15 @@ void fnDefined(FnVec* out);
 struct FnMarked {
     void get(LUMA_OUT FnVec* out) const;  // a method: its `this` is not in the list
 };
+// Fields the game reads only after testing them (N-4004): "nullable" in the types file; the others have none.
+struct FnHolder {
+    FnVec* always;
+    LUMA_NULLABLE FnVec* maybe;
+    int count;
+    void use(LUMA_OUT FnVec* out);
+    LUMA_NULLABLE
+    const FnVec* nextLine;
+};
 // A mark in a macro's argument is recorded where it is written, and binds.
 #define FN_DECLARE(type) void fnByMacro(type v)
 FN_DECLARE(LUMA_OUT float*);

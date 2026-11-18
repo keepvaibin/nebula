@@ -137,6 +137,13 @@ REFUSED = [
     # A18M-4: a mark inside a macro's own text
     ("a mark inside a macro's text", "#define OUT_VEC LUMA_OUT float*\nvoid f(OUT_VEC p);",
      "{f}:2: LUMA_OUT is written inside a macro (OUT_VEC)"),
+    # N-4004: a field takes LUMA_NULLABLE only, on a pointer
+    ("a way on a field", "struct S { LUMA_OUT float* p; };", "{f}:2: LUMA_OUT on the field S::p: a field takes LUMA_NULLABLE only"),
+    ("NULLABLE on a number field", "struct S { LUMA_NULLABLE int n; };",
+     "{f}:2: LUMA_NULLABLE on the field S::n of type int: a field mark takes a pointer"),
+    ("NULLABLE twice on a field", "struct S { LUMA_NULLABLE LUMA_NULLABLE float* p; };",
+     "{f}:2: LUMA_NULLABLE twice on the field S::p"),
+    ("a mark after a field's name", "struct S { float* p LUMA_NULLABLE; };", "{f}:2: LUMA_NULLABLE marks no parameter or field"),
 ]
 
 
@@ -176,6 +183,13 @@ def main():
     extra = [(f["name"], f["signature"]) for f in have if f not in EXPECTED]
     if extra or len(have) != len(EXPECTED):
         failed.append("rows not in the expected list, or counted twice: %s (%d rows)" % (extra, len(have)))
+
+    # N-4004: the fields' marks in the types file
+    holder = next((r for r in json.loads((out / "gen" / "luma_types.json").read_text(encoding="utf-8"))["types"]
+                   if r.get("kind") == "struct" and r.get("name") == "FnHolder"), None)
+    marked = {f["name"]: f.get("nullable", False) for f in (holder or {}).get("fields", [])}
+    if marked != {"always": False, "maybe": True, "count": False, "nextLine": True}:
+        failed.append("the fields' nullable marks are %s, not maybe and nextLine only" % marked)
 
     # Self-description: table keys
     tables = {t["name"].rpartition("#")[2]: t for t in

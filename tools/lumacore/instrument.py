@@ -1547,12 +1547,35 @@ class Unit:
         """Each LUMA_ mark bound to the parameter it is written in: after the function's name or the previous
         parameter, up to the end of this one (`LUMA_OUT Vec3f* p`, `const LUMA_OUT Vec3f* p`); checked; merged over a
         function's declarations, an unmarked parameter taking the marked one's. self.marks: hash of a canonical
-        declaration -> [(canonical, one entry per parameter)]. Stops, naming the file and line, on a mark that marks no
-        parameter, a mark of the wrong form, or two declarations marking one parameter differently."""
+        declaration -> [(canonical, one entry per parameter)]. A mark written before a field (after the previous member,
+        up to the field's name: `LUMA_NULLABLE LiveActor* mHost;`) is the field's (N-4004): self.field_marks, the
+        (file, offset of the name) of each field marked LUMA_NULLABLE. Stops, naming the file and line, on a mark that
+        marks no parameter or field, a mark of the wrong form, or two declarations marking one parameter differently."""
         api = self.api
         self.marks = {}
+        self.field_marks = set()
+        found = self.mark_expansions()
+        if not found:
+            return
+        starts = {file: [m[0] for m in marks] for file, marks in found.items()}
+        bound = set()
+        self.bind_field_marks(api.cursor(self.tu), found, bound)
+        self.bind_parameter_marks(found, starts, bound)
+
+    def read_field_marks(self):
+        """gen_types.py's header pass: the fields' marks only (read_marks' self.field_marks); a function's marks are the
+        unit pass's, which sees each template's instances."""
+        self.field_marks = set()
+        found = self.mark_expansions()
+        if found:
+            self.bind_field_marks(self.api.cursor(self.tu), found, set())
+
+    def mark_expansions(self):
+        """Every LUMA_ mark the unit writes, checked as LumaMarks.hpp's and written outside a macro: file -> [(start, end,
+        line, name, argument)], in the order written."""
+        api = self.api
         self.marks_in_macros()
-        found = {}  # file -> [(start, end, line, name, argument)], in the order written
+        found = {}
         texts = {}
         for c in self.children(api.cursor(self.tu)):
             if c.kind != K_MACRO_EXPANSION:
@@ -1581,12 +1604,12 @@ class Unit:
                     sys.exit(f'instrument.py: {where}: {name} is written "{written}": one argument in parentheses')
                 argument = match.group(1)
             found.setdefault(file, []).append((start, end, line, name, argument))
-        if not found:
-            return
         for marks in found.values():
             marks.sort()
-        starts = {file: [m[0] for m in marks] for file, marks in found.items()}
-        bound = set()
+        return found
+
+    def bind_parameter_marks(self, found, starts, bound):
+        api = self.api
         templates = []  # (file, start, end) of each function template's declaration
         for d in self.declarations(api.cursor(self.tu), []):
             if d.kind == K_FUNCTION_TEMPLATE:
@@ -1647,8 +1670,52 @@ class Unit:
                 where = f'{self.file_name(file)}:{line}'
                 if any(f == file and s <= start < e for f, s, e in templates):
                     sys.exit(f'instrument.py: {where}: {name} is on a function template: no row carries its marks')
-                sys.exit(f'instrument.py: {where}: {name} marks no parameter (a mark is written before a parameter\'s '
-                         'type in a function\'s declaration)')
+                sys.exit(f'instrument.py: {where}: {name} marks no parameter or field (a mark is written before a '
+                         'parameter\'s type in a function\'s declaration, or a field\'s)')
+
+    def bind_field_marks(self, cursor, found, bound):
+        """The marks written before a field: after the previous member (or the record's name), up to the field's name.
+        A field takes LUMA_NULLABLE only, on a pointer: the game reads it only after testing it, so a mod may store null
+        there (the compiler's field rule, M-123)."""
+        api = self.api
+        for c in self.children(cursor):
+            if c.kind in (K_STRUCT, K_UNION, K_CLASS, K_CLASS_TEMPLATE, K_CLASS_PARTIAL):
+                file, low, _ = self.spelled(api.location(c))
+                for member in self.children(c):
+                    if member.kind == K_FIELD:
+                        at_file, at, line = self.spelled(api.location(member))
+                        if at_file == file and file in found:
+                            names = [m for m in found[file] if low <= m[0] and m[1] <= at and (file, m[0]) not in bound]
+                            if names:
+                                self.field_mark(c, member, names, file, line)
+                                bound.update((file, m[0]) for m in names)
+                    end_file, end, _ = self.spelled(api.rangeEnd(api.extent(member)))
+                    if end_file == file:
+                        low = max(low, end)
+                self.bind_field_marks(c, found, bound)
+            elif c.kind in SCOPES:
+                self.bind_field_marks(c, found, bound)
+
+    def field_mark(self, record, member, names, file, line):
+        api = self.api
+        where = f'{self.file_name(file)}:{names[0][2]}'
+        field = f'{self.string(api.spelling(record))}::{self.string(api.spelling(member))}'
+        written = [m[3] for m in names]
+        if any(name != 'LUMA_NULLABLE' for name in written):
+            other = next(name for name in written if name != 'LUMA_NULLABLE')
+            sys.exit(f'instrument.py: {where}: {other} on the field {field}: a field takes LUMA_NULLABLE only')
+        if len(written) > 1:
+            sys.exit(f'instrument.py: {where}: LUMA_NULLABLE twice on the field {field}')
+        declared = api.type(member)
+        if api.canonical(declared).kind != T_POINTER:
+            sys.exit(f'instrument.py: {where}: LUMA_NULLABLE on the field {field} of type '
+                     f'{self.string(api.typeSpelling(declared))}: a field mark takes a pointer')
+        self.field_marks.add((self.file_name(file), self.spelled(api.location(member))[1]))
+
+    def field_nullable(self, member):
+        """Whether a field (any instance's: its location is the declaration's) is marked LUMA_NULLABLE."""
+        file, at, _ = self.spelled(self.api.location(member))
+        return bool(file) and (self.file_name(file), at) in getattr(self, 'field_marks', ())
 
     def marks_in_macros(self):
         """Stops on a #define whose own text names a mark (`#define OUT_VEC LUMA_OUT Vec3f*`): the preprocessing record

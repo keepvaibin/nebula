@@ -422,6 +422,9 @@ pub struct Field {
     pub extents: Vec<u64>,
     pub bits: Option<Bits>,
     pub access: Access,
+    /// A pointer field the game reads only after testing it (LUMA_NULLABLE in its header, N-4004): a mod may store
+    /// null there. The types file writes `"nullable": true` only on such a field.
+    pub nullable: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -907,7 +910,11 @@ impl Types {
                             "private" => Access::Private,
                             other => return Err(bad(format!("{at}.access"), &format!("\"{other}\" is no access"))),
                         };
-                        let field = Field { name: text(f, "name", &at)?, ty: text(f, "type", &at)?, offset: number(f, "offset", &at)?, extents, bits, access };
+                        let nullable = match f.get("nullable") {
+                            None => false,
+                            Some(v) => v.as_bool().ok_or_else(|| bad(format!("{at}.nullable"), "not true or false"))?,
+                        };
+                        let field = Field { name: text(f, "name", &at)?, ty: text(f, "type", &at)?, offset: number(f, "offset", &at)?, extents, bits, access, nullable };
                         record.fields.insert(field.name.clone(), field.ty.clone());
                         record.own.push(field);
                     }
