@@ -22,8 +22,8 @@ namespace galaxy::render::core {
 
 class ProbeBook {
 public:
-    // Two frames: the game's frame F is made while the render thread draws F - 1, and F - 2 is on the GPU or done. The
-    // console's GXPeekZ answered the frame before; one more frame keeps the CPU and GPU working side by side.
+    // Two frames: the game's frame F is made while the render thread draws F - 1, and F - 2 is on the GPU or done, so an
+    // answer read two frames later never makes the CPU wait for the GPU.
     static constexpr std::uint32_t kDelay = 2u;
     // Answers kept per channel: enough for the newest at or before F - kDelay while later frames come back.
     static constexpr std::size_t kKept = 8u;
