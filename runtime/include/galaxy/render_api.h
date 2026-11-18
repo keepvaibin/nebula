@@ -207,6 +207,8 @@ void native_settings_files_dropped(std::vector<std::filesystem::path> files);
 [[nodiscard]] bool native_settings_launch_imports_taken() noexcept;
 // The player placed the window by hand: its client size and the monitor it is on (a device name) become the setting.
 void native_settings_window_placed(unsigned width, unsigned height, const char* monitor);
+// The player took the window to full screen or out of it through the system (P-105): DISPLAY MODE follows.
+void native_settings_display_mode_placed(unsigned mode);
 // The graphics device lost at the renderer's next frame, as a driver reset loses it (an extension's lose_gpu_device).
 void lose_gpu_device() noexcept;
 // Delivers an overlay key to the window thread (controller navigation).
