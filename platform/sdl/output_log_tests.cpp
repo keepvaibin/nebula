@@ -43,7 +43,9 @@ void start_with_output(const fs::path& data, int fd, const char* text) {
         dup2(fd, STDOUT_FILENO);
         dup2(fd, STDERR_FILENO);
         galaxy::sdl::keep_output_in_log(data);
+        // Each line written out as it is said: a pipe makes stdout fully buffered, and the order is part of the check.
         std::printf("%s out\n", text);
+        std::fflush(stdout);
         std::fprintf(stderr, "%s err\n", text);
         std::fflush(nullptr);
         _exit(0);
