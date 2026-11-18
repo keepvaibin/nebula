@@ -127,6 +127,24 @@ fn a_register_prefix_marks_its_operands() {
 }
 
 #[test]
+fn a_port_past_the_consoles_16_is_refused() {
+    // Write port 15 from register 0, then finish; port 16 is past the game's SeqTrack::mPorts.
+    assert!(decode_program(&[0xD1, 0x0F, 0x00, 0xFF], &[0]).is_ok());
+    for code in [0xD0u8, 0xD1, 0xD4, 0xD6] {
+        assert!(decode_program(&[code, 0x10, 0x00, 0xFF], &[0]).is_err(), "{code:#04x}");
+        assert!(decode_program(&[code, 0x0F, 0x00, 0xFF], &[0]).is_ok(), "{code:#04x}");
+    }
+    for code in [0xD2u8, 0xD3] {
+        assert!(decode_program(&[code, 0x10, 0xFF], &[0]).is_err(), "{code:#04x}");
+        assert!(decode_program(&[code, 0x0F, 0xFF], &[0]).is_ok(), "{code:#04x}");
+    }
+    // The port from a register: 0x91 (two operands), mask 0x80 marks the first.
+    assert!(decode_program(&[0x91, 0x80, 0xD1, 0x03, 0x02, 0xFF], &[0]).is_err());
+    // A child's port operation takes the number's low 4 bits: child 1, port 15.
+    assert!(decode_program(&[0xD5, 0x1F, 0x00, 0xFF], &[0]).is_ok());
+}
+
+#[test]
 fn overlapping_code_is_refused() {
     // A jump into the middle of the tempo operation's operand.
     let b = [0xE0, 0xC7, 0x00, 0x00, 0x01, 0xFF];
