@@ -765,6 +765,14 @@ private:
     void reset_sampler_frame(); // only after this slot's fence completes
     bool create_conversion_pipeline();  // the capture pipelines and the screen probes' compute pipeline
     bool create_clear_pipeline();
+    // Every variant of the renderer's own passes' pipelines the device can draw (the clear's per scene variant, the 2D
+    // layer's per sample count, the depth resolve and copy) while the renderer starts (P-052): a frame never makes one.
+    void prepare_utility_pipelines();
+    void make_depth_resolve_pipeline();
+    void make_depth_copy_pipeline();
+    // The driver cache's loaded and made count at the end of the start, then as last logged: begin_frame names the
+    // pipelines made after it (a settings change; none in play).
+    std::uint64_t utility_pipelines_seen_ = 0u;
 
     // Records the conversion blit: fullscreen triangle into `dest` (RTV),
     // sampling the scene target color (or depth) SRV.  (src_x, src_y) is the source
@@ -932,7 +940,9 @@ private:
     bool create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* color, ID3D12Resource* depth, unsigned samples,
                          D3D12_CPU_DESCRIPTOR_HANDLE& rtv, D3D12_CPU_DESCRIPTOR_HANDLE& dsv);
     void write_msaa_depth_view(SceneMsaa& msaa);
-    [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color);
+    [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color) { return clear_pipeline(color, scene_variant()); }
+    // The clear's pipeline for a scene variant (scene_variant()'s bits).
+    [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color, std::uint8_t variant);
     SceneMsaa scene_msaa_;
     mutable unsigned msaa_max_samples_ = 0u;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> depth_resolve_pso_;

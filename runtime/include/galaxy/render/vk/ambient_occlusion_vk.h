@@ -31,6 +31,9 @@ public:
     bool initialize();
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
+    // Every pipeline of the pass in the renderer's scene target passes, `passes` and `wide_passes` by samples (log2; null
+    // where none), while the renderer starts (P-052): a frame never makes one.
+    void prepare_pipelines(const std::array<VkRenderPass, 4>& passes, const std::array<VkRenderPass, 4>& wide_passes);
 
     // Outside a render pass, the scene's single-sample depth readable as `depth_layout` by compute and fragment shaders: the
     // colour multiplier of each scene target pixel (drawn into an 8-bit target in a pass of its own; at one occlusion pixel

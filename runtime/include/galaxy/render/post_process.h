@@ -48,6 +48,9 @@ public:
     bool initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
                     const PostProcessSettings& settings);
     void shutdown() noexcept;
+    // The scene passes' multisampled pipelines (FXAA's, SMAA's) for each sample count up to `max_samples` (P-052), made
+    // again by set_wide in its format; one the device refuses is not tried again. On any thread, while no frame records.
+    void prepare_pipelines(unsigned max_samples);
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     // Capabilities, self-test results, last frame's AA pass and totals.
     [[nodiscard]] const PostProcessStatus& status() const noexcept { return status_; }
@@ -172,6 +175,8 @@ private:
     // FXAA's, SMAA's: per sample count (log2).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> scene_pass_ms_[2][4];
     [[nodiscard]] ID3D12PipelineState* scene_pass_pipeline(bool smaa, unsigned samples);
+    unsigned scene_pass_failed_ = 0u;  // scene_pass_ms_ entries the device would not make: bit smaa * 4 + log2 samples
+    unsigned prepared_samples_ = 1u;   // prepare_pipelines' last count, which set_wide makes again
     Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_;
     // Into the window (8 bits, dithered), and into a picture for a pass after it (the scene's format).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_window_;

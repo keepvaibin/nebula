@@ -33,10 +33,14 @@ public:
     GameBloom& operator=(const GameBloom&) = delete;
     ~GameBloom() { shutdown(); }
 
-    // The root signature and compute pipelines (precompiled shaders); the composite's pipelines are made per sample
-    // count and format at first use. False leaves the bloom to the game's own chain.
+    // The root signature and compute pipelines (precompiled shaders); the composite's pipelines are
+    // prepare_pipelines'. False leaves the bloom to the game's own chain.
     bool initialize(ID3D12Device* device);
     void shutdown() noexcept;
+    // Every pipeline of the pass for each sample count up to `max_samples` (a power of two, at most 8) while the renderer
+    // starts (P-052), so a frame never makes one; one the device refuses is not tried again. On any thread, while no
+    // frame records with the pass.
+    void prepare_pipelines(unsigned max_samples);
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 
     // game_bloom.hlsl's BloomConstants.

@@ -23,6 +23,9 @@ public:
     bool initialize();
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
+    // Every pipeline of the pass in the renderer's scene target passes, `passes` and `wide_passes` by samples (log2; null
+    // where none), while the renderer starts (P-052): a frame never makes one.
+    void prepare_pipelines(const std::array<VkRenderPass, 4>& passes, const std::array<VkRenderPass, 4>& wide_passes);
 
     // Each works in the top-left `width` x `height` of its targets (the scene's drawn part: dynamic resolution's
     // rectangle, or all of them).
@@ -48,7 +51,14 @@ private:
     VkDescriptorSetLayout set_layout_ = VK_NULL_HANDLE;
     VkPipelineLayout layout_ = VK_NULL_HANDLE;
     VkPipeline meter_ = VK_NULL_HANDLE;
-    std::array<std::array<VkPipeline, 8>, kKinds> pipelines_{};
+    // Per kind and render pass: the base scene's pass is wide or not with HDR output, and a pipeline made in one is not
+    // compatible with the other. A failure is kept (null), not tried again each frame.
+    struct Made {
+        Kind kind = kCamera;
+        VkRenderPass pass = VK_NULL_HANDLE;
+        VkPipeline pipeline = VK_NULL_HANDLE;
+    };
+    std::vector<Made> made_;
     bool exposure_ready_ = false;
     bool ready_ = false;
 };
