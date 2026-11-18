@@ -428,11 +428,32 @@ namespace luma {
                 }
             }
 
+            // The freed list (sFreed, sFreedTarget) with room for `room`. False: no memory (both as they were).
+            bool growFreed(u32 room) {
+                GameTexture** const pFreed = static_cast<GameTexture**>(::realloc(sFreed, room * sizeof(GameTexture*)));
+                if (pFreed == nullptr) {
+                    return false;
+                }
+                sFreed = pFreed;
+                bool* const pTarget = static_cast<bool*>(::realloc(sFreedTarget, room * sizeof(bool)));
+                if (pTarget == nullptr) {
+                    return false;  // sFreed is larger; sFreedRoom stays the smaller of the two
+                }
+                sFreedTarget = pTarget;
+                sFreedRoom = room;
+                return true;
+            }
+
             void freeTexture(Texture& rTexture) {
                 if (rTexture.pixels || rTexture.target) {
-                    // Room for every slot (textureSlot), so always room here.
-                    sFreedTarget[sFreedCount] = rTexture.target;
-                    sFreed[sFreedCount++] = rTexture.texture;
+                    // A slot freed, made again and freed in one frame is freed twice: the list grows past the slots then.
+                    if (sFreedCount == sFreedRoom && !growFreed(sFreedRoom == 0u ? 64u : sFreedRoom * 2u)) {
+                        // No memory: kept rather than freed under the frame (the renderer may still draw it).
+                        nebula_log("LumaDraw: a freed texture kept (no memory for the freed list)\n");
+                    } else {
+                        sFreedTarget[sFreedCount] = rTexture.target;
+                        sFreed[sFreedCount++] = rTexture.texture;
+                    }
                 } else {
                     delete rTexture.texture;  // the store's image stays mapped (the game's or the mod's file)
                 }
@@ -1186,19 +1207,10 @@ namespace luma {
                         pFree = &sTextures.at(i);
                     }
                 }
-                if (pFree == nullptr && sFreedRoom <= sTextureHigh) {
-                    // The freed list has room for every slot: a slot's texture is freed at most once a frame.
-                    const u32 room = sFreedRoom == 0u ? 64u : sFreedRoom * 2u;
-                    GameTexture** const pFreed = static_cast<GameTexture**>(::realloc(sFreed, room * sizeof(GameTexture*)));
-                    if (pFreed != nullptr) {
-                        sFreed = pFreed;
-                    }
-                    bool* const pTarget = pFreed != nullptr ? static_cast<bool*>(::realloc(sFreedTarget, room * sizeof(bool))) : nullptr;
-                    if (pTarget == nullptr) {
-                        return nullptr;
-                    }
-                    sFreedTarget = pTarget;
-                    sFreedRoom = room;
+                // The freed list keeps room for every slot, so freeing one needs no memory but in a frame that frees a
+                // slot twice.
+                if (pFree == nullptr && sFreedRoom <= sTextureHigh && !growFreed(sFreedRoom == 0u ? 64u : sFreedRoom * 2u)) {
+                    return nullptr;
                 }
                 if (pFree == nullptr) {
                     pFree = sTextures.reserve(sTextureHigh);
