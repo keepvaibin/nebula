@@ -136,8 +136,8 @@ script names are `LUMA_ARG(call, n, T)` (n from 1; `call->args[0]` is `this`, `s
 - Constructors and destructors: before and after only (luma.h; validator L512 refuses a wrap); `call->result` is null.
 - A script error inside a hook: the hook's body returns early through the status path: a
   `before` returns 0 (no skip), an `after` leaves the result as the game made it, a wrap that has not proceeded calls
-  `core->proceed(call)`, a `replace` that has not written its result writes the game's: it calls
-  `call->function->invoke` with the mod's flag for that function set (so it does not re-enter itself). A non-void
+  `core->proceed(call)`, a `replace` gives the game's result by `core->proceed(call)` with the mod's flag for that
+  function down (the wraps after it, then the function; not by `invoke`, which would run every hook twice). A non-void
   `replace` with no result to give is a compile error ("a replace must give a result on every path").
 
 ## Values across the boundary
@@ -203,8 +203,8 @@ before a use, `lumart_scratch_release` once the text is used (logged, copied int
 call it went to), and every generated function that uses the scratch gives back to its own mark on its way out and at
 a task's park, so a script error between loses nothing and a mod with no frame handler never grows it. A builder being
 written is the top; one left below bytes a script error kept moves past them. Uses: every log and fact line, an
-interpolated text before its copy (one allocation, not two), and a `const char *` C-6 marks `in` (`FnTy::transient`:
-that text is never kept).
+interpolated text before its copy (one allocation, not two), and a `const char *` the self-description marks `in`
+(that text is never kept).
 
 ## Handles (`ref<C>`)
 
@@ -232,11 +232,13 @@ that text is never kept).
 
 ## Start and stop
 
-`luma_mod.start(core, mod)`: stores `core` and `mod`; for each service the script uses, `core->service(name,
-major, minor)` (until 1.1's import rows), a null result returning non-zero after `core->log` names the service and
-the version wanted; runs the module-level `let`s and every `on start` in module order. A script error in `on start`
-returns non-zero (the mod stays off, the log line names the line). `stop`: stops every task, removes every hook it
-added with `core->hook` (1.1's `unhook`), releases every value (the kernel then frees what `alloc` gave, 7.1).
+The services a script uses and its hooks are rows of its import list, which the loader binds before `start` (an
+optional service's slot is null when it is not given). `luma_mod.start(core, mod)`: stores `core` and `mod`; a
+script with frames, steps or tasks asks for `time` with `core->service` and does not start without it; runs the
+module-level `let`s and every `on start` in module order. A script error in `on start` returns non-zero (the mod
+stays off, the log line names the line). The kernel takes the mod's hooks out before `stop`. `stop`: ends the
+frame, step, option and draw handlers it gave, stops every task, runs every `on stop` (the last module's first),
+and releases every value it holds; the kernel then frees what `alloc` gave.
 
 ## C in the same mod
 
@@ -273,6 +275,8 @@ different order in another language (Japanese puts S0904's `{1}` first).
 | S0912 | a call that needs a value that is `none` now | function, the needed name in code (`player`) | `{0} needs {1}, which is none now, so it was not called` |
 | S0913 | a call on an ended LumaKit handle | handle's kind (`kit.hud.meter`) | `{0} was ended, so it can no longer be used` |
 | S0914 | a LumaKit call with an argument outside what it takes | function, parameter, value, condition (`>= 1`, `1..=100`, `!= ""`) | `{0}: {1} is {2}; it must be {3}` |
+| S0917 | a float that is NaN or an infinity written as JSON | expression source | `{0} is not a finite number (NaN or an infinity)` |
+| S0918 | a text with a zero byte passed where the game reads a C string | function, parameter number | `{0}: the text for {1} holds a zero byte, which the game cannot take` |
 
 - S0914 replaces the prose form in lumakit.md's examples ("kit.hud.meter: max is 0; a meter needs max of 1 or more"):
   `kit.hud.meter: max is 0; it must be >= 1`. A LumaKit module raises it through lumart, never its own text.
@@ -350,7 +354,7 @@ different order in another language (Japanese puts S0904's `{1}` first).
 ## Reference and pointer arguments
 
 - `args[n]` of a reference parameter (`T &`, `const T &`) is the object's address, a `T *`, as for a value parameter
-  (the copy's address). Of a pointer parameter (`T *`) it is the address of the pointer, a `T `. This is what the
+  (the copy's address). Of a pointer parameter (`T *`) it is the address of the pointer, a `T **`. This is what the
   game's instrumented code reads (`(void*)&param`) and what luma.h says; the compiler and lumart use nothing else.
 - Calling: a script value given to a `const T &` parameter is copied into a temporary of the calling
   function and `args[n]` is its address; given to a `T &` parameter it must be written `var x` and
@@ -359,16 +363,14 @@ different order in another language (Japanese puts S0904's `{1}` first).
 - Hooks: `LUMA_ARG(call, n, T)` of a reference parameter is the caller's object itself. A written argument
   of a value parameter changes the copy the function receives; of a `T &` parameter, the caller's object. A `const T &`
   parameter is read-only to the script: writing it is a compile error.
-- Tested in 4.8: a call and a hook each on a `const Vec3f &`, a `Vec3f &` and a `Vec3f *` parameter.
 
 - A `T &&` parameter is as `T &` (luma_hook.h's Bare strips both): `args[n]` is the object's address. A script
   call gives it a temporary of the calling function, as for `const T &` (it needs no `var`); a hook may read and write
   it as the caller's object.
-- `args[n]` is a `T `, and a call takes a pointer value for it. The game's rows keep the parameter as written
+- An array parameter: `args[n]` is a `T **`, and a call takes a pointer value for it. The game's rows keep the parameter as written
   (`ParticleEmitter::setGlobalSRTMatrix "void(const Mtx)"`, `Mtx` being `f32[3][4]`), so the checker reads a parameter
   whose type names an array, through any alias, as a pointer to its element: `const Mtx` there is `const f32 (*)[4]`.
   The same holds for a hook's `LUMA_ARG` of it.
-- Tested in 4.8 with the cases of addition 3: a call and a hook on a `T &&` parameter and on `const Mtx`.
 
 ## Imports for globals and bit-fields
 
@@ -383,7 +385,7 @@ on another that has the same names and types.
 
 - A const global is read only; writing it is a compile error.
 - A bit-field read gives its declared type, zero- or sign-extended by that type; a write keeps the low `width` bits
-  and is a script error when the value does not fit (`wrap(...)` keeps the low bits on purpose, as for `as`).
+  and is a script error when the value does not fit (`low_bits<T>(...)` keeps the low bits on purpose).
 
 ## Text across the boundary
 
@@ -404,18 +406,14 @@ on another that has the same names and types.
 - Text the game gives a script (a `const char *` result, field or global read as `text`) is copied into a script
   `text` when read: the script never holds a pointer into the game's memory, so text the game frees later is never
   read.
-- Addition 5, corrected: a bit-field write that should keep the low bits uses `low_bits<T>(...)`;
-  `wrap(...)` is not a conversion.
 
-The scratch is only for a parameter C-6 marks not kept. When 1.11 adds
-unloading, the loader frees a reloaded mod's image and text store only at the next stage change (where the game's
-objects are rebuilt) or at the game's end, never at the unload itself; the reload test reads a kept label after the
-reload.
+The scratch is only for a parameter the self-description marks not kept. A literal and the text store live until
+the mod's library is closed, after its grace when the mod is taken out or reloaded.
 
 ## Marked pointer parameters
 
-C-6 says what LumaScript does with a marked parameter; this is how the checker types it and how the compiler and
-lumart pass it. Unmarked and `kept` pointer parameters stay refused (S0060 with why PointerToValue or Kept).
+The self-description marks some pointer parameters `in`, `out`, `inout`, `count`, `fixed` or `nullable`; this is how
+the checker types such a parameter and how the compiler and lumart pass it. Unmarked and `kept` pointer parameters stay refused (S0060 with why PointerToValue or Kept).
 
 - Typing (checker, `Game::call_signature`). A row's marks come from the functions file (luma_functions.json); a build
   without it has none. A marked parameter must be a pointer (or an array parameter) to a number, value (vector, quat,
@@ -429,8 +427,7 @@ lumart pass it. Unmarked and `kept` pointer parameters stay refused (S0060 with 
     (S0060, S0062, S0063, S0133) number the parameter by its place in the row's text, so the number matches the
     signature the build report lists.
   - S0133 (build time): a list literal (`[a, b]`) for a `fixed` parameter with another number of elements.
-- Passing (compiler 4.3, lumart). `args[n]` of a pointer parameter is the address of a local holding the pointer
-  (addition 3); the local holds:
+- Passing. `args[n]` of a pointer parameter is the address of a local holding the pointer; the local holds:
   - `in`: the address of a copy of the value in the calling function's frame; `out`: the address of a frame local of
     the pointee's type, zero-filled before the call (a function that writes on some paths only leaves zero), copied
     into `x` after the call; `inout`: the same local, first filled from `x`, copied back after.
@@ -442,8 +439,8 @@ lumart pass it. Unmarked and `kept` pointer parameters stay refused (S0060 with 
     length works and holds the n values after). `in` and `inout`: a list of another length is S0915 and the call is
     not made (a literal of another length is S0133 at build time).
   - `nullable` and `none`: a null pointer, and a count of 0.
-  - Nothing of the script's is kept: every address is valid only during the call, which C-6's `in`, `out`, `inout`
-    promise.
+  - Nothing of the script's is kept: every address is valid only during the call, which the marks `in`, `out` and
+    `inout` promise.
 - Run-time codes (in the table of run-time error codes):
 
 | Code | Raised when | Arguments | English |
@@ -451,12 +448,7 @@ lumart pass it. Unmarked and `kept` pointer parameters stay refused (S0060 with 
 | S0915 | a list of another length for a `fixed` in or inout parameter | function, parameter number, n, length | `{0}: parameter {1} takes exactly {2} elements; the list has {3}, so it was not called` |
 | S0916 | a list longer than its count parameter's type holds | function, parameter number, length, count type | `{0}: parameter {1}'s list has {2} elements, more than its count, a {3}, holds, so it was not called` |
 
-- Text (addition 6): C-6 marks no `const char *`, so made text still goes through `lumart_text_keep`.
-- Tested in 4.8 with C-6's first marks: `MR::getPlayerFrontVec(var front)` (out), `MR::calcScreenPosition`
-  (out, both overloads), and once the headers mark them, one count, one fixed and one nullable function; each
-  S0915 and S0916 raised once. The checker's half is tested now (tests/body.rs: marked_pointer_parameters,
-  a_fixed_counts_list_literal_is_that_many, a_hidden_count_keeps_the_parameters_numbers). Written, not yet proven
-  in a run.
+- Text: a `const char *` marked `in` takes made text from the scratch; any other goes through `lumart_text_keep`.
 
 ## Further reading
 

@@ -35,21 +35,22 @@ on player ready {
 - Locals that live across a `wait` may not be views; the compiler names the line.
 - `stop` ends the task; `t.stop()` from outside; a task whose `ref` argument empties is not stopped by itself (the
   script checks, as above).
+- A task takes no `var` parameter (S0161): it runs on after the call, when the caller's variable may be gone. Give
+  the value back as the task's result.
 
-11.1a A task with a result. `task f(params) -> T { ... }` gives a value: each `return v` is
-checked against `T`, and a path that ends without one is S0101 (MISSING_RETURN), as in a function. A call `f(args)`
+A task with a result: `task f(params) -> T { ... }` gives a value. Each `return v` is
+checked against `T`, and a path that ends without one is S0101, as in a function. A call `f(args)`
 starts the task as `start` does and gives `pending<T>`; `start f(args)` still gives its `task`. `wait p` gives the
 value when the task returns it. `p.stop()` cancels: the task is stopped (its `defer`s run, its way out as any stopped
 task's), and a `wait p` on a task that ended without a value (stopped, its own `stop`, a script error, or `p` waited
 already) stops the waiting task too, its way out run; it never gives `T`'s zero. A library's `pub task f(...) -> T` is
 exported (its interface line `pub task`): the caller gets the handle with
 the library's own operations, and `wait` copies the value into the caller's memory. A `pending` dropped without `wait`
-still gives a warning.
+is note S0097.
 
 A task without a result called gives `pending<>`: `wait p` goes on once the task ended by
-itself, and stops the waiting task as above when it was stopped or failed. Dropped, it is no warning (it loses
-nothing); `start f(args)` still gives the `task`. A library's result-less `pub task` is exported the same way (its
-`lumi1` result `pending<>`).
+itself, and stops the waiting task as above when it was stopped or failed. Dropped, it is no note (it loses
+nothing); `start f(args)` still gives the `task`. A library's result-less `pub task` is exported the same way, its result `pending<>`.
 
 ## Further reading
 

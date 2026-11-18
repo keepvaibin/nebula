@@ -92,7 +92,7 @@ A mod in `mods` can be an object instead of a path:
 | Key | Default | Description |
 |---|---|---|
 | `path` | Required | The mod folder or `.luma` file. |
-| `options` | The mod's defaults | The mod's options by key, set as the **MODS** page sets them. A number option can be `{"free_port": "NAME"}`: it gets a free TCP port, the same one for every option with that NAME. |
+| `options` | The mod's defaults | The mod's options by key, set as the **Mods** page sets them. A number option can be `{"free_port": "NAME"}`: it gets a free TCP port, the same one for every option with that NAME. |
 | `code` | The test's `code` | `allow`, `deny` or `ask` for this mod. |
 | `permissions` | `"allow"` | `"allow"` or `"deny"` for every permission the mod asks for, or an object with one answer per permission, such as `{"net.internet": "deny"}`. Naming a permission the mod does not ask for is an error. |
 | `install` | `"placed"` | `"placed"` puts the mod straight into the mods folder. `"import"` sends it through the game's own import, as a file dropped on the window, so the import screen's checks run. |
@@ -179,7 +179,7 @@ A fact condition takes any check from [Fact checks](#fact-checks) except `far`. 
 | `erase_file` | `{"erase_file": 2}` | Erases a save file. Writes `file.erased`. |
 | `take_out` | `{"take_out": "gold-throw"}` | Takes a running mod out of the game. The next step waits until it is gone, unless the step has `"wait": false`. |
 | `reload` | `{"reload": "gold-throw"}` | Reloads a running mod's code from its installed folder, as dev mode does. The next step waits until the reload ends, up to 600 frames, unless the step has `"wait": false`. The fact `reload.MOD-ID` holds the result. |
-| `forget` | `{"forget": "gold-throw"}` | Presses **FORGET** on a removed mod in the **MODS** page. |
+| `forget` | `{"forget": "gold-throw"}` | Presses **FORGET** on a removed mod in the **Mods** page. |
 | `wait` | `{"wait": true}` | Does nothing. Use it to hang an `after` on. |
 | `window` | `{"window": [960, 540]}` | Resizes the inside of the game's window, as a player dragging its edge does: `[width, height]` in pixels, each 1 to 65535. |
 | `lose_device` | `{"lose_device": true}` | Loses the graphics device at the renderer's next frame, as a driver reset does. The game must make it again and go on. |
@@ -211,7 +211,7 @@ A fact is a value with a key and a frame. The run writes them to `facts.jsonl`, 
 | The `fact` of a step | The step runs. |
 | `import.FILE` | The import screen shows a line about that file: `{"line", "text", "code", "file", "at"}`. |
 | `modlog` | The mod log shows a line: `{"mod", "file", "line", "text"}`. |
-| `modscreen.ID` | The **MODS** page shows a line about that mod. |
+| `modscreen.ID` | The **Mods** page shows a line about that mod. |
 | `input.motor` | The controller's rumble changes, from 0 to 255, with `"device": "pad"`. |
 | `file.created`, `file.loaded`, `file.copied`, `file.erased` | A save-file step finishes. |
 

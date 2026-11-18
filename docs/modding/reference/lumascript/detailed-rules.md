@@ -36,7 +36,7 @@ This page holds the detailed rules of LumaScript that complete the other referen
    named by a run-time `text` is not possible (no run-time lookup): a nerve chosen while running is a `match`
    over the class's steps, which the mod's build can generate from the same list.
 4. `wrap ... every override of`: `wrap every override of LiveActor::movement { ... }` as `hook`
-   allows (`K.vhook`); `self` is the object, of the virtual's class.
+   allows; `self` is the object, of the virtual's class.
 5. a hook calling the function it hooks: inside any hook of a mod, a call to a function the same mod
    hooks runs the other mods' hooks and the game's code, not this mod's hooks on it (no recursion through one's own
    hooks); another mod's hooks run as usual (an `after MR::getPlayerPos` that calls `MR::getPlayerPos` gets the value
@@ -44,9 +44,9 @@ This page holds the detailed rules of LumaScript that complete the other referen
 6. `result =` for a function returning a pointer to a vector (`Vec3f *`, `const TVec3f &`): the value
    is kept in a slot of that hook (one per hook, on the game thread) and the caller receives a pointer to the slot,
    valid until the hook next runs. A caller that keeps the pointer across a second call of the same function sees the
-   newer value; the compiler warns (S-code) on every such hook, naming the function.
-7. The self-description's nerves come from the game source's `NEW_NERVE` and `NEW_NERVE_ONEND` declarations
-   (3,434 and 161 of them): `NEW_NERVE(BossKameckVs1NrvBattleLv2, BossKameckVs1, BattleLv2)` is
+   newer value.
+7. The self-description's nerves come from the game source's `NEW_NERVE` and `NEW_NERVE_ONEND` declarations:
+   `NEW_NERVE(BossKameckVs1NrvBattleLv2, BossKameckVs1, BattleLv2)` is
    `nerve "BossKameckVs1.BattleLv2"`, with its address per build.
 
 ---
@@ -78,7 +78,7 @@ block's `}`, the next statement may follow on the same line (`enter { ... } wait
 
 ## Hooks: re-entry, replace's error path, threads, order
 
-- The hook flag is cleared around `core->proceed(call)` and set again after it , so a
+- The hook flag is cleared around `core->proceed(call)` and set again after it, so a
   recursive game function, or an override that calls its base under `every override of`, runs every mod's hooks each
   time, as the game would.
 - A `replace` whose body ends in a script error gives the game's own result by `core->proceed(call)` (which runs
@@ -186,7 +186,7 @@ no `option("key")` call.
 - A call that answers later (a service request such as `fs.read`, or LumaKit's `screen.choose`, `talk.ask` and `cutscene.play`) returns
   `pending<T>`. Only `wait` reads one, and `wait` is allowed only in a `task`, a state's body or `enter`, or a
   `wait`-holding handler that the compiler makes a task (`on start` and events): in a `fn` or a hook it is an error
-  naming the line (a function that waits is a `task`). A `pending` dropped without `wait` is a warning.
+  naming the line (a function that waits is a `task`). A `pending` dropped without `wait` is note S0097.
 - `text "Key"` is the mod's text row in the player's language. Its placeholders `{name}` are filled by named arguments
   right after it: `text "Coop.Hosting"(address: outside)`. Each placeholder of the row must be given (in every
   language's row), and no other: checked when building, as content names are.
@@ -609,7 +609,7 @@ the word.
   u32)) -> time.Timer?`, `time.cancel(timer: time.Timer)`. No property or other sugar: the docs show one list, the
   header's.
 - What the C results become: `set_rate`, `hold`, `release` and `cancel` return nothing (a mistake is reported by the
-  service to the mod log, registry 7); `step` is false for LUMA_E_BUSY (another mod holds too, or loading: an answer,
+  service to the mod log); `step` is false for LUMA_E_BUSY (another mod holds too, or loading: an answer,
   not a mistake) and true for LUMA_OK; `timer` is `none` when it was refused (reported). `now` and `wall` cannot fail.
 - A service's struct `Luma<Service><Name>` is `<service>.<Name>` (`time.Now`, `time.Wall`), its enums likewise
   (`time.Clock.Frames`, `.Steps`, `.Nanoseconds`; the state's `time.State`); a handle is `<service>.<Name>` of the

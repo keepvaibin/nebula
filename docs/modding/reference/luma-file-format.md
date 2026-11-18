@@ -44,7 +44,7 @@ An archive that uses `\` between folders throughout, as .NET Framework's `ZipFil
 | `luma.json` | Yes | The manifest. For more information, see [luma.json](luma-json.md). |
 | `layers/LAYER/` | Yes | Content: files placed at game paths, patches, new assets and texture pictures. For more information, see [Layers](#layers). |
 | `code/PLATFORM/` | Yes | The built libraries for each platform: the entry library and any others. For more information, see [Code](#code). |
-| `media/` | Yes, on the **MODS** page | The icon and pictures named in `luma.json`, and nothing else. |
+| `media/` | Yes, on the **Mods** page | The icon and pictures named in `luma.json`, and nothing else. |
 | `saves/REGION/` | Yes, offered to the player and never written silently | Save files the mod brings, for each region. For more information, see [Saves a mod brings](#saves-a-mod-brings). |
 | `certs/` | Yes, only through a network permission's `roots` | PEM files of the TLS root certificates the mod adds for its own hosts. |
 | `kit/MODULE/` | No | Data for library mods such as LumaKit, checked against the schema that module supplies. A schema is data in a fixed subset of JSON Schema, never code that the validator runs. |
@@ -77,9 +77,9 @@ Game paths match the player's game without regard to case, and the game uses its
 
 Files with rows are patched, never replaced. These include tables (`.bcsv` and the game data's tables), stage placement, scenario data and message files. A `files/` entry at such a path is an error that names it and says to patch it by key. LumaLink's `convert` makes the patches by comparing a Wii mod's whole file with the player's game.
 
-Whole files, such as models, textures, streams, layout pictures and movies, replace the game's. When two mods that are on replace the same path, the one higher in the mod list wins (L305), and the **MODS** page names both mods and the path.
+Whole files, such as models, textures, streams, layout pictures and movies, replace the game's. When two mods that are on replace the same path, the one higher in the mod list wins (L305), and the **Mods** page names both mods and the path.
 
-A whole file can be a game format, such as an `.arc` with `.bdl` files, a `.bti` or an `.ast`. It can also be an ordinary source at the game path with its own extension, for example `files/ObjectData/Mario.arc/Mario.glb`. These source formats are accepted: `.gltf`, `.glb`, `.png`, `.ktx2`, `.dds`, `.wav`, `.ogg`, `.mid`, `.json`, `.ttf`, `.otf`, `.webm` and `.mp4`. Each content kind's page says what a source can stand in for and how it is checked, for example units, joints and materials.
+A whole file can be a game format, such as an `.arc` with `.bdl` files, a `.bti` or an `.ast`. It can also be an ordinary source at the game path with its own extension, for example `files/ObjectData/Mario.arc/Mario.glb`. These source formats stand at a game path: `.gltf` and `.glb` (with the `.bin`, `.png`, `.jpg`, `.ktx2` and `.dds` files the model names beside it), `.png`, `.wav`, `.ogg`, and JSON for tables (`.bcsv.json`, `.bcam.json`, a stage's placements under `.arc/jmp/`), screen layouts (`.layout.json`), a clip's frame events (`.anim.json`) and a hidden game model (`.model.json`). A font (`.ttf`, `.otf`), a movie (AV1 in `.webm` or `.ivf`) and MIDI music (`.mid`) go in `assets/` with the `.font.json`, `.movie.json` or `.sound.json` that names them. One of these at a game path, or a model's file that no model there names, is L304, which names where it belongs. Each content kind's page says what a source can stand in for and how it is checked, for example units, joints and materials.
 
 ### Mod paths
 
@@ -172,7 +172,7 @@ The validator checks each value against the column's type, from the game's own d
 
 * Patches apply from the bottom of the mod list up, then in layer order, then in file order.
 * Within one mod, `set` by key applies before `select`.
-* When two mods `set` the same cell, or one mod adds a row that another removes, the mod higher in the list wins (L404). The **MODS** page names both mods and the cell.
+* When two mods `set` the same cell, or one mod adds a row that another removes, the mod higher in the list wins (L404). The **Mods** page names both mods and the cell.
 
 ### Patching another mod's file
 

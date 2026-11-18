@@ -45,6 +45,7 @@ Services that wait for the outside world, such as a web request, answer with an 
 | `draw` | None | Draws shapes, text and pictures over the game. |
 | `draw.inst`, `draw.light`, `draw.post`, `draw.view` | None | Draws many copies of a model, adds lights, adds full-screen effects, and renders extra views of the world. |
 | `draw.native` | `native` | Draws with the device's graphics API. |
+| `events` | None | Tells the mod what happened in the game, such as a coin, a star or a stage starting, at the start of the next frame. |
 | `fs` | None | Reads and writes files in the mod's own folder. |
 | `fs.exchange` | `fs.exchange` | Reads and writes files in the Exchange folder. |
 | `input` | None | The mod's own actions, which the player binds in **Controls**. |

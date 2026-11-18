@@ -32,8 +32,8 @@ This page lists the types of LumaScript values.
 - Inference. `let x = 3` is `int`; `let v = vec3()`; a function's parameter and result types are always
   written, its locals never need to be. An integer literal takes the type its place needs if it fits, else is an
   error naming the type and the value.
-- Conversions are written. `x as f32`, `n as u8` (an integer that does not fit is a script error; `wrap(n as
-  u8)` keeps the low bits on purpose). No implicit conversion between integer and float, or between sizes, except
+- Conversions are written. `x as f32`, `n as u8` (an integer that does not fit is a script error;
+  `low_bits<u8>(n)` keeps the low bits on purpose). No implicit conversion between integer and float, or between sizes, except
   that a literal adapts as above.
 - Equality and order. `==` on every type but functions, views and service handles (for those, `same(a, b)`:
   the same object or the same stream); `<` on numbers and `text`.

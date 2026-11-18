@@ -64,7 +64,7 @@ layers/base/
 
 A file in `files/` replaces the game's file at the same path, or adds a new one. Game paths are the paths on the disc, such as `ObjectData/Kuribo.arc`. A file inside an archive is written as a path inside it, such as `ObjectData/Kuribo.arc/Kuribo.bdl`.
 
-A whole file can be in the game's own format, or in an ordinary format that Nebula converts: glTF models, PNG and DDS pictures, WAV and Ogg sounds, TrueType fonts, WebM and MP4 movies. Put it at the game path with its own extension, for example `files/ObjectData/Mario.arc/Mario.glb`.
+A whole file can be in the game's own format, or in an ordinary format that Nebula converts: glTF models, PNG pictures, WAV and Ogg Vorbis streams, and tables and screen layouts in JSON. Put it at the game path with its own extension, for example `files/ObjectData/Mario.arc/Mario.glb`. Fonts, movies and MIDI music go in `assets/` with the `.font.json`, `.movie.json` or `.sound.json` that names them, and a DDS picture replaces a texture in `textures/`.
 
 ### Patching a file with rows
 

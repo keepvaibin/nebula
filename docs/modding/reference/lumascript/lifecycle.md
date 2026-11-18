@@ -93,8 +93,8 @@ on layers -> list<text> { return [] }           // which `when.code` layers are 
   files and resolved when the mod loads: `model "GoldBall"`, `effect "Burst"`, `sound "Throw"`,
   `layout "Timer"`, `text "Timer.Title"`, `font "Lyrics"`, `movie "Trailer"`, `data "lyrics.json"` (a data file of
   the mod, its bytes; `json.decode` reads it). A name that is not there is a compile error naming it.
-- `sound_named(name)`, `model_named(name)`, ...: the same lookup with a name made while running; `none` when the mod
-  has no such content. The only content names the build cannot check, so each use is listed in the build's report.
+- `sound_named(name)`, `model_named(name)`, ...: the same lookup with a name made while running; `none` for an empty
+  text. The build cannot check such a name: one the mod does not have is the game's placeholder where it is used.
 - `log "..."` writes to the game's log as the mod; `log fact "key" value` writes a fact for the harness.
 
 ## Further reading

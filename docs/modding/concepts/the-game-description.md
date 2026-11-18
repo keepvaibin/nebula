@@ -31,7 +31,7 @@ A name and signature in a released game description keeps its meaning in later v
 To find the name of a function, a class or a table key, use one of these:
 
 * The reference pages for [classes](../reference/classes.md), [events](../reference/events.md), [nerves](../reference/nerves.md) and [tables](../reference/tables.md).
-* `lumalink list tables`, `models`, `messages` or `files`, which lists those in your imported game, with a filter such as `Kuribo`. For more information, see [lumalink list](../reference/lumalink-commands/list.md).
+* `lumalink list tables`, `models`, `messages`, `sounds` or `files`, which lists those in your imported game, with a filter such as `Kuribo`. For more information, see [lumalink list](../reference/lumalink-commands/list.md).
 * An editor with LumaLink's language server, which completes game names as you type. For more information, see [Setting up an editor](../how-tos/setting-up-an-editor.md).
 
 ## Using another game description

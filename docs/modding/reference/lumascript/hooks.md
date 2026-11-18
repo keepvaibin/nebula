@@ -42,11 +42,11 @@ hook before `MR::isNear(const LiveActor *, const Vec3f &, f32)`(actor, at, dist)
 - A hook written in a `class` applies to that class's objects only (the compiler adds the `is_a` test).
 - Hooks on constructors and destructors: `hook after Kuribo::Kuribo(name)`, `hook before Kuribo::~Kuribo`, before
   and after only (the kernel's rule).
-- `hook ... every override of LiveActor::control` hooks the virtual and each override the self-description lists
-  (kernel part `K.vhook`).
+- `hook ... every override of LiveActor::control` hooks the virtual and each override the self-description lists.
 - Order: hooks of one mod run in the order written; between mods, in the player's load order (kernel).
 - A script error inside a hook ends that hook's run: a `before` does not skip; a `wrap` that has not proceeded
-  proceeds; an `after` leaves the result as it was. The game's own behavior goes on.
+  proceeds; an `after` leaves the result as it was; a `replace` gives the game's own result. The game's own
+  behavior goes on.
 
 ## Further reading
 

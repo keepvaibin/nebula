@@ -19,11 +19,11 @@ Prepared content is kept between starts, so a mod's files are prepared once. Whe
 | Animations | The animations in a glTF model | The game's clips: joints, texture movement, colors and texture swaps | [Adding animations](../how-tos/adding-animations.md) |
 | Materials | HLSL with a `.shader.json` description | A material program for every renderer | [Writing material shaders](../how-tos/writing-material-shaders.md) |
 | Particle effects | JSON | Particles in the game's own particle data | [Adding particle effects](../how-tos/adding-particle-effects.md) |
-| Sounds and music | WAV, FLAC or Ogg Vorbis, with a `.sound.json` description | Sound effects and music streams | [Adding sounds and music](../how-tos/adding-sounds-and-music.md) |
+| Sounds and music | WAV, FLAC, Ogg Vorbis or MIDI, with a `.sound.json` description | Sound effects and music streams | [Adding sounds and music](../how-tos/adding-sounds-and-music.md) |
 | Screens and fonts | Layout JSON, PNG, TrueType and OpenType fonts | The game's layouts and fonts | [Adding screens and fonts](../how-tos/adding-screens-and-fonts.md) |
 | Stages | Placement table patches, collision models | Objects placed in the game's stages, or new stages | [Placing objects in stages](../how-tos/placing-objects-in-stages.md) |
 | Text | Message patches | Lines in the game's message files, in each language | [Changing Nebula's text](../how-tos/changing-nebulas-text.md) |
-| Movies | WebM or MP4 | Movies the game plays, on the screen or on a model | [A video in a galaxy](../tutorials/a-video-in-a-galaxy.md) |
+| Movies | AV1 video in WebM or IVF, with a `.movie.json` description | Movies the game plays, on the screen or on a model | [A video in a galaxy](../tutorials/a-video-in-a-galaxy.md) |
 | Textures | PNG or DDS, by the game's texture names | Replacements for the game's textures | [About mod files and layers](mod-files-and-layers.md) |
 
 ## Replacing or adding

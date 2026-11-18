@@ -27,9 +27,9 @@ A game path (in lowercase) takes the key of the first pattern it matches. In a p
 | `stagedata/*/objnametable.tbl` | `en_name` | None |
 | `**/messageid.tbl` | `MessageId` | None |
 | `objectdata/**/*.banmt` | `name` | None |
-| `objectdata/**/actoranimctrl.bcsv` | `ActorAnimName` | None |
-| `objectdata/**/shadow.bcsv` | `Name` | None |
-| `objectdata/**/groupinfo` | `name` | None |
+| `objectdata/*/actoranimctrl.bcsv` | `ActorAnimName` | None |
+| `objectdata/*/shadow.bcsv` | `Name` | None |
+| `objectdata/*/groupinfo` | `name` | None |
 | `objectdata/*/padrumbledata.bcsv` | `PadRumbleName`, `StartFrame` | None |
 | `objectdata/lightdata/lightdata.bcsv` | `AreaLightName` | None |
 | `objectdata/*/light*.bcsv` | `AreaLightName`, `LightID` | None |
@@ -46,7 +46,7 @@ Tables the game reads in order, such as keyframes, a cutscene's steps and a rail
 * `set` and `select` work as on any table.
 * `add` appends rows after the game's rows, with mods' rows from the bottom of the mod list up, so the higher mod's rows come last.
 * `remove` is refused (L402), because it would move every later row under other mods' `#` numbers.
-* `rows` gives the whole table: the mod's rows replace the game's. When two mods give `rows` for one table, or one mod gives `rows` and another sets cells in it, the mod higher in the list wins, and the **MODS** page names both.
+* `rows` gives the whole table: the mod's rows replace the game's. When two mods give `rows` for one table, or one mod gives `rows` and another sets cells in it, the mod higher in the list wins, and the **Mods** page names both.
 * Every `#` that a patch names is checked against the game's row count (L402).
 
 ## Keys the game repeats
@@ -94,7 +94,7 @@ is in StageData/EggStarGalaxy.arc/jmp/Placement/Common/ObjInfo already: the game
 layers; give another.
 ```
 
-When two mods add the same key to one group, the higher mod's row stays, the lower mod's row is left out with a conflict on the **MODS** page, and the rest of the lower mod's patch applies.
+When two mods add the same key to one group, the higher mod's row stays, the lower mod's row is left out with a conflict on the **Mods** page, and the rest of the lower mod's patch applies.
 
 ### Layers that are on together
 
@@ -106,7 +106,7 @@ The count uses the game's own tables, the scenario patches of this mod and of th
 
 The game patches its tables once, at start, when it prepares the mods. A stage load reads the patched tables, so it costs the same with or without mods.
 
-The game takes each table and the patches of every mod that is on, from the bottom of the mod list up. Each mod's patch applies in this order: `rows`, `remove`, `set`, `add`, `select`. Where two mods meet, the higher mod wins, and the **MODS** page names both (`Mods.Conflict.Cell`, `Mods.Conflict.Row` or `Mods.Conflict.Removed`).
+The game takes each table and the patches of every mod that is on, from the bottom of the mod list up. Each mod's patch applies in this order: `rows`, `remove`, `set`, `add`, `select`. Where two mods meet, the higher mod wins, and the **Mods** page names both (`Mods.Conflict.Cell`, `Mods.Conflict.Row` or `Mods.Conflict.Removed`).
 
 The validator reads the same rules and the same view of each table in the game's start check and in LumaLink's `check` and `pack`, so both give the same findings.
 

@@ -19,9 +19,12 @@ code with its message. The first error does not stop the check; all are listed.
 
 A script error does this, and only this:
 
-1. The statement stops; the hook, task or event handler it is in ends as described above.
+1. The statement stops, and so does the hook, task step or event handler it is in. A `before` hook does not skip
+   the game's function, an `after` hook leaves the game's result, a `wrap` that has not called `proceed` calls it,
+   and a `replace` gives the game's own result. An error in `on start` leaves the mod off.
 2. The mod log on screen and the game's log get one line: the mod, `file.lum:line`, and what happened
-   (`index 7 outside a list of 5`, `handle to Kuribo is empty`, `division by zero`, `i32 overflow in a + b`).
+   (`index 7 is outside a list of 5`, `the handle to Kuribo is empty`, `division by zero in a / b`,
+   `i32 overflow in a + b`).
 3. The same line repeated is counted, not repeated.
 4. The mod keeps running. A script error writes no memory the script does not own, so it is not a fault.
    The guard is for faults in C code (a mod's own C, a library's, and the C LumaLink writes), which turn
