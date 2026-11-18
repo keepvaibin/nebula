@@ -503,7 +503,7 @@ def read_setup(t, bare, seed, language, classes):
     lines.append("setup file 1")
     if "save" in t:
         s = t["save"]
-        keys_known(s, "save", {"character", "spin", "stars", "grand_stars", "flags", "values"})
+        keys_known(s, "save", {"character", "spin", "stars", "grand_stars", "flags", "values", "tico_seeds"})
         if "character" in s:
             c = text(s, "character", "save")
             if c not in ("mario", "luigi"):
@@ -529,6 +529,13 @@ def read_setup(t, bare, seed, language, classes):
             for name in s["values"]:
                 plain(name, "save.values key")
                 lines.append("setup save.value %s %d" % (name, whole(s["values"], name, "save.values", 0)))
+        if "tico_seeds" in s:
+            if not isinstance(s["tico_seeds"], dict):
+                raise HarnessError("save.tico_seeds must be an object")
+            for luma in s["tico_seeds"]:
+                if not luma.isdigit() or int(luma) > 255:
+                    raise HarnessError("save.tico_seeds keys are seed numbers, 0 to 255")
+                lines.append("setup save.tico_seed %d %d" % (int(luma), whole(s["tico_seeds"], luma, "save.tico_seeds", 0)))
     lines.append("setup seed %d" % seed)
     if language is not None:
         lines.append("setup language %s" % language)
