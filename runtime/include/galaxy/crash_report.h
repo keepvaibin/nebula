@@ -81,10 +81,9 @@ bool is_gpu_lost(const char* text) noexcept;
 // (the exception line, the dump's path) and the session's mods. Returns the length written (without the terminator).
 std::size_t format_report(const Report& report, std::string_view technical, char* out, std::size_t size) noexcept;
 
-// English words in a language folder's spelling (UsFrench, EuGerman, ...) for the dialog, in a healthy process: the
-// file keeps English for the team. No row, or no such folder: the words given.
-[[nodiscard]] std::string_view translated(std::string_view english, std::string_view language) noexcept;
-// A report (format_report, without its technical details) line by line; "CODE: title" keeps its code.
+// A report (format_report, without its technical details) line by line in a language folder's spelling (UsFrench,
+// EuGerman, ...), for the dialog in a healthy process (host_text::translated: the "C." rows); the file keeps English for
+// the team. "CODE: title" keeps its code.
 [[nodiscard]] std::string translated_report(std::string_view report, std::string_view language);
 
 // A mod read within this many seconds before the game failed is named as the likely cause.

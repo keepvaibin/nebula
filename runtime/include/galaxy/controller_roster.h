@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace galaxy::input {
@@ -70,5 +71,9 @@ void build_device_list(std::span<const ControllerInfo> connected, std::optional<
 // The entry to edit after the list changed: `previous` if it is still there,
 // else another controller of its scheme (same bindings), else the keyboard.
 [[nodiscard]] std::size_t resolve_device(const DeviceList& list, DeviceKey previous) noexcept;
+
+// A controller's own name as the system gives it (SDL's, GCController's), kept for the life of the process as
+// ControllerInfo::model wants: one copy for each name. nullptr for an empty name. Any thread.
+[[nodiscard]] const char* kept_model_name(std::string_view name);
 
 }  // namespace galaxy::input

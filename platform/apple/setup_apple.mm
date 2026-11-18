@@ -56,10 +56,20 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
         if (free.doubleValue + replaced >= kNeeded) {
             return {};
         }
-        char words[160];
-        std::snprintf(words, sizeof(words), "Nebula needs %.1f GB free on this Mac to set up the game; %.1f GB is free.",
-                      kNeeded / 1e9, free.doubleValue / 1e9);
-        return words;
+        // In the host's language, with its decimal mark (host_text, P-106).
+        const char* const language = galaxy::host_text::language();
+        const std::string_view mark = galaxy::host_text::translated(".", language);
+        const auto gigabytes = [mark](double bytes) {
+            char number[32];
+            std::snprintf(number, sizeof(number), "%.1f", bytes / 1e9);
+            std::string text = number;
+            if (const std::size_t dot = text.find('.'); dot != std::string::npos) text.replace(dot, 1u, mark);
+            return text;
+        };
+        return galaxy::host_text::format(
+            galaxy::host_text::translated("Nebula needs {0} GB free on this Mac to set up the game; {1} GB is free.",
+                                          language),
+            {gigabytes(kNeeded), gigabytes(free.doubleValue)});
     }
 }
 
@@ -102,9 +112,11 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
     const auto place = [](NSView* view, CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
         view.frame = [view frameForAlignmentRect:NSMakeRect(x, y, w, h)];
     };
-    _choose = [NSButton buttonWithTitle:@"Choose Disc Image…" target:self action:@selector(chooseImage:)];
+    // In the host's language (host_text, P-106).
+    using galaxy::apple::host_ns_text;
+    _choose = [NSButton buttonWithTitle:host_ns_text("Choose disc image…") target:self action:@selector(chooseImage:)];
     _choose.keyEquivalent = @"\r";
-    _leave = [NSButton buttonWithTitle:@"Quit" target:self action:@selector(leave:)];
+    _leave = [NSButton buttonWithTitle:host_ns_text("Quit") target:self action:@selector(leave:)];
     const NSSize choose = _choose.intrinsicContentSize;
     const NSSize leave = _leave.intrinsicContentSize;
     const CGFloat chooseWidth = std::max<CGFloat>(choose.width, 96.0);
@@ -122,14 +134,15 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
     const CGFloat barY = margin + choose.height + margin;
     place(_bar, margin, barY, width - margin * 2.0, std::max<CGFloat>(_bar.intrinsicContentSize.height, 6.0));
     [content addSubview:_bar];
-    NSTextField* const title = [NSTextField labelWithString:@"Set up Nebula"];
+    NSTextField* const title = [NSTextField labelWithString:host_ns_text("Set up Nebula")];
     title.font = [NSFont boldSystemFontOfSize:17];
     const CGFloat titleHeight = title.intrinsicContentSize.height;
     place(title, margin, height - margin - titleHeight, width - margin * 2.0, titleHeight);
     [content addSubview:title];
     _words = [NSTextField
-        wrappingLabelWithString:again ? @"Nebula's copy of the game is from an earlier version or is damaged. Choose your Super Mario Galaxy disc image to set it up again."
-                                      : @"Choose your Super Mario Galaxy disc image. This is done once."];
+        wrappingLabelWithString:again ? host_ns_text("Nebula's copy of the game is from an earlier version or is damaged. "
+                                                     "Choose your Super Mario Galaxy disc image to set it up again.")
+                                      : host_ns_text("Choose your Super Mario Galaxy disc image. This is done once.")];
     const CGFloat wordsTop = height - margin - titleHeight - 8.0;
     const CGFloat wordsBottom = barY + [_bar alignmentRectForFrame:_bar.frame].size.height + 12.0;
     place(_words, margin, wordsBottom, width - margin * 2.0, wordsTop - wordsBottom);
@@ -146,7 +159,7 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
     if (self.working) {
         // The importer stops at its next step; the window goes on showing until it has.
         g_cancel.store(true, std::memory_order_relaxed);
-        [self say:@"Stopping…"];
+        [self say:galaxy::apple::host_ns_text("Stopping…")];
         self.leave.enabled = NO;
         return;
     }
@@ -163,7 +176,7 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
     panel.canChooseFiles = YES;
     panel.canChooseDirectories = YES;  // a folder the disc was extracted to
     panel.allowsMultipleSelection = NO;
-    panel.message = @"Choose your Super Mario Galaxy disc image";
+    panel.message = galaxy::apple::host_ns_text("Choose your Super Mario Galaxy disc image");
     [panel beginSheetModalForWindow:self.window
                   completionHandler:^(NSModalResponse result) {
                       if (result == NSModalResponseOK && panel.URL.fileSystemRepresentation != nullptr) {
@@ -175,10 +188,10 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
 - (void)importFrom:(std::string)input {
     self.working = YES;
     self.choose.enabled = NO;
-    self.leave.title = @"Cancel";
+    self.leave.title = galaxy::apple::host_ns_text("Cancel");
     self.bar.hidden = NO;
     self.bar.doubleValue = 0.0;
-    [self say:@"Checking…"];
+    [self say:galaxy::apple::host_ns_text("Checking…")];
     g_cancel.store(false, std::memory_order_relaxed);
     g_done.store(0, std::memory_order_relaxed);
     g_total.store(0, std::memory_order_relaxed);
@@ -213,12 +226,12 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
             nebula_import_free(identity);
         }
         if (!supported && failure.empty()) {
-            failure = "This disc image can't be used.";
+            failure = galaxy::host_text::text("This disc image cannot be used.");
         }
         std::fprintf(stderr, "[setup] disc image checked in %.1f s\n", seconds());
         if (supported) {
             dispatch_async(dispatch_get_main_queue(), ^{
-                [self say:@"Setting up…"];
+                [self say:galaxy::apple::host_ns_text("Setting up…")];
             });
             // Built beside its place and moved there whole: a stopped import leaves no half of a game.pak. What an
             // import that never finished (the Mac turned off) left is cleared first.
@@ -238,17 +251,17 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
             char* const refused = nebula_import_build(input.c_str(), partial.c_str(), &import_progress, nullptr);
             std::fprintf(stderr, "[setup] game.pak built in %.1f s\n", seconds());
             if (refused != nullptr) {
-                failure = g_cancel.load(std::memory_order_relaxed) ? "Stopped." : refused;
+                failure = g_cancel.load(std::memory_order_relaxed) ? galaxy::host_text::text("Stopped.") : std::string(refused);
                 nebula_import_free(refused);
                 std::filesystem::remove(partial, error);
             } else {
                 std::filesystem::rename(partial, place, error);
                 if (error) {
-                    failure = "Couldn't save the game's data.";
+                    failure = galaxy::host_text::text("The game's data could not be saved.");
                 } else if (!galaxy::apple::game_data_opens(output)) {
                     // Read back as the game reads it: what was written is what the game will find.
                     std::filesystem::remove(place, error);
-                    failure = "The game's data couldn't be read back from this Mac's drive. Try again.";
+                    failure = galaxy::host_text::text("The game's data could not be read back from this Mac's drive. Try again.");
                 }
             }
         }
@@ -277,7 +290,7 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
     self.bar.hidden = YES;
     self.choose.enabled = YES;
     self.leave.enabled = YES;
-    self.leave.title = @"Quit";
+    self.leave.title = galaxy::apple::host_ns_text("Quit");
     [self say:@(failure.c_str())];
 }
 

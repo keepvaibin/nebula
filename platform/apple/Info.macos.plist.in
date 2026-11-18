@@ -4,6 +4,25 @@
 <dict>
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
+    <!-- The languages of the app's own words (localization/NebulaText.tsv): AppKit says its own menu items and panels
+         in the one of these the Mac prefers. -->
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>en-GB</string>
+        <string>fr</string>
+        <string>fr-CA</string>
+        <string>es</string>
+        <string>es-419</string>
+        <string>de</string>
+        <string>it</string>
+        <string>nl</string>
+        <string>pt-BR</string>
+        <string>ja</string>
+        <string>ko</string>
+        <string>zh-Hans</string>
+        <string>zh-Hant</string>
+    </array>
     <key>CFBundleExecutable</key>
     <string>Nebula</string>
     <key>CFBundleIconFile</key>

@@ -30,6 +30,7 @@
 #include "galaxy/mods.h"
 #include "galaxy/luma_system_platform.h"
 #include "galaxy/game_paths.h"
+#include "galaxy/host_text.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
@@ -1616,37 +1617,43 @@ void pick_files(FilePick kind, PickDone done) {
         // No dialog, or one that would not show (anything but the player's cancel).
         HRESULT shown = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
         if (SUCCEEDED(shown)) {
+            // The dialog's own words in the host's language (host_text, P-106); the system draws its buttons.
+            const char* const language = galaxy::host_text::language();
+            const auto say = [language](const char* english) {
+                return widen_utf8(galaxy::host_text::translated(english, language));
+            };
+            const std::wstring all = say(galaxy::host_text::kAllFiles);
             DWORD options = 0u;
             dialog->GetOptions(&options);
             options |= FOS_ALLOWMULTISELECT | FOS_FORCEFILESYSTEM;
             if (kind == FilePick::Miis) {
                 // Every kind of Mii file (galaxy::host::read_mii_file); the Mii Studio code as text.
+                const std::wstring name = say(galaxy::host_text::kMiiFiles);
                 const COMDLG_FILTERSPEC filters[] = {
-                    {L"Mii files (Wii, DS, 3DS, Wii U, Switch, Mii Studio, Mii Creator)",
+                    {name.c_str(),
                      L"*.mii;*.rcd;*.rsd;*.mae;*.miigx;*.ncd;*.nsd;*.cfcd;*.cfsd;*.ffcd;*.ffsd;*.charinfo;*.nfsd;*.nfcd;"
                      L"*.mnms;*.emnms;*.miic;*.dat;*.bin;*.txt"},
-                    {L"All files", L"*.*"}};
+                    {all.c_str(), L"*.*"}};
                 dialog->SetFileTypes(2u, filters);
-                dialog->SetTitle(L"Import Miis");
+                dialog->SetTitle(say(galaxy::host_text::kImportMiis).c_str());
                 options |= FOS_FILEMUSTEXIST;
             } else if (kind == FilePick::ModFolders) {
                 options |= FOS_PICKFOLDERS | FOS_PATHMUSTEXIST;
-                dialog->SetTitle(L"Import mod folders");
+                dialog->SetTitle(say(galaxy::host_text::kImportModFolders).c_str());
             } else if (kind == FilePick::Saves) {
-                const COMDLG_FILTERSPEC filters[] = {
-                    {L"Saves (zip, Nebula.sav, GameData.bin, Wii SD data.bin)", L"*.zip;*.sav;*.bin"},
-                    {L"All files", L"*.*"}};
+                const std::wstring name = say(galaxy::host_text::kSaveFiles);
+                const COMDLG_FILTERSPEC filters[] = {{name.c_str(), L"*.zip;*.sav;*.bin"}, {all.c_str(), L"*.*"}};
                 dialog->SetFileTypes(2u, filters);
-                dialog->SetTitle(L"Import saves");
+                dialog->SetTitle(say(galaxy::host_text::kImportSaves).c_str());
                 options &= ~static_cast<DWORD>(FOS_ALLOWMULTISELECT);
                 options |= FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST;
             } else {
+                const std::wstring name = say(galaxy::host_text::kModFiles);
                 const COMDLG_FILTERSPEC filters[] = {
-                    {L"Mods and texture packs (luma, zip, 7z, rar, tar)",
-                     L"*.luma;*.zip;*.7z;*.rar;*.tar;*.tgz;*.gz;*.txz;*.xz;*.tbz2;*.bz2;*.tzst;*.zst"},
-                    {L"All files", L"*.*"}};
+                    {name.c_str(), L"*.luma;*.zip;*.7z;*.rar;*.tar;*.tgz;*.gz;*.txz;*.xz;*.tbz2;*.bz2;*.tzst;*.zst"},
+                    {all.c_str(), L"*.*"}};
                 dialog->SetFileTypes(2u, filters);
-                dialog->SetTitle(L"Import mods");
+                dialog->SetTitle(say(galaxy::host_text::kImportMods).c_str());
                 options |= FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST;
             }
             dialog->SetOptions(options);
@@ -1690,11 +1697,13 @@ void save_copy(const std::filesystem::path& file, std::function<void(SaveCopy)> 
         SaveCopy result = SaveCopy::Failed;
         IFileSaveDialog* dialog = nullptr;
         if (SUCCEEDED(CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
-            const COMDLG_FILTERSPEC filters[] = {{L"Zip archive", L"*.zip"}};
+            const char* const language = galaxy::host_text::language();
+            const std::wstring zip = widen_utf8(galaxy::host_text::translated(galaxy::host_text::kZipArchive, language));
+            const COMDLG_FILTERSPEC filters[] = {{zip.c_str(), L"*.zip"}};
             dialog->SetFileTypes(1u, filters);
             dialog->SetDefaultExtension(L"zip");
             dialog->SetFileName(file.filename().c_str());
-            dialog->SetTitle(L"Export saves");
+            dialog->SetTitle(widen_utf8(galaxy::host_text::translated(galaxy::host_text::kExportSaves, language)).c_str());
             DWORD options = 0u;
             dialog->GetOptions(&options);
             dialog->SetOptions(options | FOS_FORCEFILESYSTEM | FOS_OVERWRITEPROMPT | FOS_PATHMUSTEXIST);

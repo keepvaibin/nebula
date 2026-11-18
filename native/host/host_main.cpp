@@ -34,6 +34,7 @@
 #include "galaxy/asset_store.h"
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
+#include "galaxy/host_text.h"
 #include "galaxy/game_module.h"
 #include "galaxy/luma_guard_host.h"
 #if defined(_WIN32)
@@ -1783,33 +1784,7 @@ const char* crash_dialog_language() {
         language = galaxy::get_runtime_settings().language;
     } catch (const std::exception&) {
     }
-    const LANGID system = GetUserDefaultUILanguage();
-    const auto region = [system](WORD sublanguage) { return SUBLANGID(system) == sublanguage; };
-    const bool spain = PRIMARYLANGID(system) == LANG_SPANISH && region(SUBLANG_SPANISH_MODERN);
-    const bool canada = PRIMARYLANGID(system) == LANG_FRENCH && region(SUBLANG_FRENCH_CANADIAN);
-    switch (language) {
-    case galaxy::GameLanguage::Japanese: return "JpJapanese";
-    case galaxy::GameLanguage::English: return "UsEnglish";
-    case galaxy::GameLanguage::German: return "EuGerman";
-    case galaxy::GameLanguage::French: return canada ? "UsFrench" : "EuFrench";
-    case galaxy::GameLanguage::Spanish: return spain ? "EuSpanish" : "UsSpanish";
-    case galaxy::GameLanguage::Italian: return "EuItalian";
-    case galaxy::GameLanguage::Dutch: return "EuDutch";
-    case galaxy::GameLanguage::Auto: break;
-    }
-    switch (PRIMARYLANGID(system)) {
-    case LANG_JAPANESE: return "JpJapanese";
-    case LANG_GERMAN: return "EuGerman";
-    case LANG_FRENCH: return canada ? "UsFrench" : "EuFrench";
-    case LANG_SPANISH: return spain ? "EuSpanish" : "UsSpanish";
-    case LANG_ITALIAN: return "EuItalian";
-    case LANG_DUTCH: return "EuDutch";
-    case LANG_PORTUGUESE: return "UsPortuguese";
-    case LANG_KOREAN: return "KrKorean";
-    case LANG_CHINESE:
-        return region(SUBLANG_CHINESE_SIMPLIFIED) || region(SUBLANG_CHINESE_SINGAPORE) ? "CnSimpChinese" : "TwTradChinese";
-    default: return "UsEnglish";
-    }
+    return galaxy::host_text::language_of(language, galaxy::host_text::system_tag());
 }
 
 std::wstring wide_of(std::string_view text) {
@@ -1842,9 +1817,9 @@ int show_crash_report_dialog() {
     const char* language = crash_dialog_language();
     text = galaxy::crash::translated_report(text, language);
     text += "\n\n";
-    text += galaxy::crash::translated("Open the folder with the report?", language);
+    text += galaxy::host_text::translated("Open the folder with the report?", language);
     const std::wstring wide = wide_of(text);
-    const std::wstring caption = wide_of(galaxy::crash::translated("Nebula stopped", language));
+    const std::wstring caption = wide_of(galaxy::host_text::translated("Nebula stopped", language));
     if (MessageBoxW(nullptr, wide.c_str(), caption.c_str(), MB_ICONERROR | MB_YESNO | MB_SETFOREGROUND | MB_TOPMOST) ==
         IDYES) {
         const std::wstring select = L"/select,\"" + file.wstring() + L"\"";

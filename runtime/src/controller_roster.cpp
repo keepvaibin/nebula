@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
+#include <set>
+#include <string>
 #include <vector>
 
 namespace galaxy::input {
@@ -90,6 +93,17 @@ std::size_t resolve_device(const DeviceList& list, DeviceKey previous) noexcept 
         if (list.entries[i].key.scheme == previous.scheme) return i;
     }
     return 0;
+}
+
+const char* kept_model_name(std::string_view name) {
+    if (name.empty()) return nullptr;
+    // A set's strings never move: the names a session sees are few (one for each kind of controller plugged in).
+    static std::mutex mutex;
+    static std::set<std::string, std::less<>> names;
+    const std::lock_guard<std::mutex> lock(mutex);
+    auto found = names.find(name);
+    if (found == names.end()) found = names.emplace(name).first;
+    return found->c_str();
 }
 
 }  // namespace galaxy::input

@@ -142,6 +142,8 @@ struct InputState {
     std::array<std::uint32_t, kMaxPads> pad_ids{};
     // Each pad's button icon model: the DualShock 3's and the GameCube pad's own buttons, else the family's.
     std::array<galaxy::input::ButtonIconModel, kMaxPads> pad_icons{};
+    // Each pad's own name as the system gives it (input::kept_model_name; nullptr: none given), for the CONTROLS page.
+    std::array<const char*, kMaxPads> pad_names{};
     // Each pad's motion and touch surface since the game last took them (take_pad_motion).
     std::array<PadMotion, kMaxPads> motion{};
     // The device's own sensors (a phone), when it has them.

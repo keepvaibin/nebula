@@ -440,7 +440,7 @@ add_executable(nebula_native_host host/host_main.cpp ../runtime/src/whole_lines.
     ../runtime/src/luma_input.cpp ../runtime/src/input/mod_actions.cpp ../runtime/src/input_bindings.cpp
     ../runtime/src/mod_log.cpp ../runtime/src/mod_check.cpp ../runtime/src/luma_game_store.cpp ../runtime/src/mod_screens.cpp ../runtime/src/mod_start_check.cpp ../runtime/src/mod_plugins.cpp ../runtime/src/game_module.cpp host/luma_guard.cpp host/crash_watch.cpp
     ../runtime/src/luma.cpp ../runtime/src/mods.cpp ../runtime/src/mod_consent.cpp ../runtime/src/texture_categories.cpp ../runtime/src/dolphin_pack.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/asset_store.cpp
-    ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
+    ../runtime/src/crash_report.cpp ../runtime/src/host_text.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
     ../runtime/src/mii_formats.cpp ../runtime/src/pointer_control.cpp
     # The start check asks whether the compiler of mods' programs is there (mod_start_check.cpp): the same answer as
     # the windowed host's on Windows (dxc beside the program) and Apple (none yet); elsewhere Vulkan's, whose HLSL
@@ -455,6 +455,9 @@ target_compile_features(nebula_native_host PRIVATE cxx_std_20)
 include("${CMAKE_CURRENT_LIST_DIR}/../third_party/boringssl.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../third_party/zlib_inflate.cmake")
 target_link_libraries(nebula_native_host PRIVATE nebula_bssl_ssl nebula_zinflate)
+if(APPLE)
+    target_link_libraries(nebula_native_host PRIVATE "-framework CoreFoundation")  # host_text.cpp: the preferred language
+endif()
 target_compile_definitions(nebula_native_host PRIVATE _CRT_SECURE_NO_WARNINGS)
 add_dependencies(nebula_native_host ${game_modules})
 if(NEBULA_SANITIZE)

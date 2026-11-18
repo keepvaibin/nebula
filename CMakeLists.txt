@@ -194,6 +194,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/strict_json.cpp
     runtime/src/diag_seal.cpp
     runtime/src/crash_report.cpp
+    runtime/src/host_text.cpp
     runtime/src/discord_presence.cpp
     runtime/src/controller_hid.cpp
     runtime/src/switch2_ble_win.cpp
