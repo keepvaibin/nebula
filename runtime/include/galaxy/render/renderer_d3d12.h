@@ -63,6 +63,7 @@
 #include <atomic>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace galaxy::render {
@@ -190,7 +191,7 @@ public:
         replaced_owner_ = owner;
     }
     // The heaps growth replaced, for the renderer to free once the GPU is past the commands that may read them.
-    [[nodiscard]] std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> take_replaced() noexcept { return std::move(replaced_); }
+    [[nodiscard]] std::vector<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>> take_replaced() noexcept { return std::exchange(replaced_, {}); }
     // The most a frame's segment and the persistent region have held (diagnostics). A segment that a frame fills doubles, as the
     // persistent region does (grow_frames); its first size is kSrvPerFrame.
     [[nodiscard]] unsigned frame_high_water() const noexcept { return frame_high_water_; }

@@ -127,6 +127,7 @@ int main() {
         passed &= expect(p0.index == 0u && ring.persistent_cpu(p0.index).ptr != 0u && ring.persistent_cpu(p1.index).ptr != 0u,
                          "the earlier persistent descriptors keep their indices");
         passed &= expect(ring.take_replaced().size() == 1u, "the replaced heap is handed back");
+        passed &= expect(ring.take_replaced().empty(), "a heap handed back is not kept (P-029)");
         // A full frame segment doubles into a new heap: this frame's tables so far move with it, at the same place in
         // the segment.
         const auto heap_full = ring.heap();
