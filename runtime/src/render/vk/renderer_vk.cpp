@@ -8,6 +8,7 @@
 #include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/whole_lines.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #if defined(_WIN32)
 #include "galaxy/render/streamline_bridge.h"
@@ -2898,6 +2899,7 @@ void RendererVk::refresh_display_rate() {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';

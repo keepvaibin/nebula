@@ -81,6 +81,10 @@ Interpolation interpolation_of(const RenderConfig& render) {
 // The targets a mode offers, lowest first (0: the display's refresh rate): the standard rates
 // below the display's, then its own, then Unlimited for native interpolation without VSync. Frame generation without
 // dynamic multi frame generation runs at multiples of the step rate (and at most the multiplier the GPU runs).
+// With VSync on a display of fixed refresh a picture stays a whole number of refreshes, so only the rates it shows
+// evenly are offered: its refresh over a whole number (144 Hz: 72; 240 Hz: 80 and 120). Another target would
+// show at the next of those down (a 120 target on 144 Hz shows 72) or unevenly. VSync off or a display of variable
+// refresh shows any rate.
 std::vector<unsigned> interpolation_targets(Interpolation mode, const FrameRateCaps& caps) {
     std::vector<unsigned> targets;
     if (mode == Interpolation::kOff) {
@@ -97,12 +101,22 @@ std::vector<unsigned> interpolation_targets(Interpolation mode, const FrameRateC
     const bool sixties = generated && caps.generated_supported && !caps.generated_dynamic;
     const unsigned most = generated && caps.generated_supported
         ? kStepRate * (caps.generated_max + 1u) : kUnlimitedTarget;
-    for (const unsigned rate : {75u, 90u, 100u, 120u, 144u, 165u, 180u, 200u, 240u, 280u, 300u, 360u, 480u, 500u, 540u,
-                                600u, 720u, 1000u}) {
+    const bool even = refresh != 0u && !caps.unlimited && !caps.variable_refresh;
+    std::vector<unsigned> rates;
+    if (even) {
+        for (unsigned whole = refresh / (kStepRate + 2u) + 1u; whole >= 2u; --whole) {
+            if (refresh % whole == 0u && refresh / whole > kStepRate + 1u) {
+                rates.push_back(refresh / whole);
+            }
+        }
+    } else {
+        rates = {75u, 90u, 100u, 120u, 144u, 165u, 180u, 200u, 240u, 280u, 300u, 360u, 480u, 500u, 540u, 600u, 720u, 1000u};
+    }
+    for (const unsigned rate : rates) {
         if (refresh != 0u && rate + 1u >= refresh) {
             break;
         }
-        if ((rate == 180u && !sixties) || (sixties && rate % kStepRate != 0u) || rate > most) {
+        if ((rate == 180u && !sixties && !even) || (sixties && rate % kStepRate != 0u) || rate > most) {
             continue;
         }
         targets.push_back(rate);

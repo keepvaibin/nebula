@@ -7,6 +7,7 @@
 #include "galaxy/benchmark.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/display_aspect.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/device_memory.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/whole_lines.h"
@@ -1029,6 +1030,7 @@ void RendererMtl::refresh_display_rate() {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';

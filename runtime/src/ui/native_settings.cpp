@@ -6,6 +6,7 @@
 #include "galaxy/content_viewport.h"
 #include "galaxy/desktop_window.h"
 #include "galaxy/discord_presence.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/ui/benchmark_menu.h"
 #include "galaxy/ui/hdr_calibration.h"
@@ -448,7 +449,8 @@ ui::FrameRateCaps settings_frame_rate_caps(const RenderConfig& render, bool offe
     return {settings_refresh_hz(render), offer && frame_generation_offered(),
             host_window::upscaler_caps().frame_generation, host_window::upscaler_caps().frame_generation_dynamic,
             host_window::upscaler_caps().frame_generation_max, host_window::upscaler_caps().fsr_frame_generation,
-            render.vsync_interval == 0u && !vsync_fixed, vsync_fixed};
+            render.vsync_interval == 0u && !vsync_fixed, vsync_fixed,
+            galaxy::render::g_variable_refresh.load(std::memory_order_relaxed)};
 }
 Interpolation interpolation_of(const RenderConfig& render) { return ui::interpolation_of(render); }
 std::vector<unsigned> interpolation_targets(const RenderConfig& render, Interpolation mode) {

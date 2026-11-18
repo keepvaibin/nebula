@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Direct3D 11 renderer (d3d11/renderer_d3d11.h): device, swap chain, frames, present, the draws' replay, samplers and
 // tables. The scene target, its passes, copies, pictures, probes and the renderer's parts are renderer_d3d11_scene.cpp.
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/d3d11/renderer_d3d11.h"
 #include "../dxgi_pacing.h"
 
@@ -911,6 +912,7 @@ void RendererD3D11::refresh_display_rate() {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';

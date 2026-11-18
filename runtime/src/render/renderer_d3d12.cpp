@@ -1,4 +1,5 @@
 // RendererD3D12: device and swap chain, scene targets and copies, presentation.
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/utility_shaders.h"
 #include "dxgi_pacing.h"
 #include "galaxy/benchmark.h"
@@ -3850,6 +3851,7 @@ void RendererD3D12::refresh_display_rate(bool read_mode) {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     const double hz = variable ? variable_refresh_cap(mode_hz) : (timed ? measured_hz : mode_hz);
     if (hz <= 1.0) {
         return;
