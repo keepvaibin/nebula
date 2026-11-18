@@ -24,7 +24,34 @@
       "absent": true
     },
     {
-      "log": "tt-sig-global: .*global variable \"CubeCameraArea::sCubeCategory\" of type \"u32\""
+      "fact": "modlog",
+      "has": {
+        "mod": "tt-sig-global",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "tt-sig-global: code/windows-x64/mod.dll: the game has no global variable \"CubeCameraArea::sCubeCategory\" of type \"u32\"."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "tt-sig-global",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "tt-sig-global: code/linux-x64/mod.so: the game has no global variable \"CubeCameraArea::sCubeCategory\" of type \"u32\"."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

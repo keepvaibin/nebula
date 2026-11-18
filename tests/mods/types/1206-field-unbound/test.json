@@ -24,7 +24,34 @@
       "absent": true
     },
     {
-      "log": "tt-unb-field: .*field \"AudAnmSoundObject\\.mHandles\" a mod can bind \\(.*mHandles.*each have it\\)"
+      "fact": "modlog",
+      "has": {
+        "mod": "tt-unb-field",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "tt-unb-field: code/windows-x64/mod.dll: the game has no field \"AudAnmSoundObject.mHandles\" a mod can bind (SoundAnimator::mHandles, SoundHandles::mHandles each have it)."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "tt-unb-field",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "tt-unb-field: code/linux-x64/mod.so: the game has no field \"AudAnmSoundObject.mHandles\" a mod can bind (SoundAnimator::mHandles, SoundHandles::mHandles each have it)."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

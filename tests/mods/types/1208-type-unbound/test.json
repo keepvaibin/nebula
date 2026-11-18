@@ -24,7 +24,34 @@
       "absent": true
     },
     {
-      "log": "tt-unb-type: .*type \"MR::NameIndexOf<MR::NameKeyExact>::Slot\" a mod can bind \\(no size"
+      "fact": "modlog",
+      "has": {
+        "mod": "tt-unb-type",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "tt-unb-type: code/windows-x64/mod.dll: the game has no type \"MR::NameIndexOf<MR::NameKeyExact>::Slot\" a mod can bind (no size: incomplete or dependent)."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "tt-unb-type",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "tt-unb-type: code/linux-x64/mod.so: the game has no type \"MR::NameIndexOf<MR::NameKeyExact>::Slot\" a mod can bind (no size: incomplete or dependent)."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

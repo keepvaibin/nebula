@@ -24,7 +24,34 @@
       "absent": true
     },
     {
-      "log": "lt-sigmany: .*single function \"MR::getRandom\": the import names no signature and it has several \\(\"f32\\(\\)\", \"f32\\(f32, f32\\)\", \"s32\\(s32, s32\\)\"\\)"
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-sigmany",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "lt-sigmany: code/windows-x64/mod.dll: the game has no single function \"MR::getRandom\": the import names no signature and it has several (\"f32()\", \"f32(f32, f32)\", \"s32(s32, s32)\")."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-sigmany",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "lt-sigmany: code/linux-x64/mod.so: the game has no single function \"MR::getRandom\": the import names no signature and it has several (\"f32()\", \"f32(f32, f32)\", \"s32(s32, s32)\")."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

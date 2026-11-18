@@ -28,8 +28,11 @@
       "fact": "modlog",
       "has": {
         "mod": "lt-sighas-jp",
+        "source": "validator",
+        "level": "error",
         "code": 505,
-        "english": "lt-sighas-jp: mod.dll: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
+        "file": "code/windows-x64/mod.dll",
+        "english": "lt-sighas-jp: code/windows-x64/mod.dll: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
       },
       "when": "any",
       "systems": [
@@ -40,8 +43,11 @@
       "fact": "modlog",
       "has": {
         "mod": "lt-sighas-jp",
+        "source": "validator",
+        "level": "error",
         "code": 505,
-        "english": "lt-sighas-jp: mod.so: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
+        "file": "code/linux-x64/mod.so",
+        "english": "lt-sighas-jp: code/linux-x64/mod.so: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
       },
       "when": "any",
       "systems": [
@@ -52,8 +58,9 @@
       "fact": "modlog",
       "has": {
         "mod": "lt-sighas-jp",
-        "code": 505,
-        "english": "lt-sighas-jp: mod.dylib: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
+        "source": "validator",
+        "level": "error",
+        "code": 505
       },
       "when": "any",
       "systems": [
@@ -64,7 +71,7 @@
       "fact": "modlog",
       "matching": {
         "mod": "lt-sighas-jp",
-        "text": "lt-sighas-jp: mod.dll: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
+        "text": "lt-sighas-jp: code/windows-x64/mod.dll: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
       },
       "absent": true,
       "systems": [
@@ -75,7 +82,7 @@
       "fact": "modlog",
       "matching": {
         "mod": "lt-sighas-jp",
-        "text": "lt-sighas-jp: mod.so: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
+        "text": "lt-sighas-jp: code/linux-x64/mod.so: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
       },
       "absent": true,
       "systems": [
@@ -86,7 +93,18 @@
       "fact": "modlog",
       "matching": {
         "mod": "lt-sighas-jp",
-        "text": "lt-sighas-jp: mod.dylib: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
+        "text": "lt-sighas-jp: code/macos-arm64/mod.dylib: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
+      },
+      "absent": true,
+      "systems": [
+        "macos"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "lt-sighas-jp",
+        "text": "lt-sighas-jp: code/macos-x64/mod.dylib: the game has no function \"MR::getPlayerLeft\" with the signature \"int()\" (its signatures: \"s32()\")."
       },
       "absent": true,
       "systems": [

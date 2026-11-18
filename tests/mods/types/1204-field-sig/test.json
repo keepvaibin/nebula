@@ -24,7 +24,34 @@
       "absent": true
     },
     {
-      "log": "tt-sig-field: .*field \"Vec3<f32>\\.x\" of type \"s32\""
+      "fact": "modlog",
+      "has": {
+        "mod": "tt-sig-field",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "tt-sig-field: code/windows-x64/mod.dll: the game has no field \"Vec3<f32>.x\" of type \"s32\"."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "tt-sig-field",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "tt-sig-field: code/linux-x64/mod.so: the game has no field \"Vec3<f32>.x\" of type \"s32\"."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

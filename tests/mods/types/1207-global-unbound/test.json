@@ -24,7 +24,34 @@
       "absent": true
     },
     {
-      "log": "tt-unb-global: .*global variable \"Angle::cRadian090\" a mod can bind \\(internal linkage"
+      "fact": "modlog",
+      "has": {
+        "mod": "tt-unb-global",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "tt-unb-global: code/windows-x64/mod.dll: the game has no global variable \"Angle::cRadian090\" a mod can bind (internal linkage: no name a mod can bind)."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "tt-unb-global",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "tt-unb-global: code/linux-x64/mod.so: the game has no global variable \"Angle::cRadian090\" a mod can bind (internal linkage: no name a mod can bind)."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

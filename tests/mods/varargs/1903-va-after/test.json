@@ -23,7 +23,34 @@
   ],
   "expect": [
     {
-      "log": "va-after: .*luma_mod cannot be used: \"MR::tryCreateCsvParser\" takes a variable number of arguments, so it takes before hooks only"
+      "fact": "modlog",
+      "has": {
+        "mod": "va-after",
+        "source": "validator",
+        "level": "error",
+        "code": 512,
+        "file": "code/windows-x64/mod.dll",
+        "text": "va-after: code/windows-x64/mod.dll: luma_mod cannot be used: \"MR::tryCreateCsvParser\" takes a variable number of arguments, so it takes before hooks only; the function it passes them to with a va_list takes every hook."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "va-after",
+        "source": "validator",
+        "level": "error",
+        "code": 512,
+        "file": "code/linux-x64/mod.so",
+        "text": "va-after: code/linux-x64/mod.so: luma_mod cannot be used: \"MR::tryCreateCsvParser\" takes a variable number of arguments, so it takes before hooks only; the function it passes them to with a va_list takes every hook."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     },
     {
       "fact": "mod.va-after.after_ran",

@@ -393,3 +393,7 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   before (Cook.Model.NoGameModel) and passes after; nebula-import and luma-validate tests all pass.
 - tools/nebula_text.py --check failed on main's mods.cpp (an environment variable's name read as shown text, from my
   M-031 commit); it is listed as not shown, and the check passes. The check is in neither the gate nor GitHub's jobs.
+- N-2060: the full run one at a time on bins a2m16 (the parallel series' baseline) was 556 of 569: two not run (other
+  region discs) and eleven refusal tests that still looked for the loader's line after N-2054 moved the refusal to the
+  start's check. They expect the check's mod log row now; loader5, types and varargs 28 of 28 on a2w5.
+- engine/e13a a8796ab68 merged (8ce3d9560), at Agent 1's request.

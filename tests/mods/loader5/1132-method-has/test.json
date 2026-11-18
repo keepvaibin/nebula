@@ -25,7 +25,34 @@
       "absent": true
     },
     {
-      "log": "lt-methodhas: .*virtual function \"LiveActor::calcAndSetBaseMtx\" with the signature \"int\\(\\)\" \\(its signatures: \"void\\(\\)\"\\)"
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-methodhas",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "lt-methodhas: code/windows-x64/mod.dll: the game has no virtual function \"LiveActor::calcAndSetBaseMtx\" with the signature \"int()\" (its signatures: \"void()\")."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-methodhas",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "lt-methodhas: code/linux-x64/mod.so: the game has no virtual function \"LiveActor::calcAndSetBaseMtx\" with the signature \"int()\" (its signatures: \"void()\")."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

@@ -19,7 +19,34 @@
   ],
   "expect": [
     {
-      "log": "cx-hook: .*luma_mod cannot be used: \"Game/Gravity/CubeGravity.cpp#encodeCorner\" is constexpr"
+      "fact": "modlog",
+      "has": {
+        "mod": "cx-hook",
+        "source": "validator",
+        "level": "error",
+        "code": 512,
+        "file": "code/windows-x64/mod.dll",
+        "text": "cx-hook: code/windows-x64/mod.dll: luma_mod cannot be used: \"Game/Gravity/CubeGravity.cpp#encodeCorner\" is constexpr: the game may run it while it is being built, so it takes no hooks."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "cx-hook",
+        "source": "validator",
+        "level": "error",
+        "code": 512,
+        "file": "code/linux-x64/mod.so",
+        "text": "cx-hook: code/linux-x64/mod.so: luma_mod cannot be used: \"Game/Gravity/CubeGravity.cpp#encodeCorner\" is constexpr: the game may run it while it is being built, so it takes no hooks."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     },
     {
       "fact": "mod.cx-hook.hook_ran",
