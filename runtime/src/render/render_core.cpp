@@ -639,10 +639,12 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
 
 void RenderCore::render_work_begins() noexcept {
     render_work_started_ns_.store(steady_now_ns(), std::memory_order_release);
+    galaxy::host::perf_hint_busy(true);
 }
 
 void RenderCore::render_work_ends() noexcept {
     render_work_started_ns_.store(0u, std::memory_order_release);
+    galaxy::host::perf_hint_busy(false);
 }
 
 void RenderCore::finish_pictures_here() {

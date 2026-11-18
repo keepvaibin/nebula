@@ -142,6 +142,7 @@ struct ThreadWork {
 };
 inline void perf_hint_add_current_thread(const char*) noexcept {}
 inline void perf_hint_set_target(int64_t) noexcept {}
+inline void perf_hint_busy(bool) noexcept {}
 inline int64_t perf_hint_frame_done() noexcept { return 0; }
 inline std::size_t perf_hint_last_work(ThreadWork*, std::size_t) noexcept { return 0; }
 inline bool perf_hint_on_battery() noexcept { return false; }
@@ -1129,6 +1130,8 @@ void svc_frame_wait(void*) {
     static ThreadWindow threads[kThreads];
 #endif
     for (;;) {
+        // The step's work ends here: the wait for the next is not work to the performance hints.
+        galaxy::host::perf_hint_busy(false);
         // The step's moment on the runtime's clock: the display's vsync it waited for, else the host clock's due time,
         // reached by a precise wait (precise_wait.h: a timer woken late would start the step late).
         std::int64_t due_qpc = 0;
@@ -1155,7 +1158,7 @@ void svc_frame_wait(void*) {
             next = Clock::now() + period;
             continue;
         }
-        // The last frame's work (the game and render threads' CPU time), to the performance hints (Android).
+        // The last step's work (the game and render threads' busy wall time), to the performance hints (Android).
         [[maybe_unused]] const int64_t work = galaxy::host::perf_hint_frame_done();
         if (period != display_period && !gBootFast.load(std::memory_order_relaxed)) {
             period = display_period;
