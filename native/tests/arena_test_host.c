@@ -17,6 +17,8 @@ uint64_t arena_test_reserved;
 uint64_t arena_test_committed;
 uint64_t arena_test_commit_calls;
 uint64_t arena_test_odd_commits;  // commits not a whole number of MiB
+// Called inside each commit when set: a test's way into the arena while one of its calls is under way.
+void (*arena_test_on_commit)(void);
 
 static void* reserve(void* user, uint64_t size) {
     (void)user;
@@ -37,6 +39,9 @@ static void* reserve(void* user, uint64_t size) {
 static int commit(void* user, void* start, uint64_t size) {
     (void)user;
     arena_test_commit_calls++;
+    if (arena_test_on_commit != NULL) {
+        arena_test_on_commit();
+    }
     if (size % (1u << 20) != 0) {
         arena_test_odd_commits++;
     }

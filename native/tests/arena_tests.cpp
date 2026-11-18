@@ -28,6 +28,7 @@ extern uint64_t arena_test_reserved;
 extern uint64_t arena_test_committed;
 extern uint64_t arena_test_commit_calls;
 extern uint64_t arena_test_odd_commits;
+extern void (*arena_test_on_commit)(void);
 }
 
 namespace {
@@ -286,6 +287,17 @@ int main() {
         NebulaArena::destroy(pScene);
         expect(NebulaArena::current() == pRoot, "the root is current when it has no child");
         expect(arena_test_reserved == rootReserved, "only the root's addresses are held");
+    }
+
+    // Two users of the game's memory at once (P-012): a new that starts while another is inside the arena (here from
+    // the host's commit, as a second thread's would) stops and says so, rather than sharing a free list. Last: the outer
+    // new is left where the stop took it.
+    {
+        arena_test_on_commit = [] { arena_test_on_commit = nullptr; (void)operator new(16); };
+        const bool stopped = NEBULA_TEST_PANICS((void)operator new(256u << 20));
+        arena_test_on_commit = nullptr;
+        expect(stopped, "a new inside another new stops");
+        expect(strstr(nebula_test_panic_text, "two threads") != nullptr, "the stop names two users at once");
     }
 
     if (sFailures == 0) {
