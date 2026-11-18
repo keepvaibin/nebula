@@ -55,6 +55,10 @@ public:
     void addParts(CollisionParts*);
     void calcMinMaxAndRadius();
     void calcMinMaxAndRadiusIfMoveOuter(CollisionParts*);
+#if defined(NEBULA_PLAIN_PATHS)
+    // Whether the part lies past the box shrunk by its radius: calcMinMaxAndRadiusIfMoveOuter's test.
+    bool isMoveOuter(CollisionParts*) const;
+#endif
     void addAndUpdateMinMax(Vec3f, Vec3f);
     void eraseParts(CollisionParts*);
 

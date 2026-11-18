@@ -39,10 +39,11 @@ void CollisionCategorizedKeeper::movement() {
                     continue;
                 }
 
-                if (mUpdateZoneBounds) {
+                // A moved part past the zone's box (shrunk by its radius) has the zone's bounds made again once,
+                // after every part moved, not once for each such part (P-130): the bounds only decide which
+                // zones a query looks in, and they hold every part either way.
+                if (mUpdateZoneBounds || (pParts->mStillCount == 0 && (*pZone)->isMoveOuter(pParts))) {
                     remake = true;
-                } else if (pParts->mStillCount == 0) {
-                    (*pZone)->calcMinMaxAndRadiusIfMoveOuter(pParts);
                 }
             }
         }
@@ -681,6 +682,23 @@ void CollisionZone::calcMinMaxAndRadius() {
     }
 #endif
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+bool CollisionZone::isMoveOuter(CollisionParts* pParts) const {
+    f32 radius = pParts->mBoundingRadius;
+    Vec3f position(pParts->getTrans());
+    Vec3f min(mMin);
+    Vec3f max(mMax);
+    min.x += radius;
+    min.y += radius;
+    min.z += radius;
+    max.x -= radius;
+    max.y -= radius;
+    max.z -= radius;
+
+    return !MR::isInRange(position.x, min.x, max.x) || !MR::isInRange(position.y, min.y, max.y) || !MR::isInRange(position.z, min.z, max.z);
+}
+#endif
 
 void CollisionZone::calcMinMaxAndRadiusIfMoveOuter(CollisionParts* pParts) {
     f32 radius = pParts->mBoundingRadius;
