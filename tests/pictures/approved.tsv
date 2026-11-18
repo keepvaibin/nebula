@@ -58,7 +58,7 @@ picture	pc	engine	menu-text-fit-de	d3d12	display	320	240	61e8eec523501c2548a1fba
 picture	pc	engine	menu-text-fit-de	d3d12	general	320	240	bd794f9957a4f5d2760a4bbb17d1f786cf9eeb1e51a27197428aad5b78f56beb
 picture	pc	engine	menu-text-fit-de	d3d12	graphics	320	240	39842d5a01a5eb6b22b1f10de97b95361928f20ec46b8490d6a132fe06c3125f
 picture	pc	engine	menu-text-fit-de	d3d12	mods	320	240	9e1bdb0451e3a32fa5fe509d54546311f7120bd6359bb83ecab97db3faf47174
-picture	pc	engine	menu-text-fit-de	d3d12	system	320	240	8be8a6d1f09343293d0e1c18f4d89b04d5733f6cbadf924da9224e102c7cd394
+picture	pc	engine	menu-text-fit-de	d3d12	system	320	240	955a192ce2cb297973c968ee919171424be5b0489a09dec84bf580f0fc2b6e82
 picture	pc	engine	menu-text-fit-fr	d3d12	advanced	320	240	ee1efb28ca6b10347bac71252ed85413dd442aa867210a917514c2eb91143466
 picture	pc	engine	menu-text-fit-fr	d3d12	audio	320	240	e1d7147ec58b644e0916e3fa3ec503136fef9831a06ce94e0565d09504b3a5da
 picture	pc	engine	menu-text-fit-fr	d3d12	controls	320	240	119b7cfa7e957280b358457c4eb4d29833447182ac2bf6c212733d620638be4e
@@ -66,7 +66,7 @@ picture	pc	engine	menu-text-fit-fr	d3d12	display	320	240	3c84258a92168f520487696
 picture	pc	engine	menu-text-fit-fr	d3d12	general	320	240	9f91bbf37d342a3ab725bd4c8999b12df41786a56bb318ee6f37ddadf53b6343
 picture	pc	engine	menu-text-fit-fr	d3d12	graphics	320	240	9d039625a91763d5819ee772dd3a176527ee2d2b5468a6dec217ec21ad1d2433
 picture	pc	engine	menu-text-fit-fr	d3d12	mods	320	240	48ce13ddb07709f9953d14099e3953aa17da74fdfc3cf85c7653c01b11f379af
-picture	pc	engine	menu-text-fit-fr	d3d12	system	320	240	b84dcface4aa12c3f341b0179a4ea5a1a0abcfc8a1d68570ec7394508323512b
+picture	pc	engine	menu-text-fit-fr	d3d12	system	320	240	24c0d3157e36149a270c4712e30a79707f11206f1dc56134e2f6ff05951afd77
 picture	pc	engine	menu-text-fit-ja	d3d12	advanced	320	240	e4e176045f674c846a43193ca998983e24736f38a5da6c5e086f3df44682ff29
 picture	pc	engine	menu-text-fit-ja	d3d12	audio	320	240	2c28ae8b939d366ed80a2ec8b8af84fc8b27dfb9458e380d69383aec28832a1e
 picture	pc	engine	menu-text-fit-ja	d3d12	controls	320	240	5e0bb7bf8996629261f17d3f4b2f2d6e246c05cc6caf628ce0271a1bf5d29a3f
@@ -74,7 +74,7 @@ picture	pc	engine	menu-text-fit-ja	d3d12	display	320	240	4e38a27d1ebdefeaebc10f7
 picture	pc	engine	menu-text-fit-ja	d3d12	general	320	240	6b8b08424b909e128bb9620dbfb11e66ece9e2d5bdbe02740830edb1e233b2bd
 picture	pc	engine	menu-text-fit-ja	d3d12	graphics	320	240	02a903e9c38adef1807c5c1636f6314cc534e26abcc05dbecfdf016a69df413e
 picture	pc	engine	menu-text-fit-ja	d3d12	mods	320	240	953530952c0696bd4c2fa66e38b70bc33dbc1d76fd990374167c08b863241442
-picture	pc	engine	menu-text-fit-ja	d3d12	system	320	240	fa22a33699e062ac336c8feae35ddace92bb35db330da7bc2cb6b26718bb5908
+picture	pc	engine	menu-text-fit-ja	d3d12	system	320	240	872d0ba810d6eefdf22f9a3424c558a50687b30553e72d6af9c938463857d3b2
 picture	pc	engine	restarts	d3d12	title	1280	720	90b2b45144c572c1cacc01f7109f3439bab770eff070a60338abd247337dcfce
 picture	pc	engine	talk-balloon-edge	d3d11	arrive	1280	720	4aef64b9bb13528781be2af803901bd4564872769f0e079e57372f8d086e97ad
 picture	pc	engine	talk-balloon-edge	d3d12	arrive	1280	720	73537b7027e242547a2e66a501c282062a477a709b7369aa95f6c4f1354f813b
