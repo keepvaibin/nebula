@@ -24,7 +24,34 @@
       "absent": true
     },
     {
-      "log": "lt-svc-none: .*lt\\.absent"
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-svc-none",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "lt-svc-none: code/windows-x64/mod.dll: the game has no service \"lt.absent\" at version 1.0 or a later one with the same major number."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-svc-none",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "lt-svc-none: code/linux-x64/mod.so: the game has no service \"lt.absent\" at version 1.0 or a later one with the same major number."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

@@ -47,7 +47,9 @@ to replace, without a second check.
   self-description and the installed mods. The self-description is the `luma` folder beside the game's program (an
   installed game's `versions/<v>/luma`), read as LumaLink's `--names` reads it: the function rows, `luma_types.json`,
   `luma_services.json` and the placement facts `smg_game.luma-placement.json` (LumaValidateInput `names`, `types`,
-  `services`, `placement`), so the game and LumaLink judge a mod alike. Without the folder (a development build, a
+  `services`, `placement`), so the game and LumaLink judge a mod alike. In a test run the test extension's `test.`
+  services are added to the services catalog (LumaValidateInput `test_services`), so a test mod's import of one binds
+  as the kernel binds it; every other game has none. Without the folder (a development build, a
   device with none) those rules go unchecked; one the validator refuses is said on stderr and the mod is checked as
   without it. Its findings become mod-log entries (source VALIDATOR, at the title's
   summary). A start's check reads the kept report for the rules that read the whole `.luma`; reference rules that read

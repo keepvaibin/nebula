@@ -36,7 +36,34 @@
       "absent": true
     },
     {
-      "log": "lt-rep1: .*replaces \"MR::getPlayerLeft\" .*which lt-rep2 replaces already"
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-rep1",
+        "source": "validator",
+        "level": "error",
+        "code": 805,
+        "file": "code/windows-x64/mod.dll",
+        "text": "lt-rep1: code/windows-x64/mod.dll replaces \"MR::getPlayerLeft\" (s32()), which lt-rep2 replaces already; only one mod may replace a function."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-rep1",
+        "source": "validator",
+        "level": "error",
+        "code": 805,
+        "file": "code/linux-x64/mod.so",
+        "text": "lt-rep1: code/linux-x64/mod.so replaces \"MR::getPlayerLeft\" (s32()), which lt-rep2 replaces already; only one mod may replace a function."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

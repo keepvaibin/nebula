@@ -53,6 +53,9 @@ struct Game {
     std::string region;
     std::string played;
     const galaxy::assets::AssetStore* store = nullptr;
+    // The "test." services this process's host extensions give (services/registry.md 14), bound as the catalog's rows
+    // (LumaValidateInput.test_services): only a test run has any. Their texts live as long as the process.
+    std::vector<LumaTestService> test_services;
 };
 
 // What identifies a store's content for a kept report (LumaValidateInput.store_key): its version and the game it came

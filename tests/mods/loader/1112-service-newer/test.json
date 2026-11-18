@@ -24,7 +24,34 @@
       "absent": true
     },
     {
-      "log": "lt-svc-new: .*harness"
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-svc-new",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "lt-svc-new: code/windows-x64/mod.dll: the game has no service \"harness\" at version 1.99 or a later one with the same major number."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-svc-new",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "lt-svc-new: code/linux-x64/mod.so: the game has no service \"harness\" at version 1.99 or a later one with the same major number."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

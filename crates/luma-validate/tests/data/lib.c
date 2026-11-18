@@ -111,6 +111,12 @@ static LumaImport imports[] = {
     {5, 0, "net", "1.0", &get_pos, 0, 0, 0},
 };
 LUMA_MOD(imports, start, 0);
+#elif defined(SERVICE_TEST)
+/* A test service (services/registry.md 14): only a test run's catalog has it. */
+static LumaImport imports[] = {
+    {5, 0, "test.svc", "1.3", &get_pos, 0, 0, 0},
+};
+LUMA_MOD(imports, start, 0);
 #elif defined(SERVICE_BAD)
 static LumaImport imports[] = {
     {5, 0, "net", "one", &get_pos, 0, 0, 0},

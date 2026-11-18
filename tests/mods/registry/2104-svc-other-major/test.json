@@ -25,7 +25,34 @@
       "absent": true
     },
     {
-      "log": "reg-svc20: .*test\\.svc.*2\\.0"
+      "fact": "modlog",
+      "has": {
+        "mod": "reg-svc20",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "reg-svc20: code/windows-x64/mod.dll: the game has no service \"test.svc\" at version 2.0 or a later one with the same major number."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "reg-svc20",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "reg-svc20: code/linux-x64/mod.so: the game has no service \"test.svc\" at version 2.0 or a later one with the same major number."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

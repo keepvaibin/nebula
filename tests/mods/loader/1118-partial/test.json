@@ -38,7 +38,34 @@
       "absent": true
     },
     {
-      "log": "lt-partial: .*MR::ltNoSuchFunction"
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-partial",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "lt-partial: code/windows-x64/mod.dll: the game has no function \"MR::ltNoSuchFunction\" with the signature \"void()\"."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-partial",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "lt-partial: code/linux-x64/mod.so: the game has no function \"MR::ltNoSuchFunction\" with the signature \"void()\"."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

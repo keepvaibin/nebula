@@ -75,7 +75,34 @@
       "absent": true
     },
     {
-      "log": "mods-refused: mod\\.(dll|so|dylib): the game has no service \\\"mods\\\" at version 1\\.9"
+      "fact": "modlog",
+      "has": {
+        "mod": "mods-refused",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/windows-x64/mod.dll",
+        "text": "mods-refused: code/windows-x64/mod.dll: the game has no service \"mods\" at version 1.9 or a later one with the same major number."
+      },
+      "when": "any",
+      "systems": [
+        "windows"
+      ]
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "mods-refused",
+        "source": "validator",
+        "level": "error",
+        "code": 505,
+        "file": "code/linux-x64/mod.so",
+        "text": "mods-refused: code/linux-x64/mod.so: the game has no service \"mods\" at version 1.9 or a later one with the same major number."
+      },
+      "when": "any",
+      "systems": [
+        "linux"
+      ]
     }
   ]
 }

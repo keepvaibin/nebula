@@ -55,6 +55,15 @@ typedef struct LumaOption {
     const char* value;
 } LumaOption;
 
+/* A service a test run's host extension gives (services-registry 14): a "test." name, its version, and its permission
+   (null, or its own name). */
+typedef struct LumaTestService {
+    const char* name;
+    uint16_t major;
+    uint16_t minor;
+    const char* permission;
+} LumaTestService;
+
 typedef struct LumaValidateInput {
     uint32_t size;          /* sizeof(LumaValidateInput) */
     const char* path;       /* the .luma, or a placed mod's folder laid out as one; UTF-8 */
@@ -91,6 +100,10 @@ typedef struct LumaValidateInput {
                                planet's is left to the check after the mods' start (luma_report_after_start). Needs
                                `names`, as LumaLink reads both from one folder */
     uint64_t placement_size;
+    const LumaTestService* test_services; /* the "test." services this run's host extensions give, bound as the
+                               catalog's rows (services-registry 14); null: none, as in every game but a test run.
+                               Needs `services` */
+    uint32_t test_service_count;
 } LumaValidateInput;
 
 typedef struct LumaFinding {

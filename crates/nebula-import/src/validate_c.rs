@@ -45,6 +45,16 @@ pub struct LumaOption {
     pub value: *const c_char,
 }
 
+/// A service a test run's host extension gives (services/registry.md 14): a `test.` name, its version, and its
+/// permission (null, or its own name).
+#[repr(C)]
+pub struct LumaTestService {
+    pub name: *const c_char,
+    pub major: u16,
+    pub minor: u16,
+    pub permission: *const c_char,
+}
+
 #[repr(C)]
 pub struct LumaValidateInput {
     pub size: u32,
@@ -82,6 +92,10 @@ pub struct LumaValidateInput {
     /// class but a planet's is left to the check after the mods' start. Needs `names`.
     pub placement: *const c_char,
     pub placement_size: u64,
+    /// The `test.` services this run's host extensions give (services/registry.md 14), bound with the catalog's rows;
+    /// null: none (every game but a test run). Needs `services`.
+    pub test_services: *const LumaTestService,
+    pub test_service_count: u32,
 }
 
 #[repr(C)]
@@ -315,6 +329,16 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     if placement_bytes.is_some() && names_text.is_none() {
         return Err("placement given without names".to_string());
     }
+    // Each test service: its name, version and permission, added to the catalog in order (Services::add_test).
+    let mut test_services = Vec::new();
+    for (i, service) in list(input.test_services, input.test_service_count).iter().enumerate() {
+        let name = text(service.name).ok_or_else(|| format!("test_services[{i}]: name is null"))?;
+        let permission = text(service.permission);
+        test_services.push(luma_validate::names::Service { name, major: service.major, minor: service.minor, permission });
+    }
+    if !test_services.is_empty() && services_bytes.is_none() {
+        return Err("test_services given without services".to_string());
+    }
     // Each device feature is a name; one that is not, or a null in the list, is the caller's fault.
     let device_features: Option<Vec<String>> = if input.device_features.is_null() {
         None
@@ -337,6 +361,11 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
             n.add_rows(t).map_err(|line| format!("names line {line}: not name, signature, kind, line"))?;
             n.types = types_bytes.map(luma_validate::names::Types::from_json).transpose().map_err(|e| format!("types: {e}"))?;
             n.services = services_bytes.map(luma_validate::names::Services::from_json).transpose().map_err(|e| format!("services: {e}"))?;
+            if let Some(catalog) = n.services.as_mut() {
+                for (i, service) in test_services.iter().enumerate() {
+                    catalog.add_test(service.clone()).map_err(|e| format!("test_services[{i}]: {e}"))?;
+                }
+            }
             n.renderer_features = renderer_bytes.map(luma_validate::names::renderer_features_from_json).transpose().map_err(|e| format!("renderer: {e}"))?;
             n.factory = placement_bytes.map(luma_validate::names::factory_from_json).transpose().map_err(|e| format!("placement: {e}"))?;
             Some(n)
@@ -357,13 +386,18 @@ unsafe fn run(input: &LumaValidateInput) -> Result<LumaReport, String> {
     // features are not in it: L806 is a manifest rule, run at every start, and a laptop that switches GPUs
     // keeps its kept reports.
     let game_key = format!(
-        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; renderer {}; placement {}; store {}",
+        "nebula {nebula}; region {}; platform {platform}; languages {}; api {}; names {}; types {}; services {}; test services {}; renderer {}; placement {}; store {}",
         region.as_deref().unwrap_or("-"),
         languages.join(","),
         input.luma_api,
         names_text.as_deref().map_or_else(|| "-".to_string(), |t| hex_sha1(t.as_bytes())),
         types_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         services_bytes.map_or_else(|| "-".to_string(), hex_sha1),
+        if test_services.is_empty() {
+            "-".to_string()
+        } else {
+            test_services.iter().map(|s| format!("{} {}.{} {}", s.name, s.major, s.minor, s.permission.as_deref().unwrap_or("-"))).collect::<Vec<_>>().join(",")
+        },
         renderer_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         placement_bytes.map_or_else(|| "-".to_string(), hex_sha1),
         if store.is_some() { store_key.as_str() } else { "-" },

@@ -203,6 +203,12 @@ bool validate_package(const Validator* v, std::string_view id, const std::filesy
         if (!self.services.empty()) {
             input.services = self.services.data();
             input.services_size = self.services.size();
+            // A test run's services bind as the catalog's rows, so its mods' imports of them are checked as the
+            // kernel binds them; every other game has none, and an import of one is L505.
+            if (!game.test_services.empty()) {
+                input.test_services = game.test_services.data();
+                input.test_service_count = static_cast<std::uint32_t>(game.test_services.size());
+            }
         }
         if (!self.placement.empty()) {
             input.placement = self.placement.data();
@@ -241,6 +247,8 @@ bool validate_package(const Validator* v, std::string_view id, const std::filesy
         input.types_size = 0;
         input.services = nullptr;
         input.services_size = 0;
+        input.test_services = nullptr;
+        input.test_service_count = 0;
         input.placement = nullptr;
         input.placement_size = 0;
         input.renderer = nullptr;

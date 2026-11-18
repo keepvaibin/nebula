@@ -298,3 +298,37 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
 - The cause is the render queue (Agent 1, N-1056; 77e311fe0 did not change it in 2493). 2493 is in
   world/pending.json, without a renderer list, and M-013 is open until it passes on all three renderers. The kernel
   side of M-013 stays: a take-out no longer waits for the call itself.
+
+## 2026-11-17 M-029, M-011, N-2055: no pointer a mod gives a service can end the game
+
+- M-029 (and M-011, its short form): every service function, in the game's kernel and in the host's providers, read
+  and wrote the pointers a mod gave it directly, so an unmapped address, read-only data or a function outside the
+  mod's code ended the game. Each pointer now goes through the kernel; a wrong one is LUMA_E_ARGUMENT, reported, and
+  the call does nothing (no out written, nothing started; a take into a buffer it cannot write takes nothing). Large
+  copies run outside the I/O and mix locks. calling-services.md states the rule.
+- Tests, one per service, each giving every pointer wrong (lt_bad.h: unmapped, read-only, data as a function, a game
+  function), then a good call: time 2220, movie 3106, player 2963, system 2235, fs 2315, mods 2255, input 2514, audio
+  2612, audio 2613 (microphone, camera), assets 2808, net 2711. On the bins before (a2m10 for the kernel, a2m13 for
+  the host) each crashed the game; on a2m14 each passes.
+- N-2055: test mods imported the harness service as required; the game's catalog leaves it out, so the checker
+  refused them (L505: time 2216, loader 1109 and 1116, classes 1409 and 1410). They import it as optional now.
+- For Agent 1: stage 3902 (P-177, a view group cube with Obj_arg0 -1) and 3903 (P-178, a flat-model shadow of a
+  one-joint model) fail on the current game and wait in stage/pending.json for the fixes.
+
+## 2026-11-17 N-2056: a test run's check binds the test services
+
+- Since N-2054 the start's check ran in every test run, but it bound service imports against the shipped catalog
+  only. It refused every mod that imports the test extension's test. services: 20 loader, registry and mods tests
+  failed on a2m14 and on a2m10 before it.
+- LumaValidateInput gains test_services: the test. services this run's host extensions give, with name, version and
+  permission. They are added to the catalog in order, so an import binds as the kernel binds it. The game fills the
+  list from the extensions; a player's game has none, so a test. import is L505 there, as luma-json.md says. A kept
+  report depends on the list.
+- Tests: crates/nebula-import validate_c a_test_run_s_services_bind_as_the_catalog_s, with a new fixture
+  (pe-x64/service_test.dll, test.svc 1.3). Registry 2101-2116 pass. Loader 1101, 1102, 1110, 1112, 1118, mods 2242
+  and registry 2103, 2104 now expect the check's finding: the check refuses those mods before the loader, as in a
+  player's game. A game without the importer's library turns every mod off, so the loader's own lines for these cases
+  are not reachable from a start.
+- For Agent 1: stage 3904 (P-164, First Comet unlocks during the comet star's get sequence) fails on the current game
+  (First Star unlocks, First Comet does not) and waits in stage/pending.json. 2493 passes on d3d12, vulkan and d3d11
+  with engine/e13a merged; it moves to world/suite.json when mods/m2 stands on 77e311fe0 and df726e744.

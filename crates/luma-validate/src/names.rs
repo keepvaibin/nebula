@@ -212,6 +212,27 @@ impl Services {
         Ok(Services { rows })
     }
 
+    /// Adds a service a test run's host extension gives (services/registry.md 14) at its place in the order: a name
+    /// `test.PARTS` in section 2's grammar, its permission null or its own name. Only a running game gives these (a
+    /// player's game has none), so a `test.` import binds in a test run and is L505 everywhere else. An error names the
+    /// row: another name, another permission, or a name and major the catalog has already.
+    pub fn add_test(&mut self, service: Service) -> Result<(), String> {
+        if !service.name.starts_with("test.") || !service_name_ok(&service.name) {
+            return Err(format!("\"{}\" is not a test service's name (test.PARTS)", service.name));
+        }
+        if service.permission.as_deref().is_some_and(|p| p != service.name) {
+            return Err(format!("\"{}\": its permission is neither none nor its own name", service.name));
+        }
+        let key = (service.name.as_bytes(), service.major);
+        match self.rows.binary_search_by(|row| (row.name.as_bytes(), row.major).cmp(&key)) {
+            Ok(_) => Err(format!("\"{}\" {} is given twice", service.name, service.major)),
+            Err(at) => {
+                self.rows.insert(at, service);
+                Ok(())
+            }
+        }
+    }
+
     /// The row a kind 5 import of `name` at `major.minor` binds: that name and major, and a minor at least the one asked.
     pub fn find(&self, name: &str, major: u16, minor: u16) -> Option<&Service> {
         self.rows.iter().find(|s| s.name == name && s.major == major && s.minor >= minor)

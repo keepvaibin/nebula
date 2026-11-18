@@ -129,6 +129,8 @@ struct Call {
     device_ptrs: Vec<*const c_char>,
     /// The placement facts given; empty: none.
     placement: Vec<u8>,
+    /// The test run's `test.` services given; empty: none.
+    test_services: Vec<LumaTestService>,
 }
 
 impl Call {
@@ -149,6 +151,7 @@ impl Call {
             device: None,
             device_ptrs: Vec::new(),
             placement: Vec::new(),
+            test_services: Vec::new(),
         });
         c.store.context = (&*c.table as *const CTable).cast_mut().cast();
         c
@@ -189,6 +192,8 @@ impl Call {
             device_feature_count: self.device_ptrs.len() as u32,
             placement: if self.placement.is_empty() { null() } else { self.placement.as_ptr().cast() },
             placement_size: self.placement.len() as u64,
+            test_services: if self.test_services.is_empty() { null() } else { self.test_services.as_ptr() },
+            test_service_count: self.test_services.len() as u32,
         }
     }
 }
@@ -426,8 +431,10 @@ fn the_layout_is_the_header_s() {
     assert_eq!((size_of::<LumaGameStore>(), offset_of!(LumaGameStore, context), offset_of!(LumaGameStore, folder)), (40, 8, 32));
     assert_eq!(size_of::<LumaInstalledMod>(), 32);
     assert_eq!(size_of::<LumaOption>(), 16);
-    assert_eq!(size_of::<LumaValidateInput>(), 224);
+    assert_eq!(size_of::<LumaValidateInput>(), 240);
     assert_eq!((offset_of!(LumaValidateInput, placement), offset_of!(LumaValidateInput, placement_size)), (208, 216));
+    assert_eq!((offset_of!(LumaValidateInput, test_services), offset_of!(LumaValidateInput, test_service_count)), (224, 232));
+    assert_eq!((size_of::<LumaTestService>(), offset_of!(LumaTestService, major), offset_of!(LumaTestService, minor), offset_of!(LumaTestService, permission)), (24, 8, 10, 16));
     assert_eq!(
         (offset_of!(LumaValidateInput, names_size), offset_of!(LumaValidateInput, store), offset_of!(LumaValidateInput, position), offset_of!(LumaValidateInput, kept_size)),
         (64, 96, 124, 152)
@@ -579,6 +586,52 @@ fn the_required_services_are_read_per_platform_and_after_a_start_s_check() {
     i.names = null();
     let got = c_call(Some(&i));
     assert!(got.invalid.unwrap().contains("services given without names"));
+}
+
+/// A test run's `test.` services (services/registry.md 14) through the C input: bound as the catalog's rows, so an
+/// import of one is L505 in every game but a run that gives it; part of the game's key; a row not in form, or rows
+/// without a catalog, the caller's fault.
+#[test]
+fn a_test_run_s_services_bind_as_the_catalog_s() {
+    // pe-x64/service_test.dll imports test.svc 1.3 without LUMA_OPTIONAL (luma-validate's tests/data/lib.c, SERVICE_TEST).
+    let dir = tempfile::tempdir().unwrap();
+    let bytes = luma(&[("code", r#"{"platforms": ["windows-x64"]}"#)], &[file("code/windows-x64/mod.dll", &fixture("pe-x64/service_test.dll"))]);
+    let path = write(dir.path(), "t.luma", &bytes);
+    let mut call = Call::new(&path, "windows-x64");
+    call.services = br#"{"services": [{"name": "net", "major": 1, "minor": 0, "permission": null}]}"#.to_vec();
+    let codes = |got: &Got| got.findings.iter().filter(|f| f.1 == 0).map(|f| f.0).collect::<Vec<u32>>();
+    // A player's game: no test service, so the import is L505.
+    let without = c_call(Some(&call.input(None)));
+    assert_eq!(without.state, 0);
+    assert_eq!(codes(&without), vec![505]);
+    let name = CString::new("test.svc").unwrap();
+    let secret = CString::new("test.secret").unwrap();
+    let given = |major: u16, minor: u16| LumaTestService { name: name.as_ptr(), major, minor, permission: null() };
+    // The run gives test.svc 1.3 (and test.secret, its own permission): it binds.
+    call.test_services = vec![given(1, 3), LumaTestService { name: secret.as_ptr(), major: 1, minor: 0, permission: secret.as_ptr() }];
+    let with = c_call(Some(&call.input(None)));
+    assert_eq!(codes(&with), Vec::<u32>::new());
+    // A kept report made without them is checked again with them, and the other way round.
+    assert_eq!(c_call(Some(&call.input(Some(&without.kept)))).state, 0);
+    assert_eq!(c_call(Some(&call.input(Some(&with.kept)))).state, 1);
+    // An older minor, or another major, is as absent.
+    call.test_services = vec![given(1, 2)];
+    assert_eq!(codes(&c_call(Some(&call.input(None)))), vec![505]);
+    call.test_services = vec![given(2, 3)];
+    assert_eq!(codes(&c_call(Some(&call.input(None)))), vec![505]);
+    // Not a test name, a permission not its own, a row given twice, or rows without a catalog: the caller's fault.
+    let net = CString::new("net").unwrap();
+    call.test_services = vec![LumaTestService { name: net.as_ptr(), major: 1, minor: 3, permission: null() }];
+    let got = c_call(Some(&call.input(None)));
+    assert_eq!(got.state, -1);
+    assert!(got.invalid.unwrap().contains("test_services[0]"));
+    call.test_services = vec![LumaTestService { name: name.as_ptr(), major: 1, minor: 3, permission: secret.as_ptr() }];
+    assert!(c_call(Some(&call.input(None))).invalid.unwrap().contains("test_services[0]"));
+    call.test_services = vec![given(1, 3), given(1, 4)];
+    assert!(c_call(Some(&call.input(None))).invalid.unwrap().contains("test_services[1]"));
+    call.test_services = vec![given(1, 3)];
+    call.services = Vec::new();
+    assert!(c_call(Some(&call.input(None))).invalid.unwrap().contains("test_services given without services"));
 }
 
 /// luma.md revision 4 through the C input: the renderer's list and the device's features give L806 (an error, the
