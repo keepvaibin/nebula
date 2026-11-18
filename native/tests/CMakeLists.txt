@@ -49,6 +49,11 @@ native_test(native_binder_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/binder_tests.
 native_test(native_hit_sensor_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/hit_sensor_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
     "${game_src}/LiveActor/HitSensor.cpp" "${game_src}/System/NebulaArena.cpp")
+# The plain module's sensor pairs: the sweep keeps every pair and its order (P-039), and is timed against the walk.
+native_test(native_sensor_hit_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/sensor_hit_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
+    "${game_src}/LiveActor/SensorHitChecker.cpp" "${game_src}/LiveActor/HitSensor.cpp" "${game_src}/System/NebulaArena.cpp")
+target_compile_definitions(native_sensor_hit_tests PRIVATE NEBULA_PLAIN_MODULE=1)
 # Every message Mario sends in a step goes out (N-3006).
 native_test(native_mario_messenger_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_messenger_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
