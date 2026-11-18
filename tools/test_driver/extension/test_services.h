@@ -8,7 +8,8 @@
 
 namespace test_services {
 
-// The providers, valid for the process: test.svc 1.3 and test.secret 1.0. `count` gets 2.
-const LumaServiceProvider* const* providers(std::uint32_t* count);
+// The providers, valid for the process: test.svc 1.3, test.secret 1.0 and `extra` test.extra.n<i> 1.0 (at most
+// LUMA_TEST_EXTRA_MOST). `count` gets how many.
+const LumaServiceProvider* const* providers(std::uint32_t extra, std::uint32_t* count);
 
 }  // namespace test_services

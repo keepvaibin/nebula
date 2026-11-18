@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "2118-many-services",
+  "about": "N-3008: with 200 extra test services (test.extra.n0 to 199) beside the catalog's, the kernel takes every one; reg-many binds test.extra.n199 and test.svc and asks for test.extra.n100 and 0 by name",
+  "proves": [
+    "kernel.service",
+    "services.registry"
+  ],
+  "settings": [
+    "GALAXY_TEST_EXTRA_SERVICES=200"
+  ],
+  "mods": [
+    "../mods/reg-many"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.reg-many.last",
+      "is": 199
+    },
+    {
+      "fact": "mod.reg-many.middle",
+      "is": 100
+    },
+    {
+      "fact": "mod.reg-many.first",
+      "is": 0
+    },
+    {
+      "fact": "mod.reg-many.echo",
+      "is": 0
+    },
+    {
+      "fact": "mod.reg-many.out",
+      "is": 42
+    }
+  ]
+}

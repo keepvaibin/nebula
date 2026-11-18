@@ -344,13 +344,34 @@ const LumaServiceProvider kSecretProvider = {
     nullptr, nullptr, nullptr, nullptr, nullptr,
 };
 
-const LumaServiceProvider* const kProviders[] = {&kSvcProvider, &kSecretProvider};
+// test.extra.n<i>: a name, a table and a provider each, made once (the process keeps them).
+struct Extra {
+    std::string name;
+    LumaTestExtraService table{};
+    LumaServiceProvider provider{};
+};
 
 }  // namespace
 
-const LumaServiceProvider* const* providers(std::uint32_t* count) {
-    *count = static_cast<std::uint32_t>(sizeof(kProviders) / sizeof(kProviders[0]));
-    return kProviders;
+const LumaServiceProvider* const* providers(std::uint32_t extra, std::uint32_t* count) {
+    static std::vector<std::unique_ptr<Extra>> extras;
+    static std::vector<const LumaServiceProvider*> list;
+    if (list.empty()) {
+        list = {&kSvcProvider, &kSecretProvider};
+        extra = extra < LUMA_TEST_EXTRA_MOST ? extra : LUMA_TEST_EXTRA_MOST;
+        for (std::uint32_t i = 0; i < extra; ++i) {
+            auto one = std::make_unique<Extra>();
+            one->name = "test.extra.n" + std::to_string(i);
+            one->table = {{sizeof(LumaTestExtraService), LUMA_TEST_EXTRA_MAJOR, LUMA_TEST_EXTRA_MINOR}, i};
+            one->provider.size = sizeof(LumaServiceProvider);
+            one->provider.name = one->name.c_str();
+            one->provider.table = &one->table.base;
+            list.push_back(&one->provider);
+            extras.push_back(std::move(one));
+        }
+    }
+    *count = static_cast<std::uint32_t>(list.size());
+    return list.data();
 }
 
 }  // namespace test_services

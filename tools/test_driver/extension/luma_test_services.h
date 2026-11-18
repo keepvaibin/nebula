@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* The test services the harness's host half provides (services/registry.md 14): "test.svc" 1.3, no permission, and
-   "test.secret" 1.0, permission "test.secret". Only in a harness run; never in an install. The registry's tests
-   import them. */
+   "test.secret" 1.0, permission "test.secret"; and, when a test sets GALAXY_TEST_EXTRA_SERVICES to n, "test.extra.n0"
+   to "test.extra.n<n-1>" 1.0. Only in a harness run; never in an install. The registry's tests import them. */
 #ifndef LUMA_TEST_SERVICES_H
 #define LUMA_TEST_SERVICES_H
 
@@ -18,6 +18,10 @@ extern "C" {
 #define LUMA_TEST_SVC_MINOR 3u
 #define LUMA_TEST_SECRET_MAJOR 1u
 #define LUMA_TEST_SECRET_MINOR 0u
+#define LUMA_TEST_EXTRA_MAJOR 1u
+#define LUMA_TEST_EXTRA_MINOR 0u
+/* The most extra services GALAXY_TEST_EXTRA_SERVICES gives (a larger value gives this many). */
+#define LUMA_TEST_EXTRA_MOST 4096u
 
 /* LumaEvent.kind of test.svc: an event the service posted for the mod. `value` is its number in the mod's post order
    (from 0), `handle` the call's request id (never 0). */
@@ -73,6 +77,13 @@ typedef struct LumaTestSecretService {
     /* 1.0. Game thread: LUMA_OK. Bound only for a mod granted "test.secret". */
     int32_t (*ping)(const LumaMod* mod);
 } LumaTestSecretService;
+
+/* test.extra.n<i>: so many services that the kernel's table of them grows (N-3008). */
+typedef struct LumaTestExtraService {
+    LumaServiceTable base;
+    /* 1.0: i, the number in the service's name. */
+    uint32_t number;
+} LumaTestExtraService;
 
 #ifdef __cplusplus
 }

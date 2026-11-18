@@ -85,19 +85,36 @@ namespace luma {
                 {nullptr, 0, 0, nullptr, nullptr},
             };
 
-            // Registered services: the catalog's, the module's and the host's, and a host extension's "test." ones.
-            const u32 kMostServices = 64;
+            // Registered services: the catalog's, the module's and the host's, and a host extension's "test." ones, as
+            // many as are given. They are kept in chunks that never move, the first one static: any thread reads an
+            // entry below the count it loaded with acquire while the game thread adds more (N-3008).
+            const u32 kChunkEntries = 64;
             struct Entry {
                 const LumaServiceProvider* provider;
                 const char* permission;  // the catalog's, or a test service's own; null: none
                 u16 major;
                 u16 minor;
             };
-            Entry sEntries[kMostServices];
+            struct Chunk {
+                Entry entries[kChunkEntries];
+                Chunk* next;  // stored with release before the count that reaches it; loaded with acquire
+            };
+            Chunk sFirstChunk;
+            Chunk* sLastChunk = &sFirstChunk;  // game thread
             u32 sEntryCount = 0;  // written on the game thread before sSealed, with release; read with acquire
-            // Deterministic mode's providers with a frame_start (game thread), called at each frame's start.
-            const LumaServiceProvider* sFrameStarts[kMostServices];
+            // Deterministic mode's providers with a frame_start (game thread), called at each frame's start; grows.
+            const LumaServiceProvider** sFrameStarts = nullptr;
             u32 sFrameStartCount = 0;
+            u32 sFrameStartRoom = 0;
+
+            // Entry `index`, below a count loaded with acquire (any thread) or on the game thread.
+            Entry& entryAt(u32 index) {
+                Chunk* pChunk = &sFirstChunk;
+                for (; index >= kChunkEntries; index -= kChunkEntries) {
+                    pChunk = __atomic_load_n(&pChunk->next, __ATOMIC_ACQUIRE);
+                }
+                return pChunk->entries[index];
+            }
             bool sSealed = false; // a mod began: no more registrations (game thread)
             bool sOpened = false; // luma_services_open ran: the module's own are registered (game thread)
 
@@ -716,7 +733,7 @@ namespace luma {
                 for (const CatalogRow* pRow = cCatalog; pRow->name != nullptr; pRow++) {
                     bool found = false;
                     for (u32 i = 0; i < sEntryCount && !found; i++) {
-                        found = sEntries[i].major == pRow->major && sameText(sEntries[i].provider->name, pRow->name);
+                        found = entryAt(i).major == pRow->major && sameText(entryAt(i).provider->name, pRow->name);
                     }
                     if (!found) {
                         NEBULA_PANIC("LumaCore: the service %s %u.%u has no provider in this build (%s)", pRow->name, pRow->major, pRow->minor,
@@ -761,7 +778,7 @@ namespace luma {
                     NEBULA_PANIC("LumaCore: the test service %s asks for the permission %s, which is not a test one", pName, pProvider->permission);
                 }
                 for (u32 i = 0; i < sEntryCount; i++) {
-                    if (sEntries[i].major == pTable->major && sameText(sEntries[i].provider->name, pName)) {
+                    if (entryAt(i).major == pTable->major && sameText(entryAt(i).provider->name, pName)) {
                         NEBULA_PANIC("LumaCore: the service %s %u was provided twice", pName, pTable->major);
                     }
                 }
@@ -796,10 +813,15 @@ namespace luma {
                         }
                     }
                 }
-                if (sEntryCount == kMostServices) {
-                    NEBULA_PANIC("LumaCore: more than %u services", kMostServices);
+                if (sEntryCount != 0 && sEntryCount % kChunkEntries == 0) {
+                    Chunk* const pChunk = static_cast<Chunk*>(::calloc(1, sizeof(Chunk)));
+                    if (pChunk == nullptr) {
+                        NEBULA_PANIC("LumaCore: no memory for the service %s", pName);
+                    }
+                    __atomic_store_n(&sLastChunk->next, pChunk, __ATOMIC_RELEASE);
+                    sLastChunk = pChunk;
                 }
-                Entry& rEntry = sEntries[sEntryCount];
+                Entry& rEntry = entryAt(sEntryCount);
                 rEntry.provider = pProvider;
                 rEntry.permission = pRow != nullptr ? pRow->permission : pProvider->permission;
                 rEntry.major = pTable->major;
@@ -813,6 +835,15 @@ namespace luma {
                 // frame_start likewise, and only in deterministic mode (the host's test_frame_step): never in play.
                 if (pProvider->size >= offsetof(LumaServiceProvider, frame_start) + sizeof(pProvider->frame_start) &&
                     pProvider->frame_start != nullptr && nebula_host()->test_frame_step != nullptr) {
+                    if (sFrameStartCount == sFrameStartRoom) {
+                        const u32 room = sFrameStartRoom == 0 ? 8u : sFrameStartRoom * 2u;
+                        void* const pGrown = ::realloc(sFrameStarts, room * sizeof(*sFrameStarts));
+                        if (pGrown == nullptr) {
+                            NEBULA_PANIC("LumaCore: no memory for the service %s", pName);
+                        }
+                        sFrameStarts = static_cast<const LumaServiceProvider**>(pGrown);
+                        sFrameStartRoom = room;
+                    }
                     sFrameStarts[sFrameStartCount++] = pProvider;
                 }
                 return 0;
@@ -890,7 +921,7 @@ namespace luma {
             }
             const u32 count = __atomic_load_n(&sEntryCount, __ATOMIC_ACQUIRE);
             for (u32 i = 0; i < count; i++) {
-                const Entry& rEntry = sEntries[i];
+                const Entry& rEntry = entryAt(i);
                 if (rEntry.major == major && rEntry.minor >= minor && sameText(rEntry.provider->name, pName)) {
                     if (ppPermission != nullptr) {
                         *ppPermission = rEntry.permission;
@@ -958,7 +989,7 @@ namespace luma {
             sByOrder[at] = &rRecord;
             sByOrderCount++;
             for (u32 i = 0; i < sEntryCount; i++) {
-                const LumaServiceProvider* const pProvider = sEntries[i].provider;
+                const LumaServiceProvider* const pProvider = entryAt(i).provider;
                 if (pProvider->mod_begin != nullptr) {
                     pProvider->mod_begin(pProvider->user, pMod);
                 }
@@ -977,7 +1008,7 @@ namespace luma {
             removeFromOrder(pRecord);
             // The last registered first, so a service built on another is told before the one it uses.
             for (u32 i = sEntryCount; i-- > 0;) {
-                const LumaServiceProvider* const pProvider = sEntries[i].provider;
+                const LumaServiceProvider* const pProvider = entryAt(i).provider;
                 if (pProvider->mod_gone != nullptr) {
                     pProvider->mod_gone(pProvider->user, pMod);
                 }
@@ -999,7 +1030,7 @@ namespace luma {
             // A post that raced the providers' mod_gone.
             dropAll(pRecord);
             for (u32 i = sEntryCount; i-- > 0;) {
-                const LumaServiceProvider* const pProvider = sEntries[i].provider;
+                const LumaServiceProvider* const pProvider = entryAt(i).provider;
                 if (pProvider->mod_end != nullptr) {
                     pProvider->mod_end(pProvider->user, pMod);
                 }
@@ -1027,7 +1058,7 @@ namespace luma {
             }
             const u32 count = __atomic_load_n(&sEntryCount, __ATOMIC_ACQUIRE);
             for (u32 i = 0; i < count; i++) {
-                const LumaServiceProvider* const pProvider = sEntries[i].provider;
+                const LumaServiceProvider* const pProvider = entryAt(i).provider;
                 for (u32 r = 0; r < pProvider->row_count; r++) {
                     if (pProvider->rows[r].code == code) {
                         nebula_snprintf(pId, size, "%s", pProvider->rows[r].id);

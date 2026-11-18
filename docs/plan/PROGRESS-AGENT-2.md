@@ -379,3 +379,17 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   and 2258a-d (data file written, read back at the next start, forgotten, gone). Before, on bins a2w2: 2257b fails
   (Mods.IdsUnreadable), 2257c fails ("dot.ids is not on the REMOVED MODS line: nothing to forget"), 2258a fails
   (write -6).
+
+## 2026-11-18 mods/m2-w: N-2058 (services past 64, a crash), N-2059 (a character's own clips)
+
+- Board 00:28: the rows handed to me since 22:30 (N-3008, N-4011, N-4014, N-4015, N-4019 to N-4021) and P-116's cook
+  part (N-2057, open) are taken; order on the board 01:05.
+- N-2058, the crash in N-3008: the kernel's services table held 64 and panicked past it. It is now chunks of 64 that
+  never move (a reader on any thread is safe while the game thread adds) and a frame-start list that grows. The test
+  extension gives GALAXY_TEST_EXTRA_SERVICES test services (test.extra.n0 ...); registry 2118-many-services asks for
+  200. Before (bins a2w5b, old game): crashed, "LumaCore: more than 64 services". After (a2w5): registry 18 of 18.
+- N-2059 (N-4011): an animation file in an archive with no model (MarioAnime.arc) moves the model of the archive its
+  name gives (Mario.anim.glb: ObjectData/Mario.arc); none there: Cook.Anim.NoModel, 14 languages. The cook's test fails
+  before (Cook.Model.NoGameModel) and passes after; nebula-import and luma-validate tests all pass.
+- tools/nebula_text.py --check failed on main's mods.cpp (an environment variable's name read as shown text, from my
+  M-031 commit); it is listed as not shown, and the check passes. The check is in neither the gate nor GitHub's jobs.
