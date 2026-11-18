@@ -279,6 +279,7 @@ def run_on_device(lt, device, test, args, run_folder, previous):
             shutil.rmtree(run_folder / sub)
             shutil.copytree(previous / sub, run_folder / sub)
         lt.carry_data(previous, run_folder, device_data_folder)
+        lt.cut_files(test, settings)
     lt.place_saves(test, run_folder)
     # The libraries the app carries are the ones the run starts; their hashes are the bin folder's, built with them.
     frozen = {name: lt.sha256(bin_folder / name) for name in (lt.HOST["game"], lt.HOST["extension"])}
@@ -290,6 +291,8 @@ def run_on_device(lt, device, test, args, run_folder, previous):
         (run_folder / "ports.json").write_text(json.dumps(ports, indent=2) + "\n", encoding="utf-8")
     placed, imports = lt.place_mods(test, settings, previous, frozen, ports)
     assert not imports, imports
+    if lt.unreadable_files(test, settings, placed):
+        raise lt.HarnessError("unreadable: the device's mods folder is the app's own; no file in it can be held")
     lt.write_run_settings(test, settings)
     hooks = [a for a in test.get("settings", []) if a.partition("=")[0] in lt.TEST_HOOKS]
     if hooks:

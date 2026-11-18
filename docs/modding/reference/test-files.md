@@ -77,8 +77,9 @@ Any key that is not on this page, anywhere in the file, stops the test with an e
 | `visible` | No | `true` shows the game's window. The default is a hidden window. Use it only to measure how pictures are shown. |
 | `settings` | No | Game settings for the run, as a list of `"GALAXY_NAME=value"` (`"GALAXY_VSYNC_INTERVAL=1"`). Each name must be one the game's settings file takes; the list is `tools/verify/settings_args.py` in Nebula's source. Any other name stops the test with a harness error. |
 | `diagnostics` | No | The game's own records for the run, as a list of the names its `--diagnostics` option takes (`present-stats`, `frame-times`, `timeline`; the list is `runtime/include/galaxy/launch_args.h`). With `timeline`, the record is the run folder's `timeline.bin`. |
-| `bare` | No | `true` runs the game with no test code in it. Only `wait`, `picture`, `key`, `text`, `settings` and `end` steps are allowed, and only log, picture and sound checks. A bare test has no mods. |
+| `bare` | No | `true` runs the game with no test code in it. Only `wait`, `picture`, `key`, `text`, `settings` and `end` steps are allowed. Checks are of the log, pictures, sound and the game's own facts, never a `mod.` fact. A bare test's only mods are ones with `"install": "import"`. |
 | `hide_game_files` | No | Paths inside the game's folder that the run's copy of the game leaves out. |
+| `cut_files` | No | Paths inside the run's settings folder, such as `mods/.cooked/validate/my-mod.kept`, that the test named in `continue_from` left. Each is cut to half its bytes before the game starts, as a file a crash left half written. Needs `continue_from`. |
 
 ## Mod entries
 
@@ -99,6 +100,8 @@ A mod in `mods` can be an object instead of a path:
 | `enabled` | `true` | `false` installs the mod switched off. For a mod kept from the test named in `continue_from`, `true` or `false` switches it on or off; without `enabled`, it stays as that test left it, so a player's choice saved then holds. |
 | `remove` | `false` | `true` removes a mod kept from the test named in `continue_from`, as a player deleting it. The entry has only `path` and `remove`. |
 | `folder` | The mod's ID | The folder the mod is placed in. Lowercase letters, digits, `-` and `.`, up to 64 characters. |
+| `copies` | `1` | 2 or more places the mod that many times, copy k with the ID `<id>-<k>` in its own folder, one after another in the order. Not with `folder`, `remove` or an import. |
+| `unreadable` | None | Paths inside the placed mod, such as `source/main.c`, that no program can read while the game runs, as a file another program holds locked. Only for a placed mod, without `copies` or `remove`. Not on Android. |
 
 A mod must already hold its built code for this computer. `lumalink test` builds your mod before it runs the tests. A mod that is not expected to fail, and does not load, fails the test.
 

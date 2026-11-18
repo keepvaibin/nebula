@@ -29,6 +29,8 @@ nebula-import; the mods' code is code/linux-x64/mod.so, and the game runs on wha
 virtual one in the container).
 """
 import argparse
+import contextlib
+import ctypes
 import datetime
 import decimal
 import hashlib
@@ -256,13 +258,14 @@ def object_ref(value, path, classes):
     return value
 
 
-def hidden_path(value, path):
-    """A hide_game_files path: relative to the game's folder, no drive, no leading slash, no `..`."""
+def hidden_path(value, path, within="the game's folder"):
+    """A hide_game_files path (relative to the game's folder) or an unreadable one (to the mod's): no drive, no leading
+    slash, no `..`."""
     if not isinstance(value, str) or not value or any(c in value for c in "\t\r\n"):
         raise HarnessError("%s must be a path" % path)
     if (value[0] in "/\\" or re.match(r"[A-Za-z]:", value) or pathlib.PureWindowsPath(value).is_absolute()
             or ".." in re.split(r"[/\\]", value)):
-        raise HarnessError("%s: %s must be relative to the game's folder, with no drive and no .." % (path, value))
+        raise HarnessError("%s: %s must be relative to %s, with no drive and no .." % (path, value, within))
     return value.replace("\\", "/")
 
 
@@ -273,7 +276,7 @@ def read_test(folder, types=None):
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
                        "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh", "window",
-                       "time", "visible", "settings", "diagnostics", "disc", "memory", "saves", "clock"})
+                       "time", "visible", "settings", "diagnostics", "disc", "memory", "saves", "clock", "cut_files"})
     for key in ("harness", "name", "about", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -345,12 +348,21 @@ def read_test(folder, types=None):
             if isinstance(entry, str):
                 entry = {"path": entry}
             keys_known(entry, path, {"path", "options", "code", "permissions", "install", "loads", "folder", "enabled",
-                                     "remove", "copies"})
+                                     "remove", "copies", "unreadable"})
             if "path" not in entry:
                 raise HarnessError("%s has no path" % path)
             mod = {"path": (folder / text(entry, "path", path)).resolve(), "code": code, "loads": True,
                    "install": "placed", "permissions": "allow", "options": {}, "folder": None, "enabled": True,
-                   "remove": False, "copies": 1}
+                   "remove": False, "copies": 1, "unreadable": []}
+            # "unreadable": files of the placed mod (paths inside it, with /) that no other program can read for the
+            # whole run, as a file another program holds locked: a test of a package the start's check cannot read
+            # (M-150). A placed mod only, one copy; Windows, Linux and macOS (held_unreadable).
+            if "unreadable" in entry:
+                if not isinstance(entry["unreadable"], list) or not entry["unreadable"]:
+                    raise HarnessError("%s.unreadable must be a list of files inside the mod" % path)
+                mod["unreadable"] = [hidden_path(u, "%s.unreadable[%d]" % (path, k), "the mod's folder") for k, u in enumerate(entry["unreadable"])]
+                if entry.get("install") == "import" or "copies" in entry or "remove" in entry:
+                    raise HarnessError("%s: unreadable is for a placed mod: no import, copies or remove" % path)
             # "copies": n (2 or more): the mod placed n times, copy k with the id <id>-<k> in its own folder, one after
             # another in the order, each its own library loaded from its own folder (as n mods built alike): a test
             # of as many mods as it likes from one source (N-3008: past the 256 the loader held).
@@ -408,8 +420,9 @@ def read_test(folder, types=None):
                                            "lowercase letters, digits and -, up to 32" % (path, key))
                 mod["options"] = entry["options"]
             mods.append(mod)
-    if bare and mods:
-        raise HarnessError("a bare test has no mods")
+    # A bare test runs no mod code: only mods the game imports (each import's result is the game's own fact).
+    if bare and any(m["install"] != "import" for m in mods):
+        raise HarnessError("a bare test has no mods but imported ones")
     language = None
     if "language" in t:
         language = text(t, "language", "")
@@ -461,6 +474,16 @@ def read_test(folder, types=None):
         if not isinstance(t["hide_game_files"], list):
             raise HarnessError("hide_game_files must be a list")
         hidden = [hidden_path(h, "hide_game_files[%d]" % i) for i, h in enumerate(t["hide_game_files"])]
+    # "cut_files": files the test named in continue_from left in the run's settings folder (paths inside it, with /),
+    # each cut to half its bytes before this start, as a write cut short on disk: a test of what the game keeps
+    # between starts (a kept report the start's check must make again, M-150).
+    cut = []
+    if "cut_files" in t:
+        if not isinstance(t["cut_files"], list) or not t["cut_files"]:
+            raise HarnessError("cut_files must be a list of files in the settings folder")
+        if continue_from is None:
+            raise HarnessError("cut_files cuts what the test named in continue_from left: it needs continue_from")
+        cut = [hidden_path(c, "cut_files[%d]" % i, "the settings folder") for i, c in enumerate(t["cut_files"])]
     # How the run must end (revision 10): "end", at its end step by the harness (the default); or "crash", by the
     # host's crash reporter before the end step (a test of a fault that must never be resumed, guard 2); or
     # "crash-at-stop", at its end step, then by the crash reporter while the game stops (a mod's stop function). A
@@ -492,7 +515,7 @@ def read_test(folder, types=None):
             "language": language, "seed": seed, "renderers": renderers, "limit": limit, "window": window,
             "continue_from": continue_from, "saves": saves, "faults": faults, "setup": setup, "steps": steps,
             "expect": expect,
-            "has_stage": "stage" in t, "hidden": hidden, "safe_start": safe_start, "device": device, "ends": ends,
+            "has_stage": "stage" in t, "hidden": hidden, "cut": cut, "safe_start": safe_start, "device": device, "ends": ends,
             "time": clock, "clock": clock_from, "visible": visible, "settings": run_settings, "diagnostics": diagnostics,
             "starts": starts, "fresh": fresh, "not_here": not_here, "disc": disc, "memory": memory}
 
@@ -914,8 +937,8 @@ def read_expect(t, bare, steps, folder):
         if "fact" in c:
             keys_known(c, path, {"fact", "when", "frames", "within", "beyond", "matching", "field", "scope"} | FACT_OPS)
             scope_of(c, path)
-            if bare:
-                raise HarnessError("%s: a bare test checks only the log, pictures and sound" % path)
+            if bare and (c["fact"] == "mod" or c["fact"].startswith("mod.")):
+                raise HarnessError("%s: a bare test runs no mod code, so it checks no mod.* fact" % path)
             op, value, within = read_check(c, path, {"within", "count", "far"})
             # `matching`: only the writes whose value has it (as `has` reads) are checked, so `count`, `absent`
             # and the rest speak of one mod's or one word's writes of a key many write ("modlog", "fx.*").
@@ -1546,6 +1569,59 @@ def place_mods(test, settings, previous, frozen, ports=None):
     return mod_ids, imports
 
 
+def cut_files(test, settings):
+    """Each of the test's cut_files (in the settings the test before left) cut to half its bytes."""
+    for inside in test.get("cut", []):
+        f = settings / inside
+        if not f.is_file():
+            raise SetupFailed("cut_files: the test before left no %s in the settings folder" % inside)
+        data = f.read_bytes()
+        f.write_bytes(data[:len(data) // 2])
+
+
+def unreadable_files(test, settings, placed):
+    """The files the test's mods name "unreadable", in the run's placed copies."""
+    files = []
+    for mod_id, m in placed:
+        for inside in m.get("unreadable", []):
+            files.append(settings / "mods" / (m["folder"] or mod_id) / inside)
+    return files
+
+
+@contextlib.contextmanager
+def held_unreadable(files):
+    """`files` kept from every other reader while the block runs, then given back. Windows: each held open with no
+    sharing, so another open fails with a sharing violation, as a file another program holds locked. Elsewhere: no read
+    permission (refused when the runner reads it anyway, as root does)."""
+    handles, modes = [], []
+    try:
+        for f in files:
+            if not f.is_file():
+                raise SetupFailed("unreadable: %s is not a file of the placed mod" % f)
+            if platform.system() == "Windows":
+                kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+                kernel32.CreateFileW.restype = ctypes.c_void_p
+                kernel32.CreateFileW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p,
+                                                 ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p]
+                kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+                # GENERIC_READ, no sharing, OPEN_EXISTING.
+                handle = kernel32.CreateFileW(str(f), 0x80000000, 0, None, 3, 0, None)
+                if handle is None or handle == ctypes.c_void_p(-1).value:
+                    raise SetupFailed("unreadable: %s could not be held (error %d)" % (f, ctypes.get_last_error()))
+                handles.append((kernel32, handle))
+            else:
+                modes.append((f, f.stat().st_mode))
+                f.chmod(0)
+                if os.access(f, os.R_OK):
+                    raise SetupFailed("unreadable: %s stays readable to this runner (root?)" % f)
+        yield
+    finally:
+        for kernel32, handle in handles:
+            kernel32.CloseHandle(handle)
+        for f, mode in modes:
+            f.chmod(mode)
+
+
 def write_run_settings(test, settings):
     """The run's settings file: the window's size and the test's language (tools/verify/settings_args.py)."""
     assignments = ["GALAXY_WINDOW_WIDTH=%d" % test["window"][0], "GALAXY_WINDOW_HEIGHT=%d" % test["window"][1]]
@@ -1734,6 +1810,7 @@ def run_one(test, renderer, args, run_folder, previous):
             shutil.rmtree(run_folder / sub)
             shutil.copytree(previous / sub, run_folder / sub)
         carry_data(previous, run_folder)
+        cut_files(test, settings)
     place_saves(test, run_folder)
     frozen = {}
     # The plain module when the bin folder has it: without it the game loads the rows module and says so.
@@ -1849,7 +1926,7 @@ def run_one(test, renderer, args, run_folder, previous):
         # No window flag elsewhere: the host takes a hidden start from its arguments (docs/using-nebula/command-line-arguments.md).
         command += ["--hidden", "1"]
     began = time.time()
-    with (run_folder / "run.log").open("wb") as log:
+    with (run_folder / "run.log").open("wb") as log, held_unreadable(unreadable_files(test, settings, placed)):
         with subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, **hidden) as process:
             code, starts, unwatched = watch_run(process, run_folder, exe.name, test["limit"] + 60)
     seconds = time.time() - began
