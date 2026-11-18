@@ -332,3 +332,14 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
 - For Agent 1: stage 3904 (P-164, First Comet unlocks during the comet star's get sequence) fails on the current game
   (First Star unlocks, First Comet does not) and waits in stage/pending.json. 2493 passes on d3d12, vulkan and d3d11
   with engine/e13a merged; it moves to world/suite.json when mods/m2 stands on 77e311fe0 and df726e744.
+
+## 2026-11-17 M-030, M-065: extra players are reused, and their draw slots freed
+
+- M-030: player.make made a new MarioActor in the scene's memory each time, and remove only ended it, so a mod that
+  makes and removes in a loop filled the scene's memory. An ended extra player is now kept (dead, hidden) and the
+  next make stands it again at the new home. Test player 2964: three makes, then forty removes and makes; before,
+  MarioActor::init2 ran 43 times, now 3, and the last made stands (picture f120).
+- M-065: set_drawn's four slots kept removed players, so a later hide (of the game's player) was not held and
+  outlived its mod. A player's slots are freed when it goes. Test player 2965: three hidden extras removed, a fourth
+  hidden, then the game's player; the mod is taken out; before, the player stayed hidden (isAllHidden 1), now 0.
+- Player suite 5 of 5 on d3d12 with the new game (a2m16).

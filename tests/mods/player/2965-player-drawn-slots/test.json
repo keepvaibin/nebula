@@ -1,0 +1,65 @@
+{
+  "harness": 1,
+  "name": "2965-player-drawn-slots",
+  "about": "M-065: a mod draws three extra players as their shadows only and removes them, makes and draws a fourth so, then draws the game's player as his shadow only; taken out, it gives him back whole (MarioActor::isAllHidden 0): a removed player keeps no set_drawn slot, so the hide is held and ends with its mod",
+  "proves": [
+    "services.player"
+  ],
+  "mods": [
+    "../mods/pl-slots",
+    "../mods/pl-look"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4340
+      ]
+    },
+    {
+      "at": 40,
+      "take_out": "pl-slots",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.pl-slots",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4341
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.pl-look.player_hidden",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.pl-slots.steps_ok",
+      "is": 7
+    },
+    {
+      "fact": "mod.pl-slots.hide_player",
+      "is": 0
+    },
+    {
+      "fact": "mod.pl-look.player_hidden",
+      "is": 0
+    }
+  ]
+}

@@ -3,6 +3,8 @@
   "tests": [
     "2961-player-extra",
     "2962-player-draw-time",
-    "2963-player-bad-pointers"
+    "2963-player-bad-pointers",
+    "2964-player-reuse",
+    "2965-player-drawn-slots"
   ]
 }

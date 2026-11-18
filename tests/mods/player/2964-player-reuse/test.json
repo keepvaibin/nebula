@@ -1,0 +1,413 @@
+{
+  "harness": 1,
+  "name": "2964-player-reuse",
+  "about": "M-030: a mod makes three extra players, then forty times removes the oldest and makes one in its place: every make LUMA_OK, and the game makes only the first three (MarioActor::init2 three times); a removed player stands again in place of a new one, so the scene's memory does not grow; the last made stands",
+  "proves": [
+    "services.player"
+  ],
+  "mods": [
+    "../mods/pl-reuse"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4292
+      ]
+    },
+    {
+      "at": 32,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4293
+      ]
+    },
+    {
+      "at": 34,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4294
+      ]
+    },
+    {
+      "at": 36,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4295
+      ]
+    },
+    {
+      "at": 38,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4296
+      ]
+    },
+    {
+      "at": 40,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4297
+      ]
+    },
+    {
+      "at": 42,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4298
+      ]
+    },
+    {
+      "at": 44,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4299
+      ]
+    },
+    {
+      "at": 46,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4300
+      ]
+    },
+    {
+      "at": 48,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "at": 50,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "at": 52,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4303
+      ]
+    },
+    {
+      "at": 54,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4304
+      ]
+    },
+    {
+      "at": 56,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4305
+      ]
+    },
+    {
+      "at": 58,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4306
+      ]
+    },
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4307
+      ]
+    },
+    {
+      "at": 62,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4308
+      ]
+    },
+    {
+      "at": 64,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4309
+      ]
+    },
+    {
+      "at": 66,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4310
+      ]
+    },
+    {
+      "at": 68,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4311
+      ]
+    },
+    {
+      "at": 70,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4312
+      ]
+    },
+    {
+      "at": 72,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4313
+      ]
+    },
+    {
+      "at": 74,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4314
+      ]
+    },
+    {
+      "at": 76,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4315
+      ]
+    },
+    {
+      "at": 78,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4316
+      ]
+    },
+    {
+      "at": 80,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4317
+      ]
+    },
+    {
+      "at": 82,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4318
+      ]
+    },
+    {
+      "at": 84,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4319
+      ]
+    },
+    {
+      "at": 86,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4320
+      ]
+    },
+    {
+      "at": 88,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4321
+      ]
+    },
+    {
+      "at": 90,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4322
+      ]
+    },
+    {
+      "at": 92,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4323
+      ]
+    },
+    {
+      "at": 94,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4324
+      ]
+    },
+    {
+      "at": 96,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4325
+      ]
+    },
+    {
+      "at": 98,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4326
+      ]
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4327
+      ]
+    },
+    {
+      "at": 102,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4328
+      ]
+    },
+    {
+      "at": 104,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4329
+      ]
+    },
+    {
+      "at": 106,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4330
+      ]
+    },
+    {
+      "at": 108,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4331
+      ]
+    },
+    {
+      "at": 110,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4332
+      ]
+    },
+    {
+      "at": 120,
+      "picture": "f120"
+    },
+    {
+      "at": 130,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.pl-reuse.made",
+      "is": 43
+    },
+    {
+      "fact": "mod.pl-reuse.inits",
+      "is": 3
+    },
+    {
+      "fact": "mod.pl-reuse.remove",
+      "is": 0,
+      "when": "all"
+    },
+    {
+      "fact": "mod.pl-reuse.last_dead",
+      "is": 0
+    }
+  ]
+}

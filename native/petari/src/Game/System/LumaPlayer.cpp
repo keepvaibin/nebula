@@ -29,7 +29,7 @@
 // at its home (MarioActor::respawnExtra). It is made in the scene's arena, in the main stage's zone, so it goes with the
 // scene: released() forgets it then.
 //
-// No cost with no mod: released() is one load while no extra player stands.
+// No cost with no mod: released() is a few loads while no extra player stands or waits.
 
 namespace luma {
     namespace player {
@@ -43,6 +43,13 @@ namespace luma {
             const LumaServiceKernel* sKernel = nullptr;
             Extra sExtras[LUMA_PLAYER_MOST_EXTRA];
             u32 sLive = 0;  // extra players standing
+
+            // Extra players this scene made that no mod holds now (removed, or their mod gone): dead and hidden, each
+            // made to stand again by a later make in place of a new one, so a scene holds at most
+            // LUMA_PLAYER_MOST_EXTRA of them however often mods make and remove (M-030). Standing plus ended is never
+            // more than that, so the list never runs out.
+            MarioActor* sEnded[LUMA_PLAYER_MOST_EXTRA];
+            u32 sEndedCount = 0;
 
             // set_drawn: the players a mod draws only part of (the game's own and each extra), its mod the newest to set
             // them; drawn whole again at the mod's end. A slot goes with its player's memory (released).
@@ -113,10 +120,25 @@ namespace luma {
                 return nullptr;
             }
 
-            // The slot goes; the player stays dead in its scene (its memory is the scene's).
-            void forget(Extra& rExtra) {
+            // The slot goes. ended: the player was ended (endExtra) and stays dead in its scene, its memory the
+            // scene's, for a later make to stand again; otherwise its memory went with the scene (released).
+            void forget(Extra& rExtra, bool ended) {
                 if (rExtra.pad) {
                     MR::takeCoStar(false);
+                }
+                // What any mod drew of it is forgotten with it: its set_drawn slot is free again, and the player stands
+                // again drawn whole (M-065).
+                for (Drawn& rDrawn : sDrawn) {
+                    if (rDrawn.mod != nullptr && rDrawn.actor == rExtra.actor) {
+                        rDrawn = Drawn{};
+                        sDrawnLive--;
+                    }
+                }
+                if (ended) {
+                    rExtra.actor->mModHidden &= kModHiddenAttached;
+                    if (sEndedCount < LUMA_PLAYER_MOST_EXTRA) {
+                        sEnded[sEndedCount++] = rExtra.actor;
+                    }
                 }
                 rExtra = Extra{};
                 sLive--;
@@ -187,23 +209,34 @@ namespace luma {
                 // A placement's turn, as MarioActor::init takes it.
                 const Vec3f rot(MR::repeat(pInit->rot[0], 0.0f, 360.0f), MR::repeat(pInit->rot[1], 0.0f, 360.0f),
                                 MR::repeat(pInit->rot[2], 0.0f, 360.0f));
-                AllLiveActorGroup* const pActors = MR::getAllLiveActorGroup();
-                // Actors registered and not yet given a placement's system info belong to a placement being made: ours
-                // then get its, as its own objects do. Otherwise ours are taken as given none (no view group).
-                const bool pending = pActors->mActorNum < pActors->getObjNum();
                 MarioActor* pActor = nullptr;
-                {
-                    const NebulaArena::CurrentScope scope(Arenas::scene());
-                    const InMainStage inMainStage;
-                    pActor = new MarioActor("LumaExtraPlayer", true);
+                if (sEndedCount != 0) {
+                    // One this scene ended stands again at the new home, as a death brings it back (M-030).
+                    pActor = sEnded[--sEndedCount];
                     pActor->mInputChannel = pad ? PLAYER_2 : -1;
                     pActor->mExtraHome = pos;
                     pActor->mExtraHomeRotate = rot;
-                    pActor->init2(pos, rot, 1);
-                    pActor->initAfterPlacement();
-                }
-                if (!pending) {
-                    pActors->mActorNum = pActors->getObjNum();
+                    (void)pActor->respawnExtra();
+                    pActor->appear();
+                    pActor->mHidden = false;
+                } else {
+                    AllLiveActorGroup* const pActors = MR::getAllLiveActorGroup();
+                    // Actors registered and not yet given a placement's system info belong to a placement being made:
+                    // ours then get its, as its own objects do. Otherwise ours are taken as given none (no view group).
+                    const bool pending = pActors->mActorNum < pActors->getObjNum();
+                    {
+                        const NebulaArena::CurrentScope scope(Arenas::scene());
+                        const InMainStage inMainStage;
+                        pActor = new MarioActor("LumaExtraPlayer", true);
+                        pActor->mInputChannel = pad ? PLAYER_2 : -1;
+                        pActor->mExtraHome = pos;
+                        pActor->mExtraHomeRotate = rot;
+                        pActor->init2(pos, rot, 1);
+                        pActor->initAfterPlacement();
+                    }
+                    if (!pending) {
+                        pActors->mActorNum = pActors->getObjNum();
+                    }
                 }
                 if (pad) {
                     MR::takeCoStar(true);
@@ -225,7 +258,7 @@ namespace luma {
                     return LUMA_E_HANDLE;
                 }
                 pExtra->actor->endExtra();
-                forget(*pExtra);
+                forget(*pExtra, true);
                 return LUMA_OK;
             }
 
@@ -322,7 +355,7 @@ namespace luma {
                 for (Extra& rExtra : sExtras) {
                     if (rExtra.mod == pMod) {
                         rExtra.actor->endExtra();
-                        forget(rExtra);
+                        forget(rExtra, true);
                     }
                 }
             }
@@ -358,13 +391,24 @@ namespace luma {
                     }
                 }
             }
+            const auto inside = [pStart, pEnd](const MarioActor* pActor) {
+                const char* const pAt = static_cast< const char* >(static_cast< const void* >(pActor));
+                return pAt >= static_cast< const char* >(pStart) && pAt < static_cast< const char* >(pEnd);
+            };
+            // The ended players go with their scene's memory.
+            for (u32 i = 0; i < sEndedCount;) {
+                if (inside(sEnded[i])) {
+                    sEnded[i] = sEnded[--sEndedCount];
+                } else {
+                    i++;
+                }
+            }
             if (sLive == 0) {
                 return;
             }
             for (Extra& rExtra : sExtras) {
-                const char* const pAt = static_cast< const char* >(static_cast< const void* >(rExtra.actor));
-                if (rExtra.mod != nullptr && pAt >= static_cast< const char* >(pStart) && pAt < static_cast< const char* >(pEnd)) {
-                    forget(rExtra);
+                if (rExtra.mod != nullptr && inside(rExtra.actor)) {
+                    forget(rExtra, false);
                 }
             }
         }
