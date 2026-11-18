@@ -232,8 +232,9 @@ typedef struct LumaNetLocalService {
        for `protocol` (null: none; else 1 to LUMA_NET_PROTOCOL_MOST bytes of tokens separated by ", ", sent as
        Sec-WebSocket-Protocol). LUMA_PENDING and *out: CONNECTED once the server answered 101 with the right
        Sec-WebSocket-Accept (and, if it chose one, a protocol asked), or ERROR. Then MESSAGE for each message, SENT once
-       what ws_send queued is sent, CLOSED at its end. Pings are answered by the service. `close` sends a close (1000)
-       first, then the connection ends as a socket's; no event after. `send` and `take` on it: LUMA_E_HANDLE. A url
+       what ws_send queued is sent, CLOSED at its end. Pings are answered by the service, the newest one only while an
+       earlier pong still waits to be sent (RFC 6455 5.5.3): a server's pings take at most one control frame of the
+       send queue. `close` sends a close (1000) first, then the connection ends as a socket's; no event after. `send` and `take` on it: LUMA_E_HANDLE. A url
        not ws(s) or past LUMA_NET_URL_MOST, a host outside tcp_connect's, a protocol not tokens, a null url, fn or out:
        LUMA_E_ARGUMENT, reported; a 17th socket: LUMA_E_LIMIT, reported. */
     /* events: CONNECTED(socket, data), MESSAGE(socket, data, flags), SENT(socket, value), CLOSED(socket, status,

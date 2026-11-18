@@ -525,6 +525,10 @@ struct Socket {
     std::vector<Socket*> accepted;  // ACCEPTED to give, in order
     std::string received;        // bytes read, not yet taken
     std::string outgoing;        // bytes queued to send
+    // A WebSocket's pong that waits whole in `outgoing` (g_lock): its end, counted from the front, and its size (0: none
+    // waits). A newer ping's pong takes its place (RFC 6455 5.5.3), so a peer's pings hold one control frame of the queue.
+    std::size_t pong_end = 0;
+    std::size_t pong_size = 0;
     std::uint64_t sent_since = 0;  // sent since the last SENT
     bool sent_event = false;     // SENT to give
     bool peer_closed = false;    // the other side ended (or broke): nothing more is read
@@ -730,6 +734,17 @@ Socket* own_stream_end_locked(Socket* socket) noexcept {
         }
     }
     return nullptr;
+}
+
+// With g_lock: `bytes` left the front of `outgoing` (sent, moved to TLS, or dropped): the waiting pong's end moves with
+// them, and a pong that left whole or in part no longer waits there.
+void outgoing_taken_locked(Socket* socket, std::size_t bytes) noexcept {
+    if (socket->pong_size != 0u && bytes > socket->pong_end - socket->pong_size) {
+        socket->pong_end = 0;
+        socket->pong_size = 0;
+    } else if (socket->pong_size != 0u) {
+        socket->pong_end -= bytes;
+    }
 }
 
 void io_loop();
@@ -1518,6 +1533,7 @@ void tls_turn_locked(Socket* socket, short revents) {
         try {
             tls.plain_out += socket->outgoing;
             tls.moved += socket->outgoing.size();
+            outgoing_taken_locked(socket, socket->outgoing.size());
             socket->outgoing.clear();
         } catch (...) {
         }
@@ -2560,12 +2576,14 @@ void turn_locked(Socket* socket, short revents) {
             if (put < 0 && !would_block(system_error())) {
                 socket->peer_closed = true;
                 socket->closed_status = LUMA_E_IO;
+                outgoing_taken_locked(socket, socket->outgoing.size());
                 socket->outgoing.clear();
                 done = 0;
             }
             break;
         }
         if (done > 0) {
+            outgoing_taken_locked(socket, done);
             socket->outgoing.erase(0, done);
             socket->sent_since += done;
         }
@@ -2577,6 +2595,7 @@ void turn_locked(Socket* socket, short revents) {
     if (socket->closing &&
         (socket->outgoing.empty() || std::chrono::steady_clock::now() - socket->started > kCloseTime)) {
         close_locked(socket);  // the mod closed it: what it queued went first (or kCloseTime passed)
+        outgoing_taken_locked(socket, socket->outgoing.size());
         socket->outgoing.clear();
     } else if (socket->peer_closed && socket->received.empty() && !socket->closing) {
         close_locked(socket);
@@ -3899,9 +3918,20 @@ void deliver_ws(Socket* socket, const LumaMod* mod) {
             }
             message_done = fin;
         } else if (op == 9u) {
+            // A pong with the ping's data (RFC 6455 5.5.3). When an earlier ping's pong still waits whole in the queue,
+            // this one takes its place there: only the most recent ping is answered, and a peer that pings without end
+            // and never reads holds one control frame of the mod's queue, not a pong a ping.
             const std::lock_guard<std::mutex> lock(g_lock);
             try {
-                socket->outgoing += ws_frame(10u, payload);  // a pong with the ping's data (RFC 6455 5.5.3)
+                std::string pong = ws_frame(10u, payload);
+                if (socket->pong_size != 0u && socket->pong_end <= socket->outgoing.size()) {
+                    socket->outgoing.replace(socket->pong_end - socket->pong_size, socket->pong_size, pong);
+                    socket->pong_end = socket->pong_end - socket->pong_size + pong.size();
+                } else {
+                    socket->outgoing += pong;
+                    socket->pong_end = socket->outgoing.size();
+                }
+                socket->pong_size = pong.size();
             } catch (...) {
             }
         } else if (op == 8u) {

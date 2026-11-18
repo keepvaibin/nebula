@@ -11,6 +11,7 @@
     "2708-net-ws",
     "2709-net-address",
     "2710-net-http-size",
-    "2711-bad-pointers"
+    "2711-bad-pointers",
+    "2712-net-ws-ping-flood"
   ]
 }

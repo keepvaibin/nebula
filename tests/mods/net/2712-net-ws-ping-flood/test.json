@@ -1,0 +1,70 @@
+{
+  "harness": 1,
+  "name": "2712-net-ws-ping-flood",
+  "about": "M-055: a WebSocket server (the mod's own, on a tcp_listen) sends 200000 pings and never reads the pongs; once the system's buffers are full the pongs wait in the client's send queue. The service answers only the newest ping that waits (RFC 6455 5.5.3), so the waiting pongs never take the mod's send budget: every ping is queued and read, and the client's ws_send of 3 MiB after them is LUMA_OK. On the real clock: the server leaves what it is sent unread, which the fixed steps would wait a second a frame for",
+  "proves": [
+    "services.net.local",
+    "services.net.ws"
+  ],
+  "mods": [
+    "../mods/net-wsflood"
+  ],
+  "time": "real",
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4521
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.net-wsflood.done",
+        "is": 1
+      },
+      "timeout": 1800,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4522
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.net-wsflood.big_send",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-wsflood.listen",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-wsflood.connect",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-wsflood.done",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-wsflood.pings_sent",
+      "is": 200000
+    },
+    {
+      "fact": "mod.net-wsflood.big_send",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-wsflood.others",
+      "is": 0
+    }
+  ]
+}
