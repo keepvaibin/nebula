@@ -205,7 +205,8 @@ void native_settings_files_dropped(std::vector<std::filesystem::path> files);
 // that restarts the game is not made again.
 [[nodiscard]] std::vector<std::filesystem::path> native_settings_take_launch_imports();
 [[nodiscard]] bool native_settings_launch_imports_taken() noexcept;
-void native_settings_window_resized(unsigned width, unsigned height);
+// The player placed the window by hand: its client size and the monitor it is on (a device name) become the setting.
+void native_settings_window_placed(unsigned width, unsigned height, const char* monitor);
 // The graphics device lost at the renderer's next frame, as a driver reset loses it (an extension's lose_gpu_device).
 void lose_gpu_device() noexcept;
 // Delivers an overlay key to the window thread (controller navigation).

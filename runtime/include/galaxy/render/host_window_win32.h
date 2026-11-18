@@ -68,6 +68,11 @@ inline constexpr ULONG_PTR kImportCopyData = 0x4E42494Du;  // "NBIM"
 // The window's outer rect for a windowed client size on a monitor.
 [[nodiscard]] RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width, unsigned height);
 
+// The display setting (mode, monitor, windowed size) applied to the window when it differs from what was applied last
+// (display_reconcile.h), from the render thread between frames; every renderer calls it. True when the window was
+// placed: the caller follows its new size. A placement the player made by hand is the setting already, and stays.
+bool reconcile_display(HWND window);
+
 // The settings the D3D12 renderer reads (temporal upscaling and interpolation, ray tracing).
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 

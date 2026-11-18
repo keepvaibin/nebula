@@ -42,6 +42,8 @@ if(NOT WIN32)
         "${galaxy_root}/platform/sdl/output_log.cpp")
     target_include_directories(galaxy_output_log_tests PRIVATE "${galaxy_root}/platform/sdl")
 endif()
+# When the window is placed again for the display setting, and a placement by hand kept (P-110, P-111).
+galaxy_test(galaxy_display_reconcile_tests SOURCES ${render_src}/display_reconcile_tests.cpp)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # The Linux package's install.sh with a stand-in package (P-126).
     add_test(NAME nebula_linux_install_tests

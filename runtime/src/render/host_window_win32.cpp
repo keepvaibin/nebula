@@ -15,6 +15,7 @@
 #include "galaxy/input/raw_mouse_win32.h"
 
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/display_reconcile.h"
 #include "galaxy/render/galaxy_select.h"
 #include "galaxy/render/post_process_settings.h"
 #include "galaxy/render/render_config.h"
@@ -209,6 +210,8 @@ using host_window::WindowPlacement;
 
 namespace {
 
+// The window's thread is placing the window for the display setting (kPlaceWindowMessage).
+bool s_placing_window = false;
 std::atomic<bool> s_pointer_focused{false};
 galaxy::host::HostPointerSnapshotCache s_pointer_snapshot;
 std::atomic<int> s_pointer_last_cursor_poll_x{std::numeric_limits<int>::min()};
@@ -483,6 +486,95 @@ RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width,
     return RECT{left, top, left + outer_w, top + outer_h};
 }
 
+namespace {
+
+// What was last applied to the window (display_reconcile.h), under s_display_mutex together with the setting's display
+// fields whenever either changes: the render thread never sees one without the other.
+std::mutex s_display_mutex;
+AppliedDisplay s_applied_display;
+
+DisplayState display_state_of(const RenderConfig& cfg) {
+    DisplayState state;
+    state.mode = std::min(cfg.display_mode, kDisplayBorderless);
+    state.monitor = cfg.monitor;
+    state.window_width = cfg.window_width;
+    state.window_height = cfg.window_height;
+    return state;
+}
+
+// The player placed the window by hand (an edge dragged, the window moved to another monitor or given another scale,
+// an extension's resize_window_client): its client size and monitor become the setting and what is applied, together.
+void keep_player_placement(HWND hwnd) {
+    if (hidden_window_mode_enabled() || borderless_active.load(std::memory_order_acquire) || IsIconic(hwnd)) {
+        return;
+    }
+    RECT client{};
+    if (!GetClientRect(hwnd, &client) || client.right <= 0 || client.bottom <= 0) {
+        return;
+    }
+    MONITORINFOEXW info{};
+    info.cbSize = sizeof(info);
+    std::string monitor;
+    if (GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &info)) {
+        monitor = narrow_utf8(info.szDevice);
+    }
+    const unsigned width = static_cast<unsigned>(client.right);
+    const unsigned height = static_cast<unsigned>(client.bottom);
+    const std::lock_guard<std::mutex> lock(s_display_mutex);
+    const DisplayState now = placed_by_player(display_state_of(get_render_config()), width, height, monitor);
+    native_settings_window_placed(width, height, now.monitor.data());
+    s_applied_display = {true, now};
+}
+
+}  // namespace
+
+bool reconcile_display(HWND window) {
+    if (window == nullptr || hidden_window_mode_enabled()) {
+        return false;
+    }
+    const bool monitors_changed = display_changed.exchange(false, std::memory_order_acq_rel);
+    std::unique_lock<std::mutex> lock(s_display_mutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        // The window's thread is writing a placement of the player's: the next frame looks again.
+        if (monitors_changed) display_changed.store(true, std::memory_order_release);
+        return false;
+    }
+    const RenderConfig cfg = get_render_config();
+    const DisplayState wanted = display_state_of(cfg);
+    if (!display_needs_placing(s_applied_display, wanted, monitors_changed, wanted.mode == kDisplayWindowed,
+                               move_size_active.load(std::memory_order_acquire))) {
+        return false;
+    }
+    const std::vector<MonitorInfo> monitors = enumerate_monitors();
+    const MonitorInfo* monitor = find_monitor(monitors, widen_utf8(cfg.monitor.data()));
+    if (monitor == nullptr) {
+        return false;
+    }
+    WindowPlacement placement{};
+    if (wanted.mode == kDisplayWindowed) {
+        placement.style = kWindowStyle;
+        placement.rect = windowed_rect_on_monitor(*monitor, cfg.window_width, cfg.window_height);
+        placement.borderless = false;
+    } else {
+        placement.style = WS_POPUP;
+        placement.rect = monitor->bounds;
+        placement.borderless = true;
+    }
+    // The window's thread places it (and may take this lock for the player's own placement meanwhile).
+    lock.unlock();
+    DWORD_PTR result = 0u;
+    if (SendMessageTimeoutW(window, kPlaceWindowMessage, 0u, reinterpret_cast<LPARAM>(&placement), SMTO_NORMAL, 2000u,
+                            &result) == 0) {
+        std::cerr << "[Renderer] display change: the window did not respond\n";
+        return false;
+    }
+    lock.lock();
+    s_applied_display = {true, wanted};
+    std::cout << "[Renderer] display " << (wanted.mode == kDisplayWindowed ? "windowed" : "borderless") << ' '
+              << narrow_utf8(monitor->device) << '\n';
+    return true;
+}
+
 OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_height) {
     OpenedWindow opened;
     quit_request.store(false, std::memory_order_release);
@@ -744,10 +836,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == kResizeClientMessage) {
         RECT rect{0, 0, static_cast<LONG>(wp), static_cast<LONG>(lp)};
-        (void)AdjustWindowRectEx(&rect, static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE)), FALSE,
-                                 static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE)));
+        (void)AdjustWindowRectExForDpi(&rect, static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE)), FALSE,
+                                       static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE)), GetDpiForWindow(hwnd));
         (void)SetWindowPos(hwnd, nullptr, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
                            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        host_window::keep_player_placement(hwnd);
         return 0;
     }
     if (msg == kPlaceWindowMessage) {
@@ -757,6 +850,8 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             const LONG_PTR visible = GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_VISIBLE;
             (void)SetWindowLongPtrW(
                 hwnd, GWL_STYLE, static_cast<LONG_PTR>(placement->style) | visible);
+            // The rect is made for the target monitor's scale already: a scale change on the way is not the player's.
+            s_placing_window = true;
             (void)SetWindowPos(
                 hwnd, placement->borderless ? HWND_TOP : nullptr,
                 placement->rect.left, placement->rect.top,
@@ -764,6 +859,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 placement->rect.bottom - placement->rect.top,
                 SWP_FRAMECHANGED | SWP_NOACTIVATE |
                     (placement->borderless ? 0u : SWP_NOZORDER));
+            s_placing_window = false;
             host_window::borderless_active.store(placement->borderless, std::memory_order_release);
         }
         return 0;
@@ -787,13 +883,9 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         invalidate_pointer_focus_once();
         clear_pointer_buttons();
     }
-    if (msg == WM_EXITSIZEMOVE &&
-        !host_window::borderless_active.load(std::memory_order_acquire)) {
-        // A size the player drags the window to becomes the windowed size.
-        RECT client{};
-        if (GetClientRect(hwnd, &client) && client.right > 0 && client.bottom > 0) {
-            native_settings_window_resized(static_cast<unsigned>(client.right), static_cast<unsigned>(client.bottom));
-        }
+    if (msg == WM_EXITSIZEMOVE) {
+        // Where the player dragged the window to, and its size, become the setting.
+        host_window::keep_player_placement(hwnd);
     }
     if (msg == WM_EXITMENULOOP || msg == WM_EXITSIZEMOVE) {
         (msg == WM_EXITMENULOOP ? s_system_menu_active : host_window::move_size_active)
@@ -1024,10 +1116,15 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_DPICHANGED) {
         // Borderless fills its monitor: only a window takes the rectangle suggested for the new scale.
         const auto* suggested=reinterpret_cast<const RECT*>(lp);
-        if (suggested && !borderless_active.load(std::memory_order_relaxed)) {
+        if (suggested && !borderless_active.load(std::memory_order_relaxed) && !s_placing_window) {
             SetWindowPos(hwnd,nullptr,suggested->left,suggested->top,
                 suggested->right-suggested->left,suggested->bottom-suggested->top,
                 SWP_NOZORDER|SWP_NOACTIVATE);
+            // A new scale with no drag (the system's scale setting): the size it gives is kept. A drag across
+            // monitors is kept as it ends (WM_EXITSIZEMOVE).
+            if (!host_window::move_size_active.load(std::memory_order_acquire)) {
+                host_window::keep_player_placement(hwnd);
+            }
         }
         return 0;
     }
