@@ -3,6 +3,9 @@
   "tests": [
     "3891-stage-args",
     "3892-stage-args-refused",
-    "3901-stage-placed"
+    "3901-stage-placed",
+    "3902-view-group-no-group",
+    "3903-flat-shadow-one-joint",
+    "3904-comet-star-achievement"
   ]
 }

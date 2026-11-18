@@ -1,6 +1,7 @@
 /* 3903-flat-shadow-one-joint (P-178): sh-flat1 gives every Kuribo, after its own init, a flat-model shadow
    (MR::initShadowVolumeFlatModel, the game's own call) whose model is the Coin's: one joint, no child to drop to.
-   "flat_made" counts the Kuribos given one; "started" is the mod's start. js-stage places two Kuribos. */
+   "flat_made" counts the Kuribos given one; "started" is the mod's start. The scene has ten: EggStarGalaxy's own
+   eight and js-stage's two. */
 #include "../loader/lt.h"
 
 static int32_t c_live;
