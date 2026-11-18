@@ -475,16 +475,31 @@ std::atomic<uint32_t> gSceneBegins{0};
 // The game frame running (frame_begun): it numbers the frame lists the game submits.
 std::atomic<uint32_t> gGameFrames{0};
 
-void* find_symbol(void* module, const char* name) {
+void* find_optional_symbol(void* module, const char* name) {
 #if defined(_WIN32)
-    void* p = reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(module), name));
+    return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(module), name));
 #else
-    void* p = dlsym(module, name);
+    return dlsym(module, name);
 #endif
+}
+
+void* find_symbol(void* module, const char* name) {
+    void* p = find_optional_symbol(module, name);
     if (p == nullptr) {
         die("the game module has no %s", name);
     }
     return p;
+}
+
+// A counting build's module (native/coverage_counts.c: coverage, or the profile's training) writes its counts here,
+// as the process ends without running the module's exit. No other build has the export.
+void write_module_counts() {
+    if (gModule.module == nullptr) {
+        return;
+    }
+    if (void* const write = find_optional_symbol(gModule.module, "nebula_game_write_counts")) {
+        reinterpret_cast<int (*)()>(write)();
+    }
 }
 
 #if defined(_WIN32)
@@ -4748,6 +4763,7 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
     // Windows HDR the game turned on goes off again; a restart hands it to the next process (render/os_hdr.h).
     galaxy::render::os_hdr::finish(restart);
 #endif
+    write_module_counts();
     galaxy::whole_lines::flush();
 #if defined(_WIN32)
     if (restart) {

@@ -451,6 +451,26 @@ if(NEBULA_COVERAGE)
     endif()
     target_compile_options(smg_game_common INTERFACE -fprofile-instr-generate -fcoverage-mapping)
     target_link_options(smg_game_common INTERFACE -fprofile-instr-generate)
+    get_target_property(game_exports_all smg_game WINDOWS_EXPORT_ALL_SYMBOLS)
+    if(WIN32 AND game_exports_all)
+        # The rows module keeps its exports (mods find the game's functions in this build too), less the counters,
+        # whose names CMake's own list cuts (../cmake/coverage_exports.py).
+        set(game_def "${CMAKE_CURRENT_BINARY_DIR}/smg_game_coverage.def")
+        file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/smg_game_objects.txt" CONTENT "$<JOIN:$<TARGET_OBJECTS:smg_game>,\n>\n")
+        set_target_properties(smg_game PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+        add_custom_command(TARGET smg_game PRE_LINK
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/coverage_exports.py" --cmake "${CMAKE_COMMAND}"
+                    --nm "${CMAKE_NM}" --objects "${CMAKE_CURRENT_BINARY_DIR}/smg_game_objects.txt" --out "${game_def}"
+            VERBATIM)
+        target_link_options(smg_game PRIVATE "LINKER:/DEF:${game_def}")
+    endif()
+endif()
+# A counting build (coverage, or the profile's training build: tools/gate/pgo.py make): the host asks for the counts
+# as it ends (nebula_game_write_counts), since it runs no library's exit.
+if(NEBULA_COVERAGE OR CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate")
+    foreach(module IN LISTS game_modules)
+        target_sources(${module} PRIVATE coverage_counts.c)
+    endforeach()
 endif()
 
 # The native game's host (host/host_main.cpp): loads the module and serves it. Built with the host's own C++ library.
