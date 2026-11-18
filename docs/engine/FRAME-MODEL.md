@@ -210,3 +210,77 @@ with no row has a new one.
 
 Every file stage 2 item 1 names has been read for this list. The parts marked "to be given" get new rows in the
 ledger with the model's landing.
+
+## Part 2. The target
+
+### 2.1 The rules
+
+1. The render thread never compiles a program or pipeline, never reads a file and never waits for the whole GPU
+   inside a frame. Every pipeline a frame can need is known when its content loads (a material's form, a utility
+   pass) and made then, on the workers; a size change makes its targets beside the old ones and retires the old ones
+   by the frame fence, as any other resource.
+2. The game thread waits for the render thread at one point only: room in the render queue, bounded by the queue's
+   depth. A picture's shape, a screen probe and a capture are answered later, by the frame they belong to, never by
+   holding the step.
+3. The game thread reads no file inside a step: what a step loads was read ahead by the loader's thread.
+4. Each hand-over has one owner at a time and a release and acquire pair (1.2's list, the pipeline cells, the decoded
+   textures); a debug build asserts the thread at each hand-over (`render_thread_only()`, `game_thread_only()`).
+5. The CPU work of a picture does not grow with what the scene holds: an in-between picture is a GPU pass over both
+   poses, not a second walk.
+
+### 2.2 The threads and hand-overs
+
+The threads stay as 1.1 lists them. What changes is what crosses between them:
+
+| From | To | What | When |
+| --- | --- | --- | --- |
+| Loader (content) | workers | a model's or effect's records, its material forms and texture lists | when content loads |
+| Workers | render thread | made pipelines (atomic cells), uploaded geometry, decoded textures | as they are made; a draw whose form is not ready waits for it at load, never in a frame |
+| Game | render thread | per step: both poses of each object (transforms, joints), what changed in materials, the passes and what each reads and writes | once a step, in the frame list |
+| Render thread | GPU | one pass that makes each picture's matrices from both poses at t, then the frame as the planner ordered it | each picture |
+| Render thread | game | the released list; probe answers and pictures for the frame that asked | at release |
+
+### 2.3 What the records must allow later
+
+Model format 12 is designed once for these; no code for them now, and ray tracing stays off main.
+
+- Nothing in a record is computed for one camera on the CPU: billboards, particles and coordinates that read the eye
+  are marked and resolved per view on the GPU (today: calc mode 1's view inside the joints, `draw_walker.cpp:309-313`;
+  eye-space rows, :225-316).
+- Every drawn thing names geometry the renderer holds, plus a transform; skinning inputs live on the GPU; a vertex
+  stream still built on the CPU is marked as such (today: the step's vertices, `draw_walker.cpp:399`).
+- Each material form says what it is beside its program: the base map, the glow, the alpha mode, two-sided or not,
+  which vertex colour is baked light, what each coordinate source is, whether it reads a copy of the screen.
+- Lights and shadow shapes are records in world space (today: light sets as the game gives them each step).
+- An object outside the view can stay in the list, marked (today: culled on the CPU, `draw_walker.cpp:482`).
+- Both poses of each object (E3 step 5).
+- The importer writes normals where a mesh has none.
+- A later field does not make a format 13, and a mod's cooked model keeps loading: the format carries a table of
+  sections by name and size, and a reader skips what it does not know.
+
+### 2.4 Model format 12
+
+What the importer writes, by E3's steps (file 01, E3):
+
+| Step | Written at cook | Ends in the engine |
+| --- | --- | --- |
+| 1 | per material form: which row glows, the map rows, the glow value, the alpha cutoff and mode | searching console register codes at load; with it, every pipeline made at load (P-010, N-1067) |
+| 2 | samplers in final form, each form's texture list | hashing a texture's address and decoding filter codes per draw; the per-frame table rebuilds (`draw_walker.cpp:878`, :920); the sampler heap's drain (P-048) |
+| 3 | per form: a block of final constant rows, and the short list of rows that change, with their source | filling register rows at draw time |
+| 4 | prepared material records for the immediate-style draw sites and particles; fixed shapes as meshes registered once | vertices and indices built on the CPU each frame |
+| 5 | (engine only) both poses once a step; a GPU pass makes each picture's matrices; skinning on the GPU | matrices, skin sums and blends on the CPU for every picture |
+| 6 | lights as world-space records | lights per object in the eight-register form |
+
+### 2.5 The pass list
+
+Each pass of the frame list states what it reads and writes; a planner on the render thread orders them (E4):
+
+| Pass | Reads | Writes | Order |
+| --- | --- | --- | --- |
+| Targets (render to texture: shadows, reflections, the game's screen copies) | the scene's records | its own texture | before the scene, so the scene opens once |
+| Scene, opaque then translucent | records, targets | the scene's colour, depth, motion | one pass instance, loads and stores chosen by what reads it later |
+| Scene copy (a material that reads the screen) | the scene | a copy | only when something visible reads it, once |
+| Mod post (`draw.post`), ambient occlusion, bloom | the scene, depth | the scene | after the scene |
+| Upscale (temporal or spatial) | scene, depth, motion | the display-size picture | after post |
+| 2-D layer (HUD, menus) | layouts | the display-size picture | merged with bloom's composite and the final picture where no upscaler sits between |
+| Show | the picture | the swap chain | last; "the last picture" is asked for by name, the last real frame |
