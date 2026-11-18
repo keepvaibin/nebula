@@ -61,12 +61,15 @@ jobs:
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
-        run: sccache --show-stats
+        run: |
+          sccache --show-stats
+          awk '{n[$1]++} END {printf "Hook copies: %d from the cache, %d made\n", n["hit"], n["miss"]}' \
+            "$NEBULA_LUMA_CACHE_LOG" 2>/dev/null || echo "Hook copies: none made"
       - name: Save the compiler cache
-        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
+        if: always() && steps.cache.outputs.key != '' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@v6
         with:
-          path: ${{ runner.temp }}/sccache
+          path: ${{ runner.temp }}/compiler-cache
           key: ${{ steps.cache.outputs.key }}
       # Each program starts without game data: its window and renderer on the runner's software adapter, 300 frames
       # drawn and shown (the action: Mesa's lavapipe and the Vulkan loader for NebulaVk).
@@ -106,12 +109,15 @@ jobs:
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
-        run: sccache --show-stats
+        run: |
+          sccache --show-stats
+          awk '{n[$1]++} END {printf "Hook copies: %d from the cache, %d made\n", n["hit"], n["miss"]}' \
+            "$NEBULA_LUMA_CACHE_LOG" 2>/dev/null || echo "Hook copies: none made"
       - name: Save the compiler cache
-        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
+        if: always() && steps.cache.outputs.key != '' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@v6
         with:
-          path: ${{ runner.temp }}/sccache
+          path: ${{ runner.temp }}/compiler-cache
           key: ${{ steps.cache.outputs.key }}
       - name: The game's unit tests
         shell: pwsh
@@ -185,12 +191,15 @@ jobs:
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
-        run: sccache --show-stats
+        run: |
+          sccache --show-stats
+          awk '{n[$1]++} END {printf "Hook copies: %d from the cache, %d made\n", n["hit"], n["miss"]}' \
+            "$NEBULA_LUMA_CACHE_LOG" 2>/dev/null || echo "Hook copies: none made"
       - name: Save the compiler cache
-        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
+        if: always() && steps.cache.outputs.key != '' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@v6
         with:
-          path: ${{ runner.temp }}/sccache
+          path: ${{ runner.temp }}/compiler-cache
           key: ${{ steps.cache.outputs.key }}
   # The unit tests under the address and undefined-behaviour sanitizers, and under the thread sanitizer (file 00
   # section 4.2); the game's own tests under the first (its arenas poison what is free, NebulaArena.cpp). A finding
@@ -246,12 +255,15 @@ jobs:
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
-        run: sccache --show-stats
+        run: |
+          sccache --show-stats
+          awk '{n[$1]++} END {printf "Hook copies: %d from the cache, %d made\n", n["hit"], n["miss"]}' \
+            "$NEBULA_LUMA_CACHE_LOG" 2>/dev/null || echo "Hook copies: none made"
       - name: Save the compiler cache
-        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
+        if: always() && steps.cache.outputs.key != '' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@v6
         with:
-          path: ${{ runner.temp }}/sccache
+          path: ${{ runner.temp }}/compiler-cache
           key: ${{ steps.cache.outputs.key }}
   linux:
     name: Linux
@@ -286,12 +298,15 @@ jobs:
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
-        run: sccache --show-stats
+        run: |
+          sccache --show-stats
+          awk '{n[$1]++} END {printf "Hook copies: %d from the cache, %d made\n", n["hit"], n["miss"]}' \
+            "$NEBULA_LUMA_CACHE_LOG" 2>/dev/null || echo "Hook copies: none made"
       - name: Save the compiler cache
-        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
+        if: always() && steps.cache.outputs.key != '' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@v6
         with:
-          path: ${{ runner.temp }}/sccache
+          path: ${{ runner.temp }}/compiler-cache
           key: ${{ steps.cache.outputs.key }}
       - name: Start check (Vulkan on Mesa's software renderer, on a virtual display)
         run: |
@@ -356,7 +371,7 @@ jobs:
           sh platform/apple/build_libcxx.sh "$src" "$TOOLS/toolchain/llvm" "$TOOLS/toolchain/libcxx" macos arm64
           rm -rf "$TOOLS/toolchain/libcxx/build-macos-arm64"
       - name: Save libc++
-        if: steps.libcxx-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+        if: steps.libcxx-cache.outputs.cache-hit != 'true' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@v6
         with:
           path: ~/nebula-tools/toolchain/libcxx
@@ -371,12 +386,15 @@ jobs:
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
-        run: sccache --show-stats
+        run: |
+          sccache --show-stats
+          awk '{n[$1]++} END {printf "Hook copies: %d from the cache, %d made\n", n["hit"], n["miss"]}' \
+            "$NEBULA_LUMA_CACHE_LOG" 2>/dev/null || echo "Hook copies: none made"
       - name: Save the compiler cache
-        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
+        if: always() && steps.cache.outputs.key != '' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@v6
         with:
-          path: ${{ runner.temp }}/sccache
+          path: ${{ runner.temp }}/compiler-cache
           key: ${{ steps.cache.outputs.key }}
       - name: Start check (Metal)
         timeout-minutes: 5
@@ -440,7 +458,7 @@ jobs:
           sh platform/apple/build_libcxx.sh "$src" "$TOOLS/toolchain/llvm" "$TOOLS/toolchain/libcxx" macos x86_64
           rm -rf "$TOOLS/toolchain/libcxx/build-macos-x86_64"
       - name: Save libc++
-        if: steps.libcxx-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+        if: steps.libcxx-cache.outputs.cache-hit != 'true' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@v6
         with:
           path: ~/nebula-tools/toolchain/libcxx
@@ -456,12 +474,15 @@ jobs:
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
-        run: sccache --show-stats
+        run: |
+          sccache --show-stats
+          awk '{n[$1]++} END {printf "Hook copies: %d from the cache, %d made\n", n["hit"], n["miss"]}' \
+            "$NEBULA_LUMA_CACHE_LOG" 2>/dev/null || echo "Hook copies: none made"
       - name: Save the compiler cache
-        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
+        if: always() && steps.cache.outputs.key != '' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@v6
         with:
-          path: ${{ runner.temp }}/sccache
+          path: ${{ runner.temp }}/compiler-cache
           key: ${{ steps.cache.outputs.key }}
       - name: Start check (Metal)
         timeout-minutes: 5
@@ -555,12 +576,15 @@ jobs:
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
-        run: sccache --show-stats
+        run: |
+          sccache --show-stats
+          awk '{n[$1]++} END {printf "Hook copies: %d from the cache, %d made\n", n["hit"], n["miss"]}' \
+            "$NEBULA_LUMA_CACHE_LOG" 2>/dev/null || echo "Hook copies: none made"
       - name: Save the compiler cache
-        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
+        if: always() && steps.cache.outputs.key != '' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
         uses: actions/cache/save@v6
         with:
-          path: ${{ runner.temp }}/sccache
+          path: ${{ runner.temp }}/compiler-cache
           key: ${{ steps.cache.outputs.key }}
       - uses: actions/upload-artifact@v7
         if: matrix.abi == 'x86_64'
