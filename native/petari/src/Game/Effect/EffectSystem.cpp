@@ -36,6 +36,7 @@ ParticleEmitter* EffectSystem::createEmitter(u16 resourceId, u8 groupId, u8 reso
 
     MR::Effect::createParticleEmitter(pEmitter, mEmitterManager, Vec3f(0.0f, 0.0f, 0.0f), resourceId, groupId, resourceManagerId);
     if (pEmitter->mEmitter != nullptr) {
+        mEmitterHolder->taken(pEmitter);
         return pEmitter;
     }
 
