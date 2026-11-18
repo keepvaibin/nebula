@@ -1043,8 +1043,8 @@ void audio_frame_tick() {
 std::optional<galaxy::host::DisplayRefresh> display_refresh() {
     static std::optional<galaxy::host::DisplayRefresh> known;
     static int64_t earlier_vblank_ns = 0;
-    static uint32_t frames = 0;
-    if (frames++ % 30u != 0u) return known;
+    static galaxy::ClockInterval look{500, true};
+    if (!look.due()) return known;
     known.reset();
     DWM_TIMING_INFO timing{};
     timing.cbSize = sizeof(timing);
@@ -1174,7 +1174,7 @@ void svc_frame_wait(void*) {
             next = now + period;  // the host's clock continues from the display's
             ++on_vsync;
         }
-        // Every 600 frames: how they were paced (the window's wall time, how many began on the display's vsync) and
+        // Every 10 s: how the frames were paced (the window's wall time, how many began on the display's vsync) and
         // each frame thread's CPU time (average, and the longest with its frame's number), so a slow frame is the game
         // step's or the render thread's.
         galaxy::host::ThreadWork work_now[kThreads];
@@ -1190,7 +1190,8 @@ void svc_frame_wait(void*) {
                 t.longest_step = steps;
             }
         }
-        if (++frames == 600u) {
+        ++frames;
+        if (now - window_began >= std::chrono::seconds(10)) {
             const double wall_ms = std::chrono::duration<double, std::milli>(now - window_began).count();
             galaxy::whole_lines::Line line;
             line.add("[pacing] %u frames in %.1f ms (%.3f ms a frame), %u on the display's vsync (%.1f Hz)", frames,

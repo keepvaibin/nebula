@@ -4222,7 +4222,9 @@ void RendererD3D12::present_to_swap_chain() {
                     statistics.PresentRefreshCount,
                 statistics.SyncRefreshCount);
         }
-        if (timeline_present_ordinal % 30u == 1u) {
+        // The compositor's timing twice a second, at any present rate.
+        static galaxy::ClockInterval dwm_look{500, true};
+        if (dwm_look.due()) {
             using DwmTimingFn = HRESULT(WINAPI*)(HWND, DWM_TIMING_INFO*);
             static const DwmTimingFn dwm_timing = [] {
                 const HMODULE dwm = LoadLibraryW(L"dwmapi.dll");

@@ -405,11 +405,9 @@ void TextureBackend::record_upload(mtl::Texture* texture, bool, const UploadChun
 }
 
 void TextureBackend::begin_frame(unsigned) {
-    constexpr std::uint32_t kTrimFrames = 600u;
-    if (++frames_since_trim_ < kTrimFrames) {
+    if (!trim_.due()) {
         return;
     }
-    frames_since_trim_ = 0u;
     std::vector<mtl::Object> emptied;
     {
         const std::lock_guard<std::mutex> lock(heaps_mutex_);

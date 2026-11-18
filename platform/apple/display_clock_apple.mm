@@ -184,15 +184,21 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept 
         static std::int64_t late_max = 0;
         static unsigned late_over_1ms = 0;
         static unsigned waits = 0;
+        static std::int64_t window_began = 0;
         const std::int64_t late = now_ns() - target;
+        if (window_began == 0) {
+            window_began = target;
+        }
         late_sum += late;
         late_max = std::max(late_max, late);
         late_over_1ms += late > 1000000 ? 1u : 0u;
-        if (++waits == 600u) {
+        ++waits;
+        if (target - window_began >= 10'000'000'000) {
             std::fprintf(stderr, "[pacing] frame wake-ups after their vsync: %.3f ms average, %.3f ms longest, %u of %u over 1 ms\n",
                          static_cast<double>(late_sum) / waits / 1e6, static_cast<double>(late_max) / 1e6, late_over_1ms, waits);
             late_sum = late_max = 0;
             late_over_1ms = waits = 0u;
+            window_began = target;
         }
     }
     last_ns = target;
