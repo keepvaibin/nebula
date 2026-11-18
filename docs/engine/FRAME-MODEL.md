@@ -48,3 +48,39 @@ frame; they are listed in 1.6 with what each may touch.
 
 So today the game and the render thread share two things per frame: the list (owned by the game until submitted, by
 the render thread until released) and the chunk's queued registry and texture work (taken under the device gate).
+
+### 1.3 The render thread's loop
+
+1. `RenderCore::render_thread_main` (`runtime/src/render/render_core.cpp:1550`) names the thread, raises it above the
+   normal priority on Windows (:1555), opts the process out of power throttling and holds the 1 ms timer (:1561-1568),
+   then runs `render_loop` (:1760) until it ends; a lost device runs `restart_device` and the loop again (:1571-1576).
+2. With nothing queued it sleeps on `queue_cv_` for up to 100 ms hidden or 250 ms shown (:1863), so a service waiting for
+   a new card can reach it (DeviceGate).
+3. A display slot that is due goes before queued chunks (:1867-1878): presents keep their cadence, and a saturated GPU
+   cannot render every endpoint unseen.
+4. It takes the front chunk (:1911); a render chunk followed by a present-only one takes that present with it
+   (:1914-1922). In-flight counts (`render_chunks_in_flight_`, `present_chunks_in_flight_`, :1926, :1929) are what
+   `wait_for_render_idle` (1.2 item 6) waits on; each taken chunk frees queue room (`queue_space_cv_`, :1908, :1941).
+5. A present-only chunk presents the cached picture again, or hands its moment to the in-between sequence (:1942-1960);
+   with no slot clock (an unlimited rate) it presents again once the last present is done (:1974-1981).
+6. A render chunk is walked (`walk_frame`, :2588), and the lists older than the one before are released (1.2 item 5).
+7. On a lost device, `drop_device_state` (:1605) releases every queued and walked list (:1608-1624) and clears the walk,
+   the in-between sequence and the screen probes (:1629-1656), so no list stays held by a dead device.
+
+### 1.4 What the render thread waits for on the GPU
+
+Two frames are in flight (`kFramesInFlight`, `runtime/include/galaxy/render/renderer_common.h:49`).
+
+| Renderer | Per frame | Inside a frame, the whole GPU |
+| --- | --- | --- |
+| Direct3D 12 | the slot about to be used again (`renderer_d3d12.cpp:3774-3782`); the oldest history ring segment when it is reused (:3952-3956); the frame latency waitable, 100 ms bound (:4364) | `wait_for_gpu` (:916) in `reset_sampler_frame` (:1410), `prepare_temporal_upscaler` (:5034, :5067), `record_temporal_upscale` (:5229), and a capture's readback (:6904, :6907) |
+| Vulkan | the slot (`vk/renderer_vk.cpp:2013`); the history ring segment (:2111) | to be read (1.4 continues) |
+| Direct3D 11 | the slot (`d3d11/renderer_d3d11.cpp:536`); the frame latency waitable, 100 ms bound (:676) | to be read |
+
+Outside a frame, `wait_for_gpu` drains the GPU at a window size change (:1955), a swap chain's re-creation or resize
+(:3371, :3419), an HDR switch (:4150), shutdown (:3114, :3141) and the pictures at exit (:6769). Those are allowed by the
+rules of part 2; the four inside a frame are not, and go to the list at the end of part 1.
+
+The game thread waits on the render thread at three places: queue room (1.2 item 3), the render thread idle (1.2 item
+6), and a screen probe's answers for frame F - 2 (`render_core.cpp:2032`, bounded by `kProbeWaitNs`), which waits only
+for that list's GPU work, as the list was walked when F - 1 superseded it (:2028-2031).
