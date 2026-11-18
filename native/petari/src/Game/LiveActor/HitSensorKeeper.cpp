@@ -42,6 +42,15 @@ HitSensor* HitSensorKeeper::getSensor(const char* pSensorName) const {
         return mSensorInfos[0]->mSensor;
     }
 
+#if defined(NEBULA_PLAIN_PATHS)
+    // The first sensor of that name, as the hash test before the name test found it: equal names hash alike, and the
+    // name a caller passes is most often the very text the sensor was made with (P-136).
+    for (s32 i = 0; i < mSensorInfosSize; i++) {
+        if (mSensorInfos[i]->mName == pSensorName || MR::isEqualString(mSensorInfos[i]->mName, pSensorName)) {
+            return mSensorInfos[i]->mSensor;
+        }
+    }
+#else
     u32 hashCode = MR::getHashCode(pSensorName);
 
     for (s32 i = 0; i < mSensorInfosSize; i++) {
@@ -49,6 +58,7 @@ HitSensor* HitSensorKeeper::getSensor(const char* pSensorName) const {
             return mSensorInfos[i]->mSensor;
         }
     }
+#endif
 
     return nullptr;
 }
@@ -105,6 +115,15 @@ HitSensorInfo* HitSensorKeeper::getSensorInfo(const char* pSensorName) const {
         return mSensorInfos[0];
     }
 
+#if defined(NEBULA_PLAIN_PATHS)
+    // The first sensor of that name, as the hash test before the name test found it: equal names hash alike, and the
+    // name a caller passes is most often the very text the sensor was made with (P-136).
+    for (s32 i = 0; i < mSensorInfosSize; i++) {
+        if (mSensorInfos[i]->mName == pSensorName || MR::isEqualString(mSensorInfos[i]->mName, pSensorName)) {
+            return mSensorInfos[i];
+        }
+    }
+#else
     u32 hashCode = MR::getHashCode(pSensorName);
 
     for (s32 i = 0; i < mSensorInfosSize; i++) {
@@ -112,6 +131,7 @@ HitSensorInfo* HitSensorKeeper::getSensorInfo(const char* pSensorName) const {
             return mSensorInfos[i];
         }
     }
+#endif
 
     return nullptr;
 }
