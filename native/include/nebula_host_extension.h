@@ -94,7 +94,7 @@ enum {
        whose motor is the extension's (`motor`), whatever devices are attached. */
     NEBULA_EXT_CONTROLS_PAD = 1u << 3,
     /* Every texture target pass makes its target again at the same size, as a size change does: a test of a target
-       made again while frames are in flight (Direct3D 12, P-028). The pictures are the same as without it. */
+       made again while frames are in flight (Direct3D 12 and Vulkan; P-028, P-054). The pictures are the same as without it. */
     NEBULA_EXT_REMAKE_TARGETS = 1u << 4,
 };
 

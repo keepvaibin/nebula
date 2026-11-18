@@ -1840,7 +1840,7 @@ void RendererVk::shutdown() {
         pass_ms_.fill(0.0);
         stats_sum_.fill(0.0);
         profile_samples_ = 0;
-        profile_frame_ = pass_recording_ = false;
+        profile_frame_ = pass_recording_ = frame_recording_ = false;
         destroy_swapchain();
         for (VkRenderPass pass :
              {present_pass_, color_pass_, color_pass_wide_, rgba8_pass_, depth_copy_pass_, draw_layout_.scene_pass,
@@ -2088,6 +2088,7 @@ void RendererVk::begin_frame() {
     vk::check(vkBeginCommandBuffer(frame.uploads, &begin), "vkBeginCommandBuffer");
     vk::check(vkBeginCommandBuffer(frame.commands, &begin), "vkBeginCommandBuffer");
     commands_ = frame.commands;
+    frame_recording_ = true;
     if (timestamps_ != VK_NULL_HANDLE) {
         vkCmdResetQueryPool(frame.commands, timestamps_, frame_slot_ * 2u, 2u);
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, timestamps_, frame_slot_ * 2u);
@@ -2145,6 +2146,7 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     // The transfer queue's copies go out, and the images this frame names are acquired in the upload list (the submission
     // waits for the queue's timeline semaphore).
     const std::uint64_t transfer_wait = uploads_store_ != nullptr ? uploads_store_->backend().submit_uploads() : 0u;
+    frame_recording_ = false;
     vk::check(vkEndCommandBuffer(frame.uploads), "vkEndCommandBuffer");
     vk::check(vkEndCommandBuffer(frame.commands), "vkEndCommandBuffer");
     const VkCommandBuffer buffers[] = {frame.uploads, frame.commands};

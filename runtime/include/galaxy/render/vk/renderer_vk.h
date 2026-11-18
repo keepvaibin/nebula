@@ -1255,6 +1255,7 @@ private:
     std::array<unsigned, kFramesInFlight> pass_mark_count_{};
     GpuPass current_pass_ = GpuPass::Scene;
     bool pass_recording_ = false;  // between begin_frame and end_frame
+    bool frame_recording_ = false;  // begin_frame to end_frame: the frame's command buffers are open
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_ (every frame is profiled while it is), and each pass's running
     // average for the page.

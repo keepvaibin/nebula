@@ -20,6 +20,7 @@
 #include "galaxy/platform_time.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/idle_clock.h"
+#include "galaxy/host_extension.h"
 #include "galaxy/launch_args.h"
 
 #include <span>
@@ -285,6 +286,12 @@ void RendererVk::run_one_time(const std::function<void(VkCommandBuffer)>& record
     vk::check(vkBeginCommandBuffer(commands, &begin), "vkBeginCommandBuffer");
     record(commands);
     vk::check(vkEndCommandBuffer(commands), "vkEndCommandBuffer");
+    if (frame_recording_) {
+        // The queue's earlier work is waited for too (a fence covers every submission before it): named, so a run counts them
+        // (P-054).
+        std::fprintf(stderr, "[gpu-drain] one-time work while a frame records, frame %llu\n",
+                     static_cast<unsigned long long>(frame_index_));
+    }
     const bool done = context.wait(context.submit(commands), 10'000'000'000ull);
     vkFreeCommandBuffers(device, utility_pool_, 1, &commands);
     if (!done) {
@@ -752,7 +759,8 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint32_t width, std::
         }
     }
     const FrameMap map(width, height);
-    const bool kept = slot.set.color && slot.map == map;
+    // The test hook NEBULA_EXT_REMAKE_TARGETS makes it again at the same size, as a size change does (P-028, P-054).
+    const bool kept = slot.set.color && slot.map == map && (galaxy::extensions::flags() & NEBULA_EXT_REMAKE_TARGETS) == 0u;
     if (!kept) {
         if (slot.set.color || slot.set.depth) {
             destroy_scene_set(slot.set);
