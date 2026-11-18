@@ -18,6 +18,7 @@
 #include <iostream>
 #include <system_error>
 #include <thread>
+#include <utility>
 
 #if defined(NEBULA_AV1)
 #include <dav1d/dav1d.h>
