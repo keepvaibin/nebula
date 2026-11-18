@@ -6,6 +6,9 @@
 #   ctest --test-dir <build> --output-on-failure
 cmake_minimum_required(VERSION 3.22)
 project(NebulaUnitTests LANGUAGES C CXX ASM)
+if(APPLE)
+    enable_language(OBJCXX)  # the movie source test's AVFoundation reader (cmake/unit_tests.cmake)
+endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

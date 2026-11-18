@@ -117,6 +117,22 @@ galaxy_test(galaxy_audio_mixer_tests SOURCES ${rt}/audio_mixer_tests.cpp LIBS ga
 # The sound output's fill and the chunked pull (audio_fill.h): P-072, P-037.
 galaxy_test(galaxy_audio_fill_tests SOURCES ${rt}/audio_fill_tests.cpp)
 galaxy_test(galaxy_movie_video_tests SOURCES ${rt}/movie_video_tests.cpp ${rt}/movie_video.cpp)
+# A replacement movie through the system's decoder (render/movie_source.h) on each platform: the fixture's pictures,
+# times, colours and seeks. On Linux GStreamer and its H.264 decoder (gst-libav) must be installed; under the sanitizers
+# the test is left out, as the system's libraries are not instrumented.
+set(galaxy_movie_fixture "${galaxy_root}/tests/data/movie/h264_64x64.mp4")
+if(WIN32)
+    galaxy_test(galaxy_movie_source_tests SOURCES ${render_src}/movie_source_tests.cpp ${render_src}/movie_source_win.cpp
+        LIBS mfplat mfreadwrite mfuuid d3d11 ARGS "${galaxy_movie_fixture}")
+elseif(APPLE)
+    galaxy_test(galaxy_movie_source_tests SOURCES ${render_src}/movie_source_tests.cpp ${render_src}/movie_source_apple.mm
+        LIBS "-framework AVFoundation" "-framework CoreMedia" "-framework CoreVideo" "-framework Foundation"
+        ARGS "${galaxy_movie_fixture}")
+    set_source_files_properties(${render_src}/movie_source_apple.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CXX_FLAGS MATCHES "-fsanitize")
+    galaxy_test(galaxy_movie_source_tests SOURCES ${render_src}/movie_source_tests.cpp
+        ${render_src}/movie_source_gstreamer.cpp LIBS ${CMAKE_DL_LIBS} ARGS "${galaxy_movie_fixture}")
+endif()
 galaxy_test(galaxy_power_policy_tests SOURCES ${rt}/power_policy_tests.cpp)
 galaxy_test(galaxy_frame_phase_tests SOURCES ${rt}/frame_phase_tests.cpp ${rt}/frame_phase.cpp)
 galaxy_test(galaxy_precise_wait_tests SOURCES ${rt}/precise_wait_tests.cpp)

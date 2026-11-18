@@ -76,6 +76,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 endif()
 target_link_libraries(galaxy_render_mtl PUBLIC "-framework Metal" "-framework QuartzCore" "-framework Foundation"
     "-framework CoreGraphics" "-framework IOSurface")
+# A replacement movie through AVFoundation (runtime/src/render/movie_source_apple.mm, from the Vulkan library's list),
+# built with ARC as platform/sdl builds it.
+set_source_files_properties("${nebula_root}/runtime/src/render/movie_source_apple.mm" PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+target_link_libraries(galaxy_render_mtl PRIVATE "-framework AVFoundation" "-framework CoreMedia" "-framework CoreVideo")
 # MetalFX is asked for at run time (macOS 13, iOS 16): the program starts without it.
 target_link_libraries(galaxy_render_mtl PUBLIC "-weak_framework MetalFX")
 set_source_files_properties(${nebula_apple_mtl_backend} PROPERTIES COMPILE_OPTIONS "-fobjc-arc")

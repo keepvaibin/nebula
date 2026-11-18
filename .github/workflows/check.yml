@@ -191,6 +191,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ninja-build
+          # The movie source test's decoder (galaxy_movie_source_tests): GStreamer with MP4 and H.264.
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libgstreamer1.0-0 \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav
           cd "$RUNNER_TEMP"
           curl -fsSL --retry 3 -o llvm.tar.xz \
             "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/LLVM-$LLVM_VERSION-Linux-X64.tar.xz"
@@ -407,6 +410,14 @@ jobs:
           mkdir -p "$d/data" "$d/settings"
           "$WORK/Nebula.app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" \
             --crash-dumps "$d"
+      # The unit tests (cmake/unit_tests.cmake, as Windows and Linux run them) with Xcode's clang, after the app's
+      # build and start whatever their result.
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        run: |
+          cmake -S tests/unit -B "$RUNNER_TEMP/unit" -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$RUNNER_TEMP/unit" -- -k 0
+          ctest --test-dir "$RUNNER_TEMP/unit" --output-on-failure --timeout 600
 
   android:
     name: Android (${{ matrix.abi }})
