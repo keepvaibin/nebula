@@ -88,6 +88,7 @@
 #include "galaxy/render/host_window_win32.h"
 #include "galaxy/render/renderer_check.h"
 #endif
+#include "galaxy/crash_stack.h"
 #include "galaxy/perf_hint.h"
 #include "galaxy/power_policy.h"
 #if defined(_WIN32)
