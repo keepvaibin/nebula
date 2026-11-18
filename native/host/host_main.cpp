@@ -6543,6 +6543,7 @@ int main(int argc, char** argv) {
             }
             gSuspendWake.notify_all();
             gAudio->set_paused(away);
+            galaxy::sdl::set_display_clock_held(away);
             log_line("host:", away ? "suspended (out of sight)" : "resumed");
         }
         if constexpr (galaxy::kDesktopWindow) {

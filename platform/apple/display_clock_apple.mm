@@ -68,6 +68,9 @@ void note_vsync(std::int64_t vsync, std::int64_t stated) noexcept {
     g_grid.note(vsync, stated);
 }
 
+// Held (set_display_clock_held): the link gives no vsyncs. Read on the main queue, where the link starts and is held.
+std::atomic<bool> g_held{false};
+
 #if TARGET_OS_OSX
 
 CVDisplayLinkRef g_link = nullptr;
@@ -96,9 +99,11 @@ void start_clock() {
         return;
     }
     CVDisplayLinkSetOutputCallback(g_link, on_vsync, nullptr);
-    CVDisplayLinkStart(g_link);
     // The window's own display, now and whenever the window moves to another (the main thread's to ask).
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (!g_held.load(std::memory_order_relaxed)) {
+            CVDisplayLinkStart(g_link);
+        }
         for (NSWindow* window in NSApp.windows) {
             if (window.isVisible) {
                 follow_window(window);
@@ -133,6 +138,8 @@ void start_clock() {
 
 namespace {
 
+CADisplayLink* g_ios_link = nil;  // main queue only
+
 void start_clock() {
     dispatch_async(dispatch_get_main_queue(), ^{
         static NebulaDisplayClock* target = [NebulaDisplayClock new];
@@ -143,7 +150,9 @@ void start_clock() {
             const float fastest = static_cast<float>(UIScreen.mainScreen.maximumFramesPerSecond);
             link.preferredFrameRateRange = CAFrameRateRangeMake(fastest, fastest, fastest);
         }
+        link.paused = g_held.load(std::memory_order_relaxed);
         [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+        g_ios_link = link;
     });
 }
 
@@ -223,6 +232,27 @@ double display_refresh_hz() noexcept {
     }
     const std::lock_guard<std::mutex> lock(g_mutex);
     return g_grid.interval_ns != 0 ? 1e9 / static_cast<double>(g_grid.interval_ns) : 0.0;
+}
+
+void set_display_clock_held(bool held) noexcept {
+    g_held.store(held, std::memory_order_relaxed);
+    // On the main queue, after the link's start (also queued there): the last word is the latest call's.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        const bool now_held = g_held.load(std::memory_order_relaxed);
+#if TARGET_OS_OSX
+        if (g_link != nullptr) {
+            if (now_held) {
+                CVDisplayLinkStop(g_link);
+            } else if (!CVDisplayLinkIsRunning(g_link)) {
+                CVDisplayLinkStart(g_link);
+            }
+        }
+#else
+        if (g_ios_link != nil) {
+            g_ios_link.paused = now_held;
+        }
+#endif
+    });
 }
 
 }  // namespace galaxy::sdl

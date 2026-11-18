@@ -40,6 +40,11 @@ std::atomic<std::int64_t> g_frame_slot_ns{0};
 std::atomic<std::int64_t> g_frame_period_ns{0};
 // The display's vsync period as the system states it (refresh-rate callbacks); 0 until the first.
 std::atomic<std::int64_t> g_display_period_ns{0};
+// Held (set_display_clock_held): a callback posts no next one. g_posted: a callback is asked for (the looper
+// thread's own; it posts again when let go). g_looper: that thread's looper, to wake it.
+std::atomic<bool> g_held{false};
+bool g_posted = false;
+std::atomic<ALooper*> g_looper{nullptr};
 
 std::int64_t monotonic_ns() noexcept {
     timespec now{};
@@ -72,14 +77,30 @@ void record_frame(std::int64_t frame_ns, std::int64_t expected) {
     g_expected_presentation_ns = expected;
 }
 
+void on_frame(std::int64_t frame_ns, void* choreographer);
+void on_timeline(const AChoreographerFrameCallbackData* data, void* choreographer);
+
+// The next callback, unless the clock is held (the looper thread only).
+void post_next(AChoreographer* choreographer) {
+    g_posted = !g_held.load(std::memory_order_relaxed);
+    if (!g_posted) {
+        return;
+    }
+    if (g_timeline.post != nullptr) {
+        g_timeline.post(choreographer, on_timeline, choreographer);
+    } else {
+        AChoreographer_postFrameCallback64(choreographer, on_frame, choreographer);
+    }
+}
+
 void on_frame(std::int64_t frame_ns, void* choreographer) {
     record_frame(frame_ns, 0);
-    AChoreographer_postFrameCallback64(static_cast<AChoreographer*>(choreographer), on_frame, choreographer);
+    post_next(static_cast<AChoreographer*>(choreographer));
 }
 
 void on_timeline(const AChoreographerFrameCallbackData* data, void* choreographer) {
     record_frame(g_timeline.frame_time(data), g_timeline.expected(data, g_timeline.preferred(data)));
-    g_timeline.post(static_cast<AChoreographer*>(choreographer), on_timeline, choreographer);
+    post_next(static_cast<AChoreographer*>(choreographer));
 }
 
 void on_refresh_rate(std::int64_t vsync_period_ns, void*) {
@@ -95,13 +116,18 @@ void clock_thread() {
     }
     if (g_timeline.load()) {
         std::fprintf(stderr, "[display] Android preferred presentation timeline enabled\n");
-        g_timeline.post(choreographer, on_timeline, choreographer);
     } else {
-        AChoreographer_postFrameCallback64(choreographer, on_frame, choreographer);
+        g_timeline.post = nullptr;
     }
+    g_looper.store(ALooper_forThread(), std::memory_order_release);
+    post_next(choreographer);
     AChoreographer_registerRefreshRateCallback(choreographer, on_refresh_rate, nullptr);
     for (;;) {
+        // A callback, or a wake from set_display_clock_held: let go with none asked for, it asks again.
         ALooper_pollOnce(-1, nullptr, nullptr, nullptr);
+        if (!g_posted) {
+            post_next(choreographer);
+        }
     }
 }
 
@@ -133,6 +159,13 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept 
     g_frame_period_ns.store(frame_period, std::memory_order_relaxed);
     g_frame_slot_ns.store(target, std::memory_order_release);
     return true;
+}
+
+void set_display_clock_held(bool held) noexcept {
+    g_held.store(held, std::memory_order_relaxed);
+    if (ALooper* const looper = g_looper.load(std::memory_order_acquire); looper != nullptr && !held) {
+        ALooper_wake(looper);
+    }
 }
 
 bool display_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
@@ -171,6 +204,8 @@ double display_refresh_hz() noexcept {
 bool wait_display_frame(std::int64_t, std::int64_t&) noexcept {
     return false;
 }
+
+void set_display_clock_held(bool) noexcept {}
 
 bool display_grid(std::int64_t&, std::int64_t&, std::int64_t&, std::int64_t&) noexcept {
     return false;

@@ -32,6 +32,9 @@ void pump_events(int timeout_ms) noexcept;
 // no recent vsyncs (out of sight, not yet shown), the display's rate does not divide the period, or the platform has
 // no display clock: the host's own clock times the frame then.
 bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept;
+// The app out of sight: the display clock asks for no vsyncs (Android's Choreographer callbacks, Apple's display link)
+// until it is let go, so no thread wakes at the display's rate for a game that waits. Any thread.
+void set_display_clock_held(bool held) noexcept;
 // The frame grid (CLOCK_MONOTONIC nanoseconds): the latest frame slot, the frame period, the display's vsync
 // interval and now; false while frames follow the host's clock.
 [[nodiscard]] bool display_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
