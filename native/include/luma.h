@@ -717,16 +717,16 @@ typedef void (*LumaCtor)(void);
 
 #define LUMA_MOD(imports, start, stop) \
     LUMA_RUNTIME                       \
-    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, 0, 0, 0, 0, 0}
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, 0, 0, 0, 0, 0, 0}
 /* A mod that binds no name of the game (it finds what it needs through the core at start). */
 #define LUMA_MOD_NO_IMPORTS(start, stop) \
     LUMA_RUNTIME                         \
-    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop, luma_begin, luma_finish, 0, 0, 0, 0, 0}
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, 0, 0, start, stop, luma_begin, luma_finish, 0, 0, 0, 0, 0, 0}
 /* A library mod: its exports (LUMA_EXPORT_FUNCTION rows, sorted by name) and what it does when a mod that
    needs it is taken out. */
 #define LUMA_LIBRARY_MOD(imports, start, stop, exports, dependent_gone) \
     LUMA_RUNTIME                                                        \
-    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, exports, sizeof(exports) / sizeof(exports[0]), dependent_gone, 0, 0}
+    LUMA_C LUMA_EXPORT const LumaModInfo luma_mod = {sizeof(LumaModInfo), LUMA_API, imports, sizeof(imports) / sizeof(imports[0]), start, stop, luma_begin, luma_finish, exports, sizeof(exports) / sizeof(exports[0]), dependent_gone, 0, 0, 0}
 
 /* LUMA_MOD and LUMA_LIBRARY_MOD with a `cut` (LumaModInfo.cut): the mod is told when a fault in another mod's code
    cut a call of its code short. */
