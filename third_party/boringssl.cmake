@@ -41,7 +41,15 @@ message(STATUS "BoringSSL 0.20261020.0: assembly ${nebula_bssl_asm_kind}")
 add_library(nebula_bssl_crypto STATIC ${BCM_SOURCES} ${CRYPTO_SOURCES} ${nebula_bssl_asm})
 add_library(nebula_bssl_ssl STATIC ${SSL_SOURCES})
 target_link_libraries(nebula_bssl_ssl PUBLIC nebula_bssl_crypto)
-target_include_directories(nebula_bssl_crypto SYSTEM PUBLIC "${nebula_bssl_dir}/include")
+# Its headers before every other folder: a system folder can hold another OpenSSL's headers under the same names
+# (Homebrew's in /usr/local/include on an Intel Mac, searched before -isystem folders there), and the library and its
+# users must read these. As -I first, except under MSVC: its users build with /W4 /WX, a system folder keeps the
+# headers' warnings upstream's, and MSVC searches its own folders (INCLUDE) after /external:I.
+if(MSVC)
+    target_include_directories(nebula_bssl_crypto SYSTEM PUBLIC "${nebula_bssl_dir}/include")
+else()
+    target_include_directories(nebula_bssl_crypto BEFORE PUBLIC "${nebula_bssl_dir}/include")
+endif()
 # Its C++ headers (openssl/span.h) need C++17 in every file that includes them.
 target_compile_features(nebula_bssl_crypto PUBLIC cxx_std_17)
 if(nebula_bssl_asm STREQUAL "")
