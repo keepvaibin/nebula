@@ -92,10 +92,30 @@ def case_reused(root):
     return None
 
 
+def case_no_kit(root):
+    """Without a LumaLink tree the examples are not copied (there is no LumaKit for them) and their row says they did
+    not run; with one, they and the kit beside them are. Before N-4018 they were copied without the kit and every one
+    of them failed to build."""
+    places = [place for _, place in mod_tests.copies(None)]
+    if "examples" in places:
+        return "the examples copied without a LumaLink tree: %r" % places
+    if not hasattr(mod_tests, "no_tree_rows"):
+        return "no row for the examples without a LumaLink tree"
+    rows = mod_tests.no_tree_rows([])
+    if [r[0] for r in rows] != ["lumalink", "examples"] or any(r[2] != "not-run" for r in rows):
+        return "the rows without a LumaLink tree: %r" % rows
+    if [r[0] for r in mod_tests.no_tree_rows(["s/t1"])]:
+        return "a run of one test of tests/mods has a row for the other origins"
+    with_tree = [place for _, place in mod_tests.copies(root)]
+    if "examples" not in with_tree or "examples/lumakit" not in with_tree:
+        return "with a LumaLink tree, the examples or their kit are not copied: %r" % with_tree
+    return None
+
+
 def main():
     work = pathlib.Path(sys.argv[sys.argv.index("--work") + 1]) if "--work" in sys.argv else None
     failed = []
-    for case in (case_checkout, case_reused):
+    for case in (case_checkout, case_reused, case_no_kit):
         with tempfile.TemporaryDirectory(dir=work) as root:
             why = case(pathlib.Path(root))
             if why is not None:

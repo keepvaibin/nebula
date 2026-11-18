@@ -20,7 +20,8 @@ when the runner answered as expected.json says (harness_self.py), so a test that
 whose expected.json has "twice_same_facts" is run twice and passes when both runs left the same facts (but the keys
 its "except" lists: measured times).
 The documentation's worked examples (docs/modding/examples, the reference mods) are an origin too: each example's
-tests/ is a suite, labelled examples/<example>, built and run like the rest with LumaKit beside them.
+tests/ is a suite, labelled examples/<example>, built and run like the rest with LumaKit beside them. Without a
+LumaLink tree there is no LumaKit, and they do not run: a row says so (not a pass), as for LumaLink's tests/game.
 
 --device runs on an Android device instead (luma_test.py run --device; the test app prepared with
 luma_test_android.py prepare, --bin its test-bin folder, --renderer vulkan): every mod is built for the platforms its
@@ -61,13 +62,15 @@ if platform.machine().lower() in ("arm64", "aarch64"):
 
 def copies(ll_tree):
     """(source folder, its place under <work>/tree): what is copied and built."""
-    out = [(TESTS, "tests/mods"), (EXAMPLES, "examples")] + [(TREE / name, name) for name in INCLUDED]
+    out = [(TESTS, "tests/mods")] + [(TREE / name, name) for name in INCLUDED]
     if ll_tree is not None:
         # LumaKit beside the tests' mods, where `lumalink build` looks first for a mod a mod needs (../<id>), and
         # where the tests name it (../../mods/lumakit); without it, the build would take this machine's installed kit.
         # The examples get it beside them too, as a mod author has the kit installed.
+        # Without a LumaLink tree there is no kit, and the examples, which need it as a player has it, are not copied:
+        # run_all gives them one not-run row.
         out += [(ll_tree / "tests" / "game", "lumalink/tests/game"), (ll_tree / "lumakit", "lumalink/tests/game/mods/lumakit"),
-                (ll_tree / "lumakit", "examples/lumakit")]
+                (EXAMPLES, "examples"), (ll_tree / "lumakit", "examples/lumakit")]
     return out
 
 
@@ -363,8 +366,9 @@ def run_unit_held(args, unit, work):
            "--lock", str(lock)]
     for name in unit["tests"]:
         cmd += ["--test", name]
-    if args.device:
-        cmd += ["--device", args.device] + (["--device-lock", args.device_lock] if args.device_lock else [])
+    device = getattr(args, "device", None)
+    if device:
+        cmd += ["--device", device] + (["--device-lock", args.device_lock] if getattr(args, "device_lock", None) else [])
     if args.pak:
         cmd += ["--pak", args.pak]
     while args.wait_while and pathlib.Path(args.wait_while).exists():
@@ -700,29 +704,41 @@ def main():
         lock.unlink()
 
 
+def no_tree_rows(only):
+    """The rows of a run whose lumalink was built in no LumaLink checkout: LumaLink's tests/game and the examples,
+    which need its LumaKit, did not run (not a pass)."""
+    why = "no LUMALINK_TREE, and LUMALINK was built in no LumaLink checkout: "
+    rows = []
+    if not only or any(o.startswith("lumalink/") or o == "lumalink" for o in only):
+        rows.append(("lumalink", "-", "not-run", why + "LumaLink's tests/game did not run"))
+    if not only or any(o.startswith("examples/") or o == "examples" for o in only):
+        rows.append(("examples", "-", "not-run", why + "no LumaKit, so the examples did not run"))
+    return rows
+
+
 def run_all(args, lumalink, work, ll_tree):
     if args.set == "quick":
-        sources = [("", TESTS), ("examples/", EXAMPLES)] + ([("lumalink/", ll_tree / "tests" / "game")] if ll_tree is not None else [])
+        sources = [("", TESTS)] + ([("examples/", EXAMPLES), ("lumalink/", ll_tree / "tests" / "game")] if ll_tree is not None else [])
         selection, problems = quick_set(sources)
         if problems:
             for problem in problems:
                 print("quick-set %s" % problem)
             print("mod_tests: %s: the quick set does not match the suites" % args.renderer)
             return 1
-        args.only = list(args.only) + [e for e in selection if ll_tree is not None or not e.startswith("lumalink/")]
+        args.only = list(args.only) + [e for e in selection if ll_tree is not None or not e.startswith(("lumalink/", "examples/"))]
     tree, build_failed = prepare(args, lumalink, work, ll_tree)
     if args.build_only:
         for mod, why in sorted(build_failed.items()):
             print("build-failed %s: %s" % (mod.relative_to(tree).as_posix(), why))
         return 0 if not build_failed else 1
     # (label prefix, the copy's suites, the runs' folder)
-    origins = [("", tree / "tests" / "mods", work / args.renderer),
-               ("examples/", tree / "examples", work / args.renderer / "examples")]
+    origins = [("", tree / "tests" / "mods", work / args.renderer)]
     rows = []
     if ll_tree is not None:
-        origins.append(("lumalink/", tree / "lumalink" / "tests" / "game", work / args.renderer / "lumalink"))
-    elif not args.only or any(o.startswith("lumalink/") for o in args.only):
-        rows.append(("lumalink", "-", "not-run", "no LUMALINK_TREE, and LUMALINK was built in no LumaLink checkout: LumaLink's tests/game did not run"))
+        origins += [("examples/", tree / "examples", work / args.renderer / "examples"),
+                    ("lumalink/", tree / "lumalink" / "tests" / "game", work / args.renderer / "lumalink")]
+    else:
+        rows += no_tree_rows(args.only)
     planned = [(run_root,) + plan_origin(args, prefix, copy, run_root, build_failed) for prefix, copy, run_root in origins]
     units = [u for _, _, origin_units, _ in planned for u in origin_units]
     logs = run_units(args, units, work)
