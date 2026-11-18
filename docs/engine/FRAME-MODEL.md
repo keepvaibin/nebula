@@ -10,7 +10,7 @@ rules the later stages hold (07-BASE-FIRST, stage 2 item 1). Part 1 grows sectio
 
 | Thread | Started at | Owns | Hands over |
 | --- | --- | --- | --- |
-| Game (the host's main thread) | `native/host/host_main.cpp` main, the game module's step | the game's state, the frame list it writes | a written list to the render thread (1.2) |
+| Game ("Nebula Game") | `native/host/host_main.cpp:6538`, running `gModule.run()`; the host's main thread (:6527) only waits for messages, the game's end and the once-a-second report (:6628) | the game's state, the frame list it writes | a written list to the render thread (1.2) |
 | Render | `runtime/src/render/render_core.cpp:259` (`RenderCore::render_thread_main`, :1550) | the device, every GPU object, the lists it walks | released lists back to the game (1.2); pictures to the display |
 | Window owner | `runtime/src/render/window_owner.cpp:20` | the OS window and its message loop | size, focus and input to the game and render threads |
 | Display clock | `runtime/src/render/vblank_clock_win32.cpp:175` | the vertical blank's time | the moment a picture is due (pacing) |
@@ -84,3 +84,24 @@ rules of part 2; the four inside a frame are not, and go to the list at the end 
 The game thread waits on the render thread at three places: queue room (1.2 item 3), the render thread idle (1.2 item
 6), and a screen probe's answers for frame F - 2 (`render_core.cpp:2032`, bounded by `kProbeWaitNs`), which waits only
 for that list's GPU work, as the list was walked when F - 1 superseded it (:2028-2031).
+
+### 1.5 What the game thread waits for
+
+The game thread runs the game module's loop; each wait below is a call it makes into the host (`native/host/host_main.cpp`).
+
+| Wait | Where | Bound | Kind |
+| --- | --- | --- | --- |
+| The next step's moment | `svc_frame_wait` (:1140): the display's vertical blank on the SDL hosts (:1166), else a precise wait for the host clock's due time (:1182, `PreciseWait`), recorded as `StepWaitBegin`/`StepWaitEnd` | the step period (`kGameStepNs`) | pacing, every frame |
+| Suspended (minimised, or the system's suspend) | `wait_while_suspended` (:1034), from the step wait (:1188) | until resumed | by design |
+| Room in the render queue | `render_frame`'s wait (`render_core.cpp:604-635`, 1.2 item 3) | none of its own | every frame the render thread is behind |
+| A screen probe's answers | `svc_probe_results` (:2792) to `screen_probe_results` (`render_core.cpp:2032`) | `kProbeWaitNs` | only frames with probes |
+| The render thread idle | the output's shape latched (`svc_frame_begun`, :3232-3240, `wait_for_render_idle`) | none | a window or aspect change |
+| The last save request | `svc_save_wait` (:3499) to `StatusBoard::wait` (`runtime/src/save_files.cpp:179`) | none | the game's own `waitRequest` |
+| A file's bytes | `svc_asset_read` (:3152): a copy from the store's mapped view (`gPak.store.read`), so a page not in memory is read from the drive on this thread | the drive | loads |
+
+The start check's wait for each list's release (:2070-2078) and its final `wait_for_render_idle` (:2084) are the
+`--start-check` mode's own, not the game's.
+
+Two of these hold the game for the whole render queue: the aspect latch (all queued frames, then the picture is fitted)
+and a render queue already at its depth. The asset read is the one wait on the drive inside a step; every other file the
+game touches goes through the save worker.
