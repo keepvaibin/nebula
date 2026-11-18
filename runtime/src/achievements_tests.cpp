@@ -56,10 +56,11 @@ int main() {
     expect(!ach::unlock("comets"), "still not new after a restart");
     expect(ach::unlock("lives") && ach::unlocked("lives"), "a second achievement");
 
-    // The writer saves an unlock by itself, a moment later.
+    // The writer saves an unlock by itself, a moment later. The test waits for the file, up to 30 s: on a loaded machine
+    // (a main gate's lanes beside it) the writer's moment can come seconds late, and 2 s failed there (11-18).
     expect(ach::unlock("bank"), "a third achievement");
     bool written = false;
-    for (int i = 0; i < 100 && !written; ++i) {
+    for (int i = 0; i < 1500 && !written; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         written = read_file(path).find("bank=") != std::string::npos;
     }
