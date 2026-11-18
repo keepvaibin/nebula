@@ -167,23 +167,23 @@ with no row has a new one.
 
 | Part | Where | Row |
 | --- | --- | --- |
-| A draw whose pipeline is not ready compiles it on the render thread | `core/pipelines.cpp:253` (`create_now`) | P-010 |
-| Utility pipelines compiled on the render thread at first use, outside the cache | `core/pipelines.cpp` | P-052 |
-| A present waits for every pipeline creation in flight (Direct3D 12) | `core/present_gate.h` | N-1067 |
-| The sampler heap, full, drains the whole GPU | `renderer_d3d12.cpp:1410` (`reset_sampler_frame`) | P-048 |
-| Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5034`, :5067, :5229 (the temporal upscaler), :1955 | P-028 |
-| The game thread waits for frame F - 2's probe answers | `render_core.cpp:2032` | N-1068 |
+| A draw whose pipeline is not ready compiles it on the render thread | `core/pipelines.cpp:253` (`create_now`) | P-010, E3 step 1 (a form known at load) |
+| Utility pipelines compiled on the render thread at first use, outside the cache | `core/pipelines.cpp` | P-052 (written, engine/b) |
+| A present waits for every pipeline creation in flight (Direct3D 12) | `core/present_gate.h` | N-1067, E3 step 1 |
+| The sampler heap, full, drains the whole GPU | `renderer_d3d12.cpp:1410` (`reset_sampler_frame`) | P-048, E3 step 2 |
+| Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5034`, :5067, :5229 (the temporal upscaler), :1955 | P-028 (written, engine/b) |
+| The game thread waits for frame F - 2's probe answers | `render_core.cpp:2032` | N-1068, E4 |
 | The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3236` | to be given |
 | A capture's readback waits for the GPU inside a frame | `renderer_d3d12.cpp:6904`, :6907 | to be given |
 | The game thread copies loads from the mapped store: a page not in memory is a drive read inside a step | `host_main.cpp:3152` (`svc_asset_read`) | to be given |
-| Matrix rows made in eye space for one camera on the CPU, each walk and again for each in-between picture; skin envelopes on the CPU | `draw_walker.cpp:225-316` | E3 |
-| A block in calc mode 1 comes with the view inside its joints (the console's billboards and camera-bound models) | `draw_walker.cpp:309-313` | E3 |
-| Vertices the game builds on the CPU each step, copied each walk and moved at t on the CPU | `draw_walker.cpp:399` on | E3 |
-| Culling against the view's planes on the CPU | `draw_walker.cpp:482` | E3 |
-| A target pass (the console's copy of the frame into a texture) breaks the frame's pass: store and load on tiled GPUs | `draw_walker.cpp:1461` | E4 |
-| A copy before the list writes the frame reads the picture shown last, as the console's frame buffer held it | `draw_walker.cpp:1583` | E4 |
-| The scene's camera found at its opaque end, as the game loads its projection after the scene begins | `draw_walker.cpp:1356` | E4 |
-| A target's texture table rebuilt each frame; each draw names its textures again | `draw_walker.cpp:878`, :920 | E4 |
+| Matrix rows made in eye space for one camera on the CPU, each walk and again for each in-between picture; skin envelopes on the CPU | `draw_walker.cpp:225-316` | E3 step 5 |
+| A block in calc mode 1 comes with the view inside its joints (the console's billboards and camera-bound models) | `draw_walker.cpp:309-313` | E3 step 5 (resolved per view on the GPU) |
+| Vertices the game builds on the CPU each step, copied each walk and moved at t on the CPU | `draw_walker.cpp:399` on | E3 step 4 |
+| Culling against the view's planes on the CPU | `draw_walker.cpp:482` | E3 step 5 |
+| A target pass (the console's copy of the frame into a texture) breaks the frame's pass: store and load on tiled GPUs | `draw_walker.cpp:1461` | E4 (render-to-texture passes first) |
+| A copy before the list writes the frame reads the picture shown last, as the console's frame buffer held it | `draw_walker.cpp:1583` | E4 (the last picture asked for by name) |
+| The scene's camera found at its opaque end, as the game loads its projection after the scene begins | `draw_walker.cpp:1356` | E4 (`GameScene::draw3D` states its passes) |
+| A target's texture table rebuilt each frame; each draw names its textures again | `draw_walker.cpp:878`, :920 | E3 step 2 (each form's texture list) |
 
 The list grows with the files still to read (the post-process files for Vulkan and Metal, the upscaler and
 frame-generation bodies).
