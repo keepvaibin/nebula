@@ -1422,6 +1422,11 @@ mod tests {
     #[test]
     fn small_checks() {
         assert!(id_ok("gold-flower") && id_ok("a.b-c") && !id_ok("ab") && !id_ok("Gold") && !id_ok("1abc") && !id_ok("a..b") && !id_ok("abc."));
+        // N-4090: the message says every part of the rule an id can fail, so a..b and abc. are told why.
+        for (id, part) in [("a..b", "no two . together"), ("abc.", "not end with ."), ("ab", "3 to 64 long"), ("1abc", "start with a letter")] {
+            let said = crate::message_of(206, &[("mod", "m"), ("found", &format!("T:{id}"))], "UsEnglish");
+            assert!(said.contains(part) && said.contains(id), "{id}: {said}");
+        }
         // Windows' device names, alone or before the first dot; the same letters inside a longer part are fine.
         for kept in ["con", "prn", "aux", "nul", "com1", "com9", "lpt1", "lpt9", "con.mod", "nul.x.y", "lpt3.gold"] {
             assert!(!id_ok(kept), "{kept}");
