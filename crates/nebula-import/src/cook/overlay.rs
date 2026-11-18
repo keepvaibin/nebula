@@ -135,31 +135,47 @@ fn model_place(change: &Change, base: Option<&Path>) -> Result<(String, Option<s
 }
 
 /// The model an animation file in game archive `folder` moves: its one model, else the one named as the archive
-/// (`Kuribo.arc/Kuribo.bdl`).
-fn archive_model(folder: &str, base: &Path) -> Result<super::gltf::GameModel> {
+/// (`Kuribo.arc/Kuribo.bdl`). An archive with no model of its own (the player's clips, `MarioAnime.arc`) holds clips of
+/// another archive's model: the stem of `file` (the mod's path) names that archive beside it, `Mario.anim.glb` there moving
+/// `ObjectData/Mario.arc`'s model; refused as `Cook.Anim.NoModel` when that archive has no model (N-4011).
+fn archive_model(folder: &str, file: &str, base: &Path) -> Result<super::gltf::GameModel> {
     use super::refuse::refuse;
-    let models: Vec<(String, Vec<u8>)> = store::read_folder(base, folder)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|(name, _)| {
-            let name = name.to_ascii_lowercase();
-            !name.contains('/') && (name.ends_with(".bdl") || name.ends_with(".bmd"))
-        })
-        .collect();
-    let archive = folder.rsplit('/').next().unwrap_or(folder);
+    let models_of = |folder: &str| -> Vec<(String, Vec<u8>)> {
+        store::read_folder(base, folder)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(name, _)| {
+                let name = name.to_ascii_lowercase();
+                !name.contains('/') && (name.ends_with(".bdl") || name.ends_with(".bmd"))
+            })
+            .collect()
+    };
+    let name = file.rsplit('/').next().unwrap_or(file);
+    let stem = name.split('.').next().unwrap_or(name);
+    let mut folder = folder.to_string();
+    let mut models = models_of(&folder);
+    if models.is_empty() {
+        let parent = folder.rsplit_once('/').map_or(String::new(), |(p, _)| format!("{p}/"));
+        let named = format!("{parent}{stem}.arc");
+        let other = if named.eq_ignore_ascii_case(&folder) { Vec::new() } else { models_of(&named) };
+        if other.is_empty() {
+            return Err(refuse("Cook.Anim.NoModel", &[("file", file.to_string()), ("archive", folder.clone()), ("model", named)]));
+        }
+        (folder, models) = (named, other);
+    }
+    let archive = folder.rsplit('/').next().unwrap_or(&folder);
     let archive = &archive[..archive.len() - ".arc".len()];
     let named: Vec<&(String, Vec<u8>)> = models.iter().filter(|(n, _)| n.split('.').next().unwrap_or(n).eq_ignore_ascii_case(archive)).collect();
     let (name, block) = match (models.as_slice(), named.as_slice()) {
-        ([], _) => return Err(refuse("Cook.Model.NoGameModel", &[("archive", folder.to_string()), ("models", String::new())])),
         ([one], _) => one,
         (_, [one]) => *one,
         _ => {
             let names: Vec<&str> = models.iter().map(|(n, _)| n.as_str()).collect();
-            return Err(refuse("Cook.Anim.WhichModel", &[("archive", folder.to_string()), ("models", names.join(", "))]));
+            return Err(refuse("Cook.Anim.WhichModel", &[("archive", folder.clone()), ("models", names.join(", "))]));
         }
     };
     let path = format!("{folder}/{name}");
-    super::gltf::GameModel::read(&path, block).ok_or_else(|| refuse("Cook.Model.NoGameModel", &[("archive", folder.to_string()), ("models", name.clone())]))
+    super::gltf::GameModel::read(&path, block).ok_or_else(|| refuse("Cook.Model.NoGameModel", &[("archive", folder.clone()), ("models", name.clone())]))
 }
 
 /// A new model's level of detail (models.md section 6: `<path>Middle.glb` or `<path>Low.glb` outside an archive, the
@@ -262,7 +278,7 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
             return Err(super::refuse::refuse("Cook.Anim.NotInArchive", &[("file", change.path.clone())]));
         }
         let base = base.ok_or_else(|| super::refuse::refuse("Cook.Anim.NoGame", &[("file", change.path.clone())]))?;
-        let game = archive_model(folder, base)?;
+        let game = archive_model(folder, &change.path, base)?;
         let (clips, made) = super::gltf::to_clip_files(bytes, change.source.parent(), &change.path, &game)?;
         super::refuse::record(super::refuse::CookFact::Model { path: game.path.clone(), source: change.path.clone(), facts: made });
         return Ok(clips.into_iter().map(|(file, clip)| (format!("{folder}/{file}"), clip, true)).collect());
@@ -1507,6 +1523,20 @@ mod tests {
         let two = game_store(two_dir.path(), &[("ObjectData/Kuribo.arc/a.bdl", &block), ("ObjectData/Kuribo.arc/b.bdl", &block)]);
         let error = cook_source("ObjectData/Kuribo.arc/Kuribo.anim.gltf", &source, anim.as_bytes(), Some(&two), None).unwrap_err();
         assert_eq!(refusal_of(&error).map(|f| f.args.iter().any(|(n, v)| *n == "why" && *v == luma_validate::Arg::Phrase("Cook.Anim.WhichModel"))), Some(true), "{error:#}");
+        // N-4011: an archive with no model of its own (the player's clips, MarioAnime.arc) holds clips of the model of the
+        // archive its file's name gives: Mario.anim.gltf there moves ObjectData/Mario.arc's model, its clips in
+        // MarioAnime.arc. A name with no archive of a model beside it is refused, naming the archive it looked for.
+        let player_dir = tempfile::tempdir().unwrap();
+        let player = game_store(player_dir.path(), &[("ObjectData/Mario.arc/Mario.bdl", &block), ("ObjectData/MarioAnime.arc/Run.bck", b"x")]);
+        let change = |path: &str| Change { path: path.into(), source: source.clone(), merge: false };
+        let made = modern_files(&change("ObjectData/MarioAnime.arc/Mario.anim.gltf"), anim.as_bytes(), Some(&player)).unwrap();
+        assert_eq!(made.iter().map(|(path, _, _)| path.as_str()).collect::<Vec<_>>(), ["ObjectData/MarioAnime.arc/Walk.bck"]);
+        for (path, looked) in [("ObjectData/MarioAnime.arc/Luigi.anim.gltf", "ObjectData/Luigi.arc"), ("ObjectData/MarioAnime.arc/MarioAnime.anim.gltf", "ObjectData/MarioAnime.arc")] {
+            let error = modern_files(&change(path), anim.as_bytes(), Some(&player)).unwrap_err();
+            let found = refusal_of(&error).unwrap();
+            assert!(found.args.iter().any(|(n, v)| *n == "why" && *v == luma_validate::Arg::Phrase("Cook.Anim.NoModel")), "{error:#}");
+            assert!(found.args.iter().any(|(n, v)| *n == "model" && *v == luma_validate::Arg::Text(looked.into())), "{error:#}");
+        }
         // Not in a game archive, and no game to read the model from.
         for (path, base, why) in [
             ("ObjectData/Walk.anim.gltf", Some(one.as_path()), "Cook.Anim.NotInArchive"),

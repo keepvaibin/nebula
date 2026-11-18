@@ -43,7 +43,9 @@ HOST_NOT_SHOWN = {'SSAO', 'GTAO', 'SB4', 'SB5', '(BLUETOOTH)', '(BT)', '-OPTIONS
                   # the mods: unavailable buttons, hex digits, the game's id, the head of "ON (1 OF 2)"
                   '-ABOUT', '-DETAILS', '-PICK', '0123456789ABCDEF', 'RMG', 'ON (',
                   # HDR CALIBRATION's button while the picture is not HDR (the CALIBRATE row is its text)
-                  '-CALIBRATE'}
+                  '-CALIBRATE',
+                  # an environment variable's name (mods.cpp: a harness run's mods are not the player's)
+                  'LUMA_HARNESS_PLAN'}
 
 
 def unescape(cell):

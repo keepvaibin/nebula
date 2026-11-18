@@ -626,6 +626,7 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Anim.TooLong` | animation {animation} lasts {seconds} seconds; a clip lasts at most {max} |
 | `Cook.Anim.Twice` | two animations are named {name} |
 | `Cook.Anim.WhichModel` | {archive} has more than one model ({models}) and none has the archive's name: an animation file there cannot tell which it moves |
+| `Cook.Anim.NoModel` | {file}: {archive} has no model, so an animation file there moves the model in the archive of its own name, and {model} has none |
 | `Cook.Camera.NoAnimation` | no animation moves the camera's node or its yfov |
 | `Cook.Camera.NoFov` | camera {camera} has no yfov |
 | `Cook.Camera.None` | no node has a camera: give the camera's node a "camera" |

@@ -56,6 +56,8 @@ To change how a game model moves without replacing the model, add an animation f
 
 Each animation in the file replaces the game's animation with the same name. The game's other animations stay. A joint your animation doesn't move keeps its rest pose from your file.
 
+Some archives hold animations and no model. The player's animations are in `ObjectData/MarioAnime.arc`, and the model they move is in `ObjectData/Mario.arc`. In such an archive, the name before `.anim.glb` is the archive whose model the file moves: `ObjectData/MarioAnime.arc/Mario.anim.glb` moves the model in `ObjectData/Mario.arc`, and its animations go in `MarioAnime.arc`. If no archive of that name has a model, the check says which archive it looked for.
+
 An animation file is checked against the game's model, so the game must be known. If LumaLink finds no installed Nebula, give the game with `--game`.
 
 ### Which model an animation file moves
