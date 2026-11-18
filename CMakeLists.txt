@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.24)
 project(Nebula VERSION 2.0.0 LANGUAGES C CXX)
+
+# The programs' debug information (crash dumps, the profiler): one PDB per program (/Zi), or inside each object (/Z7)
+# when a compiler cache sits in front of the compiler (the push workflow's sccache), which cannot cache a shared PDB.
+# The linker makes the same PDB either way.
+if(CMAKE_CXX_COMPILER_LAUNCHER OR "$ENV{CMAKE_CXX_COMPILER_LAUNCHER}")
+    set(NEBULA_MSVC_DEBUG_INFO /Z7)
+else()
+    set(NEBULA_MSVC_DEBUG_INFO /Zi)
+endif()
 add_compile_definitions(NEBULA_VERSION="${PROJECT_VERSION}")
 
 # One build: a release and a test run use the same binaries (tools/release_check.ps1 checks the sources and the release).
@@ -118,7 +127,7 @@ function(nebula_host_cpu_entry target)
         target_include_directories(nebula_host_entry PRIVATE runtime/include)
         get_target_property(entry_options nebula_host_entry COMPILE_OPTIONS)
         list(FILTER entry_options EXCLUDE REGEX "arch:AVX2|-mavx2")
-        list(APPEND entry_options /GS- /Zi)
+        list(APPEND entry_options /GS- ${NEBULA_MSVC_DEBUG_INFO})
         set_property(TARGET nebula_host_entry PROPERTY COMPILE_OPTIONS "${entry_options}")
     endif()
     target_link_libraries(${target} PRIVATE nebula_host_entry)
@@ -542,7 +551,7 @@ if(MSVC)
     # Paths past MAX_PATH (CMake merges a .manifest source into the program's manifest).
     target_sources(Nebula PRIVATE native/host/nebula_host.manifest)
     # Symbols for crash dumps and the thread profiler; code generation is unchanged.
-    target_compile_options(Nebula PRIVATE /Zi)
+    target_compile_options(Nebula PRIVATE ${NEBULA_MSVC_DEBUG_INFO})
     target_link_options(Nebula PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:Nebula.pdb)
 endif()
 nebula_host_cpu_entry(Nebula)
@@ -802,7 +811,7 @@ runtime/src/render/host_window_win32.cpp
     target_link_libraries(NebulaVk PRIVATE dwmapi galaxy_render_vk galaxy_save_files galaxy_asset_store)
     if(MSVC)
         target_sources(NebulaVk PRIVATE native/host/nebula_host.manifest)
-        target_compile_options(NebulaVk PRIVATE /Zi)
+        target_compile_options(NebulaVk PRIVATE ${NEBULA_MSVC_DEBUG_INFO})
         target_link_options(NebulaVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaVk.pdb)
     endif()
     nebula_host_cpu_entry(NebulaVk)
@@ -932,7 +941,7 @@ if(NEBULA_D3D11)
     target_link_libraries(NebulaD11 PRIVATE dwmapi galaxy_render_d3d11 galaxy_save_files galaxy_asset_store)
     if(MSVC)
         target_sources(NebulaD11 PRIVATE native/host/nebula_host.manifest)
-        target_compile_options(NebulaD11 PRIVATE /Zi)
+        target_compile_options(NebulaD11 PRIVATE ${NEBULA_MSVC_DEBUG_INFO})
         target_link_options(NebulaD11 PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaD11.pdb)
     endif()
     # Both CPU levels like the other hosts (NebulaD11-x86-64-v2.exe from the baseline tree).
