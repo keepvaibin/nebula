@@ -221,6 +221,7 @@ private:
     std::string failure_;
     std::mutex buffers_mutex_;
     std::vector<Buffer*> upload_buffers_;  // every buffer with a system-memory copy
+    std::vector<void*> written_pages_;     // upload_written's page list, made once (P-064)
     std::array<std::atomic<AddressPage*>, kAddressIds / kAddressPageSize> address_pages_{};
     std::mutex address_mutex_;
     std::vector<std::uint32_t> free_address_ids_;
