@@ -110,6 +110,17 @@ std::thread::id g_sdl_thread;
 // Keys the settings menu takes from other threads and from the pads, in order, on SDL's thread.
 std::mutex g_menu_keys_mutex;
 std::deque<std::uintptr_t> g_menu_keys;
+// The keys in g_menu_keys and the one run_requests is handling (native_settings_keys_waiting): it moves up with a
+// push, under the queue's lock, and down once the key is handled, so it is never below the keys not handled yet.
+std::atomic<std::uint32_t> g_menu_keys_waiting{0u};
+// Milliseconds run_requests waits before it takes the keys, once (busy_window: a loaded machine's window thread).
+std::atomic<std::uint32_t> g_busy_ms{0u};
+
+void push_menu_key(std::uintptr_t key) {
+    const std::lock_guard<std::mutex> lock(g_menu_keys_mutex);
+    g_menu_keys.push_back(key);
+    g_menu_keys_waiting.fetch_add(1u, std::memory_order_relaxed);
+}
 galaxy::input::NativeSettingsPadState g_menu_pad{};
 std::optional<galaxy::input::DeviceKey> g_capture_device;
 std::optional<galaxy::input::InputSource> g_capture_result;
@@ -943,8 +954,7 @@ void sample_gamepads() {
             }
             // The menu waits for the press: told as the Windows host tells it, it takes the input and binds it.
             if (g_capture_result.has_value()) {
-                const std::lock_guard<std::mutex> keys(g_menu_keys_mutex);
-                g_menu_keys.push_back(galaxy::host::kBindingCaptureKey);
+                push_menu_key(galaxy::host::kBindingCaptureKey);
             }
         }
         g_capture_previous = bits;
@@ -1102,6 +1112,9 @@ bool start() noexcept {
 
 // Requests from other threads (menu keys, rumble), on SDL's thread.
 void run_requests() {
+    if (const std::uint32_t ms = g_busy_ms.exchange(0u, std::memory_order_relaxed); ms != 0u) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+    }
     for (;;) {
         std::uintptr_t key = 0u;
         {
@@ -1118,6 +1131,7 @@ void run_requests() {
         } else {
             (void)galaxy::render::native_settings_pad_key(key);
         }
+        g_menu_keys_waiting.fetch_sub(1u, std::memory_order_release);
     }
 #if defined(__ANDROID__)
     run_activity_calls();
@@ -2223,13 +2237,19 @@ host::HostPointerTransitionPoll poll_host_pointer_transition(std::uint64_t) noex
 }
 
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
-    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
-    galaxy::sdl::g_menu_keys.push_back(virtual_key);
+    galaxy::sdl::push_menu_key(virtual_key);
 }
 
 void native_settings_post_keyboard_key(std::uintptr_t virtual_key) noexcept {
-    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
-    galaxy::sdl::g_menu_keys.push_back(virtual_key | kMenuKeyKeyboard);
+    galaxy::sdl::push_menu_key(virtual_key | kMenuKeyKeyboard);
+}
+
+std::uint32_t native_settings_keys_waiting() noexcept {
+    return galaxy::sdl::g_menu_keys_waiting.load(std::memory_order_acquire);
+}
+
+void busy_window(std::uint32_t ms) noexcept {
+    galaxy::sdl::g_busy_ms.store(ms, std::memory_order_relaxed);
 }
 
 }  // namespace galaxy::render
