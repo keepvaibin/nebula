@@ -6,7 +6,6 @@ mods/tablet-quick	main	N-2043	Agent 2
 hostile-files	main	N-2044	Agent 2
 two-mods	main	N-2045	Agent 2
 mods/tablet	long	N-2043	Agent 2
-mods-asan/d3d12	long	N-1041	Agent 1
 fuzz	long	N-2046	Agent 2
 coverage	long	N-1042	Agent 1
 measure/short	long	N-1043	Agent 1

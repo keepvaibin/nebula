@@ -6,7 +6,7 @@
    list fails; a check whose runs were not all reported cannot be known; a planned check that runs fails; an owed
    check does not fail the run; planned checks of the level are reported; history.tsv gets one line per run.
 3. The levels (a dry run of each): quick has no tablet, GitHub or soak; main has the tablet's short part and GitHub and
-   no soak; long has the soak, the sanitizer tour and every disc on every renderer, and no GitHub; final has both.
+   no soak; long has the soak, the sanitizer tour and mod tests, every disc on every renderer, and no GitHub; final has both.
    --only keeps a check and what it needs.
 4. The tablet's part is owed, not failed, when the tablet does not answer.
 5. GitHub (section 8, N-1047): every job of the candidate's run is required; a red, cancelled or skipped job ends the
@@ -145,14 +145,19 @@ def main():
             names[level] = set(dry.needs)
             if level == "main":
                 main_needs = dry.needs
+            if level == "long":
+                long_needs = dry.needs
         q, m, lg, f = names["quick"], names["main"], names["long"], names["final"]
         check("tour/d3d12" in q and not any(n.startswith(("tablet/", "tour/tablet", "github", "soak")) for n in q),
               "quick: no tablet, GitHub or soak: %s" % sorted(q))
         check({"tour/vulkan", "tour/d3d11", "replays/tablet", "tour/tablet-pc", "github", "build/android",
                "tour-RMGP01/d3d12", "pictures/tablet"} <= m and "soak" not in m and "tour-RMGP01/vulkan" not in m,
               "main: %s" % sorted(m))
-        check({"soak", "tour-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage"} <= lg
+        check({"soak", "tour-asan/d3d12", "mods-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage"} <= lg
               and "github" not in lg and "unit/windows" not in lg and "pictures/tablet" not in lg, "long: %s" % sorted(lg))
+        # The sanitizer build runs the mod tests too (N-1041): a check of its own after that build, not a planned one.
+        check(tuple(long_needs.get("mods-asan/d3d12", ())) == ("build/windows-asan",),
+              "long: the mod tests on the sanitizer build: %s" % (long_needs.get("mods-asan/d3d12"),))
         check((m | lg) <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))
         chosen = gate.select(main_needs, ["replays/vulkan"])
         check(chosen == {"replays/vulkan", "tour/vulkan", "tour/d3d12", "build/windows"}, "--only and its needs: %s" % sorted(chosen))

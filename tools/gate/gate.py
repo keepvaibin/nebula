@@ -888,13 +888,14 @@ def pictures(g, label, renderer):
 MOD_TESTS = TREE / "tools" / "lumacore" / "mod_tests.py"
 
 
-def mod_tests(g, renderer):
+def mod_tests(g, renderer, bin_dir=None, label="mods"):
     """The mod tests on one renderer, through the mods' own entry point (it builds the test mods with LumaLink, then
     runs them side by side, --mod-parallel at a time, each game in its own folder): every suite of tests/mods and of
     the pinned LumaLink's tests/game, or at the quick level the quick set (tests/mods/quick.json, one or more of every
-    suite). Passes when it exits 0; its rows name each test that did not pass."""
+    suite). `bin_dir`: another build's bin folder (the sanitizer build's), `label` its runs' name. Passes when it exits
+    0; its rows name each test that did not pass."""
     def fn(log):
-        work = g.work / ("runs-mods-%s" % renderer)
+        work = g.work / ("runs-%s-%s" % (label, renderer))
         env = {"LUMA_TEST_PAKS": g.args.paks}
         if g.args.lumalink:
             env["LUMALINK"] = g.args.lumalink
@@ -905,8 +906,8 @@ def mod_tests(g, renderer):
                 pathlib.Path(log).write_text("%s\n" % stop, encoding="utf-8")
                 return False, str(stop)
             env["LUMALINK"], env["LUMALINK_TREE"] = str(program), str(checkout)
-        cmd = [sys.executable, "-X", "utf8", "-I", MOD_TESTS, "--bin", g.bin, "--work", work, "--renderer", renderer,
-               "--lock", g.work / ("harness-mods-%s.lock" % renderer), "--commit", g.commit, "--jobs", g.args.jobs,
+        cmd = [sys.executable, "-X", "utf8", "-I", MOD_TESTS, "--bin", bin_dir or g.bin, "--work", work, "--renderer",
+               renderer, "--lock", g.work / ("harness-%s-%s.lock" % (label, renderer)), "--commit", g.commit, "--jobs", g.args.jobs,
                "--parallel", str(g.args.mod_parallel)]
         if g.level == "quick":
             cmd += ["--set", "quick"]
@@ -1390,15 +1391,21 @@ def sanitizer_lane(g):
 
 def sanitizer_part(g):
     """The game modules built with AddressSanitizer (build_windows.ps1 -Sanitize address, a build root of its own)
-    play the tour on Direct3D 12: a memory fault the tour reaches ends the run with the sanitizer's report."""
+    play the tour and every mod test on Direct3D 12: a memory fault either reaches ends the run with the sanitizer's
+    report. The mod tests reach the game's code from mods (calls, hooks, events) that the tour never does (N-1041)."""
     root = pathlib.Path(g.args.build_root) / "asan"
     asan_bin = str(root / "bins")
+    mods = MOD_TESTS.exists()
     if g.check("build/windows-asan", build_windows(g, root=root, bin_dir=asan_bin, sanitize="address")) is False:
         g.missing("tour-asan/d3d12", "the sanitizer build failed", ("build/windows-asan",))
+        if mods:
+            g.missing("mods-asan/d3d12", "the sanitizer build failed", ("build/windows-asan",))
         return
     tour = gate_tour.write(g.work / "tour-asan", None)
     step_hash.with_hash(tour.parent)
     g.check("tour-asan/d3d12", harness(g, tour, "d3d12", "tour-asan", bin_dir=asan_bin), ("build/windows-asan",))
+    if mods:
+        g.check("mods-asan/d3d12", mod_tests(g, "d3d12", bin_dir=asan_bin, label="mods-asan"), ("build/windows-asan",))
 
 
 def run_checks(args, known=None, planned=None, selected=None, dry=False):
