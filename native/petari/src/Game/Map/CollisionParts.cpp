@@ -46,7 +46,22 @@ CollisionParts::CollisionParts()
     mBaseMatrix.identity();
     mMatrix.identity();
     NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
+#if defined(NEBULA_PLAIN_PATHS)
+    mInvPrevBaseMatrix.identity();
+    keepInverses();
+#endif
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+// What the queries made from the matrices at each call (P-132), made when they change: the same operations on the
+// same values. A singular previous matrix leaves the last inverse, as NebulaMtxInverse leaves its output.
+void CollisionParts::keepInverses() {
+    NebulaMtxInverse(mPrevBaseMatrix.toMtxPtr(), mInvPrevBaseMatrix.toMtxPtr());
+    Vec3f scale;
+    mInvBaseMatrix.getScale(scale);
+    mInvAverageScale = (scale.x + scale.y + scale.z) / 3.0f;
+}
+#endif
 
 void CollisionParts::init(const Pos3f& rMatrix, HitSensor* pHitSensor, const void* pKclData, const void* pMapInfo, s32 keeperIndex,
                           bool /*useAutoScale*/) {
@@ -162,6 +177,7 @@ void CollisionParts::resetAllMtxPrivate(const Pos3f& rMatrix) {
     mMatrix.setInline(rMatrix);
     NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
 #if defined(NEBULA_PLAIN_PATHS)
+    keepInverses();
     noteParts(this);
     noteMoved(this);
 #endif
@@ -218,6 +234,7 @@ void CollisionParts::updateMtx() {
             mBaseMatrix.setInline(mMatrix);
             NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
 #if defined(NEBULA_PLAIN_PATHS)
+            keepInverses();
             if (moved) {
                 noteParts(this);
                 noteMoved(this);
@@ -307,9 +324,13 @@ s32 CollisionParts::getPlacementZoneID() const {
 bool CollisionParts::checkStrikePoint(HitInfo* pHitInfo, const Vec3f& rPos) {
     Vec3f localPos;
     mInvBaseMatrix.mult(rPos, localPos);
+#if defined(NEBULA_PLAIN_PATHS)
+    const f32 averageScale = mInvAverageScale;
+#else
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
     f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
+#endif
     f32 distance;
     KC_PrismData* prism = nullptr;
     u8 classification;
@@ -420,15 +441,23 @@ u32 CollisionParts::checkStrikeBall(HitInfo* pHitInfo, u32 maxHits, const Vec3f&
     Pos3f inversePrev;
     Vec3f localPos;
     mInvBaseMatrix.mult(rPos, localPos);
+#if defined(NEBULA_PLAIN_PATHS)
+    const f32 averageScale = mInvAverageScale;
+#else
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
     f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
+#endif
     f32 inverseScale = 1.0f / averageScale;
     radius *= averageScale;
     Vec3f movement(0, 0, 0);
 
     if (checkMovement && mStillCount == 0) {
+#if defined(NEBULA_PLAIN_PATHS)
+        inversePrev = mInvPrevBaseMatrix;
+#else
         NebulaMtxInverse(mPrevBaseMatrix.toMtxPtr(), inversePrev.toMtxPtr());
+#endif
         Vec3f prevPos;
         inversePrev.mult(rPos, prevPos);
         Vec3f localMovement(localPos - prevPos);
@@ -509,9 +538,13 @@ u32 CollisionParts::checkStrikeBallWithThickness(HitInfo* pHitInfo, u32 maxHits,
     u8* const classifications = lists.mClassifications;
     Vec3f localPos;
     mInvBaseMatrix.mult(rPos, localPos);
+#if defined(NEBULA_PLAIN_PATHS)
+    const f32 averageScale = mInvAverageScale;
+#else
     Vec3f scale;
     mInvBaseMatrix.getScale(scale);
     f32 averageScale = (scale.x + scale.y + scale.z) / 3.0f;
+#endif
     f32 scaledRadius = radius * averageScale;
     u32 count = mServer->checkSphereWithThickness(&localPos,scaledRadius, averageScale, maxHits, prisms, distances, classifications, thickness);
     f32 inverseScale = 1.0f / averageScale;

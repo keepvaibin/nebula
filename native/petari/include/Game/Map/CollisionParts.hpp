@@ -70,5 +70,9 @@ public:
 #if defined(NEBULA_PLAIN_PATHS)
     // The zone whose list holds the part (its own zone or the global one), told when the part moves (P-129).
     CollisionZone* mListZone;
+    // Kept when the matrices change (P-132): the previous matrix's inverse, and the average of the inverse's scale.
+    Pos3f mInvPrevBaseMatrix;
+    f32 mInvAverageScale;
+    void keepInverses();
 #endif
 };
