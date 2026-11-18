@@ -3,13 +3,17 @@
 // the caller sees every item's writes when run() returns, passes of every size follow each other at once (a thread that
 // woke late for one pass claims nothing of the next), callers on several threads at once (more than the pool's slots)
 // each get their own items done, and a pool of no threads runs the pass on the caller. An urgent pass published while
-// every thread is inside a long normal pass is taken by those threads between their ranges and ends long before it, and
-// a pass wakes at most half as many threads as it has ranges.
+// every thread is inside a long normal pass (the process held to four processors, on the pool the host makes for them)
+// is taken by those threads between their ranges and ends long before it, and a pass wakes at most half as many threads
+// as it has ranges.
 //
 // --bench: what a pass costs on the pool against its caller alone, for items of a few costs and counts, with the
 // threads awake (passes back to back) and asleep (passes 5 ms apart): the item counts above which a pass gains, which
 // the game's passes take as their ranges' size.
 #include "galaxy/worker_pool.h"
+
+#include "galaxy/cpu_count.h"
+#include "galaxy/windows_api.h"
 
 #include <algorithm>
 #include <atomic>
@@ -19,6 +23,10 @@
 #include <cstring>
 #include <thread>
 #include <vector>
+
+#if defined(__linux__)
+#include <sched.h>
+#endif
 
 namespace {
 
@@ -55,6 +63,38 @@ void spin_for(int micros) {
     const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds(micros);
     while (std::chrono::steady_clock::now() < until) {
     }
+}
+
+// The process held to the first `count` processors it may use (on Linux and Android the calling thread, which threads
+// made after inherit), as a runner of that many or a launcher's affinity would: true when held. Platforms with no
+// affinity, and machines with fewer, are not held.
+bool hold_to(unsigned count) {
+#if defined(_WIN32)
+    DWORD_PTR process_mask = 0;
+    DWORD_PTR system_mask = 0;
+    if (GetProcessAffinityMask(GetCurrentProcess(), &process_mask, &system_mask) == 0) return false;
+    DWORD_PTR held = 0;
+    for (DWORD_PTR rest = process_mask; rest != 0 && count != 0u; rest &= rest - 1u, --count) {
+        held |= rest & (~rest + 1u);  // the lowest processor left
+    }
+    return count == 0u && SetProcessAffinityMask(GetCurrentProcess(), held) != 0;
+#elif defined(__linux__)
+    cpu_set_t allowed;
+    CPU_ZERO(&allowed);
+    if (sched_getaffinity(0, sizeof(allowed), &allowed) != 0) return false;
+    cpu_set_t held;
+    CPU_ZERO(&held);
+    for (int cpu = 0; cpu < CPU_SETSIZE && count != 0u; ++cpu) {
+        if (CPU_ISSET(cpu, &allowed)) {
+            CPU_SET(cpu, &held);
+            --count;
+        }
+    }
+    return count == 0u && sched_setaffinity(0, sizeof(held), &held) == 0;
+#else
+    (void)count;
+    return false;
+#endif
 }
 
 struct Urgent {
@@ -113,10 +153,10 @@ double median_us(std::vector<double>& times) {
 }
 
 int bench() {
-    const unsigned threads = galaxy::WorkerPool::threads_for(std::thread::hardware_concurrency());
+    const unsigned threads = galaxy::WorkerPool::threads_for(galaxy::logical_cores());
     galaxy::WorkerPool pool(threads, nullptr);
     galaxy::WorkerPool none(0u, nullptr);
-    std::printf("bench: %u processors, %u worker threads\n", std::thread::hardware_concurrency(), threads);
+    std::printf("bench: %u processors, %u worker threads\n", galaxy::logical_cores(), threads);
     std::vector<std::uint32_t> out(1u << 16u);
     using clock = std::chrono::steady_clock;
     for (const std::uint32_t iterations : {8u, 64u, 512u}) {
@@ -209,30 +249,62 @@ int main(int argc, char** argv) {
             callers.emplace_back([&pool] { passes(pool, 5000u, 1024u, 16u, "callers at once: every item once"); });
         }
         for (std::thread& caller : callers) caller.join();
-
-        // An urgent pass while every thread is inside a long normal pass (180 items of 2 ms on three threads and its
-        // caller, 90 ms at best): the threads take its ranges between theirs, so it ends first.
-        std::atomic<bool> normal_done{false};
-        std::thread normal_caller([&pool, &normal_done] {
-            pool.run(180u, 1u, [](void*, std::uint32_t first, std::uint32_t last) { spin_for(2000 * static_cast<int>(last - first)); },
-                     nullptr);
-            normal_done.store(true);
-        });
-        spin_for(6000);
-        Urgent urgent;
-        urgent.caller = std::this_thread::get_id();
-        pool.run(32u, 1u, [](void* context, std::uint32_t first, std::uint32_t last) {
-            Urgent& u = *static_cast<Urgent*>(context);
-            for (std::uint32_t i = first; i < last; ++i) {
-                if (std::this_thread::get_id() != u.caller) u.by_pool.fetch_add(1u);
-                spin_for(500);
-            }
-        }, &urgent, WorkerPool::Lane::urgent);
-        const bool first = !normal_done.load();
-        normal_caller.join();
-        check(urgent.by_pool.load() > 0u, "an urgent pass is taken by threads inside a normal pass");
-        check(first, "an urgent pass ends before the long normal pass it was published in");
-        passes(pool, 2000u, kRoom, 64u, "passes after an urgent one: every item once");
+    }
+    {
+        // An urgent pass (the render thread's) while every thread of the pool is inside a long normal pass (the game
+        // thread's), on the pool the host makes for the processors the process may use, so each caller has a processor
+        // of its own as in the game. The process is held to four processors first, as a runner of four is: the pool is
+        // sized from those, not from the machine's (more spinning threads than processors and any thread, a caller too,
+        // waits out the system's whole time slice whatever the pool does; a server's slices are longer than the normal
+        // pass). No thread is spare: the threads take the urgent pass's ranges between their own, so it ends first.
+        if (hold_to(4u)) {
+            check(galaxy::logical_cores() == 4u, "a process held to four processors counts four");
+        }
+        const unsigned threads = WorkerPool::threads_for(galaxy::logical_cores());
+        if (threads == 0u) {
+            std::printf("worker_pool_tests: %u processors give the pool no threads: the urgent lane is not tested\n",
+                        galaxy::logical_cores());
+        } else {
+            // The pool and its two callers (the game thread, the render thread) fit the processors.
+            check(threads + 2u <= galaxy::logical_cores(), "the pool and its two callers fit the processors");
+            WorkerPool pool(threads, nullptr);
+            // The normal pass: 60 items of 2 ms for each thread and its caller (120 ms at best).
+            const std::uint32_t normal_items = 60u * (threads + 1u);
+            using Clock = std::chrono::steady_clock;
+            std::atomic<Clock::rep> normal_end{0};
+            std::thread normal_caller([&pool, &normal_end, normal_items] {
+                pool.run(normal_items, 1u,
+                         [](void*, std::uint32_t first, std::uint32_t last) {
+                             spin_for(2000 * static_cast<int>(last - first));
+                         },
+                         nullptr);
+                normal_end.store(Clock::now().time_since_epoch().count());
+            });
+            spin_for(6000);
+            Urgent urgent;
+            urgent.caller = std::this_thread::get_id();
+            const Clock::time_point published = Clock::now();
+            pool.run(32u, 1u, [](void* context, std::uint32_t first, std::uint32_t last) {
+                Urgent& u = *static_cast<Urgent*>(context);
+                for (std::uint32_t i = first; i < last; ++i) {
+                    if (std::this_thread::get_id() != u.caller) u.by_pool.fetch_add(1u);
+                    spin_for(500);
+                }
+            }, &urgent, WorkerPool::Lane::urgent);
+            const Clock::time_point urgent_end = Clock::now();
+            const bool first = normal_end.load() == 0;
+            normal_caller.join();
+            const auto ms = [published](Clock::time_point at) {
+                return std::chrono::duration<double, std::milli>(at - published).count();
+            };
+            std::printf("worker_pool_tests: %u threads; urgent pass %.1f ms (%u items by the pool), normal pass ends at "
+                        "%.1f ms\n",
+                        threads, ms(urgent_end), urgent.by_pool.load(),
+                        ms(Clock::time_point(Clock::duration(normal_end.load()))));
+            check(urgent.by_pool.load() > 0u, "an urgent pass is taken by threads inside a normal pass");
+            check(first, "an urgent pass ends before the long normal pass it was published in");
+            passes(pool, 2000u, kRoom, 64u, "passes after an urgent one: every item once");
+        }
     }
     check(true, "the pool joins its threads at its end");
 

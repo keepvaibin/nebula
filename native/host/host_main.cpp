@@ -6379,10 +6379,10 @@ int main(int argc, char** argv) {
     services.frame_begun = svc_frame_begun;
     services.save_request = svc_save_request;
     services.save_wait = svc_save_wait;
-    // The worker threads: the processor's count (galaxy::WorkerPool::threads_for), or a test extension's.
+    // The worker threads: threads_for the processors the process may use (galaxy::logical_cores), or a test's count.
     {
         const std::uint32_t tested = galaxy::extensions::worker_threads();
-        const unsigned workers = tested != 0u ? tested - 1u : galaxy::WorkerPool::threads_for(std::thread::hardware_concurrency());
+        const unsigned workers = tested != 0u ? tested - 1u : galaxy::WorkerPool::threads_for(galaxy::logical_cores());
         galaxy::configure_process_workers(workers, &worker_start);
         char text[64];
         std::snprintf(text, sizeof(text), "%u%s", workers, tested != 0u ? " (a test's)" : "");

@@ -30,6 +30,8 @@
 #include <thread>
 #include <vector>
 
+#include "galaxy/cpu_count.h"
+
 #if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
 #include <immintrin.h>
 #endif
@@ -256,7 +258,7 @@ inline std::atomic<unsigned> threads{~0u};
 inline std::atomic<WorkerPool::ThreadStart> start{nullptr};
 }  // namespace process_workers_detail
 
-// The host, before anything calls process_workers(): the pool's threads (default: threads_for the processor count)
+// The host, before anything calls process_workers(): the pool's threads (default: threads_for logical_cores())
 // and what each runs first. A later call changes nothing.
 inline void configure_process_workers(unsigned threads, WorkerPool::ThreadStart start) noexcept {
     process_workers_detail::threads.store(threads, std::memory_order_relaxed);
@@ -268,7 +270,7 @@ inline void configure_process_workers(unsigned threads, WorkerPool::ThreadStart 
 inline WorkerPool& process_workers() {
     static WorkerPool* const pool = [] {
         const unsigned configured = process_workers_detail::threads.load(std::memory_order_relaxed);
-        return new WorkerPool(configured != ~0u ? configured : WorkerPool::threads_for(std::thread::hardware_concurrency()),
+        return new WorkerPool(configured != ~0u ? configured : WorkerPool::threads_for(logical_cores()),
                               process_workers_detail::start.load(std::memory_order_relaxed));
     }();
     return *pool;
