@@ -179,6 +179,9 @@ typedef struct NebulaHostExtension {
     uint32_t (*holds_menus)(void* user);
     /* Nonzero: each write of a save file waits this long first, slow storage (the longest of the extensions'). */
     uint32_t save_write_delay_us;
+    /* Nonzero: each new graphics device after a loss takes this much longer to make, in milliseconds, a slow driver
+       (the longest of the extensions'). */
+    uint32_t device_rebuild_delay_ms;
 } NebulaHostExtension;
 
 typedef const NebulaHostExtension* (*NebulaExtensionAttach)(const NebulaHostForExtension* host);

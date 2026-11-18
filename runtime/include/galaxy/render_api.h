@@ -208,6 +208,8 @@ void native_settings_files_dropped(std::vector<std::filesystem::path> files);
 void native_settings_window_resized(unsigned width, unsigned height);
 // The graphics device lost at the renderer's next frame, as a driver reset loses it (an extension's lose_gpu_device).
 void lose_gpu_device() noexcept;
+// True while the renderer makes a new graphics device after a loss (a test run's stall watchdog leaves that time out).
+[[nodiscard]] bool device_rebuilding() noexcept;
 // Delivers an overlay key to the window thread (controller navigation).
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
 // Delivers a keyboard key to the window thread, as the keyboard gives it (a harness's `key` step): a keyboard binding
