@@ -98,6 +98,36 @@ def main():
         check(0 < source.find("take_gate_lock(lock, holder") < source.find("push_checks(commit)"),
               "the pre-push checks run after the gate lock is taken")
 
+        # The long run takes the lock part by part (Planner 11-18 03:44, condition 4): held during a part, free between
+        # two, and a part that cannot have it within --wait is a failed check that says why.
+        locked_part = getattr(gate, "locked_part", None)
+        check(locked_part is not None, "the long run has parts under the lock")
+        if locked_part is not None:
+            lock_path, board_path = str(lock), str(board)
+
+            class Args:
+                mode, gate_lock, wait, board, who = "long", lock_path, 0, board_path, "Agent 1"
+
+            class FakeGate:
+                dry, args, rows = False, Args(), []
+
+                def record(self, name, state, seconds, detail, log=None):
+                    self.rows.append((name, state, detail))
+
+            g = FakeGate()
+            seen = []
+            check(locked_part(g, "tours", lambda: seen.append(lock.exists()) or "ran") == "ran" and seen == [True],
+                  "a part runs holding the gate lock")
+            check(not lock.exists(), "the lock is free between two parts")
+            lock.mkdir()
+            (lock / "holder.txt").write_text("quick gate by hand (Agent 3) 2026-11-18 04:00:00\n", encoding="utf-8")
+            check(locked_part(g, "tablet", lambda: seen.append("ran")) is None and seen == [True]
+                  and g.rows and g.rows[-1][0] == "part/tablet" and g.rows[-1][1] == "fail",
+                  "a part that cannot have the lock does not run and fails as part/<name>")
+            shutil.rmtree(lock, ignore_errors=True)
+            Args.mode = "main"
+            check(locked_part(g, "x", lambda: lock.exists()) is False, "at the other levels a part takes no lock of its own")
+
         work = t / "runs"
         def quick(name, passed):
             f = work / name

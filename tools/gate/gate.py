@@ -1445,11 +1445,15 @@ def android_lane(g, stops):
     def lane():
         g.android_built = g.args.no_build or g.check("build/android", build_android(g)) is not False
         tablet_part(g, stops)
+    lane.part = "tablet"
     return lane
 
 
 def sanitizer_lane(g):
-    return lambda: sanitizer_part(g)
+    def lane():
+        sanitizer_part(g)
+    lane.part = "sanitizer"
+    return lane
 
 
 def sanitizer_part(g):
@@ -1471,6 +1475,24 @@ def sanitizer_part(g):
         g.check("mods-asan/d3d12", mod_tests(g, "d3d12", bin_dir=asan_bin, label="mods-asan"), ("build/windows-asan",))
 
 
+def locked_part(g, name, fn):
+    """Runs one part of the long run under the gate lock, taken through the queue and freed at the part's end, so a
+    waiting gate runs between two parts (Planner 11-18 03:44, condition 4). Other levels hold the lock for the whole
+    run (main()), so the part just runs. A part whose lock is not had within --wait is a failed check, part/<name>.
+    Returns what fn returns, None when it did not run."""
+    if g.dry or g.args.mode != "long":
+        return fn()
+    holder = "long run part %s of %s pid %d" % (name, TREE.name, os.getpid())
+    held = take_gate_lock(g.args.gate_lock, holder, g.args.wait, g.args.board, g.args.who)
+    if held is not None:
+        g.record("part/" + name, "fail", 0.0, "not run: " + held)
+        return None
+    try:
+        return fn()
+    finally:
+        free_gate_lock(g.args.gate_lock, holder, g.args.board, g.args.who, "part %s done" % name)
+
+
 def run_checks(args, known=None, planned=None, selected=None, dry=False):
     """The level's checks. The build and the unit checks first, one after another; then the parts that start the game
     side by side (section 7), each renderer's engine tests and tours in a lane of their own, each other disc's tour,
@@ -1478,7 +1500,7 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     Gate (its names and needs) without running any."""
     g = Gate(args, dry=dry, known=known, planned=planned, selected=selected)
     level = args.mode
-    if not build_part(g):
+    if not locked_part(g, "build", lambda: build_part(g)):
         g.code = 0 if g.write() else 1
         return g
     quick = level == "quick"
@@ -1511,7 +1533,18 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         lanes.append(android_lane(g, QUICK_STOPS if level == "main" else None))
     if level in ("long", "final"):
         lanes.append(sanitizer_lane(g))
-    g.lanes(lanes)
+    if level == "long":
+        # Part by part under the gate lock: the tours of every renderer and disc side by side, then the tablet, then
+        # the sanitizer build's runs. The soak, started above in processes of its own at below-normal priority, is the
+        # only work that runs beside another gate.
+        tablet = [l for l in lanes if getattr(l, "part", "") == "tablet"]
+        sanitizer = [l for l in lanes if getattr(l, "part", "") == "sanitizer"]
+        tour_lanes = [l for l in lanes if l not in tablet and l not in sanitizer]
+        for name, part in (("tours", tour_lanes), ("tablet", tablet), ("sanitizer", sanitizer)):
+            if part:
+                locked_part(g, name, lambda part=part: g.lanes(part))
+    else:
+        g.lanes(lanes)
     replay_part(g, renderers)
     if level in ("long", "final") and g.wanted("soak", ("build/windows",)) and not g.dry:
         if soak is None:
