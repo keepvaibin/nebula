@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include "galaxy/step_lock.h"
+
 // The display's vsync grid as the game's frame clock, from the vsync callbacks a platform delivers (Android's
 // Choreographer: platform/sdl/display_clock.cpp; Apple's display link: platform/apple/display_clock_apple.mm): the
 // latest vsync, the interval between vsyncs, and the frame slots on that grid. Arithmetic on one monotonic nanosecond
@@ -72,15 +74,15 @@ struct VsyncGrid {
     // period (less half a vsync) after the last slot, or from now when the clock fell behind (a suspended app, a stalled
     // thread), as a display skips the fields it missed. `frame_period`: the period in whole vsyncs. False, and the host's
     // own clock runs the frames, when there is no grid (no vsync yet, or none for a quarter second: out of sight, the
-    // display asleep) or its vsyncs do not divide the period (60, 120, 180 or 240 Hz keep the game at its speed; at
-    // 50, 75 or 90 Hz the host's clock runs it).
-    [[nodiscard]] bool next_slot(std::int64_t period, std::int64_t last, std::int64_t now, std::int64_t& slot,
-                                 std::int64_t& frame_period) const noexcept {
+    // display asleep) or the step does not lock to it (galaxy/step_lock.h: `in_between`, in-between pictures on;
+    // 59.94, 60, 120 or 240 Hz keep the game on the grid with them off; at 50, 61, 75 or 90 Hz the host's clock runs it).
+    [[nodiscard]] bool next_slot(std::int64_t period, std::int64_t last, std::int64_t now, bool in_between,
+                                 std::int64_t& slot, std::int64_t& frame_period) const noexcept {
         if (vsync_ns == 0 || interval_ns == 0 || now - vsync_ns > 250000000) {
             return false;
         }
-        const double vsyncs = static_cast<double>(period) / static_cast<double>(interval_ns);
-        if (std::abs(vsyncs - std::round(vsyncs)) > 0.03 || std::round(vsyncs) < 1.0) {
+        const std::int64_t vsyncs = step_lock_refreshes(period, interval_ns, in_between);
+        if (vsyncs == 0) {
             return false;
         }
         std::int64_t earliest = last + period - interval_ns / 2;
@@ -90,7 +92,7 @@ struct VsyncGrid {
         const std::int64_t ahead = earliest - vsync_ns + interval_ns - 1;
         const std::int64_t steps = ahead > 0 ? ahead / interval_ns : 0;
         slot = vsync_ns + steps * interval_ns;
-        frame_period = std::llround(vsyncs) * interval_ns;
+        frame_period = vsyncs * interval_ns;
         return true;
     }
 

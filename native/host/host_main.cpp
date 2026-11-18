@@ -1071,7 +1071,8 @@ Clock::time_point next_frame_start(Clock::time_point start, std::chrono::nanosec
     const int64_t present_ns = galaxy::render::g_last_present_ns.load(std::memory_order_relaxed);
     const int64_t work_ns = previous_ns != 0 && present_ns > previous_ns ? present_ns - previous_ns : 0;
     previous_ns = start_ns;
-    const int64_t next_ns = phase.next_start(start_ns, work_ns, period.count(), display_refresh());
+    const int64_t next_ns = phase.next_start(start_ns, work_ns, period.count(), display_refresh(),
+                                             galaxy::render::g_in_between_on.load(std::memory_order_relaxed));
     return start + std::chrono::nanoseconds(next_ns - start_ns);
 }
 
@@ -1132,7 +1133,8 @@ void svc_frame_wait(void*) {
         // reached by a precise wait (precise_wait.h: a timer woken late would start the step late).
         std::int64_t due_qpc = 0;
 #if defined(NEBULA_HOST_SDL)
-        const bool vsync = galaxy::sdl::wait_display_frame(period.count(), vsync_ns);
+        const bool vsync = galaxy::sdl::wait_display_frame(period.count(), vsync_ns,
+                                                           galaxy::render::g_in_between_on.load(std::memory_order_relaxed));
         if (vsync) {
             due_qpc = vsync_ns;
         } else {

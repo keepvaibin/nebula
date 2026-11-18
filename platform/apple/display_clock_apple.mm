@@ -162,7 +162,7 @@ void start_clock() {
 
 namespace galaxy::sdl {
 
-bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept {
+bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_between) noexcept {
     std::call_once(g_started, [] { start_clock(); });
     galaxy::VsyncGrid grid;
     {
@@ -173,7 +173,7 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept 
     // keeps the game at its speed.
     std::int64_t target = 0;
     std::int64_t frame_period = 0;
-    if (!grid.next_slot(period_ns, last_ns, now_ns(), target, frame_period)) {
+    if (!grid.next_slot(period_ns, last_ns, now_ns(), in_between, target, frame_period)) {
         g_frame_slot_ns.store(0, std::memory_order_relaxed);
         return false;
     }

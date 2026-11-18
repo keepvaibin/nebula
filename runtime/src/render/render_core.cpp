@@ -2619,6 +2619,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz());
         interp_on_ = renderer_.interpolation_mode();
         const unsigned frames = interp_on_ ? interpolated_frames_per_game_frame(rate) : 0u;
+        g_in_between_on.store(frames != 0u, std::memory_order_relaxed);
         if (frames != interp_frames_) {
             interp_frames_ = frames;
             restart_interp_governors();

@@ -31,7 +31,7 @@ void pump_events(int timeout_ms) noexcept;
 // vsync times predict, so every frame stays on screen for the same number of vsyncs. False, at once, when there are
 // no recent vsyncs (out of sight, not yet shown), the display's rate does not divide the period, or the platform has
 // no display clock: the host's own clock times the frame then.
-bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept;
+bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_between) noexcept;
 // The app out of sight: the display clock asks for no vsyncs (Android's Choreographer callbacks, Apple's display link)
 // until it is let go, so no thread wakes at the display's rate for a game that waits. Any thread.
 void set_display_clock_held(bool held) noexcept;
