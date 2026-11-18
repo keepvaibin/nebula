@@ -13,7 +13,7 @@ The table: UTF-8, tab-separated, one row per string id, one column per language 
 empty cell uses the language's fallback (NebulaText.cpp). In a cell, \\n is a line break and \\\\ a backslash. "L." rows
 are Setup's (installer/native/text.cpp, which finds any row by its English cell): the game's
 table leaves them out. "C." rows (the crash dialog's) and "H." rows (the host's own windows: menus, file dialogs, the
-Mac's setup window), with the rows HOST_ROWS names, are written to runtime/src/host_text_table.inc for the host
+Mac's setup window), with the rows HOST_ROWS and HOST_ROW_PREFIXES name, are written to runtime/src/host_text_table.inc for the host
 (galaxy/host_text.h, which finds a row by its English cell); each English text the hosts pass to host_text must have
 one of them.
 "Validator." rows are the mod validator's (crates/luma-validate, which reads this file at build and checks their named
@@ -31,7 +31,9 @@ TABLE = os.path.join(ROOT, 'localization', 'NebulaText.tsv')
 OUTPUT = os.path.join(ROOT, 'native', 'petari', 'src', 'Game', 'System', 'NebulaTextTable.inc')
 HOST_OUTPUT = os.path.join(ROOT, 'runtime', 'src', 'host_text_table.inc')
 # Rows of Setup the host's windows say too (their id; the host table has every "C." and "H." row besides).
-HOST_ROWS = ('Quit', 'L.CANCEL_0246', 'L.CHOOSE_YOUR_SUPER_MARIO_GALAXY_DISC_IMAGE_0F03', 'L.Android.AboutNebula')
+HOST_ROWS = ('Quit', 'L.CANCEL_0246', 'L.CHOOSE_YOUR_SUPER_MARIO_GALAXY_DISC_IMAGE_0F03', 'L.Android.AboutNebula', 'L.Android.DiscNotGame')
+# The importer's refusals (crates/nebula-import Refusal::id), which every setup shows: the Mac's through host_text.
+HOST_ROW_PREFIXES = ('C.', 'H.', 'L.Android.Refused')
 # Where the hosts call host_text with an English literal (host_text::text, host_text::translated, the Mac's
 # host_ns_text), and host_text.h's named texts.
 HOST_TEXT_CALLS = ['runtime/include/galaxy/host_text.h', 'native/host/host_main.cpp',
@@ -157,7 +159,7 @@ def c_narrow(text):
 
 
 def host_row(row):
-    return row[0].startswith(('C.', 'H.')) or row[0] in HOST_ROWS
+    return row[0].startswith(HOST_ROW_PREFIXES) or row[0] in HOST_ROWS
 
 
 def generate_host():

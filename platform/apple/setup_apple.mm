@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <pthread.h>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <thread>
 
@@ -71,6 +72,33 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
                                           language),
             {gigabytes(kNeeded), gigabytes(free.doubleValue)});
     }
+}
+
+// The importer's refusal (crates/nebula-import Refusal::id: identify's "reason") in the host's language; empty for an
+// id this host does not know.
+std::string refusal_text(std::string_view id) {
+    if (id == "folders-only") return galaxy::host_text::text("This version of Nebula sets up the game from an extracted game folder, not from a disc image.");
+    if (id == "not-a-disc") return galaxy::host_text::text("This file is not a Wii disc image.");
+    if (id == "missing") return galaxy::host_text::text("The file could not be found.");
+    if (id == "not-a-folder") return galaxy::host_text::text("This folder is not an extracted Wii game. Choose the folder that holds sys/main.dol.");
+    if (id == "damaged") return galaxy::host_text::text("This disc image is damaged or incomplete. Make a new copy of the disc, then try again.");
+    if (id == "gamecube") return galaxy::host_text::text("This is a GameCube game, not Super Mario Galaxy.");
+    if (id == "galaxy-2") return galaxy::host_text::text("This is Super Mario Galaxy 2. Nebula plays Super Mario Galaxy.");
+    if (id == "not-galaxy") return galaxy::host_text::text("This is not Super Mario Galaxy.");
+    if (id == "region") return galaxy::host_text::text("It is not Super Mario Galaxy for North America, Europe or Japan.");
+    if (id == "changed") return galaxy::host_text::text("This copy of Super Mario Galaxy is changed or another revision. Nebula needs an unchanged copy of the disc.");
+    if (id == "no-space") return galaxy::host_text::text("The drive is full. Free up space, then try again.");
+    return {};
+}
+
+// What nebula_import_build returned ("<id>\t<English>", or the English alone) as the player is told it.
+std::string build_failure(std::string_view refused) {
+    const std::size_t tab = refused.find('\t');
+    if (tab != std::string_view::npos) {
+        if (std::string text = refusal_text(refused.substr(0, tab)); !text.empty()) return text;
+        return std::string(refused.substr(tab + 1));
+    }
+    return std::string(refused);
 }
 
 }  // namespace
@@ -209,7 +237,8 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
             return std::chrono::duration<double>(std::chrono::steady_clock::now() - began).count();
         };
         std::string failure;
-        // What the image is first: a wrong disc is said in the importer's own words before anything is written.
+        // What the image is first: a wrong disc is said before anything is written, in the host's language where the
+        // importer names its refusal, else in the importer's own words.
         char* const identity = nebula_import_identify(input.c_str());
         bool supported = false;
         if (identity != nullptr) {
@@ -218,7 +247,10 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
                 NSDictionary* const fields = [NSJSONSerialization JSONObjectWithData:json options:0 error:nil];
                 if ([fields isKindOfClass:NSDictionary.class]) {
                     supported = [fields[@"supported"] boolValue];
-                    if (!supported && [fields[@"message"] isKindOfClass:NSString.class]) {
+                    if (!supported && [fields[@"reason"] isKindOfClass:NSString.class]) {
+                        failure = refusal_text([(NSString*)fields[@"reason"] UTF8String]);
+                    }
+                    if (!supported && failure.empty() && [fields[@"message"] isKindOfClass:NSString.class]) {
                         failure = [(NSString*)fields[@"message"] UTF8String];
                     }
                 }
@@ -251,7 +283,7 @@ std::string room_for_the_game(const std::filesystem::path& folder, double replac
             char* const refused = nebula_import_build(input.c_str(), partial.c_str(), &import_progress, nullptr);
             std::fprintf(stderr, "[setup] game.pak built in %.1f s\n", seconds());
             if (refused != nullptr) {
-                failure = g_cancel.load(std::memory_order_relaxed) ? galaxy::host_text::text("Stopped.") : std::string(refused);
+                failure = g_cancel.load(std::memory_order_relaxed) ? galaxy::host_text::text("Stopped.") : build_failure(refused);
                 nebula_import_free(refused);
                 std::filesystem::remove(partial, error);
             } else {
