@@ -159,6 +159,8 @@ def main():
         check(tuple(long_needs.get("mods-asan/d3d12", ())) == ("build/windows-asan",),
               "long: the mod tests on the sanitizer build: %s" % (long_needs.get("mods-asan/d3d12"),))
         # The short measurement set runs at the long run's end (N-1043): a check of its own, not a planned one.
+        check(tuple(long_needs.get("coverage", ())) == ("build/windows-coverage",) and "build/windows-coverage" in lg,
+              "long: the coverage build's report runs: %s" % (long_needs.get("coverage"),))
         check(tuple(long_needs.get("measure/short", ())) == ("build/windows",),
               "long: the short measurement set runs: %s" % (long_needs.get("measure/short"),))
         check((m | lg) <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))

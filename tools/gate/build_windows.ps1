@@ -10,6 +10,8 @@
 # -Sanitize address,undefined: the game modules built with those sanitizers (native/CMakeLists.txt NEBULA_SANITIZE),
 # their runtime (LLVM's clang_rt.asan_dynamic) in the bin folder. The programs stay as they are: one AddressSanitizer
 # runtime serves a process, and Microsoft's compiler would bring its own. Use a ROOT of its own.
+# -Coverage: the game modules count the lines and functions they run (native/CMakeLists.txt NEBULA_COVERAGE), each
+# process writing them where LLVM_PROFILE_FILE says (tools/gate/coverage.py). Use a ROOT of its own.
 param(
     [Parameter(Mandatory = $true)][string]$Tree,
     [Parameter(Mandatory = $true)][string]$Root,
@@ -24,6 +26,7 @@ param(
     [string]$SeedFrom = "",
     # Sanitizers for the game modules (clang -fsanitize=...), e.g. address,undefined; empty for none.
     [string]$Sanitize = "",
+    [switch]$Coverage,
     # The compiler cache in front of clang and cl (N-1049): one cache for every tree and build folder beside these,
     # their paths taken out of what it hashes (SCCACHE_BASEDIRS), so a file another tree compiled the same way is not
     # compiled again. Empty, or no such program: none.
@@ -95,12 +98,14 @@ if (-not (Test-Path "$game/build.ninja") -or (Launcher-Differs $game)) {
     Step "game configure" ("`"$cmake`" -S `"$Tree/native`" -B `"$game`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$ninja`" $launch" +
         "-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=`"$Llvm/clang.exe`" -DCMAKE_CXX_COMPILER=`"$Llvm/clang++.exe`" " +
         "-DCMAKE_RC_COMPILER=`"$Llvm/llvm-rc.exe`" -DNEBULA_PETARI_DIR=`"$Tree/native/petari`" " +
-        "-DNEBULA_SANITIZE=`"$Sanitize`"") "$Root/game.configure.log"
+        "-DNEBULA_SANITIZE=`"$Sanitize`" -DNEBULA_COVERAGE=$(if ($Coverage) { 'ON' } else { 'OFF' })") "$Root/game.configure.log"
 }
 $configured = (Select-String -Path "$game/CMakeCache.txt" -Pattern '^NEBULA_SANITIZE:STRING=(.*)$' -ErrorAction SilentlyContinue |
     Select-Object -First 1)
 $have = if ($configured) { $configured.Matches[0].Groups[1].Value } else { "" }
 if ($have -ne $Sanitize) { "game: $game was configured with NEBULA_SANITIZE='$have', asked for '$Sanitize'"; exit 1 }
+$counted = [bool](Select-String -Path "$game/CMakeCache.txt" -Pattern '^NEBULA_COVERAGE:BOOL=ON$' -Quiet -ErrorAction SilentlyContinue)
+if ($counted -ne [bool]$Coverage) { "game: $game was configured with NEBULA_COVERAGE=$counted, asked for $([bool]$Coverage)"; exit 1 }
 # The game and the MSVC build run side by side, each with half the jobs.
 $half = [Math]::Max(2, [int]($Jobs / 2))
 $gameWatch = [Diagnostics.Stopwatch]::StartNew()

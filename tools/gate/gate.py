@@ -506,17 +506,17 @@ def parse_scripts(g):
     return fn
 
 
-def build_windows(g, root=None, bin_dir=None, sanitize=""):
+def build_windows(g, root=None, bin_dir=None, sanitize="", coverage=False):
     """The game modules (clang) and every Windows program with the unit tests and the test extension (MSVC), into the
-    build root; then the bin folder the harness runs. `sanitize`: the game modules with those sanitizers, in a build
-    root and bin folder of their own."""
+    build root; then the bin folder the harness runs. `sanitize`: the game modules with those sanitizers, `coverage`:
+    counting the lines and functions they run, each in a build root and bin folder of its own."""
     root, bin_dir = root or g.args.build_root, bin_dir or g.bin
 
     def fn(log):
         seed = ["-SeedFrom", g.args.seed_from] if g.args.seed_from else []
         code = run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", HERE / "build_windows.ps1",
                     "-Tree", TREE, "-Root", root, "-Bin", bin_dir, "-Pak", g.args.pak, "-Jobs", g.args.jobs, *seed]
-                   + (["-Sanitize", sanitize] if sanitize else []), log)
+                   + (["-Sanitize", sanitize] if sanitize else []) + (["-Coverage"] if coverage else []), log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         fails = [l for l in text.splitlines() if l.startswith("FAILED:")]
         if code != 0 or fails:
@@ -671,17 +671,17 @@ HARNESS_SELF = sorted([*(TREE / "tools" / "lumacore").glob("harness_*_test.py"),
 DESCRIPTION_SELF = sorted((TREE / "tools" / "lumacore").glob("*_fixture_test.py"))
 
 
-def harness(g, suite, renderer, label, device=None, bin_dir=None):
+def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None):
     """One harness suite on one renderer, on this computer or on an Android device (its serial; the test app
     prepared and the device's lock held by the gate). Passes when every test in it passed (a test whose disc has no
     pak is not-run, which is not a pass). Its verdicts go with it when every test of the suite reported one, so the
-    known-failures list can be applied."""
+    known-failures list can be applied. `env`: more for the games' environment (the coverage build's counts)."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
         on_device = ["--device", device, "--bin", g.android_bin] if device else ["--bin", bin_dir or g.bin]
         code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools/lumacore/luma_test.py", "run", suite]
                    + on_device + ["--work", work, "--who", "gate", "--lock", g.work / ("harness-%s-%s.lock" % (label, renderer)),
-                                  "--commit", g.commit, "--renderer", renderer], log, env={"LUMA_TEST_PAKS": g.args.paks},
+                                  "--commit", g.commit, "--renderer", renderer], log, env=dict(env or {}, LUMA_TEST_PAKS=g.args.paks),
                    cwd=g.args.build_root)
         # The run's copies of the programs are not evidence: removed so the drive does not fill.
         for d in work.rglob("bin"):
@@ -1003,15 +1003,15 @@ def pictures(g, label, renderer):
 MOD_TESTS = TREE / "tools" / "lumacore" / "mod_tests.py"
 
 
-def mod_tests(g, renderer, bin_dir=None, label="mods"):
+def mod_tests(g, renderer, bin_dir=None, label="mods", more_env=None):
     """The mod tests on one renderer, through the mods' own entry point (it builds the test mods with LumaLink, then
     runs them side by side, --mod-parallel at a time, each game in its own folder): every suite of tests/mods and of
     the pinned LumaLink's tests/game, or at the quick level the quick set (tests/mods/quick.json, one or more of every
-    suite). `bin_dir`: another build's bin folder (the sanitizer build's), `label` its runs' name. Passes when it exits
-    0; its rows name each test that did not pass."""
+    suite). `bin_dir`: another build's bin folder (the sanitizer build's), `label` its runs' name, `more_env` more for
+    the games' environment. Passes when it exits 0; its rows name each test that did not pass."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
-        env = {"LUMA_TEST_PAKS": g.args.paks}
+        env = dict(more_env or {}, LUMA_TEST_PAKS=g.args.paks)
         if g.args.lumalink:
             env["LUMALINK"] = g.args.lumalink
         else:
@@ -1610,6 +1610,72 @@ def sanitizer_part(g):
         g.check("mods-asan/d3d12", mod_tests(g, "d3d12", bin_dir=asan_bin, label="mods-asan"), ("build/windows-asan",))
 
 
+LLVM_BIN = pathlib.Path(os.environ.get("NEBULA_LLVM_BIN", "C:/Program Files/LLVM/bin"))
+
+
+def coverage_lane(g):
+    def lane():
+        coverage_part(g)
+    lane.part = "coverage"
+    return lane
+
+
+def coverage_part(g):
+    """Which game code no test runs (tools/gate/coverage.py, file 04 3.3, N-1042): the game modules built counting the
+    lines and functions they run (build_windows.ps1 -Coverage, a build root of its own) play the engine tests, the
+    tour and every mod test on Direct3D 12, each game writing its counts; then the list of what none of them ran and
+    the share of lines run, which may not fall below the last long run's (gate-runs/coverage-history.tsv)."""
+    root = pathlib.Path(g.args.build_root) / "coverage"
+    bin_dir = str(root / "bins")
+    if g.check("build/windows-coverage", build_windows(g, root=root, bin_dir=bin_dir, coverage=True)) is False:
+        g.missing("coverage", "the coverage build failed", ("build/windows-coverage",))
+        return
+    tour = gate_tour.write(g.work / "tour-coverage", None)
+    step_hash.with_hash(tour.parent)
+    g.check("coverage", coverage_check(g, bin_dir, tour), ("build/windows-coverage",))
+
+
+def coverage_check(g, bin_dir, tour):
+    """The counting runs, then the report. The runs' own verdicts are the other checks' business (the same tests run
+    there on the players' build); here they say only what ran."""
+    def fn(log):
+        out = g.work / "coverage"
+        counts = out / "counts"
+        shutil.rmtree(counts, ignore_errors=True)
+        counts.mkdir(parents=True)
+        # %m: one file per module (smg_game, smg_game_plain), %p: per process.
+        env = {"LLVM_PROFILE_FILE": str(counts / "game-%m-%p.profraw")}
+        runs = [("engine", harness(g, TREE / "tests" / "engine" / "suite.json", "d3d12", "engine-coverage",
+                                   bin_dir=bin_dir, env=env)),
+                ("tour", harness(g, tour, "d3d12", "tour-coverage", bin_dir=bin_dir, env=env))]
+        if MOD_TESTS.exists():
+            runs.append(("mods", mod_tests(g, "d3d12", bin_dir=bin_dir, label="mods-coverage", more_env=env)))
+        said = []
+        for name, part in runs:
+            said.append("%s %s" % (name, part(out / ("%s.log" % name))[1]))
+        with open(log, "a", encoding="utf-8") as f:
+            f.write("runs: %s\n" % "; ".join(said))
+        raws = sorted(counts.glob("*.profraw"))
+        if not raws:
+            return False, "no game wrote counts; runs: " + "; ".join(said)
+        llvm = LLVM_BIN
+        merged = out / "game.profdata"
+        if run([llvm / "llvm-profdata.exe", "merge", "-o", merged] + raws, log) != 0:
+            return False, "llvm-profdata merge failed"
+        modules = [pathlib.Path(bin_dir) / m for m in ("smg_game.dll", "smg_game_plain.dll")
+                   if (pathlib.Path(bin_dir) / m).exists()]
+        binaries = [a for m in modules for a in ("--binary", m)]
+        code = run([sys.executable, "-X", "utf8", "-I", HERE / "coverage.py", "report", *binaries, "--profile", merged,
+                    "--work", out, "--root", TREE, "--history", pathlib.Path(g.args.work) / "coverage-history.tsv",
+                    "--commit", g.commit, "--llvm", llvm], log)
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        line = next((l for l in reversed(text.splitlines()) if l.startswith("coverage: ")), "coverage: no report")
+        # The counts are large and made again each run; the lists stay with the results.
+        shutil.rmtree(counts, ignore_errors=True)
+        return code == 0, "%s (%d processes)" % (line[len("coverage: "):], len(raws))
+    return fn
+
+
 def locked_part(g, name, fn):
     """Runs one part of the long run under the gate lock, taken through the queue and freed at the part's end, so a
     waiting gate runs between two parts (Planner 11-18 03:44, condition 4). Other levels hold the lock for the whole
@@ -1668,15 +1734,14 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         # The main level's tablet part is the twelve quick stops; the long run's (and the final check's) all of them.
         lanes.append(android_lane(g, QUICK_STOPS if level == "main" else None))
     if level in ("long", "final"):
-        lanes.append(sanitizer_lane(g))
+        lanes += [sanitizer_lane(g), coverage_lane(g)]
     if level == "long":
         # Part by part under the gate lock: the tours of every renderer and disc side by side, then the tablet, then
-        # the sanitizer build's runs. The soak, started above in processes of its own at below-normal priority, is the
-        # only work that runs beside another gate.
-        tablet = [l for l in lanes if getattr(l, "part", "") == "tablet"]
-        sanitizer = [l for l in lanes if getattr(l, "part", "") == "sanitizer"]
-        tour_lanes = [l for l in lanes if l not in tablet and l not in sanitizer]
-        for name, part in (("tours", tour_lanes), ("tablet", tablet), ("sanitizer", sanitizer)):
+        # the sanitizer build's runs, then the coverage build's. The soak, started above in processes of its own at
+        # below-normal priority, is the only work that runs beside another gate.
+        apart = {n: [l for l in lanes if getattr(l, "part", "") == n] for n in ("tablet", "sanitizer", "coverage")}
+        tour_lanes = [l for l in lanes if not getattr(l, "part", "")]
+        for name, part in (("tours", tour_lanes),) + tuple(apart.items()):
             if part:
                 locked_part(g, name, lambda part=part: g.lanes(part))
     else:

@@ -187,9 +187,12 @@ endif()
 # plain one when no enabled mod has code (runtime/src/game_module.cpp). Everything else about them is the same, in
 # smg_game_common. OFF: one module, as before (a build that needs only the rows one).
 option(NEBULA_LUMA_PLAIN_MODULE "Also build smg_game_plain, the game without rows, for a start with no mod code" ON)
+# Coverage builds (tests only, N-1042): the modules count every line and function they run (clang's source-based
+# coverage, written where LLVM_PROFILE_FILE says); tools/gate/coverage.py lists what no test ran.
+option(NEBULA_COVERAGE "Count the lines and functions the game modules run (a test build)" OFF)
 # A sanitizer's runtime and the profile counters' need the C runtime in the module (below).
 set(nebula_module_with_crt OFF)
-if(WIN32 AND (NEBULA_SANITIZE OR CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate"))
+if(WIN32 AND (NEBULA_SANITIZE OR NEBULA_COVERAGE OR CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate"))
     set(nebula_module_with_crt ON)
 endif()
 set(game_runtime_sources
@@ -441,6 +444,13 @@ if(NEBULA_SANITIZE)
         set_source_files_properties("${petari}/src/Game/System/NebulaArena.cpp" PROPERTIES COMPILE_OPTIONS "-fno-sanitize=address"
                                     COMPILE_DEFINITIONS NEBULA_ASAN_HEAPS=1)
     endif()
+endif()
+if(NEBULA_COVERAGE)
+    if(NEBULA_PGO OR NEBULA_LTO)
+        message(FATAL_ERROR "NEBULA_COVERAGE counts the code as written: build it without NEBULA_PGO and NEBULA_LTO")
+    endif()
+    target_compile_options(smg_game_common INTERFACE -fprofile-instr-generate -fcoverage-mapping)
+    target_link_options(smg_game_common INTERFACE -fprofile-instr-generate)
 endif()
 
 # The native game's host (host/host_main.cpp): loads the module and serves it. Built with the host's own C++ library.
