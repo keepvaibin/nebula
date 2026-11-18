@@ -145,10 +145,9 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             return harness;
         }
         // Record diagnostics (the launcher's, or the game's restart for it): the next normal run only.
-        final SharedPreferences prefs = GameFiles.controls(this);
-        final boolean record = isProfileRun() || prefs.getBoolean(GameFiles.RECORD_NEXT_RUN, false);
+        final boolean record = isProfileRun() || GameFiles.recordNextRun(this);
         if (record && !isProfileRun()) {
-            prefs.edit().remove(GameFiles.RECORD_NEXT_RUN).commit();
+            GameFiles.setRecordNextRun(this, false);
         }
         // The native game's settings, saves and log: the app's private storage. The mods that come with the app are
         // installed by the game from where they were unpacked.
@@ -722,7 +721,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
         runOnUiThread(() -> {
             final Intent intent = new Intent(getIntent());
             if (kind == 2) {
-                GameFiles.controls(this).edit().putBoolean(GameFiles.RECORD_NEXT_RUN, true).commit();
+                GameFiles.setRecordNextRun(this, true);
             }
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);

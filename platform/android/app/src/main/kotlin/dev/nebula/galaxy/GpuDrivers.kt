@@ -68,12 +68,12 @@ object GpuDrivers {
     /** The driver the game starts with; null: the system's. */
     fun selected(context: Context): GpuDriver? {
         if (!supported()) return null
-        val id = GameFiles.controls(context).getString(SELECTED, null) ?: return null
+        val id = GameFiles.launcher(context).getString(SELECTED, null) ?: return null
         return list(context).firstOrNull { it.id == id }
     }
 
     fun select(context: Context, driver: GpuDriver?) {
-        val edit = GameFiles.controls(context).edit()
+        val edit = GameFiles.launcher(context).edit()
         if (driver == null) edit.remove(SELECTED) else edit.putString(SELECTED, driver.id)
         edit.commit()
     }

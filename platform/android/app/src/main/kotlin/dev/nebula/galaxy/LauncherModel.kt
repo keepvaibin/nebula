@@ -68,7 +68,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     var license by mutableStateOf<License?>(null)
 
     /** The next run records diagnostics in its log, to share after it. */
-    var recordNextRun by mutableStateOf(GameFiles.controls(application).getBoolean(GameFiles.RECORD_NEXT_RUN, false))
+    var recordNextRun by mutableStateOf(GameFiles.recordNextRun(application))
         private set
 
     /** The graphics drivers the player imported, and the one the game starts with (null: the system's). */
@@ -259,7 +259,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     fun updateRecordNextRun(value: Boolean) {
         recordNextRun = value
-        GameFiles.controls(app).edit().putBoolean(GameFiles.RECORD_NEXT_RUN, value).commit()
+        GameFiles.setRecordNextRun(app, value)
     }
 
     val imports = Imports.state
@@ -420,7 +420,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         install = Install.read(app)
         outdated = Install.outdated(app)
         freeBytes = Storage.freeBytes(app)
-        recordNextRun = GameFiles.controls(app).getBoolean(GameFiles.RECORD_NEXT_RUN, false)
+        recordNextRun = GameFiles.recordNextRun(app)
         viewModelScope.launch(Dispatchers.IO) {
             val saves = Storage.saveBytes(app)
             withContext(Dispatchers.Main) { saveBytes = saves }
@@ -503,7 +503,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     /** From the launcher's activity, so the game joins its task and ends back here. */
     fun launchGame(activity: Context) {
-        GameFiles.controls(app).edit().putLong(LAUNCHED_AT, System.currentTimeMillis()).commit()
+        GameFiles.launcher(app).edit().putLong(LAUNCHED_AT, System.currentTimeMillis()).commit()
         activity.startActivity(Intent(activity, GameActivity::class.java)
             .putStringArrayListExtra(GpuDrivers.EXTRA, ArrayList(GpuDrivers.launchArguments(app))))
     }
@@ -513,11 +513,11 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         GpuDrivers.failedStart(app)?.let { name ->
             gpuDrivers = GpuDrivers.list(app)
             gpuDriver = GpuDrivers.selected(app)
-            GameFiles.controls(app).edit().remove(LAUNCHED_AT).apply()
+            GameFiles.launcher(app).edit().remove(LAUNCHED_AT).apply()
             gameExit = GameExit(app.getString(R.string.DriverFailed), app.getString(R.string.DriverFailedText, name), GameFiles.log(app).isFile)
             return
         }
-        val prefs = GameFiles.controls(app)
+        val prefs = GameFiles.launcher(app)
         val launchedAt = prefs.getLong(LAUNCHED_AT, 0L)
         if (launchedAt == 0L) return
         prefs.edit().remove(LAUNCHED_AT).apply()
