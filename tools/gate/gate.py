@@ -408,8 +408,14 @@ def stop_runs(why):
         end_tree(process)
 
 
+# Per lane thread: below_normal starts a lane's programs at below-normal priority (the CPU-only checks beside the game
+# lanes, so a game run never waits for a compiler).
+LANE = threading.local()
+
+
 def run(cmd, log, env=None, cwd=None, timeout=None):
-    """Runs cmd with its output in log; returns the exit code (124: timed out; 125: stopped, stop_runs)."""
+    """Runs cmd with its output in log; returns the exit code (124: timed out; 125: stopped, stop_runs). In a lane that
+    asks it (LANE.below_normal), the program and its children run at below-normal priority."""
     with open(log, "ab") as f:
         f.write(("$ %s\n" % " ".join(str(c) for c in cmd)).encode())
         f.flush()
@@ -418,7 +424,9 @@ def run(cmd, log, env=None, cwd=None, timeout=None):
             return 125
         e = dict(os.environ)
         e.update(env or {})
-        process = subprocess.Popen([str(c) for c in cmd], stdout=f, stderr=subprocess.STDOUT, env=e, cwd=cwd)
+        flags = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0) if getattr(LANE, "below_normal", False) else 0
+        process = subprocess.Popen([str(c) for c in cmd], stdout=f, stderr=subprocess.STDOUT, env=e, cwd=cwd,
+                                   creationflags=flags)
         with CHILDREN_LOCK:
             CHILDREN.add(process)
         try:
@@ -1381,24 +1389,37 @@ def build_part(g):
     return g.check("build/windows", build_windows(g)) is not False
 
 
-def unit_part(g, discs_proved):
+def unit_part(g):
+    """The unit tests and the start checks: they prove the bins every lane after them runs."""
     g.check("unit/windows", unit_tests(g), ("build/windows",))
     g.check("unit/game", game_tests(g), ("build/windows",))
     for r in RENDERERS:
         g.check("start/%s" % r, start_check(g, r), ("build/windows",))
-    g.check("rust", rust_tests(g))
-    g.check("lumalink", lumalink_tests(g), ("build/windows",))
-    # The cooked collision against each disc's (P-169).
-    discs = disc_images(g.args.discs)
-    for disc in discs_proved:
-        if disc in discs:
-            g.check("import/collision/%s" % disc, collision_proof(g, discs[disc]), ("build/windows",))
-        else:
-            g.missing("import/collision/%s" % disc, "no %s image in %s (--discs)" % (disc, g.args.discs))
-    g.check("harness/self", scripts(g, HARNESS_SELF, ("--work", "{out}")))
-    commands = pathlib.Path(g.args.build_root) / "game" / "compile_commands.json"
-    g.check("description/self", scripts(g, DESCRIPTION_SELF, ("--commands", str(commands), "--out", "{out}")),
-            ("build/windows",))
+
+
+def cpu_lane(g, discs_proved):
+    """The checks that start no game (Rust, LumaLink, the collision proof, the harness's and the descriptions' own
+    tests): a lane beside the game lanes at below-normal priority (N-1070). One after another they held the quick gate
+    for 500 s before any game ran."""
+    def lane():
+        LANE.below_normal = True
+        try:
+            g.check("rust", rust_tests(g))
+            g.check("lumalink", lumalink_tests(g), ("build/windows",))
+            # The cooked collision against each disc's (P-169).
+            discs = disc_images(g.args.discs)
+            for disc in discs_proved:
+                if disc in discs:
+                    g.check("import/collision/%s" % disc, collision_proof(g, discs[disc]), ("build/windows",))
+                else:
+                    g.missing("import/collision/%s" % disc, "no %s image in %s (--discs)" % (disc, g.args.discs))
+            g.check("harness/self", scripts(g, HARNESS_SELF, ("--work", "{out}")))
+            commands = pathlib.Path(g.args.build_root) / "game" / "compile_commands.json"
+            g.check("description/self", scripts(g, DESCRIPTION_SELF, ("--commands", str(commands), "--out", "{out}")),
+                    ("build/windows",))
+        finally:
+            LANE.below_normal = False
+    return lane
 
 
 def engine_lane(g, r):
@@ -1507,14 +1528,15 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     every = level in ("main", "final")
     renderers = ("d3d12",) if quick else RENDERERS
     if level != "long":
-        unit_part(g, ("RMGE01",) if quick else ("RMGE01",) + REGION_DISCS)
+        unit_part(g)
     if level != "long" and not MOD_TESTS.exists():
         g.missing("mods", "the mod tests are not in the tree (tools/lumacore/mod_tests.py, mods M0)")
     soak = start_soak(g) if level in ("long", "final") and not g.dry and g.wanted("soak", ("build/windows",)) else None
     tours = write_tours(g, QUICK_STOPS if quick else None, QUICK_REGION_STOPS if quick else None)
     # Region discs: Direct3D 12 at the quick and main levels; every renderer in the long run and the final check.
     region_renderers = RENDERERS if level in ("long", "final") else ("d3d12",)
-    lanes = []
+    # The CPU-only checks first in the list, so their rows read where they always did.
+    lanes = [cpu_lane(g, ("RMGE01",) if quick else ("RMGE01",) + REGION_DISCS)] if level != "long" else []
     for r in renderers:
         def renderer_lane(r=r):
             if level != "long":

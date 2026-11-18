@@ -210,6 +210,45 @@ def main():
         ok, detail = gate.github_wait("gate/x", "abc", state_of=lambda b, c: ("in_progress", green[:2]), sleep=tick,
                                       clock=lambda: now[0], log=t / "gh2.log")
         check(not ok and "120 minutes" in detail and now[0] >= 7200, "the wait has a limit: %s" % detail)
+        # N-1070: the CPU-only checks run in a lane beside the game lanes, their programs at below-normal priority;
+        # the unit tests and start checks stay before every lane.
+        import inspect
+        cpu_lane = getattr(gate, "cpu_lane", None)
+        check(cpu_lane is not None, "the CPU-only checks have a lane of their own")
+        if cpu_lane is not None:
+            source = inspect.getsource(gate.run_checks)
+            check(source.find("cpu_lane(") < source.find("g.lanes(lanes)") and "rust" not in inspect.getsource(gate.unit_part),
+                  "the lane is among the game lanes and the unit part runs no CPU-only check")
+            seen = []
+
+            class CpuArgs:
+                discs, build_root, jobs = str(t / "no-discs"), str(t), "1"
+
+            class CpuGate:
+                args = CpuArgs()
+
+                def check(self, name, fn, needs=()):
+                    seen.append((name, getattr(gate.LANE, "below_normal", False)))
+
+                def missing(self, name, why, needs=()):
+                    seen.append((name, getattr(gate.LANE, "below_normal", False)))
+
+            cpu_lane(CpuGate(), ("RMGE01",))()
+            check([n for n, _ in seen] == ["rust", "lumalink", "import/collision/RMGE01", "harness/self", "description/self"]
+                  and all(low for _, low in seen) and not getattr(gate.LANE, "below_normal", False),
+                  "the lane's checks run in order at below-normal priority, and the lane gives the flag back")
+            if os.name == "nt":
+                out = t / "priority.log"
+                gate.LANE.below_normal = True
+                try:
+                    gate.run([sys.executable, "-c", "import ctypes; k = ctypes.windll.kernel32; "
+                              "k.GetCurrentProcess.restype = ctypes.c_void_p; k.GetPriorityClass.argtypes = [ctypes.c_void_p]; "
+                              "print('class', k.GetPriorityClass(k.GetCurrentProcess()))"], str(out))
+                finally:
+                    gate.LANE.below_normal = False
+                check("class 16384" in out.read_text(encoding="utf-8", errors="replace"),
+                      "a program the lane starts runs at below-normal priority (16384)")
+
         # --github-wait (Planner 11-18 03:49): 120 unless a candidate asks more, and the move's wait takes it.
         args = gate.parser().parse_args(["--main", "--move"])
         longer = gate.parser().parse_args(["--main", "--move", "--github-wait", "180"])             if "--github-wait" in gate.parser().format_help() else None
