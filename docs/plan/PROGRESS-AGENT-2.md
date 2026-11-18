@@ -168,3 +168,17 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
 - events_page_test.py (M-111) ended in FileNotFoundError when given a --work folder that did not exist (the gate makes
   it first): 1ee8d0663.
 - N-2042 open: four ui tests have no Direct3D 11 reference pictures (harness-error on d3d11 in every gate).
+
+## 2026-11-17 N-2047, N-2048: answers at a fixed frame; mods/m2 on Agent 1's branch
+
+- mods/m2 is rebased on engine/n1011 e76e79c4f (Agent 1's joined branch for the first move of main). The gate's
+  lumalink check and the mods lanes are carried onto his new gate.py (lanes, checks with needs): the mods lanes run the
+  quick set at the quick level and --mod-parallel tests at once (2), and one helper builds the pinned LumaLink once for
+  the lumalink check and every lane. planned.tsv names N-2043 to N-2046. gate_levels_test and gate_lock_test pass.
+- N-2047 and N-2048 fixed d363f6b7c: fs's worker and assets' cooking thread posted their answers when done, so in fixed
+  steps the frame a mod got them followed the disk's and the cooker's speed (fs/2301: frame 12 alone, 11 side by side;
+  a 32 MiB cook: frame 16). Both now have the kernel's deterministic-mode frame_start, as net has: a request or cook
+  asked in one frame is answered at the next frame's start. fs/2301 and assets/2807 pin those frames and fail before.
+  The fs and assets suites: 22 of 22, the same one at a time and four at a time (D:/NebulaWork/build/a2-fsdet).
+  Every other provider that posts from its own thread was read: net had it already, system answers on the game thread
+  in deterministic mode, capture and input read devices the tests do not have.
