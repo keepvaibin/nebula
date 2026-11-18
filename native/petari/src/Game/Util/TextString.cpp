@@ -3,25 +3,58 @@
 namespace MR {
     size_t utf8ToText(char16_t* pDst, const char* pSrc) {
         const unsigned char* p = reinterpret_cast< const unsigned char* >(pSrc);
-        const auto follows = [](unsigned char b) { return (b & 0xC0) == 0x80; };
         size_t length = 0;
-        while (*p != 0) {
-            unsigned int c = *p++;
-            if (c >= 0xF0 && c <= 0xF4 && follows(p[0]) && follows(p[1]) && follows(p[2])) {
-                p += 3;
-                c = 0xFFFD;
-            } else if (c >= 0xE0 && c < 0xF0 && follows(p[0]) && follows(p[1])) {
-                c = ((c & 0x0F) << 12) | ((p[0] & 0x3F) << 6) | (p[1] & 0x3F);
-                p += 2;
-            } else if (c >= 0xC2 && c < 0xE0 && follows(p[0])) {
-                c = ((c & 0x1F) << 6) | (p[0] & 0x3F);
-                p += 1;
-            } else if (c >= 0x80) {
-                c = 0xFFFD;
+        const auto put = [&](unsigned int unit) {
+            if (pDst != nullptr) {
+                pDst[length] = static_cast< char16_t >(unit);
             }
-            pDst[length++] = static_cast< char16_t >(c);
+            length++;
+        };
+        while (*p != 0) {
+            const unsigned int lead = *p++;
+            // The Encoding Standard's UTF-8 decoder: the bytes a lead takes and the range of its second byte (no
+            // overlong form, no surrogate's own code, nothing past U+10FFFF).
+            unsigned int more = 0;
+            unsigned int low = 0x80;
+            unsigned int high = 0xBF;
+            unsigned int c = lead;
+            if (lead >= 0xC2 && lead <= 0xDF) {
+                more = 1;
+                c = lead & 0x1F;
+            } else if (lead >= 0xE0 && lead <= 0xEF) {
+                more = 2;
+                c = lead & 0x0F;
+                low = lead == 0xE0 ? 0xA0 : 0x80;
+                high = lead == 0xED ? 0x9F : 0xBF;
+            } else if (lead >= 0xF0 && lead <= 0xF4) {
+                more = 3;
+                c = lead & 0x07;
+                low = lead == 0xF0 ? 0x90 : 0x80;
+                high = lead == 0xF4 ? 0x8F : 0xBF;
+            } else if (lead >= 0x80) {
+                put(0xFFFD);
+                continue;
+            }
+            // A sequence cut short is one U+FFFD; the byte that cut it starts the next character.
+            for (; more > 0; more--) {
+                if (*p < low || *p > high) {
+                    c = 0xFFFD;
+                    break;
+                }
+                c = (c << 6) | (*p++ & 0x3F);
+                low = 0x80;
+                high = 0xBF;
+            }
+            if (c >= 0x10000) {
+                put(0xD800 + ((c - 0x10000) >> 10));
+                put(0xDC00 + ((c - 0x10000) & 0x3FF));
+            } else {
+                put(c);
+            }
         }
-        pDst[length] = 0;
+        if (pDst != nullptr) {
+            pDst[length] = 0;
+        }
         return length;
     }
 }  // namespace MR

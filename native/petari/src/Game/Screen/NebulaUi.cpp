@@ -16,6 +16,7 @@
 #include <Game/Ui/Font.hpp>
 #include <Game/Ui/Rect.hpp>
 #include "Game/System/NebulaHost.hpp"
+#include <nebula_module.h>
 
 namespace NebulaUi {
     Color8 color(u32 rgba) {
@@ -135,7 +136,96 @@ namespace NebulaUi {
             const s32 units = (p[1] & 0xFF) / 2;
             return units > 0 ? units : 1;
         }
+        if (*p >= 0xD800 && *p < 0xDC00 && p[1] >= 0xDC00 && p[1] < 0xE000) {
+            return 2;
+        }
         return 1;
+    }
+
+    f32 squeezeTo(f32 width, f32 room) {
+        return width > room && width > 0.0f ? clamp(room / width, cMinSqueeze, 1.0f) : 1.0f;
+    }
+
+    f32 setFitLine(FitLine& rLine, TextBox* pBox, const char16_t* pString) {
+        const u32 units = static_cast< u32 >(MR::textLength(pString)) + 1;
+        MR::copyText(rLine.mWhole.room(units), pString, units);
+        setText(pBox, rLine.mWhole.mItems);
+        f32 height = 0.0f;
+        measure(pBox, 4000.0f, &rLine.mWholeWidth, &height);
+        rLine.mWidth = rLine.mWholeWidth;
+        rLine.mFitted = false;
+        rLine.mCut = false;
+        rLine.mTold = false;
+        return rLine.mWholeWidth;
+    }
+
+    f32 fitLine(FitLine& rLine, TextBox* pBox, f32 room) {
+        if (pBox == nullptr || rLine.mWhole.mItems == nullptr) {
+            return 1.0f;
+        }
+        if (!rLine.mFitted || room != rLine.mRoom) {
+            rLine.mFitted = true;
+            rLine.mRoom = room;
+            const char16_t* const pWhole = rLine.mWhole.mItems;
+            f32 height = 0.0f;
+            if (rLine.mWholeWidth * cMinSqueeze <= room) {
+                if (rLine.mCut) {
+                    setText(pBox, pWhole);
+                    measure(pBox, 4000.0f, &rLine.mWidth, &height);
+                    rLine.mCut = false;
+                }
+            } else {
+                // The most whole units of the text that fit with the ellipsis: a binary search over the units, each
+                // try taken back to where a character or tag ends.
+                const s32 length = static_cast< s32 >(MR::textLength(pWhole));
+                char16_t* const pShown = rLine.mShown.room(static_cast< u32 >(length) + 2);
+                const auto show = [&](s32 want) {
+                    s32 end = 0;
+                    while (end < want && pWhole[end] != 0 && end + unitLength(&pWhole[end]) <= want) {
+                        end += unitLength(&pWhole[end]);
+                    }
+                    s32 n = end;
+                    for (s32 k = 0; k < n; k++) {
+                        pShown[k] = pWhole[k];
+                    }
+                    while (n > 0 && pShown[n - 1] == u' ') {
+                        n--;
+                    }
+                    pShown[n] = 0x2026;
+                    pShown[n + 1] = 0;
+                    setText(pBox, pShown);
+                    measure(pBox, 4000.0f, &rLine.mWidth, &height);
+                };
+                // What is shown grows with `want`, so whether it fits does too.
+                s32 fits = 0;
+                s32 longest = length - 1;
+                while (fits < longest) {
+                    const s32 want = (fits + longest + 1) / 2;
+                    show(want);
+                    if (rLine.mWidth * cMinSqueeze <= room) {
+                        fits = want;
+                    } else {
+                        longest = want - 1;
+                    }
+                }
+                show(fits);
+                rLine.mCut = true;
+            }
+            // Past its room even as its ellipsis: a layout that leaves a text no room (the menu test looks for this).
+            if (rLine.mWidth * cMinSqueeze > room + 0.5f && !rLine.mTold) {
+                rLine.mTold = true;
+                char start[48];
+                u32 n = 0;
+                for (; n + 1 < sizeof(start) && pWhole[n] != 0; n++) {
+                    start[n] = pWhole[n] >= 0x20 && pWhole[n] < 0x7F ? static_cast< char >(pWhole[n]) : '?';
+                }
+                start[n] = 0;
+                nebula_log("NebulaUi: a text runs past its room (%.0f of %.0f): %s\n", rLine.mWidth * cMinSqueeze, room, start);
+            }
+        }
+        const f32 squeeze = squeezeTo(rLine.mWidth, room);
+        pBox->mScale = Vec2f(squeeze, 1.0f);
+        return squeeze;
     }
 
     void wrapWords(TextBox* pText, const char16_t* pSource, f32 limit, f32* pWidth, f32* pHeight) {
