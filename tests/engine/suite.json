@@ -4,6 +4,7 @@
     "boot",
     "device-lost",
     "restarts",
+    "device-lost-building",
     "window-small",
     "window-wide",
     "window-tall",

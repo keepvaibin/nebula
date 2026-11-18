@@ -12,7 +12,7 @@
 struct GalaxyTimeLimitInfo {
     const char* mGalaxyName;
     s32 mScenarioNo;
-    u32 mTimeLimit;
+    u32 mTimeLimit;  // seconds
 };
 
 namespace {
@@ -31,7 +31,7 @@ void CometEventKeeper::init() {
 
     if (isStartEvent("Red") || isStartEvent("Black")) {
         const u32 modLimit = NebulaMods::cometTimeLimit(MR::getCurrentStageName(), MR::getCurrentScenarioNo());
-        mExecutorTimeLimit = new CometEventExecutorTimeLimit((modLimit != 0 ? modLimit : getTimeLimitFromTable(::sTimeLimitInfoTable, ARRAY_SIZE(::sTimeLimitInfoTable))) / static_cast< s32 >(NebulaFrameClock::cStepsPerSecond));
+        mExecutorTimeLimit = new CometEventExecutorTimeLimit(modLimit != 0 ? modLimit : getTimeLimitFromTable(::sTimeLimitInfoTable, ARRAY_SIZE(::sTimeLimitInfoTable)));
         mExecutorTimeLimit->initWithoutIter();
         mExecutorTimeLimit->kill();
     }

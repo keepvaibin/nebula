@@ -165,7 +165,6 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     if (std::strcmp(key, "vsync_interval") == 0) cfg.vsync_interval      = std::clamp(parse_uint(val, cfg.vsync_interval), 0u, 2u);
     else if (std::strcmp(key, "msaa_samples")   == 0) cfg.msaa_samples        = std::clamp(parse_uint(val, 1), 1u, 8u);
     else if (std::strcmp(key, "max_fps")        == 0) cfg.max_fps             = parse_frame_rate(val, cfg.max_fps);
-    else if (std::strcmp(key, "frame_rate_decouple") == 0) cfg.frame_rate_decouple = parse_bool(val, cfg.frame_rate_decouple);
     else if (std::strcmp(key, "texture_lod_bias") == 0) cfg.texture_lod_bias = std::clamp(parse_uint(val, 0), 0u, 8u);
     else if (std::strcmp(key, "anisotropic_filtering") == 0) cfg.anisotropic_filtering = std::clamp(parse_uint(val, cfg.anisotropic_filtering), 1u, 16u);
     else if (std::strcmp(key, "per_pixel_lighting") == 0) cfg.per_pixel_lighting = parse_bool(val, cfg.per_pixel_lighting);
@@ -395,22 +394,6 @@ void set_frame_generation_running(bool running) noexcept {
 
 bool frame_generation_running() noexcept { return s_frame_generation_running.load(std::memory_order_relaxed); }
 
-namespace {
-std::atomic<float> s_camera_water{-1.0f};
-std::atomic<std::int64_t> s_camera_water_ms{0};
-}  // namespace
-
-void note_camera_water(float depth) noexcept {
-    s_camera_water.store(depth, std::memory_order_relaxed);
-    s_camera_water_ms.store(steady_ms(), std::memory_order_relaxed);
-}
-
-float camera_water_depth() noexcept {
-    const std::int64_t at = s_camera_water_ms.load(std::memory_order_relaxed);
-    return at != 0 && steady_ms() - at < kFrameGenerationReportMs ? s_camera_water.load(std::memory_order_relaxed)
-                                                                   : -1.0f;
-}
-
 void note_frame_generation_allowed(bool allowed) noexcept {
     s_frame_generation_allowed.store(allowed, std::memory_order_relaxed);
     s_frame_generation_report_ms.store(steady_ms(), std::memory_order_relaxed);
@@ -518,8 +501,6 @@ void load_render_config_from_file() {
     std::array<char, 32> file_gpu = cfg.gpu;
     file_gpu.back() = '\0';
 
-    // Frame-rate decoupling is not offered: its key is read but stays off.
-    cfg.frame_rate_decouple = false;
     clamp_render_config(cfg);
 
     s_lock.lock();
@@ -593,7 +574,6 @@ bool reload_render_config_if_changed() {
     const unsigned file_renderer = cfg.renderer;
     cfg.gpu = session_gpu;
     cfg.renderer = session_renderer;
-    cfg.frame_rate_decouple = false;
     clamp_render_config(cfg);
 
     s_lock.lock();

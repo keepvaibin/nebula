@@ -231,7 +231,8 @@ GPU = None
 # from the environment): a test names them among its settings, and they go to the game's environment. Everything else a
 # test does is a step of its plan. harness_settings_test.py keeps this list equal to the extension's.
 TEST_HOOKS = ("GALAXY_TEST_VRAM_BUDGET_MB", "GALAXY_TEST_DISC_DELAY_US", "GALAXY_TEST_SAVE_DELAY_US",
-              "GALAXY_TEST_MODS_SCREEN", "GALAXY_TEST_MODS_CHANGED")
+              "GALAXY_TEST_MODS_SCREEN", "GALAXY_TEST_MODS_CHANGED", "GALAXY_TEST_REBUILD_DELAY_MS",
+              "GALAXY_TEST_CPU_LOAD")
 
 
 def setting_names():
@@ -503,7 +504,7 @@ def read_setup(t, bare, seed, language, classes):
     lines.append("setup file 1")
     if "save" in t:
         s = t["save"]
-        keys_known(s, "save", {"character", "spin", "stars", "grand_stars", "flags", "values"})
+        keys_known(s, "save", {"character", "spin", "stars", "grand_stars", "flags", "values", "tico_seeds"})
         if "character" in s:
             c = text(s, "character", "save")
             if c not in ("mario", "luigi"):
@@ -529,6 +530,13 @@ def read_setup(t, bare, seed, language, classes):
             for name in s["values"]:
                 plain(name, "save.values key")
                 lines.append("setup save.value %s %d" % (name, whole(s["values"], name, "save.values", 0)))
+        if "tico_seeds" in s:
+            if not isinstance(s["tico_seeds"], dict):
+                raise HarnessError("save.tico_seeds must be an object")
+            for luma in s["tico_seeds"]:
+                if not luma.isdigit() or int(luma) > 255:
+                    raise HarnessError("save.tico_seeds keys are seed numbers, 0 to 255")
+                lines.append("setup save.tico_seed %d %d" % (int(luma), whole(s["tico_seeds"], luma, "save.tico_seeds", 0)))
     lines.append("setup seed %d" % seed)
     if language is not None:
         lines.append("setup language %s" % language)
@@ -1506,12 +1514,19 @@ def place_mods(test, settings, previous, frozen, ports=None):
 
 
 def write_run_settings(test, settings):
-    """The run's settings file: the window's size and the test's language (tools/verify/settings_args.py)."""
+    """The run's settings file: the window's size, the test's language, VSync off for a fixed-step run, and the test's own settings
+    (tools/verify/settings_args.py)."""
     assignments = ["GALAXY_WINDOW_WIDTH=%d" % test["window"][0], "GALAXY_WINDOW_HEIGHT=%d" % test["window"][1]]
     if test["language"] is not None:
         assignments.append("GALAXY_LANGUAGE=%s" % LANGUAGES[test["language"]])
     if GPU is not None:
         assignments.append("GALAXY_GPU=%s" % GPU)
+    named = {a.partition("=")[0] for a in test.get("settings", [])}
+    if test.get("time", "steps") == "steps" and "GALAXY_VSYNC_INTERVAL" not in named:
+        # A fixed-step run's frames do not follow the display, so its presents need not wait for the refresh (N-1052:
+        # Direct3D's VSync waits where Vulkan's MAILBOX does not, which made the Direct3D suites the gate's slowest).
+        # A test that names the setting (the pace suite's real-time runs) keeps its own.
+        assignments.append("GALAXY_VSYNC_INTERVAL=0")
     assignments += [a for a in test.get("settings", []) if a.partition("=")[0] not in TEST_HOOKS]
     subprocess.run([sys.executable, "-I", str(TREE / "tools" / "verify" / "settings_args.py"), str(settings)] + assignments,
                    check=True, capture_output=True)
@@ -2238,6 +2253,12 @@ def evaluate(test, renderer, run_folder, ran):
         counts = re.findall(r"([\w-]+)=(\d+)", report[-1]) if report else []
         add("nothing the game asked for was lost", bool(report) and bool(counts) and all(v == "0" for _, v in counts),
             report[-1] if report else "no [loss] report at the exit")
+    if test["ends"] == "end" and end:
+        # Every picture a step asked was written (the host writes them from the GPU at its exit, waiting 5 s): a test
+        # whose picture never came is not a pass, whether or not a check of its own reads that picture.
+        unwritten = sorted(s["picture"] for s in test["steps"]
+                           if "picture" in s and not (run_folder / "pictures" / (s["picture"] + ".png")).exists())
+        add("every picture asked was written", not unwritten, unwritten)
     for bad in by_key.get("harness.bad_fact", []):
         add("every fact is well formed (JSON, a key a mod may log)", False, bad["value"])
     if not test["bare"]:

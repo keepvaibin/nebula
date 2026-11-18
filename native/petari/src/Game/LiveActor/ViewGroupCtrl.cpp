@@ -9,6 +9,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Map/StageSwitch.hpp"
+#include <nebula_module.h>
 
 namespace {
     const u32 sAllLodCtrlNumMax = 0x100;
@@ -109,6 +110,12 @@ void ViewGroupCtrl::startInitViewGroupTable() {
     if (mViewCubeMgr) {
         for (s32 i = 0; i < mViewCubeMgr->getNumAreaObj(); i++) {
             s32 groupID = mViewCubeMgr->getAreaObj(i)->mObjArg0;
+            // A cube with no group (P-177: a mod's stage; no shipped cube has one) is left out of update.
+            if (groupID < 0) {
+                nebula_log("view group cube %d has no group (Obj_arg0 %d): it does nothing\n", static_cast< int >(i),
+                           static_cast< int >(groupID));
+                continue;
+            }
             if (groupID >= mMaxViewGroupId) {
                 mMaxViewGroupId = groupID + 1;
             }

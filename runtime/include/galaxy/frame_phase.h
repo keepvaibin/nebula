@@ -24,11 +24,11 @@ public:
     static constexpr int kPlainFrames = 600;
 
     // The frame that started at `last_start_ns` took `work_ns` to its present (0: not known yet). `period_ns`: the
-    // frame's length. Returns the next frame's start. Without refreshes, on a display whose rate is no multiple of
-    // the frame's, after a missed frame, or when the work leaves no room to start later, frames simply follow
-    // `period_ns`.
+    // frame's length; `in_between`: in-between pictures are on. Returns the next frame's start. Without refreshes, on
+    // a display the step does not lock to (galaxy/step_lock.h), after a missed frame, or when the work leaves no room
+    // to start later, frames simply follow `period_ns`.
     [[nodiscard]] std::int64_t next_start(std::int64_t last_start_ns, std::int64_t work_ns, std::int64_t period_ns,
-                                          const std::optional<DisplayRefresh>& refresh) noexcept;
+                                          const std::optional<DisplayRefresh>& refresh, bool in_between) noexcept;
     [[nodiscard]] std::int64_t budget_ns() const noexcept { return budget_ns_; }
     [[nodiscard]] bool plain() const noexcept { return plain_frames_ != 0; }
 
@@ -40,8 +40,5 @@ private:
 // Two readings of the display's clock agree: a whole number of refreshes apart. Not on a variable refresh display, whose
 // refreshes follow the presents.
 [[nodiscard]] bool refreshes_in_step(std::int64_t earlier_vblank_ns, const DisplayRefresh& now) noexcept;
-
-// The refreshes that fit a frame of `period_ns`: its length in whole refreshes, or 0 when none is within 1%.
-[[nodiscard]] std::int64_t refreshes_per_frame(std::int64_t period_ns, std::int64_t refresh_period_ns) noexcept;
 
 }  // namespace galaxy::host

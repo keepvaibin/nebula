@@ -3,7 +3,7 @@
 #include "Game/System/NebulaLoadTrace.hpp"
 #include <nebula_module.h>
 #include "Game/Render/FrameList.hpp"
-#include "Game/Util/GameLightSignal.hpp"
+#include "Game/System/LumaDrawLight.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -33,7 +33,6 @@
 #include "Game/Map/OceanBowl.hpp"
 #include "Game/Map/OceanRing.hpp"
 #include "Game/Map/OceanSphere.hpp"
-#include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Map/WaterPoint.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Player/MarioAccess.hpp"
@@ -297,12 +296,6 @@ void GameScene::draw() const {
     // The scene shows play, whatever is over it: the HDR calibration's reference stage is ready once it does.
     NebulaHost::gameContext(NEBULA_CONTEXT_SCENE_PLAY,
                             !MR::isActiveMoviePlayer() && isNerve(GET_NERVE(GameScene, GameSceneAction)) ? 1 : 0);
-    // Where the camera is in water, how deep: ray tracing lights the water it looks through. Asked only while ray
-    // tracing is on (P-127); nothing else reads it.
-    if (NebulaHost::option(NEBULA_OPTION_RAY_TRACING) != 0) {
-        const f32 depth = MR::isCameraInWater() ? WaterAreaFunction::getCameraWaterDepth() : -1.0f;
-        NebulaHost::gameContext(NEBULA_CONTEXT_CAMERA_WATER, depth < 0.0f ? 0 : static_cast< s32 >(depth) + 1);
-    }
     // The settings' galaxy select (its ADVANCED page) names its galaxies and stars in the game's own words, asked once.
     if (NebulaHost::galaxySelectNamesWanted() != 0) {
         MR::FormattedName id;
@@ -529,7 +522,7 @@ void GameScene::draw3D() const {
     MotionSignal::sceneCamera(sceneCamera);
     NebulaHost::gameStage(MR::getCurrentStageName());
     Frame::sceneBegin(sceneCamera);
-    GameLightSignal::frame();
+    luma::draw::light::frame();  // the mods' lights (draw.light); one load while no mod has one
     CategoryList::execute(MR::DrawType_AstroDomeSkyClear);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
@@ -711,11 +704,6 @@ bool GameScene::isDrawMirror() const {
     }
 
     if (isPlayMovie()) {
-        return false;
-    }
-
-    // Reflections traced at High: the mirror's surface takes the traced reflection in its capture's place (12.5).
-    if ((NebulaHost::option(NEBULA_OPTION_RAY_TRACING) & static_cast< u32 >(NEBULA_RAY_TRACING_MIRROR)) != 0) {
         return false;
     }
 

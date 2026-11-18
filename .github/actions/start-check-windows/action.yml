@@ -1,0 +1,65 @@
+name: Start check (Windows)
+description: >-
+  Each program in `folder` starts without game data (host_main.cpp run_start_check): its window and renderer on the
+  runner's software adapter, 300 frames drawn and shown. A crash, a renderer that does not start or no picture fails
+  it. The runner has no Vulkan driver: Mesa's software one (lavapipe, the Linux jobs' too) and the Khronos loader, both
+  pinned here, the loader put into `folder` for the check. check.yml runs it on the build; release.yml on a copy of the
+  programs the Setup packs.
+inputs:
+  folder:
+    description: The folder holding the programs (and D3D12\ beside them).
+    required: true
+  programs:
+    description: The programs to start, without .exe, separated by spaces.
+    default: Nebula NebulaVk NebulaD11
+runs:
+  using: composite
+  steps:
+    - name: Vulkan on the CPU (Mesa lavapipe and the Vulkan loader)
+      shell: pwsh
+      env:
+        MESA_WIN_VERSION: '26.2.7'
+        VULKAN_LOADER_TAG: 'vulkan-sdk-1.4.363.0'
+        FOLDER: ${{ inputs.folder }}
+      run: |
+        . .\tools\enter_msvc_environment.ps1 | Out-Null
+        $t = Join-Path $env:RUNNER_TEMP 'vk'
+        New-Item -ItemType Directory -Force $t | Out-Null
+        curl.exe -fsSL --retry 3 -o "$t/mesa.7z" "https://github.com/pal1000/mesa-dist-win/releases/download/$env:MESA_WIN_VERSION/mesa3d-$env:MESA_WIN_VERSION-release-msvc.7z"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        7z x "$t/mesa.7z" "-o$t/mesa" x64 | Out-Null
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        git clone -q --depth 1 -b $env:VULKAN_LOADER_TAG https://github.com/KhronosGroup/Vulkan-Loader "$t/loader-src"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cmake -S "$t/loader-src" -B "$t/loader" -G Ninja -DCMAKE_BUILD_TYPE=Release -DUPDATE_DEPS=ON -DBUILD_TESTS=OFF
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cmake --build "$t/loader"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $dll = Get-ChildItem -Recurse "$t/loader" -Filter vulkan-1.dll | Select-Object -First 1
+        if (-not $dll) { Write-Output "the loader build made no vulkan-1.dll"; exit 1 }
+        Copy-Item $dll.FullName $env:FOLDER
+        $icd = (Resolve-Path "$t/mesa/x64/lvp_icd.x86_64.json").Path
+        # The driver is named in the registry, where the loader looks for installed drivers: the runner's processes
+        # are elevated, and an elevated process's loader ignores VK_DRIVER_FILES (seen: "Found no drivers").
+        $drivers = 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers'
+        New-Item -Force -Path $drivers | Out-Null
+        New-ItemProperty -Force -Path $drivers -Name $icd -PropertyType DWord -Value 0 | Out-Null
+    - name: Start check
+      shell: pwsh
+      env:
+        FOLDER: ${{ inputs.folder }}
+        PROGRAMS: ${{ inputs.programs }}
+        # The loader names the drivers it found and why one was not taken, in the start check's log.
+        VK_LOADER_DEBUG: error,warn,driver
+      run: |
+        foreach ($exe in $env:PROGRAMS.Split(' ', [StringSplitOptions]::RemoveEmptyEntries)) {
+          $d = Join-Path $env:RUNNER_TEMP "start-$exe"
+          New-Item -ItemType Directory -Force "$d/data", "$d/settings" | Out-Null
+          $p = Start-Process (Join-Path $env:FOLDER "$exe.exe") -WindowStyle Hidden -PassThru `
+            -ArgumentList '--start-check', '300', '--data', "$d/data", '--settings', "$d/settings", '--crash-dumps', $d `
+            -RedirectStandardOutput "$d/out.txt" -RedirectStandardError "$d/err.txt"
+          $null = $p.Handle
+          if (-not $p.WaitForExit(300000)) { $p.Kill(); Write-Output "${exe}: no end in 5 minutes"; exit 1 }
+          Get-Content "$d/out.txt", "$d/err.txt" | Select-String 'start check|\[gpu\] adapter'
+          if ($p.ExitCode -ne 0) { Write-Output "${exe}: exit $($p.ExitCode)"; Get-Content "$d/err.txt" -Tail 80; exit 1 }
+        }

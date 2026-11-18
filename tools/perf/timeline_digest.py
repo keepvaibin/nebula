@@ -19,7 +19,9 @@ from collections import defaultdict
 EVENTS = {
     1: 'SubmitBegin', 2: 'SubmitEnd', 4: 'RenderBegin', 6: 'RenderSubmitted', 7: 'GpuBegin', 8: 'GpuEnd', 14: 'PresentBegin',
     15: 'PresentEnd', 16: 'DisplayStats', 21: 'DisplayCopy', 22: 'SlotWaitBegin', 23: 'SlotWaitEnd', 24: 'VBlank',
-    25: 'DisplayPresented', 26: 'GameFrame',
+    25: 'DisplayPresented', 26: 'GameFrame', 27: 'ListOpsBegin', 28: 'ListOpsEnd', 29: 'WalkBegin', 30: 'WalkEnd',
+    31: 'StepWaitBegin', 32: 'StepWaitEnd', 33: 'ContentTime', 34: 'AcquireBegin', 35: 'AcquireEnd',
+    36: 'GateWaitBegin', 37: 'GateWaitEnd',
 }
 
 
@@ -133,6 +135,11 @@ def main():
     print('[timeline-present] new-picture-interval-in-frame-periods ' + ' '.join(f'{k}:{v}' for k, v in sorted(hist.items())))
     copies = [r[0] for r in records if r[1] == 21]
     print(f'[timeline-picture] display-copies={len(copies)} per-s={len(copies) / max(span_s, 1e-9):.3f}')
+
+    # The render thread's waits: a frame slot's last frame (every renderer), a swap image (Vulkan, Metal), the
+    # Direct3D 12 present gate's pipeline creations in flight (core/present_gate.h).
+    for name, begin_ev, end_ev in (('slot', 22, 23), ('acquire', 34, 35), ('present-gate', 36, 37)):
+        print(f'[timeline-wait] {name} ms {stats(paired(begin_ev, end_ev))}')
 
     # DXGI frame statistics: per displayed present, refreshes on screen.
     ds = [r for r in records if r[1] == 16]

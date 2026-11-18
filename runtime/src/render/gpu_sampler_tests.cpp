@@ -50,12 +50,24 @@ int main() {
                      "disabling anisotropy restores one sample");
     {
         // Levels drawn by hand: the level the game showed, whatever anisotropy and LOD bias the settings ask for.
-        const auto drawn = make_sampler_key(mode, 32, 0.0f, false, 1.0f, -0.5f, true);
+        const auto drawn = make_sampler_key(mode, 32, 0.5f, false, true);
         RenderConfig sharp{}; sharp.anisotropic_filtering = 16u; sharp.texture_lod_bias = 2u;
         const auto drawn_desc = build_sampler_desc_from_key(drawn, sharp);
         passed &= expect(drawn_desc.Filter == D3D12_FILTER_MIN_MAG_MIP_LINEAR && drawn_desc.MaxAnisotropy == 1u &&
-                             std::fabs(drawn_desc.MipLODBias - (mode.lod_bias + 1.0f)) < 1e-5f,
-                         "levels drawn by hand take no anisotropy, scene bias or settings bias");
+                             std::fabs(drawn_desc.MipLODBias - (mode.lod_bias - 0.5f)) < 1e-5f,
+                         "levels drawn by hand take no anisotropy or settings bias, and their replacement's shift");
+        // P-048: the frame's part of the bias is the programs', by kind: the key is the same at every frame height,
+        // window and upscaler, so they make no new samplers.
+        passed &= expect(sampler_frame_bias(mode, false, true) == SamplerFrameBias::lines &&
+                             sampler_frame_bias(mode, true, false) == SamplerFrameBias::lines &&
+                             sampler_frame_bias(mode, false, false) == SamplerFrameBias::scene,
+                         "levels drawn by hand follow the frame's lines, the game's levels the scene's bias");
+        auto flat = mode;
+        flat.mip = 0;
+        passed &= expect(sampler_frame_bias(flat, true, true) == SamplerFrameBias::none,
+                         "a sampler without levels takes no frame bias");
+        passed &= expect(make_sampler_key(mode, 32).lod_bias == mode.lod_bias,
+                         "the game's levels keep the game's bias in the key, the scene's is the programs'");
     }
     auto unmipped = mode;
     unmipped.mip = 0; unmipped.max_lod = 0; unmipped.mag_linear = false;
@@ -127,6 +139,7 @@ int main() {
         passed &= expect(p0.index == 0u && ring.persistent_cpu(p0.index).ptr != 0u && ring.persistent_cpu(p1.index).ptr != 0u,
                          "the earlier persistent descriptors keep their indices");
         passed &= expect(ring.take_replaced().size() == 1u, "the replaced heap is handed back");
+        passed &= expect(ring.take_replaced().empty(), "a heap handed back is not kept (P-029)");
         // A full frame segment doubles into a new heap: this frame's tables so far move with it, at the same place in
         // the segment.
         const auto heap_full = ring.heap();

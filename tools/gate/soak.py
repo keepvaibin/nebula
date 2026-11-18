@@ -31,6 +31,8 @@ import sys
 import threading
 
 TREE = pathlib.Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import gate_tour  # noqa: E402
 LIST = TREE / "tools" / "verify" / "tours" / "tour_enterable.txt"
 STEPS_PER_SECOND = 60
 MEMORY_SECONDS = 30
@@ -41,6 +43,15 @@ LOAD_FRAMES = 300  # input starts this long after a stage is asked for (the load
 def stops():
     lines = [l for l in LIST.read_text(encoding="utf-8").splitlines() if l.strip() and not l.startswith("#")]
     return [(l.split()[0], int(l.split()[1])) for l in lines]
+
+
+def save_for(chosen):
+    """The run's one save: the spin, and every Hungry Luma seed a chosen stop's line feeds (gate_tour's list words)."""
+    save = {"spin": True}
+    for stage, scenario, extra in gate_tour.stops_with_save():
+        if (stage, scenario) in chosen and "tico_seeds" in extra:
+            save.setdefault("tico_seeds", {}).update(extra["tico_seeds"])
+    return save
 
 
 def random_play(r, start, end):
@@ -100,7 +111,7 @@ def test_for(minutes, lap, stage_seconds, seed):
     return {"harness": 1, "name": "soak",
             "about": "%d minutes of seeded random play (seed %d) through %d stages a lap, %d seconds each, in real time"
                      % (minutes, seed, len(chosen), stage_seconds),
-            "save": {"spin": True}, "stage": {"name": first[0], "scenario": first[1]}, "time": "real",
+            "save": save_for(chosen), "stage": {"name": first[0], "scenario": first[1]}, "time": "real",
             "memory": MEMORY_SECONDS, "limit_seconds": int(minutes * 60 * 1.25) + 900, "steps": steps, "expect": []}
 
 

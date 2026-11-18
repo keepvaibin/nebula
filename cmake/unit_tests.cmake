@@ -15,7 +15,7 @@ function(galaxy_test name)
     target_compile_features(${name} PRIVATE cxx_std_20)
     target_link_libraries(${name} PRIVATE galaxy_runtime_abi ${arg_LIBS})
     if(MSVC)
-        target_compile_options(${name} PRIVATE /W4 /WX /permissive- /EHsc)
+        target_compile_options(${name} PRIVATE /W4 ${NEBULA_WARNINGS_AS_ERRORS} /permissive- /EHsc)
     endif()
     if(NOT WIN32)
         find_package(Threads REQUIRED)
@@ -29,6 +29,8 @@ set(render_src "${galaxy_rt}/render")
 
 # The process's output: every line whole, whichever threads write.
 galaxy_test(galaxy_whole_lines_tests SOURCES ${rt}/whole_lines_tests.cpp ${rt}/whole_lines.cpp)
+# Its writer's thread: no caller waits on a stuck output; order kept; flush bounded.
+galaxy_test(galaxy_line_writer_tests SOURCES ${rt}/line_writer_tests.cpp)
 # The pacing measures (file 00 4.3) on synthetic runs, and the recorder that feeds them.
 galaxy_test(galaxy_pacing_tests SOURCES ${rt}/pacing_tests.cpp ${rt}/pacing.cpp ${rt}/pacing_recorder.cpp)
 # The frame threads' CPU time by thread (the pacing line). Windows reads no thread's CPU time there (perf_hint.cpp's
@@ -54,6 +56,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_compile_definitions(galaxy_update_linux_install_tests PRIVATE
         NEBULA_INSTALLER_LINUX="${galaxy_root}/installer/linux")
 endif()
+# The frame timeline (--diagnostics timeline): its clock, threads and file on every platform.
+galaxy_test(galaxy_frame_timeline_tests SOURCES ${rt}/frame_timeline_tests.cpp)
+# A frame thread's work as wall time between its marks (P-069), on every platform.
+galaxy_test(galaxy_busy_window_tests SOURCES ${rt}/busy_window_tests.cpp)
 
 # Files and saves.
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
@@ -196,6 +202,12 @@ galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.c
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpolation_tests.cpp
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 galaxy_test(galaxy_present_slots_tests SOURCES ${render_src}/present_slots_tests.cpp ${render_src}/present_slots.cpp)
+# The temporal upscaler's hold on generated frames ends (header-only).
+galaxy_test(galaxy_temporal_hold_tests SOURCES ${render_src}/temporal_hold_tests.cpp)
+# The renderers' video memory read: at most every 100 ms, at once when the budget moved (P-011).
+galaxy_test(galaxy_video_memory_reading_tests SOURCES ${render_src}/video_memory_reading_tests.cpp)
+# The game thread's place in the render queue (header-only).
+galaxy_test(galaxy_render_queue_tests SOURCES ${render_src}/render_queue_tests.cpp)
 # The vsync grid the Android and Apple display clocks run the game's frames on (header-only).
 galaxy_test(galaxy_vsync_grid_tests SOURCES ${rt}/vsync_grid_tests.cpp)
 # The draw walker's plans for a list (header-only).

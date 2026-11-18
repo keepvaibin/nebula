@@ -8,7 +8,7 @@
 
 use anyhow::{Context, Result};
 
-/// A table of text rows (ray tracing's NebulaData/RtStages.tsv and RtEffects.tsv: tab-separated, a header row, `#` a
+/// A table of text rows (tab-separated, a header row, `#` a
 /// comment) with `extra`'s rows after its own, placed in its columns by their names: a column the game's table lacks
 /// is refused; one `extra` leaves out is empty. The host reads a later row of the same name over an earlier one.
 pub fn add_rows(base: &[u8], extra: &[u8]) -> Result<Vec<u8>> {

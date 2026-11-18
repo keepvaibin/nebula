@@ -187,6 +187,10 @@ bool nunchuk_stick_response() {
     ok &= expect(nunchuk_stick_counts(15.0f, -15.0f).x == 0.0f && nunchuk_stick_counts(71.0f, 0.0f).x == 1.0f &&
                      nunchuk_stick_counts(-43.0f, 0.0f).x == -0.5f,
                  "a Nunchuk's own counts: 15 nothing, 43 half, 71 full");
+    // The same bits on every CPU (N-1064): the length's two squares are rounded apart, never fused into one rounding,
+    // which gives 0x1.53a09cp-1 and -0x1.7f242cp-1 here.
+    const StickValue held = nunchuk_stick(0.64f, -0.75f);
+    ok &= expect(held.x == 0x1.53a09ap-1f && held.y == -0x1.7f242ap-1f, "a stick past the circle: the same bits everywhere");
     return ok;
 }
 

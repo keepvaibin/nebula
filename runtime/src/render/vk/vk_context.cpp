@@ -835,6 +835,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     }
     // The driver's per-heap budget (the internal-resolution memory check), where it reports one.
     memory_budget_ = has_device_extension(physical_, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+    memory_reading_.forget();
     if (memory_budget_) {
         device_extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     }
@@ -1281,7 +1282,7 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
     functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
     VmaAllocatorCreateInfo allocator_info{};
-    allocator_info.vulkanApiVersion = vulkan_1_0 ? VK_API_VERSION_1_0 : VK_API_VERSION_1_1;
+    allocator_info.vulkanApiVersion = allocator_api_version(app.apiVersion, properties_.apiVersion);
     if (dedicated_extension) {
         allocator_info.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
     }
@@ -1867,16 +1868,15 @@ bool Context::grey_view(Texture& texture) const {
 bool Context::device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
     usage = budget = 0u;
     if (memory_budget_ && physical_ != VK_NULL_HANDLE) {
-        // The driver's own figures, whole-process and whoever else is on the card, read afresh at most ten times a second.
+        // The driver's own figures, whole-process and whoever else is on the card, by the renderers' rule (at most ten
+        // reads a second).
         const std::int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
                                      std::chrono::steady_clock::now().time_since_epoch()).count();
-        if (memory_budget_bytes_ == 0u || now - memory_read_ms_ >= 100) {
+        const auto ask = [this](std::uint64_t& used, std::uint64_t& largest) {
             VkPhysicalDeviceMemoryBudgetPropertiesEXT extension{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT};
             VkPhysicalDeviceMemoryProperties2 memory2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
             memory2.pNext = &extension;
             vkGetPhysicalDeviceMemoryProperties2(physical_, &memory2);
-            std::uint64_t largest = 0u;
-            std::uint64_t used = 0u;
             // The largest device-local heap holds the render targets (the only one on most devices).
             for (std::uint32_t i = 0; i < memory2.memoryProperties.memoryHeapCount; ++i) {
                 if ((memory2.memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0u &&
@@ -1885,15 +1885,12 @@ bool Context::device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) 
                     used = extension.heapUsage[i];
                 }
             }
-            memory_read_ms_ = now;
-            memory_budget_bytes_ = largest;
-            memory_usage_ = used;
-        }
-        if (memory_budget_bytes_ != 0u) {
-            usage = memory_usage_;
-            budget = memory_budget_bytes_;
+            return true;
+        };
+        if (memory_reading_.read(now, false, ask, usage, budget)) {
             return true;
         }
+        usage = budget = 0u;
     }
     if (allocator_ == nullptr) {
         return false;

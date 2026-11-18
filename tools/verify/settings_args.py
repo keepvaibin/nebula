@@ -15,7 +15,7 @@ import sys
 RENDER = [
     ("GALAXY_VSYNC_INTERVAL", "vsync_interval"), ("GALAXY_MSAA_SAMPLES", "msaa_samples"),
     ("GALAXY_MAX_FPS", "max_fps"),
-    ("GALAXY_FRAME_RATE_DECOUPLE", "frame_rate_decouple"), ("GALAXY_TEXTURE_LOD_BIAS", "texture_lod_bias"),
+    ("GALAXY_TEXTURE_LOD_BIAS", "texture_lod_bias"),
     ("GALAXY_ANISOTROPIC_FILTERING", "anisotropic_filtering"),
     ("GALAXY_PER_PIXEL_LIGHTING", "per_pixel_lighting"), ("GALAXY_CURVED_SURFACES", "curved_surfaces"),
     ("GALAXY_DYNAMIC_RESOLUTION", "dynamic_resolution"),

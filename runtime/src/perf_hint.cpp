@@ -21,6 +21,7 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <mutex>
 #include <vector>
 #endif
@@ -51,6 +52,7 @@ struct FrameThread {
     std::int64_t cpu_ns;
     const char* name;
     std::int64_t last_ns = -1;  // its CPU time in the window the last perf_hint_frame_done closed
+    BusyWindow busy{};          // its work's wall time (perf_hint_busy)
 #if defined(__ANDROID__)
     std::int32_t tid = 0;
 #endif
@@ -58,6 +60,13 @@ struct FrameThread {
 
 std::mutex g_mutex;
 std::vector<FrameThread> g_threads;
+// The calling thread's place in g_threads; -1: not a frame thread.
+thread_local int t_index = -1;
+
+std::int64_t steady_ns() {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
 
 #if defined(__APPLE__)
 std::int64_t cpu_time(ThreadClock thread) {
@@ -164,7 +173,17 @@ void perf_hint_add_current_thread(const char* name) noexcept {
     thread.tid = static_cast<std::int32_t>(gettid());
     g_session_stale = true;  // made again with every thread at the next report
 #endif
+    t_index = static_cast<int>(g_threads.size());
     g_threads.push_back(thread);
+}
+
+void perf_hint_busy(bool on) noexcept {
+    if (t_index < 0) {
+        return;
+    }
+    const std::int64_t now = steady_ns();
+    std::lock_guard<std::mutex> lock(g_mutex);
+    g_threads[static_cast<std::size_t>(t_index)].busy.mark(now, on);
 }
 
 void perf_hint_set_target(std::int64_t target_ns) noexcept {
@@ -186,13 +205,17 @@ void perf_hint_set_target(std::int64_t target_ns) noexcept {
 }
 
 std::int64_t perf_hint_frame_done() noexcept {
+    const std::int64_t wall = steady_ns();
     std::lock_guard<std::mutex> lock(g_mutex);
+    if (t_index >= 0) {
+        g_threads[static_cast<std::size_t>(t_index)].busy.mark(wall, true);
+    }
     std::int64_t work = 0;
     for (FrameThread& thread : g_threads) {
         const std::int64_t now = cpu_time(thread.clock);
         thread.last_ns = now >= 0 && thread.cpu_ns >= 0 ? std::max<std::int64_t>(now - thread.cpu_ns, 0) : -1;
-        work = std::max(work, thread.last_ns);
         thread.cpu_ns = now;
+        work = std::max(work, thread.busy.close(wall));
     }
 #if defined(__ANDROID__)
     if (!g_threads.empty()) {
@@ -220,6 +243,8 @@ std::atomic<bool> g_on_battery{false};
 void perf_hint_add_current_thread(const char*) noexcept {}
 
 void perf_hint_set_target(std::int64_t) noexcept {}
+
+void perf_hint_busy(bool) noexcept {}
 
 std::size_t perf_hint_last_work(ThreadWork*, std::size_t) noexcept {
     return 0;

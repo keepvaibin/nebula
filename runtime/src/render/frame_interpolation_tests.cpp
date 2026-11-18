@@ -67,14 +67,15 @@ void test_camera_endpoints_and_arc() {
 
 void test_camera_cut() {
     const Affine34 a = camera(0.0f, 0.0f, 0.0f, 0.0f);
-    const Affine34 b = camera(2.0f, 0.0f, 0.0f, 0.0f);  // 115 degrees in one frame
+    const Affine34 b = camera(2.0f, 0.0f, 0.0f, 0.0f);  // 115 degrees in one frame: a fast look (M-068)
     CameraMotion m;
     camera_motion(&a, &b, 0.0f, CameraCutLimits{}, m);
-    check(m.cut, "a 115 degree turn is a cut");
-    check(near_matrix(camera_at(m, 0.25f), b), "a cut shows the new camera at once");
+    check(!m.cut, "a 115 degree turn in one step is motion, not a cut");
+    check(near_matrix(camera_at(m, 0.5f), camera(1.0f, 0.0f, 0.0f, 0.0f), 1e-4f), "a fast turn is shown halfway at t=0.5");
     const Affine34 c = camera(0.0f, 5000.0f, 0.0f, 0.0f);
     camera_motion(&a, &c, 0.0f, CameraCutLimits{}, m);
     check(m.cut, "a 5000 unit jump from rest is a cut");
+    check(near_matrix(camera_at(m, 0.25f), c), "a cut shows the new camera at once");
     camera_motion(&a, &c, 4000.0f, CameraCutLimits{}, m);
     check(!m.cut, "a 5000 unit move after a 4000 unit move is motion");
 }

@@ -104,8 +104,8 @@ fn replaced(path: &str) -> String {
     }
 }
 
-/// Ray tracing's tables a layer's `merge/` may hold (lowercase): rows the host reads after the game's, and the tables
-/// that class a pack's models as they cook.
+/// Ray tracing's tables a layer's `merge/` may hold (lowercase). This game has no ray tracing: the import checks each as
+/// before and writes it nowhere (nebula-import overlay.rs RAY_TABLES, the note Cook.RayData).
 pub const MERGE_TABLES: [&str; 5] =
     ["nebuladata/rtstages.tsv", "nebuladata/rteffects.tsv", "nebuladata/rtmaterials.tsv", "nebuladata/rtglow.tsv", "nebuladata/rtwater.tsv"];
 

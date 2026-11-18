@@ -65,36 +65,48 @@ void PresentSlots::observe(std::int64_t requested, std::int64_t earliest, std::i
     } else if (actual <= requested + half_vsync) {
         calm_margin_ = std::min(calm_margin_, margin);
     }
-    if (++window_frames_ < 60u) {
+    // Windows by the presents' shown times: a second of them at any rate. A gap of more than two windows (a stall, the
+    // app out of sight) counts as two: time with no presents is not calm.
+    if (window_start_ == 0 || actual < window_start_) {
+        window_start_ = actual;
+        return;
+    }
+    const std::int64_t window_ns = std::min(actual - window_start_, 2 * kWindowNs);
+    if (window_ns < kWindowNs) {
         return;
     }
     if (window_late_ >= 2u) {
         depth_ns_ += std::clamp<std::int64_t>((window_miss_ + step - 1) / step, 1, 2) * step;
-        if (since_step_down_ < 600u) {
-            calm_needed_ = std::min(calm_needed_ * 2u, 4800u);
+        if (since_step_down_ns_ >= 0 && since_step_down_ns_ < kStepDownHeldNs) {
+            calm_needed_ns_ = std::min(calm_needed_ns_ * 2, kCalmMostNs);
         }
-        since_step_down_ = ~0u;
-        calm_frames_ = 0u;
+        since_step_down_ns_ = -1;
+        calm_ns_ = 0;
         calm_margin_ = INT64_MAX;
     } else if (window_late_ == 0u) {
-        calm_frames_ += window_frames_;
-        if (calm_frames_ >= calm_needed_) {
-            const std::int64_t down = std::min(step, depth_ns_ - least_ns_);
-            if (down > 0 && calm_margin_ >= down + 2'000'000) {
+        calm_ns_ += window_ns;
+        if (calm_ns_ >= calm_needed_ns_) {
+            // What the margin leaves room for (2 ms kept), in whole periods, a game step at most (a period at the
+            // least): the same time at every rate, so a 360 Hz display settles as soon as a 60 Hz one.
+            const std::int64_t most = std::max(step, kGameStepNs / step * step);
+            const std::int64_t room = calm_margin_ == INT64_MAX ? 0 : (calm_margin_ - 2'000'000) / step * step;
+            const std::int64_t down = std::min({most, room, depth_ns_ - least_ns_});
+            if (down > 0) {
                 depth_ns_ -= down;
-                since_step_down_ = 0u;
+                since_step_down_ns_ = 0;
             }
-            calm_frames_ = 0u;
+            calm_ns_ = 0;
             calm_margin_ = INT64_MAX;
         }
     } else {
-        calm_frames_ = 0u;
+        calm_ns_ = 0;
         calm_margin_ = INT64_MAX;
     }
-    if (since_step_down_ != ~0u) {
-        since_step_down_ += window_frames_;
+    if (since_step_down_ns_ >= 0) {
+        since_step_down_ns_ += window_ns;
     }
-    window_frames_ = window_late_ = 0u;
+    window_start_ = actual;
+    window_late_ = 0u;
     window_miss_ = 0;
 }
 

@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "walk",
-  "about": "Good Egg, star 1, in real time: the stick tilted forward for two seconds moves Mario at least 3 m from his start. The run's diagnostics reach the game (frame-times lines), and after 600 frames the pacing line names the game and render threads' CPU time.",
+  "about": "Good Egg, star 1, in real time: the stick tilted forward for two seconds moves Mario at least 3 m from his start. The run's diagnostics reach the game (frame-times lines), and the pacing line (one each 10 s of play) names the game and render threads' CPU time.",
   "time": "real",
   "diagnostics": [
     "frame-times"
@@ -70,7 +70,7 @@
       "log": "\\[latency\\] frame=[0-9]+ qpc="
     },
     {
-      "log": "\\[pacing\\] 600 frames in [0-9.]+ ms \\([0-9.]+ ms a frame\\), [0-9]+ on the display's vsync"
+      "log": "\\[pacing\\] [0-9]+ frames in [0-9.]+ ms \\([0-9.]+ ms a frame\\), [0-9]+ on the display's vsync"
     },
     {
       "log": "; game CPU [0-9.]+ ms average, [0-9.]+ ms longest \\(frame [0-9]+\\)"

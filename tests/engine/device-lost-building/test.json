@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "device-lost-building",
+  "about": "The graphics device lost on the stage's second frame and again four frames later, while the new device's pipelines are still being built: a build the loss ended is not a refusal, nothing refused carries to the next device, and the last device builds every pipeline (N-4024). A third loss within five minutes is a fault by design (RenderCore::bear_device_loss).",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "BattleShipGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 2,
+      "lose_device": true
+    },
+    {
+      "at": 6,
+      "lose_device": true
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "the graphics card was reset",
+      "times": 2
+    },
+    {
+      "log": "a new device in",
+      "times": 2
+    },
+    {
+      "no_log": "\\[pipelines\\] [0-9]+ prepared .*, [1-9][0-9]* refused,"
+    },
+    {
+      "no_log": "refused twice"
+    }
+  ]
+}

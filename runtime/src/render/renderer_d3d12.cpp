@@ -1,9 +1,11 @@
 // RendererD3D12: device and swap chain, scene targets and copies, presentation.
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/utility_shaders.h"
 #include "dxgi_pacing.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 #include "galaxy/render/program_table.h"
 #include <nebula_frame_list.h>
 #include "galaxy/render/host_window_win32.h"
@@ -57,6 +59,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <thread>
+#include <type_traits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -388,6 +391,11 @@ bool DescriptorRing::initialize(
     frame_ready_ = false;
     bound_list_ = nullptr;
     bound_heap_ = nullptr;
+    views_.clear();
+    view_heap_.Reset();
+    free_view_slots_.clear();
+    view_capacity_ = view_next_ = 0u;
+    view_frame_ = views_made_ = 0u;
     // The null block: typed 2D null views, what any slot a pass leaves unwritten holds.
     D3D12_SHADER_RESOURCE_VIEW_DESC null_view{};
     null_view.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -471,6 +479,161 @@ void DescriptorRing::begin_frame(unsigned frame_slot) {
     cursor_     = frame_base_;
     frame_ready_ = true;
     bound_list_ = nullptr;
+    // The views no frame wrote in the last frames_in_flight + 1 give back their slot and their resource.
+    ++view_frame_;
+    for (auto it = views_.begin(); it != views_.end();) {
+        if (view_frame_ - it->second.written_frame > frames_in_flight_ + 1u) {
+            free_view_slots_.push_back(it->second.slot);
+            it = views_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+namespace {
+// The view cache's first size; it doubles when full.
+constexpr unsigned kFirstViewCache = 64u;
+
+template <typename T>
+void put(std::array<unsigned char, 48>& bytes, std::size_t at, const T& value) {
+    static_assert(std::is_trivially_copyable_v<T>);
+    std::memcpy(bytes.data() + at, &value, sizeof(value));
+}
+
+// Copies the union member `member` (fields of four bytes only, so no padding) to the key's place for it.
+template <typename T>
+void put_member(std::array<unsigned char, 48>& bytes, const T& member) {
+    static_assert(sizeof(T) % 4u == 0u && sizeof(T) <= 32u);
+    put(bytes, 16u, member);
+}
+}  // namespace
+
+std::size_t DescriptorRing::ViewKeyHash::operator()(const ViewKey& key) const noexcept {
+    // FNV-1a.
+    std::uint64_t hash = 14695981039346656037ull;
+    const auto mix = [&hash](const unsigned char* p, std::size_t n) {
+        for (std::size_t i = 0; i < n; ++i) {
+            hash = (hash ^ p[i]) * 1099511628211ull;
+        }
+    };
+    const std::uintptr_t resource = reinterpret_cast<std::uintptr_t>(key.resource);
+    mix(reinterpret_cast<const unsigned char*>(&resource), sizeof(resource));
+    mix(reinterpret_cast<const unsigned char*>(&key.kind), sizeof(key.kind));
+    mix(key.desc.data(), key.desc.size());
+    return static_cast<std::size_t>(hash);
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorRing::view_slot(const ViewKey& key, ID3D12Resource* resource, bool& made) {
+    auto found = views_.find(key);
+    made = found == views_.end();
+    if (made) {
+        unsigned slot = 0u;
+        if (!free_view_slots_.empty()) {
+            slot = free_view_slots_.back();
+            free_view_slots_.pop_back();
+        } else {
+            if (view_next_ == view_capacity_) {
+                // A larger CPU-only heap with the views so far: their slots stay.
+                const unsigned capacity = view_capacity_ == 0u ? kFirstViewCache : view_capacity_ * 2u;
+                D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+                dhd.Type = type_;
+                dhd.NumDescriptors = capacity;
+                dhd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+                Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap;
+                if (FAILED(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&heap)))) {
+                    return {};
+                }
+                if (view_capacity_ > 0u) {
+                    device_->CopyDescriptorsSimple(view_capacity_, heap->GetCPUDescriptorHandleForHeapStart(),
+                                                   view_heap_->GetCPUDescriptorHandleForHeapStart(), type_);
+                }
+                view_heap_ = std::move(heap);
+                view_capacity_ = capacity;
+            }
+            slot = view_next_++;
+        }
+        found = views_.emplace(key, KeptView{Microsoft::WRL::ComPtr<ID3D12Resource>(resource), slot, 0u}).first;
+        ++views_made_;
+    }
+    found->second.written_frame = view_frame_;
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu = view_heap_->GetCPUDescriptorHandleForHeapStart();
+    cpu.ptr += static_cast<SIZE_T>(found->second.slot) * increment_;
+    return cpu;
+}
+
+void DescriptorRing::write_view(D3D12_CPU_DESCRIPTOR_HANDLE at, ID3D12Resource* resource,
+                                const D3D12_SHADER_RESOURCE_VIEW_DESC& desc) {
+    ViewKey key;
+    key.resource = resource;
+    key.kind = 0u;
+    put(key.desc, 0u, desc.Format);
+    put(key.desc, 4u, desc.ViewDimension);
+    put(key.desc, 8u, desc.Shader4ComponentMapping);
+    bool known = true;
+    switch (desc.ViewDimension) {
+    case D3D12_SRV_DIMENSION_BUFFER:
+        put(key.desc, 16u, desc.Buffer.FirstElement);
+        put(key.desc, 24u, desc.Buffer.NumElements);
+        put(key.desc, 28u, desc.Buffer.StructureByteStride);
+        put(key.desc, 32u, desc.Buffer.Flags);
+        break;
+    case D3D12_SRV_DIMENSION_TEXTURE1D: put_member(key.desc, desc.Texture1D); break;
+    case D3D12_SRV_DIMENSION_TEXTURE1DARRAY: put_member(key.desc, desc.Texture1DArray); break;
+    case D3D12_SRV_DIMENSION_TEXTURE2D: put_member(key.desc, desc.Texture2D); break;
+    case D3D12_SRV_DIMENSION_TEXTURE2DARRAY: put_member(key.desc, desc.Texture2DArray); break;
+    case D3D12_SRV_DIMENSION_TEXTURE2DMS: put_member(key.desc, desc.Texture2DMS); break;
+    case D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY: put_member(key.desc, desc.Texture2DMSArray); break;
+    case D3D12_SRV_DIMENSION_TEXTURE3D: put_member(key.desc, desc.Texture3D); break;
+    case D3D12_SRV_DIMENSION_TEXTURECUBE: put_member(key.desc, desc.TextureCube); break;
+    case D3D12_SRV_DIMENSION_TEXTURECUBEARRAY: put_member(key.desc, desc.TextureCubeArray); break;
+    default: known = false; break;  // made in place each time
+    }
+    bool made = false;
+    const D3D12_CPU_DESCRIPTOR_HANDLE kept = known ? view_slot(key, resource, made) : D3D12_CPU_DESCRIPTOR_HANDLE{};
+    if (kept.ptr == 0u) {
+        device_->CreateShaderResourceView(resource, &desc, at);
+        return;
+    }
+    if (made) {
+        device_->CreateShaderResourceView(resource, &desc, kept);
+    }
+    device_->CopyDescriptorsSimple(1u, at, kept, type_);
+}
+
+void DescriptorRing::write_view(D3D12_CPU_DESCRIPTOR_HANDLE at, ID3D12Resource* resource,
+                                const D3D12_UNORDERED_ACCESS_VIEW_DESC& desc) {
+    ViewKey key;
+    key.resource = resource;
+    key.kind = 1u;
+    put(key.desc, 0u, desc.Format);
+    put(key.desc, 4u, desc.ViewDimension);
+    bool known = true;
+    switch (desc.ViewDimension) {
+    case D3D12_UAV_DIMENSION_BUFFER:
+        put(key.desc, 16u, desc.Buffer.FirstElement);
+        put(key.desc, 24u, desc.Buffer.NumElements);
+        put(key.desc, 28u, desc.Buffer.StructureByteStride);
+        put(key.desc, 32u, desc.Buffer.CounterOffsetInBytes);
+        put(key.desc, 40u, desc.Buffer.Flags);
+        break;
+    case D3D12_UAV_DIMENSION_TEXTURE1D: put_member(key.desc, desc.Texture1D); break;
+    case D3D12_UAV_DIMENSION_TEXTURE1DARRAY: put_member(key.desc, desc.Texture1DArray); break;
+    case D3D12_UAV_DIMENSION_TEXTURE2D: put_member(key.desc, desc.Texture2D); break;
+    case D3D12_UAV_DIMENSION_TEXTURE2DARRAY: put_member(key.desc, desc.Texture2DArray); break;
+    case D3D12_UAV_DIMENSION_TEXTURE3D: put_member(key.desc, desc.Texture3D); break;
+    default: known = false; break;  // made in place each time
+    }
+    bool made = false;
+    const D3D12_CPU_DESCRIPTOR_HANDLE kept = known ? view_slot(key, resource, made) : D3D12_CPU_DESCRIPTOR_HANDLE{};
+    if (kept.ptr == 0u) {
+        device_->CreateUnorderedAccessView(resource, nullptr, &desc, at);
+        return;
+    }
+    if (made) {
+        device_->CreateUnorderedAccessView(resource, nullptr, &desc, kept);
+    }
+    device_->CopyDescriptorsSimple(1u, at, kept, type_);
 }
 
 DescriptorRing::Persistent DescriptorRing::allocate_persistent(unsigned count) {
@@ -1055,7 +1218,7 @@ void RendererD3D12::record_scene_resolve(ID3D12GraphicsCommandList* list, bool c
             pd.NumRenderTargets = 0;
             pd.DSVFormat = kSceneDepthFormat;
             pd.SampleDesc.Count = 1;
-            d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&depth_resolve_pso_)),
+            d3d_check(core::utility_pipeline(device_.Get(), pd, &depth_resolve_pso_),
                       "depth resolve PSO");
         }
         if (!msaa.depth_srv) {
@@ -1098,9 +1261,6 @@ HRESULT create_draw_root_signature(
     tex_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     tex_range.NumDescriptors = UINT_MAX;
     tex_range.RegisterSpace = 1u;
-    // The same table as Texture3D (t0 space2, from the heap's start too): the light volume (program.hlsli traced_air).
-    D3D12_DESCRIPTOR_RANGE tex_ranges[2] = {tex_range, tex_range};
-    tex_ranges[1].RegisterSpace = 2u;
     D3D12_DESCRIPTOR_RANGE samp_range{};
     samp_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
     samp_range.NumDescriptors = UINT_MAX;
@@ -1117,8 +1277,8 @@ HRESULT create_draw_root_signature(
     params[3].Constants.Num32BitValues = gpu::kDrawRootWords;
     params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    params[4].DescriptorTable.NumDescriptorRanges = 2;
-    params[4].DescriptorTable.pDescriptorRanges = tex_ranges;
+    params[4].DescriptorTable.NumDescriptorRanges = 1;
+    params[4].DescriptorTable.pDescriptorRanges = &tex_range;
     params[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     params[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[5].DescriptorTable.NumDescriptorRanges = 1;
@@ -1258,6 +1418,10 @@ void RendererD3D12::reset_sampler_frame() {
     if (config_key == sampler_config_ && !full) {
         return;
     }
+    if (full) {
+        std::fprintf(stderr, "[samplers] %u of %u slots made: the heap starts again once the GPU is past them\n",
+                     sampler_slots_.used(), kSamplerHeapSlots);
+    }
     if (sampler_config_ != ~0u) {
         wait_for_gpu();
     }
@@ -1340,19 +1504,15 @@ bool RendererD3D12::create_conversion_pipeline() {
         pd.NumRenderTargets      = 1;
         pd.RTVFormats[0]         = kSceneColorFormat;
         pd.SampleDesc.Count      = 1;
-        d3d_check(device_->CreateGraphicsPipelineState(
-            &pd, IID_PPV_ARGS(&conv_pipeline_)), "CreateConvPSO");
+        d3d_check(core::utility_pipeline(device_.Get(), pd, &conv_pipeline_), "CreateConvPSO");
         pd.RTVFormats[0] = kSceneHdrColorFormat;
-        d3d_check(device_->CreateGraphicsPipelineState(
-            &pd, IID_PPV_ARGS(&conv_pipeline_wide_)), "CreateConvPSO wide");
+        d3d_check(core::utility_pipeline(device_.Get(), pd, &conv_pipeline_wide_), "CreateConvPSO wide");
         const UtilityShaderBytes filter = utility_shader(UtilityShader::DisplayFilterPs);
         pd.PS = {filter->GetBufferPointer(), filter->GetBufferSize()};
         pd.RTVFormats[0] = kSceneColorFormat;
-        d3d_check(device_->CreateGraphicsPipelineState(
-            &pd, IID_PPV_ARGS(&display_filter_pipeline_)), "CreateDisplayFilterPSO");
+        d3d_check(core::utility_pipeline(device_.Get(), pd, &display_filter_pipeline_), "CreateDisplayFilterPSO");
         pd.RTVFormats[0] = kSceneHdrColorFormat;
-        d3d_check(device_->CreateGraphicsPipelineState(
-            &pd, IID_PPV_ARGS(&display_filter_pipeline_wide_)), "CreateDisplayFilterPSO wide");
+        d3d_check(core::utility_pipeline(device_.Get(), pd, &display_filter_pipeline_wide_), "CreateDisplayFilterPSO wide");
     }
 
     // Screen probes: b0 the count, t0 the depth (a table), t1 the pixels and u0 the values (root views).
@@ -1382,7 +1542,7 @@ bool RendererD3D12::create_conversion_pipeline() {
         D3D12_COMPUTE_PIPELINE_STATE_DESC cd{};
         cd.pRootSignature = probe_root_signature_.Get();
         cd.CS = {cs->GetBufferPointer(), cs->GetBufferSize()};
-        d3d_check(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&probe_pipeline_)), "CreateProbePSO");
+        d3d_check(core::utility_pipeline(device_.Get(), cd, &probe_pipeline_), "CreateProbePSO");
     }
 
     // CPU-only RTV slot reused after each conversion bind is recorded.
@@ -1490,10 +1650,11 @@ void RendererD3D12::begin_scene_rectangle() {
                                                       resolution_budget_ms(rate, display_refresh_hz_));
         if (::galaxy::diagnosing(::galaxy::kDiagnoseResolutionSteps | ::galaxy::kDiagnosePresentStats) &&
             dynamic_resolution_.sixteenths() != before) {
-            std::fprintf(stderr, "[dynres] frame %llu: %u/16, %ux%u of %ux%u (floor %u/16)\n",
+            // With the samplers made so far, so what a step adds shows.
+            std::fprintf(stderr, "[dynres] frame %llu: %u/16, %ux%u of %ux%u (floor %u/16), samplers %zu\n",
                          static_cast<unsigned long long>(frame_index_), dynamic_resolution_.sixteenths(),
                          scene_rectangle_.width, scene_rectangle_.height, scene_extent_.width, scene_extent_.height,
-                         dynamic_resolution_.lowest_sixteenths());
+                         dynamic_resolution_.lowest_sixteenths(), static_cast<std::size_t>(sampler_slots_.used()));
         }
     }
     if (!(scene_rectangle_.width <= frame_extent_.width && scene_rectangle_.height <= frame_extent_.height) ||
@@ -1527,7 +1688,7 @@ bool RendererD3D12::publish_scene_depth_copy(std::uint64_t key, TextureStore& te
         pd.NumRenderTargets = 1;
         pd.RTVFormats[0] = DXGI_FORMAT_R32_FLOAT;
         pd.SampleDesc.Count = 1;
-        d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&depth_copy_pso_)), "depth copy PSO");
+        d3d_check(core::utility_pipeline(device_.Get(), pd, &depth_copy_pso_), "depth copy PSO");
     }
     // Its own key beside the colour captures' (channels in bits 48 and up, at most 4): freed with the texture's id.
     const std::uint64_t dest_key = static_cast<std::uint64_t>(static_cast<std::uint32_t>(key)) | (0xFFull << 48);
@@ -1734,10 +1895,6 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
     return picture;
 }
 
-// The share of wall time the GPU may spend on the frame's command lists before Match Output steps down: the rest is
-// headroom for heavier frames than the window's average, the compositor and other processes.
-constexpr double kGpuBudgetBusy = 0.80;
-
 void RendererD3D12::sync_post_process_settings() {
     if (!post_process_.ready()) {
         return;
@@ -1796,9 +1953,6 @@ void RendererD3D12::apply_window_size() {
     for (auto& retired : retired_targets_) {
         retired.clear();
     }
-    readback_buf_.Reset();
-    readback_pending_ = false;
-    readback_fence_value_ = 0u;
     const FrameMap previous = scene_extent_;
     if (format_changes) {
         // The post chain first: a format it cannot take leaves everything as it was.
@@ -1838,20 +1992,16 @@ void RendererD3D12::apply_window_size() {
 }
 
 bool RendererD3D12::scene_fits_memory(const FrameMap& map) const {
-    if (!adapter3_) {
-        return true;
-    }
-    DXGI_QUERY_VIDEO_MEMORY_INFO info{};
-    if (FAILED(adapter3_->QueryVideoMemoryInfo(
-            0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
+    std::uint64_t usage = 0u;
+    std::uint64_t budget = 0u;
+    if (!memory_.read_now(usage, budget)) {
         return true;
     }
     // Size-dependent residency: scene colour (4 bytes per pixel) and depth (kSceneDepthBytes) and at most the display
     // picture pair plus one full-picture copy (12 bytes per pixel).
     const auto bytes = [](const FrameMap& m) { return (4.0 + kSceneDepthBytes + 12.0) * m.width * m.height; };
     const double needed = bytes(map) - bytes(scene_extent_);
-    return static_cast<double>(info.CurrentUsage) + needed <=
-           0.9 * static_cast<double>(info.Budget);
+    return static_cast<double>(usage) + needed <= 0.9 * static_cast<double>(budget);
 }
 
 void RendererD3D12::probe_occlusion() {
@@ -1866,42 +2016,7 @@ void RendererD3D12::probe_occlusion() {
 }
 
 bool RendererD3D12::video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
-    usage = budget = 0u;
-    if (!adapter3_) {
-        return false;
-    }
-    // The use moves with every allocation and is read at most every 100 ms; the budget moves when the OS says (the event), and
-    // that is read at once.
-    const std::int64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                 std::chrono::steady_clock::now().time_since_epoch()).count();
-    const bool moved = budget_event_ != nullptr && WaitForSingleObject(budget_event_, 0u) == WAIT_OBJECT_0;
-    if (moved || memory_budget_ == 0u || now - memory_read_ms_ >= 100) {
-        DXGI_QUERY_VIDEO_MEMORY_INFO info{};
-        if (FAILED(adapter3_->QueryVideoMemoryInfo(0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
-            return false;
-        }
-        if (moved) {
-            std::cout << "[vram] the OS moved the budget from " << (memory_budget_ >> 20u) << " MB to " << (info.Budget >> 20u)
-                      << " MB\n";
-        }
-        memory_read_ms_ = now;
-        memory_usage_ = info.CurrentUsage;
-        memory_budget_ = info.Budget;
-    }
-    usage = memory_usage_;
-    budget = memory_budget_;
-    return true;
-}
-
-void RendererD3D12::release_budget_notification() noexcept {
-    if (adapter3_ && budget_cookie_ != 0u) {
-        adapter3_->UnregisterVideoMemoryBudgetChangeNotification(budget_cookie_);
-    }
-    budget_cookie_ = 0u;
-    if (budget_event_ != nullptr) {
-        CloseHandle(budget_event_);
-        budget_event_ = nullptr;
-    }
+    return memory_.read(usage, budget);
 }
 
 bool RendererD3D12::create_clear_pipeline() {
@@ -1953,7 +2068,7 @@ ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color) {
     pd.BlendState.RenderTarget[0].RenderTargetWriteMask = color
         ? D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE
         : D3D12_COLOR_WRITE_ENABLE_ALPHA;
-    d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline)),
+    d3d_check(core::utility_pipeline(device_.Get(), pd, &pipeline),
               color ? "CreateClearRgbPSO" : "CreateClearAlphaPSO");
     return pipeline.Get();
 }
@@ -2192,16 +2307,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         host_window::rtx_adapter.store(adapter_desc.VendorId == 0x10DEu &&
                                        std::wcsstr(adapter_desc.Description, L"RTX") != nullptr,
                                        std::memory_order_relaxed);
-        (void)adapter.As(&adapter3_);
-        release_budget_notification();
-        if (adapter3_) {
-            budget_event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-            if (budget_event_ != nullptr &&
-                FAILED(adapter3_->RegisterVideoMemoryBudgetChangeNotificationEvent(budget_event_, &budget_cookie_))) {
-                budget_cookie_ = 0u;
-                release_budget_notification();
-            }
-        }
+        memory_.attach(adapter.Get());
         {
             const std::string narrow = narrow_utf8(adapter_desc.Description);
             const bool is_software =
@@ -2509,7 +2615,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             pd.NumRenderTargets      = 1;
             pd.RTVFormats[0]         = kBackbufferFormat;
             pd.SampleDesc.Count      = 1;
-            d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&blit_pipeline_)), "CreateBlitPSO");
+            d3d_check(core::utility_pipeline(device_.Get(), pd, &blit_pipeline_), "CreateBlitPSO");
         }
 
         frame_pass_heap_.initialize(device_.Get());
@@ -2893,7 +2999,7 @@ void RendererD3D12::list_live_objects(Kept& kept) {
 RendererD3D12::Kept RendererD3D12::take_apart_lost_device() {
     keep_window_ = true;
     device_gone_ = true;
-    readback_pending_ = backbuffer_readback_pending_ = selected_display_readback_pending_ = false;
+    backbuffer_readback_pending_ = selected_display_readback_pending_ = false;
     try {
         shutdown();
     } catch (const std::exception& error) {
@@ -2939,9 +3045,6 @@ void RendererD3D12::shutdown() {
     }
     // A diagnostic copy can be the last submitted list: its data goes to the
     // background PPM writers before any D3D resource is released.
-    retain_shutdown_failure("scene target diagnostic readback", [&] {
-        debug_log_readback();
-    });
     retain_shutdown_failure("backbuffer diagnostic readback", [&] {
         debug_log_backbuffer_readback();
     });
@@ -2958,7 +3061,7 @@ void RendererD3D12::shutdown() {
         streamline::shutdown();
     });
     if (fence_event_) { CloseHandle(fence_event_); fence_event_ = nullptr; }
-    release_budget_notification();
+    memory_.release();
     host_window::pending_resize_extent.store(0u, std::memory_order_relaxed);
     s_blit_root_sig.Reset();
     set_mod_post_compiler(nullptr, false);
@@ -3013,11 +3116,6 @@ void RendererD3D12::shutdown() {
     timestamp_readback_.Reset();
     timestamp_pending_.fill(false);
     timestamp_frequency_ = 0;
-    readback_buf_.Reset();
-    readback_pending_ = false;
-    readback_fence_value_ = 0;
-    next_scene_capture_path_.clear();
-    readback_capture_path_.clear();
     backbuffer_readback_buf_.Reset();
     hdr_capture_target_.Reset();
     hdr_capture_rtv_heap_.Reset();
@@ -3510,7 +3608,7 @@ void RendererD3D12::begin_frame() {
     // Display and size changes apply here, between command-list recordings.
     // They wait for the GPU themselves, so they come before any per-slot state
     // below is touched.
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     reconcile_display_state();
     apply_pending_resize();
     if (const bool fsr = fsr_generation_wanted(); fsr != fsr_swap_chain_ && !streamline_frame_open_) {
@@ -3533,9 +3631,14 @@ void RendererD3D12::begin_frame() {
     apply_dynamic_resolution();
     sync_post_process_settings();
     {
-        if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
-            // The settings changed: decided again.
-            temporal_interp_suspended_ = false;
+        if (temporal_interp_hold_.held()) {
+            if (temporal_interp_key() != temporal_interp_key_) {
+                temporal_interp_hold_.settings_changed();  // the settings changed: decided again
+            } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+                // Its wait passed: the governor measures generated frames again, not by the cost that held it.
+                reset_generated_gpu_ema();
+                std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
+            }
         }
         // A ring whose frames took over half their budget (or spilled) grows before the next frame; one whose last 30 seconds
         // (and 600 frames) stayed under a quarter of it gives half of its memory back on a frame without the scene
@@ -3813,6 +3916,7 @@ void RendererD3D12::refresh_display_rate(bool read_mode) {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     const double hz = variable ? variable_refresh_cap(mode_hz) : (timed ? measured_hz : mode_hz);
     if (hz <= 1.0) {
         return;
@@ -4054,11 +4158,17 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     if (hz <= 0.0) {
         return 1u;
     }
-    // EnumDisplaySettings reports whole hertz: 119 for 119.88, 239 for 239.76. A game frame without generated frames
-    // holds for its whole 60 Hz frame (4 refreshes at 240 Hz) rather than the next refresh after it is ready, which
-    // drifts against the display.
+    // EnumDisplaySettings reports whole hertz: 119 for 119.88, 239 for 239.76.
     const double rate = game_frame ? std::min(kGameStepRate, present_frame_rate(max_fps, configured, hz))
                                    : present_frame_rate(max_fps, configured, hz);
+    // A game frame at 60 (in-between pictures off, or a movie between them) goes out at once and the display repeats
+    // it until the next: the step clock keeps the frames on the display's grid where its rate is a multiple
+    // (galaxy/step_lock.h, frame_phase.h). A sync interval of a whole step held each frame back that long (file F, M1:
+    // at 240 Hz the present call was made 12.9 ms after its step and came back at 29.3 ms). A rate capped under 60
+    // (30), or of in-between pictures that is a part of the refresh, keeps whole refreshes per picture.
+    if ((game_frame || !interpolation_mode()) && rate >= kGameStepRate - 0.5) {
+        return 1u;
+    }
     const double multiple = std::round(hz / rate);
     if (multiple >= 2.0 && multiple <= 4.0 &&
         std::abs(hz - rate * multiple) <= 0.015 * hz) {
@@ -4190,7 +4300,9 @@ void RendererD3D12::present_to_swap_chain() {
                     statistics.PresentRefreshCount,
                 statistics.SyncRefreshCount);
         }
-        if (timeline_present_ordinal % 30u == 1u) {
+        // The compositor's timing twice a second, at any present rate.
+        static galaxy::ClockInterval dwm_look{500, true};
+        if (dwm_look.due()) {
             using DwmTimingFn = HRESULT(WINAPI*)(HWND, DWM_TIMING_INFO*);
             static const DwmTimingFn dwm_timing = [] {
                 const HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
@@ -4490,9 +4602,6 @@ std::uint64_t RendererD3D12::end_frame(
         d3d_check(signal_hr, "Queue Signal");
     }
     // Readbacks recorded on this list complete at this signal; nothing waits for them here.
-    if (readback_pending_ && readback_fence_value_ == 0u) {
-        readback_fence_value_ = submitted_fence;
-    }
     if (backbuffer_readback_pending_ &&
         backbuffer_readback_fence_value_ == 0u) {
         backbuffer_readback_fence_value_ = submitted_fence;
@@ -4746,7 +4855,7 @@ bool RendererD3D12::interpolation_mode() const {
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
     // With a temporal upscaler every presented frame is upscaled, its motion from the frame presented before (any
     // rate: the slots' t need not divide the game frame evenly), unless the GPU could not afford it.
-    if (temporal_mode() && temporal_interp_suspended_) {
+    if (temporal_mode() && temporal_interp_hold_.held()) {
         return false;
     }
     return interpolated_frames_per_game_frame(rate) != 0u;
@@ -4766,13 +4875,13 @@ RendererD3D12::TemporalInterpKey RendererD3D12::temporal_interp_key() const {
 }
 
 void RendererD3D12::suspend_temporal_interpolation(double ms_per_frame) {
-    if (temporal_interp_suspended_) {
+    if (temporal_interp_hold_.held()) {
         return;
     }
-    temporal_interp_suspended_ = true;
+    temporal_interp_hold_.hold(galaxy::qpc_to_ns(galaxy::qpc_now()));
     temporal_interp_key_ = temporal_interp_key();
     std::cerr << "[interp] temporal upscaling of generated frames off: " << ms_per_frame
-              << " ms GPU per presented frame\n";
+              << " ms GPU per presented frame; tried again in " << temporal_interp_hold_.wait_ns() / 1000000000 << " s\n";
 }
 
 bool RendererD3D12::begin_motion_scene() {
@@ -5580,7 +5689,7 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
         sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         sd.Texture2D.MipLevels = 1;
-        device_->CreateShaderResourceView(fg_hudless_display_.texture.Get(), &sd, tbl.cpu);
+        srv_ring_.write_view(tbl.cpu, fg_hudless_display_.texture.Get(), sd);
         command_list_->SetGraphicsRootSignature(s_blit_root_sig.Get());
         command_list_->SetPipelineState(blit_pipeline_.Get());
         srv_ring_.bind(command_list_.Get());
@@ -5849,7 +5958,7 @@ ID3D12PipelineState* RendererD3D12::layer_pipeline(bool merge, unsigned samples)
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = merge ? kSceneHdrColorFormat : kSceneColorFormat;
     pd.SampleDesc.Count = samples;
-    if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&slot)))) {
+    if (FAILED(core::utility_pipeline(device_.Get(), pd, &slot))) {
         slot.Reset();
         return nullptr;
     }
@@ -5971,10 +6080,10 @@ void RendererD3D12::end_layer_2d() {
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1;
     view.Format = kSceneColorFormat;
-    device_->CreateShaderResourceView(layer2d_set_.color.Get(), &view, table.cpu);
+    srv_ring_.write_view(table.cpu, layer2d_set_.color.Get(), view);
     D3D12_CPU_DESCRIPTOR_HANDLE second = table.cpu;
     second.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    device_->CreateShaderResourceView(layer2d_base_.Get(), &view, second);
+    srv_ring_.write_view(second, layer2d_base_.Get(), view);
     // Into the float set's target (each sample with MSAA, resolved again when next read).
     record_layer_draw(layer_pipeline(true, scene_msaa_.samples), layer2d_merge_root_.Get(), scene_rtv_,
                       static_cast<unsigned>(desc.Width), desc.Height, table.gpu, false);
@@ -6154,7 +6263,6 @@ bool RendererD3D12::begin_output_scene(bool resolve_msaa_only) {
     }
     // The whole scene scene target, resampled into the output target with the display
     // copy's identity settings (no filter, gamma 1.0, alpha kept).
-    FramePassRequest params{};
     const unsigned w = output.width;
     const unsigned h = output.height;
     const FramePassGeometry sampling = frame_pass_geometry(w, h, frame_);
@@ -6565,16 +6673,12 @@ void RendererD3D12::finish_pictures() {
     if (queue_ && fence_) {
         wait_for_gpu();
     }
-    debug_log_readback();
     debug_log_backbuffer_readback();
     debug_log_selected_display_readback();
     reap_debug_capture_writers(true);
 }
 
-void RendererD3D12::set_debug_capture_paths(
-    std::string scene_ppm_path,
-    std::string backbuffer_ppm_path) {
-    next_scene_capture_path_ = std::move(scene_ppm_path);
+void RendererD3D12::set_debug_capture_paths(std::string backbuffer_ppm_path) {
     next_backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
 }
 
@@ -6686,162 +6790,6 @@ void RendererD3D12::queue_debug_ppm_capture(
             }
         });
     debug_ppm_writers_.push_back(std::move(writer));
-}
-
-bool RendererD3D12::debug_copy_scene_to_readback() {
-    // The scene target as it is: the 10-bit one (R10G10B10A2), or the wide one (RGBA16F, a traced scene's),
-    // whose halves debug_log_readback turns into the 10-bit target's words.
-    resolve_scene(false);
-    debug_log_readback();
-    if (readback_pending_) {
-        std::cerr << "[scene-dump] skipped=prior-readback-pending path="
-                  << next_scene_capture_path_ << '\n';
-        return false;
-    }
-    const UINT w = frame_.width;
-    const UINT h = frame_.height;
-    // 8 or 4 bytes a pixel from the target's own format (as the Vulkan side): any other is not read.
-    const DXGI_FORMAT format = scene_color_->GetDesc().Format;
-    const bool wide = format == kSceneHdrColorFormat;
-    if (!wide && format != kSceneColorFormat) {
-        std::cerr << "[scene-dump] skipped=scene-format-not-read format=" << static_cast<unsigned>(format)
-                  << " path=" << next_scene_capture_path_ << '\n';
-        return false;
-    }
-    const UINT row_pitch =
-        (w * (wide ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
-        ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
-
-    if (readback_buf_ && readback_buf_->GetDesc().Width < static_cast<UINT64>(row_pitch) * h) {
-        readback_buf_.Reset();  // made for the 10-bit target or a smaller frame: no copy is pending (checked above)
-    }
-    if (!readback_buf_) {
-        D3D12_HEAP_PROPERTIES hp{};
-        hp.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC rd{};
-        rd.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER;
-        rd.Width            = static_cast<UINT64>(row_pitch) * h;
-        rd.Height           = 1;
-        rd.DepthOrArraySize = 1;
-        rd.MipLevels        = 1;
-        rd.SampleDesc.Count = 1;
-        rd.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        if (FAILED(device_->CreateCommittedResource(
-                &hp, D3D12_HEAP_FLAG_NONE, &rd,
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                nullptr, IID_PPV_ARGS(&readback_buf_)))) {
-            std::cerr << "[scene-dump] skipped=readback-allocation-failed path="
-                      << next_scene_capture_path_ << '\n';
-            return false;
-        }
-    }
-
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::CopySource);
-    uses.issue();
-
-    D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
-    src.pResource = scene_color_.Get();
-    src.Type      = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    dst.pResource = readback_buf_.Get();
-    dst.Type      = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    dst.PlacedFootprint.Footprint.Format   = wide ? kSceneHdrColorFormat : kSceneColorFormat;
-    dst.PlacedFootprint.Footprint.Width    = w;
-    dst.PlacedFootprint.Footprint.Height   = h;
-    dst.PlacedFootprint.Footprint.Depth    = 1;
-    dst.PlacedFootprint.Footprint.RowPitch = row_pitch;
-    command_list_->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-
-    uses.undo();
-    readback_pending_ = true;
-    readback_wide_ = wide;
-    readback_fence_value_ = 0u;
-    readback_capture_path_ = next_scene_capture_path_;
-    return true;
-}
-
-void RendererD3D12::debug_log_readback() {
-    reap_debug_capture_writers(false);
-    if (!readback_pending_ || !readback_buf_) {
-        return;
-    }
-    if (readback_fence_value_ == 0u ||
-        completed_fence_value() < readback_fence_value_) {
-        return;
-    }
-    readback_pending_ = false;
-    readback_fence_value_ = 0u;
-
-    const UINT w = frame_.width;
-    const UINT h = frame_.height;
-    const UINT copied_pitch =
-        (w * (readback_wide_ ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
-        ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
-
-    void* mapped = nullptr;
-    D3D12_RANGE range{0, static_cast<SIZE_T>(copied_pitch) * h};
-    if (FAILED(readback_buf_->Map(0, &range, &mapped))) {
-        readback_capture_path_.clear();
-        return;
-    }
-    bool mapped_active = true;
-    const D3D12_RANGE no_write{0, 0};
-    const ScopeExit unmap_readback([&]() noexcept {
-        if (mapped_active) readback_buf_->Unmap(0, &no_write);
-    });
-    std::uint64_t nonblack = 0, alpha_hits = 0, rs = 0, gs = 0, bs = 0;
-    std::uint8_t rmax = 0, gmax = 0, bmax = 0, amax = 0;
-    // The wide target's halves as the 10-bit target's words; the rest reads words either way.
-    std::vector<std::uint8_t> words;
-    const auto* base = static_cast<const std::uint8_t*>(mapped);
-    UINT row_pitch = copied_pitch;
-    if (readback_wide_) {
-        row_pitch = w * 4u;
-        words.resize(static_cast<std::size_t>(row_pitch) * h);
-        half4_to_ten_bit(base, words.data(), w, h, copied_pitch, row_pitch);
-        base = words.data();
-    }
-    for (UINT y = 0; y < h; y += 4) {           // sample every 4th row/col
-        const std::uint8_t* row = base + static_cast<std::size_t>(y) * row_pitch;
-        for (UINT x = 0; x < w; x += 4) {
-            std::uint32_t word = 0u;
-            std::memcpy(&word, row + x * 4u, 4u);
-            const auto r = static_cast<std::uint8_t>((word & 1023u) >> 2u);
-            const auto g = static_cast<std::uint8_t>((word >> 10u & 1023u) >> 2u);
-            const auto bl = static_cast<std::uint8_t>((word >> 20u & 1023u) >> 2u);
-            const auto a = static_cast<std::uint8_t>((word >> 30u) * 85u);
-            rs += r; gs += g; bs += bl;
-            rmax = std::max(rmax, r); gmax = std::max(gmax, g);
-            bmax = std::max(bmax, bl); amax = std::max(amax, a);
-            if (r > 8 || g > 8 || bl > 8) ++nonblack;
-            if (a > 8) ++alpha_hits;
-        }
-    }
-    const std::uint64_t samples =
-        (static_cast<std::uint64_t>((h + 3) / 4)) * ((w + 3) / 4);
-
-    if (!readback_capture_path_.empty()) {
-        queue_debug_ppm_capture(
-            "scene-dump",
-            readback_capture_path_,
-            base,
-            w,
-            h,
-            row_pitch,
-            true);
-    }
-
-    readback_buf_->Unmap(0, &no_write);
-    mapped_active = false;
-    readback_capture_path_.clear();
-    std::cerr << "[scene-dump] nonblack=" << nonblack << "/" << samples
-              << " alpha=" << alpha_hits
-              << " mean=(" << rs / samples << "," << gs / samples << ","
-              << bs / samples << ") max=("
-              << static_cast<unsigned>(rmax) << ","
-              << static_cast<unsigned>(gmax) << ","
-              << static_cast<unsigned>(bmax) << ","
-              << static_cast<unsigned>(amax) << ")\n";
 }
 
 bool RendererD3D12::present(
@@ -6968,7 +6916,7 @@ bool RendererD3D12::present(
         sd.ViewDimension             = D3D12_SRV_DIMENSION_TEXTURE2D;
         sd.Shader4ComponentMapping   = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         sd.Texture2D.MipLevels       = 1;
-        device_->CreateShaderResourceView(source->texture.Get(), &sd, tbl.cpu);
+        srv_ring_.write_view(tbl.cpu, source->texture.Get(), sd);
         command_list_->SetGraphicsRootSignature(s_blit_root_sig.Get());
         command_list_->SetPipelineState(blit_pipeline_.Get());
         srv_ring_.bind(command_list_.Get());

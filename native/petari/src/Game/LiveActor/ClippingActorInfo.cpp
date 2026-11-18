@@ -60,11 +60,9 @@ bool ClippingActorInfo::isJudgedToClip() const {
 // another scenario uses them (Space Junk's web coins), relying on their staying clipped there. Never over a planet that
 // is not there: view cubes and switches hide a planet and leave what stands on it to its distance.
 // A clipped actor already drawn stays so until its sphere is a margin outside the frustum (same reason as isJudgedToClip).
-// While the host traces, the judge's margin more: what stands just off screen stays drawn,
-// stopped, for the tracer's shadows and mirrors; the host leaves it out of its raster passes.
 bool ClippingActorInfo::isDrawnWhileClipped() const {
     ClippingJudge* const pJudge = ::getJudge();
-    const f32 radius = (mActor->mFlag.mIsDrawnClipped ? mRadius + ::sClipLeaveMargin : mRadius) + pJudge->getTracedDrawMargin();
+    const f32 radius = (mActor->mFlag.mIsDrawnClipped ? mRadius + ::sClipLeaveMargin : mRadius);
     return !mViewGroup->mIsHidden && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor, mActor->mFlag.mHasPose) &&
            !pJudge->isJudgedToClipFrustum(*mCenter, radius, 0) && const_cast< ClippingActorInfo* >(this)->isGroundShown();
 }

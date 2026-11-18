@@ -96,11 +96,11 @@ bool finite(const Affine34& m) noexcept {
 }  // namespace
 
 // One frame of an object's motion: its origin moved less than half its
-// distance from the eye plus 200 units, no axis scaled by more than 2x, and
-// it turned less than 150 degrees (a teleport, a respawn or a reused slot
-// otherwise). A scale step up to 8x is motion (pulsing, popping effects). A
-// larger turn alone is a flip of an object that stays (a sprite spun by a
-// random angle): its rotation shows b, the rest still moves.
+// distance from the eye plus 200 units, no axis scaled by more than 8x (so
+// pulsing and popping effects are motion), and it turned less than 150
+// degrees (a teleport, a respawn or a reused slot otherwise). A larger turn
+// alone is a flip of an object that stays (a sprite spun by a random angle):
+// its rotation shows b, the rest still moves.
 Plausibility plausibility(const AffineMotion& m, float eye_distance) noexcept {
     float moved = 0.0f;
     for (unsigned r = 0; r < 3u; ++r) {
@@ -168,9 +168,7 @@ void camera_motion(const Affine34* a, const Affine34* b, float previous_move,
             out.inv_sin_theta = 1.0f / std::sin(out.theta);
         }
     }
-    out.cut = out.turn_degrees > limits.max_turn_degrees ||
-              (out.moved > limits.max_move_units &&
-               out.moved > limits.relative * previous_move + limits.slack);
+    out.cut = out.moved > limits.max_move_units && out.moved > limits.relative * previous_move + limits.slack;
 }
 
 Affine34 camera_at(const CameraMotion& m, float t) noexcept {

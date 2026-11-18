@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/whole_lines.h"
 
+#include "galaxy/line_writer.h"
+
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include <streambuf>
 #include <string>
@@ -16,12 +19,28 @@ std::FILE* file_of(unsigned output) noexcept {
     return output == Out ? stdout : stderr;
 }
 
-void emit(unsigned output, const char* data, std::size_t size) noexcept {
+void write_now(unsigned output, const char* data, std::size_t size) noexcept {
     // One fwrite: stdio holds the stream's lock for the whole call, so no other thread's write lands inside it.
     std::fwrite(data, 1u, size, file_of(output));
     if (output == Err) {
         std::fflush(stderr);
     }
+}
+
+// The writer's thread (install): never destroyed, as the streams it writes outlive every static.
+LineWriter* g_writer = nullptr;
+
+void emit(unsigned output, const char* data, std::size_t size) noexcept {
+    if (g_writer != nullptr) {
+        try {
+            if (g_writer->hand(output, data, size)) {
+                return;
+            }
+        } catch (...) {
+            // No memory for the queue: written here.
+        }
+    }
+    write_now(output, data, size);
 }
 
 // Set when this thread's unfinished lines are gone (its end; the main thread's comes before the program's statics are
@@ -108,6 +127,50 @@ void install() noexcept {
     std::cout.rdbuf(out);
     std::cerr.rdbuf(err);
     std::clog.rdbuf(err);
+    if (g_writer == nullptr) {
+        try {
+            g_writer = new LineWriter(
+                [](void*, unsigned output, const char* data, std::size_t size) {
+                    std::fwrite(data, 1u, size, file_of(output));
+                },
+                [](void*) {
+                    std::fflush(stdout);
+                    std::fflush(stderr);
+                },
+                nullptr);
+            g_writer->start();
+            // A normal end (main returns, exit): what is queued goes out before stdio closes, and the thread is
+            // joined (let go if its output is stuck). A line written after this goes out at once.
+            std::atexit([] { g_writer->finish(); });
+        } catch (...) {
+            g_writer = nullptr;  // no thread: every line is written where it is made, as before
+        }
+    }
+}
+
+void write(std::FILE* to, const char* data, std::size_t size) noexcept {
+    if (to == stdout || to == stderr) {
+        emit(to == stdout ? Out : Err, data, size);
+    } else {
+        std::fwrite(data, 1u, size, to);
+    }
+}
+
+bool flush(unsigned bound_ms) noexcept {
+    bool done = true;
+    if (g_writer != nullptr) {
+        try {
+            done = g_writer->flush(std::chrono::milliseconds(bound_ms));
+        } catch (...) {
+            done = false;
+        }
+    }
+    // Not when the writer is stuck: its write holds the stream's lock, and fflush would wait on it with no bound.
+    if (done) {
+        std::fflush(stdout);
+        std::fflush(stderr);
+    }
+    return done;
 }
 
 }  // namespace galaxy::whole_lines

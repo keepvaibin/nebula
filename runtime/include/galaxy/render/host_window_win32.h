@@ -73,7 +73,7 @@ inline constexpr ULONG_PTR kImportCopyData = 0x4E42494Du;  // "NBIM"
 // placed: the caller follows its new size. A placement the player made by hand is the setting already, and stays.
 bool reconcile_display(HWND window);
 
-// The settings the D3D12 renderer reads (temporal upscaling and interpolation, ray tracing).
+// The settings the D3D12 renderer reads (temporal upscaling and interpolation).
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 }  // namespace galaxy::render::host_window

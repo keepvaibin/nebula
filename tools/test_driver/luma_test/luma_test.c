@@ -37,6 +37,8 @@ static const LumaFunction* flag_on;         /* void GameDataFunction::onGameEven
 static const LumaFunction* is_flag_on;      /* bool GameDataFunction::isOnGameEventFlag(const char *) */
 static const LumaFunction* set_value;       /* void GameDataFunction::setGameEventValue(const char *, u16) */
 static const LumaFunction* get_value;       /* u32 GameDataFunction::getGameEventValue(const char *) */
+static const LumaFunction* seed_given;      /* u32 GameDataFunction::getStarPieceNumGivingToTicoSeed(int) */
+static const LumaFunction* seed_give;       /* void GameDataFunction::addStarPieceGivingToTicoSeed(int, int) */
 static const LumaFunction* star_count;      /* s32 GameDataFunction::calcCurrentPowerStarNum() */
 static const LumaFunction* grand_count;     /* s32 GameDataFunction::calcGrandStarNum(const GameDataHolder *) */
 static const LumaFunction* game_data;       /* GameDataHolder *GameDataFunction::getCurrentGameDataHolder() */
@@ -924,6 +926,30 @@ static void setup_save(const Words* w) {
         finish(back == (uint32_t)value, "save.values did not take");
         return;
     }
+    /* Star bits already given to a Hungry Luma's seed (the save's alms count), as feeding it on an earlier visit does. */
+    if (same(item, "save.tico_seed") && w->count == 4u) {
+        int good_value = 0;
+        const int64_t index = to_int(w->word[2], &good);
+        const int64_t want = to_int(w->word[3], &good_value);
+        if (!good || !good_value || index < 0 || index > 255 || want < 0 || want > 65535) {
+            finish(0, "save.tico_seeds: a seed is 0 to 255 and a count 0 to 65535");
+            return;
+        }
+        int32_t seed = (int32_t)index;
+        uint32_t have = 0;
+        call1(seed_given, &seed, &have);
+        int32_t more = (int32_t)(want - (int64_t)have);
+        void* args[] = {0, &seed, &more};
+        seed_give->invoke(args, 0);
+        call1(seed_given, &seed, &have);
+        Out key;
+        out_empty(&key);
+        put(&key, "setup.save.tico_seeds.");
+        put(&key, w->word[2]);
+        fact_int(key.text, have);
+        finish(have == (uint32_t)want, "save.tico_seeds did not take (a count above the seed's most is not stored)");
+        return;
+    }
     if ((same(item, "save.stars") || same(item, "save.grand_stars")) && w->count == 3u) {
         const int64_t want = to_int(w->word[2], &good);
         int32_t have = -1;
@@ -1363,8 +1389,8 @@ static void do_read(const Words* w) {
    the order the game made them, each its name's bytes and its position, rotation, scale, velocity and gravity (the
    floats' bits) and its spine's step. No addresses: two builds of the same game give the same hash, so a change to the
    game's source that changes nothing the game does keeps every step's hash. "hash detail" writes one fact hash.actor
-   per actor at that step: its place in the order, its name, its own hash and its values, so the first actor two runs
-   differ in can be named. */
+   per actor at that step: its place in the order, its name, its own hash, its values and their bits (the 15 floats
+   in the hash's order, 8 hex digits each), so the first actor two runs differ in, and the value, can be named. */
 
 static int hashing;
 static int32_t hashed_frame = -1;
@@ -1405,6 +1431,27 @@ static void put_hex(Out* out, uint64_t value) {
     put_string(out, hex);
 }
 
+/* The bits of the floats the hash reads, position to gravity, as 120 hex digits. */
+static void put_bits(Out* out, const char* actor) {
+    const int32_t at[5] = {field_position, field_rotation, field_scale, field_velocity, field_gravity};
+    char hex[121];
+    uint32_t n = 0;
+    for (uint32_t f = 0; f < 5u; f++) {
+        for (uint32_t c = 0; c < 3u; c++) {
+            const char* const from = actor + at[f] + c * 4u;
+            uint32_t bits = (uint32_t)(unsigned char)from[0] | (uint32_t)(unsigned char)from[1] << 8u |
+                   (uint32_t)(unsigned char)from[2] << 16u | (uint32_t)(unsigned char)from[3] << 24u;
+            for (int i = 7; i >= 0; i--) {
+                hex[n + (uint32_t)i] = "0123456789abcdef"[bits & 15u];
+                bits >>= 4u;
+            }
+            n += 8u;
+        }
+    }
+    hex[n] = 0;
+    put_string(out, hex);
+}
+
 static void hash_step(int detail) {
     uint64_t h = 14695981039346656037ull;
     uint32_t actors = 0;
@@ -1438,6 +1485,8 @@ static void hash_step(int detail) {
             put(&each, ",\"step\":");
             const char* const spine = *(const char* const*)(actor + field_spine);
             put_int(&each, spine != 0 ? *(const int32_t*)(spine + field_spine_step) : -1);
+            put(&each, ",\"bits\":");
+            put_bits(&each, actor);
             put(&each, "}");
             fact("hash.actor", &each);
         }
@@ -1625,6 +1674,8 @@ static const LumaImport imports[] = {
     LUMA_FUNCTION(is_flag_on, "GameDataFunction::isOnGameEventFlag", "bool(const char *)"),
     LUMA_FUNCTION(set_value, "GameDataFunction::setGameEventValue", "void(const char *, u16)"),
     LUMA_FUNCTION(get_value, "GameDataFunction::getGameEventValue", "u32(const char *)"),
+    LUMA_FUNCTION(seed_given, "GameDataFunction::getStarPieceNumGivingToTicoSeed", "u32(int)"),
+    LUMA_FUNCTION(seed_give, "GameDataFunction::addStarPieceGivingToTicoSeed", "void(int, int)"),
     LUMA_FUNCTION(star_count, "GameDataFunction::calcCurrentPowerStarNum", "s32()"),
     LUMA_FUNCTION(grand_count, "GameDataFunction::calcGrandStarNum", "s32(const GameDataHolder *)"),
     LUMA_FUNCTION(game_data, "GameDataFunction::getCurrentGameDataHolder", "GameDataHolder *()"),

@@ -8,8 +8,9 @@ starts the game for a test goes through here.
          two stops of each other disc. Before asking for a main gate.
 --main   level 2, what moves main: everything deterministic. Every renderer's engine tests and 102-stop tour with
          pictures and step hashes, the other discs, the mod tests on every renderer, the Android build, the tablet's
-         short part (the 12 stops, their step hashes against the PC's at the tablet's screen size) and GitHub's
-         Linux, Linux unit tests, Mac and Rust-on-Linux jobs of the same commit.
+         short part (the 12 stops, their step hashes against the PC's at the tablet's screen size) and every job of
+         GitHub's Check run of the same commit (Linux, Linux unit tests, both sanitizer jobs, Mac, Mac (Intel), Android,
+         Rust-on-Linux and any job added later), planned.tsv's github/<job> lines aside.
          --move: main moves to this commit when it passes (section 5). It needs a whole quick gate of the commit
          passed, the branch pushed and main an ancestor of it; it takes the gate lock (or waits --wait minutes),
          and on a pass fast-forwards main and pushes it itself, writes MAIN-MOVED on the board and frees the lock.
@@ -329,6 +330,13 @@ class Gate:
         lines = [head] + ["  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
         path.with_suffix(".txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
         append_history(pathlib.Path(self.args.work) / "history.tsv", out)
+        if out["passed"] and not self.args.keep_runs and not self.args.out:
+            # The passed tests' working files are not evidence once the run passed (N-1060): the drive keeps its room.
+            import prune_runs
+            tests, freed = prune_runs.prune(self.work)
+            if tests:
+                print("gate.py: %d passed tests' working files removed (%.1f GB); --keep-runs keeps them" % (
+                    tests, freed / 1e9))
         if self.level == "main" and not self.args.only and seconds > MAIN_GATE_SECONDS:
             print("gate.py: this main gate took %.0f minutes, over 30: a ledger row for Agent 1 (section 7)" % (seconds / 60))
         if self.args.record:
@@ -372,22 +380,80 @@ def git(*args):
     return r.stdout.strip()
 
 
+# A run's checks stop when GitHub has a red job of the commit (GithubWatch): every command running is ended with its
+# children, and one asked after is not started.
+STOPPED = threading.Event()
+STOPPED_WHY = [""]
+CHILDREN = set()
+CHILDREN_LOCK = threading.Lock()
+
+
+def end_tree(process):
+    """Ends a process and every process it started."""
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True)
+    else:
+        process.kill()
+
+
+def stop_runs(why):
+    """Ends every command the checks run now and starts no other (the run then fails)."""
+    STOPPED_WHY[0] = why
+    STOPPED.set()
+    with CHILDREN_LOCK:
+        running = list(CHILDREN)
+    for process in running:
+        end_tree(process)
+
+
+# Per lane thread: below_normal starts a lane's programs at below-normal priority (the CPU-only checks beside the game
+# lanes, so a game run never waits for a compiler).
+LANE = threading.local()
+
+
 def run(cmd, log, env=None, cwd=None, timeout=None):
-    """Runs cmd with its output in log; returns the exit code."""
+    """Runs cmd with its output in log; returns the exit code (124: timed out; 125: stopped, stop_runs). In a lane that
+    asks it (LANE.below_normal), the program and its children run at below-normal priority."""
     with open(log, "ab") as f:
         f.write(("$ %s\n" % " ".join(str(c) for c in cmd)).encode())
         f.flush()
+        if STOPPED.is_set():
+            f.write(("(not started: %s)\n" % STOPPED_WHY[0]).encode())
+            return 125
         e = dict(os.environ)
         e.update(env or {})
+        flags = getattr(subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0) if getattr(LANE, "below_normal", False) else 0
+        process = subprocess.Popen([str(c) for c in cmd], stdout=f, stderr=subprocess.STDOUT, env=e, cwd=cwd,
+                                   creationflags=flags)
+        with CHILDREN_LOCK:
+            CHILDREN.add(process)
         try:
-            return subprocess.run([str(c) for c in cmd], stdout=f, stderr=subprocess.STDOUT, env=e, cwd=cwd,
-                                  timeout=timeout).returncode
+            code = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
+            end_tree(process)
+            process.wait()
             f.write(b"\n(timed out)\n")
             return 124
+        finally:
+            with CHILDREN_LOCK:
+                CHILDREN.discard(process)
+        if STOPPED.is_set():
+            f.write(("\n(stopped: %s)\n" % STOPPED_WHY[0]).encode())
+            return 125
+        return code
 
 
 # Checks ---------------------------------------------------------------------------------------------------------
+
+
+def settings_table(g):
+    """tools/settings_table.py --check: the settings table against the engine's readers, the apps and the game's menu."""
+    def fn(log):
+        code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools" / "settings_table.py", "--check"], log, cwd=TREE)
+        return code == 0, last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
+    return fn
 
 
 def repo_audit(g):
@@ -397,6 +463,36 @@ def repo_audit(g):
                    log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         return code == 0, last_line(text)
+    return fn
+
+
+# The code checks (P-043): each needs only the tree and Python, and GitHub's Linux unit job runs the same three.
+CODE_CHECKS = ("console_census.py", "cast_check.py", "byte_order_check.py")
+
+
+def code_checks(tree=TREE, scripts=CODE_CHECKS, log=None):
+    """The tree's code checks (tools/verify): the console census (closed groups read zero), cast_check (no number read
+    by casting a pointer in the game) and byte_order_check (no meaning that depends on the byte order). (passed, what
+    each said), each script's output in `log`."""
+    said, ok = [], True
+    for name in scripts:
+        script = pathlib.Path(TREE) / "tools" / "verify" / name
+        if log is not None:
+            code = run([sys.executable, "-X", "utf8", "-I", script, tree], log, cwd=str(tree))
+            text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace").split("$ ")[-1]
+        else:
+            r = subprocess.run([sys.executable, "-X", "utf8", "-I", str(script), str(tree)], capture_output=True,
+                               text=True, cwd=str(tree))
+            code, text = r.returncode, r.stdout + r.stderr
+        lines = [l.strip() for l in text.splitlines()[1 if log is not None else 0:] if l.strip()]
+        ok = ok and code == 0
+        said.append("%s %s" % (name[:-3], "pass" if code == 0 else "FAILED: " + (lines[0] if lines else "(no output)")[:120]))
+    return ok, "; ".join(said)
+
+
+def repo_code(g):
+    def fn(log):
+        return code_checks(TREE, log=log)
     return fn
 
 
@@ -420,17 +516,17 @@ def text_table(g):
     return fn
 
 
-def build_windows(g, root=None, bin_dir=None, sanitize=""):
+def build_windows(g, root=None, bin_dir=None, sanitize="", coverage=False):
     """The game modules (clang) and every Windows program with the unit tests and the test extension (MSVC), into the
-    build root; then the bin folder the harness runs. `sanitize`: the game modules with those sanitizers, in a build
-    root and bin folder of their own."""
+    build root; then the bin folder the harness runs. `sanitize`: the game modules with those sanitizers, `coverage`:
+    counting the lines and functions they run, each in a build root and bin folder of its own."""
     root, bin_dir = root or g.args.build_root, bin_dir or g.bin
 
     def fn(log):
         seed = ["-SeedFrom", g.args.seed_from] if g.args.seed_from else []
         code = run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", HERE / "build_windows.ps1",
                     "-Tree", TREE, "-Root", root, "-Bin", bin_dir, "-Pak", g.args.pak, "-Jobs", g.args.jobs, *seed]
-                   + (["-Sanitize", sanitize] if sanitize else []), log)
+                   + (["-Sanitize", sanitize] if sanitize else []) + (["-Coverage"] if coverage else []), log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         fails = [l for l in text.splitlines() if l.startswith("FAILED:")]
         if code != 0 or fails:
@@ -492,7 +588,7 @@ def pinned(g):
 
 def lumalink_tests(g):
     """LumaLink's own tests at the commit tools/lumacore/lumalink.commit pins, in the checkout the mod tests build it in
-    (mod_tests.pinned_lumalink: <build root>/lumalink-pin, its nebula/ a link to this tree): every crate's tests, and
+    (mod_tests.pinned_lumalink: <build root>/lumalink-pin, its nebula/ a copy of the tree paths it builds from): every crate's tests, and
     those that need clang, this tree's SDK and this build (the generated C compiled for every platform, one mod built
     for all nine and each library read as its loader will, the same floating point on every platform, the programs
     checked and emitted against this build's names); the VS Code one needs VS Code. The mod tests use the same build
@@ -585,17 +681,17 @@ HARNESS_SELF = sorted([*(TREE / "tools" / "lumacore").glob("harness_*_test.py"),
 DESCRIPTION_SELF = sorted((TREE / "tools" / "lumacore").glob("*_fixture_test.py"))
 
 
-def harness(g, suite, renderer, label, device=None, bin_dir=None):
+def harness(g, suite, renderer, label, device=None, bin_dir=None, env=None):
     """One harness suite on one renderer, on this computer or on an Android device (its serial; the test app
     prepared and the device's lock held by the gate). Passes when every test in it passed (a test whose disc has no
     pak is not-run, which is not a pass). Its verdicts go with it when every test of the suite reported one, so the
-    known-failures list can be applied."""
+    known-failures list can be applied. `env`: more for the games' environment (the coverage build's counts)."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
         on_device = ["--device", device, "--bin", g.android_bin] if device else ["--bin", bin_dir or g.bin]
         code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools/lumacore/luma_test.py", "run", suite]
                    + on_device + ["--work", work, "--who", "gate", "--lock", g.work / ("harness-%s-%s.lock" % (label, renderer)),
-                                  "--commit", g.commit, "--renderer", renderer], log, env={"LUMA_TEST_PAKS": g.args.paks},
+                                  "--commit", g.commit, "--renderer", renderer], log, env=dict(env or {}, LUMA_TEST_PAKS=g.args.paks),
                    cwd=g.args.build_root)
         # The run's copies of the programs are not evidence: removed so the drive does not fill.
         for d in work.rglob("bin"):
@@ -621,8 +717,9 @@ def suite_tests(suite):
 
 def start_soak(g):
     """The soak (tools/gate/soak.py, file 00 section 4.2): two hours of random input on each renderer, in processes of
-    its own, started so it runs beside the Android part. Returns the process and its log."""
-    log = g.work / "soak.log"
+    its own, started so it runs beside the Android part. Returns the process and its log (soak-run.log: the check's own
+    log is soak.log, N-1065)."""
+    log = g.work / "soak-run.log"
     out = log.open("wb")
     process = subprocess.Popen([sys.executable, "-X", "utf8", "-I", str(HERE / "soak.py"), "run", "--bin", str(g.bin),
                                 "--pak", g.args.pak, "--work", str(g.work / "soak"), "--minutes", str(g.args.soak_minutes),
@@ -631,12 +728,27 @@ def start_soak(g):
     return process, log
 
 
+def measure_short(g):
+    """The short measurement set at the long run's end (tools/gate/measure_short.py, section 10, N-1043): one renderer
+    a run in turn, the 120 Hz pacing run and the benchmark under measure.lock, against the last ten runs' spread in
+    gate-runs/measure-history.tsv."""
+    def fn(log):
+        code = run([sys.executable, "-X", "utf8", "-I", HERE / "measure_short.py", "run", "--bin", g.bin, "--pak",
+                    g.args.pak, "--paks", g.args.paks, "--work", g.work / "measure", "--commit", g.commit, "--history",
+                    pathlib.Path(g.args.work) / "measure-history.tsv"], log)
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        said = next((l for l in reversed(text.splitlines()) if l.startswith("measure: ")), "measure: no summary")
+        return code == 0, said[len("measure: "):]
+    return fn
+
+
 def soak_result(process, soak_log):
     """The soak's verdict once it ends: one line per renderer (soak.py run)."""
     def fn(log):
         code = process.wait()
         text = soak_log.read_text(encoding="utf-8", errors="replace")
-        shutil.copyfile(soak_log, log)
+        if pathlib.Path(log).resolve() != pathlib.Path(soak_log).resolve():
+            shutil.copyfile(soak_log, log)
         lines = [l.strip() for l in text.splitlines() if l.strip()]
         return code == 0, "; ".join(lines[-3:]) if lines else "no output (exit %d)" % code
     return fn
@@ -754,32 +866,95 @@ def board_line(board, text):
             f.write("%s %s\n" % (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), text))
 
 
-def take_gate_lock(path, holder, wait_minutes, board, who, alive=process_alive, sleep=time.sleep, poll=30.0):
+# Who goes first among waiting gates (Planner, 11-18 03:44): Agents 3 and 4 before Agents 1 and 2 (DECISION 01:15),
+# otherwise first come. gate.py keeps the order, not the agents.
+FIRST_IN_QUEUE = ("Agent 3", "Agent 4")
+
+
+def queue_rank(who):
+    """0 for an agent whose waiting gate goes first, 1 for the rest."""
+    return 0 if any(who.startswith(name) for name in FIRST_IN_QUEUE) else 1
+
+
+def queue_folder(lock):
+    """The waiting gates of a lock: <lock>.queue beside it, one file each."""
+    return pathlib.Path(str(lock) + ".queue")
+
+
+def queue_order(lock, alive):
+    """The waiting gates in the order they take the lock, (rank, time, pid, file), from files named
+    <rank>-<time in ms>-<pid>.txt. An entry whose process has ended is removed."""
+    entries = []
+    for f in queue_folder(lock).glob("*.txt"):
+        parts = f.stem.split("-")
+        if len(parts) != 3 or not all(x.isdigit() for x in parts):
+            continue
+        rank, stamp, pid = (int(x) for x in parts)
+        if not alive(pid):
+            f.unlink(missing_ok=True)
+            continue
+        entries.append((rank, stamp, pid, f))
+    return sorted(entries)
+
+
+def locks_for(mode, patterns, gate_lock, long_lock):
+    """The locks a gate of this level takes: the gate lock at every level but the long run (--only runs too), the long
+    lock for the long and final runs of all their checks."""
+    locks = [gate_lock] if mode in ("quick", "main", "final") else []
+    if mode in ("long", "final") and not patterns:
+        locks.append(long_lock)
+    return locks
+
+
+def take_gate_lock(path, holder, wait_minutes, board, who, alive=process_alive, sleep=time.sleep, poll=30.0,
+                   pid=None, clock=time.time):
     """Takes the gate lock for `holder` (a line naming the run, with "pid N"): None when taken, else why not. Waits
-    up to wait_minutes while another holds it; a holder whose process has ended loses it, and the board says so."""
+    up to wait_minutes while another holds it; a holder whose process has ended loses it, and the board says so.
+    A gate that has to wait joins the lock's queue and takes the lock only when it is the queue's first (queue_rank,
+    then first come). A lock taken by hand (a holder.txt naming no process) holds until its holder frees it."""
     lock = pathlib.Path(path)
-    deadline = time.time() + 60.0 * wait_minutes
+    pid = os.getpid() if pid is None else pid
+    deadline = clock() + 60.0 * wait_minutes
     said_waiting = False
-    while True:
-        try:
-            lock.mkdir()
-        except FileExistsError:
-            text, pid = lock_holder(lock)
-            if pid is not None and not alive(pid):
-                board_line(board, "%s NOTICE: the gate lock held by a process that has ended (%s) is taken over." % (who, text))
-                shutil.rmtree(lock, ignore_errors=True)
-                continue
-            if time.time() >= deadline:
+    mine = None
+    try:
+        while True:
+            # A newcomer takes a free lock only when nobody waits (one freed between two polls is not its to
+            # take); a waiter takes it when it heads the queue.
+            order = queue_order(lock, alive)
+            first = not order if mine is None else order[0][3] == mine
+            if first:
+                try:
+                    lock.mkdir()
+                except FileExistsError:
+                    text, holder_pid = lock_holder(lock)
+                    if holder_pid is not None and not alive(holder_pid):
+                        board_line(board, "%s NOTICE: the gate lock held by a process that has ended (%s) is taken over."
+                                   % (who, text))
+                        shutil.rmtree(lock, ignore_errors=True)
+                        continue
+                else:
+                    (lock / "holder.txt").write_text("%s %s\n" % (holder, datetime.datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S")), encoding="utf-8")
+                    board_line(board, "%s LOCK: gate.lock taken by gate.py: %s." % (who, holder))
+                    return None
+                text = lock_holder(lock)[0]
+            else:
+                text = "a gate before this one in the queue"
+            if clock() >= deadline:
                 return "the gate lock %s is held: %s" % (lock, text)
+            if mine is None:
+                queue_folder(lock).mkdir(exist_ok=True)
+                mine = queue_folder(lock) / ("%d-%d-%d.txt" % (queue_rank(who), int(clock() * 1000), pid))
+                mine.write_text(holder + "\n", encoding="utf-8")
+                continue
             if not said_waiting:
                 print("gate.py: the gate lock is held (%s); waiting up to %g minutes" % (text, wait_minutes), flush=True)
                 said_waiting = True
             sleep(poll)
-            continue
-        (lock / "holder.txt").write_text("%s %s\n" % (holder, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                                         encoding="utf-8")
-        board_line(board, "%s LOCK: gate.lock taken by gate.py: %s." % (who, holder))
-        return None
+    finally:
+        if mine is not None:
+            mine.unlink(missing_ok=True)
 
 
 def free_gate_lock(path, holder, board, who, summary):
@@ -819,13 +994,15 @@ def take_device_lock(path, who):
     return None
 
 
-def pictures(g, label, renderer):
-    """The pictures a harness suite's runs took against the approved ones (tools/gate/pictures.py, tolerance none).
-    Above the quick level it also fails on an approved picture its runs did not take."""
+def pictures(g, label, renderer, place="pc"):
+    """The pictures a harness suite's runs took against the approved ones of that place, pc or tablet
+    (tools/gate/pictures.py, tolerance none). Above the quick level it also fails on an approved picture its runs did
+    not take."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
         code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools" / "gate" / "pictures.py", "check", "--runs", work,
-                    "--renderer", renderer] + (["--complete"] if g.level != "quick" else []), log, cwd=TREE)
+                    "--renderer", renderer, "--place", place] + (["--complete"] if g.level != "quick" else []), log,
+                   cwd=TREE)
         lines = pathlib.Path(log).read_text(encoding="utf-8", errors="replace").splitlines()
         summary = next((l for l in reversed(lines) if l.startswith("pictures: ")), "no summary")
         others = [l.split()[0] + " " + l.split()[1] for l in lines if l.split() and l.split()[0] in ("changed", "new", "missing", "machine")]
@@ -838,14 +1015,15 @@ def pictures(g, label, renderer):
 MOD_TESTS = TREE / "tools" / "lumacore" / "mod_tests.py"
 
 
-def mod_tests(g, renderer):
+def mod_tests(g, renderer, bin_dir=None, label="mods", more_env=None):
     """The mod tests on one renderer, through the mods' own entry point (it builds the test mods with LumaLink, then
     runs them side by side, --mod-parallel at a time, each game in its own folder): every suite of tests/mods and of
     the pinned LumaLink's tests/game, or at the quick level the quick set (tests/mods/quick.json, one or more of every
-    suite). Passes when it exits 0; its rows name each test that did not pass."""
+    suite). `bin_dir`: another build's bin folder (the sanitizer build's), `label` its runs' name, `more_env` more for
+    the games' environment. Passes when it exits 0; its rows name each test that did not pass."""
     def fn(log):
-        work = g.work / ("runs-mods-%s" % renderer)
-        env = {"LUMA_TEST_PAKS": g.args.paks}
+        work = g.work / ("runs-%s-%s" % (label, renderer))
+        env = dict(more_env or {}, LUMA_TEST_PAKS=g.args.paks)
         if g.args.lumalink:
             env["LUMALINK"] = g.args.lumalink
         else:
@@ -855,8 +1033,8 @@ def mod_tests(g, renderer):
                 pathlib.Path(log).write_text("%s\n" % stop, encoding="utf-8")
                 return False, str(stop)
             env["LUMALINK"], env["LUMALINK_TREE"] = str(program), str(checkout)
-        cmd = [sys.executable, "-X", "utf8", "-I", MOD_TESTS, "--bin", g.bin, "--work", work, "--renderer", renderer,
-               "--lock", g.work / ("harness-mods-%s.lock" % renderer), "--commit", g.commit, "--jobs", g.args.jobs,
+        cmd = [sys.executable, "-X", "utf8", "-I", MOD_TESTS, "--bin", bin_dir or g.bin, "--work", work, "--renderer",
+               renderer, "--lock", g.work / ("harness-%s-%s.lock" % (label, renderer)), "--commit", g.commit, "--jobs", g.args.jobs,
                "--parallel", str(g.args.mod_parallel)]
         if g.level == "quick":
             cmd += ["--set", "quick"]
@@ -927,6 +1105,18 @@ def planned_jobs(planned):
     return {name[len("github/"):] for name in planned if name.startswith("github/")}
 
 
+def red_minute(job):
+    """' at HH:MM' (this computer's time) of a job's end, from GitHub's completedAt; '' where it has none."""
+    when = job.get("completedAt") or ""
+    try:
+        moment = datetime.datetime.fromisoformat(when.replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if moment.year < 2000:  # GitHub's zero time: not ended
+        return ""
+    return " at " + moment.astimezone().strftime("%H:%M")
+
+
 def judge_run(status, jobs, planned_jobs=()):
     """(done, green, detail) of a run (section 8): every job is required except the planned ones. A job that ended
     other than green (failure, cancelled, skipped) ends it at once; otherwise it is done when the run has ended."""
@@ -940,7 +1130,7 @@ def judge_run(status, jobs, planned_jobs=()):
         elif j.get("conclusion") == "success":
             green += 1
         else:
-            red.append("%s %s" % (name, j.get("conclusion") or "?"))
+            red.append("%s %s%s" % (name, j.get("conclusion") or "?", red_minute(j)))
     if red:
         return True, False, "red: " + "; ".join(red)
     if status is None:
@@ -971,6 +1161,65 @@ def github_wait(branch, sha, planned=(), wait_minutes=GITHUB_WAIT_MINUTES, state
         if clock() >= deadline:
             return False, detail + " (no result after %g minutes)" % wait_minutes
         sleep(60.0)
+
+
+# The answers that count as red before a main gate starts (a cancelled run is another push's, not a fault).
+RED_CONCLUSIONS = ("failure", "timed_out", "startup_failure")
+
+
+def commit_runs(sha):
+    """[(branch, jobs)] of every push run of the commit on GitHub, under any branch name."""
+    runs = gh_json("run", "list", "--commit", sha, "--workflow", WORKFLOW, "--event", "push", "--json",
+                   "databaseId,headBranch", "--limit", "20") or []
+    return [(r.get("headBranch") or "?", gh_json("run", "view", str(r["databaseId"]), "--json", "jobs").get("jobs", []))
+            for r in runs]
+
+
+def red_on_github(sha, planned=(), runs_of=commit_runs):
+    """Why a main gate of `sha` would not move main, already known on GitHub (section 8: read before the checks
+    start): a job of any run of the commit that failed, with its branch and the minute it went red. None when none
+    did, or when GitHub does not answer (the run then starts, and its own wait reads GitHub again)."""
+    try:
+        runs = runs_of(sha)
+    except (RuntimeError, OSError, ValueError, subprocess.SubprocessError):
+        return None
+    red = ["%s %s on %s%s" % (j.get("name") or "?", j.get("conclusion"), branch, red_minute(j))
+           for branch, jobs in runs for j in jobs
+           if j.get("status") == "completed" and j.get("conclusion") in RED_CONCLUSIONS
+           and (j.get("name") or "?") not in planned]
+    return ("red on GitHub: " + "; ".join(red[:4]) + (" ..." if len(red) > 4 else "")) if red else None
+
+
+class GithubWatch:
+    """Reads the candidate's run once a minute while the gate's checks run (section 8); at its first red job calls
+    on_red with why (the job and the minute it went red) and stops reading."""
+
+    def __init__(self, branch, sha, planned=(), on_red=None, state_of=candidate_state, every=60.0):
+        self.branch, self.sha, self.planned = branch, sha, planned
+        self.on_red = on_red or stop_runs
+        self.state_of, self.every = state_of, every
+        self.red = None
+        self._end = threading.Event()
+        self._thread = threading.Thread(target=self._loop, name="github-watch", daemon=True)
+
+    def start(self):
+        self._thread.start()
+        return self
+
+    def stop(self):
+        self._end.set()
+        self._thread.join(timeout=10.0)
+
+    def _loop(self):
+        while not self._end.wait(self.every):
+            try:
+                done, green, detail = judge_run(*self.state_of(self.branch, self.sha), planned_jobs=self.planned)
+            except (RuntimeError, OSError, ValueError, subprocess.SubprocessError):
+                continue  # asked again the next minute
+            if done and not green:
+                self.red = "GitHub's jobs on %s: %s" % (self.branch, detail)
+                self.on_red(self.red)
+                return
 
 
 def github_check(g, wait_minutes=GITHUB_CHECK_MINUTES, state_of=commit_state, sleep=time.sleep, clock=time.time):
@@ -1085,12 +1334,81 @@ def move_main(sha, run_name, work, board, who, covers, tree=TREE):
 
 
 def long_due(work, hours=6.0, now=None):
-    """Whether a long run is due (section 14): none in history.tsv started within `hours`."""
+    """Whether a long run is due (section 14): none in history.tsv and none started by a move (long-started.txt, the
+    run's history line comes only at its end) within `hours`."""
     path = pathlib.Path(work) / "history.tsv"
     now = now or datetime.datetime.now()
     rows = [l.split("\t") for l in path.read_text(encoding="utf-8").splitlines()[1:]] if path.exists() else []
     started = [datetime.datetime.fromisoformat(r[0]) for r in rows if len(r) > 2 and r[2] == "long"]
+    marker = pathlib.Path(work) / "long-started.txt"
+    if marker.exists():
+        started.append(datetime.datetime.fromisoformat(marker.read_text(encoding="utf-8").split()[0]))
     return not started or (now - max(started)).total_seconds() >= hours * 3600
+
+
+# The long run's own tree (Planner 11-18 04:39, N-1046): the gate's, not an agent's. It reads its tree for hours and
+# must be on main's newest commit, so it cannot be the mover's (the agent edits that next). gate.py makes it with git
+# worktree add on first use and brings it to each moved commit, detached, reset and cleaned; nobody edits or builds in
+# it by hand. Its build folder is gate-Nebula-long beside the others (--build-root's default), pruned as they are.
+LONG_TREE = pathlib.Path(os.environ.get("NEBULA_GATE_LONG_TREE", "D:/NebulaWork/MarioGalaxyRecomp/Nebula-long"))
+
+
+def long_tree_at(sha, tree=LONG_TREE, source=TREE):
+    """Brings the long run's tree to `sha` (made from `source`'s repository on first use): None, or why not."""
+    tree = pathlib.Path(tree)
+
+    def git_in(where, *a):
+        r = subprocess.run([GIT, "-C", str(where), *a], capture_output=True, text=True)
+        return None if r.returncode == 0 else "git %s: %s" % (a[0], (r.stderr or r.stdout).strip()[-300:])
+
+    if not (tree / ".git").exists():
+        return git_in(source, "worktree", "add", "--detach", str(tree), sha)
+    for a in (("checkout", "-q", "--force", "--detach", sha), ("reset", "-q", "--hard", sha), ("clean", "-q", "-d", "-f", "-f")):
+        why = git_in(tree, *a)
+        if why is not None:
+            return why
+    return None
+
+
+def long_lock_free(lock, alive=process_alive):
+    """Whether the long lock is free: no lock folder, or one whose process has ended (the run then takes it over)."""
+    if not pathlib.Path(lock).exists():
+        return True
+    _, pid = lock_holder(lock)
+    return pid is not None and not alive(pid)
+
+
+def long_command(sha, args, tree=LONG_TREE):
+    """The long run a move starts: gate.py --long of the long run's tree, with the mover's folders, locks and tablet."""
+    cmd = [sys.executable, "-X", "utf8", "-I", str(pathlib.Path(tree) / "tools" / "gate" / "gate.py"), "--long",
+           "--who", args.who, "--covers", "main %s, started by its move (section 14)" % sha[:9], "--work", args.work,
+           "--board", args.board, "--status", args.status, "--gate-lock", args.gate_lock, "--long-lock", args.long_lock,
+           "--tablet-lock", args.tablet_lock, "--pak", args.pak, "--paks", args.paks, "--discs", args.discs,
+           "--jobs", args.jobs]
+    return cmd + (["--tablet", args.tablet] if args.tablet else [])
+
+
+def start_long(sha, args, tree=LONG_TREE, source=TREE, popen=subprocess.Popen, now=None):
+    """After a move: when a long run is due and the long lock is free, brings the long run's tree to `sha` and starts
+    the run there, detached and below normal priority (it lowers itself too, below_normal), its output in
+    <work>/long-<sha>.log. Returns (command or None, what happened) for the board."""
+    if not long_due(args.work, now=now):
+        return None, "a long run started within 6 hours"
+    if not long_lock_free(args.long_lock):
+        return None, "the long lock is held (%s)" % lock_holder(args.long_lock)[0]
+    why = long_tree_at(sha, tree, source)
+    if why is not None:
+        return None, "its tree %s could not be brought to %s: %s" % (tree, sha[:9], why)
+    cmd = long_command(sha, args, tree)
+    log = pathlib.Path(args.work) / ("long-%s.log" % sha[:9])
+    log.parent.mkdir(parents=True, exist_ok=True)
+    # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | BELOW_NORMAL_PRIORITY_CLASS: the run outlives the mover's gate.
+    detach = {"creationflags": 0x8 | 0x200 | 0x4000} if os.name == "nt" else {"start_new_session": True}
+    with open(log, "ab") as out:
+        popen(cmd, cwd=str(tree), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, close_fds=True, **detach)
+    (pathlib.Path(args.work) / "long-started.txt").write_text(
+        "%s %s\n" % ((now or datetime.datetime.now()).isoformat(timespec="seconds"), sha), encoding="utf-8")
+    return cmd, "the long run of main %s started in %s (log %s)" % (sha[:9], tree, log)
 
 
 # The tablet --------------------------------------------------------------------------------------------------------
@@ -1122,8 +1440,10 @@ def tablet_part(g, stops, device=None):
     built = ("build/android",)
     needs = {"tablet/prepare": built + ("tablet/remove",), "android/tablet": built + ("tablet/prepare",),
              "tour/tablet": built + ("tablet/prepare",), "tablet/remove": (), "tour/tablet-pc": ("build/windows",),
-             "replays/tablet": ("tour/tablet", "tour/tablet-pc")}
-    wanted = [n for n in TABLET_CHECKS if g.wanted(n, needs[n])]
+             "replays/tablet": ("tour/tablet", "tour/tablet-pc"), "pictures/tablet": ("tour/tablet",)}
+    # The tablet's pictures are approved for the main level's twelve stops (N-1040); the long run's tour takes more.
+    checks = TABLET_CHECKS + (("pictures/tablet",) if g.level == "main" else ())
+    wanted = [n for n in checks if g.wanted(n, needs[n])]
     if g.dry or not wanted:
         return
     if not g.android_built:
@@ -1160,6 +1480,8 @@ def tablet_part(g, stops, device=None):
                 tour = gate_tour.write(g.work / "tour-tablet", stops)
                 step_hash.with_hash(tour.parent)
                 g.check("tour/tablet", harness(g, tour, "vulkan", "tour-tablet", g.args.tablet))
+                if "pictures/tablet" in wanted:
+                    g.check("pictures/tablet", pictures(g, "tour-tablet", "vulkan", "tablet"), ("tour/tablet",))
                 if not device.answers():
                     gone = "the tablet left adb"
                     g.owe_last(gone)
@@ -1188,32 +1510,47 @@ def tablet_part(g, stops, device=None):
 
 def build_part(g):
     """The repository checks and the Windows build: False when the build failed (nothing after it can run)."""
+    g.check("repo/settings", settings_table(g))
     g.check("repo/audit", repo_audit(g))
     g.check("repo/scripts", parse_scripts(g))
     g.check("repo/text", text_table(g))
+    g.check("repo/code", repo_code(g))
     if g.args.no_build:
         return True
     return g.check("build/windows", build_windows(g)) is not False
 
 
-def unit_part(g, discs_proved):
+def unit_part(g):
+    """The unit tests and the start checks: they prove the bins every lane after them runs."""
     g.check("unit/windows", unit_tests(g), ("build/windows",))
     g.check("unit/game", game_tests(g), ("build/windows",))
     for r in RENDERERS:
         g.check("start/%s" % r, start_check(g, r), ("build/windows",))
-    g.check("rust", rust_tests(g))
-    g.check("lumalink", lumalink_tests(g), ("build/windows",))
-    # The cooked collision against each disc's (P-169).
-    discs = disc_images(g.args.discs)
-    for disc in discs_proved:
-        if disc in discs:
-            g.check("import/collision/%s" % disc, collision_proof(g, discs[disc]), ("build/windows",))
-        else:
-            g.missing("import/collision/%s" % disc, "no %s image in %s (--discs)" % (disc, g.args.discs))
-    g.check("harness/self", scripts(g, HARNESS_SELF, ("--work", "{out}")))
-    commands = pathlib.Path(g.args.build_root) / "game" / "compile_commands.json"
-    g.check("description/self", scripts(g, DESCRIPTION_SELF, ("--commands", str(commands), "--out", "{out}")),
-            ("build/windows",))
+
+
+def cpu_lane(g, discs_proved):
+    """The checks that start no game (Rust, LumaLink, the collision proof, the harness's and the descriptions' own
+    tests): a lane beside the game lanes at below-normal priority (N-1070). One after another they held the quick gate
+    for 500 s before any game ran."""
+    def lane():
+        LANE.below_normal = True
+        try:
+            g.check("rust", rust_tests(g))
+            g.check("lumalink", lumalink_tests(g), ("build/windows",))
+            # The cooked collision against each disc's (P-169).
+            discs = disc_images(g.args.discs)
+            for disc in discs_proved:
+                if disc in discs:
+                    g.check("import/collision/%s" % disc, collision_proof(g, discs[disc]), ("build/windows",))
+                else:
+                    g.missing("import/collision/%s" % disc, "no %s image in %s (--discs)" % (disc, g.args.discs))
+            g.check("harness/self", scripts(g, HARNESS_SELF, ("--work", "{out}")))
+            commands = pathlib.Path(g.args.build_root) / "game" / "compile_commands.json"
+            g.check("description/self", scripts(g, DESCRIPTION_SELF, ("--commands", str(commands), "--out", "{out}")),
+                    ("build/windows",))
+        finally:
+            LANE.below_normal = False
+    return lane
 
 
 def engine_lane(g, r):
@@ -1260,24 +1597,125 @@ def android_lane(g, stops):
     def lane():
         g.android_built = g.args.no_build or g.check("build/android", build_android(g)) is not False
         tablet_part(g, stops)
+    lane.part = "tablet"
     return lane
 
 
 def sanitizer_lane(g):
-    return lambda: sanitizer_part(g)
+    def lane():
+        sanitizer_part(g)
+    lane.part = "sanitizer"
+    return lane
 
 
 def sanitizer_part(g):
     """The game modules built with AddressSanitizer (build_windows.ps1 -Sanitize address, a build root of its own)
-    play the tour on Direct3D 12: a memory fault the tour reaches ends the run with the sanitizer's report."""
+    play the tour and every mod test on Direct3D 12: a memory fault either reaches ends the run with the sanitizer's
+    report. The mod tests reach the game's code from mods (calls, hooks, events) that the tour never does (N-1041)."""
     root = pathlib.Path(g.args.build_root) / "asan"
     asan_bin = str(root / "bins")
+    mods = MOD_TESTS.exists()
     if g.check("build/windows-asan", build_windows(g, root=root, bin_dir=asan_bin, sanitize="address")) is False:
         g.missing("tour-asan/d3d12", "the sanitizer build failed", ("build/windows-asan",))
+        if mods:
+            g.missing("mods-asan/d3d12", "the sanitizer build failed", ("build/windows-asan",))
         return
     tour = gate_tour.write(g.work / "tour-asan", None)
     step_hash.with_hash(tour.parent)
     g.check("tour-asan/d3d12", harness(g, tour, "d3d12", "tour-asan", bin_dir=asan_bin), ("build/windows-asan",))
+    if mods:
+        g.check("mods-asan/d3d12", mod_tests(g, "d3d12", bin_dir=asan_bin, label="mods-asan"), ("build/windows-asan",))
+
+
+LLVM_BIN = pathlib.Path(os.environ.get("NEBULA_LLVM_BIN", "C:/Program Files/LLVM/bin"))
+
+
+def coverage_lane(g):
+    def lane():
+        coverage_part(g)
+    lane.part = "coverage"
+    return lane
+
+
+def coverage_part(g):
+    """Which code no test runs (tools/gate/coverage.py, file 04 3.3, N-1042): the game modules and the programs built
+    counting the lines and functions they run (build_windows.ps1 -Coverage, a build root of its own) play the engine
+    tests, the tour and every mod test on Direct3D 12, each process writing its counts; then the list of what none of
+    them ran and the share of lines run, which may not fall below the last long run's (gate-runs/coverage-history.tsv,
+    per set of binaries)."""
+    root = pathlib.Path(g.args.build_root) / "coverage"
+    bin_dir = str(root / "bins")
+    if g.check("build/windows-coverage", build_windows(g, root=root, bin_dir=bin_dir, coverage=True)) is False:
+        g.missing("coverage", "the coverage build failed", ("build/windows-coverage",))
+        return
+    tour = gate_tour.write(g.work / "tour-coverage", None)
+    step_hash.with_hash(tour.parent)
+    g.check("coverage", coverage_check(g, bin_dir, tour), ("build/windows-coverage",))
+
+
+def coverage_check(g, bin_dir, tour):
+    """The counting runs, then the report. The runs' own verdicts are the other checks' business (the same tests run
+    there on the players' build); here they say only what ran."""
+    def fn(log):
+        out = g.work / "coverage"
+        counts = out / "counts"
+        shutil.rmtree(counts, ignore_errors=True)
+        counts.mkdir(parents=True)
+        # %m: one file per module (Nebula.exe, smg_game, smg_game_plain), %p: per process.
+        env = {"LLVM_PROFILE_FILE": str(counts / "counts-%m-%p.profraw")}
+        runs = [("engine", harness(g, TREE / "tests" / "engine" / "suite.json", "d3d12", "engine-coverage",
+                                   bin_dir=bin_dir, env=env)),
+                ("tour", harness(g, tour, "d3d12", "tour-coverage", bin_dir=bin_dir, env=env))]
+        if MOD_TESTS.exists():
+            runs.append(("mods", mod_tests(g, "d3d12", bin_dir=bin_dir, label="mods-coverage", more_env=env)))
+        said = []
+        for name, part in runs:
+            said.append("%s %s" % (name, part(out / ("%s.log" % name))[1]))
+        with open(log, "a", encoding="utf-8") as f:
+            f.write("runs: %s\n" % "; ".join(said))
+        raws = sorted(counts.glob("*.profraw"))
+        if not raws:
+            return False, "no process wrote counts; runs: " + "; ".join(said)
+        llvm = LLVM_BIN
+        merged = out / "counts.profdata"
+        # Hundreds of files: their names in a list, past the command line's length.
+        listed = out / "counts.txt"
+        listed.write_text("".join("%s\n" % r for r in raws), encoding="utf-8")
+        if run([llvm / "llvm-profdata.exe", "merge", "-o", merged, "-f", listed], log) != 0:
+            return False, "llvm-profdata merge failed"
+        # The program the runs on Direct3D 12 start, and the game modules it loads.
+        modules = [pathlib.Path(bin_dir) / m for m in ("Nebula.exe", "smg_game.dll", "smg_game_plain.dll")
+                   if (pathlib.Path(bin_dir) / m).exists()]
+        binaries = [a for m in modules for a in ("--binary", m)]
+        builds = pathlib.Path(bin_dir).parent
+        code = run([sys.executable, "-X", "utf8", "-I", HERE / "coverage.py", "report", *binaries, "--profile", merged,
+                    "--work", out, "--root", TREE, "--rebase", builds / "game", "--rebase", builds / "msvc",
+                    "--history", pathlib.Path(g.args.work) / "coverage-history.tsv",
+                    "--commit", g.commit, "--llvm", llvm], log)
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        line = next((l for l in reversed(text.splitlines()) if l.startswith("coverage: ")), "coverage: no report")
+        # The counts are large and made again each run; the lists stay with the results.
+        shutil.rmtree(counts, ignore_errors=True)
+        return code == 0, "%s (%d processes)" % (line[len("coverage: "):], len(raws))
+    return fn
+
+
+def locked_part(g, name, fn):
+    """Runs one part of the long run under the gate lock, taken through the queue and freed at the part's end, so a
+    waiting gate runs between two parts (Planner 11-18 03:44, condition 4). Other levels hold the lock for the whole
+    run (main()), so the part just runs. A part whose lock is not had within --wait is a failed check, part/<name>.
+    Returns what fn returns, None when it did not run."""
+    if g.dry or g.args.mode != "long":
+        return fn()
+    holder = "long run part %s of %s pid %d" % (name, TREE.name, os.getpid())
+    held = take_gate_lock(g.args.gate_lock, holder, g.args.wait, g.args.board, g.args.who)
+    if held is not None:
+        g.record("part/" + name, "fail", 0.0, "not run: " + held)
+        return None
+    try:
+        return fn()
+    finally:
+        free_gate_lock(g.args.gate_lock, holder, g.args.board, g.args.who, "part %s done" % name)
 
 
 def run_checks(args, known=None, planned=None, selected=None, dry=False):
@@ -1287,21 +1725,22 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
     Gate (its names and needs) without running any."""
     g = Gate(args, dry=dry, known=known, planned=planned, selected=selected)
     level = args.mode
-    if not build_part(g):
+    if not locked_part(g, "build", lambda: build_part(g)):
         g.code = 0 if g.write() else 1
         return g
     quick = level == "quick"
     every = level in ("main", "final")
     renderers = ("d3d12",) if quick else RENDERERS
     if level != "long":
-        unit_part(g, ("RMGE01",) if quick else ("RMGE01",) + REGION_DISCS)
+        unit_part(g)
     if level != "long" and not MOD_TESTS.exists():
         g.missing("mods", "the mod tests are not in the tree (tools/lumacore/mod_tests.py, mods M0)")
     soak = start_soak(g) if level in ("long", "final") and not g.dry and g.wanted("soak", ("build/windows",)) else None
     tours = write_tours(g, QUICK_STOPS if quick else None, QUICK_REGION_STOPS if quick else None)
     # Region discs: Direct3D 12 at the quick and main levels; every renderer in the long run and the final check.
     region_renderers = RENDERERS if level in ("long", "final") else ("d3d12",)
-    lanes = []
+    # The CPU-only checks first in the list, so their rows read where they always did.
+    lanes = [cpu_lane(g, ("RMGE01",) if quick else ("RMGE01",) + REGION_DISCS)] if level != "long" else []
     for r in renderers:
         def renderer_lane(r=r):
             if level != "long":
@@ -1319,14 +1758,27 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         # The main level's tablet part is the twelve quick stops; the long run's (and the final check's) all of them.
         lanes.append(android_lane(g, QUICK_STOPS if level == "main" else None))
     if level in ("long", "final"):
-        lanes.append(sanitizer_lane(g))
-    g.lanes(lanes)
+        lanes += [sanitizer_lane(g), coverage_lane(g)]
+    if level == "long":
+        # Part by part under the gate lock: the tours of every renderer and disc side by side, then the tablet, then
+        # the sanitizer build's runs, then the coverage build's. The soak, started above in processes of its own at
+        # below-normal priority, is the only work that runs beside another gate.
+        apart = {n: [l for l in lanes if getattr(l, "part", "") == n] for n in ("tablet", "sanitizer", "coverage")}
+        tour_lanes = [l for l in lanes if not getattr(l, "part", "")]
+        for name, part in (("tours", tour_lanes),) + tuple(apart.items()):
+            if part:
+                locked_part(g, name, lambda part=part: g.lanes(part))
+    else:
+        g.lanes(lanes)
     replay_part(g, renderers)
     if level in ("long", "final") and g.wanted("soak", ("build/windows",)) and not g.dry:
         if soak is None:
             g.missing("soak", "it did not start")
         else:
             g.check("soak", soak_result(*soak))
+    if level in ("long", "final"):
+        # Last, with the machine alone: the gate lock keeps gates out, measure_short.py takes measure.lock.
+        locked_part(g, "measure", lambda: g.check("measure/short", measure_short(g), ("build/windows",)))
     if every and not getattr(g.args, "move", False):
         # With --move the gate waits for GitHub after its own checks, outside gate.lock (main()).
         g.check("github", github_check(g))
@@ -1354,12 +1806,16 @@ def parser():
     for level in LEVELS:
         mode.add_argument("--" + level, dest="mode", action="store_const", const=level)
     p.add_argument("--move", action="store_true", help="--main: move main to this commit when it passes (section 5)")
+    p.add_argument("--github-wait", type=float, default=GITHUB_WAIT_MINUTES,
+                   help="--move: minutes to wait for GitHub's jobs. Longer only for the one candidate that brings a job "
+                        "whose compiler cache is cold (Planner 11-18 03:49); --covers says why, and the board's LOCK "
+                        "line shows the wait")
     p.add_argument("--only", default="", help="only these checks (shell patterns, comma-separated) and what they need")
     p.add_argument("--build-root", default=os.environ.get("NEBULA_GATE_BUILD", "D:/NebulaWork/build/gate-%s" % TREE.name),
                    help="where the builds go (kept between runs, so builds are incremental)")
-    p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", "D:/NebulaWork/build/us-pak-35/game.pak"))
+    p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", "D:/NebulaWork/build/us-pak-37/game.pak"))
     p.add_argument("--paks", default=os.environ.get("NEBULA_GATE_PAKS", os.pathsep.join((
-                   "RMGP01=D:/NebulaWork/build/a1-pak-pal-35/game.pak", "RMGJ01=D:/NebulaWork/build/a1-pak-jp-35/game.pak"))),
+                   "RMGP01=D:/NebulaWork/build/a1-pak-pal-37/game.pak", "RMGJ01=D:/NebulaWork/build/a1-pak-jp-37/game.pak"))),
                    help="the other discs' game.paks, DISC=path joined by the path separator: the tests with a \"disc\"")
     p.add_argument("--work", default=os.environ.get("NEBULA_GATE_WORK", "D:/NebulaWork/build/gate-runs"))
     p.add_argument("--discs", default=os.environ.get("NEBULA_GATE_DISCS", "D:/NebulaWork/discs"),
@@ -1368,6 +1824,8 @@ def parser():
     p.add_argument("--jobs", default=str(max(4, (os.cpu_count() or 8) - 4)))
     p.add_argument("--no-build", action="store_true", help="use the bins already in the build root")
     p.add_argument("--record", action="store_true", help="also keep the result in docs/plan/gate-runs, for a commit")
+    p.add_argument("--keep-runs", action="store_true",
+                   help="keep the passed tests' working files (pictures, sound, game folders), for same_runs.py")
     p.add_argument("--seed-from", default=os.environ.get("NEBULA_GATE_SEED", ""),
                    help="a configured MSVC build folder whose compiled shader stages seed a new build (content-keyed)")
     p.add_argument("--lumalink", default=os.environ.get("LUMALINK", ""),
@@ -1386,7 +1844,8 @@ def parser():
                    help="the lock one main gate (or final check) at a time holds")
     p.add_argument("--long-lock", default=os.environ.get("NEBULA_GATE_LONG_LOCK", "D:/NebulaWork/plan/long.lock"),
                    help="the lock one long run (or final check) at a time holds")
-    p.add_argument("--wait", type=float, default=0.0, help="minutes to wait for a held gate or long lock (0: refuse)")
+    p.add_argument("--wait", type=float, default=240.0,
+                   help="minutes to wait in the queue for a held gate or long lock (0: refuse at once)")
     p.add_argument("--board", default=os.environ.get("NEBULA_GATE_BOARD", "D:/NebulaWork/plan/BOARD.md"),
                    help="the board the lock, owed and MAIN-MOVED lines go to ('' for none)")
     p.add_argument("--status", default=os.environ.get("NEBULA_GATE_STATUS", "D:/NebulaWork/plan/STATUS.md"),
@@ -1431,16 +1890,16 @@ def main(argv=None):
             return refuse("the long run is on main's newest commit (%s), this tree is at %s" % (
                 git("rev-parse", "--short", "origin/main"), commit[:9]))
     candidate = None
-    if args.move or args.mode == "quick":
-        why = push_checks(commit)
-        if why:
-            return refuse("main could not move to %s: %s" % (commit[:9], why))
     if args.move:
         git("fetch", "origin", "main")
         if not git_ok("merge-base", "--is-ancestor", "origin/main", "HEAD"):
             return refuse("main (%s) is not an ancestor of this commit: rebase on it first" % git("rev-parse", "--short", "origin/main"))
         if git("status", "--porcelain"):
             return refuse("the tree has uncommitted changes")
+        red = red_on_github(commit, planned_jobs(planned))
+        if red:
+            board_line(args.board, "%s NOTICE: no main gate of %s: %s." % (args.who, commit[:9], red))
+            return refuse("main could not move to %s: %s" % (commit[:9], red))
         unheld = unheld_candidates(args.work, commit)
         if unheld:
             return refuse("candidates still wait for GitHub that this commit does not hold (%s): rebase on the newest "
@@ -1459,14 +1918,15 @@ def main(argv=None):
             return refuse("no whole quick gate of %s passed in %s: run --quick first" % (commit[:9], args.work))
     if args.mode == "long":
         below_normal()
-    locks = []
-    if args.mode in ("main", "final") and not patterns:
-        locks.append(args.gate_lock)
-    if args.mode in ("long", "final") and not patterns:
-        locks.append(args.long_lock)
-    holder = "%s gate of %s@%s pid %d%s%s" % (args.mode, TREE.name, commit[:9], os.getpid(),
-                                             ("; covers " + args.covers) if args.covers else "",
-                                             ("; quick gate " + quick.name) if quick else "")
+    # Every level takes the gate lock for its own checks, --only runs too (Planner 11-18 03:44, one gate at a time: a
+    # quick gate beside a main gate finishes no sooner, and beside a hand slot it disturbs a measurement). The long run
+    # keeps the long lock alone until it takes the gate lock part by part.
+    locks = locks_for(args.mode, patterns, args.gate_lock, args.long_lock)
+    holder = "%s gate of %s@%s pid %d%s%s%s" % (args.mode, TREE.name, commit[:9], os.getpid(),
+                                               ("; covers " + args.covers) if args.covers else "",
+                                               ("; quick gate " + quick.name) if quick else "",
+                                               ("; GitHub wait %g minutes" % args.github_wait)
+                                               if args.github_wait != GITHUB_WAIT_MINUTES else "")
     taken = []
     for lock in locks:
         held = take_gate_lock(lock, holder, args.wait, args.board, args.who)
@@ -1475,17 +1935,33 @@ def main(argv=None):
                 free_gate_lock(t, holder, args.board, args.who, "not run: " + held)
             return refuse(held)
         taken.append(lock)
+    # The pre-push checks build a work tree of their own (the ratchet's inventory): machine work, so under the lock,
+    # never beside another gate or a measurement (N-1069).
+    why = push_checks(commit) if args.move or args.mode == "quick" else None
+    if why:
+        for t in taken:
+            free_gate_lock(t, holder, args.board, args.who, "not run: " + why)
+        return refuse("main could not move to %s: %s" % (commit[:9], why))
     code, summary = 2, "it ended before writing a result"
+    watch = GithubWatch(candidate, commit, planned_jobs(planned)).start() if args.move else None
     try:
-        g = run_checks(args, known, planned, selected)
+        try:
+            g = run_checks(args, known, planned, selected)
+        finally:
+            if watch is not None:
+                watch.stop()
         code = g.code
         summary = "all checks passed" if code == 0 else "checks failed (exit %d)" % code
+        if watch is not None and watch.red:
+            code, summary = 1, "stopped: " + watch.red
+            board_line(args.board, "%s NOTICE: main gate %s on %s stopped: %s." % (args.who, g.name, commit[:9],
+                                                                                    watch.red))
         owed = [r["check"] for r in g.results if r["state"] == "owed"]
         if owed and args.board:
             board_line(args.board, "%s OWED: the tablet's part of %s gate %s on %s: %s. It runs on main's newest "
                        "commit first when the tablet is back (gate.py --main --only \"%s\")." % (
                            args.who, args.mode, g.name, commit[:9], ", ".join(owed), ",".join(owed)))
-        if args.move and code == 0:
+        if args.move and code == 0 and not (watch is not None and watch.red):
             # The machine is free for the next gate from here (section 5.5); this process waits for GitHub alone.
             for lock in taken:
                 free_gate_lock(lock, holder, args.board, args.who, "its checks passed; it waits for GitHub's jobs on %s"
@@ -1493,7 +1969,8 @@ def main(argv=None):
             taken = []
             add_waiting(args.work, commit, candidate, os.getpid())
             try:
-                green, detail = github_wait(candidate, commit, planned_jobs(planned), log=str(g.work / "github.log"))
+                green, detail = github_wait(candidate, commit, planned_jobs(planned), wait_minutes=args.github_wait,
+                                            log=str(g.work / "github.log"))
                 why = None if green else "GitHub's jobs on %s: %s" % (candidate, detail)
                 if why is None:
                     move_lock = str(pathlib.Path(args.gate_lock).with_name("move.lock"))
@@ -1515,8 +1992,12 @@ def main(argv=None):
                     args.who, g.name, commit[:9], why))
             else:
                 summary = "passed, GitHub green (%s), main moved to %s" % (detail, commit[:9])
-                if long_due(args.work):
-                    print("gate.py: no long run started in 6 hours: start one on main's newest commit (section 14)")
+                started, what = start_long(commit, args)
+                print("gate.py: long run: %s" % what)
+                if started is not None:
+                    board_line(args.board, "%s LONG: %s; none had started in 6 hours (section 14, N-1046)." % (args.who, what))
+                elif what.startswith("its tree"):
+                    board_line(args.board, "%s NOTICE: main moved to %s; no long run started: %s." % (args.who, commit[:9], what))
     finally:
         for lock in taken:
             free_gate_lock(lock, holder, args.board, args.who, summary)

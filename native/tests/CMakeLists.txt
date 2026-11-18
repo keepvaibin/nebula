@@ -103,5 +103,15 @@ native_test(native_seq_read_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/seq_read_te
 native_test(native_note_octave_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/note_octave_tests.cpp")
 # A placement argument names a table's entry or takes the fallback (N-3031, N-3032).
 native_test(native_placement_index_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/placement_index_tests.cpp")
+if(NEBULA_SANITIZE AND WIN32)
+    # NebulaArena.cpp defines operator new/delete, as in the module: the sanitizer runtime's own give way (N-1062).
+    foreach(arena_test native_arena_tests native_binder_tests native_binder_plain_tests native_hit_sensor_tests
+            native_sensor_hit_tests native_gravity_bound_tests native_draw_run_list_tests native_collision_index_tests
+            native_mario_messenger_tests)
+        target_link_options(${arena_test} PRIVATE LINKER:/force:multiple)
+    endforeach()
+endif()
 # The frame-list writer, against the list the renderer reads.
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
+# The cutscene skip's bound, in steps of play (header only).
+native_test(native_cutscene_skip_bound_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/cutscene_skip_bound_tests.cpp")

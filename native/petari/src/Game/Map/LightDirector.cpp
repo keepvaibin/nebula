@@ -1,5 +1,4 @@
 #include "Game/Map/LightDirector.hpp"
-#include "Game/Util/GameLightSignal.hpp"
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/Map/LightDataHolder.hpp"
 #include "Game/Map/LightFunction.hpp"
@@ -12,7 +11,6 @@
 LightDirector::LightDirector()
     : NameObj("ライト指揮"), mAreaHolder(), mDataHolder(), mZoneDataHolder(), mDefaultAreaLight(), mPlayerLightCtrl(), mPointCtrl(), mResourceHolder() {
     lumacore::setClass(this, lumacore::kClassId< LightDirector >);
-    GameLightSignal::sceneStart();
 }
 
 void LightDirector::init(const TableIter& /*rIter*/) {

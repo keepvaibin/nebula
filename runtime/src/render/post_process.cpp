@@ -2,6 +2,7 @@
 #include "galaxy/render/post_process.h"
 #include "barriers_d3d12.h"
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 #include "galaxy/render/idle_clock.h"
 
 #include <algorithm>
@@ -118,7 +119,7 @@ bool PostProcessor::create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTEC
         ds.FrontFace = op;
         ds.BackFace = op;
     }
-    return SUCCEEDED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&out)));
+    return SUCCEEDED(core::utility_pipeline(device_, pd, &out));
 }
 
 bool PostProcessor::create_smaa_pipelines(unsigned quality,
@@ -558,7 +559,7 @@ void PostProcessor::draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ri
         sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         sd.Texture2D.MipLevels = 1;
-        device_->CreateShaderResourceView(input, &sd, slot);
+        srv_ring.write_view(slot, input, sd);
         slot.ptr += increment;
         ++written;
     }
@@ -568,7 +569,7 @@ void PostProcessor::draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ri
         sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         sd.Texture2D.MipLevels = 1;
-        device_->CreateShaderResourceView(nullptr, &sd, slot);
+        srv_ring.write_view(slot, nullptr, sd);
         slot.ptr += increment;
     }
     list->SetPipelineState(pipeline);

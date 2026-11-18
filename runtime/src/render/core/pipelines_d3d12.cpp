@@ -3,6 +3,7 @@
 
 #include "render/core/pipeline_cache_file.h"
 #include "render/core/present_gate.h"
+#include "render/core/utility_pipeline_d3d12.h"
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -10,6 +11,7 @@
 #include <nebula_model.h>
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -19,6 +21,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <system_error>
+#include <type_traits>
 #include <vector>
 
 namespace galaxy::render::core {
@@ -60,6 +63,9 @@ struct DriverCache {
     std::vector<char> blob;  // the library reads it for as long as it lives
     std::filesystem::path file;
     D3d12CacheIdentity identity;
+    // The device the library was made on (a device child holds its device, so no other device takes this address while the
+    // library lives).
+    gpu::Device* device = nullptr;
     std::mutex lock;
     // The library itself: loads hold it shared, so they run side by side; StorePipeline, GetSerializedSize, Serialize and
     // the release hold it alone. Taken after a name's stripe and before `lock`.
@@ -86,6 +92,7 @@ ID3D12PipelineLibrary* driver_cache(gpu::Device* device) {
         return gCache.library.Get();
     }
     gCache.opened = true;
+    gCache.device = device;
     Microsoft::WRL::ComPtr<ID3D12Device1> device1;
     if (FAILED(device->QueryInterface(IID_PPV_ARGS(&device1)))) {
         return nullptr;
@@ -161,6 +168,7 @@ void release_driver_cache() noexcept {
     std::lock_guard guard(gCache.lock);
     gCache.library.Reset();
     gCache.blob.clear();
+    gCache.device = nullptr;
     gCache.opened = false;
     gCache.changed = false;
 }
@@ -281,7 +289,6 @@ void fill_inputs(const PipelineEntry& entry, bool motion, InputList& list) {
         case NEBULA_INPUT_BINORMAL: list.add("BINORMAL", 0u, format, slot, input.offset); break;
         case NEBULA_INPUT_WIDEN: list.add("BLENDINDICES", 1u, format, slot, input.offset); break;
         case NEBULA_INPUT_MATRIX: list.add("BLENDINDICES", 0u, format, slot, input.offset); break;
-        case NEBULA_INPUT_GAIN: list.add("BLENDWEIGHT", 0u, format, slot, input.offset); break;
         default:
             if (input.semantic >= NEBULA_INPUT_COORD0) {
                 list.add("TEXCOORD", input.semantic - NEBULA_INPUT_COORD0, format, slot, input.offset);
@@ -489,6 +496,8 @@ gpu::Pipeline* Pipelines::build(const PipelineEntry& entry, unsigned variant, un
     if (FAILED(hr)) {
         if (hr == E_OUTOFMEMORY) {
             note_pipeline_out_of_memory();
+        } else if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == DXGI_ERROR_DEVICE_HUNG) {
+            note_pipeline_device_lost();
         }
         std::fprintf(stderr, "[pipelines] create failed %08lx: %llx %llx state %08x variant %u aux %u\n", static_cast<unsigned long>(hr),
                      static_cast<unsigned long long>(desc.vertex), static_cast<unsigned long long>(desc.pixel), state, variant, aux);
@@ -528,6 +537,212 @@ bool Pipelines::cache_file_state(std::filesystem::path& file, std::uint64_t& acc
 std::uint64_t Pipelines::cache_file_hash() noexcept {
     std::lock_guard guard(gCache.lock);
     return gCache.stale ? 0u : gCache.on_disk;
+}
+
+namespace {
+
+// A utility pipeline's key: field by field (a description's padding never reaches it), the programs by their bytes'
+// hash, the semantic names by their text.
+struct UtilityHash {
+    std::uint64_t value = 14695981039346656037ull;
+    template <typename T>
+    void add(const T& field) noexcept {
+        static_assert(std::is_trivially_copyable_v<T> && std::has_unique_object_representations_v<T>);
+        const auto* bytes = reinterpret_cast<const unsigned char*>(&field);
+        for (std::size_t i = 0; i < sizeof(T); ++i) {
+            value = (value ^ bytes[i]) * 1099511628211ull;
+        }
+    }
+    void add(float field) noexcept {
+        std::uint32_t bits = 0u;
+        std::memcpy(&bits, &field, sizeof(bits));
+        add(bits);
+    }
+    void add(const D3D12_SHADER_BYTECODE& program) noexcept {
+        add(static_cast<std::uint64_t>(program.BytecodeLength));
+        add(program.pShaderBytecode != nullptr ? blob_hash(program.pShaderBytecode, program.BytecodeLength) : 0u);
+    }
+    void add_text(const char* text) noexcept {
+        const std::size_t length = text != nullptr ? std::strlen(text) : 0u;
+        add(static_cast<std::uint64_t>(length));
+        if (length > 0u) {
+            add(blob_hash(text, length));
+        }
+    }
+};
+
+std::uint64_t utility_hash(const D3D12_GRAPHICS_PIPELINE_STATE_DESC& d) noexcept {
+    UtilityHash h;
+    h.add(std::uint32_t{1u});  // graphics
+    for (const D3D12_SHADER_BYTECODE* program : {&d.VS, &d.PS, &d.DS, &d.HS, &d.GS}) {
+        h.add(*program);
+    }
+    h.add(d.StreamOutput.NumEntries);
+    for (UINT i = 0; i < d.StreamOutput.NumEntries && d.StreamOutput.pSODeclaration != nullptr; ++i) {
+        const D3D12_SO_DECLARATION_ENTRY& e = d.StreamOutput.pSODeclaration[i];
+        h.add(e.Stream);
+        h.add_text(e.SemanticName);
+        h.add(e.SemanticIndex);
+        h.add(e.StartComponent);
+        h.add(e.ComponentCount);
+        h.add(e.OutputSlot);
+    }
+    h.add(d.StreamOutput.NumStrides);
+    for (UINT i = 0; i < d.StreamOutput.NumStrides && d.StreamOutput.pBufferStrides != nullptr; ++i) {
+        h.add(d.StreamOutput.pBufferStrides[i]);
+    }
+    h.add(d.StreamOutput.RasterizedStream);
+    h.add(d.BlendState.AlphaToCoverageEnable);
+    h.add(d.BlendState.IndependentBlendEnable);
+    for (const D3D12_RENDER_TARGET_BLEND_DESC& b : d.BlendState.RenderTarget) {
+        h.add(b.BlendEnable);
+        h.add(b.LogicOpEnable);
+        h.add(b.SrcBlend);
+        h.add(b.DestBlend);
+        h.add(b.BlendOp);
+        h.add(b.SrcBlendAlpha);
+        h.add(b.DestBlendAlpha);
+        h.add(b.BlendOpAlpha);
+        h.add(b.LogicOp);
+        h.add(b.RenderTargetWriteMask);
+    }
+    h.add(d.SampleMask);
+    const D3D12_RASTERIZER_DESC& r = d.RasterizerState;
+    h.add(r.FillMode);
+    h.add(r.CullMode);
+    h.add(r.FrontCounterClockwise);
+    h.add(r.DepthBias);
+    h.add(r.DepthBiasClamp);
+    h.add(r.SlopeScaledDepthBias);
+    h.add(r.DepthClipEnable);
+    h.add(r.MultisampleEnable);
+    h.add(r.AntialiasedLineEnable);
+    h.add(r.ForcedSampleCount);
+    h.add(r.ConservativeRaster);
+    const D3D12_DEPTH_STENCIL_DESC& s = d.DepthStencilState;
+    h.add(s.DepthEnable);
+    h.add(s.DepthWriteMask);
+    h.add(s.DepthFunc);
+    h.add(s.StencilEnable);
+    h.add(s.StencilReadMask);
+    h.add(s.StencilWriteMask);
+    for (const D3D12_DEPTH_STENCILOP_DESC* face : {&s.FrontFace, &s.BackFace}) {
+        h.add(face->StencilFailOp);
+        h.add(face->StencilDepthFailOp);
+        h.add(face->StencilPassOp);
+        h.add(face->StencilFunc);
+    }
+    h.add(d.InputLayout.NumElements);
+    for (UINT i = 0; i < d.InputLayout.NumElements && d.InputLayout.pInputElementDescs != nullptr; ++i) {
+        const D3D12_INPUT_ELEMENT_DESC& e = d.InputLayout.pInputElementDescs[i];
+        h.add_text(e.SemanticName);
+        h.add(e.SemanticIndex);
+        h.add(e.Format);
+        h.add(e.InputSlot);
+        h.add(e.AlignedByteOffset);
+        h.add(e.InputSlotClass);
+        h.add(e.InstanceDataStepRate);
+    }
+    h.add(d.IBStripCutValue);
+    h.add(d.PrimitiveTopologyType);
+    h.add(d.NumRenderTargets);
+    for (const DXGI_FORMAT format : d.RTVFormats) {
+        h.add(format);
+    }
+    h.add(d.DSVFormat);
+    h.add(d.SampleDesc.Count);
+    h.add(d.SampleDesc.Quality);
+    h.add(d.NodeMask);
+    h.add(d.Flags);
+    return h.value;
+}
+
+std::uint64_t utility_hash(const D3D12_COMPUTE_PIPELINE_STATE_DESC& d) noexcept {
+    UtilityHash h;
+    h.add(std::uint32_t{2u});  // compute
+    h.add(d.CS);
+    h.add(d.NodeMask);
+    h.add(d.Flags);
+    return h.value;
+}
+
+std::atomic<std::uint64_t> gUtilityLoaded{0u};
+std::atomic<std::uint64_t> gUtilityMade{0u};
+
+template <typename Desc>
+HRESULT utility_through_cache(ID3D12Device* device, const Desc& desc, ID3D12PipelineState** out) {
+    constexpr bool kGraphics = std::is_same_v<Desc, D3D12_GRAPHICS_PIPELINE_STATE_DESC>;
+    const auto create = [&] {
+        const CreationScope gate;
+        HRESULT made = E_FAIL;
+        if constexpr (kGraphics) {
+            made = device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(out));
+        } else {
+            made = device->CreateComputePipelineState(&desc, IID_PPV_ARGS(out));
+        }
+        if (SUCCEEDED(made)) {
+            gUtilityMade.fetch_add(1u, std::memory_order_relaxed);
+        }
+        return made;
+    };
+    if (device == nullptr || out == nullptr) {
+        return E_INVALIDARG;
+    }
+    ID3D12PipelineLibrary* cache = driver_cache(device);
+    {
+        // A library serves the device it was made on only (another device's pipelines are made, not stored).
+        const std::lock_guard guard(gCache.lock);
+        if (gCache.device != device) {
+            cache = nullptr;
+        }
+    }
+    if (cache == nullptr) {
+        return create();
+    }
+    const std::uint64_t hash = utility_hash(desc);
+    // 'u' and the hash: never one of the game's names (cache_name, the hash alone).
+    std::array<wchar_t, 40> name{};
+    std::swprintf(name.data(), name.size(), L"u%016llx", static_cast<unsigned long long>(hash));
+    std::mutex& named = gNameLocks[hash % gNameLocks.size()];
+    HRESULT hr = E_FAIL;
+    {
+        const std::lock_guard held(named);
+        const std::shared_lock shared(gCache.use);
+        const CreationScope gate;
+        if constexpr (kGraphics) {
+            hr = cache->LoadGraphicsPipeline(name.data(), &desc, IID_PPV_ARGS(out));
+        } else {
+            hr = cache->LoadComputePipeline(name.data(), &desc, IID_PPV_ARGS(out));
+        }
+    }
+    if (SUCCEEDED(hr)) {
+        gUtilityLoaded.fetch_add(1u, std::memory_order_relaxed);
+        return hr;
+    }
+    hr = create();
+    if (SUCCEEDED(hr)) {
+        const std::lock_guard held(named);
+        const std::unique_lock alone(gCache.use);
+        const std::lock_guard guard(gCache.lock);
+        gCache.changed = SUCCEEDED(cache->StorePipeline(name.data(), *out)) || gCache.changed;
+    }
+    return hr;
+}
+
+}  // namespace
+
+HRESULT utility_pipeline(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC& desc,
+                         ID3D12PipelineState** out) {
+    return utility_through_cache(device, desc, out);
+}
+
+HRESULT utility_pipeline(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC& desc,
+                         ID3D12PipelineState** out) {
+    return utility_through_cache(device, desc, out);
+}
+
+UtilityPipelineCounts utility_pipeline_counts() noexcept {
+    return {gUtilityLoaded.load(std::memory_order_relaxed), gUtilityMade.load(std::memory_order_relaxed)};
 }
 
 }  // namespace galaxy::render::core

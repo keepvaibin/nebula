@@ -4,14 +4,18 @@
    stage asked for at every stage's start after the first, the end at the last frame, input only inside the run.
 2. The judgment: flat memory passes; memory that keeps growing past the bound fails; the first lap's growth is left
    out; a run of fewer than three laps cannot pass.
+3. The gate's verdict (gate.soak_result): the soak's output lands in the check's log, which is not the file the soak
+   writes (N-1065: both were soak.log, and the copy onto itself failed the check).
 """
 import json
 import pathlib
+import subprocess
 import sys
 import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "lumacore"))
+import gate  # noqa: E402
 import luma_test  # noqa: E402
 import soak  # noqa: E402
 
@@ -53,6 +57,28 @@ def main():
     check(soak.judge(small, lap)[0], "growth inside the bound passes: %s" % soak.judge(small, lap)[1])
     check(not soak.judge(flat[:len(flat) * 2 // 5], lap)[0], "two laps cannot pass")
     check(not soak.judge([(0, None)] * 100, lap)[0], "no bytes cannot pass")
+
+    class Ended:
+        def wait(self):
+            return 0
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work = pathlib.Path(tmp)
+        real_popen = subprocess.Popen
+        subprocess.Popen = lambda *a, **k: Ended()
+        try:
+            process, soak_log = gate.start_soak(type("G", (), {"work": work, "bin": "b", "args": type("A", (), {
+                "pak": "p", "soak_minutes": 1, "build_root": tmp})()})())
+        finally:
+            subprocess.Popen = real_popen
+        check_log = work / "soak.log"  # Gate.check's log of the check named "soak"
+        check(pathlib.Path(soak_log) != check_log, "the soak writes another file than the check's log: %s" % soak_log)
+        pathlib.Path(soak_log).write_text("d3d12    pass  3 laps" + chr(10), encoding="utf-8")
+        ok, said = gate.soak_result(process, pathlib.Path(soak_log))(check_log)
+        check(ok and "3 laps" in said and "3 laps" in check_log.read_text(encoding="utf-8"),
+              "the verdict and the soak's output in the check's log: %s %s" % (ok, said))
+        ok, said = gate.soak_result(process, check_log)(check_log)
+        check(ok, "a soak log that is the check's log is read, not copied onto itself: %s" % said)
 
     if failures:
         print("soak_test.py: FAILED:\n  " + "\n  ".join(failures))

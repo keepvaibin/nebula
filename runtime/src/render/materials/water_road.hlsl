@@ -51,10 +51,9 @@ float4 material_color(NativeVaryings i) {
         move = step * material.params.y / material.screen.xy;
         screen += move;
     }
-    // The screen behind and the painted environment: what the tracer shows in their place under the traced light
-    // (program.hlsli traced_sea). Each sum is clamped as the game's stages clamp it; the pixel stage clamps the whole.
+    // The screen behind and the painted environment. Each sum is clamped as the game's stages clamp it; the pixel stage
+    // clamps the whole.
     const float3 behind = TEX(2).Sample(SAMP(2), screen).rgb;  // the scene behind, moved; its tint apart
-    const float3 painted = TEX(3).Sample(SAMP(3), i.uv[1].zw).rgb;  // the painted environment: the traced mirror's place
-    return traced_sea(pattern8 / 255.0, c8 / 255.0 - pattern8 / 255.0, behind, material.tint.rgb, painted, i.color.a,
-                      move * line_point_raster.xy, i.pos);
+    const float3 painted = TEX(3).Sample(SAMP(3), i.uv[1].zw).rgb;  // the painted environment
+    return sea_colour(pattern8 / 255.0, c8 / 255.0 - pattern8 / 255.0, behind, material.tint.rgb, painted, i.color.a);
 }

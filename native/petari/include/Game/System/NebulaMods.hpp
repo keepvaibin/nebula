@@ -62,7 +62,7 @@ namespace NebulaMods {
 
     // What a mod has made of an object of the game's, where `where` (NEBULA_OBJECTS_*) is: its own name unchanged, another's, or null: gone.
     const char* objectBecomes(s32 where, const char* pName);
-    // Frames, from what mods say of a comet mission; 0: they say nothing.
+    // Steps of play, from what mods say of a comet mission; 0: they say nothing.
     u32 cometTimeLimit(const char* pGalaxy, s32 mission);
     // The journey, if a mod says: the stage named, or the game's own.
     const char* firstStage();

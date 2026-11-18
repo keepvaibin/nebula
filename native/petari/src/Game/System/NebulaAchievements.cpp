@@ -299,7 +299,7 @@ namespace {
             galaxyNum++;
             const s32 comet = galaxy.getNormalCometScenarioNo();
             if (comet > 0) {
-                const bool owned = galaxy.hasPowerStar(comet);
+                const bool owned = hasStar(pName, comet);
                 const char* pKind = galaxy.getCometName(comet);
                 comets++;
                 result.mCometsOwned += owned ? 1 : 0;
@@ -321,7 +321,7 @@ namespace {
             }
             const s32 purple = galaxy.getCoin100CometScenarioNo();
             if (purple > 0) {
-                const bool owned = galaxy.hasPowerStar(purple);
+                const bool owned = hasStar(pName, purple);
                 purpleCoins++;
                 result.mPurpleCoinsOwned += owned ? 1 : 0;
                 result.mPurpleCoins = result.mPurpleCoins && owned;
@@ -331,7 +331,7 @@ namespace {
             for (s32 scenario = 1; scenario <= galaxy.getPowerStarNum(); scenario++) {
                 if (galaxy.isHiddenStar(scenario)) {
                     hidden++;
-                    const bool owned = galaxy.hasPowerStar(scenario);
+                    const bool owned = hasStar(pName, scenario);
                     result.mHiddenOwned += owned ? 1 : 0;
                     result.mHidden = result.mHidden && owned;
                 }

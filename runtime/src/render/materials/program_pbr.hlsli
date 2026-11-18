@@ -2,12 +2,11 @@
 // A mod's glTF material (glTF 2.0 metallic-roughness) in a program's lit form: the template the generator writes for a
 // material with MaterialIr pbr (crates/nebula-import/src/cook/programs.rs pbr_*; docs/modding/how-tos/writing-material-shaders.md).
 // The material's stages make its base colour (factor x base map x vertex colour, display-encoded, as the cook writes
-// them); this lights it: the light set's ambient and lights summed as the game's lit channel sums them (each light by
-// its traced share in the traced form, the ambient by AMBIENT_TERM: MOD-MATERIALS-FC.md 1), Lambert for the diffuse
+// them); this lights it: the light set's ambient and lights summed as the game's lit channel sums them (the ambient by
+// AMBIENT_TERM: MOD-MATERIALS-FC.md 1), Lambert for the diffuse
 // part, GGX with the material's roughness for the first light's highlight, and a reflection of the stage along the
 // mirrored view: the stage's light as an environment (its fill as the sky about the player's up, its ambient as the
-// ground), through ENV_FETCH, so where the tracer owns the pixel the traced scene stands in its place (program.hlsli
-// env_fetch). Metal from the factor and the map's blue, roughness from the factor and its green, occlusion on the
+// ground), through ENV_FETCH. Metal from the factor and the map's blue, roughness from the factor and its green, occlusion on the
 // indirect light.
 
 #ifndef PROGRAM_PBR_HLSLI
@@ -38,7 +37,7 @@ void pbr_begin(float3 amb) {
     g_pbr.ambient = AMBIENT_TERM(g_pbr.amb_lin * enh_sky(g_enh));
 }
 
-// Light n of the material's channel, summed as enh_add_light sums it (the same traced share); the first one
+// Light n of the material's channel, summed as enh_add_light sums it; the first one
 // with a facing is the key whose highlight the material takes.
 void pbr_add_light(uint base, uint n, bool spot, uint diffuse, bool first, float3 eye, float3 amb) {
     float3 ldir;
@@ -49,28 +48,16 @@ void pbr_add_light(uint base, uint n, bool spot, uint diffuse, bool first, float
         g_pbr.fill = enh_lin(lcol);
     }
     float facing = diffuse == 1u ? dot(g_enh.N, ldir) : diffuse == 2u ? max(dot(g_enh.N, ldir), 0.0) : 1.0;
-#if NATIVE_TRACED
-    lcol *= traced_light(n);
-    facing = traced_key_facing(n, diffuse, facing);
-    facing = traced_fill_facing(n, diffuse, facing, g_enh.N);
-#endif
     const float x = attn * facing;
     const float3 amb_lin = g_pbr.amb_lin;
     g_pbr.direct += lerp(enh_lin(amb + lcol * x) - amb_lin, (enh_lin(amb + lcol) - amb_lin) * x, kEnhRamp);
     if (first && diffuse != 0u && g_enh.valid) {
-#if NATIVE_TRACED
-        ldir = traced_key_dir(n, ldir);
-#endif
         g_pbr.key = enh_lin(lcol) * attn;
         g_pbr.key_dir = ldir;
         g_pbr.has_key = true;
     }
 }
 
-// The diffuse light level, display-encoded: the traced form takes the colour under it as c / level (TRACED_LEVEL).
-float3 pbr_level() {
-    return enh_srgb(enh_shoulder(max(g_pbr.ambient + g_pbr.direct, 0.0)));
-}
 
 // The stage seen along R, linear, blurred by the roughness: its fill light as the sky above the horizon about the
 // player's up, its ambient below; a rough surface sees their mean.

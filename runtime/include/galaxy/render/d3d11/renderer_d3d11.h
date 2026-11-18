@@ -21,6 +21,7 @@
 #include "galaxy/render/d3d11/d3d11_context.h"
 #include "galaxy/render/d3d11/fx_d3d11.h"
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/dxgi_memory.h"
 #include "galaxy/render/dynamic_resolution.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
@@ -137,7 +138,7 @@ public:
     void trace_rings() const;
     void copy_fg_hudless_display(const DisplayTexture&) {}
     void attach_texture_uploads(TextureStore& cache);
-    // The video memory in use and its budget (IDXGIAdapter3::QueryVideoMemoryInfo), read at a frame boundary.
+    // The video memory in use and its budget (dxgi_memory.h: asked at most every 100 ms, at once when the budget moved).
     [[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
     void wait_for_gpu_idle();
     void pump_messages() {}
@@ -259,13 +260,11 @@ public:
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
 
-    // Test captures: the scene target and the presented picture as PPM files (paths from set_debug_capture_paths).
-    bool debug_copy_scene_to_readback();
-    void debug_log_readback();
+    // Test captures: the presented picture as PPM files (paths from set_debug_capture_paths).
     void debug_log_backbuffer_readback();
     bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
     void debug_log_display_readback();
-    void set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path);
+    void set_debug_capture_paths(std::string backbuffer_ppm_path);
     // The pictures handed to an extension, taken from the GPU and written (render thread; RenderCore::finish_pictures,
     // before a process that ends without the shutdown).
     void finish_pictures();
@@ -439,6 +438,8 @@ private:
     void end_scene_pass(const char* caller = __builtin_FUNCTION());
     // The recorded draws run: the upload memory they read reaches the GPU, then the ops replay on the immediate context.
     void flush_draws();
+    // The roots of pass_ops_ from `from` on into the ring, one Map, as many as fit; returns the first op not written.
+    std::size_t write_roots(std::size_t from, bool carried);
     void bind_constants(unsigned slot, gpu::Address address, bool vertex, bool pixel);
     void bind_rows(gpu::Address rows, gpu::Address instances);
     void reset_draw_bindings() noexcept;
@@ -470,6 +471,8 @@ private:
     bool window_shown_ = false;
     bool keep_window_ = false;
     bool occluded_ = false;
+    // The device's adapter's video memory (video_memory); render thread.
+    mutable DxgiMemory memory_;
     bool loss_asked_ = false;  // lose_device, until the present that reports it
     TextureStore* mirrored_store_ = nullptr;
 
@@ -496,7 +499,14 @@ private:
     d3d11::RenderLayout draw_layout_{};
     d3d11::ComPtr<ID3D11SamplerState> linear_clamp_;
     d3d11::ComPtr<ID3D11SamplerState> point_clamp_;
-    d3d11::ComPtr<ID3D11Buffer> root_constants_;     // b3: the draw's DrawRoot, written per change (dynamic)
+    // b3: the draws' DrawRoots, a ring of kRootSlots slots of 256 bytes (dynamic), written ahead of the draws in runs of
+    // one Map each, each draw bound to its slot by offset (flush_draws, P-060).
+    static constexpr unsigned kRootSlots = 1024u;
+    d3d11::ComPtr<ID3D11Buffer> root_constants_;
+    unsigned root_next_ = kRootSlots;               // the ring's next free slot (kRootSlots: start again, DISCARD)
+    std::vector<std::uint16_t> root_slots_;         // per pass op: the slot its Root was written to
+    gpu::DrawRoot root_carried_{};                  // the last root written: the next pass starts with it bound
+    unsigned root_carried_slot_ = 0u;               // where this pass's copy of it lies
     d3d11::ComPtr<ID3D11Buffer> utility_constants_;  // the renderer's own draws' b0 (dynamic)
     std::array<d3d11::ComPtr<ID3D11PixelShader>, static_cast<std::size_t>(Utility::Count)> utility_ps_{};
     d3d11::ComPtr<ID3D11VertexShader> full_screen_vs_;
@@ -619,12 +629,7 @@ private:
     std::vector<ProbeSlot> probe_slots_;
 
     // Captures and telemetry.
-    std::string scene_capture_path_;
     std::string backbuffer_capture_path_;
-    Readback scene_capture_;
-    std::string scene_capture_pending_path_;
-    unsigned scene_capture_width_ = 0;
-    unsigned scene_capture_height_ = 0;
     Readback backbuffer_capture_;
     std::string backbuffer_capture_pending_path_;
     unsigned backbuffer_capture_width_ = 0;

@@ -23,8 +23,6 @@ concurrency:
 env:
   LLVM_VERSION: '22.1.6'
   ANDROID_NDK: '28.2.13676358'
-  MESA_WIN_VERSION: '26.2.7'
-  VULKAN_LOADER_TAG: 'vulkan-sdk-1.4.363.0'
 
 jobs:
   windows:
@@ -60,37 +58,6 @@ jobs:
           . .\tools\enter_msvc_environment.ps1 | Out-Null
           ctest --test-dir (Join-Path $env:RUNNER_TEMP 'host') --output-on-failure --timeout 600
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      # Each program starts without game data (host_main.cpp run_start_check): its window and renderer on the runner's
-      # software adapter, 300 frames drawn and shown. A crash, a renderer that does not start or no picture fails it.
-      # The runner has no Vulkan driver: Mesa's software one (lavapipe, the Linux job's too) and the Khronos loader,
-      # both pinned, beside NebulaVk.exe only for this check.
-      - name: Vulkan on the CPU (Mesa lavapipe and the Vulkan loader)
-        shell: pwsh
-        run: |
-          . .\tools\enter_msvc_environment.ps1 | Out-Null
-          $t = Join-Path $env:RUNNER_TEMP 'vk'
-          New-Item -ItemType Directory -Force $t | Out-Null
-          curl.exe -fsSL --retry 3 -o "$t/mesa.7z" "https://github.com/pal1000/mesa-dist-win/releases/download/$env:MESA_WIN_VERSION/mesa3d-$env:MESA_WIN_VERSION-release-msvc.7z"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          7z x "$t/mesa.7z" "-o$t/mesa" x64 | Out-Null
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          git clone -q --depth 1 -b $env:VULKAN_LOADER_TAG https://github.com/KhronosGroup/Vulkan-Loader "$t/loader-src"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake -S "$t/loader-src" -B "$t/loader" -G Ninja -DCMAKE_BUILD_TYPE=Release -DUPDATE_DEPS=ON -DBUILD_TESTS=OFF
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build "$t/loader"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $dll = Get-ChildItem -Recurse "$t/loader" -Filter vulkan-1.dll | Select-Object -First 1
-          if (-not $dll) { Write-Output "the loader build made no vulkan-1.dll"; exit 1 }
-          Copy-Item $dll.FullName (Join-Path $env:RUNNER_TEMP 'host')
-          $icd = (Resolve-Path "$t/mesa/x64/lvp_icd.x86_64.json").Path
-          # The driver is named in the registry, where the loader looks for installed drivers: the runner's processes
-          # are elevated, and an elevated process's loader ignores VK_DRIVER_FILES (seen: "Found no drivers").
-          $drivers = 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers'
-          New-Item -Force -Path $drivers | Out-Null
-          New-ItemProperty -Force -Path $drivers -Name $icd -PropertyType DWord -Value 0 | Out-Null
-          # The loader names the drivers it found and why one was not taken, in the start check's log.
-          "VK_LOADER_DEBUG=error,warn,driver" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
         shell: bash
@@ -104,21 +71,12 @@ jobs:
         with:
           path: ${{ runner.temp }}/compiler-cache
           key: ${{ steps.cache.outputs.key }}
+      # Each program starts without game data: its window and renderer on the runner's software adapter, 300 frames
+      # drawn and shown (the action: Mesa's lavapipe and the Vulkan loader for NebulaVk).
       - name: Start check (Direct3D 12, Vulkan and Direct3D 11)
-        shell: pwsh
-        run: |
-          $build = Join-Path $env:RUNNER_TEMP 'host'
-          foreach ($exe in 'Nebula', 'NebulaVk', 'NebulaD11') {
-            $d = Join-Path $env:RUNNER_TEMP "start-$exe"
-            New-Item -ItemType Directory -Force "$d/data", "$d/settings" | Out-Null
-            $p = Start-Process (Join-Path $build "$exe.exe") -WindowStyle Hidden -PassThru `
-              -ArgumentList '--start-check', '300', '--data', "$d/data", '--settings', "$d/settings", '--crash-dumps', $d `
-              -RedirectStandardOutput "$d/out.txt" -RedirectStandardError "$d/err.txt"
-            $null = $p.Handle
-            if (-not $p.WaitForExit(300000)) { $p.Kill(); Write-Output "${exe}: no end in 5 minutes"; exit 1 }
-            Get-Content "$d/out.txt", "$d/err.txt" | Select-String 'start check|\[gpu\] adapter'
-            if ($p.ExitCode -ne 0) { Write-Output "${exe}: exit $($p.ExitCode)"; Get-Content "$d/err.txt" -Tail 80; exit 1 }
-          }
+        uses: ./.github/actions/start-check-windows
+        with:
+          folder: ${{ runner.temp }}\host
 
   windows-game:
     name: Windows game modules
@@ -193,6 +151,12 @@ jobs:
         uses: ./.github/actions/compiler-cache
         with:
           name: linux-unit
+      # The code checks gate.py runs as repo/code (P-043): the console census, cast_check and byte_order_check.
+      - name: Code checks
+        run: |
+          for check in console_census cast_check byte_order_check; do
+            python3 -X utf8 -I "tools/verify/$check.py" . || exit 1
+          done
       - name: LLVM
         run: |
           sudo apt-get update
@@ -258,7 +222,8 @@ jobs:
       - id: cache
         uses: ./.github/actions/compiler-cache
         with:
-          name: sanitizers-${{ matrix.sanitize }}
+          # A cache key holds no comma: 'address,undefined' is named address-undefined (N-1045).
+          name: sanitizers-${{ matrix.sanitize == 'thread' && 'thread' || 'address-undefined' }}
       - name: LLVM
         run: |
           sudo apt-get update

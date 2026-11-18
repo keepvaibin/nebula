@@ -7,6 +7,8 @@
 // due or running. Outside the warm-up no creation is in flight and a Present only takes and drops one lock.
 #pragma once
 
+#include "galaxy/frame_timeline.h"
+
 #include <condition_variable>
 #include <mutex>
 
@@ -30,10 +32,16 @@ public:
         }
     }
     // presents_ counts the Present due and the one running: new creations wait from the moment one is due.
+    // A wait is a timeline event (--diagnostics timeline): a tour's timeline names each Present a creation held.
     void begin_present() {
         std::unique_lock held(lock_);
         ++presents_;
+        if (creations_ == 0u) {
+            return;
+        }
+        ::galaxy::timeline::record(::galaxy::timeline::Event::GateWaitBegin, creations_);
         turn_.wait(held, [this] { return creations_ == 0u; });
+        ::galaxy::timeline::record(::galaxy::timeline::Event::GateWaitEnd);
     }
     void end_present() {
         {

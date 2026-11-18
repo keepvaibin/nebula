@@ -5,8 +5,10 @@
 #include "galaxy/pacing_recorder.h"
 
 #include "galaxy/benchmark.h"
+#include "galaxy/frame_timeline.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/display_aspect.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/device_memory.h"
 #include "galaxy/render/first_start_scale.h"
 #include "galaxy/launch_args.h"
@@ -389,7 +391,7 @@ void RendererMtl::shutdown() {
         pictures_.clear();
         frame_pass_targets_.clear();
         capture_target_.reset();
-        scene_capture_ = backbuffer_capture_ = display_capture_ = Readback{};
+        backbuffer_capture_ = display_capture_ = Readback{};
         probe_slots_.clear();
         held_probe_slots_.clear();
         pass_visibility_.reset();
@@ -571,15 +573,20 @@ void RendererMtl::next_command_buffer(GpuPass pass) {
 }
 
 void RendererMtl::begin_frame() {
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     follow_window_and_resize();
     apply_window_size();
     grow_rings();
     prepare_temporal_upscaler();
     apply_dynamic_resolution();
-    if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
-        // The settings changed: decided again.
-        temporal_interp_suspended_ = false;
+    if (temporal_interp_hold_.held()) {
+        if (temporal_interp_key() != temporal_interp_key_) {
+            temporal_interp_hold_.settings_changed();  // the settings changed: decided again
+        } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+            // Its wait passed: the governor measures generated frames again, not by the cost that held it.
+            reset_generated_gpu_ema();
+            std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
+        }
     }
     sync_post_process();
     bloom_.poll_ready();
@@ -590,7 +597,15 @@ void RendererMtl::begin_frame() {
     frame_ = &frame;
     mtl::Context& context = mtl::Context::get();
     if (frame.fence != 0u) {
+        // --diagnostics timeline: a wait for the slot's last frame, as Direct3D 12 records it (a = its fence value).
+        const bool timeline_slot_wait = galaxy::timeline::enabled() && completed_fence_value() < frame.fence;
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitBegin, frame.fence);
+        }
         wait_for_fence_value(frame.fence);
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitEnd, frame.fence);
+        }
         // The GPU's time on the slot's last frame: from its first command buffer's start to its last one's end.
         const double start = (*frame.gpu_time)[0].exchange(0.0, std::memory_order_acq_rel);
         const double end = (*frame.gpu_time)[1].exchange(0.0, std::memory_order_acq_rel);
@@ -819,9 +834,6 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
             probes.fence = fence;
         }
     }
-    if (scene_capture_.buffer && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {
-        scene_capture_.fence = fence;
-    }
     if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
         backbuffer_capture_.fence = fence;
     }
@@ -1035,6 +1047,7 @@ void RendererMtl::refresh_display_rate() {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';
@@ -1204,7 +1217,9 @@ bool RendererMtl::present(const DisplayTexture* source, bool capture_backbuffer,
     @autoreleasepool {
         // The drawable is taken as late as the frame allows: it is one of a few, and held until it is shown.
         const std::int64_t asked = galaxy::qpc_now();
+        galaxy::timeline::record_at(galaxy::timeline::Event::AcquireBegin, static_cast<std::uint64_t>(asked));
         id<CAMetalDrawable> const drawable = [(__bridge CAMetalLayer*)layer_.layer nextDrawable];
+        galaxy::timeline::record(galaxy::timeline::Event::AcquireEnd, 0u, drawable == nil ? 1u : 0u);
         const double waited = static_cast<double>(galaxy::qpc_now() - asked) * 1000.0 / static_cast<double>(galaxy::qpc_frequency());
         stats_.drawable_wait_ms += waited;
         stats_.drawable_wait_max_ms = std::max(stats_.drawable_wait_max_ms, waited);

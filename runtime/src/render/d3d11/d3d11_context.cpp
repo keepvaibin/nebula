@@ -161,7 +161,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool debug_layer) {
         caps_.level = level;
         caps_.vendor = desc.VendorId;
         caps_.dedicated_bytes = desc.DedicatedVideoMemory;
-        caps_.unified_memory = desc.DedicatedVideoMemory < (std::uint64_t{512} << 20u);
+        caps_.unified_memory = unified_memory(desc.DedicatedVideoMemory);
+        caps_.no_overwrite_constants = options.MapNoOverwriteOnDynamicConstantBuffer != FALSE;
         // The debug layer's messages, read back each frame (report_messages): Direct3D 11 has no callback.
         if ((flags & D3D11_CREATE_DEVICE_DEBUG) != 0u && SUCCEEDED(device1.As(&info_queue_))) {
             info_queue_->SetMessageCountLimit(4096u);
@@ -507,18 +508,25 @@ Buffer::~Buffer() {
 
 void Context::upload_written() {
     std::lock_guard guard(buffers_mutex_);
-    std::vector<void*> pages;
+    std::vector<void*>& pages = written_pages_;
+    if (pages.size() < 4096u) {
+        pages.resize(4096u);
+    }
     for (Buffer* buffer : upload_buffers_) {
         bool any = false;
         for (const ComPtr<ID3D11Buffer>& made : buffer->gpu) {
             any = any || made != nullptr;
         }
-        pages.resize(std::max<std::size_t>(pages.size(), 4096u));
+        // No video-memory copy yet: nothing to bring up to date (Buffer::bound makes one from the whole system copy;
+        // pages written before it are then copied once more, the same bytes) (P-064).
+        if (!any) {
+            continue;
+        }
         ULONG_PTR count = pages.size();
         DWORD page_bytes = 4096u;
         // Every written page since the last call; read and reset in one call, so a write after it is seen next time.
         while (GetWriteWatch(WRITE_WATCH_FLAG_RESET, buffer->shadow, buffer->size, pages.data(), &count, &page_bytes) == 0u) {
-            if (any && count != 0u) {
+            if (count != 0u) {
                 // Runs of adjacent pages, each one UpdateSubresource1 into every video-memory buffer made.
                 std::size_t i = 0;
                 while (i < count) {

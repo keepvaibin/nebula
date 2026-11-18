@@ -3,6 +3,7 @@
 #include "galaxy/render/scene_camera_shape.h"
 
 #include "galaxy/render/renderer_d3d12.h"
+#include "render/core/utility_pipeline_d3d12.h"
 #include "barriers_d3d12.h"
 
 #include <algorithm>
@@ -66,7 +67,7 @@ bool SceneCamera::initialize(ID3D12Device* device) {
     D3D12_COMPUTE_PIPELINE_STATE_DESC cd{};
     cd.pRootSignature = root_signature_.Get();
     cd.CS = code(g_camera_meter_cs, sizeof(g_camera_meter_cs));
-    if (FAILED(device_->CreateComputePipelineState(&cd, IID_PPV_ARGS(&meter_)))) {
+    if (FAILED(core::utility_pipeline(device_, cd, &meter_))) {
         std::cerr << "[scene-camera] meter pipeline failed\n";
         return false;
     }
@@ -125,7 +126,7 @@ ID3D12PipelineState* SceneCamera::camera_pipeline(unsigned samples, bool resolve
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = kSceneColorFormat;
     pd.SampleDesc.Count = resolve ? 1u : 1u << index;
-    if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&output)))) {
+    if (FAILED(core::utility_pipeline(device_, pd, &output))) {
         std::cerr << "[scene-camera] pipeline failed for " << (1u << index) << " samples\n";
         return nullptr;
     }
@@ -151,7 +152,7 @@ ID3D12PipelineState* SceneCamera::widen_pipeline(unsigned samples) {
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = kSceneHdrColorFormat;
     pd.SampleDesc.Count = 1u << index;
-    if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&widen_[index])))) {
+    if (FAILED(core::utility_pipeline(device_, pd, &widen_[index]))) {
         std::cerr << "[scene-camera] widen pipeline failed for " << (1u << index) << " samples\n";
         return nullptr;
     }
@@ -171,7 +172,6 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
     constants.width = static_cast<float>(in.width);
     constants.height = static_cast<float>(in.height);
     constants.seconds = exposure_ready_ ? in.seconds : -1.0f;
-    constants.finish = static_cast<float>(in.finish);
     exposure_ready_ = true;
 
     // Two tables: the meter's (the resolved picture, the exposure, its storage view) and the camera's (the picture it
@@ -195,26 +195,26 @@ bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, 
     view.Texture2D.MipLevels = 1u;
     D3D12_SHADER_RESOURCE_VIEW_DESC exposure_view = view;
     exposure_view.Format = kExposureFormat;
-    device_->CreateShaderResourceView(in.wide, &view, cpu(0));
-    device_->CreateShaderResourceView(exposure_.Get(), &exposure_view, cpu(1));
+    ring.write_view(cpu(0), in.wide, view);
+    ring.write_view(cpu(1), exposure_.Get(), exposure_view);
     D3D12_SHADER_RESOURCE_VIEW_DESC depth_view = view;
     depth_view.Format = kSceneDepthSrvFormat;
-    device_->CreateShaderResourceView(in.depth, &depth_view, cpu(2));
+    ring.write_view(cpu(2), in.depth, depth_view);
     D3D12_UNORDERED_ACCESS_VIEW_DESC storage{};
     storage.Format = kExposureFormat;
     storage.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    device_->CreateUnorderedAccessView(exposure_.Get(), nullptr, &storage, cpu(3));
+    ring.write_view(cpu(3), exposure_.Get(), storage);
     if (samples) {
         D3D12_SHADER_RESOURCE_VIEW_DESC many{};
         many.Format = kSceneHdrColorFormat;
         many.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
         many.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        device_->CreateShaderResourceView(in.wide_ms, &many, cpu(4));
+        ring.write_view(cpu(4), in.wide_ms, many);
     } else {
-        device_->CreateShaderResourceView(in.wide, &view, cpu(4));
+        ring.write_view(cpu(4), in.wide, view);
     }
-    device_->CreateShaderResourceView(exposure_.Get(), &exposure_view, cpu(5));
-    device_->CreateShaderResourceView(in.depth, &depth_view, cpu(6));
+    ring.write_view(cpu(5), exposure_.Get(), exposure_view);
+    ring.write_view(cpu(6), in.depth, depth_view);
 
     // The meter's inputs and its exposure change in one call.
     BarriersD3D12 to_meter{list};
@@ -275,16 +275,16 @@ bool SceneCamera::widen(ID3D12GraphicsCommandList* list, DescriptorRing& ring, c
     view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1u;
-    device_->CreateShaderResourceView(in.picture, &view, cpu);
+    ring.write_view(cpu, in.picture, view);
     cpu.ptr += stride;
     D3D12_SHADER_RESOURCE_VIEW_DESC exposure_view = view;
     exposure_view.Format = kExposureFormat;
-    device_->CreateShaderResourceView(exposure_.Get(), &exposure_view, cpu);
+    ring.write_view(cpu, exposure_.Get(), exposure_view);
     cpu.ptr += stride;
     D3D12_UNORDERED_ACCESS_VIEW_DESC storage{};
     storage.Format = kExposureFormat;
     storage.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-    device_->CreateUnorderedAccessView(exposure_.Get(), nullptr, &storage, cpu);
+    ring.write_view(cpu, exposure_.Get(), storage);
     D3D12_GPU_DESCRIPTOR_HANDLE storage_table = table.gpu;
     storage_table.ptr += stride * 2u;
 

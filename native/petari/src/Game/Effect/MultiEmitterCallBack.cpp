@@ -15,8 +15,9 @@ namespace {
         return Color8(r, g, b, 255);
     }
 
-    // The light colour a light-affected effect sits in. The game feeds none, so white: the effect keeps its own colours.
-    // A source (the blended ambient of the actor's light, ActorLightCtrl mLightInfo.mColor) goes here, not into setColor.
+    // The light colour a light-affected effect sits in: white, so the effect keeps its own colours. The console's
+    // effectLight evaluates the affect value and keeps nothing (main.dol 0x800C86B8), so no area light reached an effect
+    // there either (P-179). A source (the actor's ActorLightCtrl colour) would go here, not into setColor.
     Color8 getEffectLight(const MultiEmitter* /*pEmitter*/) {
         return Color8(255, 255, 255, 255);
     }

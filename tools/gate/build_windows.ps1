@@ -10,6 +10,9 @@
 # -Sanitize address,undefined: the game modules built with those sanitizers (native/CMakeLists.txt NEBULA_SANITIZE),
 # their runtime (LLVM's clang_rt.asan_dynamic) in the bin folder. The programs stay as they are: one AddressSanitizer
 # runtime serves a process, and Microsoft's compiler would bring its own. Use a ROOT of its own.
+# -Coverage: the game modules and the programs count the lines and functions they run (native/CMakeLists.txt and
+# CMakeLists.txt NEBULA_COVERAGE; the programs then built by clang-cl), each process writing them where LLVM_PROFILE_FILE
+# says (tools/gate/coverage.py). Use a ROOT of its own.
 param(
     [Parameter(Mandatory = $true)][string]$Tree,
     [Parameter(Mandatory = $true)][string]$Root,
@@ -23,7 +26,12 @@ param(
     # build's, so the first build does not compile every program again.
     [string]$SeedFrom = "",
     # Sanitizers for the game modules (clang -fsanitize=...), e.g. address,undefined; empty for none.
-    [string]$Sanitize = ""
+    [string]$Sanitize = "",
+    [switch]$Coverage,
+    # The compiler cache in front of clang and cl (N-1049): one cache for every tree and build folder, keyed by the
+    # paths as they are. Empty, or no such program: none.
+    [string]$Sccache = "D:/NebulaWork/tools/sccache/sccache.exe",
+    [string]$SccacheDir = "D:/NebulaWork/sccache"
 )
 $ErrorActionPreference = "Stop"
 $Tree = (Resolve-Path $Tree).Path.Replace("\", "/")
@@ -35,6 +43,41 @@ $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
 $cmake = Join-Path $vs "Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 $ninja = (Get-Command ninja).Source.Replace("\", "/")
 $failed = 0
+
+# The compiler cache: its server starts with the first build and reads these then (it stops after 10 idle minutes).
+$launch = ""
+$cacheBefore = $null
+if ($Sccache -and (Test-Path $Sccache)) {
+    $Sccache = (Resolve-Path $Sccache).Path.Replace("\", "/")
+    $env:SCCACHE_DIR = $SccacheDir
+    $env:SCCACHE_CACHE_SIZE = "60G"
+    # No path is taken out of what it hashes (SCCACHE_BASEDIRS): an object holds the paths it was compiled with (a
+    # test's work folder and extension, __FILE__, the debug information's sources), so another tree's object is never
+    # this tree's (N-1049: the unit tests of one tree ran another's test extension). A server of its own port, as one
+    # started with base folders keeps them until it stops.
+    Remove-Item Env:SCCACHE_BASEDIRS -ErrorAction SilentlyContinue
+    $env:SCCACHE_SERVER_PORT = "4227"
+    $launch = "-DCMAKE_C_COMPILER_LAUNCHER=`"$Sccache`" -DCMAKE_CXX_COMPILER_LAUNCHER=`"$Sccache`" "
+    $cacheBefore = (& $Sccache --show-stats --stats-format json 2>$null | ConvertFrom-Json)
+}
+# A build folder configured with another launcher (or none) is configured again with this one.
+function Launcher-Differs([string]$Folder) {
+    if (-not (Test-Path "$Folder/CMakeCache.txt")) { return $false }
+    $line = Select-String -Path "$Folder/CMakeCache.txt" -Pattern '^CMAKE_CXX_COMPILER_LAUNCHER:[A-Z]+=(.*)$' | Select-Object -First 1
+    $have = if ($line) { $line.Matches[0].Groups[1].Value } else { "" }
+    $want = if ($launch) { $Sccache } else { "" }
+    return $have -ne $want
+}
+# A folder built through the cache while it took the trees' paths out may hold objects another tree compiled: they go,
+# once, and the build makes them again (sccache-own-paths says it is done; a new folder is so from the start).
+function Drop-Shared-Objects([string]$Folder) {
+    if (-not $launch -or (Test-Path "$Folder/sccache-own-paths")) { return }
+    if (Test-Path "$Folder/CMakeCache.txt") {
+        Get-ChildItem -Path $Folder -Recurse -File -Include *.obj, *.o -ErrorAction SilentlyContinue | Remove-Item -Force
+    }
+    New-Item -ItemType Directory -Force $Folder | Out-Null
+    Set-Content -Path "$Folder/sccache-own-paths" -Value "objects compiled with this folder's own paths (N-1049)" -Encoding ascii
+}
 
 # A step: its command in the build environment, its output in its log. Start returns the running process; Finish
 # waits for it and judges it (a FAILED line or a non-zero exit fails the build); Step does both.
@@ -62,16 +105,19 @@ function Step([string]$Name, [string]$Command, [string]$Log) {
 
 # The game modules (both), the headless host, the self-description and the services list.
 $game = "$Root/game"
-if (-not (Test-Path "$game/build.ninja")) {
-    Step "game configure" ("`"$cmake`" -S `"$Tree/native`" -B `"$game`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$ninja`" " +
+Drop-Shared-Objects $game
+if (-not (Test-Path "$game/build.ninja") -or (Launcher-Differs $game)) {
+    Step "game configure" ("`"$cmake`" -S `"$Tree/native`" -B `"$game`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$ninja`" $launch" +
         "-DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=`"$Llvm/clang.exe`" -DCMAKE_CXX_COMPILER=`"$Llvm/clang++.exe`" " +
         "-DCMAKE_RC_COMPILER=`"$Llvm/llvm-rc.exe`" -DNEBULA_PETARI_DIR=`"$Tree/native/petari`" " +
-        "-DNEBULA_SANITIZE=`"$Sanitize`"") "$Root/game.configure.log"
+        "-DNEBULA_SANITIZE=`"$Sanitize`" -DNEBULA_COVERAGE=$(if ($Coverage) { 'ON' } else { 'OFF' })") "$Root/game.configure.log"
 }
 $configured = (Select-String -Path "$game/CMakeCache.txt" -Pattern '^NEBULA_SANITIZE:STRING=(.*)$' -ErrorAction SilentlyContinue |
     Select-Object -First 1)
 $have = if ($configured) { $configured.Matches[0].Groups[1].Value } else { "" }
 if ($have -ne $Sanitize) { "game: $game was configured with NEBULA_SANITIZE='$have', asked for '$Sanitize'"; exit 1 }
+$counted = [bool](Select-String -Path "$game/CMakeCache.txt" -Pattern '^NEBULA_COVERAGE:BOOL=ON$' -Quiet -ErrorAction SilentlyContinue)
+if ($counted -ne [bool]$Coverage) { "game: $game was configured with NEBULA_COVERAGE=$counted, asked for $([bool]$Coverage)"; exit 1 }
 # The game and the MSVC build run side by side, each with half the jobs.
 $half = [Math]::Max(2, [int]($Jobs / 2))
 $gameWatch = [Diagnostics.Stopwatch]::StartNew()
@@ -80,6 +126,7 @@ $gameRun = Start-Step "`"$cmake`" --build `"$game`" --target all -j $half -- -k 
 # Every Windows program, the unit tests and the test extension, in one MSVC build.
 $msvc = "$Root/msvc"
 New-Item -ItemType Directory -Force $msvc | Out-Null
+Drop-Shared-Objects $msvc
 # The SDK's libraries are built already; building them again would rewrite the folder other trees link from.
 foreach ($stamp in "fidelityfx-fg.built", "fidelityfx-fg-vk.built") {
     if (-not (Test-Path "$msvc/$stamp")) { Set-Content -Path "$msvc/$stamp" -Value "$Ffx/sdk" -Encoding ascii }
@@ -90,11 +137,25 @@ if ($SeedFrom -and (Test-Path "$SeedFrom/generated")) {
         if (-not (Test-Path "$msvc/generated/$($_.Name)")) { Copy-Item -Recurse $_.FullName "$msvc/generated/$($_.Name)" }
     }
 }
-if (-not (Test-Path "$msvc/build.ninja")) {
-    Step "msvc configure" ("`"$cmake`" -G Ninja -S `"$Tree`" -B `"$msvc`" -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=ON " +
-        "-DNEBULA_D3D11=ON -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DFETCHCONTENT_SOURCE_DIR_FIDELITYFX_SDK=$Ffx " +
+# A coverage build's programs: clang-cl, its linker and resource compiler (CMakeLists.txt NEBULA_COVERAGE).
+$compilers = "-DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DNEBULA_COVERAGE=OFF "
+if ($Coverage) {
+    $compilers = "-DCMAKE_C_COMPILER=`"$Llvm/clang-cl.exe`" -DCMAKE_CXX_COMPILER=`"$Llvm/clang-cl.exe`" " +
+        "-DCMAKE_LINKER=`"$Llvm/lld-link.exe`" -DCMAKE_RC_COMPILER=`"$Llvm/llvm-rc.exe`" -DNEBULA_COVERAGE=ON "
+}
+# A folder configured the other way (another compiler) is configured again from nothing.
+$counting = { (Test-Path "$msvc/CMakeCache.txt") -and [bool](Select-String -Path "$msvc/CMakeCache.txt" -Pattern '^NEBULA_COVERAGE:BOOL=ON$' -Quiet) }
+if ((Test-Path "$msvc/CMakeCache.txt") -and ((& $counting) -ne [bool]$Coverage)) {
+    Remove-Item -Force "$msvc/CMakeCache.txt"
+    Remove-Item -Recurse -Force "$msvc/CMakeFiles" -ErrorAction SilentlyContinue
+    Remove-Item -Force "$msvc/build.ninja" -ErrorAction SilentlyContinue
+}
+if (-not (Test-Path "$msvc/build.ninja") -or -not (Test-Path "$msvc/CMakeCache.txt") -or (Launcher-Differs $msvc)) {
+    Step "msvc configure" ("`"$cmake`" -G Ninja -S `"$Tree`" -B `"$msvc`" -DCMAKE_BUILD_TYPE=Release -DNEBULA_VULKAN=ON $launch" +
+        "-DNEBULA_D3D11=ON $compilers-DFETCHCONTENT_SOURCE_DIR_FIDELITYFX_SDK=$Ffx " +
         "`"-DNEBULA_EXTRA_CMAKE=$Tree/tools/test_driver/test_driver.cmake`"") "$Root/msvc.configure.log"
 }
+if ((& $counting) -ne [bool]$Coverage) { "msvc: $msvc is not configured with NEBULA_COVERAGE=$([bool]$Coverage)"; exit 1 }
 $msvcWatch = [Diagnostics.Stopwatch]::StartNew()
 $msvcRun = Start-Step "`"$cmake`" --build `"$msvc`" -j $half -- -k 0" "$Root/msvc.build.log"
 Finish-Step "game" $gameRun "$Root/game.build.log" $gameWatch
@@ -111,6 +172,17 @@ Step "luma-test" ("`"$Llvm/clang.exe`" --target=x86_64-pc-windows-msvc -O2 -shar
 Step "nebula-import" ("cd /d `"$Tree`" && set CARGO_TARGET_DIR=$Root/cargo&& cargo build --release --locked --offline " +
     "-p nebula-import --bin nebula-import --lib") "$Root/cargo.log"
 
+# What the cache gave, this build's share of the server's counts (another build at the same time is counted too).
+if ($launch) {
+    $after = (& $Sccache --show-stats --stats-format json 2>$null | ConvertFrom-Json)
+    if ($after -and $cacheBefore) {
+        $sum = { param($c) $n = 0; if ($c) { $c.PSObject.Properties | ForEach-Object { $n += [int64]$_.Value } }; $n }
+        $hits = (& $sum $after.stats.cache_hits.counts) - (& $sum $cacheBefore.stats.cache_hits.counts)
+        $misses = (& $sum $after.stats.cache_misses.counts) - (& $sum $cacheBefore.stats.cache_misses.counts)
+        $other = $after.stats.requests_not_cacheable - $cacheBefore.stats.requests_not_cacheable
+        "sccache: $hits hits, $misses misses, $other not cacheable; cache $([int]($after.cache_size / 1MB)) MB in $SccacheDir"
+    }
+}
 if ($failed -ne 0) { "build failed"; exit 1 }
 
 # The bin folder: what luma_test.py runs (the programs, the game modules, the game half, the importer, the

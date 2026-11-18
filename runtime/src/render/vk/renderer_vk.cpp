@@ -8,6 +8,7 @@
 #include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/whole_lines.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #if defined(_WIN32)
 #include "galaxy/render/streamline_bridge.h"
@@ -1810,7 +1811,6 @@ void RendererVk::shutdown() {
         }
         probe_slots_.clear();
         held_probe_slots_.clear();
-        scene_capture_ = Readback{};
         backbuffer_capture_ = Readback{};
         display_capture_ = Readback{};
         display_capture_pending_path_.clear();
@@ -1969,7 +1969,7 @@ void RendererVk::wait_for_fence_value(std::uint64_t fence_value) {
 }
 
 void RendererVk::begin_frame() {
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     if (!streamline_frame_open_) {
         vk::streamline_vk::open_frame(swapchain_fsr_);
         streamline_frame_open_ = true;
@@ -1981,9 +1981,14 @@ void RendererVk::begin_frame() {
     apply_dynamic_resolution();
     // draw.post: a program reading motion registers only while a temporal upscaler makes it.
     set_mod_post_motion(temporal_ != nullptr && temporal_mode());
-    if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
-        // The settings changed: decided again.
-        temporal_interp_suspended_ = false;
+    if (temporal_interp_hold_.held()) {
+        if (temporal_interp_key() != temporal_interp_key_) {
+            temporal_interp_hold_.settings_changed();  // the settings changed: decided again
+        } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+            // Its wait passed: the governor measures generated frames again, not by the cost that held it.
+            reset_generated_gpu_ema();
+            std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
+        }
     }
     sync_post_process();
     bloom_.poll_ready();
@@ -1996,7 +2001,15 @@ void RendererVk::begin_frame() {
     vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
     if (frame.fence != 0u) {
+        // --diagnostics timeline: a wait for the slot's last frame, as Direct3D 12 records it (a = its fence value).
+        const bool timeline_slot_wait = galaxy::timeline::enabled() && completed_fence_value() < frame.fence;
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitBegin, frame.fence);
+        }
         wait_for_fence_value(frame.fence);
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitEnd, frame.fence);
+        }
     }
     if (timestamp_pending_[frame_slot_] && timestamps_ != VK_NULL_HANDLE) {
         std::uint64_t ticks[2]{};
@@ -2154,9 +2167,6 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         if (probes.fence == kProbesInFrame) {
             probes.fence = fence;
         }
-    }
-    if (scene_capture_.buffer && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {
-        scene_capture_.fence = fence;
     }
     if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u &&
         !backbuffer_capture_pending_path_.empty()) {
@@ -2852,9 +2862,6 @@ void RendererVk::read_gpu_passes() {
     stats_pending_[frame_slot_] = false;
 }
 
-// The share of wall time the GPU may spend on the frame before Match Output steps down (RendererD3D12's rule).
-constexpr double kGpuBudgetBusy = 0.80;
-
 void RendererVk::sync_post_process() {
     const bool was_ready = post_.ready();
     if (!post_.poll_ready()) {
@@ -2897,6 +2904,7 @@ void RendererVk::refresh_display_rate() {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';
@@ -3133,8 +3141,11 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     VkResult result = VK_SUCCESS;
     {
         const galaxy::bench::RenderSpan span(galaxy::bench::RenderPart::Acquire);
+        galaxy::timeline::record(galaxy::timeline::Event::AcquireBegin);
         result = swapchain_calls_.acquire(context.device(), swapchain_.handle, kAcquireTimeoutNs, frame.acquired, VK_NULL_HANDLE,
                                           &image);
+        const bool acquired = result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
+        galaxy::timeline::record(galaxy::timeline::Event::AcquireEnd, acquired ? image : 0u, acquired ? 0u : 1u);
     }
     vk::note_driver_cpu(vk::DriverCall::Acquire, vk::thread_cpu_ns() - acquire_cpu);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_ERROR_SURFACE_LOST_KHR || result == VK_TIMEOUT ||

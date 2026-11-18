@@ -58,8 +58,9 @@ extern std::timed_mutex surface_use;
 
 // Saves changed settings; false (kept dirty for a retry) when a file could not be written.
 bool flush_native_settings_if_dirty();
-// Takes a config.ini that Nebula Settings changed while the game runs.
-void poll_render_config_file();
+// Starts the watch for a config.ini that Nebula Settings changes while the game runs (on the settings' own thread;
+// the caller only starts it, once).
+void watch_render_config_file();
 // A hidden start (launch_args.h started_hidden): the window is never shown.
 [[nodiscard]] bool hidden_window_mode_enabled();
 
