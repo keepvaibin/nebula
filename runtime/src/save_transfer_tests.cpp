@@ -584,6 +584,28 @@ void test_commit(const fs::path& base) {
         CHECK(siblings(root).empty());
     }
 
+    // The process ends at any move (P-081: before, the save folder could be left with no save, and nothing at the
+    // start found the import's folders): its journal stays, and the next start's recover_import puts the save back.
+    CHECK(st::recover_import(root).empty());
+    for (const int step : {1, 2, 3, 4}) {
+        st::detail::set_commit_crash(step);
+        const st::ImportResult crashed = st::commit_import(plan, root);
+        st::detail::set_commit_crash(0);
+        CHECK(crashed.error == Error::kIo);
+        CHECK(fs::exists(root.parent_path() / "saves.import-journal"));
+        const std::string said = st::recover_import(root);
+        CHECK(said.starts_with("a save import that stopped half way was undone"));
+        CHECK(listing(root) == before);
+        CHECK(siblings(root).empty());
+        CHECK(st::recover_import(root).empty());
+    }
+    // A journal this Nebula did not write moves nothing and stays.
+    write_all(root.parent_path() / "saves.import-journal",
+              bytes_of("nebula save import journal 1\nstaging\tsaves.import\nbackup\t../elsewhere\nreplaced\tRMGE/Nebula.sav\n"));
+    CHECK(st::recover_import(root).find("is not one this Nebula wrote") != std::string::npos);
+    CHECK(listing(root) == before);
+    fs::remove(root.parent_path() / "saves.import-journal");
+
     const st::ImportResult result = st::commit_import(plan, root);
     CHECK(result.error == Error::kNone && result.written == 1 && !result.backup.empty());
     const auto after = listing(root);
