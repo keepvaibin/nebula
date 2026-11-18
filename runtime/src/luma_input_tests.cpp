@@ -126,6 +126,14 @@ int main() {
     check(galaxy::luma_input::mod_rumble(0u) == 128u, "rumble: on at 0.499 s");
     fake_now += 2000000;
     check(galaxy::luma_input::mod_rumble(0u) == 0u, "rumble: off at 0.501 s, with no read between");
+
+    // The mods end as the kernel ends them: what the service kept for each (its look and rumble) goes with it, so the
+    // sanitizers' leak check finds nothing left (it found two records of 112 bytes while the mods were left running).
+    check(input->rumble(B, 0u, 1.0f, 1.0f) == LUMA_OK, "b's rumble answers LUMA_OK");
+    check(galaxy::luma_input::mod_rumble(0u) == 255u, "b's rumble on");
+    provider->mod_end(provider->user, A);
+    provider->mod_end(provider->user, B);
+    check(galaxy::luma_input::mod_rumble(0u) == 0u, "no rumble once b has ended");
     galaxy::luma_input::set_clock_for_tests(nullptr);
 
     check(reports == 0, "no mistake reported");
