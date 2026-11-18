@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "1301-own-class",
-  "about": "own_class of the player through a LiveActor pointer is MarioActor's number, the rows' index (1366 since app/land1's classes came before it)",
+  "about": "own_class of the player through a LiveActor pointer is MarioActor's number, the rows' index (1366, LiveActor's 1104, since app/land1's classes came before them)",
   "proves": [
     "kernel.objects.own_class",
     "kernel.objects.number"
@@ -48,7 +48,7 @@
     },
     {
       "fact": "mod.to-objects.live_number",
-      "is": 1097
+      "is": 1104
     },
     {
       "fact": "mod.to-objects.own_is_mario",
