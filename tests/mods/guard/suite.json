@@ -48,6 +48,7 @@
     "1649-call-mod-cost",
     "1650-crash-names-callback",
     "1651-crash-names-callback-next",
-    "1652-common-place-page"
+    "1652-common-place-page",
+    "1653-callback-late-take-out"
   ]
 }

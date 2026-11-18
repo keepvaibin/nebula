@@ -1,0 +1,115 @@
+{
+  "harness": 1,
+  "name": "1409-late-take-out",
+  "about": "lc-late taken out while its override of LiveActor::receiveMsgTake runs on another thread (lc-late-drive calls it there through harness 1.2 thread_start): the override proceeds after its class ended and runs the base's code, its library closes only after the call left, and the game goes on (M-008)",
+  "proves": [
+    "kernel.classes.taken_out_off_thread"
+  ],
+  "mods": [
+    "../mods/lc-late",
+    "../mods/lc-late-drive"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "after": {
+        "fact": "mod.lc-late-drive.seen",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1409
+      ],
+      "fact": "start"
+    },
+    {
+      "after": {
+        "fact": "mod.lc-late.entered",
+        "exists": true
+      },
+      "take_out": "lc-late",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.lc-late",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1410
+      ],
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "mod.lc-late-drive.after_done",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-late.defined",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-late.made",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-late-drive.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-late.entered",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-late.entered_game_thread",
+      "is": 0
+    },
+    {
+      "fact": "mod.lc-late.stopped_seen",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-late.proceeded",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-late.result",
+      "is": 0
+    },
+    {
+      "fact": "mod.lc-late-drive.late_result",
+      "is": 0
+    },
+    {
+      "fact": "mod.lc-late-drive.late_done",
+      "is": 1
+    },
+    {
+      "log": "\\[mod lc-late\\] its 1 classes ended; their [1-9][0-9]* objects are the game's own now"
+    },
+    {
+      "fact": "mod.lc-late-drive.own_is_base_after",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-late-drive.after_done",
+      "is": 1
+    },
+    {
+      "no_log": "proceeded on an object that is no class overriding it"
+    }
+  ]
+}

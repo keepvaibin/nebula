@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "guard-late-giver",
+  "name": "guard-late-giver",
+  "summary": "guard-late-giver (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "needs": [
+    {
+      "id": "guard-late-lib"
+    }
+  ]
+}

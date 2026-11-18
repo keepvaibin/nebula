@@ -2,6 +2,8 @@
 // binds. Nothing runs at start: prepareTypes sorts them once, on the game thread, when the first mod loads.
 #include "Game/System/LumaTypes.hpp"
 
+#include "Game/System/LumaGuard.hpp"
+
 #include <luma.h>
 #include <nebula_format.h>
 #include <nebula_game_api.h>
@@ -534,11 +536,39 @@ namespace luma {
 
         // The own class's type_info and the whole object, from the vtable of the subobject at pObject. Null when the
         // vtable carries no RTTI the kernel can read.
-        // A pointer that cannot be an object's or a vtable's: null or not aligned as a pointer. What a mod passes C
-        // cannot check further without reading it; a read that faults is the guard's (1.6), under which mod code runs.
-        // A vtable is not required to be the game module's: a mod's own derived class (1.4) has its vtable in the mod.
+        // A pointer that cannot be an object's or a vtable's: null or not aligned as a pointer. Past that, what a mod
+        // passes is read only through the guard's probe (guard::probe): an object kept past its scene, a freed block or
+        // a number that is no pointer gives null, never a fault in the kernel. A vtable is not required to be the game
+        // module's: a mod's own derived class (1.4) has its vtable in the mod.
         bool misaligned(const void* p) {
             return p == nullptr || (reinterpret_cast<__UINTPTR_TYPE__>(p) & (sizeof(void*) - 1)) != 0;
+        }
+
+        // The words before a vtable the kernel reads: the ABI's own (Microsoft: the locator; Itanium: the offset to the
+        // whole object, the type_info).
+#if defined(_WIN32)
+        constexpr u32 kVtableWords = 1;
+#else
+        constexpr u32 kVtableWords = 2;
+#endif
+
+        // A vtable read once, kept per thread (no lock, no sharing): its class's type_info and the whole object's
+        // place from the subobject's. A mod's library that closes can take its vtables with it, so every thread's
+        // copies go when sVtablesAge moves (forgetVtables).
+        struct SeenVtable {
+            const void* pVtable;
+            const void* pTypeInfo;
+            __PTRDIFF_TYPE__ toComplete;
+        };
+        constexpr u32 kSeenVtables = 64;  // a power of two
+        u32 sVtablesAge = 0;
+        // Constant-initialized: the game module has no dynamic thread-local init (no __tls_guard).
+        LUMA_THREAD SeenVtable tSeen[kSeenVtables] = {};
+        LUMA_THREAD u32 tSeenAge = 0;
+
+        SeenVtable* seenSlot(const void* pVtable) {
+            const __UINTPTR_TYPE__ key = reinterpret_cast<__UINTPTR_TYPE__>(pVtable);
+            return &tSeen[((key >> 3) ^ (key >> 11)) & (kSeenVtables - 1)];
         }
 
         const void* readOwnClass(const void* pObject, const void** pComplete) {
@@ -546,32 +576,55 @@ namespace luma {
                 return nullptr;
             }
             const void* const* pVtable;
-            __builtin_memcpy(&pVtable, pObject, sizeof(pVtable));
-            if (misaligned(pVtable)) {
+            if (!guard::probe(&pVtable, pObject, sizeof(pVtable)) || misaligned(pVtable)) {
+                return nullptr;
+            }
+            const u32 age = __atomic_load_n(&sVtablesAge, __ATOMIC_ACQUIRE);
+            if (tSeenAge != age) {
+                __builtin_memset(tSeen, 0, sizeof(tSeen));
+                tSeenAge = age;
+            }
+            SeenVtable* const pSeen = seenSlot(pVtable);
+            if (pSeen->pVtable == pVtable) {
+                *pComplete = static_cast<const char*>(pObject) + pSeen->toComplete;
+                return pSeen->pTypeInfo;
+            }
+            const void* before[kVtableWords];
+            if (!guard::probe(before, pVtable - kVtableWords, sizeof(before))) {
                 return nullptr;
             }
 #if defined(_WIN32)
-            const ObjectLocator* const pLocator = static_cast<const ObjectLocator*>(pVtable[-1]);
+            const ObjectLocator* const pAt = static_cast<const ObjectLocator*>(before[kVtableWords - 1]);
             // The locator is 32-bit words: aligned as one.
-            if (pLocator == nullptr || (reinterpret_cast<__UINTPTR_TYPE__>(pLocator) & 3) != 0 || pLocator->signature != 1) {
+            ObjectLocator locator;
+            if (pAt == nullptr || (reinterpret_cast<__UINTPTR_TYPE__>(pAt) & 3) != 0 || !guard::probe(&locator, pAt, sizeof(locator)) ||
+                locator.signature != 1) {
                 return nullptr;
             }
             // The locator's own offset leads to its image: a module begins "MZ" (a vtable with no locator is
             // refused, not followed).
-            const char* const pImage = reinterpret_cast<const char*>(pLocator) - pLocator->self;
-            if (pImage[0] != 'M' || pImage[1] != 'Z') {
+            const char* const pImage = reinterpret_cast<const char*>(pAt) - locator.self;
+            char mz[2];
+            if (!guard::probe(mz, pImage, sizeof(mz)) || mz[0] != 'M' || mz[1] != 'Z') {
                 return nullptr;
             }
-            *pComplete = static_cast<const char*>(pObject) - pLocator->offset;
-            return pImage + pLocator->typeDescriptor;
+            const __PTRDIFF_TYPE__ toComplete = -static_cast<__PTRDIFF_TYPE__>(locator.offset);
+            const void* const pTypeInfo = pImage + locator.typeDescriptor;
 #else
             // The Itanium C++ ABI (Android, Linux, Apple): vtable[-2] is the offset to the whole object, vtable[-1]
             // the type_info.
-            __PTRDIFF_TYPE__ top;
-            __builtin_memcpy(&top, pVtable - 2, sizeof(top));
-            *pComplete = static_cast<const char*>(pObject) + top;
-            return pVtable[-1];
+            __PTRDIFF_TYPE__ toComplete;
+            __builtin_memcpy(&toComplete, &before[kVtableWords - 2], sizeof(toComplete));
+            const void* const pTypeInfo = before[kVtableWords - 1];
+            if (misaligned(pTypeInfo)) {
+                return nullptr;
+            }
 #endif
+            pSeen->pVtable = pVtable;
+            pSeen->pTypeInfo = pTypeInfo;
+            pSeen->toComplete = toComplete;
+            *pComplete = static_cast<const char*>(pObject) + toComplete;
+            return pTypeInfo;
         }
 
         // Depth first through the bases' rows from pType (at `at` in the whole object): how many pTarget subobjects,
@@ -842,6 +895,51 @@ namespace luma {
         out.complete = pComplete;
         out.type = rowOfTypeInfo(pTypeInfo);
         return out;
+    }
+
+    void forgetVtables() { __atomic_add_fetch(&sVtablesAge, 1u, __ATOMIC_RELEASE); }
+
+    void copyTypeInfoName(const void* pTypeInfo, char* pOut, u32 size) {
+        if (size == 0) {
+            return;
+        }
+        pOut[0] = 0;
+        if (pTypeInfo == nullptr || size == 1) {
+            return;
+        }
+#if defined(_WIN32)
+        const char* pName = static_cast<const char*>(pTypeInfo) + 2 * sizeof(void*);
+#else
+        const char* pName = nullptr;
+        if (!guard::probe(&pName, static_cast<const char*>(pTypeInfo) + sizeof(void*), sizeof(pName)) || pName == nullptr) {
+            return;
+        }
+#endif
+        // A page at a time, so a name that ends before an unreadable page is read whole.
+        u32 length = 0;
+        while (length + 1 < size) {
+            const __UINTPTR_TYPE__ at = reinterpret_cast<__UINTPTR_TYPE__>(pName + length);
+            u32 chunk = static_cast<u32>(4096 - (at & 4095));
+            if (chunk > size - 1 - length) {
+                chunk = size - 1 - length;
+            }
+            if (!guard::probe(pOut + length, pName + length, chunk)) {
+                pOut[0] = 0;
+                return;
+            }
+            for (u32 i = 0; i < chunk; i++) {
+                if (pOut[length + i] == 0) {
+#if !defined(_WIN32)
+                    if (pOut[0] == '*') {
+                        __builtin_memmove(pOut, pOut + 1, length + i);
+                    }
+#endif
+                    return;
+                }
+            }
+            length += chunk;
+        }
+        pOut[length] = 0;
     }
 
     const char* typeInfoName(const void* pTypeInfo) {

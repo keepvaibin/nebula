@@ -94,6 +94,20 @@ namespace luma {
     // (docs/modding/reference/lumascript/compiled-form.md).
     u32 graceMark();
     bool graceOver(u32 mark);
+    // A call into a mod's code that no list holds (an override run through its class's table, LumaClasses slotCall; a
+    // library's call of a function another mod gave it, LumaGuard callMod):
+    // off the game thread it is counted as a call reading a list is, so a grace marked while it runs ends only after
+    // it has left. On the game thread it counts nothing: take-outs run there between calls.
+    class CodeHold {
+    public:
+        CodeHold();
+        ~CodeHold();
+        CodeHold(const CodeHold&) = delete;
+        CodeHold& operator=(const CodeHold&) = delete;
+
+    private:
+        s32 mCounter;  // -1: the game thread
+    };
     // From a wrap: runs the wraps after it and then the function.
     void proceed(Call* pCall);
 

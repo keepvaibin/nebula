@@ -1,4 +1,5 @@
 #include "Game/System/LumaGuard.hpp"
+#include "Game/System/LumaHook.hpp"
 
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaModLog.hpp"
@@ -21,6 +22,9 @@ extern "C" {
 __attribute__((returns_twice)) int luma_guard_call(LumaGuardFrame* frame);
 void luma_guard_resume(LumaGuardFrame* frame);
 extern const char luma_guard_call_return[];
+// The probe's copy: n bytes from src to dst, a byte at a time, answering n. A leaf: it calls nothing and keeps nothing
+// on the stack, so a fault in it has only luma_guard_call's frame above it (guard::probe).
+uint64_t luma_guard_probe(void* dst, const void* src, uint64_t n);
 NEBULA_GAME_API int32_t luma_guard_cost(const char* mod, uint64_t* avg_ns, uint64_t* worst_ns);
 NEBULA_GAME_API int32_t luma_guard_blame(const LumaGuardThread* thread, const LumaGuardFrame* frame, char* mod, uint32_t mod_size,
                                          char* text, uint32_t text_size);
@@ -108,7 +112,25 @@ __asm__(".text\n"
         "    fldcw 84(%rcx)\n"
         "    movq 64(%rcx), %rsp\n"
         "    movl $1, %eax\n"
-        "    jmpq *72(%rcx)\n");
+        "    jmpq *72(%rcx)\n"
+        ".globl luma_guard_probe\n"
+        ".def luma_guard_probe; .scl 2; .type 32; .endef\n"
+        ".p2align 4\n"
+        "luma_guard_probe:\n"
+        ".seh_proc luma_guard_probe\n"
+        ".seh_endprologue\n"
+        "    xorl %eax, %eax\n"
+        "    testq %r8, %r8\n"
+        "    je 2f\n"
+        "1:\n"
+        "    movb (%rdx,%rax), %r9b\n"
+        "    movb %r9b, (%rcx,%rax)\n"
+        "    incq %rax\n"
+        "    cmpq %r8, %rax\n"
+        "    jne 1b\n"
+        "2:\n"
+        "    ret\n"
+        ".seh_endproc\n");
 #elif defined(__x86_64__)
 // Each symbol is the module's own (not exported): Mach-O .private_extern, ELF .hidden.
 #if defined(__APPLE__)
@@ -172,7 +194,23 @@ __asm__(".text\n"
         "    fldcw 68(%rdi)\n"
         "    movq 48(%rdi), %rsp\n"
         "    movl $1, %eax\n"
-        "    jmpq *56(%rdi)\n");
+        "    jmpq *56(%rdi)\n"
+        ".globl " LUMA_GUARD_SYM(luma_guard_probe) "\n" LUMA_GUARD_TYPE(luma_guard_probe)
+        ".p2align 4\n"
+        LUMA_GUARD_SYM(luma_guard_probe) ":\n"
+        ".cfi_startproc\n"
+        "    xorl %eax, %eax\n"
+        "    testq %rdx, %rdx\n"
+        "    je 2f\n"
+        "1:\n"
+        "    movb (%rsi,%rax), %cl\n"
+        "    movb %cl, (%rdi,%rax)\n"
+        "    incq %rax\n"
+        "    cmpq %rdx, %rax\n"
+        "    jne 1b\n"
+        "2:\n"
+        "    ret\n"
+        ".cfi_endproc\n");
 #elif defined(__aarch64__) && !defined(_WIN32)
 // Each symbol is the module's own (not exported): Mach-O .private_extern, ELF .hidden.
 #if defined(__APPLE__)
@@ -250,7 +288,23 @@ __asm__(".text\n"
         "    ldr x16, [x0, #96]\n"
         "    mov sp, x16\n"
         "    mov w0, #1\n"
-        "    ret\n");
+        "    ret\n"
+        ".globl " LUMA_GUARD_SYM(luma_guard_probe) "\n" LUMA_GUARD_TYPE(luma_guard_probe)
+        ".p2align 4\n"
+        LUMA_GUARD_SYM(luma_guard_probe) ":\n"
+        ".cfi_startproc\n"
+        "    mov x3, #0\n"
+        "    cbz x2, 2f\n"
+        "1:\n"
+        "    ldrb w4, [x1, x3]\n"
+        "    strb w4, [x0, x3]\n"
+        "    add x3, x3, #1\n"
+        "    cmp x3, x2\n"
+        "    b.ne 1b\n"
+        "2:\n"
+        "    mov x0, x3\n"
+        "    ret\n"
+        ".cfi_endproc\n");
 #else
 #error "LumaCore's guard has no call for this processor or system (luma_guard.h; Windows on ARM64)"
 #endif
@@ -261,6 +315,8 @@ namespace luma {
             // The host's half; null until luma_guard_install (a host without it: frames are kept, nothing resumes).
             const LumaGuardHost* sHost = nullptr;
             bool sMeasured = false;  // measureForHarness ran (game thread)
+            // More than luma_guard_probe's code on every ABI (win-x64 31 bytes, sysv-x64 29, aarch64 36).
+            constexpr uintptr_t kProbeBytes = 64;
 
             // The empty function measureForHarness calls both ways.
             __attribute__((noinline)) u64 nothing(uintptr_t a0, uintptr_t a1) {
@@ -789,6 +845,9 @@ namespace luma {
             if (pResult != nullptr) {
                 *pResult = 0;
             }
+            // Counted before the giver is looked up: a take-out on the game thread after this point waits for the
+            // call to leave before the giver's library closes.
+            const CodeHold hold;
             LumaMod* const pGiver = fn != nullptr ? modAt(reinterpret_cast<uintptr_t>(fn)) : nullptr;
             if (pCaller == nullptr || pGiver == nullptr) {
                 nebula_log("[mod %s] call_mod: %p is in no running mod's code; it was not called\n",
@@ -817,6 +876,55 @@ namespace luma {
         }
 
         LumaMod* current() { return tMod; }
+
+        bool probe(void* pDest, const void* pSource, uintptr_t size) {
+            if (size == 0) {
+                return true;
+            }
+            LumaGuardThread* const pThread = &tThread;
+            if (pThread->entered == 0u) {
+                pThread->entered = 1u;
+                if (sHost != nullptr && sHost->thread_enter(pThread) != 0) {
+                    nebula_log("LumaCore: the guard is not on for a thread running mods' code; a fault there ends the game "
+                               "with its report\n");
+                }
+            }
+            if (sHost == nullptr) {
+                // No host half (a system with no guard): nothing could resume a fault, so the copy is plain.
+                luma_guard_probe(pDest, pSource, size);
+                return true;
+            }
+            LumaGuardFrame frame;
+            frame.fn = reinterpret_cast<void*>(luma_guard_probe);
+            frame.args[0] = reinterpret_cast<uintptr_t>(pDest);
+            frame.args[1] = reinterpret_cast<uintptr_t>(pSource);
+            frame.args[2] = size;
+            frame.args[3] = 0;
+            frame.result = 0;
+            frame.outer = pThread->top;
+            frame.mod = "LumaCore";
+            frame.where = "probe";
+            frame.boundary = LUMA_GUARD_EVENT;
+            frame.fault = LUMA_GUARD_NONE;
+            // The probe's code, and only it: no other code runs under this frame (the probe calls nothing), so a fault
+            // the host sees with this frame on top is the probe's. kProbeBytes is more than its code on every ABI.
+            frame.code_begin = reinterpret_cast<uintptr_t>(luma_guard_probe);
+            frame.code_end = frame.code_begin + kProbeBytes;
+            frame.pc = 0;
+            frame.address = 0;
+            frame.resume = luma_guard_resume;
+            frame.call_return = reinterpret_cast<uintptr_t>(luma_guard_call_return);
+            __atomic_signal_fence(__ATOMIC_SEQ_CST);
+            pThread->top = &frame;
+            __atomic_signal_fence(__ATOMIC_SEQ_CST);
+            const bool returned = luma_guard_call(&frame) == 0;
+            pThread->top = frame.outer;
+            if (!returned) {
+                // Resumed: no mod to blame and nothing to report; the caller answers as for a pointer it cannot use.
+                pThread->handling = 0u;
+            }
+            return returned;
+        }
 
         void measureForHarness() {
             // Once, in a harness run only (the facts writer is set): the boundary's cost against a plain call of the same

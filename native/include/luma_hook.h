@@ -68,6 +68,8 @@ namespace luma {
     };
     extern const GuaranteeSet kGuaranteeSets[];
 
+    // Whether fn is one of the module's function rows, by its address alone (a pointer a mod gives is read only then).
+    bool isRow(const Function* fn);
     // Whether every need of fn is there now, whoever asks (LumaCore.can_call). Nothing is logged.
     bool canCall(const Function* fn);
     // Whether the set named holds now (LumaCore.holds): 1 it does, 0 it does not, -1 no set has that name. look: false

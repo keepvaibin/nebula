@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lc-late",
+  "name": "lc-late",
+  "summary": "lc-late (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

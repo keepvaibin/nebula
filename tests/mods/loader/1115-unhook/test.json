@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "1115-unhook",
-  "about": "hook and unhook at run time: a running call keeps its hooks; the next has what is left",
+  "about": "hook and unhook at run time: a running call keeps its hooks; the next has what is left; a function pointer that is no row is refused unread (M-005)",
   "proves": [
     "kernel.unhook"
   ],
@@ -61,6 +61,22 @@
     },
     {
       "fact": "mod.lt-unhook.unhook_self",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-unhook.hook_nowhere",
+      "is": -1
+    },
+    {
+      "fact": "mod.lt-unhook.hook_inside",
+      "is": -1
+    },
+    {
+      "fact": "mod.lt-unhook.unhook_nowhere",
+      "is": -1
+    },
+    {
+      "fact": "mod.lt-unhook.can_call_nowhere",
       "is": 0
     }
   ]

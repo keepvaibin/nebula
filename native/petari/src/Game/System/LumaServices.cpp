@@ -397,6 +397,23 @@ namespace luma {
                 return LUMA_OK;
             }
 
+            // fn(a0, a1), the mod's own function, called by the guard with no frame between (the provider has checked
+            // the thread and the arguments).
+            int32_t callGuarded(const LumaMod* pMod, const char* pService, u32 kind, const void* fn, uintptr_t a0, uintptr_t a1) {
+                const Record* const pRecord = recordOf(pMod);
+                if (pRecord == nullptr || isGone(pRecord)) {
+                    return LUMA_E_CANCELLED;
+                }
+                // Through the guard: a fault in fn is the mod's, caught there and named "<service> event <kind>"
+                // in the mod log (services/registry.md 6.1, J S-7). A mod off after a fault is not called.
+                char where[96];
+                nebula_snprintf(where, sizeof(where), "%s event %u", pService, kind);
+                if (!guard::run(const_cast<LumaMod*>(pMod), LUMA_GUARD_EVENT, where, fn, a0, a1, 0, 0, nullptr)) {
+                    return LUMA_E_CANCELLED;
+                }
+                return LUMA_OK;
+            }
+
             int32_t kernelCall(const LumaMod* pMod, const char* pService, LumaEventFn fn, void* pUser, const LumaEvent* pEvent) {
                 if (!onGameThread()) {
                     sayCounted(pService, "called a mod's event function off the game thread (a provider bug); not called");
@@ -407,19 +424,20 @@ namespace luma {
                                                        : "called a mod's event function with no event (a provider bug); not called");
                     return LUMA_E_ARGUMENT;
                 }
-                const Record* const pRecord = recordOf(pMod);
-                if (pRecord == nullptr || isGone(pRecord)) {
-                    return LUMA_E_CANCELLED;
+                return callGuarded(pMod, pService, pEvent->kind, reinterpret_cast<const void*>(fn), reinterpret_cast<uintptr_t>(pUser),
+                                   reinterpret_cast<uintptr_t>(pEvent));
+            }
+
+            int32_t kernelCallWords(const LumaMod* pMod, const char* pService, uint32_t kind, const void* fn, uintptr_t a0, uintptr_t a1) {
+                if (!onGameThread()) {
+                    sayCounted(pService, "called a mod's function off the game thread (a provider bug); not called");
+                    return LUMA_E_THREAD;
                 }
-                // Through the guard: a fault in fn is the mod's, caught there and named "<service> event <kind>"
-                // in the mod log (services/registry.md 6.1, J S-7). A mod off after a fault is not called.
-                char where[96];
-                nebula_snprintf(where, sizeof(where), "%s event %u", pService, pEvent->kind);
-                if (!guard::run(const_cast<LumaMod*>(pMod), LUMA_GUARD_EVENT, where, reinterpret_cast<const void*>(fn),
-                                reinterpret_cast<uintptr_t>(pUser), reinterpret_cast<uintptr_t>(pEvent), 0, 0, nullptr)) {
-                    return LUMA_E_CANCELLED;
+                if (fn == nullptr) {
+                    sayCounted(pService, "called a mod's function with no function; not called");
+                    return LUMA_E_ARGUMENT;
                 }
-                return LUMA_OK;
+                return callGuarded(pMod, pService, kind, fn, a0, a1);
             }
 
             void* kernelAlloc(const LumaMod* pMod, uint64_t size, uint64_t align) { return core()->alloc(pMod, size, align); }
@@ -429,6 +447,7 @@ namespace luma {
             const LumaServiceKernel sKernel = {
                 sizeof(LumaServiceKernel), kernelModId, kernelModOrder, kernelGranted, kernelModLive, kernelGameThread,
                 kernelReport,              kernelPost,  kernelCall,     kernelAlloc,   kernelFree,       kernelUnknownMod,
+                kernelCallWords,
             };
 
             // Every node of the mod's stack and carried list goes to its drop: the mod is gone (game thread).

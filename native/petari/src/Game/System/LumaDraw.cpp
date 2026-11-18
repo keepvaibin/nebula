@@ -1661,19 +1661,6 @@ namespace luma {
                 {cNothingPushedCode, "Draw.NothingPushed", {"where", nullptr, nullptr, nullptr}},
             };
 
-            // ---- A point's call through the kernel (the guard names "draw event <point>") ----
-
-            struct PointCall {
-                LumaDrawFn fn;
-                void* user;
-                const LumaDrawScreen* screen;
-            };
-
-            void pointTrampoline(void* pUser, const LumaEvent* pEvent) {
-                (void)pEvent;
-                const PointCall* const pCall = static_cast< const PointCall* >(pUser);
-                pCall->fn(pCall->user, pCall->screen);
-            }
 
             // ---- The provider ----
 
@@ -1822,12 +1809,9 @@ namespace luma {
                 sTransformDepth = 0;
                 const f32 identity[6] = {1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
                 memcpy(sTransforms[0], identity, sizeof(identity));
-                PointCall call = {rHandler.fn, rHandler.user, &screen};
-                LumaEvent event = {};
-                event.size = sizeof(LumaEvent);
-                event.kind = point;
-                event.status = LUMA_OK;
-                (void)sKernel->call(rHandler.mod, LUMA_DRAW_NAME, pointTrampoline, &call, &event);
+                // Called by the guard itself, which names "draw event <point>".
+                (void)sKernel->call_words(rHandler.mod, LUMA_DRAW_NAME, point, reinterpret_cast<const void*>(rHandler.fn),
+                                          reinterpret_cast<uintptr_t>(rHandler.user), reinterpret_cast<uintptr_t>(&screen));
                 // What it left pushed is let go: the next mod starts from the screen.
                 if (sClipDepth != 0 && flat) {
                     MR::setDefaultViewportAndScissor();

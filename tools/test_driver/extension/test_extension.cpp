@@ -328,6 +328,7 @@ void sound(void*, const float* samples, std::uint32_t frames, std::uint32_t chan
 // The host's process end, a start-again's too: the dump complete.
 void process_ending(void*, std::uint32_t) {
     g_wav.end();
+    harness::join_threads();
 }
 
 bool g_mods_changed = false;

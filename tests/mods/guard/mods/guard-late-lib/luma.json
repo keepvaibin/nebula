@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "guard-late-lib",
+  "name": "guard-late-lib",
+  "summary": "guard-late-lib (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

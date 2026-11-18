@@ -66,6 +66,11 @@ typedef struct LumaServiceKernel {
        calls this with "<service>.<function>". One line in the game's log per place, repeats counted and said again at
        10, 100, 1000 (there is no mod to report to). */
     void (*unknown_mod)(const char* where);
+    /* Game thread: calls the mod's own fn(a0, a1) through the guard with nothing between them, for a mod function
+       whose two parameters are words (pointers or integers) and that is no LumaEventFn. A provider function between
+       the guard and the mod's would be a game frame there, and a fault in the mod's code could not be resumed. The
+       guard names "<service> event <kind>". Answers as `call`. A kernel built before it has no field (size). */
+    int32_t (*call_words)(const LumaMod* mod, const char* service, uint32_t kind, const void* fn, uintptr_t a0, uintptr_t a1);
 } LumaServiceKernel;
 
 /* A service's table and what the kernel tells its provider. */

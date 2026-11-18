@@ -232,7 +232,9 @@ typedef struct LumaCore {
        out; -1: this mod has no such hook; -3: not on the game thread (nothing changes). */
     int32_t (*unhook)(const LumaMod* mod, const LumaFunction* function, uint32_t kind, LumaHook hook, void* user);
     /* Memory for the mod, `size` bytes aligned to `align` (a power of two up to 65536), counted on the Mods screen and
-       freed when the mod is taken out. Null: none left (the mod says so). From any thread. */
+       freed when the mod is taken out. Null: none left (the mod says so). From any thread. A write in front of a block
+       or past its end is found when the block is freed or the mod taken out: the mod is turned off (MEMORY, the mod
+       log's Memory.WrittenBefore or Memory.WrittenAfter) and the game goes on. */
     void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align);
     /* Gives back what `alloc` gave this mod; null does nothing. */
     void (*free)(const LumaMod* mod, void* p);
@@ -246,7 +248,8 @@ typedef struct LumaCore {
     /* Objects (objects contract). The object's own class (the most derived), from the object or any of its
        polymorphic subobjects: its number (class_of's). -1: object is null. -2: its class has no row (no name a mod
        can write). -3: not a game object the kernel can read (the object or its vtable pointer not aligned as a
-       pointer; on Windows, a locator that is not one). -2 and -3 are reported for `mod`, once each. Any thread. */
+       pointer, memory that is not there, as for an object kept past its scene; on Windows, a locator that is not
+       one). -2 and -3 are reported for `mod`, once each. Any thread. */
     int32_t (*own_class)(const LumaMod* mod, const void* object);
     /* The address of the object's `class_number` subobject when its own class is that class or derives from it, else
        null. Null too when the class is in the object twice (an ambiguous base), reported. Any thread. */
@@ -261,7 +264,8 @@ typedef struct LumaCore {
        the object pointer at neither (reported, ambiguous). Any thread. */
     const LumaFunction* (*overrider)(const LumaMod* mod, const void* object, const char* name, const char* signature);
     /* method() with the adjustment done: sets args[0] to `object` as the declaring class, then invokes (args may be
-       null for a virtual with no parameters). 0: called; -1: no such virtual, or args null for one with parameters;
+       null for a virtual with no parameters, result null for one that returns void). 0: called; -1: no such virtual,
+       args null for one with parameters, or result null for one with a result;
        -2: the object is not of that class (or ambiguous, reported); -3: not readable (reported). The thread the call
        may run on is the called function's. */
     int32_t (*call_method)(const LumaMod* mod, const void* object, const char* name, const char* signature, void** args,
@@ -420,8 +424,9 @@ typedef struct LumaModInfo {
     uint32_t import_count;
     /* After every slot is filled. Non-zero: the mod could not start and is left off. May be null. */
     int32_t (*start)(const LumaCore* core, const LumaMod* mod);
-    /* When the mod is taken out, after its hooks are: other threads may still be inside one until the game's grace
-       ends, so it frees nothing they read (memory from `alloc` and its globals go after the grace). From stop and
+    /* When the mod is taken out, after its hooks are: other threads may still be inside its code (a hook, an override
+       of its class, a library's call_mod of a function it gave) until the game's grace ends, so it frees nothing they
+       read (memory from `alloc`, its globals and its library go after the grace). From stop and
        finish (and after a start that refused), hook, define_class, alias_class, set_number, set_table and make_gravity
        refuse (-1, or null), said in the log: what the mod added then would outlive it. May be null. */
     void (*stop)(void);

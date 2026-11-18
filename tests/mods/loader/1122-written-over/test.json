@@ -1,0 +1,115 @@
+{
+  "harness": 1,
+  "name": "1122-written-over",
+  "about": "A mod that writes outside a block of its memory (one byte in front, one past the end) is turned off when the kernel finds it: at the block's free, or at the mod's take-out for a block it kept. Said once a mod (MEMORY, the mod log's Memory.WrittenBefore or Memory.WrittenAfter); every block is freed whole and the game goes on (M-003; before, a write in front stopped the game)",
+  "proves": [
+    "kernel.memory"
+  ],
+  "mods": [
+    "../mods/lt-memfront",
+    "../mods/lt-memback",
+    "../mods/lt-memkeep"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "take_out": "lt-memkeep",
+      "wait": true
+    },
+    {
+      "at": 90,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-memfront.got",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-memfront.went_on",
+      "is": 1
+    },
+    {
+      "fact": "takeout.lt-memfront",
+      "exists": true
+    },
+    {
+      "fact": "mod.lt-memback.got",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-memback.went_on",
+      "is": 1
+    },
+    {
+      "fact": "takeout.lt-memback",
+      "exists": true
+    },
+    {
+      "fact": "mod.lt-memkeep.got",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-memkeep.went_on",
+      "is": 1
+    },
+    {
+      "fact": "takeout.lt-memkeep",
+      "exists": true
+    },
+    {
+      "log": "\\[mod lt-memfront\\] MEMORY: it wrote in front of a block of its memory\\. It is off until the next start; what it was changing may be half done\\."
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-memfront",
+        "source": "guard",
+        "level": "error",
+        "row": "Memory.WrittenBefore"
+      },
+      "when": "any"
+    },
+    {
+      "log": "\\[mod lt-memback\\] MEMORY: it wrote past the end of a block of its memory\\. It is off until the next start; what it was changing may be half done\\."
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-memback",
+        "source": "guard",
+        "level": "error",
+        "row": "Memory.WrittenAfter"
+      },
+      "when": "any"
+    },
+    {
+      "log": "\\[mod lt-memkeep\\] MEMORY: it wrote in front of a block of its memory\\. It is off until the next start; what it was changing may be half done\\."
+    },
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "lt-memkeep",
+        "source": "guard",
+        "level": "error",
+        "row": "Memory.WrittenBefore"
+      },
+      "when": "any"
+    },
+    {
+      "no_log": "was written over in front of its bytes|memory count is wrong"
+    }
+  ],
+  "faults": [
+    {
+      "mod": "lt-memfront"
+    },
+    {
+      "mod": "lt-memback"
+    },
+    {
+      "mod": "lt-memkeep"
+    }
+  ]
+}

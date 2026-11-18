@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "1306-not-readable",
-  "about": "A pointer one byte into the player gives -3 with one Object.NotReadable; null gives -1",
+  "about": "A pointer one byte into the player gives -3 with one Object.NotReadable; null gives -1; an object whose vtable is unmapped, and an unmapped object, give -3 through the guard's probe and the game goes on (M-007)",
   "proves": [
     "kernel.objects.own_class",
     "kernel.report"
@@ -49,6 +49,34 @@
     {
       "fact": "mod.to-objects.null_object",
       "is": -1
+    },
+    {
+      "fact": "mod.to-objects.hollow_vtable",
+      "is": -3
+    },
+    {
+      "fact": "mod.to-objects.nowhere",
+      "is": -3
+    },
+    {
+      "fact": "mod.to-objects.nowhere_as_null",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.nowhere_is_a",
+      "is": 0
+    },
+    {
+      "fact": "mod.to-objects.nowhere_overrider_null",
+      "is": 1
+    },
+    {
+      "fact": "mod.to-objects.nowhere_call",
+      "is": -3
+    },
+    {
+      "fact": "mod.to-objects.nowhere_data_null",
+      "is": 1
     },
     {
       "log": "to-objects: own_class was given something that is not a game object\\."

@@ -1,7 +1,9 @@
 /* lt-unhook: hook and unhook while the game runs (loader contract 4). On MR::getRandom(0, 4247): a before (digit 1), a
    wrap (result = min * 10 + 3 after the function) and an after added by core->hook at start (result * 10 + 2). The
    after takes out the before and itself on its first call: a call already running keeps its hooks, so the first call
-   gives 132; the second has the wrap alone: 3. unhook of a hook already gone: -1. A hook the mod never added: -1. */
+   gives 132; the second has the wrap alone: 3. unhook of a hook already gone: -1. A hook the mod never added: -1.
+   A function pointer that is no row (unmapped memory, the middle of a row) is refused unread by hook (-1), unhook
+   (-1) and can_call (0) (M-005). */
 #include "lt.h"
 
 #define MARK 4247
@@ -41,5 +43,13 @@ static const LumaImport imports[] = {
     LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_WRAP, wrap),
 };
 
-LT_START(lt_fact("hook_after", core->hook(mod, random2, LUMA_AFTER, after, 0)))
+LT_START({
+    lt_fact("hook_after", core->hook(mod, random2, LUMA_AFTER, after, 0));
+    const LumaFunction* const nowhere = (const LumaFunction*)(uintptr_t)0x3000;
+    const LumaFunction* const inside = (const LumaFunction*)((const char*)random2 + 8);
+    lt_fact("hook_nowhere", core->hook(mod, nowhere, LUMA_BEFORE, before, 0));
+    lt_fact("hook_inside", core->hook(mod, inside, LUMA_BEFORE, before, 0));
+    lt_fact("unhook_nowhere", core->unhook(mod, nowhere, LUMA_BEFORE, before, 0));
+    lt_fact("can_call_nowhere", core->can_call(nowhere));
+})
 LUMA_MOD(imports, start, 0);

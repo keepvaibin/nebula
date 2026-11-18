@@ -172,7 +172,7 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
 ## 2026-11-17 N-2047, N-2048: answers at a fixed frame; mods/m2 on Agent 1's branch
 
 - mods/m2 is rebased on engine/n1011 e76e79c4f (Agent 1's joined branch for the first move of main). The gate's
-  lumalink check and the mods lanes are carried onto his new gate.py (lanes, checks with needs): the mods lanes run the
+  lumalink check and the mods lanes are carried onto Agent 1's new gate.py (lanes, checks with needs): the mods lanes run the
   quick set at the quick level and --mod-parallel tests at once (2), and one helper builds the pinned LumaLink once for
   the lumalink check and every lane. planned.tsv names N-2043 to N-2046. gate_levels_test and gate_lock_test pass.
 - N-2047 and N-2048 fixed d363f6b7c: fs's worker and assets' cooking thread posted their answers when done, so in fixed
@@ -198,7 +198,7 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   the workers go on making pipelines after the start's set, and while they run the line reads "Preparing graphics:
   N%" in place of the page's own. aftercrash 6702 and 6709 failed so under load on Vulkan and 6702 on d3d11, and pass
   unloaded. It cannot be a known-failures line (a pass would fail the gate). The renderer, the status line and the
-  host's deterministic mode are Agent 1's files; he takes the row.
+  host's deterministic mode are Agent 1's files; Agent 1 takes the row.
 
 ## 2026-11-17 N-2023, N-2024, N-2050, N-2051: a call's needs are proved at build time
 
@@ -216,3 +216,31 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   touch the player only while holds("player"), checked again after every wait; actor, item and projectile kill and
   give only with their set. 18 kit-* test mods got the same guards after their waits. New game test k12-sets: every
   handler's order and the sets it proves across two stages and a death (EggStarGalaxy, HoneyBeeKingdomGalaxy).
+
+## 2026-11-17 M-002, M-003, M-005, M-007, M-008, M-028: what a mod gives the kernel cannot end the game
+
+- M-007 fixed: own_class, as_class, is_a, class_data, overrider and call_method read a mod's object, its vtable and
+  the RTTI behind it only through guard::probe, a byte copy that runs under a guard frame of its own (asm leaf per ABI:
+  win-x64, sysv-x64, aarch64). A stale object, a freed block or a number that is no pointer answers -3 or null. A
+  vtable read once is kept per thread (64 slots) until a mod's library closes. A class name for the NoRow report is
+  copied through the probe a page at a time.
+- M-005 fixed: hook, unhook and can_call take a LumaFunction* only when it is one of the rows (luma::isRow);
+  call_method with a null result for a virtual that has one is -1, not a write through null.
+- M-003 fixed: a mod's block record lives in the kernel's slots, with 16 guard bytes each side. A write in front of a
+  block or past its end turns that mod off at free or take-out (MEMORY, Memory.WrittenBefore/After in 14 languages);
+  the game goes on.
+- M-008 fixed: an override that runs on another thread while its mod is taken out proceeds to the base's code from
+  its own call record, and its mod's library closes only after the call left. Harness 1.2 adds thread_start, a thread
+  the game does not wait for.
+- M-002 fixed: every mod taken out waits for the grace (it was only one with a hook), call_mod counts its call off
+  the game thread as a hook's is, and a finished mod record is freed after a second grace, since modAt reads the
+  gone list from any thread. Test guard 1653: a library's call_mod of a callback on another thread while its giver,
+  which has no hook, is taken out; before, the giver's library closed under the call.
+- M-028 fixed: time handlers and draw points are called by the guard itself (LumaServiceKernel.call_words), not through
+  a provider trampoline that was resumable only while the compiler made its call a tail jump.
+  guard_frames_fixture_test.py fails when a provider passes its own function to the kernel's call.
+- Tests: loader 1115 and 1122 (new), objects 1306 and 1307, classes 1409 (new), guard 1653 (new). Each failed on
+  the kernel before its fix: on a2m4, 1115 a guard fault outside the mods' code, 1122 NEB-C02, 1306 and 1307 NEB-M03;
+  on the build before M-008, 1409 a guard catch in lc-late's closed library, then NEB-C02 (slotOriginal's panic); on
+  the build before M-002, 1653 a guard catch in the giver's closed library (call_mod -1).
+  guard_frames_fixture_test.py named the two trampolines. All six pass on d3d12, vulkan and d3d11.

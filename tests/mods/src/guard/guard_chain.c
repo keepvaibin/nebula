@@ -15,7 +15,12 @@
    -DCASE=5, guard-cb-checker: needs guard-cb-lib; at 1657 calls cb.check().
    -DCASE=6, guard-chain-a: needs guard-chain-l1; at 1646 calls l1.go (fact entered before, survived after).
    -DCASE=7, guard-chain-l1 (a library, with a cut): needs guard-chain-l2; l1.go calls l2.fault.
-   -DCASE=8, guard-chain-l2 (a library, with a cut): l2.fault writes through a null pointer. */
+   -DCASE=8, guard-chain-l2 (a library, with a cut): l2.fault writes through a null pointer.
+   -DCASE=9, guard-late-lib (a library): exports cb.add as CASE 1; at 1653 its after hook starts a thread (harness 1.2
+     thread_start) that calls the first kept callback with call_mod(1653) (facts late_answer, late_result, late_done).
+   -DCASE=10, guard-late-giver: needs guard-late-lib, no hook of its own: its callback, given 1653, waits until its stop
+     has run on the game thread, goes on a while (about a second), then returns 9 (facts entered, entered_game_thread,
+     stopped_seen). */
 #include "../loader/lt.h"
 
 #define SIG "lumi1:0000000000001644"
@@ -249,6 +254,100 @@ static const LumaImport imports[] = {
 
 LT_START((void)0)
 LUMA_MOD(imports, start, 0);
+
+#elif CASE == 9
+#include <luma_harness.h>
+typedef int32_t (*Callback)(int32_t);
+static const void* harness_table;
+static Callback late_fn;
+static const LumaMod* late_who;
+
+static int32_t add(Callback fn, const LumaMod* who) {
+    if (late_fn != 0) return -1;
+    late_fn = fn;
+    late_who = who;
+    return 1;
+}
+
+static void late_call(void* user) {
+    (void)user;
+    uint64_t result = 0;
+    const int32_t answer = lt_core->call_mod(lt_mod, (const void*)late_fn, 1653, 0, 0, 0, &result);
+    lt_fact("late_answer", answer);
+    lt_fact("late_result", (int32_t)result);
+    lt_fact("late_done", 1);
+}
+
+static int32_t after(LumaCall* call, void* user) {
+    (void)user;
+    if (CALLED_WITH(call) != 1653) return 0;
+    const LumaHarness* const harness = (const LumaHarness*)harness_table;
+    int32_t started = 0;
+    if (late_fn != 0 && harness != 0 && harness->size >= sizeof(LumaHarness)) started = harness->thread_start(late_call, 0);
+    lt_fact("started", started);
+    return 0;
+}
+
+static void gone(const LumaMod* dependent) {
+    /* The giver's callback is dropped on the game thread; the thread's call already made goes on. */
+    if (dependent == late_who) {
+        late_fn = 0;
+        late_who = 0;
+    }
+    lt_fact("dependent_gone", 1);
+}
+
+static const LumaExport exports[] = {
+    LUMA_EXPORT_FUNCTION("cb.add", SIG, add),
+};
+
+static const LumaImport imports[] = {
+    LUMA_SERVICE(harness_table, LUMA_HARNESS_NAME, "1.2"),
+    LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, after),
+};
+
+LT_START((void)0)
+LUMA_LIBRARY_MOD(imports, start, 0, exports, gone);
+
+#elif CASE == 10
+static const void* add_fn;
+static volatile int32_t stopped;
+typedef int32_t (*AddFn)(int32_t (*)(int32_t), const LumaMod*);
+
+static int32_t late(int32_t x) {
+    if (x != 1653) return 0;
+    lt_fact("entered", 1);
+    lt_fact("entered_game_thread", lt_core->game_thread());
+    /* Until the stop has run on the game thread; bounded so a take-out that never comes ends the wait (the test then
+       fails on stopped_seen). */
+    for (uint64_t i = 0; !__atomic_load_n(&stopped, __ATOMIC_ACQUIRE) && i < (1ull << 30); i++) {
+#if defined(__x86_64__) || defined(__i386__)
+        __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+        __asm__ volatile("yield");
+#endif
+    }
+    lt_fact("stopped_seen", __atomic_load_n(&stopped, __ATOMIC_ACQUIRE));
+    /* Still running after the stop, as the game thread goes on to end the mod: its library must stay until this call
+       has left. */
+    for (uint32_t i = 0; i < (1u << 24); i++) {
+#if defined(__x86_64__) || defined(__i386__)
+        __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+        __asm__ volatile("yield");
+#endif
+    }
+    return 9;
+}
+
+static void stop(void) { __atomic_store_n(&stopped, 1, __ATOMIC_RELEASE); }
+
+static const LumaImport imports[] = {
+    LUMA_MOD_FUNCTION(add_fn, "guard-late-lib/cb.add", SIG),
+};
+
+LT_START(lt_fact("added", ((AddFn)add_fn)(late, mod)))
+LUMA_MOD(imports, start, stop);
 
 #elif CASE == 7 || CASE == 8
 static void cut(const LumaCut* c) {

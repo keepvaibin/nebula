@@ -1013,6 +1013,27 @@ void run_step(Step& s, std::int64_t now) {
 
 // --- The service the game half asks ------------------------------------------------------------------------------
 
+// Revision 1.2: the threads thread_start made, joined when the process ends (join_threads).
+std::mutex g_threads_lock;
+std::vector<std::thread> g_threads;
+
+// Revision 1.2: fn(user) on a thread of its own; the game goes on.
+std::int32_t service_thread_start(void (*fn)(void*), void* user) {
+    if (fn == nullptr) {
+        return 0;
+    }
+    try {
+        std::lock_guard<std::mutex> hold(g_threads_lock);
+        g_threads.emplace_back(fn, user);
+        return 1;
+    } catch (const std::system_error&) {
+        if (g.log != nullptr) {
+            g.log("harness: thread_start: no thread could be made");
+        }
+        return 0;
+    }
+}
+
 // Revision 1.1: fn(user) on a thread of its own; the game thread waits until it ends.
 std::int32_t service_other_thread(void (*fn)(void*), void* user) {
     if (fn == nullptr) {
@@ -1184,12 +1205,26 @@ bool start(const NebulaHostForExtension* host, const std::string& plan, void (*l
     g_service.done = service_done;
     g_service.fact = service_fact;
     g_service.other_thread = service_other_thread;
+    g_service.thread_start = service_thread_start;
     log("harness: plan read: " + std::to_string(g.setup.size()) + " setup lines, " + std::to_string(g.steps.size()) + " steps");
     return true;
 }
 
 bool on() {
     return g.on;
+}
+
+void join_threads() {
+    std::vector<std::thread> threads;
+    {
+        std::lock_guard<std::mutex> hold(g_threads_lock);
+        threads.swap(g_threads);
+    }
+    for (std::thread& t : threads) {
+        if (t.joinable()) {
+            t.join();
+        }
+    }
 }
 
 // `memory <seconds>`: the process's own memory at frame 0 and each given seconds of wall time after it (a run that

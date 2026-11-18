@@ -396,27 +396,11 @@ namespace luma {
                 }
             }
 
-            // ---- Handlers through the kernel's call (the guard names "time event 2" or "time event 3") ----
-
-            struct HandlerCall {
-                LumaTimeFn fn;
-                void* user;
-                const LumaTimeNow* now;
-            };
-
-            void handlerTrampoline(void* pUser, const LumaEvent* pEvent) {
-                (void)pEvent;
-                const HandlerCall* const pCall = static_cast<const HandlerCall*>(pUser);
-                pCall->fn(pCall->user, pCall->now);
-            }
+            // ---- Handlers, called by the guard itself (it names "time event 2" or "time event 3") ----
 
             void callHandler(Clock* pClock, LumaTimeFn fn, void* pUser, const LumaTimeNow* pNow, u32 kind) {
-                HandlerCall call = {fn, pUser, pNow};
-                LumaEvent event = {};
-                event.size = sizeof(LumaEvent);
-                event.kind = kind;
-                event.status = LUMA_OK;
-                (void)sKernel->call(pClock->mod, LUMA_TIME_NAME, handlerTrampoline, &call, &event);
+                (void)sKernel->call_words(pClock->mod, LUMA_TIME_NAME, kind, reinterpret_cast<const void*>(fn),
+                                          reinterpret_cast<uintptr_t>(pUser), reinterpret_cast<uintptr_t>(pNow));
             }
 
             // Inserts or removes `pClock` in a pass's list, kept in list order.

@@ -18,6 +18,11 @@
                          LumaClassDef without it): defined, made, and its `gone` never called.
    lc-slots  (-DCASE=6): class LcSlots from Kuribo in place of every Kuribo, overrides by slot of LiveActor's inline
                          virtuals (f/1.3-slots): control, receiveMsgPlayerAttack, receiveMsgTake, seen to run.
+   lc-late   (-DCASE=7): class LcLate from Kuribo in place of every Kuribo, no hook of its own (so nothing but its class
+                         keeps its library through the grace): its override by slot of LiveActor::receiveMsgTake, given
+                         the mark 0x1409 as its first sensor, waits until the mod's stop has run, then proceeds (M-008).
+   lc-late-drive (-DCASE=8): with lc-late: keeps an LcLate it saw; MR::getRandom(0, 1409) starts a thread (harness 1.2
+                         thread_start) that makes that marked call; (0, 1410) after lc-late is out: own_class of it.
    Cases 4 and 5 need a luma.h with LumaClassDef.gone (build.sh builds them only then). */
 #include "../loader/lt.h"
 
@@ -490,5 +495,113 @@ LT_START({
     slot_class = core->define_class(mod, &slots_def);
     lt_fact("defined", slot_class >= 0);
 })
+LUMA_MOD(imports, start, 0);
+
+#elif CASE == 7
+#define LATE_MARK ((void*)(uintptr_t)0x1409u)
+static int32_t late_class = -1;
+static volatile int32_t made_count, stopped;
+
+static void made(void* object, void* data, void* user) {
+    (void)object;
+    (void)data;
+    (void)user;
+    lt_fact("made", __atomic_add_fetch(&made_count, 1, __ATOMIC_RELAXED));
+}
+
+static int32_t on_take(LumaCall* call, void* user) {
+    (void)user;
+    const int32_t marked = LUMA_ARG(call, 1, void*) == LATE_MARK;
+    if (marked) {
+        lt_fact("entered", 1);
+        lt_fact("entered_game_thread", lt_core->game_thread());
+        /* Until the stop has run on the game thread (its class has ended by then); bounded so a take-out that never
+           comes ends the wait (the test then fails on stopped_seen). */
+        for (uint64_t i = 0; !__atomic_load_n(&stopped, __ATOMIC_ACQUIRE) && i < (1ull << 30); i++) {
+#if defined(__x86_64__) || defined(__i386__)
+            __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+            __asm__ volatile("yield");
+#endif
+        }
+        lt_fact("stopped_seen", __atomic_load_n(&stopped, __ATOMIC_ACQUIRE));
+    }
+    lt_core->proceed(call);
+    if (marked) {
+        lt_fact("proceeded", 1);
+        lt_fact("result", LUMA_RESULT(call, _Bool));
+    }
+    return 0;
+}
+
+static void stop(void) { __atomic_store_n(&stopped, 1, __ATOMIC_RELEASE); }
+
+static const LumaOverride overrides[] = {
+    {"LiveActor::receiveMsgTake", "bool(HitSensor *, HitSensor *)", on_take, 0},
+};
+
+static const LumaClassDef late_def = {
+    .size = sizeof(LumaClassDef), .name = "LcLate", .base = "Kuribo", .replaces = "Kuribo",
+    .data_size = 0, .made = made, .overrides = overrides,
+    .override_count = sizeof(overrides) / sizeof(overrides[0]),
+};
+
+LT_START({
+    late_class = core->define_class(mod, &late_def);
+    lt_fact("defined", late_class >= 0);
+})
+LUMA_MOD_NO_IMPORTS(start, stop);
+
+#elif CASE == 8
+#include <luma_harness.h>
+static const void* harness_table;
+static const LumaFunction* m_take; /* LiveActor::receiveMsgTake, the virtual call */
+static int32_t c_base;
+static void* volatile seen;
+
+static int32_t look(LumaCall* call, void* user) {
+    (void)user;
+    if (seen == 0 && lt_core->class_of("LcLate") >= 0 && lt_core->own_class(lt_mod, call->args[0]) == lt_core->class_of("LcLate")) {
+        seen = call->args[0];
+        lt_fact("seen", 1);
+    }
+    return 0;
+}
+
+static void late_call(void* user) {
+    (void)user;
+    void* sensor = (void*)(uintptr_t)0x1409u;
+    void* none = 0;
+    void* args[3] = {seen, &sensor, &none};
+    _Bool took = 1;
+    m_take->invoke(args, &took);
+    lt_fact("late_result", took);
+    lt_fact("late_done", 1);
+}
+
+static int32_t trigger(LumaCall* call, void* user) {
+    (void)user;
+    const int32_t which = LUMA_ARG(call, 2, int32_t);
+    if (which == 1409) {
+        const LumaHarness* const harness = (const LumaHarness*)harness_table;
+        int32_t started = 0;
+        if (seen != 0 && harness != 0 && harness->size >= sizeof(LumaHarness)) started = harness->thread_start(late_call, 0);
+        lt_fact("started", started);
+    } else if (which == 1410) {
+        lt_fact("own_is_base_after", seen != 0 && lt_core->own_class(lt_mod, seen) == c_base);
+        lt_fact("after_done", 1);
+    }
+    return 0;
+}
+
+static const LumaImport imports[] = {
+    LUMA_SERVICE(harness_table, LUMA_HARNESS_NAME, "1.2"),
+    LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
+    LUMA_HOOK_ON("LiveActor::calcAnim", "void()", LUMA_AFTER, look),
+    LUMA_METHOD(m_take, "LiveActor::receiveMsgTake", "bool(HitSensor *, HitSensor *)"),
+    LUMA_CLASS(c_base, "Kuribo"),
+};
+
+LT_START({})
 LUMA_MOD(imports, start, 0);
 #endif

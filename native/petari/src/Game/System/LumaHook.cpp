@@ -481,14 +481,19 @@ namespace luma {
     extern const GuaranteeSet kGuaranteeSets[] = {{nullptr, false, nullptr}};
 #endif
 
-    bool canCall(const Function* pFunction) {
-        prepare();
-        // A mod gives the pointer: it is read only when it is one of the module's rows (a linker's pad between rows is
-        // a whole row with a null name).
+    bool isRow(const Function* pFunction) {
+        // Compared as addresses only: nothing at pFunction is read before it is known to be a row (a linker's pad
+        // between rows is a whole row with a null name).
         const uintptr_t at = reinterpret_cast< uintptr_t >(pFunction);
         const uintptr_t begin = reinterpret_cast< uintptr_t >(rowsBegin());
-        if (pFunction == nullptr || pFunction < rowsBegin() || pFunction >= rowsEnd() || (at - begin) % sizeof(Function) != 0 ||
-            pFunction->name == nullptr || pFunction->hooked == nullptr) {
+        const uintptr_t end = reinterpret_cast< uintptr_t >(rowsEnd());
+        return pFunction != nullptr && at >= begin && at < end && (at - begin) % sizeof(Function) == 0 && pFunction->name != nullptr;
+    }
+
+    bool canCall(const Function* pFunction) {
+        prepare();
+        // A mod gives the pointer: it is read only when it is one of the module's rows.
+        if (!isRow(pFunction) || pFunction->hooked == nullptr) {
             return false;
         }
         // A row's `hooked` is its flag's first byte (luma_hook.h Flag).
@@ -598,8 +603,8 @@ namespace luma {
             return HookResult_NotGameThread;
         }
         // A virtual call (objects 10: LumaCore.method, import kind 8) has no flag: it is not one function. Its rows'
-        // own functions are hooked instead.
-        if (pFunction == nullptr || pFunction->hooked == nullptr || pCallback == nullptr || kind >= Hook_KindCount ||
+        // own functions are hooked instead. A pointer that is no row (a mod's stale or wrong one) is refused unread.
+        if (!isRow(pFunction) || pFunction->hooked == nullptr || pCallback == nullptr || kind >= Hook_KindCount ||
             (wraps(kind) && (isTell(pFunction) || resultKind(pFunction) == kFixed)) ||
             (kind != Hook_Before && isVariadic(pFunction))) {
             return HookResult_Refused;
@@ -632,7 +637,7 @@ namespace luma {
         if (!tGameThread) {
             return HookResult_NotGameThread;
         }
-        const Chain* const pChain = pFunction != nullptr && pFunction->hooked != nullptr ? chainOf(pFunction) : nullptr;
+        const Chain* const pChain = isRow(pFunction) && pFunction->hooked != nullptr ? chainOf(pFunction) : nullptr;
         if (pChain == nullptr) {
             return -1;
         }
@@ -704,6 +709,21 @@ namespace luma {
     u32 retiredCount() { return sRetiredCount; }
 
     u32 graceMark() { return __atomic_load_n(&sEpoch, __ATOMIC_RELAXED); }
+
+    CodeHold::CodeHold() {
+        if (tGameThread) {
+            mCounter = -1;
+            return;
+        }
+        mCounter = static_cast<s32>(__atomic_load_n(&sEpoch, __ATOMIC_SEQ_CST) & 1u);
+        __atomic_fetch_add(&sReaders[mCounter], 1u, __ATOMIC_SEQ_CST);
+    }
+
+    CodeHold::~CodeHold() {
+        if (mCounter >= 0) {
+            __atomic_fetch_sub(&sReaders[mCounter], 1u, __ATOMIC_RELEASE);
+        }
+    }
 
     bool graceOver(u32 mark) {
         if (__atomic_load_n(&sEpoch, __ATOMIC_RELAXED) - mark < 2u) {

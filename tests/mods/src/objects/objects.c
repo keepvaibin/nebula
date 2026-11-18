@@ -11,8 +11,11 @@
    - 1305 own_class of the player's current nerve (LiveActor.mSpine -> Spine.mCurrNerve, a header's record): a number
      of its own, is_a Nerve, as_class Nerve the same address; and the last Kuribo constructed: its current nerve, an
      NrvKuribo record Kuribo.cpp defines (LumaUnitRows; G-R22-1), the same three;
-   - 1306 a pointer one byte past the player gives -3, twice: one Object.NotReadable kept (the second counted);
-   - 1307 call_method on the player runs as 1303: the hook counts one more, getBaseMtx's answer the same. */
+   - 1306 a pointer one byte past the player gives -3, twice: one Object.NotReadable kept (the second counted); an
+     object whose vtable is unmapped memory, and an unmapped object, give -3 (as_class, overrider, class_data null;
+     is_a 0; call_method -3) and the game goes on (M-007);
+   - 1307 call_method on the player runs as 1303: the hook counts one more, getBaseMtx's answer the same; with no
+     result for getBaseMtx, -1 (M-005). */
 #include "../loader/lt.h"
 
 static const LumaFunction* player;
@@ -137,6 +140,20 @@ static void checks(void) {
     lt_fact("misaligned", lt_core->own_class(lt_mod, p + 1));
     lt_fact("misaligned_again", lt_core->own_class(lt_mod, p + 1));
     lt_fact("null_object", lt_core->own_class(lt_mod, 0));
+    /* 1306 (M-007): memory that is not there. An object whose first word is an aligned address with nothing mapped
+       before it (the words before a vtable are read), and an aligned address with nothing mapped at all (the object's
+       own first word). Every system keeps its lowest 64 KiB unmapped. The kernel reads what a mod gives through the
+       guard's probe: each answer is -3, null or 0, and the game goes on. */
+    static const void* hollow[1];
+    hollow[0] = (const void*)(uintptr_t)0x1000;
+    const void* const nowhere = (const void*)(uintptr_t)0x2000;
+    lt_fact("hollow_vtable", lt_core->own_class(lt_mod, hollow));
+    lt_fact("nowhere", lt_core->own_class(lt_mod, nowhere));
+    lt_fact("nowhere_as_null", lt_core->as_class(lt_mod, nowhere, c_nameobj) == 0);
+    lt_fact("nowhere_is_a", lt_core->is_a(nowhere, c_live));
+    lt_fact("nowhere_overrider_null", lt_core->overrider(lt_mod, nowhere, "LiveActor::calcAndSetBaseMtx", "void()") == 0);
+    lt_fact("nowhere_call", lt_core->call_method(lt_mod, nowhere, "LiveActor::calcAndSetBaseMtx", "void()", 0, 0));
+    lt_fact("nowhere_data_null", lt_core->class_data(lt_mod, nowhere, lt_core->class_of("NameObj")) == 0);
     /* 1307 */
     before = calc_runs;
     void* call_args[1] = {0};
@@ -152,6 +169,8 @@ static void checks(void) {
     lt_fact("call_base", lt_core->call_method(lt_mod, p, "LiveActor::getBaseMtx", "MtxPtr() const", base_args, &got));
     lt_fact("call_base_same", got == by_row);
     lt_fact("call_unknown", lt_core->call_method(lt_mod, p, "LiveActor::noSuchVirtual", "void()", call_args, 0));
+    /* M-005: no result for a virtual with one: -1, nothing written through null. */
+    lt_fact("call_no_result", lt_core->call_method(lt_mod, p, "LiveActor::getBaseMtx", "MtxPtr() const", base_args, 0));
 }
 
 static int32_t marks(LumaCall* call, void* user) {

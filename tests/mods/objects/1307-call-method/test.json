@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "1307-call-method",
-  "about": "call_method on the player runs as the kind 8 import: the hook counts one, the same answer",
+  "about": "call_method on the player runs as the kind 8 import: the hook counts one, the same answer; no result for a virtual with one: -1 (M-005)",
   "proves": [
     "kernel.objects.call_method"
   ],
@@ -67,6 +67,10 @@
     },
     {
       "fact": "mod.to-objects.call_null_args_params",
+      "is": -1
+    },
+    {
+      "fact": "mod.to-objects.call_no_result",
       "is": -1
     }
   ]

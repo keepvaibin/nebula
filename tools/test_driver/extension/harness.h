@@ -17,6 +17,8 @@ namespace harness {
 // when the plan cannot be read: the run then ends at once.
 bool start(const NebulaHostForExtension* host, const std::string& plan, void (*log)(const std::string&), void (*quit)());
 [[nodiscard]] bool on();
+// Waits for the threads harness 1.2 thread_start made (the process is ending).
+void join_threads();
 
 // Game thread, once a game frame, before its controls.
 void frame(std::uint64_t game_frames);

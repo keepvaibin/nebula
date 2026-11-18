@@ -15,7 +15,7 @@ extern "C" {
 
 #define LUMA_HARNESS_NAME "harness"
 #define LUMA_HARNESS_MAJOR 1u
-#define LUMA_HARNESS_MINOR 1u /* a mod asking for a later minor is not given the service */
+#define LUMA_HARNESS_MINOR 2u /* a mod asking for a later minor is not given the service */
 
 typedef struct LumaHarness {
     uint32_t size;
@@ -34,6 +34,10 @@ typedef struct LumaHarness {
        0 when no thread could be made. For a test of what a hook sees off the game thread, which a harness run
        otherwise never has (its sound ticks on the game thread). */
     int32_t (*other_thread)(void (*fn)(void* user), void* user);
+    /* Revision 1.2. Starts fn(user) on a thread of its own and returns at once: 1, or 0 when no thread could be made.
+       The game goes on while it runs (a test of a take-out while a mod's code runs on another thread); the process's
+       end waits for it. */
+    int32_t (*thread_start)(void (*fn)(void* user), void* user);
 } LumaHarness;
 
 #ifdef __cplusplus

@@ -39,13 +39,40 @@ namespace luma {
 
     // One block a mod took with core->alloc, just before the bytes it gives. `free` reads it only after finding the
     // pointer in the mod's own set; the check word is a second check.
-    struct Block {
-        void* start;  // what malloc gave
-        u64 size;     // what the mod asked for
-        const LumaMod* owner;
-        uintptr_t check;  // the block's address mixed with kBlockCheck; 0 once freed
-    };
+    // A block alloc gave a mod: its bytes, with kGuardBytes of guard on either side that the mod must not write (an
+    // index -1, or one past the end, lands there and not on malloc's own records). What the kernel knows of the block
+    // (where malloc's memory starts, its size) is in the mod's BlockSet, never in memory the mod can reach.
+    const u32 kGuardBytes = 16;
     const uintptr_t kBlockCheck = static_cast<uintptr_t>(0x4C554D41424C4B21ull);
+
+    // The guard's bytes for the block at `at`: a pattern of the address, so a block's guard is not another's.
+    u8 guardByte(uintptr_t at, u32 i) { return static_cast<u8>(((at ^ kBlockCheck) >> ((i & 7u) * 8u)) ^ (i * 0x3Bu)); }
+
+    void putGuards(uintptr_t at, u64 size) {
+        u8* const pBefore = reinterpret_cast<u8*>(at) - kGuardBytes;
+        u8* const pAfter = reinterpret_cast<u8*>(at) + size;
+        for (u32 i = 0; i < kGuardBytes; i++) {
+            pBefore[i] = guardByte(at, i);
+            pAfter[i] = guardByte(at, i + kGuardBytes);
+        }
+    }
+
+    // Which guard the mod wrote over: 0 none, 1 the one before its bytes, 2 the one after (1 when both).
+    u32 guardWritten(uintptr_t at, u64 size) {
+        const u8* const pBefore = reinterpret_cast<const u8*>(at) - kGuardBytes;
+        const u8* const pAfter = reinterpret_cast<const u8*>(at) + size;
+        for (u32 i = 0; i < kGuardBytes; i++) {
+            if (pBefore[i] != guardByte(at, i)) {
+                return 1;
+            }
+        }
+        for (u32 i = 0; i < kGuardBytes; i++) {
+            if (pAfter[i] != guardByte(at, i + kGuardBytes)) {
+                return 2;
+            }
+        }
+        return 0;
+    }
 
     // One thing a mod's code reported: its place and code, its args the first time, how often.
     const u32 kReportArgs = 8;
@@ -61,9 +88,16 @@ namespace luma {
         const luma::modlog::Entry* entry;  // its entry in the mod log, counted with it; null: not kept
     };
 
-    // The addresses alloc gave one mod: open addressing, kept at most half full. 0 is an empty slot, 1 a taken-out one.
+    // One block alloc gave a mod: the address it gave, what malloc gave, the size the mod asked for.
+    struct BlockSlot {
+        uintptr_t at;  // 0: an empty slot; 1: a taken-out one
+        void* start;
+        u64 size;
+    };
+
+    // The blocks alloc gave one mod, by address: open addressing, kept at most half full.
     struct BlockSet {
-        uintptr_t* slots;
+        BlockSlot* slots;
         u32 capacity;  // a power of two, or 0
         u32 used;      // live and taken-out slots
 
@@ -71,18 +105,18 @@ namespace luma {
             return static_cast<u32>(((p >> 4) * static_cast<uintptr_t>(0x9E3779B97F4A7C15ull)) >> 32) & (capacity - 1);
         }
 
-        bool add(uintptr_t p) {
+        bool add(const BlockSlot& rBlock) {
             if ((used + 1) * 2 > capacity) {
                 const u32 grown = capacity == 0 ? 64u : capacity * 2u;
-                uintptr_t* const pSlots = static_cast<uintptr_t*>(zeroed(grown, sizeof(uintptr_t)));
+                BlockSlot* const pSlots = static_cast<BlockSlot*>(zeroed(grown, sizeof(BlockSlot)));
                 if (pSlots == nullptr) {
                     return false;
                 }
                 u32 live = 0;
                 for (u32 i = 0; i < capacity; i++) {
-                    if (slots[i] > 1) {
-                        u32 at = hash(slots[i], grown);
-                        while (pSlots[at] != 0) {
+                    if (slots[i].at > 1) {
+                        u32 at = hash(slots[i].at, grown);
+                        while (pSlots[at].at != 0) {
                             at = (at + 1) & (grown - 1);
                         }
                         pSlots[at] = slots[i];
@@ -94,25 +128,26 @@ namespace luma {
                 capacity = grown;
                 used = live;
             }
-            u32 at = hash(p, capacity);
-            while (slots[at] > 1) {
+            u32 at = hash(rBlock.at, capacity);
+            while (slots[at].at > 1) {
                 at = (at + 1) & (capacity - 1);
             }
-            if (slots[at] == 0) {
+            if (slots[at].at == 0) {
                 used++;
             }
-            slots[at] = p;
+            slots[at] = rBlock;
             return true;
         }
 
-        // Taken out when there; false when this set never held it.
-        bool remove(uintptr_t p) {
+        // Taken out when there (*pBlock what it was); false when this set never held it.
+        bool remove(uintptr_t p, BlockSlot* pBlock) {
             if (capacity == 0) {
                 return false;
             }
-            for (u32 at = hash(p, capacity), n = 0; n < capacity && slots[at] != 0; at = (at + 1) & (capacity - 1), n++) {
-                if (slots[at] == p) {
-                    slots[at] = 1;
+            for (u32 at = hash(p, capacity), n = 0; n < capacity && slots[at].at != 0; at = (at + 1) & (capacity - 1), n++) {
+                if (slots[at].at == p) {
+                    *pBlock = slots[at];
+                    slots[at] = BlockSlot{1, nullptr, 0};
                     return true;
                 }
             }
@@ -135,9 +170,8 @@ struct LumaMod {
     void* library;
     LumaCloseLibrary close;
     bool begun;      // its begin ran (so finish runs; T-2: a mod refused before begin runs no terminator)
-    bool published;  // a hook of it was in a chain at some time (so its end waits for the grace)
-    u32 grace;       // the grace mark of its end
-    LumaMod* nextGone;
+    u32 grace;       // the grace mark of its end, then of its finish
+    LumaMod* nextGone;  // in sGone, then in sDead
     // What its code reported, for the Mods page and the mod log; under `lock`. Past kReportsKept, counted.
     luma::Report* reports;
     u32 reportCount;
@@ -165,6 +199,7 @@ struct LumaMod {
     uintptr_t codeBegin;
     uintptr_t codeEnd;
     u32 faulted;
+    u32 wroteOver;  // 1 once it wrote over a guard of its memory (wroteOver; atomic): said once
     u32 costSlot;  // its code-time slot (LumaGuard.cpp): 0 none, else index + 1
     // Between luma_begin_mod and luma_start_begun (or luma_drop_begun): bound and begun, not started. `hostId` and
     // `hostFile` are the host's strings, copied whole, for a refusal of its start.
@@ -194,6 +229,9 @@ namespace luma {
         u32 sWaitingCount = 0;
         // Mods taken out (or refused after their code ran) whose grace has not ended.
         LumaMod* sGone = nullptr;
+        // Finished mods whose own record waits for a second grace: modAt (any thread, a fault's handler and call_mod)
+        // may have read one from sGone just before it was unlinked.
+        LumaMod* sDead = nullptr;
         u32 sStartedCount = 0;
 
         // Take-out requests (reload.md 2): any thread queues a mod's id under sTakeLock; the game thread takes them all
@@ -315,9 +353,6 @@ namespace luma {
             }
             const HookResult result =
                 addHook(asRow(pFunction), static_cast<HookKind>(kind), reinterpret_cast<HookCallback>(pHook), pUser, pMod, pMod->order);
-            if (result == HookResult_Added) {
-                pMod->published = true;
-            }
             return result;
         }
 
@@ -755,7 +790,9 @@ namespace luma {
                 return -3;
             }
             if (pOwn->type == nullptr) {
-                const char* const args[1] = {typeInfoName(pOwn->typeInfo)};
+                char name[128];
+                copyTypeInfoName(pOwn->typeInfo, name, sizeof(name));
+                const char* const args[1] = {name};
                 apiReport(pMod, pWhere, 0, kCodeObjectNoRow, args, 1);
                 return -2;
             }
@@ -829,6 +866,12 @@ namespace luma {
             if (ppArgs == nullptr) {
                 ppArgs = pOwnArgs;
             }
+            // A result to put somewhere: a function with one is not called with none (it would write through null).
+            const char* const pRowSignature = pVirtual->function->signature;
+            if (pResult == nullptr && !(pRowSignature[0] == 'v' && pRowSignature[1] == 'o' && pRowSignature[2] == 'i' &&
+                                        pRowSignature[3] == 'd' && pRowSignature[4] == '(')) {
+                return -1;
+            }
             OwnClass own;
             const s32 state = readObject(pMod, pObject, "call_method", &own);
             if (state == -1) {
@@ -862,6 +905,28 @@ namespace luma {
             return false;
         }
 
+        // A mod wrote over a guard of a block of its memory (1 before its bytes, 2 after them): said once a mod, in the log
+        // and the mod log (the Mods screen), and the mod is off as after a fault the guard caught: its code does not
+        // run again this session, and it is taken out at the next frame's start (once more is nothing).
+        void wroteOver(LumaMod* pMod, u32 written) {
+            if (__atomic_exchange_n(&pMod->wroteOver, 1u, __ATOMIC_ACQ_REL) != 0u) {
+                return;
+            }
+            __atomic_store_n(modFaulted(pMod), 1u, __ATOMIC_RELEASE);
+            nebula_log("[mod %s] MEMORY: it wrote %s a block of its memory. It is off until the next start; what it was "
+                       "changing may be half done.\n",
+                       pMod->name, written == 1 ? "in front of" : "past the end of");
+            LumaModLogEntry entry = {};
+            entry.size = sizeof(entry);
+            entry.source = LUMA_MODLOG_GUARD;
+            entry.level = LUMA_MODLOG_ERROR;
+            entry.mod = pMod->name;
+            luma::modlog::add(entry, written == 1 ? "Memory.WrittenBefore" : "Memory.WrittenAfter");
+            if (!pMod->going) {
+                requestTakeOut(pMod->name);
+            }
+        }
+
         // luma.h's types: uint64_t is unsigned long on LP64 Android and Linux, which u64 (unsigned long long) is not.
         void* apiAlloc(const LumaMod* pConstMod, uint64_t size, uint64_t align) {
             LumaMod* const pMod = const_cast<LumaMod*>(pConstMod);
@@ -875,20 +940,16 @@ namespace luma {
                            pMod->name, static_cast<unsigned long long>(size), static_cast<unsigned long long>(align));
                 return nullptr;
             }
-            const u64 total = sizeof(Block) + size + align;
+            const u64 total = kGuardBytes + size + kGuardBytes + align - 1;
             void* const pStart = ::malloc(static_cast<size_t>(total));
             if (pStart == nullptr) {
                 return nullptr;
             }
-            // The bytes start at the first `align` boundary with room for the block before them.
-            const uintptr_t at = (reinterpret_cast<uintptr_t>(pStart) + sizeof(Block) + align - 1) & ~static_cast<uintptr_t>(align - 1);
-            Block* const pBlock = reinterpret_cast<Block*>(at) - 1;
-            pBlock->start = pStart;
-            pBlock->size = size;
-            pBlock->owner = pMod;
-            pBlock->check = reinterpret_cast<uintptr_t>(pBlock) ^ kBlockCheck;
+            // The bytes start at the first `align` boundary with room for the guard before them.
+            const uintptr_t at = (reinterpret_cast<uintptr_t>(pStart) + kGuardBytes + align - 1) & ~static_cast<uintptr_t>(align - 1);
+            putGuards(at, size);
             lockMod(pMod);
-            const bool kept = pMod->blocks.add(at);
+            const bool kept = pMod->blocks.add(BlockSlot{at, pStart, size});
             if (kept) {
                 pMod->bytes += size;
                 pMod->blockCount++;
@@ -908,16 +969,11 @@ namespace luma {
             }
             // Nothing is read through `p` until the mod's own set has it.
             lockMod(pMod);
-            const bool held = pMod->blocks.remove(reinterpret_cast<uintptr_t>(p));
-            Block* const pBlock = static_cast<Block*>(p) - 1;
-            if (held && (pBlock->check != (reinterpret_cast<uintptr_t>(pBlock) ^ kBlockCheck) || pBlock->owner != pMod)) {
-                unlockMod(pMod);
-                NEBULA_PANIC("LumaCore: %s's block at %p was written over in front of its bytes", pMod->name, p);
-            }
+            BlockSlot block = {};
+            const bool held = pMod->blocks.remove(reinterpret_cast<uintptr_t>(p), &block);
             if (held) {
-                pMod->bytes -= pBlock->size;
+                pMod->bytes -= block.size;
                 pMod->blockCount--;
-                pBlock->check = 0;
             }
             unlockMod(pMod);
             if (!held) {
@@ -926,7 +982,11 @@ namespace luma {
                            pMod->name, p);
                 return;
             }
-            ::free(pBlock->start);
+            const u32 written = guardWritten(block.at, block.size);
+            if (written != 0) {
+                wroteOver(pMod, written);
+            }
+            ::free(block.start);
         }
 
         // What freeAll found and freed.
@@ -935,21 +995,24 @@ namespace luma {
             u64 bytes;
         };
 
-        // Everything a mod still holds, after its grace, counted (reload.md 3): every block is checked and counted
-        // before any is freed, and the count must be the mod's own; a broken set would free the wrong memory.
+        // Everything a mod still holds, after its grace, counted (reload.md 3): every block is counted before any is
+        // freed, and the count must be the mod's own (the set is the kernel's memory, which no mod writes). A guard a
+        // mod wrote over is said, once.
         Held freeAll(LumaMod* pMod) {
             BlockSet& rSet = pMod->blocks;
             Held held = {0, 0};
+            u32 written = 0;
             for (u32 i = 0; i < rSet.capacity; i++) {
-                if (rSet.slots[i] > 1) {
-                    const Block* const pBlock = reinterpret_cast<const Block*>(rSet.slots[i]) - 1;
-                    if (pBlock->check != (reinterpret_cast<uintptr_t>(pBlock) ^ kBlockCheck) || pBlock->owner != pMod) {
-                        NEBULA_PANIC("LumaCore: %s's block at %p was written over in front of its bytes", pMod->name,
-                                     reinterpret_cast<void*>(rSet.slots[i]));
-                    }
+                if (rSet.slots[i].at > 1) {
                     held.blocks++;
-                    held.bytes += pBlock->size;
+                    held.bytes += rSet.slots[i].size;
+                    if (written == 0) {
+                        written = guardWritten(rSet.slots[i].at, rSet.slots[i].size);
+                    }
                 }
+            }
+            if (written != 0) {
+                wroteOver(pMod, written);
             }
             if (held.blocks != pMod->blockCount || held.bytes != pMod->bytes) {
                 NEBULA_PANIC("LumaCore: %s's memory count is wrong: %u blocks and %llu bytes kept, %u and %llu found", pMod->name,
@@ -957,10 +1020,8 @@ namespace luma {
                              static_cast<unsigned long long>(held.bytes));
             }
             for (u32 i = 0; i < rSet.capacity; i++) {
-                if (rSet.slots[i] > 1) {
-                    Block* const pBlock = reinterpret_cast<Block*>(rSet.slots[i]) - 1;
-                    pBlock->check = 0;
-                    ::free(pBlock->start);
+                if (rSet.slots[i].at > 1) {
+                    ::free(rSet.slots[i].start);
                 }
             }
             ::free(rSet.slots);
@@ -1412,6 +1473,7 @@ namespace luma {
             const Held held = freeAll(pMod);
             if (pMod->library != nullptr && pMod->close != nullptr) {
                 pMod->close(pMod->library);
+                forgetVtables();
             }
             if (pMod->takenOut || pMod->startRefused) {
                 if (held.blocks != 0) {
@@ -1438,16 +1500,15 @@ namespace luma {
             ::free(pMod->hostId);
             ::free(pMod->hostFile);
             ::free(pMod->chosen);
-            delete pMod;
+            pMod->grace = graceMark();
+            pMod->nextGone = sDead;
+            sDead = pMod;
         }
 
-        // A mod whose code may still run on another thread waits for the grace; one whose code cannot ends now.
+        // Every mod waits for the grace: its code may still run on another thread through a hook, an override of its
+        // class (slotCall) or a library's call of a function it gave (call_mod), each counted as a list's reader is.
         void endMod(LumaMod* pMod) {
             luma::guard::modEnd(pMod);
-            if (!pMod->published) {
-                finishMod(pMod);
-                return;
-            }
             pMod->grace = graceMark();
             pMod->nextGone = sGone;
             sGone = pMod;
@@ -1516,7 +1577,16 @@ namespace luma {
 
     void frame() {
         luma::guard::frameEnd();
-        reclaim(sGone != nullptr);
+        reclaim(sGone != nullptr || sDead != nullptr);
+        for (LumaMod** ppAt = &sDead; *ppAt != nullptr;) {
+            LumaMod* const pMod = *ppAt;
+            if (graceOver(pMod->grace)) {
+                *ppAt = pMod->nextGone;
+                delete pMod;
+            } else {
+                ppAt = &pMod->nextGone;
+            }
+        }
         for (LumaMod** ppAt = &sGone; *ppAt != nullptr;) {
             LumaMod* const pMod = *ppAt;
             if (graceOver(pMod->grace)) {
@@ -1534,7 +1604,7 @@ namespace luma {
 
     namespace {
         // After the mod's code ran (its begin, its layers call or its start) and it will not run: the hooks its code added
-        // itself go, the mods it imported from are told, and it ends after the grace when any hook was published.
+        // itself go, the mods it imported from are told, and it ends after the grace.
         void endBegun(LumaMod* pMod) {
             pMod->going = true;
             removeHooks(pMod);
@@ -2120,7 +2190,6 @@ namespace luma {
                 // Pass 2 took every condition `hook` checks, on this thread, with no other mod between.
                 NEBULA_PANIC("LumaCore: %s's hook on %s was refused after it was checked (%d)", pMod->name, rImport.name, static_cast<int>(result));
             }
-            pMod->published = true;
         }
         pMod->startedAt = ++sStartedCount;
         sMods[sModCount++] = pMod;
@@ -2278,7 +2347,7 @@ namespace luma {
                 out[j] = pAt;
             }
             for (u32 i = 0; i < outCount; i++) {
-                // unloadMod may end it at once (no hook of it was ever published): nothing of it is read after.
+                // unloadMod ends it (after the grace): nothing of it is read here after.
                 char name[cIdBytes];
                 copyText(name, sizeof(name), out[i]->name);
                 const LumaModInfo* const pInfo = out[i]->info;

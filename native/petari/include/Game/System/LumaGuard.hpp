@@ -26,6 +26,13 @@ namespace luma {
         // -4 fn is no running mod's code (said). Any thread.
         int32_t callMod(const LumaMod* pCaller, const void* fn, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t* pResult);
 
+        // Copies `size` bytes from pSource to pDest when either may be an address a mod gave that nothing proves is there
+        // (an object kept past its scene, a freed block, a number that is no pointer): true when all were copied, false
+        // when a read or a write faulted (nothing is reported and no mod is blamed: the caller answers as it does for a
+        // pointer it cannot use; pDest may then hold part of the bytes). The copy runs under a frame of its own whose
+        // code is the copy alone, so the host resumes a fault in it as it does one in a mod's code. With no host half
+        // (a system without the guard) the copy is plain. Any thread; costs one boundary.
+        bool probe(void* pDest, const void* pSource, uintptr_t size);
         // A fault was caught in the mod's code this session: none of its code runs again until the next start.
         bool faulted(const LumaMod* pMod);
 

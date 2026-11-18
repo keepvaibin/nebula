@@ -55,6 +55,11 @@ namespace luma {
     // The name a type_info carries, as the ABI writes it (MSVC decorated ".?AVLiveActor@@", Itanium mangled
     // "9LiveActor"): for a report naming a class with no row. "" for null.
     const char* typeInfoName(const void* pTypeInfo);
+    // The same name copied into pOut (at most size - 1 bytes, ended) through the guard's probe, for a type_info read
+    // from an object a mod gave: "" when it cannot be read.
+    void copyTypeInfoName(const void* pTypeInfo, char* pOut, u32 size);
+    // A mod's library closed: the vtables every thread kept from objects it read (ownClass) are read again.
+    void forgetVtables();
     // The virtual call of a virtual function a record row declares ("LiveActor::control", "void()"): its invoke takes
     // args[0] as the object seen as the declaring class and runs what the object's own class runs. Null: no such row.
     const Function* findMethod(const char* pName, const char* pSignature);

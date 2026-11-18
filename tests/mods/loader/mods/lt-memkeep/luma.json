@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lt-memkeep",
+  "name": "lt-memkeep",
+  "summary": "lt-memkeep (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

@@ -1089,17 +1089,33 @@ namespace luma {
             return true;
         }
 
+        // A call slotCall is running on this thread: what its proceed runs (the override's code) for its object and
+        // slot, kept by the call itself. The kernel's records of the object go when its class ends (modGone), which
+        // another thread may do while an override runs here; the call's own record does not.
+        struct SlotFrame {
+            const void* object;
+            const Function* original;
+            const void* code;
+            const SlotFrame* outer;
+        };
+        LUMA_THREAD const SlotFrame* tSlotFrame = nullptr;
+
         void slotCall(const Function* pOriginal, void** args, void* result) {  // luma::slotCall
+            // Counted before the class is read: a take-out on the game thread that ends the class after this point
+            // waits for the call to leave before its mod's library closes (every mod's end waits for the grace).
+            const CodeHold hold;
             // Only the kernel's tables hold an entry, so the object's table is one: its head says the class.
             ClassRow* const pRow = rowOfTable(args[0]);
             const Override* const pOverride = overrideOf(pRow, pOriginal);
             if (pOverride == nullptr) {
                 NEBULA_PANIC("LumaCore: the entry of %s ran on an object whose table has no override of it", pOriginal->name);
             }
+            const SlotFrame frame = {args[0], pOriginal, pOverride->code, tSlotFrame};
+            tSlotFrame = &frame;
             Call call = {pOriginal, args, result, 0, 0, nullptr};
             // A class that ended (its mod gone) runs the base's code; a live class's override runs and proceeds itself, as a
             // wrap does (LumaHook proceed).
-            if (!pRow->live) {
+            if (!__atomic_load_n(&pRow->live, __ATOMIC_ACQUIRE)) {
                 proceed(&call);
             } else if (!guard::run(const_cast<LumaMod*>(pRow->mod), LUMA_GUARD_CLASS, pOriginal->name,
                                    reinterpret_cast<const void*>(pOverride->hook), reinterpret_cast<uintptr_t>(&call),
@@ -1109,11 +1125,17 @@ namespace luma {
                 // as if it had (LumaHook proceed does the same for a wrap).
                 proceed(&call);
             }
+            tSlotFrame = frame.outer;
         }
 
         const void* slotOriginal(const void* pObject, const Function* pOriginal) {  // luma::slotOriginal
-            // The object's table is the class's copy, or the base's again (its mod went while the call was in it): the
-            // kernel's records say the class then.
+            // The call on this thread that proceeds: its own record (its class may have ended since it began, M-008).
+            for (const SlotFrame* pFrame = tSlotFrame; pFrame != nullptr; pFrame = pFrame->outer) {
+                if (pFrame->object == pObject && pFrame->original == pOriginal) {
+                    return pFrame->code;
+                }
+            }
+            // Outside a slot call: the object's table is the class's copy; the kernel's records say the class.
             ClassRow* pRow = rowOfTable(pObject);
             if (pRow == nullptr) {
                 pRow = rowOfObject(pObject);
@@ -1136,7 +1158,7 @@ namespace luma {
             lock();
             for (u32 r = 0; r < sRowCount; r++) {
                 if (sRows[r]->live && sRows[r]->mod == pMod) {
-                    sRows[r]->live = false;
+                    __atomic_store_n(&sRows[r]->live, false, __ATOMIC_RELEASE);
                     sLiveCount--;
                     ended++;
                 }

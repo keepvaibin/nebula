@@ -1,0 +1,97 @@
+{
+  "harness": 1,
+  "name": "1653-callback-late-take-out",
+  "about": "guard-late-giver, which has no hook, is taken out while guard-late-lib's call_mod of its callback runs on another thread (harness 1.2 thread_start): the callback finishes and returns 9 to the call, the giver's library closes only after the call left, and the game goes on (M-002)",
+  "proves": [
+    "kernel.mods.taken_out_under_call"
+  ],
+  "mods": [
+    "../mods/guard-late-lib",
+    "../mods/guard-late-giver"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1653
+      ],
+      "fact": "start"
+    },
+    {
+      "after": {
+        "fact": "mod.guard-late-giver.entered",
+        "exists": true
+      },
+      "take_out": "guard-late-giver",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.guard-late-giver",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1654
+      ],
+      "fact": "after"
+    },
+    {
+      "after": {
+        "fact": "after",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.guard-late-giver.added",
+      "is": 1
+    },
+    {
+      "fact": "mod.guard-late-lib.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.guard-late-giver.entered",
+      "is": 1
+    },
+    {
+      "fact": "mod.guard-late-giver.entered_game_thread",
+      "is": 0
+    },
+    {
+      "fact": "mod.guard-late-giver.stopped_seen",
+      "is": 1
+    },
+    {
+      "fact": "mod.guard-late-lib.late_answer",
+      "is": 0
+    },
+    {
+      "fact": "mod.guard-late-lib.late_result",
+      "is": 9
+    },
+    {
+      "fact": "mod.guard-late-lib.late_done",
+      "is": 1
+    },
+    {
+      "fact": "mod.guard-late-lib.dependent_gone",
+      "is": 1
+    },
+    {
+      "no_log": "guard-late-giver's code failed"
+    }
+  ]
+}
