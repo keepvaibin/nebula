@@ -409,8 +409,11 @@ namespace luma {
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
-                    LiveActor* const pActor = static_cast< LiveActor* >(actor);
-                    const char* pWrong = pActor == nullptr ? "actor" : pOut == nullptr ? "out" : nullptr;
+                    // The mod's actor and out through the scene's actor list and the kernel (M-029).
+                    LiveActor* const pActor = lumacore::liveActorOf(actor);
+                    const char* pWrong = pActor == nullptr                                 ? "actor"
+                                         : luma_out_ready(sKernel, pMod, pOut) != LUMA_OK ? "out"
+                                                                                          : nullptr;
                     if (pWrong == nullptr && (!lumacore::isA(lumacore::classOf(pActor), lumacore::kClassId< LiveActor >) ||
                                               MR::isDead(pActor) || pActor->mModelManager == nullptr ||
                                               MR::getModel(pActor) == nullptr)) {
@@ -432,7 +435,7 @@ namespace luma {
                             }
                         } else if (sInsts[i].mod == pMod) {
                             if (sInsts[i].actor == pActor) {
-                                *pOut = sInsts[i].handle;  // the one it has on this actor already
+                                (void)luma_value_out(sKernel, pMod, pOut, sInsts[i].handle);  // the one it has on this actor already
                                 return LUMA_OK;
                             }
                             own++;
@@ -466,7 +469,7 @@ namespace luma {
                         nebula_snprintf(json, sizeof(json), "{\"mod\":%s,\"meshes\":%u}", mod, rInst.meshCount);
                         luma::modlog::fact(key, json);
                     }
-                    *pOut = rInst.handle;
+                    (void)luma_value_out(sKernel, pMod, pOut, rInst.handle);
                     return LUMA_OK;
                 }
 
@@ -479,12 +482,31 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcSetMaterialParam(const LumaMod* pMod, LumaDrawInst inst, const char* pMaterial, const char* pName,
-                                            const float* pValue) {
+                int32_t svcSetMaterialParam(const LumaMod* pMod, LumaDrawInst inst, const char* pMaterialGiven,
+                                            const char* pNameGiven, const float* pValueGiven) {
                     const char* const pWhere = "draw.inst.set_material_param";
                     Inst* pInst = nullptr;
                     if (const s32 status = enterInst(pMod, pWhere, inst, &pInst); status != LUMA_OK) {
                         return status;
+                    }
+                    // The mod's texts and value through the kernel (M-029).
+                    char pMaterialText[1024];
+                    const char* const pMaterial = pMaterialGiven != nullptr ? pMaterialText : nullptr;
+                    if (pMaterialGiven != nullptr && luma_text_in(sKernel, pMod, pMaterialGiven, pMaterialText) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "material", nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                    char pNameText[1024];
+                    const char* const pName = pNameGiven != nullptr ? pNameText : nullptr;
+                    if (pNameGiven != nullptr && luma_text_in(sKernel, pMod, pNameGiven, pNameText) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "name", nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                    float pValueCopy[4];
+                    const float* const pValue = pValueGiven != nullptr ? pValueCopy : nullptr;
+                    if (pValueGiven != nullptr && sKernel->copy_in(pMod, pValueCopy, pValueGiven, sizeof(pValueCopy)) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "value", nullptr);
+                        return LUMA_E_ARGUMENT;
                     }
                     u32 which = kColours8 + kColours16;
                     for (u32 i = 0; pName != nullptr && i < kColours8 + kColours16; i++) {
@@ -556,11 +578,17 @@ namespace luma {
                     return LUMA_E_ABSENT;  // 1.0's contract call; a draw texture on a model's map is a later 1.x
                 }
 
-                int32_t svcSetVisible(const LumaMod* pMod, LumaDrawInst inst, const char* pPart, int32_t on) {
+                int32_t svcSetVisible(const LumaMod* pMod, LumaDrawInst inst, const char* pPartGiven, int32_t on) {
                     const char* const pWhere = "draw.inst.set_visible";
                     Inst* pInst = nullptr;
                     if (const s32 status = enterInst(pMod, pWhere, inst, &pInst); status != LUMA_OK) {
                         return status;
+                    }
+                    char pPartText[1024];
+                    const char* const pPart = pPartGiven != nullptr ? pPartText : nullptr;
+                    if (pPartGiven != nullptr && luma_text_in(sKernel, pMod, pPartGiven, pPartText) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "part", nullptr);
+                        return LUMA_E_ARGUMENT;
                     }
                     Joint* pJoint = nullptr;
                     if (pPart != nullptr) {
@@ -592,11 +620,17 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcSetScale(const LumaMod* pMod, LumaDrawInst inst, const float* pScale) {
+                int32_t svcSetScale(const LumaMod* pMod, LumaDrawInst inst, const float* pScaleGiven) {
                     const char* const pWhere = "draw.inst.set_scale";
                     Inst* pInst = nullptr;
                     if (const s32 status = enterInst(pMod, pWhere, inst, &pInst); status != LUMA_OK) {
                         return status;
+                    }
+                    float pScaleCopy[3];
+                    const float* const pScale = pScaleGiven != nullptr ? pScaleCopy : nullptr;
+                    if (pScaleGiven != nullptr && sKernel->copy_in(pMod, pScaleCopy, pScaleGiven, sizeof(pScaleCopy)) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "scale", nullptr);
+                        return LUMA_E_ARGUMENT;
                     }
                     for (u32 j = 0; j < 3; j++) {
                         if (pScale == nullptr || !(pScale[j] > 0.0f && pScale[j] <= LUMA_DRAW_INST_SCALE_MOST)) {

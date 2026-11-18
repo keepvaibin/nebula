@@ -15,6 +15,7 @@
 // settles what came of it under the lock again; the game thread never waits on cryptography.
 
 #include "galaxy/luma_net_service.h"
+#include "galaxy/luma_mod_memory.h"
 #include "galaxy/luma_net_reach.h"
 
 #include "galaxy/luma.h"
@@ -252,6 +253,40 @@ constexpr auto kCloseTime = std::chrono::seconds(10);
 constexpr int kPollMs = 10;  // the I/O thread's wait while it holds sockets (a socket made meanwhile waits at most this)
 
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
+
+// The kernel a call reads and writes the mod's memory through (M-029). Set while a call runs: enter checks it.
+const LumaServiceKernel* mod_kernel() noexcept {
+    return g_kernel.load(std::memory_order_acquire);
+}
+
+// A text of the mod's through the kernel (M-029): p then points at *keep. A longer one than `most` keeps its first
+// most + 1 bytes, so the length checks after still find it too long. Null stays null (the checks after report it).
+// False: unreadable, or no memory.
+bool mod_text_in(const LumaMod* mod, const char*& p, std::size_t most, std::string* keep) noexcept {
+    if (p == nullptr) {
+        return true;
+    }
+    try {
+        const std::int32_t read = galaxy::mod_memory::text(mod_kernel(), mod, p, most + 1u, keep);
+        if (read != LUMA_OK && read != LUMA_E_TOO_LARGE) {
+            return false;
+        }
+    } catch (...) {
+        return false;
+    }
+    p = keep->c_str();
+    return true;
+}
+
+// `bytes` bytes of the mod's through the kernel into *keep. False: unreadable, or no memory.
+bool mod_bytes_in(const LumaMod* mod, const void* p, std::uint64_t bytes, std::string* keep) noexcept {
+    try {
+        keep->resize(static_cast<std::size_t>(bytes));
+    } catch (...) {
+        return false;
+    }
+    return bytes == 0u || mod_kernel()->copy_in(mod, keep->data(), p, bytes) == LUMA_OK;
+}
 void (*g_log)(const char*) = nullptr;
 
 enum class Kind : std::uint8_t { Resolving, Connecting, Open, Listener, Udp };
@@ -3067,7 +3102,7 @@ std::int32_t join(Socket* socket, LumaHandle* out) {
         socket->owner->open++;
     }
     wake_io();
-    *out = socket->handle;
+    (void)luma_value_out(mod_kernel(), socket->node.event.mod, out, socket->handle);
     return LUMA_OK;
 }
 
@@ -3115,16 +3150,17 @@ std::int32_t local_connect(const LumaMod* mod, const char* where, bool udp, cons
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (host == nullptr) {
+    std::string host_keep;
+    if (host == nullptr || !mod_text_in(mod, host, LUMA_NET_HOST_MOST + 2u, &host_keep)) {
         return argument(mod, where, "host");
     }
     if (port == 0u) {
         return argument(mod, where, "port");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     try {
@@ -3192,10 +3228,10 @@ std::int32_t net_udp_open(const LumaMod* mod, std::uint16_t port, std::uint32_t 
     if (local_network > 1u) {
         return argument(mod, where, "local_network");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     ModState* state = state_of(mod);
@@ -3235,8 +3271,10 @@ std::int32_t net_udp_open(const LumaMod* mod, std::uint16_t port, std::uint32_t 
 // A file of the mod's own into *out (`given`: a path inside its folder, '/' between parts). LUMA_OK; a part empty,
 // "." or "..", a drive or a separator (a root, a way out): LUMA_E_ARGUMENT; missing, or no folder: LUMA_E_NOT_FOUND;
 // past kOwnFileMost: LUMA_E_FORMAT.
+constexpr std::size_t kOwnFileNameMost = 1024u;  // a file of the mod's own (tls_listen's certificate and key)
+
 std::int32_t read_own_file(const std::filesystem::path& package, std::string_view given, std::string* out) {
-    if (given.empty() || given.size() > 1024u) {
+    if (given.empty() || given.size() > kOwnFileNameMost) {
         return LUMA_E_ARGUMENT;
     }
     std::filesystem::path path = package;
@@ -3282,10 +3320,12 @@ std::int32_t read_own_file(const std::filesystem::path& package, std::string_vie
 // tls_listen's context: the certificate chain (the server's first) and its private key, from the mod's own files.
 std::int32_t server_context(const LumaMod* mod, const char* where, const ModState* state, const char* certificate,
                             const char* key, std::shared_ptr<SSL_CTX>* out) noexcept {
-    if (certificate == nullptr) {
+    std::string certificate_keep;
+    std::string key_keep;
+    if (certificate == nullptr || !mod_text_in(mod, certificate, kOwnFileNameMost, &certificate_keep)) {
         return argument(mod, where, "certificate");
     }
-    if (key == nullptr) {
+    if (key == nullptr || !mod_text_in(mod, key, kOwnFileNameMost, &key_keep)) {
         return argument(mod, where, "key");
     }
     try {
@@ -3357,10 +3397,10 @@ std::int32_t listen_on(const LumaMod* mod, const char* where, std::uint16_t port
     if (local_network > 1u) {
         return argument(mod, where, "local_network");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     ModState* state = state_of(mod);
@@ -3422,7 +3462,7 @@ std::int32_t port_on(const LumaMod* mod, const char* where, bool internet, LumaH
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     const ModState* state = state_of(mod);
@@ -3431,7 +3471,7 @@ std::int32_t port_on(const LumaMod* mod, const char* where, bool internet, LumaH
     if (socket == nullptr || socket->ipc || (socket->kind != Kind::Listener && !(socket->udp && !socket->tied))) {
         return bad_handle(mod, where);  // a listener's or a udp_open socket's
     }
-    *out = socket->port;
+    (void)luma_value_out(mod_kernel(), mod, out, socket->port);
     return LUMA_OK;
 }
 
@@ -3457,6 +3497,11 @@ std::int32_t send_on(const LumaMod* mod, const char* where, bool internet, LumaH
         return status;
     }
     if (data == nullptr && bytes != 0u) {
+        return argument(mod, where, "data");
+    }
+    // The mod's data through the kernel (M-029), before the sockets' lock; more than the queue holds is refused below.
+    thread_local std::string sent;
+    if (bytes <= LUMA_NET_SEND_QUEUED_MOST && !mod_bytes_in(mod, data, bytes, &sent)) {
         return argument(mod, where, "data");
     }
     const ModState* state = state_of(mod);
@@ -3485,11 +3530,11 @@ std::int32_t send_on(const LumaMod* mod, const char* where, bool internet, LumaH
         try {
             if (socket->udp) {
                 Datagram datagram;
-                datagram.bytes.assign(static_cast<const char*>(data), static_cast<std::size_t>(bytes));
+                datagram.bytes.assign(sent.data(), static_cast<std::size_t>(bytes));
                 socket->datagrams_out.push_back(std::move(datagram));
                 socket->datagrams_out_bytes += static_cast<std::size_t>(bytes);
             } else {
-                socket->outgoing.append(static_cast<const char*>(data), static_cast<std::size_t>(bytes));
+                socket->outgoing.append(sent.data(), static_cast<std::size_t>(bytes));
             }
         } catch (...) {
             return LUMA_E_MEMORY;
@@ -3519,7 +3564,10 @@ std::int64_t take_on(const LumaMod* mod, const char* where, bool internet, LumaH
         return static_cast<std::int64_t>(from.size());
     }
     const std::size_t taken = static_cast<std::size_t>(std::min<std::uint64_t>(size, from.size()));
-    std::memcpy(buf, from.data(), taken);
+    if (taken != 0u && mod_kernel()->copy_out(mod, buf, from.data(), taken) != LUMA_OK) {
+        report(mod, where, 101u, "buf");
+        return LUMA_E_ARGUMENT;
+    }
     from.erase(0, taken);
     return static_cast<std::int64_t>(taken);
 }
@@ -3964,11 +4012,19 @@ std::int32_t ws_connect_on(const LumaMod* mod, const char* where, bool internet,
     if (url == nullptr) {
         return argument(mod, where, "url");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
+    }
+    std::string url_keep;
+    std::string protocol_keep;
+    if (!mod_text_in(mod, url, LUMA_NET_URL_MOST, &url_keep)) {
+        return argument(mod, where, "url");
+    }
+    if (!mod_text_in(mod, protocol, LUMA_NET_PROTOCOL_MOST, &protocol_keep)) {
+        return argument(mod, where, "protocol");
     }
     try {
         const std::string_view given(url, ::strnlen(url, LUMA_NET_URL_MOST + 1u));
@@ -4066,6 +4122,11 @@ std::int32_t ws_send_on(const LumaMod* mod, const char* where, bool internet, Lu
     if (binary > 1u) {
         return argument(mod, where, "binary");
     }
+    // The mod's data through the kernel (M-029), before the sockets' lock; a longer message is refused below.
+    thread_local std::string message;
+    if (bytes <= LUMA_NET_MESSAGE_MOST && !mod_bytes_in(mod, data, bytes, &message)) {
+        return argument(mod, where, "data");
+    }
     const ModState* state = state_of(mod);
     {
         const std::lock_guard<std::mutex> lock(g_lock);
@@ -4079,7 +4140,7 @@ std::int32_t ws_send_on(const LumaMod* mod, const char* where, bool internet, Lu
         if (bytes > LUMA_NET_MESSAGE_MOST) {
             return LUMA_E_TOO_LARGE;  // an answer (header)
         }
-        const std::string_view payload(static_cast<const char*>(data), static_cast<std::size_t>(bytes));
+        const std::string_view payload(message.data(), static_cast<std::size_t>(bytes));
         if (binary == 0u && !utf8(payload)) {
             return argument(mod, where, "data");  // text must be UTF-8 (RFC 6455 5.6)
         }
@@ -4157,13 +4218,19 @@ std::int32_t net_send_to(const LumaMod* mod, LumaHandle handle, const char* host
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (host == nullptr) {
+    std::string host_keep;
+    if (host == nullptr || !mod_text_in(mod, host, LUMA_NET_HOST_MOST + 2u, &host_keep)) {
         return argument(mod, where, "host");
     }
     if (port == 0u) {
         return argument(mod, where, "port");
     }
     if (data == nullptr && bytes != 0u) {
+        return argument(mod, where, "data");
+    }
+    // The mod's data through the kernel (M-029); a longer datagram is refused below.
+    thread_local std::string sent;
+    if (bytes <= LUMA_NET_DATAGRAM_MOST && !mod_bytes_in(mod, data, bytes, &sent)) {
         return argument(mod, where, "data");
     }
     try {
@@ -4187,7 +4254,7 @@ std::int32_t net_send_to(const LumaMod* mod, LumaHandle handle, const char* host
             if (const std::int32_t status = room_locked(mod, where, state, bytes); status != LUMA_OK) {
                 return status;
             }
-            datagram.bytes.assign(static_cast<const char*>(data), static_cast<std::size_t>(bytes));
+            datagram.bytes.assign(sent.data(), static_cast<std::size_t>(bytes));
             socket->datagrams_out.push_back(std::move(datagram));
             socket->datagrams_out_bytes += static_cast<std::size_t>(bytes);
         }
@@ -4226,16 +4293,22 @@ std::int64_t take_datagram_on(const LumaMod* mod, const char* where, bool intern
     if (buf == nullptr && size != 0u) {
         return argument(mod, where, "buf");
     }
+    if (from != nullptr && luma_out_ready(mod_kernel(), mod, from) != LUMA_OK) {
+        return argument(mod, where, "from");
+    }
     if (socket->datagrams_in.empty()) {
         return LUMA_E_NOT_FOUND;  // an answer: all taken
     }
     const Datagram& datagram = socket->datagrams_in.front();
     const std::size_t length = datagram.bytes.size();
-    if (buf != nullptr) {
-        std::memcpy(buf, datagram.bytes.data(), static_cast<std::size_t>(std::min<std::uint64_t>(size, length)));
+    const std::uint64_t given = std::min<std::uint64_t>(size, length);
+    if (buf != nullptr && given != 0u && mod_kernel()->copy_out(mod, buf, datagram.bytes.data(), given) != LUMA_OK) {
+        return argument(mod, where, "buf");  // not taken: a right buf may take it still
     }
     if (from != nullptr) {
-        peer_of(datagram, from);
+        LumaNetPeer peer{};
+        peer_of(datagram, &peer);
+        (void)luma_value_out(mod_kernel(), mod, from, peer);
     }
     socket->datagrams_in_bytes -= length;
     socket->datagrams_in.pop_front();
@@ -4346,13 +4419,14 @@ std::int32_t net_ipc_connect(const LumaMod* mod, const char* name, LumaEventFn f
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (!endpoint_ok(name, LUMA_NET_ENDPOINT_MOST)) {
+    std::string name_keep;
+    if (!mod_text_in(mod, name, LUMA_NET_ENDPOINT_MOST, &name_keep) || !endpoint_ok(name, LUMA_NET_ENDPOINT_MOST)) {
         return argument(mod, where, "name");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     try {
@@ -4401,13 +4475,14 @@ std::int32_t net_ipc_listen(const LumaMod* mod, const char* name, LumaEventFn fn
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (!endpoint_ok(name, LUMA_NET_ENDPOINT_MOST)) {
+    std::string name_keep;
+    if (!mod_text_in(mod, name, LUMA_NET_ENDPOINT_MOST, &name_keep) || !endpoint_ok(name, LUMA_NET_ENDPOINT_MOST)) {
         return argument(mod, where, "name");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     try {
@@ -4608,16 +4683,17 @@ std::int32_t internet_connect(const LumaMod* mod, const char* where, bool udp, c
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (host == nullptr) {
+    std::string host_keep;
+    if (host == nullptr || !mod_text_in(mod, host, LUMA_NET_HOST_MOST + 2u, &host_keep)) {
         return argument(mod, where, "host");
     }
     if (port == 0u) {
         return argument(mod, where, "port");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     try {
@@ -4677,7 +4753,7 @@ std::int32_t internet_connect(const LumaMod* mod, const char* where, bool udp, c
             socket->lookup_status = LUMA_E_IO;  // no thread: the I/O thread gives the ERROR
         }
         wake_io();
-        *out = socket->handle;
+        (void)luma_value_out(mod_kernel(), mod, out, socket->handle);
         return LUMA_PENDING;
     } catch (...) {
         return LUMA_E_MEMORY;
@@ -4717,21 +4793,25 @@ constexpr std::string_view kServiceHeaders[] = {"host", "content-length", "trans
 
 // http of both services: the request checked and copied, then a connect (net.internet's: luma.json's hosts) that
 // sends it.
-std::int32_t http_on(const LumaMod* mod, const char* where, bool internet, const LumaNetHttpRequest* request,
+std::int32_t http_on(const LumaMod* mod, const char* where, bool internet, const LumaNetHttpRequest* request_given,
                      LumaEventFn fn, void* user, LumaHandle* out) noexcept {
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (request == nullptr || request->size < kHttpRequestLeast) {
+    // The mod's request through the kernel (M-029); its texts, headers and body below.
+    LumaNetHttpRequest request_copy{};
+    const LumaNetHttpRequest* const request = &request_copy;
+    if (galaxy::mod_memory::sized(mod_kernel(), mod, request_given, &request_copy) != LUMA_OK ||
+        request->size < kHttpRequestLeast) {
         return argument(mod, where, "request");
     }
     if (request->url == nullptr) {
         return argument(mod, where, "url");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     if (request->timeout_ms > LUMA_NET_TIMEOUT_MOST_MS) {
@@ -4748,6 +4828,29 @@ std::int32_t http_on(const LumaMod* mod, const char* where, bool internet, const
         return argument(mod, where, "body");
     }
     try {
+        std::string url_keep;
+        std::string method_keep;
+        if (!mod_text_in(mod, request_copy.url, LUMA_NET_URL_MOST, &url_keep)) {
+            return argument(mod, where, "url");
+        }
+        if (!mod_text_in(mod, request_copy.method, 8u, &method_keep)) {
+            return argument(mod, where, "method");
+        }
+        std::vector<LumaNetHeader> headers(request->header_count);
+        std::vector<std::string> header_texts(std::size_t{request->header_count} * 2u);  // never grows
+        if (!headers.empty()) {
+            if (mod_kernel()->copy_in(mod, headers.data(), request->headers,
+                                      headers.size() * sizeof(LumaNetHeader)) != LUMA_OK) {
+                return argument(mod, where, "headers");
+            }
+            for (std::size_t i = 0; i < headers.size(); i++) {
+                if (!mod_text_in(mod, headers[i].name, 64u, &header_texts[i * 2u]) ||
+                    !mod_text_in(mod, headers[i].value, 4096u, &header_texts[i * 2u + 1u])) {
+                    return argument(mod, where, "headers");
+                }
+            }
+            request_copy.headers = headers.data();
+        }
         auto h = std::make_unique<Http>();
         h->method = "GET";
         if (request->method != nullptr) {
@@ -4808,7 +4911,9 @@ std::int32_t http_on(const LumaMod* mod, const char* where, bool internet, const
         }
         const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
         const char* const id = kernel != nullptr ? kernel->mod_id(mod) : nullptr;
-        h->body.assign(static_cast<const char*>(request->body), static_cast<std::size_t>(request->body_bytes));
+        if (!mod_bytes_in(mod, request->body, request->body_bytes, &h->body)) {
+            return argument(mod, where, "body");
+        }
         h->https = target.https;
         h->host = target.host;
         h->port = target.port;
@@ -5084,7 +5189,9 @@ std::int64_t net_address(const LumaMod* mod, char* buf, std::uint64_t size) noex
             if (size < length + 1u) {
                 return LUMA_E_TOO_LARGE;
             }
-            std::memcpy(buf, text, length + 1u);
+            if (mod_kernel()->copy_out(mod, buf, text, length + 1u) != LUMA_OK) {
+                return argument(mod, where, "buf");
+            }
             return static_cast<std::int64_t>(length);
         }
     }

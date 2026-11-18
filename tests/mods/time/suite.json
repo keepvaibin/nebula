@@ -23,6 +23,7 @@
     "2216-clocks",
     "2217-struct-size",
     "2218-let-go",
-    "2219-calls-cost"
+    "2219-calls-cost",
+    "2220-bad-pointers"
   ]
 }

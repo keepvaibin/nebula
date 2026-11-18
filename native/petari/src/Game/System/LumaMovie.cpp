@@ -295,16 +295,24 @@ namespace luma {
 
             // ---- Calls ----
 
-            int32_t svcPlay(const LumaMod* pMod, const char* pName, LumaEventFn fn, void* pUser, LumaMovie* pOut) {
+            int32_t svcPlay(const LumaMod* pMod, const char* pNameGiven, LumaEventFn fn, void* pUser, LumaMovie* pOut) {
                 const char* const pWhere = "movie.play";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pName == nullptr || pName[0] == '\0') {
+                // The mod's memory through the kernel (M-029): a name or out that cannot be read or written, or an fn in
+                // no code of the mod's, is a wrong argument, and nothing is done.
+                char name[sizeof(sPath)];
+                const char* const pName = name;
+                if (luma_text_in(sKernel, pMod, pNameGiven, name) != LUMA_OK || name[0] == '\0') {
                     report(pMod, pWhere, 101u, "name");
                     return LUMA_E_ARGUMENT;
                 }
-                if (pOut == nullptr) {
+                if (fn != nullptr && sKernel->mod_code(pMod, reinterpret_cast<const void*>(fn)) != 1) {
+                    report(pMod, pWhere, 101u, "fn");
+                    return LUMA_E_ARGUMENT;
+                }
+                if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
                     report(pMod, pWhere, 101u, "out");
                     return LUMA_E_ARGUMENT;
                 }
@@ -352,7 +360,7 @@ namespace luma {
                 sPlaying.user = pUser;
                 sPlaying.loop = loop;
                 sPlaying.frames = static_cast< s32 >(frames);
-                *pOut = sPlaying.handle;
+                (void)luma_value_out(sKernel, pMod, pOut, sPlaying.handle);
                 if (luma::modlog::facts()) {
                     char mod[160];
                     luma::modlog::jsonString(mod, sizeof(mod), sKernel->mod_id(pMod));
@@ -392,11 +400,13 @@ namespace luma {
                     report(pMod, pWhere, 102u, nullptr);
                     return LUMA_E_HANDLE;
                 }
-                if (pFrame != nullptr) {
-                    *pFrame = sPlaying.player->getCurrentFrame();
+                if (pFrame != nullptr && luma_value_out(sKernel, pMod, pFrame, s32(sPlaying.player->getCurrentFrame())) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "frame");
+                    return LUMA_E_ARGUMENT;
                 }
-                if (pFrames != nullptr) {
-                    *pFrames = sPlaying.frames;
+                if (pFrames != nullptr && luma_value_out(sKernel, pMod, pFrames, s32(sPlaying.frames)) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "frames");
+                    return LUMA_E_ARGUMENT;
                 }
                 return LUMA_OK;
             }

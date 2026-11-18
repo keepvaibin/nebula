@@ -1,0 +1,63 @@
+{
+  "harness": 1,
+  "name": "2963-player-bad-pointers",
+  "about": "M-029: make with an init or out that cannot be read or written: LUMA_E_ARGUMENT, reported, no player made (three good makes after, the fourth LUMA_E_LIMIT)",
+  "proves": [
+    "services.player",
+    "kernel.services.mod_memory"
+  ],
+  "mods": [
+    "../mods/pl-badptr"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4291
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.pl-badptr.init_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.pl-badptr.out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.pl-badptr.out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.pl-badptr.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.pl-badptr.made",
+      "is": 3
+    },
+    {
+      "fact": "mod.pl-badptr.fourth",
+      "is": -4
+    },
+    {
+      "log": "pl-badptr: player\\.make was given a wrong init; it did nothing\\."
+    },
+    {
+      "log": "pl-badptr: player\\.make was given a wrong out; it did nothing\\."
+    }
+  ]
+}

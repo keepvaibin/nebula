@@ -460,8 +460,27 @@ namespace luma {
 
             // ---- The service ----
 
+            // pClip: the kernel's copy (svcPlay, svcPlayOnModel); how, its marks and out are the mod's (M-029).
             s32 playOn(const LumaMod* pMod, const char* pWhere, LiveActor* pActor, LumaHandle model, const char* pClip,
-                       const LumaAnimHow* pHow, LumaEventFn fn, void* pUser, LumaAnimPlay* pOut) {
+                       const LumaAnimHow* pHowGiven, LumaEventFn fn, void* pUser, LumaAnimPlay* pOut) {
+                LumaAnimHow pHowCopy = {};
+                const LumaAnimHow* const pHow = pHowGiven != nullptr ? &pHowCopy : nullptr;
+                if (pHowGiven != nullptr) {
+                    uint32_t pHowSize = 0;
+                    if (luma_struct_size(sKernel, pMod, pHowGiven, &pHowSize) != LUMA_OK ||
+                        luma_struct_in(sKernel, pMod, pHowGiven, pHowSize, &pHowCopy) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "how", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                }
+                if (fn != nullptr && sKernel->mod_code(pMod, reinterpret_cast<const void*>(fn)) != 1) {
+                    report(pMod, pWhere, 101u, "fn", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "out", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
                 LumaAnimHow how = {};
                 how.size = sizeof(how);
                 if (pHow != nullptr) {
@@ -475,6 +494,15 @@ namespace luma {
                     }
                     how = *pHow;
                 }
+                // The marks, copied (the mod's count checked below against the most).
+                float marks[LUMA_ANIM_MOST_MARKS];
+                if (how.mark_count != 0 && how.mark_count <= LUMA_ANIM_MOST_MARKS && how.marks != nullptr) {
+                    if (sKernel->copy_in(pMod, marks, how.marks, how.mark_count * sizeof(float)) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "marks", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                    how.marks = marks;
+                }
                 const f32 rate = how.rate == 0.0f ? 1.0f : how.rate;
                 const char* pWrong = pClip == nullptr || pClip[0] == 0             ? "clip"
                                      : strlen(pClip) >= kClipMost                  ? "clip"
@@ -484,7 +512,6 @@ namespace luma {
                                      : !(how.start >= 0.0f) || !std::isfinite(how.start) ? "start"
                                      : how.mark_count > LUMA_ANIM_MOST_MARKS       ? "marks"
                                      : how.mark_count != 0 && how.marks == nullptr ? "marks"
-                                     : pOut == nullptr                             ? "out"
                                                                                    : nullptr;
                 for (u32 i = 0; pWrong == nullptr && i < how.mark_count; i++) {
                     if (!std::isfinite(how.marks[i])) {
@@ -672,7 +699,7 @@ namespace luma {
                         }
                     }
                 }
-                *pOut = rPlay.handle;
+                (void)luma_value_out(sKernel, pMod, pOut, rPlay.handle);
                 return LUMA_OK;
             }
 
@@ -681,13 +708,19 @@ namespace luma {
                        !MR::isDead(pActor) && pActor->mModelManager != nullptr;
             }
 
-            int32_t svcPlay(const LumaMod* pMod, LumaActor actor, const char* pClip, const LumaAnimHow* pHow, LumaEventFn fn,
+            int32_t svcPlay(const LumaMod* pMod, LumaActor actor, const char* pClipGiven, const LumaAnimHow* pHow, LumaEventFn fn,
                             void* pUser, LumaAnimPlay* pOut) {
                 const char* const pWhere = "anim.play";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                LiveActor* const pActor = static_cast< LiveActor* >(actor);
+                char pClipText[kClipMost];
+                const char* const pClip = pClipGiven != nullptr ? pClipText : nullptr;
+                if (pClipGiven != nullptr && luma_text_in(sKernel, pMod, pClipGiven, pClipText) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "clip", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                LiveActor* const pActor = lumacore::liveActorOf(actor);
                 if (!isLiveActor(pActor)) {
                     report(pMod, pWhere, 101u, "actor", nullptr, nullptr);
                     return LUMA_E_ARGUMENT;
@@ -695,11 +728,17 @@ namespace luma {
                 return playOn(pMod, pWhere, pActor, 0, pClip, pHow, fn, pUser, pOut);
             }
 
-            int32_t svcPlayOnModel(const LumaMod* pMod, LumaContentModel model, const char* pClip, const LumaAnimHow* pHow,
+            int32_t svcPlayOnModel(const LumaMod* pMod, LumaContentModel model, const char* pClipGiven, const LumaAnimHow* pHow,
                                    LumaEventFn fn, void* pUser, LumaAnimPlay* pOut) {
                 const char* const pWhere = "anim.play_on_model";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                char pClipText[kClipMost];
+                const char* const pClip = pClipGiven != nullptr ? pClipText : nullptr;
+                if (pClipGiven != nullptr && luma_text_in(sKernel, pMod, pClipGiven, pClipText) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "clip", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
                 }
                 bool open = false;
                 LiveActor* const pPart = luma::content::model::partOf(pMod, model, &open);
@@ -752,11 +791,13 @@ namespace luma {
                 const FrameCtrl* const pCtrl = ctrlOf(pPlay->actor, pPlay->lead);
                 const f32 frame = pCtrl->getFrame();
                 const f32 last = static_cast< f32 >(pCtrl->getEnd());
-                if (pFrame != nullptr) {
-                    *pFrame = frame;
+                if (pFrame != nullptr && luma_value_out(sKernel, pMod, pFrame, frame) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "frame", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
                 }
-                if (pLast != nullptr) {
-                    *pLast = last;
+                if (pLast != nullptr && luma_value_out(sKernel, pMod, pLast, last) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "last", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
                 }
                 if (luma::modlog::facts()) {
                     char key[48];

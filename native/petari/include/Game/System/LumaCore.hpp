@@ -10,6 +10,8 @@
 
 class NameObj;
 
+class LiveActor;
+
 namespace lumacore {
     // The game's classes by id: 0 is "unknown" (a NameObj made outside the factory whose class no placed one shared).
     struct ClassRow {
@@ -29,6 +31,11 @@ namespace lumacore {
     u16 classOf(const NameObj* pObj);
     // The factory sets it as it creates an object; the vtable is remembered for objects made without it.
     void setClass(NameObj* pObj, u16 id);
+
+    // An actor a mod gave a service (LumaActor): the scene's actor when `pActor` is one of the scene's LiveActors (the
+    // scene's actor list, which every LiveActor joins as it is made and leaves only with its scene's arena), else null,
+    // without reading `pActor`: a pointer that is stale, freed or not an actor is answered, not followed. Game thread.
+    LiveActor* liveActorOf(const void* pActor);
 
     // An arena's memory, [pStart, pEnd), is about to go with every object in it, whose destructors mostly do not run:
     // told at the start of each NebulaArena::destroy, a parent before its children. It does

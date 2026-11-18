@@ -11,6 +11,8 @@
     "2608-audio-place",
     "2609-audio-game",
     "2610-audio-replace",
-    "2611-audio-placeholder"
+    "2611-audio-placeholder",
+    "2612-bad-pointers",
+    "2613-bad-pointers"
   ]
 }

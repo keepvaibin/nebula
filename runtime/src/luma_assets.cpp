@@ -5,6 +5,7 @@
 // Layer 2: files a mod provides, which the game is given before the store's (host_main svc_asset_*). Layer 3: a file
 // as the disc has it cooked by the game's cooker on a thread of its own, then provided.
 #include "galaxy/luma_assets_service.h"
+#include "galaxy/luma_mod_memory.h"
 
 #include "galaxy/asset_store.h"
 
@@ -73,6 +74,11 @@ static_assert(int{LUMA_ASSET_MODEL} == int{NEBULA_ASSET_KIND_MODEL} &&
               "LumaAssetKind is the importer's kind, value for value");
 
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
+
+// The kernel a call reads and writes the mod's memory through (M-029). Set while a call runs: enter checks it.
+const LumaServiceKernel* mod_kernel() noexcept {
+    return g_kernel.load(std::memory_order_acquire);
+}
 std::atomic<const assets::AssetStore*> g_store{nullptr};
 // A 0-byte file's bytes: a pointer that is not null (header).
 constexpr unsigned char kNoBytes[1] = {0};
@@ -115,18 +121,20 @@ std::int32_t begin(const LumaMod* mod, const char* where, const char* text, std:
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (text == nullptr) {
-        return argument(mod, where, "path");
-    }
-    const std::size_t length = ::strnlen(text, LUMA_ASSETS_PATH_MOST + 1u);
-    if (length > LUMA_ASSETS_PATH_MOST) {
-        return argument(mod, where, "path");
+    // The mod's path through the kernel (M-029): unreadable, null or longer than the most is a wrong path.
+    std::string text_copy;
+    try {
+        if (galaxy::mod_memory::text(mod_kernel(), mod, text, LUMA_ASSETS_PATH_MOST, &text_copy) != LUMA_OK) {
+            return argument(mod, where, "path");
+        }
+    } catch (...) {
+        return LUMA_E_MEMORY;
     }
     if ((flags & ~LUMA_ASSETS_GAME_ONLY) != 0u) {
         return argument(mod, where, "flags");
     }
     try {
-        const std::string_view given(text, length);
+        const std::string_view given(text_copy);
         const std::size_t colon = given.find(':');
         if (colon != std::string_view::npos && colon != 0u &&
             given.substr(0, colon).find('/') == std::string_view::npos) {
@@ -279,8 +287,22 @@ struct Piece {
     std::string_view path;  // inside the folder; "" the top itself
     const std::uint8_t* data = nullptr;
     std::uint64_t bytes = 0;
-    bool folder = false;  // a cooker's empty folder
+    bool folder = false;          // a cooker's empty folder
+    const LumaMod* mod = nullptr;  // data in this mod's memory (read through the kernel), or null: the host's
 };
+
+// A piece's bytes into the block: a mod's through the kernel (M-029), the host's (a cook's) directly. False: the mod's
+// data was not all readable.
+bool piece_copy(std::uint8_t* to, const Piece& piece) {
+    if (piece.bytes == 0u) {
+        return true;
+    }
+    if (piece.mod == nullptr) {
+        std::memcpy(to, piece.data, static_cast<std::size_t>(piece.bytes));
+        return true;
+    }
+    return mod_kernel()->copy_in(piece.mod, to, piece.data, piece.bytes) == LUMA_OK;
+}
 
 // A provide built off the lock: nodes with indices local to it (0 the top), and its block.
 struct Built {
@@ -329,8 +351,9 @@ std::int32_t build(std::string_view top_name, const std::vector<Piece>& pieces, 
     built.block.reset(static_cast<std::uint8_t*>(::operator new[](static_cast<std::size_t>(built.size), kBlockAlign)));
     std::memset(built.block.get(), 0, static_cast<std::size_t>(built.size));
     if (single) {
-        if (pieces[0].bytes != 0u) {
-            std::memcpy(built.block.get(), pieces[0].data, static_cast<std::size_t>(pieces[0].bytes));
+        if (!piece_copy(built.block.get(), pieces[0])) {
+            *bad = "files";
+            return LUMA_E_ARGUMENT;
         }
         return LUMA_OK;
     }
@@ -413,8 +436,9 @@ std::int32_t build(std::string_view top_name, const std::vector<Piece>& pieces, 
         file.kind = kind_of(name);
         file.position = at[i];
         file.length = piece.bytes;
-        if (piece.bytes != 0u) {
-            std::memcpy(built.block.get() + at[i], piece.data, static_cast<std::size_t>(piece.bytes));
+        if (!piece_copy(built.block.get() + at[i], piece)) {
+            *bad = "files";
+            return LUMA_E_ARGUMENT;
         }
         const std::int32_t index = static_cast<std::int32_t>(built.nodes.size());
         built.nodes[static_cast<std::size_t>(parent)].children.push_back(index);
@@ -592,18 +616,23 @@ std::uint32_t entries_of(const assets::AssetStore& store, const assets::Entry& f
     return folder.children + added_count(store, path);
 }
 
-// *out from an entry (only the bytes the mod's struct has).
-void fill(const assets::AssetStore& store, const assets::Entry& found, std::string_view path, std::uint32_t flags,
-          LumaAssetInfo* out) {
+// *out from an entry (only the bytes the mod's struct has: `size`, read by info_size), through the kernel. False: the
+// mod's struct cannot take it.
+bool fill(const LumaMod* mod, const assets::AssetStore& store, const assets::Entry& found, std::string_view path,
+          std::uint32_t flags, LumaAssetInfo* out, std::uint32_t size) {
     LumaAssetInfo info{};
-    info.size = out->size;
     info.folder = found.folder ? 1u : 0u;
     info.archive = found.archive ? 1u : 0u;
     info.kind = found.folder ? 0u : found.kind;
     info.from_mod = found.from_overlay ? 1u : 0u;
     info.entries = entries_of(store, found, path, flags);
     info.bytes = found.folder ? 0u : found.length;
-    std::memcpy(out, &info, std::min<std::size_t>(out->size, sizeof(info)));
+    return luma_struct_out(mod_kernel(), mod, out, size, info) == LUMA_OK;
+}
+
+// The size of the mod's LumaAssetInfo (at least its first 8 bytes). False: unreadable or too small.
+bool info_size(const LumaMod* mod, const LumaAssetInfo* out, std::uint32_t* size) {
+    return luma_struct_size(mod_kernel(), mod, out, size) == LUMA_OK && *size >= 8u;
 }
 
 std::int32_t assets_find(const LumaMod* mod, const char* text, std::uint32_t flags, LumaAssetInfo* out) noexcept {
@@ -612,7 +641,8 @@ std::int32_t assets_find(const LumaMod* mod, const char* text, std::uint32_t fla
     if (const std::int32_t status = begin(mod, where, text, flags, path); status != LUMA_OK) {
         return status;
     }
-    if (out == nullptr || out->size < 8u) {
+    std::uint32_t size = 0;
+    if (!info_size(mod, out, &size)) {
         return argument(mod, where, "out");
     }
     const assets::AssetStore* store = g_store.load(std::memory_order_acquire);
@@ -621,7 +651,9 @@ std::int32_t assets_find(const LumaMod* mod, const char* text, std::uint32_t fla
         if (!found) {
             return LUMA_E_NOT_FOUND;
         }
-        fill(*store, *found, path, flags, out);
+        if (!fill(mod, *store, *found, path, flags, out, size)) {
+            return argument(mod, where, "out");
+        }
     } catch (...) {
         return LUMA_E_MEMORY;
     }
@@ -635,10 +667,10 @@ std::int32_t assets_bytes(const LumaMod* mod, const char* text, std::uint32_t fl
     if (const std::int32_t status = begin(mod, where, text, flags, path); status != LUMA_OK) {
         return status;
     }
-    if (data == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, data) != LUMA_OK) {
         return argument(mod, where, "data");
     }
-    if (bytes == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, bytes) != LUMA_OK) {
         return argument(mod, where, "bytes");
     }
     const assets::AssetStore* store = g_store.load(std::memory_order_acquire);
@@ -651,8 +683,8 @@ std::int32_t assets_bytes(const LumaMod* mod, const char* text, std::uint32_t fl
             return LUMA_E_FORMAT;
         }
         if (found->length == 0u) {
-            *data = kNoBytes;
-            *bytes = 0u;
+            (void)luma_value_out(mod_kernel(), mod, data, static_cast<const void*>(kNoBytes));
+            (void)luma_value_out(mod_kernel(), mod, bytes, std::uint64_t{0});
             return LUMA_OK;
         }
         const std::uint8_t* const mapped = is_provided(found->index)
@@ -661,8 +693,8 @@ std::int32_t assets_bytes(const LumaMod* mod, const char* text, std::uint32_t fl
         if (mapped == nullptr) {
             return LUMA_E_IO;
         }
-        *data = mapped;
-        *bytes = found->length;
+        (void)luma_value_out(mod_kernel(), mod, data, static_cast<const void*>(mapped));
+        (void)luma_value_out(mod_kernel(), mod, bytes, std::uint64_t{found->length});
     } catch (...) {
         return LUMA_E_MEMORY;
     }
@@ -679,8 +711,12 @@ std::int32_t assets_entry(const LumaMod* mod, const char* text, std::uint32_t fl
     if (name == nullptr && name_size != 0u) {
         return argument(mod, where, "name");
     }
-    if (out != nullptr && out->size < 8u) {
+    std::uint32_t out_size = 0;
+    if (out != nullptr && !info_size(mod, out, &out_size)) {
         return argument(mod, where, "out");
+    }
+    if (needed != nullptr && luma_out_ready(mod_kernel(), mod, needed) != LUMA_OK) {
+        return argument(mod, where, "needed");
     }
     const assets::AssetStore* store = g_store.load(std::memory_order_acquire);
     try {
@@ -712,23 +748,26 @@ std::int32_t assets_entry(const LumaMod* mod, const char* text, std::uint32_t fl
                 found = merged;
             }
         }
-        if (out != nullptr) {
-            fill(*store, *found, full, flags, out);
+        if (out != nullptr && !fill(mod, *store, *found, full, flags, out, out_size)) {
+            return argument(mod, where, "out");
         }
         const std::uint32_t size = static_cast<std::uint32_t>(entry_name.size()) + 1u;
         if (name_size < size) {
             if (needed != nullptr) {
-                *needed = size;
+                (void)luma_value_out(mod_kernel(), mod, needed, size);
             }
-            if (name_size != 0u) {
-                name[0] = '\0';
+            const char end = '\0';
+            if (name_size != 0u && mod_kernel()->copy_out(mod, name, &end, 1u) != LUMA_OK) {
+                return argument(mod, where, "name");
             }
             return LUMA_E_TOO_LARGE;
         }
-        std::memcpy(name, entry_name.data(), entry_name.size());
-        name[entry_name.size()] = '\0';
+        const std::string written(entry_name);  // with its 0
+        if (mod_kernel()->copy_out(mod, name, written.c_str(), written.size() + 1u) != LUMA_OK) {
+            return argument(mod, where, "name");
+        }
         if (needed != nullptr) {
-            *needed = size;
+            (void)luma_value_out(mod_kernel(), mod, needed, size);
         }
     } catch (...) {
         return LUMA_E_MEMORY;
@@ -977,20 +1016,26 @@ void cancel_cooks(const LumaMod* mod) {
 
 // ---- The service's calls for layers 2 and 3. ----
 
-std::int32_t assets_provide(const LumaMod* mod, const char* text, const LumaAssetFile* files,
+std::int32_t assets_provide(const LumaMod* mod, const char* text, const LumaAssetFile* files_given,
                             std::uint32_t count) noexcept {
     static constexpr const char* where = "assets.provide";
     std::string path;
     if (const std::int32_t status = begin(mod, where, text, 0u, path); status != LUMA_OK) {
         return status;
     }
-    if (files == nullptr) {
+    if (files_given == nullptr) {
         return argument(mod, where, "files");
     }
     if (count == 0u || count > LUMA_ASSETS_PROVIDE_FILES_MOST) {
         return argument(mod, where, "count");
     }
     try {
+        // The mod's files and their paths through the kernel (M-029); their data is read as build copies it.
+        std::vector<LumaAssetFile> files(count);
+        if (mod_kernel()->copy_in(mod, files.data(), files_given, std::uint64_t{count} * sizeof(LumaAssetFile)) != LUMA_OK) {
+            return argument(mod, where, "files");
+        }
+        std::vector<std::string> paths(count);  // never grows: the pieces' views stay
         const std::string normal = normal_of(path);
         if (normal.empty()) {
             return argument(mod, where, "path");
@@ -1002,13 +1047,15 @@ std::int32_t assets_provide(const LumaMod* mod, const char* text, const LumaAsse
             if (file.data == nullptr && file.bytes != 0u) {
                 return argument(mod, where, "files");
             }
-            const std::string_view inside =
-                file.path != nullptr ? std::string_view(file.path, ::strnlen(file.path, LUMA_ASSETS_PATH_MOST + 1u))
-                                     : std::string_view{};
-            if (inside.size() > LUMA_ASSETS_PATH_MOST || (inside.empty() && count != 1u)) {
+            if (file.path != nullptr &&
+                galaxy::mod_memory::text(mod_kernel(), mod, file.path, LUMA_ASSETS_PATH_MOST, &paths[i]) != LUMA_OK) {
                 return argument(mod, where, "files");
             }
-            pieces.push_back(Piece{inside, static_cast<const std::uint8_t*>(file.data), file.bytes, false});
+            const std::string_view inside(paths[i]);
+            if (inside.empty() && count != 1u) {
+                return argument(mod, where, "files");
+            }
+            pieces.push_back(Piece{inside, static_cast<const std::uint8_t*>(file.data), file.bytes, false, mod});
         }
         const char* bad = "files";
         const std::int32_t status = provide_pieces(mod, normal, pieces, nullptr, &bad);
@@ -1052,10 +1099,10 @@ std::int32_t assets_cook(const LumaMod* mod, const char* text, const void* data,
     if (const std::int32_t status = begin(mod, where, text, 0u, path); status != LUMA_OK) {
         return status;
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (request == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, request) != LUMA_OK) {
         return argument(mod, where, "request");
     }
     if (data == nullptr || bytes == 0u) {
@@ -1066,6 +1113,11 @@ std::int32_t assets_cook(const LumaMod* mod, const char* text, const void* data,
         return LUMA_E_TOO_LARGE;
     }
     try {
+        // The mod's data through the kernel (M-029), before the cooks' lock: a large one takes a while.
+        std::vector<std::uint8_t> source(static_cast<std::size_t>(bytes));
+        if (mod_kernel()->copy_in(mod, source.data(), data, bytes) != LUMA_OK) {
+            return argument(mod, where, "data");
+        }
         std::string normal = normal_of(path);
         if (normal.empty()) {
             return argument(mod, where, "path");
@@ -1090,11 +1142,11 @@ std::int32_t assets_cook(const LumaMod* mod, const char* text, const void* data,
         job->mod = mod;
         job->normal = std::move(normal);
         job->name = path;
-        job->source.assign(static_cast<const std::uint8_t*>(data), static_cast<const std::uint8_t*>(data) + bytes);
+        job->source = std::move(source);
         job->fn = fn;
         job->user = user;
         job->request = g_requests.fetch_add(1u, std::memory_order_relaxed) + 1u;
-        *request = job->request;
+        (void)luma_value_out(mod_kernel(), mod, request, job->request);
         c.jobs.push_back(std::move(job));
         if (!c.thread) {
             std::thread(cook_loop).detach();

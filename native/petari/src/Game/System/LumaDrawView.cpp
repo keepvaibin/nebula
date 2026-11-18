@@ -334,7 +334,7 @@ namespace luma {
                     if (h == 0 || h > LUMA_DRAW_VIEW_SIDE_MOST) {
                         return badArgument(pMod, pWhere, "h");
                     }
-                    if (pOut == nullptr) {
+                    if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
                         return badArgument(pMod, pWhere, "out");
                     }
                     u32 own = 0;
@@ -373,16 +373,32 @@ namespace luma {
                         sHigh = slot + 1;
                     }
                     sLive++;
-                    *pOut = rView.handle;
+                    (void)luma_value_out(sKernel, pMod, pOut, rView.handle);
                     return LUMA_OK;
                 }
 
-                int32_t svcCamera(const LumaMod* pMod, LumaDrawViewRegion view, const LumaDrawVec3* pEye, const LumaDrawVec3* pAt,
-                                  const LumaDrawVec3* pUp, float fovY) {
+                int32_t svcCamera(const LumaMod* pMod, LumaDrawViewRegion view, const LumaDrawVec3* pEyeGiven,
+                                  const LumaDrawVec3* pAtGiven, const LumaDrawVec3* pUpGiven, float fovY) {
                     const char* const pWhere = "draw.view.camera";
                     View* pView = nullptr;
                     if (const s32 status = enterView(pMod, pWhere, view, &pView); status != LUMA_OK) {
                         return status;
+                    }
+                    // The mod's points through the kernel (M-029).
+                    LumaDrawVec3 pEyeCopy;
+                    const LumaDrawVec3* const pEye = pEyeGiven != nullptr ? &pEyeCopy : nullptr;
+                    if (pEyeGiven != nullptr && sKernel->copy_in(pMod, &pEyeCopy, pEyeGiven, sizeof(pEyeCopy)) != LUMA_OK) {
+                        return badArgument(pMod, pWhere, "eye");
+                    }
+                    LumaDrawVec3 pAtCopy;
+                    const LumaDrawVec3* const pAt = pAtGiven != nullptr ? &pAtCopy : nullptr;
+                    if (pAtGiven != nullptr && sKernel->copy_in(pMod, &pAtCopy, pAtGiven, sizeof(pAtCopy)) != LUMA_OK) {
+                        return badArgument(pMod, pWhere, "at");
+                    }
+                    LumaDrawVec3 pUpCopy;
+                    const LumaDrawVec3* const pUp = pUpGiven != nullptr ? &pUpCopy : nullptr;
+                    if (pUpGiven != nullptr && sKernel->copy_in(pMod, &pUpCopy, pUpGiven, sizeof(pUpCopy)) != LUMA_OK) {
+                        return badArgument(pMod, pWhere, "up");
                     }
                     if (!finite3(pEye) || !finite3(pAt) || !finite3(pUp)) {
                         return badArgument(pMod, pWhere, !finite3(pEye) ? "eye" : !finite3(pAt) ? "at" : "up");
@@ -403,14 +419,20 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcFollow(const LumaMod* pMod, LumaDrawViewRegion view, LumaActor actor, const LumaDrawVec3* pOffset,
+                int32_t svcFollow(const LumaMod* pMod, LumaDrawViewRegion view, LumaActor actor, const LumaDrawVec3* pOffsetGiven,
                                   float fovY) {
                     const char* const pWhere = "draw.view.follow";
                     View* pView = nullptr;
                     if (const s32 status = enterView(pMod, pWhere, view, &pView); status != LUMA_OK) {
                         return status;
                     }
-                    LiveActor* const pActor = static_cast< LiveActor* >(actor);
+                    // The mod's actor and offset through the scene's actor list and the kernel (M-029).
+                    LumaDrawVec3 pOffsetCopy;
+                    const LumaDrawVec3* const pOffset = pOffsetGiven != nullptr ? &pOffsetCopy : nullptr;
+                    if (pOffsetGiven != nullptr && sKernel->copy_in(pMod, &pOffsetCopy, pOffsetGiven, sizeof(pOffsetCopy)) != LUMA_OK) {
+                        return badArgument(pMod, pWhere, "offset");
+                    }
+                    LiveActor* const pActor = lumacore::liveActorOf(actor);
                     if (pActor == nullptr || !lumacore::isA(lumacore::classOf(pActor), lumacore::kClassId< LiveActor >) ||
                         MR::isDead(pActor)) {
                         return badArgument(pMod, pWhere, "actor");
@@ -460,7 +482,8 @@ namespace luma {
                         }
                         return nullptr;
                     }
-                    LiveActor* const pActor = static_cast< LiveActor* >(pCamera->actor);
+                    // pCamera is the kernel's copy (M-029); its actor one of the scene's.
+                    LiveActor* const pActor = lumacore::liveActorOf(pCamera->actor);
                     if (pActor == nullptr || !lumacore::isA(lumacore::classOf(pActor), lumacore::kClassId< LiveActor >)) {
                         return "actor";
                     }
@@ -497,11 +520,16 @@ namespace luma {
                     return nullptr;
                 }
 
-                int32_t svcRig(const LumaMod* pMod, LumaDrawViewRegion view, const LumaDrawViewCamera* pCamera) {
+                int32_t svcRig(const LumaMod* pMod, LumaDrawViewRegion view, const LumaDrawViewCamera* pCameraGiven) {
                     const char* const pWhere = "draw.view.rig";
                     View* pView = nullptr;
                     if (const s32 status = enterView(pMod, pWhere, view, &pView); status != LUMA_OK) {
                         return status;
+                    }
+                    LumaDrawViewCamera pCameraCopy;
+                    const LumaDrawViewCamera* const pCamera = pCameraGiven != nullptr ? &pCameraCopy : nullptr;
+                    if (pCameraGiven != nullptr && sKernel->copy_in(pMod, &pCameraCopy, pCameraGiven, sizeof(pCameraCopy)) != LUMA_OK) {
+                        return badArgument(pMod, pWhere, "camera");
                     }
                     bool dead = false;
                     if (const char* const pFault = rigFault(pCamera, &dead); pFault != nullptr) {
@@ -529,13 +557,18 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcEyeOf(const LumaMod* pMod, const LumaDrawViewCamera* pCamera, LumaDrawViewEye* pOut) {
+                int32_t svcEyeOf(const LumaMod* pMod, const LumaDrawViewCamera* pCameraGiven, LumaDrawViewEye* pOut) {
                     const char* const pWhere = "draw.view.eye_of";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
-                    if (pOut == nullptr) {
+                    if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
                         return badArgument(pMod, pWhere, "out");
+                    }
+                    LumaDrawViewCamera pCameraCopy;
+                    const LumaDrawViewCamera* const pCamera = pCameraGiven != nullptr ? &pCameraCopy : nullptr;
+                    if (pCameraGiven != nullptr && sKernel->copy_in(pMod, &pCameraCopy, pCameraGiven, sizeof(pCameraCopy)) != LUMA_OK) {
+                        return badArgument(pMod, pWhere, "camera");
                     }
                     bool dead = false;
                     if (const char* const pFault = rigFault(pCamera, &dead); pFault != nullptr) {
@@ -554,16 +587,8 @@ namespace luma {
                                        Vec3f(pCamera->offset[0], pCamera->offset[1], pCamera->offset[2]), pCamera->joint, &eye,
                                        &at, &up);  // the joint checked in rigFault
                     }
-                    pOut->eye[0] = eye.x;
-                    pOut->eye[1] = eye.y;
-                    pOut->eye[2] = eye.z;
-                    pOut->at[0] = at.x;
-                    pOut->at[1] = at.y;
-                    pOut->at[2] = at.z;
-                    pOut->up[0] = up.x;
-                    pOut->up[1] = up.y;
-                    pOut->up[2] = up.z;
-                    pOut->fov_y = pCamera->fov_y;
+                    const LumaDrawViewEye answer = {{eye.x, eye.y, eye.z}, {at.x, at.y, at.z}, {up.x, up.y, up.z}, pCamera->fov_y};
+                    (void)luma_value_out(sKernel, pMod, pOut, answer);
                     return LUMA_OK;
                 }
 
@@ -573,10 +598,9 @@ namespace luma {
                     if (const s32 status = enterView(pMod, pWhere, view, &pView); status != LUMA_OK) {
                         return status;
                     }
-                    if (pOut == nullptr) {
+                    if (luma_value_out(sKernel, pMod, pOut, pView->texture) != LUMA_OK) {
                         return badArgument(pMod, pWhere, "out");
                     }
-                    *pOut = pView->texture;
                     return LUMA_OK;
                 }
 
@@ -697,10 +721,15 @@ namespace luma {
                     sMainApplied = true;
                 }
 
-                int32_t svcMainEye(const LumaMod* pMod, const LumaDrawViewEye* pEye) {
+                int32_t svcMainEye(const LumaMod* pMod, const LumaDrawViewEye* pEyeGiven) {
                     const char* const pWhere = "draw.view.main_eye";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
+                    }
+                    LumaDrawViewEye pEyeCopy;
+                    const LumaDrawViewEye* const pEye = pEyeGiven != nullptr ? &pEyeCopy : nullptr;
+                    if (pEyeGiven != nullptr && sKernel->copy_in(pMod, &pEyeCopy, pEyeGiven, sizeof(pEyeCopy)) != LUMA_OK) {
+                        return badArgument(pMod, pWhere, "eye");
                     }
                     if (pEye == nullptr) {
                         if (sMainMod == pMod) {
@@ -732,10 +761,20 @@ namespace luma {
                     return __builtin_sqrtf(pValues[0] * pValues[0] + pValues[1] * pValues[1] + pValues[2] * pValues[2]);
                 }
 
-                int32_t svcMainRig(const LumaMod* pMod, const LumaDrawViewCamera* pCamera, const LumaDrawViewLook* pLook) {
+                int32_t svcMainRig(const LumaMod* pMod, const LumaDrawViewCamera* pCameraGiven, const LumaDrawViewLook* pLookGiven) {
                     const char* const pWhere = "draw.view.main_rig";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
+                    }
+                    LumaDrawViewCamera pCameraCopy;
+                    const LumaDrawViewCamera* const pCamera = pCameraGiven != nullptr ? &pCameraCopy : nullptr;
+                    if (pCameraGiven != nullptr && sKernel->copy_in(pMod, &pCameraCopy, pCameraGiven, sizeof(pCameraCopy)) != LUMA_OK) {
+                        return badArgument(pMod, pWhere, "camera");
+                    }
+                    LumaDrawViewLook pLookCopy;
+                    const LumaDrawViewLook* const pLook = pLookGiven != nullptr ? &pLookCopy : nullptr;
+                    if (pLookGiven != nullptr && sKernel->copy_in(pMod, &pLookCopy, pLookGiven, sizeof(pLookCopy)) != LUMA_OK) {
+                        return badArgument(pMod, pWhere, "look");
                     }
                     if (pCamera == nullptr) {
                         if (sMainMod == pMod) {

@@ -1,0 +1,166 @@
+{
+  "harness": 1,
+  "name": "2235-bad-pointers",
+  "about": "M-029: every pointer system, system.clipboard and system.links read, write or call given wrong (unmapped, read-only, data, a function outside the mod): LUMA_E_ARGUMENT, reported, nothing started; the good calls after work and take",
+  "proves": [
+    "services.system",
+    "services.system.clipboard",
+    "services.system.links",
+    "kernel.services.mod_memory"
+  ],
+  "mods": [
+    "../mods/sys-badptr"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4241
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4242
+      ]
+    },
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4243
+      ]
+    },
+    {
+      "at": 40,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sys-badptr.facts_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.facts_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.display_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.display_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.get_fn_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.get_fn_game",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.get_out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.get_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.set_text_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.set_image_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.link_url_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.link_fn_game",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.link_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.take_buf_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.take_buf_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.sys-badptr.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-badptr.set_good",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-badptr.get_good",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-badptr.take_good",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-badptr.take_good_text",
+      "is": 1
+    },
+    {
+      "fact": "mod.sys-badptr.events",
+      "is": 2
+    },
+    {
+      "log": "sys-badptr: system\\.facts was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "sys-badptr: system\\.display was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "sys-badptr: system\\.clipboard\\.get_text was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "sys-badptr: system\\.clipboard\\.get_text was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "sys-badptr: system\\.clipboard\\.get_image was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "sys-badptr: system\\.clipboard\\.set_text was given a wrong text; it did nothing\\."
+    },
+    {
+      "log": "sys-badptr: system\\.clipboard\\.set_image was given a wrong rgba; it did nothing\\."
+    },
+    {
+      "log": "sys-badptr: system\\.links\\.open was given a wrong url; it did nothing\\."
+    },
+    {
+      "log": "sys-badptr: system\\.links\\.open was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "sys-badptr: system\\.links\\.open was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "sys-badptr: system\\.clipboard\\.take_text was given a wrong buf; it did nothing\\."
+    }
+  ]
+}

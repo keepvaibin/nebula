@@ -526,6 +526,85 @@ namespace luma {
                 return callGuarded(pMod, pService, kind, fn, a0, a1);
             }
 
+            int32_t kernelCopyIn(const LumaMod* pMod, void* pDest, const void* pSource, uint64_t size) {
+                (void)pMod;
+                if (size == 0) {
+                    return LUMA_OK;
+                }
+                const uintptr_t at = reinterpret_cast<uintptr_t>(pSource);
+                if (pDest == nullptr || pSource == nullptr || at + size < at) {
+                    return LUMA_E_ARGUMENT;
+                }
+                return guard::probe(pDest, pSource, static_cast<uintptr_t>(size)) ? LUMA_OK : LUMA_E_ARGUMENT;
+            }
+
+            int32_t kernelCopyOut(const LumaMod* pMod, void* pDest, const void* pSource, uint64_t size) {
+                (void)pMod;
+                if (size == 0) {
+                    return LUMA_OK;
+                }
+                const uintptr_t at = reinterpret_cast<uintptr_t>(pDest);
+                if (pDest == nullptr || pSource == nullptr || at + size < at) {
+                    return LUMA_E_ARGUMENT;
+                }
+                return guard::probe(pDest, pSource, static_cast<uintptr_t>(size)) ? LUMA_OK : LUMA_E_ARGUMENT;
+            }
+
+            // In pieces that end at a page's end: a text whose 0 comes just before an unmapped page reads whole.
+            int32_t kernelCopyText(const LumaMod* pMod, const char* pText, char* pOut, uint64_t cap, uint64_t* pLength) {
+                (void)pMod;
+                if (pLength != nullptr) {
+                    *pLength = 0;
+                }
+                if (pText == nullptr || pOut == nullptr || cap == 0) {
+                    return LUMA_E_ARGUMENT;
+                }
+                const uint64_t kPage = 4096u;
+                uint64_t done = 0;
+                while (done + 1u < cap) {
+                    const uintptr_t at = reinterpret_cast<uintptr_t>(pText) + static_cast<uintptr_t>(done);
+                    uint64_t piece = kPage - (at & (kPage - 1u));
+                    if (piece > cap - 1u - done) {
+                        piece = cap - 1u - done;
+                    }
+                    if (!guard::probe(pOut + done, pText + done, static_cast<uintptr_t>(piece))) {
+                        pOut[0] = 0;
+                        return LUMA_E_ARGUMENT;
+                    }
+                    for (uint64_t i = 0; i < piece; i++) {
+                        if (pOut[done + i] == 0) {
+                            if (pLength != nullptr) {
+                                *pLength = done + i;
+                            }
+                            return LUMA_OK;
+                        }
+                    }
+                    done += piece;
+                }
+                pOut[cap - 1u] = 0;
+                if (pLength != nullptr) {
+                    *pLength = cap - 1u;
+                }
+                return LUMA_E_TOO_LARGE;
+            }
+
+            int32_t kernelModCode(const LumaMod* pMod, const void* fn) {
+                if (pMod == nullptr || fn == nullptr) {
+                    return 0;
+                }
+                // Its own code first: during its start a mod is in none of the lists modAt reads.
+                const uintptr_t at = reinterpret_cast<uintptr_t>(fn);
+                uintptr_t base = 0;
+                uintptr_t begin = 0;
+                uintptr_t end = 0;
+                modCode(pMod, &base, &begin, &end);
+                if (at >= begin && at < end) {
+                    return 1;
+                }
+                const LumaMod* const pOwner = modAt(at);
+                return pOwner != nullptr && modUsesThrough(pMod, pOwner) ? 1 : 0;
+            }
+
             void* kernelAlloc(const LumaMod* pMod, uint64_t size, uint64_t align) { return core()->alloc(pMod, size, align); }
 
             void kernelFree(const LumaMod* pMod, void* p) { core()->free(pMod, p); }
@@ -533,7 +612,7 @@ namespace luma {
             const LumaServiceKernel sKernel = {
                 sizeof(LumaServiceKernel), kernelModId, kernelModOrder, kernelGranted, kernelModLive, kernelGameThread,
                 kernelReport,              kernelPost,  kernelCall,     kernelAlloc,   kernelFree,       kernelUnknownMod,
-                kernelCallWords,
+                kernelCallWords,           kernelCopyIn, kernelCopyOut, kernelCopyText, kernelModCode,
             };
 
             // Every node of the mod's stack and carried list goes to its drop: the mod is gone (game thread).

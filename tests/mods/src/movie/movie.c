@@ -8,8 +8,11 @@
                   stop of 999999 ("stop_unknown"); play "movies/intro" ("play"), stop it ("stop"), stop again
                   ("stop_again"), position after ("position_ended"); its end "end" LUMA_E_CANCELLED.
    jv-subs (1) 3103: case 1's code; its .movie.json: a subtitle over the whole movie, "skip": false.
-   jv-skip (1) 3104: case 1's code; its .movie.json leaves "skip" true (the player skips it with +, Yes). */
+   jv-skip (1) 3104: case 1's code; its .movie.json leaves "skip" true (the player skips it with +, Yes).
+   jv-badptr (3) 3106: k 1 play with a name, fn or out that is wrong (lt_bad.h), then a good play ("play"); position
+                  into a wrong frame and frames, then a good one ("position"); stop ("stop"). */
 #include "../loader/lt.h"
+#include "../loader/lt_bad.h"
 #include <luma_movie.h>
 
 #ifndef CASE
@@ -54,6 +57,23 @@ static int32_t trigger(LumaCall* call, void* user) {
         lt_fact("stop", mv->stop(lt_mod, movie));
         lt_fact("stop_again", mv->stop(lt_mod, movie));
         lt_fact("position_ended", mv->position(lt_mod, movie, &frame, 0));
+    }
+#elif CASE == 3
+    if (k == 1) {
+        LumaMovie none = 0;
+        lt_fact("name_unmapped", mv->play(lt_mod, (const char*)LT_UNMAPPED, on_end, 0, &none));
+        lt_fact("fn_unmapped", mv->play(lt_mod, "movies/intro", (LumaEventFn)LT_UNMAPPED, 0, &none));
+        lt_fact("fn_data", mv->play(lt_mod, "movies/intro", (LumaEventFn)LT_DATA_FN, 0, &none));
+        lt_fact("out_unmapped", mv->play(lt_mod, "movies/intro", on_end, 0, (LumaMovie*)LT_UNMAPPED));
+        lt_fact("out_read_only", mv->play(lt_mod, "movies/intro", on_end, 0, (LumaMovie*)LT_READ_ONLY));
+        lt_fact("none_written", none == 0);
+        lt_fact("play", mv->play(lt_mod, "movies/intro", on_end, 0, &movie));
+        int32_t frame = -2, frames = -2;
+        lt_fact("frame_unmapped", mv->position(lt_mod, movie, (int32_t*)LT_UNMAPPED, &frames));
+        lt_fact("frames_read_only", mv->position(lt_mod, movie, &frame, (int32_t*)LT_READ_ONLY));
+        lt_fact("position", mv->position(lt_mod, movie, &frame, &frames));
+        lt_fact("frames_above_0", frames > 0);
+        lt_fact("stop", mv->stop(lt_mod, movie));
     }
 #endif
     LUMA_RESULT(call, int32_t) = 1;

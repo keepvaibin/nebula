@@ -209,15 +209,18 @@ namespace luma {
 
                 // ---- Calls ----
 
-                int32_t svcProgram(const LumaMod* pMod, const char* pName, LumaDrawPostProgram* pOut) {
+                int32_t svcProgram(const LumaMod* pMod, const char* pNameGiven, LumaDrawPostProgram* pOut) {
                     const char* const pWhere = "draw.post.program";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
-                    if (pName == nullptr || pName[0] == 0 || strlen(pName) > 200) {
+                    // The mod's name (1 to 200 bytes) and out through the kernel (M-029).
+                    char name[201];
+                    const char* const pName = name;
+                    if (luma_text_in(sKernel, pMod, pNameGiven, name) != LUMA_OK || name[0] == 0) {
                         return badArgument(pMod, pWhere, "name");
                     }
-                    if (pOut == nullptr) {
+                    if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
                         return badArgument(pMod, pWhere, "out");
                     }
                     u32 own = 0;
@@ -280,7 +283,7 @@ namespace luma {
                     program.mod = pMod;
                     program.host = host;
                     *pFree = program;
-                    *pOut = program.handle;
+                    (void)luma_value_out(sKernel, pMod, pOut, program.handle);
                     return LUMA_OK;
                 }
 
@@ -323,7 +326,7 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcParams(const LumaMod* pMod, LumaDrawPostStage stage, const float* pValues, uint32_t count) {
+                int32_t svcParams(const LumaMod* pMod, LumaDrawPostStage stage, const float* pValuesGiven, uint32_t count) {
                     const char* const pWhere = "draw.post.params";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
@@ -334,7 +337,11 @@ namespace luma {
                     if (count > kParams) {
                         return badArgument(pMod, pWhere, "count");
                     }
-                    if (count != 0 && pValues == nullptr) {
+                    // The mod's values through the kernel (M-029).
+                    f32 values[kParams];
+                    const f32* const pValues = pValuesGiven != nullptr ? values : nullptr;
+                    if (count != 0 && (pValuesGiven == nullptr ||
+                                       sKernel->copy_in(pMod, values, pValuesGiven, count * sizeof(f32)) != LUMA_OK)) {
                         return badArgument(pMod, pWhere, "values");
                     }
                     for (u32 i = 0; i < count; i++) {

@@ -71,6 +71,21 @@ typedef struct LumaServiceKernel {
        the guard and the mod's would be a game frame there, and a fault in the mod's code could not be resumed. The
        guard names "<service> event <kind>". Answers as `call`. A kernel built before it has no field (size). */
     int32_t (*call_words)(const LumaMod* mod, const char* service, uint32_t kind, const void* fn, uintptr_t a0, uintptr_t a1);
+    /* A mod's memory, which a provider reads and writes only through these: a pointer the mod gave that cannot be read
+       (copy_in) or written (copy_out) for `size` bytes, being unmapped, freed, too short or protected, answers
+       LUMA_E_ARGUMENT and the game goes on, where a read in the provider's own code would end it (the guard resumes a
+       fault only in a mod's code). The provider answers the mod as for any argument it cannot use. A null pointer
+       with size 0: LUMA_OK, nothing copied. Any thread. A kernel built before them has no fields (size). */
+    int32_t (*copy_in)(const LumaMod* mod, void* dest, const void* source, uint64_t size);
+    int32_t (*copy_out)(const LumaMod* mod, void* dest, const void* source, uint64_t size);
+    /* A text the mod gave, with its 0, into out (cap bytes, the 0 counted). LUMA_OK, *length its bytes without the 0;
+       LUMA_E_ARGUMENT: null, or unreadable before its 0; LUMA_E_TOO_LARGE: no 0 in its first cap - 1 bytes (out holds
+       those, and a 0). length may be null. Any thread. */
+    int32_t (*copy_text)(const LumaMod* mod, const char* text, char* out, uint64_t cap, uint64_t* length);
+    /* 1 when fn lies in the code of `mod` or of a mod it uses, directly or through others (a library acting for it):
+       a function the mod may give a service to call back. 0 for anything else, which would fault at an address in no
+       mod's code, where the guard cannot resume. Any thread. */
+    int32_t (*mod_code)(const LumaMod* mod, const void* fn);
 } LumaServiceKernel;
 
 /* A service's table and what the kernel tells its provider. */
@@ -137,6 +152,62 @@ typedef void (*LumaSaveKept)(LumaSaveKeptFn fn, void* user);
 typedef void (*LumaSaveForget)(const char* id);
 
 #ifdef __cplusplus
+}
+
+/* For a provider in C++: a mod's struct, which starts with its size (uint32_t), read and written through the kernel's
+   copy_in and copy_out, so a pointer the mod got wrong is an answer, not the end of the game. */
+
+/* The size field of the mod's struct at p. LUMA_OK and *size; LUMA_E_ARGUMENT (*size 0): p null or unreadable. */
+inline int32_t luma_struct_size(const LumaServiceKernel* kernel, const LumaMod* mod, const void* p, uint32_t* size) {
+    *size = 0;
+    return p == nullptr ? LUMA_E_ARGUMENT : kernel->copy_in(mod, size, p, sizeof(*size));
+}
+
+/* The mod's struct at p into *out: the bytes the mod gave (its size, at most sizeof(T)), the rest zero, out->size the
+   mod's. The caller has checked the size against the least it takes. LUMA_E_ARGUMENT: unreadable. */
+template <typename T>
+inline int32_t luma_struct_in(const LumaServiceKernel* kernel, const LumaMod* mod, const void* p, uint32_t size, T* out) {
+    *out = T{};
+    const int32_t status = kernel->copy_in(mod, out, p, size < sizeof(T) ? size : sizeof(T));
+    if (status != LUMA_OK) {
+        *out = T{};
+    }
+    return status;
+}
+
+/* value to the mod's struct at p, whose size field is `size` (checked by the caller): the first min(size, sizeof(T))
+   bytes, the size field left as the mod wrote it. LUMA_E_ARGUMENT: p cannot be written. */
+template <typename T>
+inline int32_t luma_struct_out(const LumaServiceKernel* kernel, const LumaMod* mod, void* p, uint32_t size, T value) {
+    value.size = size;
+    return kernel->copy_out(mod, p, &value, size < sizeof(T) ? size : sizeof(T));
+}
+
+/* A text the mod gave into out, with its 0. LUMA_OK; LUMA_E_ARGUMENT: null, or unreadable before its 0;
+   LUMA_E_TOO_LARGE: longer than N - 1 bytes. length (may be null): its bytes without the 0. */
+template <uint64_t N>
+inline int32_t luma_text_in(const LumaServiceKernel* kernel, const LumaMod* mod, const char* text, char (&out)[N],
+                            uint64_t* length = nullptr) {
+    out[0] = 0;
+    return kernel->copy_text(mod, text, out, N, length);
+}
+
+/* Whether the mod's out pointer p can take a T, leaving it as it was (its bytes read and written back): checked
+   before a call does anything, so a call whose out is wrong does nothing. LUMA_E_ARGUMENT: null, or p cannot be read
+   and written. */
+template <typename T>
+inline int32_t luma_out_ready(const LumaServiceKernel* kernel, const LumaMod* mod, T* p) {
+    unsigned char bytes[sizeof(T)];
+    if (p == nullptr || kernel->copy_in(mod, bytes, p, sizeof(T)) != LUMA_OK) {
+        return LUMA_E_ARGUMENT;
+    }
+    return kernel->copy_out(mod, p, bytes, sizeof(T));
+}
+
+/* One value (a handle, a count) to the mod's out pointer p. LUMA_E_ARGUMENT: null, or p cannot be written. */
+template <typename T>
+inline int32_t luma_value_out(const LumaServiceKernel* kernel, const LumaMod* mod, T* p, T value) {
+    return p == nullptr ? LUMA_E_ARGUMENT : kernel->copy_out(mod, p, &value, sizeof(T));
 }
 #endif
 

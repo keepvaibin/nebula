@@ -103,6 +103,7 @@ The text of a version in an import row is `MAJOR.MINOR`, each a decimal number f
 * A function returns within the frame. Work that waits on the outside world, such as a file read or a connection, returns `LUMA_PENDING`, and its answer arrives later as an event.
 * A handle that another mod holds, or one that is closed, is `LUMA_E_HANDLE`. A handle is never 0, and one session never gives the same handle twice.
 * A service copies the text and data you give it before the call returns, and never keeps your pointer.
+* A pointer your mod gives a service is read and written only where your mod may read or write it. A pointer the service cannot read, an out it cannot write (such as read-only data), or a function that is not in your mod's code is `LUMA_E_ARGUMENT`, reported. The call then does nothing: it starts nothing and writes no out. A take into a buffer it cannot write takes nothing, so a take into a right buffer still works.
 * Buffers and queues a service keeps for your mod are shown on the **Mods** page and freed when your mod stops.
 * When your mod stops, its services cancel its requests and close its handles, and no event reaches it after its `stop`.
 * A service starts no thread and opens no file, socket or device until a mod uses it.
@@ -115,7 +116,7 @@ A C function returns a status of type `int32_t`. A value of 0 or more is success
 |---|---|---|---|
 | `LUMA_OK` | 0 | Done. | |
 | `LUMA_PENDING` | 1 | Accepted. The answer arrives as an event. | |
-| `LUMA_E_ARGUMENT` | -1 | An argument the function does not take, a null or unknown mod, or a struct whose `size` is too small. | Yes |
+| `LUMA_E_ARGUMENT` | -1 | An argument the function does not take, a null or unknown mod, a struct whose `size` is too small, or a pointer the service cannot read or write. | Yes |
 | `LUMA_E_THREAD` | -2 | Called off the game thread, where the function does not allow it. | Yes |
 | `LUMA_E_HANDLE` | -3 | A handle that is closed, not the mod's, or never was. | Yes |
 | `LUMA_E_LIMIT` | -4 | A limit the service states was reached. | Yes |

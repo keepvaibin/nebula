@@ -4,6 +4,7 @@
 // codecs; the machine's clipboard and browser are the platform layer's (luma_system_platform.h).
 
 #include "galaxy/luma_system_platform.h"
+#include "galaxy/luma_mod_memory.h"
 
 #include "galaxy/host_extension.h"
 #include "galaxy/mod_log.h"
@@ -75,6 +76,11 @@ const char* const kLinksName = LUMA_SYSTEM_LINKS_NAME;
 
 std::atomic<const Platform*> g_platform{nullptr};
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
+
+// The kernel a call reads and writes the mod's memory through (M-029). Set while a call runs: enter checks it.
+const LumaServiceKernel* mod_kernel() noexcept {
+    return g_kernel.load(std::memory_order_acquire);
+}
 // Set by providers() on the game thread before the first mod loads, so before any request reaches a platform thread.
 void (*g_log)(const char*) = nullptr;
 std::uint64_t (*g_monotonic)() = nullptr;
@@ -549,17 +555,17 @@ std::int32_t system_facts(const LumaMod* mod, LumaSystemFacts* out) {
     if (const std::int32_t status = enter(mod, where, true); status != LUMA_OK) {
         return status;
     }
-    if (out == nullptr) {
+    std::uint32_t size = 0;
+    if (luma_struct_size(mod_kernel(), mod, out, &size) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    if (out->size < kFactsLeast) {
-        return struct_size(mod, where, "LumaSystemFacts", out->size, kFactsLeast);
+    if (size < kFactsLeast) {
+        return struct_size(mod, where, "LumaSystemFacts", size, kFactsLeast);
     }
     LumaSystemFacts facts{};
     if (const Platform* platform = g_platform.load(std::memory_order_acquire)) {
         platform->facts(facts);
     }
-    facts.size = out->size;
     facts.lumacore_major = LUMA_API;
     facts.lumacore_minor = 0;
     const std::string game_id = galaxy::mods::mods_game_id();
@@ -586,7 +592,10 @@ std::int32_t system_facts(const LumaMod* mod, LumaSystemFacts* out) {
     } else if (facts.locale[0] == 0) {
         copy_text(facts.locale, sizeof(facts.locale), "und");
     }
-    std::memcpy(out, &facts, sizeof(facts));
+    // The mod's struct is its size (an older mod's is shorter): no more is written.
+    if (luma_struct_out(mod_kernel(), mod, out, size, facts) != LUMA_OK) {
+        return argument(mod, where, "out");
+    }
     return LUMA_OK;
 }
 
@@ -595,18 +604,20 @@ std::int32_t system_display(const LumaMod* mod, LumaSystemDisplay* out) {
     if (const std::int32_t status = enter(mod, where, false); status != LUMA_OK) {
         return status;
     }
-    if (out == nullptr) {
+    std::uint32_t size = 0;
+    if (luma_struct_size(mod_kernel(), mod, out, &size) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    if (out->size < kDisplayLeast) {
-        return struct_size(mod, where, "LumaSystemDisplay", out->size, kDisplayLeast);
+    if (size < kDisplayLeast) {
+        return struct_size(mod, where, "LumaSystemDisplay", size, kDisplayLeast);
     }
     LumaSystemDisplay display = read_display();
-    display.size = out->size;
     if (deterministic()) {
         display.focused = 1u;
     }
-    std::memcpy(out, &display, sizeof(display));
+    if (luma_struct_out(mod_kernel(), mod, out, size, display) != LUMA_OK) {
+        return argument(mod, where, "out");
+    }
     return LUMA_OK;
 }
 
@@ -631,11 +642,11 @@ ModState* clipboard_enter(const LumaMod* mod, const char* where, LumaEventFn fn,
     if (*status != LUMA_OK) {
         return nullptr;
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         *status = argument(mod, where, "fn");
         return nullptr;
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         *status = argument(mod, where, "out");
         return nullptr;
     }
@@ -664,7 +675,7 @@ std::int32_t clipboard_get_text(const LumaMod* mod, LumaEventFn fn, void* user, 
     if (request == nullptr) {
         return LUMA_E_MEMORY;
     }
-    *out = request->handle;
+    (void)luma_value_out(mod_kernel(), mod, out, request->handle);
     if (!window_in_front()) {
         answer_now(request, LUMA_E_BUSY);
     } else if (deterministic()) {
@@ -713,8 +724,12 @@ int64_t clipboard_take_text(const LumaMod* mod, LumaHandle handle, char* buf, st
     }
     const std::uint64_t length = request->text.size();
     const std::uint64_t copied = std::min<std::uint64_t>(length, size - 1u);
-    std::memcpy(buf, request->text.data(), static_cast<std::size_t>(copied));
-    buf[copied] = 0;
+    const char end = 0;
+    const LumaServiceKernel* const kernel = mod_kernel();
+    if ((copied != 0u && kernel->copy_out(mod, buf, request->text.data(), copied) != LUMA_OK) ||
+        kernel->copy_out(mod, buf + copied, &end, 1u) != LUMA_OK) {
+        return argument(mod, where, "buf");  // not taken: a right buf may take it still
+    }
     request->taken = true;
     return static_cast<int64_t>(length);
 }
@@ -736,7 +751,7 @@ std::int32_t clipboard_get_image(const LumaMod* mod, LumaEventFn fn, void* user,
     if (request == nullptr) {
         return LUMA_E_MEMORY;
     }
-    *out = request->handle;
+    (void)luma_value_out(mod_kernel(), mod, out, request->handle);
     if (!window_in_front()) {
         answer_now(request, LUMA_E_BUSY);
     } else if (deterministic()) {
@@ -793,7 +808,9 @@ std::int32_t clipboard_take_image(const LumaMod* mod, LumaHandle handle, std::ui
     if (size < request->image.rgba.size()) {
         return argument(mod, where, "size");
     }
-    std::memcpy(rgba, request->image.rgba.data(), request->image.rgba.size());
+    if (mod_kernel()->copy_out(mod, rgba, request->image.rgba.data(), request->image.rgba.size()) != LUMA_OK) {
+        return argument(mod, where, "rgba");  // not taken: a right buffer may take it still
+    }
     request->taken = true;
     return LUMA_OK;
 }
@@ -811,7 +828,15 @@ std::int32_t clipboard_set_text(const LumaMod* mod, const char* text, std::uint6
         report(mod, where, 101u, "bytes");  // Service.Argument: more than the contract's 16 MiB
         return LUMA_E_TOO_LARGE;
     }
-    if (!valid_text(text, bytes)) {
+    // The mod's text through the kernel (M-029), checked in the copy.
+    std::string copy;
+    try {
+        copy.resize(static_cast<std::size_t>(bytes));
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+    if ((bytes != 0u && mod_kernel()->copy_in(mod, copy.data(), text, bytes) != LUMA_OK) ||
+        !valid_text(copy.data(), bytes)) {
         return argument(mod, where, "text");
     }
     std::int32_t status = LUMA_OK;
@@ -819,17 +844,11 @@ std::int32_t clipboard_set_text(const LumaMod* mod, const char* text, std::uint6
     if (state == nullptr) {
         return status;
     }
-    std::string copy;
-    try {
-        copy.assign(text, static_cast<std::size_t>(bytes));
-    } catch (...) {
-        return LUMA_E_MEMORY;
-    }
     Request* request = open_request(*state, mod, false, LUMA_SYSTEM_CLIPBOARD_EVENT_SET, fn, user);
     if (request == nullptr) {
         return LUMA_E_MEMORY;
     }
-    *out = request->handle;
+    (void)luma_value_out(mod_kernel(), mod, out, request->handle);
     if (deterministic()) {
         {
             const std::lock_guard<std::mutex> lock(g_private_lock);
@@ -877,16 +896,15 @@ std::int32_t clipboard_set_image(const LumaMod* mod, const std::uint8_t* rgba, s
     Image image;
     image.width = width;
     image.height = height;
-    try {
-        image.rgba.assign(rgba, rgba + bytes);
-    } catch (...) {
-        return LUMA_E_MEMORY;
+    // The mod's pixels through the kernel (M-029).
+    if (const std::int32_t read = galaxy::mod_memory::bytes(mod_kernel(), mod, rgba, bytes, &image.rgba); read != LUMA_OK) {
+        return read == LUMA_E_MEMORY ? LUMA_E_MEMORY : argument(mod, where, "rgba");
     }
     Request* request = open_request(*state, mod, false, LUMA_SYSTEM_CLIPBOARD_EVENT_SET, fn, user);
     if (request == nullptr) {
         return LUMA_E_MEMORY;
     }
-    *out = request->handle;
+    (void)luma_value_out(mod_kernel(), mod, out, request->handle);
     if (deterministic()) {
         {
             const std::lock_guard<std::mutex> lock(g_private_lock);
@@ -942,18 +960,21 @@ std::int32_t clipboard_cancel(const LumaMod* mod, LumaHandle handle) {
 
 // ---- system.links --------------------------------------------------------------------------------------------------
 
-std::int32_t links_open(const LumaMod* mod, const char* url, LumaEventFn fn, void* user, LumaHandle* out) {
+std::int32_t links_open(const LumaMod* mod, const char* url_given, LumaEventFn fn, void* user, LumaHandle* out) {
     const char* const where = "system.links.open";
     if (const std::int32_t status = enter(mod, where, false); status != LUMA_OK) {
         return status;
     }
-    if (url == nullptr) {
+    // The mod's url, function and out through the kernel (M-029).
+    std::string url_text;
+    if (galaxy::mod_memory::text(mod_kernel(), mod, url_given, kUrlMost, &url_text) != LUMA_OK) {
         return argument(mod, where, "url");
     }
-    if (fn == nullptr) {
+    const char* const url = url_text.c_str();
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     std::string site = link_site(url);
@@ -975,7 +996,7 @@ std::int32_t links_open(const LumaMod* mod, const char* url, LumaEventFn fn, voi
     request->site = std::move(site);
     state->linked = true;
     state->last_link_ns = now;
-    *out = request->handle;
+    (void)luma_value_out(mod_kernel(), mod, out, request->handle);
     if (g_log != nullptr) {
         const std::string line = "LumaCore: " + state->id + " opens " + url;
         g_log(line.c_str());

@@ -50,6 +50,7 @@
     "kernel.classes.taken_out_off_thread": "A mod taken out while its override runs on another thread: the override proceeds to the base's code, the mod's library closes only after the call left, and the game goes on",
     "kernel.classes.game_thread_makes": "A mod class's objects are made on the game thread only: its creator called on another thread makes nothing and says so once, and the game goes on",
     "kernel.classes.rows_again": "A class whose mod has finished frees its place for a new class when a new scene begins: a mod reloaded again and again defines its classes every time, each with a new number",
+    "kernel.services.mod_memory": "A pointer a mod gives a service that cannot be read or written for the bytes the service needs, or a function outside the mod's code, is answered LUMA_E_ARGUMENT and reported; the game and the mod go on",
     "kernel.services.call_cost": "A service's call of a mod's function makes no text and scans no list of mods per call: its name for the guard is made once per service and kind, the mod's record found through a cache",
     "kernel.classes.scene": "A new scene makes a mod class's objects again; the old scene's are forgotten with it",
     "kernel.modules.plain": "No mod with code: the game loads its module without rows (no hook test, no row, no RTTI data, no export), and says so",

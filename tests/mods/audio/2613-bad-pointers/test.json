@@ -1,0 +1,76 @@
+{
+  "harness": 1,
+  "name": "2613-bad-pointers",
+  "about": "M-029: every pointer audio.microphone.open and capture.camera.open read, write or call given wrong (unmapped, read-only, data, a function outside the mod): LUMA_E_ARGUMENT, reported, nothing opened or written",
+  "proves": [
+    "services.audio.microphone",
+    "services.capture.camera",
+    "kernel.services.mod_memory"
+  ],
+  "mods": [
+    "../mods/capture-badptr"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.capture-badptr.mic_desc_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-badptr.mic_fn_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-badptr.mic_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-badptr.camera_desc_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-badptr.camera_fn_game",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-badptr.camera_out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.capture-badptr.none_written",
+      "is": 1
+    },
+    {
+      "log": "capture-badptr: audio\\.microphone\\.open was given a wrong desc; it did nothing\\."
+    },
+    {
+      "log": "capture-badptr: audio\\.microphone\\.open was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "capture-badptr: audio\\.microphone\\.open was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "capture-badptr: capture\\.camera\\.open was given a wrong desc; it did nothing\\."
+    },
+    {
+      "log": "capture-badptr: capture\\.camera\\.open was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "capture-badptr: capture\\.camera\\.open was given a wrong out; it did nothing\\."
+    }
+  ]
+}

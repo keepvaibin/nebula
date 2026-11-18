@@ -18,8 +18,11 @@
                       (One byte over 64 MiB is fs-args': the kernel says fs.write's Service.Limit once a session.)
    fs-last       (11) 2313: four files of 64 MiB at k 1, in the test's last frame (the game ends at once).
                       2314: k 2 reads them, in the start after.
+   fs-badptr     (12) 2315 (M-029): at k 1 every pointer fs reads, writes or calls given wrong (lt_bad.h), then a
+                      good write and read; the read's event takes into a wrong buf first. At k 2 the events counted.
    Run steps call MR::getRandom(0, 4300 + k) and the hook gives 1. */
 #include "../loader/lt.h"
+#include "../loader/lt_bad.h"
 #include <luma_fs.h>
 
 #ifndef CASE
@@ -68,6 +71,11 @@ __attribute__((unused)) static void on_event(void* user, const LumaEvent* event)
     tag_fact(tag, "value", (long long)event->value);
     if (event->status != LUMA_OK) return;
     if (event->kind == LUMA_FS_EVENT_READ || event->kind == LUMA_FS_EVENT_LIST) {
+#if CASE == 12
+        /* A wrong buf: refused, reported and not taken, so the good take below still takes it. */
+        tag_fact(tag, "buf_unmapped", fs->take_read(lt_mod, event->handle, LT_UNMAPPED, 8));
+        tag_fact(tag, "buf_read_only", fs->take_read(lt_mod, event->handle, LT_READ_ONLY, 8));
+#endif
         char got[512];
         const int listing = event->kind == LUMA_FS_EVENT_LIST;
         int64_t n;
@@ -298,6 +306,23 @@ static int32_t trigger(LumaCall* call, void* user) {
             tag_fact(10 + n, "asked", fs->read(lt_mod, name, T(10 + n)));
         }
     }
+#elif CASE == 12
+    if (k == 1) {
+        LumaHandle none = 0;
+        lt_fact("read_path_unmapped", fs->read(lt_mod, (const char*)LT_UNMAPPED, on_event, 0, &none));
+        lt_fact("read_fn_data", fs->read(lt_mod, "a", (LumaEventFn)(uintptr_t)LT_DATA_FN, 0, &none));
+        lt_fact("list_fn_game", fs->list(lt_mod, "", 0, (LumaEventFn)(uintptr_t)fs->cancel, 0, &none));
+        lt_fact("read_out_unmapped", fs->read(lt_mod, "a", on_event, 0, (LumaHandle*)LT_UNMAPPED));
+        lt_fact("write_out_read_only", fs->write(lt_mod, "a", "x", 1, on_event, 0, (LumaHandle*)LT_READ_ONLY));
+        lt_fact("write_data_unmapped", fs->write(lt_mod, "a", LT_UNMAPPED, 16, on_event, 0, &none));
+        lt_fact("move_to_unmapped", fs->move(lt_mod, "a", (const char*)LT_UNMAPPED, on_event, 0, &none));
+        lt_fact("remove_path_unmapped", fs->remove(lt_mod, (const char*)LT_UNMAPPED, on_event, 0, &none));
+        lt_fact("none_written", none == 0);
+        lt_fact("w1", fs->write(lt_mod, "g.txt", "a", 1, T(1)));
+        expect[2] = "a";
+        lt_fact("r2", fs->read(lt_mod, "g.txt", T(2)));
+    }
+    if (k == 2) lt_fact("events", events);
 #endif
     LUMA_RESULT(call, int32_t) = 1;
     return 0;

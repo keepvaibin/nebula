@@ -168,13 +168,15 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            // The least size of a struct (services/registry.md 3: the first minor's whole struct).
-            s32 checkSize(const LumaMod* pMod, const char* pWhere, const char* pStruct, const void* p, u32 least) {
-                if (p == nullptr) {
+            // The least size of a struct (services/registry.md 3: the first minor's whole struct), read through the
+            // kernel: a pointer that is null or cannot be read is a wrong `out` (M-029). *pSize: the mod's size field.
+            s32 checkSize(const LumaMod* pMod, const char* pWhere, const char* pStruct, const void* p, u32 least, u32* pSize) {
+                u32 size = 0;
+                if (luma_struct_size(sKernel, pMod, p, &size) != LUMA_OK) {
                     report(pMod, pWhere, 101u, "out", nullptr, nullptr);
                     return LUMA_E_ARGUMENT;
                 }
-                const u32 size = *static_cast<const u32*>(p);
+                *pSize = size;
                 if (size < least) {
                     char found[16];
                     char expected[16];
@@ -191,6 +193,20 @@ namespace luma {
                 nebula_snprintf(text, sizeof(text), "%u", limit);
                 report(pMod, pWhere, 104u, text, nullptr, nullptr);
             }
+
+            // The answer into the mod's struct (its size checked): LUMA_OK, or a wrong `out` when it cannot be written.
+            template <typename T>
+            s32 outStruct(const LumaMod* pMod, const char* pWhere, void* pOut, u32 size, const T& rValue) {
+                if (luma_struct_out(sKernel, pMod, pOut, size, rValue) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "out", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                return LUMA_OK;
+            }
+
+            // A function the mod gives the service to call: in its code, or a mod's it uses (M-029). Anything else
+            // would be called where the guard cannot resume a fault.
+            bool modCode(const LumaMod* pMod, const void* fn) { return fn != nullptr && sKernel->mod_code(pMod, fn) == 1; }
 
             // ---- The world clock ----
 
@@ -530,14 +546,14 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere, false); status != LUMA_OK) {
                     return status;
                 }
-                if (const s32 status = checkSize(pMod, pWhere, "LumaTimeNow", pOut, sizeof(LumaTimeNow)); status != LUMA_OK) {
+                u32 size = 0;
+                if (const s32 status = checkSize(pMod, pWhere, "LumaTimeNow", pOut, sizeof(LumaTimeNow), &size); status != LUMA_OK) {
                     return status;
                 }
                 markInUse();
-                const u32 size = pOut->size;
-                fill(pOut, sStepsThisFrame);
-                pOut->size = size;
-                return LUMA_OK;
+                LumaTimeNow now;
+                fill(&now, sStepsThisFrame);
+                return outStruct(pMod, pWhere, pOut, size, now);
             }
 
             int64_t svcMonotonic(const LumaMod* pMod) {
@@ -566,7 +582,8 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere, true); status != LUMA_OK) {
                     return status;
                 }
-                if (const s32 status = checkSize(pMod, pWhere, "LumaTimeWall", pOut, sizeof(LumaTimeWall)); status != LUMA_OK) {
+                u32 size = 0;
+                if (const s32 status = checkSize(pMod, pWhere, "LumaTimeWall", pOut, sizeof(LumaTimeWall), &size); status != LUMA_OK) {
                     return status;
                 }
                 const NebulaHostServices* const pHost = nebula_host();
@@ -589,7 +606,6 @@ namespace luma {
                 const s64 days = second >= 0 ? second / 86400 : (second + 1) / 86400 - 1;
                 const s64 inDay = second - days * 86400;
                 LumaTimeWall wall = {};
-                wall.size = pOut->size;
                 wall.utc_offset_s = offset;
                 wall.utc_ns = utcNs;
                 u32 month = 0;
@@ -602,8 +618,7 @@ namespace luma {
                 wall.minute = static_cast<u8>(inDay / 60 % 60);
                 wall.second = static_cast<u8>(inDay % 60);
                 wall.millisecond = static_cast<u16>(nanos / 1000000);
-                *pOut = wall;
-                return LUMA_OK;
+                return outStruct(pMod, pWhere, pOut, size, wall);
             }
 
             int32_t svcSetRate(const LumaMod* pMod, uint32_t rate) {
@@ -693,11 +708,12 @@ namespace luma {
                 static_assert(sizeof(clockGiven) == sizeof(u32), "LumaTimeClock is 4 bytes");
                 u32 clock;
                 __builtin_memcpy(&clock, &clockGiven, sizeof(clock));
-                const char* pWrong = clock > LUMA_TIME_NANOSECONDS ? "clock"
-                                     : after == 0                  ? "after"
-                                     : fn == nullptr               ? "fn"
-                                     : pOut == nullptr             ? "out"
-                                                                   : nullptr;
+                // out is checked before the timer is made, so an out that cannot be written leaves no timer behind.
+                const char* pWrong = clock > LUMA_TIME_NANOSECONDS                                   ? "clock"
+                                     : after == 0                                                    ? "after"
+                                     : !modCode(pMod, reinterpret_cast<const void*>(fn))             ? "fn"
+                                     : luma_out_ready(sKernel, pMod, pOut) != LUMA_OK                  ? "out"
+                                                                                                     : nullptr;
                 if (pWrong != nullptr) {
                     report(pMod, pWhere, 101u, pWrong, nullptr, nullptr);
                     return LUMA_E_ARGUMENT;
@@ -747,7 +763,10 @@ namespace luma {
                     sTimerClocks++;
                     frameHooksChanged();
                 }
-                *pOut = pTimer->handle;
+                // Checked a moment ago: a fault now would be the mod freeing it from another thread meanwhile.
+                if (luma_value_out(sKernel, pMod, pOut, pTimer->handle) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "out", nullptr, nullptr);
+                }
                 return LUMA_PENDING;
             }
 
@@ -770,6 +789,10 @@ namespace luma {
                 if (const s32 status = enter(pMod, "time.on_frame", false); status != LUMA_OK) {
                     return status;
                 }
+                if (fn != nullptr && !modCode(pMod, reinterpret_cast<const void*>(fn))) {
+                    report(pMod, "time.on_frame", 101u, "fn", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
                 Clock* const pClock = findClock(pMod);
                 if (pClock == nullptr || pClock->gone) {
                     return LUMA_E_CANCELLED;
@@ -785,6 +808,10 @@ namespace luma {
             int32_t svcOnStep(const LumaMod* pMod, LumaTimeFn fn, void* pUser) {
                 if (const s32 status = enter(pMod, "time.on_step", false); status != LUMA_OK) {
                     return status;
+                }
+                if (fn != nullptr && !modCode(pMod, reinterpret_cast<const void*>(fn))) {
+                    report(pMod, "time.on_step", 101u, "fn", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
                 }
                 Clock* const pClock = findClock(pMod);
                 if (pClock == nullptr || pClock->gone) {

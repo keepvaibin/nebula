@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "audio-badptr",
+  "name": "audio-badptr",
+  "summary": "audio-badptr (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

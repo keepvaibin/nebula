@@ -16,6 +16,7 @@
     "2254-watch-stopped",
     "2290-state-taken-out",
     "2291a-forget-write",
-    "2291b-forget"
+    "2291b-forget",
+    "2255-bad-pointers"
   ]
 }

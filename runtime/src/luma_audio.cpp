@@ -9,6 +9,7 @@
 // audio thread never allocates and never frees: it reads, mixes, marks a voice ended or silent and posts its event
 // node (the kernel's queue links nodes and allocates nothing). Items are made and freed on the game thread only.
 #include "galaxy/luma_audio_service.h"
+#include "galaxy/luma_mod_memory.h"
 
 #include "galaxy/asset_store.h"
 #include "galaxy/mod_log.h"
@@ -167,6 +168,11 @@ std::vector<std::unique_ptr<ModState>> g_mods;  // game thread
 const Item* g_delivering = nullptr;             // g_lock: the item whose deliver runs
 std::atomic<std::size_t> g_live{0};             // g_items' size: the mix's test with no lock
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
+
+// The kernel a call reads and writes the mod's memory through (M-029). Set while a call runs: enter checks it.
+const LumaServiceKernel* mod_kernel() noexcept {
+    return g_kernel.load(std::memory_order_acquire);
+}
 std::atomic<const assets::AssetStore*> g_store{nullptr};
 std::atomic<LumaHandle> g_next_handle{1};
 std::atomic<std::size_t> g_taps{0};             // taps of the output: the frame's test with no lock
@@ -771,6 +777,28 @@ std::int32_t check_place(const LumaMod* mod, const char* where, const LumaAudioP
     return LUMA_OK;
 }
 
+// The mod's sound name through the kernel (M-029): false when null, unreadable, empty or longer than the most.
+bool name_of(const LumaMod* mod, const char* given, std::string* out) noexcept {
+    try {
+        return galaxy::mod_memory::text(mod_kernel(), mod, given, LUMA_AUDIO_NAME_MOST, out) == LUMA_OK && !out->empty();
+    } catch (...) {
+        return false;
+    }
+}
+
+// The mod's place through the kernel (M-029): *at the copy, or null when it gave none. False: unreadable.
+bool place_of(const LumaMod* mod, const LumaAudioPlace* given, LumaAudioPlace* copy, const LumaAudioPlace** at) noexcept {
+    *at = nullptr;
+    if (given == nullptr) {
+        return true;
+    }
+    if (galaxy::mod_memory::sized(mod_kernel(), mod, given, copy) != LUMA_OK) {
+        return false;
+    }
+    *at = copy;
+    return true;
+}
+
 // Where the camera and the player are now (LumaGameSound.cpp luma_game_listener).
 struct Listener {
     bool camera = false;
@@ -878,20 +906,33 @@ void place_frame(Item* placer) noexcept {
 
 // ---- The calls, continued ------------------------------------------------------------------------------------------
 
-std::int32_t play_sound(const LumaMod* mod, const char* where, const char* name, const LumaAudioPlay* how,
-                        const LumaAudioPlace* at, LumaEventFn fn, void* user, LumaHandle* out) noexcept {
+std::int32_t play_sound(const LumaMod* mod, const char* where, const char* name_given, const LumaAudioPlay* how_given,
+                        const LumaAudioPlace* at_given, LumaEventFn fn, void* user, LumaHandle* out) noexcept {
     ModState* state = nullptr;
     if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
         return status;
     }
-    if (name == nullptr) {
+    // The mod's name through the kernel (M-029).
+    std::string name_text;
+    if (!name_of(mod, name_given, &name_text)) {
         return argument(mod, where, "name");
     }
-    const std::size_t length = ::strnlen(name, LUMA_AUDIO_NAME_MOST + 1u);
-    if (length == 0u || length > LUMA_AUDIO_NAME_MOST) {
-        return argument(mod, where, "name");
+    const char* const name = name_text.c_str();
+    const std::size_t length = name_text.size();
+    LumaAudioPlay how_copy{};
+    const LumaAudioPlay* const how = how_given != nullptr ? &how_copy : nullptr;
+    if (how_given != nullptr && galaxy::mod_memory::sized(mod_kernel(), mod, how_given, &how_copy) != LUMA_OK) {
+        return argument(mod, where, "how");
     }
-    if (out == nullptr) {
+    LumaAudioPlace at_copy{};
+    const LumaAudioPlace* at = nullptr;
+    if (!place_of(mod, at_given, &at_copy, &at)) {
+        return argument(mod, where, "at");
+    }
+    if (fn != nullptr && !galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
+        return argument(mod, where, "fn");
+    }
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     LumaAudioPlay play{sizeof(LumaAudioPlay), 1.0f, 1.0f, LUMA_AUDIO_BUS_SOUND, -1, 0u};
@@ -1019,7 +1060,7 @@ std::int32_t play_sound(const LumaMod* mod, const char* where, const char* name,
         }
         g_items.reserve(g_items.size() + 1u);
         item->handle = g_next_handle.fetch_add(1, std::memory_order_relaxed);
-        *out = item->handle;
+        (void)luma_value_out(mod_kernel(), mod, out, item->handle);
         g_items.push_back(item.release());
         reap_locked();
     } catch (...) {
@@ -1038,11 +1079,16 @@ std::int32_t audio_play_at(const LumaMod* mod, const char* name, const LumaAudio
     return play_sound(mod, "audio.play_at", name, how, at, fn, user, out);
 }
 
-std::int32_t audio_voice_place(const LumaMod* mod, LumaHandle voice, const LumaAudioPlace* at) noexcept {
+std::int32_t audio_voice_place(const LumaMod* mod, LumaHandle voice, const LumaAudioPlace* at_given) noexcept {
     static constexpr const char* where = "audio.voice_place";
     ModState* state = nullptr;
     if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
         return status;
+    }
+    LumaAudioPlace at_copy{};
+    const LumaAudioPlace* at = nullptr;
+    if (!place_of(mod, at_given, &at_copy, &at)) {
+        return argument(mod, where, "at");
     }
     if (at != nullptr) {
         if (const std::int32_t status = check_place(mod, where, at); status != LUMA_OK) {
@@ -1072,20 +1118,25 @@ std::int32_t audio_voice_place(const LumaMod* mod, LumaHandle voice, const LumaA
 }
 
 // The game's own sounds (LumaGameSound.cpp). Their handles are the game module's ids, never a voice's.
-std::int32_t audio_game_play(const LumaMod* mod, const char* name, const LumaAudioPlace* at, LumaHandle* out) noexcept {
+std::int32_t audio_game_play(const LumaMod* mod, const char* name_given, const LumaAudioPlace* at_given,
+                             LumaHandle* out) noexcept {
     static constexpr const char* where = "audio.game_play";
     ModState* state = nullptr;
     if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
         return status;
     }
-    if (name == nullptr) {
+    // The mod's name through the kernel (M-029).
+    std::string name_text;
+    if (!name_of(mod, name_given, &name_text)) {
         return argument(mod, where, "name");
     }
-    const std::size_t length = ::strnlen(name, LUMA_AUDIO_NAME_MOST + 1u);
-    if (length == 0u || length > LUMA_AUDIO_NAME_MOST) {
-        return argument(mod, where, "name");
+    const char* const name = name_text.c_str();
+    LumaAudioPlace at_copy{};
+    const LumaAudioPlace* at = nullptr;
+    if (!place_of(mod, at_given, &at_copy, &at)) {
+        return argument(mod, where, "at");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     if (at != nullptr) {
@@ -1109,7 +1160,7 @@ std::int32_t audio_game_play(const LumaMod* mod, const char* name, const LumaAud
     if (status != LUMA_OK) {
         return status;  // NOT_FOUND, BUSY: answers
     }
-    *out = id;
+    (void)luma_value_out(mod_kernel(), mod, out, LumaHandle{id});
     if (at != nullptr && at->follow != LUMA_AUDIO_AT_POINT) {
         const std::lock_guard<std::mutex> lock(g_lock);
         try {
@@ -1121,11 +1172,16 @@ std::int32_t audio_game_play(const LumaMod* mod, const char* name, const LumaAud
     return LUMA_OK;
 }
 
-std::int32_t audio_game_place(const LumaMod* mod, LumaHandle sound, const LumaAudioPlace* at) noexcept {
+std::int32_t audio_game_place(const LumaMod* mod, LumaHandle sound, const LumaAudioPlace* at_given) noexcept {
     static constexpr const char* where = "audio.game_place";
     ModState* state = nullptr;
     if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
         return status;
+    }
+    LumaAudioPlace at_copy{};
+    const LumaAudioPlace* at = nullptr;
+    if (!place_of(mod, at_given, &at_copy, &at)) {
+        return argument(mod, where, "at");
     }
     if (at == nullptr) {
         return argument(mod, where, "at");
@@ -1227,15 +1283,21 @@ std::int32_t audio_bus_volume(const LumaMod* mod, std::uint32_t bus, float volum
     return LUMA_OK;
 }
 
-std::int32_t audio_stream_open(const LumaMod* mod, const LumaAudioStreamDesc* desc, LumaEventFn fn, void* user,
+std::int32_t audio_stream_open(const LumaMod* mod, const LumaAudioStreamDesc* desc_given, LumaEventFn fn, void* user,
                                LumaHandle* out) noexcept {
     static constexpr const char* where = "audio.stream_open";
     ModState* state = nullptr;
     if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
         return status;
     }
-    if (desc == nullptr) {
+    // The mod's desc and function through the kernel (M-029).
+    LumaAudioStreamDesc desc_copy{};
+    const LumaAudioStreamDesc* const desc = &desc_copy;
+    if (galaxy::mod_memory::sized(mod_kernel(), mod, desc_given, &desc_copy) != LUMA_OK) {
         return argument(mod, where, "desc");
+    }
+    if (fn != nullptr && !galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
+        return argument(mod, where, "fn");
     }
     if (desc->size < sizeof(LumaAudioStreamDesc)) {
         return struct_size(mod, where, "LumaAudioStreamDesc", desc->size, sizeof(LumaAudioStreamDesc));
@@ -1252,7 +1314,7 @@ std::int32_t audio_stream_open(const LumaMod* mod, const LumaAudioStreamDesc* de
     if (!finite_in(desc->volume, 0.0f, LUMA_AUDIO_VOLUME_MOST)) {
         return argument(mod, where, "desc.volume");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     try {
@@ -1288,7 +1350,7 @@ std::int32_t audio_stream_open(const LumaMod* mod, const LumaAudioStreamDesc* de
         const std::lock_guard<std::mutex> lock(g_lock);
         g_items.reserve(g_items.size() + 1u);
         item->handle = g_next_handle.fetch_add(1, std::memory_order_relaxed);
-        *out = item->handle;
+        (void)luma_value_out(mod_kernel(), mod, out, item->handle);
         Item* const made = item.release();
         g_items.push_back(made);
         if (fn != nullptr) {
@@ -1312,21 +1374,41 @@ std::int64_t audio_stream_push(const LumaMod* mod, LumaHandle stream, const floa
     if (samples == nullptr && frames != 0u) {
         return argument(mod, where, "samples");
     }
-    std::uint64_t not_numbers = 0;
+    // The room the ring has: only the mix takes from it (it only grows until the push below), and only this thread
+    // pushes or closes the mod's streams.
+    std::size_t channels = 0;
     std::uint64_t taken = 0;
+    {
+        const std::lock_guard<std::mutex> lock(g_lock);
+        const Item* item = find_locked(state, stream, true);
+        if (item == nullptr) {
+            return bad_handle(mod, where);
+        }
+        channels = item->channels;
+        taken = std::min<std::uint64_t>(frames, item->capacity - item->count);
+    }
+    // The mod's samples through the kernel (M-029), outside the mix's lock.
+    thread_local std::vector<float> given;
+    try {
+        given.resize(static_cast<std::size_t>(taken) * channels);
+    } catch (...) {
+        return LUMA_E_MEMORY;
+    }
+    if (taken != 0u && mod_kernel()->copy_in(mod, given.data(), samples, given.size() * sizeof(float)) != LUMA_OK) {
+        return argument(mod, where, "samples");
+    }
+    std::uint64_t not_numbers = 0;
     {
         const std::lock_guard<std::mutex> lock(g_lock);
         Item* item = find_locked(state, stream, true);
         if (item == nullptr) {
             return bad_handle(mod, where);
         }
-        const std::size_t channels = item->channels;
-        taken = std::min<std::uint64_t>(frames, item->capacity - item->count);
         std::size_t at = (item->read + item->count) % item->capacity;
         for (std::uint64_t f = 0; f < taken; ++f) {
             float* to = item->ring.data() + at * channels;
             for (std::size_t c = 0; c < channels; ++c) {
-                const float value = samples[f * channels + c];
+                const float value = given[f * channels + c];
                 if (std::isfinite(value)) {
                     to[c] = value;
                 } else {
@@ -1352,7 +1434,7 @@ std::int32_t audio_stream_channels(const LumaMod* mod, LumaHandle stream, std::u
     if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
         return status;
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     const std::lock_guard<std::mutex> lock(g_lock);
@@ -1360,7 +1442,7 @@ std::int32_t audio_stream_channels(const LumaMod* mod, LumaHandle stream, std::u
     if (item == nullptr) {
         return bad_handle(mod, where);
     }
-    *out = static_cast<std::uint32_t>(item->channels);
+    (void)luma_value_out(mod_kernel(), mod, out, static_cast<std::uint32_t>(item->channels));
     return LUMA_OK;
 }
 
@@ -1407,19 +1489,19 @@ void end_music_locked(std::uint32_t fade_ms) noexcept {
     }
 }
 
-std::int32_t audio_music(const LumaMod* mod, const char* name, std::uint32_t fade_ms) noexcept {
+std::int32_t audio_music(const LumaMod* mod, const char* name_given, std::uint32_t fade_ms) noexcept {
     static constexpr const char* where = "audio.music";
     ModState* state = nullptr;
     if (const std::int32_t status = begin(mod, where, &state); status != LUMA_OK) {
         return status;
     }
-    if (name == nullptr) {
+    // The mod's name through the kernel (M-029).
+    std::string name_text;
+    if (!name_of(mod, name_given, &name_text)) {
         return argument(mod, where, "name");
     }
-    const std::size_t length = ::strnlen(name, LUMA_AUDIO_NAME_MOST + 1u);
-    if (length == 0u || length > LUMA_AUDIO_NAME_MOST) {
-        return argument(mod, where, "name");
-    }
+    const char* const name = name_text.c_str();
+    const std::size_t length = name_text.size();
     if (fade_ms > LUMA_AUDIO_FADE_MOST_MS) {
         return argument(mod, where, "fade_ms");
     }
@@ -1544,10 +1626,10 @@ std::int32_t audio_tap_open(const LumaMod* mod, std::uint32_t source, LumaEventF
     if (source > LUMA_AUDIO_TAP_MODS) {
         return argument(mod, where, "source");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     try {
@@ -1579,7 +1661,7 @@ std::int32_t audio_tap_open(const LumaMod* mod, std::uint32_t source, LumaEventF
         const std::lock_guard<std::mutex> lock(g_lock);
         g_items.reserve(g_items.size() + 1u);
         item->handle = g_next_handle.fetch_add(1, std::memory_order_relaxed);
-        *out = item->handle;
+        (void)luma_value_out(mod_kernel(), mod, out, item->handle);
         if (source == LUMA_AUDIO_TAP_OUTPUT) {
             g_taps.fetch_add(1, std::memory_order_relaxed);
         }

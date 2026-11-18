@@ -10,6 +10,7 @@
 // Camera2 (the first camera through an image reader, YUV 4:2:0 converted to RGBA). Other platforms
 // answer LUMA_E_ABSENT until their backends land (Core Audio and AVFoundation on Apple; PipeWire and V4L2 on Linux).
 #include "galaxy/luma_capture_service.h"
+#include "galaxy/luma_mod_memory.h"
 
 #include <luma_capture.h>
 
@@ -109,6 +110,11 @@ std::mutex g_lock;
 std::vector<std::shared_ptr<Item>> g_items;  // g_lock; an item leaves once closed and not queued
 const Item* g_delivering = nullptr;          // g_lock
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
+
+// The kernel a call reads and writes the mod's memory through (M-029). Set while a call runs: enter checks it.
+const LumaServiceKernel* mod_kernel() noexcept {
+    return g_kernel.load(std::memory_order_acquire);
+}
 std::atomic<LumaHandle> g_next_handle{1};
 
 void report(const LumaMod* mod, const char* where, std::uint32_t code, const char* a = nullptr) noexcept {
@@ -911,7 +917,7 @@ std::int32_t open_item(const LumaMod* mod, const char* where, bool camera, LumaE
         g_items.reserve(g_items.size() + 1u);
         std::thread(camera ? camera_thread : microphone_thread, item).detach();
         item->handle = g_next_handle.fetch_add(1, std::memory_order_relaxed);
-        *out = item->handle;
+        (void)luma_value_out(mod_kernel(), mod, out, item->handle);
         g_items.push_back(item);
     } catch (...) {
         item->stop.store(true, std::memory_order_release);
@@ -937,13 +943,16 @@ std::int32_t close_item(const LumaMod* mod, const char* where, bool camera, Luma
     return LUMA_E_HANDLE;
 }
 
-std::int32_t microphone_open(const LumaMod* mod, const LumaAudioMicrophoneDesc* desc, LumaEventFn fn, void* user,
+std::int32_t microphone_open(const LumaMod* mod, const LumaAudioMicrophoneDesc* desc_given, LumaEventFn fn, void* user,
                              LumaHandle* out) noexcept {
     static constexpr const char* where = "audio.microphone.open";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (desc == nullptr) {
+    // The mod's desc, function and out through the kernel (M-029).
+    LumaAudioMicrophoneDesc desc_copy{};
+    const LumaAudioMicrophoneDesc* const desc = &desc_copy;
+    if (galaxy::mod_memory::sized(mod_kernel(), mod, desc_given, &desc_copy) != LUMA_OK) {
         return argument(mod, where, "desc");
     }
     if (desc->size < sizeof(LumaAudioMicrophoneDesc)) {
@@ -956,10 +965,10 @@ std::int32_t microphone_open(const LumaMod* mod, const LumaAudioMicrophoneDesc* 
     if (desc->channels != 1u && desc->channels != 2u) {
         return argument(mod, where, "desc.channels");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     try {
@@ -982,13 +991,16 @@ std::int32_t microphone_close(const LumaMod* mod, LumaHandle microphone) noexcep
     }
 }
 
-std::int32_t camera_open(const LumaMod* mod, const LumaCaptureCameraDesc* desc, LumaEventFn fn, void* user,
+std::int32_t camera_open(const LumaMod* mod, const LumaCaptureCameraDesc* desc_given, LumaEventFn fn, void* user,
                          LumaHandle* out) noexcept {
     static constexpr const char* where = "capture.camera.open";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (desc == nullptr) {
+    // The mod's desc, function and out through the kernel (M-029).
+    LumaCaptureCameraDesc desc_copy{};
+    const LumaCaptureCameraDesc* const desc = &desc_copy;
+    if (galaxy::mod_memory::sized(mod_kernel(), mod, desc_given, &desc_copy) != LUMA_OK) {
         return argument(mod, where, "desc");
     }
     if (desc->size < sizeof(LumaCaptureCameraDesc)) {
@@ -1001,10 +1013,10 @@ std::int32_t camera_open(const LumaMod* mod, const LumaCaptureCameraDesc* desc, 
     if (desc->fps > LUMA_CAPTURE_CAMERA_FPS_MOST) {
         return argument(mod, where, "desc.fps");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     try {

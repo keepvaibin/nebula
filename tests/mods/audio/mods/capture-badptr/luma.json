@@ -1,0 +1,23 @@
+{
+  "format": "1.0",
+  "id": "capture-badptr",
+  "name": "capture-badptr",
+  "summary": "capture-badptr (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "audio.microphone",
+      "why": "The capture test asks for it."
+    },
+    {
+      "name": "capture.camera",
+      "why": "The capture test asks for it."
+    }
+  ]
+}

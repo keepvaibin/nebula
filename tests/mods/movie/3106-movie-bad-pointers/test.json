@@ -1,0 +1,108 @@
+{
+  "harness": 1,
+  "name": "3106-movie-bad-pointers",
+  "about": "M-029: play with a name, fn or out that cannot be read, written or called, position into a frame or frames that cannot be written: LUMA_E_ARGUMENT, reported, nothing played or written; the good calls after work",
+  "proves": [
+    "movie.play",
+    "kernel.services.mod_memory"
+  ],
+  "mods": [
+    "../mods/jv-badptr"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        3101
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.jv-badptr.name_unmapped",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.fn_unmapped",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.fn_data",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.out_unmapped",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.out_read_only",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.frame_unmapped",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.frames_read_only",
+      "is": -1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.none_written",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.play",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.position",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.frames_above_0",
+      "is": 1,
+      "when": "last"
+    },
+    {
+      "fact": "mod.jv-badptr.stop",
+      "is": 0,
+      "when": "last"
+    },
+    {
+      "log": "jv-badptr: movie\\.play was given a wrong name; it did nothing\\."
+    },
+    {
+      "log": "jv-badptr: movie\\.play was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "jv-badptr: movie\\.play was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "jv-badptr: movie\\.position was given a wrong frame; it did nothing\\."
+    },
+    {
+      "log": "jv-badptr: movie\\.position was given a wrong frames; it did nothing\\."
+    }
+  ]
+}

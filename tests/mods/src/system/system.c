@@ -17,8 +17,12 @@
    sys-links-undeclared(12) 2232b: the same without the permission: L506.
    sys-takeout        (13) 2234: at k 1 set_text, get_text and a link (all answered at once in deterministic mode,
                             their events queued); the run takes the mod out before the next frame's deliveries.
+   sys-badptr         (14) 2235 (M-029): at k 1 every pointer facts, display, the clipboard and links read, write or
+                            call given wrong (lt_bad.h), then a good set_text; at k 2 a good get_text, whose event's
+                            call takes into a wrong buf, then a good one; at k 3 the events counted.
    Run steps call MR::getRandom(0, 4240 + k) and the hook gives 1. Facts are numbers (lt.h); texts are compared here. */
 #include "../loader/lt.h"
+#include "../loader/lt_bad.h"
 #include <luma_system.h>
 
 #ifndef CASE
@@ -64,6 +68,14 @@ __attribute__((unused)) static void on_event(void* user, const LumaEvent* event)
         lt_fact("take_head", small[0] == 'L' && small[1] == 'u' && small[2] == 'm' && small[3] == 'a' && small[4] == 0);
         char again[32];
         lt_fact("take_again", clip->take_text(lt_mod, event->handle, again, sizeof(again)));
+    }
+#elif CASE == 14
+    if (event->kind == LUMA_SYSTEM_CLIPBOARD_EVENT_TEXT && event->status == LUMA_OK) {
+        lt_fact("take_buf_unmapped", clip->take_text(lt_mod, event->handle, (char*)LT_UNMAPPED, 8));
+        lt_fact("take_buf_read_only", clip->take_text(lt_mod, event->handle, (char*)LT_READ_ONLY, 8));
+        char small[8];
+        lt_fact("take_good", clip->take_text(lt_mod, event->handle, small, sizeof(small)));
+        lt_fact("take_good_text", small[0] == 'a' && small[1] == 0);
     }
 #elif CASE == 4
     if (event->kind == LUMA_SYSTEM_CLIPBOARD_EVENT_IMAGE && event->status == LUMA_OK) {
@@ -185,6 +197,27 @@ static int32_t trigger(LumaCall* call, void* user) {
         lt_fact("get", clip->get_text(lt_mod, on_event, 0, &handle));
         lt_fact("open", links->open(lt_mod, "https://example.org/luma", on_event, 0, &handle));
     }
+#elif CASE == 14
+    if (k == 1) {
+        lt_fact("facts_unmapped", sys->facts(lt_mod, (LumaSystemFacts*)LT_UNMAPPED));
+        lt_fact("facts_read_only", sys->facts(lt_mod, (LumaSystemFacts*)LT_READ_ONLY));
+        lt_fact("display_unmapped", sys->display(lt_mod, (LumaSystemDisplay*)LT_UNMAPPED));
+        lt_fact("display_read_only", sys->display(lt_mod, (LumaSystemDisplay*)LT_READ_ONLY));
+        LumaHandle none = 0;
+        lt_fact("get_fn_data", clip->get_text(lt_mod, (LumaEventFn)(uintptr_t)LT_DATA_FN, 0, &none));
+        lt_fact("get_fn_game", clip->get_text(lt_mod, (LumaEventFn)(uintptr_t)clip->cancel, 0, &none));
+        lt_fact("get_out_unmapped", clip->get_text(lt_mod, on_event, 0, (LumaHandle*)LT_UNMAPPED));
+        lt_fact("get_out_read_only", clip->get_image(lt_mod, on_event, 0, (LumaHandle*)LT_READ_ONLY));
+        lt_fact("set_text_unmapped", clip->set_text(lt_mod, (const char*)LT_UNMAPPED, 4, on_event, 0, &none));
+        lt_fact("set_image_unmapped", clip->set_image(lt_mod, (const uint8_t*)LT_UNMAPPED, 24, 3, 2, on_event, 0, &none));
+        lt_fact("link_url_unmapped", links->open(lt_mod, (const char*)LT_UNMAPPED, on_event, 0, &none));
+        lt_fact("link_fn_game", links->open(lt_mod, "https://example.org/", (LumaEventFn)(uintptr_t)links->cancel, 0, &none));
+        lt_fact("link_out_read_only", links->open(lt_mod, "https://example.org/", on_event, 0, (LumaHandle*)LT_READ_ONLY));
+        lt_fact("none_written", none == 0);
+        lt_fact("set_good", clip->set_text(lt_mod, "a", 1, on_event, 0, &handle));
+    }
+    if (k == 2) lt_fact("get_good", clip->get_text(lt_mod, on_event, 0, &handle));
+    if (k == 3) lt_fact("events", events);
 #endif
     LUMA_RESULT(call, int32_t) = 1;
     return 0;
@@ -193,6 +226,10 @@ static int32_t trigger(LumaCall* call, void* user) {
 static const LumaImport imports[] = {
 #if CASE == 1 || CASE == 2
     LUMA_SERVICE(sys, LUMA_SYSTEM_NAME, "1.0"),
+#elif CASE == 14
+    LUMA_SERVICE(sys, LUMA_SYSTEM_NAME, "1.0"),
+    LUMA_SERVICE(clip, LUMA_SYSTEM_CLIPBOARD_NAME, "1.0"),
+    LUMA_SERVICE(links, LUMA_SYSTEM_LINKS_NAME, "1.0"),
 #elif CASE >= 3 && CASE <= 8 || CASE == 11
     LUMA_SERVICE(clip, LUMA_SYSTEM_CLIPBOARD_NAME, "1.0"),
 #elif CASE == 9 || CASE == 10 || CASE == 12

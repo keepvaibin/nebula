@@ -199,6 +199,12 @@ namespace luma {
                     sKernel->report(pMod, cWhere, 101u, args, 1u);  // Service.Argument
                     return LUMA_E_ARGUMENT;
                 }
+                // A function in the mod's code (M-029): anything else would be called where no guard can resume.
+                if (fn != nullptr && sKernel->mod_code(pMod, reinterpret_cast<const void*>(fn)) != 1) {
+                    const char* args[1] = {"fn"};
+                    sKernel->report(pMod, cWhere, 101u, args, 1u);  // Service.Argument
+                    return LUMA_E_ARGUMENT;
+                }
                 const bool on = kinds != 0 && fn != nullptr;
                 Watch* pWatch = findWatch(pMod);
                 if (pWatch == nullptr && !on) {

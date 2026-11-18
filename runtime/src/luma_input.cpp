@@ -8,6 +8,7 @@
 // and whether a motor is driven. With no mod nothing here runs but one atomic load per read.
 
 #include "galaxy/luma_input_service.h"
+#include "galaxy/luma_mod_memory.h"
 
 #include "galaxy/input/mod_actions.h"
 #include "galaxy/input_bindings.h"
@@ -44,6 +45,9 @@
 namespace galaxy::luma_input {
 namespace {
 
+constexpr std::size_t kActionIdMost = 64u;  // an action's id: a key option's key (the manifest's key rule)
+constexpr std::size_t kInitialBytesMost = LUMA_INPUT_TEXT_MOST * 4u + 4u;  // a text request's initial text's bytes read
+constexpr std::size_t kDevicePathMost = 4096u;  // a device's path (dev.list's paths are far shorter)
 constexpr std::uint32_t kStateLeast = static_cast<std::uint32_t>(sizeof(LumaInputState));  // 1.0's whole struct
 static_assert(sizeof(LumaInputState) == 24u, "LumaInputState 1.0 is 24 bytes (luma_input.h)");
 constexpr std::uint32_t kGameLeast = static_cast<std::uint32_t>(sizeof(LumaInputGame));
@@ -66,6 +70,11 @@ constexpr float kRumbleMostSeconds = 10.0f;
 constexpr std::size_t kReportsKept = 64u;
 
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
+
+// The kernel a call reads and writes the mod's memory through (M-029). Set while a call runs: enter checks it.
+const LumaServiceKernel* mod_kernel() noexcept {
+    return g_kernel.load(std::memory_order_acquire);
+}
 void (*g_log)(const char*) = nullptr;  // set by providers() before the first mod
 bool g_declared = false;              // game thread: the session's actions are declared (at the first mod's begin)
 // Game thread, from declare: (mod, a mod it needs) for each started mod, so a library reads the actions of the mods that
@@ -768,41 +777,55 @@ std::int32_t index_of(const LumaMod* mod, LumaInputAction handle) {
     return -1;
 }
 
-std::int32_t input_action(const LumaMod* mod, const char* id, LumaInputAction* out) {
+std::int32_t input_action(const LumaMod* mod, const char* id_given, LumaInputAction* out) {
     const char* const where = "input.action";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (id == nullptr) {
+    // The mod's id and out through the kernel (M-029): an id longer than any key option's is none.
+    std::string id_text;
+    const std::int32_t id_read = galaxy::mod_memory::text(mod_kernel(), mod, id_given, kActionIdMost, &id_text);
+    if (id_read != LUMA_OK && id_read != LUMA_E_TOO_LARGE) {
         return argument(mod, where, "id");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    *out = 0u;
+    (void)luma_value_out(mod_kernel(), mod, out, LumaInputAction{0});
+    if (id_read == LUMA_E_TOO_LARGE) {
+        return LUMA_E_NOT_FOUND;
+    }
+    const char* const id = id_text.c_str();
     const char* const mod_id = kernel()->mod_id(mod);
     const std::int32_t index = galaxy::input::mod_actions::find(mod_id, id);
     if (index < 0) {
         return LUMA_E_NOT_FOUND;  // an answer: the mod's luma.json has no key option `id`
     }
-    *out = static_cast<LumaInputAction>(index) + 1u;
+    (void)luma_value_out(mod_kernel(), mod, out, static_cast<LumaInputAction>(index) + 1u);
     return LUMA_OK;
 }
 
 // input 1.3: the action `id` of `of`, a running mod that is `mod` or needs it (a library starting its user's moves by
 // the user's own keys).
-std::int32_t input_user_action(const LumaMod* mod, std::uint64_t of, const char* id, LumaInputAction* out) {
+std::int32_t input_user_action(const LumaMod* mod, std::uint64_t of, const char* id_given, LumaInputAction* out) {
     const char* const where = "input.user_action";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (id == nullptr) {
+    // The mod's id and out through the kernel (M-029): an id longer than any key option's is none.
+    std::string id_text;
+    const std::int32_t id_read = galaxy::mod_memory::text(mod_kernel(), mod, id_given, kActionIdMost, &id_text);
+    if (id_read != LUMA_OK && id_read != LUMA_E_TOO_LARGE) {
         return argument(mod, where, "id");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    *out = 0u;
+    (void)luma_value_out(mod_kernel(), mod, out, LumaInputAction{0});
+    if (id_read == LUMA_E_TOO_LARGE) {
+        return LUMA_E_NOT_FOUND;
+    }
+    const char* const id = id_text.c_str();
     const LumaServiceKernel* const k = kernel();
     const auto* const other = reinterpret_cast<const LumaMod*>(static_cast<std::uintptr_t>(of));
     const char* const own_id = k->mod_id(mod);
@@ -825,7 +848,7 @@ std::int32_t input_user_action(const LumaMod* mod, std::uint64_t of, const char*
     if (index < 0) {
         return LUMA_E_NOT_FOUND;  // an answer: `of`'s luma.json has no key option `id`
     }
-    *out = static_cast<LumaInputAction>(index) + 1u;
+    (void)luma_value_out(mod_kernel(), mod, out, static_cast<LumaInputAction>(index) + 1u);
     return LUMA_OK;
 }
 
@@ -834,26 +857,28 @@ std::int32_t input_read(const LumaMod* mod, LumaInputAction action, LumaInputSta
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (out == nullptr) {
+    std::uint32_t size = 0;
+    if (luma_struct_size(mod_kernel(), mod, out, &size) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    if (out->size < kStateLeast) {
-        return struct_size(mod, where, "LumaInputState", out->size, kStateLeast);
+    if (size < kStateLeast) {
+        return struct_size(mod, where, "LumaInputState", size, kStateLeast);
     }
     const std::int32_t index = index_of(mod, action);
     if (index < 0) {
         return bad_handle(mod, where);
     }
     const galaxy::input::mod_actions::State state = galaxy::input::mod_actions::read(index);
-    const std::uint32_t size = out->size;
-    std::memset(out, 0, kStateLeast);
-    out->size = size;
-    out->down = state.down ? 1u : 0u;
-    out->pressed = state.pressed ? 1u : 0u;
-    out->released = state.released ? 1u : 0u;
-    out->bound = state.bound ? 1u : 0u;
-    out->value = state.value;
-    out->frames = state.frames;
+    LumaInputState answer{};
+    answer.down = state.down ? 1u : 0u;
+    answer.pressed = state.pressed ? 1u : 0u;
+    answer.released = state.released ? 1u : 0u;
+    answer.bound = state.bound ? 1u : 0u;
+    answer.value = state.value;
+    answer.frames = state.frames;
+    if (luma_struct_out(mod_kernel(), mod, out, size, answer) != LUMA_OK) {
+        return argument(mod, where, "out");
+    }
     return LUMA_OK;
 }
 
@@ -866,22 +891,19 @@ std::int32_t game_common(const LumaMod* mod, const char* where, std::uint32_t pl
     if (player >= LUMA_INPUT_PLAYERS) {
         return argument(mod, where, "player");
     }
-    if (out == nullptr) {
+    std::uint32_t size = 0;
+    if (luma_struct_size(mod_kernel(), mod, out, &size) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    if (out->size < kGameLeast) {
-        return struct_size(mod, where, "LumaInputGame", out->size, kGameLeast);
+    if (size < kGameLeast) {
+        return struct_size(mod, where, "LumaInputGame", size, kGameLeast);
     }
-    const std::uint32_t size = out->size;
     const PlayerRead& read = g_players[player];
-    if (!read.read) {
-        std::memset(out, 0, kGameLeast);
-        out->size = size;
-        return LUMA_E_ABSENT;
+    const LumaInputGame answer = !read.read ? LumaInputGame{} : raw ? read.raw : read.game;
+    if (luma_struct_out(mod_kernel(), mod, out, size, answer) != LUMA_OK) {
+        return argument(mod, where, "out");
     }
-    std::memcpy(out, raw ? &read.raw : &read.game, kGameLeast);
-    out->size = size;
-    return LUMA_OK;
+    return read.read ? LUMA_OK : LUMA_E_ABSENT;
 }
 
 std::int32_t input_game(const LumaMod* mod, std::uint32_t player, LumaInputGame* out) {
@@ -900,10 +922,9 @@ std::int32_t input_device(const LumaMod* mod, std::uint32_t player, std::uint32_
     if (player >= LUMA_INPUT_PLAYERS) {
         return argument(mod, where, "player");
     }
-    if (out == nullptr) {
+    if (luma_value_out(mod_kernel(), mod, out, g_players[player].device) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    *out = g_players[player].device;
     return LUMA_OK;
 }
 
@@ -911,6 +932,9 @@ std::int32_t input_watch_device(const LumaMod* mod, LumaEventFn fn, void* user) 
     const char* const where = "input.watch_device";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
+    }
+    if (fn != nullptr && !galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
+        return argument(mod, where, "fn");
     }
     ModRecord* record = record_of(mod, fn != nullptr);
     if (record != nullptr) {
@@ -924,22 +948,25 @@ std::int32_t input_watch_device(const LumaMod* mod, LumaEventFn fn, void* user) 
     return LUMA_OK;
 }
 
-std::int32_t input_text_request(const LumaMod* mod, const LumaInputTextRequest* request, LumaEventFn fn, void* user,
-                                LumaHandle* out) {
+std::int32_t input_text_request(const LumaMod* mod, const LumaInputTextRequest* request_given, LumaEventFn fn,
+                                void* user, LumaHandle* out) {
     const char* const where = "input.text_request";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (request == nullptr) {
+    // The mod's request, function and out through the kernel (M-029).
+    LumaInputTextRequest request_copy{};
+    const LumaInputTextRequest* const request = &request_copy;
+    if (galaxy::mod_memory::sized(mod_kernel(), mod, request_given, &request_copy) != LUMA_OK) {
         return argument(mod, where, "request");
     }
-    if (fn == nullptr) {
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    *out = 0u;
+    (void)luma_value_out(mod_kernel(), mod, out, LumaHandle{0});
     if (request->size < kTextRequestLeast) {
         return struct_size(mod, where, "LumaInputTextRequest", request->size, kTextRequestLeast);
     }
@@ -951,7 +978,21 @@ std::int32_t input_text_request(const LumaMod* mod, const LumaInputTextRequest* 
     }
     std::u32string initial;
     if (request->initial != nullptr) {
-        std::optional<std::u32string> points = decode_utf8(request->initial);
+        // The initial text through the kernel: its first bytes, more than the most it can hold, cut at a whole
+        // character (only the first max_length characters are used).
+        std::string initial_text;
+        const std::int32_t read = galaxy::mod_memory::text(mod_kernel(), mod, request->initial, kInitialBytesMost, &initial_text);
+        if (read != LUMA_OK && read != LUMA_E_TOO_LARGE) {
+            return argument(mod, where, "request.initial");
+        }
+        if (read == LUMA_E_TOO_LARGE) {
+            std::size_t keep = initial_text.size();
+            while (keep > 0u && (static_cast<unsigned char>(initial_text[keep - 1u]) & 0xC0u) == 0x80u) {
+                keep--;
+            }
+            initial_text.resize(keep > 0u ? keep - 1u : 0u);  // the cut character's lead byte goes too
+        }
+        std::optional<std::u32string> points = decode_utf8(initial_text);
         if (!points) {
             return argument(mod, where, "request.initial");
         }
@@ -988,7 +1029,7 @@ std::int32_t input_text_request(const LumaMod* mod, const LumaInputTextRequest* 
         g_text_is_open.store(true, std::memory_order_release);
     }
     g_active.store(true, std::memory_order_release);
-    *out = made->handle;
+    (void)luma_value_out(mod_kernel(), mod, out, made->handle);
     return LUMA_PENDING;
 }
 
@@ -1001,6 +1042,12 @@ std::int32_t input_text_peek(const LumaMod* mod, LumaHandle request, char* buffe
     if (buffer == nullptr && size > 0u) {
         return argument(mod, where, "buffer");
     }
+    if (length != nullptr && luma_out_ready(mod_kernel(), mod, length) != LUMA_OK) {
+        return argument(mod, where, "length");
+    }
+    if (caret != nullptr && luma_out_ready(mod_kernel(), mod, caret) != LUMA_OK) {
+        return argument(mod, where, "caret");
+    }
     std::string text;
     std::size_t caret_at = 0;
     {
@@ -1011,19 +1058,22 @@ std::int32_t input_text_peek(const LumaMod* mod, LumaHandle request, char* buffe
         text = encode_utf8(g_text_open->text);
         caret_at = g_text_open->caret;
     }
+    const std::size_t text_size = text.size();
     if (size > 0u) {
         std::size_t take = std::min<std::size_t>(text.size(), size - 1u);
         while (take > 0 && take < text.size() && (static_cast<unsigned char>(text[take]) & 0xC0u) == 0x80u) {
             take--;
         }
-        std::memcpy(buffer, text.data(), take);
-        buffer[take] = '\0';
+        text.resize(take);
+        if (mod_kernel()->copy_out(mod, buffer, text.c_str(), take + 1u) != LUMA_OK) {
+            return argument(mod, where, "buffer");
+        }
     }
     if (length != nullptr) {
-        *length = static_cast<std::uint32_t>(text.size());
+        (void)luma_value_out(mod_kernel(), mod, length, static_cast<std::uint32_t>(text_size));
     }
     if (caret != nullptr) {
-        *caret = static_cast<std::uint32_t>(caret_at);
+        (void)luma_value_out(mod_kernel(), mod, caret, static_cast<std::uint32_t>(caret_at));
     }
     return LUMA_OK;
 }
@@ -1169,15 +1219,16 @@ std::int32_t input_look(const LumaMod* mod, LumaInputPad pad, LumaInputLook* out
     if (pad != LUMA_INPUT_PAD_MAIN) {
         return argument(mod, where, "pad");
     }
-    if (out == nullptr) {
+    std::uint32_t size = 0;
+    if (luma_struct_size(mod_kernel(), mod, out, &size) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    if (out->size < kLookLeast) {
-        return struct_size(mod, where, "LumaInputLook", out->size, kLookLeast);
+    if (size < kLookLeast) {
+        return struct_size(mod, where, "LumaInputLook", size, kLookLeast);
     }
-    const std::uint32_t size = out->size;
-    std::memcpy(out, &g_look_frame, kLookLeast);
-    out->size = size;
+    if (luma_struct_out(mod_kernel(), mod, out, size, g_look_frame) != LUMA_OK) {
+        return argument(mod, where, "out");
+    }
     return LUMA_OK;
 }
 
@@ -1200,10 +1251,10 @@ std::int32_t inject_begin(const LumaMod* mod, std::uint32_t player, LumaHandle* 
     if (player >= LUMA_INPUT_PLAYERS) {
         return argument(mod, where, "player");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    *out = 0u;
+    (void)luma_value_out(mod_kernel(), mod, out, LumaHandle{0});
     Injection& injection = g_injections[player];
     if (injection.mod != nullptr) {
         return LUMA_E_BUSY;  // an answer: a mod injects that player already
@@ -1212,7 +1263,7 @@ std::int32_t inject_begin(const LumaMod* mod, std::uint32_t player, LumaHandle* 
     injection.handle = new_handle();
     injection.set = false;
     injection.state = LumaInputGame{};
-    *out = injection.handle;
+    (void)luma_value_out(mod_kernel(), mod, out, injection.handle);
     g_active.store(true, std::memory_order_release);
     return LUMA_OK;
 }
@@ -1239,13 +1290,14 @@ std::int32_t inject_set(const LumaMod* mod, LumaHandle handle, const LumaInputGa
     if (injection == nullptr) {
         return bad_handle(mod, where);
     }
-    if (state == nullptr) {
+    // The mod's state through the kernel (M-029).
+    LumaInputGame taken{};
+    if (galaxy::mod_memory::sized(mod_kernel(), mod, state, &taken) != LUMA_OK) {
         return argument(mod, where, "state");
     }
-    if (state->size < kGameLeast) {
-        return struct_size(mod, where, "LumaInputGame", state->size, kGameLeast);
+    if (taken.size < kGameLeast) {
+        return struct_size(mod, where, "LumaInputGame", taken.size, kGameLeast);
     }
-    LumaInputGame taken = *state;
     taken.size = kGameLeast;
     taken.buttons &= LUMA_INPUT_BUTTONS_ALL;
     taken.pointer_on = taken.pointer_on != 0u ? 1u : 0u;
@@ -1283,34 +1335,46 @@ std::int32_t dev_list(const LumaMod* mod, LumaInputDeviceInfo* out, std::uint32_
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (found == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, found) != LUMA_OK) {
         return argument(mod, where, "found");
     }
-    *found = 0;
+    (void)luma_value_out(mod_kernel(), mod, found, std::uint32_t{0});
     if (out == nullptr && capacity > 0u) {
         return argument(mod, where, "out");
     }
+    // Each of the mod's structs' sizes through the kernel (M-029); only the first LUMA_INPUT_DEVICES_MOST are written.
+    std::vector<std::uint32_t> sizes;
     for (std::uint32_t i = 0; i < capacity; ++i) {
-        if (out[i].size < kDeviceInfoLeast) {
-            return struct_size(mod, where, "LumaInputDeviceInfo", out[i].size, kDeviceInfoLeast);
+        std::uint32_t size = 0;
+        if (luma_struct_size(mod_kernel(), mod, &out[i], &size) != LUMA_OK) {
+            return argument(mod, where, "out");
+        }
+        if (size < kDeviceInfoLeast) {
+            return struct_size(mod, where, "LumaInputDeviceInfo", size, kDeviceInfoLeast);
+        }
+        if (i < LUMA_INPUT_DEVICES_MOST) {
+            sizes.push_back(size);
         }
     }
 #if defined(_WIN32)
     std::uint32_t count = 0;
+    bool wrong = false;
     each_hid([&](const std::wstring& path) {
         const std::optional<HidFacts> facts = hid_facts(path);
         if (!facts || facts->keyboard_or_mouse) {
             return true;
         }
-        if (count < capacity) {
-            const std::uint32_t size = out[count].size;
-            std::memcpy(&out[count], &facts->info, kDeviceInfoLeast);
-            out[count].size = size;
+        if (count < capacity && !wrong &&
+            luma_struct_out(mod_kernel(), mod, &out[count], sizes[count], facts->info) != LUMA_OK) {
+            wrong = true;
         }
         count++;
         return count < LUMA_INPUT_DEVICES_MOST;
     });
-    *found = count;
+    if (wrong) {
+        return argument(mod, where, "out");
+    }
+    (void)luma_value_out(mod_kernel(), mod, found, count);
     return LUMA_OK;
 #else
     return LUMA_E_ABSENT;  // an answer: raw devices on this platform are a later layer (the contract)
@@ -1326,21 +1390,25 @@ OpenDevice* device_of(const LumaMod* mod, LumaHandle handle) {
     return nullptr;
 }
 
-std::int32_t dev_open(const LumaMod* mod, const char* path, LumaEventFn fn, void* user, LumaHandle* out) {
+std::int32_t dev_open(const LumaMod* mod, const char* path_given, LumaEventFn fn, void* user, LumaHandle* out) {
     const char* const where = "input.dev.open";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (path == nullptr || path[0] == '\0') {
+    // The mod's path, function and out through the kernel (M-029).
+    std::string path_text;
+    if (galaxy::mod_memory::text(mod_kernel(), mod, path_given, kDevicePathMost, &path_text) != LUMA_OK ||
+        path_text.empty()) {
         return argument(mod, where, "path");
     }
-    if (fn == nullptr) {
+    const char* const path = path_text.c_str();
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
-    *out = 0u;
+    (void)luma_value_out(mod_kernel(), mod, out, LumaHandle{0});
 #if defined(_WIN32)
     std::uint32_t open_count = 0;
     for (const OpenDevice* device : g_devices) {
@@ -1396,7 +1464,7 @@ std::int32_t dev_open(const LumaMod* mod, const char* path, LumaEventFn fn, void
     }
     device->reader = std::thread(read_reports, device, report_bytes);
     g_devices.push_back(device);
-    *out = device->handle;
+    (void)luma_value_out(mod_kernel(), mod, out, device->handle);
     return LUMA_OK;
 #else
     (void)user;
@@ -1413,7 +1481,9 @@ std::int32_t dev_write(const LumaMod* mod, LumaHandle handle, const void* data, 
     if (device == nullptr) {
         return bad_handle(mod, where);
     }
-    if (data == nullptr || size == 0u || size > LUMA_INPUT_REPORT_MOST) {
+    std::uint8_t report_bytes[LUMA_INPUT_REPORT_MOST];
+    if (data == nullptr || size == 0u || size > LUMA_INPUT_REPORT_MOST ||
+        mod_kernel()->copy_in(mod, report_bytes, data, size) != LUMA_OK) {
         return argument(mod, where, "data");
     }
 #if defined(_WIN32)
@@ -1424,7 +1494,7 @@ std::int32_t dev_write(const LumaMod* mod, LumaHandle handle, const void* data, 
         return LUMA_E_MEMORY;
     }
     DWORD wrote = 0;
-    BOOL done = WriteFile(device->file, data, size, &wrote, &overlapped);
+    BOOL done = WriteFile(device->file, report_bytes, size, &wrote, &overlapped);
     if (!done && GetLastError() == ERROR_IO_PENDING) {
         if (WaitForSingleObject(overlapped.hEvent, 50) != WAIT_OBJECT_0) {
             CancelIoEx(device->file, &overlapped);

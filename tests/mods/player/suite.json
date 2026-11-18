@@ -2,6 +2,7 @@
   "harness": 1,
   "tests": [
     "2961-player-extra",
-    "2962-player-draw-time"
+    "2962-player-draw-time",
+    "2963-player-bad-pointers"
   ]
 }

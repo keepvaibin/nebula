@@ -1,0 +1,168 @@
+{
+  "harness": 1,
+  "name": "2711-bad-pointers",
+  "about": "M-029: every pointer net.local reads, writes or calls given wrong (unmapped, read-only, data, a function outside the mod, an HTTP request's url, headers or body): LUMA_E_ARGUMENT, reported, nothing opened or written; a good listener after gives its port and closes",
+  "proves": [
+    "services.net",
+    "kernel.services.mod_memory"
+  ],
+  "mods": [
+    "../mods/net-badptr"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4501
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.net-badptr.connect_host_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.connect_fn_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.connect_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.listen_fn_game",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.listen_out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.send_data_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.udp_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.send_to_host_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.send_to_data_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.ipc_name_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.tls_certificate_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.http_request_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.http_url_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.http_headers_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.http_body_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.ws_url_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.port_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.net-badptr.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-badptr.listen_good",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-badptr.port_good",
+      "is": 0
+    },
+    {
+      "fact": "mod.net-badptr.port_given",
+      "is": 1
+    },
+    {
+      "fact": "mod.net-badptr.close_good",
+      "is": 0
+    },
+    {
+      "log": "net-badptr: net\\.local\\.tcp_connect was given a wrong host; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.tcp_connect was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.tcp_connect was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.tcp_listen was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.tcp_listen was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.send was given a wrong data; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.udp_open was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.send_to was given a wrong host; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.send_to was given a wrong data; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.ipc_connect was given a wrong name; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.tls_listen was given a wrong certificate; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.http was given a wrong request; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.http was given a wrong url; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.http was given a wrong headers; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.http was given a wrong body; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.ws_connect was given a wrong url; it did nothing\\."
+    },
+    {
+      "log": "net-badptr: net\\.local\\.port was given a wrong out; it did nothing\\."
+    }
+  ]
+}

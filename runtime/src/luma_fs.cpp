@@ -5,6 +5,7 @@
 // start.
 
 #include "galaxy/luma_fs_service.h"
+#include "galaxy/luma_mod_memory.h"
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/mods.h"
@@ -51,6 +52,11 @@ const char* const kFsName = LUMA_FS_NAME;
 const char* const kExchangeName = LUMA_FS_EXCHANGE_NAME;
 
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
+
+// The kernel a call reads and writes the mod's memory through (M-029). Set while a call runs: enter checks it.
+const LumaServiceKernel* mod_kernel() noexcept {
+    return g_kernel.load(std::memory_order_acquire);
+}
 void (*g_log)(const char*) = nullptr;  // set by providers() before the first mod
 
 // ---- The path rule (fs.md) -----------------------------------------------------------------------------------------
@@ -904,11 +910,12 @@ ModState* request_enter(const LumaMod* mod, const char* where, LumaEventFn fn, L
     if (*status != LUMA_OK) {
         return nullptr;
     }
-    if (fn == nullptr) {
+    // The mod's function and out through the kernel (M-029).
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         *status = argument(mod, where, "fn");
         return nullptr;
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         *status = argument(mod, where, "out");
         return nullptr;
     }
@@ -933,11 +940,10 @@ ModState* request_enter(const LumaMod* mod, const char* where, LumaEventFn fn, L
 // A path argument's parts; LUMA_OK, or LUMA_E_ARGUMENT reported naming `name`.
 std::int32_t path_argument(const LumaMod* mod, const char* where, const char* name, const char* path, bool empty_ok,
                            std::vector<std::string>* parts) {
-    if (path == nullptr) {
-        return argument(mod, where, name);
-    }
-    const std::size_t length = ::strnlen(path, kPathMost + 1u);
-    if (length > kPathMost || !split_path(std::string_view(path, length), empty_ok, parts)) {
+    // The mod's path through the kernel (M-029): unreadable, null or longer than the most is a wrong path.
+    std::string copy;
+    if (galaxy::mod_memory::text(mod_kernel(), mod, path, kPathMost, &copy) != LUMA_OK ||
+        !split_path(std::string_view(copy), empty_ok, parts)) {
         parts->clear();
         return argument(mod, where, name);
     }
@@ -960,7 +966,7 @@ std::int32_t start(ModState& state, const LumaMod* mod, Request* request, LumaEv
         state.first = request;
         state.open++;
     }
-    *out = request->handle;
+    (void)luma_value_out(mod_kernel(), mod, out, request->handle);
     queue(request);
     return LUMA_PENDING;
 }
@@ -1029,7 +1035,10 @@ std::int32_t ask_checked(const LumaMod* mod, const char* where, Root root, Op op
         }
         try {
             if (bytes > 0u) {  // a null data with 0 bytes is an empty file
-                request->bytes.assign(static_cast<const char*>(data), static_cast<std::size_t>(bytes));
+                request->bytes.resize(static_cast<std::size_t>(bytes));
+                if (mod_kernel()->copy_in(mod, request->bytes.data(), data, bytes) != LUMA_OK) {
+                    return argument(mod, where, "data");
+                }
             }
         } catch (...) {
             return LUMA_E_MEMORY;
@@ -1107,7 +1116,9 @@ std::int64_t take(const LumaMod* mod, const char* where, LumaHandle handle, std:
         return static_cast<std::int64_t>(length);  // the length first (D12.4); not the take
     }
     const std::uint64_t copied = std::min(length, size);
-    std::memcpy(buf, request->bytes.data(), static_cast<std::size_t>(copied));
+    if (copied != 0u && mod_kernel()->copy_out(mod, buf, request->bytes.data(), copied) != LUMA_OK) {
+        return argument(mod, where, "buf");  // not taken: a right buf may take it still
+    }
     request->taken = true;
     return static_cast<std::int64_t>(length);
 }

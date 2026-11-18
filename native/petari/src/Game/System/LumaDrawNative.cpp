@@ -137,6 +137,10 @@ namespace luma {
                     if (!nativePoint(p)) {
                         return badArgument(pMod, pWhere, "point");
                     }
+                    // A function in the mod's code (M-029): anything else would be called where no guard can resume.
+                    if (fn != nullptr && sKernel->mod_code(pMod, reinterpret_cast<const void*>(fn)) != 1) {
+                        return badArgument(pMod, pWhere, "fn");
+                    }
                     sweep();
                     Fn* pOwn = nullptr;
                     Fn* pFree = nullptr;
@@ -182,10 +186,9 @@ namespace luma {
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
-                    if (pOut == nullptr) {
+                    if (luma_value_out(sKernel, pMod, pOut, uint32_t(NebulaHost::option(NEBULA_OPTION_GRAPHICS_BACKEND))) != LUMA_OK) {
                         return badArgument(pMod, pWhere, "out");
                     }
-                    *pOut = NebulaHost::option(NEBULA_OPTION_GRAPHICS_BACKEND);
                     return LUMA_OK;
                 }
 

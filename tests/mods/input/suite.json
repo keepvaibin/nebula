@@ -13,6 +13,7 @@
     "2510-text",
     "2511-dev",
     "2512-dev-declined",
-    "2513-rumble"
+    "2513-rumble",
+    "2514-bad-pointers"
   ]
 }

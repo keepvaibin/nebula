@@ -15,6 +15,7 @@
     "2311-two-mods",
     "2312-quota",
     "2313-write-at-end",
-    "2314-written-at-end"
+    "2314-written-at-end",
+    "2315-bad-pointers"
   ]
 }

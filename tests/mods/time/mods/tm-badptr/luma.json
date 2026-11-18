@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "tm-badptr",
+  "name": "tm-badptr",
+  "summary": "tm-badptr (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

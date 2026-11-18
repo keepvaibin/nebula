@@ -619,15 +619,39 @@ namespace luma {
                 // ---- The service ----
 
                 // start and start_on_model: `model` the mod's model handle the actor draws (0: an actor of the game's).
-                int32_t startOn(const LumaMod* pMod, const char* pWhere, LumaActor actor, LumaEffectName name, const char* pJoint,
-                                const LumaPlace* pPlace, bool follow, LumaContentFxEffect* pOut, LumaHandle model) {
+                // The mod's actor, texts, place and out through the scene's actor list and the kernel (M-029).
+                int32_t startOn(const LumaMod* pMod, const char* pWhere, LumaActor actor, LumaEffectName nameGiven,
+                                const char* pJointGiven, const LumaPlace* pPlaceGiven, bool follow, LumaContentFxEffect* pOut,
+                                LumaHandle model) {
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
-                    LiveActor* const pActor = static_cast< LiveActor* >(actor);
+                    char nameText[1024];
+                    const char* const name = nameGiven != nullptr ? nameText : nullptr;
+                    if (nameGiven != nullptr && luma_text_in(sKernel, pMod, nameGiven, nameText) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "name", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                    char pJointText[1024];
+                    const char* const pJoint = pJointGiven != nullptr ? pJointText : nullptr;
+                    if (pJointGiven != nullptr && luma_text_in(sKernel, pMod, pJointGiven, pJointText) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "joint", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                    LumaPlace pPlaceCopy = {};
+                    const LumaPlace* const pPlace = pPlaceGiven != nullptr ? &pPlaceCopy : nullptr;
+                    if (pPlaceGiven != nullptr) {
+                        uint32_t pPlaceSize = 0;
+                        if (luma_struct_size(sKernel, pMod, pPlaceGiven, &pPlaceSize) != LUMA_OK ||
+                            luma_struct_in(sKernel, pMod, pPlaceGiven, pPlaceSize, &pPlaceCopy) != LUMA_OK) {
+                            report(pMod, pWhere, 101u, "place", nullptr, nullptr);
+                            return LUMA_E_ARGUMENT;
+                        }
+                    }
+                    LiveActor* const pActor = lumacore::liveActorOf(actor);
                     const char* pWrong = pActor == nullptr                                            ? "actor"
                                          : name == nullptr || name[0] == 0                           ? "name"
-                                         : pOut == nullptr                                            ? "out"
+                                         : luma_out_ready(sKernel, pMod, pOut) != LUMA_OK            ? "out"
                                                                                                       : nullptr;
                     if (pWrong == nullptr &&
                         (!lumacore::isA(lumacore::classOf(pActor), lumacore::kClassId< LiveActor >) || MR::isDead(pActor))) {
@@ -743,7 +767,7 @@ namespace luma {
                     if (luma::modlog::facts()) {
                         startFact(rEffect, pJoint, follow, placeholder);
                     }
-                    *pOut = rEffect.handle;
+                    (void)luma_value_out(sKernel, pMod, pOut, rEffect.handle);
                     return LUMA_OK;
                 }
 

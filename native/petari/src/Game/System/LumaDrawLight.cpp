@@ -196,12 +196,23 @@ namespace luma {
 
                 // ---- The service ----
 
-                int32_t svcAdd(const LumaMod* pMod, const LumaDrawLightDesc* pDesc, LumaDrawLight* pOut) {
+                int32_t svcAdd(const LumaMod* pMod, const LumaDrawLightDesc* pDescGiven, LumaDrawLight* pOut) {
                     const char* const pWhere = "draw.light.add";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
-                    if (pOut == nullptr) {
+                    // The mod's desc and out through the kernel (M-029).
+                    LumaDrawLightDesc pDescCopy = {};
+                    const LumaDrawLightDesc* const pDesc = pDescGiven != nullptr ? &pDescCopy : nullptr;
+                    if (pDescGiven != nullptr) {
+                        uint32_t pDescSize = 0;
+                        if (luma_struct_size(sKernel, pMod, pDescGiven, &pDescSize) != LUMA_OK ||
+                            luma_struct_in(sKernel, pMod, pDescGiven, pDescSize, &pDescCopy) != LUMA_OK) {
+                            report(pMod, pWhere, 101u, "desc", nullptr, nullptr);
+                            return LUMA_E_ARGUMENT;
+                        }
+                    }
+                    if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
                         report(pMod, pWhere, 101u, "out", nullptr, nullptr);
                         return LUMA_E_ARGUMENT;
                     }
@@ -240,14 +251,20 @@ namespace luma {
                     if (luma::modlog::facts()) {
                         lightFact("add", rLight, "");
                     }
-                    *pOut = rLight.handle;
+                    (void)luma_value_out(sKernel, pMod, pOut, rLight.handle);
                     return LUMA_OK;
                 }
 
-                int32_t svcMove(const LumaMod* pMod, LumaDrawLight light, const float* pPosition) {
+                int32_t svcMove(const LumaMod* pMod, LumaDrawLight light, const float* pPositionGiven) {
                     const char* const pWhere = "draw.light.move";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
+                    }
+                    float position[3];
+                    const float* const pPosition = pPositionGiven != nullptr ? position : nullptr;
+                    if (pPositionGiven != nullptr && sKernel->copy_in(pMod, position, pPositionGiven, sizeof(position)) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "position", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
                     }
                     Light* const pLight = lightOf(pMod, light);
                     if (pLight == nullptr) {
@@ -264,10 +281,21 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                int32_t svcSet(const LumaMod* pMod, LumaDrawLight light, const LumaDrawLightDesc* pDesc) {
+                int32_t svcSet(const LumaMod* pMod, LumaDrawLight light, const LumaDrawLightDesc* pDescGiven) {
                     const char* const pWhere = "draw.light.set";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
+                    }
+                    // The mod's desc and out through the kernel (M-029).
+                    LumaDrawLightDesc pDescCopy = {};
+                    const LumaDrawLightDesc* const pDesc = pDescGiven != nullptr ? &pDescCopy : nullptr;
+                    if (pDescGiven != nullptr) {
+                        uint32_t pDescSize = 0;
+                        if (luma_struct_size(sKernel, pMod, pDescGiven, &pDescSize) != LUMA_OK ||
+                            luma_struct_in(sKernel, pMod, pDescGiven, pDescSize, &pDescCopy) != LUMA_OK) {
+                            report(pMod, pWhere, 101u, "desc", nullptr, nullptr);
+                            return LUMA_E_ARGUMENT;
+                        }
                     }
                     Light* const pLight = lightOf(pMod, light);
                     if (pLight == nullptr) {

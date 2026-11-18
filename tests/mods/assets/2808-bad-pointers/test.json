@@ -1,0 +1,137 @@
+{
+  "harness": 1,
+  "name": "2808-bad-pointers",
+  "about": "M-029: every pointer assets reads, writes or calls given wrong (unmapped, read-only, data, a function outside the mod, a file's path or bytes): LUMA_E_ARGUMENT, reported, no out written and nothing provided; a good find after works",
+  "proves": [
+    "services.assets",
+    "kernel.services.mod_memory"
+  ],
+  "mods": [
+    "../mods/assets-badptr"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4801
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.assets-badptr.find_path_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.find_out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.find_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.bytes_data_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.bytes_bytes_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.entry_name_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.entry_needed_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.entry_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.provide_files_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.provide_data_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.provide_path_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.withdraw_path_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.cook_fn_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.cook_request_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.cook_data_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.assets-badptr.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.assets-badptr.find_good",
+      "is": 0
+    },
+    {
+      "fact": "mod.assets-badptr.withdraw_none",
+      "is": -7
+    },
+    {
+      "log": "assets-badptr: assets\\.find was given a wrong path; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.find was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.bytes was given a wrong data; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.bytes was given a wrong bytes; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.entry was given a wrong name; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.entry was given a wrong needed; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.entry was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.provide was given a wrong files; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.withdraw was given a wrong path; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.cook was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.cook was given a wrong request; it did nothing\\."
+    },
+    {
+      "log": "assets-badptr: assets\\.cook was given a wrong data; it did nothing\\."
+    }
+  ]
+}

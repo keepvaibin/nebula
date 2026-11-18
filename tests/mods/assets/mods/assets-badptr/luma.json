@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "assets-badptr",
+  "name": "assets-badptr",
+  "summary": "assets-badptr (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

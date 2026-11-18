@@ -544,9 +544,15 @@ namespace luma {
             }
 
             // The text arguments common to text and text_measure: LUMA_OK with the font and sText filled.
-            s32 textArguments(const LumaMod* pMod, const char* pWhere, LumaDrawFont font, const char* pText, f32 size,
+            // A text a mod gave draw.text or draw.text_measure, copied (textArguments). Game thread.
+            char sTextCopy[LUMA_DRAW_TEXT_BYTES_MOST + 2];
+
+            s32 textArguments(const LumaMod* pMod, const char* pWhere, LumaDrawFont font, const char* pTextGiven, f32 size,
                               f32 wrap, FontEntry** ppEntry, u32* pLength) {
-                if (pText == nullptr) {
+                // The mod's text through the kernel (M-029): its first LUMA_DRAW_TEXT_BYTES_MOST + 1 bytes, as many as
+                // decode reads before it cuts, into the game thread's one copy (enter: draw calls are the game thread's).
+                const char* const pText = sTextCopy;
+                if (const s32 copied = luma_text_in(sKernel, pMod, pTextGiven, sTextCopy); copied != LUMA_OK && copied != LUMA_E_TOO_LARGE) {
                     return badArgument(pMod, pWhere, "text");
                 }
                 if (!finite(size) || size <= 0.0f || size > 456.0f) {
@@ -584,6 +590,10 @@ namespace luma {
                 const u32 p = static_cast< u32 >(point);
                 if (p >= kPoints) {
                     return badArgument(pMod, pWhere, "point");
+                }
+                // A function in the mod's code (M-029): anything else would be called where no guard can resume.
+                if (fn != nullptr && sKernel->mod_code(pMod, reinterpret_cast<const void*>(fn)) != 1) {
+                    return badArgument(pMod, pWhere, "fn");
                 }
                 Handler* const pList = sHandlers[p];
                 u32& rCount = sHandlerCount[p];
@@ -625,12 +635,13 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pOut == nullptr) {
+                u32 given = 0;
+                if (luma_struct_size(sKernel, pMod, pOut, &given) != LUMA_OK) {
                     return badArgument(pMod, pWhere, "out");
                 }
-                if (pOut->size < cScreenSize) {
+                if (given < cScreenSize) {
                     char found[16];
-                    nebula_snprintf(found, sizeof(found), "%u", pOut->size);
+                    nebula_snprintf(found, sizeof(found), "%u", given);
                     char expected[16];
                     nebula_snprintf(expected, sizeof(expected), "%u", cScreenSize);
                     const char* args[3] = {"LumaDrawScreen", found, expected};
@@ -639,16 +650,23 @@ namespace luma {
                 }
                 LumaDrawScreen screen;
                 screenNow(screen, sMod == pMod ? sPoint : kPoints);
-                const u32 size = pOut->size < sizeof(screen) ? pOut->size : static_cast< u32 >(sizeof(screen));
-                memcpy(pOut, &screen, size);
-                pOut->size = size;
+                const u32 size = given < sizeof(screen) ? given : static_cast< u32 >(sizeof(screen));
+                screen.size = size;
+                if (sKernel->copy_out(pMod, pOut, &screen, size) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "out");
+                }
                 return LUMA_OK;
             }
 
-            int32_t svcRect(const LumaMod* pMod, const LumaDrawRect* pRect, LumaColor colour) {
+            int32_t svcRect(const LumaMod* pMod, const LumaDrawRect* pRectGiven, LumaColor colour) {
                 const char* const pWhere = "draw.rect";
                 if (const s32 status = enter2D(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                LumaDrawRect pRectCopy;
+                const LumaDrawRect* const pRect = pRectGiven != nullptr ? &pRectCopy : nullptr;
+                if (pRectGiven != nullptr && sKernel->copy_in(pMod, &pRectCopy, pRectGiven, sizeof(pRectCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "rect");
                 }
                 if (pRect == nullptr || !finite(pRect->x) || !finite(pRect->y) || !finite(pRect->w) || !finite(pRect->h) ||
                     pRect->w < 0.0f || pRect->h < 0.0f) {
@@ -663,10 +681,15 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcRectOutline(const LumaMod* pMod, const LumaDrawRect* pRect, float thickness, LumaColor colour) {
+            int32_t svcRectOutline(const LumaMod* pMod, const LumaDrawRect* pRectGiven, float thickness, LumaColor colour) {
                 const char* const pWhere = "draw.rect_outline";
                 if (const s32 status = enter2D(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                LumaDrawRect pRectCopy;
+                const LumaDrawRect* const pRect = pRectGiven != nullptr ? &pRectCopy : nullptr;
+                if (pRectGiven != nullptr && sKernel->copy_in(pMod, &pRectCopy, pRectGiven, sizeof(pRectCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "rect");
                 }
                 if (pRect == nullptr || !finite(pRect->x) || !finite(pRect->y) || !finite(pRect->w) || !finite(pRect->h) ||
                     pRect->w < 0.0f || pRect->h < 0.0f) {
@@ -752,10 +775,20 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcTri(const LumaMod* pMod, const LumaDrawVec2 points[3], const LumaColor colours[3]) {
+            int32_t svcTri(const LumaMod* pMod, const LumaDrawVec2 pointsGiven[3], const LumaColor coloursGiven[3]) {
                 const char* const pWhere = "draw.tri";
                 if (const s32 status = enter2D(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                LumaDrawVec2 pointsCopy[3];
+                const LumaDrawVec2* const points = pointsGiven != nullptr ? pointsCopy : nullptr;
+                if (pointsGiven != nullptr && sKernel->copy_in(pMod, pointsCopy, pointsGiven, sizeof(pointsCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "points");
+                }
+                LumaColor coloursCopy[3];
+                const LumaColor* const colours = coloursGiven != nullptr ? coloursCopy : nullptr;
+                if (coloursGiven != nullptr && sKernel->copy_in(pMod, coloursCopy, coloursGiven, sizeof(coloursCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "colours");
                 }
                 if (points == nullptr) {
                     return badArgument(pMod, pWhere, "points");
@@ -787,11 +820,21 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcImage(const LumaMod* pMod, LumaDrawTexture texture, const LumaDrawRect* pDst, const LumaDrawRect* pSrc,
-                             LumaColor colour) {
+            int32_t svcImage(const LumaMod* pMod, LumaDrawTexture texture, const LumaDrawRect* pDstGiven,
+                             const LumaDrawRect* pSrcGiven, LumaColor colour) {
                 const char* const pWhere = "draw.image";
                 if (const s32 status = enter2D(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                LumaDrawRect pDstCopy;
+                const LumaDrawRect* const pDst = pDstGiven != nullptr ? &pDstCopy : nullptr;
+                if (pDstGiven != nullptr && sKernel->copy_in(pMod, &pDstCopy, pDstGiven, sizeof(pDstCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "dst");
+                }
+                LumaDrawRect pSrcCopy;
+                const LumaDrawRect* const pSrc = pSrcGiven != nullptr ? &pSrcCopy : nullptr;
+                if (pSrcGiven != nullptr && sKernel->copy_in(pMod, &pSrcCopy, pSrcGiven, sizeof(pSrcCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "src");
                 }
                 if (pDst == nullptr || !finite(pDst->x) || !finite(pDst->y) || !finite(pDst->w) || !finite(pDst->h) ||
                     pDst->w < 0.0f || pDst->h < 0.0f) {
@@ -861,6 +904,9 @@ namespace luma {
                 if (static_cast< u32 >(align) > LUMA_DRAW_RIGHT) {
                     return badArgument(pMod, pWhere, "align");
                 }
+                if (pAdvance != nullptr && luma_out_ready(sKernel, pMod, pAdvance) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "advance");
+                }
                 FontEntry* pEntry = nullptr;
                 u32 length = 0;
                 if (const s32 status = textArguments(pMod, pWhere, font, pText, size, wrap, &pEntry, &length); status != LUMA_OK) {
@@ -868,7 +914,7 @@ namespace luma {
                 }
                 Ui::Font* const pFont = fontNow(*pEntry);
                 if (pAdvance != nullptr) {
-                    *pAdvance = 0.0f;
+                    (void)luma_value_out(sKernel, pMod, pAdvance, 0.0f);
                 }
                 if (length == 0) {
                     return LUMA_OK;
@@ -898,7 +944,7 @@ namespace luma {
                     writer.SetCursorX(x + rect.GetWidth());
                 }
                 if (pAdvance != nullptr) {
-                    *pAdvance = writer.GetCursorX() - x;
+                    (void)luma_value_out(sKernel, pMod, pAdvance, f32(writer.GetCursorX() - x));
                 }
                 return LUMA_OK;
             }
@@ -909,7 +955,7 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pOut == nullptr) {
+                if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
                     return badArgument(pMod, pWhere, "out");
                 }
                 FontEntry* pEntry = nullptr;
@@ -917,24 +963,27 @@ namespace luma {
                 if (const s32 status = textArguments(pMod, pWhere, font, pText, size, wrap, &pEntry, &length); status != LUMA_OK) {
                     return status;
                 }
-                pOut->x = 0.0f;
-                pOut->y = 0.0f;
                 if (length == 0) {
+                    (void)luma_value_out(sKernel, pMod, pOut, LumaDrawVec2{0.0f, 0.0f});
                     return LUMA_OK;
                 }
                 Ui::WideTextWriter writer;
                 setupWriter(writer, fontNow(*pEntry), size, LUMA_DRAW_LEFT, wrap);
                 Ui::Rect rect;
                 writer.CalcStringRect(&rect, sText, static_cast< int >(length));
-                pOut->x = rect.GetWidth();
-                pOut->y = rect.GetHeight();
+                (void)luma_value_out(sKernel, pMod, pOut, LumaDrawVec2{rect.GetWidth(), rect.GetHeight()});
                 return LUMA_OK;
             }
 
-            int32_t svcClipPush(const LumaMod* pMod, const LumaDrawRect* pRect) {
+            int32_t svcClipPush(const LumaMod* pMod, const LumaDrawRect* pRectGiven) {
                 const char* const pWhere = "draw.clip_push";
                 if (const s32 status = enter2D(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                LumaDrawRect pRectCopy;
+                const LumaDrawRect* const pRect = pRectGiven != nullptr ? &pRectCopy : nullptr;
+                if (pRectGiven != nullptr && sKernel->copy_in(pMod, &pRectCopy, pRectGiven, sizeof(pRectCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "rect");
                 }
                 if (pRect == nullptr || !finite(pRect->x) || !finite(pRect->y) || !finite(pRect->w) || !finite(pRect->h) ||
                     pRect->w < 0.0f || pRect->h < 0.0f) {
@@ -983,10 +1032,15 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcTransformPush(const LumaMod* pMod, const float m[6]) {
+            int32_t svcTransformPush(const LumaMod* pMod, const float mGiven[6]) {
                 const char* const pWhere = "draw.transform_push";
                 if (const s32 status = enter2D(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                float mCopy[6];
+                const float* const m = mGiven != nullptr ? mCopy : nullptr;
+                if (mGiven != nullptr && sKernel->copy_in(pMod, mCopy, mGiven, sizeof(mCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "m");
                 }
                 if (m == nullptr) {
                     return badArgument(pMod, pWhere, "m");
@@ -1027,15 +1081,18 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcFont(const LumaMod* pMod, const char* pName, LumaDrawFont* pOut) {
+            int32_t svcFont(const LumaMod* pMod, const char* pNameGiven, LumaDrawFont* pOut) {
                 const char* const pWhere = "draw.font";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pName == nullptr || pName[0] == 0 || strlen(pName) > 190) {
+                // The mod's name (1 to 190 bytes) and out through the kernel (M-029).
+                char name[191];
+                const char* const pName = name;
+                if (luma_text_in(sKernel, pMod, pNameGiven, name) != LUMA_OK || name[0] == 0) {
                     return badArgument(pMod, pWhere, "name");
                 }
-                if (pOut == nullptr) {
+                if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
                     return badArgument(pMod, pWhere, "out");
                 }
                 const u32 hash = MR::getHashCode(pName);
@@ -1052,7 +1109,7 @@ namespace luma {
                     }
                     mine++;
                     if (rEntry.hash == hash && strcmp(rEntry.name, pName) == 0) {
-                        *pOut = rEntry.handle;
+                        (void)luma_value_out(sKernel, pMod, pOut, rEntry.handle);
                         return LUMA_OK;
                     }
                 }
@@ -1100,7 +1157,7 @@ namespace luma {
                 if (ModDraw* const pDraw = modDraw(pMod, true); pDraw != nullptr) {
                     pDraw->fonts++;
                 }
-                *pOut = rNew.handle;
+                (void)luma_value_out(sKernel, pMod, pOut, rNew.handle);
                 return LUMA_OK;
             }
 
@@ -1130,15 +1187,18 @@ namespace luma {
                 return pFree;
             }
 
-            int32_t svcTexture(const LumaMod* pMod, const char* pName, LumaDrawTexture* pOut) {
+            int32_t svcTexture(const LumaMod* pMod, const char* pNameGiven, LumaDrawTexture* pOut) {
                 const char* const pWhere = "draw.texture";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pName == nullptr || pName[0] == 0 || strlen(pName) > 240) {
+                // The mod's name (1 to 240 bytes) and out through the kernel (M-029).
+                char name[241];
+                const char* const pName = name;
+                if (luma_text_in(sKernel, pMod, pNameGiven, name) != LUMA_OK || name[0] == 0) {
                     return badArgument(pMod, pWhere, "name");
                 }
-                if (pOut == nullptr) {
+                if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
                     return badArgument(pMod, pWhere, "out");
                 }
                 // The store's file at the name: a texture the importer or the mod's cook wrote (NebulaTextureInfo).
@@ -1166,7 +1226,7 @@ namespace luma {
                 pSlot->height = pSlot->info.mHeight;
                 pSlot->bytes = 0;
                 pDraw->textures++;
-                *pOut = pSlot->handle;
+                (void)luma_value_out(sKernel, pMod, pOut, pSlot->handle);
                 return LUMA_OK;
             }
 
@@ -1186,7 +1246,7 @@ namespace luma {
                 if ((flags & ~(LUMA_DRAW_TEXTURE_NEAREST | LUMA_DRAW_TEXTURE_REPEAT)) != 0) {
                     return badArgument(pMod, pWhere, "flags");
                 }
-                if (pOut == nullptr) {
+                if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
                     return badArgument(pMod, pWhere, "out");
                 }
                 const u64 bytes = static_cast< u64 >(w) * h * 4u;
@@ -1200,7 +1260,11 @@ namespace luma {
                     delete pTexture;
                     return LUMA_E_MEMORY;
                 }
-                memcpy(pTexture->image(), pRgba8, static_cast< size_t >(bytes));
+                // The mod's pixels through the kernel (M-029): w x h x 4 bytes it cannot all read are a wrong rgba8.
+                if (sKernel->copy_in(pMod, pTexture->image(), pRgba8, bytes) != LUMA_OK) {
+                    delete pTexture;
+                    return badArgument(pMod, pWhere, "rgba8");
+                }
                 RenderTexture::rewritten(pTexture->image(), static_cast< u32 >(bytes));
                 const u8 wrap = (flags & LUMA_DRAW_TEXTURE_REPEAT) != 0 ? NEBULA_WRAP_REPEAT : NEBULA_WRAP_CLAMP;
                 const u8 filter = (flags & LUMA_DRAW_TEXTURE_NEAREST) != 0 ? NEBULA_FILTER_NEAREST : NEBULA_FILTER_LINEAR;
@@ -1214,7 +1278,7 @@ namespace luma {
                 pSlot->bytes = bytes;
                 pDraw->textures++;
                 pDraw->textureBytes += bytes;
-                *pOut = pSlot->handle;
+                (void)luma_value_out(sKernel, pMod, pOut, pSlot->handle);
                 return LUMA_OK;
             }
 
@@ -1243,10 +1307,15 @@ namespace luma {
                     return badArgument(pMod, pWhere, "stride");
                 }
                 u8* const pImage = pTexture->texture->image();
+                // The mod's rows through the kernel (M-029): a row it cannot read stops the update there (the rows before
+                // it are in) and is a wrong rgba8.
                 const u8* const pFrom = static_cast< const u8* >(pRgba8);
                 for (u32 row = 0; row < h; row++) {
-                    memcpy(pImage + (static_cast< size_t >(y + row) * pTexture->width + x) * 4u,
-                           pFrom + static_cast< size_t >(row) * stride, static_cast< size_t >(w) * 4u);
+                    if (sKernel->copy_in(pMod, pImage + (static_cast< size_t >(y + row) * pTexture->width + x) * 4u,
+                                         pFrom + static_cast< size_t >(row) * stride, static_cast< u64 >(w) * 4u) != LUMA_OK) {
+                        RenderTexture::rewritten(pImage, static_cast< u32 >(pTexture->bytes));
+                        return badArgument(pMod, pWhere, "rgba8");
+                    }
                 }
                 RenderTexture::rewritten(pImage, static_cast< u32 >(pTexture->bytes));
                 return LUMA_OK;
@@ -1262,11 +1331,11 @@ namespace luma {
                     report(pMod, pWhere, 102u, nullptr, nullptr);
                     return LUMA_E_HANDLE;
                 }
-                if (pW != nullptr) {
-                    *pW = pTexture->width;
+                if (pW != nullptr && luma_value_out(sKernel, pMod, pW, uint32_t(pTexture->width)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "w");
                 }
-                if (pH != nullptr) {
-                    *pH = pTexture->height;
+                if (pH != nullptr && luma_value_out(sKernel, pMod, pH, uint32_t(pTexture->height)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "h");
                 }
                 return LUMA_OK;
             }
@@ -1322,11 +1391,21 @@ namespace luma {
                 rMaterial.setTexture(0, pTexture);
             }
 
-            int32_t svcLine3(const LumaMod* pMod, const LumaDrawVec3* pA, const LumaDrawVec3* pB, float thickness,
+            int32_t svcLine3(const LumaMod* pMod, const LumaDrawVec3* pAGiven, const LumaDrawVec3* pBGiven, float thickness,
                              LumaColor colour) {
                 const char* const pWhere = "draw.line3";
                 if (const s32 status = enter3D(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                LumaDrawVec3 pACopy;
+                const LumaDrawVec3* const pA = pAGiven != nullptr ? &pACopy : nullptr;
+                if (pAGiven != nullptr && sKernel->copy_in(pMod, &pACopy, pAGiven, sizeof(pACopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "a");
+                }
+                LumaDrawVec3 pBCopy;
+                const LumaDrawVec3* const pB = pBGiven != nullptr ? &pBCopy : nullptr;
+                if (pBGiven != nullptr && sKernel->copy_in(pMod, &pBCopy, pBGiven, sizeof(pBCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "b");
                 }
                 if (!finite3(pA)) {
                     return badArgument(pMod, pWhere, "a");
@@ -1378,10 +1457,20 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcTri3(const LumaMod* pMod, const LumaDrawVec3 points[3], const LumaColor colours[3]) {
+            int32_t svcTri3(const LumaMod* pMod, const LumaDrawVec3 pointsGiven[3], const LumaColor coloursGiven[3]) {
                 const char* const pWhere = "draw.tri3";
                 if (const s32 status = enter3D(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                LumaDrawVec3 pointsCopy[3];
+                const LumaDrawVec3* const points = pointsGiven != nullptr ? pointsCopy : nullptr;
+                if (pointsGiven != nullptr && sKernel->copy_in(pMod, pointsCopy, pointsGiven, sizeof(pointsCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "points");
+                }
+                LumaColor coloursCopy[3];
+                const LumaColor* const colours = coloursGiven != nullptr ? coloursCopy : nullptr;
+                if (coloursGiven != nullptr && sKernel->copy_in(pMod, coloursCopy, coloursGiven, sizeof(coloursCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "colours");
                 }
                 if (points == nullptr || !finite3(&points[0]) || !finite3(&points[1]) || !finite3(&points[2])) {
                     return badArgument(pMod, pWhere, "points");
@@ -1542,10 +1631,21 @@ namespace luma {
                 sMeshXlu->frameInit();
             }
 
-            int32_t svcMesh(const LumaMod* pMod, const char* pModel, const float matrix[12], LumaColor colour) {
+            int32_t svcMesh(const LumaMod* pMod, const char* pModelGiven, const float matrixGiven[12], LumaColor colour) {
                 const char* const pWhere = "draw.mesh";
                 if (const s32 status = enter3D(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                // The mod's model name (shorter than kMeshName) and matrix through the kernel (M-029).
+                char model[kMeshName];
+                const char* const pModel = pModelGiven != nullptr ? model : nullptr;
+                if (pModelGiven != nullptr && luma_text_in(sKernel, pMod, pModelGiven, model) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "model");
+                }
+                float matrixCopy[12];
+                const float* const matrix = matrixGiven != nullptr ? matrixCopy : nullptr;
+                if (matrixGiven != nullptr && sKernel->copy_in(pMod, matrixCopy, matrixGiven, sizeof(matrixCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "matrix");
                 }
                 if (pModel == nullptr || pModel[0] == '\0' || strlen(pModel) >= kMeshName) {
                     return badArgument(pMod, pWhere, "model");
@@ -1581,11 +1681,16 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcBillboard(const LumaMod* pMod, LumaDrawTexture texture, const LumaDrawVec3* pPos, float w, float h,
+            int32_t svcBillboard(const LumaMod* pMod, LumaDrawTexture texture, const LumaDrawVec3* pPosGiven, float w, float h,
                                  LumaColor colour) {
                 const char* const pWhere = "draw.billboard";
                 if (const s32 status = enter3D(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                LumaDrawVec3 pPosCopy;
+                const LumaDrawVec3* const pPos = pPosGiven != nullptr ? &pPosCopy : nullptr;
+                if (pPosGiven != nullptr && sKernel->copy_in(pMod, &pPosCopy, pPosGiven, sizeof(pPosCopy)) != LUMA_OK) {
+                    return badArgument(pMod, pWhere, "pos");
                 }
                 if (!finite3(pPos)) {
                     return badArgument(pMod, pWhere, "pos");

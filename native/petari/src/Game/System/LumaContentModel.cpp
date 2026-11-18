@@ -525,18 +525,41 @@ namespace luma {
 
                 // ---- The service ----
 
-                int32_t svcAttach(const LumaMod* pMod, LumaActor actor, LumaModelName name, LumaContentModelFollow follow,
-                                  const char* pJoint, const LumaPlace* pPlace, LumaContentModel* pOut) {
+                int32_t svcAttach(const LumaMod* pMod, LumaActor actor, LumaModelName nameGiven, LumaContentModelFollow follow,
+                                  const char* pJointGiven, const LumaPlace* pPlaceGiven, LumaContentModel* pOut) {
                     const char* const pWhere = "content.model.attach";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
                     }
-                    LiveActor* const pHost = static_cast< LiveActor* >(actor);
+                    // The mod's actor, texts, place and out through the scene's actor list and the kernel (M-029).
+                    char nameText[1024];
+                    const char* const name = nameGiven != nullptr ? nameText : nullptr;
+                    if (nameGiven != nullptr && luma_text_in(sKernel, pMod, nameGiven, nameText) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "model", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                    char pJointText[1024];
+                    const char* const pJoint = pJointGiven != nullptr ? pJointText : nullptr;
+                    if (pJointGiven != nullptr && luma_text_in(sKernel, pMod, pJointGiven, pJointText) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "joint", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                    LumaPlace pPlaceCopy = {};
+                    const LumaPlace* const pPlace = pPlaceGiven != nullptr ? &pPlaceCopy : nullptr;
+                    if (pPlaceGiven != nullptr) {
+                        uint32_t pPlaceSize = 0;
+                        if (luma_struct_size(sKernel, pMod, pPlaceGiven, &pPlaceSize) != LUMA_OK ||
+                            luma_struct_in(sKernel, pMod, pPlaceGiven, pPlaceSize, &pPlaceCopy) != LUMA_OK) {
+                            report(pMod, pWhere, 101u, "place", nullptr, nullptr);
+                            return LUMA_E_ARGUMENT;
+                        }
+                    }
+                    LiveActor* const pHost = lumacore::liveActorOf(actor);
                     const u32 followed = static_cast< u32 >(follow);
                     const char* pWrong = pHost == nullptr                                    ? "actor"
                                          : name == nullptr || name[0] == 0                   ? "model"
                                          : followed > LUMA_CONTENT_MODEL_SKELETON            ? "follow"
-                                         : pOut == nullptr                                    ? "out"
+                                         : luma_out_ready(sKernel, pMod, pOut) != LUMA_OK    ? "out"
                                                                                               : nullptr;
                     if (pWrong == nullptr && (!lumacore::isA(lumacore::classOf(pHost), lumacore::kClassId< LiveActor >) ||
                                               MR::isDead(pHost) || pHost->mModelManager == nullptr)) {
@@ -628,7 +651,7 @@ namespace luma {
                     if (luma::modlog::facts()) {
                         attachFact(rAttached, placeholder ? cPlaceholder : name, followed, pJoint, placeholder);
                     }
-                    *pOut = rAttached.handle;
+                    (void)luma_value_out(sKernel, pMod, pOut, rAttached.handle);
                     return LUMA_OK;
                 }
 
@@ -681,22 +704,35 @@ namespace luma {
                         report(pMod, pWhere, 101u, "parts", nullptr, nullptr);
                         return LUMA_E_ARGUMENT;
                     }
+                    // Each of the mod's parts through the kernel (M-029): its size read, the two names written.
                     for (u32 i = 0; i < count; i++) {
-                        if (pParts[i].size < sizeof(LumaPlayerPart)) {
+                        uint32_t size = 0;
+                        if (luma_struct_size(sKernel, pMod, &pParts[i], &size) != LUMA_OK) {
+                            report(pMod, pWhere, 101u, "parts", nullptr, nullptr);
+                            return LUMA_E_ARGUMENT;
+                        }
+                        if (size < sizeof(LumaPlayerPart)) {
                             char found[16];
                             char expected[16];
-                            nebula_snprintf(found, sizeof(found), "%u", pParts[i].size);
+                            nebula_snprintf(found, sizeof(found), "%u", size);
                             nebula_snprintf(expected, sizeof(expected), "%u", static_cast< u32 >(sizeof(LumaPlayerPart)));
                             report(pMod, pWhere, 103u, "LumaPlayerPart", found, expected);
                             return LUMA_E_ARGUMENT;
                         }
                     }
+                    if (pTotal != nullptr && luma_out_ready(sKernel, pMod, pTotal) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "total", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
                     for (u32 i = 0; i < count && i < cPlayerPartCount; i++) {
-                        pParts[i].name = cPlayerParts[i].name;
-                        pParts[i].joint = cPlayerParts[i].joint;
+                        const char* const names[2] = {cPlayerParts[i].name, cPlayerParts[i].joint};
+                        if (sKernel->copy_out(pMod, &pParts[i].name, names, sizeof(names)) != LUMA_OK) {
+                            report(pMod, pWhere, 101u, "parts", nullptr, nullptr);
+                            return LUMA_E_ARGUMENT;
+                        }
                     }
                     if (pTotal != nullptr) {
-                        *pTotal = cPlayerPartCount;
+                        (void)luma_value_out(sKernel, pMod, pTotal, uint32_t(cPlayerPartCount));
                     }
                     return LUMA_OK;
                 }
@@ -792,11 +828,30 @@ namespace luma {
                     return place;
                 }
 
-                int32_t svcSetParam(const LumaMod* pMod, LumaContentModel model, const char* pMaterial, const char* pParam,
-                                    const float* pRgba) {
+                int32_t svcSetParam(const LumaMod* pMod, LumaContentModel model, const char* pMaterialGiven,
+                                    const char* pParamGiven, const float* pRgbaGiven) {
                     const char* const pWhere = "content.model.set_param";
                     if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                         return status;
+                    }
+                    // The mod's texts and colour through the kernel (M-029).
+                    char pMaterialText[1024];
+                    const char* const pMaterial = pMaterialGiven != nullptr ? pMaterialText : nullptr;
+                    if (pMaterialGiven != nullptr && luma_text_in(sKernel, pMod, pMaterialGiven, pMaterialText) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "material", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                    char pParamText[1024];
+                    const char* const pParam = pParamGiven != nullptr ? pParamText : nullptr;
+                    if (pParamGiven != nullptr && luma_text_in(sKernel, pMod, pParamGiven, pParamText) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "param", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
+                    }
+                    float rgba[4];
+                    const float* const pRgba = pRgbaGiven != nullptr ? rgba : nullptr;
+                    if (pRgbaGiven != nullptr && sKernel->copy_in(pMod, rgba, pRgbaGiven, sizeof(rgba)) != LUMA_OK) {
+                        report(pMod, pWhere, 101u, "rgba", nullptr, nullptr);
+                        return LUMA_E_ARGUMENT;
                     }
                     Attached* const pAttached = attachedOf(pMod, model);
                     if (pAttached == nullptr) {

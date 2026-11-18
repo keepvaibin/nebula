@@ -1,0 +1,136 @@
+{
+  "harness": 1,
+  "name": "2255-bad-pointers",
+  "about": "M-029: every pointer mods, mods.ids and mods.install read, write or call given wrong (unmapped, read-only, data, a function outside the mod): LUMA_E_ARGUMENT, reported, nothing written or started; a good find after works",
+  "proves": [
+    "services.mods",
+    "kernel.services.mod_memory"
+  ],
+  "mods": [
+    "../mods/mods-badptr"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4251
+      ]
+    },
+    {
+      "at": 20,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.mods-badptr.at_out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.at_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.find_id_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.of_mod_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.option_key_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.watch_options_fn_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.watch_mods_fn_game",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.kit_names_length_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.needing_count_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.ids_name_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.ids_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.install_path_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.install_fn_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.install_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.mods-badptr.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.mods-badptr.find_good",
+      "is": 0
+    },
+    {
+      "fact": "mod.mods-badptr.find_order",
+      "is": 1
+    },
+    {
+      "log": "mods-badptr: mods\\.at was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.find was given a wrong id; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.of_mod was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.option was given a wrong key; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.watch_options was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.watch_mods was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.kit_names was given a wrong length; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.needing was given a wrong count; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.ids\\.get was given a wrong name; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.ids\\.get was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.install\\.request was given a wrong path; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.install\\.request was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "mods-badptr: mods\\.install\\.request was given a wrong out; it did nothing\\."
+    }
+  ]
+}

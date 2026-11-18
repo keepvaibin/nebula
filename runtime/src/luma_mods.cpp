@@ -4,6 +4,7 @@
 // no fs yet, so LUMA_E_ABSENT after its checks).
 
 #include "galaxy/luma_mods_service.h"
+#include "galaxy/luma_mod_memory.h"
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/luma.h"
@@ -41,6 +42,8 @@ constexpr std::uint32_t kHigh = 0x01FFFFFFu;
 constexpr std::uint64_t kSpan = std::uint64_t{kHigh} - kLow + 1u;
 constexpr std::size_t kNameMost = 64u;        // a name: 1 to 64 of a-z 0-9 _ - . (item 5)
 constexpr std::size_t kModIdMost = 64u;       // a .luma's id (luma.cpp valid_id)
+constexpr std::size_t kOptionKeyMost = 64u;   // an option's key (the manifest's key rule)
+constexpr std::size_t kInstallPathMost = 255u;  // bytes of a path (fs's path rule)
 constexpr std::uint64_t kRecordMost = 16u << 20u;  // a record bigger than this is not ours
 constexpr std::uint32_t kInfoLeast = static_cast<std::uint32_t>(sizeof(LumaModsInfo));  // 1.0's whole struct
 static_assert(sizeof(LumaModsInfo) == 260u, "LumaModsInfo 1.0 is 260 bytes (mods.md section 2)");
@@ -49,6 +52,11 @@ static_assert(sizeof(LumaModsKind) == 4u && sizeof(LumaModsState) == 4u, "the en
 const char* const kSpaces[] = {LUMA_MODS_SPACE_MESSAGE, LUMA_MODS_SPACE_SENSOR};
 
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
+
+// The kernel a call reads and writes the mod's memory through (M-029). Set while a call runs: enter checks it.
+const LumaServiceKernel* mod_kernel() noexcept {
+    return g_kernel.load(std::memory_order_acquire);
+}
 void (*g_log)(const char*) = nullptr;  // set by providers() before the first mod
 
 // ---- Calling rules (services/registry.md 4)
@@ -184,10 +192,26 @@ void make_list() {
 }
 
 // The 1.0 fields into the mod's struct: whole fields only, none past its size (services/registry.md 3's size rule).
-void give(const LumaModsInfo& info, LumaModsInfo* out) {
-    const std::uint32_t size = out->size;
-    std::memcpy(out, &info, std::min<std::size_t>(size, sizeof(info)));
-    out->size = size;
+// A short text of the mod's (a space, a name, an id, a path) copied through the kernel (M-029): false when unreadable,
+// null, or longer than `most`; every caller's text has a limit, and a longer one was a wrong one before too.
+bool mod_text(const LumaMod* mod, const char* p, std::size_t most, std::string* out) {
+    return galaxy::mod_memory::text(mod_kernel(), mod, p, most, out) == LUMA_OK;
+}
+
+// The info at the mod's size (`size`, read by info_size), through the kernel. False: the mod's struct cannot take it.
+bool give(const LumaMod* mod, const LumaModsInfo& info, LumaModsInfo* out, std::uint32_t size) {
+    return luma_struct_out(mod_kernel(), mod, out, size, info) == LUMA_OK;
+}
+
+// The size of the mod's LumaModsInfo: LUMA_OK, or the status reported (a wrong out, or a size too small).
+std::int32_t info_size(const LumaMod* mod, const char* where, const LumaModsInfo* out, std::uint32_t* size) {
+    if (luma_struct_size(mod_kernel(), mod, out, size) != LUMA_OK) {
+        return argument(mod, where, "out");
+    }
+    if (*size < kInfoLeast) {
+        return struct_size(mod, where, *size);
+    }
+    return LUMA_OK;
 }
 
 std::uint32_t mods_count(const LumaMod* mod) {
@@ -203,39 +227,39 @@ std::int32_t mods_at(const LumaMod* mod, std::uint32_t index, LumaModsInfo* out)
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (out == nullptr) {
-        return argument(mod, where, "out");
-    }
-    if (out->size < kInfoLeast) {
-        return struct_size(mod, where, out->size);
+    std::uint32_t size = 0;
+    if (const std::int32_t status = info_size(mod, where, out, &size); status != LUMA_OK) {
+        return status;
     }
     make_list();
     if (index >= g_list.size()) {
         return LUMA_E_NOT_FOUND;
     }
-    give(g_list[index], out);
-    return LUMA_OK;
+    return give(mod, g_list[index], out, size) ? LUMA_OK : argument(mod, where, "out");
 }
 
-std::int32_t mods_find(const LumaMod* mod, const char* id, LumaModsInfo* out) {
+std::int32_t mods_find(const LumaMod* mod, const char* id_given, LumaModsInfo* out) {
     const char* const where = "mods.find";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (id == nullptr) {
+    // The mod's id through the kernel (M-029): one longer than any id is no mod's.
+    std::string id_text;
+    if (const std::int32_t read = galaxy::mod_memory::text(mod_kernel(), mod, id_given, kModIdMost, &id_text);
+        read != LUMA_OK && read != LUMA_E_TOO_LARGE) {
         return argument(mod, where, "id");
+    } else if (read == LUMA_E_TOO_LARGE) {
+        id_text.assign("/");  // matches no id
     }
-    if (out == nullptr) {
-        return argument(mod, where, "out");
-    }
-    if (out->size < kInfoLeast) {
-        return struct_size(mod, where, out->size);
+    const char* const id = id_text.c_str();
+    std::uint32_t size = 0;
+    if (const std::int32_t status = info_size(mod, where, out, &size); status != LUMA_OK) {
+        return status;
     }
     make_list();
     for (const LumaModsInfo& info : g_list) {
         if (std::strcmp(info.id, id) == 0) {
-            give(info, out);
-            return LUMA_OK;
+            return give(mod, info, out, size) ? LUMA_OK : argument(mod, where, "out");
         }
     }
     return LUMA_E_NOT_FOUND;
@@ -541,20 +565,25 @@ void unreadable_error() {
     galaxy::modlog::add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_ERROR, "", 161u, "mod-ids.json", "Mods.IdsUnreadable", {});
 }
 
-std::int32_t ids_get(const LumaMod* mod, const char* space, const char* name, std::uint32_t* out) {
+std::int32_t ids_get(const LumaMod* mod, const char* space_given, const char* name_given, std::uint32_t* out) {
     const char* const where = "mods.ids.get";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (space == nullptr || !known_space(space)) {
+    // The mod's texts and out through the kernel (M-029).
+    std::string space_text;
+    std::string name_text;
+    if (!mod_text(mod, space_given, kNameMost, &space_text) || !known_space(space_text)) {
         return argument(mod, where, "space");
     }
-    if (name == nullptr || !valid_name(name)) {
+    if (!mod_text(mod, name_given, kNameMost, &name_text) || !valid_name(name_text)) {
         return argument(mod, where, "name");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
+    const char* const space = space_text.c_str();
+    const char* const name = name_text.c_str();
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
     const std::string mod_id = kernel->mod_id(mod);
     const std::string key = mod_id + "/" + name;
@@ -598,27 +627,35 @@ std::int32_t ids_get(const LumaMod* mod, const char* space, const char* name, st
         galaxy::modlog::add_row(LUMA_MODLOG_CODE, LUMA_MODLOG_NOTE, mod_id, 160u, "", "Mods.IdMoved",
                                 {{"key", key}, {"number", number_text}, {"space", space}, {"other", moved_from}});
     }
-    *out = number;
+    (void)luma_value_out(mod_kernel(), mod, out, number);
     return LUMA_OK;
 }
 
-std::int32_t ids_of(const LumaMod* mod, const char* space, const char* mod_id, const char* name, std::uint32_t* out) {
+std::int32_t ids_of(const LumaMod* mod, const char* space_given, const char* mod_id_given, const char* name_given,
+                    std::uint32_t* out) {
     const char* const where = "mods.ids.of";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (space == nullptr || !known_space(space)) {
+    // The mod's texts and out through the kernel (M-029).
+    std::string space_text;
+    std::string mod_id_text;
+    std::string name_text;
+    if (!mod_text(mod, space_given, kNameMost, &space_text) || !known_space(space_text)) {
         return argument(mod, where, "space");
     }
-    if (mod_id == nullptr || !valid_mod_id(mod_id)) {
+    if (!mod_text(mod, mod_id_given, kModIdMost, &mod_id_text) || !valid_mod_id(mod_id_text)) {
         return argument(mod, where, "mod_id");
     }
-    if (name == nullptr || !valid_name(name)) {
+    if (!mod_text(mod, name_given, kNameMost, &name_text) || !valid_name(name_text)) {
         return argument(mod, where, "name");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
+    const char* const space = space_text.c_str();
+    const char* const mod_id = mod_id_text.c_str();
+    const char* const name = name_text.c_str();
     const std::string key = std::string(mod_id) + "/" + name;
     Record& r = record();
     bool unreadable = false;
@@ -638,7 +675,7 @@ std::int32_t ids_of(const LumaMod* mod, const char* space, const char* mod_id, c
     if (!number) {
         return LUMA_E_NOT_FOUND;
     }
-    *out = *number;
+    (void)luma_value_out(mod_kernel(), mod, out, *number);
     return LUMA_OK;
 }
 
@@ -699,18 +736,21 @@ void install_drop(LumaEventNode* node) {
     install_free(request);
 }
 
-std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn fn, void* user, LumaHandle* out) {
+std::int32_t install_request(const LumaMod* mod, const char* path_given, LumaEventFn fn, void* user, LumaHandle* out) {
     const char* const where = "mods.install.request";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (path == nullptr || !valid_install_path(path)) {
+    // The mod's path, function and out through the kernel (M-029).
+    std::string path_text;
+    if (!mod_text(mod, path_given, kInstallPathMost, &path_text) || !valid_install_path(path_text)) {
         return argument(mod, where, "path");
     }
-    if (fn == nullptr) {
+    const char* const path = path_text.c_str();
+    if (!galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
         return argument(mod, where, "fn");
     }
-    if (out == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, out) != LUMA_OK) {
         return argument(mod, where, "out");
     }
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
@@ -771,7 +811,7 @@ std::int32_t install_request(const LumaMod* mod, const char* path, LumaEventFn f
         install_free(request);
         return status;  // LUMA_E_BUSY or LUMA_E_ABSENT (no menu in this host): answers
     }
-    *out = handle;
+    (void)luma_value_out(mod_kernel(), mod, out, handle);
     return LUMA_PENDING;
 }
 
@@ -957,11 +997,24 @@ void deliver_options(LumaEventNode* node) {
 
 void drop_options(LumaEventNode*) {}  // the node is the ModOptions'; nothing was taken for it
 
-std::int64_t mods_option(const LumaMod* mod, const char* key, char* buf, std::uint64_t size) {
+std::int64_t mods_option(const LumaMod* mod, const char* key_given, char* buf, std::uint64_t size) {
     static constexpr const char* where = "mods.option";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
+    // The mod's key through the kernel (M-029): one longer than a key can be is no option's.
+    std::string key_text;
+    if (key_given != nullptr) {
+        const std::int32_t read = galaxy::mod_memory::text(mod_kernel(), mod, key_given, kOptionKeyMost, &key_text);
+        if (read != LUMA_OK && read != LUMA_E_TOO_LARGE) {
+            return argument(mod, where, "key");
+        }
+        if (read == LUMA_E_TOO_LARGE) {
+            report(mod, where, 165u, key_text.c_str());  // Mods.OptionUnknown
+            return LUMA_E_NOT_FOUND;
+        }
+    }
+    const char* const key = key_given != nullptr ? key_text.c_str() : nullptr;
     if (key == nullptr) {
         report(mod, where, 165u, "(null)");  // Mods.OptionUnknown
         return LUMA_E_NOT_FOUND;
@@ -1006,14 +1059,18 @@ std::int64_t mods_option(const LumaMod* mod, const char* key, char* buf, std::ui
         report(mod, where, 167u, given, key, needed);  // Mods.OptionBufferShort
         return LUMA_E_TOO_LARGE;
     }
-    std::memcpy(buf, text.data(), static_cast<std::size_t>(length));
-    buf[length] = '\0';
+    if (mod_kernel()->copy_out(mod, buf, text.c_str(), length + 1u) != LUMA_OK) {
+        return argument(mod, where, "buf");
+    }
     return static_cast<std::int64_t>(length);
 }
 
 std::int32_t mods_watch_options(const LumaMod* mod, LumaEventFn fn, void* user) {
     if (const std::int32_t status = enter(mod, "mods.watch_options"); status != LUMA_OK) {
         return status;
+    }
+    if (fn != nullptr && !galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
+        return argument(mod, "mods.watch_options", "fn");
     }
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
     const std::string id = kernel->mod_id(mod);
@@ -1089,6 +1146,9 @@ void drop_stopped(LumaEventNode*) {}  // the node is the StopWatch's
 std::int32_t mods_watch_mods(const LumaMod* mod, LumaEventFn fn, void* user) {
     if (const std::int32_t status = enter(mod, "mods.watch_mods"); status != LUMA_OK) {
         return status;
+    }
+    if (fn != nullptr && !galaxy::mod_memory::code(mod_kernel(), mod, reinterpret_cast<const void*>(fn))) {
+        return argument(mod, "mods.watch_mods", "fn");
     }
     try {
         const std::lock_guard<std::mutex> lock(g_options_lock);
@@ -1206,12 +1266,14 @@ void make_kit_index() {
 }
 
 // A module or a file's name: 1 to 64 of a-z 0-9 _ - ., not starting with a dot, no "..": no path part can be in it.
+constexpr std::size_t kKitPartMost = 64u;  // a kit module's or file's name (valid_kit_part)
+
 bool valid_kit_part(const char* part) noexcept {
     if (part == nullptr) {
         return false;
     }
     const std::string_view text(part);
-    if (text.empty() || text.size() > 64u || text.front() == '.' || text.find("..") != std::string_view::npos) {
+    if (text.empty() || text.size() > kKitPartMost || text.front() == '.' || text.find("..") != std::string_view::npos) {
         return false;
     }
     return std::all_of(text.begin(), text.end(), [](char c) {
@@ -1241,22 +1303,25 @@ const KitMod* kit_mod_for(const LumaMod* mod, const char* where, std::uint64_t o
     return nullptr;
 }
 
-std::int32_t kit_names(const LumaMod* mod, std::uint64_t of, const char* module, char* buf, std::uint64_t size,
+std::int32_t kit_names(const LumaMod* mod, std::uint64_t of, const char* module_given, char* buf, std::uint64_t size,
                        std::uint64_t* length) {
     static constexpr const char* where = "mods.kit_names";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (!valid_kit_part(module)) {
+    // The mod's texts, length and buf through the kernel (M-029).
+    std::string module_text;
+    if (!mod_text(mod, module_given, kKitPartMost, &module_text) || !valid_kit_part(module_text.c_str())) {
         return argument(mod, where, "module");
     }
-    if (length == nullptr) {
+    const char* const module = module_text.c_str();
+    if (luma_out_ready(mod_kernel(), mod, length) != LUMA_OK) {
         return argument(mod, where, "length");
     }
     if (buf == nullptr && size != 0u) {
         return argument(mod, where, "buf");
     }
-    *length = 0u;
+    (void)luma_value_out(mod_kernel(), mod, length, std::uint64_t{0});
     const LumaMod* other = nullptr;
     const KitMod* const entry = kit_mod_for(mod, where, of, &other);
     if (entry == nullptr) {
@@ -1282,39 +1347,48 @@ std::int32_t kit_names(const LumaMod* mod, std::uint64_t of, const char* module,
     for (const std::string& name : names) {
         total += name.size() + 1u;
     }
-    *length = total;
+    (void)luma_value_out(mod_kernel(), mod, length, total);
     if (buf == nullptr) {
         return LUMA_OK;  // the length asked
     }
     if (size < total) {
         return LUMA_E_TOO_LARGE;  // an answer: nothing written, *length is what it needs
     }
+    std::string all;
+    all.reserve(static_cast<std::size_t>(total));
     for (const std::string& name : names) {
-        std::memcpy(buf, name.c_str(), name.size() + 1u);
-        buf += name.size() + 1u;
+        all.append(name.c_str(), name.size() + 1u);
+    }
+    if (!all.empty() && mod_kernel()->copy_out(mod, buf, all.data(), all.size()) != LUMA_OK) {
+        return argument(mod, where, "buf");
     }
     return LUMA_OK;
 }
 
-std::int32_t kit_read(const LumaMod* mod, std::uint64_t of, const char* module, const char* name, void* buf,
+std::int32_t kit_read(const LumaMod* mod, std::uint64_t of, const char* module_given, const char* name_given, void* buf,
                       std::uint64_t size, std::uint64_t* length) {
     static constexpr const char* where = "mods.kit_read";
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (!valid_kit_part(module)) {
+    // The mod's texts, length and buf through the kernel (M-029).
+    std::string module_text;
+    std::string name_text;
+    if (!mod_text(mod, module_given, kKitPartMost, &module_text) || !valid_kit_part(module_text.c_str())) {
         return argument(mod, where, "module");
     }
-    if (!valid_kit_part(name)) {
+    if (!mod_text(mod, name_given, kKitPartMost, &name_text) || !valid_kit_part(name_text.c_str())) {
         return argument(mod, where, "name");
     }
-    if (length == nullptr) {
+    const char* const module = module_text.c_str();
+    const char* const name = name_text.c_str();
+    if (luma_out_ready(mod_kernel(), mod, length) != LUMA_OK) {
         return argument(mod, where, "length");
     }
     if (buf == nullptr && size != 0u) {
         return argument(mod, where, "buf");
     }
-    *length = 0u;
+    (void)luma_value_out(mod_kernel(), mod, length, std::uint64_t{0});
     const LumaMod* other = nullptr;
     const KitMod* const entry = kit_mod_for(mod, where, of, &other);
     if (entry == nullptr) {
@@ -1350,15 +1424,15 @@ std::int32_t kit_read(const LumaMod* mod, std::uint64_t of, const char* module, 
         it = kept.emplace(key, std::move(data)).first;
     }
     const std::vector<unsigned char>& data = it->second;
-    *length = data.size();
+    (void)luma_value_out(mod_kernel(), mod, length, std::uint64_t{data.size()});
     if (buf == nullptr) {
         return LUMA_OK;  // the length asked
     }
     if (size < data.size()) {
         return LUMA_E_TOO_LARGE;  // an answer: nothing written, *length is what it needs
     }
-    if (!data.empty()) {
-        std::memcpy(buf, data.data(), data.size());
+    if (!data.empty() && mod_kernel()->copy_out(mod, buf, data.data(), data.size()) != LUMA_OK) {
+        return argument(mod, where, "buf");
     }
     return LUMA_OK;
 }
@@ -1368,7 +1442,7 @@ std::int32_t kit_needing(const LumaMod* mod, std::uint64_t* out, std::uint32_t c
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (count == nullptr) {
+    if (luma_out_ready(mod_kernel(), mod, count) != LUMA_OK) {
         return argument(mod, where, "count");
     }
     if (out == nullptr && capacity != 0u) {
@@ -1391,10 +1465,15 @@ std::int32_t kit_needing(const LumaMod* mod, std::uint64_t* out, std::uint32_t c
     }
     std::stable_sort(found.begin(), found.end(),
                      [](const auto& a, const auto& b) { return a.first < b.first; });  // the Mods list's order
-    *count = static_cast<std::uint32_t>(found.size());
+    std::vector<std::uint64_t> given;
     for (std::uint32_t i = 0; i < capacity && i < found.size(); i++) {
-        out[i] = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(found[i].second));
+        given.push_back(static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(found[i].second)));
     }
+    if (!given.empty() &&
+        mod_kernel()->copy_out(mod, out, given.data(), given.size() * sizeof(std::uint64_t)) != LUMA_OK) {
+        return argument(mod, where, "out");
+    }
+    (void)luma_value_out(mod_kernel(), mod, count, static_cast<std::uint32_t>(found.size()));
     return LUMA_OK;
 }
 
@@ -1448,11 +1527,9 @@ std::int32_t mods_of_mod(const LumaMod* mod, std::uint64_t which, LumaModsInfo* 
     if (const std::int32_t status = enter(mod, where); status != LUMA_OK) {
         return status;
     }
-    if (out == nullptr) {
-        return argument(mod, where, "out");
-    }
-    if (out->size < kInfoLeast) {
-        return struct_size(mod, where, out->size);
+    std::uint32_t size = 0;
+    if (const std::int32_t status = info_size(mod, where, out, &size); status != LUMA_OK) {
+        return status;
     }
     const LumaServiceKernel* kernel = g_kernel.load(std::memory_order_acquire);
     const auto* const other = reinterpret_cast<const LumaMod*>(static_cast<std::uintptr_t>(which));
@@ -1463,8 +1540,7 @@ std::int32_t mods_of_mod(const LumaMod* mod, std::uint64_t which, LumaModsInfo* 
     make_list();
     for (const LumaModsInfo& info : g_list) {
         if (std::strcmp(info.id, id) == 0) {
-            give(info, out);
-            return LUMA_OK;
+            return give(mod, info, out, size) ? LUMA_OK : argument(mod, where, "out");
         }
     }
     return LUMA_E_NOT_FOUND;

@@ -122,19 +122,31 @@ namespace luma {
                 sLive--;
             }
 
-            int32_t svcMake(const LumaMod* pMod, const LumaPlayerInit* pInit, LumaActor* pOut) {
+            int32_t svcMake(const LumaMod* pMod, const LumaPlayerInit* pInitGiven, LumaActor* pOut) {
                 const char* const pWhere = "player.make";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pInit == nullptr || pOut == nullptr) {
-                    report(pMod, pWhere, 101u, pInit == nullptr ? "init" : "out", nullptr, nullptr);
+                // The mod's memory through the kernel (M-029): init copied in, out checked first (a wrong one makes no
+                // player).
+                u32 size = 0;
+                const char* const pUnusable = luma_struct_size(sKernel, pMod, pInitGiven, &size) != LUMA_OK        ? "init"
+                                              : luma_out_ready(sKernel, pMod, pOut) != LUMA_OK                     ? "out"
+                                                                                                                 : nullptr;
+                if (pUnusable != nullptr) {
+                    report(pMod, pWhere, 101u, pUnusable, nullptr, nullptr);
                     return LUMA_E_ARGUMENT;
                 }
-                if (pInit->size < sizeof(LumaPlayerInit)) {
+                LumaPlayerInit init;
+                const LumaPlayerInit* const pInit = &init;
+                if (size >= sizeof(LumaPlayerInit) && luma_struct_in(sKernel, pMod, pInitGiven, size, &init) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "init", nullptr, nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                if (size < sizeof(LumaPlayerInit)) {
                     char found[16];
                     char expected[16];
-                    nebula_snprintf(found, sizeof(found), "%u", static_cast< u32 >(pInit->size));
+                    nebula_snprintf(found, sizeof(found), "%u", static_cast< u32 >(size));
                     nebula_snprintf(expected, sizeof(expected), "%u", static_cast< u32 >(sizeof(LumaPlayerInit)));
                     report(pMod, pWhere, 103u, "LumaPlayerInit", found, expected);
                     return LUMA_E_ARGUMENT;
@@ -198,7 +210,7 @@ namespace luma {
                 }
                 *pSlot = Extra{pMod, pActor, pad};
                 sLive++;
-                *pOut = pActor;
+                (void)luma_value_out(sKernel, pMod, pOut, LumaActor(pActor));
                 return LUMA_OK;
             }
 

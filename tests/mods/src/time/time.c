@@ -18,6 +18,8 @@
                         higher mod in the list steps (0), the lower is told LUMA_E_BUSY (-14).
    tm-clocks      (14) 2216: monotonic_ns and wall from the harness's other thread and the game thread at k 1.
    tm-struct      (15) 2217: now with a LumaTimeNow of 8 bytes, wall with a LumaTimeWall of 8 bytes.
+   tm-badptr      (16) 2220: every pointer the service reads, writes or calls given wrong at k 1 (unmapped, read-only,
+                        a function that is the game's or data); at k 3 whether the good on_frame handler still runs.
    Run steps call MR::getRandom(0, 4220 + k) and the hook gives 1. k 0 starts the frame watch, k 6 ends it: each frame
    between, the on_frame handler writes the facts df (frames since the last), ds (steps since the last), ds2 (steps
    in the last two frames), steps, state, rate, holders, sound, calls (on_step calls since the last) and sif (the
@@ -51,8 +53,11 @@ static void on_step(void* user, const LumaTimeNow* now) {
 /* 2214: armed at k 1, done on the next on_frame. */
 __attribute__((unused)) static int32_t order_armed;
 
+static int32_t frame_calls;
+
 static void on_frame(void* user, const LumaTimeNow* now) {
     (void)user;
+    frame_calls++;
 #if CASE == 13
     if (order_armed) {
         /* Hold, then step: step answers BUSY once another mod holds too, so the first handler called gets 0 and the
@@ -131,6 +136,16 @@ static void off_thread(void* user) {
 
 __attribute__((unused)) static LumaHandle handle;
 __attribute__((unused)) static uint64_t mark;
+
+#if CASE == 16
+/* In the mod's read-only data: sizes that pass the size check, so the write is what fails. */
+static const LumaTimeNow ro_now = {.size = sizeof(LumaTimeNow)};
+static const LumaTimeWall ro_wall = {.size = sizeof(LumaTimeWall)};
+static const LumaHandle ro_handle = 7;
+/* The first page: mapped by no system. */
+#define UNMAPPED ((void*)(uintptr_t)0x1000)
+static int32_t frames_at_k1;
+#endif
 
 static int32_t trigger(LumaCall* call, void* user) {
     (void)user;
@@ -245,6 +260,32 @@ static int32_t trigger(LumaCall* call, void* user) {
         LumaTimeNow whole = {.size = sizeof(LumaTimeNow)};
         lt_fact("now_whole", tm->now(lt_mod, &whole));
     }
+#elif CASE == 16
+    if (k == 1) {
+        lt_fact("now_unmapped", tm->now(lt_mod, (LumaTimeNow*)UNMAPPED));
+        lt_fact("now_read_only", tm->now(lt_mod, (LumaTimeNow*)(uintptr_t)&ro_now));
+        lt_fact("wall_unmapped", tm->wall(lt_mod, (LumaTimeWall*)UNMAPPED));
+        lt_fact("wall_read_only", tm->wall(lt_mod, (LumaTimeWall*)(uintptr_t)&ro_wall));
+        LumaHandle h = 99;
+        lt_fact("timer_fn_unmapped", tm->timer(lt_mod, LUMA_TIME_FRAMES, 1, 0, (LumaEventFn)UNMAPPED, 0, &h));
+        lt_fact("timer_fn_data", tm->timer(lt_mod, LUMA_TIME_FRAMES, 1, 0, (LumaEventFn)(uintptr_t)&ro_now, 0, &h));
+        lt_fact("timer_fn_game", tm->timer(lt_mod, LUMA_TIME_FRAMES, 1, 0, (LumaEventFn)(uintptr_t)tm->cancel, 0, &h));
+        lt_fact("timer_h", (long long)h);
+        lt_fact("timer_out_unmapped", tm->timer(lt_mod, LUMA_TIME_FRAMES, 1, 0, on_timer, 0, (LumaHandle*)UNMAPPED));
+        lt_fact("timer_out_read_only", tm->timer(lt_mod, LUMA_TIME_FRAMES, 1, 0, on_timer, 0, (LumaHandle*)(uintptr_t)&ro_handle));
+        lt_fact("on_frame_unmapped", tm->on_frame(lt_mod, (LumaTimeFn)UNMAPPED, 0));
+        lt_fact("on_frame_game", tm->on_frame(lt_mod, (LumaTimeFn)(uintptr_t)tm->now, 0));
+        lt_fact("on_step_data", tm->on_step(lt_mod, (LumaTimeFn)(uintptr_t)&ro_wall, 0));
+        /* Still right after: a good call answers, and the good timer works. */
+        LumaTimeNow whole = {.size = sizeof(LumaTimeNow)};
+        lt_fact("now_after", tm->now(lt_mod, &whole));
+        lt_fact("timer_good", tm->timer(lt_mod, LUMA_TIME_FRAMES, 1, 0, on_timer, 0, &h));
+        frames_at_k1 = frame_calls;
+    }
+    if (k == 3) {
+        lt_fact("frames_still", frame_calls > frames_at_k1);
+        lt_fact("events", events);
+    }
 #endif
     LUMA_RESULT(call, int32_t) = 1;
     return 0;
@@ -253,7 +294,7 @@ static int32_t trigger(LumaCall* call, void* user) {
 static const LumaImport imports[] = {
     LUMA_SERVICE(tm, LUMA_TIME_NAME, "1.0"),
 #if CASE == 14
-    LUMA_SERVICE(harness_table, LUMA_HARNESS_NAME, "1.1"),
+    LT_HARNESS(harness_table, "1.1"),
 #endif
     LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
 };

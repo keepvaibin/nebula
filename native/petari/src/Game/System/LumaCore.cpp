@@ -1,6 +1,8 @@
 // The game's classes by id (LumaCore.hpp).
 #include "Game/System/LumaCore.hpp"
+#include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
 #include <cstring>
 
 namespace lumacore {
@@ -32,6 +34,15 @@ namespace {
         const void* v;
         std::memcpy(&v, static_cast< const void* >(pObj), sizeof(v));
         return v;
+    }
+    // Actors liveActorOf found in the scene's actor list, until their arena goes (released): a direct-mapped set, so a
+    // mod asking each frame about the same actors scans the list once.
+    constexpr u32 cKnownActorSlots = 512;
+    const void* sKnownActors[cKnownActorSlots] = {};
+
+    u32 knownSlot(const void* p) {
+        const uintptr_t at = reinterpret_cast< uintptr_t >(p);
+        return static_cast< u32 >((at >> 4) ^ (at >> 13)) & (cKnownActorSlots - 1);
     }
 }  // namespace
 
@@ -101,8 +112,33 @@ namespace lumacore {
         return id;
     }
 
+    LiveActor* liveActorOf(const void* pActor) {
+        if (pActor == nullptr) {
+            return nullptr;
+        }
+        const u32 slot = knownSlot(pActor);
+        if (sKnownActors[slot] == pActor) {
+            return static_cast< LiveActor* >(const_cast< void* >(pActor));
+        }
+        if (!MR::isExistSceneObj(SceneObj_AllLiveActorGroup)) {
+            return nullptr;
+        }
+        const AllLiveActorGroup* const pGroup = MR::getAllLiveActorGroup();
+        for (s32 i = 0, n = pGroup->getObjNum(); i < n; i++) {
+            if (pGroup->getObj(i) == pActor) {
+                sKnownActors[slot] = pActor;
+                return static_cast< LiveActor* >(const_cast< void* >(pActor));
+            }
+        }
+        return nullptr;
+    }
+
     void released(const void* pStart, const void* pEnd) {
-        (void)pStart;
-        (void)pEnd;
+        // Actors known from the scene's list go with their arena (the list itself is in the scene's).
+        for (const void*& rKnown : sKnownActors) {
+            if (rKnown >= pStart && rKnown < pEnd) {
+                rKnown = nullptr;
+            }
+        }
     }
 }  // namespace lumacore

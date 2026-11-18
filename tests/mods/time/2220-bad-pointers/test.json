@@ -1,0 +1,129 @@
+{
+  "harness": 1,
+  "name": "2220-bad-pointers",
+  "about": "M-029: every pointer time reads, writes or calls given wrong (unmapped, read-only, a game function, data): LUMA_E_ARGUMENT, reported, and the game and the mod go on; a good call after still works",
+  "proves": [
+    "services.time",
+    "services.registry",
+    "kernel.services.mod_memory"
+  ],
+  "mods": [
+    "../mods/tm-badptr"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4221
+      ]
+    },
+    {
+      "at": 20,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4223
+      ]
+    },
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.tm-badptr.now_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.now_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.wall_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.wall_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.timer_fn_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.timer_fn_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.timer_fn_game",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.timer_out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.timer_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.on_frame_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.on_frame_game",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.on_step_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.tm-badptr.timer_h",
+      "is": 99
+    },
+    {
+      "fact": "mod.tm-badptr.now_after",
+      "is": 0
+    },
+    {
+      "fact": "mod.tm-badptr.timer_good",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-badptr.frames_still",
+      "is": 1
+    },
+    {
+      "fact": "mod.tm-badptr.events",
+      "is": 1
+    },
+    {
+      "log": "tm-badptr: time\\.now was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "tm-badptr: time\\.wall was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "tm-badptr: time\\.timer was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "tm-badptr: time\\.timer was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "tm-badptr: time\\.on_frame was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "tm-badptr: time\\.on_step was given a wrong fn; it did nothing\\."
+    }
+  ]
+}

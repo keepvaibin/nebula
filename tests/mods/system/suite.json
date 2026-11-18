@@ -17,6 +17,7 @@
     "2232-links-declined",
     "2232b-links-undeclared",
     "2233-read-noted",
-    "2234-taken-out"
+    "2234-taken-out",
+    "2235-bad-pointers"
   ]
 }

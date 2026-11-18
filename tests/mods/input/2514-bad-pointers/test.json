@@ -1,0 +1,148 @@
+{
+  "harness": 1,
+  "name": "2514-bad-pointers",
+  "about": "M-029: every pointer input, input.inject and input.dev read, write or call given wrong (unmapped, read-only, data, a function outside the mod): LUMA_E_ARGUMENT, reported, no out written before; a good device read after works",
+  "proves": [
+    "services.input",
+    "kernel.services.mod_memory"
+  ],
+  "mods": [
+    "../mods/in-badptr"
+  ],
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.in-badptr.action_id_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.action_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.read_out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.game_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.game_raw_out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.device_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.watch_fn_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.text_request_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.text_fn_game",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.text_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.text_initial_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.inject_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.dev_found_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.dev_out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.dev_path_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.dev_fn_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.in-badptr.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-badptr.text_none",
+      "is": 1
+    },
+    {
+      "fact": "mod.in-badptr.device_good",
+      "is": 0
+    },
+    {
+      "fact": "mod.in-badptr.started",
+      "is": 1
+    },
+    {
+      "log": "in-badptr: input\\.action was given a wrong id; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.action was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.read was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.game was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.game_raw was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.device was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.watch_device was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.text_request was given a wrong request; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.text_request was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.text_request was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.text_request was given a wrong request.initial; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.inject\\.begin was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.dev\\.list was given a wrong found; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.dev\\.list was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.dev\\.open was given a wrong path; it did nothing\\."
+    },
+    {
+      "log": "in-badptr: input\\.dev\\.open was given a wrong fn; it did nothing\\."
+    }
+  ]
+}

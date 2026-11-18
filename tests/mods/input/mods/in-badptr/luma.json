@@ -1,0 +1,23 @@
+{
+  "format": "1.0",
+  "id": "in-badptr",
+  "name": "in-badptr",
+  "summary": "in-badptr (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "input.inject",
+      "why": "The input test asks for it."
+    },
+    {
+      "name": "input.devices",
+      "why": "The input test asks for it."
+    }
+  ]
+}

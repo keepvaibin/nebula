@@ -1,0 +1,169 @@
+{
+  "harness": 1,
+  "name": "2315-bad-pointers",
+  "about": "M-029: every pointer fs reads, writes or calls given wrong (unmapped, read-only, data, a function outside the mod): LUMA_E_ARGUMENT, reported, nothing started or written; a read's take into a wrong buf is refused and not taken, so the good take after takes it",
+  "proves": [
+    "services.fs",
+    "kernel.services.mod_memory"
+  ],
+  "mods": [
+    "../mods/fs-badptr"
+  ],
+  "steps": [
+    {
+      "at": 10,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-badptr.e2_again",
+        "exists": true
+      },
+      "timeout": 6000,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fs-badptr.events",
+        "exists": true
+      },
+      "timeout": 6000,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fs-badptr.read_path_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-badptr.read_fn_data",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-badptr.list_fn_game",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-badptr.read_out_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-badptr.write_out_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-badptr.write_data_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-badptr.move_to_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-badptr.remove_path_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-badptr.e2_buf_unmapped",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-badptr.e2_buf_read_only",
+      "is": -1
+    },
+    {
+      "fact": "mod.fs-badptr.none_written",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-badptr.w1",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-badptr.r2",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-badptr.e1_kind",
+      "is": 2
+    },
+    {
+      "fact": "mod.fs-badptr.e1_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-badptr.e1_value",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-badptr.e2_kind",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-badptr.e2_status",
+      "is": 0
+    },
+    {
+      "fact": "mod.fs-badptr.e2_value",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-badptr.e2_len",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-badptr.e2_take",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-badptr.e2_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.fs-badptr.e2_again",
+      "is": -3
+    },
+    {
+      "fact": "mod.fs-badptr.events",
+      "is": 2
+    },
+    {
+      "log": "fs-badptr: fs\\.read was given a wrong path; it did nothing\\."
+    },
+    {
+      "log": "fs-badptr: fs\\.read was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "fs-badptr: fs\\.list was given a wrong fn; it did nothing\\."
+    },
+    {
+      "log": "fs-badptr: fs\\.read was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "fs-badptr: fs\\.write was given a wrong out; it did nothing\\."
+    },
+    {
+      "log": "fs-badptr: fs\\.write was given a wrong data; it did nothing\\."
+    },
+    {
+      "log": "fs-badptr: fs\\.move was given a wrong to; it did nothing\\."
+    },
+    {
+      "log": "fs-badptr: fs\\.remove was given a wrong path; it did nothing\\."
+    },
+    {
+      "log": "fs-badptr: fs\\.take_read was given a wrong buf; it did nothing\\."
+    }
+  ]
+}

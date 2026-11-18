@@ -67,6 +67,10 @@ namespace luma {
 
             // A key by the rule (item 4). A key kept for a mod ("<mod id>/<name>", item 5) is the user files' only: a
             // global file is not read at a FORGET, so save.global takes names alone.
+            // A value on its way between a mod and the files (get, set, global.get, global.set): the mod's memory is
+            // read and written only through the kernel (M-029). Game thread.
+            u8 sValueBytes[LumaSaveChunk::cValueMost];
+
             bool checkKey(const LumaMod* pMod, const char* pWhere, const char* pKey, bool keptFor = true) {
                 if (LumaSaveChunk::isValidKey(pKey)) {
                     bool slash = false;
@@ -81,6 +85,17 @@ namespace luma {
                 return false;
             }
 
+            // A value read into sValueBytes (length its whole size, room what was read of it) into the mod's buf: its
+            // length, or a wrong buf when buf cannot take what was read.
+            s64 giveValue(const LumaMod* pMod, const char* pWhere, void* pBuf, s64 length, u32 room) {
+                const u64 read = static_cast< u64 >(length) < room ? static_cast< u64 >(length) : room;
+                if (read != 0 && sKernel->copy_out(pMod, pBuf, sValueBytes, read) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "buf");
+                    return LUMA_E_ARGUMENT;
+                }
+                return length;
+            }
+
             // The loaded file's game data, or null at the title and the file select (item 1: LUMA_E_ABSENT).
             GameDataHolder* loadedHolder() {
                 if (!sLoaded || MR::isStageFileSelect()) {
@@ -89,10 +104,17 @@ namespace luma {
                 return GameDataFunction::getCurrentGameDataHolder();
             }
 
-            int64_t svcGet(const LumaMod* pMod, const char* pKey, void* pBuf, uint64_t size) {
+            int64_t svcGet(const LumaMod* pMod, const char* pKeyGiven, void* pBuf, uint64_t size) {
                 const char* const pWhere = "save.get";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                // The mod's key through the kernel (M-029): a longer one than a key can be is a wrong key, as before.
+                char key[LUMA_SAVE_KEY_MOST + 2];
+                const char* const pKey = pKeyGiven != nullptr ? key : nullptr;
+                if (pKeyGiven != nullptr && luma_text_in(sKernel, pMod, pKeyGiven, key) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "key");
+                    return LUMA_E_ARGUMENT;
                 }
                 if (!checkKey(pMod, pWhere, pKey)) {
                     return LUMA_E_ARGUMENT;
@@ -106,14 +128,28 @@ namespace luma {
                     return LUMA_E_ABSENT;  // also a later version's values, kept unread (LumaSaveChunk::isNewer)
                 }
                 const u32 room = size < LumaSaveChunk::cValueMost ? static_cast< u32 >(size) : LumaSaveChunk::cValueMost;
-                const s64 length = pHolder->getLumaChunk()->get(sKernel->mod_id(pMod), pKey, pBuf, room);
-                return length >= 0 ? length : LUMA_E_NOT_FOUND;
+                const s64 length = pHolder->getLumaChunk()->get(sKernel->mod_id(pMod), pKey, room != 0 ? sValueBytes : nullptr, room);
+                return length >= 0 ? giveValue(pMod, pWhere, pBuf, length, room) : LUMA_E_NOT_FOUND;
             }
 
-            int32_t svcSet(const LumaMod* pMod, const char* pKey, const void* pValue, uint64_t bytes) {
+            int32_t svcSet(const LumaMod* pMod, const char* pKeyGiven, const void* pValueGiven, uint64_t bytes) {
                 const char* const pWhere = "save.set";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                // The mod's key through the kernel (M-029): a longer one than a key can be is a wrong key, as before.
+                char key[LUMA_SAVE_KEY_MOST + 2];
+                const char* const pKey = pKeyGiven != nullptr ? key : nullptr;
+                if (pKeyGiven != nullptr && luma_text_in(sKernel, pMod, pKeyGiven, key) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "key");
+                    return LUMA_E_ARGUMENT;
+                }
+                // Its value copied (at most a value's bytes; more is the limit, below).
+                const void* const pValue = pValueGiven != nullptr ? sValueBytes : nullptr;
+                if (pValueGiven != nullptr && bytes <= LumaSaveChunk::cValueMost &&
+                    sKernel->copy_in(pMod, sValueBytes, pValueGiven, bytes) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "value");
+                    return LUMA_E_ARGUMENT;
                 }
                 if (!checkKey(pMod, pWhere, pKey)) {
                     return LUMA_E_ARGUMENT;
@@ -144,10 +180,17 @@ namespace luma {
                 }
             }
 
-            int32_t svcRemove(const LumaMod* pMod, const char* pKey) {
+            int32_t svcRemove(const LumaMod* pMod, const char* pKeyGiven) {
                 const char* const pWhere = "save.remove";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                // The mod's key through the kernel (M-029): a longer one than a key can be is a wrong key, as before.
+                char key[LUMA_SAVE_KEY_MOST + 2];
+                const char* const pKey = pKeyGiven != nullptr ? key : nullptr;
+                if (pKeyGiven != nullptr && luma_text_in(sKernel, pMod, pKeyGiven, key) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "key");
+                    return LUMA_E_ARGUMENT;
                 }
                 if (!checkKey(pMod, pWhere, pKey)) {
                     return LUMA_E_ARGUMENT;
@@ -165,8 +208,9 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pNumber == nullptr || pCharacter == nullptr) {
-                    report(pMod, pWhere, 101u, pNumber == nullptr ? "number" : "character");
+                const bool numberReady = luma_out_ready(sKernel, pMod, pNumber) == LUMA_OK;
+                if (!numberReady || luma_out_ready(sKernel, pMod, pCharacter) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, !numberReady ? "number" : "character");
                     return LUMA_E_ARGUMENT;
                 }
                 const GameDataHolder* const pHolder = loadedHolder();
@@ -174,8 +218,9 @@ namespace luma {
                     return LUMA_E_ABSENT;
                 }
                 const SaveFileId file = pHolder->getFileId();
-                *pNumber = static_cast< uint32_t >(file.mUser);
-                *pCharacter = file.mKind == SaveFileId::Kind_Mario ? LUMA_SAVE_MARIO : LUMA_SAVE_LUIGI;
+                (void)luma_value_out(sKernel, pMod, pNumber, static_cast< uint32_t >(file.mUser));
+                (void)luma_value_out(sKernel, pMod, pCharacter,
+                                     file.mKind == SaveFileId::Kind_Mario ? LUMA_SAVE_MARIO : LUMA_SAVE_LUIGI);
                 return LUMA_OK;
             }
 
@@ -468,10 +513,17 @@ namespace luma {
                 luma::services::setSaveHook(saveFrame);
             }
 
-            int64_t svcGlobalGet(const LumaMod* pMod, const char* pKey, void* pBuf, uint64_t size) {
+            int64_t svcGlobalGet(const LumaMod* pMod, const char* pKeyGiven, void* pBuf, uint64_t size) {
                 const char* const pWhere = "save.global.get";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                // The mod's key through the kernel (M-029): a longer one than a key can be is a wrong key, as before.
+                char key[LUMA_SAVE_KEY_MOST + 2];
+                const char* const pKey = pKeyGiven != nullptr ? key : nullptr;
+                if (pKeyGiven != nullptr && luma_text_in(sKernel, pMod, pKeyGiven, key) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "key");
+                    return LUMA_E_ARGUMENT;
                 }
                 if (!checkKey(pMod, pWhere, pKey, false)) {
                     return LUMA_E_ARGUMENT;
@@ -485,14 +537,28 @@ namespace luma {
                     return status;
                 }
                 const u32 room = size < LumaSaveChunk::cValueMost ? static_cast< u32 >(size) : LumaSaveChunk::cValueMost;
-                const s64 length = pStore->mValues.get(pStore->mId, pKey, pBuf, room);
-                return length >= 0 ? length : LUMA_E_NOT_FOUND;
+                const s64 length = pStore->mValues.get(pStore->mId, pKey, room != 0 ? sValueBytes : nullptr, room);
+                return length >= 0 ? giveValue(pMod, pWhere, pBuf, length, room) : LUMA_E_NOT_FOUND;
             }
 
-            int32_t svcGlobalSet(const LumaMod* pMod, const char* pKey, const void* pValue, uint64_t bytes) {
+            int32_t svcGlobalSet(const LumaMod* pMod, const char* pKeyGiven, const void* pValueGiven, uint64_t bytes) {
                 const char* const pWhere = "save.global.set";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                // The mod's key through the kernel (M-029): a longer one than a key can be is a wrong key, as before.
+                char key[LUMA_SAVE_KEY_MOST + 2];
+                const char* const pKey = pKeyGiven != nullptr ? key : nullptr;
+                if (pKeyGiven != nullptr && luma_text_in(sKernel, pMod, pKeyGiven, key) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "key");
+                    return LUMA_E_ARGUMENT;
+                }
+                // Its value copied (at most a value's bytes; more is the limit, below).
+                const void* const pValue = pValueGiven != nullptr ? sValueBytes : nullptr;
+                if (pValueGiven != nullptr && bytes <= LumaSaveChunk::cValueMost &&
+                    sKernel->copy_in(pMod, sValueBytes, pValueGiven, bytes) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "value");
+                    return LUMA_E_ARGUMENT;
                 }
                 if (!checkKey(pMod, pWhere, pKey, false)) {
                     return LUMA_E_ARGUMENT;
@@ -522,10 +588,17 @@ namespace luma {
                 }
             }
 
-            int32_t svcGlobalRemove(const LumaMod* pMod, const char* pKey) {
+            int32_t svcGlobalRemove(const LumaMod* pMod, const char* pKeyGiven) {
                 const char* const pWhere = "save.global.remove";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                // The mod's key through the kernel (M-029): a longer one than a key can be is a wrong key, as before.
+                char key[LUMA_SAVE_KEY_MOST + 2];
+                const char* const pKey = pKeyGiven != nullptr ? key : nullptr;
+                if (pKeyGiven != nullptr && luma_text_in(sKernel, pMod, pKeyGiven, key) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "key");
+                    return LUMA_E_ARGUMENT;
                 }
                 if (!checkKey(pMod, pWhere, pKey, false)) {
                     return LUMA_E_ARGUMENT;
@@ -936,8 +1009,13 @@ namespace luma {
                     report(pMod, pWhere, 101u, "file");
                     return LUMA_E_ARGUMENT;
                 }
-                if (fn == nullptr || pOut == nullptr) {
-                    report(pMod, pWhere, 101u, fn == nullptr ? "fn" : "out");
+                // The mod's function and out through the kernel (M-029).
+                const char* const pUnusable =
+                    fn == nullptr || sKernel->mod_code(pMod, reinterpret_cast<const void*>(fn)) != 1 ? "fn"
+                    : luma_out_ready(sKernel, pMod, pOut) != LUMA_OK                                ? "out"
+                                                                                                    : nullptr;
+                if (pUnusable != nullptr) {
+                    report(pMod, pWhere, 101u, pUnusable);
                     return LUMA_E_ARGUMENT;
                 }
                 u32 open = 0;
@@ -975,7 +1053,7 @@ namespace luma {
                     freeExport(pFree);
                     return posted;
                 }
-                *pOut = pFree->mHandle;
+                (void)luma_value_out(sKernel, pMod, pOut, pFree->mHandle);
                 return LUMA_PENDING;
             }
 
@@ -994,8 +1072,9 @@ namespace luma {
                     return LUMA_E_ARGUMENT;
                 }
                 const u32 copied = size < pRequest->mLength ? static_cast< u32 >(size) : pRequest->mLength;
-                if (copied != 0) {
-                    __builtin_memcpy(pBuf, pRequest->mBytes, copied);
+                if (copied != 0 && sKernel->copy_out(pMod, pBuf, pRequest->mBytes, copied) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "buf");
+                    return LUMA_E_ARGUMENT;  // not taken: a right buf may take it still
                 }
                 pRequest->mTaken = true;
                 return pRequest->mLength;
@@ -1292,17 +1371,25 @@ namespace luma {
                 return false;
             }
 
-            int32_t svcOffer(const LumaMod* pMod, const char* pPath, LumaEventFn fn, void* pUser, LumaHandle* pOut) {
+            int32_t svcOffer(const LumaMod* pMod, const char* pPathGiven, LumaEventFn fn, void* pUser, LumaHandle* pOut) {
                 const char* const pWhere = "save.game.offer";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (!isDataPath(pPath)) {
+                // The mod's path through the kernel (M-029).
+                char path[1024];
+                const char* const pPath = pPathGiven != nullptr ? path : nullptr;
+                if ((pPathGiven != nullptr && luma_text_in(sKernel, pMod, pPathGiven, path) != LUMA_OK) || !isDataPath(pPath)) {
                     report(pMod, pWhere, 101u, "path");
                     return LUMA_E_ARGUMENT;
                 }
-                if (fn == nullptr || pOut == nullptr) {
-                    report(pMod, pWhere, 101u, fn == nullptr ? "fn" : "out");
+                // The mod's function and out through the kernel (M-029).
+                const char* const pUnusable =
+                    fn == nullptr || sKernel->mod_code(pMod, reinterpret_cast<const void*>(fn)) != 1 ? "fn"
+                    : luma_out_ready(sKernel, pMod, pOut) != LUMA_OK                                ? "out"
+                                                                                                    : nullptr;
+                if (pUnusable != nullptr) {
+                    report(pMod, pWhere, 101u, pUnusable);
                     return LUMA_E_ARGUMENT;
                 }
                 const LumaServicesFacts* const pFacts = sFacts;
@@ -1375,7 +1462,7 @@ namespace luma {
                 LumaOfferFacts facts;
                 good = good && offerFacts(pHandler, &facts);
                 rOffer.mStage = Offer_Asked;
-                *pOut = rOffer.mHandle;
+                (void)luma_value_out(sKernel, pMod, pOut, rOffer.mHandle);
                 if (!good) {
                     offerPost(LUMA_E_FORMAT);  // never shown (item 8)
                     return LUMA_PENDING;
@@ -1384,7 +1471,7 @@ namespace luma {
                                                     reinterpret_cast< void* >(static_cast< uintptr_t >(rOffer.mHandle)));
                 if (asked != LUMA_PENDING) {
                     offerFree();
-                    *pOut = 0;
+                    (void)luma_value_out(sKernel, pMod, pOut, LumaHandle(0));
                     return asked == LUMA_E_BUSY ? LUMA_E_BUSY : LUMA_E_ABSENT;  // a screen is up; no menu in this host
                 }
                 return LUMA_PENDING;

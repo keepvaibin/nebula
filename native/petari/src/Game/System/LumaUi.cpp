@@ -600,16 +600,23 @@ namespace luma {
 
             // ---- The service ----
 
-            int32_t svcOpen(const LumaMod* pMod, const char* pLayout, LumaUiLayer layer, LumaUiScreen* pOut) {
+            int32_t svcOpen(const LumaMod* pMod, const char* pLayoutGiven, LumaUiLayer layer, LumaUiScreen* pOut) {
                 const char* const pWhere = "ui.open";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
+                // The mod's layout name and out through the kernel (M-029).
+                char pLayoutText[1024];
+                const char* const pLayout = pLayoutGiven != nullptr ? pLayoutText : nullptr;
+                if (pLayoutGiven != nullptr && luma_text_in(sKernel, pMod, pLayoutGiven, pLayoutText) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "layout", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
                 const u32 placed = static_cast< u32 >(layer);
-                const char* const pWrong = pLayout == nullptr || pLayout[0] == 0 ? "layout"
-                                           : placed > LUMA_UI_PAUSE              ? "layer"
-                                           : pOut == nullptr                     ? "out"
-                                                                                 : nullptr;
+                const char* const pWrong = pLayout == nullptr || pLayout[0] == 0                ? "layout"
+                                           : placed > LUMA_UI_PAUSE                             ? "layer"
+                                           : luma_out_ready(sKernel, pMod, pOut) != LUMA_OK     ? "out"
+                                                                                                : nullptr;
                 if (pWrong != nullptr) {
                     report(pMod, pWhere, 101u, pWrong, nullptr);
                     return LUMA_E_ARGUMENT;
@@ -693,14 +700,25 @@ namespace luma {
                 if (luma::modlog::facts()) {
                     openFact(rScreen);
                 }
-                *pOut = rScreen.handle;
+                (void)luma_value_out(sKernel, pMod, pOut, rScreen.handle);
                 return LUMA_OK;
             }
 
-            int32_t svcPane(const LumaMod* pMod, LumaUiScreen screen, const char* pName, LumaUiPane* pOut) {
+            int32_t svcPane(const LumaMod* pMod, LumaUiScreen screen, const char* pNameGiven, LumaUiPane* pOut) {
                 const char* const pWhere = "ui.pane";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                // The mod's pane name and out through the kernel (M-029).
+                char pNameText[1024];
+                const char* const pName = pNameGiven != nullptr ? pNameText : nullptr;
+                if (pNameGiven != nullptr && luma_text_in(sKernel, pMod, pNameGiven, pNameText) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "name", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                if (pOut != nullptr && luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "out", nullptr);
+                    return LUMA_E_ARGUMENT;
                 }
                 Screen* const pScreen = screenOf(pMod, screen);
                 if (pScreen == nullptr) {
@@ -732,7 +750,7 @@ namespace luma {
                         continue;
                     }
                     if (sPanes[i].screen == screen && sPanes[i].pane == pFound) {
-                        *pOut = sPanes[i].handle;
+                        (void)luma_value_out(sKernel, pMod, pOut, sPanes[i].handle);
                         return LUMA_OK;
                     }
                     if (sPanes[i].mod == pMod) {
@@ -757,11 +775,11 @@ namespace luma {
                 if (luma::modlog::facts()) {
                     paneFact(rPane, "pane");
                 }
-                *pOut = rPane.handle;
+                (void)luma_value_out(sKernel, pMod, pOut, rPane.handle);
                 return LUMA_OK;
             }
 
-            int32_t svcSetText(const LumaMod* pMod, LumaUiPane pane, const char* pText) {
+            int32_t svcSetText(const LumaMod* pMod, LumaUiPane pane, const char* pTextGiven) {
                 const char* const pWhere = "ui.set_text";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
@@ -777,7 +795,12 @@ namespace luma {
                     report(pMod, pWhere, cNotTextCode, pPane->pane->mName, nullptr);
                     return LUMA_E_ARGUMENT;
                 }
-                if (pText == nullptr) {
+                // The mod's text through the kernel (M-029): its first bytes, more than LUMA_UI_TEXT_MOST units' UTF-8
+                // and the one after (toUtf16 reads no further), so a longer text is cut where it was.
+                char textBytes[LUMA_UI_TEXT_MOST * 4u + 2u];
+                const char* const pText = textBytes;
+                if (const s32 copied = luma_text_in(sKernel, pMod, pTextGiven, textBytes);
+                    copied != LUMA_OK && copied != LUMA_E_TOO_LARGE) {
                     report(pMod, pWhere, 101u, "text", nullptr);
                     return LUMA_E_ARGUMENT;
                 }
@@ -890,11 +913,22 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcPlay(const LumaMod* pMod, LumaUiScreen screen, const char* pAnimation, bool loop, LumaEventFn fn,
+            int32_t svcPlay(const LumaMod* pMod, LumaUiScreen screen, const char* pAnimationGiven, bool loop, LumaEventFn fn,
                             void* pUser) {
                 const char* const pWhere = "ui.play";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                // The mod's animation name and function through the kernel (M-029).
+                char pAnimationText[1024];
+                const char* const pAnimation = pAnimationGiven != nullptr ? pAnimationText : nullptr;
+                if (pAnimationGiven != nullptr && luma_text_in(sKernel, pMod, pAnimationGiven, pAnimationText) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "animation", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                if (fn != nullptr && sKernel->mod_code(pMod, reinterpret_cast<const void*>(fn)) != 1) {
+                    report(pMod, pWhere, 101u, "fn", nullptr);
+                    return LUMA_E_ARGUMENT;
                 }
                 Screen* const pScreen = screenOf(pMod, screen);
                 if (pScreen == nullptr) {
@@ -963,7 +997,7 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pOut == nullptr) {
+                if (luma_out_ready(sKernel, pMod, pOut) != LUMA_OK) {
                     report(pMod, pWhere, 101u, "out", nullptr);
                     return LUMA_E_ARGUMENT;
                 }
@@ -972,7 +1006,7 @@ namespace luma {
                     return LUMA_E_HANDLE;
                 }
                 // A handle this run gave that is not an open screen of this mod (ended, or a pane's): false.
-                *pOut = screenOf(pMod, screen) != nullptr;
+                (void)luma_value_out(sKernel, pMod, pOut, screenOf(pMod, screen) != nullptr);
                 return LUMA_OK;
             }
 
@@ -1032,12 +1066,17 @@ namespace luma {
                 return LUMA_OK;
             }
 
-            int32_t svcMenuRows(const LumaMod* pMod, LumaUiScreen screen, const LumaUiMenuRow* pRows, uint32_t count) {
+            int32_t svcMenuRows(const LumaMod* pMod, LumaUiScreen screen, const LumaUiMenuRow* pRowsGiven, uint32_t count) {
                 const char* const pWhere = "ui.menu_rows";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (count > LUMA_UI_MENU_ROWS_MOST || (count != 0u && pRows == nullptr)) {
+                // The mod's rows through the kernel (M-029).
+                LumaUiMenuRow rows[LUMA_UI_MENU_ROWS_MOST];
+                const LumaUiMenuRow* const pRows = rows;
+                if (count > LUMA_UI_MENU_ROWS_MOST || (count != 0u && (pRowsGiven == nullptr ||
+                                                                      sKernel->copy_in(pMod, rows, pRowsGiven,
+                                                                                       count * sizeof(LumaUiMenuRow)) != LUMA_OK))) {
                     report(pMod, pWhere, 101u, count > LUMA_UI_MENU_ROWS_MOST ? "count" : "rows", nullptr);
                     return LUMA_E_ARGUMENT;
                 }
@@ -1078,7 +1117,7 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pRow == nullptr) {
+                if (luma_out_ready(sKernel, pMod, pRow) != LUMA_OK) {
                     report(pMod, pWhere, 101u, "row", nullptr);
                     return LUMA_E_ARGUMENT;
                 }
@@ -1088,16 +1127,21 @@ namespace luma {
                     return LUMA_E_HANDLE;
                 }
                 const Menu& rMenu = pScreen->menu;
-                *pRow = rMenu.count != 0u ? rMenu.chosen : -1;
+                (void)luma_value_out(sKernel, pMod, pRow, int32_t(rMenu.count != 0u ? rMenu.chosen : -1));
                 return LUMA_OK;
             }
 
-            int32_t svcShareRows(const LumaMod* pMod, const LumaUiMenuRow* pRows, uint32_t count) {
+            int32_t svcShareRows(const LumaMod* pMod, const LumaUiMenuRow* pRowsGiven, uint32_t count) {
                 const char* const pWhere = "ui.share_rows";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (count > LUMA_UI_MENU_ROWS_MOST || (count != 0u && pRows == nullptr)) {
+                // The mod's rows through the kernel (M-029).
+                LumaUiMenuRow rows[LUMA_UI_MENU_ROWS_MOST];
+                const LumaUiMenuRow* const pRows = rows;
+                if (count > LUMA_UI_MENU_ROWS_MOST || (count != 0u && (pRowsGiven == nullptr ||
+                                                                      sKernel->copy_in(pMod, rows, pRowsGiven,
+                                                                                       count * sizeof(LumaUiMenuRow)) != LUMA_OK))) {
                     report(pMod, pWhere, 101u, count > LUMA_UI_MENU_ROWS_MOST ? "count" : "rows", nullptr);
                     return LUMA_E_ARGUMENT;
                 }
@@ -1133,32 +1177,46 @@ namespace luma {
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
                 }
-                if (pFocused == nullptr || pChosen == nullptr) {
-                    report(pMod, pWhere, 101u, pFocused == nullptr ? "focused" : "chosen", nullptr);
+                const bool focusedReady = luma_out_ready(sKernel, pMod, pFocused) == LUMA_OK;
+                if (!focusedReady || luma_out_ready(sKernel, pMod, pChosen) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, !focusedReady ? "focused" : "chosen", nullptr);
                     return LUMA_E_ARGUMENT;
                 }
-                *pFocused = 0;
-                *pChosen = 0;
+                LumaUiPane focused = 0;
+                LumaUiPane chosen = 0;
                 for (u32 i = 0; i < sPaneHigh; i++) {
                     const Pane& rPane = sPanes[i];
                     if (rPane.handle == 0 || rPane.mod != pMod || !rPane.shared) {
                         continue;
                     }
                     if (rPane.focused) {
-                        *pFocused = rPane.handle;
+                        focused = rPane.handle;
                     }
                     if (rPane.chosen) {
-                        *pChosen = rPane.handle;
+                        chosen = rPane.handle;
                     }
                 }
+                (void)luma_value_out(sKernel, pMod, pFocused, focused);
+                (void)luma_value_out(sKernel, pMod, pChosen, chosen);
                 return LUMA_OK;
             }
 
-            int32_t svcPlayPane(const LumaMod* pMod, LumaUiScreen screen, LumaUiPane pane, const char* pAnimation, bool loop,
-                                LumaEventFn fn, void* pUser) {
+            int32_t svcPlayPane(const LumaMod* pMod, LumaUiScreen screen, LumaUiPane pane, const char* pAnimationGiven,
+                                bool loop, LumaEventFn fn, void* pUser) {
                 const char* const pWhere = "ui.play_pane";
                 if (const s32 status = enter(pMod, pWhere); status != LUMA_OK) {
                     return status;
+                }
+                // The mod's animation name and function through the kernel (M-029).
+                char pAnimationText[1024];
+                const char* const pAnimation = pAnimationGiven != nullptr ? pAnimationText : nullptr;
+                if (pAnimationGiven != nullptr && luma_text_in(sKernel, pMod, pAnimationGiven, pAnimationText) != LUMA_OK) {
+                    report(pMod, pWhere, 101u, "animation", nullptr);
+                    return LUMA_E_ARGUMENT;
+                }
+                if (fn != nullptr && sKernel->mod_code(pMod, reinterpret_cast<const void*>(fn)) != 1) {
+                    report(pMod, pWhere, 101u, "fn", nullptr);
+                    return LUMA_E_ARGUMENT;
                 }
                 Screen* const pScreen = screenOf(pMod, screen);
                 Pane* const pPane = paneOf(pMod, pane);

@@ -5,6 +5,7 @@
     "3102-movie-args",
     "3103-movie-subtitles",
     "3104-movie-skip",
-    "3105-movie-sound-ends"
+    "3105-movie-sound-ends",
+    "3106-movie-bad-pointers"
   ]
 }
