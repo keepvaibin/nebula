@@ -116,12 +116,14 @@ enum {
     NEBULA_FILTER_LINEAR_BETWEEN_LEVELS = 5,
 };
 
-/* The bytes of `levels` levels of a width x height texture in `layout`, header excluded. */
-static inline uint32_t nebula_texture_level_bytes(uint32_t width, uint32_t height, uint32_t levels, uint8_t layout) {
-    uint32_t total = 0;
-    for (uint32_t l = 0; l < levels; l++) {
-        const uint32_t w = width >> l != 0 ? width >> l : 1u;
-        const uint32_t h = height >> l != 0 ? height >> l : 1u;
+/* The bytes of `levels` levels of a width x height texture in `layout`, header excluded. Counted in 64 bits: a
+   record's size check compares it with the record's bytes, and a 32-bit sum of a large image wraps (65536 x 65536
+   RGBA8 is 2^34 bytes, 0 in 32 bits). */
+static inline uint64_t nebula_texture_level_bytes(uint32_t width, uint32_t height, uint32_t levels, uint8_t layout) {
+    uint64_t total = 0;
+    for (uint32_t l = 0; l < levels && l < 32u; l++) {
+        const uint64_t w = width >> l != 0 ? width >> l : 1u;
+        const uint64_t h = height >> l != 0 ? height >> l : 1u;
         total += layout == NEBULA_TEXTURE_BLOCK4 ? ((w + 3u) / 4u) * ((h + 3u) / 4u) * 8u
                                                  : w * h * nebula_texture_texel_bytes(layout);
     }
@@ -150,7 +152,8 @@ static inline void nebula_texture_init(void* p, uint32_t width, uint32_t height,
     t->layout = layout;
     t->source_format = NEBULA_TEXTURE_MADE;
     t->flags = flags;
-    t->size = NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(width, height, levels, layout);
+    /* An image the game makes: its size fits a record's 32 bits (the largest is a few megabytes). */
+    t->size = (uint32_t)(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(width, height, levels, layout));
 }
 
 #ifdef __cplusplus

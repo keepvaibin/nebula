@@ -688,8 +688,18 @@ void test_categories_off() {
     std::filesystem::remove_all(root, error);
 }
 
+// nebula_texture_level_bytes counts in 64 bits (M-168): an image of more than 4 GB of texels does not wrap to a small
+// size that a record's size check would pass.
+void test_level_bytes() {
+    expect(nebula_texture_level_bytes(65536u, 65536u, 1u, NEBULA_TEXTURE_RGBA8) == (std::uint64_t{1} << 34u),
+           "65536 x 65536 RGBA8 is 2^34 bytes, not 0");
+    expect(nebula_texture_level_bytes(32u, 32u, 6u, NEBULA_TEXTURE_RGBA8) == 4u * (1024u + 256u + 64u + 16u + 4u + 1u),
+           "the levels of 32 x 32 RGBA8");
+}
+
 int main() {
     set_names();
+    test_level_bytes();
     test_categories_off();
     const std::filesystem::path root = galaxy::test_temp_path("nebula-texture-pack-test");
     std::filesystem::remove_all(root);
