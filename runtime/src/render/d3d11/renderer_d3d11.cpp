@@ -637,9 +637,13 @@ unsigned RendererD3D11::present_sync_interval(unsigned configured, float max_fps
     if (hz <= 0.0) {
         return 1u;
     }
-    // As renderer_d3d12.cpp present_sync_interval: a game frame holds for its whole 60 Hz frame on a display of a multiple.
+    // As renderer_d3d12.cpp present_sync_interval: a game frame at 60 goes out at once; a capped or in-between rate
+    // that is a part of the refresh keeps whole refreshes per picture.
     const double rate = game_frame ? std::min(kGameStepRate, present_frame_rate(max_fps, configured, hz))
                                    : present_frame_rate(max_fps, configured, hz);
+    if ((game_frame || !interpolation_mode()) && rate >= kGameStepRate - 0.5) {
+        return 1u;
+    }
     const double multiple = std::round(hz / rate);
     if (multiple >= 2.0 && multiple <= 4.0 && std::abs(hz - rate * multiple) <= 0.015 * hz) {
         return static_cast<unsigned>(multiple);
