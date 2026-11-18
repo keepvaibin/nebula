@@ -578,7 +578,7 @@ def pinned(g):
 
 def lumalink_tests(g):
     """LumaLink's own tests at the commit tools/lumacore/lumalink.commit pins, in the checkout the mod tests build it in
-    (mod_tests.pinned_lumalink: <build root>/lumalink-pin, its nebula/ a link to this tree): every crate's tests, and
+    (mod_tests.pinned_lumalink: <build root>/lumalink-pin, its nebula/ a copy of the tree paths it builds from): every crate's tests, and
     those that need clang, this tree's SDK and this build (the generated C compiled for every platform, one mod built
     for all nine and each library read as its loader will, the same floating point on every platform, the programs
     checked and emitted against this build's names); the VS Code one needs VS Code. The mod tests use the same build
