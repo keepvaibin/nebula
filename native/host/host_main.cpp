@@ -6204,6 +6204,12 @@ int main(int argc, char** argv) {
         const galaxy::saves::SaveFolders save_folders = galaxy::saves::save_folders(std::string_view(gPak.id, 4));
         gOldSaveDataPath = save_folders.earlier;
         gSaveDataPath = save_folders.current;
+        // A save import that stopped half way (the process ended between two of its moves) is undone first.
+        if (!gSaveRoot.empty()) {
+            if (const std::string recovered = galaxy::save_transfer::recover_import(gSaveRoot); !recovered.empty()) {
+                log_line("saves:", recovered.c_str());
+            }
+        }
         if (!gSaveRoot.empty()) fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
         if (!gSaveRoot.empty()) {
             galaxy::save_transfer::set_game_saves(gSaveRoot, std::string_view(gPak.id, 4));  // SAVES rows

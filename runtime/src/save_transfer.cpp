@@ -88,6 +88,10 @@ constexpr std::size_t kNativeHeader = 16;
 constexpr std::size_t kNativeRow = 20;
 
 std::atomic<int> gCommitFault{0};
+std::atomic<int> gCommitCrash{0};
+
+// An import's moves end by this throw when a test stops it as the process ending would (set_commit_crash).
+struct CommitCrash {};
 
 // ---- bytes ----
 
@@ -1421,6 +1425,9 @@ bool move_file(const fs::path& from, const fs::path& to) {
     if (const int fault = gCommitFault.load(); fault > 0 && gCommitFault.fetch_sub(1) == 1) {
         return false;
     }
+    if (const int crash = gCommitCrash.load(); crash > 0 && gCommitCrash.fetch_sub(1) == 1) {
+        throw CommitCrash{};
+    }
     std::error_code error;
     fs::create_directories(to.parent_path(), error);
     if (error) {
@@ -1434,6 +1441,38 @@ bool same_file_bytes(const fs::path& file, ByteSpan expected) {
     Bytes bytes;
     return read_file(file, kMaxFileBytes, &bytes) == Error::kNone && bytes.size() == expected.size() &&
            std::equal(bytes.begin(), bytes.end(), expected.begin());
+}
+
+// ---- the import's journal ----
+// Beside the root: "<root>.import-journal", written before an import's first move and removed after its last. Lines:
+// the head, "staging\t<name>", "backup\t<name or nothing>", then "replaced\t<path>" for each file moved aside (each
+// one there before the import) and "new\t<path>" for each file moved in.
+
+constexpr std::string_view kJournalSuffix = ".import-journal";
+constexpr std::string_view kJournalHead = "nebula save import journal 1";
+
+fs::path journal_path(const fs::path& root) {
+    return root.parent_path() / text_path(path_text(root.filename()) + std::string(kJournalSuffix));
+}
+
+bool journal_line_ok(std::string_view text) {
+    return text.find_first_of("\t\r\n") == std::string_view::npos;
+}
+
+bool write_journal(const fs::path& root, const fs::path& staging, const fs::path& backup,
+                   const std::vector<std::string>& replaced, const std::vector<SaveFile>& files) {
+    std::string text = std::string(kJournalHead) + "\n";
+    text += "staging\t" + path_text(staging.filename()) + "\n";
+    text += "backup\t" + (backup.empty() ? std::string() : path_text(backup.filename())) + "\n";
+    for (const std::string& path : replaced) {
+        if (!journal_line_ok(path)) return false;
+        text += "replaced\t" + path + "\n";
+    }
+    for (const SaveFile& file : files) {
+        if (!journal_line_ok(file.path)) return false;
+        text += "new\t" + file.path + "\n";
+    }
+    return io::write_file_atomically(journal_path(root), text);
 }
 
 // The paths an import moves aside: each release's whole save and the copies the game reads, and each file it writes.
@@ -1596,9 +1635,15 @@ ImportResult commit_import(const ImportPlan& plan, const std::filesystem::path& 
                 return result;
             }
         }
-        // The replaced files aside, then the new ones in; on a failure, each move undone in reverse.
+        // The replaced files aside, then the new ones in; on a failure, each move undone in reverse. The journal first,
+        // so a start after a process that ended between two moves puts the save back (recover_import).
         const std::vector<std::string> replaced = replaced_paths(plan, root);
         const fs::path backup = replaced.empty() ? fs::path() : free_sibling(root, "-backup-" + local_stamp());
+        if (!write_journal(root, staging, backup, replaced, plan.files)) {
+            fs::remove_all(staging, error);
+            result.error = Error::kIo;
+            return result;
+        }
         std::vector<std::pair<fs::path, fs::path>> moved;
         bool failed = false;
         for (const std::string& path : replaced) {
@@ -1620,27 +1665,139 @@ ImportResult commit_import(const ImportPlan& plan, const std::filesystem::path& 
             moved.emplace_back(from, to);
         }
         if (failed) {
+            bool undone = true;
             for (auto it = moved.rbegin(); it != moved.rend(); ++it) {
-                fs::rename(it->second, it->first, error);
+                std::error_code back;
+                fs::rename(it->second, it->first, back);
+                undone = undone && !back;
             }
-            fs::remove_all(staging, error);
-            if (!backup.empty()) {
-                fs::remove_all(backup, error);  // empty again: every file went back
+            if (undone) {
+                fs::remove_all(staging, error);
+                if (!backup.empty()) {
+                    fs::remove_all(backup, error);  // empty again: every file went back
+                }
+                fs::remove(journal_path(root), error);
             }
+            // Else the journal stays, with the folders it names: the next start puts the rest back.
             result.error = Error::kIo;
             return result;
         }
+        // Every file in: the import is done once its journal is gone.
+        fs::remove(journal_path(root), error);
         fs::remove_all(staging, error);
         result.backup = backup;
         result.written = plan.files.size();
         return result;
+    } catch (const CommitCrash&) {
+        result.error = Error::kIo;  // a test's process end: everything stays as it is
+        return result;
     } catch (...) {
-        std::error_code error;
-        if (!staging.empty()) {
-            fs::remove_all(staging, error);
+        // Once the journal is written, the moves made so far are undone from it; before, only the staging goes.
+        try {
+            std::error_code error;
+            if (fs::exists(journal_path(clean_root(save_root)), error)) {
+                (void)recover_import(save_root);
+            } else if (!staging.empty()) {
+                fs::remove_all(staging, error);
+            }
+        } catch (...) {
         }
         result.error = Error::kIo;
         return result;
+    }
+}
+
+std::string recover_import(const std::filesystem::path& save_root) noexcept {
+    try {
+        const fs::path root = clean_root(save_root);
+        const fs::path journal = journal_path(root);
+        std::error_code error;
+        if (!fs::is_regular_file(journal, error)) {
+            return {};
+        }
+        Bytes bytes;
+        if (read_file(journal, 1u << 20, &bytes) != Error::kNone) {
+            return "a save import's journal " + path_text(journal) + " cannot be read; it is left as it is";
+        }
+        // The journal's names: folders beside the root that the import made, and paths inside the root.
+        const std::string own = path_text(root.filename());
+        std::string staging, backup;
+        std::vector<std::string> replaced, added;
+        bool good = true, head = false;
+        std::string_view rest(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        while (!rest.empty()) {
+            const std::size_t end = rest.find('\n');
+            const std::string_view line = rest.substr(0, end);
+            rest = end == std::string_view::npos ? std::string_view() : rest.substr(end + 1);
+            if (!head) {
+                head = line == kJournalHead;
+                good = good && head;
+                continue;
+            }
+            const std::size_t tab = line.find('\t');
+            const std::string_view key = line.substr(0, tab);
+            const std::string value(tab == std::string_view::npos ? std::string_view() : line.substr(tab + 1));
+            if (key == "staging") {
+                staging = value;
+                good = good && staging.starts_with(own + ".import") && staging.find_first_of("/\\") == std::string::npos;
+            } else if (key == "backup") {
+                backup = value;
+                good = good && (backup.empty() || (backup.starts_with(own + "-backup-") &&
+                                                   backup.find_first_of("/\\") == std::string::npos));
+            } else if (key == "replaced" || key == "new") {
+                good = good && detail::is_safe_entry_name(value);
+                (key == "replaced" ? replaced : added).push_back(value);
+            } else {
+                good = false;
+            }
+        }
+        if (!good || !head || staging.empty() || (backup.empty() && !replaced.empty())) {
+            return "a save import's journal " + path_text(journal) + " is not one this Nebula wrote; it is left as it is";
+        }
+        const fs::path staging_folder = root.parent_path() / text_path(staging);
+        const fs::path backup_folder = backup.empty() ? fs::path() : root.parent_path() / text_path(backup);
+        const std::set<std::string> was_there(replaced.begin(), replaced.end());
+        int removed = 0, restored = 0, failures = 0;
+        // A new file in the root: one that was not there before, or one whose old file was moved aside already.
+        for (const std::string& path : added) {
+            const fs::path at = root / text_path(path);
+            const bool moved_aside = !backup_folder.empty() && fs::is_regular_file(backup_folder / text_path(path), error);
+            if (fs::is_regular_file(at, error) && (!was_there.contains(path) || moved_aside)) {
+                if (fs::remove(at, error) && !error) {
+                    ++removed;
+                } else {
+                    ++failures;
+                }
+            }
+        }
+        for (const std::string& path : replaced) {
+            const fs::path from = backup_folder / text_path(path);
+            if (!fs::is_regular_file(from, error)) {
+                continue;  // not moved aside yet: still in its place
+            }
+            const fs::path to = root / text_path(path);
+            fs::create_directories(to.parent_path(), error);
+            std::error_code moved;
+            fs::rename(from, to, moved);
+            if (moved) {
+                ++failures;
+            } else {
+                ++restored;
+            }
+        }
+        if (failures != 0) {
+            return "a save import that stopped half way could not be undone whole (" + std::to_string(failures) +
+                   " files); its journal " + path_text(journal) + " stays for the next start";
+        }
+        fs::remove_all(staging_folder, error);
+        if (!backup_folder.empty()) {
+            fs::remove_all(backup_folder, error);  // every file it held is back in the root
+        }
+        fs::remove(journal, error);
+        return "a save import that stopped half way was undone: " + std::to_string(restored) + " files put back, " +
+               std::to_string(removed) + " removed";
+    } catch (...) {
+        return "a save import's journal could not be read";
     }
 }
 
@@ -2255,6 +2412,10 @@ bool write_zip(std::span<const ZipEntry> entries, std::vector<std::byte>* zip) n
 
 void set_commit_fault(int step) noexcept {
     gCommitFault.store(step);
+}
+
+void set_commit_crash(int step) noexcept {
+    gCommitCrash.store(step);
 }
 
 }  // namespace detail
