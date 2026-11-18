@@ -4,7 +4,7 @@
 // fixed-step clock, and keeps the run's sound (GALAXY_AUDIO_WAV_DUMP). Without a plan it declines, so a run never
 // goes on without the checks it was started for. A few test hooks stay in the environment because the host reads
 // them when it starts (GALAXY_TEST_VRAM_BUDGET_MB, GALAXY_TEST_DISC_DELAY_US, GALAXY_TEST_SAVE_DELAY_US,
-// GALAXY_TEST_MODS_SCREEN, GALAXY_TEST_MODS_CHANGED); luma_test.py's TEST_HOOKS lists them.
+// GALAXY_TEST_MODS_SCREEN, GALAXY_TEST_MODS_CHANGED, GALAXY_TEST_REMAKE_TARGETS); luma_test.py's TEST_HOOKS lists them.
 #include <nebula_host_extension.h>
 
 #include "harness.h"
@@ -390,7 +390,8 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
     e.flags = (!harness::real_time() ? NEBULA_EXT_FIXED_STEPS : 0u) |
               (env_flag("GALAXY_AUDIO_WAV_DUMP_ONLY") ? NEBULA_EXT_NO_SOUND_DEVICE : 0u) |
               (env("GALAXY_TEST_MODS_SCREEN").has_value() ? NEBULA_EXT_MODS_SCREEN : 0u) |
-              (harness::as_pad() ? NEBULA_EXT_CONTROLS_PAD : 0u);
+              (harness::as_pad() ? NEBULA_EXT_CONTROLS_PAD : 0u) |
+              (env("GALAXY_TEST_REMAKE_TARGETS").has_value() ? NEBULA_EXT_REMAKE_TARGETS : 0u);
     e.controls = controls;
     e.frame = frame;
     e.picture_path = picture_path;
