@@ -113,6 +113,10 @@ void Pipelines::shutdown() noexcept {
         left_jobs_.clear();
     }
     wake_.notify_all();
+    // A worker in a job finishes it at the normal priority: the caller (a device restore, the end) waits for it (N-1072).
+    for (std::thread& thread : threads_) {
+        galaxy::host::raise_waited_thread(thread);
+    }
     for (std::thread& thread : threads_) {
         thread.join();
     }
