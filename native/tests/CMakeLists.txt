@@ -42,9 +42,14 @@ native_test(native_name_index_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_inde
 # The game's arenas, on the host's address services as the host gives them.
 native_test(native_arena_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/arena_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c"
     "${game_src}/System/NebulaArena.cpp")
+# The binder keeps every plane a bind meets (P-166), on the game's arenas.
+native_test(native_binder_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/binder_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c"
+    "${game_src}/LiveActor/Binder.cpp" "${game_src}/System/NebulaArena.cpp")
 if(NEBULA_SANITIZE AND WIN32)
     # NebulaArena.cpp defines operator new/delete, as in the module: the sanitizer runtime's own give way (N-1062).
-    target_link_options(native_arena_tests PRIVATE LINKER:/force:multiple)
+    foreach(arena_test native_arena_tests native_binder_tests)
+        target_link_options(${arena_test} PRIVATE LINKER:/force:multiple)
+    endforeach()
 endif()
 # The frame-list writer, against the list the renderer reads.
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
