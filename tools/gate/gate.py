@@ -1018,6 +1018,33 @@ def git_ok(*args):
 ALLOWED_ENV = "NEBULA_MAIN_ALLOWED"
 
 
+RATCHET = pathlib.Path("D:/NebulaWork/agents/guards")
+
+
+def push_checks(sha, tree=TREE, guards=RATCHET):
+    """The pre-push hook's checks of main (the console census, the native ratchet), run before the gate's runs: a gate
+    that passes is then never refused at the push. The ratchet runs on a copy of itself, since a pass rewrites its
+    baseline. None when both pass, else why not."""
+    census = pathlib.Path(tree) / "tools" / "verify" / "console_census.py"
+    if census.exists():
+        r = subprocess.run([sys.executable, "-I", str(census), str(tree)], capture_output=True, text=True)
+        if r.returncode != 0:
+            shut = [l for l in r.stdout.splitlines() if l.startswith("    ")]
+            return "the console census refuses it (a closed group is not zero): %s" % "; ".join(shut[:5]).strip()
+    script = pathlib.Path(guards) / "ratchet_prepush.py"
+    if not script.exists():
+        return None
+    with tempfile.TemporaryDirectory(prefix="gate-ratchet-") as copy:
+        for name in ("ratchet_prepush.py", "ratchet_baseline.json"):
+            if (pathlib.Path(guards) / name).exists():
+                shutil.copy2(pathlib.Path(guards) / name, copy)
+        r = subprocess.run([sys.executable, "-I", str(pathlib.Path(copy) / "ratchet_prepush.py"), str(tree), sha],
+                           capture_output=True, text=True)
+    if r.returncode != 0:
+        return "the native ratchet refuses it: %s" % (r.stdout + r.stderr).strip()[-400:]
+    return None
+
+
 def move_main(sha, run_name, work, board, who, covers, tree=TREE):
     """Fast-forwards origin's main to sha (section 5.5): main must still be its ancestor. The push carries a one-time
     allowance the pre-push hook's guard (tools/gate/main_push_guard.py) reads. None when moved, else why not."""
@@ -1393,6 +1420,10 @@ def main(argv=None):
             return refuse("the long run is on main's newest commit (%s), this tree is at %s" % (
                 git("rev-parse", "--short", "origin/main"), commit[:9]))
     candidate = None
+    if args.move or args.mode == "quick":
+        why = push_checks(commit)
+        if why:
+            return refuse("main could not move to %s: %s" % (commit[:9], why))
     if args.move:
         git("fetch", "origin", "main")
         if not git_ok("merge-base", "--is-ancestor", "origin/main", "HEAD"):
