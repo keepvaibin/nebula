@@ -1578,6 +1578,10 @@ def parser():
     for level in LEVELS:
         mode.add_argument("--" + level, dest="mode", action="store_const", const=level)
     p.add_argument("--move", action="store_true", help="--main: move main to this commit when it passes (section 5)")
+    p.add_argument("--github-wait", type=float, default=GITHUB_WAIT_MINUTES,
+                   help="--move: minutes to wait for GitHub's jobs. Longer only for the one candidate that brings a job "
+                        "whose compiler cache is cold (Planner 11-18 03:49); --covers says why, and the board's LOCK "
+                        "line shows the wait")
     p.add_argument("--only", default="", help="only these checks (shell patterns, comma-separated) and what they need")
     p.add_argument("--build-root", default=os.environ.get("NEBULA_GATE_BUILD", "D:/NebulaWork/build/gate-%s" % TREE.name),
                    help="where the builds go (kept between runs, so builds are incremental)")
@@ -1690,9 +1694,11 @@ def main(argv=None):
     # quick gate beside a main gate finishes no sooner, and beside a hand slot it disturbs a measurement). The long run
     # keeps the long lock alone until it takes the gate lock part by part.
     locks = locks_for(args.mode, patterns, args.gate_lock, args.long_lock)
-    holder = "%s gate of %s@%s pid %d%s%s" % (args.mode, TREE.name, commit[:9], os.getpid(),
-                                             ("; covers " + args.covers) if args.covers else "",
-                                             ("; quick gate " + quick.name) if quick else "")
+    holder = "%s gate of %s@%s pid %d%s%s%s" % (args.mode, TREE.name, commit[:9], os.getpid(),
+                                               ("; covers " + args.covers) if args.covers else "",
+                                               ("; quick gate " + quick.name) if quick else "",
+                                               ("; GitHub wait %g minutes" % args.github_wait)
+                                               if args.github_wait != GITHUB_WAIT_MINUTES else "")
     taken = []
     for lock in locks:
         held = take_gate_lock(lock, holder, args.wait, args.board, args.who)
@@ -1735,7 +1741,8 @@ def main(argv=None):
             taken = []
             add_waiting(args.work, commit, candidate, os.getpid())
             try:
-                green, detail = github_wait(candidate, commit, planned_jobs(planned), log=str(g.work / "github.log"))
+                green, detail = github_wait(candidate, commit, planned_jobs(planned), wait_minutes=args.github_wait,
+                                            log=str(g.work / "github.log"))
                 why = None if green else "GitHub's jobs on %s: %s" % (candidate, detail)
                 if why is None:
                     move_lock = str(pathlib.Path(args.gate_lock).with_name("move.lock"))

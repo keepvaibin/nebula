@@ -210,6 +210,12 @@ def main():
         ok, detail = gate.github_wait("gate/x", "abc", state_of=lambda b, c: ("in_progress", green[:2]), sleep=tick,
                                       clock=lambda: now[0], log=t / "gh2.log")
         check(not ok and "120 minutes" in detail and now[0] >= 7200, "the wait has a limit: %s" % detail)
+        # --github-wait (Planner 11-18 03:49): 120 unless a candidate asks more, and the move's wait takes it.
+        args = gate.parser().parse_args(["--main", "--move"])
+        longer = gate.parser().parse_args(["--main", "--move", "--github-wait", "180"])             if "--github-wait" in gate.parser().format_help() else None
+        check(longer is not None and args.github_wait == 120 and longer.github_wait == 180
+              and "wait_minutes=args.github_wait" in __import__("inspect").getsource(gate.main),
+              "--github-wait sets the move's wait for GitHub, 120 minutes unless given")
         asked = [0]
 
         def flaky(branch, commit):
