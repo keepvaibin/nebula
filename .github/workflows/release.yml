@@ -8,6 +8,9 @@ name: Release
 # published from there, by hand.
 # Run by hand with "dry run", it builds every package from the chosen branch and keeps them as the run's artifacts:
 # no tag, no release.
+# A release is built only from a commit main holds whose Check run (check.yml) passed: the first job asks GitHub
+# (tools/release_guard.py) and every package job needs it; a dry run only reports the answer. Each package job ends
+# with the start check check.yml runs, on the package as built (P-023).
 on:
   push:
     tags: ['v*']
@@ -23,6 +26,8 @@ on:
 
 permissions:
   contents: write
+  # The guard reads the commit's Check runs.
+  actions: read
 
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
@@ -71,6 +76,15 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ steps.what.outputs.ref }}
+      - name: On main, its Check run green
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH: ${{ steps.what.outputs.publish }}
+        run: |
+          only=--report-only
+          [ "$PUBLISH" = true ] && only=
+          python3 -X utf8 -I tools/release_guard.py --repo "$GITHUB_REPOSITORY" --commit "$(git rev-parse HEAD)" $only
       - name: Version and notes
         id: version
         shell: bash
@@ -315,6 +329,13 @@ jobs:
           Copy-Item installer\lumakit\lumakit.luma $shipped
           .\installer\build-native-setup.ps1 -Version $env:VERSION -Bin $bin -Names (Join-Path $temp 'game\names') `
             -Dxc (Join-Path $temp 'dxc') -ShippedMods $shipped -OutputDirectory (Join-Path $temp 'dist') -SigningKey ''
+      # The programs the Setup packed, from the folder it packed them from (the Setup is built: the Vulkan loader the
+      # check puts there is not in it), AVX2 and x86-64-v2, on all three renderers.
+      - name: Start check (the packed programs)
+        uses: ./.github/actions/start-check-windows
+        with:
+          folder: ${{ runner.temp }}\bin
+          programs: Nebula NebulaVk NebulaD11 Nebula-x86-64-v2 NebulaVk-x86-64-v2 NebulaD11-x86-64-v2
       - name: Keep it (dry run)
         if: needs.release.outputs.publish != 'true'
         uses: actions/upload-artifact@v7
@@ -377,6 +398,16 @@ jobs:
           for package in "$RUNNER_TEMP"/dist/*.tar.gz; do
             python3 tools/release_manifest.py "$package" "$VERSION"
           done
+      - name: Start check (the package as unpacked, Vulkan on Mesa's software renderer, on a virtual display)
+        run: |
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends mesa-vulkan-drivers xvfb xauth
+          d="$RUNNER_TEMP/start"
+          mkdir -p "$d/data" "$d/settings" "$d/unpacked"
+          for package in "$RUNNER_TEMP"/dist/*.tar.gz; do tar -C "$d/unpacked" -xzf "$package"; done
+          nebula=$(find "$d/unpacked" -path '*/files/nebula' -type f | head -n 1)
+          [ -n "$nebula" ] || { echo "the package has no files/nebula"; exit 1; }
+          SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a "$nebula" --start-check 300 \
+            --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
       - name: Keep it (dry run)
         if: needs.release.outputs.publish != 'true'
         uses: actions/upload-artifact@v7
@@ -458,6 +489,17 @@ jobs:
           # The name the Mac app's update looks for (update_install_macos.mm): Nebula-Beta-macOS.zip for a beta.
           cp "$WORK/Nebula-macOS.zip" "$RUNNER_TEMP/dist/$PREFIX-macOS.zip"
           python3 tools/release_manifest.py "$RUNNER_TEMP/dist/$PREFIX-macOS.zip" "$VERSION"
+      - name: Start check (the app as unpacked, Metal)
+        timeout-minutes: 5
+        env:
+          PREFIX: ${{ needs.release.outputs.prefix }}
+        run: |
+          d="$RUNNER_TEMP/start"
+          mkdir -p "$d/data" "$d/settings" "$d/unpacked"
+          ditto -x -k "$RUNNER_TEMP/dist/$PREFIX-macOS.zip" "$d/unpacked"
+          app=$(find "$d/unpacked" -maxdepth 3 -name Nebula.app -type d | head -n 1)
+          [ -n "$app" ] || { echo "the zip has no Nebula.app"; exit 1; }
+          "$app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
       - name: Keep it (dry run)
         if: needs.release.outputs.publish != 'true'
         uses: actions/upload-artifact@v7
@@ -472,6 +514,8 @@ jobs:
           TAG: ${{ needs.release.outputs.tag }}
         run: gh release upload "$TAG" "$RUNNER_TEMP"/dist/* --repo "$GITHUB_REPOSITORY" --clobber
 
+  # The release app is arm64 only and no runner starts it; its code is the test app's, which check.yml's emulator job
+  # starts (--start-check through tools/lumacore/luma_test_android.py).
   android:
     name: Android app
     needs: [release, windows-hosts, lumakit]
