@@ -984,13 +984,15 @@ def take_device_lock(path, who):
     return None
 
 
-def pictures(g, label, renderer):
-    """The pictures a harness suite's runs took against the approved ones (tools/gate/pictures.py, tolerance none).
-    Above the quick level it also fails on an approved picture its runs did not take."""
+def pictures(g, label, renderer, place="pc"):
+    """The pictures a harness suite's runs took against the approved ones of that place, pc or tablet
+    (tools/gate/pictures.py, tolerance none). Above the quick level it also fails on an approved picture its runs did
+    not take."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
         code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools" / "gate" / "pictures.py", "check", "--runs", work,
-                    "--renderer", renderer] + (["--complete"] if g.level != "quick" else []), log, cwd=TREE)
+                    "--renderer", renderer, "--place", place] + (["--complete"] if g.level != "quick" else []), log,
+                   cwd=TREE)
         lines = pathlib.Path(log).read_text(encoding="utf-8", errors="replace").splitlines()
         summary = next((l for l in reversed(lines) if l.startswith("pictures: ")), "no summary")
         others = [l.split()[0] + " " + l.split()[1] for l in lines if l.split() and l.split()[0] in ("changed", "new", "missing", "machine")]
@@ -1428,8 +1430,10 @@ def tablet_part(g, stops, device=None):
     built = ("build/android",)
     needs = {"tablet/prepare": built + ("tablet/remove",), "android/tablet": built + ("tablet/prepare",),
              "tour/tablet": built + ("tablet/prepare",), "tablet/remove": (), "tour/tablet-pc": ("build/windows",),
-             "replays/tablet": ("tour/tablet", "tour/tablet-pc")}
-    wanted = [n for n in TABLET_CHECKS if g.wanted(n, needs[n])]
+             "replays/tablet": ("tour/tablet", "tour/tablet-pc"), "pictures/tablet": ("tour/tablet",)}
+    # The tablet's pictures are approved for the main level's twelve stops (N-1040); the long run's tour takes more.
+    checks = TABLET_CHECKS + (("pictures/tablet",) if g.level == "main" else ())
+    wanted = [n for n in checks if g.wanted(n, needs[n])]
     if g.dry or not wanted:
         return
     if not g.android_built:
@@ -1466,6 +1470,8 @@ def tablet_part(g, stops, device=None):
                 tour = gate_tour.write(g.work / "tour-tablet", stops)
                 step_hash.with_hash(tour.parent)
                 g.check("tour/tablet", harness(g, tour, "vulkan", "tour-tablet", g.args.tablet))
+                if "pictures/tablet" in wanted:
+                    g.check("pictures/tablet", pictures(g, "tour-tablet", "vulkan", "tablet"), ("tour/tablet",))
                 if not device.answers():
                     gone = "the tablet left adb"
                     g.owe_last(gone)

@@ -51,7 +51,7 @@ def main():
         # 1. The lists.
         known, planned, problems = gate.read_lists()
         check(not problems, "the tree's lists read cleanly: %s" % problems)
-        check("pictures/tablet" in planned, "the tablet's pictures planned (N-1040)")
+        check("pictures/tablet" not in planned, "the tablet's pictures are a check, not planned (N-1040)")
         ledger = t / "ledger.tsv"
         ledger.write_text("id\tagent\tpackage\tstate\tproof\ttitle\tnote\nP-1\t1\tE0\topen\t\tx\t\nP-2\t1\tE0\tfixed\tc\tx\t\n",
                           encoding="utf-8")
@@ -148,6 +148,8 @@ def main():
             if level == "long":
                 long_needs = dry.needs
         q, m, lg, f = names["quick"], names["main"], names["long"], names["final"]
+        check(tuple(main_needs.get("pictures/tablet", ())) == ("tour/tablet",),
+              "main: the tablet's pictures checked after its tour: %s" % (main_needs.get("pictures/tablet"),))
         check("tour/d3d12" in q and not any(n.startswith(("tablet/", "tour/tablet", "github", "soak")) for n in q),
               "quick: no tablet, GitHub or soak: %s" % sorted(q))
         check({"tour/vulkan", "tour/d3d11", "replays/tablet", "tour/tablet-pc", "github", "build/android",
@@ -177,8 +179,10 @@ def main():
         g3 = gate.Gate(a)
         g3.android_built = True
         gate.tablet_part(g3, gate.QUICK_STOPS, device=Away())
-        check([r["state"] for r in g3.results] == ["owed"] * len(gate.TABLET_CHECKS)
-              and [r["check"] for r in g3.results] == list(gate.TABLET_CHECKS), "a tablet away owes its whole part")
+        # At the main level its part includes the pictures' check.
+        whole = list(gate.TABLET_CHECKS) + ["pictures/tablet"]
+        check([r["state"] for r in g3.results] == ["owed"] * len(whole)
+              and [r["check"] for r in g3.results] == whole, "a tablet away owes its whole part")
 
         # 5. GitHub: every job of the candidate's run (section 8).
         def job(name, state="completed", conclusion="success"):

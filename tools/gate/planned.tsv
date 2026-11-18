@@ -1,7 +1,6 @@
 # Checks not built yet (docs/plan/04-GATE-AND-MAIN.md section 4.2): reported as planned, not failed. Building
 # a check removes its line; a listed check that runs fails. Every line has an open ledger row or plan step.
 check	level	plan step or ledger row	owner
-pictures/tablet	main	N-1040	Agent 1
 mods/tablet-quick	main	N-2043	Agent 2
 hostile-files	main	N-2044	Agent 2
 two-mods	main	N-2045	Agent 2
