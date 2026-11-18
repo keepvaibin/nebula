@@ -292,23 +292,65 @@ bool CollisionParts::checkStrikePoint(HitInfo* pHitInfo, const Vec3f& rPos) {
 }
 
 namespace {
-    // A query's working lists: room for the common case on the stack, more when more hits were asked for.
+    // Lists for queries that ask for more hits than the stack holds, kept from one query to the next (P-131): one set per
+    // depth of queries in progress (a triangle filter may make a query while its caller's lists are in use), each grown
+    // to the most asked for, in the permanent arena. Queries are made on the game thread only.
+    constexpr u32 cKeptDepths = 8;
+
+    struct KeptStrikeLists {
+        KC_PrismData** mPrisms;
+        f32* mDistances;
+        u8* mClassifications;
+        u32 mRoom;
+    };
+
+    KeptStrikeLists sKeptStrikeLists[cKeptDepths];
+    u32 sStrikeDepth = 0;
+
+    // A query's working lists: room for the common case on the stack, the kept lists of its depth when more hits were
+    // asked for (lists of its own past cKeptDepths).
     struct StrikeLists {
-        explicit StrikeLists(u32 maxHits) {
-            const bool fits = maxHits <= ARRAY_SIZEU(mPrismRoom);
-            mPrisms = fits ? mPrismRoom : new KC_PrismData*[maxHits];
-            mDistances = fits ? mDistanceRoom : new f32[maxHits];
-            mClassifications = fits ? mClassificationRoom : new u8[maxHits];
+        explicit StrikeLists(u32 maxHits) : mDepth(sStrikeDepth++), mOwned(false) {
+            if (maxHits <= ARRAY_SIZEU(mPrismRoom)) {
+                mPrisms = mPrismRoom;
+                mDistances = mDistanceRoom;
+                mClassifications = mClassificationRoom;
+            } else if (mDepth < cKeptDepths) {
+                KeptStrikeLists& rKept = sKeptStrikeLists[mDepth];
+                if (rKept.mRoom < maxHits) {
+                    delete[] rKept.mPrisms;
+                    delete[] rKept.mDistances;
+                    delete[] rKept.mClassifications;
+                    rKept.mPrisms = new (Arenas::permanent(), 0) KC_PrismData*[maxHits];
+                    rKept.mDistances = new (Arenas::permanent(), 0) f32[maxHits];
+                    rKept.mClassifications = new (Arenas::permanent(), 0) u8[maxHits];
+                    rKept.mRoom = maxHits;
+                }
+                mPrisms = rKept.mPrisms;
+                mDistances = rKept.mDistances;
+                mClassifications = rKept.mClassifications;
+            } else {
+                mOwned = true;
+                mPrisms = new KC_PrismData*[maxHits];
+                mDistances = new f32[maxHits];
+                mClassifications = new u8[maxHits];
+            }
         }
 
         ~StrikeLists() {
-            if (mPrisms != mPrismRoom) {
+            if (mOwned) {
                 delete[] mPrisms;
                 delete[] mDistances;
                 delete[] mClassifications;
             }
+            sStrikeDepth--;
         }
 
+        StrikeLists(const StrikeLists&) = delete;
+        StrikeLists& operator=(const StrikeLists&) = delete;
+
+        u32 mDepth;
+        bool mOwned;
         KC_PrismData* mPrismRoom[64];
         f32 mDistanceRoom[64];
         u8 mClassificationRoom[64];
