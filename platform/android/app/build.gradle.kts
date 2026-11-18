@@ -236,3 +236,9 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }
+
+// Some JVM tests read the app's own files (the manifest, the sources: ConfigChangesTest, ProcessFilesTest), which Gradle
+// does not see as their input: without this a changed manifest leaves the test task up to date and it does not run.
+tasks.withType<Test>().configureEach {
+    inputs.dir("src/main").withPropertyName("appSources").withPathSensitivity(PathSensitivity.RELATIVE)
+}
