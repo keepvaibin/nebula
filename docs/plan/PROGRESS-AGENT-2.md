@@ -189,3 +189,13 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   system's unwinder will, before the mod loads. Before, a .pdata entry or its unwind data outside the image, or a chain
   that loops, reached RtlLookupFunctionEntry and RtlVirtualUnwind in the guard's fault handler unchecked. 21 lies (x64
   and arm64) are refused and fail before; a byte sweep finds no panic; 417 real mod libraries still read.
+- N-2016 fixed 51e02aaeb: the Direct3D 11 references of safestart 6604 to 6607 and aftercrash 6704 and 6709 held
+  the aliased key pictures Agent 1 fixed in N-1032 (465dbbe23). Made again on NebulaD11 from a2m4 (on 37ce7f3cc),
+  each equals the Direct3D 12 one; the old ones failed the full d3d11 run (rmse 1.26 to 1.65). With the new ones
+  6604 to 6607 and 6709 pass on d3d11; 6704 waited behind 6702 (N-2049). These were not in known-failures.tsv, so
+  mods/d3d11 would have failed the main gate.
+- N-2049 open: in fixed steps the settings screen's status line follows the pipeline workers' speed. With a new cache
+  the workers go on making pipelines after the start's set, and while they run the line reads "Preparing graphics:
+  N%" in place of the page's own. aftercrash 6702 and 6709 failed so under load on Vulkan and 6702 on d3d11, and pass
+  unloaded. It cannot be a known-failures line (a pass would fail the gate). The renderer, the status line and the
+  host's deterministic mode are Agent 1's files; he chooses the fix.
