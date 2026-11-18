@@ -71,6 +71,11 @@ native_test(native_gravity_bound_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/gravit
     "${game_src}/AreaObj/AreaForm.cpp" "${game_src}/Util/MathUtil.cpp" "${game_src}/Util/MtxUtil.cpp"
     "${game_src}/System/NebulaArena.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/math/src/nebula_math.c")
 target_compile_definitions(native_gravity_bound_tests PRIVATE NEBULA_PLAIN_MODULE=1)
+# The plain module's shape-drawer packets keep the array's order at a cost that does not grow with them (P-038).
+native_test(native_draw_run_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/draw_run_list_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
+    "${game_src}/System/DrawRunList.cpp" "${game_src}/System/NebulaArena.cpp")
+target_compile_definitions(native_draw_run_list_tests PRIVATE NEBULA_PLAIN_MODULE=1)
 # Every message Mario sends in a step goes out (N-3006).
 native_test(native_mario_messenger_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_messenger_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"

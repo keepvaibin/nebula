@@ -10,13 +10,33 @@ DrawBufferShapeDrawer::DrawBufferShapeDrawer(Material* pMaterial, MaterialEntry*
     : mMaterial(pMaterial), mMatPacket(pMatPacket), mNumShapes(1), mMaxPackets(0), mNumPackets(0), mPackets(nullptr) {
 }
 
+#if defined(NEBULA_PLAIN_MODULE)
+namespace {
+    bool isSameLight(const void* pCtrl, const void* pLoader) {
+        return static_cast< const ActorLightCtrl* >(pCtrl)->isSameLight(static_cast< const ActorLightCtrl* >(pLoader));
+    }
+
+    bool isBlending(const void* pCtrl) {
+        return static_cast< const ActorLightCtrl* >(pCtrl)->mBlendFrom != 0;
+    }
+}  // namespace
+#endif
+
 void DrawBufferShapeDrawer::init(s32 maxActors) {
     mMaxPackets = maxActors * mNumShapes;
+#if defined(NEBULA_PLAIN_MODULE)
+    mList.reserve(mMaxPackets);
+#else
     mPackets = new PacketInfo[mMaxPackets]();
+#endif
 }
 
 void DrawBufferShapeDrawer::reserve(s32 maxActors) {
     const s32 maxPackets = maxActors * mNumShapes;
+#if defined(NEBULA_PLAIN_MODULE)
+    mList.reserve(maxPackets);
+    mMaxPackets = maxPackets;
+#else
     PacketInfo* pPackets = new (NebulaArena::findFromRoot(this), 0) PacketInfo[maxPackets]();
     for (s32 idx = 0; idx < mNumPackets; idx++) {
         pPackets[idx] = mPackets[idx];
@@ -24,6 +44,7 @@ void DrawBufferShapeDrawer::reserve(s32 maxActors) {
     delete[] mPackets;
     mPackets = pPackets;
     mMaxPackets = maxPackets;
+#endif
 }
 
 void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
@@ -44,12 +65,22 @@ void DrawBufferShapeDrawer::draw() const {
     Material* pShared = mMatPacket->getMaterial();
     MaterialDraw draw(pShared);
 
+#if defined(NEBULA_PLAIN_MODULE)
+    for (s32 slot = mList.first(); slot >= 0; slot = mList.next(slot)) {
+        const DrawRunList::Packet& rPacket = mList.at(slot);
+        MeshEntry* packet = static_cast< MeshEntry* >(const_cast< void* >(rPacket.mEntry));
+
+        if (rPacket.mLightLoader != nullptr) {
+            static_cast< const ActorLightCtrl* >(rPacket.mLightLoader)->loadLight();
+        }
+#else
     for (s32 idx = 0; idx < mNumPackets; idx++) {
         MeshEntry* packet = mPackets[idx].mShapePacket;
 
         if (getLightLoader(idx) != nullptr) {
             getLightLoader(idx)->loadLight();
         }
+#endif
 
         if (!packet->mMesh->isHidden()) {
             if (packet->mMaterial != pShared) {
@@ -63,6 +94,10 @@ void DrawBufferShapeDrawer::draw() const {
 }
 
 void DrawBufferShapeDrawer::add(const MeshEntry* pShapePacket, const ActorLightCtrl* pLightCtrl) {
+#if defined(NEBULA_PLAIN_MODULE)
+    mList.add(pShapePacket, pLightCtrl, ::isSameLight, ::isBlending);
+    mNumPackets = mList.count();
+#else
     bool setLightLoader = false;
     s32 index = findLightSortIndex(pLightCtrl, &setLightLoader);
 
@@ -81,10 +116,15 @@ void DrawBufferShapeDrawer::add(const MeshEntry* pShapePacket, const ActorLightC
     }
 
     mNumPackets++;
+#endif
 }
 
 // A removed run head hands the light load to the packet after it.
 void DrawBufferShapeDrawer::remove(const MeshEntry* pShapePacket) {
+#if defined(NEBULA_PLAIN_MODULE)
+    mList.remove(pShapePacket);
+    mNumPackets = mList.count();
+#else
     for (s32 removeIdx = 0; removeIdx < mNumPackets; removeIdx++) {
         if (mPackets[removeIdx].mShapePacket == pShapePacket) {
             const bool loadsLight = mPackets[removeIdx].mLightLoader != nullptr;
@@ -98,9 +138,14 @@ void DrawBufferShapeDrawer::remove(const MeshEntry* pShapePacket) {
             return;
         }
     }
+#endif
 }
 
 void DrawBufferShapeDrawer::resetLightSort(const ActorLightCtrl* pLightCtrl) {
+#if defined(NEBULA_PLAIN_MODULE)
+    mList.resetLightSort(pLightCtrl, ::isSameLight, ::isBlending);
+    mNumPackets = mList.count();
+#else
     for (s32 idx = 0; idx < mNumPackets; idx++) {
         if (mPackets[idx].mLightCtrl == pLightCtrl) {
             MeshEntry* shapePacket = mPackets[idx].mShapePacket;
@@ -109,6 +154,7 @@ void DrawBufferShapeDrawer::resetLightSort(const ActorLightCtrl* pLightCtrl) {
             return;
         }
     }
+#endif
 }
 
 s32 DrawBufferShapeDrawer::findLightSortIndex(const ActorLightCtrl* pLightCtrl, bool* pSetLightLoader) const {

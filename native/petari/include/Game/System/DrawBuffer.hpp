@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/System/DrawRunList.hpp"
 
 class Material;
 class MaterialEntry;
@@ -43,6 +44,10 @@ public:
     s32 mMaxPackets;
     s32 mNumPackets;
     PacketInfo* mPackets;  // mNumPackets in draw order: same light runs together, the first of a run loads it
+#if defined(NEBULA_PLAIN_MODULE)
+    // The plain module's packets instead of mPackets, in the same order (P-038).
+    DrawRunList mList;
+#endif
 };
 
 class DrawBuffer {
