@@ -236,10 +236,6 @@ float4 sea_colour(float3 pattern, float3 ring, float3 screen, float3 tint, float
 #ifndef ENV_FETCH
 #define ENV_FETCH(t) (t)
 #endif
-// The generated programs' light level mark (programs.rs): the colour as it is.
-#ifndef TRACED_LEVEL
-#define TRACED_LEVEL(x) (x)
-#endif
 
 #if NATIVE_MOTION
 // The move since the previous frame in pixels (mv_cur.z and mv_prev.z: the half viewport).

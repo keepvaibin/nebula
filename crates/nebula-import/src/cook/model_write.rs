@@ -1762,60 +1762,6 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
         b.u32(0);
         meshes.push(streams);
     }
-    // The painted light per facing taken out of the painted meshes' vertex colours by a gain (debake_gains):
-    // vertex-coloured, its colour's rgb not lit, opaque and not emissive; never a sky's. The records learn of it here.
-    let sky_model = {
-        let lower = stem.to_ascii_lowercase();
-        lower.ends_with("sky") || lower.starts_with("vrorbit")
-    };
-    if !sky_model {
-        let debake_material: Vec<bool> = ir
-            .materials
-            .iter()
-            .map(|m| {
-                // Painted colour, or a lit colour taken from the vertex colour (debakes).
-                debakes(m)
-            })
-            .collect();
-        let which: Vec<bool> = ir.shapes.iter().map(|s| debake_material.get(s.material as usize).copied().unwrap_or(false)).collect();
-        // The meshes painted by a map alone whose map holds light (map_light).
-        let map_painted: Vec<bool> = ir.shapes.iter().map(|s| ir.materials.get(s.material as usize).is_some_and(debakes_map)).collect();
-        // Each such mesh's first map as its vertices see it, for the same fit.
-        let maps: Vec<Option<Vec<f64>>> = ir
-            .shapes
-            .iter()
-            .zip(&meshes)
-            .zip(which.iter().zip(&map_painted))
-            .map(|((shape, streams), (&w, &w2))| {
-                if w {
-                    first_map_at_vertices(ir, shape.material as usize, streams)
-                } else if w2 {
-                    map_light(ir, shape.material as usize, streams)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let map_only: Vec<bool> = map_painted.iter().zip(&maps).map(|(&w, m)| w && m.is_some()).collect();
-        let chosen: Vec<bool> = which.iter().zip(&map_only).map(|(&a, &b)| a || b).collect();
-        let materials: Vec<u32> = ir.shapes.iter().map(|s| s.material).collect();
-        // A far twin's de-baked materials take their near model's Lref (a vertex colour's: the map
-        // ratios, each mesh's own, are kept out).
-        let fixed: std::collections::BTreeMap<u32, f64> = ir
-            .materials
-            .iter()
-            .enumerate()
-            .filter(|(_, m)| debakes(m))
-            .filter_map(|(i, m)| super::hit_record::twin_reference(stem, &m.name).map(|r| (i as u32, r)))
-            .collect();
-        debake_gains_with(&mut meshes, &chosen, &map_only, &maps, &materials, &fixed, None);
-        for (streams, &slot) in meshes.iter().zip(&mesh_slots) {
-            if streams.attributes & MESH_GAIN != 0 {
-                b.patch32(slot + 56, streams.attributes);
-                b.patch32(slot + 60, further_stride(streams));
-            }
-        }
-    }
     // Each mesh's coordinates by number: coordinate 0 in stream 1, the others packed in stream 3 in ascending order.
     // Their place counts from the mesh's record, so a mesh record alone gives its layout.
     b.align(4);
@@ -2047,9 +1993,6 @@ pub fn write(ir: &ModelIr, stem: &str, written: &Written, pipelines: &mut pipeli
                 if streams.attributes & MESH_TANGENTS != 0 {
                     b.fs(&streams.tangents[i][0]);
                     b.fs(&streams.tangents[i][1]);
-                }
-                if streams.attributes & MESH_GAIN != 0 {
-                    b.u32(streams.gains[i]);
                 }
             }
         }
@@ -2349,9 +2292,6 @@ pub fn further_stride(s: &MeshStreams) -> u32 {
     }
     if s.attributes & MESH_TANGENTS != 0 {
         stride += 24;
-    }
-    if s.attributes & MESH_GAIN != 0 {
-        stride += 4;
     }
     stride
 }

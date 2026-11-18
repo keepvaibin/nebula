@@ -124,7 +124,7 @@ enum {
     NEBULA_MESH_COLOR0 = 1u << 1,
     NEBULA_MESH_COLOR1 = 1u << 2,
     NEBULA_MESH_TANGENTS = 1u << 3,
-    NEBULA_MESH_GAIN = 1u << 4, /* stream 3: a word a vertex, the de-light gain (NEBULA_INPUT_GAIN) */
+    /* 1u << 4: unused from store 36 (the tracer's de-light gain) */
 };
 
 /* Where a mesh keeps coordinate n: stream 1 at 16 for coordinate 0, stream 3 at `offset` for the others;
@@ -189,8 +189,7 @@ enum {
     NEBULA_INPUT_BINORMAL = 4,
     NEBULA_INPUT_WIDEN = 5, /* a site's widened corner: one uint, which corner */
     NEBULA_INPUT_MATRIX = 6, /* a site's vertex carrying its draw matrix: one uint */
-    NEBULA_INPUT_GAIN = 7, /* the painted light's de-light gain a channel (NEBULA_MESH_GAIN): one uint, signed bytes of
-                              log2 x 64 (r, g, b), 0 a gain of 1 */
+    /* 7: unused from store 36 (the tracer's de-light gain) */
     NEBULA_INPUT_COORD0 = 16, /* + the mesh's coordinate number */
 };
 

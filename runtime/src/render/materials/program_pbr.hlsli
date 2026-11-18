@@ -58,10 +58,6 @@ void pbr_add_light(uint base, uint n, bool spot, uint diffuse, bool first, float
     }
 }
 
-// The diffuse light level, display-encoded (the generated programs' TRACED_LEVEL).
-float3 pbr_level() {
-    return enh_srgb(enh_shoulder(max(g_pbr.ambient + g_pbr.direct, 0.0)));
-}
 
 // The stage seen along R, linear, blurred by the roughness: its fill light as the sky above the horizon about the
 // player's up, its ambient below; a rough surface sees their mean.

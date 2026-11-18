@@ -601,7 +601,6 @@ fn a_mod_programs_flags_are_the_tables() {
     assert_eq!(text_flags(false, "float3 p = world_pos;"), FLAG_READS_WORLD);
     assert_eq!(text_flags(false, "float3 p = pos;"), 0);
     assert_eq!(text_flags(true, "#include \"program_lit.hlsli\"\n  # define NATIVE_LIT 1\n"), FLAG_LIT | FLAG_SUMS_KEY);
-    assert_eq!(text_flags(true, "#include \"program_lit.hlsli\"\nx = light_term(i.lit_light, 0u, 1u);\nTRACED_UNKEYED;\n"), FLAG_LIT);
     assert_eq!(text_coords("#define NATIVE_COORDS 2\n"), 2);
     assert_eq!(text_coords(&t.vertex), 0);
 }

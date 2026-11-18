@@ -379,7 +379,7 @@ pub enum SheenKind {
 /// What part of a face a material is, by its name: 2 an eye (eye, pupil, hitomi; not a lid), 1 another
 /// face part (a lid, mouth, lip, moustache, cheek, eyebrow, lash, tooth, a name beginning "face"), 0 none. A part of a
 /// skinned mesh (a character's, programs.rs mesh_skinned) is a face part: face_plain, never a sheen layer, and its
-/// program takes the face's light (programs.rs TRACED_FACE; program_lit.hlsli).
+/// program takes the game's light as any other.
 pub fn face_kind(material: &str) -> u32 {
     let name = material.to_ascii_lowercase();
     if (name.contains("eye") || name.contains("pupil") || name.contains("hitomi")) && !name.contains("lid") {

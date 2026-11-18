@@ -1110,7 +1110,7 @@ fn a_lit_material_is_drawn_by_the_pbr_template() {
     for form in &forms {
         let t = generate(m, *form, false, &Registers::of(m)).unwrap();
         let px = &t.pixel;
-        for wanted in ["#include \"program_pbr.hlsli\"", "pbr_begin(", "pbr_add_light(i.lit_light, 0u", "TRACED_LEVEL(pbr_level())",
+        for wanted in ["#include \"program_pbr.hlsli\"", "pbr_begin(", "pbr_add_light(i.lit_light, 0u",
                        "ENV_FETCH(pbr_reflection(", "pbr_finish(prev.rgb", "pbr_metal *= pbr_mr.b", "pbr_ao = 1.0 + 0.7"] {
             assert!(px.contains(wanted), "{form:?} lacks {wanted}:\n{px}");
         }

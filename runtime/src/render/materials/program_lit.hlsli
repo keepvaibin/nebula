@@ -24,9 +24,6 @@ static const float kEnhEnvGraze = 0.80;      // gain added at grazing angles, Sc
 bool enh_on() { return (view_flags & 2u) != 0u; }
 
 #define AMBIENT_TERM(x) (x)
-// The generated programs' marks for the light set's key (programs.rs): nothing here.
-#define TRACED_UNKEYED
-#define TRACED_FACE(k)
 
 float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
 float3 enh_srgb(float3 c) { return pow(max(c, 0.0), 1.0 / 2.2); }
@@ -107,11 +104,9 @@ EnhShade enh_begin(float3 P, float3 n) {
     return e;
 }
 
-// A painted highlight sprite (the generator calls enh_sprite for a material with one): its spot is drawn as painted,
-// and the enhanced highlight keeps its own roughness and strength.
+// The enhanced highlight's roughness and strength (a painted highlight sprite's spot is drawn as painted).
 static const float g_enh_sheen_rough = kEnhSheenRough;
 static const float g_enh_sheen_gain = 1.0;
-void enh_sprite(float rough, float gain) {}
 #define HIGHLIGHT_FETCH(t) (t)
 // A light's highlight. `radiance` is its colour in linear light: the diffuse term is the colour times N.L, so the colour
 // is the light's irradiance over pi and the lobe takes kEnhSheen = pi.
