@@ -195,9 +195,58 @@ pub fn to_bytes(frames: &[Frame], names: &[u8]) -> Vec<u8> {
     out
 }
 
-/// A recording cooked: a disc's to NGST; a cooked one as it is.
+/// A cooked recording read back, with what GhostPlayer reads in place checked (M-168): its frames and its names lie in
+/// the file, the names end in a 0, and each frame's name starts inside them.
+pub fn from_ngst(bytes: &[u8]) -> Result<(Vec<Frame>, Vec<u8>)> {
+    if !bytes.starts_with(MAGIC) {
+        bail!("not a cooked recording");
+    }
+    let word = |at: usize| -> Result<usize> {
+        let b = bytes.get(at..at + 4).context("past the recording's end")?;
+        Ok(u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
+    };
+    let (count, names_at, names_size) = (word(4)?, word(8)?, word(12)?);
+    if count.checked_mul(FRAME).and_then(|n| n.checked_add(HEADER)).map_or(true, |end| end > bytes.len()) {
+        bail!("a recording's {count} frames past its end");
+    }
+    let names = names_at.checked_add(names_size).and_then(|end| bytes.get(names_at..end)).context("a recording's names past its end")?;
+    if names.last() != Some(&0) {
+        bail!("a recording whose names do not end in a 0");
+    }
+    let frames = (0..count)
+        .map(|i| {
+            let f = &bytes[HEADER + FRAME * i..HEADER + FRAME * (i + 1)];
+            let s16 = |at: usize| i16::from_le_bytes([f[at], f[at + 1]]);
+            let s8s = |at: usize| [f[at] as i8, f[at + 1] as i8, f[at + 2] as i8];
+            let frame = Frame {
+                flags: u16::from_le_bytes([f[0], f[1]]),
+                anim_frame: s16(2),
+                position: [s16(4), s16(6), s16(8)],
+                velocity: s8s(10),
+                scale: s8s(13),
+                rotation: s8s(16),
+                weights: [f[19] as i8, f[20] as i8, f[21] as i8, f[22] as i8],
+                rate: f[23] as i8,
+                name: u32::from_le_bytes([f[24], f[25], f[26], f[27]]),
+                hash: u32::from_le_bytes([f[28], f[29], f[30], f[31]]),
+            };
+            if frame.name as usize >= names.len() {
+                bail!("frame {i} names an animation past the recording's names");
+            }
+            Ok(frame)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok((frames, names.to_vec()))
+}
+
+/// A recording cooked: a disc's to NGST; a cooked one as it is, once it reads whole (from_ngst) and writes back to the
+/// same bytes.
 pub fn cook(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.starts_with(MAGIC) {
+        let (frames, names) = from_ngst(bytes)?;
+        if to_bytes(&frames, &names) != bytes {
+            bail!("a cooked recording that is not as the cook writes it");
+        }
         return Ok(bytes.to_vec());
     }
     let (frames, names) = from_disc(bytes)?;
@@ -253,6 +302,38 @@ mod tests {
         let mut gap = packet.clone();
         gap.extend_from_slice(&next);
         assert!(from_disc(&gap).is_err());
+    }
+
+    /// M-168: a cooked recording stays only when GhostPlayer can read it in place: its frames and names in the file, the
+    /// names ending in a 0, each frame's name inside them, and laid out as the cook writes it.
+    #[test]
+    fn a_cooked_recording_is_checked_before_it_stays() {
+        let frame = Frame { flags: 0x11, name: 1, position: [1, 2, 3], ..Frame::default() };
+        let good = to_bytes(&[frame, Frame::default()], b"\0Run\0");
+        assert_eq!(from_ngst(&good).unwrap(), (vec![frame, Frame::default()], b"\0Run\0".to_vec()));
+        assert_eq!(cook(&good).unwrap(), good);
+        let with = |at: usize, word: u32| {
+            let mut g = good.clone();
+            g[at..at + 4].copy_from_slice(&word.to_le_bytes());
+            g
+        };
+        for (at, word, why) in [
+            (4, u32::MAX, "frames past"),
+            (4, 3, "frames past"),
+            (8, u32::MAX, "names past"),
+            (12, 99, "names past"),
+            (12, 4, "end in a 0"),
+            (HEADER + 24, 5, "past the recording's names"),
+            (HEADER + 24, u32::MAX, "past the recording's names"),
+        ] {
+            let error = format!("{:#}", cook(&with(at, word)).unwrap_err());
+            assert!(error.contains(why), "word at {at} = {word}: {error}");
+        }
+        // Reads whole, but not as the cook lays it out: the names' offset one byte on.
+        let mut moved = with(8, (HEADER + 2 * FRAME + 1) as u32);
+        moved.insert(HEADER + 2 * FRAME, 0);
+        let error = format!("{:#}", cook(&moved).unwrap_err());
+        assert!(error.contains("not as the cook writes it"), "{error}");
     }
 
     #[test]
