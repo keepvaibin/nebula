@@ -13,11 +13,11 @@ The `draw` service lets your mod draw at the game's draw points. In LumaScript, 
 |---|---|---|---|---|
 | `draw` | 1.0 | None | `LUMA_SERVICE(slot, "draw", "1.0")` | `use svc.draw` |
 
-The header is `native/include/luma_draw.h`. In LumaScript, a service is called by the last part of its name, such as `draw.` for `draw`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_draw.h`. In LumaScript, a service is called by the last part of its name, such as `draw.` for `draw`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
-LumaCore's draw service: a mod draws at named points of the game's frame. In 2-D over the game (rectangles, lines, triangles, images, text in the game's fonts and the mod's own, every language), clipped and transformed; in 3-D in the world, depth tested (lines, triangles, models, billboards). Textures come by content name or from the mod's own pixels. Everything a mod draws is drawn the frame it asks and never again: nothing stays in the renderer, and a mod that is off draws nothing from that frame. Import: `LUMA_SERVICE(slot, "draw", "1.0")`. Units. 2-D: the game's layout units, the frame its HUD is laid out in: (0, 0) the screen's top left, x right, y down, 456 units high, as wide as the screen's shape makes it (608 at 4:3, 832 at 16:9, more on wider screens); the HUD's own 4:3 frame (608 x 456) centered in it is the safe frame (screen's safe_*). 3-D: the game's world units (centimetres), its axes.
+LumaCore's draw service: a mod draws at named points of the game's frame. In 2-D over the game (rectangles, lines, triangles, images, text in the game's fonts and the mod's own, every language), clipped and transformed; in 3-D in the world, depth tested (lines, triangles, models, billboards). Textures come by content name or from the mod's own pixels. Everything a mod draws is drawn the frame it asks and never again: nothing stays in the renderer, and a mod that is off draws nothing from that frame. Units. 2-D: the game's layout units, the frame its HUD is laid out in: (0, 0) the screen's top left, x right, y down, 456 units high, as wide as the screen's shape makes it (608 at 4:3, 832 at 16:9, more on wider screens); the HUD's own 4:3 frame (608 x 456) centered in it is the safe frame (screen's safe_*). 3-D: the game's world units (centimeters), its axes.
 
 ## Limits and constants
 
@@ -102,8 +102,8 @@ The 2-D frame now (screen, and the second argument of a point's function).
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaDrawScreen`) as the mod was built. |
-| `uint32_t point` | In a point's function: its `LumaDrawPoint`; from screen(): `LUMA_DRAW_POINTS`. |
+| `uint32_t size` | `sizeof(LumaDrawScreen)` as the mod was built. |
+| `uint32_t point` | In a point's function: its `LumaDrawPoint`; from screen: `LUMA_DRAW_POINTS`. |
 | `uint64_t frame` | Frames presented since start (time's `frame`). |
 | `float w, h` | The 2-D frame, layout units (h is 456). |
 | `float safe_x, safe_y, safe_w, safe_h` | The HUD's 4:3 frame in it. |
@@ -116,7 +116,7 @@ In C, each function takes your mod (`const LumaMod* mod`) first. LumaScript pass
 ### `at`
 
 ```lumascript
-draw.at(point: draw.Point, fn: fn(e: draw.Event))
+draw.at(point: draw.Point, fn: fn(draw.Screen))
 ```
 
 ```c
@@ -152,7 +152,7 @@ int32_t rect(const LumaMod* mod, const LumaDrawRect* rect, LumaColor colour);
 ### `rect_outline`
 
 ```lumascript
-draw.rect_outline(rect: draw.Rect, thickness: f32, colour: color)
+draw.rect_outline(rect: draw.Rect, thickness: f32, colour: color) -> bool
 ```
 
 ```c
@@ -164,7 +164,7 @@ A rectangle's outline `thickness` units wide, inside its edges (thickness above 
 ### `line`
 
 ```lumascript
-draw.line(a: draw.Vec2, b: draw.Vec2, thickness: f32, colour: color)
+draw.line(a: draw.Vec2, b: draw.Vec2, thickness: f32, colour: color) -> bool
 ```
 
 ```c
@@ -176,7 +176,7 @@ A line from a to b, `thickness` units wide (above 0), square ends.
 ### `tri`
 
 ```lumascript
-draw.tri(points: (draw.Vec2, draw.Vec2, draw.Vec2), colours: (color, color, color))
+draw.tri(points: (draw.Vec2, draw.Vec2, draw.Vec2), colours: (color, color, color)) -> bool
 ```
 
 ```c
@@ -188,7 +188,7 @@ A filled triangle, a color each corner (blended between them).
 ### `image`
 
 ```lumascript
-draw.image(texture: draw.Texture, dst: draw.Rect, src: draw.Rect?, colour: color)
+draw.image(texture: draw.Texture, dst: draw.Rect, src: draw.Rect?, colour: color) -> bool
 ```
 
 ```c
@@ -200,7 +200,7 @@ int32_t image(const LumaMod* mod, LumaDrawTexture texture, const LumaDrawRect* d
 ### `text`
 
 ```lumascript
-draw.text(font: draw.Font, text: text, x: f32, y: f32, size: f32, colour: color, align: draw.Align, wrap: f32) -> f32
+draw.text(font: draw.Font, text: text, x: f32, y: f32, size: f32, colour: color, align: draw.Align, wrap: f32) -> f32?
 ```
 
 ```c
@@ -212,19 +212,19 @@ Text, UTF-8, in `font` at `size` units a line, from (x, y) its first line's top,
 ### `text_measure`
 
 ```lumascript
-draw.text_measure(font: draw.Font, text: text, size: f32, wrap: f32) -> draw.Vec2
+draw.text_measure(font: draw.Font, text: text, size: f32, wrap: f32) -> draw.Vec2?
 ```
 
 ```c
 int32_t text_measure(const LumaMod* mod, LumaDrawFont font, const char* text, float size, float wrap, LumaDrawVec2* out);
 ```
 
-Anywhere (no point needed). The box text() would fill from (0, 0): out->x the widest line, out->y its height (lines times the line's height). Arguments as text.
+Anywhere (no point needed). The box text would fill from (0, 0): out->x the widest line, out->y its height (lines times the line's height). Arguments as text.
 
 ### `clip_push`
 
 ```lumascript
-draw.clip_push(rect: draw.Rect)
+draw.clip_push(rect: draw.Rect) -> bool
 ```
 
 ```c
@@ -248,7 +248,7 @@ The clip under it again. None pushed in this point's call: `LUMA_E_STATE` (repor
 ### `transform_push`
 
 ```lumascript
-draw.transform_push(m: (f32, f32, f32, f32, f32, f32))
+draw.transform_push(m: (f32, f32, f32, f32, f32, f32)) -> bool
 ```
 
 ```c
@@ -356,7 +356,7 @@ int32_t line3(const LumaMod* mod, const LumaDrawVec3* a, const LumaDrawVec3* b, 
 ### `tri3`
 
 ```lumascript
-draw.tri3(points: (draw.Vec3, draw.Vec3, draw.Vec3), colours: (color, color, color))
+draw.tri3(points: (draw.Vec3, draw.Vec3, draw.Vec3), colours: (color, color, color)) -> bool
 ```
 
 ```c
@@ -380,7 +380,7 @@ A cooked model by name (the mod's "Luma/<id>/<path>", 3.2, or the game's object 
 ### `billboard`
 
 ```lumascript
-draw.billboard(texture: draw.Texture, pos: draw.Vec3, w: f32, h: f32, colour: color)
+draw.billboard(texture: draw.Texture, pos: draw.Vec3, w: f32, h: f32, colour: color) -> bool
 ```
 
 ```c

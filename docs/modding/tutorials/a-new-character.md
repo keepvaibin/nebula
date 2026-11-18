@@ -108,7 +108,11 @@ The sound's name is its path in `assets/` without `.sound.json`: `voice/Hup`. Fo
 
 A defined character plays only when code asks. Robo plays from the start:
 
+<!-- sample: examples/a-new-character/source/main.lum -->
 ```lumascript
+// Robo: the player plays Robo in Mario's place from the start. Robo itself is data, kit/player.character/robo.json:
+// its model (assets/Robot.glb, made from source/Robot.glb by `lumalink add character`), the clips it plays for some
+// of Mario's actions, its voice and its higher jump. When the mod is switched off, Mario comes back.
 use kit.player.character as pc
 
 on start {

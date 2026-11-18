@@ -500,6 +500,29 @@ def lumalink_tests(g):
     return fn
 
 
+def docs_check(g):
+    """The modding docs against what this tree and the pinned LumaLink make (tools/modding/docs_check.py, M11): the
+    services' pages from the SDK's headers and the compiler's forms, LumaKit's pages from its sources, the build codes,
+    LumaLink's commands, the validator's rules, the game's events, nerves and tables, and every LumaScript sample of
+    the docs built with this build's game names."""
+    def fn(log):
+        try:
+            program, checkout = pinned(g)
+        except SystemExit as stop:
+            pathlib.Path(log).write_text("%s\n" % stop, encoding="utf-8")
+            return False, str(stop)
+        names = pathlib.Path(g.bin) / "luma"
+        if not (names / "luma_types.json").exists() and (pathlib.Path(g.bin) / "luma_types.json").exists():
+            names = pathlib.Path(g.bin)
+        cmd = [sys.executable, "-X", "utf8", "-I", TREE / "tools" / "modding" / "docs_check.py", "--lumalink", program,
+               "--lumalink-tree", checkout, "--names", names, "--work", g.work / "docs"]
+        if g.args.pak:
+            cmd += ["--pak", g.args.pak]
+        code = run(cmd, log, cwd=TREE, timeout=1800)
+        return code == 0, last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
+    return fn
+
+
 def disc_images(folder):
     """{disc id: image} of a folder holding the discs as RMGE01.wbfs, RMGP01.rvz and so on."""
     out = {}
@@ -1093,6 +1116,7 @@ def unit_part(g, discs_proved):
         g.check("start/%s" % r, start_check(g, r), ("build/windows",))
     g.check("rust", rust_tests(g))
     g.check("lumalink", lumalink_tests(g), ("build/windows",))
+    g.check("docs", docs_check(g), ("build/windows",))
     # The cooked collision against each disc's (P-169).
     discs = disc_images(g.args.discs)
     for disc in discs_proved:

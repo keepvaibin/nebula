@@ -13,6 +13,7 @@ contentType: reference
 | Version | 1.1 | 1.0 | 1.0 |
 | Header | `luma_save.h` | `luma_save.h` | `luma_save.h` |
 | Permission | None | None | `save.game` |
+| C import | `LUMA_SERVICE(slot, "save", "1.1")` | `LUMA_SERVICE(slot, "save.global", "1.0")` | `LUMA_SERVICE(slot, "save.game", "1.0")` |
 | LumaScript | `use svc.save` | `use svc.save.global`, then `global.get(...)` | `use svc.save.game`, then `game.export_file(...)` |
 
 ### Values kept with a game file

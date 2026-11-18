@@ -10,22 +10,25 @@ contentType: reference
 A state machine runs one state at a time and moves between states, the way the game's objects use nerves.
 
 ```lumascript
+class GoldBall : Kuribo { }                 // a class derived from the game's
+
 states Phases for GoldBall {               // one machine per GoldBall object, stored with its fields
     state Fly {
         enter { MR::startAction(self, "Fly") }
         update { if MR::isBindedWall(self) { go Burst } }
     }
     state Burst {
-        enter { effect "Burst"; sound "Pop" }
+        enter { effect "Burst" }
         wait 30 frames                        // a state's body may wait like a task
-        kill
+        kill()
     }
     start Fly
 }
 ```
 
 A machine is the same generated code as a task, with `go` jumping to a state's start and `enter`/`update`/`exit`
-blocks run as their names say. On a derived class it runs from the class's `control` by default. LumaKit's `actor`
+blocks run as their names say. On a derived class it runs from the class's `control` by default. The game calls `control` only while the
+object lives, so a state may call what the base's `control` and a stage need, after a `wait` too. LumaKit's `actor`
 uses the same machines; the game's own nerves are reached as functions and hooks, not through `states`.
 
 ## Further reading

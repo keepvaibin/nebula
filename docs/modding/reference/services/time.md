@@ -179,8 +179,8 @@ Game thread.
 Starts a timer on one of three clocks.
 
 ```c
-int32_t (*timer)(const LumaMod* mod, LumaTimeClock clock, uint64_t after, uint64_t every, LumaEventFn fn,
-                 void* user, LumaTimeTimer* out);
+int32_t (*timer)(const LumaMod* mod, LumaTimeClock clock, uint64_t after, uint64_t every, LumaEventFn fn, void* user,
+                 LumaTimeTimer* out);
 ```
 
 ```lumascript

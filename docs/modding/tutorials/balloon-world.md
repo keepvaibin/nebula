@@ -74,6 +74,7 @@ Every line the mod shows is a row in `layers/base/merge/MessageData/messages.jso
 
 Create `balloon-world/source/main.lum` with this code:
 
+<!-- sample: examples/balloon-world/source/main.lum -->
 ```lumascript
 use svc.net.local as local
 use svc.net.internet as internet
@@ -254,7 +255,9 @@ fn send(hint: text) {
 
 task send_task(h: Hidden) {
     guard let answer = wait request("POST", "/balloons", json.encode(h)), let kept = json.decode<Hidden>(answer) else {
-        remove_balloon()
+        if holds("stage") {                      // after a wait the stage may have ended, its balloon with it
+            remove_balloon()
+        }
         wait outcome(text "Balloon_NotSent")
         return
     }
@@ -300,6 +303,10 @@ task find_task() {
         return
     }
     let h = all[i]
+    guard holds("stage") else {
+        mode = Mode.Idle
+        return
+    }
     remove_balloon()
     guard let b = actor.spawn(k, h.at) else {
         mode = Mode.Idle
@@ -315,6 +322,7 @@ task find_task() {
 }
 
 fn touched(b: LiveActor) {
+    guard holds("stage") else { return }
     if mode != Mode.Finding {
         return
     }
@@ -359,7 +367,9 @@ on step {
         log fact "time_up" "hide"
         start outcome(text "Balloon_HideTimeUp")
     } else {
-        remove_balloon()
+        if holds("stage") {
+            remove_balloon()
+        }
         hunted = none
         log fact "time_up" "find"
         start outcome(text "Balloon_FindTimeUp")
@@ -393,7 +403,7 @@ on frame {
     }
     if mode == Mode.Hiding and now.steps > 0 {
         if let a = place {
-            if input.read(a).pressed != 0 {
+            if input.read(a).pressed != 0 and holds("stage") {
                 put_balloon()
             }
         }

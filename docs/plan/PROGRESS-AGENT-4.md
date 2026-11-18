@@ -74,3 +74,24 @@ M12 platforms for mods; M14 the six reference mods; M11 documentation, from the 
   docs/modding/examples/a-new-character/tests/look-and-moves/test.json.owed; the gated tests/play checks the tuning.
 - Files of others touched: platform/android/build_apk.ps1 (the names set in test-bin), tools/lumacore/mod_tests.py
   and luma_test.py (holds, logs per test, the folder's result, the examples origin); board 23:16.
+
+## 2026-11-18 M11 docs made from the build (LumaLink c0a9375 and the states proof)
+
+- Generated reference pages, each with its generator in tools/modding: the services' pages from the SDK's headers
+  and the compiler's forms (service_pages.py, `lumalink services --forms`), LumaKit's from its sources
+  (kit_pages.py), the build codes from the compiler (build_codes.py, a new page of 156 codes with what S0800 names).
+- The gate's docs check (gate.py `docs`, tools/modding/docs_check.py): every generated page against what this tree
+  and the pinned LumaLink make (services, LumaKit, build codes, LumaLink's commands, validator rules, events,
+  nerves, tables), and every LumaScript block of the docs built (samples_check.py): 71 of 71 (36 of 72 before).
+  A tutorial's whole file is its worked example's, marked and kept the same (--write); the tutorials had kept code
+  their examples changed for the needs proofs.
+- Fixed: M-004, M-016, M-022 (a library's export off the game thread reports S0901 and runs nothing), M-024
+  (permissions: mod code can do anything; services check permissions), M-025, M-034, M-039, M-115, M-120, M-170,
+  M-171, M-172, M-176, M-177, and N-4025 (a class's state machine proves what its control and the stage need,
+  found by the samples check).
+- Open, mine: N-4022 (S0800's words are English in every language), N-4023 (`c struct`, vectors, colors and
+  handles across C).
+- Rows for others: N-4019, N-4020, N-4021 (Agent 2: the device runner), N-4024 (Agent 1: pipelines refused after
+  a device loss; the quick gate's engine/device-lost failure).
+- Files of others touched, comments only: native/include/luma.h, luma_anim.h (Agent 2); tools/gate/gate.py one
+  check (Agent 1); board 00:20 and 00:34.

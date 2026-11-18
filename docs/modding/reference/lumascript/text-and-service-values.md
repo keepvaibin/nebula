@@ -39,6 +39,7 @@ A pointer field left out of the literal is null in C (a count or size of 0). Eve
 (S0075). `size` is set by the compiler. A struct of the header that no service table owns is named by the table it
 is grouped with: `LumaNetHeader` is `net.internet.Header`.
 
+<!-- sample: S0075 -->
 ```lumascript
 use svc.net.internet as internet
 

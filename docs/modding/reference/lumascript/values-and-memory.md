@@ -24,10 +24,10 @@ struct field, a container, a closure, a task across a `wait`), naming the line. 
 ```lumascript
 var target: ref<Kuribo>? = none
 ...
-if let k = target?.get { k.mVelocity = vec3 }   // nothing when it is gone
+if let k = target?.get() { k.mVelocity = vec3() }   // nothing when it is gone
 ```
 
-`get` on a handle known not to be empty (`target!.get`) is a script error if it is empty. The run-time support
+`get` on a handle known not to be empty (`target!.get()`) is a script error if it is empty. The run-time support
 learns that an object is gone from the destructor rows of its class (kernel: `LUMA_TELL` on `NameObj::~NameObj` and
 every derived destructor); there is no list kept by the game for it, and no cost when a mod holds no handle.
 

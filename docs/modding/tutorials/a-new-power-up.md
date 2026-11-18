@@ -158,6 +158,7 @@ Create `layers/base/patches/StageData/EggStarGalaxy.arc/jmp/placement/common/obj
 
 Create `source/main.lum` with this code:
 
+<!-- sample: examples/a-new-power-up/source/main.lum -->
 ```lumascript
 use kit.player.form
 use kit.item
@@ -212,7 +213,9 @@ fn hit(h: projectile.Hit, mine: HitSensor, other: HitSensor) -> projectile.Then 
     }
     if let enemy = other.mHost {
         start flash(ref(enemy))
-        MR::appearCoinPop(enemy, enemy.mPosition, 3)
+        if can(MR::appearCoinPop) {              // its needs there now (the coins' holder among them)
+            MR::appearCoinPop(enemy, enemy.mPosition, 3)
+        }
         log fact "defeated" true
     }
     return projectile.Then.Burst

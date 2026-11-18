@@ -76,6 +76,7 @@ The code refers to each line by name, for example `text "GhostTrial_Replays"`, a
 
 Create `ghost-time-trial/source/main.lum` with this code:
 
+<!-- sample: examples/ghost-time-trial/source/main.lum -->
 ```lumascript
 use kit.replay
 use kit.hud
@@ -336,6 +337,7 @@ task watch(track: replay.Track) {
     end_attempt()
     watch_no += 1
     let mine = watch_no
+    guard holds("player") else { return }       // the stage ended while the run was chosen
     watching = true
     MR::offPlayerControl()
     MR::hidePlayer()
@@ -395,8 +397,10 @@ fn end_watch() {
         replay.free(t)
     }
     view_track = none
-    MR::showPlayer()
-    MR::onPlayerControl(true)
+    if holds("player") {                         // with the stage gone, the next one starts with the player shown
+        MR::showPlayer()
+        MR::onPlayerControl(true)
+    }
     log fact "watching" false
 }
 ```

@@ -25,12 +25,12 @@ marked `var` is passed so the function may change the caller's variable: `fn gro
 ```lumascript
 struct Ball {
     pos: vec3
-    vel: vec3 = vec3
+    vel: vec3 = vec3()
     life: int = 120
     fn step(var self) { self.pos += self.vel; self.life -= 1 }
     fn dead(self) -> bool { return self.life <= 0 }
 }
-let b = Ball { pos: vec3 }
+let b = Ball { pos: vec3() }
 ```
 
 ## Enums

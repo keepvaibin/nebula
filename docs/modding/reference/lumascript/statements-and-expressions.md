@@ -10,21 +10,26 @@ contentType: reference
 This page describes declarations, control flow and expressions in LumaScript.
 
 ```lumascript
-let speed = 12.0                 // a constant local
-var count = 0                    // a variable local
-count += 1
-if count > 3 { log "many" } else if count == 0 { log "none" }
-while count < 10 { count += 1 }
-for i in 0..10 { }               // ranges
-for item in items { }            // lists, sets: the values; maps: (key, value) pairs
-for (i, item) in items.indexed { }
-match shape {
-    Shape.Circle(r) => area = 3.14159 * r * r
-    Shape.Box { w, h } => area = w * h
-    else => area = 0.0
+enum Shape { Circle(r: f32), Box(w: f32, h: f32) }
+
+fn area_of(items: list<text>, shape: Shape) -> f32 {
+    let speed = 12.0                 // a constant local
+    var count = 0                    // a variable local
+    var area = 0.0
+    count += 1
+    if count > 3 { log "many" } else if count == 0 { log "none" }
+    while count < 10 { count += 1 }
+    for i in 0..10 { }               // ranges
+    for item in items { }            // lists, sets: the values; maps: (key, value) pairs
+    for (i, item) in items.indexed() { }
+    match shape {
+        Shape.Circle(r) => area = 3.14159 * r * r
+        Shape.Box { w, h } => area = w * h
+        else => area = 0.0
+    }
+    defer log "left"                 // runs when the block ends, however it ends
+    return area * speed
 }
-defer log "left"                 // runs when the block ends, however it ends
-return value
 ```
 
 - `match` must cover every case or have `else`; a missing case is a compile error naming it.

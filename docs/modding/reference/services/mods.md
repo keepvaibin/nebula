@@ -13,6 +13,7 @@ contentType: reference
 | Version | 1.1 | 1.0 | 1.0 |
 | Header | `luma_mods.h` | `luma_mods.h` | `luma_mods.h` |
 | Permission | None | None | None |
+| C import | `LUMA_SERVICE(slot, "mods", "1.1")` | `LUMA_SERVICE(slot, "mods.ids", "1.0")` | `LUMA_SERVICE(slot, "mods.install", "1.0")` |
 | LumaScript | `use svc.mods` | `use svc.mods.ids`, then `ids.get(...)` | `use svc.mods.install`, then `install.request(...)` |
 
 `mods.install` needs no permission because nothing installs without the player's answer on the import screen.
@@ -121,7 +122,7 @@ int32_t (*watch_options)(const LumaMod* mod, LumaEventFn fn, void* user);
 ```
 
 ```lumascript
-mods.watch_options(fn: fn(e: mods.Event)?)
+mods.watch_options(fn(e: mods.Event)?)
 ```
 
 Game thread. Returns `LUMA_OK`. One event arrives for each option changed, in `luma.json` order, at the start of a frame after the **Mods** page applied the change. `option` called in the event gives the new value. A later call replaces `fn`. A null `fn`, or `none`, stops the events.
@@ -139,7 +140,7 @@ int32_t (*watch_mods)(const LumaMod* mod, LumaEventFn fn, void* user);
 ```
 
 ```lumascript
-mods.watch_mods(fn: fn(e: mods.Event)?)
+mods.watch_mods(fn(e: mods.Event)?)
 ```
 
 Game thread. Returns `LUMA_OK`.
@@ -156,8 +157,7 @@ In a library mod written in LumaScript, `on mods.stopped(gone) { }` runs when a 
 The names of the `kit/<module>/<name>.json` files in another mod.
 
 ```c
-int32_t (*kit_names)(const LumaMod* mod, uint64_t of, const char* module, char* buf, uint64_t size,
-                     uint64_t* length);
+int32_t (*kit_names)(const LumaMod* mod, uint64_t of, const char* module, char* buf, uint64_t size, uint64_t* length);
 ```
 
 ```lumascript
@@ -185,8 +185,8 @@ Game thread. In C, the names are written into `buf` sorted byte for byte, each f
 The bytes of `kit/<module>/<name>.json` in another mod.
 
 ```c
-int32_t (*kit_read)(const LumaMod* mod, uint64_t of, const char* module, const char* name, void* buf,
-                    uint64_t size, uint64_t* length);
+int32_t (*kit_read)(const LumaMod* mod, uint64_t of, const char* module, const char* name, void* buf, uint64_t size,
+                    uint64_t* length);
 ```
 
 ```lumascript

@@ -22,11 +22,13 @@ extern "C" {
 #define LUMA_ANIM_MAJOR 1u
 #define LUMA_ANIM_MINOR 1u
 
-/* Plays one mod has going at once, marks one play carries, and event rows one clip's events give. */
+/* Plays one mod has going at once. */
 #define LUMA_ANIM_MOST_PLAYS 64u
+/* Marks one play carries. */
 #define LUMA_ANIM_MOST_MARKS 16u
+/* Event rows one clip's events give. */
 #define LUMA_ANIM_MOST_EVENT_ROWS 64u
-/* An event row's name: 1 to 63 bytes of A-Z a-z 0-9 _ . (the cook's rule). */
+/* An event row's name: 1 to 63 bytes, each a letter A-Z or a-z, a digit, `_` or `.` (the cook's rule). */
 #define LUMA_ANIM_EVENT_NAME_MOST 63u
 /* The fastest rate: frames of the clip per frame of the game (60 a second). */
 #define LUMA_ANIM_MOST_RATE 16.0f

@@ -29,7 +29,7 @@ This page lists the types of LumaScript values.
 | game classes `C` | a view of a live game object, valid during the statement or hook that has it | pointer, not storable |
 | game enums, game structs by value | as the self-description gives them | the game's own layout |
 
-- Inference. `let x = 3` is `int`; `let v = vec3`; a function's parameter and result types are always
+- Inference. `let x = 3` is `int`; `let v = vec3()`; a function's parameter and result types are always
   written, its locals never need to be. An integer literal takes the type its place needs if it fits, else is an
   error naming the type and the value.
 - Conversions are written. `x as f32`, `n as u8` (an integer that does not fit is a script error; `wrap(n as

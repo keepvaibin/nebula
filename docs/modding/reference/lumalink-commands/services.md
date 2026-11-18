@@ -29,6 +29,7 @@ lumalink services [OPTIONS]
 |---|---|
 | `--sdk <FOLDER>` | The folder with the game's luma.h. Default: LUMA_INCLUDE, then the installed game's sdk. |
 | `--unreachable` | Only what scripts cannot reach. |
+| `--forms` | Each function's form as a script calls it: `form`, the service, the function, then the form, or `-` for one a script does not call by name; a `wait` line after it for a request a task may wait. |
 | `-h, --help` | Print this help. |
 | `--language <LANGUAGE>` | The language LumaLink and the validator speak: one of the game's 14, by its name in the game (UsEnglish, EuGerman, JpJapanese...). Default: UsEnglish. |
 

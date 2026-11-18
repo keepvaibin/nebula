@@ -133,6 +133,7 @@ For more information, see [Placing objects in stages](../how-tos/placing-objects
 
 Create `source/main.lum` with this code:
 
+<!-- sample: examples/a-new-npc/source/main.lum -->
 ```lumascript
 use kit.actor
 use kit.talk

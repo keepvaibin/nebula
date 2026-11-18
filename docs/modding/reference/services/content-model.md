@@ -13,11 +13,11 @@ The `content.model` service puts your mod's cooked models on actors and changes 
 |---|---|---|---|---|
 | `content.model` | 1.1 | None | `LUMA_SERVICE(slot, "content.model", "1.1")` | `use svc.content.model` |
 
-The header is `native/include/luma_content_model.h`. In LumaScript, a service is called by the last part of its name, such as `model.` for `content.model`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_content_model.h`. In LumaScript, a service is called by the last part of its name, such as `model.` for `content.model`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
-LumaCore's content.model service: a model drawn with an actor of the game, following its base, one of its joints, or its whole skeleton by joint name; shown, hidden, detached; the player's parts listed. Import: `LUMA_SERVICE(slot, "content.model", "1.0")`.
+LumaCore's content.model service: a model drawn with an actor of the game, following its base, one of its joints, or its whole skeleton by joint name; shown, hidden, detached; the player's parts listed.
 
 ## Limits and constants
 
@@ -53,7 +53,7 @@ Its size in version 1.0 is 24 bytes.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaPlayerPart`) as the mod was built. |
+| `uint32_t size` | `sizeof(LumaPlayerPart)` as the mod was built. |
 | `const char* name` | "MarioHandR": the model, ObjectData/<name>.arc. |
 | `const char* joint` | The body's joint it is drawn at ("HandR"); "" for one drawn at the base. |
 
@@ -64,7 +64,7 @@ In C, each function takes your mod (`const LumaMod* mod`) first. LumaScript pass
 ### `attach`
 
 ```lumascript
-model.attach(actor: LiveActor, model: model, follow: model.Follow, joint: text?, place: content.Place?) -> model.Model
+model.attach(actor: LiveActor, model: model, follow: model.Follow, joint: text?, place: model.Place?) -> model.Model
 ```
 
 ```c
@@ -99,11 +99,13 @@ Call it on the game thread. Shown (`on` true) or hidden (false); hidden with its
 
 ### `player_parts`
 
+```lumascript
+model.player_parts() -> list<model.PlayerPart>
+```
+
 ```c
 int32_t player_parts(const LumaMod* mod, LumaPlayerPart* parts, uint32_t count, uint32_t* total);
 ```
-
-Not callable from LumaScript.
 
 You can call it on any thread. The player's parts, the first `count` into `parts` (each one's size set by the mod; null when count is 0), and their number in *total (null: not wanted). `LUMA_OK`; a part's size below 1.0's, or a null parts with a count: `LUMA_E_ARGUMENT` (reported) (`Service.StructSize`).
 

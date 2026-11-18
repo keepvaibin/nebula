@@ -11,13 +11,13 @@ The `draw.view` service renders the scene from another camera into a texture of 
 
 | Service | Version | Permission | C import | LumaScript |
 |---|---|---|---|---|
-| `draw.view` | 1.0 | None | `LUMA_SERVICE(slot, "draw.view", "1.0")` | `use svc.draw.view` |
+| `draw.view` | 1.1 | None | `LUMA_SERVICE(slot, "draw.view", "1.1")` | `use svc.draw.view` |
 
-The header is `native/include/luma_draw_view.h`. In LumaScript, a service is called by the last part of its name, such as `view.` for `draw.view`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_draw_view.h`. In LumaScript, a service is called by the last part of its name, such as `view.` for `draw.view`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
-LumaCore's draw.view service: the scene from another camera into a texture of the mod's: mirrors, picture in picture, replay cameras, minimaps. Import: `LUMA_SERVICE(slot, "draw.view", "1.0")`. What a view shows: the scene's models (every list the game draws its world's models from: the map, objects, the player, enemies, the sky's models; opaque, then translucent) as this frame's poses have them, lit by the game's light sets, through the view's camera; cleared first to the view's color. Not in it: particles, the game's shadow volumes, drawn lines and shapes, 2-D, the ray tracer's light (a view is drawn as with ray tracing off), and what the game's clipping left out of this frame for its own camera (a view shows what the game draws this frame). Drawn once a frame before the scene, so a view's texture drawn at a world point or on the HUD shows this frame. A view the mod has not given a camera draws nothing; its texture stays as last drawn (black at first).
+LumaCore's draw.view service: the scene from another camera into a texture of the mod's: mirrors, picture in picture, replay cameras, minimaps. What a view shows: the scene's models (every list the game draws its world's models from: the map, objects, the player, enemies, the sky's models; opaque, then translucent) as this frame's poses have them, lit by the game's light sets, through the view's camera; cleared first to the view's color. Not in it: particles, the game's shadow volumes, drawn lines and shapes, 2-D, the ray tracer's light (a view is drawn as with ray tracing off), and what the game's clipping left out of this frame for its own camera (a view shows what the game draws this frame). Drawn once a frame before the scene, so a view's texture drawn at a world point or on the HUD shows this frame. A view the mod has not given a camera draws nothing; its texture stays as last drawn (black at first). The main camera (main_eye, main_rig 1.1): the picture's own camera. Each frame LumaCore puts the game's own view back before the game's camera works (so the game's camera works out its pose from its own, never from the mod's), then sets the main camera right after the game's camera has moved, before anything reads it (the player's stick directions, clipping, the pointer, sound), and again before the scene's models take their poses (a rig on this frame's joints). Import 1.1 for main_rig: `LUMA_SERVICE(slot, "draw.view", "1.1")`.
 
 ## Limits and constants
 
@@ -26,6 +26,7 @@ LumaCore's draw.view service: the scene from another camera into a texture of th
 | `LUMA_DRAW_VIEWS_MOST` | `2` | Views one mod has at once, and all mods together. |
 | `LUMA_DRAW_VIEWS_ALL_MOST` | `8` |  |
 | `LUMA_DRAW_VIEW_SIDE_MOST` | `1024` | A view's texture: at most this wide and high (pixels). |
+| `LUMA_DRAW_VIEW_AHEAD_MOST` | `1000.0f` | The farthest main_rig moves the eye along its look (`LumaDrawViewLook`.ahead), game units. |
 | `LUMA_DRAW_VIEW_FOV_LEAST` | `1.0f` | A camera's vertical field of view: above 1 degree, under 179. |
 | `LUMA_DRAW_VIEW_FOV_MOST` | `179.0f` |  |
 
@@ -76,6 +77,16 @@ A camera rig (a script's view.Camera): the same rig drives a view (rig) or, thro
 | `float offset[3]` | FOLLOW, WORLD: not of length 0. |
 | `char joint[32]` | JOINT: a joint of the actor's model, NUL-terminated. |
 | `float near_z` | JOINT: the near plane in game units, above 0; 0 elsewhere: the game's. |
+
+### `LumaDrawViewLook`
+
+1.1. The way the main camera looks on a rig (main_rig): the mod turns the view, the rig places the eye.
+
+| Name | Description |
+|---|---|
+| `float look[3]` | The way the eye looks, world axes, not zero (any length). |
+| `float up[3]` | The picture's up, world axes, not zero, not along look. |
+| `float ahead` | The eye moved this far along look from the rig's eye, 0 to `LUMA_DRAW_VIEW_AHEAD_MOST`. |
 
 ## `draw.view` functions
 
@@ -187,7 +198,21 @@ view.main_eye(eye: view.Eye?)
 int32_t main_eye(const LumaMod* mod, const LumaDrawViewEye* eye);
 ```
 
-Call it on the game thread. The main camera at `eye` (null: the game's own again) from now on: each frame, right after the game's camera moves and again before the scene's models take their poses, the scene's view, field of view and watch point (`MR::getCameraWatchPos`) are set from it, so everything that reads the camera reads it (clipping, the stick's directions, the pointer, sound, the picture), and it holds while the scene's update is held (a pause, a cutscene's hold); the game's camera keeps working out its own pose underneath and has it back at once on null. The newest mod to call holds it; one mod's null gives back only its own. `LUMA_OK`. An eye not finite, `at` at the eye, `up` along the look or zero, fov out of range: `LUMA_E_ARGUMENT` (reported). Ends with the mod.
+Call it on the game thread. The main camera at `eye` (null: the game's own again) from now on: each frame, right after the game's camera moves and again before the scene's models take their poses, the scene's view, field of view and watch point (MR::getCameraWatchPos: `at`) are set from it (the header's first comment), so everything that reads the camera reads it: the player's stick directions, clipping, the pointer, sound, the picture. It holds while the scene's update is held (a pause, a cutscene's hold); the game's camera keeps working out its own pose underneath and has it back at once on null. The newest mod to call main_eye or main_rig holds it; one mod's null gives back only its own. `LUMA_OK`. An eye not finite, `at` at the eye, `up` along the look or zero, fov out of range: `LUMA_E_ARGUMENT` (reported). Ends with the mod.
+
+### `main_rig`
+
+```lumascript
+view.main_rig(camera: view.Camera?, look: view.Look?)
+```
+
+```c
+int32_t main_rig(const LumaMod* mod, const LumaDrawViewCamera* camera, const LumaDrawViewLook* look);
+```
+
+Needs `draw.view` 1.1 or later.
+
+Call it on the game thread. The main camera on `camera` (null: the game's own again) from now on, as main_eye, its eye worked out by LumaCore at both of main_eye's times: right after the game's camera moves (the rig on the poses the frame starts with) and before the picture (on this frame's poses, so an eye on a joint never lags it). `look` (null: the rig's own look and up) turns the view to its `look` and `up` (a first-person mod's turn from input's look) and moves the eye `ahead` along the look. The field of view is camera's fov_y; a JOINT rig's near_z is the main camera's near plane (the game's again on null). Calling it each frame with a new look is the way to turn the view. When the rig's actor dies or leaves the game (its scene ends) the game's own camera shows again, as on null. `LUMA_OK`. A rig's field out of range, a dead actor, a joint the actor's model lacks: `LUMA_E_ARGUMENT` naming it (reported); a look or up not finite or zero, an up along the look, an ahead out of range: `LUMA_E_ARGUMENT` naming it (reported). Ends with the mod.
 
 ## Further reading
 

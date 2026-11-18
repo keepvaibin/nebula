@@ -13,11 +13,11 @@ The `draw.inst` service puts overrides on one actor's drawn model: a color over 
 |---|---|---|---|---|
 | `draw.inst` | 1.0 | None | `LUMA_SERVICE(slot, "draw.inst", "1.0")` | `use svc.draw.inst` |
 
-The header is `native/include/luma_draw_inst.h`. In LumaScript, a service is called by the last part of its name, such as `inst.` for `draw.inst`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_draw_inst.h`. In LumaScript, a service is called by the last part of its name, such as `inst.` for `draw.inst`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
-LumaCore's draw.inst service: per-instance overrides on an actor's drawn model, seen on that one actor and on no other of its model. A color over every material, a material's color by name, a part hidden, a scale: the Gold Flower's gold Mario is this (a color on Mario), not a feature. An override lives until release, the mod's end, the actor's death or its scene's end; then the model draws as the game made it again. Import: `LUMA_SERVICE(slot, "draw.inst", "1.0")`. The actor's own model (the one its game code draws: MR::getModel), not its attached parts (content.model has its own). Applied each frame after the game's own animation of the model (color animations, poses), before its draw.
+LumaCore's draw.inst service: per-instance overrides on an actor's drawn model, seen on that one actor and on no other of its model. A color over every material, a material's color by name, a part hidden, a scale: the Gold Flower's gold Mario is this (a color on Mario), not a feature. An override lives until release, the mod's end, the actor's death or its scene's end; then the model draws as the game made it again. The actor's own model (the one its game code draws: MR::getModel), not its attached parts (content.model has its own). Applied each frame after the game's own animation of the model (color animations, poses), before its draw.
 
 ## Limits and constants
 
@@ -39,7 +39,7 @@ LumaCore's draw.inst service: per-instance overrides on an actor's drawn model, 
 
 ## `draw.inst` functions
 
-"constant0".. "constant3", "register0".. "register3" alike.
+"constant0" .. "constant3", "register0" .. "register3" alike.
 
 In C, each function takes your mod (`const LumaMod* mod`) first. LumaScript passes it for you.
 

@@ -12,7 +12,7 @@ A LumaScript class can derive from one of the game's classes and override its fu
 ```lumascript
 class GoldBall : Kuribo {
     var age: int = 0
-    override fn control { age += 1; if age > 300 { kill } else { base.control } }
+    override fn control() { age += 1; if age > 300 { kill() } else { base.control() } }
 }
 ```
 

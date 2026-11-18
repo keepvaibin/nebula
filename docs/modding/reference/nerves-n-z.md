@@ -2790,6 +2790,7 @@ src/Game/Screen/TitleSequenceProduct.cpp
 | `TitleSequenceProductLogoFadein` | `TitleSequenceProduct::exeLogoFadein` |  |
 | `TitleSequenceProductLogoWait` | `TitleSequenceProduct::exeLogoWait` |  |
 | `TitleSequenceProductLogoDisplay` | `TitleSequenceProduct::exeLogoDisplay` |  |
+| `TitleSequenceProductUpdateNotice` | `TitleSequenceProduct::exeUpdateNotice` |  |
 | `TitleSequenceProductDecide` | `TitleSequenceProduct::exeDecide` |  |
 | `TitleSequenceProductDead` | `TitleSequenceProduct::exeDead` |  |
 

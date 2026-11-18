@@ -25,6 +25,7 @@ LumaScript is the language for Nebula mods. LumaLink compiles it to C and then t
 | [The game by name](the-game-by-name.md) | How LumaScript names the game's functions, fields, classes and enums, and checks them. |
 | [Hooks](hooks.md) | Running code before, after, around or instead of a game function. |
 | [Errors](errors.md) | Errors LumaLink reports when it builds a mod, and script errors while the game runs. |
+| [Build codes](build-codes.md) | Every code LumaLink gives when it builds a mod's LumaScript, with its message. |
 | [Lifecycle, options, frames and content](lifecycle.md) | The on handlers, options and content names of a LumaScript mod. |
 | [Tasks](tasks.md) | Code that waits across frames. |
 | [State machines](state-machines.md) | States and nerves in LumaScript. |

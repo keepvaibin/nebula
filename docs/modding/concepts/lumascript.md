@@ -28,7 +28,9 @@ For more information, see [About the game description](the-game-description.md).
 
 ## Memory and errors
 
-LumaScript has no raw pointers and no manual freeing, and it cannot read a game object after the object is gone. When a mistake can only show while the game runs, such as an index outside a list, an empty handle, a division by zero or an overflow, it is a script error. Nebula reports the mod, the file and the line, and the game goes on with its own behavior.
+LumaScript has no raw pointers and no manual freeing. A handle to a game object gives `none` once the object is gone, so a script never reads an object that is gone. When a mistake can only show while the game runs, such as an index outside a list, an empty handle, a division by zero or an overflow, it is a script error. Nebula reports the mod, the file and the line, and the game goes on with its own behavior.
+
+A script that calls one of the game's own functions runs the game's code, with the game's rules. Nebula does not make a call whose scene objects are missing: the call gives its empty value, and the mod log says `Call.NotNow`. A fault inside the game's code still ends the game. For more information, see [When a mod fails](when-a-mod-fails.md).
 
 LumaScript has no garbage collector. Values belong to their owner and are freed when the owner ends, and temporary values are freed every frame. Nothing pauses the game.
 

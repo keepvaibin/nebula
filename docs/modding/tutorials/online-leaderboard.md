@@ -87,6 +87,7 @@ The code refers to each line by name, for example `text "Board.Menu"`, or `text 
 
 Create `online-leaderboard/source/main.lum` with this code:
 
+<!-- sample: examples/online-leaderboard/source/main.lum -->
 ```lumascript
 use optional svc.net.internet as internet
 use optional svc.net.local as local

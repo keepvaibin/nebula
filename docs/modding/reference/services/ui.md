@@ -13,11 +13,11 @@ The `ui` service shows your mod's cooked screens and lets your code read and cha
 |---|---|---|---|---|
 | `ui` | 1.3 | None | `LUMA_SERVICE(slot, "ui", "1.3")` | `use svc.ui` |
 
-The header is `native/include/luma_ui.h`. In LumaScript, a service is called by the last part of its name, such as `ui.` for `ui`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_ui.h`. In LumaScript, a service is called by the last part of its name, such as `ui.` for `ui`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
-LumaCore's ui service: a screen layout of the mod's or the game's, shown over the game as the game shows its own (the game's layout drawer: picture and text panes, its fonts, its 16:9 widening), its panes found by name, their text, visibility, scale and place set. Import: `LUMA_SERVICE(slot, "ui", "1.3")` for set_position, share_rows, shared_focus and play_pane ("1.2" menu_rows and menu_chosen, "1.1" alive and set_scale, "1.0" the rest).
+LumaCore's ui service: a screen layout of the mod's or the game's, shown over the game as the game shows its own (the game's layout drawer: picture and text panes, its fonts, its 16:9 widening), its panes found by name, their text, visibility, scale and place set. for set_position, share_rows, shared_focus and play_pane ("1.2" menu_rows and menu_chosen, "1.1" alive and set_scale, "1.0" the rest).
 
 ## Limits and constants
 
@@ -146,7 +146,7 @@ Call it on the game thread. The screen is no longer drawn; it and its panes' han
 ### `play`
 
 ```lumascript
-ui.play(screen: ui.Screen, animation: text, loop: bool, fn: fn(e: ui.Event)?) -> bool
+ui.play(screen: ui.Screen, animation: text, loop: bool, fn(e: ui.Event)?) -> bool
 ```
 
 ```c
@@ -270,7 +270,7 @@ Call it on the game thread. The mod's shared row (share_rows) with the highlight
 ### `play_pane`
 
 ```lumascript
-ui.play_pane(screen: ui.Screen, pane: ui.Pane, animation: text, loop: bool, fn: fn(e: ui.Event)?) -> bool
+ui.play_pane(screen: ui.Screen, pane: ui.Pane, animation: text, loop: bool, fn(e: ui.Event)?) -> bool
 ```
 
 ```c

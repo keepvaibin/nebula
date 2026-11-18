@@ -13,20 +13,20 @@ The `anim` service plays a clip of an actor's model or of a model your mod attac
 |---|---|---|---|---|
 | `anim` | 1.1 | None | `LUMA_SERVICE(slot, "anim", "1.1")` | `use svc.anim` |
 
-The header is `native/include/luma_anim.h`. In LumaScript, a service is called by the last part of its name, such as `anim.` for `anim`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_anim.h`. In LumaScript, a service is called by the last part of its name, such as `anim.` for `anim`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
-LumaCore's anim service: a clip of an actor's model played as the game plays its own (its joint, texture, color, texture-swap and visibility clips of one name started together), from a frame, at a rate, once or looping, blended from the pose it had; its frame read; frames of it marked, each mark an event as the clip passes it; its end an event. The clip is the model's own (a mod model's glTF animations, a game model's clips, or the mod's replacement of one). Import: `LUMA_SERVICE(slot, "anim", "1.0")`.
+LumaCore's anim service: a clip of an actor's model played as the game plays its own (its joint, texture, color, texture-swap and visibility clips of one name started together), from a frame, at a rate, once or looping, blended from the pose it had; its frame read; frames of it marked, each mark an event as the clip passes it; its end an event. The clip is the model's own (a mod model's glTF animations, a game model's clips, or the mod's replacement of one).
 
 ## Limits and constants
 
 | Name | Value | Description |
 |---|---|---|
-| `LUMA_ANIM_MOST_PLAYS` | `64` | Plays one mod has going at once, marks one play carries, and event rows one clip's events give. |
-| `LUMA_ANIM_MOST_MARKS` | `16` |  |
-| `LUMA_ANIM_MOST_EVENT_ROWS` | `64` |  |
-| `LUMA_ANIM_EVENT_NAME_MOST` | `63` | An event row's name: 1 to 63 bytes of A-Z a-z 0-9 _. (the cook's rule). |
+| `LUMA_ANIM_MOST_PLAYS` | `64` | Plays one mod has going at once. |
+| `LUMA_ANIM_MOST_MARKS` | `16` | Marks one play carries. |
+| `LUMA_ANIM_MOST_EVENT_ROWS` | `64` | Event rows one clip's events give. |
+| `LUMA_ANIM_EVENT_NAME_MOST` | `63` | An event row's name: 1 to 63 bytes, each a letter A-Z or a-z, a digit, `_` or `.` (the cook's rule). |
 | `LUMA_ANIM_MOST_RATE` | `16.0f` | The fastest rate: frames of the clip per frame of the game (60 a second). |
 | `LUMA_ANIM_BLEND_CLIP` | `0` | As the game starts the clip: its model's clip table (.banmt), else none. |
 | `LUMA_ANIM_BLEND_NONE` | `(-1)` | The clip's pose at once. |
@@ -81,7 +81,7 @@ Its size in version 1.0 is 32 bytes.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaAnimHow`) as the mod was built. |
+| `uint32_t size` | `sizeof(LumaAnimHow)` as the mod was built. |
 | `float rate` | Frames of the clip per frame of the game; 0: 1. Above 0, at most `LUMA_ANIM_MOST_RATE`. |
 | `int32_t blend` | Joint clips: frames from the pose it had to the clip's; `LUMA_ANIM_BLEND_CLIP` or _NONE. |
 | `uint32_t loop` | A `LumaAnimLoop`: 0 to 2. |
@@ -96,21 +96,21 @@ In C, each function takes your mod (`const LumaMod* mod`) first. LumaScript pass
 ### `play`
 
 ```lumascript
-anim.play(actor: LiveActor, clip: text, how: anim.How, fn: fn(e: anim.Event)?) -> anim.Play?
+anim.play(actor: LiveActor, clip: text, how: anim.How, fn(e: anim.Event)?) -> anim.Play?
 ```
 
 ```c
 int32_t play(const LumaMod* mod, LumaActor actor, const char* clip, const LumaAnimHow* how, LumaEventFn fn, void* user, LumaAnimPlay* out);
 ```
 
-Call it on the game thread. The clip `clip` of `actor`'s model played: every kind of clip of that name its model has (joints.bck, texture moves.btk, colors.brk and.bpk, texture swaps.btp, visibility.bva), the first of them in that order leading (its frame is the play's; its end, its marks; 1.1: its events' rows, as marks after the mod's own, the first `LUMA_ANIM_MOST_EVENT_ROWS` of them). An earlier play on the actor of a kind this one plays ends (`LUMA_ANIM_REPLACED`). Played as `how` says (null: the clip as the game plays it, from its first frame). The play's events come to fn(user, event) at a frame's start (`fn` null: none; `user` null: given back null). It returns `LUMA_OK` and sets `*out`. No clip of that name: `LUMA_E_NOT_FOUND`, `Content.MissingAnimation` in the mod log. A null or dead actor, one that is not one or has no model, an empty name, a rate below 0, not a number or above `LUMA_ANIM_MOST_RATE`, a blend below -1, a loop outside the enum, a start outside the clip, more than `LUMA_ANIM_MOST_MARKS` marks, null marks with a count, a null out: `LUMA_E_ARGUMENT` (reported); a how below 1.0's size: `LUMA_E_ARGUMENT` (reported) (`Service.StructSize`); `LUMA_ANIM_MOST_PLAYS` going: `LUMA_E_LIMIT` (reported). Off the game thread: `LUMA_E_THREAD` (reported); while the game takes the mod out: `LUMA_E_CANCELLED`.
+Call it on the game thread. The clip `clip` of `actor`'s model played: every kind of clip of that name its model has (joints .bck, texture moves .btk, colors .brk and .bpk, texture swaps .btp, visibility .bva), the first of them in that order leading (its frame is the play's; its end, its marks; 1.1: its events' rows, as marks after the mod's own, the first `LUMA_ANIM_MOST_EVENT_ROWS` of them). An earlier play on the actor of a kind this one plays ends (`LUMA_ANIM_REPLACED`). Played as `how` says (null: the clip as the game plays it, from its first frame). The play's events come to fn(user, event) at a frame's start (`fn` null: none; `user` null: given back null). It returns `LUMA_OK` and sets `*out`. No clip of that name: `LUMA_E_NOT_FOUND`, `Content.MissingAnimation` in the mod log. A null or dead actor, one that is not one or has no model, an empty name, a rate below 0, not a number or above `LUMA_ANIM_MOST_RATE`, a blend below -1, a loop outside the enum, a start outside the clip, more than `LUMA_ANIM_MOST_MARKS` marks, null marks with a count, a null out: `LUMA_E_ARGUMENT` (reported); a how below 1.0's size: `LUMA_E_ARGUMENT` (reported) (`Service.StructSize`); `LUMA_ANIM_MOST_PLAYS` going: `LUMA_E_LIMIT` (reported). Off the game thread: `LUMA_E_THREAD` (reported); while the game takes the mod out: `LUMA_E_CANCELLED`.
 
 Events: `END(socket, status, value)`, `MARK(socket, value, data)`.
 
 ### `play_on_model`
 
 ```lumascript
-anim.play_on_model(model: content.model.Model, clip: text, how: anim.How, fn: fn(e: anim.Event)?) -> anim.Play?
+anim.play_on_model(model: model.Model, clip: text, how: anim.How, fn(e: anim.Event)?) -> anim.Play?
 ```
 
 ```c

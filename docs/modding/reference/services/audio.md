@@ -17,7 +17,7 @@ Capture from a microphone or camera is in the [capture services](capture.md).
 |---|---|---|---|---|
 | `audio` | 1.1 | None | `LUMA_SERVICE(slot, "audio", "1.1")` | `use svc.audio` |
 
-The header is `native/include/luma_audio.h`. In LumaScript, a service is called by the last part of its name, such as `audio.` for `audio`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_audio.h`. In LumaScript, a service is called by the last part of its name, such as `audio.` for `audio`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
@@ -92,7 +92,7 @@ Where a sound is heard from: the camera hears it (distance and side), as the gam
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaAudioPlace`). |
+| `uint32_t size` | `sizeof(LumaAudioPlace)`. |
 | `uint32_t follow` | `LumaAudioFollow`. |
 | `float pos[3]` | Game units, each within `LUMA_AUDIO_PLACE_MOST`. |
 | `uint32_t reserved` |  |
@@ -103,7 +103,7 @@ How play plays a sound (null: as cooked).
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaAudioPlay`). |
+| `uint32_t size` | `sizeof(LumaAudioPlay)`. |
 | `float volume` | Times the sound's own (0 to `LUMA_AUDIO_VOLUME_MOST`). |
 | `float pitch` | Times the sound's own pick in its pitch range (0.25 to 4). |
 | `uint32_t bus` | `LumaAudioBus`; `LUMA_AUDIO_BUS_SOUND`: the sound's. |
@@ -116,7 +116,7 @@ What stream_open makes.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaAudioStreamDesc`). |
+| `uint32_t size` | `sizeof(LumaAudioStreamDesc)`. |
 | `uint32_t rate` | Frames a second, `LUMA_AUDIO_RATE_LEAST` to `LUMA_AUDIO_RATE_MOST` (resampled to the output's). |
 | `uint32_t channels` | 1 or 2 (interleaved: left, right). |
 | `uint32_t bus` | `LumaAudioBus`, not `LUMA_AUDIO_BUS_SOUND`. |
@@ -130,7 +130,7 @@ In C, each function takes your mod (`const LumaMod* mod`) first. LumaScript pass
 ### `play`
 
 ```lumascript
-audio.play(name: text, how: audio.Play?, fn: fn(e: audio.Event)?) -> audio.Request?
+audio.play(name: text, how: audio.Play?, fn(e: audio.Event)?) -> audio.Request?
 ```
 
 ```c
@@ -268,7 +268,7 @@ Ends a tap; no event after. A handle not the mod's tap: `LUMA_E_HANDLE` (reporte
 ### `play_at`
 
 ```lumascript
-audio.play_at(name: text, how: audio.Play?, at: audio.Place?, fn: fn(e: audio.Event)?) -> audio.Request?
+audio.play_at(name: text, how: audio.Play?, at: audio.Place?, fn(e: audio.Event)?) -> audio.Request?
 ```
 
 ```c

@@ -12,14 +12,16 @@ A task is code that runs across several frames. It can wait for frames, time, a 
 ```lumascript
 task blink(h: ref<LiveActor>) {
     for i in 0..6 {
-        if let a = h.get { MR::hideModel(a) } else { stop }
+        if holds("stage"), let a = h.get() { MR::hideModel(a) } else { stop }   // after a wait the stage may be gone
         wait 5 frames
-        if let a = h.get { MR::showModel(a) } else { stop }
+        if holds("stage"), let a = h.get() { MR::showModel(a) } else { stop }
         wait 5 frames
     }
 }
-...
-start blink(ref(self))            // runs from the next frame; returns a task handle
+
+on player ready {
+    if let p = MarioAccess::getPlayerActor() { start blink(ref(p)) }   // runs from the next frame; returns a task handle
+}
 ```
 
 - A task runs on the game thread, at the frame's start (after `on frame`), until it reaches `wait`, `stop` or its

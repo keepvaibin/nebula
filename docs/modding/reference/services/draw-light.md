@@ -13,11 +13,11 @@ The `draw.light` service adds your mod's own lights to the world. A light has a 
 |---|---|---|---|---|
 | `draw.light` | 1.0 | None | `LUMA_SERVICE(slot, "draw.light", "1.0")` | `use svc.draw.light` |
 
-The header is `native/include/luma_draw_light.h`. In LumaScript, a service is called by the last part of its name, such as `light.` for `draw.light`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_draw_light.h`. In LumaScript, a service is called by the last part of its name, such as `light.` for `draw.light`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
-LumaCore's draw.light service: a mod's own lights in the world. A light is a glowing body at a place, of a color and an intensity in candela. Traced (ray tracing on), it is an emitter like the game's lamps: it lights what it sees, casts shadows where `casts` says, and is seen in reflections. Not traced, it joins the game's own light set as the game's lamps do (a Luma's glow, a fireball's): the game lights with one such lamp at a time, the one nearest the player, blending to it over half a second. A light lives until remove or the mod's end; it is in whatever scene runs, and in none while the game loads one. Import: `LUMA_SERVICE(slot, "draw.light", "1.0")`. Units: the game's world units (centimetres) and axes; color 0 to 1 as the game's own lights give it (sRGB).
+LumaCore's draw.light service: a mod's own lights in the world. A light is a glowing body at a place, of a color and an intensity in candela. Traced (ray tracing on), it is an emitter like the game's lamps: it lights what it sees, casts shadows where `casts` says, and is seen in reflections. Not traced, it joins the game's own light set as the game's lamps do (a Luma's glow, a fireball's): the game lights with one such lamp at a time, the one nearest the player, blending to it over half a second. A light lives until remove or the mod's end; it is in whatever scene runs, and in none while the game loads one. Units: the game's world units (centimeters) and axes; color 0 to 1 as the game's own lights give it (sRGB).
 
 ## Limits and constants
 
@@ -53,7 +53,7 @@ LumaCore's draw.light service: a mod's own lights in the world. A light is a glo
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaDrawLightDesc`) as the mod was built. |
+| `uint32_t size` | `sizeof(LumaDrawLightDesc)` as the mod was built. |
 | `float position[3]` | Its center in the world: each within `LUMA_DRAW_LIGHT_FAR`. |
 | `float colour[3]` | 0 to 1 each (sRGB, as the game's lights); all 0 is dark. |
 | `float candela` | Its intensity: above 0, at most `LUMA_DRAW_LIGHT_CANDELA_MOST`. |
@@ -74,7 +74,7 @@ light.add(desc: light.Desc) -> light.Light
 int32_t add(const LumaMod* mod, const LumaDrawLightDesc* desc, LumaDrawLight* out);
 ```
 
-Call it on the game thread. A light as `desc` says, lit from the next frame the game draws. It returns `LUMA_OK` and sets `*out`. A null desc or out, a value outside its range or not finite (the argument named: position, color, candela, radius, flags: a bit this version does not know): `LUMA_E_ARGUMENT` (reported); a desc's size under sizeof(`LumaDrawLightDesc`) 1.0: `LUMA_E_ARGUMENT`, `Service.StructSize` in the mod log (a larger one, a later version's, is read up to 1.0's fields); `LUMA_DRAW_LIGHTS_MOST` of the mod's, or `LUMA_DRAW_LIGHTS_ALL_MOST` of all mods': `LUMA_E_LIMIT` (reported). Off the game thread: `LUMA_E_THREAD` (reported); while the game takes the mod out: `LUMA_E_CANCELLED`.
+Call it on the game thread. A light as `desc` says, lit from the next frame the game draws. It returns `LUMA_OK` and sets `*out`. A null desc or out, a value outside its range or not finite (the argument named: position, color, candela, radius, flags: a bit this version does not know): `LUMA_E_ARGUMENT` (reported); a desc's size under `sizeof(LumaDrawLightDesc)` 1.0: `LUMA_E_ARGUMENT`, `Service.StructSize` in the mod log (a larger one, a later version's, is read up to 1.0's fields); `LUMA_DRAW_LIGHTS_MOST` of the mod's, or `LUMA_DRAW_LIGHTS_ALL_MOST` of all mods': `LUMA_E_LIMIT` (reported). Off the game thread: `LUMA_E_THREAD` (reported); while the game takes the mod out: `LUMA_E_CANCELLED`.
 
 ### `move`
 

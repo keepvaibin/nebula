@@ -126,6 +126,7 @@ Create `layers/base/patches/StageData/EggStarGalaxy.arc/jmp/placement/common/obj
 
 Create `source/main.lum` with this code:
 
+<!-- sample: examples/a-video-in-a-galaxy/source/main.lum -->
 ```lumascript
 use kit.actor
 use svc.movie

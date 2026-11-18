@@ -38,12 +38,14 @@ lumalink add option hide hide-the-hud --kind toggle --default true --name "Hide 
 
 Create `hide-the-hud/source/main.lum` with this code:
 
+<!-- sample: examples/hide-the-hud/source/main.lum -->
 ```lumascript
 option hide: bool
 
-// The game shows the HUD when a level starts. Put it away on the first frame it is up.
+// The game shows the HUD when a level starts. Put it away on the first frame it is up. holds("stage"): a stage is
+// there with its scene objects (the HUD's among them), which the HUD's functions need.
 on frame {
-    if hide and MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder as i32) and MR::isActiveDefaultGameLayout() {
+    if hide and holds("stage") and MR::isActiveDefaultGameLayout() {
         MR::deactivateDefaultGameLayout()
     }
 }
@@ -57,14 +59,14 @@ hook before GameSceneLayoutHolder::activateDefaultGameLayout() {
 
 // The option turned off during play: the HUD comes back at once.
 on option hide {
-    if not hide and MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder as i32) and not MR::isDemoActive() {
+    if not hide and holds("player") and not MR::isDemoActive() {
         MR::activateDefaultGameLayout()
     }
 }
 ```
 
 * `option hide: bool` declares the option. Your code reads it like a variable.
-* `on frame` runs every frame. When a level is loaded (the HUD's holder exists) and the HUD is showing, it calls the game's own `MR::deactivateDefaultGameLayout`, which hides every counter and the meter.
+* `on frame` runs every frame, also while the game boots and loads. `holds("stage")` is true when a stage is there with its scene objects, the HUD's among them. Then, if the HUD is showing, it calls the game's own `MR::deactivateDefaultGameLayout`, which hides every counter and the meter. Without the test the build refuses the call (S0154): the HUD's functions need the scene.
 * `hook before GameSceneLayoutHolder::activateDefaultGameLayout()` runs before the game shows the HUD again, for example after a cutscene. `skip` stops the game's call.
 * `on option hide` runs when the player changes the option. When the player turns it off outside a cutscene, the HUD appears again immediately.
 

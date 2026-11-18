@@ -23,15 +23,15 @@ The key is the action's id: 1 to 64 characters of `a-z`, `0-9`, `.`, `_` and `-`
 
 | Service | Version | Permission | C import | LumaScript |
 |---|---|---|---|---|
-| `input` | 1.3 | None | `LUMA_SERVICE(slot, "input", "1.3")` | `use svc.input` |
+| `input` | 1.4 | None | `LUMA_SERVICE(slot, "input", "1.4")` | `use svc.input` |
 | `input.inject` | 1.0 | `input.inject` | `LUMA_SERVICE(slot, "input.inject", "1.0")` | `use svc.input.inject` |
 | `input.dev` | 1.0 | `input.devices` | `LUMA_SERVICE(slot, "input.dev", "1.0")` | `use svc.input.dev` |
 
-The header is `native/include/luma_input.h`. In LumaScript, a service is called by the last part of its name, such as `input.` for `input`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_input.h`. In LumaScript, a service is called by the last part of its name, such as `input.` for `input`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
-LumaCore's input services. `input` 1.3, no permission: `LUMA_SERVICE(slot, "input", "1.3")`. - The mod's own actions (1.0), which the player binds in Controls. An action is a `key` option of the mod's luma.json: its `key` is the action's id, its `name` what Controls shows, its `default` the game control it follows until the player binds it (one of input_bindings.cpp's kTargetIds: "c" follows the game's C wherever the player has put it). The bindings live only in the game's settings (`modbind.` lines), kept while the mod is off or removed. - What the game gets from a player's controller this frame, the kind of device the player uses and an event when it changes, text typed with the system keyboard, and rumble (1.1). - What aims the main player's pointer (1.2). - The actions of a mod that needs this one, found by their ids (1.3). `input.inject` 1.0, permission "input.inject" (the **Mods** page says the mod moves the player): the mod supplies a player's controller. `input.dev` 1.0, permission "input.devices": the computer's HID devices, listed and read raw.
+LumaCore's input services. `input` 1.4, no permission: `LUMA_SERVICE(slot, "input", "1.4")` (import the lowest minor that has what the mod calls). - The mod's own actions (1.0), which the player binds in Controls. An action is a `key` option of the mod's luma.json: its `key` is the action's id, its `name` what Controls shows, its `default` the game control it follows until the player binds it (one of input_bindings.cpp's kTargetIds: "c" follows the game's C wherever the player has put it). The bindings live only in the game's settings (`modbind.` lines), kept while the mod is off or removed. - What the game gets from a player's controller this frame, the kind of device the player uses and an event when it changes, text typed with the system keyboard, and rumble (1.1). - What aims the main player's pointer (1.2). - The actions of a mod that needs this one, found by their ids (1.3). - A first-person look (1.4): the window holds the mouse, every pointer source turns the view, the pointer stays at the picture's middle. `input.inject` 1.0, permission "input.inject" (the Mods page says the mod moves the player): the mod supplies a player's controller. `input.dev` 1.0, permission "input.devices": the computer's HID devices, listed and read raw.
 
 ## Limits and constants
 
@@ -137,7 +137,7 @@ Its size in version 1.0 is 24 bytes.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaInputState`) as the mod was built. |
+| `uint32_t size` | `sizeof(LumaInputState)` as the mod was built. |
 | `uint8_t down` | 1 while held. |
 | `uint8_t pressed` | 1 the frame it went down. |
 | `uint8_t released` | 1 the frame it went up. |
@@ -153,7 +153,7 @@ Its size in version 1.1 is 28 bytes.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaInputGame`) as the mod was built. |
+| `uint32_t size` | `sizeof(LumaInputGame)` as the mod was built. |
 | `uint32_t buttons` | `LUMA_INPUT_BUTTON_`* held. |
 | `float stick_x` | The move stick, -1 to 1: right. |
 | `float stick_y` | -1 to 1: up. |
@@ -164,13 +164,27 @@ Its size in version 1.1 is 28 bytes.
 | `uint8_t device` | `LUMA_INPUT_DEVICE_`*; read only (inject ignores it). |
 | `uint8_t injected` | 1: a mod supplied it (input.inject); read only. |
 
+### `LumaInputLook`
+
+1.4. The main player's look since the mod's last look call (look).
+
+Its size in version 1.4 is 20 bytes.
+
+| Name | Description |
+|---|---|
+| `uint32_t size` | `sizeof(LumaInputLook)` as the mod was built. |
+| `float yaw` | Radians the view turned right since the mod's last look (left negative), the scale applied. |
+| `float pitch` | Radians it turned up (down negative). |
+| `uint32_t on` | 1: the look held the controls at the game's last read (look_mode on, in play, the window in front, no menu). |
+| `uint32_t device` | `LUMA_INPUT_DEVICE_`* that turned it last; 0 before any. |
+
 ### `LumaInputTextRequest`
 
 Its size in version 1.1 is 24 bytes.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaInputTextRequest`) as the mod was built. |
+| `uint32_t size` | `sizeof(LumaInputTextRequest)` as the mod was built. |
 | `uint32_t kind` | `LUMA_INPUT_TEXT_`*. |
 | `uint32_t max_length` | Code points, 1 to `LUMA_INPUT_TEXT_MOST`. |
 | `uint32_t reserved` |  |
@@ -182,7 +196,7 @@ Its size in version 1.0 is 400 bytes.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaInputDeviceInfo`) as the mod was built. |
+| `uint32_t size` | `sizeof(LumaInputDeviceInfo)` as the mod was built. |
 | `uint16_t vendor` | USB vendor id. |
 | `uint16_t product` | USB product id. |
 | `uint16_t usage_page` | Its top collection's HID usage page and usage (1/5: a game pad). |
@@ -237,7 +251,7 @@ Call it on the game thread. What the game got from `player`'s controller at its 
 ### `game_raw`
 
 ```lumascript
-input.game_raw(player: u32) -> input.Game
+input.game_raw(player: u32) -> input.Game?
 ```
 
 ```c
@@ -265,7 +279,7 @@ Call it on the game thread. The kind of device `player` plays with into `*out` (
 ### `watch_device`
 
 ```lumascript
-input.watch_device(fn: fn(e: input.Event)?)
+input.watch_device(fn(e: input.Event)?)
 ```
 
 ```c
@@ -282,7 +296,7 @@ Events: `DEVICE(value, flags)`.
 
 ```lumascript
 input.text_request(request: input.TextRequest, fn(e: input.TextEvent)) -> input.Request?
-wait input.text_request(request: input.TextRequest) -> u64?
+wait input.text_request(request: input.TextRequest) -> text?
 ```
 
 ```c
@@ -291,7 +305,7 @@ int32_t text_request(const LumaMod* mod, const LumaInputTextRequest* request, Lu
 
 Needs `input` 1.1 or later.
 
-Call it on the game thread. Opens the system keyboard (and its input method: composition, candidates) for the player to type; the game's controls are held while it is open (the game reads a controller at rest, every action reads up). The text arrives as `LUMA_INPUT_EVENT_TEXT` through fn when the player confirms (Enter) or cancels (Escape). `*out`: the request. `LUMA_PENDING`; a TEXT event follows (to fn), closed after its event. One request open at once in the game: a new one ends the open one Canceled. `LUMA_E_ABSENT` where the host has no text entry ; a null request, fn or out, a size below 1.1's, a bad kind, max_length 0 or past `LUMA_INPUT_TEXT_MOST`, or an initial that is not UTF-8: `LUMA_E_ARGUMENT` (reported).
+Call it on the game thread. Opens the system keyboard (and its input method: composition, candidates) for the player to type; the game's controls are held while it is open (the game reads a controller at rest, every action reads up). The text arrives as `LUMA_INPUT_EVENT_TEXT` through fn when the player confirms (Enter) or cancels (Escape). `*out`: the request. `LUMA_PENDING`; a TEXT event follows (to fn), closed after its event. One request open at once in the game: a new one ends the open one CANCELLED. `LUMA_E_ABSENT` where the host has no text entry ; a null request, fn or out, a size below 1.1's, a bad kind, max_length 0 or past `LUMA_INPUT_TEXT_MOST`, or an initial that is not UTF-8: `LUMA_E_ARGUMENT` (reported).
 
 In a task, `wait` gives the `TEXT` event's result instead of calling a closure.
 
@@ -321,7 +335,7 @@ int32_t text_cancel(const LumaMod* mod, LumaHandle request);
 
 Needs `input` 1.1 or later.
 
-Call it on the game thread. Ends the mod's open request: its event comes Canceled. `LUMA_OK`; one that is not its open one: `LUMA_E_HANDLE` (reported).
+Call it on the game thread. Ends the mod's open request: its event comes CANCELLED. `LUMA_OK`; one that is not its open one: `LUMA_E_HANDLE` (reported).
 
 ### `rumble`
 
@@ -363,7 +377,35 @@ int32_t user_action(const LumaMod* mod, uint64_t of, const char* id, LumaInputAc
 
 Needs `input` 1.3 or later.
 
-Call it on the game thread. As `action`, the action `id` of the mod `of` (a mod as LumaScript's caller() gives it: its `LumaMod` pointer as a number), so a library starts what a mod using it defines by that mod's own keys; `read` reads it. `of` must be running and be `mod` itself or name `mod` in its luma.json `needs`. `LUMA_OK`; `LUMA_E_NOT_FOUND` when `of` has no key option of that key (an answer, not reported); any other `of`: `LUMA_E_DENIED` (reported) (`Mods.KitNotNeeded`); a null id or out: `LUMA_E_ARGUMENT` (reported).
+Call it on the game thread. As `action`, the action `id` of the mod `of` (a mod as LumaScript's caller gives it: its `LumaMod` pointer as a number), so a library starts what a mod using it defines by that mod's own keys; `read` reads it. `of` must be running and be `mod` itself or name `mod` in its luma.json `needs`. `LUMA_OK`; `LUMA_E_NOT_FOUND` when `of` has no key option of that key (an answer, not reported); any other `of`: `LUMA_E_DENIED` (reported) (`Mods.KitNotNeeded`); a null id or out: `LUMA_E_ARGUMENT` (reported).
+
+### `look_mode`
+
+```lumascript
+input.look_mode(pad: input.Pad, on: i32, scale: f32)
+```
+
+```c
+int32_t look_mode(const LumaMod* mod, LumaInputPad pad, int32_t on, float scale);
+```
+
+Needs `input` 1.4 or later.
+
+Call it on the game thread. A first-person look for `pad` (`LUMA_INPUT_PAD_MAIN`) on (`on` 1) or off (0). While on and the game is in play with its window in front and no menu over it (a pause, the HOME menu, the settings, text being typed): - the window holds the mouse: its cursor hidden and kept inside, its moves turning the view by their own counts; - the pointer stick and the pointer keys turn it at the player's pointer speed, a controller's gyro (when it points) as far as the controller turns, a controller's touch surface and a phone's finger by their travel; - the pointer stays at the picture's middle: the game's pointer is the crosshair (Star Bits are aimed by looking). A menu or the window losing focus gives the mouse back until play resumes. `scale` (above 0, at most 8) times every turn: a mod's sensitivity option. The newest mod's on holds; it ends with off or the mod. `LUMA_OK`; a pad other than `LUMA_INPUT_PAD_MAIN`, a scale out of range with on: `LUMA_E_ARGUMENT` (reported).
+
+### `look`
+
+```lumascript
+input.look(pad: input.Pad) -> input.Look
+```
+
+```c
+int32_t look(const LumaMod* mod, LumaInputPad pad, LumaInputLook* out);
+```
+
+Needs `input` 1.4 or later.
+
+Call it on the game thread. The main player's look: the turn of every read of the main player's controller since this mod's last look call, each turn given to each mod once however often the game reads (a world rate above real time reads more than once a frame) and however often the mod calls. The mod's first call gives no turn: it starts from then. It returns `LUMA_OK` and sets `*out`; yaw and pitch 0 while no look is on or nothing turned it. A pad other than `LUMA_INPUT_PAD_MAIN`, a null out: `LUMA_E_ARGUMENT` (reported); an out smaller than 1.4's: `LUMA_E_ARGUMENT` (reported) (`Service.StructSize`).
 
 ## `input.inject` functions
 
@@ -411,11 +453,13 @@ In C, each function takes your mod (`const LumaMod* mod`) first. LumaScript pass
 
 ### `list`
 
+```lumascript
+dev.list() -> list<input.DeviceInfo>?
+```
+
 ```c
 int32_t list(const LumaMod* mod, LumaInputDeviceInfo* out, uint32_t capacity, uint32_t* found);
 ```
-
-Not callable from LumaScript.
 
 Call it on the game thread. The HID devices plugged in now, up to `capacity` into out[] (each with its size set by the mod), and how many there are into *found (may exceed capacity; at most `LUMA_INPUT_DEVICES_MOST`). The system's keyboards and mice are not listed (it keeps them). `LUMA_OK`; `LUMA_E_ABSENT` on a platform or host that gives no raw devices ; a null found, a null out with capacity above 0, or a size below 1.0's in an entry: `LUMA_E_ARGUMENT` (reported).
 

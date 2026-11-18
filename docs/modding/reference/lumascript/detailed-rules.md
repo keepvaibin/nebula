@@ -11,7 +11,7 @@ This page holds the detailed rules of LumaScript that complete the other referen
 
 ## More types and calls
 
-1. `if let`: takes the same list as `guard`: `if let r = room, not r.host, let p = r.peers.get { }`
+1. `if let`: takes the same list as `guard`: `if let r = room, not r.host, let p = r.peers.get() { }`
    checks each in order; the names bound are in scope in the `if` block only.
 2. container functions (each a compile error on the wrong type, never a run-time lookup):
    - `list<T>`: `len -> int`, `push(T)`, `pop -> T?`, `insert(int, T)`, `remove(int) -> T` (out of range: a
@@ -87,7 +87,8 @@ block's `}`, the next statement may follow on the same line (`enter { ... } wait
   another thread does nothing (a `before` does not skip, a `wrap` proceeds, an `after` leaves the result) and logs
   once per hook `S0901: <function> was called off the game thread, so the mod's script did not run there`. An
   `export c fn` the mod's own C calls on another thread runs none of its script either: it returns its result's zero
-  and logs the same S0901. Which functions the game calls off the game thread is not in the self-description: the
+  and logs the same S0901. So does a library's export another mod's C calls on another thread: the call is a
+  script error of the caller's, and the library runs nothing. Which functions the game calls off the game thread is not in the self-description: the
   build does not warn, and the log line is how a mod learns it.
 - Between mods: the mod higher in the list is outermost: its `before` runs first, its `after` last (its result
   stands), its `wrap` encloses the lower mods' wraps.
@@ -124,7 +125,7 @@ written `var x`.
 Every game pointer or reference result, every pointer field read from a game object, and every pointer
 parameter is `T?` (and `const char *` is `text?`), unless the self-description marks it never-null. The self-description takes
 that mark only from a C++ reference type `T &`. So `MarioAccess::getPlayerActor` is `MarioActor?`
-(`if let p = MarioAccess::getPlayerActor { ... }`, none while there is no player), and `none`
+(`if let p = MarioAccess::getPlayerActor() { ... }`, none while there is no player), and `none`
 may be passed for a pointer parameter (`initModelManagerWithAnm("Crumble", none, false)`). `self` in a hook or a class
 is never `none`.
 
@@ -171,7 +172,7 @@ no `option("key")` call.
 ## Smaller words
 
 - One container way each: `filter` (no `retain`: `balls = balls.filter(...)`), `set.add` (no `insert`), `filter(...)
-  .last` (no `last_where`). A handle is empty when `h.get == none` (no `empty`).
+  .last` (no `last_where`). A handle is empty when `h.get() == none` (no `empty`).
 - `map[K]` gives `V` (a missing key is a script error); `map.get(K)` gives `V?`.
 - `same(a, b)` for views and service handles (no `same_stream`).
 - `self` is the first parameter of a struct's function or a class member only; a free function names its own.
@@ -192,7 +193,7 @@ no `option("key")` call.
 
 ## Grammar
 
-```lumascript
+```ebnf
 (* G.1 tokens *)
 IDENT    = letter_or_ "_" { letter | digit | "_" } ;          (* not a reserved word *)
 GAME     = "`" { any but "`" and line end } "`" ;
@@ -320,16 +321,16 @@ for `&&` (`and`), `||` (`or`) and a prefix `!` (`not`).
   functions as for the game's.
 - A pointer result that is never null in fact is still `T?` when its type is a pointer: `MR::getCurrentStageName`
   never gives null (it is `""` before any stage), but its type is `const char *`, so it is `text?`. Write
-  `MR::getCurrentStageName ?? ""`.
+  `MR::getCurrentStageName() ?? ""`.
 - The player. There is no player at the boot, on the file select, and while a scene is being built.
   - `MarioAccess::getPlayerActor` is none then (`MarioActor?`). Test it before using the player:
-    `if let p = MarioAccess::getPlayerActor { ... }`.
+    `if let p = MarioAccess::getPlayerActor() { ... }`.
   - These rows answer with no player instead of reading one: `MR::getPlayerPos`, `getPlayerCenterPos`,
     `getPlayerRotate`, `getPlayerShadowRotate` and `getPlayerGravity` give none (`vec3?`); `getPlayerHitRadius`
     gives 0; `isPlayerInAreaObj` gives false; `getPlayerUpVec`, `getPlayerFrontVec`, `getPlayerSideVec` and
     `getPlayerGroundPos` leave their out-parameter as it was (PlayerUtil.cpp).
   - Every other function of `MarioAccess` and of the player in `MR` reads the player with no test, as the game
-    calls it only with one: call it inside `if let p = MarioAccess::getPlayerActor { ... }`. Called with no player,
+    calls it only with one: call it inside `if let p = MarioAccess::getPlayerActor() { ... }`. Called with no player,
     it faults inside the game, and the game stops.
 
 ## Nested wraps
@@ -562,7 +563,7 @@ read as any container.
 A plain game struct (no vtable, crossing by value) read through a view is the script's copy, and also through `?.`
 (`let b = a?.mBox` is `Box?`, a copy). It is no view.
 
-The way to keep an object is a handle: `ref(x)`, then `h.get`, which gives `none` once the object is gone.
+The way to keep an object is a handle: `ref(x)`, then `h.get()`, which gives `none` once the object is gone.
 
 ## `wait`
 

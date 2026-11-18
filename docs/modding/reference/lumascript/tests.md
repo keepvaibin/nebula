@@ -10,6 +10,11 @@ contentType: reference
 A `test` block checks your mod's own code. Each `expect` in it states a condition that must be true. A failing `expect` names the file, the line and both sides of the comparison.
 
 ```lumascript
+fn count_after_throws(throws: int) -> int {     // at most two balls at once
+    if throws > 2 { return 2 }
+    return throws
+}
+
 test "two balls at most" {
     expect count_after_throws(5) == 2
 }

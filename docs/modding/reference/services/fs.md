@@ -246,8 +246,7 @@ typedef struct LumaFsExchangeService {
     int32_t (*write)(const LumaMod* mod, const char* path, const void* data, uint64_t bytes, LumaEventFn fn,
                      void* user, LumaHandle* out);
     int32_t (*remove)(const LumaMod* mod, const char* path, LumaEventFn fn, void* user, LumaHandle* out);
-    int32_t (*move)(const LumaMod* mod, const char* from, const char* to, LumaEventFn fn, void* user,
-                    LumaHandle* out);
+    int32_t (*move)(const LumaMod* mod, const char* from, const char* to, LumaEventFn fn, void* user, LumaHandle* out);
     int32_t (*list)(const LumaMod* mod, const char* path, uint32_t recursive, LumaEventFn fn, void* user,
                     LumaHandle* out);
     int64_t (*take_list)(const LumaMod* mod, LumaHandle request, char* buf, uint64_t size);
@@ -258,7 +257,7 @@ typedef struct LumaFsExchangeService {
 ```lumascript
 use svc.fs.exchange
 
-task export(data: bytes) {
+task save_out(data: bytes) {
     if wait exchange.write("my-mod/save.bin", data) == none {
         log "could not write to the Exchange folder"
     }

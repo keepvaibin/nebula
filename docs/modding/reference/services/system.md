@@ -13,6 +13,7 @@ contentType: reference
 | Version | 1.0 | 1.0 | 1.0 |
 | Header | `luma_system.h` | `luma_system.h` | `luma_system.h` |
 | Permission | None | `system.clipboard` | `system.links` |
+| C import | `LUMA_SERVICE(slot, "system", "1.0")` | `LUMA_SERVICE(slot, "system.clipboard", "1.0")` | `LUMA_SERVICE(slot, "system.links", "1.0")` |
 | LumaScript | `use svc.system` | `use svc.system.clipboard`, then `clipboard.get_text(...)` | `use svc.system.links`, then `links.open(...)` |
 
 The clipboard and links never make the game wait. Each call copies what you give it and returns at once. The work runs on the thread the platform needs, and the answer arrives as an event at a frame's start.

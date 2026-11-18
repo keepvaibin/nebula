@@ -216,6 +216,8 @@ A fact is a value with a key and a frame. The run writes them to `facts.jsonl`, 
 A mod writes its own facts through its log. In LumaScript:
 
 ```lumascript
+var thrown = 0
+...
 log fact "balls_thrown" thrown
 ```
 

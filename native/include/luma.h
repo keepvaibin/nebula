@@ -398,7 +398,8 @@ typedef struct LumaCut {
 #define LUMA_CAN_CALL 1
 
 /* report's own codes (docs/modding/concepts/how-nebula-loads-mods.md, `report`). */
-#define LUMA_REPORT_OUT_OF_MEMORY 1u /* Hook.OutOfMemory: args[0] the size; luma.h's `new` then stops the game */
+#define LUMA_REPORT_OUT_OF_MEMORY 1u /* Hook.OutOfMemory: args[0] the size; luma.h's `new` then traps, a fault the
+                                        guard turns the mod off for (the game goes on) */
 /* The kernel's own, said for a mod by LumaCore (not passed to report): 2 Hook.NoResult and 3 Hook.SkipRefused (a hook's
    result), 4 Hook.ServiceNotGranted, and the objects contract's 5 Object.NoRow (found: the class's type_info name as
    the ABI writes it), 6 Object.NotReadable (where: the call), 7 Object.Ambiguous (where, found: the class), 8 Call.NotNow (found: the function,
@@ -761,8 +762,8 @@ typedef void (*LumaCtor)(void);
 /* C++'s `new` and `delete` over the core's memory, in a mod's library (built freestanding, lumalink/loader.md;
    the game's own code, built hosted, includes luma.h for its types only). Include <new> before luma.h or not at all:
    without it, luma.h declares what `new` needs. `new` of 0 bytes takes 1; alignments go up to 65536. A throwing `new`
-   the system has no memory for logs and stops the game (no exceptions); the nothrow forms give null. Placement `new`
-   is the usual one. */
+   the system has no memory for logs Hook.OutOfMemory and traps (no exceptions): in code the guard watches, the mod is
+   turned off and the game goes on. The nothrow forms give null. Placement `new` is the usual one. */
 #if !__STDC_HOSTED__
 #if !defined(_NEW_) && !defined(_LIBCPP_NEW) && !defined(_NEW) && !defined(__NEW__) && !defined(__NOTHROW_T_DEFINED)
 namespace std {
@@ -796,7 +797,7 @@ extern "C" const LumaMod* luma_rt_self;
     static void* luma_new(__SIZE_TYPE__ size, __SIZE_TYPE__ align, bool must) {                                       \
         void* const p = luma_rt_core != 0 ? luma_rt_core->alloc(luma_rt_self, size != 0 ? size : 1, align < 16 ? 16 : align) : 0; \
         if (p == 0 && must) {                                                                                         \
-            /* Hook.OutOfMemory through report, then the game stops with its crash report. */                         \
+            /* Hook.OutOfMemory through report, then a trap: the guard turns the mod off.  */                         \
             if (luma_rt_core != 0) {                                                                                  \
                 char digits[24];                                                                                      \
                 char* at = digits + sizeof(digits) - 1;                                                               \

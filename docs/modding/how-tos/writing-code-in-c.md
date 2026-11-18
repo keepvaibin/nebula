@@ -66,12 +66,9 @@ The LumaScript declaration must match the C one. These types cross between the t
 | `i8` to `i64`, `u8` to `u64` | `int8_t` to `int64_t`, `uint8_t` to `uint64_t` |
 | `f32`, `f64` | `float`, `double` |
 | `bool` | `bool` |
-| `vec2`, `vec3`, `vec4`, `mat34`, `color` | Structs of floats, in that order |
-| A struct marked `c struct` | The same struct, in C layout |
 | `text`, `bytes` | A pointer and a length, valid until the call returns |
-| `ref<C>` | A handle. Get the object with `lumart_ref_get`, on the game thread. |
 
-Lists, maps and other containers don't cross. Pass them one item at a time, or as `bytes`.
+A result is a number or a `bool`. Other types don't cross yet: vectors, `color`, structs (a struct marked `c struct` too), handles and containers. LumaLink refuses them with S0800. Pass a vector or a struct as its numbers, and a list one item at a time or as `bytes`.
 
 ## Calling LumaScript from C
 

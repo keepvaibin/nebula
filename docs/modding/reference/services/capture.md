@@ -14,7 +14,7 @@ contentType: reference
 | `audio.microphone` | 1.0 | `audio.microphone` | `LUMA_SERVICE(slot, "audio.microphone", "1.0")` | `use svc.audio.microphone` |
 | `capture.camera` | 1.0 | `capture.camera` | `LUMA_SERVICE(slot, "capture.camera", "1.0")` | `use svc.capture.camera` |
 
-The header is `native/include/luma_capture.h`. In LumaScript, a service is called by the last part of its name, such as `microphone.` for `audio.microphone`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_capture.h`. In LumaScript, a service is called by the last part of its name, such as `microphone.` for `audio.microphone`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
@@ -55,7 +55,7 @@ The camera's events (`LumaEvent`.kind); `handle` is the open's.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaAudioMicrophoneDesc`). |
+| `uint32_t size` | `sizeof(LumaAudioMicrophoneDesc)`. |
 | `uint32_t rate` | 8000 to 192000 Hz (resampled from the device's); 0: 48000. |
 | `uint32_t channels` | 1 or 2. |
 | `uint32_t reserved` |  |
@@ -64,7 +64,7 @@ The camera's events (`LumaEvent`.kind); `handle` is the open's.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaCaptureCameraDesc`). |
+| `uint32_t size` | `sizeof(LumaCaptureCameraDesc)`. |
 | `uint32_t width` | Wanted, to `LUMA_CAPTURE_CAMERA_WIDTH_MOST`; 0: the camera's own (FRAME says what it gives). |
 | `uint32_t height` | To `LUMA_CAPTURE_CAMERA_HEIGHT_MOST`; 0 with width 0. |
 | `uint32_t fps` | Wanted, to `LUMA_CAPTURE_CAMERA_FPS_MOST`; 0: the camera's own. |
@@ -75,7 +75,7 @@ A FRAME's data: RGBA, 8 bits each, rows top first (draw's texture from pixels ta
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaCaptureCameraFrame`). |
+| `uint32_t size` | `sizeof(LumaCaptureCameraFrame)`. |
 | `uint32_t width` |  |
 | `uint32_t height` |  |
 | `uint32_t stride` | Bytes from a row to the next: width × 4. |

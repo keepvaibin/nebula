@@ -31,6 +31,7 @@ Replace YOUR-NAME with your name.
 
 Create `six-health/source/main.lum` with this code:
 
+<!-- sample: examples/a-small-tweak/source/main.lum -->
 ```lumascript
 on start {
     set_number("Game/System/GameRules.cpp#cPlayerHealth", 6)

@@ -13,7 +13,7 @@ The `assets` service finds and reads files of the game and of your mod, lets you
 |---|---|---|---|---|
 | `assets` | 1.1 | None | `LUMA_SERVICE(slot, "assets", "1.1")` | `use svc.assets` |
 
-The header is `native/include/luma_assets.h`. In LumaScript, a service is called by the last part of its name, such as `assets.` for `assets`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_assets.h`. In LumaScript, a service is called by the last part of its name, such as `assets.` for `assets`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
@@ -71,7 +71,7 @@ Its size in version 1.0 is 32 bytes.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaAssetInfo`) as the mod was built: the service fills only what both know. |
+| `uint32_t size` | `sizeof(LumaAssetInfo)` as the mod was built: the service fills only what both know. |
 | `uint32_t folder` | 1: a folder (an archive is a folder of its files); 0: a file. |
 | `uint32_t archive` | 1: a folder that was an archive on the disc (the mods replace it whole). |
 | `uint32_t kind` | A file's `LumaAssetKind`; a folder's 0. |
@@ -161,7 +161,7 @@ The game's own again at `path` (what it had before the mod's provide). `LUMA_OK`
 
 ```lumascript
 assets.cook(path: text, data: bytes, fn(e: assets.CookedEvent)) -> assets.Request?
-wait assets.cook(path: text, data: bytes) -> u64?
+wait assets.cook(path: text, data: bytes) -> bytes?
 ```
 
 ```c
@@ -170,7 +170,7 @@ int32_t cook(const LumaMod* mod, const char* path, const void* data, uint64_t by
 
 Needs `assets` 1.1 or later.
 
-A file as the disc has it (a model, a texture, an archive, compressed or not; the name `path` ends with decides how it is read, as at install) cooked by the game's cooker on its own thread, then provided at `path` as provide does. The bytes are copied. `LUMA_PENDING` and *request (not null): a COOKED event follows, to fn(user, event) on a later frame, with handle *request; the request is closed after its event. In a test run's deterministic mode, it comes at the start of the next frame, however long the cooking takes. Answers: `LUMA_E_ABSENT` this game's cooker cannot cook at run time; `LUMA_E_BUSY` `LUMA_ASSETS_COOKS_MOST` cooks wait or run. Reported: `LUMA_E_ARGUMENT` a null or too long path, null fn or request, null data or 0 bytes; `LUMA_E_TOO_LARGE` over `LUMA_ASSETS_PROVIDE_MOST` bytes. A mod's stop cancels its cooks (no event).
+A file as the disc has it (a model, a texture, an archive, compressed or not; the name `path` ends with decides how it is read, as at install) cooked by the game's cooker on its own thread, then provided at `path` as provide does. The bytes are copied. `LUMA_PENDING` and *request (not null): a COOKED event follows, to fn(user, event) on a later frame, with handle *request; the request is closed after its event. Answers: `LUMA_E_ABSENT` this game's cooker cannot cook at run time; `LUMA_E_BUSY` `LUMA_ASSETS_COOKS_MOST` cooks wait or run. Reported: `LUMA_E_ARGUMENT` a null or too long path, null fn or request, null data or 0 bytes; `LUMA_E_TOO_LARGE` over `LUMA_ASSETS_PROVIDE_MOST` bytes. A mod's stop cancels its cooks (no event).
 
 In a task, `wait` gives the `COOKED` event's result instead of calling a closure.
 

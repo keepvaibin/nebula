@@ -153,7 +153,7 @@ script names are `LUMA_ARG(call, n, T)` (n from 1; `call->args[0]` is `this`, `s
 | `T?` | `struct { uint8_t some; T value; }`; a view's `none` is a null pointer | a game pointer that may be null |
 | a view of a game class | `void *` | the object's address; fields at `base + lm_off_<n>` |
 | `ref<C>` | `lumart_ref` | never crosses; `get` gives a view |
-| tuples, structs, enums of the mod | C structs and tagged unions in source order | `c struct` only |
+| tuples, structs, enums of the mod | C structs and tagged unions in source order | do not cross (`c struct` is not built yet: S0800) |
 
 A game function is called through its slot: the compiler fills `void* args[1 + n]` with `this` (or null) and the
 address of each argument (a copy for values), calls `lm_fn_<n>->invoke(args, &result)`, and converts the result.
@@ -180,8 +180,8 @@ depends on another mod's), freestanding: no C library, no OS call, nothing impor
 
 ## Memory
 
-- Where it comes from: LumaCore has no allocator today, and a library that imports nothing cannot reach the
-  system's. LumaCore gives `void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align)` and
+- Where it comes from: LumaCore has no allocator today, and a library that imports nothing imports none of the
+  system's allocators. LumaCore gives `void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align)` and
   `void (*free)(const LumaMod* mod, void* p)` at the end of `LumaCore` (its `size` field makes the addition safe),
   counted per mod so the **Mods** page can show each mod's memory and the kernel frees what is left when a mod is
   taken out. Until then a LumaScript mod cannot be built: the compiler refuses with
@@ -219,7 +219,7 @@ that text is never kept).
   the object's slot and bumps its generation. Removing a hook after loading needs a call luma.h does not have today,
   `int32_t (*unhook)(const LumaMod*, const LumaFunction*, uint32_t kind, LumaHook, void* user)`; until
   then the hook stays once added and returns at once when the table is empty.
-- `get` on an empty handle gives `none`; `h!.get` on one is a script error.
+- `get` on an empty handle gives `none`; `h!.get()` on one is a script error.
 
 ## Tasks (`task`, `wait`, states)
 
@@ -261,7 +261,7 @@ different order in another language (Japanese puts S0904's `{1}` first).
 
 | Code | Raised when | Arguments | English |
 |---|---|---|---|
-| S0901 | a hook or an `export c fn` was called off the game thread | function name | `{0} was called off the game thread, so the mod's script did not run there` |
+| S0901 | a hook, an `export c fn` or a library's export was called off the game thread | function name | `{0} was called off the game thread, so the mod's script did not run there` |
 | S0902 | `list[i]` out of range | index, length | `index {0} is outside a list of {1}` |
 | S0903 | `h!` or a call through an empty `ref<C>` | class name | `the handle to {0} is empty` |
 | S0904 | integer overflow (`__builtin_*_overflow`) | type, expression source | `{0} overflow in {1}` |

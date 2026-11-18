@@ -86,6 +86,8 @@ To run on Vulkan instead of Direct3D 12, add `--renderer vulkan`. To run each te
 Your mod can report any value as a fact. In LumaScript, log it with `log fact`:
 
 ```lumascript
+var jumps = 0
+...
 log fact "jumps" jumps
 ```
 

@@ -13,11 +13,11 @@ The `content.fx` service plays your mod's cooked effects and the game's. For how
 |---|---|---|---|---|
 | `content.fx` | 1.0 | None | `LUMA_SERVICE(slot, "content.fx", "1.0")` | `use svc.content.fx` |
 
-The header is `native/include/luma_content_fx.h`. In LumaScript, a service is called by the last part of its name, such as `fx.` for `content.fx`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_content_fx.h`. In LumaScript, a service is called by the last part of its name, such as `fx.` for `content.fx`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
-LumaCore's content.fx service: a mod's particle effects, or the game's, started on an actor or a model the mod attached, stopped and tinted. Import: `LUMA_SERVICE(slot, "content.fx", "1.0")`.
+LumaCore's content.fx service: a mod's particle effects, or the game's, started on an actor or a model the mod attached, stopped and tinted.
 
 ## Limits and constants
 
@@ -38,7 +38,7 @@ In C, each function takes your mod (`const LumaMod* mod`) first. LumaScript pass
 ### `start`
 
 ```lumascript
-fx.start(actor: LiveActor, name: effect, joint: text?, place: content.Place?, follow: bool) -> fx.Effect
+fx.start(actor: LiveActor, name: effect, joint: text?, place: fx.Place?, follow: bool) -> fx.Effect
 ```
 
 ```c
@@ -50,7 +50,7 @@ Call it on the game thread. The effect `name` on `actor`: at the joint `joint` (
 ### `start_on_model`
 
 ```lumascript
-fx.start_on_model(model: content.model.Model, name: effect, socket: text?, place: content.Place?, follow: bool) -> fx.Effect
+fx.start_on_model(model: model.Model, name: effect, socket: text?, place: fx.Place?, follow: bool) -> fx.Effect
 ```
 
 ```c

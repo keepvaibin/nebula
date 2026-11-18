@@ -31,7 +31,7 @@ int32_t (*watch)(const LumaMod* mod, uint32_t kinds, LumaEventFn fn, void* user)
 ```
 
 ```lumascript
-events.watch(kinds: u32, fn: fn(e: events.Event)?)
+events.watch(kinds: u32, fn(e: events.Event)?) -> bool
 ```
 
 Game thread. Returns `LUMA_OK`.

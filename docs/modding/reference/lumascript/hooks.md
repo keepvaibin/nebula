@@ -10,21 +10,23 @@ contentType: reference
 A hook runs your code before, after, around or instead of one of the game's functions.
 
 ```lumascript
-hook before MarioActor::control {
+var frozen = false
+
+hook before MarioActor::control() {
     if frozen { skip }                    // a void function: skip it
 }
 
-hook after MR::getStarPieceNum -> n {  // the result, named
+hook after MR::getStarPieceNum() -> n {  // the result, named
     result = n * 2                        // changes what the caller receives
 }
 
 wrap MR::addStarPiece(num) {             // the arguments, named; may be written
     num *= 2
-    proceed                             // the next wrap, then the game's own code
+    proceed()                           // the next wrap, then the game's own code
 }
 
-replace Kuribo::exeWander {            // one mod only (a second is refused at load, naming both mods)
-    self.mVelocity = vec3
+replace Kuribo::exeWander() {          // one mod only (a second is refused at load, naming both mods)
+    self.mVelocity = vec3()
 }
 
 hook before `MR::isNear(const LiveActor *, const Vec3f &, f32)`(actor, at, dist) -> bool {

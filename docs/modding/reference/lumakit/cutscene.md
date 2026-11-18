@@ -27,7 +27,7 @@ The module's source is `lumakit/source/cutscene.lum`.
 |---|---|---|
 | [`Shot`](#shot) | Enum |  |
 | [`Scene`](#scene) | Struct |  |
-| [`play`](#play) | Task | The scene played for the calling mod. true: it ran to its end; false: it was skipped, a newer scene began, or its mod stopped. |
+| [`play`](#play) | Task | The scene played for the calling mod. true: it ran to its end; false: it was skipped, a newer scene began, its mod stopped, or its stage ended (the player fell, the stage changed); none plays outside a stage with its player. |
 | [`find`](#find) | Function | The scene of the calling mod's kit/cutscene/<id>.json, its actors found now by their placement names; none when the mod has no such file, it does not read as a scene, or an actor a Look or an Action names is not in the stage. (A Line's speaker that is not there is said as a message.) Call it in the stage the scene plays in. |
 | [`active`](#active) | Function | Whether a scene plays now (for a mod that holds its own HUD or input back while one does). |
 
@@ -52,7 +52,7 @@ pub struct Scene { shots: list<Shot>, letterbox: bool = true, skippable: bool = 
 pub task play(s: Scene) -> bool
 ```
 
-The scene played for the calling mod. true: it ran to its end; false: it was skipped, a newer scene began, or its mod stopped.
+The scene played for the calling mod. true: it ran to its end; false: it was skipped, a newer scene began, its mod stopped, or its stage ended (the player fell, the stage changed); none plays outside a stage with its player.
 
 ### `find`
 

@@ -11,13 +11,13 @@ The `player` service adds extra players to the running scene. Each is one of the
 
 | Service | Version | Permission | C import | LumaScript |
 |---|---|---|---|---|
-| `player` | 1.0 | None | `LUMA_SERVICE(slot, "player", "1.0")` | `use svc.player` |
+| `player` | 1.1 | None | `LUMA_SERVICE(slot, "player", "1.1")` | `use svc.player` |
 
-The header is `native/include/luma_player.h`. In LumaScript, a service is called by the last part of its name, such as `player.` for `player`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_player.h`. In LumaScript, a service is called by the last part of its name, such as `player.` for `player`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
-LumaCore's player service: extra players in the running scene, each a MarioActor of the game's own (the same brother as the game's player: the scene loaded only that one's files), driven by the second controller or by nothing. The game's own player stays the scene's: its camera, its HUD, its lives, the level's end. Import: `LUMA_SERVICE(slot, "player", "1.0")`.
+LumaCore's player service: extra players in the running scene, each a MarioActor of the game's own (the same brother as the game's player: the scene loaded only that one's files), driven by the second controller or by nothing. The game's own player stays the scene's: its camera, its HUD, its lives, the level's end. What of a player is drawn (1.1, set_drawn): a first-person camera's body.
 
 ## Limits and constants
 
@@ -26,6 +26,16 @@ LumaCore's player service: extra players in the running scene, each a MarioActor
 | `LUMA_PLAYER_MOST_EXTRA` | `3` | Extra players standing at once, across mods (the game's own player not counted). |
 
 ## Enumerations
+
+### Other constants
+
+1.1. What of a player set_drawn draws (bits).
+
+| Name | Description |
+|---|---|
+| `LUMA_PLAYER_DRAWN_BODY = 1u << 0` | His model in every form, his hands, the Bee's fur and wings, the Rainbow's glow, what he carries, his silhouette behind walls, his blur. |
+| `LUMA_PLAYER_DRAWN_SHADOW = 1u << 1` | His shadow on the ground. |
+| `LUMA_PLAYER_DRAWN_ALL = (1u << 2) - 1u` |  |
 
 ### `LumaPlayerInput`
 
@@ -46,7 +56,7 @@ Its size in version 1.0 is 36 bytes.
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaPlayerInit`) as the mod was built. |
+| `uint32_t size` | `sizeof(LumaPlayerInit)` as the mod was built. |
 | `LumaPlayerInput input` | 4 bytes, a C enum. |
 | `uint32_t pad` | `LUMA_PLAYER_INPUT_PAD`: 1, the game's second controller (input's `LUMA_INPUT_PAD_CO_STAR`); NONE: 0. |
 | `float pos[3]` | Where it stands, in the main stage's space; also where it comes back after a fall or a death. |
@@ -79,6 +89,20 @@ int32_t remove(const LumaMod* mod, LumaActor player);
 ```
 
 Call it on the game thread. The mod's extra player goes: it is no longer moved, drawn or touched (MR::isDead on it is true). `LUMA_OK`; not one of the mod's standing extra players: `LUMA_E_HANDLE` (reported). Off the game thread: `LUMA_E_THREAD` (reported); while the game takes the mod out: `LUMA_E_CANCELLED`.
+
+### `set_drawn`
+
+```lumascript
+player.set_drawn(player: LiveActor, parts: u32)
+```
+
+```c
+int32_t set_drawn(const LumaMod* mod, LumaActor player, uint32_t parts);
+```
+
+Needs `player` 1.1 or later.
+
+Call it on the game thread. Of `player` (the game's own player, or any standing extra player) only `parts` (`LUMA_PLAYER_DRAWN_`*) drawn from the next frame; the rest is not drawn while everything else of him goes on: his animation and joints (a camera on his eye), sounds, effects, collision, his reflection in mirrors and water. A first-person camera's body: `LUMA_PLAYER_DRAWN_SHADOW`. The newest mod's call holds; `LUMA_PLAYER_DRAWN_ALL` gives him back whole. Until then, the mod's end, or his scene's end. `LUMA_OK`. A null `player` or one that is not a player standing in the scene, parts outside ALL: `LUMA_E_ARGUMENT` (reported). Off the game thread: `LUMA_E_THREAD` (reported); while the game takes the mod out: `LUMA_E_CANCELLED`.
 
 ## Further reading
 

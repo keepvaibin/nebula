@@ -1,7 +1,7 @@
 ---
 title: About permissions
 shortTitle: Permissions
-intro: Mods that run code ask the player before they start, and list every sensitive service they use as a permission the player can allow or refuse.
+intro: Mods that run code ask the player before they start, and list each service that reaches outside the game as a permission the player can allow or refuse.
 contentType: concepts
 ---
 
@@ -10,6 +10,8 @@ contentType: concepts
 Mod code can call Nebula's services. Most services are safe for any mod, such as drawing on the screen or reading the controls. Some services reach outside the game: the internet, the player's files, the camera or the clipboard. A mod that uses one of these lists it as a permission in its `luma.json`, with a line that says why.
 
 The player answers once for each mod. Nebula asks again only when an update changes the mod's code or its permissions.
+
+Mod code is native code. It runs in the game's process and can do anything on the device that the game can, with or without a service, and the question tells the player so: "This mod runs its own code and can do anything on this device." Permissions do not limit what code can do. They are how a mod says which of Nebula's outside services it uses, so the player sees it before allowing the mod and can refuse a service. Each of those services checks its permission before it answers. A player who allows a mod with code trusts its author.
 
 ## Permissions
 
@@ -20,7 +22,7 @@ The player answers once for each mod. Nebula asks again only when an update chan
 | `fs.exchange` | Exchange folder | Reads and writes files in the Exchange folder, which the player and other mods can open. |
 | `input.devices` | Other devices | Uses Bluetooth, USB and MIDI devices. |
 | `input.inject` | Controls | Presses buttons and moves the controls as if the mod were the player. |
-| `native` | Native libraries | Loads libraries of its own, with full access to the device. |
+| `native` | Native libraries | Calls the system's own libraries and loads libraries of its own, and draws with the renderer's own handles (`draw.native`). |
 | `net.internet` | Internet | Connects to the internet hosts the mod lists. |
 | `net.local` | Local network | Connects to devices on the local network and to programs on the same device. |
 | `save.game` | Game saves | Reads the player's save files, and offers a save to replace one. The player confirms each replacement. |
@@ -68,7 +70,7 @@ Changing only the `why` line does not ask again. Adding a host to `net.internet`
 
 The question lists the mod's name and version, a warning that the mod runs its own code, and one row for each permission. Its focus starts on **Not now**, so a button pressed by accident allows nothing. **Choose** lets the player allow some optional permissions and refuse others.
 
-Mod code cannot open, answer or skip the question.
+No service opens, answers or skips the question for a mod.
 
 ## Changing answers later
 

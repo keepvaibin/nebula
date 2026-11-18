@@ -51,6 +51,7 @@ To start LiveSplit's server, right-click LiveSplit and choose **Control** > **St
 
 Create `livesplit-link/source/main.lum` with this code:
 
+<!-- sample: examples/livesplit-link/source/main.lum -->
 ```lumascript
 use svc.net.local as local
 use svc.time

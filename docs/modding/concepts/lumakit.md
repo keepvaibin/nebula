@@ -64,7 +64,7 @@ A call to a LumaKit function is a direct native call into LumaKit's library, bou
 * Names never clash. LumaKit names your kinds, items and forms `MOD-ID/NAME` to the game, so two mods can use the same short name.
 * Permissions are yours. A module function that uses the network, files or the camera says so. Your mod declares the permission, and the player sees it on your mod.
 * Failures are named. A wrong call is a script error at your line, naming the module, the function and what it expected. A function that can fail to do what you asked returns `none` or `false`, as its reference says.
-* Game thread only. Call module functions from your mod's code on the game thread. A call from another thread is a script error.
+* Game thread only. Call module functions on the game thread, where LumaScript code always runs. A call from another thread, such as a C mod's own thread, is a script error, and the function does nothing.
 
 ## Data or code
 

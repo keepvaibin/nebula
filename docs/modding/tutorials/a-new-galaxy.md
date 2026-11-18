@@ -80,6 +80,7 @@ The galaxy's name and the star's name, in all 14 languages, are in `layers/base/
 
 Create `orb-galaxy/source/main.lum` with this code:
 
+<!-- sample: examples/a-new-galaxy/source/main.lum -->
 ```lumascript
 use kit.stage
 use kit.actor
@@ -120,8 +121,10 @@ on start {
     })
 }
 
-// A Spikeroll rolls at Mario once he is near.
+// A Spikeroll rolls at Mario once he is near. The kit calls it each frame the actor lives, which is only in a stage;
+// a function given away as a value proves what its game calls need itself (holds).
 fn roll(a: LiveActor) {
+    guard holds("stage") else { return }
     if actor.near_player(a, 900.0) {
         MR::tryStartAction(a, "Roll")
         actor.move_toward_player(a, 0.4)
@@ -152,6 +155,7 @@ task wake(k: ref<LiveActor>) {
 
 // It walks toward Mario, charges at him, then sits dizzy: the time to stomp it.
 fn king_step(k: LiveActor) {
+    guard holds("stage") else { return }
     if not awake {
         if actor.near_player(k, 1500.0) {
             awake = true
@@ -184,6 +188,7 @@ fn king_step(k: LiveActor) {
 
 // A stomp while it is dizzy costs it one health; the third beats it and its star appears.
 fn king_hit(k: LiveActor, attack: actor.Attack) -> bool {
+    guard holds("stage") else { return true }
     if mood != "Dizzy" {
         return true
     }

@@ -16,7 +16,7 @@ No call blocks. Every call runs on the game thread, and what your mod waits for 
 | `net.local` | 1.4 | `net.local` | `LUMA_SERVICE(slot, "net.local", "1.4")` | `use svc.net.local` |
 | `net.internet` | 1.4 | `net.internet` | `LUMA_SERVICE(slot, "net.internet", "1.4")` | `use svc.net.internet` |
 
-The header is `native/include/luma_net.h`. In LumaScript, a service is called by the last part of its name, such as `local.` for `net.local`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md).
+The header is `native/include/luma_net.h`. In LumaScript, a service is called by the last part of its name, such as `local.` for `net.local`. Each function below shows its LumaScript form first and its C form second. For how the forms are made, see [Calling services](calling-services.md). A C mod may import an earlier minor version when it calls only what that version has: each function says the version it needs when it is not 1.0.
 
 ### Details from the header
 
@@ -83,7 +83,7 @@ Needs service version 1.3 or later. One header a request sends.
 
 | Name | Description |
 |---|---|
-| `const char* name` | 1 to 64 of letters, digits and !#$%&'*+-.^_`\|~ ; not Host, Content-Length, Transfer-Encoding, Connection or Accept-Encoding (the service writes those). |
+| `const char* name` | 1 to 64 of letters, digits and !#$%&'*+-.^_`\|~; not Host, Content-Length, Transfer-Encoding, Connection or Accept-Encoding (the service writes those). |
 | `const char* value` | Printable text and tabs, at most 4096 bytes, no line ends. |
 
 ### `LumaNetHttpRequest`
@@ -92,7 +92,7 @@ Needs service version 1.3 or later. What http sends. Everything is copied before
 
 | Name | Description |
 |---|---|
-| `uint32_t size` | Sizeof(`LumaNetHttpRequest`). |
+| `uint32_t size` | `sizeof(LumaNetHttpRequest)`. |
 | `uint32_t timeout_ms` | The whole request, redirects included; 0: `LUMA_NET_TIMEOUT_DEFAULT_MS`. |
 | `const char* method` | "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE" or "OPTIONS"; null: "GET". |
 | `const char* url` | "http://" or "https://", the host as the service's tcp_connect takes it (an IPv6 address in brackets), an optional ":port", then the path and query as they go on the wire ("/" when none). |
@@ -164,7 +164,7 @@ Queues `bytes` of `data` (copied) to send in order. `LUMA_OK`; a SENT event foll
 int64_t take(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size);
 ```
 
-Not called by name in LumaScript. In the event's closure, the event's `data` already holds what this function takes.
+Not called by name in LumaScript. Inside the event's closure, the event's `data` already holds what this function takes.
 
 Inside a DATA event's call: up to `size` of the bytes waiting into buf, the oldest first; returns how many were taken (the rest stay). A null buf with size 0: the bytes waiting. Outside a DATA call of this socket: `LUMA_E_HANDLE` (reported).
 
@@ -234,7 +234,7 @@ int64_t take_datagram(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t
 
 Needs `net.local` 1.1 or later.
 
-Not called by name in LumaScript. In the event's closure, the event's `data` already holds what this function takes.
+Not called by name in LumaScript. Inside the event's closure, the event's `data` already holds what this function takes.
 
 Inside a DATAGRAM event's call: takes the oldest datagram waiting: up to `size` bytes into buf (the rest of a longer one is lost), its sender into *from (may be null). Returns its whole length (0 is a datagram too); none waiting: `LUMA_E_NOT_FOUND` (an answer). Outside a DATAGRAM call of this socket: `LUMA_E_HANDLE` (reported); a null buf with size: `LUMA_E_ARGUMENT` (reported). `take` on a UDP socket: `LUMA_E_HANDLE`.
 
@@ -350,13 +350,15 @@ Queues one message of `bytes` (copied): `binary` 0 text (must be UTF-8), 1 bytes
 
 ### `address`
 
+```lumascript
+local.address() -> text?
+```
+
 ```c
 int64_t address(const LumaMod* mod, char* buf, uint64_t size);
 ```
 
 Needs `net.local` 1.4 or later.
-
-Not callable from LumaScript.
 
 Call it on the game thread. This machine's IPv4 address on the local network in text ("192.168.1.20"): the one a phone on the same network reaches it at (the interface the system routes to the network by; no packet is sent), into buf with its NUL. Returns its length without the NUL; a null buf with size 0 asks the length only. No local network (only loopback, or a public address): `LUMA_E_NOT_FOUND` (an answer, not reported); a buf too short: `LUMA_E_TOO_LARGE` (an answer; nothing written); a null buf with size above 0: `LUMA_E_ARGUMENT` (reported).
 
@@ -422,7 +424,7 @@ As net.local's send, take and close, for this service's sockets (a handle belong
 int64_t take(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t size);
 ```
 
-Not called by name in LumaScript. In the event's closure, the event's `data` already holds what this function takes.
+Not called by name in LumaScript. Inside the event's closure, the event's `data` already holds what this function takes.
 
 ### `close`
 
@@ -488,7 +490,7 @@ int64_t take_datagram(const LumaMod* mod, LumaHandle socket, void* buf, uint64_t
 
 Needs `net.internet` 1.1 or later.
 
-Not called by name in LumaScript. In the event's closure, the event's `data` already holds what this function takes.
+Not called by name in LumaScript. Inside the event's closure, the event's `data` already holds what this function takes.
 
 As net.local's.
 
