@@ -2,15 +2,3 @@
 # A line goes in only when main's newest commit fails the same way, or for a new test of an open ledger row;
 # never for what the candidate broke. The commit that closes the row removes its lines.
 check	test	ledger row	first seen	what
-tour/d3d12	030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour/vulkan	030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour/d3d11	030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour/tablet	030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour/tablet-pc	030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour-asan/d3d12	030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour-RMGP01/d3d12	RMGP01-030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour-RMGP01/vulkan	RMGP01-030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour-RMGP01/d3d11	RMGP01-030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour-RMGJ01/d3d12	RMGJ01-030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour-RMGJ01/vulkan	RMGJ01-030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
-tour-RMGJ01/d3d11	RMGJ01-030-FactoryGalaxy-4	P-122	a6b483875	FactoryGalaxy scenario 4 never gives control to the player after its opening flight: setup-failed
