@@ -1475,9 +1475,9 @@ void resize_window_client(unsigned width, unsigned height) noexcept {
 }
 
 // The system's open panel, answered on the main thread.
-void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done) {
+void pick_files(FilePick kind, PickDone done) {
     using namespace galaxy::sdl;
-    auto shared = std::make_shared<std::function<void(std::vector<std::filesystem::path>)>>(std::move(done));
+    auto shared = std::make_shared<PickDone>(std::move(done));
     dispatch_async(dispatch_get_main_queue(), ^{
         @autoreleasepool {
             NSOpenPanel* const panel = [NSOpenPanel openPanel];
@@ -1501,7 +1501,7 @@ void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::p
                     }
                 }
                 g_panels.fetch_sub(1, std::memory_order_relaxed);
-                (*shared)(std::move(chosen));
+                (*shared)(std::move(chosen), false);
             };
             if (g_window != nil) {
                 [panel beginSheetModalForWindow:g_window completionHandler:finished];
