@@ -373,7 +373,7 @@ std::string json_string(std::string_view text) {
 // --- The plan ------------------------------------------------------------------------------------------------------
 
 enum class Action { Hold, Stick, Shake, Pointer, Key, Text, Settings, Picture, Wait, End, Game, TakeOut, Reload, Forget,
-                    Window, LoseDevice };
+                    Window, LoseDevice, Restart };
 
 struct Cond {
     bool log = false;
@@ -395,6 +395,7 @@ struct Step {
     float x = 0.0f, y = 0.0f;
     std::uint32_t key = 0u;
     std::uint32_t width = 0u, height = 0u;  // window's
+    std::uint32_t starts_again = 0u;        // restart's: the starts made again before the run goes on
     std::int64_t frames = 0;
     std::vector<Cond> conds;
     std::int64_t timeout = 600;
@@ -434,6 +435,7 @@ struct State {
     double memory_next = 0.0;     // the seconds after frame 0 of the next process.memory fact
     bool title_seen = false;
     bool setup_finished = false;  // "setup done" answered
+    bool restarting = false;      // a restart step asked the host to start the game again: no step runs after it
     std::string out;
     std::ofstream facts;
     std::vector<std::string> setup;
@@ -751,6 +753,16 @@ bool read_line(const std::string& line, std::string& why) {
         } else if (a == "lose_device" && args.empty()) {
             // The graphics device lost at the renderer's next frame, as a driver reset loses it.
             s.action = Action::LoseDevice;
+        } else if (a == "restart" && args.size() == 1u) {
+            // The game started again, as Nebula Settings' Restart starts it, until it has been started again `count`
+            // times: each start runs the plan from its first step, and at this step one that has fewer starts before
+            // it starts the game again; the one with `count` goes on to the next step.
+            if (!number(args[0], value) || value < 1.0 || value > 1000.0 || value != std::floor(value)) {
+                why = "step " + std::to_string(s.number) + ": restart takes how many starts again, 1 to 1000";
+                return false;
+            }
+            s.action = Action::Restart;
+            s.starts_again = static_cast<std::uint32_t>(value);
         } else {
             why = "step " + std::to_string(s.number) + ": not an action this host half knows: " + a;
             return false;
@@ -936,6 +948,28 @@ void run_step(Step& s, std::int64_t now) {
         }
         g.host->lose_gpu_device(g.host->host);
         break;
+    case Action::Restart: {
+        if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, restart) + sizeof(g.host->restart) ||
+            g.host->restart == nullptr) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": this host cannot start the game again");
+            return;
+        }
+        // In the log, which every start of a run writes to: the runner checks the last start's count.
+        if (g.log != nullptr) {
+            g.log("harness: starts made again before this one: " + std::to_string(g.host->started_again));
+        }
+        if (g.host->started_again >= s.starts_again) {
+            break;
+        }
+        if (g.host->restart(g.host->host) == 0u) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": the host could not start the game again");
+            return;
+        }
+        // This start ends; the next one runs the plan from its first step.
+        g.restarting = true;
+        s.waiting = true;
+        return;
+    }
     case Action::Text:
         if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, type_text) + sizeof(g.host->type_text) ||
             g.host->type_text == nullptr) {
@@ -1233,7 +1267,7 @@ void frame(std::uint64_t game_frames) {
     bool before_done = true;      // every step written before this one has run
     bool game_waiting = false;    // a game step written before this one is not answered yet
     for (Step& s : g.steps) {
-        if (g.finished) {
+        if (g.finished || g.restarting) {
             return;
         }
         if (s.waiting && (s.action == Action::TakeOut || s.action == Action::Reload)) {

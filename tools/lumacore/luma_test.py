@@ -627,7 +627,7 @@ def read_steps(t, bare, classes):
     pictures = set()
     actions = {"hold", "stick", "shake", "pointer", "key", "text", "settings", "picture", "call", "read", "stage", "wait", "hash",
                "end", "take_out", "reload", "forget", "copy_file", "load_file", "erase_file", "new_file", "window",
-               "lose_device"}
+               "lose_device", "restart"}
     for i, s in enumerate(steps):
         path = "steps[%d]" % i
         if not isinstance(s, dict):
@@ -680,8 +680,9 @@ def read_steps(t, bare, classes):
         for key in needs:
             if key not in s:
                 raise HarnessError("%s: %s needs %s" % (path, action, key))
-        if bare and action not in ("wait", "picture", "key", "text", "settings", "window", "lose_device", "end"):
-            raise HarnessError("%s: a bare test has only wait, picture, key, text, settings, window, lose_device and end steps" % path)
+        if bare and action not in ("wait", "picture", "key", "text", "settings", "window", "lose_device", "restart", "end"):
+            raise HarnessError("%s: a bare test has only wait, picture, key, text, settings, window, lose_device, restart and "
+                               "end steps" % path)
         v = s[action]
         if action == "hold":
             if not isinstance(v, list) or not v or not all(isinstance(b, str) and b in BUTTONS for b in v):
@@ -728,6 +729,12 @@ def read_steps(t, bare, classes):
             if v is not True:
                 raise HarnessError("%s.lose_device takes true" % path)
             step["line"] = "lose_device"
+        elif action == "restart":
+            # The game started again as Nebula Settings' Restart starts it, until it has been `restart` times: each
+            # start runs the steps from the first, and at this one a start with fewer before it starts the game again.
+            if not (isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 1000):
+                raise HarnessError("%s.restart is how many starts again, 1 to 1000" % path)
+            step["line"] = "restart %d" % v
         elif action in ("wait", "end"):
             if v is not True:
                 raise HarnessError("%s.%s takes true" % (path, action))
@@ -1741,13 +1748,13 @@ def run_one(test, renderer, args, run_folder, previous):
     began = time.time()
     with (run_folder / "run.log").open("wb") as log:
         with subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, **hidden) as process:
-            code, starts, unwatched = watch_run(process, run_folder, exe.name, test["limit"] + 60)
+            code, starts, unwatched = watch_run(process, run_folder, exe.name, test["limit"] + 60, test["starts"] or 5)
     seconds = time.time() - began
     return {"code": code, "seconds": seconds, "frozen": frozen, "mods": mod_ids, "exe": exe.name, "starts": starts,
             "unwatched": unwatched}
 
 
-def watch_run(first, run_folder, exe_name, limit):
+def watch_run(first, run_folder, exe_name, limit, most):
     """The run's game to its end: the process the runner started and each one that took its place (the host's
     start-again: mods cooked, a mod's code chose other layers). The host writes "<process id> <creation time>" of the new
     process to <crash dumps>/restarted, the run folder here, just after starting it and before its own end. The new
@@ -1757,7 +1764,8 @@ def watch_run(first, run_folder, exe_name, limit):
     The file is read while the process that writes it still runs, and the new process is opened at once: an open
     handle keeps it findable with its exit code however long the old one takes to end, so a new process that ends
     first is still watched. Each process gets `limit` seconds and is ended at it (Popen's kill or Followed's); one
-    ended at its limit, or one that cannot be watched, ends every process that took its place too. Returns (the last process's exit code, or None when
+    ended at its limit, or one that cannot be watched, ends every process that took its place too. `most` starts are
+    watched (the test's "starts", else 5): one more is a game that keeps starting again, and is not followed. Returns (the last process's exit code, or None when
     one was ended at its limit; processes started; why one could not be watched, or None)."""
     marker = run_folder / "restarted"
     seen = set()
@@ -1777,8 +1785,8 @@ def watch_run(first, run_folder, exe_name, limit):
         key = (int(words[0]), int(words[1]))
         if key in seen or state["unwatched"] is not None:
             return
-        if len(seen) == 4:
-            state["unwatched"] = "the game started again more than 4 times"
+        if len(seen) == max(most, 5) - 1:
+            state["unwatched"] = "the game started again more than %d times" % (max(most, 5) - 1)
             return
         seen.add(key)
         state["starts"] += 1
@@ -1798,8 +1806,8 @@ def watch_run(first, run_folder, exe_name, limit):
         if found <= state["starts"]:
             return False
         state["starts"] = found
-        if found > 5:
-            state["unwatched"] = "the game started again more than 4 times"
+        if found > max(most, 5):
+            state["unwatched"] = "the game started again more than %d times" % (max(most, 5) - 1)
         return True
 
     process = first

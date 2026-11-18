@@ -1,0 +1,28 @@
+{
+  "harness": 1,
+  "name": "restarts",
+  "about": "The game started again twice in a row, as Nebula Settings' Restart starts it: each start comes up, the last one knows 2 came before it and reaches the title.",
+  "bare": true,
+  "limit_seconds": 120,
+  "starts": 3,
+  "steps": [
+    {
+      "at": 120,
+      "restart": 2
+    },
+    {
+      "at": 600,
+      "picture": "title"
+    },
+    {
+      "at": 660,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "harness: starts made again before this one: 2$",
+      "times": 1
+    }
+  ]
+}

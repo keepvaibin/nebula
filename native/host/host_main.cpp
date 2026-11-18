@@ -4289,6 +4289,10 @@ void extension_lose_gpu_device(void*) {
 void extension_type_text(void*, const char* utf8) {
     galaxy::luma_input::text_utf8(utf8);
 }
+// The harness's restart step: the settings' Restart (host_window::restart_game), from any thread.
+std::uint32_t extension_restart(void*) {
+    return galaxy::render::host_window::restart_game(galaxy::render::host_window::Restart::Start) ? 1u : 0u;
+}
 #endif
 
 void extension_take_out_mod(void*, const char* mod_id) {
@@ -4340,6 +4344,7 @@ void attach_extensions() {
     host.resize_window = extension_resize_window;
     host.lose_gpu_device = extension_lose_gpu_device;
     host.type_text = extension_type_text;
+    host.restart = extension_restart;
 #endif
     std::string error;
     if (!galaxy::extensions::attach(files, host, error)) {
