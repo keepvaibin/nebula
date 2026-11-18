@@ -529,7 +529,7 @@ void RendererD3D11::attach_texture_uploads(TextureStore& cache) {
 }
 
 void RendererD3D11::begin_frame() {
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     follow_window_and_resize();
     apply_window_size();
     apply_dynamic_resolution();

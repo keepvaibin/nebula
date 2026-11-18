@@ -3542,7 +3542,7 @@ void RendererD3D12::begin_frame() {
     // Display and size changes apply here, between command-list recordings.
     // They wait for the GPU themselves, so they come before any per-slot state
     // below is touched.
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     reconcile_display_state();
     apply_pending_resize();
     if (const bool fsr = fsr_generation_wanted(); fsr != fsr_swap_chain_ && !streamline_frame_open_) {

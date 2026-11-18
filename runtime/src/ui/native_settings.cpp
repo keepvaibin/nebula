@@ -101,7 +101,7 @@ std::atomic<bool> rtx_adapter{false};
 }  // namespace host_window
 
 using host_window::flush_native_settings_if_dirty;
-using host_window::poll_render_config_file;
+using host_window::watch_render_config_file;
 using host_window::hidden_window_mode_enabled;
 
 namespace {
@@ -5994,18 +5994,13 @@ float upscaler_render_fraction(const RenderConfig& render, unsigned output_width
 // Exit paths: waits for a queued or running save (at most 5 s), then writes what is still unsaved here.
 void save_native_settings_now() { s_settings_save.save_now(); }
 
+namespace {
 // Nebula Settings can save config.ini while the game runs. The game takes the file's settings as the menu's
-// apply does, so the next save from the game writes them back rather than over them. Checked twice a second,
-// and not while the menu is open: its draft and display confirmation belong to the settings it opened with, and
-// a change made meanwhile lands once it closes.
-void poll_render_config_file() {
-    static std::uint64_t s_next_check_ms = 0u;
-    const std::uint64_t now = galaxy::steady_ms();
-    if (now < s_next_check_ms) {
-        return;
-    }
-    s_next_check_ms = now + 500u;
-    // A save of the game's own still in flight would read back as a change made outside it.
+// apply does, so the next save from the game writes them back rather than over them. Checked twice a second on the
+// settings' own thread (s_settings_save), between its saves, and not while the menu is open: its draft and display
+// confirmation belong to the settings it opened with, and a change made meanwhile lands once it closes.
+void look_at_render_config_file() {
+    // A save asked for since would read back as a change made outside the game.
     if (s_settings_save.pending()) {
         return;
     }
@@ -6022,6 +6017,17 @@ void poll_render_config_file() {
     if (const std::string gpu = next_start_gpu(); gpu != gpu_before) {
         std::cerr << "[settings] gpu=" << gpu << " applies at the next start\n";
     }
+}
+}  // namespace
+
+// The render thread's only part: starting the watch, once (a flag's load after that). It never takes the settings'
+// lock or reads their files.
+void watch_render_config_file() {
+    static std::atomic<bool> s_watching{false};
+    if (s_watching.load(std::memory_order_relaxed) || s_watching.exchange(true, std::memory_order_relaxed)) {
+        return;
+    }
+    s_settings_save.watch(look_at_render_config_file, std::chrono::milliseconds(500));
 }
 
 // A renderer chosen in Nebula Settings during the session that is not the one the game runs on.

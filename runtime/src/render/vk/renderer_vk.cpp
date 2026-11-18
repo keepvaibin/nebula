@@ -1968,7 +1968,7 @@ void RendererVk::wait_for_fence_value(std::uint64_t fence_value) {
 }
 
 void RendererVk::begin_frame() {
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     if (!streamline_frame_open_) {
         vk::streamline_vk::open_frame(swapchain_fsr_);
         streamline_frame_open_ = true;

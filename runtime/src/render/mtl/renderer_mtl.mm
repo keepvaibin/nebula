@@ -563,7 +563,7 @@ void RendererMtl::next_command_buffer(GpuPass pass) {
 }
 
 void RendererMtl::begin_frame() {
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     follow_window_and_resize();
     apply_window_size();
     grow_rings();
