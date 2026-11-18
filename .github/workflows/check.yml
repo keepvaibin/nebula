@@ -9,13 +9,16 @@ on:
   push:
     branches: ['**']
   pull_request:
+  # The Windows and Android jobs of a work branch, started by hand.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# A work branch's new push cancels its old run; a run of main or of a candidate (gate/*) keeps its results.
 concurrency:
   group: check-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/gate/') }}
 
 env:
   LLVM_VERSION: '22.1.6'
@@ -26,6 +29,8 @@ env:
 jobs:
   windows:
     name: Windows (three renderers, unit tests)
+    # Main, candidates and a start by hand (file 04, 8): this machine builds and tests Windows and Android itself.
+    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-2022
     timeout-minutes: 240
     steps:
@@ -86,8 +91,12 @@ jobs:
           New-ItemProperty -Force -Path $drivers -Name $icd -PropertyType DWord -Value 0 | Out-Null
           # The loader names the drivers it found and why one was not taken, in the start check's log.
           "VK_LOADER_DEBUG=error,warn,driver" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-      - name: Save the compiler cache
+      - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
+        shell: bash
+        run: sccache --show-stats
+      - name: Save the compiler cache
+        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/sccache
@@ -110,6 +119,8 @@ jobs:
 
   windows-game:
     name: Windows game modules
+    # Main, candidates and a start by hand (file 04, 8): this machine builds and tests Windows and Android itself.
+    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-2022
     timeout-minutes: 240
     steps:
@@ -134,8 +145,12 @@ jobs:
           $llvm = Join-Path $env:RUNNER_TEMP 'llvm\bin'
           & .\native\build.ps1 -Petari native\petari -Build $build -Llvm $llvm -Target all
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Save the compiler cache
+      - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
+        shell: bash
+        run: sccache --show-stats
+      - name: Save the compiler cache
+        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/sccache
@@ -151,7 +166,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2022]
+        # Windows too on main, candidates and a start by hand; work branches run Rust on Linux only (file 04, 8).
+        os: ${{ fromJSON((github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch') && '["ubuntu-24.04", "windows-2022"]' || '["ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     steps:
@@ -199,8 +215,12 @@ jobs:
           cmake --build "$RUNNER_TEMP/game" --target native_tests
           ctest --test-dir "$RUNNER_TEMP/game" --output-on-failure --timeout 600
 
-      - name: Save the compiler cache
+      - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
+        shell: bash
+        run: sccache --show-stats
+      - name: Save the compiler cache
+        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/sccache
@@ -255,8 +275,12 @@ jobs:
           cmake --build "$RUNNER_TEMP/game" --target native_tests
           ctest --test-dir "$RUNNER_TEMP/game" --output-on-failure --timeout 1200
 
-      - name: Save the compiler cache
+      - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
+        shell: bash
+        run: sccache --show-stats
+      - name: Save the compiler cache
+        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/sccache
@@ -291,8 +315,12 @@ jobs:
         run: sh tools/fetch_build_deps.sh "$RUNNER_TEMP/deps"
       - name: Build Nebula
         run: sh platform/linux/build_linux.sh -d "$RUNNER_TEMP/deps" -l "$RUNNER_TEMP/llvm" -w "$RUNNER_TEMP/work"
-      - name: Save the compiler cache
+      - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
+        shell: bash
+        run: sccache --show-stats
+      - name: Save the compiler cache
+        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/sccache
@@ -322,30 +350,33 @@ jobs:
         run: |
           echo "TOOLS=$HOME/nebula-tools" >> "$GITHUB_ENV"
           echo "WORK=$HOME/nebula-work" >> "$GITHUB_ENV"
-          brew install llvm ninja
-          llvm="$(brew --prefix llvm)"
-          echo "BREW_LLVM_VERSION=$("$llvm/bin/llvm-config" --version)" >> "$GITHUB_ENV"
-          mkdir -p "$HOME/nebula-tools/toolchain"
-          ln -sfn "$llvm" "$HOME/nebula-tools/toolchain/llvm"
+          brew install ninja
+          llvm="$HOME/nebula-tools/toolchain/llvm"
+          mkdir -p "$llvm"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/llvm.tar.xz" \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/LLVM-$LLVM_VERSION-macOS-ARM64.tar.xz"
+          tar -xJf "$RUNNER_TEMP/llvm.tar.xz" -C "$llvm" --strip-components=1
+          rm "$RUNNER_TEMP/llvm.tar.xz"
+          test "$("$llvm/bin/llvm-config" --version)" = "$LLVM_VERSION"
           rustup target add aarch64-apple-darwin
       - name: Restore libc++
         id: libcxx-cache
         uses: actions/cache/restore@v6
         with:
           path: ~/nebula-tools/toolchain/libcxx
-          key: libcxx-macos-arm64-${{ env.BREW_LLVM_VERSION }}-${{ hashFiles('platform/apple/build_libcxx.sh') }}
+          key: libcxx-macos-arm64-${{ env.LLVM_VERSION }}-${{ hashFiles('platform/apple/build_libcxx.sh') }}
       - name: Build libc++
         if: steps.libcxx-cache.outputs.cache-hit != 'true'
         run: |
           src="$RUNNER_TEMP/llvm-src"
           mkdir -p "$src"
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/llvm-project.tar.xz" \
-            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$BREW_LLVM_VERSION/llvm-project-$BREW_LLVM_VERSION.src.tar.xz"
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM_VERSION/llvm-project-$LLVM_VERSION.src.tar.xz"
           tar -xJf "$RUNNER_TEMP/llvm-project.tar.xz" -C "$src" --strip-components 1
           sh platform/apple/build_libcxx.sh "$src" "$TOOLS/toolchain/llvm" "$TOOLS/toolchain/libcxx" macos arm64
           rm -rf "$TOOLS/toolchain/libcxx/build-macos-arm64"
       - name: Save libc++
-        if: steps.libcxx-cache.outputs.cache-hit != 'true'
+        if: steps.libcxx-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
         with:
           path: ~/nebula-tools/toolchain/libcxx
@@ -357,8 +388,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/shipped"
           cp installer/lumakit/lumakit.luma "$RUNNER_TEMP/shipped/"
           sh platform/apple/build_macos.sh -t "$TOOLS" -w "$WORK" -a arm64 -m "$RUNNER_TEMP/shipped"
-      - name: Save the compiler cache
+      - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
+        shell: bash
+        run: sccache --show-stats
+      - name: Save the compiler cache
+        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/sccache
@@ -373,6 +408,8 @@ jobs:
 
   android:
     name: Android (${{ matrix.abi }})
+    # Main, candidates and a start by hand (file 04, 8): this machine builds and tests Windows and Android itself.
+    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/gate/') || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-2022
     timeout-minutes: 300
     strategy:
@@ -444,8 +481,12 @@ jobs:
             -HostTools (Join-Path $temp 'host-tools') -Abis x86_64 -Debuggable `
             -Harness (Join-Path $PWD 'tools/test_driver/android/java') `
             -ReleaseKey ''
-      - name: Save the compiler cache
+      - name: The compiler cache's hits and misses
         if: always() && steps.cache.outputs.key != ''
+        shell: bash
+        run: sccache --show-stats
+      - name: Save the compiler cache
+        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/sccache
