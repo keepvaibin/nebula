@@ -1,6 +1,7 @@
 // The real Wii Remote's worker (wiimote_hid.h): finds a remote through the platform's link (wiimote_link.h), sets it
 // up as the game wants it and hands its reports to the host's input thread.
 #include "galaxy/wiimote_hid.h"
+#include "galaxy/crash_stack.h"
 #include "galaxy/launch_args.h"
 
 #include "galaxy/input/host_input.h"
@@ -442,6 +443,7 @@ void name_this_thread() {
 #elif defined(__linux__) || defined(__ANDROID__)
     pthread_setname_np(pthread_self(), "Nebula Wiimote");  // 15 characters at most
 #endif
+    galaxy::host::crash_stack_for_this_thread();
 }
 
 }  // namespace

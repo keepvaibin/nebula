@@ -1097,6 +1097,7 @@ bool start() noexcept {
 #if defined(__ANDROID__)
     forward_output_to_logcat();
 #else
+    keep_output_in_log(galaxy::nebula_data_directory());
     install_crash_log(-1);
 #endif
     // Landscape either way up: the game lays out for shapes from 4:3 wide; taller ones come with Vert+ framing.

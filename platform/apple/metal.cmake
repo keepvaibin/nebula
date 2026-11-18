@@ -98,6 +98,8 @@ add_executable(nebula_native
     "${nebula_root}/native/host/host_main.cpp"
     "${nebula_root}/runtime/src/whole_lines.cpp"
     "${nebula_root}/platform/sdl/native_game_host_sdl.cpp"
+    "${nebula_root}/platform/sdl/crash_log.cpp"
+    "${nebula_root}/platform/sdl/output_log.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_window_apple.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/luma_system_apple.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_apple.mm"
