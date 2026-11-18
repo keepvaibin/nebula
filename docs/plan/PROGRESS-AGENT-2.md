@@ -198,4 +198,4 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   the workers go on making pipelines after the start's set, and while they run the line reads "Preparing graphics:
   N%" in place of the page's own. aftercrash 6702 and 6709 failed so under load on Vulkan and 6702 on d3d11, and pass
   unloaded. It cannot be a known-failures line (a pass would fail the gate). The renderer, the status line and the
-  host's deterministic mode are Agent 1's files; he chooses the fix.
+  host's deterministic mode are Agent 1's files; he takes the row.
