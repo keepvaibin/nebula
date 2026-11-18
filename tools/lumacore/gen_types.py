@@ -928,7 +928,10 @@ class Reader:
             if wrong:
                 sys.exit("gen_types.py: the function rows' facts (luma_functions.json) do not hold:\n  " +
                          "\n  ".join(wrong[:200]) + ("\n  ... %d in all" % len(wrong) if len(wrong) > 200 else ""))
-            I.write_if_changed(OUT / "luma_texts.left", prove_text_in(functions).encode("utf-8"))
+            helpers, wrong = merge_text_helpers(DEFINED)
+            if wrong:
+                sys.exit("gen_types.py: the text facts of functions with no row (.texts) do not hold:\n  " + "\n  ".join(wrong))
+            I.write_if_changed(OUT / "luma_texts.left", prove_text_in(functions, helpers).encode("utf-8"))
             guarantees, wrong = read_guarantees(GUARANTEES_TABLE)
             if wrong:
                 sys.exit("gen_types.py: the sets a handler proves (guarantees.json) do not hold:\n  " + "\n  ".join(wrong))
@@ -1568,33 +1571,66 @@ def merge_functions(folder, records, left_records):
     return functions, wrong
 
 
+def merge_text_helpers(folder):
+    """N-4002: every unit's .texts (instrument.py text_helper_facts), one entry per function: a function defined in a
+    header is seen by many units, each with the same body. Returns (helpers, what is wrong)."""
+    helpers, wrong = {}, []
+    for rows_file in sorted(pathlib.Path(folder).rglob("*.rows")):
+        source = rows_file.relative_to(folder).as_posix()[:-len(".rows")]
+        texts_file = rows_file.with_suffix(".texts")
+        if not texts_file.is_file():
+            wrong.append("%s: no .texts" % source)
+            continue
+        for h in json.loads(texts_file.read_text(encoding="utf-8")):
+            key = (h["name"], h["signature"])
+            have = helpers.get(key)
+            if have is None:
+                helpers[key] = h
+            elif have["texts"] != h["texts"]:
+                # One function, two bodies (an ODR fault, or a macro that differs per unit): read as the one that
+                # lets out the most, parameter by parameter.
+                for k, (a, b) in enumerate(zip(have["texts"]["params"], h["texts"]["params"])):
+                    if a is None or b is None:
+                        continue
+                    a["escape"] = a["escape"] or b["escape"]
+                    a["passes"] = sorted({tuple(p) for p in a["passes"] + b["passes"]})
+                    a["passes"] = [list(p) for p in a["passes"]]
+                have["texts"]["bases"] = sorted({tuple(b) for b in have["texts"]["bases"] + h["texts"]["bases"]})
+                have["texts"]["bases"] = [list(b) for b in have["texts"]["bases"]]
+    return [helpers[k] for k in sorted(helpers)], wrong
+
+
 # N-4002: the C library functions with no row that only read a text argument during the call: name -> the argument
-# indexes read, or ("from", n): every argument from n on (a formatter's format and its values).
+# indexes read, or ("from", n): every argument from n on (a formatter's format and its values). A function whose result
+# points into a text argument reads its others (strstr's second); the first is followed (instrument.py TEXT_DERIVED).
 TEXT_READERS = {
     "strcmp": (0, 1), "strncmp": (0, 1), "strcasecmp": (0, 1), "strncasecmp": (0, 1), "stricmp": (0, 1),
     "strnicmp": (0, 1), "_stricmp": (0, 1), "_strnicmp": (0, 1), "strlen": (0,), "strnlen": (0,), "strspn": (0, 1),
     "strcspn": (0, 1), "strcpy": (1,), "strncpy": (1,), "strcat": (1,), "strncat": (1,), "memcmp": (0, 1),
     "memcpy": (1,), "memmove": (1,), "atoi": (0,), "atol": (0,), "atof": (0,), "sscanf": (0, 1), "puts": (0,),
     "fputs": (0,), "printf": ("from", 0), "sprintf": ("from", 1), "snprintf": ("from", 2), "vsprintf": (1,),
-    "vsnprintf": (2,), "vprintf": (0,),
+    "vsnprintf": (2,), "vprintf": (0,), "strstr": (1,), "strpbrk": (1,),
 }
 
 
-def prove_text_in(functions):
+def prove_text_in(functions, helpers=()):
     """N-4002: gives `in` (read during the call only, not kept) to each `const char *` parameter the game's code proves
     so: the function lets it out nowhere (instrument.py's TextUses), every callee parameter it hands it to is `in` or a
     C library reader (TEXT_READERS), and so is the parameter in every function that overrides it, at every level (a
     call may reach any of them). The greatest set where that holds (a cycle of calls that keeps nothing is `in`).
-    A variadic function's parameters are not marked (the compiler calls no marked variadic function). Takes each row's
+    A variadic function's parameters are not marked (the compiler calls no marked variadic function). `helpers`: the
+    text facts of functions with no row (merge_text_helpers), read as rows are and never marked. Takes each row's
     "texts" out and fills an unmarked text parameter's mark; returns luma_texts.left: each text parameter left
-    unmarked, and why."""
+    unmarked, and why, and each of a function with no row ("(no row)") that lets one out."""
     by = {(f["name"], f["signature"]): f for f in functions}
+    every = functions + [h for h in helpers if (h["name"], h["signature"]) not in by]
+    by.update({(h["name"], h["signature"]): h for h in every})
     overriders = {}
-    for f in functions:
+    for f in every:
         for name, signature in (f.get("texts") or {}).get("bases", []):
             overriders.setdefault((name, signature), []).append(f)
     holds, why = {}, {}
-    for f in functions:
+    for f in every:
         for k, t in enumerate((f.get("texts") or {}).get("params", [])):
             if t is not None:
                 key = (f["name"], f["signature"], k)
@@ -1616,7 +1652,7 @@ def prove_text_in(functions):
     changed = True
     while changed:
         changed = False
-        for f in functions:
+        for f in every:
             texts = f.get("texts") or {}
             for k, t in enumerate(texts.get("params", [])):
                 key = (f["name"], f["signature"], k)
@@ -1650,6 +1686,11 @@ def prove_text_in(functions):
                     f["marks"][k] = {"way": "in", "count": None, "fixed": None, "nullable": False}
             else:
                 left.append("%s %s parameter %d: %s" % (f["name"], f["signature"], k + 1, why[key]))
+    for h in every[len(functions):]:
+        for k, t in enumerate(h["texts"]["params"]):
+            key = (h["name"], h["signature"], k)
+            if t is not None and not holds[key]:
+                left.append("%s %s parameter %d (no row): %s" % (h["name"], h["signature"], k + 1, why[key]))
     return "".join(line + "\n" for line in sorted(left))
 
 

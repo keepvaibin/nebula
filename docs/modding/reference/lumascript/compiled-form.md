@@ -448,8 +448,10 @@ lumart pass it. Unmarked and `kept` pointer parameters stay refused (S0060 with 
 - Text (addition 6): a `const char *` is marked `in` when the game's code proves it read during the call only: the
   function lets the address out nowhere (no member, global, static, return, lambda or initializer list holds it),
   and every function it hands it to reads it only, as does every override of each (instrument.py's TextUses,
-  gen_types.py's prove_text_in, N-4002; tools/lumacore/texts_fixture_test.py). luma_texts.left, beside the functions
-  file, lists each text parameter left unmarked and why. A made text given to an `in` one goes to the scratch; any
+  gen_types.py's prove_text_in, N-4002; tools/lumacore/texts_fixture_test.py). A function with no row of its own
+  (defined in a header, inline or static) is read where a unit sees its body, and so is an override defined in a
+  header; the C library's are known by name. luma_texts.left, beside the functions file, lists each text parameter
+  left unmarked and why, and each of a function with no row that lets one out ("(no row)"). A made text given to an `in` one goes to the scratch; any
   other still goes through `lumart_text_keep`.
 - Tested in 4.8 with C-6's first marks: `MR::getPlayerFrontVec(var front)` (out), `MR::calcScreenPosition`
   (out, both overloads), and once the headers mark them, one count, one fixed and one nullable function; each

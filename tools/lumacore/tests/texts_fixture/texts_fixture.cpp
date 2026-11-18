@@ -142,3 +142,11 @@ int txTwo(const char* pRead, const char* pKept) {
     sTxKept = pKept;
     return *pRead;
 }
+
+int txUsesHeaderRead(const char* pText) { return txHeaderCompare(pText, "a"); }
+void txUsesHeaderKeep(const char* pText) { txHeaderKeep(pText); }
+int txSubstring(const char* pText, const char* pPart) { return strstr(pText, pPart) != nullptr; }
+
+TxShown::~TxShown() {}
+int TxShown::show(const char* pText) { return *pText; }
+int txShow(TxShown* pShown, const char* pText) { return pShown->show(pText); }

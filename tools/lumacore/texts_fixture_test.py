@@ -6,7 +6,8 @@ command):
   1. instrument.py writes the fixture unit's copy, .rows and .functions;
   2. gen_types.py (--tree the fixture, --defined the copy's folder) writes luma_functions.json: each row's marks are
      the expected ones exactly (`in` on each text parameter proven read only, nothing on any other), and
-     luma_texts.left names each text parameter left unmarked with the expected reason, and no other.
+     luma_texts.left names each text parameter left unmarked with the expected reason, and no other: a row's, and
+     each of a function with no row that the proof followed (HELPERS_LEFT).
 Exit 0 only when both hold.
 """
 import json
@@ -67,6 +68,19 @@ EXPECTED = {
     ("txInsideKept", "void(const char *)"): ([None], {1: ": stored"}),
     ("txInsideRead", "int(const char *)"): ([IN], {}),
     ("txTwo", "int(const char *, const char *)"): ([IN, None], {2: ": stored"}),
+    ("txUsesHeaderRead", "int(const char *)"): ([IN], {}),
+    ("txUsesHeaderKeep", "void(const char *)"): ([None], {1: "given to txHeaderKeep void(const char *) argument 1"}),
+    ("txSubstring", "int(const char *, const char *)"): ([IN, IN], {}),
+    ("TxShown::~TxShown", "()"): ([], {}),
+    ("TxShown::show", "int(const char *)"): ([None], {1: "overridden by TxShownKeeper::show int(const char *)"}),
+    ("txShow", "int(TxShown *, const char *)"): ([None, None], {2: "given to TxShown::show int(const char *) argument 1"}),
+}
+
+# The functions with no row the proof follows (defined in the header) that keep a text: (name, signature, parameter
+# number): what luma_texts.left says of it. txHeaderCompare is followed too and keeps nothing.
+HELPERS_LEFT = {
+    ("txHeaderKeep", "void(const char *)", 1): ": stored",
+    ("TxShownKeeper::show", "int(const char *)", 1): ": stored",
 }
 
 
@@ -123,6 +137,12 @@ def main():
             named.update(lines)
             if len(lines) != 1 or reason not in lines[0]:
                 failed.append("luma_texts.left on %s: %s, not one line with %r" % (head.strip(), lines, reason))
+    for (name, signature, number), reason in HELPERS_LEFT.items():
+        head = "%s %s parameter %d (no row): " % (name, signature, number)
+        lines = [line for line in left if line.startswith(head)]
+        named.update(lines)
+        if len(lines) != 1 or reason not in lines[0]:
+            failed.append("luma_texts.left on %s: %s, not one line with %r" % (head.strip(), lines, reason))
     extra = [line for line in left if line not in named]
     if extra:
         failed.append("luma_texts.left names more: %s" % extra)

@@ -74,7 +74,7 @@ foreach(source IN LISTS game_sources)
         set(copy "${CMAKE_CURRENT_BINARY_DIR}/luma/${relative}")
         add_custom_command(OUTPUT "${copy}"
             BYPRODUCTS "${copy}.globals" "${copy}.types" "${copy}.rows" "${copy}.functions" "${copy}.numbers" "${copy}.places"
-                       "${copy}.needs"
+                       "${copy}.needs" "${copy}.texts"
             COMMAND "${Python3_EXECUTABLE}" "${luma_tool}" "${source}" "${copy}"
                     --commands "${CMAKE_BINARY_DIR}/compile_commands.json" --root "${petari}/src" --depfile "${copy}.d"
                     ${luma_libclang}
@@ -82,7 +82,7 @@ foreach(source IN LISTS game_sources)
         set_source_files_properties("${copy}" PROPERTIES COMPILE_OPTIONS "-iquote${folder}")
         list(APPEND module_sources "${copy}")
         list(APPEND luma_defined_lists "${copy}.globals" "${copy}.types" "${copy}.rows" "${copy}.functions" "${copy}.numbers" "${copy}.places"
-             "${copy}.needs")
+             "${copy}.needs" "${copy}.texts")
     else()
         list(APPEND module_sources "${source}")
     endif()

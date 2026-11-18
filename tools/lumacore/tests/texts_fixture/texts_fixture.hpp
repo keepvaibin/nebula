@@ -73,3 +73,28 @@ void txInsideKept(const char* pText);
 int txInsideRead(const char* pText);
 int txOwnLook(TxKeeper* pKeeper, const char* pText);
 int txTwo(const char* pRead, const char* pKept);
+
+// Defined in a header, so no row: the proof follows into them (a static one is named by the unit that sees it).
+static inline int txHeaderCompare(const char* pA, const char* pB) { return strcmp(pA, pB); }
+inline void txHeaderKeep(const char* pText) { sTxKept = pText; }
+int txUsesHeaderRead(const char* pText);
+void txUsesHeaderKeep(const char* pText);
+// strstr reads its second text and points into its first.
+int txSubstring(const char* pText, const char* pPart);
+
+// An override defined in a header (no row) that keeps the text: a call through the base may reach it.
+class TxShown {
+public:
+    virtual ~TxShown();
+    virtual int show(const char* pText);
+};
+
+class TxShownKeeper : public TxShown {
+public:
+    int show(const char* pText) override {
+        sTxKept = pText;
+        return 1;
+    }
+};
+
+int txShow(TxShown* pShown, const char* pText);

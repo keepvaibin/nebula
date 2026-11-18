@@ -9,6 +9,8 @@ OUTPUT keeps SOURCE's line numbers.
 Beside OUTPUT: OUTPUT.rows (name, signature, kind, line of every row), OUTPUT.left (what got no row, and why) and
 OUTPUT.globals (the mangled name of every variable with external linkage SOURCE defines: gen_types.py gives a header's
 global a row only when some unit defines it), OUTPUT.types (this unit's part of the self-description) and
+OUTPUT.texts (N-4002: the text facts of each function with no row this unit sees defined that a text reaches: one
+a text is handed to, or one overriding another; gen_types.py's prove_text_in closes over them as over rows) and
 OUTPUT.functions (each row's facts, in the rows' order: gen_types.py merges them into luma_functions.json):
   {"name", "signature"}  the row, as OUTPUT.rows has it
   "kind"                 "free", "method", "static", "constructor" or "destructor"
@@ -183,6 +185,7 @@ def load(path):
     api.rangeStart = fn('clang_getRangeStart', CXSourceLocation, CXSourceRange)
     api.rangeEnd = fn('clang_getRangeEnd', CXSourceLocation, CXSourceRange)
     api.inMain = fn('clang_Location_isFromMainFile', c_int, CXSourceLocation)
+    api.inSystem = fn('clang_Location_isInSystemHeader', c_int, CXSourceLocation)
     api.expansion = fn('clang_getExpansionLocation', None, CXSourceLocation, POINTER(c_void_p), POINTER(c_uint),
                        POINTER(c_uint), POINTER(c_uint))
     api.spellingLocation = fn('clang_getSpellingLocation', None, CXSourceLocation, POINTER(c_void_p), POINTER(c_uint),
@@ -296,6 +299,8 @@ class Unit:
         self.rows = []
         self.facts = []  # per row, in order: (cursor, name, signature, kind)
         self.functions = []
+        self.text_calls = []  # N-4002: each function a text parameter is handed to (TextUses.call), as called
+        self.text_helpers = []  # N-4002: OUTPUT.texts
         self.marks = {}
         self.left = []
         self.defines = set()
@@ -1258,6 +1263,46 @@ class Unit:
                 'virtual': member and bool(api.isVirtual(cursor)), 'pure': member and bool(api.isPure(cursor)),
                 'const': role == 'method' and bool(api.isConst(cursor)), 'overrides': overrides,
                 'marks': self.marks_of(cursor), 'texts': self.text_facts(cursor, types)})
+        self.text_helper_facts(types)
+
+    def text_helper_facts(self, types):
+        """N-4002: the text facts (text_facts) of each function with no row of this unit's that it sees defined and a
+        text may reach (OUTPUT.texts): each one a text is handed to (a header's inline function, a static one; and in
+        turn each one those hand it to), and each override defined outside this file (a header's): a call through its
+        base may reach it, so prove_text_in reads it as one of the base's overriders. A class template's own functions
+        are not read (their instances are), nor a system header's (the C library's: TEXT_READERS knows those it may
+        read)."""
+        api = self.api
+        seen = {(name, signature) for _, name, signature, _ in self.facts}
+        found = []
+
+        def overrides(cursor):
+            for child in self.children(cursor):
+                if child.kind in (K_METHOD, K_DESTRUCTOR):
+                    if api.isVirtual(child) and api.isDefinition(child) and not self.in_main(child):
+                        found.append(child)
+                elif child.kind in SCOPES and not api.inSystem(api.location(child)):
+                    scope = self.scope(child)
+                    if scope is not None and not (scope and scope[0][0] == 'std'):
+                        overrides(child)
+
+        overrides(api.cursor(self.tu))
+        done = 0
+        while True:
+            todo = [api.definition(c) for c in self.text_calls[done:]] + found
+            done, found = len(self.text_calls), []
+            if not todo:
+                return
+            for body in todo:
+                if api.isNull(body) or not api.isDefinition(body) or api.inSystem(api.location(body)):
+                    continue
+                ident = self.identity(body)
+                if ident is None or ident in seen:
+                    continue
+                seen.add(ident)
+                texts = self.text_facts(body, types)
+                if texts is not None:
+                    self.text_helpers.append({'name': ident[0], 'signature': ident[1], 'texts': texts})
 
     def text_facts(self, cursor, types):
         """N-4002: None for a row with no `const char *` parameter; else {"params": TextUses' facts, "bases": every
@@ -1943,6 +1988,7 @@ class Unit:
         write_if_changed(output + '.types', (json.dumps(self.types_part, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.rows', ('\n'.join(self.rows) + '\n' if self.rows else '').encode())
         write_if_changed(output + '.functions', (json.dumps(self.functions, ensure_ascii=False) + '\n').encode('utf-8'))
+        write_if_changed(output + '.texts', (json.dumps(self.text_helpers, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.places', (json.dumps(self.places_part, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.needs', (json.dumps(self.needs, ensure_ascii=False) + '\n').encode('utf-8'))
         write_if_changed(output + '.left', ('\n'.join(self.left) + '\n' if self.left else '').encode())
@@ -2376,6 +2422,7 @@ class TextUses:
             if library:
                 return ('pass', spelling, '?', j)
             return ('escape', f'given to {spelling}, which no row names')
+        unit.text_calls.append(target)
         return ('pass', ident[0], ident[1], j)
 
 
