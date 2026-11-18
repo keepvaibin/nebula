@@ -49,13 +49,15 @@ native_test(native_binder_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/binder_tests.
 native_test(native_mario_messenger_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_messenger_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c" "${CMAKE_CURRENT_LIST_DIR}/arena_test_tables.cpp"
     "${game_src}/Player/MarioMessenger.cpp" "${game_src}/System/NebulaArena.cpp")
+# Mario's state timers stop at their top instead of reading 0 after 65536 steps (N-3011).
+native_test(native_frame_count_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_count_tests.cpp")
+# The frame-list writer, against the list the renderer reads.
+native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
+# The cutscene skip's bound, in steps of play (header only).
+native_test(native_cutscene_skip_bound_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/cutscene_skip_bound_tests.cpp")
 if(NEBULA_SANITIZE AND WIN32)
     # NebulaArena.cpp defines operator new/delete, as in the module: the sanitizer runtime's own give way (N-1062).
     foreach(arena_test native_arena_tests native_binder_tests native_mario_messenger_tests)
         target_link_options(${arena_test} PRIVATE LINKER:/force:multiple)
     endforeach()
 endif()
-# The frame-list writer, against the list the renderer reads.
-native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
-# The cutscene skip's bound, in steps of play (header only).
-native_test(native_cutscene_skip_bound_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/cutscene_skip_bound_tests.cpp")

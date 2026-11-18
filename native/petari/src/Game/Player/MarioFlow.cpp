@@ -2,6 +2,7 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 bool Mario::doFlow() {
     if (isStatusActive(MarioStatus_Flow)) {
@@ -41,7 +42,7 @@ bool MarioFlow::start() {
 }
 
 bool MarioFlow::update() {
-    mTimer++;
+    MR::countUp(mTimer);
 
     switch (mStep) {
     case 0:

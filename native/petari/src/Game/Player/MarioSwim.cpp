@@ -16,6 +16,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 namespace {
     static f32 cFrontAcc[] = {-0.2f, -0.2f, -0.2f, -0.1f, -0.1f, -0.1f, -0.1f, -0.1f, -0.0f, -0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
@@ -2205,7 +2206,7 @@ void MarioSwim::jet() {
             }
         }
 
-        mJetTimer++;
+        MR::countUp(mJetTimer);
 
         if (checkLvlZ()) {
             if (checkTrgZ() || mStateTimer < 2) {

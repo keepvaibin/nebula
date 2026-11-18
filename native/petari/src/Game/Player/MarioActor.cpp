@@ -50,6 +50,7 @@
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/GameRules.hpp"
 #include "Game/System/LumaCore.hpp"
+#include "Game/Util/FrameCount.hpp"
 
 namespace {
     // The air the player has under water (8).
@@ -960,7 +961,7 @@ void MarioActor::controlMain() {
     updateControllerSwingLeft();
     update2D();
     if (mPreWipeOn) {
-        mPreWipeTimer++;
+        MR::countUp(mPreWipeTimer);
     }
 
     if (!isEnableMoveMario()) {
@@ -1220,9 +1221,9 @@ void MarioActor::updateSwingAction() {
 
         if (!isPunching()) {
             if (mSpinTicoTimer) {
-                mSpinTicoTimer += 0x96;
+                MR::countUp(mSpinTicoTimer, 0x96);
             } else {
-                mSpinTicoTimer += 0x12c;
+                MR::countUp(mSpinTicoTimer, 0x12c);
             }
         }
 

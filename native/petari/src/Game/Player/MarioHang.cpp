@@ -7,6 +7,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/FrameCount.hpp"
 #include <cstring>
 
 bool Mario::isHanging() const {
@@ -532,7 +533,7 @@ bool MarioHang::update() {
     NebulaMtxMultVecSR(matrix.toMtxPtr(), &mLocalNormal, &normal);
     getPlayer()->setFrontVecKeepUp(-normal);
     mWallNormal = normal;
-    mTimer++;
+    MR::countUp(mTimer);
     if (mSlipUpTimer) {
         mSlipUpTimer--;
         if (!mSlipUpTimer) {
