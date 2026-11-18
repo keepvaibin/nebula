@@ -18,7 +18,9 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    // One per bit of a layer mask.
+    // One per bit of a layer mask. Common and LayerA to LayerP are the disc's (the console walks those 17); LayerQ to
+    // LayerAE are for mods' stages, whose scenarios may set a mask bit past 16. A folder the zone's archive does not
+    // have holds no table, so a disc stage reads exactly the console's set.
     const char* const cLayerDirName[32] = {"Common", "LayerA", "LayerB", "LayerC", "LayerD", "LayerE", "LayerF", "LayerG", "LayerH", "LayerI", "LayerJ", "LayerK", "LayerL", "LayerM", "LayerN", "LayerO", "LayerP", "LayerQ", "LayerR", "LayerS", "LayerT", "LayerU", "LayerV", "LayerW", "LayerX", "LayerY", "LayerZ", "LayerAA", "LayerAB", "LayerAC", "LayerAD", "LayerAE"};
 
     static bool isPrioPlacementObjInfo(const char* pName) {
