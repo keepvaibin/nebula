@@ -1,24 +1,41 @@
-"""gate.py: the one check of a Nebula tree. Every check that starts the game for a test goes through here.
+"""gate.py: the one check of a Nebula tree, at the four levels of docs/plan/04-GATE-AND-MAIN.md. Every check that
+starts the game for a test goes through here.
 
-    python -X utf8 -I tools/gate/gate.py --quick [options]
-    python -X utf8 -I tools/gate/gate.py --full  [options]
+    python -X utf8 -I tools/gate/gate.py --quick | --main [--move] | --long | --final  [options]
 
---quick: the Windows builds, the unit tests, the Rust tests, the mod tests, the engine tests (tests/engine) and twelve tour stops on Direct3D 12.
---full:  every check of docs/plan/00-READ-FIRST.md section 4.2 this computer can run; a check that does not exist yet
-         or cannot run here is a failure, named as such, never a pass.
+--quick  level 1: the repository checks, the Windows build, the unit and Rust tests, a start on each renderer, the
+         self-tests, the mod tests and the engine tests on Direct3D 12, 12 tour stops with pictures and step hashes,
+         two stops of each other disc. Before asking for a main gate.
+--main   level 2, what moves main: everything deterministic. Every renderer's engine tests and 102-stop tour with
+         pictures and step hashes, the other discs, the mod tests on every renderer, the Android build, the tablet's
+         short part (the 12 stops, their step hashes against the PC's at the tablet's screen size) and GitHub's
+         Linux, Linux unit tests, Mac and Rust-on-Linux jobs of the same commit.
+         --move: main moves to this commit when it passes (section 5). It needs a whole quick gate of the commit
+         passed, the branch pushed and main an ancestor of it; it takes the gate lock (or waits --wait minutes),
+         and on a pass fast-forwards main and pushes it itself, writes MAIN-MOVED on the board and frees the lock.
+--long   level 3, on main's newest commit, under the long lock, at below-normal priority: the tablet's 102 stops
+         against the PC's, a sanitizer build's tour, the soak, every disc on every renderer.
+--final  level 4: the main and long levels on one commit. "Done" needs it passed with no check planned or known.
+--only CHECK[,CHECK]: only the checks those shell patterns name, and the checks they need (for tracing a red main).
 
-It writes one result (JSON and text, side by side) and exits 1 when any check failed, 0 when all passed, 2 when it
-could not start (bad options, a lock held). Checks run one after another; each records its time and its log.
+Each check ends in one state:
+  pass     it passed;
+  fail     it failed, or it exists and could not run;
+  known    it failed only in tests tools/gate/known-failures.tsv lists for it (each with an open ledger row); a listed
+           test that passes fails the check: its line must go;
+  planned  it is not built yet and tools/gate/planned.tsv lists it for this level; a listed check that runs fails;
+  owed     the tablet's part, when the tablet does not answer, its lock stays held, or it leaves during the run: the
+           part runs on main's newest commit first thing when the tablet is back; the board says so.
+The run passes when no check failed.
 
---full runs one at a time on this computer (the board's gate rule of 2026-11-17 13:06): it takes the gate lock
-(--gate-lock, a folder, as measure.lock and tablet.lock are) before its first check and frees it when it ends, with a
-board line for each (--board, --who). While another holds the lock it refuses, or waits --wait minutes for it; a lock
-whose holder's process has ended is taken over and the board says so. Before the lock it needs a quick gate of the same
-commit whose build, unit, start and engine checks passed (--without-quick says it ran without one).
+It writes one result (JSON and text, side by side), one line in <work>/history.tsv and the owner's page
+(tools/gate/status.py, --status), and exits 1 when a check failed, 0 when none did, 2 when it could not start (bad
+options, a lock held, a rule of section 5 not met).
 """
 import argparse
 import ctypes
 import datetime
+import fnmatch
 import json
 import os
 import pathlib
@@ -26,6 +43,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -35,69 +53,246 @@ sys.path.insert(0, str(TREE / "tools" / "verify"))
 import gate_tour  # noqa: E402
 import step_hash  # noqa: E402
 
-# The twelve stops --quick plays: one per kind of stage (a hub, water, gravity, a boss, sand, ice, lava, a 2D stage,
-# a race, the fleet, the heaviest stop of the tour, the factory). Names as tools/verify/tours/tour_enterable.txt
-# lists them.
+LEVELS = ("quick", "main", "long", "final")
+# The twelve stops --quick plays, and the tablet's short part: one per kind of stage (a hub, water, gravity, a boss,
+# sand, ice, lava, a 2D stage, a race, the fleet, the heaviest stop of the tour, the factory). Names as
+# tools/verify/tours/tour_enterable.txt lists them.
 QUICK_STOPS = [
     "HoneyBeeKingdomGalaxy 1", "OceanRingGalaxy 1", "EggStarGalaxy 1", "KoopaBattleVs1Galaxy 1",
     "SandClockGalaxy 1", "IceVolcanoGalaxy 1", "HellProminenceGalaxy 1", "TeresaMario2DGalaxy 1",
     "SurfingLv1Galaxy 1", "CannonFleetGalaxy 1", "OceanPhantomCaveGalaxy 4", "FactoryGalaxy 1",
 ]
-# The other regions' discs: their tours run on Direct3D 12 only, since a region changes the game's data (text,
-# layouts, fonts), not what a renderer does with it. --quick plays two of their stops (a hub and the heaviest);
-# --full all of them.
+# The other regions' discs: their tours run on Direct3D 12 at the main level, since a region changes the game's data
+# (text, layouts, fonts), not what a renderer does with it; the long run plays them on every renderer. --quick plays
+# two of their stops (a hub and the heaviest).
 REGION_DISCS = ("RMGP01", "RMGJ01")
 QUICK_REGION_STOPS = ["HoneyBeeKingdomGalaxy 1", "OceanPhantomCaveGalaxy 4"]
 RENDERERS = ("d3d12", "vulkan", "d3d11")
-# The checks of a quick gate that a full gate of the same commit needs passed first: the build, the pak and the flags
-# are right before hours are spent.
+# The checks of a quick gate that a main gate's --without-quick still needs passed first: the build, the pak and the
+# flags are right before an hour is spent.
 QUICK_FIRST = ("build/windows", "unit/windows", "start/d3d12", "engine/d3d12")
+# The checks of the tablet's part, in the order they run.
+TABLET_CHECKS = ("tablet/prepare", "android/tablet", "tour/tablet", "tablet/remove", "tour/tablet-pc", "replays/tablet")
+# GitHub's push workflow (.github/workflows/check.yml): the jobs a main gate needs green on its commit (section 8),
+# and how long it waits for them after its own checks.
+WORKFLOW = "check.yml"
+GITHUB_JOBS = ("Linux", "Linux unit tests", "Mac", "Rust tests (ubuntu-24.04)")
+GITHUB_WAIT_MINUTES = 15
+# The two lists (section 4) and the ledger their lines name.
+KNOWN = HERE / "known-failures.tsv"
+PLANNED = HERE / "planned.tsv"
+LEDGER = TREE / "docs" / "plan" / "ledger.tsv"
+KNOWN_COLUMNS = ("check", "test", "ledger row", "first seen", "what")
+PLANNED_COLUMNS = ("check", "level", "plan step or ledger row", "owner")
+CLOSED = ("fixed", "not-a-fault", "decided", "out-of-scope")
+MAIN_GATE_SECONDS = 30 * 60
+
+
+# The two lists ----------------------------------------------------------------------------------------------------
+
+
+def read_tsv(path, columns):
+    """The rows of a list (a header line of `columns`, '#' lines are comments): (rows as dicts, problems)."""
+    rows, problems = [], []
+    lines = pathlib.Path(path).read_text(encoding="utf-8").splitlines() if pathlib.Path(path).exists() else []
+    body = [(n, l) for n, l in enumerate(lines, 1) if l.strip() and not l.startswith("#")]
+    if not body or tuple(body[0][1].split("\t")) != columns:
+        return [], ["%s: the first line is the header: %s" % (pathlib.Path(path).name, "\\t".join(columns))]
+    for n, line in body[1:]:
+        cells = line.split("\t")
+        if len(cells) != len(columns) or not all(c.strip() for c in cells):
+            problems.append("%s:%d: %d cells, every one filled" % (pathlib.Path(path).name, n, len(columns)))
+            continue
+        rows.append(dict(zip(columns, (c.strip() for c in cells))))
+    return rows, problems
+
+
+def ledger_states(path=LEDGER):
+    """{row id: state} of the ledger."""
+    out = {}
+    for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines()[1:] if pathlib.Path(path).exists() else []:
+        cells = line.split("\t")
+        if len(cells) > 3:
+            out[cells[0]] = cells[3]
+    return out
+
+
+LEDGER_ID = re.compile(r"^[A-Z]+-\d+$")
+
+
+def read_lists(known_path=KNOWN, planned_path=PLANNED, ledger_path=LEDGER):
+    """(known {check: {test: row}}, planned {check: row}, problems). Every line names an open ledger row (a planned
+    line may name a plan step instead, e.g. M6); a check or test is listed once; a level is one of LEVELS."""
+    states = ledger_states(ledger_path)
+    known_rows, problems = read_tsv(known_path, KNOWN_COLUMNS)
+    planned_rows, more = read_tsv(planned_path, PLANNED_COLUMNS)
+    problems += more
+
+    def open_row(what, row_id, may_be_step):
+        if LEDGER_ID.match(row_id):
+            if row_id not in states:
+                problems.append("%s: ledger row %s is not in the ledger" % (what, row_id))
+            elif states[row_id] in CLOSED:
+                problems.append("%s: ledger row %s is %s: the line goes with the commit that closes it" % (
+                    what, row_id, states[row_id]))
+        elif not may_be_step:
+            problems.append("%s: %r is not a ledger row" % (what, row_id))
+
+    known = {}
+    for r in known_rows:
+        what = "known-failures.tsv %s %s" % (r["check"], r["test"])
+        open_row(what, r["ledger row"], False)
+        if r["test"] in known.setdefault(r["check"], {}):
+            problems.append(what + ": listed twice")
+        known[r["check"]][r["test"]] = r
+    planned = {}
+    for r in planned_rows:
+        what = "planned.tsv %s" % r["check"]
+        open_row(what, r["plan step or ledger row"], True)
+        if r["level"] not in LEVELS:
+            problems.append("%s: level %r is not one of %s" % (what, r["level"], ", ".join(LEVELS)))
+        if r["check"] in planned:
+            problems.append(what + ": listed twice")
+        if r["check"] in known:
+            problems.append(what + ": also in known-failures.tsv (a check is built or it is not)")
+        planned[r["check"]] = r
+    return known, planned, problems
+
+
+def judge(passed, detail, verdicts, known):
+    """(state, detail) of a check's outcome: `verdicts` {test: verdict} when the check runs tests (None when it does
+    not, or when its runs are not all reported), `known` its known-failures lines {test: row}."""
+    if verdicts is None:
+        return ("pass" if passed else "fail"), detail
+    listed_passing = sorted(t for t in known if verdicts.get(t) == "pass")
+    if listed_passing:
+        return "fail", detail + "; passes but is listed in known-failures.tsv, remove the line: " + ", ".join(listed_passing)
+    if passed:
+        return "pass", detail
+    unexpected = [t for t, v in verdicts.items() if v != "pass" and t not in known]
+    listed_failing = sorted(t for t in known if t in verdicts and verdicts[t] != "pass")
+    if not unexpected and listed_failing:
+        return "known", detail + "; known: " + ", ".join("%s (%s)" % (t, known[t]["ledger row"]) for t in listed_failing)
+    return "fail", detail
+
+
+def level_has(level, planned_level):
+    """Whether a check planned for `planned_level` belongs to a run of `level`."""
+    return planned_level == level or (level == "final" and planned_level in ("main", "long", "final"))
+
+
+# The run ----------------------------------------------------------------------------------------------------------
 
 
 class Gate:
-    def __init__(self, args):
+    """One run: its checks' results. A dry run (dry=True) runs no check: it learns the level's check names and what
+    each needs, for --only."""
+
+    def __init__(self, args, dry=False, known=None, planned=None, selected=None):
         self.args = args
+        self.level = args.mode
+        self.dry = dry
         self.results = []
+        self.needs = {}
+        self.known = known or {}
+        self.planned = planned or {}
+        self.selected = selected
         self.started = time.time()
         self.commit = git("rev-parse", "--short", "HEAD")
         self.dirty = git("status", "--porcelain") != ""
         stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         self.name = "%s-%s-%s" % (stamp, self.commit, args.mode)
-        self.work = pathlib.Path(args.work) / self.name
+        self.work = pathlib.Path(tempfile.mkdtemp()) if dry else pathlib.Path(args.work) / self.name
         self.work.mkdir(parents=True, exist_ok=True)
+        self.bin = str(pathlib.Path(args.build_root) / "bins")
+        self.android_bin = str(pathlib.Path(args.build_root) / "android" / "test-bin-arm64-v8a")
 
-    def check(self, name, fn):
-        """Runs one check. fn returns (passed, detail); an exception is a failure with its text."""
+    def wanted(self, name, needs=()):
+        if self.dry:
+            self.needs.setdefault(name, set()).update(needs)
+        return self.selected is None or name in self.selected
+
+    def record(self, name, state, seconds, detail, log=None):
+        row = {"check": name, "state": state, "passed": state != "fail", "seconds": seconds, "detail": detail,
+               "log": str(log) if log is not None and pathlib.Path(log).exists() else None}
+        self.results.append(row)
+        print("%-34s %-7s %7.1f s  %s" % (name, state if state != "fail" else "FAIL", seconds, detail), flush=True)
+
+    def check(self, name, fn, needs=()):
+        """Runs one check. fn returns (passed, detail) or (passed, detail, {test: verdict}); an exception is a failure
+        with its text. True unless it failed; None when --only leaves it out."""
+        if not self.wanted(name, needs):
+            return None
+        if self.dry:
+            self.results.append({"check": name, "state": "pass", "passed": True})
+            return True
         t0 = time.time()
         log = self.work / ("%s.log" % name.replace("/", "-").replace(" ", "-"))
+        verdicts = None
         try:
-            passed, detail = fn(log)
+            out = fn(log)
+            passed, detail = out[0], out[1]
+            verdicts = out[2] if len(out) > 2 else None
         except Exception as e:  # noqa: BLE001 - every failure of a check is the check's result
             passed, detail = False, "%s: %s" % (type(e).__name__, e)
-        row = {"check": name, "passed": bool(passed), "seconds": round(time.time() - t0, 1), "detail": detail,
-               "log": str(log) if log.exists() else None}
-        self.results.append(row)
-        print("%-34s %-4s %7.1f s  %s" % (name, "pass" if passed else "FAIL", row["seconds"], detail), flush=True)
-        return passed
+        state, detail = judge(bool(passed), detail, verdicts, self.known.get(name, {}))
+        if name in self.planned:
+            state, detail = "fail", "it runs, so its line in planned.tsv must go; " + detail
+        self.record(name, state, round(time.time() - t0, 1), detail, log)
+        return state != "fail"
 
-    def missing(self, name, why):
-        """A check the gate does not have yet, or that cannot run on this computer: a failure, said plainly."""
-        self.check(name, lambda log: (False, "not run: " + why))
+    def missing(self, name, why, needs=()):
+        """A check that exists and cannot run here: a failure, said plainly."""
+        if self.wanted(name, needs) and not self.dry:
+            self.record(name, "fail", 0.0, "not run: " + why)
+
+    def owe(self, name, why, needs=()):
+        """A part of the tablet's that could not run because the tablet is away: owed, not failed (section 4.3)."""
+        if self.wanted(name, needs) and not self.dry:
+            self.record(name, "owed", 0.0, why)
+
+    def owe_last(self, why):
+        """The last check failed because the tablet left: owed."""
+        row = self.results[-1]
+        if row["state"] == "fail":
+            row["state"], row["passed"] = "owed", True
+            row["detail"] = "%s; %s" % (why, row["detail"])
+            print("%-34s %-7s (%s)" % (row["check"], "owed", why), flush=True)
+
+    def plan_rows(self):
+        """The planned checks of this level that --only keeps."""
+        ran = {r["check"] for r in self.results}
+        for name, row in sorted(self.planned.items()):
+            if level_has(self.level, row["level"]) and self.wanted(name) and not self.dry and name not in ran:
+                self.record(name, "planned", 0.0, "not built yet: %s (%s)" % (row["plan step or ledger row"], row["owner"]))
+
+    def counts(self):
+        out = {s: 0 for s in ("pass", "known", "planned", "owed", "fail")}
+        for r in self.results:
+            out[r["state"]] += 1
+        return out
 
     def write(self):
-        failed = [r for r in self.results if not r["passed"]]
-        out = {"gate": 1, "mode": self.args.mode, "commit": self.commit, "dirty": self.dirty,
+        failed = [r for r in self.results if r["state"] == "fail"]
+        counts = self.counts()
+        seconds = round(time.time() - self.started, 1)
+        out = {"gate": 2, "mode": self.level, "commit": self.commit, "dirty": self.dirty, "run": self.name,
+               "only": self.args.only or None,
                "started": datetime.datetime.fromtimestamp(self.started).isoformat(timespec="seconds"),
-               "seconds": round(time.time() - self.started, 1), "passed": not failed and bool(self.results),
+               "seconds": seconds, "passed": not failed and bool(self.results), "counts": counts,
                "checks": self.results}
         path = pathlib.Path(self.args.out) if self.args.out else self.work / "result.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
-        lines = ["gate %s %s%s: %s (%d checks, %d failed, %.0f s)" % (
-            self.args.mode, self.commit, " (uncommitted changes)" if self.dirty else "",
-            "PASS" if out["passed"] else "FAIL", len(self.results), len(failed), out["seconds"])]
-        lines += ["  %-34s %s  %s" % (r["check"], "pass" if r["passed"] else "FAIL", r["detail"]) for r in self.results]
+        head = "gate %s %s%s%s: %s (%d checks: %s; %.0f s)" % (
+            self.level, self.commit, " (uncommitted changes)" if self.dirty else "",
+            " only " + self.args.only if self.args.only else "", "PASS" if out["passed"] else "FAIL", len(self.results),
+            ", ".join("%d %s" % (n, s if s != "fail" else "failed") for s, n in counts.items() if n), seconds)
+        lines = [head] + ["  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
         path.with_suffix(".txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        append_history(pathlib.Path(self.args.work) / "history.tsv", out)
+        if self.level == "main" and not self.args.only and seconds > MAIN_GATE_SECONDS:
+            print("gate.py: this main gate took %.0f minutes, over 30: a ledger row for Agent 1 (section 7)" % (seconds / 60))
         if self.args.record:
             # Kept with the tree (docs/plan/gate-runs): what the push workflow cannot run is proved by these.
             keep = TREE / "docs" / "plan" / "gate-runs" / self.name
@@ -105,9 +300,29 @@ class Gate:
             shutil.copyfile(path, keep.with_suffix(".json"))
             shutil.copyfile(path.with_suffix(".txt"), keep.with_suffix(".txt"))
             print("recorded:", keep.with_suffix(".txt"))
-        print("\n".join(lines[:1]))
+        print(head)
         print("result:", path)
         return out["passed"]
+
+
+HISTORY_COLUMNS = ("started", "run", "level", "commit", "result", "seconds", "pass", "known", "planned", "owed",
+                   "failed", "only", "checks")
+
+
+def append_history(path, out):
+    """One line per run in gate-runs/history.tsv: when, which, the result and every check's state and seconds."""
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new = not path.exists()
+    c = out["counts"]
+    cells = (out["started"], out["run"], out["mode"], out["commit"] + ("+" if out["dirty"] else ""),
+             "pass" if out["passed"] else "fail", "%.0f" % out["seconds"], c["pass"], c["known"], c["planned"],
+             c["owed"], c["fail"], out["only"] or "-",
+             " ".join("%s=%s/%.0f" % (r["check"], r["state"], r.get("seconds", 0.0)) for r in out["checks"]))
+    with open(path, "a", encoding="utf-8") as f:
+        if new:
+            f.write("\t".join(HISTORY_COLUMNS) + "\n")
+        f.write("\t".join(str(x) for x in cells) + "\n")
 
 
 # Git for Windows when it is there: another git on PATH (an msys2 one without autocrlf) reports every file changed.
@@ -157,19 +372,22 @@ def parse_scripts(g):
     return fn
 
 
-def build_windows(g):
+def build_windows(g, root=None, bin_dir=None, sanitize=""):
     """The game modules (clang) and every Windows program with the unit tests and the test extension (MSVC), into the
-    build root; then the bin folder the harness runs."""
+    build root; then the bin folder the harness runs. `sanitize`: the game modules with those sanitizers, in a build
+    root and bin folder of their own."""
+    root, bin_dir = root or g.args.build_root, bin_dir or g.bin
+
     def fn(log):
         seed = ["-SeedFrom", g.args.seed_from] if g.args.seed_from else []
         code = run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", HERE / "build_windows.ps1",
-                    "-Tree", TREE, "-Root", g.args.build_root, "-Bin", g.bin, "-Pak", g.args.pak, "-Jobs", g.args.jobs,
-                    *seed], log)
+                    "-Tree", TREE, "-Root", root, "-Bin", bin_dir, "-Pak", g.args.pak, "-Jobs", g.args.jobs, *seed]
+                   + (["-Sanitize", sanitize] if sanitize else []), log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         fails = [l for l in text.splitlines() if l.startswith("FAILED:")]
         if code != 0 or fails:
             return False, "exit %d, %d FAILED: %s" % (code, len(fails), fails[0][8:120] if fails else last_line(text))
-        return True, "bins at %s" % g.bin
+        return True, "bins at %s" % bin_dir
     return fn
 
 
@@ -276,13 +494,14 @@ HARNESS_SELF = sorted([*(TREE / "tools" / "lumacore").glob("harness_*_test.py"),
 DESCRIPTION_SELF = sorted((TREE / "tools" / "lumacore").glob("*_fixture_test.py"))
 
 
-def harness(g, suite, renderer, label, device=None):
+def harness(g, suite, renderer, label, device=None, bin_dir=None):
     """One harness suite on one renderer, on this computer or on an Android device (its serial; the test app
     prepared and the device's lock held by the gate). Passes when every test in it passed (a test whose disc has no
-    pak is not-run, which is not a pass)."""
+    pak is not-run, which is not a pass). Its verdicts go with it when every test of the suite reported one, so the
+    known-failures list can be applied."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
-        on_device = ["--device", device, "--bin", g.android_bin] if device else ["--bin", g.bin]
+        on_device = ["--device", device, "--bin", g.android_bin] if device else ["--bin", bin_dir or g.bin]
         code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools/lumacore/luma_test.py", "run", suite]
                    + on_device + ["--work", work, "--who", "gate", "--lock", g.work / "harness.lock",
                                   "--commit", g.commit, "--renderer", renderer], log, env={"LUMA_TEST_PAKS": g.args.paks},
@@ -292,8 +511,21 @@ def harness(g, suite, renderer, label, device=None):
             if d.is_dir():
                 shutil.rmtree(d, ignore_errors=True)
         detail = summarize(log, renderer)
-        return code == 0 and not detail.startswith("0 of 0") and "; not:" not in detail, detail
+        seen = verdicts(log, renderer)
+        tests = suite_tests(suite)
+        if tests is not None and len(seen) != tests:
+            detail += "; %d of %d tests reported" % (len(seen), tests)
+            seen = None
+        return code == 0 and not detail.startswith("0 of 0") and "; not:" not in detail, detail, seen
     return fn
+
+
+def suite_tests(suite):
+    """How many tests a suite.json names, or None for one test's folder."""
+    suite = pathlib.Path(suite)
+    if suite.is_file() and suite.name == "suite.json":
+        return len(json.loads(suite.read_text(encoding="utf-8")).get("tests", []))
+    return None
 
 
 def start_soak(g):
@@ -326,7 +558,7 @@ def replays(g, label, renderer, against=None):
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
         other = None if against is None else g.work / ("runs-%s-%s" % against)
-        ok, lines = step_hash.check(work, other, some=g.args.mode == "quick")
+        ok, lines = step_hash.check(work, other, some=g.level == "quick")
         pathlib.Path(log).write_text("\n".join(lines) + "\n", encoding="utf-8")
         return ok, lines[-1]
     return fn
@@ -467,14 +699,18 @@ def free_gate_lock(path, holder, board, who, summary):
         board_line(board, "%s FREE: gate.lock freed by gate.py: %s; %s." % (who, holder, summary))
 
 
-def quick_passed(work, commit):
-    """The newest quick gate of this commit in the work folder whose QUICK_FIRST checks all passed, else None."""
+def quick_passed(work, commit, whole=False):
+    """The newest quick gate of this commit in the work folder that passed whole (`whole`; section 5.2), or whose
+    QUICK_FIRST checks all passed, else None. A run of some checks (--only) does not count."""
     for folder in sorted(pathlib.Path(work).glob("*-%s-quick" % commit), reverse=True):
         try:
-            rows = {r["check"]: r["passed"] for r in json.loads((folder / "result.json").read_text(encoding="utf-8"))["checks"]}
+            result = json.loads((folder / "result.json").read_text(encoding="utf-8"))
+            rows = {r["check"]: r["passed"] for r in result["checks"]}
         except (OSError, ValueError, KeyError, TypeError):
             continue
-        if all(rows.get(c) for c in QUICK_FIRST):
+        if result.get("only") or result.get("dirty"):
+            continue
+        if (result.get("passed") is True) if whole else all(rows.get(c) for c in QUICK_FIRST):
             return folder
     return None
 
@@ -494,11 +730,11 @@ def take_device_lock(path, who):
 
 def pictures(g, label, renderer):
     """The pictures a harness suite's runs took against the approved ones (tools/gate/pictures.py, tolerance none).
-    --full also fails on an approved picture its runs did not take."""
+    Above the quick level it also fails on an approved picture its runs did not take."""
     def fn(log):
         work = g.work / ("runs-%s-%s" % (label, renderer))
         code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools" / "gate" / "pictures.py", "check", "--runs", work,
-                    "--renderer", renderer] + (["--complete"] if g.args.mode == "full" else []), log, cwd=TREE)
+                    "--renderer", renderer] + (["--complete"] if g.level != "quick" else []), log, cwd=TREE)
         lines = pathlib.Path(log).read_text(encoding="utf-8", errors="replace").splitlines()
         summary = next((l for l in reversed(lines) if l.startswith("pictures: ")), "no summary")
         others = [l.split()[0] + " " + l.split()[1] for l in lines if l.split() and l.split()[0] in ("changed", "new", "missing", "machine")]
@@ -528,6 +764,12 @@ def mod_tests(g, renderer):
     return fn
 
 
+def verdicts(log, renderer):
+    """{test: verdict} from the harness's result rows (name, renderer, verdict, reason)."""
+    text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace").splitlines()
+    return {l.split()[0]: l.split()[2] for l in text if len(l.split()) >= 3 and l.split()[1] == renderer}
+
+
 def summarize(log, renderer):
     """'N of M pass; not: ...' from the harness's result rows (name, renderer, verdict, reason)."""
     text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace").splitlines()
@@ -546,11 +788,349 @@ def last_line(text):
     return (said or (lines[-1] if lines else "(no output)"))[:160]
 
 
-def main():
+# GitHub ----------------------------------------------------------------------------------------------------------
+
+
+def gh_json(*args):
+    r = subprocess.run(["gh", *args], capture_output=True, text=True, cwd=TREE, timeout=120)
+    if r.returncode != 0:
+        raise RuntimeError("gh %s: %s" % (" ".join(args[:2]), (r.stderr or r.stdout).strip()[-200:]))
+    return json.loads(r.stdout or "null")
+
+
+def github_jobs(sha):
+    """Every job of the push workflow's runs on a commit (pushed under any branch name): [{name, status,
+    conclusion}]."""
+    jobs = []
+    for run_row in gh_json("run", "list", "--commit", sha, "--workflow", WORKFLOW, "--event", "push",
+                           "--json", "databaseId", "--limit", "20") or []:
+        jobs += gh_json("run", "view", str(run_row["databaseId"]), "--json", "jobs").get("jobs", [])
+    return jobs
+
+
+def judge_jobs(jobs, required=GITHUB_JOBS):
+    """(done, green, detail) of the required jobs: green in any run of the commit counts; a job that ended in no run
+    green is red, and a red one ends the wait; one still running or not started keeps it."""
+    words, done, green = [], True, True
+    for name in required:
+        mine = [j for j in jobs if j.get("name") == name]
+        if any(j.get("conclusion") == "success" for j in mine):
+            words.append(name + " green")
+        elif any(j.get("status") != "completed" for j in mine):
+            words.append(name + " running")
+            done, green = done and False, False
+        elif mine:
+            words.append("%s %s" % (name, "/".join(sorted({j.get("conclusion") or "?" for j in mine}))))
+            green = False
+        else:
+            words.append(name + " not started")
+            done, green = False, False
+    red = any(not w.endswith((" green", " running", " not started")) for w in words)
+    return (done or red), (green and not red), "; ".join(words)
+
+
+def github_check(g, wait_minutes=GITHUB_WAIT_MINUTES, jobs_of=github_jobs, sleep=time.sleep, clock=time.time):
+    """GitHub's Linux, Linux unit tests, Mac and Rust-on-Linux jobs of this commit (section 8): green, waited for up
+    to wait_minutes."""
+    def fn(log):
+        sha = git("rev-parse", "HEAD")
+        deadline = clock() + 60.0 * wait_minutes
+        while True:
+            done, green, detail = judge_jobs(jobs_of(sha))
+            with open(log, "a", encoding="utf-8") as f:
+                f.write("%s %s\n" % (datetime.datetime.now().strftime("%H:%M:%S"), detail))
+            if done or clock() >= deadline:
+                return green, detail + ("" if done else " (after %g minutes)" % wait_minutes)
+            sleep(60.0)
+    return fn
+
+
+# Main --------------------------------------------------------------------------------------------------------------
+
+
+def git_ok(*args):
+    return subprocess.run([GIT, "-C", str(TREE), *args], capture_output=True, text=True).returncode == 0
+
+
+def pushed(sha):
+    """Whether a branch on origin holds the commit (so GitHub's workflow runs on it)."""
+    out = subprocess.run([GIT, "-C", str(TREE), "branch", "-r", "--contains", sha], capture_output=True, text=True).stdout
+    return any(l.strip().startswith("origin/") and not l.strip().startswith("origin/HEAD") for l in out.splitlines())
+
+
+ALLOWED_ENV = "NEBULA_MAIN_ALLOWED"
+
+
+def move_main(sha, run_name, work, board, who, covers, tree=TREE):
+    """Fast-forwards origin's main to sha (section 5.5): main must still be its ancestor. The push carries a one-time
+    allowance the pre-push hook's guard (tools/gate/main_push_guard.py) reads. None when moved, else why not."""
+    def tree_git(*args, env=None):
+        return subprocess.run([GIT, "-C", str(tree), *args], capture_output=True, text=True, env=env)
+
+    tree_git("fetch", "origin", "main")
+    before = tree_git("rev-parse", "origin/main").stdout.strip()
+    if tree_git("merge-base", "--is-ancestor", before, sha).returncode != 0:
+        return "main moved during the gate (now %s): rebase on it and gate again" % before[:9]
+    allowed = pathlib.Path(work) / "main-allowed.txt"
+    allowed.write_text("%s %s\n" % (sha, run_name), encoding="utf-8")
+    try:
+        r = tree_git("push", "origin", "%s:refs/heads/main" % sha, env=dict(os.environ, **{ALLOWED_ENV: str(allowed)}))
+    finally:
+        allowed.unlink(missing_ok=True)
+    if r.returncode != 0:
+        return "the push of main failed: %s" % (r.stderr or r.stdout).strip()[-300:]
+    tree_git("fetch", "origin", "main")
+    count = tree_git("rev-list", "--count", "%s..%s" % (before, sha)).stdout.strip()
+    board_line(board, "%s MAIN-MOVED: main %s -> %s (%s commits)%s; gate %s." % (
+        who, before[:9], sha[:9], count, (": " + covers) if covers else "", run_name))
+    return None
+
+
+def long_due(work, hours=6.0, now=None):
+    """Whether a long run is due (section 14): none in history.tsv started within `hours`."""
+    path = pathlib.Path(work) / "history.tsv"
+    now = now or datetime.datetime.now()
+    rows = [l.split("\t") for l in path.read_text(encoding="utf-8").splitlines()[1:]] if path.exists() else []
+    started = [datetime.datetime.fromisoformat(r[0]) for r in rows if len(r) > 2 and r[2] == "long"]
+    return not started or (now - max(started)).total_seconds() >= hours * 3600
+
+
+# The tablet --------------------------------------------------------------------------------------------------------
+
+
+def android_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("luma_test_android", TREE / "tools" / "lumacore" / "luma_test_android.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def take_device_lock_wait(path, who, wait_minutes, sleep=time.sleep):
+    """The device's lock, waited for up to wait_minutes (a main gate and the long run share the tablet through it)."""
+    deadline = time.time() + 60.0 * wait_minutes
+    while True:
+        held = take_device_lock(path, who)
+        if held is None or time.time() >= deadline:
+            return held
+        sleep(30.0)
+
+
+def tablet_part(g, stops, device=None):
+    """The tablet's part: the test app installed with the pak, tests/android, a tour of `stops` (None: all), the
+    test app removed; then the PC plays the same stops at the tablet's screen size and both must take the same game
+    steps at every step (the game runs the actors its picture shows: its clipping follows the picture's shape). When
+    the tablet does not answer, its lock stays held, or it leaves during the run, the part is owed (section 4.3)."""
+    built = ("build/android",)
+    needs = {"tablet/prepare": built + ("tablet/remove",), "android/tablet": built + ("tablet/prepare",),
+             "tour/tablet": built + ("tablet/prepare",), "tablet/remove": (), "tour/tablet-pc": ("build/windows",),
+             "replays/tablet": ("tour/tablet", "tour/tablet-pc")}
+    wanted = [n for n in TABLET_CHECKS if g.wanted(n, needs[n])]
+    if g.dry or not wanted:
+        return
+    if not g.android_built:
+        for n in wanted:
+            g.missing(n, "the Android build failed")
+        return
+    device = device or android_module().Device(g.args.tablet)
+
+    def owe_rest(why, done=()):
+        for n in wanted:
+            if n not in done and not any(r["check"] == n for r in g.results):
+                g.owe(n, why)
+
+    if not device.answers():
+        owe_rest("%s does not answer adb" % g.args.tablet)
+        return
+    held = take_device_lock_wait(g.args.tablet_lock, "gate %s" % g.name, g.args.tablet_wait)
+    if held is not None:
+        owe_rest("the tablet's lock stayed held %g minutes: %s" % (g.args.tablet_wait, held))
+        return
+    gone = None
+    try:
+        if g.check("tablet/prepare", device_step(g, "prepare")) is False and not device.answers():
+            gone = "the tablet left adb"
+            g.owe_last(gone)
+        elif any(r["check"] == "tablet/prepare" and r["state"] == "pass" for r in g.results):
+            g.check("android/tablet", harness(g, TREE / "tests" / "android" / "suite.json", "vulkan", "android",
+                                              g.args.tablet))
+            if not device.answers():
+                gone = "the tablet left adb"
+                g.owe_last(gone)
+            else:
+                tour = gate_tour.write(g.work / "tour-tablet", stops)
+                step_hash.with_hash(tour.parent)
+                g.check("tour/tablet", harness(g, tour, "vulkan", "tour-tablet", g.args.tablet))
+                if not device.answers():
+                    gone = "the tablet left adb"
+                    g.owe_last(gone)
+    finally:
+        if gone is None and device.answers():
+            g.check("tablet/remove", device_step(g, "remove"))
+        else:
+            g.owe("tablet/remove", "the tablet left adb: the test app may still be on it")
+        shutil.rmtree(g.args.tablet_lock, ignore_errors=True)
+    if gone is not None:
+        owe_rest(gone + " during its part")
+        return
+    screen = device_screen(g.work / "runs-tour-tablet-vulkan")
+    if screen is None:
+        g.missing("tour/tablet-pc", "the tablet's runs name no screen size")
+        g.missing("replays/tablet", "the tablet's runs name no screen size")
+        return
+    pc_tour = gate_tour.write(g.work / "tour-tablet-pc", stops, window=screen)
+    step_hash.with_hash(pc_tour.parent)
+    g.check("tour/tablet-pc", harness(g, pc_tour, "d3d12", "tour-tablet-pc"))
+    g.check("replays/tablet", replays(g, "tour-tablet", "vulkan", ("tour-tablet-pc", "d3d12")))
+
+
+# The levels ----------------------------------------------------------------------------------------------------------
+
+
+def build_part(g):
+    """The repository checks and the Windows build: False when the build failed (nothing after it can run)."""
+    g.check("repo/audit", repo_audit(g))
+    g.check("repo/scripts", parse_scripts(g))
+    if g.args.no_build:
+        return True
+    return g.check("build/windows", build_windows(g)) is not False
+
+
+def unit_part(g, discs_proved):
+    g.check("unit/windows", unit_tests(g), ("build/windows",))
+    g.check("unit/game", game_tests(g), ("build/windows",))
+    for r in RENDERERS:
+        g.check("start/%s" % r, start_check(g, r), ("build/windows",))
+    g.check("rust", rust_tests(g))
+    # The cooked collision against each disc's (P-169).
+    discs = disc_images(g.args.discs)
+    for disc in discs_proved:
+        if disc in discs:
+            g.check("import/collision/%s" % disc, collision_proof(g, discs[disc]), ("build/windows",))
+        else:
+            g.missing("import/collision/%s" % disc, "no %s image in %s (--discs)" % (disc, g.args.discs))
+    g.check("harness/self", scripts(g, HARNESS_SELF, ("--work", "{out}")))
+    commands = pathlib.Path(g.args.build_root) / "game" / "compile_commands.json"
+    g.check("description/self", scripts(g, DESCRIPTION_SELF, ("--commands", str(commands), "--out", "{out}")),
+            ("build/windows",))
+
+
+def mods_part(g, renderers):
+    if not MOD_TESTS.exists():
+        g.missing("mods", "the mod tests are not in the tree (tools/lumacore/mod_tests.py, mods M0)")
+        return
+    for r in renderers:
+        g.check("mods/%s" % r, mod_tests(g, r), ("build/windows",))
+
+
+def engine_part(g, renderers):
+    """The engine's own tests (tests/engine): start, device loss, window shapes and sizes, stage loads, save files."""
+    for r in renderers:
+        g.check("engine/%s" % r, harness(g, TREE / "tests" / "engine" / "suite.json", r, "engine"), ("build/windows",))
+        g.check("pictures/engine/%s" % r, pictures(g, "engine", r), ("engine/%s" % r,))
+
+
+def tour_part(g, renderers, stops, region_renderers, region_stops):
+    """The tour on each renderer with pictures and step hashes (Direct3D 12's against the recordings, another
+    renderer's against Direct3D 12's), and the other discs' tours."""
+    tour = gate_tour.write(g.work / "tour", stops)
+    step_hash.with_hash(tour.parent)
+    for r in renderers:
+        g.check("tour/%s" % r, harness(g, tour, r, "tour"), ("build/windows",))
+        g.check("pictures/tour/%s" % r, pictures(g, "tour", r), ("tour/%s" % r,))
+        g.check("replays/%s" % r, replays(g, "tour", r, None if r == "d3d12" else ("tour", "d3d12")),
+                ("tour/%s" % r,) + (() if r == "d3d12" else ("tour/d3d12",)))
+    for disc in REGION_DISCS:
+        region = gate_tour.write(g.work / ("tour-%s" % disc), region_stops, disc)
+        for r in region_renderers:
+            g.check("tour-%s/%s" % (disc, r), harness(g, region, r, "tour-%s" % disc), ("build/windows",))
+            g.check("pictures/tour-%s/%s" % (disc, r), pictures(g, "tour-%s" % disc, r), ("tour-%s/%s" % (disc, r),))
+
+
+def android_part(g):
+    g.android_built = g.args.no_build or g.check("build/android", build_android(g)) is not False
+
+
+def sanitizer_part(g):
+    """The game modules built with AddressSanitizer (build_windows.ps1 -Sanitize address, a build root of its own)
+    play the tour on Direct3D 12: a memory fault the tour reaches ends the run with the sanitizer's report."""
+    root = pathlib.Path(g.args.build_root) / "asan"
+    asan_bin = str(root / "bins")
+    if g.check("build/windows-asan", build_windows(g, root=root, bin_dir=asan_bin, sanitize="address")) is False:
+        g.missing("tour-asan/d3d12", "the sanitizer build failed", ("build/windows-asan",))
+        return
+    tour = gate_tour.write(g.work / "tour-asan", None)
+    step_hash.with_hash(tour.parent)
+    g.check("tour-asan/d3d12", harness(g, tour, "d3d12", "tour-asan", bin_dir=asan_bin), ("build/windows-asan",))
+
+
+def run_checks(args, known=None, planned=None, selected=None, dry=False):
+    """The level's checks, in order. A dry run returns the Gate (its names and needs) without running any."""
+    g = Gate(args, dry=dry, known=known, planned=planned, selected=selected)
+    level = args.mode
+    if not build_part(g):
+        g.code = 0 if g.write() else 1
+        return g
+    quick = level == "quick"
+    every = level in ("main", "final")
+    if level != "long":
+        unit_part(g, ("RMGE01",) if quick else ("RMGE01",) + REGION_DISCS)
+        mods_part(g, ("d3d12",) if quick else RENDERERS)
+        engine_part(g, ("d3d12",) if quick else RENDERERS)
+    if quick:
+        tour_part(g, ("d3d12",), QUICK_STOPS, ("d3d12",), QUICK_REGION_STOPS)
+    elif every:
+        tour_part(g, RENDERERS, None, ("d3d12",), None)
+    soak = None
+    if level in ("long", "final"):
+        soak = None if g.dry else start_soak(g)
+        if level == "long":
+            # Every disc on every renderer.
+            tour_part(g, RENDERERS, None, RENDERERS, None)
+        else:
+            for disc in REGION_DISCS:
+                region = gate_tour.write(g.work / ("tour-%s" % disc), None, disc)
+                for r in RENDERERS[1:]:
+                    g.check("tour-%s/%s" % (disc, r), harness(g, region, r, "tour-%s" % disc), ("build/windows",))
+                    g.check("pictures/tour-%s/%s" % (disc, r), pictures(g, "tour-%s" % disc, r), ("tour-%s/%s" % (disc, r),))
+    if not quick:
+        android_part(g)
+        # The main level's tablet part is the twelve quick stops; the long run's (and the final check's) all of them.
+        tablet_part(g, QUICK_STOPS if level == "main" else None)
+    if level in ("long", "final"):
+        sanitizer_part(g)
+        if g.wanted("soak", ("build/windows",)) and not g.dry:
+            if soak is None:
+                g.missing("soak", "it did not start")
+            else:
+                g.check("soak", soak_result(*soak))
+    if every:
+        g.check("github", github_check(g))
+    g.plan_rows()
+    if not dry:
+        g.code = 0 if g.write() else 1
+    return g
+
+
+def select(names_needs, patterns):
+    """The checks --only keeps: those a pattern names, and what each needs, transitively."""
+    chosen = {n for n in names_needs if any(fnmatch.fnmatchcase(n, p) for p in patterns)}
+    grow = list(chosen)
+    while grow:
+        for n in names_needs.get(grow.pop(), ()):
+            if n in names_needs and n not in chosen:
+                chosen.add(n)
+                grow.append(n)
+    return chosen
+
+
+def parser():
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     mode = p.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--quick", dest="mode", action="store_const", const="quick")
-    mode.add_argument("--full", dest="mode", action="store_const", const="full")
+    for level in LEVELS:
+        mode.add_argument("--" + level, dest="mode", action="store_const", const=level)
+    p.add_argument("--move", action="store_true", help="--main: move main to this commit when it passes (section 5)")
+    p.add_argument("--only", default="", help="only these checks (shell patterns, comma-separated) and what they need")
     p.add_argument("--build-root", default=os.environ.get("NEBULA_GATE_BUILD", "D:/NebulaWork/build/gate-%s" % TREE.name),
                    help="where the builds go (kept between runs, so builds are incremental)")
     p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", "D:/NebulaWork/build/us-pak-35/game.pak"))
@@ -568,153 +1148,127 @@ def main():
                    help="a configured MSVC build folder whose compiled shader stages seed a new build (content-keyed)")
     p.add_argument("--lumalink", default=os.environ.get("LUMALINK", ""), help="the lumalink program the mod tests use")
     p.add_argument("--tablet", default=os.environ.get("NEBULA_GATE_TABLET", ""),
-                   help="--full: an Android device's serial: the test app goes on it, tests/android and the tour run "
-                        "there, and the test app is removed again")
+                   help="the main, long and final levels: the tablet's serial (its part is owed when it does not answer)")
     p.add_argument("--tablet-lock", default=os.environ.get("NEBULA_GATE_TABLET_LOCK", "D:/NebulaWork/plan/tablet.lock"))
+    p.add_argument("--tablet-wait", type=float, default=20.0, help="minutes to wait for a held tablet lock before the "
+                                                                   "tablet's part is owed")
     p.add_argument("--android-deps", default=os.environ.get("NEBULA_GATE_ANDROID_DEPS", "D:/NebulaWork/deps"),
                    help="build_apk.ps1 -Deps: SDL, Vulkan-Headers, volk, VMA and glslang's sources")
     p.add_argument("--gate-lock", default=os.environ.get("NEBULA_GATE_LOCK", "D:/NebulaWork/plan/gate.lock"),
-                   help="--full: the lock one full gate at a time holds")
-    p.add_argument("--wait", type=float, default=0.0, help="--full: minutes to wait for a held gate lock (0: refuse)")
+                   help="the lock one main gate (or final check) at a time holds")
+    p.add_argument("--long-lock", default=os.environ.get("NEBULA_GATE_LONG_LOCK", "D:/NebulaWork/plan/long.lock"),
+                   help="the lock one long run (or final check) at a time holds")
+    p.add_argument("--wait", type=float, default=0.0, help="minutes to wait for a held gate or long lock (0: refuse)")
     p.add_argument("--board", default=os.environ.get("NEBULA_GATE_BOARD", "D:/NebulaWork/plan/BOARD.md"),
-                   help="--full: the board the lock's lines go to ('' for none)")
+                   help="the board the lock, owed and MAIN-MOVED lines go to ('' for none)")
+    p.add_argument("--status", default=os.environ.get("NEBULA_GATE_STATUS", "D:/NebulaWork/plan/STATUS.md"),
+                   help="the owner's page tools/gate/status.py writes after the run ('' for none)")
     p.add_argument("--who", default=os.environ.get("NEBULA_GATE_WHO", "gate.py"), help="who runs it, for the board")
-    p.add_argument("--covers", default="", help="--full: what the run answers for (commits, packages), for the board")
+    p.add_argument("--covers", default="", help="what the run answers for (commits, packages), for the board")
     p.add_argument("--soak-minutes", type=int, default=int(os.environ.get("NEBULA_GATE_SOAK_MINUTES", "120")),
-                   help="--full: the soak's minutes on each renderer (0: not run, a failure)")
+                   help="the long run: the soak's minutes on each renderer")
     p.add_argument("--without-quick", action="store_true",
-                   help="--full: run without a passed quick gate of the same commit (the result says so)")
-    args = p.parse_args()
+                   help="--main without --move: run without a passed quick gate of the same commit")
+    return p
 
-    if args.mode != "full":
-        return run_checks(args)
-    commit = git("rev-parse", "--short", "HEAD")
-    quick = quick_passed(args.work, commit)
-    if quick is None and not args.without_quick:
-        print("gate.py: no quick gate of %s passed %s in %s: run --quick first (or --without-quick)" % (
-            commit, ", ".join(QUICK_FIRST), args.work), file=sys.stderr)
+
+def main(argv=None):
+    args = parser().parse_args(argv)
+    patterns = [s.strip() for s in args.only.split(",") if s.strip()]
+
+    def refuse(text):
+        print("gate.py: " + text, file=sys.stderr)
         return 2
-    holder = "full gate of %s@%s pid %d%s%s" % (TREE.name, commit, os.getpid(),
-                                               ("; covers " + args.covers) if args.covers else "",
-                                               "; quick gate " + quick.name if quick else "; WITHOUT a quick gate")
-    held = take_gate_lock(args.gate_lock, holder, args.wait, args.board, args.who)
-    if held is not None:
-        print("gate.py: %s" % held, file=sys.stderr)
-        return 2
+
+    if args.move and (args.mode != "main" or patterns or args.no_build):
+        return refuse("--move goes with --main alone: the whole main gate, built here")
+    if args.mode != "quick" and not args.tablet:
+        return refuse("--%s needs the tablet's serial (--tablet): its part is owed when the tablet is away" % args.mode)
+    known, planned, problems = read_lists()
+    if problems:
+        return refuse("the lists are wrong:\n  " + "\n  ".join(problems))
+    selected = None
+    if patterns:
+        dry = run_checks(args, known, planned, dry=True)
+        shutil.rmtree(dry.work, ignore_errors=True)
+        selected = select(dry.needs, patterns)
+        if not selected:
+            return refuse("--only %s names no check of --%s: %s" % (args.only, args.mode, ", ".join(sorted(dry.needs))))
+    commit = git("rev-parse", "HEAD")
+    if args.mode in ("long", "final") and not patterns:
+        git("fetch", "origin", "main")
+        if args.mode == "long" and commit != git("rev-parse", "origin/main"):
+            return refuse("the long run is on main's newest commit (%s), this tree is at %s" % (
+                git("rev-parse", "--short", "origin/main"), commit[:9]))
+    if args.move:
+        git("fetch", "origin", "main")
+        if not git_ok("merge-base", "--is-ancestor", "origin/main", "HEAD"):
+            return refuse("main (%s) is not an ancestor of this commit: rebase on it first" % git("rev-parse", "--short", "origin/main"))
+        if git("status", "--porcelain"):
+            return refuse("the tree has uncommitted changes")
+        if not pushed(commit):
+            return refuse("this commit is on no branch of origin: push the branch first, so GitHub runs on it")
+    quick = None
+    if args.mode in ("main", "final") and not patterns:
+        quick = quick_passed(args.work, git("rev-parse", "--short", "HEAD"), whole=True)
+        if quick is None and (args.move or not args.without_quick):
+            return refuse("no whole quick gate of %s passed in %s: run --quick first" % (commit[:9], args.work))
+    if args.mode == "long":
+        below_normal()
+    locks = []
+    if args.mode in ("main", "final") and not patterns:
+        locks.append(args.gate_lock)
+    if args.mode in ("long", "final") and not patterns:
+        locks.append(args.long_lock)
+    holder = "%s gate of %s@%s pid %d%s%s" % (args.mode, TREE.name, commit[:9], os.getpid(),
+                                             ("; covers " + args.covers) if args.covers else "",
+                                             ("; quick gate " + quick.name) if quick else "")
+    taken = []
+    for lock in locks:
+        held = take_gate_lock(lock, holder, args.wait, args.board, args.who)
+        if held is not None:
+            for t in taken:
+                free_gate_lock(t, holder, args.board, args.who, "not run: " + held)
+            return refuse(held)
+        taken.append(lock)
     code, summary = 2, "it ended before writing a result"
     try:
-        code = run_checks(args)
+        g = run_checks(args, known, planned, selected)
+        code = g.code
         summary = "all checks passed" if code == 0 else "checks failed (exit %d)" % code
+        owed = [r["check"] for r in g.results if r["state"] == "owed"]
+        if owed and args.board:
+            board_line(args.board, "%s OWED: the tablet's part of %s gate %s on %s: %s. It runs on main's newest "
+                       "commit first when the tablet is back (gate.py --main --only \"%s\")." % (
+                           args.who, args.mode, g.name, commit[:9], ", ".join(owed), ",".join(owed)))
+        if args.move and code == 0:
+            why = move_main(commit, g.name, g.work, args.board, args.who, args.covers)
+            if why is not None:
+                code, summary = 1, "passed, main not moved: " + why
+                print("gate.py: main not moved: " + why, file=sys.stderr)
+            else:
+                summary = "passed, main moved to %s" % commit[:9]
+                if long_due(args.work):
+                    print("gate.py: no long run started in 6 hours: start one on main's newest commit (section 14)")
     finally:
-        free_gate_lock(args.gate_lock, holder, args.board, args.who, summary)
+        for lock in taken:
+            free_gate_lock(lock, holder, args.board, args.who, summary)
+        if args.status:
+            try:
+                import status
+                status.write(args.status, work=args.work, board=args.board)
+            except Exception as e:  # noqa: BLE001 - the page is a report; the gate's result stands without it
+                print("gate.py: the status page was not written: %s: %s" % (type(e).__name__, e), file=sys.stderr)
     return code
 
 
-def run_checks(args):
-    g = Gate(args)
-    g.bin = str(pathlib.Path(args.build_root) / "bins")
-    renderers = ("d3d12",) if args.mode == "quick" else RENDERERS
-    g.check("repo/audit", repo_audit(g))
-    g.check("repo/scripts", parse_scripts(g))
-    if not args.no_build:
-        if not g.check("build/windows", build_windows(g)):
-            return 0 if g.write() else 1
-    g.check("unit/windows", unit_tests(g))
-    g.check("unit/game", game_tests(g))
-    for r in RENDERERS:
-        g.check("start/%s" % r, start_check(g, r))
-    g.check("rust", rust_tests(g))
-    # The cooked collision against each disc's (P-169): the quick gate proves the US disc only.
-    discs = disc_images(args.discs)
-    for disc in ("RMGE01",) if args.mode == "quick" else ("RMGE01", "RMGP01", "RMGJ01"):
-        if disc in discs:
-            g.check("import/collision/%s" % disc, collision_proof(g, discs[disc]))
-        else:
-            g.missing("import/collision/%s" % disc, "no %s image in %s (--discs)" % (disc, args.discs))
-    g.check("harness/self", scripts(g, HARNESS_SELF, ("--work", "{out}")))
-    commands = pathlib.Path(args.build_root) / "game" / "compile_commands.json"
-    g.check("description/self", scripts(g, DESCRIPTION_SELF, ("--commands", str(commands), "--out", "{out}")))
-
-    if not MOD_TESTS.exists():
-        g.missing("mods", "the mod tests are not in the tree yet (tools/lumacore/mod_tests.py, mods M0)")
+def below_normal():
+    """The long run runs below normal priority (section 3.3), and so do the programs it starts."""
+    if os.name == "nt":
+        kernel = ctypes.windll.kernel32
+        kernel.SetPriorityClass(kernel.GetCurrentProcess(), 0x4000)  # BELOW_NORMAL_PRIORITY_CLASS
     else:
-        for r in renderers:
-            g.check("mods/%s" % r, mod_tests(g, r))
-
-    # The engine's own tests (tests/engine): start, device loss, window shapes and sizes, stage loads, save files.
-    for r in renderers:
-        g.check("engine/%s" % r, harness(g, TREE / "tests" / "engine" / "suite.json", r, "engine"))
-        g.check("pictures/engine/%s" % r, pictures(g, "engine", r))
-
-    stops = QUICK_STOPS if args.mode == "quick" else None
-    tour = gate_tour.write(g.work / "tour", stops)
-    step_hash.with_hash(tour.parent)
-    for r in renderers:
-        g.check("tour/%s" % r, harness(g, tour, r, "tour"))
-        g.check("pictures/tour/%s" % r, pictures(g, "tour", r))
-        # The game's steps: Direct3D 12's against the recordings; another renderer's against Direct3D 12's.
-        g.check("replays/%s" % r, replays(g, "tour", r, None if r == "d3d12" else ("tour", "d3d12")))
-    region_stops = QUICK_REGION_STOPS if args.mode == "quick" else None
-    for disc in REGION_DISCS:
-        region = gate_tour.write(g.work / ("tour-%s" % disc), region_stops, disc)
-        g.check("tour-%s/d3d12" % disc, harness(g, region, "d3d12", "tour-%s" % disc))
-        g.check("pictures/tour-%s/d3d12" % disc, pictures(g, "tour-%s" % disc, "d3d12"))
-
-    soak = start_soak(g) if args.mode == "full" and args.soak_minutes > 0 else None
-    if args.mode == "full":
-        # The Android test app, and on a named device its tests and the tour (Vulkan, the device's renderer).
-        g.android_bin = str(pathlib.Path(args.build_root) / "android" / "test-bin-arm64-v8a")
-        built = args.no_build or g.check("build/android", build_android(g))
-        if not args.tablet:
-            for name in ("android/tablet", "tour/tablet"):
-                g.missing(name, "no device named (--tablet SERIAL)")
-        elif not built:
-            for name in ("android/tablet", "tour/tablet"):
-                g.missing(name, "the Android build failed")
-        else:
-            held = take_device_lock(args.tablet_lock, "gate %s" % g.name)
-            if held is not None:
-                for name in ("android/tablet", "tour/tablet"):
-                    g.missing(name, "the device's lock %s is held: %s" % (args.tablet_lock, held))
-            else:
-                try:
-                    if g.check("tablet/prepare", device_step(g, "prepare")):
-                        g.check("android/tablet", harness(g, TREE / "tests" / "android" / "suite.json", "vulkan",
-                                                          "android", args.tablet))
-                        tablet_tour = gate_tour.write(g.work / "tour-tablet", None)
-                        step_hash.with_hash(tablet_tour.parent)
-                        g.check("tour/tablet", harness(g, tablet_tour, "vulkan", "tour-tablet", args.tablet))
-                finally:
-                    g.check("tablet/remove", device_step(g, "remove"))
-                    shutil.rmtree(args.tablet_lock, ignore_errors=True)
-                # The device's game steps against the PC's. The game runs the actors the picture shows (its clipping
-                # follows the picture's shape), so the PC plays the same tour on Direct3D 12 at the device's screen
-                # size, and the two must agree at every step.
-                screen = device_screen(g.work / "runs-tour-tablet-vulkan")
-                if screen is None:
-                    g.missing("replays/tablet", "the device's runs name no screen size")
-                else:
-                    pc_tour = gate_tour.write(g.work / "tour-tablet-pc", None, window=screen)
-                    step_hash.with_hash(pc_tour.parent)
-                    g.check("tour/tablet-pc", harness(g, pc_tour, "d3d12", "tour-tablet-pc"))
-                    g.check("replays/tablet", replays(g, "tour-tablet", "vulkan", ("tour-tablet-pc", "d3d12")))
-        g.missing("pictures/tablet", "approved pictures are kept per renderer for one adapter; a device's own set is "
-                                     "not in pictures.py yet")
-        for name, why in (
-            ("build/linux", "runs in the push workflow only (E0.3); no Linux on this computer"),
-            ("build/macos", "runs in the push workflow only (E0.3)"),
-            ("unit/linux", "runs in the push workflow only (E0.3, E0.4)"),
-            ("mods/android", "the mod tests on a device are not in the gate yet (mods M0, tools/lumacore/mod_tests.py)"),
-            ("hostile-files", "the bad-file corpus is not in the gate yet (mods M6)"),
-            ("two-mods", "the two-mod tests are not in the gate yet (mods M2)"),
-            ("sanitizers", "sanitizer builds not in the gate yet (E0.14)"),
-        ):
-            g.missing(name, why)
-        if soak is None:
-            g.missing("soak", "--soak-minutes 0")
-        else:
-            g.check("soak", soak_result(*soak))
-    return 0 if g.write() else 1
+        os.nice(5)
 
 
 if __name__ == "__main__":

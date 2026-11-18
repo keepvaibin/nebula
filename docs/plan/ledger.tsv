@@ -413,3 +413,11 @@ N-1035	1	E0 gate	fixed	3b4a8139b; galaxy_pacing_tests qpc_to_ns case; the linux-
 N-1036	1	E0 gate	fixed	3b4a8139b; the linux-sanitizers address,undefined job	crash (UBSan): save_transfer.cpp passed a null pointer to memcpy for an empty part; the copy now runs only when there is something to copy	
 N-1037	1	E0 gate	fixed	3b4a8139b; the linux-sanitizers address,undefined job	crash (UBSan): crash_report.cpp copy() passed a null pointer to memcpy for an empty text; the copy now runs only when there is something to copy	
 N-1038	1	E0 gate	fixed	f0aa80195; tools/lumacore/tests/harness_android_test.py (fails before: no DeviceLost)	false failure: when the tablet left adb during a tour the runner fell over with run-as giving no folder, and tablet/remove said the test app was not installed although it was still there; now verdict device-lost, the suite's other tests not run, and remove fails on a device that does not answer	
+N-1039	1	E0 gate	open		(design gap) the gate has one level that runs every check one after another and counts checks not built as failures, so main cannot move; nothing moves main but a hand (file 04 step 2: four levels, known-failures.tsv and planned.tsv, owed tablet parts, the GitHub read, --move, the pre-push guard, history.tsv, STATUS.md)	file 04
+N-1040	1	E0 gate	open		(untested) the tablet's pictures are not checked: pictures.py keeps one adapter and driver per renderer	file 04
+N-1041	1	E0 gate	open		(untested) the sanitizer build runs the tour but not the mod tests	file 04
+N-1042	1	E0 gate	open		(untested) no list of the game and engine code no test runs (coverage, file 04 3.3)	file 04
+N-1043	1	E0 gate	open		(no measure) no short measurement set at the long run's end and no full set job (E0.17, file 04 section 10)	file 04
+N-1044	1	E0 gate	open		(slow gate) the main gate runs its parts one after another, about 90 minutes; file 04 holds it to 30 (step 5, with the proof that side by side gives the same pictures and hashes)	file 04
+N-1045	1	E0 gate	open		(slow gate) GitHub's push workflow takes about two hours (its Android job 1 h 50 min); file 04 holds it under 20 minutes (step 6)	file 04
+N-1046	1	E0 gate	open		(by hand) the long run is started by hand; file 04 section 14 has whoever moves main start it under long.lock when none ran in 6 hours	file 04

@@ -163,10 +163,11 @@ Put `Nebula.exe` and `smg_game.dll` in one folder, then run:
 
 ### Run the tests
 
-Every check, from one command (`--quick` for the short form; it needs `game.pak` for the runs in the game):
+Every check, from one command at four levels: `--quick` (minutes), `--main` (what moves main, with an Android device
+named by `--tablet`), `--long` and `--final` (docs/plan/04-GATE-AND-MAIN.md). The runs in the game need `game.pak`:
 
 ```powershell
-python tools/gate/gate.py --full --pak D:\nebula\content\game.pak
+python tools/gate/gate.py --quick --pak D:\nebula\content\game.pak
 ```
 
 The unit tests alone:
