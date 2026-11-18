@@ -46,23 +46,35 @@ object ModImport {
         val data = GameFiles.data(context)
         val (shown, size) = nameAndSize(context, uri)
         val name = (shown ?: "Mod").replace(Regex("[/\\\\:*?\"<>|]"), "_").trim().ifEmpty { "Mod" }
-        val incoming = File(data, ".mod-incoming-${System.nanoTime()}")
+        // Copies an import cut off left (the app ended during it): imports run one at a time, so none is in use now.
+        for (stale in GameSwap.modIncoming(data)) stale.deleteRecursively()
+        // The copy, then the mod unpacked from it: room for the file twice over, and some to spare.
+        if (size > 0 && Storage.freeBytes(context) < 2 * size + GameSwap.MOD_MARGIN_BYTES) {
+            throw IOException(context.getString(R.string.StorageLow))
+        }
+        val incoming = File(data, "${GameSwap.MOD_INCOMING}${System.nanoTime()}")
         if (!incoming.mkdirs()) throw IOException(context.getString(R.string.ModsFolderUnwritable))
         try {
             val copy = File(incoming, name)
             val input = context.contentResolver.openInputStream(uri) ?: throw IOException(context.getString(R.string.FileUnopenable))
-            input.use { from ->
-                copy.outputStream().use { to ->
-                    val buffer = ByteArray(1 shl 20)
-                    var done = 0L
-                    while (true) {
-                        val read = from.read(buffer)
-                        if (read < 0) break
-                        to.write(buffer, 0, read)
-                        done += read
-                        if (size > 0) onProgress(0.5f * minOf(done, size) / size)
+            try {
+                input.use { from ->
+                    copy.outputStream().use { to ->
+                        val buffer = ByteArray(1 shl 20)
+                        var done = 0L
+                        while (true) {
+                            val read = from.read(buffer)
+                            if (read < 0) break
+                            to.write(buffer, 0, read)
+                            done += read
+                            if (size > 0) onProgress(0.5f * minOf(done, size) / size)
+                        }
                     }
                 }
+            } catch (failure: IOException) {
+                // A full device: the launcher's own words, not the system's (ENOSPC).
+                if (GameSwap.isNoSpace(failure.message.orEmpty())) throw IOException(context.getString(R.string.StorageLow))
+                throw failure
             }
             val answer = String(importFile(copy.path.toByteArray(Charsets.UTF_8), data.path.toByteArray(Charsets.UTF_8),
                 GameFiles.pak(context).path.toByteArray(Charsets.UTF_8),

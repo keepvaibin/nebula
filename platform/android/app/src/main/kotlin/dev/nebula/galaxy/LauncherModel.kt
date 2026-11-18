@@ -265,7 +265,12 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     val imports = Imports.state
 
     init {
-        if (Imports.state.value is ImportState.Running) screen = Screen.Import
+        if (Imports.state.value is ImportState.Running) {
+            screen = Screen.Import
+        } else {
+            // A setup the app's end cut off left its new game, or a game with no install file: room given back.
+            Storage.sweepSetup(app)
+        }
     }
 
     /** A newer release to offer (Updates), over the launcher until the player answers. */
@@ -453,10 +458,15 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     // The game in place is replaced, so its room counts; an outdated one's too (it is removed before the import).
     val roomBytes: Long
-        get() = freeBytes + (install?.bytes ?: if (outdated) GameFiles.pak(app).length() else 0L)
+        get() = freeBytes + Storage.reclaimableBytes(app)
 
     val enoughSpace: Boolean
         get() = roomBytes >= Storage.GAME_BYTES + Storage.MARGIN_BYTES
+
+    /** Room for one game only: setup removes the game in place before it builds the new one (said on the screen). */
+    val replacesFirst: Boolean
+        get() = GameSwap.room(freeBytes, Storage.reclaimableBytes(app), Storage.GAME_BYTES + Storage.MARGIN_BYTES) ==
+            GameSwap.Room.REPLACE_FIRST
 
     fun startImport() {
         val pick = disc ?: return

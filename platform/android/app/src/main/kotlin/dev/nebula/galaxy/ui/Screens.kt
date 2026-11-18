@@ -443,6 +443,13 @@ private fun DiscScreen(model: LauncherModel, onChoose: () -> Unit) {
                             style = MaterialTheme.typography.bodyMedium,
                             color = Night.Error,
                         )
+                    } else if (model.replacesFirst) {
+                        Gap(6.dp)
+                        Text(
+                            stringResource(R.string.SetupReplacesFirst),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Night.TextDim,
+                        )
                     }
                 }
                 Gap(28.dp)

@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
+import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -99,9 +100,17 @@ class ImportService : Service() {
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Nebula:setup")
         wake.acquire(60 * 60 * 1000L)
         val manager = getSystemService(NotificationManager::class.java)
+        val folder = GameFiles.pak(this).parentFile!!
         try {
-            val output = GameFiles.pak(this)
-            Storage.removeGame(this)
+            folder.mkdirs()
+            // The new game is built beside the one in place (GameSwap): a failure, Cancel or a full device keeps it.
+            GameSwap.sweep(folder)
+            when (GameSwap.room(Storage.freeBytes(this), GameSwap.reclaimable(folder), Storage.GAME_BYTES + Storage.MARGIN_BYTES)) {
+                GameSwap.Room.BESIDE -> Unit
+                GameSwap.Room.REPLACE_FIRST -> GameSwap.removeInPlace(folder)
+                GameSwap.Room.NONE -> throw IllegalStateException(getString(R.string.StorageLow))
+            }
+            val output = File(folder, GameSwap.NEW)
             val descriptor = contentResolver.openFileDescriptor(uri, "r")
                 ?: throw IllegalStateException(getString(R.string.DiscOpenFailed))
             val started = SystemClock.elapsedRealtime()
@@ -122,17 +131,21 @@ class ImportService : Service() {
                     !Imports.cancelRequested
                 }
             }
+            val bytes = output.length()
             when {
-                error == null -> {
-                    Install(gameId, title, format, source, output.length(), System.currentTimeMillis()).write(this)
-                    Imports.publish(ImportState.Finished)
-                }
+                error == null && GameSwap.commit(folder) {
+                    Install(gameId, title, format, source, bytes, System.currentTimeMillis()).write(this)
+                } -> Imports.publish(ImportState.Finished)
+                error == null -> Imports.publish(ImportState.Failed(getString(R.string.SetupSwapFailed)))
                 Imports.cancelRequested -> Imports.publish(ImportState.Cancelled)
+                GameSwap.isNoSpace(error) -> Imports.publish(ImportState.Failed(getString(R.string.StorageLow)))
                 else -> Imports.publish(ImportState.Failed(sentence(error)))
             }
         } catch (failure: Exception) {
-            Imports.publish(ImportState.Failed(sentence(failure.message ?: failure.toString())))
+            val text = failure.message ?: failure.toString()
+            Imports.publish(ImportState.Failed(if (GameSwap.isNoSpace(text)) getString(R.string.StorageLow) else sentence(text)))
         } finally {
+            GameSwap.abandon(folder)
             if (wake.isHeld) wake.release()
             worker = null
             stopForeground(STOP_FOREGROUND_REMOVE)
