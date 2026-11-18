@@ -540,7 +540,8 @@ void RendererMtl::next_command_buffer(GpuPass pass) {
     @autoreleasepool {
         id<MTLCommandBuffer> const made = [queue() commandBuffer];
         if (made == nil) {
-            throw std::runtime_error("no command buffer");
+            // The queue gives none only when the device is gone (P-008).
+            throw std::runtime_error("device lost: the Metal queue gave no command buffer");
         }
         list_pass_ = pass == GpuPass::Count ? GpuPass::Scene : pass;
         if (profile_frame_) {
