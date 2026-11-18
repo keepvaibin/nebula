@@ -155,9 +155,12 @@ inline void dump() noexcept {
     } catch (...) {
         return;
     }
+    // The path as UTF-8 for the log line (C++20's u8string is char8_t text).
+    const std::u8string shown = path.generic_u8string();
+    const char* const shown_text = reinterpret_cast<const char*>(shown.c_str());
     std::FILE* const file = ::galaxy::open_path(path, "wb");
     if (file == nullptr) {
-        std::fprintf(stderr, "[frame-timeline] cannot create %s\n", path.generic_u8string().c_str());
+        std::fprintf(stderr, "[frame-timeline] cannot create %s\n", shown_text);
         return;
     }
     const std::uint64_t written_count = g_state.next.load(std::memory_order_acquire);
@@ -176,7 +179,7 @@ inline void dump() noexcept {
     ok = std::fclose(file) == 0 && ok;
     std::fprintf(stderr, "[frame-timeline] wrote %llu of %llu events to %s ok=%d\n",
                  static_cast<unsigned long long>(count), static_cast<unsigned long long>(written_count),
-                 path.generic_u8string().c_str(), ok ? 1 : 0);
+                 shown_text, ok ? 1 : 0);
 }
 
 }  // namespace galaxy::timeline
