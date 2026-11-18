@@ -438,7 +438,7 @@ wstring RefusalText(const wstring& id) {
     if (id == L"folders-only") return Of(L"This version of Nebula sets up the game from an extracted game folder, not from a disc image.");
     if (id == L"not-a-disc") return Of(L"This file is not a Wii disc image.");
     if (id == L"missing") return Of(L"The file could not be found.");
-    if (id == L"not-a-folder") return Of(L"This folder is not an extracted Wii game. Choose the folder that holds sys/main.dol.");
+    if (id == L"not-a-folder") return Of(L"This folder is not an extracted Wii game. Choose the folder that holds the sys and files folders.");
     if (id == L"damaged") return Of(L"This disc image is damaged or incomplete. Make a new copy of the disc, then try again.");
     if (id == L"gamecube") return Of(L"This is a GameCube game, not Super Mario Galaxy.");
     if (id == L"galaxy-2") return Of(L"This is Super Mario Galaxy 2. Nebula plays Super Mario Galaxy.");

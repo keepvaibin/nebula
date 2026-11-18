@@ -80,7 +80,7 @@ std::string refusal_text(std::string_view id) {
     if (id == "folders-only") return galaxy::host_text::text("This version of Nebula sets up the game from an extracted game folder, not from a disc image.");
     if (id == "not-a-disc") return galaxy::host_text::text("This file is not a Wii disc image.");
     if (id == "missing") return galaxy::host_text::text("The file could not be found.");
-    if (id == "not-a-folder") return galaxy::host_text::text("This folder is not an extracted Wii game. Choose the folder that holds sys/main.dol.");
+    if (id == "not-a-folder") return galaxy::host_text::text("This folder is not an extracted Wii game. Choose the folder that holds the sys and files folders.");
     if (id == "damaged") return galaxy::host_text::text("This disc image is damaged or incomplete. Make a new copy of the disc, then try again.");
     if (id == "gamecube") return galaxy::host_text::text("This is a GameCube game, not Super Mario Galaxy.");
     if (id == "galaxy-2") return galaxy::host_text::text("This is Super Mario Galaxy 2. Nebula plays Super Mario Galaxy.");
