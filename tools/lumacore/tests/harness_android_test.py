@@ -176,11 +176,17 @@ def main():
         check(code == want, "a start check that ends with reason %d status %d gives %s: %s" % (reason, status, want, code))
     hung = StartDevice(alive=-1, record="")
     code, seen = android.start_check(hung, 300, 120, clock=hung.clock, sleep=hung.sleep)
+    hung_seen = seen
     check(code is None and "did not end" in seen and ("am force-stop " + android.PACKAGE) in hung.commands[-1],
           "a start check past its limit is stopped and fails: %s %s" % (code, seen))
     never = StartDevice(alive=None, record="")
     code, seen = android.start_check(never, 300, 120, clock=never.clock, sleep=never.sleep)
     check(code is None and "never" in seen, "a game process that never starts fails: %s %s" % (code, seen))
+    check("the test app's processes: none" in seen and any(c.startswith("ps -A") for c in never.commands)
+          and any(c.startswith("logcat -d") and "ActivityManager" in c for c in never.commands),
+          "a game process that never starts: the red names the app's processes and the log of its start: %s" % seen)
+    check(any(c.startswith("ps -A") for c in hung.commands) and "the log since am start" in hung_seen,
+          "a start check past its limit: the red names the device's state: %s" % hung_seen)
     code, seen = android.start_check(StartDevice(alive=3, record="", installed=False), 300, 120,
                                      clock=lambda: 0.0, sleep=lambda s: None)
     check(code is None and "not installed" in seen, "no test app: no start: %s" % seen)
