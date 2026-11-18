@@ -173,7 +173,9 @@ std::vector<wstring> InstallEngine::CheckRequirements(const wstring& installRoot
     if (!IsProcessorFeaturePresent(PF_SSE4_2_INSTRUCTIONS_AVAILABLE)) problems.push_back(Of(L"Nebula requires a CPU with SSE4.2."));
     try {
         wstring fs = FileSystemName(installRoot);
-        if (!IEquals(fs, L"NTFS")) problems.push_back(Of(L"The install folder must be on an NTFS drive. This drive uses {0}.", {fs}));
+        if (!FileSystemHoldsGame(fs)) {
+            problems.push_back(Of(L"The install folder cannot be on a {0} drive: no file there can reach 4 GB, and the game's file nearly does. Choose an NTFS or exFAT drive.", {fs}));
+        }
         long long free = FreeBytes(installRoot);
         if (free < kRequiredFreeBytes) problems.push_back(Of(L"Setup needs {0} of free space. The drive has {1}.", {FormatBytes(kRequiredFreeBytes), FormatBytes(free)}));
     } catch (const std::exception& error) {

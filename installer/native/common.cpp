@@ -752,7 +752,21 @@ Bytes ReadHandle(HANDLE handle, const wstring& what) {
 }
 }  // namespace
 
+bool VolumeHasNamedStreams(const wstring& path) {
+    wchar_t volume[MAX_PATH] = {};
+    DWORD flags = 0;
+    return GetVolumePathNameW(NativePath(path).c_str(), volume, MAX_PATH) &&
+           GetVolumeInformationW(volume, nullptr, 0, nullptr, nullptr, &flags, nullptr, 0) && (flags & FILE_NAMED_STREAMS) != 0;
+}
+
+bool FileSystemHoldsGame(const wstring& name) {
+    return !IEquals(name, L"FAT") && !IEquals(name, L"FAT12") && !IEquals(name, L"FAT16") && !IEquals(name, L"FAT32");
+}
+
 void CopyNamedStreams(const wstring& source, const wstring& target) {
+    // 1.0.2 kept saves in folder streams; the game reads none now (save_transfer.cpp), so a drive without streams loses
+    // nothing it needs.
+    if (!VolumeHasNamedStreams(source) || !VolumeHasNamedStreams(target)) return;
     StreamFind find(source);
     if (find.h == INVALID_HANDLE_VALUE) {
         if (find.error == ERROR_HANDLE_EOF) return;
@@ -789,64 +803,6 @@ void CopyTreeWithStreams(wstring source, const wstring& target, const std::funct
             FailWin32(GetLastError(), L"Copy failed: " + file);
         if (onFile) onFile(file);
     }
-}
-
-std::map<wstring, wstring> StreamDigests(const wstring& path) {
-    std::map<wstring, wstring> result;
-    StreamFind find(path);
-    if (find.h == INVALID_HANDLE_VALUE) {
-        if (find.error == ERROR_HANDLE_EOF) return result;
-        FailWin32(find.error, path);
-    }
-    do {
-        wstring name = find.data.cStreamName;
-        FileHandle handle(CreateFileW((name == L"::$DATA" ? NativePath(path) : NativePath(path) + name).c_str(), GENERIC_READ,
-                                      FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr));
-        if (handle.h == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), path + name);
-        Bytes bytes = ReadHandle(handle.h, path + name);
-        result[name] = Sha256Bytes(bytes.data(), bytes.size());
-    } while (find.Next());
-    return result;
-}
-
-std::vector<std::pair<wstring, Bytes>> ReadNamedStreams(const wstring& path, long long maximumBytes) {
-    std::vector<std::pair<wstring, Bytes>> streams;
-    StreamFind find(path);
-    if (find.h == INVALID_HANDLE_VALUE) {
-        DWORD error = find.error;
-        if (error == ERROR_HANDLE_EOF || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED ||
-            error == ERROR_INVALID_PARAMETER)
-            return streams;
-        FailWin32(error, path);
-    }
-    do {
-        wstring name = find.data.cStreamName;
-        if (name == L"::$DATA") continue;
-        if (!StartsWith(name, L":") || !EndsWith(name, L":$DATA"))
-            Fail(ErrorKind::Io, L"Unexpected stream " + name + L" on " + path + L".");
-        if (find.data.StreamSize.QuadPart > maximumBytes)
-            Fail(ErrorKind::Io, L"The stream " + name + L" of " + path + L" is too large.");
-        FileHandle handle(CreateFileW((NativePath(path) + name).c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                                      FILE_FLAG_BACKUP_SEMANTICS, nullptr));
-        if (handle.h == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), path + name);
-        Bytes bytes = ReadHandle(handle.h, path + name);
-        if ((long long)bytes.size() != find.data.StreamSize.QuadPart)
-            Fail(ErrorKind::Io, L"The stream " + name + L" of " + path + L" changed while it was read.");
-        streams.emplace_back(name.substr(1, name.size() - 7), std::move(bytes));
-    } while (find.Next());
-    DWORD last = GetLastError();
-    if (last != ERROR_HANDLE_EOF) FailWin32(last, path);
-    return streams;
-}
-
-void WriteNamedStream(const wstring& path, const wstring& name, const Bytes& bytes) {
-    FileHandle handle(CreateFileW((NativePath(path) + L":" + name).c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-                                  FILE_FLAG_BACKUP_SEMANTICS, nullptr));
-    if (handle.h == INVALID_HANDLE_VALUE) FailWin32(GetLastError(), path + L":" + name);
-    DWORD written = 0;
-    if (!bytes.empty() && !WriteFile(handle.h, bytes.data(), DWORD(bytes.size()), &written, nullptr))
-        FailWin32(GetLastError(), path + L":" + name);
-    FlushFileBuffers(handle.h);
 }
 
 // ---- hashes ------------------------------------------------------------------------------------------------------

@@ -137,6 +137,13 @@ int main() {
         std::fprintf(stderr, "FAILED: %ls\n", ErrorText(error).c_str());
         g_ok = false;
     }
+    // P-120: the drives Setup installs on, by what their files can hold (HEAD took NTFS only).
+    expect(FileSystemHoldsGame(L"NTFS") && FileSystemHoldsGame(L"ReFS") && FileSystemHoldsGame(L"exFAT"),
+           "NTFS, ReFS (a Dev Drive) and exFAT (a USB stick) are taken");
+    expect(!FileSystemHoldsGame(L"FAT32") && !FileSystemHoldsGame(L"fat") && !FileSystemHoldsGame(L"FAT16"),
+           "FAT is not: no file there reaches 4 GB");
+    expect(VolumeHasNamedStreams(temp), "an NTFS drive has named streams");
+
     std::printf("%s\n", g_ok ? "setup helpers: every case holds" : "setup helpers: FAILED");
     return g_ok ? 0 : 1;
 }
