@@ -506,7 +506,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeGame() {
-        if (refusedWhileRunning()) return
+        if (refusedWhileRunning(R.string.CloseGameThenRetry)) return
         Storage.removeGame(app)
         install = null
         freeBytes = Storage.freeBytes(app)
@@ -535,10 +535,11 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** While the game runs in its own process, what it reads and writes (the game, its mods) stays as it is (P-100). */
-    private fun refusedWhileRunning(): Boolean {
+    /** While the game runs in its own process, what it reads and writes (the game, its mods) stays as it is (P-100).
+     *  `then`: what the player does after closing it (an import: import again). */
+    private fun refusedWhileRunning(then: Int = R.string.CloseGameFirst): Boolean {
         if (!SaveTransfer.gameRunning(app)) return false
-        transferResult = TransferResult(false, app.getString(R.string.GameRunning), app.getString(R.string.CloseGameFirst))
+        transferResult = TransferResult(false, app.getString(R.string.GameRunning), app.getString(then))
         return true
     }
 
