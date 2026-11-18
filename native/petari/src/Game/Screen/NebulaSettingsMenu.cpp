@@ -1347,6 +1347,7 @@ private:
     TextBox* mStatus;
     MR::Text16 mStatusText;     // the line under the page, whole
     FitLine mStatusFit;
+    u32 mCheckedFits = 0;  // fitGeneration at the last checkNarrowing
     Hint mHints[cHintsMax];
     Button mFooter[FooterNum];
     Pane* mQuestion;
@@ -5278,6 +5279,11 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
     mQuestionIn = clamp(mQuestionIn + 1.0f / cQuestionInFrames, 0.0f, 1.0f);
     mTurnIn = clamp(mTurnIn + 1.0f / cTurnFrames, 0.0f, 1.0f);
     place(mShown);
+    // The rule's floor over the screen's texts, after a layout that fitted a line again.
+    if (fitGeneration() != mCheckedFits) {
+        mCheckedFits = fitGeneration();
+        checkNarrowing(mRoot);
+    }
 }
 
 // The menu, then its list cut to the list's box (what scrolls out never covers the pages' buttons or the footer), then

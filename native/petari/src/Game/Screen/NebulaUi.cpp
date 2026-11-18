@@ -19,6 +19,38 @@
 #include <nebula_module.h>
 
 namespace NebulaUi {
+    namespace {
+        u32 sFitGeneration;
+        // The text boxes the log has as narrowed past the floor (each said once; a few are enough for a report).
+        const TextBox* sToldNarrow[16];
+        u32 sToldNarrowNum;
+
+        void checkNarrowingUnder(Pane* pPane, s32 depth) {
+            if (pPane == nullptr || depth > 24) {
+                return;
+            }
+            if (const TextBox* pText = Ui::PaneCast< TextBox >(pPane); pText != nullptr && pText->mScale.x < pText->mScale.y * cMinSqueeze - 0.001f) {
+                bool told = false;
+                for (u32 i = 0; i < sToldNarrowNum; i++) {
+                    told = told || sToldNarrow[i] == pText;
+                }
+                if (!told && sToldNarrowNum < sizeof(sToldNarrow) / sizeof(sToldNarrow[0])) {
+                    sToldNarrow[sToldNarrowNum++] = pText;
+                    char start[48];
+                    u32 n = 0;
+                    for (; pText->mTextBuf != nullptr && n + 1 < sizeof(start) && pText->mTextBuf[n] != 0; n++) {
+                        start[n] = pText->mTextBuf[n] >= 0x20 && pText->mTextBuf[n] < 0x7F ? static_cast< char >(pText->mTextBuf[n]) : '?';
+                    }
+                    start[n] = 0;
+                    nebula_log("NebulaUi: a text is narrowed past the floor (%.2f of %.2f): %s\n", pText->mScale.x, cMinSqueeze, start);
+                }
+            }
+            for (Ui::Pane* pChild : pPane->GetChildList()) {
+                checkNarrowingUnder(pChild, depth + 1);
+            }
+        }
+    }  // namespace
+
     Color8 color(u32 rgba) {
         return Color8(rgba);
     }
@@ -147,6 +179,8 @@ namespace NebulaUi {
     }
 
     f32 setFitLine(FitLine& rLine, TextBox* pBox, const char16_t* pString) {
+        const bool fitted = rLine.mFitted;
+        const f32 room = rLine.mRoom;
         const u32 units = static_cast< u32 >(MR::textLength(pString)) + 1;
         MR::copyText(rLine.mWhole.room(units), pString, units);
         setText(pBox, rLine.mWhole.mItems);
@@ -156,6 +190,10 @@ namespace NebulaUi {
         rLine.mFitted = false;
         rLine.mCut = false;
         rLine.mTold = false;
+        // A text changed between layouts keeps to the room it had.
+        if (fitted) {
+            fitLine(rLine, pBox, room);
+        }
         return rLine.mWholeWidth;
     }
 
@@ -166,6 +204,7 @@ namespace NebulaUi {
         if (!rLine.mFitted || room != rLine.mRoom) {
             rLine.mFitted = true;
             rLine.mRoom = room;
+            sFitGeneration++;
             const char16_t* const pWhole = rLine.mWhole.mItems;
             f32 height = 0.0f;
             if (rLine.mWholeWidth * cMinSqueeze <= room) {
@@ -226,6 +265,14 @@ namespace NebulaUi {
         const f32 squeeze = squeezeTo(rLine.mWidth, room);
         pBox->mScale = Vec2f(squeeze, 1.0f);
         return squeeze;
+    }
+
+    u32 fitGeneration() {
+        return sFitGeneration;
+    }
+
+    void checkNarrowing(Pane* pRoot) {
+        checkNarrowingUnder(pRoot, 0);
     }
 
     void wrapWords(TextBox* pText, const char16_t* pSource, f32 limit, f32* pWidth, f32* pHeight) {
