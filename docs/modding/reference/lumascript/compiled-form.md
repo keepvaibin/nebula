@@ -28,31 +28,44 @@ LumaLink compiles LumaScript to C, then to machine code in your mod's own librar
 
 ## Targets and flags
 
+LumaLink's flags (`crates/lumascript/src/emit.rs` `C_FLAGS`, `crates/lumalink-core/src/build.rs` `TARGETS`).
+
 Common: `-std=c17 -O2 -nostdlib -ffreestanding -fno-stack-protector -fvisibility=hidden -fno-builtin-malloc
--fno-common -ffile-prefix-map=<mod folder>=. -Wall -Werror=implicit-function-declaration`, and the platform's below.
-Only `luma_mod` is exported (`LUMA_EXPORT`); every other symbol is hidden.
+-fno-common -Wall -Werror=implicit-function-declaration -Wframe-larger-than=4096 -Werror=frame-larger-than
+-fasynchronous-unwind-tables -fno-omit-frame-pointer -ffp-contract=off`, `-ffile-prefix-map=<work folder>=.` and
+`-ffile-prefix-map=<mod folder>/source=source`, and the platform's below. The frame limit is for the generated C; a
+mod's own C takes the rest, its C++ the rest with `-std=c++20 -fno-exceptions -fno-rtti` in place of `-std=c17`. On
+the Windows targets each object also takes `-mno-incremental-linker-compatible`.
+
+- `-ffp-contract=off`: every multiply and add rounds once each, as in the game, so a mod's floating point gives the
+  same bits on every platform. Without it clang fuses `a * b + c` into one instruction on every arm64.
+- `-ffreestanding`: the compiler reads no C library name as its own, so a `sinf` and a `cosf` of one angle never
+  become a call of the system's `sincosf`. LumaScript's `sin`, `cos`, `atan2` and `sqrt` are the run-time support's
+  (`lumart_*`), the same code on every platform.
 
 | Platform | Target | Link |
 |---|---|---|
-| `windows-x64` | `x86_64-pc-windows-msvc` | lld-link `/DLL /NOENTRY /NODEFAULTLIB /NOIMPLIB /Brepro` |
+| `windows-x64` | `x86_64-pc-windows-msvc` | lld-link `-shared /NOENTRY /NODEFAULTLIB /NOIMPLIB /Brepro` |
 | `windows-arm64` | `aarch64-pc-windows-msvc` | the same |
-| `linux-x64`, `linux-arm64` | `x86_64-` / `aarch64-unknown-linux-gnu`, `-fPIC` | ld.lld `-shared --build-id=none -z pack-relative-relocs` |
-| `android-arm64`, `android-x64` | `aarch64-` / `x86_64-linux-android31` (the game's `minSdk = 31`), `-fPIC` | ld.lld `-shared --build-id=none -z max-page-size=16384` |
-| `macos-arm64`, `macos-x64` | `arm64-` / `x86_64-apple-macos<the game's deployment target>` | ld64.lld `-dylib -undefined error -no_uuid` |
-| `ios-arm64` | `arm64-apple-ios<the game's deployment target>` | the same; the device signs it when the mod is installed |
+| `linux-x64`, `linux-arm64` | `x86_64-` / `aarch64-unknown-linux-gnu`, `-fPIC -fno-use-init-array` | ld.lld `-shared --build-id=none --hash-style=gnu -z defs -z noexecstack -T luma_ctors.ld` |
+| `android-arm64`, `android-x64` | `aarch64-` / `x86_64-linux-android24`, `-fPIC -fno-use-init-array`; arm64 also `-mno-outline-atomics` | the same and `-z max-page-size=16384` |
+| `macos-arm64`, `macos-x64` | `arm64-` / `x86_64-apple-macos12.0`, `-fPIC` | ld64.lld `-dynamiclib -undefined error -adhoc_codesign -install_name @rpath/mod.dylib -platform_version macos 12.0 12.0` |
+| `ios-arm64` | `arm64-apple-ios15.0`, `-fPIC` | the same with `-platform_version ios 15.0 15.0`; the device signs it again when the mod is installed |
 
 - The libraries import nothing but what `luma.h` and the loader allow (the compiler's `memcpy`,
   `memset`, `memmove` and, on the MSVC targets, the stack probe, all given by `luma.h`'s freestanding helpers; F,
   1.1). A LumaScript mod with C sources is held to the same: its C may not call the C library either (no `malloc`,
   no `printf`); it has the run-time support's functions and `luma.h`.
-- The Apple deployment targets are 1.1's to state from the game's build (the game's CMake does not set one today);
-  until then this row is "not settled", and LumaLink refuses those platforms naming why.
+- The gate builds one mod for all nine and reads each library as its platform's loader will
+  (`tools/lumacore/check_luma_platforms.py`: its form, `luma_mod` exported, no import from the system, no executable
+  stack, constructors out of `.init_array`, 16 KiB pages on Android, the Mach-O platform and signature).
 
 ## Reproducible
 
-The same sources, the same LumaLink release and the same self-descriptions give byte-identical libraries on every host
-system LumaLink runs on: fixed flags above, no time, no path, no UUID, no build id, `/Brepro`; generated C in a
-fixed order (modules by name, functions in source order).
+The same sources, the same LumaLink release and the same self-descriptions give byte-identical libraries: fixed flags
+above, no time, no path, no build id, `/Brepro`, a Mach-O's UUID a hash of its content; generated C in a fixed order
+(modules by name, functions in source order). The gate builds a mod twice in two work folders and compares the
+bytes.
 
 ## Names in the generated C
 
