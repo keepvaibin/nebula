@@ -89,7 +89,7 @@ object SaveTransfer {
             return TransferResult(false, context.getString(R.string.GameRunning), context.getString(R.string.CloseGameFirst))
         }
         val data = GameFiles.data(context)
-        val incoming = File(data, ".save-incoming-${System.nanoTime()}")
+        val incoming = File(data, "${Leftovers.SAVE_INCOMING}${System.nanoTime()}")
         try {
             val input = context.contentResolver.openInputStream(uri) ?: throw IOException(context.getString(R.string.FileUnopenable))
             val bytes = input.use { readAtMost(it, MAX_TOTAL_BYTES) }
@@ -351,7 +351,7 @@ object SaveTransfer {
         folder.mkdirs()
         val stamp = SimpleDateFormat("yyyy-MM-dd HHmmss", Locale.ROOT).format(Date())
         val backup = File(folder, "Saves before import $stamp.zip")
-        val writing = File(folder, ".${backup.name}.writing")
+        val writing = File(folder, ".${backup.name}${Leftovers.WRITING}")
         writing.outputStream().use { zip(files, it) }
         if (!writing.renameTo(backup)) throw IOException(context.getString(R.string.BackupFailed))
         folder.listFiles { f -> f.name.startsWith("Saves before import ") }.orEmpty()
@@ -361,7 +361,7 @@ object SaveTransfer {
 
     // The staged folder becomes the save folder: renames, so a failure leaves the old saves whole.
     private fun replaceSaves(context: Context, saveFolder: File, staged: File) {
-        val old = File(saveFolder.parentFile, ".saves-replaced-${System.nanoTime()}")
+        val old = File(saveFolder.parentFile, "${Leftovers.SAVES_REPLACED}${System.nanoTime()}")
         if (saveFolder.exists() && !saveFolder.renameTo(old)) throw IOException(context.getString(R.string.SaveFolderFailed))
         if (!staged.renameTo(saveFolder)) {
             old.renameTo(saveFolder)

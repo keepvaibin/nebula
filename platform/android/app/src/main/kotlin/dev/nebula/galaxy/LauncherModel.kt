@@ -100,6 +100,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         if (driverBusy) return
         driverBusy = true
         viewModelScope.launch(Dispatchers.IO) {
+            leftoversCleared.await()
             val failure = runCatching { GpuDrivers.import(app, uri) }.exceptionOrNull()
             withContext(Dispatchers.Main) {
                 driverBusy = false
@@ -130,6 +131,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         modProgress = 0f
         val main = android.os.Handler(android.os.Looper.getMainLooper())
         Thread {
+            leftoversCleared.await()
             val result = runCatching {
                 ModImport.import(app, uri) { share -> main.post { if (modProgress != null) modProgress = share } }
             }.getOrElse { ModImportResult(false, "", "", "", it.message ?: app.getString(R.string.FileUnreadable)) }
@@ -245,6 +247,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         if (saveBusy) return
         saveBusy = true
         viewModelScope.launch(Dispatchers.IO) {
+            leftoversCleared.await()
             val result = runCatching(work).getOrElse {
                 TransferResult(false, app.getString(R.string.SavesFailed), it.message ?: app.getString(R.string.UnknownError))
             }
@@ -264,7 +267,21 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     val imports = Imports.state
 
+    /** Open until the imports' leftovers are cleared (P-096): every import waits for it, off the main thread. */
+    private val leftoversCleared = java.util.concurrent.CountDownLatch(1)
+
     init {
+        // Saves a cut-off save import moved aside go back before anything can start the game (one rename).
+        Leftovers.restoreSaves(GameFiles.saves(app))
+        // An import's copy the app's end cut off, and saves it moved aside: none of these imports runs before this
+        // model, and each waits for the clear. Off the main thread: a mod's copy can be gigabytes.
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                Leftovers.clear(GameFiles.data(app), GameFiles.saves(app))
+            } finally {
+                leftoversCleared.countDown()
+            }
+        }
         if (Imports.state.value is ImportState.Running) {
             screen = Screen.Import
         } else {

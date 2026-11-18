@@ -89,7 +89,7 @@ object GpuDrivers {
      */
     fun import(context: Context, uri: Uri): GpuDriver {
         val root = root(context)
-        val incoming = File(root, ".incoming-${System.nanoTime()}")
+        val incoming = File(root, "${Leftovers.DRIVER_INCOMING}${System.nanoTime()}")
         if (!incoming.mkdirs()) throw IOException(context.getString(R.string.FileUnreadable))
         try {
             val input = context.contentResolver.openInputStream(uri) ?: throw IOException(context.getString(R.string.FileUnopenable))
