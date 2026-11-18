@@ -153,11 +153,14 @@ def main():
         check({"tour/vulkan", "tour/d3d11", "replays/tablet", "tour/tablet-pc", "github", "build/android",
                "tour-RMGP01/d3d12", "pictures/tablet"} <= m and "soak" not in m and "tour-RMGP01/vulkan" not in m,
               "main: %s" % sorted(m))
-        check({"soak", "tour-asan/d3d12", "mods-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage"} <= lg
+        check({"soak", "tour-asan/d3d12", "mods-asan/d3d12", "tour-RMGJ01/vulkan", "tour-RMGP01/d3d11", "tour/tablet", "coverage", "measure/short"} <= lg
               and "github" not in lg and "unit/windows" not in lg and "pictures/tablet" not in lg, "long: %s" % sorted(lg))
         # The sanitizer build runs the mod tests too (N-1041): a check of its own after that build, not a planned one.
         check(tuple(long_needs.get("mods-asan/d3d12", ())) == ("build/windows-asan",),
               "long: the mod tests on the sanitizer build: %s" % (long_needs.get("mods-asan/d3d12"),))
+        # The short measurement set runs at the long run's end (N-1043): a check of its own, not a planned one.
+        check(tuple(long_needs.get("measure/short", ())) == ("build/windows",),
+              "long: the short measurement set runs: %s" % (long_needs.get("measure/short"),))
         check((m | lg) <= f | {"pictures/tablet"} and "measure/full" in f, "final has main's and long's: %s" % sorted((m | lg) - f))
         chosen = gate.select(main_needs, ["replays/vulkan"])
         check(chosen == {"replays/vulkan", "tour/vulkan", "tour/d3d12", "build/windows"}, "--only and its needs: %s" % sorted(chosen))

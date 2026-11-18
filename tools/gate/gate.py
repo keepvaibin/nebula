@@ -718,6 +718,20 @@ def start_soak(g):
     return process, log
 
 
+def measure_short(g):
+    """The short measurement set at the long run's end (tools/gate/measure_short.py, section 10, N-1043): one renderer
+    a run in turn, the 120 Hz pacing run and the benchmark under measure.lock, against the last ten runs' spread in
+    gate-runs/measure-history.tsv."""
+    def fn(log):
+        code = run([sys.executable, "-X", "utf8", "-I", HERE / "measure_short.py", "run", "--bin", g.bin, "--pak",
+                    g.args.pak, "--paks", g.args.paks, "--work", g.work / "measure", "--commit", g.commit, "--history",
+                    pathlib.Path(g.args.work) / "measure-history.tsv"], log)
+        text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
+        said = next((l for l in reversed(text.splitlines()) if l.startswith("measure: ")), "measure: no summary")
+        return code == 0, said[len("measure: "):]
+    return fn
+
+
 def soak_result(process, soak_log):
     """The soak's verdict once it ends: one line per renderer (soak.py run)."""
     def fn(log):
@@ -1673,6 +1687,9 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
             g.missing("soak", "it did not start")
         else:
             g.check("soak", soak_result(*soak))
+    if level in ("long", "final"):
+        # Last, with the machine alone: the gate lock keeps gates out, measure_short.py takes measure.lock.
+        locked_part(g, "measure", lambda: g.check("measure/short", measure_short(g), ("build/windows",)))
     if every and not getattr(g.args, "move", False):
         # With --move the gate waits for GitHub after its own checks, outside gate.lock (main()).
         g.check("github", github_check(g))
