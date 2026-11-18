@@ -59,12 +59,12 @@ start) is refused for now. The game's own tables are never written.
 
 ## make
 
-`int32_t (*make)(const LumaMod* mod, const char* name, uint32_t count, const LumaPlace* place, uint32_t flags, void objects)`,
+`int32_t (*make)(const LumaMod* mod, const char* name, uint32_t count, const LumaMakePlace* place, uint32_t flags, void** objects)`,
 the last field of LumaCore. `count` (1 to 1024) objects by a name the factory makes, made as PlacementInfoOrdered makes a
 placed one: NameObjFactory::getCreator (a game object, a mod class, a mod's object, a mod's change of the name), the
 creator given the mod object's name or the Japanese name, initStep to the end with a placement row, then the old
 object_classes attach. The row is a table the kernel writes in the scene's memory (one per call, a row per object):
-name, pos_x/y/z, dir_x/y/z (degrees), scale_x/y/z, Obj_arg0 to 7 from `place[i]` (`LumaPlace` {size, pos[3], rot[3],
+name, pos_x/y/z, dir_x/y/z (degrees), scale_x/y/z, Obj_arg0 to 7 from `place[i]` (`LumaMakePlace` {size, pos[3], rot[3],
 scale[3], args[8]}; an array of `count` with the first's size as the stride; null: the origin, unturned, scale 1, every
 argument -1). Every other column reads as absent (no switch, link, rail, view group), as for an object made with no
 placement; the placement file (self-description, 1.8 places) names what each class reads. Its two reserved words mark
@@ -76,9 +76,10 @@ initAfterPlacement run in the call, as LumaPlayer runs an extra player's; NameOb
 take objects made after the scene connected). No scene, or the scene between the two (running the after-placement
 steps): -3, said, as off the game thread. Clipping system info: when no placement has actors waiting for theirs, ours are taken as given none; made inside
 another placement's init they get that placement's, as the objects it makes. LUMA_MAKE_DEAD: makeActorDead after init
-(actors only; another object is made alive and that is said). Returns the count made (fewer when a creator makes
+(actors only; another object is made alive and that is said). Each object's address is in `objects[i]` (`objects` may
+be null). Returns the count made (fewer when a creator makes
 nothing, said); -1 no factory row by the name; -2 its files are not in this game (NebulaMods::isMissingFiles); -4 a bad
-argument (count, a place smaller than LumaPlace or not finite, an unknown flag) or no scene memory. Test
+argument (count, a place smaller than LumaMakePlace or not finite, an unknown flag) or no scene memory. Test
 1407 (eight Kuribo with their pos, scale and Obj_arg0, of class Kuribo, alive; one dead that appears; one made during
 play; the refusals).
 

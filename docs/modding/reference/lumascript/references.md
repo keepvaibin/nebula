@@ -1,11 +1,11 @@
 ---
-title: References to game objects
-shortTitle: References to game objects
-intro: How a mod keeps references to game objects safely.
+title: Names of content
+shortTitle: Names of content
+intro: How the names a mod gives models, effects, sounds, texts and classes are found, and what stands in for a missing one.
 contentType: reference
 ---
 
-## About references to game objects
+## About names of content
 
 A mod names models, effects, sounds and other content by name. This page describes how those references are checked and resolved, the placeholders used when a name is missing, and the mod log codes from 620 to 699.
 
@@ -16,8 +16,8 @@ mod it `needs`, or in something code makes at start (a derived class).
 
 The rule. A reference that does not resolve never stops the game: the mod stays on, the thing it named is replaced by
 a placeholder of its kind where one exists, and the mod log has one Error entry naming the mod, the file, the
-line (or JSON pointer), the kind and the name, and what was expected. Texts have no placeholder
-. A file of the mod the cook cannot make (a model whose image is missing or unreadable, a picture that does
+line (or JSON pointer), the kind and the name, and what was expected. Texts have no placeholder.
+A file of the mod the cook cannot make (a model whose image is missing or unreadable, a picture that does
 not read) is not a placeholder's: LumaLink's check and its pack refuse the mod (L804, the cook's reason); at a start
 the cook leaves the file out and the mod log has the same L804 Error on the mod (source COOK), the mod's other files
 apply, and a name of the left-out file then answers as a missing one (a model: the placeholder model, 621).

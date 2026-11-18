@@ -58,12 +58,34 @@ fn is_goomba(a: LiveActor) -> bool {
 | A game class pointer or reference (`LiveActor *`, `const Kuribo &`) | a view; `none` for null where the game may give null (`LiveActor?`) |
 | Anything else (a raw buffer, a function pointer, a `void *`) | not callable from LumaScript; compile error naming the parameter. Reach it from C in the same mod |
 
+## Optional game functions
+
+`optional` before a call of a game function makes it a function your mod can do without:
+
+```lumascript
+on player ready {
+    if let dead = optional MR::isPlayerDead() {      // none on a game without it
+        log "dead: {dead}"
+    }
+    if optional MR::incPlayerLeft() {                // true when the game has it, and it ran
+        log "one more life"
+    }
+}
+```
+
+* On a game without the function, the mod still loads. The call runs nothing, its arguments included, and gives
+  `none`, or `false` for a function with no result.
+* On a game with it, it is the call: its result as an option, or `true` for a function with no result.
+* One call of the same function without `optional`, anywhere in the mod, makes the mod need it.
+* `optional` goes before a game function's call only (`MR::f(..)`, `obj.f(..)`, `obj?.f(..)`); before anything
+  else it is S0162.
+
 ## Checks
 
-Each game use is bound by name when the mod loads (kernel loader: whole or not at all). The compiler checks every
-use against the self-description of the game version(s) named in `luma.json`'s `nebula` range; a name missing in
-any of them is a compile error naming the version, or, written `optional MR::foo`, a handle that is `none` on
-versions without it.
+Each game use is bound by name and signature when the mod loads (kernel loader: whole or not at all). LumaLink
+checks every use against the self-description of the game it builds against: the installed game's, or the one
+`LUMA_NAMES` names. A name that description lacks is a compile error naming it. A game that lacks a function the
+mod calls refuses the mod and names the function, unless every call of it is `optional`.
 
 ## Further reading
 

@@ -180,6 +180,7 @@ Codes S0901 and above are script errors while the game runs, not build codes. Fo
 | S0158 | error | this match is too large to check that it covers every value: add `else` |
 | S0160 | error | {need} was built with another LumaLink (runtime layout {found}, this one {layout}); rebuild {need} with a current LumaLink |
 | S0161 | error | task `{found}` takes no `var` parameter: it runs on after the call, when the caller's value may be gone; give the value back as the task's result |
+| S0162 | error | `optional` goes before a call of a game function, such as `optional MR::f(x)`: only a game function can be missing from a game |
 | S0800 | error | LumaLink cannot build {what} yet |
 
 ## What S0800 names
@@ -362,6 +363,7 @@ S0800 is a construct that LumaScript has and LumaLink cannot build yet. These ar
 * on stage with a name made while running
 * on step without the time service's header
 * `on {event}`
+* `optional`
 * {op} on {left} and {right}
 * `proceed()`
 * proceed() outside a wrap

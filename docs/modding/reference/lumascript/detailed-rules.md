@@ -106,7 +106,7 @@ from `NameObj` (or one the self-description marks with a lifetime); anything els
 ## Operators and precedence
 
 Loosest first: `??` (right to left); `or`; `and`; `not` (prefix); comparisons `== != < <= > >=` (one per expression:
-`a == b == c` is an error); `..` `..=`; `|`; `^`; `&`; `<< >>`; `+ -`; `* / %`; prefix `-`, `wait`, `start`; `as`
+`a == b == c` is an error); `..` `..=`; `|`; `^`; `&`; `<< >>`; `+ -`; `* / %`; prefix `-`, `wait`, `start`, `optional`; `as`
 (binds tighter than every binary operator: `a as u32 * b as u32` is `(a as u32) * (b as u32)`); postfix: a call
 `(...)`, `[i]`, `.name`, `?.name`, and `!` ("the value, which must not be `none`", a script error when it
 is). There is no prefix `!` and no `&&`, `||`, `? :`. `x == none` and `x != none` test any `T?` (T need not have
@@ -249,6 +249,7 @@ bor      = bxor { "|" bxor } ;  bxor = band { "^" band } ;  band = shift { "&" s
 shift    = sum { ("<<" | ">>") sum } ;  sum = product { ("+" | "-") product } ;
 product  = unary { ("*" | "/" | "%") unary } ;
 unary    = "-" unary | "wait" ( "until" expr | unary [ "frames" | "seconds" ] ) | "start" postfix
+         | "optional" postfix                       (* a game function's call only: S0162 *)
          | postfix { "as" type } ;
 postfix  = primary { args | "[" expr "]" | ("." | "?.") WORD [targs] | "!" } ;   (* targs only before "(" *)
 args     = "(" [ arg { "," arg } ] ")" ;  arg = ["var"] expr | IDENT ":" expr ;   (* positional first *)

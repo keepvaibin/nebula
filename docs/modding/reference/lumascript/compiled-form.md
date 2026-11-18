@@ -101,7 +101,7 @@ Every game name the script uses is one `LumaImport` row, built by the compiler, 
 | a class in a test `is_a`, a `ref<C>`, a `class X : C` | `LUMA_IMPORT_CLASS`; slot `int32_t lm_class_<n>` |
 | a size (`class X : C`, game structs by value) | `LUMA_IMPORT_SIZE` |
 | `hook` / `wrap` / `replace` | `LUMA_IMPORT_HOOK` with kind 0 / 2 / 3; `after` is kind 1 |
-| `optional MR::foo` | the row with `LUMA_OPTIONAL`; a null slot is `none` to the script |
+| `optional MR::foo(..)` | the row with `LUMA_OPTIONAL` when no plain call needs it; the slot tested before the call, a null slot `none` (`false` for no result) |
 | a service `use svc.net.local` | a `LUMA_IMPORT_SERVICE` row (`LUMA_OPTIONAL` with `use optional`) |
 
 Rows are sorted (name, kind); one name used many times is one row. The overload a script call chooses

@@ -9,8 +9,6 @@ contentType: reference
 
 This page describes how a script reads a service's structs, enums and constants, shows them in text, and uses the mod's own text rows.
 
-How a script reads a service's structs, enums and constants, shows them in text, and uses the mod's own text rows.
-
 ## Smallest example
 
 ```lumascript
@@ -127,8 +125,9 @@ on start {
 }
 ```
 
-Each placeholder of the line is given by name. Against the mod's text rows the checker refuses a missing one (S0137),
-a name the line does not have (S0138) and an argument without a name (S0139).
+Each placeholder of the line is given by name. For a line of the mod or of a mod it needs, the build refuses a missing
+one (S0137), a name the line does not have (S0138) and an argument without a name (S0139). The build reads the lines
+of every layer's `merge/MessageData/messages.json` and `merge/<Language>/MessageData/Message.arc/message.bmg.json`.
 
 ## Logging text
 
@@ -159,8 +158,8 @@ when it is used. Read before then, it is its key there, and the mod log says so 
 ## Limits
 
 - `text "Key"` takes a key written as a plain string, without values placed in it (S0015).
-- A text row's placeholders are checked only when the build is given the mod's text rows; `lumalink build` does not
-  read `messages.json`, so a missing key builds and shows the key at run time.
+- A key that no line of the mod or its needed mods has may be one of the game's messages, which the build has no
+  list of: it builds, and with no such message it shows the key at run time.
 - A struct field that is a pointer of any other form (a pointer to a number, a `char *` the service writes) makes
   the struct unusable from LumaScript; C mods still use it.
 

@@ -37,7 +37,7 @@ LumaScript is the language for Nebula mods. LumaLink compiles it to C and then t
 | [Not in LumaScript](not-in-lumascript.md) | Features LumaScript does not have. |
 | [Detailed rules](detailed-rules.md) | The detailed rules of LumaScript that complete the other reference pages. |
 | [Defining classes](defining-classes.md) | How a mod defines classes the game can place and run. |
-| [References to game objects](references.md) | How a mod keeps references to game objects safely. |
+| [Names of content](references.md) | How the names a mod gives models, effects, sounds, texts and classes are found, and what stands in for a missing one. |
 | [Text and service values](text-and-service-values.md) | How a script reads a service's structs, enums and constants, shows them in text, and uses the mod's own text rows. |
 | [Message tags](message-tags.md) | The tags for waits, pages, pictures, sizes, colors and the player's name in game text. |
 | [The compiled form](compiled-form.md) | What LumaLink builds from a mod's LumaScript, in detail. |
