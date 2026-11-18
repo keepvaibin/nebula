@@ -254,7 +254,17 @@ impl TableIr {
         let rows_at = le32(bytes, 12)? as usize;
         let text_at = le32(bytes, 16)? as usize;
         let text_size = le32(bytes, 20)? as usize;
-        let text = bytes.get(text_at..text_at + text_size).context("a table's text past its end")?;
+        let text = text_at.checked_add(text_size).and_then(|end| bytes.get(text_at..end)).context("a table's text past its end")?;
+        // Every size the header gives is checked against the file before anything is made from it: rows 0xFFFFFFFF
+        // reserved about 100 GB before a row was read (M-169). The columns' records and the rows' cells lie in the
+        // file; a table with no columns has no more rows than bytes.
+        if count.checked_mul(COLUMN).and_then(|n| n.checked_add(HEADER)).map_or(true, |end| end > bytes.len()) {
+            bail!("a table's {count} columns past its end");
+        }
+        let cells = rows.checked_mul(count).and_then(|n| n.checked_mul(4)).and_then(|n| n.checked_add(rows_at));
+        if cells.map_or(true, |end| end > bytes.len()) || (count == 0 && rows > bytes.len()) {
+            bail!("a table's {rows} rows past its end");
+        }
         let mut columns = Vec::with_capacity(count);
         for c in 0..count {
             let at = HEADER + COLUMN * c;
@@ -490,6 +500,11 @@ impl TableIr {
 /// `listed`: the name says it is a table, so one that does not read as one stops the cook.
 pub fn cook(bytes: &[u8], listed: bool) -> Result<Option<Vec<u8>>> {
     if bytes.starts_with(MAGIC) {
+        // A cooked table stays only when it reads whole and writes back to the same bytes, as the cook writes it: the
+        // game reads it in place, trusting its offsets (M-168).
+        if TableIr::from_ntbl(bytes)?.to_ntbl() != bytes {
+            bail!("a cooked table that is not as the cook writes it");
+        }
         return Ok(None);
     }
     match TableIr::from_bcsv(bytes)? {
@@ -710,6 +725,31 @@ mod tests {
         assert_eq!(TableIr::from_ntbl(&cooked).unwrap(), ir);
         assert_eq!(cook(&cooked, true).unwrap(), None);
         assert!(cook(b"not a table at all", true).is_err());
+    }
+
+    /// M-169: a cooked table's sizes are checked against it before anything is reserved (rows 0xFFFFFFFF reserved
+    /// about 100 GB). M-168: a cooked table is kept only as the cook writes it.
+    #[test]
+    fn a_cooked_tables_sizes_and_bytes_are_checked() {
+        let cooked = cook(&bcsv(), true).unwrap().unwrap();
+        let with = |at: usize, word: u32| {
+            let mut t = cooked.clone();
+            t[at..at + 4].copy_from_slice(&word.to_le_bytes());
+            t
+        };
+        for (at, word) in [(4, u32::MAX), (8, u32::MAX), (8, 0x1000_0000), (12, u32::MAX - 3), (16, u32::MAX), (20, u32::MAX)] {
+            let error = format!("{:#}", TableIr::from_ntbl(&with(at, word)).unwrap_err());
+            assert!(error.contains("past its end"), "header word at {at} = {word:#x}: {error}");
+        }
+        // No columns: no more rows than bytes.
+        let mut empty = TableIr { columns: Vec::new(), rows: vec![Vec::new(); 3] }.to_ntbl();
+        assert_eq!(TableIr::from_ntbl(&empty).unwrap().rows.len(), 3);
+        empty[4..8].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(TableIr::from_ntbl(&empty).is_err());
+        // One row fewer still reads, but is not what the cook writes.
+        assert_eq!(cook(&cooked, true).unwrap(), None);
+        let error = format!("{:#}", cook(&with(4, 1), true).unwrap_err());
+        assert!(error.contains("not as the cook writes it"), "{error}");
     }
 
     #[test]
