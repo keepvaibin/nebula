@@ -329,6 +329,13 @@ class Gate:
         lines = [head] + ["  %-34s %-7s %s" % (r["check"], r["state"], r["detail"]) for r in self.results]
         path.with_suffix(".txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
         append_history(pathlib.Path(self.args.work) / "history.tsv", out)
+        if out["passed"] and not self.args.keep_runs and not self.args.out:
+            # The passed tests' working files are not evidence once the run passed (N-1060): the drive keeps its room.
+            import prune_runs
+            tests, freed = prune_runs.prune(self.work)
+            if tests:
+                print("gate.py: %d passed tests' working files removed (%.1f GB); --keep-runs keeps them" % (
+                    tests, freed / 1e9))
         if self.level == "main" and not self.args.only and seconds > MAIN_GATE_SECONDS:
             print("gate.py: this main gate took %.0f minutes, over 30: a ledger row for Agent 1 (section 7)" % (seconds / 60))
         if self.args.record:
@@ -1366,6 +1373,8 @@ def parser():
     p.add_argument("--jobs", default=str(max(4, (os.cpu_count() or 8) - 4)))
     p.add_argument("--no-build", action="store_true", help="use the bins already in the build root")
     p.add_argument("--record", action="store_true", help="also keep the result in docs/plan/gate-runs, for a commit")
+    p.add_argument("--keep-runs", action="store_true",
+                   help="keep the passed tests' working files (pictures, sound, game folders), for same_runs.py")
     p.add_argument("--seed-from", default=os.environ.get("NEBULA_GATE_SEED", ""),
                    help="a configured MSVC build folder whose compiled shader stages seed a new build (content-keyed)")
     p.add_argument("--lumalink", default=os.environ.get("LUMALINK", ""),

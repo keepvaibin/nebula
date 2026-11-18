@@ -41,6 +41,11 @@ def compare(a, b):
             bad.append(place)
             continue
         x, y = pa[place], pb[place]
+        pruned = [w for w, f in (("first", x), ("second", y)) if (f / "pruned.txt").exists()]
+        if pruned:
+            lines.append("%-70s pruned in the %s (gate.py --keep-runs keeps a run whole)" % (place, " and ".join(pruned)))
+            bad.append(place)
+            continue
         notes = []
         hx, hy = picture_hashes(x), picture_hashes(y)
         if hx != hy:
