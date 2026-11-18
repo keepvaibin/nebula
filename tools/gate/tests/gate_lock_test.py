@@ -91,6 +91,13 @@ def main():
         check(getattr(gate, "queue_rank", lambda who: None)("Agent 4") == 0 and gate.queue_rank("Agent 2") == 1,
               "Agents 3 and 4 rank before Agents 1 and 2")
 
+        # The pre-push checks (census, ratchet: a work tree and an inventory) are machine work: they run once the lock
+        # is held, never before it (11-18: they ran beside a measurement while the gate waited).
+        import inspect
+        source = inspect.getsource(gate.main)
+        check(0 < source.find("take_gate_lock(lock, holder") < source.find("push_checks(commit)"),
+              "the pre-push checks run after the gate lock is taken")
+
         work = t / "runs"
         def quick(name, passed):
             f = work / name

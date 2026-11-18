@@ -1625,10 +1625,6 @@ def main(argv=None):
             return refuse("the long run is on main's newest commit (%s), this tree is at %s" % (
                 git("rev-parse", "--short", "origin/main"), commit[:9]))
     candidate = None
-    if args.move or args.mode == "quick":
-        why = push_checks(commit)
-        if why:
-            return refuse("main could not move to %s: %s" % (commit[:9], why))
     if args.move:
         git("fetch", "origin", "main")
         if not git_ok("merge-base", "--is-ancestor", "origin/main", "HEAD"):
@@ -1672,6 +1668,13 @@ def main(argv=None):
                 free_gate_lock(t, holder, args.board, args.who, "not run: " + held)
             return refuse(held)
         taken.append(lock)
+    # The pre-push checks build a work tree of their own (the ratchet's inventory): machine work, so under the lock,
+    # never beside another gate or a measurement (N-1069).
+    why = push_checks(commit) if args.move or args.mode == "quick" else None
+    if why:
+        for t in taken:
+            free_gate_lock(t, holder, args.board, args.who, "not run: " + why)
+        return refuse("main could not move to %s: %s" % (commit[:9], why))
     code, summary = 2, "it ended before writing a result"
     watch = GithubWatch(candidate, commit, planned_jobs(planned)).start() if args.move else None
     try:
