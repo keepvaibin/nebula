@@ -34,6 +34,9 @@ done
 # A TLS directory: data alone loads; a callback runs at load and close and is refused.
 "$cc" --target=x86_64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -Wl,/INCLUDE:_tls_used -DGOOD -DTLS_DATA -o pe-x64/tls_data.dll lib.c
 "$cc" --target=x86_64-pc-windows-msvc -shared $common $win -Wl,/NOIMPLIB -Wl,/INCLUDE:_tls_used -DGOOD -DTLS_CALLBACK -o pe-x64/tls_callback.dll lib.c
+# Unwind tables, as LumaLink builds a mod: tests/libraries.rs makes the exception directory lie (N-2037).
+"$cc" --target=x86_64-pc-windows-msvc -shared $common -fasynchronous-unwind-tables $win -Wl,/NOIMPLIB -DGOOD -DUNWIND -o pe-x64/unwind.dll lib.c
+"$cc" --target=aarch64-pc-windows-msvc -shared $common -fasynchronous-unwind-tables $win -Wl,/NOIMPLIB -DGOOD -DUNWIND -o pe-arm64/unwind.dll lib.c
 
 # ELF: x64 with RELA relocations, x64 with RELR (packed relative), arm64; an extra library pair on x64.
 # luma.h's runners read the bounds of luma_ctors and luma_dtors, which luma_ctors.ld makes.

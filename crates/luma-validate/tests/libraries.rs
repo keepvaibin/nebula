@@ -793,3 +793,235 @@ fn a_library_ios_will_not_load_is_refused_with_why() {
     assert_eq!(texts.len(), 2, "{texts:?}");
     assert!(texts.iter().any(|t| t.contains("encrypted")) && texts.iter().any(|t| t.contains("does not say")), "{texts:?}");
 }
+
+/// pe-x64/unwind.dll or pe-arm64/unwind.dll (functions with unwind data, as LumaLink builds a mod's), with its
+/// sections and exception directory found as the system finds them, to edit into lies.
+struct Unwind {
+    data: Vec<u8>,
+    /// The optional header's file offset.
+    opt: usize,
+    /// (virtual address, file offset, size in the file) of each section.
+    sections: Vec<(u32, u32, u32)>,
+}
+
+impl Unwind {
+    fn load(path: &str) -> Unwind {
+        let data = lib(path);
+        let u32_at = |at: usize| u32::from_le_bytes(data[at..at + 4].try_into().unwrap());
+        let coff = u32_at(0x3c) as usize + 4;
+        let count = u16::from_le_bytes(data[coff + 2..coff + 4].try_into().unwrap()) as usize;
+        let opt_size = u16::from_le_bytes(data[coff + 16..coff + 18].try_into().unwrap()) as usize;
+        let opt = coff + 20;
+        let sections = (0..count).map(|i| opt + opt_size + 40 * i).map(|h| (u32_at(h + 12), u32_at(h + 20), u32_at(h + 16))).collect();
+        Unwind { data, opt, sections }
+    }
+    fn get(&self, at: usize) -> u32 {
+        u32::from_le_bytes(self.data[at..at + 4].try_into().unwrap())
+    }
+    fn set(&mut self, at: usize, v: u32) {
+        self.data[at..at + 4].copy_from_slice(&v.to_le_bytes());
+    }
+    fn off(&self, rva: u32) -> usize {
+        let &(va, raw, _) = self.sections.iter().find(|&&(va, _, size)| rva >= va && rva < va + size).expect("in a section");
+        (raw + rva - va) as usize
+    }
+    fn image(&self) -> u32 {
+        self.get(self.opt + 56)
+    }
+    /// The exception directory's place in the data directories (its address, then its size).
+    fn directory(&self) -> usize {
+        self.opt + 112 + 3 * 8
+    }
+    /// The file offset of entry `i` (`step` bytes each).
+    fn entry(&self, i: usize, step: usize) -> usize {
+        self.off(self.get(self.directory())) + i * step
+    }
+    fn refused(&self, platform: &str, why: &str) {
+        let r = check(&code_mod(platform, &self.data, &[], false), platform, true);
+        assert_eq!(codes(&r), vec![502], "{why}: {:?}", r.findings);
+        assert!(english(&r, 502).ends_with("it is a damaged PE file."), "{why}: {}", english(&r, 502));
+    }
+    fn passes(&self, platform: &str, why: &str) {
+        let r = check(&code_mod(platform, &self.data, &[], false), platform, true);
+        assert!(r.findings.is_empty(), "{why}: {:?}", r.findings);
+    }
+}
+
+#[test]
+fn x64_unwind_tables_that_lie_are_refused() {
+    // N-2037: the system's unwinder trusts .pdata and the unwind data it names (the guard's walk in its fault
+    // handler, a C++ throw): an entry or its data outside the image is read there, a chain that loops is followed
+    // for ever. Each lie is a damaged file, refused before the library loads.
+    let w = "windows-x64";
+    let good = Unwind::load("pe-x64/unwind.dll");
+    good.passes(w, "as built");
+    let entries = good.get(good.directory() + 4) as usize / 12;
+    assert!(entries >= 3, "{entries} entries");
+    let e0 = good.entry(0, 12);
+    let info0 = good.off(good.get(e0 + 8));
+    let last = good.entry(entries - 1, 12);
+    let info_last = good.off(good.get(last + 8));
+    let codes_of = |u: &Unwind, info: usize| u.data[info + 2] as usize;
+    let tail = |u: &Unwind, info: usize| info + 4 + 2 * (codes_of(u, info) + (codes_of(u, info) & 1));
+    let lie = |why: &str, edit: &dyn Fn(&mut Unwind)| {
+        let mut u = Unwind::load("pe-x64/unwind.dll");
+        edit(&mut u);
+        u.refused(w, why);
+    };
+    lie("unwind data past the image", &|u| {
+        let image = u.image();
+        u.set(e0 + 8, image)
+    });
+    lie("unwind data not on 4 bytes", &|u| {
+        let at = u.get(e0 + 8);
+        u.set(e0 + 8, at + 2)
+    });
+    lie("a function that ends where it begins", &|u| {
+        let begin = u.get(e0);
+        u.set(e0 + 4, begin)
+    });
+    lie("a function past its code section", &|u| {
+        let image = u.image();
+        u.set(e0 + 4, image - 4)
+    });
+    lie("entries out of order", &|u| {
+        let one = u.entry(1, 12);
+        let (a, b) = (u.data[e0..e0 + 12].to_vec(), u.data[one..one + 12].to_vec());
+        u.data[e0..e0 + 12].copy_from_slice(&b);
+        u.data[one..one + 12].copy_from_slice(&a);
+    });
+    lie("a directory that is not whole entries", &|u| {
+        let at = u.directory() + 4;
+        let size = u.get(at);
+        u.set(at, size - 4)
+    });
+    lie("a directory past the image", &|u| {
+        let at = u.directory() + 4;
+        u.set(at, 12 * 0x10000)
+    });
+    lie("unwind version 3", &|u| u.data[info0] = (u.data[info0] & !7) | 3);
+    lie("an operation no unwinder knows", &|u| u.data[info0 + 5] = (u.data[info0 + 5] & 0xf0) | 11);
+    lie("ALLOC_LARGE with OpInfo 2", &|u| {
+        assert!(codes_of(u, info0) > 0);
+        u.data[info0 + 5] = 0x21
+    });
+    lie("a code that runs past the count", &|u| {
+        // The last code made SAVE_NONVOL_FAR, three slots, where one slot is left.
+        let last_code = info0 + 4 + 2 * (codes_of(u, info0) - 1);
+        u.data[last_code + 1] = 0x05
+    });
+    lie("a chain that loops", &|u| {
+        // The last entry's data chains to an entry naming that same data.
+        let at = tail(u, info_last);
+        let (begin, end, info) = (u.get(last), u.get(last + 4), u.get(last + 8));
+        u.data[info_last] = (u.data[info_last] & 7) | (4 << 3);
+        u.set(at, begin);
+        u.set(at + 4, end);
+        u.set(at + 8, info);
+    });
+    lie("a handler outside the code", &|u| {
+        let at = tail(u, info_last);
+        u.data[info_last] = (u.data[info_last] & 7) | (1 << 3);
+        let rdata = u.sections[1].0;
+        u.set(at, rdata);
+    });
+    lie("a chain with a handler", &|u| u.data[info_last] = (u.data[info_last] & 7) | (5 << 3));
+    // What the compilers write passes: a chain to another function's data, a handler in the code.
+    let mut chained = Unwind::load("pe-x64/unwind.dll");
+    let at = tail(&chained, info_last);
+    let (begin, end, info) = (chained.get(e0), chained.get(e0 + 4), chained.get(e0 + 8));
+    chained.data[info_last] = (chained.data[info_last] & 7) | (4 << 3);
+    chained.set(at, begin);
+    chained.set(at + 4, end);
+    chained.set(at + 8, info);
+    chained.passes(w, "a chain to another function's data");
+    let mut handled = Unwind::load("pe-x64/unwind.dll");
+    let at = tail(&handled, info_last);
+    handled.data[info_last] = (handled.data[info_last] & 7) | (1 << 3);
+    handled.set(at, begin);
+    handled.passes(w, "a handler in the code");
+}
+
+#[test]
+fn arm64_unwind_tables_that_lie_are_refused() {
+    let w = "windows-arm64";
+    let good = Unwind::load("pe-arm64/unwind.dll");
+    good.passes(w, "as built");
+    let entries = good.get(good.directory() + 4) as usize / 8;
+    let word = |u: &Unwind, i: usize| u.get(u.entry(i, 8) + 4);
+    let packed = (0..entries).find(|&i| word(&good, i) & 3 != 0).expect("a packed entry");
+    let full = (0..entries).find(|&i| word(&good, i) & 3 == 0).expect("an entry with .xdata");
+    let (p, f) = (good.entry(packed, 8), good.entry(full, 8));
+    let xdata = good.off(word(&good, full));
+    let lie = |why: &str, edit: &dyn Fn(&mut Unwind)| {
+        let mut u = Unwind::load("pe-arm64/unwind.dll");
+        edit(&mut u);
+        u.refused(w, why);
+    };
+    lie("the reserved flag 3", &|u| {
+        let v = u.get(p + 4);
+        u.set(p + 4, v | 3)
+    });
+    lie("a packed length past the code", &|u| {
+        let v = u.get(p + 4);
+        u.set(p + 4, v | (0x7ff << 2))
+    });
+    lie(".xdata past the image", &|u| {
+        let image = u.image();
+        u.set(f + 4, image)
+    });
+    lie(".xdata version 1", &|u| {
+        let v = u.get(xdata);
+        u.set(xdata, v | (1 << 18))
+    });
+    lie("more code words than the image holds", &|u| {
+        // The extended header: 65535 epilog scopes and 255 code words.
+        let v = u.get(xdata);
+        u.set(xdata, v & 0x7_ffff & !(1 << 21));
+        u.set(xdata + 4, 0x00ff_ffff);
+    });
+    lie("an epilog starting past the codes", &|u| {
+        let v = u.get(xdata);
+        let (epilogs, single) = ((v >> 22) & 0x1f, v & (1 << 21) != 0);
+        assert!(!single && epilogs > 0, "the first .xdata has epilog scopes");
+        let scope = u.get(xdata + 4);
+        u.set(xdata + 4, scope | (0x3ff << 22))
+    });
+    lie("a handler outside the code", &|u| {
+        // X set; the handler's address goes after the codes, where the next record starts.
+        let v = u.get(xdata);
+        let at = xdata + 4 + 4 * ((v >> 22) & 0x1f) as usize + 4 * (v >> 27) as usize;
+        u.set(xdata, v | (1 << 20));
+        let rdata = u.sections[1].0;
+        u.set(at, rdata);
+    });
+}
+
+#[test]
+fn every_byte_of_the_unwind_tables_changed_reads_or_is_refused() {
+    // The hostile-input sweep: each byte of the exception directory and the first 16 of each unwind record it names,
+    // set to 0, 255 and with a low and a high bit flipped. The validator never panics and says nothing but L502
+    // (check_with also asks the same report twice).
+    for (path, platform, step) in [("pe-x64/unwind.dll", "windows-x64", 12usize), ("pe-arm64/unwind.dll", "windows-arm64", 8)] {
+        let good = Unwind::load(path);
+        let size = good.get(good.directory() + 4) as usize;
+        let mut places: Vec<usize> = (good.entry(0, step)..good.entry(0, step) + size).collect();
+        for i in 0..size / step {
+            let data = good.get(good.entry(i, step) + step - 4);
+            if step == 8 && data & 3 != 0 {
+                continue; // packed: no record
+            }
+            let off = good.off(data);
+            places.extend(off..off + 16);
+        }
+        for at in places {
+            let b = good.data[at];
+            for v in [0u8, 0xff, b ^ 1, b ^ 0x80] {
+                let mut u = Unwind::load(path);
+                u.data[at] = v;
+                let r = check(&code_mod(platform, &u.data, &[], false), platform, true);
+                assert!(r.findings.iter().all(|f| f.code == 502), "{path} byte {at:#x} = {v:#x}: {:?}", r.findings);
+            }
+        }
+    }
+}

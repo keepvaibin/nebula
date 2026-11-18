@@ -59,6 +59,9 @@ the Windows targets each object also takes `-mno-incremental-linker-compatible`.
 - The gate builds one mod for all nine and reads each library as its platform's loader will
   (`tools/lumacore/check_luma_platforms.py`: its form, `luma_mod` exported, no import from the system, no executable
   stack, constructors out of `.init_array`, 16 KiB pages on Android, the Mach-O platform and signature).
+- On Windows the validator reads a library's unwind tables as the system's unwinder will, in a crash too: every
+  `.pdata` entry in code, in order, and the unwind data it names in the library, of a known form, any chain ending.
+  A library whose tables do not hold is a damaged PE file (L502) and is not loaded.
 
 ## Reproducible
 

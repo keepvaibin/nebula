@@ -201,6 +201,8 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
     };
     let table = ad(opt, opt_size)?;
     let mut maps = Vec::new();
+    // The executable sections' address ranges: where the unwind tables may say code is.
+    let mut code = Vec::new();
     for s in 0..sections {
         let h = nth(table, s, 40)?;
         let vsize = u64::from(u32_at(d, h, 8)?);
@@ -208,6 +210,9 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
         let raw_size = u64::from(u32_at(d, h, 16)?);
         let raw_at = u64::from(u32_at(d, h, 20)?);
         maps.push((va, raw_size.min(vsize.max(raw_size)), raw_at));
+        if u32_at(d, h, 36)? & 0x2000_0000 != 0 {
+            code.push((va, va.checked_add(vsize)?));
+        }
     }
     let mut lib = Library {
         format: Format::Pe,
@@ -230,6 +235,8 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
     if u32_at(d, opt, 16)? != 0 {
         lib.runs_at_load.push("AddressOfEntryPoint".to_string());
     }
+    let (exceptions, exceptions_size) = dir(3)?;
+    exceptions_hold(&lib, u64::from(u32_at(d, opt, 56)?), &code, u64::from(exceptions), u64::from(exceptions_size))?;
     // TLS: the data alone runs nothing; the callbacks run at load and close. IMAGE_TLS_DIRECTORY holds
     // AddressOfCallBacks, an address (ImageBase added) at +24 (PE32+) or +12 (PE32), of an array that ends with a null.
     let (tls, _) = dir(9)?;
@@ -297,6 +304,175 @@ fn read_pe(d: &[u8]) -> Option<Library<'_>> {
         }
     }
     Some(lib)
+}
+
+// ---- Windows unwind tables (N-2037) ----
+//
+// The system's unwinder reads a library's exception directory (.pdata) and the unwind data it names whenever it walks
+// the library's frames: the guard's walk in its fault handler (RtlLookupFunctionEntry, RtlVirtualUnwind), a C++
+// throw, a crash dump. It trusts them: an entry or its data outside the image is read where it says, and a chain of
+// entries that loops is followed for ever. So a table that does not hold makes the file a damaged one (None): the
+// library is refused before anything loads it. Forms: x64 RUNTIME_FUNCTION and UNWIND_INFO; arm64 entries with
+// .xdata or packed unwind data (the Windows ABI documents).
+
+/// Chained x64 unwind data the unwinder follows, at most: the compilers chain one or two deep.
+const UNWIND_CHAIN_MOST: u32 = 32;
+
+/// `[begin, end)` lies in one executable section.
+fn in_code(code: &[(u64, u64)], begin: u64, end: u64) -> bool {
+    begin < end && code.iter().any(|&(s, e)| begin >= s && end <= e)
+}
+
+/// The exception directory at `rva` (`size` bytes): every entry in code, sorted and apart (the unwinder searches it by
+/// halves), and the unwind data each names in the image and in a known form. `image` is SizeOfImage.
+fn exceptions_hold(lib: &Library, image: u64, code: &[(u64, u64)], rva: u64, size: u64) -> Option<()> {
+    if rva == 0 && size == 0 {
+        return Some(());
+    }
+    let step: u64 = match lib.machine {
+        Machine::X64 => 12,
+        Machine::Arm64 => 8,
+        Machine::Other(_) => return Some(()), // refused as another machine (L502)
+    };
+    if size == 0 || size % step != 0 || rva % 4 != 0 || rva.checked_add(size)? > image {
+        return None;
+    }
+    let at = lib.offset_of(rva, size)?;
+    let d = lib.data;
+    let mut last_end = 0u64;
+    for i in 0..us(size / step)? {
+        let e = nth(at, i, us(step)?)?;
+        let begin = u64::from(u32_at(d, e, 0)?);
+        let end = match lib.machine {
+            Machine::X64 => {
+                x64_unwind_holds(lib, image, code, u64::from(u32_at(d, e, 8)?), 0)?;
+                u64::from(u32_at(d, e, 4)?)
+            }
+            _ => begin.checked_add(arm64_unwind_length(lib, image, code, u32_at(d, e, 4)?)?)?,
+        };
+        if begin < last_end || !in_code(code, begin, end) {
+            return None;
+        }
+        last_end = end;
+    }
+    Some(())
+}
+
+/// An x64 UNWIND_INFO at `info`: version 1 or 2, its codes each of a known operation and whole, then the handler's
+/// address (in code) or the chained RUNTIME_FUNCTION (whose own data holds, `depth` deep), all in the image.
+fn x64_unwind_holds(lib: &Library, image: u64, code: &[(u64, u64)], info: u64, depth: u32) -> Option<()> {
+    if depth > UNWIND_CHAIN_MOST || info % 4 != 0 {
+        return None;
+    }
+    let d = lib.data;
+    let head = lib.offset_of(info, 4)?;
+    let version = u8_at(d, head, 0)? & 7;
+    let flags = u8_at(d, head, 0)? >> 3;
+    let count = u64::from(u8_at(d, head, 2)?);
+    // UNW_FLAG_EHANDLER 1, UHANDLER 2, CHAININFO 4; a chain has no handler.
+    if !(version == 1 || version == 2) || flags & !7 != 0 || (flags & 4 != 0 && flags & 3 != 0) {
+        return None;
+    }
+    let codes_len = 2 * (count + (count & 1)); // the codes take an even number of 2-byte slots
+    let tail_len: u64 = if flags & 4 != 0 {
+        12
+    } else if flags & 3 != 0 {
+        4
+    } else {
+        0
+    };
+    if info.checked_add(4 + codes_len + tail_len)? > image {
+        return None;
+    }
+    let body = lib.offset_of(info, 4 + codes_len + tail_len)?;
+    // Each code's slots: its operation in the low half of its second byte, OpInfo in the high half.
+    let mut k = 0u64;
+    while k < count {
+        let op = u8_at(d, body, us(4 + 2 * k + 1)?)?;
+        k += match (op & 0xf, op >> 4) {
+            (0 | 2 | 3 | 10, _) => 1,   // PUSH_NONVOL, ALLOC_SMALL, SET_FPREG, PUSH_MACHFRAME
+            (1, 0) => 2,                // ALLOC_LARGE, the size / 8 in the next slot
+            (1, 1) => 3,                // ALLOC_LARGE, the size in the next two
+            (4 | 8, _) => 2,            // SAVE_NONVOL, SAVE_XMM128
+            (5 | 9, _) => 3,            // their _FAR forms
+            (6, _) if version == 2 => 2, // EPILOG
+            _ => return None,
+        };
+    }
+    if k != count {
+        return None; // the last code runs past the count
+    }
+    let tail_at = us(4 + codes_len)?;
+    if flags & 4 != 0 {
+        let begin = u64::from(u32_at(d, body, tail_at)?);
+        let end = u64::from(u32_at(d, body, ad(tail_at, 4)?)?);
+        if !in_code(code, begin, end) {
+            return None;
+        }
+        return x64_unwind_holds(lib, image, code, u64::from(u32_at(d, body, ad(tail_at, 8)?)?), depth + 1);
+    }
+    if flags & 3 != 0 {
+        let handler = u64::from(u32_at(d, body, tail_at)?);
+        if !in_code(code, handler, handler.checked_add(1)?) {
+            return None;
+        }
+    }
+    Some(())
+}
+
+/// The length in bytes of the function an arm64 entry's second word describes: packed (flag 1 or 2), or its .xdata
+/// record (flag 0: the record's address) whose header, epilog scopes, codes and handler address lie in the image.
+fn arm64_unwind_length(lib: &Library, image: u64, code: &[(u64, u64)], word: u32) -> Option<u64> {
+    match word & 3 {
+        1 | 2 => return Some(u64::from((word >> 2) & 0x7ff) * 4),
+        3 => return None, // reserved
+        _ => {}
+    }
+    let d = lib.data;
+    let xdata = u64::from(word);
+    let first = u32_at(d, lib.offset_of(xdata, 4)?, 0)?;
+    if (first >> 18) & 3 != 0 {
+        return None; // Vers: only 0 is defined
+    }
+    let length = u64::from(first & 0x3_ffff) * 4;
+    let has_handler = (first >> 20) & 1 != 0;
+    let single = (first >> 21) & 1 != 0; // E: one epilog, its first code's index in the epilog count field
+    let mut epilogs = u64::from((first >> 22) & 0x1f);
+    let mut words = u64::from(first >> 27);
+    let mut size = 4u64;
+    if epilogs == 0 && words == 0 {
+        let second = u32_at(d, lib.offset_of(xdata.checked_add(4)?, 4)?, 0)?;
+        epilogs = u64::from(second & 0xffff);
+        words = u64::from((second >> 16) & 0xff);
+        size = 8;
+    }
+    let scopes = if single { 0 } else { epilogs };
+    let codes_bytes = words * 4;
+    let all = size + scopes * 4 + codes_bytes + if has_handler { 4 } else { 0 };
+    if xdata.checked_add(all)? > image {
+        return None;
+    }
+    let body = lib.offset_of(xdata, all)?;
+    // Where each epilog's codes start: an index into the codes.
+    if single {
+        if codes_bytes > 0 && epilogs >= codes_bytes {
+            return None;
+        }
+    } else {
+        for i in 0..scopes {
+            let scope = u32_at(d, body, us(size + i * 4)?)?;
+            if u64::from(scope >> 22) >= codes_bytes {
+                return None;
+            }
+        }
+    }
+    if has_handler {
+        let handler = u64::from(u32_at(d, body, us(size + scopes * 4 + codes_bytes)?)?);
+        if !in_code(code, handler, handler.checked_add(1)?) {
+            return None;
+        }
+    }
+    Some(length)
 }
 
 fn read_elf(d: &[u8]) -> Option<Library<'_>> {

@@ -288,3 +288,16 @@ typedef struct {
 } TlsDirectory;
 __attribute__((used)) const TlsDirectory _tls_used = {tls_block, tls_block + 8, &tls_index, tls_callbacks, 0, 0};
 #endif
+
+#if defined(UNWIND)
+/* Functions with unwind data, as a mod's have with LumaLink's flags (-fasynchronous-unwind-tables): a frame, a saved
+   register, stack past 128 bytes, calls. Its exception directory is what tests/libraries.rs turns into lies (N-2037). */
+__attribute__((noinline, used)) int32_t unwind_leaf(volatile int32_t* p) {
+    return *p + 1;
+}
+__attribute__((noinline, used)) int32_t unwind_frame(int32_t n) {
+    volatile int32_t local[64];
+    for (int32_t i = 0; i < 64; i++) local[i] = i * n;
+    return unwind_leaf(&local[n & 63]) + unwind_leaf(&local[(n + 1) & 63]);
+}
+#endif
