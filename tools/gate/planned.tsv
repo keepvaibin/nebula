@@ -2,12 +2,12 @@
 # a check removes its line; a listed check that runs fails. Every line has an open ledger row or plan step.
 check	level	plan step or ledger row	owner
 pictures/tablet	main	N-1040	Agent 1
-mods/tablet-quick	main	M0 (the mod tests on a device)	Agent 2
-hostile-files	main	M6 (the bad-file corpus)	Agent 2
-two-mods	main	M2 (the two-mod tests)	Agent 2
-mods/tablet	long	M0 (the mod tests on a device)	Agent 2
+mods/tablet-quick	main	N-2043	Agent 2
+hostile-files	main	N-2044	Agent 2
+two-mods	main	N-2045	Agent 2
+mods/tablet	long	N-2043	Agent 2
 mods-asan/d3d12	long	N-1041	Agent 1
-fuzz	long	M6 (the fuzz targets)	Agent 2
+fuzz	long	N-2046	Agent 2
 coverage	long	N-1042	Agent 1
 measure/short	long	N-1043	Agent 1
 measure/full	final	N-1043	Agent 1

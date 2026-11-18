@@ -89,3 +89,82 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   kit-any-time-title, kit-item and kit-shop 4 of 4.
 - Open in M2: M-001 (as above), N-2023, N-2024, M-031 (Android aftercrash run); the full M2 regression on all three
   renderers.
+
+## 2026-11-17 M1 M-001: a fault in another mod's code
+
+- M-001 fixed, as the planner decided at 12:33 (board). Nebula mods/m2 (rebased onto engine/int f8a8a43b7):
+  kernel 0db33cebb, Mods page 10c00dfd1, tests 305c2a62a, docs 53e6733a2, luma.h 7ca155215 and 47cbeee62; LumaLink mods/m2
+  19e3a91, 341b31d, 8bb18e5.
+  - Who is turned off: the host records the chain of mod code between the boundary and the fault, with each run's
+    outermost frame. The kernel starts at the mod whose code faulted and moves to its caller while the caller needs
+    it (luma_guard_walk.h); that mod is turned off. A calls LumaKit and LumaKit's code faults: A. LumaKit's hook calls
+    B's callback and B's code faults: B (5fd2e8768 took that as LumaKit's own fault: the boundary was LumaKit's).
+    The resume point stays the boundary.
+  - LumaCore.call_mod: a library's call of code another mod gave it runs under a boundary of the giver; a fault there
+    turns the giver off and the caller goes on to its next user in the same frame. LumaScript makes every call of
+    another mod's function value through it; a value the mod made itself stays a plain call. In C, luma.h documents it.
+  - The cut notice: a mod that stays on with code on the cut stack gets LumaModInfo.cut (LumaScript `on mods.cut`)
+    before its next call there, with the export that was cut, the caller and the place. The LumaScript runtime first
+    puts back its own calls in progress (the mod its reports go to, its scratch). The kernel holds nothing across a
+    cut: tMod and the reporting state are put back by run() at the boundary. LumaKit is pure LumaScript, so its
+    callbacks all go through call_mod; reference/lumakit/index.md lists them per module.
+  - Naming: the log, the mod log, the crash record and the player's notice name the mod turned off, the mod whose
+    code faulted and the place as <id>/<file>+offset. Faults in a mod's code under other mods are counted per mod;
+    after two different callers the Mods page says the library is the common place and offers to turn it off or the
+    two callers on again (14 languages). Nothing else is automatic.
+  - The library span table grows by chunks of 64 and is read by the fault handler without a lock (was 512 slots and a
+    silent drop).
+- Tests, each failing before: tests/mods/guard 1643-1652 (0 of 10 pass on the bins before M-001, 10 of 10 after);
+  galaxy_luma_guard_walk_tests (the need walk, 2000 libraries); LumaLink tests/game script k11-callback, k11-cut (both
+  fail with the LumaLink before) and lumascript emit_small a_function_value_entry_is_one_for_every_module.
+- Two faults of the first M-001 code, found reading it again, fixed before it went anywhere: "needs through" (every
+  call_mod, and the walk in the fault handler) walked the need graph by recursion, exponential in a graph of shared
+  needs (67 million steps, 81 ms, for one check on 26 layers of two mods each needing both below); each mod now keeps
+  every mod it needs as one sorted set made at its bind (LumaNeeds.hpp), a check is a binary search 918f98174; and a
+  library's fault count and callers, written on the faulting thread and read by the Mods page, are published with
+  atomics 6aeb306b5. luma_guard_walk_tests: 40 such layers, and random graphs against a graph search.
+- LumaKit did not link with the first call_mod build: the function value entry was static in the first module that
+  needed it (LumaLink 8bb18e5). Found by the LumaLink kit suite; the crate test above fails before.
+- N-2036 fixed 9c0f16984: the guard read a mod library's unwind tables (.pdata unwind info, .eh_frame_hdr) with no bound,
+  in the fault handler (function_at is new in M-001, frame_register is from M5). luma_guard_unwind.h reads within the
+  image; the unit test feeds every truncation, hostile counts and offsets, a looping chain and 20000 random tables
+  (an address sanitizer build of the test overflows on the old reading); tools/fuzz/luma_unwind_fuzz.cpp ran 43
+  million inputs, every point reached, no fault. N-2037 (open, M6): the system's own unwinder still reads a mod's
+  exception directory unchecked.
+- N-2035 fixed a0a3a9f9f: needs 6801 expected MarioHolder where the call has named MarioActor since d3e9454ae.
+- Open, fixed limits found here: N-2032 (256 mods), N-2033 (256 cost slots), N-2034 (16 take-outs a frame).
+- call_mod's cost (guard/1649) is not measured yet: it is a timed run, and since 11-17 16:05 (plan 04 section 10) it
+  waits for the machine alone under measure.lock. It goes into the next entry.
+- Runs on d3d12 (6aeb306b5, the US pak of store 35): guard, guard-crash, aftercrash, loader, loader5, needs, reload, gone, modscreen, modlog, safestart, startcheck and the LumaLink script and kit suites, 182 of 182 (437 mods built, none failed; 6606 and 6607 on the Japanese and European paks). LumaKit rebuilt with LumaLink 8bb18e5 (1c858d763); build_lumakit --verify passes.
+
+## 2026-11-17 Plan 04 step 3 and what closing M-001 found
+
+- The quick gate of mods/m2 ef3d179ef failed its Windows build: luma.h's LUMA_MOD, LUMA_MOD_NO_IMPORTS and
+  LUMA_LIBRARY_MOD left out LumaModInfo.cut, which M-001 added, so a mod built with -Wall -Wextra -Werror (the
+  harness's game half is) did not compile. A fault of the first M-001 code, before it reached main: 47cbeee62, with
+  tools/lumacore/tests/harness_sdk_macros_test.py (the five forms as C17 and C++20 on four targets; 16 of 40 before,
+  40 of 40 after). My own bins had built the game half without -Wextra, so my regression did not see it.
+- N-2038 fixed (LumaLink f468f20, pin 59e178605): mods are built with -ffp-contract=off, as the game is. Before, every
+  arm64 target fused a*b+c, so a mod's floats, LumaScript's sin and cos included, differed from the PC's.
+  lumalink-core tests/same_float.rs fails before on all five arm64 targets. Agent 1's sincosf case (N-1033) cannot
+  happen in a mod (no builtins, no system library, every link refuses an undefined name).
+- N-2039 fixed 5023c2cf3: the gate's new lumalink check builds the pinned LumaLink (mod_tests.pinned_lumalink, its nebula/
+  a link to the tree under test) and runs every one of its tests with clang, the SDK and the build's names; the mod
+  tests then use that program and its tests/game. Before, the gate ran none of them, and the nine-platform build test
+  skipped itself for want of its checker (now tools/lumacore/check_luma_platforms.py). The first full run found one
+  stale test (33 services where the SDK has 34; LumaLink 9cf2ebe). Run alone on the a2m3 bins: 380 passed, 0 failed.
+- N-2040 fixed 07d4228e0: compiled-form.md's targets and flags as LumaLink builds them.
+- N-2041 fixed 297bcef3e (plan 04, section 13 step 3): mod_tests.py runs tests side by side (--parallel; one runner
+  per test, or per chain of tests continuing from one another, each with its own lock and log, the longest first by
+  the last run's times) and has a quick set (--set quick: tests/mods/quick.json, 62 tests, one or more of every suite
+  here and in LumaLink's tests/game; refused when a suite has none or a name is not a test). A selective run builds
+  only the mods its tests need. The gate's quick level runs the quick set; each mods lane runs --mod-parallel tests at once (2: the lanes run side by side too).
+  tools/lumacore/tests/harness_mod_tests_parallel_test.py fails before. On the a2m3 bins (d3d12): the quick set
+  62 of 62 in 170 s four at a time (104 s of it the mod build, beside a cargo build), 389 s one at a time; facts and
+  pictures the same for 61 of 62 (order within a frame of facts from two threads aside). fs/2301 is not: its completion
+  events landed at frame 12 one at a time and frame 11 side by side (N-2047, open).
+- Rows for the planned checks Agent 1's planned.tsv names: N-2043 (mod tests on the tablet), N-2044 (bad files),
+  N-2045 (two mods), N-2046 (fuzz).
+- events_page_test.py (M-111) ended in FileNotFoundError when given a --work folder that did not exist (the gate makes
+  it first): 1ee8d0663.
+- N-2042 open: four ui tests have no Direct3D 11 reference pictures (harness-error on d3d11 in every gate).
