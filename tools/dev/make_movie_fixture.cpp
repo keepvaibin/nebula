@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Writes the movie source test's fixture (tests/data/movie/h264_64x64.mp4, runtime/src/render/movie_source_tests.cpp):
-// 64x64 H.264 in MP4, 30 frames at 30 fps, frames 0-14 red and 15-29 blue, a key frame every 15, with Media
+// 64x64 H.264 (Baseline) in MP4, 30 frames at 30 fps, frames 0-14 red and 15-29 blue, a key frame every 15, with Media
 // Foundation's H.264 encoder. Built by hand on Windows (cl /EHsc /std:c++20 make_movie_fixture.cpp); usage:
 // make_movie_fixture <out.mp4> [width height] (another even size: the same movie for a device run, see the test).
 #include <windows.h>
@@ -50,7 +50,7 @@ int wmain(int argc, wchar_t** argv) {
     CHECK(out->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_H264));
     CHECK(out->SetUINT32(MF_MT_AVG_BITRATE, 200000));
     CHECK(out->SetUINT32(MF_MT_INTERLACE_MODE, MFVideoInterlace_Progressive));
-    CHECK(out->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Main));
+    CHECK(out->SetUINT32(MF_MT_MPEG2_PROFILE, eAVEncH264VProfile_Base));
     CHECK(MFSetAttributeSize(out.Get(), MF_MT_FRAME_SIZE, kWidth, kHeight));
     CHECK(MFSetAttributeRatio(out.Get(), MF_MT_FRAME_RATE, kRate, 1));
     CHECK(MFSetAttributeRatio(out.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1));
@@ -64,10 +64,13 @@ int wmain(int argc, wchar_t** argv) {
     CHECK(MFSetAttributeSize(in.Get(), MF_MT_FRAME_SIZE, kWidth, kHeight));
     CHECK(MFSetAttributeRatio(in.Get(), MF_MT_FRAME_RATE, kRate, 1));
     CHECK(MFSetAttributeRatio(in.Get(), MF_MT_PIXEL_ASPECT_RATIO, 1, 1));
-    // A key frame every 15: a seek to frame 15 lands on one.
+    // A key frame every 15: a seek to frame 15 lands on one. No B-frames (Baseline): each picture shows in the order
+    // it is stored, inside the movie's duration (with them the writer shifts every picture a frame later and the last
+    // one past the duration it writes, which GStreamer honours, dropping that picture).
     ComPtr<IMFAttributes> encoder;
     CHECK(MFCreateAttributes(&encoder, 1));
     CHECK(encoder->SetUINT32(CODECAPI_AVEncMPVGOPSize, 15));
+    CHECK(encoder->SetUINT32(CODECAPI_AVEncMPVDefaultBPictureCount, 0));
     CHECK(writer->SetInputMediaType(stream, in.Get(), encoder.Get()));
     CHECK(writer->BeginWriting());
     // BT.601 limited range: red Y 81 Cb 90 Cr 240; blue Y 41 Cb 240 Cr 110.
