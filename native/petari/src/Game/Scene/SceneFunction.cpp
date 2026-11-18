@@ -84,6 +84,13 @@ void CategoryList::execute(MR::CalcAnimType type) {
 
 void CategoryList::execute(MR::DrawType type) {
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
+#if defined(NEBULA_PLAIN_PATHS)
+    // A category with nothing in it draws nothing (NameObjCategoryList::execute returns at once) and leaves no run in
+    // the frame list (Frame::category drops a run that held no draw): it is passed by (P-128).
+    if (pListExecutor->mDrawList->mCategoryInfo[static_cast< int >(type)].mNameObjArr.size() == 0) {
+        return;
+    }
+#endif
 
     // What these draws are, for a renderer that needs to know (nebula_frame_list.h NEBULA_CATEGORY_*).
     const s32 number = static_cast< s32 >(type);
