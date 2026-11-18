@@ -2237,6 +2237,12 @@ def evaluate(test, renderer, run_folder, ran):
         counts = re.findall(r"([\w-]+)=(\d+)", report[-1]) if report else []
         add("nothing the game asked for was lost", bool(report) and bool(counts) and all(v == "0" for _, v in counts),
             report[-1] if report else "no [loss] report at the exit")
+    if test["ends"] == "end" and end:
+        # Every picture a step asked was written (the host writes them from the GPU at its exit, waiting 5 s): a test
+        # whose picture never came is not a pass, whether or not a check of its own reads that picture.
+        unwritten = sorted(s["picture"] for s in test["steps"]
+                           if "picture" in s and not (run_folder / "pictures" / (s["picture"] + ".png")).exists())
+        add("every picture asked was written", not unwritten, unwritten)
     for bad in by_key.get("harness.bad_fact", []):
         add("every fact is well formed (JSON, a key a mod may log)", False, bad["value"])
     if not test["bare"]:
