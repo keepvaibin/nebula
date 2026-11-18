@@ -25,17 +25,44 @@ public:
     virtual void calc() = 0;
 };
 
+// The walk's state is its thread's own in the module with no hook points, whose animation pass walks models on the step
+// threads (P-040); the module with hook points keeps it in the globals mods read.
+// A thread_local read from another file must be known to need no constructor: on the MSVC ABI the compiler otherwise
+// calls the C runtime's on-demand initialiser (__dyn_tls_on_demand_init, __tls_guard), which the game modules (no C
+// runtime) do not link.
+#if defined(__clang__)
+#define NEBULA_CONSTANT_TLS __attribute__((require_constant_initialization)) thread_local
+#else
+#define NEBULA_CONSTANT_TLS thread_local
+#endif
+#if defined(NEBULA_PLAIN_PATHS)
+#define NEBULA_WALK_STATE NEBULA_CONSTANT_TLS
+#else
+#define NEBULA_WALK_STATE
+#endif
+
 // The joint walk, and what a matrix calculator reads and writes while it runs: the matrix so far, the scale so far and the
 // parent's own scale. Same maths in the three scale modes the files use.
 namespace Skeleton {
-    extern Mtx mCurrentMtx;
-    extern Vec mCurrentS;
-    extern Vec mParentS;
-    extern Joint* mJoint;
-    extern Model* mModel;
-    extern MtxCalc* mCurrentMtxCalc;
+    extern NEBULA_WALK_STATE Mtx mCurrentMtx;
+    extern NEBULA_WALK_STATE Vec mCurrentS;
+    extern NEBULA_WALK_STATE Vec mParentS;
+    extern NEBULA_WALK_STATE Joint* mJoint;
+    extern NEBULA_WALK_STATE Model* mModel;
+    extern NEBULA_WALK_STATE MtxCalc* mCurrentMtxCalc;
 
     void evaluate(Model* pModel, const Vec& rScale, const Mtx& rMtx);
+#if defined(NEBULA_PLAIN_PATHS)
+    // The deepest joint nesting a step thread walks: its stack is the call's own.
+    constexpr u32 cStepThreadDepth = 64;
+    // True while this thread walks for the animation pass: an animation player's clips are read at the player's own
+    // frame, not at the frame the clip was last set to (one clip serves every model playing it).
+    extern NEBULA_CONSTANT_TLS bool mOwnFrames;
+    // The walk on a step thread (P-040): `pRoot` is the root joint's calculator, which evaluate reads from the joint (the
+    // model data's joints are every model's of that data). No other joint of the data holds a calculator or a callback,
+    // and the data's nesting is at most cStepThreadDepth (ActorAnimPass).
+    void evaluateOnStepThread(Model* pModel, const Vec& rScale, const Mtx& rMtx, MtxCalc* pRoot);
+#endif
 
     void initBasic(const Vec& rScale, const Mtx& rMtx);
     void initSoftimage(const Vec& rScale, const Mtx& rMtx);
@@ -248,6 +275,10 @@ public:
     virtual void viewCalc();
 
     void calcAnmMtx();
+#if defined(NEBULA_PLAIN_PATHS)
+    // calcAnmMtx on a step thread, `pRoot` the root joint's calculator (Skeleton::evaluateOnStepThread).
+    void calcAnmMtxOnStepThread(MtxCalc* pRoot);
+#endif
 
     ModelData* getModelData() const {
         return mModelData;

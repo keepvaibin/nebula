@@ -219,7 +219,11 @@ void XanimeCore::blendTracks(u32 joint, f32 totalWeight, Vec3f* pScale, Vec3f* p
         const XanimeTrack* pTrack = &mTrackList[i];
 
         if (pTrack->mClip != nullptr && pTrack->mWeight != 0.0f) {
+#if defined(NEBULA_PLAIN_PATHS)
+            if (!readTrack(*pTrack, joint, &transform)) {
+#else
             if (!pTrack->mClip->getTransform(joint, &transform)) {
+#endif
                 transform = Skeleton::mModel->getModelData()->getJointAt(joint)->getTransformInfo();
             }
             Quaternion trackRotation;
@@ -302,7 +306,11 @@ void XanimeCore::calcSingle(Vec3f* pScale, Vec3f* pTranslate) {
         return;
     }
 
+#if defined(NEBULA_PLAIN_PATHS)
+    if (!readTrack(mTrackList[0], joint, &transform)) {
+#else
     if (!mTrackList[0].mClip->getTransform(joint, &transform)) {
+#endif
         transform = Skeleton::mModel->getModelData()->getJointAt(joint)->getTransformInfo();
     }
     eulerRadiansToQuat(transform.mRotation.x, transform.mRotation.y, transform.mRotation.z, &rotation);
@@ -352,6 +360,17 @@ void XanimeCore::calcBlendSpecial() {
 
     blendWithFrozenAndLast(joint, blend, &scale, &translate, &rotation);
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+// A track's clip at the joint: at this player's frame on a step thread's walk, where the clip may be playing for other
+// models too (updateFrame's frame, made the same way), else at the frame the clip was last set to.
+bool XanimeCore::readTrack(const XanimeTrack& rTrack, u32 joint, TransformInfo* pOut) const {
+    if (Skeleton::mOwnFrames) {
+        return rTrack.mClip->getTransformAt(mFrameRatio * rTrack.mClip->getFrameMax(), joint, pOut);
+    }
+    return rTrack.mClip->getTransform(joint, pOut);
+}
+#endif
 
 void XanimeCore::updateFrame() {
     for (u32 i = 0; i < mTrackCount; i++) {

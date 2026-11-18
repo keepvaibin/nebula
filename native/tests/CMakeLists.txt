@@ -39,6 +39,10 @@ native_test(native_release_channel_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/rele
 native_test(native_formatted_name_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/formatted_name_tests.cpp"
     "${game_src}/Util/StringUtil.cpp" "${game_src}/Util/TextString.cpp" "${game_src}/System/NebulaFormat.c")
 native_test(native_name_index_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_index_tests.cpp" "${game_src}/Util/HashUtil.cpp")
+# lumacore's classes of living objects: exactClassOf gives no class to an object whose constructor never names one.
+native_test(native_lumacore_class_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/lumacore_class_tests.cpp"
+    "${game_src}/System/LumaCore.cpp")
+target_compile_definitions(native_lumacore_class_tests PRIVATE NEBULA_PLAIN_MODULE=1)
 # The game's arenas, on the host's address services as the host gives them.
 native_test(native_arena_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/arena_tests.cpp" "${CMAKE_CURRENT_LIST_DIR}/arena_test_host.c"
     "${game_src}/System/NebulaArena.cpp")

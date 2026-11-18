@@ -91,7 +91,16 @@ namespace {
     }
 }  // namespace
 
+#if defined(NEBULA_PLAIN_PATHS)
 f32 Clip::value(const NebulaClipTrack& rTrack, f32 rest) const {
+    return valueAt(rTrack, rest, mFrame);
+}
+
+f32 Clip::valueAt(const NebulaClipTrack& rTrack, f32 rest, f32 frame) const {
+#else
+f32 Clip::value(const NebulaClipTrack& rTrack, f32 rest) const {
+    const f32 frame = mFrame;
+#endif
     if (rTrack.count == 0) {
         return rest;
     }
@@ -101,19 +110,19 @@ f32 Clip::value(const NebulaClipTrack& rTrack, f32 rest) const {
     }
     switch (rTrack.stride) {
     case NEBULA_TRACK_STEP:
-        if (mFrame < 0.0f) {
+        if (frame < 0.0f) {
             return pValues[0];
         }
-        return mFrame >= rTrack.count ? pValues[rTrack.count - 1] : pValues[static_cast< int >(mFrame)];
+        return frame >= rTrack.count ? pValues[rTrack.count - 1] : pValues[static_cast< int >(frame)];
     case NEBULA_TRACK_STEP_NEAREST: {
-        if (mFrame < 0.0f) {
+        if (frame < 0.0f) {
             return pValues[0];
         }
-        const u32 frame = static_cast< u32 >(mFrame + 0.5f);
-        return frame >= rTrack.count ? pValues[rTrack.count - 1] : pValues[frame];
+        const u32 index = static_cast< u32 >(frame + 0.5f);
+        return index >= rTrack.count ? pValues[rTrack.count - 1] : pValues[index];
     }
     default:
-        return evaluateKeys(rTrack, pValues, mFrame);
+        return evaluateKeys(rTrack, pValues, frame);
     }
 }
 
@@ -148,6 +157,25 @@ bool Clip::getTransform(u32 joint, TransformInfo* pOut) const {
     pOut->mTranslate.z = value(p[8], 0.0f);
     return true;
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+bool Clip::getTransformAt(f32 frame, u32 joint, TransformInfo* pOut) const {
+    if (joint >= jointCapacity()) {
+        return false;
+    }
+    const NebulaClipTrack* p = tracks() + joint * 9u;
+    pOut->mScale.x = valueAt(p[0], 1.0f, frame);
+    pOut->mRotation.x = valueAt(p[1], 0.0f, frame);
+    pOut->mTranslate.x = valueAt(p[2], 0.0f, frame);
+    pOut->mScale.y = valueAt(p[3], 1.0f, frame);
+    pOut->mRotation.y = valueAt(p[4], 0.0f, frame);
+    pOut->mTranslate.y = valueAt(p[5], 0.0f, frame);
+    pOut->mScale.z = valueAt(p[6], 1.0f, frame);
+    pOut->mRotation.z = valueAt(p[7], 0.0f, frame);
+    pOut->mTranslate.z = valueAt(p[8], 0.0f, frame);
+    return true;
+}
+#endif
 
 void Clip::getTextureTransform(u32 entry, TextureTransform* pOut) const {
     const NebulaClipTrack* p = tracks() + entry * 5u;

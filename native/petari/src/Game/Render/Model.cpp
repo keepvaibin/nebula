@@ -11,12 +11,15 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace Skeleton {
-    Mtx mCurrentMtx;
-    Vec mCurrentS;
-    Vec mParentS;
-    Joint* mJoint;
-    Model* mModel;
-    MtxCalc* mCurrentMtxCalc;
+    NEBULA_WALK_STATE Mtx mCurrentMtx = {};
+    NEBULA_WALK_STATE Vec mCurrentS = {};
+    NEBULA_WALK_STATE Vec mParentS = {};
+    NEBULA_WALK_STATE Joint* mJoint = nullptr;
+    NEBULA_WALK_STATE Model* mModel = nullptr;
+    NEBULA_WALK_STATE MtxCalc* mCurrentMtxCalc = nullptr;
+#if defined(NEBULA_PLAIN_PATHS)
+    NEBULA_CONSTANT_TLS bool mOwnFrames = false;
+#endif
 
     void initBasic(const Vec& rScale, const Mtx& rMtx) {
         Vec unitScale = {1.0f, 1.0f, 1.0f};
@@ -133,8 +136,63 @@ namespace Skeleton {
             MtxCalc* mPreviousCalc;
             JointCallBack mCallBack;
         };
+        // The game thread's stack, as deep as the most joints walked yet.
         Saved* sStack;
         u32 sStackRoom;
+#if defined(NEBULA_PLAIN_PATHS)
+        // A step thread's stack (evaluateOnStepThread): the thread's own, outside its call frames.
+        NEBULA_CONSTANT_TLS Saved sStepStack[cStepThreadDepth] = {};
+#endif
+
+        // The walk of a model with joints, on the stack `pTop`. With kRoot, `pRoot` is the root joint's calculator in place
+        // of the one the joint holds.
+        template < bool kRoot >
+        void walk(Model* pModel, const Vec& rScale, const Mtx& rMtx, Saved* pTop, MtxCalc* pRoot) {
+            ModelData* pData = pModel->getModelData();
+            mModel = pModel;
+            MtxCalc* pBasic = pData->getBasicMtxCalc();
+            pBasic->init(rScale, rMtx);
+            mCurrentMtxCalc = pBasic;
+
+            const NebulaModelStep* pSteps = reinterpret_cast< const NebulaModelStep* >(pData->at(pData->mFile->steps_at));
+            const u32 count = pData->mFile->step_count;
+            for (u32 i = 0; i < count; i++) {
+                Joint* pJoint = pData->getJointAt(pSteps[i].joint);
+                if (pSteps[i].op == NEBULA_STEP_ENTER) {
+                    NebulaMtxCopy(mCurrentMtx, pTop->mMtx);
+                    pTop->mS = mCurrentS;
+                    pTop->mParentS = mParentS;
+                    pTop->mPreviousCalc = nullptr;
+                    MtxCalc* pCalc = kRoot && pSteps[i].joint == 0 ? pRoot : pJoint->getMtxCalc();
+                    if (pCalc != nullptr) {
+                        pTop->mPreviousCalc = mCurrentMtxCalc;
+                        mJoint = pJoint;
+                        mCurrentMtxCalc = pCalc;
+                        pCalc->calc();
+                    } else if (mCurrentMtxCalc != nullptr) {
+                        mJoint = pJoint;
+                        mCurrentMtxCalc->calc();
+                    }
+                    JointCallBack callBack = pJoint->getCallBack();
+                    pTop->mCallBack = callBack;
+                    if (callBack != nullptr) {
+                        callBack(pJoint, 0);
+                    }
+                    pTop++;
+                } else {
+                    pTop--;
+                    NebulaMtxCopy(pTop->mMtx, mCurrentMtx);
+                    mCurrentS = pTop->mS;
+                    mParentS = pTop->mParentS;
+                    if (pTop->mPreviousCalc != nullptr) {
+                        mCurrentMtxCalc = pTop->mPreviousCalc;
+                    }
+                    if (pTop->mCallBack != nullptr) {
+                        pTop->mCallBack(pJoint, 1);
+                    }
+                }
+            }
+        }
     }  // namespace
 
     void evaluate(Model* pModel, const Vec& rScale, const Mtx& rMtx) {
@@ -147,51 +205,19 @@ namespace Skeleton {
             sStackRoom = pData->getJointCount() * 2u;
             sStack = static_cast< Saved* >(pHost->heap_realloc(pHost->user, sStack, sStackRoom * sizeof(Saved)));
         }
-        mModel = pModel;
-        MtxCalc* pBasic = pData->getBasicMtxCalc();
-        pBasic->init(rScale, rMtx);
-        mCurrentMtxCalc = pBasic;
-
-        const NebulaModelStep* pSteps = reinterpret_cast< const NebulaModelStep* >(pData->at(pData->mFile->steps_at));
-        const u32 count = pData->mFile->step_count;
-        Saved* pTop = sStack;
-        for (u32 i = 0; i < count; i++) {
-            Joint* pJoint = pData->getJointAt(pSteps[i].joint);
-            if (pSteps[i].op == NEBULA_STEP_ENTER) {
-                NebulaMtxCopy(mCurrentMtx, pTop->mMtx);
-                pTop->mS = mCurrentS;
-                pTop->mParentS = mParentS;
-                pTop->mPreviousCalc = nullptr;
-                MtxCalc* pCalc = pJoint->getMtxCalc();
-                if (pCalc != nullptr) {
-                    pTop->mPreviousCalc = mCurrentMtxCalc;
-                    mJoint = pJoint;
-                    mCurrentMtxCalc = pCalc;
-                    pCalc->calc();
-                } else if (mCurrentMtxCalc != nullptr) {
-                    mJoint = pJoint;
-                    mCurrentMtxCalc->calc();
-                }
-                JointCallBack callBack = pJoint->getCallBack();
-                pTop->mCallBack = callBack;
-                if (callBack != nullptr) {
-                    callBack(pJoint, 0);
-                }
-                pTop++;
-            } else {
-                pTop--;
-                NebulaMtxCopy(pTop->mMtx, mCurrentMtx);
-                mCurrentS = pTop->mS;
-                mParentS = pTop->mParentS;
-                if (pTop->mPreviousCalc != nullptr) {
-                    mCurrentMtxCalc = pTop->mPreviousCalc;
-                }
-                if (pTop->mCallBack != nullptr) {
-                    pTop->mCallBack(pJoint, 1);
-                }
-            }
-        }
+        walk< false >(pModel, rScale, rMtx, sStack, nullptr);
     }
+
+#if defined(NEBULA_PLAIN_PATHS)
+    void evaluateOnStepThread(Model* pModel, const Vec& rScale, const Mtx& rMtx, MtxCalc* pRoot) {
+        if (pModel->getModelData()->getJointCount() == 0) {
+            return;
+        }
+        mOwnFrames = true;
+        walk< true >(pModel, rScale, rMtx, sStepStack, pRoot);
+        mOwnFrames = false;
+    }
+#endif
 }  // namespace Skeleton
 
 namespace ModelSys {
@@ -480,6 +506,16 @@ void Model::calcAnmMtx() {
         Skeleton::evaluate(this, mBaseScale, mBaseTransformMtx);
     }
 }
+
+#if defined(NEBULA_PLAIN_PATHS)
+void Model::calcAnmMtxOnStepThread(MtxCalc* pRoot) {
+    if (checkFlag(ModelFlag_UseDefaultBase)) {
+        Skeleton::evaluateOnStepThread(this, cOneScale, cIdentity, pRoot);
+    } else {
+        Skeleton::evaluateOnStepThread(this, mBaseScale, mBaseTransformMtx, pRoot);
+    }
+}
+#endif
 
 void Model::update() {
     calc();

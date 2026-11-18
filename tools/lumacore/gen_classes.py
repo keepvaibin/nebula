@@ -220,7 +220,22 @@ def emit_class_rows(rows):
     for q, parent, _, _ in rows:
         if parent is not None:
             lines.append(f'static_assert(__is_base_of(::{parent}, ::{q}), "{q} does not derive from {parent}");')
-    lines.append('')
+    # The plain module's animation pass (ActorAnimPass.cpp): which classes animate as LiveActor does, decided by the
+    # compiler (&T::m names the class that declares m). calcAnmMtx is not virtual: LiveActor::calcAnim calls its own.
+    lines += ['', '#if defined(NEBULA_PLAIN_PATHS)', 'namespace {',
+              '    template < class T, bool = __is_base_of(::LiveActor, T) >',
+              '    struct lc_anim {',
+              '        static constexpr bool value = false;',
+              '    };',
+              '    template < class T >',
+              '    struct lc_anim< T, true > {',
+              '        static constexpr bool value = __is_same(decltype(&T::calcAnim), void (::LiveActor::*)()) &&',
+              '                                      __is_same(decltype(&T::calcAndSetBaseMtx), void (::LiveActor::*)());',
+              '    };',
+              '}  // namespace', '', 'namespace lumacore {', '    extern const bool kAnimatesAsLiveActor[];',
+              '    const bool kAnimatesAsLiveActor[] = {']
+    lines += [f'        lc_anim< ::{q} >::value,' for (q, _, _, _) in rows]
+    lines += ['    };', '}  // namespace lumacore', '#endif', '']
     return '\n'.join(lines)
 
 

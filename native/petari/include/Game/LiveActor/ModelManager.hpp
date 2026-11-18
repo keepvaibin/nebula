@@ -67,6 +67,9 @@ public:
     void initMaterialAnm();
     void initVisibilityAnm();
     void calc();
+#if defined(NEBULA_PLAIN_PATHS)
+    MtxCalc* prepareWalk();
+#endif
     void changeBckSetting(const char*, const char*, XanimePlayer*);
     void init(const char*, const char*, bool);
 

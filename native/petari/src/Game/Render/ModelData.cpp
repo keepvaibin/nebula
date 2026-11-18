@@ -95,6 +95,22 @@ static ModelData* loadFile(void* pFile) {
             rJoint.mTransformInfo.mTranslate.z = rFile.translation[2];
         }
     }
+#if defined(NEBULA_PLAIN_PATHS)
+    {
+        const NebulaModelStep* pSteps = reinterpret_cast< const NebulaModelStep* >(pData->at(pHeader->steps_at));
+        u32 depth = 0;
+        u32 deepest = 0;
+        for (u32 i = 0; i < pHeader->step_count; i++) {
+            if (pSteps[i].op == NEBULA_STEP_ENTER) {
+                depth++;
+                deepest = depth > deepest ? depth : deepest;
+            } else if (depth != 0) {
+                depth--;
+            }
+        }
+        pData->mWalkDepth = deepest;
+    }
+#endif
     if (pHeader->mesh_count != 0) {
         pData->mMeshes = new Mesh[pHeader->mesh_count];
     }
@@ -160,7 +176,12 @@ static ModelData* loadFile(void* pFile) {
 
 ModelData::ModelData()
     : mFile(nullptr), mJoints(nullptr), mMaterials(nullptr), mMeshes(nullptr), mTextures(nullptr), mTextureOwner(nullptr),
-      mBasicMtxCalc(nullptr), mGpuModel(0), mTextureStamp(0), mResourceHash(0) {
+      mBasicMtxCalc(nullptr), mGpuModel(0), mTextureStamp(0), mResourceHash(0)
+#if defined(NEBULA_PLAIN_PATHS)
+      ,
+      mWalkDepth(~0u)
+#endif
+{
 }
 
 ModelData::~ModelData() {

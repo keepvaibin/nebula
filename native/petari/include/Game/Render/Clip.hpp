@@ -51,6 +51,10 @@ public:
     // plays no game animation, models.md section 4): false, and *pOut is left as it was (it then takes the joint's
     // rest).
     bool getTransform(u32 joint, TransformInfo* pOut) const;
+#if defined(NEBULA_PLAIN_PATHS)
+    // getTransform at `frame` in place of mFrame: a step thread's walk reads a clip at its own player's frame (P-040).
+    bool getTransformAt(f32 frame, u32 joint, TransformInfo* pOut) const;
+#endif
 
     // Texture matrix clips, entry by entry.
     u32 getEntryCount() const {
@@ -124,6 +128,9 @@ private:
     }
     u32 targetCount() const;
     f32 value(const NebulaClipTrack& rTrack, f32 rest) const;
+#if defined(NEBULA_PLAIN_PATHS)
+    f32 valueAt(const NebulaClipTrack& rTrack, f32 rest, f32 frame) const;
+#endif
     u8 colorByte(const NebulaClipTrack& rTrack) const;
     f32 rotation(const NebulaClipTrack& rTrack) const;
 

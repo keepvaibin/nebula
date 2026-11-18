@@ -101,6 +101,26 @@ namespace lumacore {
         return id;
     }
 
+#if defined(NEBULA_PLAIN_PATHS)
+    u16 exactClassOf(const NameObj* pObj) {
+        const u16 id = classOf(pObj);
+        if (id == 0) {
+            return 0;
+        }
+        // setClass in a constructor records the vtable of the class it constructs (the object's vtable while it runs).
+        const void* const vtable = vtableOf(pObj);
+        for (u32 i = slotOf(vtable), n = 0; n < cVtableSlots; i = (i + 1) & (cVtableSlots - 1), n++) {
+            if (sVtables[i].mVtable == vtable) {
+                return sVtables[i].mClass == id ? id : static_cast< u16 >(0);
+            }
+            if (sVtables[i].mVtable == nullptr) {
+                break;
+            }
+        }
+        return 0;
+    }
+#endif
+
     void released(const void* pStart, const void* pEnd) {
         (void)pStart;
         (void)pEnd;

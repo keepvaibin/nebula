@@ -42,4 +42,8 @@ public:
     NameObjMethod mMethod;
     NameObjMethodConst mMethodConst;
     s32 mPlaceSlot;
+#if defined(NEBULA_PLAIN_PATHS)
+    // Runs the category's calls in place of one after another, in the list's order (the animation pass, P-040).
+    void (*mPass)(CategoryInfo& rInfo);
+#endif
 };

@@ -221,6 +221,11 @@ public:
     u32 mGpuModel;
     u32 mTextureStamp;
     u32 mResourceHash;
+#if defined(NEBULA_PLAIN_PATHS)
+    // The walk's deepest nesting of joints (its steps' most ENTERs open at once); the most a u32 holds until the file's
+    // joints are read, so a step thread never walks data it has not measured (ActorAnimPass).
+    u32 mWalkDepth;
+#endif
 
     const u8* at(u32 offset) const {
         return reinterpret_cast< const u8* >(mFile) + offset;

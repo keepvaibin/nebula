@@ -1,3 +1,4 @@
+#include "Game/LiveActor/ActorAnimPass.hpp"
 #include "Game/Scene/SceneNameObjListExecutor.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 
@@ -57,6 +58,9 @@ void SceneNameObjListExecutor::initMovementList() {
 
 void SceneNameObjListExecutor::initCalcAnimList() {
     mCalcAnimList = new NameObjCategoryList(::cCalcAnimTypeNum, &NameObj::calcAnim, 1);
+#if defined(NEBULA_PLAIN_PATHS)
+    mCalcAnimList->mPass = &ActorAnimPass::execute;
+#endif
 }
 
 void SceneNameObjListExecutor::initCalcViewAndEntryList() {

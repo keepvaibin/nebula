@@ -1,11 +1,21 @@
 #include "Game/NameObj/NameObjCategoryList.hpp"
 
 NameObjCategoryList::NameObjCategoryList(u32 categoryNum, NameObjMethod pMethod, s32 placeSlot)
-    : mCategoryInfo(categoryNum), mMethod(pMethod), mMethodConst(nullptr), mPlaceSlot(placeSlot) {
+    : mCategoryInfo(categoryNum), mMethod(pMethod), mMethodConst(nullptr), mPlaceSlot(placeSlot)
+#if defined(NEBULA_PLAIN_PATHS)
+      ,
+      mPass(nullptr)
+#endif
+{
 }
 
 NameObjCategoryList::NameObjCategoryList(u32 categoryNum, NameObjMethodConst pMethod, s32 placeSlot)
-    : mCategoryInfo(categoryNum), mMethod(nullptr), mMethodConst(pMethod), mPlaceSlot(placeSlot) {
+    : mCategoryInfo(categoryNum), mMethod(nullptr), mMethodConst(pMethod), mPlaceSlot(placeSlot)
+#if defined(NEBULA_PLAIN_PATHS)
+      ,
+      mPass(nullptr)
+#endif
+{
 }
 
 void NameObjCategoryList::execute(int idx) {
@@ -18,6 +28,13 @@ void NameObjCategoryList::execute(int idx) {
     if (pCategoryInfo->mExecuteBeforeFunction != nullptr) {
         (*pCategoryInfo->mExecuteBeforeFunction)();
     }
+
+#if defined(NEBULA_PLAIN_PATHS)
+    if (mPass != nullptr) {
+        mPass(*pCategoryInfo);
+        return;
+    }
+#endif
 
     // end() is read each pass: a call may add to or remove from this category.
     if (mMethodConst != nullptr) {

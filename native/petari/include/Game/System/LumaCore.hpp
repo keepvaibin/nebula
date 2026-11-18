@@ -29,6 +29,13 @@ namespace lumacore {
     u16 classOf(const NameObj* pObj);
     // The factory sets it as it creates an object; the vtable is remembered for objects made without it.
     void setClass(NameObj* pObj, u16 id);
+#if defined(NEBULA_PLAIN_PATHS)
+    // The class of a living object only when its vtable is the one setClass recorded for that class, else 0. An object of
+    // a class whose constructors never name its id keeps a base's id, but its vtable is its own, recorded for no id.
+    u16 exactClassOf(const NameObj* pObj);
+    // Index = id (generated/lumacore_classes.cpp): the class keeps LiveActor's calcAnim and calcAndSetBaseMtx.
+    extern const bool kAnimatesAsLiveActor[];
+#endif
 
     // An arena's memory, [pStart, pEnd), is about to go with every object in it, whose destructors mostly do not run:
     // told at the start of each NebulaArena::destroy, a parent before its children. It does

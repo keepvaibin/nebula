@@ -124,6 +124,9 @@ public:
 
 private:
     f32 sumTrackWeight() const;
+#if defined(NEBULA_PLAIN_PATHS)
+    bool readTrack(const XanimeTrack& rTrack, u32 joint, TransformInfo* pOut) const;
+#endif
     void blendTracks(u32 joint, f32 totalWeight, Vec3f* pScale, Vec3f* pTranslate, Quaternion* pRotation) const;
     void blendWithFrozenAndLast(u32 joint, f32 blend, Vec3f* pScale, Vec3f* pTranslate, Quaternion* pRotation);
     void captureFrozen(u32 joint);

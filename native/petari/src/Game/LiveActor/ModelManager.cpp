@@ -417,6 +417,25 @@ void ModelManager::calc() {
     }
 }
 
+#if defined(NEBULA_PLAIN_PATHS)
+// calc but the model's walk, on the game thread, for a walk on a step thread (ActorAnimPass): the animation's frame as
+// calcAnm sets it, the root joint of the model data left as calc leaves it (clearAnm), the visibility animation. Returns
+// the root joint's calculator for the walk.
+MtxCalc* ModelManager::prepareWalk() {
+    MtxCalc* pRoot = nullptr;
+    if (mXanimePlayer != nullptr) {
+        mXanimePlayer->calcAnm(0);
+        pRoot = mXanimePlayer->mCore;
+        mXanimePlayer->clearAnm(0);
+    }
+
+    if (mBvaPlayer != nullptr) {
+        mBvaPlayer->calc();
+    }
+    return pRoot;
+}
+#endif
+
 void ModelManager::changeBckSetting(const char* pBckName, const char* pActorAnimName, XanimePlayer* pXanimePlayer) {
     if (pXanimePlayer == nullptr) {
         pXanimePlayer = mXanimePlayer;
