@@ -1,3 +1,1 @@
-{
-  "2493-native-late-take-out": "waits for N-1056 (Agent 1, engine/e13a 77e311fe0 and df726e744): the game thread did not advance while a draw.native PRESENT call held the render thread. 11-17 with those commits merged (a5555abdb onto mods/m2 cf4b277ac): passes on d3d12, vulkan and d3d11. Moves to suite.json when mods/m2 stands on them. Proves M-013."
-}
+{}
