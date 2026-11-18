@@ -1,0 +1,32 @@
+{
+  "harness": 1,
+  "name": "3136-start-feature",
+  "about": "jv-feature needs the renderer feature ray_tracing, which this game's renderer does not list (luma_renderer.json, empty): L204, refused (N-2052: before, no list was given and it started)",
+  "proves": [
+    "validator.start.renderer"
+  ],
+  "mods": [
+    {
+      "path": "../mods/jv-feature",
+      "loads": false
+    }
+  ],
+  "steps": [
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "modlog",
+      "has": {
+        "mod": "jv-feature",
+        "source": "validator",
+        "level": "error",
+        "code": 204
+      },
+      "when": "any"
+    }
+  ]
+}

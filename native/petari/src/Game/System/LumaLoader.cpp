@@ -1475,6 +1475,7 @@ namespace luma {
                 pMod->close(pMod->library);
                 forgetVtables();
             }
+            luma::classes::modFinished(pMod);
             if (pMod->takenOut || pMod->startRefused) {
                 if (held.blocks != 0) {
                     nebula_log("[mod %s] held %u blocks (%llu bytes) when it ended; the game freed them\n", pMod->name, held.blocks,

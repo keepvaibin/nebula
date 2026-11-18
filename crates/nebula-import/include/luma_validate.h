@@ -83,8 +83,8 @@ typedef struct LumaValidateInput {
     const char* renderer;   /* the renderer's feature names: JSON with the self-description's "renderer" key, as
                                luma_renderer.json (luma-format revision 4); null: L806 is not checked */
     uint64_t renderer_size;
-    const char* const* device_features; /* the features this device's graphics have (draw.native's capability query,
-                               start-check 3), each a name of `renderer`; null: L806 is not checked */
+    const char* const* device_features; /* the features of `renderer` this device's graphics have (start-check 3);
+                               null: L806 is not checked */
     uint32_t device_feature_count;
     const char* placement;  /* the game's placement facts (smg_game.luma-placement.json): its `factory` rows name every
                                class a placement makes before any mod's code; null: every placement's class but a

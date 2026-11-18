@@ -12,7 +12,8 @@
 
 namespace luma {
     namespace classes {
-        // LumaCore.define_class: the class's number (classCount() + its row), or luma.h's -1 to -5, said in the log.
+        // LumaCore.define_class: the class's number (from classCount(); never another class's in the session), or luma.h's
+        // -1 to -5, said in the log.
         // On the game thread.
         s32 define(const LumaMod* pMod, const LumaClassDef* pDef);
         // LumaCore.class_data: the object's data when it is one of class `number`'s, else null. Any thread.
@@ -50,6 +51,9 @@ namespace luma {
         // The mod is going (unloadMod, a refused start), after its hooks: its classes end and their objects are plain
         // objects of the base again. Their data is the mod's memory, freed with it after the grace. Game thread.
         void modGone(const LumaMod* pMod);
+        // The mod has finished (after the grace, its library closed): its ended classes' rows are free from the next
+        // scene. Game thread.
+        void modFinished(const LumaMod* pMod);
         // The scene's objects are gone (GameSystemSceneController::destroyScene): every mod object is forgotten and its
         // data freed. Game thread.
         void sceneGone();

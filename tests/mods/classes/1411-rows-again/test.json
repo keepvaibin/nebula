@@ -1,0 +1,89 @@
+{
+  "harness": 1,
+  "name": "1411-rows-again",
+  "about": "lc-many defines 400 classes at every start and is reloaded three times, a new scene between reloads: every start defines all 400 (a finished mod's rows are used again from the next scene, past the 1024 the rows hold), and a class of the last start is made and known by its number (M-010)",
+  "proves": [
+    "kernel.classes.rows_again"
+  ],
+  "mods": [
+    "../mods/lc-many"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "reload": "lc-many",
+      "wait": true
+    },
+    {
+      "at": 80,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 2
+      }
+    },
+    {
+      "at": 600,
+      "reload": "lc-many",
+      "wait": true
+    },
+    {
+      "at": 620,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 1
+      }
+    },
+    {
+      "at": 1200,
+      "reload": "lc-many",
+      "wait": true
+    },
+    {
+      "at": 1300,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1411
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.lc-many.made_own",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-many.defined",
+      "is": 400,
+      "when": "all"
+    },
+    {
+      "fact": "mod.lc-many.first_found",
+      "is": 1,
+      "when": "all"
+    },
+    {
+      "fact": "reload.lc-many",
+      "field": "ok",
+      "is": true,
+      "when": "all"
+    },
+    {
+      "fact": "mod.lc-many.made",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-many.made_own",
+      "is": 1
+    }
+  ],
+  "limit_seconds": 300
+}

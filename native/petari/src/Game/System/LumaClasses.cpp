@@ -21,7 +21,9 @@
 namespace luma {
     namespace classes {
         namespace {
-            constexpr u32 kMaxClasses = 1024;  // in a session; a row is never reused, so a number names one class
+            // Live at once. A row is used again once its class's mod finished and a new scene began; a number names one
+            // class in the session all the same (classCount() + generation * kMaxClasses + row).
+            constexpr u32 kMaxClasses = 1024;
             constexpr u32 kNameBytes = 64;
 
             struct ClassRow;
@@ -82,6 +84,28 @@ namespace luma {
             ClassRow* sRows[kMaxClasses];
             u32 sRowCount = 0;
             u32 sLiveCount = 0;
+            // Per row: its generation (a number names that generation's class only), and whether it is free (its class
+            // ended and its mod finished) since which scene. The scene that asked the factory may still hold the row's
+            // creator (kMakers), so a free row is used again only in a later scene. Under sLock; written on the game
+            // thread only.
+            u32 sRowGeneration[kMaxClasses];
+            bool sRowFree[kMaxClasses];
+            u32 sRowFreeScene[kMaxClasses];
+            u32 sSceneSerial = 0;  // scenes gone in the session
+
+            s32 numberOfRow(u32 r) { return static_cast<s32>(classCount() + sRowGeneration[r] * kMaxClasses + r); }
+
+            // The row a mod class's number names, or -1 (below the mod classes, never a row, or a row used again since).
+            // Under sLock.
+            s32 rowOfNumberLocked(s32 number) {
+                const s32 from = static_cast<s32>(classCount());
+                if (number < from) {
+                    return -1;
+                }
+                const u32 at = static_cast<u32>(number - from);
+                const u32 r = at % kMaxClasses;
+                return r < sRowCount && sRowGeneration[r] == at / kMaxClasses ? static_cast<s32>(r) : -1;
+            }
 
             // Aliases (classes.md, "alias"): a name the factory answers with a live class's maker, its placements'
             // arguments as the alias gives them. A dead alias's row is used again; rows are never freed (read under
@@ -702,8 +726,17 @@ namespace luma {
                 say(pMod, "define_class %s: a gravity class is made by make_gravity only: no maker, nothing it replaces", pName);
                 return -1;
             }
-            if (sRowCount == kMaxClasses) {
-                say(pMod, "define_class %s: the session's %u classes are all defined", pName, kMaxClasses);
+            s32 freeRow = -1;
+            for (u32 r = 0; freeRow < 0 && r < sRowCount; r++) {
+                // A next generation whose numbers still fit an s32.
+                const bool fits = (sRowGeneration[r] + 1u) <= (0x7FFFFFFFu - classCount() - r) / kMaxClasses;
+                if (sRowFree[r] && sRowFreeScene[r] != sSceneSerial && fits) {
+                    freeRow = static_cast<s32>(r);
+                }
+            }
+            if (freeRow < 0 && sRowCount == kMaxClasses) {
+                say(pMod, "define_class %s: %u classes are defined; a class whose mod has finished frees its place when a new "
+                          "scene begins", pName, kMaxClasses);
                 return -1;
             }
             if (nameTaken(pName)) {
@@ -796,7 +829,7 @@ namespace luma {
                 }
                 pOverrides[i] = {pVirtual, pVirtual->original, static_cast<u32>(slot), pEntry, nullptr, rWant.hook, rWant.user};
             }
-            const u32 row = sRowCount;
+            const u32 row = freeRow >= 0 ? static_cast<u32>(freeRow) : sRowCount;
             pRow->live = true;
             pRow->mod = pMod;
             copyName(pRow->name, pName);
@@ -815,8 +848,15 @@ namespace luma {
             pRow->tableCount = pBase->vtableCount;
             pRow->gravity = gravity;
             lock();
+            if (freeRow >= 0) {
+                // The ended class's own record stays allocated, as its table copy and overrides do (a call that began on
+                // another thread may still read it); its objects went with their scene. This generation's numbers are new.
+                sRowGeneration[row]++;
+                sRowFree[row] = false;
+            } else {
+                sRowCount = row + 1;
+            }
             sRows[row] = pRow;
-            sRowCount = row + 1;
             sLiveCount++;
             unlock();
             if (gravity) {
@@ -827,12 +867,14 @@ namespace luma {
                     pMakerName, pDef->replaces != nullptr ? "; in place of " : "", pDef->replaces != nullptr ? pDef->replaces : "",
                     pDef->data_size, pDef->override_count);
             }
-            return static_cast<s32>(classCount() + row);
+            lock();
+            const s32 number = numberOfRow(row);
+            unlock();
+            return number;
         }
 
         void* data(const void* pObject, s32 number) {
-            const s32 row = number - static_cast<s32>(classCount());
-            if (pObject == nullptr || row < 0 || sInstanceCount == 0) {
+            if (pObject == nullptr || number < static_cast<s32>(classCount()) || sInstanceCount == 0) {
                 return nullptr;
             }
             const void* pComplete = nullptr;
@@ -840,7 +882,8 @@ namespace luma {
                 return nullptr;
             }
             lock();
-            const s32 at = findLocked(pComplete);
+            const s32 row = rowOfNumberLocked(number);
+            const s32 at = row >= 0 ? findLocked(pComplete) : -1;
             void* const pData = at >= 0 && sSlots[at].row == static_cast<u32>(row) ? sSlots[at].data : nullptr;
             unlock();
             return pData;
@@ -856,7 +899,7 @@ namespace luma {
             }
             lock();
             const s32 at = findLocked(pComplete);
-            const s32 number = at >= 0 ? static_cast<s32>(classCount() + sSlots[at].row) : -1;
+            const s32 number = at >= 0 ? numberOfRow(sSlots[at].row) : -1;
             unlock();
             return number;
         }
@@ -877,7 +920,7 @@ namespace luma {
             s32 number = -1;
             for (u32 r = 0; r < sRowCount; r++) {
                 if (sRows[r]->live && same(sRows[r]->name, pName)) {
-                    number = static_cast<s32>(classCount() + r);
+                    number = numberOfRow(r);
                     break;
                 }
             }
@@ -1197,7 +1240,21 @@ namespace luma {
             say(pMod, "its %u classes ended; their %u objects are the game's own now", ended, objects);
         }
 
+        void modFinished(const LumaMod* pMod) {
+            lock();
+            for (u32 r = 0; r < sRowCount; r++) {
+                if (!sRowFree[r] && !sRows[r]->live && sRows[r]->mod == pMod) {
+                    sRowFree[r] = true;
+                    sRowFreeScene[r] = sSceneSerial;
+                }
+            }
+            unlock();
+        }
+
         void sceneGone() {
+            lock();
+            sSceneSerial++;
+            unlock();
             if (sInstanceCount == 0) {
                 return;
             }

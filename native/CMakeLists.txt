@@ -94,6 +94,10 @@ endforeach()
 # row only when a unit defines it (the copies' .globals lists); what a .cpp defines is in its copy's .types.
 if(NEBULA_LUMA_HOOKS)
     set(luma_types "${CMAKE_CURRENT_BINARY_DIR}/luma_types")
+    # The renderer's feature list (luma-json.md, renderer): the graphics features a mod's renderer.features may name,
+    # read by the validator in the game and in LumaLink from the self-description folder. This release lists none.
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/luma/luma_renderer.json" "${CMAKE_CURRENT_BINARY_DIR}/luma/luma_renderer.json"
+                   COPYONLY)
     add_custom_command(OUTPUT "${luma_types}/luma_types_table.cpp"
         BYPRODUCTS "${luma_types}/luma_types.json" "${luma_types}/luma_types.left" "${luma_types}/luma_functions.json"
                    "${luma_types}/luma_numbers.json"

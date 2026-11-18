@@ -92,14 +92,15 @@ bool read_description(const std::filesystem::path& folder, Description& out, std
     std::vector<std::filesystem::path> rows;
     std::filesystem::path types;
     std::filesystem::path services;
+    std::filesystem::path renderer;
     for (std::filesystem::recursive_directory_iterator it(folder, error), end; !error && it != end; it.increment(error)) {
         if (!it->is_regular_file(error)) continue;
         const std::filesystem::path& path = it->path();
         const std::filesystem::path name = path.filename();
         if (path.extension() == ".rows") {
             rows.push_back(path);
-        } else if (name == "luma_types.json" || name == "luma_services.json") {
-            std::filesystem::path& one = name == "luma_types.json" ? types : services;
+        } else if (name == "luma_types.json" || name == "luma_services.json" || name == "luma_renderer.json") {
+            std::filesystem::path& one = name == "luma_types.json" ? types : name == "luma_services.json" ? services : renderer;
             if (!one.empty()) {
                 why = "a second " + name.string() + " under " + folder.string();
                 return false;
@@ -132,6 +133,7 @@ bool read_description(const std::filesystem::path& folder, Description& out, std
     }
     if (!types.empty() && !read(types, out.types)) return false;
     if (!services.empty() && !read(services, out.services)) return false;
+    if (!renderer.empty() && !read(renderer, out.renderer)) return false;
     const std::filesystem::path placement = folder / "smg_game.luma-placement.json";
     if (std::filesystem::is_regular_file(placement, error) && !read(placement, out.placement)) return false;
     return true;
@@ -158,7 +160,7 @@ const Description& description() {
         const auto mix = [&h](std::string_view bytes) {
             for (const char c : bytes) h = (h ^ static_cast<unsigned char>(c)) * 0x100000001b3ull;
         };
-        for (const std::string* part : {&d.names, &d.types, &d.services, &d.placement}) {
+        for (const std::string* part : {&d.names, &d.types, &d.services, &d.placement, &d.renderer}) {
             mix(std::to_string(part->size()) + ":");
             mix(*part);
         }
@@ -206,6 +208,15 @@ bool validate_package(const Validator* v, std::string_view id, const std::filesy
             input.placement = self.placement.data();
             input.placement_size = self.placement.size();
         }
+        // The renderer's feature list, and this device's: the features of that list its graphics have. The list is
+        // empty in this release, so the device has none of them (a mod that needs one is refused by the list, L204).
+        if (!self.renderer.empty()) {
+            static const char* const kNoFeature[1] = {nullptr};
+            input.renderer = self.renderer.data();
+            input.renderer_size = self.renderer.size();
+            input.device_features = kNoFeature;
+            input.device_feature_count = 0;
+        }
     }
     // The game's own files, through a view for this call alone.
     std::optional<galaxy::LumaGameStoreView> view;
@@ -232,6 +243,9 @@ bool validate_package(const Validator* v, std::string_view id, const std::filesy
         input.services_size = 0;
         input.placement = nullptr;
         input.placement_size = 0;
+        input.renderer = nullptr;
+        input.renderer_size = 0;
+        input.device_features = nullptr;
         report = v->validate(&input);
     }
     if (v->state(report) < 0) {

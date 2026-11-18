@@ -1,0 +1,51 @@
+{
+  "harness": 1,
+  "name": "2219-calls-cost",
+  "about": "tm-basic's on_frame and on_step run each frame through the kernel's guarded call: over its first 1000 calls the kernel made the guard's name for them once per service and kind and scanned the mod records once, not at every call (M-129: before, a text and a scan per call)",
+  "proves": [
+    "kernel.services.call_cost"
+  ],
+  "mods": [
+    "../mods/tm-basic"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 5,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4220
+      ]
+    },
+    {
+      "after": {
+        "fact": "kernel.service_calls",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "kernel.service_calls",
+      "field": "calls",
+      "is": 1000
+    },
+    {
+      "fact": "kernel.service_calls",
+      "field": "texts_made",
+      "at_most": 8
+    },
+    {
+      "fact": "kernel.service_calls",
+      "field": "record_scans",
+      "at_most": 8
+    }
+  ],
+  "limit_seconds": 240
+}

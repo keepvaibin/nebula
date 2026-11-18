@@ -18,6 +18,7 @@
 #include "Game/System/LumaLoader.hpp"
 #include "Game/System/LumaSave.hpp"
 #include "Game/System/LumaTime.hpp"
+#include "Game/System/LumaModLog.hpp"
 #include <luma.h>
 #include <luma_capture.h>
 #include <luma_draw_native.h>
@@ -252,6 +253,90 @@ namespace luma {
 
             bool isGone(const Record* pRecord) { return __atomic_load_n(&pRecord->gone, __ATOMIC_ACQUIRE) != 0; }
 
+            // A guarded call's needs, with no text made and no record list scanned per call (M-129). Game thread: the
+            // providers call mods' functions only there (kernelCall, kernelCallWords).
+            //
+            // The mod's record: the slot it was last found in, by a hash of its pointer, used when the slot still holds
+            // it (a mod has one record: modBegin refuses a second, so the slot is the one recordOf finds).
+            const u32 kRecordCacheSize = 64u;
+            u32 sRecordCache[kRecordCacheSize];  // slot + 1; 0: none
+            u32 sRecordScans = 0;                // lookups the cache did not answer
+
+            const Record* recordForCall(const LumaMod* pMod) {
+                const uintptr_t key = reinterpret_cast<uintptr_t>(pMod);
+                const u32 line = static_cast<u32>((key >> 4) ^ (key >> 12)) & (kRecordCacheSize - 1u);
+                const u32 cached = sRecordCache[line];
+                if (cached != 0u && __atomic_load_n(&sRecords[cached - 1u].mod, __ATOMIC_ACQUIRE) == pMod) {
+                    return &sRecords[cached - 1u];
+                }
+                sRecordScans++;
+                const Record* const pRecord = recordOf(pMod);
+                if (pRecord != nullptr) {
+                    sRecordCache[line] = static_cast<u32>(pRecord - sRecords) + 1u;
+                }
+                return pRecord;
+            }
+
+            // What the guard names a fault in the call by (services/registry.md 6.1): "<service> event <kind>", made
+            // once for each service and kind and kept for the session (a guard frame holds the pointer while the call
+            // runs). Found by the service's text as well as its pointer: a provider's name may be another's once it
+            // is gone. A full neighbourhood makes the text in the caller's buffer, as before.
+            const u32 kWhereCount = 256u;
+            const u32 kWhereProbes = 8u;
+            struct Where {
+                const char* service;  // null: free
+                u32 kind;
+                char text[96];
+            };
+            Where sWhere[kWhereCount];
+            u32 sWhereTexts = 0;  // texts made, kept or not
+
+            bool whereNames(const Where& rWhere, const char* pService) {
+                u32 i = 0;
+                while (pService[i] != 0 && rWhere.text[i] == pService[i]) {
+                    i++;
+                }
+                // The whole name and then the " event " the text goes on with, or the text cut at its size.
+                return (pService[i] == 0 && rWhere.text[i] == ' ') || (i == sizeof(rWhere.text) - 1u && rWhere.text[i] == 0);
+            }
+
+            const char* whereOf(const char* pService, u32 kind, char* pScratch, u32 scratchSize) {
+                const uintptr_t key = reinterpret_cast<uintptr_t>(pService) ^ (static_cast<uintptr_t>(kind) * 0x9E3779B1u);
+                u32 line = static_cast<u32>((key >> 3) ^ (key >> 13)) & (kWhereCount - 1u);
+                for (u32 probe = 0; probe < kWhereProbes; probe++, line = (line + 1u) & (kWhereCount - 1u)) {
+                    Where& rWhere = sWhere[line];
+                    if (rWhere.service == nullptr) {
+                        sWhereTexts++;
+                        nebula_snprintf(rWhere.text, sizeof(rWhere.text), "%s event %u", pService, kind);
+                        rWhere.kind = kind;
+                        rWhere.service = pService;
+                        return rWhere.text;
+                    }
+                    if (rWhere.service == pService && rWhere.kind == kind && whereNames(rWhere, pService)) {
+                        return rWhere.text;
+                    }
+                }
+                sWhereTexts++;
+                nebula_snprintf(pScratch, scratchSize, "%s event %u", pService, kind);
+                return pScratch;
+            }
+
+            // In a harness run, once: what the first 1000 guarded calls cost in texts made and records scanned.
+            u32 sGuardedCalls = 0;
+            const u32 kCallsTold = 1000u;
+
+            void countGuardedCall() {
+                if (sGuardedCalls > kCallsTold) {
+                    return;
+                }
+                if (++sGuardedCalls == kCallsTold && luma::modlog::facts()) {
+                    char json[120];
+                    nebula_snprintf(json, sizeof(json), "{\"calls\": %u, \"texts_made\": %u, \"record_scans\": %u}", kCallsTold,
+                                    sWhereTexts, sRecordScans);
+                    luma::modlog::fact("kernel.service_calls", json);
+                }
+            }
+
             // The registry's own rows (services/registry.md 11).
             struct OwnRow {
                 u32 code;
@@ -400,15 +485,16 @@ namespace luma {
             // fn(a0, a1), the mod's own function, called by the guard with no frame between (the provider has checked
             // the thread and the arguments).
             int32_t callGuarded(const LumaMod* pMod, const char* pService, u32 kind, const void* fn, uintptr_t a0, uintptr_t a1) {
-                const Record* const pRecord = recordOf(pMod);
+                const Record* const pRecord = recordForCall(pMod);
                 if (pRecord == nullptr || isGone(pRecord)) {
                     return LUMA_E_CANCELLED;
                 }
                 // Through the guard: a fault in fn is the mod's, caught there and named "<service> event <kind>"
                 // in the mod log (services/registry.md 6.1, J S-7). A mod off after a fault is not called.
-                char where[96];
-                nebula_snprintf(where, sizeof(where), "%s event %u", pService, kind);
-                if (!guard::run(const_cast<LumaMod*>(pMod), LUMA_GUARD_EVENT, where, fn, a0, a1, 0, 0, nullptr)) {
+                char scratch[96];
+                const char* const pWhere = whereOf(pService != nullptr ? pService : "a service", kind, scratch, sizeof(scratch));
+                countGuardedCall();
+                if (!guard::run(const_cast<LumaMod*>(pMod), LUMA_GUARD_EVENT, pWhere, fn, a0, a1, 0, 0, nullptr)) {
                     return LUMA_E_CANCELLED;
                 }
                 return LUMA_OK;

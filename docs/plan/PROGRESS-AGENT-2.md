@@ -273,3 +273,18 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   are presented, so its status line no longer reads "Preparing graphics" on a loaded machine. Found as safestart
   6605's failure in the regression.
 - The types fixture's driver gives guard::probe (0e028f210): the M-007 commit had broken its link in the gate.
+
+## 2026-11-17 M-010, N-2052, N-2054, M-129: class rows come back, a needed renderer feature is refused, test runs check as a player's game does, calls cost no text
+
+- M-010: a finished mod's class rows are used again from the next scene, each use with new numbers (classCount() +
+  generation * 1024 + row). Test classes 1411-rows-again: lc-many defines 400 classes at each of four starts, a scene
+  change between; before, the starts defined 400, 400, 224 and 0.
+- N-2052: the game's renderer feature list (native/luma/luma_renderer.json, none in this release) is in the
+  self-description folder of every package, and the game gives it and the device's features to the validator. Test
+  startval 3136-start-feature: a mod needing ray_tracing is refused with L204; before, it started.
+- N-2054 (found while proving N-2052): the game in a test run had no self-description, so the in-game checks that
+  need the game's names, types, services or renderer features never ran in a test. Each run's bin/luma is now a link
+  to one copy of the bins' luma/ (harness_self_description_test.py).
+- M-129: a service's call of a mod's function makes its guard name once per service and kind and finds the mod's record
+  through a cache. Test time 2219-calls-cost: at most 8 texts and 8 scans in the first 1000 calls; before, no fact (a
+  text and a scan each call).

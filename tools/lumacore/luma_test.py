@@ -1538,6 +1538,71 @@ def described(bin_folder, name):
     return None
 
 
+def folder_link(path: pathlib.Path):
+    """Whether path is a link to a folder (a junction on Windows, a symbolic link elsewhere)."""
+    return path.is_symlink() or (hasattr(os.path, "isjunction") and os.path.isjunction(path))
+
+
+def link_folder(target: pathlib.Path, link: pathlib.Path):
+    """link names the folder target: a junction on Windows (no rights needed), a symbolic link elsewhere."""
+    if os.name == "nt":
+        import _winapi
+        _winapi.CreateJunction(str(target), str(link))
+    else:
+        os.symlink(target, link, target_is_directory=True)
+
+
+def remove_run_folder(run_folder: pathlib.Path):
+    """Deletes a run folder; its link to the shared self-description goes first, so nothing behind it is touched."""
+    link = run_folder / "bin" / "luma"
+    if folder_link(link):
+        os.unlink(link) if link.is_symlink() else os.rmdir(link)
+    shutil.rmtree(run_folder)
+
+
+# self_description's copies made or found by this process: {(bin folder's luma, root): the copy}. A bin folder does
+# not change while a run of tests uses it.
+SELF_MADE = {}
+
+
+def self_description(bin_folder: pathlib.Path, root: pathlib.Path):
+    """The bin folder's luma/ (the game's self-description: its rows, types, services, renderer features, placement
+    facts and the mods it comes with) as one copy under root/self, made once for every run of these bins: some 16,000
+    files are too many to copy for each run, and a link to the bins' own would let a run change them (a copy, not hard
+    links, for that reason). None when the bin folder has none (a build folder of the game alone)."""
+    source = bin_folder / "luma"
+    if not (source / "luma_types.json").is_file():
+        return None
+    made = SELF_MADE.get((source, root))
+    if made is not None and (made / "luma_types.json").is_file():
+        return made
+    files = sorted(f for f in source.rglob("*") if f.is_file())
+    key = hashlib.sha256(str(source).encode("utf-8"))
+    for f in files:
+        st = f.stat()
+        key.update(("%s %d %d\n" % (f.relative_to(source).as_posix(), st.st_size, st.st_mtime_ns)).encode("utf-8"))
+    final = root / "self" / key.hexdigest()[:16]
+    if (final / "luma" / "luma_types.json").is_file():
+        SELF_MADE[(source, root)] = final / "luma"
+        return final / "luma"
+    making = root / "self" / ("%s.%d" % (final.name, os.getpid()))
+    if making.exists():
+        shutil.rmtree(making)
+    for f in files:
+        to = making / "luma" / f.relative_to(source)
+        to.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, to)
+    try:
+        os.replace(making, final)
+    except OSError:
+        # Another run made it first.
+        shutil.rmtree(making, ignore_errors=True)
+    if not (final / "luma" / "luma_types.json").is_file():
+        raise SetupFailed("the self-description could not be made in %s" % final)
+    SELF_MADE[(source, root)] = final / "luma"
+    return final / "luma"
+
+
 def run_one(test, renderer, args, run_folder, previous):
     """Starts the game for one test and renderer; returns what the checks need."""
     if renderer not in EXES:
@@ -1564,7 +1629,7 @@ def run_one(test, renderer, args, run_folder, previous):
         raise HarnessError("the game %s is of store version %s; this runner's is %d: import the game again with this "
                            "version's nebula-import or name another pak" % (pak, int.from_bytes(head[8:12], "little") if head[:8] == b"NBSTORE" + bytes(1) else "none (not a store)", wanted))
     if run_folder.exists():
-        shutil.rmtree(run_folder)
+        remove_run_folder(run_folder)
     for sub in ("bin", "pictures", "saves", "settings", "appdata"):
         (run_folder / sub).mkdir(parents=True)
     # --warm: the app data an earlier start of the same bins on this machine left (its pipeline library), so this start
@@ -1598,17 +1663,29 @@ def run_one(test, renderer, args, run_folder, previous):
     # gets refusals as codes, so it is frozen with the rest.
     shutil.copyfile(bin_folder / HOST["importer"], run_folder / "bin" / HOST["importer"])
     frozen[HOST["importer"]] = sha256(run_folder / "bin" / HOST["importer"])
-    # The mods the game comes with (LumaKit), where Setup puts them: the game installs them into the run's mods folder
-    # at start, as it does for a player (host_main.cpp, install_shipped_mods).
-    shipped = sorted((bin_folder / "luma" / "mods").glob("*.luma"))
-    if shipped:
-        (run_folder / "bin" / "luma" / "mods").mkdir(parents=True)
-    for luma in shipped:
-        name = "luma/mods/" + luma.name
-        shutil.copyfile(luma, run_folder / "bin" / name)
-        frozen[name] = sha256(run_folder / "bin" / name)
-    # The test's hidden files are left out of the run's own copy (the bin folder itself is never touched).
+    # The game's self-description and the mods it comes with (LumaKit), where Setup puts them (luma/ beside the
+    # program): the start's check reads the game's names, types, services and renderer features as a player's game
+    # does (mod_check.cpp description), and the game installs the mods into the run's mods folder at start
+    # (host_main.cpp, install_shipped_mods). A link to the work folder's one copy (self_description).
+    shared_root = pathlib.Path(args.work).resolve() if getattr(args, "work", None) else run_folder.parent
+    shared = self_description(bin_folder, shared_root)
+    if shared is not None:
+        link_folder(shared, run_folder / "bin" / "luma")
+        for luma in sorted((shared / "mods").glob("*.luma")):
+            frozen["luma/mods/" + luma.name] = sha256(luma)
+    else:
+        shipped = sorted((bin_folder / "luma" / "mods").glob("*.luma"))
+        if shipped:
+            (run_folder / "bin" / "luma" / "mods").mkdir(parents=True)
+        for luma in shipped:
+            name = "luma/mods/" + luma.name
+            shutil.copyfile(luma, run_folder / "bin" / name)
+            frozen[name] = sha256(run_folder / "bin" / name)
+    # The test's hidden files are left out of the run's own copy (the bin folder itself is never touched). The
+    # self-description is shared: none of it can be hidden.
     for hidden in test["hidden"]:
+        if hidden.replace("\\", "/").startswith("luma/"):
+            raise SetupFailed("hide_game_files: %s is in the shared self-description (luma/), which a test cannot hide" % hidden)
         if not (bin_folder / hidden).is_file():
             raise SetupFailed("hide_game_files: the game's folder has no %s" % hidden)
         copy = run_folder / "bin" / hidden

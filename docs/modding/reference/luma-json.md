@@ -186,10 +186,12 @@ For how the game uses them, see [net service](services/net.md).
 `renderer` has one key, `features`: the graphics features the mod cannot do without, for example `{"features": ["FEATURE-NAME"]}`.
 
 * 1 to 64 names (L204 `Expect.Count`). Each name matches `[a-z][a-z0-9_]*`, is at most 32 bytes, has no `__` and does not end in `_` (L204 `Expect.FeatureName`). Each appears once (L204 `Expect.Once`).
-* A name the game's renderer does not list is an error (L204 `Expect.Feature`).
+* A name the game's renderer does not list is an error (L204 `Expect.Feature`). This release lists no feature, so a mod
+  that names one does not start.
 * When a player's graphics card lacks a listed feature, the mod is off with the message "MOD needs FEATURE, which this device's graphics do not have." (L806). The game checks this at every start, so a new graphics card counts at once. LumaLink has no device, so it does not check L806.
 
-A mod that can work without a feature does not list it, and asks while it runs instead.
+A mod that can work without a feature does not list it, and asks the graphics device itself while it runs (draw.native
+gives the device).
 
 ### layers
 

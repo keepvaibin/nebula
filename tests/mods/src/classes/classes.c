@@ -26,6 +26,8 @@
    lc-offmake (-DCASE=9): class LcOff from Kuribo (no stage places it); MR::getRandom(0, 1410) asks the factory for
                          its creator on the game thread (creator_found), then calls that creator on another thread
                          (harness 1.2 thread_start): it makes nothing there (off_made_null).
+   lc-many   (-DCASE=10): 400 classes LcMany000 to LcMany399 from Kuribo at every start (defined: how many were);
+                         MR::getRandom(0, 1411) makes one LcMany000 (made_own: own_class gives its number).
    Cases 4 and 5 need a luma.h with LumaClassDef.gone (build.sh builds them only then). */
 #include "../loader/lt.h"
 
@@ -651,6 +653,46 @@ static const LumaImport imports[] = {
 LT_START({
     off_class = core->define_class(mod, &off_def);
     lt_fact("defined", off_class >= 0);
+})
+LUMA_MOD(imports, start, 0);
+
+#elif CASE == 10
+#define MANY 400
+static char names[MANY][12];
+static LumaClassDef defs[MANY];
+static int32_t first_class = -1;
+
+static int32_t trigger(LumaCall* call, void* user) {
+    (void)user;
+    if (LUMA_ARG(call, 1, int32_t) != 0 || LUMA_ARG(call, 2, int32_t) != 1411) return 0;
+    void* object = 0;
+    const int32_t made = lt_core->make(lt_mod, "LcMany000", 1, 0, 0, &object);
+    lt_fact("made", made);
+    lt_fact("made_own", made == 1 && object != 0 && lt_core->own_class(lt_mod, object) == first_class);
+    return 0;
+}
+
+static const LumaImport imports[] = {
+    LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
+};
+
+LT_START({
+    int32_t defined = 0;
+    for (int i = 0; i < MANY; i++) {
+        char* const n = names[i];
+        n[0] = 'L'; n[1] = 'c'; n[2] = 'M'; n[3] = 'a'; n[4] = 'n'; n[5] = 'y';
+        n[6] = (char)('0' + i / 100); n[7] = (char)('0' + i / 10 % 10); n[8] = (char)('0' + i % 10); n[9] = 0;
+        defs[i].size = sizeof(LumaClassDef);
+        defs[i].name = n;
+        defs[i].base = "Kuribo";
+        const int32_t number = core->define_class(mod, &defs[i]);
+        if (number >= 0) {
+            defined++;
+            if (i == 0) first_class = number;
+        }
+    }
+    lt_fact("defined", defined);
+    lt_fact("first_found", first_class >= 0 && core->class_of("LcMany000") == first_class);
 })
 LUMA_MOD(imports, start, 0);
 #endif

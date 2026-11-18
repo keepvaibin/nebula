@@ -69,6 +69,7 @@ struct Description {
     std::string types;
     std::string services;
     std::string placement;
+    std::string renderer;  // luma_renderer.json: the renderer's feature names
     std::string key;  // what identifies them for a kept report: "-" when there is none
 };
 const Description& description();
