@@ -16,7 +16,10 @@ starts the game for a test goes through here.
          and on a pass fast-forwards main and pushes it itself, writes MAIN-MOVED on the board and frees the lock.
          With --move the commit is pushed first as gate/<run> (section 5): GitHub runs every job on it while the gate
          runs, the gate frees gate.lock when its own checks pass, waits up to 120 minutes for every job of that run to
-         be green (planned.tsv's github/<job> lines aside), then moves main and deletes gate/<run>.
+         be green (planned.tsv's github/<job> lines aside), then moves main and deletes gate/<run>. GitHub's slow
+         jobs (OWED_JOBS: the Android cloud builds and the emulator's start check) are owed: main moves when every
+         other job is green, tools/gate/owed.py reads them after the move and writes OWED-GREEN or OWED-RED.
+         After the move the play route measure (tools/measure) starts on a copy of the build, then the long run.
 --long   level 3, on main's newest commit, under the long lock, at below-normal priority: the tablet's 102 stops
          against the PC's, a sanitizer build's tour, the soak, every disc on every renderer.
 --final  level 4: the main and long levels on one commit. "Done" needs it passed with no check planned or known.
@@ -84,6 +87,12 @@ TABLET_CHECKS = ("tablet/prepare", "android/tablet", "tour/tablet", "tablet/remo
 # the commit's newest run as one of their checks, for up to GITHUB_CHECK_MINUTES.
 WORKFLOW = "check.yml"
 GITHUB_WAIT_MINUTES = 120
+# The jobs owed at a move (07-BASE-FIRST, How the work flows 3): GitHub's slow ones (the two Android cloud builds, 54 and
+# 73 minutes in run 44350945925, and the emulator's start check that waits for them). Main moves once every other job
+# is green; these are read after the move (tools/gate/owed.py) within OWED_HOURS, and one that ends red is fixed first
+# or the landing is taken back. One already red before the move stops it as any red job does.
+OWED_JOBS = ("Android (arm64-v8a)", "Android (x86_64)", "Android start check (x86_64 emulator)")
+OWED_HOURS = 2.0
 GITHUB_CHECK_MINUTES = 15
 CANDIDATE_PREFIX = "gate/"
 # The two lists (section 4) and the ledger their lines name.
@@ -783,6 +792,17 @@ def measure_route(g):
     return fn
 
 
+def start_owed(branch, sha, owed, args, popen=subprocess.Popen):
+    """After a move with owed jobs: tools/gate/owed.py reads them, detached, and writes their end on the board."""
+    log = pathlib.Path(args.work) / ("owed-%s.log" % sha[:9])
+    cmd = [sys.executable, "-X", "utf8", "-I", str(HERE / "owed.py"), "--branch", branch, "--sha", sha, "--board",
+           args.board, "--who", args.who, "--hours", str(OWED_HOURS)] + [a for name in owed for a in ("--job", name)]
+    detach = {"creationflags": 0x8 | 0x200} if os.name == "nt" else {"start_new_session": True}
+    with open(log, "ab") as out:
+        popen(cmd, cwd=str(TREE), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, close_fds=True, **detach)
+    return "read by tools/gate/owed.py within %g hours (log %s)" % (OWED_HOURS, log)
+
+
 def start_measure(sha, g, args, popen=subprocess.Popen, bins=MEASURE_BINS):
     """After a move: the moved commit's build copied (MEASURE_BINS/<sha>, the two before it kept), then the measure
     started there, detached; it takes the gate lock through the queue, so the gates and long run parts behind it wait
@@ -1184,13 +1204,17 @@ def red_minute(job):
     return " at " + moment.astimezone().strftime("%H:%M")
 
 
-def judge_run(status, jobs, planned_jobs=()):
+def judge_run(status, jobs, planned_jobs=(), owed_jobs=()):
     """(done, green, detail) of a run (section 8): every job is required except the planned ones. A job that ended
-    other than green (failure, cancelled, skipped) ends it at once; otherwise it is done when the run has ended."""
-    red, running, green = [], 0, 0
+    other than green (failure, cancelled, skipped) ends it at once; otherwise it is done when the run has ended, or
+    when only owed jobs (owed_jobs) have not ended: the detail then names them ("owed: ...")."""
+    red, running, green, owed = [], 0, 0, []
     for j in jobs:
         name = j.get("name") or "?"
         if name in planned_jobs:
+            continue
+        if name in owed_jobs and j.get("status") != "completed":
+            owed.append(name)
             continue
         if j.get("status") != "completed":
             running += 1
@@ -1202,22 +1226,28 @@ def judge_run(status, jobs, planned_jobs=()):
         return True, False, "red: " + "; ".join(red)
     if status is None:
         return False, False, "no run yet"
-    if status != "completed" or running:
+    if running or (status != "completed" and not owed):
         return False, False, "%d green, %d not ended" % (green, running)
     if green == 0:
         return True, False, "the run has no job"
-    return True, True, "%d of %d jobs green" % (green, green)
+    return True, True, "%d of %d jobs green" % (green, green) + ("; owed: " + ", ".join(owed) if owed else "")
+
+
+def owed_of(detail):
+    """The owed jobs a judged run's detail names ([] when none)."""
+    _, _, owed = detail.partition("; owed: ")
+    return [name for name in owed.split(", ") if name] if owed else []
 
 
 def github_wait(branch, sha, planned=(), wait_minutes=GITHUB_WAIT_MINUTES, state_of=candidate_state, sleep=time.sleep,
-                clock=time.time, log=None):
+                clock=time.time, log=None, owed=()):
     """(green, detail): asks GitHub once a minute for the run of `branch` at `sha` until it is judged, or for at most
     wait_minutes. A question that fails (gh, the network) is asked again the next minute: it is not a red job."""
     deadline = clock() + 60.0 * wait_minutes
     detail = "not asked"
     while True:
         try:
-            done, green, detail = judge_run(*state_of(branch, sha), planned_jobs=planned)
+            done, green, detail = judge_run(*state_of(branch, sha), planned_jobs=planned, owed_jobs=owed)
         except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as e:
             done, green, detail = False, False, "GitHub did not answer: %s" % e
         if log:
@@ -2038,7 +2068,7 @@ def main(argv=None):
             add_waiting(args.work, commit, candidate, os.getpid())
             try:
                 green, detail = github_wait(candidate, commit, planned_jobs(planned), wait_minutes=args.github_wait,
-                                            log=str(g.work / "github.log"))
+                                            log=str(g.work / "github.log"), owed=OWED_JOBS)
                 why = None if green else "GitHub's jobs on %s: %s" % (candidate, detail)
                 if why is None:
                     move_lock = str(pathlib.Path(args.gate_lock).with_name("move.lock"))
@@ -2060,6 +2090,10 @@ def main(argv=None):
                     args.who, g.name, commit[:9], why))
             else:
                 summary = "passed, GitHub green (%s), main moved to %s" % (detail, commit[:9])
+                owed = owed_of(detail)
+                if owed:
+                    board_line(args.board, "%s OWED: main %s moved with GitHub's %s not ended; %s." % (
+                        args.who, commit[:9], ", ".join(owed), start_owed(candidate, commit, owed, args)))
                 # First the measure (it queues for the gate lock now), then the long run, whose parts queue behind it.
                 measured = start_measure(commit, g, args)
                 print("gate.py: measure: %s" % measured)
