@@ -4,6 +4,9 @@
 // (the NBTL0001 header: version, ticks a second, records written and kept, process). Before 11-18 the timeline's
 // clock read 0 and it wrote no file outside Windows.
 #include "galaxy/frame_timeline.h"
+#include "galaxy/launch_args.h"
+#include "galaxy/platform_paths.h"
+#include "galaxy/platform_time.h"
 
 #include <cstdio>
 #include <cstring>
@@ -38,7 +41,7 @@ int main() {
         const std::uint64_t before = tl::now();
         tl::record(tl::Event::SlotWaitBegin, 7u);
         tl::record(tl::Event::SlotWaitEnd, 7u);
-        tl::record(tl::Event::AcquireEnd, 2u, 1u);
+        tl::record(tl::Event::ContentTime, 2u, 1u);
         const std::uint64_t after = tl::now();
         check(before != 0u && after >= before, "the clock reads the platform's");
         tl::dump();
@@ -61,7 +64,7 @@ int main() {
         check(header[5] == galaxy::current_process_id(), "the header names the process");
         check(records[0].event == static_cast<std::uint16_t>(tl::Event::SlotWaitBegin) &&
                   records[1].event == static_cast<std::uint16_t>(tl::Event::SlotWaitEnd) &&
-                  records[2].event == static_cast<std::uint16_t>(tl::Event::AcquireEnd),
+                  records[2].event == static_cast<std::uint16_t>(tl::Event::ContentTime),
               "the events in their order");
         check(records[0].a == 7u && records[1].a == 7u && records[2].a == 2u && records[2].b == 1u,
               "each event's values");

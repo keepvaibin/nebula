@@ -208,12 +208,13 @@ void test_sampler_shift() {
     mode.min_lod = 0.0f;
     key = make_sampler_key(mode, 9u, 2.0f);
     expect(key.min_lod == 0.0f, "close-up replacement base level remains visible");
-    key = make_sampler_key(mode, 11u, 3.0f, true, 2.0f);
-    expect(key.lod_bias == -1.0f && key.max_lod == 10.0f && ((key.filter >> 5u) & 7u) == 7u,
+    // The frame's lines over the authored lines are the programs' (sampler_frame_bias lines), not the key's: the key
+    // holds the replacement's own shift only.
+    key = make_sampler_key(mode, 11u, 3.0f, true);
+    expect(key.lod_bias == -3.0f && key.max_lod == 10.0f && ((key.filter >> 5u) & 7u) == 7u,
            "arbitrary replacement levels pair by authored index across the full chain");
-    key = make_sampler_key(mode, 11u, 3.0f, true, 2.0f, -1.5f);
-    expect(key.lod_bias == -1.0f && (key.filter & kSamplerAuthoredLevels) != 0u,
-           "arbitrary replacement levels leave out the scene's bias and are marked drawn by hand");
+    expect((key.filter & kSamplerAuthoredLevels) != 0u && sampler_frame_bias(mode, true, false) == SamplerFrameBias::lines,
+           "arbitrary replacement levels take the lines' bias, not the scene's, and are marked drawn by hand");
 }
 
 // Levels drawn by hand: found by their mean colour and coverage, and sampled as the game sampled them.
@@ -284,16 +285,20 @@ void test_authored_levels() {
     mode.mip = 1;
     mode.max_lod = 4.0f;
     mode.lod_bias = 0.25f;
-    const SamplerKey key = make_sampler_key(mode, 5u, 0.0f, false, 1.5f, -1.0f, true);
-    expect(key.lod_bias == 1.75f && key.max_lod == 4.0f && ((key.filter >> 5u) & 7u) == 5u &&
-               (key.filter & kSamplerAuthoredLevels) != 0u,
-           "the game's levels drawn by hand keep its range and level filter at the authored lines, without the scene's bias");
-    const SamplerKey plain = make_sampler_key(mode, 5u, 0.0f, false, 1.5f, -1.0f, false);
-    expect(plain.lod_bias == -0.75f && (plain.filter & kSamplerAuthoredLevels) == 0u,
+    // The key holds the game's own bias; the frame's part is the programs' (sampler_frame_bias): the lines' for levels
+    // drawn by hand, the scene's for smaller copies, none for a sampler with no levels.
+    const SamplerKey key = make_sampler_key(mode, 5u, 0.0f, false, true);
+    expect(key.lod_bias == 0.25f && key.max_lod == 4.0f && ((key.filter >> 5u) & 7u) == 5u &&
+               (key.filter & kSamplerAuthoredLevels) != 0u && sampler_frame_bias(mode, false, true) == SamplerFrameBias::lines,
+           "the game's levels drawn by hand keep its range and level filter, and take the lines' bias, not the scene's");
+    const SamplerKey plain = make_sampler_key(mode, 5u, 0.0f, false, false);
+    expect(plain.lod_bias == 0.25f && (plain.filter & kSamplerAuthoredLevels) == 0u &&
+               sampler_frame_bias(mode, false, false) == SamplerFrameBias::scene,
            "smaller copies take the scene's bias and no authored lines");
     mode.mip = 0;
-    expect((make_sampler_key(mode, 5u, 0.0f, false, 1.5f, -1.0f, true).filter & kSamplerAuthoredLevels) == 0u,
-           "a sampler reading the first level only has no levels to choose");
+    expect((make_sampler_key(mode, 5u, 0.0f, false, true).filter & kSamplerAuthoredLevels) == 0u &&
+               sampler_frame_bias(mode, false, true) == SamplerFrameBias::none,
+           "a sampler reading the first level only has no levels to choose and no frame bias");
 }
 
 struct Gpu {
