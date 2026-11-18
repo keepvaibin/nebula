@@ -51,9 +51,6 @@ struct RenderConfig {
     // present_frame_rate).
     float    max_fps             = static_cast<float>(kGameStepsPerSecond);
 
-    // Submits the game's records at their own 60 Hz cadence instead of one present per game frame.
-    bool     frame_rate_decouple = false;
-
     // Mip LOD bias in units of 0.5 LOD levels (0 full detail, 2 quarter), applied to every sampler.
     unsigned texture_lod_bias    = 0;
 

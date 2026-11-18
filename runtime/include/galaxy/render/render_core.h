@@ -178,10 +178,8 @@ private:
     // Presents black, a named picture (`slot`) or the newest.
     void present_cached_display_on_thread(
         bool black,
-        bool sleep_if_missing,
         bool count_game_display_present = true,
         std::optional<std::uint32_t> slot = std::nullopt);
-    void present_latest_frame_on_thread();
     // The output shows black (FrameChunk::black): one black present per black
     // run, repeated while the settings overlay is open. `in_frame`: inside a render chunk's
     // begin_frame/end_frame.

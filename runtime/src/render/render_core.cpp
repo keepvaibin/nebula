@@ -1771,13 +1771,9 @@ void RenderCore::render_loop() {
         }
         FrameChunk chunk;
         bool have_chunk = false;
-        bool idle_present = false;
         bool overlay_idle = false;
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
-            const RenderConfig cfg = get_render_config();
-            idle_present = !hidden && !background && cfg.frame_rate_decouple &&
-                (cfg.vsync_interval != 0u || presented_max_fps(cfg) > 0.0f);
             const bool poll_probes = !probe_flights_.empty();
             // Draining for a stop, out of sight or behind another window: queued frames present without generated frames.
             interp_stopping_ = stop_render_thread_ || hidden || background;
@@ -1818,7 +1814,7 @@ void RenderCore::render_loop() {
                     interp_wait_until(due);
                     lock.lock();
                 }
-            } else if (idle_present || poll_probes) {
+            } else if (poll_probes) {
                 // Fences are polled at the top of the loop, outside queue_mutex_:
                 // park for at most 1 ms, woken early by new work or a stop.
                 queue_cv_.wait_for(lock, std::chrono::milliseconds(1), [this] {
@@ -1899,7 +1895,7 @@ void RenderCore::render_loop() {
         }
 
         // A present of the latest picture again is work too (a chunk's began as it was taken).
-        if (!have_chunk && (idle_present || overlay_idle)) {
+        if (!have_chunk && overlay_idle) {
             render_work_begins();
         }
         try {
@@ -1910,7 +1906,7 @@ void RenderCore::render_loop() {
                     if (chunk.black) {
                         supersede_interp_sequence();
                         interp_list_waiting_ = false;
-                        present_cached_display_on_thread(true, false);
+                        present_cached_display_on_thread(true);
                     } else if (interp_list_waiting_) {
                         supersede_interp_sequence();
                         interp_list_waiting_ = false;
@@ -1921,7 +1917,7 @@ void RenderCore::render_loop() {
                     } else if (!interp_sequence_.active) {
                         cached_present_asked_qpc_ = chunk.present_asked_qpc;
                         cached_present_step_qpc_ = chunk.step_moment_qpc;
-                        present_cached_display_on_thread(false, false);
+                        present_cached_display_on_thread(false);
                     } else {
                         ++interp_present_skipped_;
                     }
@@ -1932,20 +1928,18 @@ void RenderCore::render_loop() {
                     render_frame_on_thread(chunk);
                     run_pending_interp_start();
                 }
-            } else if (idle_present) {
-                present_latest_frame_on_thread();
             } else if (overlay_idle) {
                 // A due slot presents again the picture last presented (never a newer one between the game's own
                 // presents) unless a present of the game's own landed in it.
                 const std::int64_t now = galaxy::qpc_now();
                 if (interp_slot_unbounded_) {
                     // No slot clock (an unlimited rate): again as soon as the last present is done.
-                    present_cached_display_on_thread(false, false, false,
+                    present_cached_display_on_thread(false, false,
                                                      last_presented_slot_.load(std::memory_order_relaxed));
                     overlay_idle_due_qpc_ = now;
                 } else if (now >= overlay_idle_due_qpc_) {
                     if (renderer_.last_present_qpc() < overlay_idle_due_qpc_ - interp_slot_period_qpc_) {
-                        present_cached_display_on_thread(false, false, false,
+                        present_cached_display_on_thread(false, false,
                                                      last_presented_slot_.load(std::memory_order_relaxed));
                     }
                     overlay_idle_due_qpc_ += interp_slot_period_qpc_;
@@ -2104,13 +2098,8 @@ void RenderCore::present_black_picture(bool in_frame) {
     last_presented_picture_.store(~std::uint64_t{0}, std::memory_order_relaxed);
 }
 
-void RenderCore::present_latest_frame_on_thread() {
-    present_cached_display_on_thread(false, true, false);
-}
-
 void RenderCore::present_cached_display_on_thread(
     bool black,
-    bool sleep_if_missing,
     bool count_game_display_present,
     std::optional<std::uint32_t> slot) {
     const std::int64_t asked = std::exchange(cached_present_asked_qpc_, 0);
@@ -2124,9 +2113,6 @@ void RenderCore::present_cached_display_on_thread(
     black_shown_ = false;
     const DisplayTexture* selected = slot ? display_pictures_.picture(*slot) : display_pictures_.latest();
     if (selected == nullptr) {
-        if (sleep_if_missing) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
         return;
     }
     const bool duplicate_stamp =

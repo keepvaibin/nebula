@@ -53,7 +53,6 @@ texture_pack_budget_mb	config	texture_pack_budget_mb	int	64..65536	2048	-	-	-	-	
 texture_lod_bias	config	texture_lod_bias	int	0..8	0	-	-	-	-	read by the Metal renderer only	-
 wide_scene	config	wide_scene	bool	0|1	1	-	-	-	-	-	-
 post_process	config	post_process	bool	0|1	1	-	-	s	-	-	-
-frame_rate_decouple	config	frame_rate_decouple	bool	0|1	0	-	-	-	-	read, always off	-
 input_mode	runtime	input_mode	enum	auto|keyboard_mouse|controller|real_wiimote|phone|wiimote_motion	auto	Controls	-	y	y	real_wiimote, wiimote_motion where a Wii Remote can connect; phone on Android	Input
 co_star	runtime	co_star	bool	0|1	0	Controls	-	y	-	Windows' host (the others run no second player yet)	Co-Star
 audio_master_gain	runtime	master	float	0..2/0.05	1	Audio	-	y	y	the engine accepts up to 4 in a file	Master
