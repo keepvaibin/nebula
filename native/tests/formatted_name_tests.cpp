@@ -21,12 +21,13 @@ NebulaArena* NebulaArena::findFromRoot(void*) {
     return nullptr;
 }
 
+// The global new[], so the delete[] the code under test uses matches it (the address sanitizer checks the pair).
 void* operator new[](size_t size, NebulaArena*, int) {
-    return malloc(size);
+    return ::operator new[](size);
 }
 
 void* NebulaArena::alloc(u32 size, int, NebulaArena*) {
-    return malloc(size);
+    return ::operator new[](size);
 }
 
 // StringUtil.cpp's time strings fill a message's tags; no test here reaches them.
