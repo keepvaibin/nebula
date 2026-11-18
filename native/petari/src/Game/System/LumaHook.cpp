@@ -303,6 +303,38 @@ namespace luma {
             return false;
         }
 
+        // Whether one need (a NeedsRow id) is there; holder: sceneHolderThere(), asked once by the caller.
+        bool needThere(u32 id, bool holder) {
+            if (id == kNeedUserFile || id == kNeedCometScheduler) {
+                return systemThere(id);
+            }
+            if (id == kNeedMarioActor) {
+                return marioActorThere();
+            }
+            return holder && (id == kNeedScene || MR::isExistSceneObj(static_cast< int >(id)));
+        }
+
+        bool allThere(const unsigned char* pIds) {
+            const bool holder = sceneHolderThere();
+            for (u32 i = 0; pIds[i] != kNeedsEnd; i++) {
+                if (!needThere(pIds[i], holder)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Whether a game scene's making is finished and it is not being taken down (guarantees.json "made"): its
+        // controller is in its normal nerve (not making or taking down a scene), the scene is a GameScene, and
+        // initAfterScenarioChosen finished (mSceneInitializeDone, set again to false when the next scene starts).
+        bool sceneMade() {
+            const GameSystem* const pSystem = SingletonHolder< GameSystem >::get();
+            const GameSystemSceneController* const pController = pSystem != nullptr ? pSystem->mSceneController : nullptr;
+            return pController != nullptr && pController->mScene != nullptr &&
+                   pController->mCurrSceneControlInfo.mScene == SceneKind_Game && pController->mSceneInitializeDone &&
+                   pController->isNerveNormal();
+        }
+
         const char* nameAt(const char* pNames, u32 index) {
             for (; index > 0; index--) {
                 while (*pNames != 0) {
@@ -434,11 +466,7 @@ namespace luma {
         const NeedsSet& rSet = sNeedsSets[needs - 1];
         const bool holder = sceneHolderThere();  // every scene object is the holder's: none is there without it
         for (u32 i = 0; rSet.ids[i] != kNeedsEnd; i++) {
-            const u32 id = rSet.ids[i];
-            const bool there = id == kNeedUserFile || id == kNeedCometScheduler ? systemThere(id)
-                               : id == kNeedMarioActor                         ? marioActorThere()
-                                                                               : holder && (id == kNeedScene || MR::isExistSceneObj(static_cast<int>(id)));
-            if (!there) {
+            if (!needThere(rSet.ids[i], holder)) {
                 if (gNotNow != nullptr) {
                     gNotNow(pFunction, nameAt(rSet.names, i));
                 }
@@ -446,6 +474,41 @@ namespace luma {
             }
         }
         return true;
+    }
+
+#if defined(NEBULA_PLAIN_MODULE)
+    // The module without rows has no generated table (gen_types.py guarantee_rows): no set, no mod code to ask.
+    extern const GuaranteeSet kGuaranteeSets[] = {{nullptr, false, nullptr}};
+#endif
+
+    bool canCall(const Function* pFunction) {
+        prepare();
+        // A mod gives the pointer: it is read only when it is one of the module's rows (a linker's pad between rows is
+        // a whole row with a null name).
+        const uintptr_t at = reinterpret_cast< uintptr_t >(pFunction);
+        const uintptr_t begin = reinterpret_cast< uintptr_t >(rowsBegin());
+        if (pFunction == nullptr || pFunction < rowsBegin() || pFunction >= rowsEnd() || (at - begin) % sizeof(Function) != 0 ||
+            pFunction->name == nullptr || pFunction->hooked == nullptr) {
+            return false;
+        }
+        // A row's `hooked` is its flag's first byte (luma_hook.h Flag).
+        const unsigned short needs = reinterpret_cast< const Flag* >(pFunction->hooked)->needs;
+        if (needs == 0 || needs > sNeedsSetCount) {
+            return true;
+        }
+        return allThere(sNeedsSets[needs - 1].ids);
+    }
+
+    int holds(const char* pName, bool look) {
+        if (pName == nullptr) {
+            return -1;
+        }
+        for (const GuaranteeSet* pSet = kGuaranteeSets; pSet->name != nullptr; pSet++) {
+            if (__builtin_strcmp(pSet->name, pName) == 0) {
+                return !look || ((!pSet->made || sceneMade()) && allThere(pSet->ids)) ? 1 : 0;
+            }
+        }
+        return -1;
     }
 
     void markGameThread() { tGameThread = true; }

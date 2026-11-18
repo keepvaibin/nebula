@@ -1,0 +1,74 @@
+{
+ "about": "What a handler proves (docs/plan/M2-NEEDS-PROOF.md): each set's needs, in the names of needs.json (a scene object by its SceneObj_ name without the prefix, scene, UserFile, CometScheduler, MarioActor), each with the line that makes it. A set may name an earlier set in 'with'. The kernel checks every need of a set before a handler that proves it runs (LumaCore.holds), so a set that names too much shows as a handler that does not run, never as a wrong proof. gen_types.py writes the sets into luma_functions.json ('guarantees') and the kernel's table; a name the build does not know stops it.",
+ "sets": [
+  {
+   "name": "system",
+   "holds": "the game system's files are read: some frames after the game starts, never undone",
+   "needs": {
+    "UserFile": "SaveDataHandleSequence::initAfterResourceLoaded (made once the system archive is loaded)",
+    "CometScheduler": "GameSequenceProgress::initAfterResourceLoaded (made then too)"
+   }
+  },
+  {
+   "name": "stage",
+   "holds": "a game scene's making is finished (GameSystemSceneController mSceneInitializeDone, after GameScene::initAfterScenarioChosen) and it is not taken down",
+   "made": true,
+   "with": ["system"],
+   "needs": {
+    "scene": "GameSystemSceneController makes the scene's holder before GameScene::init",
+    "SceneDataInitializer": "GameScene::init",
+    "NameObjExecuteHolder": "SceneFunction::initForNameObj, from GameScene::init",
+    "StopSceneController": "SceneFunction::initForNameObj",
+    "SceneNameObjMovementController": "SceneFunction::initForNameObj",
+    "AllLiveActorGroup": "SceneFunction::initForLiveActor, from GameScene::init",
+    "ClippingDirector": "SceneFunction::initForLiveActor",
+    "DemoDirector": "SceneFunction::initForLiveActor",
+    "SensorHitChecker": "SceneFunction::initForLiveActor",
+    "CollisionDirector": "SceneFunction::initForLiveActor",
+    "MessageSensorHolder": "SceneFunction::initForLiveActor",
+    "LiveActorGroupArray": "SceneFunction::initForLiveActor",
+    "MovementOnOffGroupHolder": "SceneFunction::initForLiveActor",
+    "LightDirector": "SceneFunction::initForLiveActor",
+    "AreaObjContainer": "SceneFunction::initForLiveActor",
+    "CaptureScreenActor": "SceneFunction::initForLiveActor",
+    "StageSwitchContainer": "SceneFunction::initForLiveActor",
+    "SwitchWatcherHolder": "SceneFunction::initForLiveActor",
+    "SleepControllerHolder": "SceneFunction::initForLiveActor",
+    "TalkDirector": "SceneFunction::initForLiveActor",
+    "NPCDirector": "SceneFunction::initForLiveActor",
+    "EffectSystem": "SceneFunction::initEffectSystem, from GameScene::initEffect in GameScene::init",
+    "CameraContext": "GameScene::init",
+    "NameObjGroup": "GameScene::init",
+    "PlanetGravityManager": "GameScene::init",
+    "MarioHolder": "GameScene::init",
+    "AudCameraWatcher": "GameScene::init",
+    "AudEffectDirector": "GameScene::init",
+    "AudBgmConductor": "GameScene::init",
+    "EventSequencer": "GameScene::init",
+    "ScenePlayingResult": "GameScene::init",
+    "FurDrawManager": "GameScene::init",
+    "PlacementStateChecker": "GameScene::init",
+    "GroupCheckManager": "GameScene::init",
+    "CinemaFrame": "GameScene::init",
+    "PlanetMapCreator": "GameScene::init",
+    "MoviePlayerSimple": "GameScene::init, when a mod has code (NebulaMods::hasCode): a handler runs only in a mod with code",
+    "StageDataHolder": "SceneDataInitializer::createStageDataHolder, from GameScene::init",
+    "EventDirector": "GameScene::initAfterScenarioChosen, phase 0",
+    "CameraDirector": "GameScene::initAfterScenarioChosen, phase 1",
+    "GameSceneLayoutHolder": "GameScene::initAfterScenarioChosen, phase 1",
+    "StarPieceDirector": "GameScene::initAfterScenarioChosen, phase 1",
+    "SceneWipeHolder": "GameScene::initAfterScenarioChosen, phase 1",
+    "NamePosHolder": "GameScene::initAfterScenarioChosen, phase 1",
+    "InformationObserver": "GameScene::initAfterScenarioChosen, phase 1"
+   }
+  },
+  {
+   "name": "player",
+   "holds": "a stage, and the player's actor is in its MarioHolder",
+   "with": ["stage"],
+   "needs": {
+    "MarioActor": "MarioActor's init sets itself in the MarioHolder (MarioActor.cpp, setMarioActor) when the stage places the player (StageDataHolder::initPlacementMario)"
+   }
+  }
+ ]
+}

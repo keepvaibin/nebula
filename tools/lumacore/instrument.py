@@ -1302,7 +1302,9 @@ class Unit:
     # without a test is `deref`; one it gives back is `returned`; one it tests first (compares, a condition, an earlier
     # `if (...) return;` that names it) is `tested`. A use the rules do not place is `deref`: the pass marks more, never
     # less. gen_types.py closes these over the whole game (needs, null_when).
-    #   calls  [{"name", "signature", "use", "line"}]: each callee with a row, once per use
+    #   calls  [{"name", "signature", "use", "line", "guards"}]: each callee with a row, once per use and guards; guards
+    #          (left out when none): the ids of the scene objects a test of MR::isExistSceneObj (or of the object) on the
+    #          way to the call names, as for a root's `checked`
     #   roots  [{"id", "use", "checked", "line"}]: each MR::getSceneObj<T>(id), by the id's enum constant without
     #          SceneObj_; checked: under a test of MR::isExistSceneObj with the same id
     def needs_facts(self):
@@ -1312,7 +1314,8 @@ class Unit:
             Needs(self, calls, roots, made).go(cursor, [])
             self.needs.append({
                 'name': name, 'signature': signature,
-                'calls': [{'name': n, 'signature': sg, 'use': u, 'line': ln} for (n, sg, u), ln in calls.items()],
+                'calls': [dict({'name': n, 'signature': sg, 'use': u, 'line': ln}, **({'guards': list(g)} if g else {}))
+                          for (n, sg, u, g), ln in calls.items()],
                 'roots': [{'id': i, 'use': u, 'checked': c, 'line': ln} for (i, u, c), ln in roots.items()],
                 'made': [{'id': i, 'line': ln} for i, ln in made.items()]})
 
@@ -1928,6 +1931,28 @@ class Needs:
                             return True
         return False
 
+    def guards(self, stack):
+        """The scene objects tested on the way here, by the places `guarded` reads: their ids, sorted."""
+        unit = self.unit
+        found = set()
+
+        def named(cond):
+            found.update(s[1] for s in self.mentions(cond) if s[0] == 'root' and s[1] != '?')
+
+        for depth in range(len(stack) - 1, 0, -1):
+            node, index = stack[depth - 1]
+            if node.kind in (K_IF_STMT, K_WHILE, K_FOR, K_CONDITIONAL) and index > 0:
+                kids = unit.children(node)
+                if kids:
+                    named(kids[0])
+            elif node.kind == K_COMPOUND:
+                for earlier in unit.children(node)[:index]:
+                    if earlier.kind == K_IF_STMT:
+                        parts = unit.children(earlier)
+                        if len(parts) >= 2 and unit.leaves(parts[1]):
+                            named(parts[0])
+        return tuple(sorted(found))
+
     def use(self, stack):
         """How the expression at the top of `stack` is used: 'deref', 'returned', 'tested', or ('local', hash) for a
         local it is stored in; 'deref' when no rule places it. stack: [(cursor, index of the child on the path)]."""
@@ -1974,7 +1999,7 @@ class Needs:
             return
         if use == 'deref' and self.guarded(subject, stack):
             use = 'tested'
-        self.calls.setdefault((subject[1], subject[2], use), line)
+        self.calls.setdefault((subject[1], subject[2], use, self.guards(stack)), line)
 
     def go(self, node, stack):
         api, unit = self.api, self.unit

@@ -517,6 +517,22 @@ A library's call of code another mod gave it (a callback it keeps). `fn(a0, a1, 
 
 Any thread. A call costs a guarded call's boundary more than a plain call; the measured cost is in `docs/plan/PROGRESS-AGENT-2.md`.
 
+### `can_call`
+
+```c
+int32_t can_call(const LumaFunction* function);
+```
+
+Whether everything a game function needs is there now: its scene objects, the player, the save files (the game's self-description, `luma_functions.json` "needs"). `1`: all there, so a call of it made now on the game thread is made. `0`: one is missing (the call would give its type's empty value and say `Call.NotNow`), or not on the game thread, or `function` is not one of the game's function rows (null, or not from `function` or `function_at`). Nothing is said. LumaScript's `if can(F) { }` is this test.
+
+### `holds`
+
+```c
+int32_t holds(const char* set);
+```
+
+Whether a set of needs that handlers prove holds now (`luma_functions.json` "guarantees"): `"system"` (the save files and the comet scheduler), `"stage"` (a game scene whose making is finished, and its scene objects that every stage makes), `"player"` (a stage, and the player's actor). `1`: it holds; `0`: it does not, or not on the game thread; `-1`: no set has that name, or a null name. The handlers that run only while a set holds are in [Lifecycle](lumascript/lifecycle.md).
+
 ## Further reading
 
 * [When a mod fails](../concepts/when-a-mod-fails.md)

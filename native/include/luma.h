@@ -361,6 +361,17 @@ typedef struct LumaCore {
        the log; not called). Any thread. Its cost per call is in docs/plan/PROGRESS-AGENT-2.md. */
     int32_t (*call_mod)(const LumaMod* mod, const void* fn, uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3,
                         uint64_t* result);
+
+    /* Whether everything a game function needs is there now (its scene objects, the player, the save files: the game's
+       self-description, luma_functions.json "needs"), so a mod's call of it made now, on the game thread, is made. 1:
+       all there; 0: one is missing (the call would give its type's empty value and say Call.NotNow), or not on the
+       game thread, or `function` is not one of the game's function rows (null, or not from function or function_at).
+       Nothing is said. LumaScript's `can(F)` (docs/modding/reference/lumascript/lifecycle.md). */
+    int32_t (*can_call)(const LumaFunction* function);
+    /* Whether a set of needs that handlers prove holds now (luma_functions.json "guarantees": "system", "stage",
+       "player"; lifecycle.md). 1: every need of the set is there (and for "stage" and "player" the game scene's
+       making is finished); 0: not, or not on the game thread; -1: no set has that name, or a null name. */
+    int32_t (*holds)(const char* set);
 } LumaCore;
 
 /* What a mod's `cut` is told (LumaModInfo.cut; docs/modding/concepts/when-a-mod-fails.md, "Code cut short"): a fault in
@@ -383,6 +394,8 @@ typedef struct LumaCut {
 
 /* This luma.h has LumaCore.call_mod and LumaModInfo.cut (code that also builds against an older one tests it). */
 #define LUMA_CALL_MOD 1
+/* This luma.h has LumaCore.can_call and LumaCore.holds. */
+#define LUMA_CAN_CALL 1
 
 /* report's own codes (docs/modding/concepts/how-nebula-loads-mods.md, `report`). */
 #define LUMA_REPORT_OUT_OF_MEMORY 1u /* Hook.OutOfMemory: args[0] the size; luma.h's `new` then stops the game */

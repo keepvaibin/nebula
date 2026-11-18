@@ -169,3 +169,41 @@ fn a_signatures_parameters_are_counted() {
     assert_eq!(signature_params("const f32 (*)[4](int, char) const"), Some(2));
     assert_eq!(signature_params("void (*)(int)"), Some(1));
 }
+
+/// What a row needs and the sets handlers prove (docs/plan/M2-NEEDS-PROOF.md): read sorted; a file made before them
+/// reads with none.
+#[test]
+fn needs_and_sets_read() {
+    let needing = r#"{"name": "MR::incCoin", "signature": "void(int)", "kind": "free", "owner": null, "virtual": false, "pure": false, "const": false, "overrides": [], "marks": [null], "needs": ["scene", "MarioHolder", "ScenePlayingResult"], "null_when": []}"#;
+    let null = r#"{"name": "MR::getAreaObjContainer", "signature": "AreaObjContainer *()", "kind": "free", "owner": null, "virtual": false, "pure": false, "const": false, "overrides": [], "marks": [], "needs": ["scene"], "null_when": ["AreaObjContainer"]}"#;
+    let sets = r#""guarantees": [{"name": "system", "holds": "h", "made": false, "needs": {"UserFile": "w"}}, {"name": "stage", "holds": "h", "made": true, "needs": {"UserFile": "w", "scene": "w", "MarioHolder": "w"}}]"#;
+    let text = format!(r#"{{"functions": [{needing}, {null}], {sets}}}"#);
+    let facts = FunctionFacts::from_json(text.as_bytes()).unwrap_or_else(|e| panic!("{e:?}"));
+    let coin = facts.get("MR::incCoin", "void(int)").unwrap();
+    assert_eq!(coin.needs, ["MarioHolder", "ScenePlayingResult", "scene"]);
+    assert!(coin.null_when.is_empty());
+    assert_eq!(facts.get("MR::getAreaObjContainer", "AreaObjContainer *()").unwrap().null_when, ["AreaObjContainer"]);
+    assert_eq!(facts.guarantees.iter().map(|g| g.name.as_str()).collect::<Vec<_>>(), ["system", "stage"]);
+    assert_eq!(facts.guarantees[1].needs, ["MarioHolder", "UserFile", "scene"]);
+    // Before them: no needs, no sets.
+    let old = FunctionFacts::from_json(file(&[row("f", "void()", "free", "null", (false, false, false), "")]).as_bytes()).unwrap();
+    assert!(old.get("f", "void()").unwrap().needs.is_empty() && old.guarantees.is_empty());
+}
+
+#[test]
+fn needs_and_sets_not_in_their_form_are_named() {
+    let with = |needs: &str| format!(r#"{{"name": "f", "signature": "void()", "kind": "free", "owner": null, "virtual": false, "pure": false, "const": false, "overrides": [], "marks": [], "needs": {needs}, "null_when": []}}"#);
+    assert_eq!(refused(&[with(r#""scene""#)]), "functions[0].needs: not a list");
+    assert_eq!(refused(&[with(r#"["scene", "scene"]"#)]), "functions[0].needs: an entry that is not a need's name, or one given twice");
+    assert_eq!(refused(&[with(r#"["a b"]"#)]), "functions[0].needs: an entry that is not a need's name, or one given twice");
+    assert_eq!(refused(&[with("[1]")]), "functions[0].needs: an entry that is not a need's name, or one given twice");
+    let set_refused = |sets: &str| match FunctionFacts::from_json(format!(r#"{{"functions": [], "guarantees": {sets}}}"#).as_bytes()) {
+        Err(TypesError::Row { at, why }) => format!("{at}: {why}"),
+        other => panic!("not refused: {other:?}"),
+    };
+    assert_eq!(set_refused("{}"), "guarantees: not a list");
+    assert_eq!(set_refused(r#"[{"name": "a", "holds": "h", "needs": {"scene": "w"}}, {"name": "a", "holds": "h", "needs": {"scene": "w"}}]"#), "guarantees[1]: a set given twice");
+    assert_eq!(set_refused(r#"[{"name": "a", "holds": "h", "needs": {}}]"#), "guarantees[0].needs: empty, or a name that is no need's");
+    assert_eq!(set_refused(r#"[{"name": "a", "holds": "h", "needs": ["scene"]}]"#), "guarantees[0].needs: missing, or not an object");
+    assert_eq!(set_refused(r#"[{"name": "a", "needs": {"scene": "w"}}]"#), "guarantees[0].holds: missing, or not text");
+}

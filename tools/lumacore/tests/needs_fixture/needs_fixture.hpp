@@ -25,6 +25,11 @@ struct NdFile {
     int use();
 };
 
+// An object whose member reaches an object only some scenes make (Holder: the fixture's sets name it in none).
+struct NdKeeper {
+    int peek();
+};
+
 namespace MR {
     void* getSceneObjHolder();
     bool isExistSceneObj(int id);
