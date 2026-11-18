@@ -33,6 +33,7 @@ luma-test.so, luma_types.json. A test's "disc" runs only when the device's game 
 """
 import argparse
 import datetime
+import json
 import math
 import os
 import pathlib
@@ -205,6 +206,41 @@ def host_for(abi):
     return host
 
 
+def device_data_folder(run_folder):
+    """The game's data folder in a device run: <run>/appdata, which Harness.java gives as --data (the desktop's is
+    <run>/appdata/Nebula, the system's own layout: luma_test.run_data_folder)."""
+    return run_folder / "appdata"
+
+
+def listening_ports(device):
+    """The TCP ports something on the device listens on (/proc/net/tcp and tcp6, state 0A); empty when unreadable."""
+    code, out = device.shell("cat /proc/net/tcp /proc/net/tcp6 2>/dev/null")
+    ports = set()
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) > 3 and parts[3] == "0A" and ":" in parts[1]:
+            try:
+                ports.add(int(parts[1].rsplit(":", 1)[1], 16))
+            except ValueError:
+                pass
+    return ports
+
+
+def device_free_ports(lt, device, test, tries=20):
+    """lt.free_ports for a device run: the mods that use them run on the device, so each port is also one nothing on
+    the device listens on (N-4020)."""
+    taken = None
+    for _ in range(tries):
+        ports = lt.free_ports(test)
+        if not ports:
+            return ports
+        if taken is None:
+            taken = listening_ports(device)
+        if not taken & set(ports.values()):
+            return ports
+    raise lt.SetupFailed("no port free on both this computer and the device in %d tries" % tries)
+
+
 def run_one(lt, device, test, args, run_folder, previous):
     """luma_test.run_one on an Android device: the same layout, the start over adb. A failure while the device no
     longer answers adb (unplugged, asleep with USB off) is lt.DeviceLost: the device went, not the test."""
@@ -242,14 +278,17 @@ def run_on_device(lt, device, test, args, run_folder, previous):
         for sub in ("saves", "settings"):
             shutil.rmtree(run_folder / sub)
             shutil.copytree(previous / sub, run_folder / sub)
-        lt.carry_data(previous, run_folder)
+        lt.carry_data(previous, run_folder, device_data_folder)
     lt.place_saves(test, run_folder)
     # The libraries the app carries are the ones the run starts; their hashes are the bin folder's, built with them.
     frozen = {name: lt.sha256(bin_folder / name) for name in (lt.HOST["game"], lt.HOST["extension"])}
     if not test["bare"]:
         frozen[lt.HOST["half"]] = lt.sha256(bin_folder / lt.HOST["half"])
         lt.install_game_half(settings, bin_folder / lt.HOST["half"])
-    placed, imports = lt.place_mods(test, settings, previous, frozen, {})
+    ports = device_free_ports(lt, device, test)
+    if ports:
+        (run_folder / "ports.json").write_text(json.dumps(ports, indent=2) + "\n", encoding="utf-8")
+    placed, imports = lt.place_mods(test, settings, previous, frozen, ports)
     assert not imports, imports
     lt.write_run_settings(test, settings)
     hooks = [a for a in test.get("settings", []) if a.partition("=")[0] in lt.TEST_HOOKS]
@@ -344,7 +383,9 @@ def run_on_device(lt, device, test, args, run_folder, previous):
     device.run_as("rm -rf %s/harness/%s" % (app_files, name))
     log = device.adb("logcat", "-d", "-v", "raw", "-s", *LOG_TAGS).stdout
     (run_folder / "run.log").write_bytes(log.replace(b"\r\n", b"\n"))
-    return {"code": ended, "seconds": seconds, "frozen": frozen, "mods": placed, "exe": "GameActivity", "starts": starts}
+    # The pictures are the device's screen: boxes are placed by the test's window frame in them (N-4021).
+    return {"code": ended, "seconds": seconds, "frozen": frozen, "mods": placed, "exe": "GameActivity", "starts": starts,
+            "fit": test["window"]}
 
 
 def prepare(args):

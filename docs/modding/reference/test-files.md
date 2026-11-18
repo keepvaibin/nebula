@@ -281,7 +281,7 @@ The path is inside the run's save folder, with forward slashes.
 | `{"picture": "NAME", "unlike": "refs/NAME.png", "beyond": {"rmse": 6.0}}` | The picture differs by more than this. |
 | `{"picture": "NAME", "box": [x, y, w, h], "mean_rgb": [r, g, b], "within": 12}` | The box's average color is within this distance of `[r, g, b]`. |
 
-`like` and `unlike` also take `"box": [x, y, w, h]` to compare part of the picture. A reference path can hold `{renderer}`, which becomes the run's renderer, so each renderer has its own references. A picture and a reference of different sizes fail the check. A missing reference stops the test.
+`like` and `unlike` also take `"box": [x, y, w, h]` to compare part of the picture. A reference path can hold `{renderer}`, which becomes the run's renderer, so each renderer has its own references. A picture and a reference of different sizes fail the check. A missing reference stops the test. On an Android device the picture is the device's own screen: a box is given in the test's `window` frame, and the runner places it in that frame fitted whole and centred in the device's picture.
 
 ### Sound checks
 

@@ -1091,6 +1091,20 @@ def read_png(path):
     return w, h, bytes(out)
 
 
+def fit_box(box, frame, size):
+    """A box given in the test's window frame ([width, height]) on a picture of another size (a device's own screen):
+    the frame fitted whole in the picture and centred, as the game draws the window's shape on a screen of another
+    shape. The box as it is when the sizes match or no frame is given."""
+    if box is None or frame is None or tuple(frame) == tuple(size):
+        return box
+    (fw, fh), (w, h) = frame, size
+    scale = min(w / fw, h / fh)
+    left, top = (w - fw * scale) / 2, (h - fh * scale) / 2
+    x0, y0 = int(round(left + box[0] * scale)), int(round(top + box[1] * scale))
+    x1, y1 = int(round(left + (box[0] + box[2]) * scale)), int(round(top + (box[1] + box[3]) * scale))
+    return [x0, y0, max(1, x1 - x0), max(1, y1 - y0)]
+
+
 def rmse(a, b, w, box):
     x0, y0, bw, bh = box if box else (0, 0, w, len(a) // (3 * w))
     total, count = 0, 0
@@ -1274,13 +1288,15 @@ def run_data_folder(run_folder):
     return run_folder / "appdata" / "Nebula"
 
 
-def carry_data(previous, run_folder):
+def carry_data(previous, run_folder, data_folder=None):
     """continue_from: the mods' data and the Exchange folder as the test before left them come along (test-harness.md);
-    links inside stay links (services-fs 5: a player may move a folder away and link it)."""
+    links inside stay links (services-fs 5: a player may move a folder away and link it). data_folder: a run's data
+    folder from its run folder, run_data_folder unless given (a device run's is its own, luma_test_android.py)."""
+    data_folder = data_folder or run_data_folder
     for sub in CARRIED_DATA:
-        source = run_data_folder(previous) / sub
+        source = data_folder(previous) / sub
         if source.is_dir():
-            shutil.copytree(source, run_data_folder(run_folder) / sub, symlinks=True)
+            shutil.copytree(source, data_folder(run_folder) / sub, symlinks=True)
 
 
 def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False, folder=None, options=None,
@@ -2417,7 +2433,8 @@ def evaluate(test, renderer, run_folder, ran):
                 add("picture %s was kept" % c["picture"], False, None)
                 continue
             w, h, rgb = read_png(png)
-            box = c["box"]
+            # A device run's picture is the device's screen: the box is placed by the window's frame in it (N-4021).
+            box = fit_box(c["box"], ran.get("fit"), (w, h))
             if box and (box[0] + box[2] > w or box[1] + box[3] > h):
                 raise HarnessError("the box %s is outside the %dx%d picture %s" % (box, w, h, c["picture"]))
             if c["kind"] == "mean_rgb":

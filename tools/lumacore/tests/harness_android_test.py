@@ -18,7 +18,13 @@ python -X utf8 -I tools/lumacore/tests/harness_android_test.py [--work <folder>]
 - a device that leaves adb during a test is luma_test.DeviceLost (verdict `device-lost`, the suite's other tests not
   run), not the test's own failure; a failure while the device still answers stays the test's; remove on a device
   that does not answer fails instead of saying the test app is not installed (seen 11-17: the tablet left adb mid-tour,
-  the runner fell over and remove said "not installed").
+  the runner fell over and remove said "not installed");
+- N-4019: a test that continues from another gets the mods' data the test before left, from the device run's own data
+  folder (<run>/appdata, Harness.java's --data), not the desktop's <run>/appdata/Nebula;
+- N-4020: a test whose mod options take a free port gets one, free on this computer and not listened on on the device
+  (the device's /proc/net/tcp), the same in each option naming it; ports.json says them;
+- N-4021: a device run's picture box is placed by the test's window frame fitted, centred, in the device's picture
+  (2800 x 1752 on the tablet); a desktop run's, or one of the window's size, stays as written.
 Exit 0 when every case holds.
 """
 import importlib.util
@@ -216,6 +222,50 @@ def main():
         check(False, "an ABI the app is not built for is refused")
     except SystemExit:
         pass
+
+    # N-4019: the data the test before left, from the device run's own data folder.
+    before, after = work / "n4019-before", work / "n4019-after"
+    (android.device_data_folder(before) / "mod-data" / "ghost").mkdir(parents=True)
+    (android.device_data_folder(before) / "mod-data" / "ghost" / "best.bin").write_bytes(b"389")
+    (before / "appdata" / "Nebula" / "mod-data").mkdir(parents=True)  # the desktop's layout: not the device's
+    luma_test.carry_data(before, after, android.device_data_folder)
+    carried = android.device_data_folder(after) / "mod-data" / "ghost" / "best.bin"
+    check(carried.is_file() and carried.read_bytes() == b"389", "a device test carries the mods' data from <run>/appdata")
+
+    # N-4020: a free port is one nothing on the device listens on.
+    class PortDevice:
+        def __init__(self, listening):
+            self.listening = listening
+
+        def shell(self, command, timeout=600):
+            rows = ["  sl  local_address rem_address   st"]
+            rows += ["   0: 0100007F:%04X 00000000:0000 0A" % p for p in self.listening]
+            rows += ["   1: 0100007F:%04X 0100007F:9999 01" % 7]
+            return 0, "\n".join(rows) + "\n"
+    test = {"mods": [{"options": {"port": {"free_port": "livesplit"}}}, {"options": {"port": {"free_port": "livesplit"}}}]}
+    check(android.listening_ports(PortDevice([0x1F90, 22])) == {0x1F90, 22}, "the device's listening ports are read")
+    ports = android.device_free_ports(luma_test, PortDevice([]), test)
+    check(list(ports) == ["livesplit"] and 0 < ports["livesplit"] < 65536, "a port for the name: %s" % ports)
+    picked = iter([{"livesplit": 5000}, {"livesplit": 5001}])
+    real_free = luma_test.free_ports
+    luma_test.free_ports = lambda t: next(picked)
+    try:
+        check(android.device_free_ports(luma_test, PortDevice([5000]), test) == {"livesplit": 5001},
+              "a port the device listens on is not given")
+    finally:
+        luma_test.free_ports = real_free
+    placed_options = luma_test.with_ports(test["mods"][0]["options"], ports)
+    check(placed_options == {"port": ports["livesplit"]}, "the mods' options take the port: %s" % placed_options)
+    check(android.device_free_ports(luma_test, PortDevice([]), {"mods": [{"options": {}}]}) == {}, "no port asked, none")
+
+    # N-4021: a box in the window's frame, on the device's own picture.
+    check(luma_test.fit_box([100, 50, 20, 10], [1280, 720], (1280, 720)) == [100, 50, 20, 10], "same size: the box as written")
+    check(luma_test.fit_box([100, 50, 20, 10], None, (2800, 1752)) == [100, 50, 20, 10], "no frame: the box as written")
+    # 2800 x 1752: the 16:9 frame fills the width (scale 2.1875) and sits 88.5 lines down.
+    check(luma_test.fit_box([0, 0, 1280, 720], [1280, 720], (2800, 1752)) == [0, 88, 2800, 1576], "the whole frame")
+    check(luma_test.fit_box([640, 360, 64, 36], [1280, 720], (2800, 1752)) == [1400, 876, 140, 79], "the centre")
+    # A 48:9 frame on a 16:9 picture: the frame fills the width, centred.
+    check(luma_test.fit_box([0, 0, 1920, 360], [1920, 360], (1280, 720)) == [0, 240, 1280, 240], "a wide frame")
 
     print("\n".join(failed) if failed else "harness android: every case holds")
     return 1 if failed else 0
