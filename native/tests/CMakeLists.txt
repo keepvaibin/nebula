@@ -93,5 +93,9 @@ native_test(native_mario_life_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_lif
 native_test(native_mario_ceil_probe_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_ceil_probe_tests.cpp")
 # The running rabbit's turn up from the map ends (N-3018).
 native_test(native_rabbit_run_turn_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/rabbit_run_turn_tests.cpp")
+# MarioActor's model index holds every mod power-up (N-3020).
+native_test(native_mario_model_index_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_model_index_tests.cpp")
+# The dash ring's times hold every time its placement gives (N-3023).
+native_test(native_mario_ring_dash_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_ring_dash_tests.cpp")
 # The frame-list writer, against the list the renderer reads.
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")

@@ -118,3 +118,24 @@ One dated entry per package step. Newest last.
   binary and a game run showing the heat).
 - The first landing (the Planner's 06:49): app/work cut before b2c422f83, with N-3012, P-035's copies cache, N-3015 to
   N-3019 and these notes. P-040 parts 1 to 3, P-146, N-3013 and N-3014 come with the second landing, once proved.
+
+## E14 read: the record by folder (the Planner's 07:19)
+
+Read whole: every line of the file, for crashes, fixed limits (E8), per-step waste and rate dependence. Swept: a pattern
+sweep over the folder (every while/for(;;)/do loop, every modulo or division by a variable, every computed index of a
+fixed array, clocks and display rates) that is not a whole read. A folder is done when every file is read whole. Notes:
+a3-prof/e14-notes.md.
+
+| Folder | Files | Lines | Read whole | Swept | Rows |
+|---|---|---|---|---|---|
+| Player: the eight files of file 01 (Mario, MarioActor, MarioSwim, MarioJump, MarioCollision, MarioAnimator, MarioEffect, MarioDamage) | 8 | 16901 | 8 | all 8 | N-3015, N-3016, N-3020, N-3021, N-3022, N-3023 (and MarioFoo), N-3024 |
+| Player, the other 99 files | 99 | 38520 | 0 | loops, rate | none yet |
+| Sound (Sound, AudioLib, GameAudio, Speaker, RhythmLib) | 82 | 15431 | 0 | loops, indices from data | N-3017 |
+| Enemy | 109 | 46301 | 0 | loops, modulos | none yet |
+| Boss | 166 | 33072 | 0 | loops, modulos | none yet |
+| Ride | 19 | 10583 | 0 | loops, modulos | none yet |
+| NPC | 76 | 19808 | 0 | loops, modulos | N-3018 |
+| MapObj | 314 | 64027 | 0 | loops, modulos | none yet |
+| LiveActor | 62 | 8533 | 0 | loops, modulos | none yet |
+
+Rate dependence, the whole game code: no clock or display rate outside System/LumaTime.cpp (the mods' time service).

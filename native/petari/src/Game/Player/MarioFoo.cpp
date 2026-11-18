@@ -565,9 +565,10 @@ bool MarioFoo::passRing(const HitSensor* pSensor) {
     }
 
     const DashRing* ring = static_cast< const DashRing* >(pSensor->mHost);
-    mRingBoostLength = ring->mMaxDuration;
+    // The ring's times are its placement's s32 arguments: a time under 0 boosts for none (N-3023).
+    mRingBoostLength = ring->mMaxDuration > 0 ? static_cast< u32 >(ring->mMaxDuration) : 0;
     mRingBoostScale = ring->mSpeedScale;
-    mRingBoostTimer = ring->mBoostTime;
+    mRingBoostTimer = ring->mBoostTime > 0 ? static_cast< u32 >(ring->mBoostTime) : 0;
     return true;
 }
 
@@ -596,8 +597,8 @@ f32 MarioFoo::calcRingAcc() {
             mBlurOffset = 30.0f;
         }
 
-        u16 duration = mRingBoostLength;
-        u16 remaining = mRingBoostTimer;
+        const u32 duration = mRingBoostLength;
+        const u32 remaining = mRingBoostTimer;
         f32 acceleration = mRingBoostScale;
         if (remaining < duration) {
             f32 ratio = static_cast< f32 >(remaining) / static_cast< f32 >(duration);

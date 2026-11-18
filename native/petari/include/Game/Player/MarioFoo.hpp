@@ -48,11 +48,11 @@ public:
     Vec3f mUpVec;  // against the gravity
     AreaObj* mCelestialSphere;  // the CelestrialSphere area he flies in
     u16 mSpinTimer;  // frames of the spin (the spin sensor's on)
-    u16 mRingBoostTimer;  // frames of the ring's boost
+    u32 mRingBoostTimer;  // frames of the ring's boost (the ring's s32 placement time; a u16 wrapped past 65535, N-3023)
     u16 mRingChargeTimer;  // frames of the ring dash's charge
     f32 mBlurOffset;  // the screen blur (getBlurOffset)
     u8 mEndKind;  // how the flight ended: 0-2 a wall by its angle, 3 braked (close)
-    u16 mRingBoostLength;  // the ring's boost frames
+    u32 mRingBoostLength;  // the ring's boost frames (as mRingBoostTimer)
     f32 mRingBoostScale;  // the ring's speed scale
     u16 mPushTimer;  // frames of mPushVelocity; nothing sets it
     Vec3f mPushVelocity;  // a push added each frame; nothing sets it

@@ -2865,11 +2865,7 @@ void MarioSwim::incOxygen() {
         return;
     }
 
-    mOxygen += (oxygenMax / 8);
-
-    if (mOxygen > (oxygenMax = mActor->getConst().getTable()->mOxygenMax)) {
-        mOxygen = oxygenMax;
-    }
+    MR::countUpTo(mOxygen, oxygenMax / 8, oxygenMax);
 
     if (mOxygen == mActor->getConst().getTable()->mOxygenMax) {
         // Play "Full" sound
@@ -2973,10 +2969,8 @@ void MarioSwim::updateLifeByTime() {
             mOxygenDecreaseDelay = 120;
 
             if (mOxygen != mActor->getConst().getTable()->mOxygenMax) {
-                mOxygen += 32;
-                if (mOxygen > mActor->getConst().getTable()->mOxygenMax) {
+                if (MR::countUpTo(mOxygen, 32, mActor->getConst().getTable()->mOxygenMax)) {
                     playSound("水面酸素完全回復");
-                    mOxygen = mActor->getConst().getTable()->mOxygenMax;
                 } else {
                     playSound("水面酸素回復");
                 }
@@ -3036,10 +3030,11 @@ bool MarioSwim::passRing(const HitSensor* pSensor) {
         getPlayer()->push((ringPos - getTrans()) * 0.25f);
     }
 
+    // The ring's times are its placement's s32 arguments: a time under 0 dashes for none (N-3023).
     DashRing* host = static_cast< DashRing* >(pSensor->mHost);
-    mRingDashMaxDuration = host->mMaxDuration;
+    mRingDashMaxDuration = host->mMaxDuration > 0 ? static_cast< u32 >(host->mMaxDuration) : 0;
     mRingDashSpeedScale = host->mSpeedScale;
-    mRingDashTimer = host->mBoostTime;
+    mRingDashTimer = host->mBoostTime > 0 ? static_cast< u32 >(host->mBoostTime) : 0;
 
     playSound("亀加速");
 
