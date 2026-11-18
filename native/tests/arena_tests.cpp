@@ -16,6 +16,7 @@
 #include "Game/System/LumaDrawView.hpp"
 #include "Game/System/LumaPlayer.hpp"
 #include "Game/System/LumaUi.hpp"
+#include "Game/System/LumaWeak.hpp"
 
 #include "test_support.h"
 
@@ -55,9 +56,14 @@ namespace {
         }
     }
 
-    enum { cForget = 9, cUnload = 10 };
+    enum { cForget = 9, cUnload = 10, cWeak = 11 };
 
-    // How many of the nine tables, the textures and the files were told of the arena that started at `start`.
+    // The blocks NebulaArena::free told the weak references of, the last of them.
+    int sWeakFreed;
+    const void* sWeakFreedLast;
+
+    // How many of the nine tables, the textures, the files and the weak references were told of the arena that started
+    // at `start`.
     int toldOf(const void* start) {
         unsigned seen = 0;
         for (int i = 0; i < sReleasedCount; i++) {
@@ -143,6 +149,15 @@ namespace luma {
             note(8, pStart, pEnd);
         }
     }  // namespace player
+    namespace weak {
+        void released(const void* pStart, const void* pEnd) {
+            note(cWeak, pStart, pEnd);
+        }
+        void freed(const void* pData) {
+            sWeakFreed++;
+            sWeakFreedLast = pData;
+        }
+    }  // namespace weak
 }  // namespace luma
 namespace RenderTexture {
     void forget(uintptr_t start, uintptr_t end) {
@@ -204,7 +219,11 @@ int main() {
     {
         u8* const p = static_cast< u8* >(pScene->alloc(200, 16));
         memset(p, 0xAB, 200);
+        sWeakFreed = 0;
         pScene->free(p);
+        expect(sWeakFreed == 1 && sWeakFreedLast == p, "a freed block's weak references are told, with its address");
+        pScene->free(nullptr);
+        expect(sWeakFreed == 1, "a null free tells nothing");
         u8* const q = static_cast< u8* >(pScene->alloc(200, 16));
         expect(q == p, "a freed block is taken again for its size");
         bool zero = true;
@@ -272,8 +291,8 @@ int main() {
         expect(NebulaArena::findFromRoot(pBlock) == nullptr, "a child arena's block is in no arena");
         expect(NebulaArena::findFromRoot(const_cast< void* >(childStart)) == nullptr, "the arena is gone");
         expect(arena_test_reserved == reservedBefore - 2 * span, "both arenas' addresses go back to the host");
-        expect(toldOf(childStart) == 11, "every table, the textures and the files told of the child's range");
-        expect(toldOf(grandchildStart) == 11, "every table, the textures and the files told of the grandchild's range");
+        expect(toldOf(childStart) == 12, "every table, the textures, the files and the weak references told of the child's range");
+        expect(toldOf(grandchildStart) == 12, "every table, the textures, the files and the weak references told of the grandchild's range");
     }
 
     // Destroying the current arena makes the root's first child current, or the root.
