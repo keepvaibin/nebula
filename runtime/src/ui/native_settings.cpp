@@ -6602,6 +6602,18 @@ void native_settings_window_placed(unsigned width, unsigned height, const char* 
     }
 }
 
+void native_settings_display_mode_placed(unsigned mode) {
+    RenderConfig render = get_render_config_chosen();
+    if (render.display_mode != mode) {
+        render.display_mode = mode;
+        set_render_config(render);
+        s_settings_save.dirty.store(true, std::memory_order_release);
+        if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
+            flush_native_settings_if_dirty();
+        }
+    }
+}
+
 NativeSettingsView native_settings_view() {
     s_settings_drawn_by_game.store(true, std::memory_order_release);
     return host_window::build_native_settings_view();

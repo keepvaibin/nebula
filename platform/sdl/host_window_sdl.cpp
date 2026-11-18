@@ -1110,6 +1110,7 @@ bool g_displays_changed = true;        // SDL's thread only: displays came, went
 bool g_displays_stale = false;         // SDL's thread only: a scale changed (the sizes read again, the window left)
 galaxy::render::host_window::AppliedDisplay g_applied_display;  // SDL's thread only
 bool g_placed_by_hand = false;         // SDL's thread only
+bool g_full_screen_seen = false;       // SDL's thread only: the window entered or left full screen (its events)
 std::chrono::steady_clock::time_point g_placed_by_hand_at{};
 constexpr auto kPlacedByHandSettle = std::chrono::milliseconds(300);
 
@@ -1260,6 +1261,23 @@ void reconcile_display() {
     }
     g_applied_display = {true, wanted};
     std::fprintf(stderr, "[window] display %s %s\n", windowed ? "windowed" : "borderless", target.key.c_str());
+}
+
+// The window manager took the window to full screen or out of it (a key or a menu of its own): DISPLAY MODE follows, as
+// on the Mac (P-105). The host's own changes have ended before their events are read (SDL_SyncWindow), so the window is
+// then as the setting has it and nothing is written.
+void keep_full_screen_by_hand() {
+    if (!std::exchange(g_full_screen_seen, false) || g_window == nullptr ||
+        galaxy::render::host_window::hidden_window_mode_enabled()) {
+        return;
+    }
+    const bool full = (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0u;
+    const unsigned mode = full ? galaxy::render::kDisplayBorderless : galaxy::render::kDisplayWindowed;
+    if (std::min(galaxy::render::get_render_config().display_mode, galaxy::render::kDisplayBorderless) == mode) {
+        return;
+    }
+    galaxy::render::native_settings_display_mode_placed(mode);
+    g_applied_display = {true, display_state_of(galaxy::render::get_render_config())};
 }
 
 // A size or display the player gave the window: noted at its events, written once the window has settled.
@@ -1418,6 +1436,7 @@ void pump_events(int timeout_ms) noexcept {
     static auto report_time = std::chrono::steady_clock::now();
     const std::int64_t wait_start = galaxy::render::vk::thread_cpu_ns();
 #if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
+    keep_full_screen_by_hand();
     reconcile_display();
     keep_placed_by_hand();
 #endif
@@ -1512,6 +1531,10 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
             g_displays_stale = true;
             note_placed_by_hand();
+            break;
+        case SDL_EVENT_WINDOW_ENTER_FULLSCREEN:
+        case SDL_EVENT_WINDOW_LEAVE_FULLSCREEN:
+            g_full_screen_seen = true;
             break;
 #endif
 #endif

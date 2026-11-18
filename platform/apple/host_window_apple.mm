@@ -29,6 +29,7 @@
 #include "galaxy/playstation_controller.h"
 #include "galaxy/power_policy.h"
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/display_reconcile.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render_api.h"
@@ -106,8 +107,28 @@ bool g_mouse_look_held = false;
 // NSEvent's deltas follow the pointer's acceleration and serve only until a GCMouse moves (a trackpad that is no
 // GCMouse). Under g_input_mutex.
 bool g_raw_look = false;
-// The display mode the window was last put in (RenderConfig::display_mode; ~0: none yet).
-unsigned g_applied_mode = ~0u;
+// The display setting as last put in the window (display_reconcile.h, the rule every host keeps); not valid: put it in
+// at the next pump. The main thread's.
+galaxy::render::host_window::AppliedDisplay g_applied_display;
+// The window goes to or from full screen at the host's own asking: its notification is not the player's.
+bool g_full_screen_changing = false;
+// The host moves or sizes the window itself: its notifications are not the player's.
+bool g_placing = false;
+// The screens' layout changed (NSApplicationDidChangeScreenParametersNotification): read again, the window placed again.
+bool g_screens_changed = true;
+// The game window's frame (make_window); its full-screen and size changes keep it.
+constexpr NSWindowStyleMask kWindowStyle =
+    NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable;
+// The screens as the main thread last read them (P-108: NSScreen's geometry is the main thread's), for the DISPLAY page
+// on any thread. Under g_screens_mutex.
+struct ScreenEntry {
+    std::string key;  // RenderConfig::monitor: the name, " (2)" after a second screen of one name (P-107)
+    unsigned width = 0, height = 0, refresh_hz = 0;  // pixels
+    long max_client_width = 0, max_client_height = 0;  // the free area less the window's frame, in pixels
+    bool primary = false;
+};
+std::mutex g_screens_mutex;
+std::vector<ScreenEntry> g_screens;
 // The system refused the last change to full screen (the main thread's).
 bool g_full_screen_owed = false;
 double g_wheel_carry = 0.0;  // the wheel's turn short of a 120th of a notch (pump_events, the main thread)
@@ -649,6 +670,157 @@ void set_rumble(Pad& pad, std::uint32_t level) {
     }
 }
 
+// The screens' keys, in NSScreen.screens' order (display_keys: two of one name stay apart). Main thread.
+std::vector<std::string> screen_keys(NSArray<NSScreen*>* screens) {
+    std::vector<std::string> names;
+    for (NSScreen* screen in screens) {
+        const char* const name = screen.localizedName.UTF8String;
+        names.emplace_back(name != nullptr && name[0] != '\0' ? name : "Display");
+    }
+    return galaxy::render::host_window::display_keys(names);
+}
+
+// The screen a setting names, else the first (the one with the menu bar). Main thread.
+NSScreen* screen_for(const char* key) {
+    NSArray<NSScreen*>* const screens = NSScreen.screens;
+    const std::vector<std::string> keys = screen_keys(screens);
+    for (std::size_t i = 0; i < keys.size() && i < screens.count; ++i) {
+        if (key != nullptr && keys[i] == key) {
+            return screens[i];
+        }
+    }
+    return screens.firstObject != nil ? screens.firstObject : NSScreen.mainScreen;
+}
+
+std::string key_of(NSScreen* wanted) {
+    NSArray<NSScreen*>* const screens = NSScreen.screens;
+    const std::vector<std::string> keys = screen_keys(screens);
+    for (std::size_t i = 0; i < keys.size() && i < screens.count; ++i) {
+        if (screens[i] == wanted) {
+            return keys[i];
+        }
+    }
+    return {};
+}
+
+void read_screens() {
+    NSArray<NSScreen*>* const screens = NSScreen.screens;
+    const std::vector<std::string> keys = screen_keys(screens);
+    std::vector<ScreenEntry> entries;
+    for (std::size_t i = 0; i < keys.size() && i < screens.count; ++i) {
+        NSScreen* const screen = screens[i];
+        const CGFloat scale = screen.backingScaleFactor > 0.0 ? screen.backingScaleFactor : 1.0;
+        const NSRect most = [NSWindow contentRectForFrameRect:screen.visibleFrame styleMask:kWindowStyle];
+        ScreenEntry entry;
+        entry.key = keys[i];
+        entry.width = static_cast<unsigned>(std::lround(screen.frame.size.width * scale));
+        entry.height = static_cast<unsigned>(std::lround(screen.frame.size.height * scale));
+        entry.refresh_hz = static_cast<unsigned>(screen.maximumFramesPerSecond);
+        entry.max_client_width = std::lround(most.size.width * scale);
+        entry.max_client_height = std::lround(most.size.height * scale);
+        entry.primary = i == 0;
+        entries.push_back(std::move(entry));
+    }
+    const std::lock_guard<std::mutex> lock(g_screens_mutex);
+    g_screens = std::move(entries);
+}
+
+galaxy::render::host_window::DisplayState display_state_of(const galaxy::render::RenderConfig& cfg) {
+    galaxy::render::host_window::DisplayState state;
+    state.mode = std::min(cfg.display_mode, galaxy::render::kDisplayBorderless);
+    state.monitor = cfg.monitor;
+    state.window_width = cfg.window_width;
+    state.window_height = cfg.window_height;
+    return state;
+}
+
+// The display setting put in the window at a pump, as the other hosts do (P-105): DISPLAY MODE (windowed, or full
+// screen: the window on a space of its own), MONITOR and the windowed RESOLUTION, in pixels. Main thread.
+void reconcile_display() {
+    using namespace galaxy::render::host_window;
+    const bool screens_changed = std::exchange(g_screens_changed, false);
+    if (screens_changed) {
+        read_screens();
+    }
+    if (g_full_screen_changing) {
+        return;  // a change of the host's own under way: the rest once it has ended
+    }
+    const DisplayState wanted = display_state_of(galaxy::render::get_render_config());
+    const bool windowed = wanted.mode == galaxy::render::kDisplayWindowed;
+    if (!display_needs_placing(g_applied_display, wanted, screens_changed, windowed,
+                               move_size_active.load(std::memory_order_acquire))) {
+        return;
+    }
+    NSScreen* const screen = screen_for(wanted.monitor.data());
+    if (screen == nil) {
+        return;
+    }
+    const bool full = (g_window.styleMask & NSWindowStyleMaskFullScreen) != 0u;
+    if (full && (windowed || g_window.screen != screen)) {
+        // Out of full screen first (a space of its own does not move to another screen); the rest at a later pump.
+        g_full_screen_changing = true;
+        [g_window toggleFullScreen:nil];
+        return;
+    }
+    const NSRect visible = screen.visibleFrame;
+    if (windowed) {
+        // The size in the middle of the screen's free area, at most all of it.
+        const CGFloat scale = screen.backingScaleFactor > 0.0 ? screen.backingScaleFactor : 1.0;
+        const NSRect most = [NSWindow contentRectForFrameRect:visible styleMask:kWindowStyle];
+        const CGFloat width =
+            std::clamp(static_cast<CGFloat>(wanted.window_width) / scale, CGFloat{320}, std::max(most.size.width, CGFloat{320}));
+        const CGFloat height =
+            std::clamp(static_cast<CGFloat>(wanted.window_height) / scale, CGFloat{240}, std::max(most.size.height, CGFloat{240}));
+        NSRect frame = [NSWindow frameRectForContentRect:NSMakeRect(0, 0, width, height) styleMask:kWindowStyle];
+        frame.origin = NSMakePoint(NSMidX(visible) - frame.size.width / 2.0, NSMidY(visible) - frame.size.height / 2.0);
+        g_placing = true;
+        [g_window setFrame:frame display:YES];
+        g_placing = false;
+    } else if (!full) {
+        if (g_window.screen != screen) {
+            const NSRect frame = g_window.frame;
+            g_placing = true;
+            [g_window setFrameOrigin:NSMakePoint(NSMidX(visible) - frame.size.width / 2.0, NSMidY(visible) - frame.size.height / 2.0)];
+            g_placing = false;
+        }
+        g_full_screen_changing = true;
+        [g_window toggleFullScreen:nil];
+    }
+    g_applied_display = {true, wanted};
+    std::fprintf(stderr, "[window] display %s %s\n", windowed ? "windowed" : "full screen", key_of(screen).c_str());
+}
+
+// The window went to or from full screen (its delegate). The player's change (the green button, Window > Enter Full
+// Screen, Escape) becomes the setting, so the DISPLAY page and the next start agree with the window (P-105).
+void full_screen_changed(bool full) {
+    if (std::exchange(g_full_screen_changing, false) || galaxy::render::host_window::hidden_window_mode_enabled()) {
+        return;
+    }
+    const unsigned mode = full ? galaxy::render::kDisplayBorderless : galaxy::render::kDisplayWindowed;
+    if (std::min(galaxy::render::get_render_config().display_mode, galaxy::render::kDisplayBorderless) != mode) {
+        galaxy::render::native_settings_display_mode_placed(mode);
+    }
+    g_applied_display = {true, display_state_of(galaxy::render::get_render_config())};
+}
+
+// The player sized the window or moved it to another screen: its size and screen become the setting, kept as applied,
+// so the next pump leaves the window where it is (as the Windows host's keep_player_placement).
+void keep_player_placement() {
+    if (g_window == nil || g_placing || g_full_screen_changing || g_window.miniaturized ||
+        (g_window.styleMask & NSWindowStyleMaskFullScreen) != 0u || galaxy::render::host_window::hidden_window_mode_enabled() ||
+        galaxy::render::get_render_config().display_mode != galaxy::render::kDisplayWindowed) {
+        return;
+    }
+    const CGFloat scale = g_window.backingScaleFactor > 0.0 ? g_window.backingScaleFactor : 1.0;
+    const NSSize content = [g_window contentRectForFrameRect:g_window.frame].size;
+    const auto width = static_cast<unsigned>(std::lround(content.width * scale));
+    const auto height = static_cast<unsigned>(std::lround(content.height * scale));
+    const std::string key = key_of(g_window.screen);
+    galaxy::render::native_settings_window_placed(width, height, key.c_str());
+    g_applied_display = {true, galaxy::render::host_window::placed_by_player(
+                                   display_state_of(galaxy::render::get_render_config()), width, height, key)};
+}
+
 // Requests from other threads (menu keys, rumble) and the settings the window follows, on the main thread.
 void run_requests() {
     for (;;) {
@@ -679,19 +851,9 @@ void run_requests() {
         g_rumble_sent_pad = pad_id;
         g_rumble_sent_level = level;
     }
-    // DISPLAY MODE: windowed, or the window on a space of its own (the system's full screen) for the other two.
-    if (g_window != nil) {
-        const unsigned mode = galaxy::render::get_render_config().display_mode;
-        if (mode != g_applied_mode && g_window.visible) {
-            const bool wanted = mode != 0u;
-            const bool full = (g_window.styleMask & NSWindowStyleMaskFullScreen) != 0u;
-            std::fprintf(stderr, "[window] display mode %u: %s\n", mode,
-                         wanted == full ? "as the window is" : wanted ? "to full screen" : "to a window");
-            if (wanted != full) {
-                [g_window toggleFullScreen:nil];
-            }
-            g_applied_mode = mode;
-        }
+    // The display setting: DISPLAY MODE (windowed, or full screen for the other two), MONITOR and RESOLUTION.
+    if (g_window != nil && g_window.visible && !galaxy::render::host_window::hidden_window_mode_enabled()) {
+        reconcile_display();
     }
     update_cursor();
 }
@@ -831,6 +993,7 @@ void files_opened(NSArray<NSURL*>* urls) {
 }
 - (void)windowDidChangeScreen:(NSNotification*)notification {
     [self sizeChanged];
+    galaxy::sdl::keep_player_placement();
 }
 - (void)windowWillStartLiveResize:(NSNotification*)notification {
     galaxy::render::host_window::move_size_active.store(true, std::memory_order_release);
@@ -838,22 +1001,26 @@ void files_opened(NSArray<NSURL*>* urls) {
 - (void)windowDidEndLiveResize:(NSNotification*)notification {
     galaxy::render::host_window::move_size_active.store(false, std::memory_order_release);
     [self sizeChanged];
+    galaxy::sdl::keep_player_placement();
 }
 - (void)windowDidEnterFullScreen:(NSNotification*)notification {
     galaxy::render::host_window::borderless_active.store(true, std::memory_order_relaxed);
     std::fprintf(stderr, "[window] full screen\n");
     [self sizeChanged];
+    galaxy::sdl::full_screen_changed(true);
 }
 - (void)windowDidExitFullScreen:(NSNotification*)notification {
     galaxy::render::host_window::borderless_active.store(false, std::memory_order_relaxed);
     std::fprintf(stderr, "[window] left full screen\n");
     [self sizeChanged];
+    galaxy::sdl::full_screen_changed(false);
 }
 - (void)windowDidFailToEnterFullScreen:(NSWindow*)window {
     // The system takes no window to full screen while the screen is locked or another such change is under way. The
     // mode is still the one asked for: it is put in again when the window next comes to the front.
     std::fprintf(stderr, "[window] the system did not take the window to full screen\n");
     galaxy::sdl::g_full_screen_owed = true;
+    galaxy::sdl::g_full_screen_changing = false;
     [self sizeChanged];
 }
 // A minimised window: the host stops the game's clocks and sound as for an app out of sight.
@@ -877,7 +1044,7 @@ void files_opened(NSArray<NSURL*>* urls) {
         galaxy::sdl::g_input.window_focused = true;
     }
     if (std::exchange(galaxy::sdl::g_full_screen_owed, false)) {
-        galaxy::sdl::g_applied_mode = ~0u;  // the next pump puts the display mode in again
+        galaxy::sdl::g_applied_display.valid = false;  // the next pump puts the display setting in again
     }
     galaxy::sdl::update_cursor();
     [self lumaDisplayChanged];
@@ -1026,6 +1193,14 @@ bool start() noexcept {
         for (GCMouse* mouse in GCMouse.mice) {
             open_mouse(mouse);
         }
+        // A screen added, taken away or set to another size: the DISPLAY page's list and the window follow.
+        [center addObserverForName:NSApplicationDidChangeScreenParametersNotification
+                            object:nil
+                             queue:NSOperationQueue.mainQueue
+                        usingBlock:^(NSNotification* note) {
+                            (void)note;
+                            g_screens_changed = true;
+                        }];
     }
     // The system's memory pressure, as Android's onTrimMemory: the host lets go of what comes back by itself
     // (take_low_memory). The source's handler runs on a global queue and only sets the flag.
@@ -1291,22 +1466,21 @@ std::timed_mutex surface_use;
 
 namespace {
 
-// The window, `width` x `height` points of picture, on the screen the settings name (else the main one). Main thread.
+// The window, `width` x `height` pixels of picture, on the screen the settings name (else the first). Main thread.
 void make_window(int width, int height) {
     using namespace galaxy::sdl;
-    NSScreen* screen = NSScreen.mainScreen;
-    const std::string wanted = get_render_config().monitor.data();
-    for (NSScreen* candidate in NSScreen.screens) {
-        if (!wanted.empty() && wanted == candidate.localizedName.UTF8String) {
-            screen = candidate;
-        }
-    }
+    read_screens();
+    NSScreen* const screen = screen_for(get_render_config().monitor.data());
     const NSRect visible = screen.visibleFrame;
-    const NSRect content = NSMakeRect(0, 0, std::min<double>(std::max(width, 320), visible.size.width),
-                                      std::min<double>(std::max(height, 240), visible.size.height));
-    const NSWindowStyleMask style = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable |
-                                    NSWindowStyleMaskResizable;
-    NSWindow* const window = [[NSWindow alloc] initWithContentRect:content styleMask:style backing:NSBackingStoreBuffered defer:NO
+    // The setting's size is in pixels, as on every platform; a window is sized in points.
+    const CGFloat scale = screen.backingScaleFactor > 0.0 ? screen.backingScaleFactor : 1.0;
+    const NSRect most = [NSWindow contentRectForFrameRect:visible styleMask:kWindowStyle];
+    const NSRect content = NSMakeRect(0, 0, std::min<CGFloat>(std::max<CGFloat>(width / scale, 320), most.size.width),
+                                      std::min<CGFloat>(std::max<CGFloat>(height / scale, 240), most.size.height));
+    NSWindow* const window = [[NSWindow alloc] initWithContentRect:content
+                                                         styleMask:kWindowStyle
+                                                           backing:NSBackingStoreBuffered
+                                                             defer:NO
                                                             screen:screen];
     window.releasedWhenClosed = NO;
     window.restorable = NO;  // the settings say how the game's window opens, not the last run's
@@ -1419,32 +1593,23 @@ bool present_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& 
 
 // The screens, for the settings menu's DISPLAY page: each one's pixels and fastest rate.
 std::vector<SettingsMonitor> settings_monitors() {
-    __block std::vector<SettingsMonitor> monitors;
-    const auto list = ^{
-        @autoreleasepool {
-            bool first = true;
-            for (NSScreen* screen in NSScreen.screens) {
-                const NSSize pixels = [screen convertRectToBacking:screen.frame].size;
-                SettingsMonitor monitor;
-                monitor.id = screen.localizedName.UTF8String ?: "display";
-                monitor.name = monitor.id;
-                monitor.width = static_cast<unsigned>(std::lround(pixels.width));
-                monitor.height = static_cast<unsigned>(std::lround(pixels.height));
-                monitor.refresh_hz = static_cast<unsigned>(screen.maximumFramesPerSecond);
-                monitor.max_client_width = static_cast<int>(monitor.width);
-                monitor.max_client_height = static_cast<int>(monitor.height);
-                monitor.primary = first;
-                monitor.resolutions.emplace_back(monitor.width, monitor.height);
-                monitors.push_back(std::move(monitor));
-                first = false;
-            }
+    // The main thread's last reading (read_screens: at the window's making and when the screens change).
+    std::vector<SettingsMonitor> monitors;
+    {
+        const std::lock_guard<std::mutex> lock(galaxy::sdl::g_screens_mutex);
+        for (const galaxy::sdl::ScreenEntry& screen : galaxy::sdl::g_screens) {
+            SettingsMonitor monitor;
+            monitor.id = screen.key;
+            monitor.name = screen.key;
+            monitor.width = screen.width;
+            monitor.height = screen.height;
+            monitor.refresh_hz = screen.refresh_hz;
+            monitor.max_client_width = screen.max_client_width;
+            monitor.max_client_height = screen.max_client_height;
+            monitor.primary = screen.primary;
+            monitor.resolutions.emplace_back(screen.width, screen.height);
+            monitors.push_back(std::move(monitor));
         }
-    };
-    if (std::this_thread::get_id() == galaxy::sdl::g_main_thread) {
-        list();
-    } else {
-        // Screens are read-only facts: any thread may ask, with no wait on the main one.
-        list();
     }
     if (monitors.empty()) {
         const galaxy::sdl::InputState state = galaxy::sdl::input_state();
@@ -1470,6 +1635,7 @@ void resize_window_client(unsigned width, unsigned height) noexcept {
         if (g_window != nil && g_view != nil) {
             const CGFloat scale = g_window.backingScaleFactor > 0.0 ? g_window.backingScaleFactor : 1.0;
             [g_window setContentSize:NSMakeSize(static_cast<CGFloat>(width) / scale, static_cast<CGFloat>(height) / scale)];
+            keep_player_placement();  // the setting follows, as for a size the player gives the window
         }
     });
 }
