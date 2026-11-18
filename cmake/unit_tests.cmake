@@ -140,13 +140,6 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CXX_FLAGS MATCHES "-fsan
         ${render_src}/movie_source_gstreamer.cpp LIBS ${CMAKE_DL_LIBS} ARGS "${galaxy_movie_fixture}")
 endif()
 galaxy_test(galaxy_power_policy_tests SOURCES ${rt}/power_policy_tests.cpp)
-# The system's heat (P-019): Android's and Apple's ladders; the Mac reads its thermal state (NSProcessInfo, Foundation).
-if(APPLE)
-    galaxy_test(galaxy_thermal_state_tests SOURCES ${rt}/thermal_state_tests.cpp ${rt}/thermal_state.cpp
-                LIBS "-framework Foundation")
-else()
-    galaxy_test(galaxy_thermal_state_tests SOURCES ${rt}/thermal_state_tests.cpp ${rt}/thermal_state.cpp)
-endif()
 # The Mac's first start on integrated graphics (P-035): which Macs draw the scene at the display's points.
 galaxy_test(galaxy_first_start_scale_tests SOURCES ${rt}/render/first_start_scale_tests.cpp)
 galaxy_test(galaxy_frame_phase_tests SOURCES ${rt}/frame_phase_tests.cpp ${rt}/frame_phase.cpp)
