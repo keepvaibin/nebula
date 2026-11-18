@@ -69,6 +69,7 @@ namespace luma {
                 Override* overrides;
                 u32 overrideCount;
                 bool saidOther;  // the maker made another class: said once
+                bool saidThread;  // asked for off the game thread: said once
                 // With overrides: the base's table at its address point, as the first object made had it, and the
                 // class's copy (never freed: an object or a call may hold it). Null until the first object.
                 void* const* baseTable;
@@ -109,7 +110,6 @@ namespace luma {
             u32 sSlotCount = 0;  // a power of two, or 0
             u32 sInstanceCount = 0;
             u32 sLock = 0;
-            u32 sMaking = 0;  // makes between the maker and `made` (modGone waits for none)
 
             // The kernel's own hooks (the factory, NameObj's destructor): an owner no mod is.
             bool sHooked = false;
@@ -312,6 +312,22 @@ namespace luma {
             bool takeTable(ClassRow* pRow, void* pObject);
 
             NameObj* make(u32 r, const char* pName) {
+                if (!onGameThread()) {
+                    // The game's objects are made on the game thread only: its arenas take no lock. So no make runs
+                    // when a take-out ends a class (take-outs run on the game thread between frames' work).
+                    lock();
+                    ClassRow* const pAsked = r < sRowCount ? sRows[r] : nullptr;
+                    const bool tell = pAsked != nullptr && !pAsked->saidThread;
+                    if (tell) {
+                        pAsked->saidThread = true;
+                    }
+                    unlock();
+                    if (tell) {
+                        nebula_log("LumaCore: %s (%s) was asked for off the game thread; the game's objects are made on the game "
+                                   "thread only, so nothing is made\n", pAsked->name, pName != nullptr ? pName : "");
+                    }
+                    return nullptr;
+                }
                 lock();
                 ClassRow* const pRow = r < sRowCount ? sRows[r] : nullptr;
                 if (pRow == nullptr || !pRow->live) {
@@ -323,7 +339,6 @@ namespace luma {
                                pGame != nullptr ? "the game's object is made" : "nothing is made");
                     return pGame != nullptr ? pGame(pName) : nullptr;
                 }
-                sMaking++;
                 unlock();
                 NameObj* const pObject = pRow->maker(pRow->makerName);
                 const void* pComplete = nullptr;
@@ -379,9 +394,6 @@ namespace luma {
                         }
                     }
                 }
-                lock();
-                sMaking--;
-                unlock();
                 return pObject;
             }
 
@@ -967,9 +979,6 @@ namespace luma {
             }
             ClassRow* const pRow = r >= 0 ? sRows[r] : nullptr;
             const bool gravity = pRow != nullptr && pRow->gravity;
-            if (gravity) {
-                sMaking++;
-            }
             unlock();
             if (!gravity) {
                 say(pMod, "make_gravity %s: %s", pShown, pRow == nullptr ? "no live mod class of that name" : "the class's base is not PlanetGravity");
@@ -1033,9 +1042,6 @@ namespace luma {
                 ::operator delete(static_cast< void* >(pGravity));
                 pGravity = nullptr;
             }
-            lock();
-            sMaking--;
-            unlock();
             return pGravity;
         }
 
@@ -1151,9 +1157,8 @@ namespace luma {
             if (sRowCount == 0) {
                 return;
             }
-            // Its classes end first, so no new make starts for them; then a make already past the factory finishes
-            // (it calls the mod's `made`, whose library closes only after the grace). Its aliases end with them, and
-            // every alias of its classes.
+            // Its classes end first, so no new make starts for them. No make is running: makes run on the game thread
+            // (make, makeGravity), between take-outs. Its aliases end with them, and every alias of its classes.
             u32 ended = 0;
             lock();
             for (u32 r = 0; r < sRowCount; r++) {
@@ -1171,19 +1176,6 @@ namespace luma {
             unlock();
             if (ended == 0) {
                 return;
-            }
-            for (;;) {
-                lock();
-                const u32 making = sMaking;
-                unlock();
-                if (making == 0) {
-                    break;
-                }
-#if defined(__x86_64__) || defined(__i386__)
-                __builtin_ia32_pause();
-#elif defined(__aarch64__) || defined(__arm__)
-                __asm__ volatile("yield");
-#endif
             }
             // Their objects are the base's again; their data is the mod's memory, freed with it after the grace.
             u32 objects = 0;

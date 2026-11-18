@@ -244,3 +244,19 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   on the build before M-008, 1409 a guard catch in lc-late's closed library, then NEB-C02 (slotOriginal's panic); on
   the build before M-002, 1653 a guard catch in the giver's closed library (call_mod -1).
   guard_frames_fixture_test.py named the two trampolines. All six pass on d3d12, vulkan and d3d11.
+
+## 2026-11-17 M-013, M-009: a take-out waits for no other thread
+
+- M-013: draw.native's take-out no longer waits for the render thread. The slot is retired (its generation moves on)
+  and wiped when the game sees no call in it; a replace takes a free slot. The trampoline counts its call as a hook
+  list reader (CodeHold), so the mod's library and memory stay until the call has returned.
+- M-009: a mod class's objects are made on the game thread only; the game's arenas take no lock. Its creator called on
+  another thread makes nothing and says so once in the log. modGone's spin for makes in progress is gone.
+- Tests: world 2493-native-late-take-out (fn-late's first call holds the render thread until its stop; the test takes
+  it out once the call says it entered, and the game's tick must then advance while the call still runs) and classes
+  1410-make-off-thread. A first form of 2493, which held each call about 80 ms and hoped the take-out came inside
+  one, missed that window on vulkan and d3d11. On vulkan and d3d11 the game thread does not move while a PRESENT
+  call holds the render thread (ticks_while_held 0 over 1.7 s), so 2493 runs on d3d12 (ticks_while_held 138 there).
+  On the kernel before, the take-out waited for the call, which waited for the stop (stopped_seen 0), and 1410 made
+  a Kuribo off the game thread (off_made_null 0).
+- Ledger: M-013, M-009 fixed; N-2052 opened (renderer feature list, found by Agent 1).

@@ -15,6 +15,90 @@
 #error CASE
 #endif
 
+#if CASE == 3 || CASE == 4
+/* fn-late (CASE 3, native) and fn-late-clock (CASE 4, a library) for M-013: fn-late's function at PRESENT, at its
+   first call, says so (entered) and holds the render thread until its mod's stop has run; then it waits there until
+   fn-late-clock's count of LiveActor::calcAnim calls (on the game thread) has moved on (facts late_waited,
+   saw_advance). Both waits are bounded. The take-out must not wait for that call on the game thread, or the count does
+   not move. MR::getRandom(0, 2493) sets it. */
+#define SIG "lumi1:0000000000002493"
+#if CASE == 4
+static volatile int64_t ticks;
+static int32_t count(LumaCall* call, void* user) {
+    (void)call;
+    (void)user;
+    __atomic_add_fetch(&ticks, 1, __ATOMIC_RELEASE);
+    return 0;
+}
+static int64_t tick(void) { return __atomic_load_n(&ticks, __ATOMIC_ACQUIRE); }
+static void gone(const LumaMod* dependent) {
+    (void)dependent;
+    lt_fact("dependent_gone", 1);
+}
+static const LumaExport exports[] = {
+    LUMA_EXPORT_FUNCTION("clock.tick", SIG, tick),
+};
+static const LumaImport imports[] = {
+    LUMA_HOOK_ON("LiveActor::calcAnim", "void()", LUMA_AFTER, count),
+};
+LT_START((void)0)
+LUMA_LIBRARY_MOD(imports, start, 0, exports, gone);
+#else
+static const LumaDrawNativeService* native;
+static const void* tick_fn;
+static volatile int32_t stopped, entered;
+
+static void pause_once(void) {
+#if defined(__x86_64__) || defined(__i386__)
+    __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+    __asm__ volatile("yield");
+#endif
+}
+
+static void late(void* user, const LumaDrawNativeFrame* frame) {
+    (void)user;
+    (void)frame;
+    if (__atomic_exchange_n(&entered, 1, __ATOMIC_ACQ_REL)) return;
+    /* The test takes the mod out once it reads `entered`: the game runs ahead of the render thread until the render
+       queue is full, so its next frames take the mod out while this call is here. */
+    lt_fact("entered", 1);
+    lt_fact("entered_game_thread", lt_core->game_thread());
+    int64_t (*const clock_now)(void) = (int64_t (*)(void))tick_fn;
+    const int64_t entered_at = clock_now();
+    for (uint64_t i = 0; i < (1ull << 27) && !__atomic_load_n(&stopped, __ATOMIC_ACQUIRE); i++) pause_once();
+    lt_fact("stopped_seen", __atomic_load_n(&stopped, __ATOMIC_ACQUIRE));
+    lt_fact("ticks_while_held", (int32_t)(clock_now() - entered_at));
+    if (!__atomic_load_n(&stopped, __ATOMIC_ACQUIRE)) return;
+    int64_t (*const now)(void) = (int64_t (*)(void))tick_fn;
+    const int64_t at = now();
+    int32_t advanced = 0;
+    /* About ten seconds at most. */
+    for (uint64_t i = 0; i < (1ull << 28) && !(advanced = now() > at); i++) pause_once();
+    lt_fact("late_waited", 1);
+    lt_fact("saw_advance", advanced);
+}
+
+static void stop(void) { __atomic_store_n(&stopped, 1, __ATOMIC_RELEASE); }
+
+static int32_t trigger(LumaCall* call, void* user) {
+    (void)user;
+    if (LUMA_ARG(call, 1, int32_t) == 0 && LUMA_ARG(call, 2, int32_t) == 2493) {
+        lt_fact("at", native->at(lt_mod, LUMA_DRAW_PRESENT, late, 0));
+    }
+    return 0;
+}
+
+static const LumaImport imports[] = {
+    LUMA_SERVICE(native, LUMA_DRAW_NATIVE_NAME, "1.0"),
+    LUMA_MOD_FUNCTION(tick_fn, "fn-late-clock/clock.tick", SIG),
+    LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
+};
+LT_START((void)0)
+LUMA_MOD(imports, start, stop);
+#endif
+#else
+
 static const LumaDrawNativeService* native;
 static uint32_t backend_now;
 static long long calls, wrong_backend, wrong_size, wrong_point;
@@ -132,3 +216,4 @@ static const LumaImport imports[] = {
 
 LT_START({})
 LUMA_MOD(imports, start, 0);
+#endif

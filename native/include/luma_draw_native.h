@@ -8,8 +8,8 @@
    synchronizes what that function shares with its game-thread code itself. The frame and every handle in it are valid
    only during the call. The function leaves the target and depth in the states and layouts given, no render pass open,
    nothing submitted on the host's queue; the host sets its own state again after it. No guard runs there (the
-   `native` permission's consent says the mod has full access): the game skips the function of a stopped mod and waits
-   for one running to return before the mod ends. */
+   `native` permission's consent says the mod has full access): the game skips the function of a stopped mod; one running
+   goes on, and the mod's library and memory go only after it returned (the game thread does not wait for it). */
 #ifndef LUMA_DRAW_NATIVE_H
 #define LUMA_DRAW_NATIVE_H
 

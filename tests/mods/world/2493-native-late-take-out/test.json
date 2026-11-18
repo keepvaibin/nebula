@@ -1,0 +1,75 @@
+{
+  "harness": 1,
+  "name": "2493-native-late-take-out",
+  "about": "fn-late taken out while its draw.native function's first call holds the render thread (entered) and then waits there for the game thread to move on (fn-late-clock's count of LiveActor::calcAnim calls): the take-out does not wait for that call, the game goes on, the function sees the count move and returns, and fn-late's library goes after it (M-013). D3D12 only: on vulkan and d3d11 the game thread does not move while a PRESENT call holds the render thread (11-17: ticks_while_held 0 over 1.7 s), so no take-out can come during one there",
+  "proves": [
+    "draw.native.take_out"
+  ],
+  "mods": [
+    "../mods/fn-late-clock",
+    "../mods/fn-late"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2493
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.fn-late.entered",
+        "exists": true
+      },
+      "take_out": "fn-late",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.fn-late",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fn-late.at",
+      "is": 0
+    },
+    {
+      "fact": "mod.fn-late.entered",
+      "is": 1
+    },
+    {
+      "fact": "mod.fn-late.entered_game_thread",
+      "is": 0
+    },
+    {
+      "fact": "mod.fn-late.stopped_seen",
+      "is": 1
+    },
+    {
+      "fact": "mod.fn-late.late_waited",
+      "is": 1
+    },
+    {
+      "fact": "mod.fn-late.saw_advance",
+      "is": 1
+    },
+    {
+      "fact": "mod.fn-late-clock.dependent_gone",
+      "is": 1
+    }
+  ],
+  "renderers": [
+    "d3d12"
+  ]
+}

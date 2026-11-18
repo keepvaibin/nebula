@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fn-late-clock",
+  "name": "fn-late-clock",
+  "version": "1.0.0",
+  "summary": "fn-late-clock (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

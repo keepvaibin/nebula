@@ -1,0 +1,24 @@
+{
+  "format": "1.0",
+  "id": "fn-late",
+  "name": "fn-late",
+  "version": "1.0.0",
+  "summary": "fn-late (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "permissions": [
+    {
+      "name": "native",
+      "why": "The take-out test runs a function on the render thread."
+    }
+  ],
+  "needs": [
+    {
+      "id": "fn-late-clock"
+    }
+  ]
+}

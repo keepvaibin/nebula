@@ -1,0 +1,54 @@
+{
+  "harness": 1,
+  "name": "1410-make-off-thread",
+  "about": "lc-offmake's class creator, asked for on the game thread, is called on another thread (harness 1.2 thread_start): it makes nothing there (the game's memory is the game thread's), says so once, and the game goes on (M-009)",
+  "proves": [
+    "kernel.classes.game_thread_makes"
+  ],
+  "mods": [
+    "../mods/lc-offmake"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 30,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1410
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.lc-offmake.off_done",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-offmake.defined",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-offmake.creator_found",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-offmake.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-offmake.off_made_null",
+      "is": 1
+    },
+    {
+      "log": "LumaCore: LcOff \\(LcOff\\) was asked for off the game thread"
+    }
+  ]
+}

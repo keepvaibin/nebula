@@ -1,6 +1,7 @@
 #include "Game/System/LumaDrawNative.hpp"
 
 #include "Game/Render/FrameList.hpp"
+#include "Game/System/LumaHook.hpp"
 #include "Game/System/LumaModLog.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include <luma_draw_native.h>
@@ -15,10 +16,12 @@
 // A function is a slot of one table across mods, never moved, so a pass names it by its slot and the slot's generation
 // then (the pass's user word). The host calls the trampoline when it reaches the pass, for every picture it draws from
 // the list, maybe frames after the game recorded it. The trampoline counts itself in the slot's `calling`, then checks the
-// generation: a slot the game changed since (removed, replaced, its mod stopped) is skipped. The game thread changes a
-// slot only after moving its generation on and seeing `calling` at zero (sequentially consistent on both sides: either
-// the trampoline sees the new generation, or the game sees it calling and waits for it to return), so a mod's function
-// never runs after its mod's end, and never runs while its slot changes.
+// generation: a slot the game changed since (removed, replaced, its mod stopped) is skipped. The game thread retires a
+// slot by moving its generation on, and wipes it (or gives it to another function) only once it sees `calling` at
+// zero after that (sequentially consistent on both sides: either the trampoline sees the new generation, or the game
+// sees it calling), so a mod's function never starts after its mod's end, and its slot never changes under a call. The
+// game thread never waits for a call: the trampoline is counted as a call reading a hook list is (CodeHold), so a mod
+// taken out while its function runs keeps its library and memory until the call has returned (M-013).
 //
 // No cost with no mod: point() is one load while no function is set.
 
@@ -37,6 +40,7 @@ namespace luma {
                     u32 generation;      // moved on at every change (atomic)
                     u32 calling;         // the render thread's calls running now (atomic)
                     u32 facts;
+                    bool retired;        // its generation moved on, a call may still run: wiped when none does
                 };
 
                 const LumaServiceKernel* sKernel = nullptr;
@@ -68,26 +72,34 @@ namespace luma {
                     return LUMA_OK;
                 }
 
-                // The slot's function stopped from running: no call of it starts after this returns, and none runs.
-                void quiet(Fn& rFn) {
-                    __atomic_add_fetch(&rFn.generation, 1u, __ATOMIC_SEQ_CST);
-                    while (__atomic_load_n(&rFn.calling, __ATOMIC_SEQ_CST) != 0u) {
-#if defined(__x86_64__) || defined(__i386__)
-                        __builtin_ia32_pause();
-#elif defined(__aarch64__) || defined(__arm__)
-                        __builtin_arm_yield();
-#endif
-                    }
-                }
-
-                void clear(Fn& rFn) {
-                    quiet(rFn);
+                void wipe(Fn& rFn) {
                     rFn.mod = nullptr;
                     rFn.fn = nullptr;
                     rFn.user = nullptr;
                     rFn.point = 0;
                     rFn.facts = 0;
+                    rFn.retired = false;
                     sSet--;
+                }
+
+                // No call of the slot's function starts after this; one running goes on (its mod's library stays until
+                // it returns), and the slot is wiped when the game thread sees none running.
+                void clear(Fn& rFn) {
+                    __atomic_add_fetch(&rFn.generation, 1u, __ATOMIC_SEQ_CST);
+                    if (__atomic_load_n(&rFn.calling, __ATOMIC_SEQ_CST) == 0u) {
+                        wipe(rFn);
+                    } else {
+                        rFn.retired = true;
+                    }
+                }
+
+                // Retired slots no call runs in any more: free again.
+                void sweep() {
+                    for (u32 i = 0; i < kMost; i++) {
+                        if (sFns[i].retired && __atomic_load_n(&sFns[i].calling, __ATOMIC_SEQ_CST) == 0u) {
+                            wipe(sFns[i]);
+                        }
+                    }
                 }
 
                 // The render thread: the slot and generation from the pass's user word.
@@ -99,6 +111,9 @@ namespace luma {
                         return;
                     }
                     Fn& rFn = sFns[slot];
+                    // Counted before the generation is read: a take-out after this point keeps the mod's library until
+                    // the call has left.
+                    const CodeHold hold;
                     __atomic_add_fetch(&rFn.calling, 1u, __ATOMIC_SEQ_CST);
                     if ((__atomic_load_n(&rFn.generation, __ATOMIC_SEQ_CST) & 0xFFFFFFu) == generation && rFn.fn != nullptr) {
                         rFn.fn(rFn.user, pFrame);
@@ -122,9 +137,13 @@ namespace luma {
                     if (!nativePoint(p)) {
                         return badArgument(pMod, pWhere, "point");
                     }
+                    sweep();
                     Fn* pOwn = nullptr;
                     Fn* pFree = nullptr;
                     for (u32 i = 0; i < kMost; i++) {
+                        if (sFns[i].retired) {
+                            continue;
+                        }
                         if (sFns[i].mod == pMod && sFns[i].point == p) {
                             pOwn = &sFns[i];
                         } else if (sFns[i].mod == nullptr && pFree == nullptr) {
@@ -137,17 +156,19 @@ namespace luma {
                         }
                         return LUMA_OK;
                     }
-                    Fn* const pSlot = pOwn != nullptr ? pOwn : pFree;
-                    if (pSlot == nullptr) {
+                    // A replaced function: its slot is retired (a call of it may still run) and the new one takes a free
+                    // slot, so no slot changes under a call.
+                    if (pFree == nullptr) {
                         char most[16];
                         nebula_snprintf(most, sizeof(most), "%u", kMost);
                         report(pMod, pWhere, 104u, most);
                         return LUMA_E_LIMIT;
                     }
-                    quiet(*pSlot);  // a replaced function: none of its calls runs while it changes
-                    if (pOwn == nullptr) {
-                        sSet++;
+                    if (pOwn != nullptr) {
+                        clear(*pOwn);
                     }
+                    Fn* const pSlot = pFree;
+                    sSet++;
                     pSlot->mod = pMod;
                     pSlot->point = p;
                     pSlot->fn = fn;
@@ -176,11 +197,13 @@ namespace luma {
 
                 // ---- The provider ----
 
-                // After the mod's stop: none of its functions starts again, and one running has returned.
+                // After the mod's stop: none of its functions starts again; one running goes on, and the mod's library
+                // and memory go only after it returned (the grace counts it).
                 void modGone(void* pUser, const LumaMod* pMod) {
                     (void)pUser;
+                    sweep();
                     for (u32 i = 0; i < kMost; i++) {
-                        if (sFns[i].mod == pMod) {
+                        if (!sFns[i].retired && sFns[i].mod == pMod) {
                             clear(sFns[i]);
                         }
                     }
@@ -214,7 +237,7 @@ namespace luma {
                 const bool facts = luma::modlog::facts();
                 for (u32 i = 0; i < kMost; i++) {
                     Fn& rFn = sFns[i];
-                    if (rFn.mod == nullptr || rFn.point != point || sKernel->mod_live(rFn.mod) == 0) {
+                    if (rFn.mod == nullptr || rFn.retired || rFn.point != point || sKernel->mod_live(rFn.mod) == 0) {
                         continue;
                     }
                     const u32 generation = __atomic_load_n(&rFn.generation, __ATOMIC_SEQ_CST);

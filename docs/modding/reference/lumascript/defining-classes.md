@@ -51,11 +51,13 @@ start) is refused for now. The game's own tables are never written.
 
 - NameObj's destructor (a kernel before hook) forgets the object and frees its data; the scene's destruction
   (`GameSystemSceneController::destroyScene` calls `luma::classes::sceneGone`) forgets the rest.
-- The mod goes (taken out, start refused, unloaded): after its hooks, its classes end, a make in progress finishes, and
+- The mod goes (taken out, start refused, unloaded): after its hooks, its classes end and
   their objects are the base's again (each gets the base's table back; a call already in an entry runs the base's code). Logged `its <n> classes ended; their <m> objects are the game's own now`. The
   objects' data is the mod's memory, freed with it after the grace (counted in `takeout.<id>`).
 - An override running on another thread when its mod goes finishes: its proceed runs the base's code, and the mod's
   library closes only after the call has left (every mod's end waits for the grace). Test classes 1409.
+- A class's objects are made on the game thread only (the game's memory takes no lock): its creator, called on another
+  thread, makes nothing and says so in the log once. Test classes 1410.
 - A class number is never reused in a session.
 - gone (LumaClassDef's last field): `void (*gone)(void* object, void* data, void* user)`, called once for each object the class kept (whose `made` ran), before the kernel frees its data, through the guard as `made` is: in NameObj's destructor (object: its address, only its NameObj part still whole: read `data`), at the scene's destruction (object null: the scene's memory went with it), and when an object is made at an address one of the class's had without its destructor seen (object null). On the thread that runs them. Not called when the mod goes (its memory goes whole). A definition whose `size` ends before `gone` (offsetof) is taken as before, with none; smaller than that is refused as before. Tests gone 1405 (once each, its own data, through a scene change) and 1406 (a definition without it: never called).
 

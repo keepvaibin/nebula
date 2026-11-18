@@ -23,6 +23,9 @@
                          the mark 0x1409 as its first sensor, waits until the mod's stop has run, then proceeds (M-008).
    lc-late-drive (-DCASE=8): with lc-late: keeps an LcLate it saw; MR::getRandom(0, 1409) starts a thread (harness 1.2
                          thread_start) that makes that marked call; (0, 1410) after lc-late is out: own_class of it.
+   lc-offmake (-DCASE=9): class LcOff from Kuribo (no stage places it); MR::getRandom(0, 1410) asks the factory for
+                         its creator on the game thread (creator_found), then calls that creator on another thread
+                         (harness 1.2 thread_start): it makes nothing there (off_made_null).
    Cases 4 and 5 need a luma.h with LumaClassDef.gone (build.sh builds them only then). */
 #include "../loader/lt.h"
 
@@ -603,5 +606,51 @@ static const LumaImport imports[] = {
 };
 
 LT_START({})
+LUMA_MOD(imports, start, 0);
+
+#elif CASE == 9
+#include <luma_harness.h>
+typedef void* (*Creator)(const char* name);
+static const void* harness_table;
+static const LumaFunction* f_get_creator; /* NameObjFactory::getCreator */
+static int32_t off_class = -1;
+static Creator creator;
+
+static const LumaClassDef off_def = {
+    .size = sizeof(LumaClassDef), .name = "LcOff", .base = "Kuribo", .data_size = 0,
+};
+
+static void off_make(void* user) {
+    (void)user;
+    void* const made = creator != 0 ? creator("LcOff") : (void*)1;
+    lt_fact("off_made_null", made == 0);
+    lt_fact("off_done", 1);
+}
+
+static int32_t trigger(LumaCall* call, void* user) {
+    (void)user;
+    if (LUMA_ARG(call, 1, int32_t) != 0 || LUMA_ARG(call, 2, int32_t) != 1410) return 0;
+    const char* name = "LcOff";
+    void* args[2] = {0, &name};
+    creator = 0;
+    f_get_creator->invoke(args, &creator);
+    lt_fact("creator_found", creator != 0);
+    const LumaHarness* const harness = (const LumaHarness*)harness_table;
+    int32_t started = 0;
+    if (creator != 0 && harness != 0 && harness->size >= sizeof(LumaHarness)) started = harness->thread_start(off_make, 0);
+    lt_fact("started", started);
+    return 0;
+}
+
+static const LumaImport imports[] = {
+    LUMA_SERVICE(harness_table, LUMA_HARNESS_NAME, "1.2"),
+    LUMA_FUNCTION(f_get_creator, "NameObjFactory::getCreator", "CreatorFuncPtr(const char *)"),
+    LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
+};
+
+LT_START({
+    off_class = core->define_class(mod, &off_def);
+    lt_fact("defined", off_class >= 0);
+})
 LUMA_MOD(imports, start, 0);
 #endif

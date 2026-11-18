@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "lc-offmake",
+  "name": "lc-offmake",
+  "summary": "lc-offmake (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}
