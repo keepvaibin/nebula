@@ -313,6 +313,10 @@ for `&&` (`and`), `||` (`or`) and a prefix `!` (`not`).
   - `MR::calcGravityVector(const LiveActor *, ...)` 3rd: through calcGravityVectorOrZero to
     PlanetGravityManager::calcTotalGravityVector, which tests it at :21. 4th: GravityUtil.cpp:45 tests it.
   - `MR::getFirstPolyOnLineToMap` 1st and 2nd: getFirstPolyOnLineCategory tests both (MapUtil.cpp:79 and 83).
+- Pointer fields are written as parameters are passed. A field reads as `T?`, but a write takes `T` unless the
+  self-description marks the field may-be-null (`LUMA_NULLABLE` before its name in the game's header, `"nullable":
+  true` in the types file): the game reads an unmarked one without a test. Writing `none`, or a `T?`, to it is S0157,
+  which names the field. A mod that means to clear such a field does it in C, in an `extern c fn`.
 - Text with a `T?`. Interpolating a `T?` (`"{x}"`) is a compile error: "`x` may be none: write
   `{x ?? ...}` or test it with `if let`". A `T?` given where a `T` goes is the same error, for the mod's own
   functions as for the game's.
