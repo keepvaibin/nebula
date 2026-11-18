@@ -38,6 +38,8 @@ galaxy_test(galaxy_pacing_tests SOURCES ${rt}/pacing_tests.cpp ${rt}/pacing.cpp 
 if(NOT WIN32)
     galaxy_test(galaxy_perf_hint_tests SOURCES ${rt}/perf_hint_tests.cpp ${rt}/perf_hint.cpp)
 endif()
+# The frame timeline (--diagnostics timeline): its clock, threads and file on every platform.
+galaxy_test(galaxy_frame_timeline_tests SOURCES ${rt}/frame_timeline_tests.cpp)
 # A frame thread's work as wall time between its marks (P-069), on every platform.
 galaxy_test(galaxy_busy_window_tests SOURCES ${rt}/busy_window_tests.cpp)
 
