@@ -718,6 +718,7 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Material.CoordSet` | the material {material}'s {map} reads texture coordinates {set}, which the mesh {mesh} does not have |
 | `Cook.Material.MissingTexture` | the material {material}'s {map} names texture {texture}, which has no image in the file |
 | `Cook.Material.Ray` | the material {material}: {key} is not a ray value a material takes, or not in its range (ior, thickness, body, shine, tint_keep, traced, sun_through, metal_kind, glow, vertex_colour) |
+| `Cook.RayData` | ray tracing data: read and not used by this game (a note: shader.json `ray`, a glTF material's `extras.nebula.ray`, or a `merge/NebulaData/Rt*.tsv` table, each checked as before) |
 | `Cook.Material.TextureTransform` | the material {material}'s {map} has a KHR_texture_transform; it was baked into its texture coordinates |
 | `Cook.Material.TransformShared` | the material {material}'s {map} has its own KHR_texture_transform on texture coordinates {set}, which another of its textures also reads; give it a set of its own |
 | `Cook.Merge.ChangeForm` | each item of "change" must have a "where" and a "set", each a set of columns |
@@ -795,7 +796,6 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Shader.Compiler` | the shader compiler {file} did not run: {detail} |
 | `Cook.Shader.Forbidden` | {file} line {line}: a shader may not write {word}; its parameters, textures and inputs come through SurfaceIn and Surface |
 | `Cook.Shader.Json` | {file}: {key} is not what a shader's interface takes (stage material; params, textures and reads as the materials contract 3.4 says) |
-| `Cook.Shader.Materials` | {count} materials of the model have a shader; a model has at most {max} |
 | `Cook.Shader.Missing` | the material {material} names the shader "{name}", but the mod has no {file} in any layer |
 | `Cook.Shader.Name` | the material {material} names the shader "{name}": a shader is named by its path under assets without its ending (letters, digits, _ and -) |
 | `Cook.Shader.NoSurface` | {file} defines no surface(in SurfaceIn i, inout Surface s) |

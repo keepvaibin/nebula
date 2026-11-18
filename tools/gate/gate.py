@@ -1355,9 +1355,9 @@ def parser():
     p.add_argument("--only", default="", help="only these checks (shell patterns, comma-separated) and what they need")
     p.add_argument("--build-root", default=os.environ.get("NEBULA_GATE_BUILD", "D:/NebulaWork/build/gate-%s" % TREE.name),
                    help="where the builds go (kept between runs, so builds are incremental)")
-    p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", "D:/NebulaWork/build/us-pak-36/game.pak"))
+    p.add_argument("--pak", default=os.environ.get("NEBULA_GATE_PAK", "D:/NebulaWork/build/us-pak-37/game.pak"))
     p.add_argument("--paks", default=os.environ.get("NEBULA_GATE_PAKS", os.pathsep.join((
-                   "RMGP01=D:/NebulaWork/build/a1-pak-pal-36/game.pak", "RMGJ01=D:/NebulaWork/build/a1-pak-jp-36/game.pak"))),
+                   "RMGP01=D:/NebulaWork/build/a1-pak-pal-37/game.pak", "RMGJ01=D:/NebulaWork/build/a1-pak-jp-37/game.pak"))),
                    help="the other discs' game.paks, DISC=path joined by the path separator: the tests with a \"disc\"")
     p.add_argument("--work", default=os.environ.get("NEBULA_GATE_WORK", "D:/NebulaWork/build/gate-runs"))
     p.add_argument("--discs", default=os.environ.get("NEBULA_GATE_DISCS", "D:/NebulaWork/discs"),

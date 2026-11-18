@@ -743,8 +743,6 @@ struct SourceMaterial {
     glow: Option<Glow>,
     /// Its hand-written shader (surface_shader.rs): the source, its values here, each texture's image.
     shader: Option<(super::surface_shader::Source, super::surface_shader::Use, Vec<usize>)>,
-    /// Its `extras.nebula.ray` (surface_shader::material_ray): what a ray takes of it beyond the cook's reading.
-    ray: super::model_ir::RayRows,
 }
 
 /// A glTF material's glow on the raster (SourceMaterial glow): constant colour 1, and the emissive map (image, set).
@@ -1449,6 +1447,7 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
     // Materials.
     let (moved, swapped) = animated_materials(root);
     let mut materials: Vec<SourceMaterial> = Vec::new();
+    let mut ray_data = false;
     for (i, material) in root["materials"].as_array().map(Vec::as_slice).unwrap_or_default().iter().enumerate() {
         let material_name = named(material, i);
         let pbr = &material["pbrMetallicRoughness"];
@@ -1471,8 +1470,13 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             }
             other => return Err(refuse("Cook.Shader.Name", &[("material", material_name.clone()), ("name", other.to_string())])),
         };
-        let ray = super::surface_shader::material_ray(&nebula["ray"])
+        super::surface_shader::material_ray(&nebula["ray"])
             .map_err(|key| refuse("Cook.Material.Ray", &[("material", material_name.clone()), ("key", format!("/materials/{i}/extras/nebula/ray{key}"))]))?;
+        // Ray tracing's rows, here or in its shader.json: checked, used for nothing, said once for the file.
+        if !ray_data && (!nebula["ray"].is_null() || shader.as_ref().is_some_and(|(source, _, _)| source.ray)) {
+            ray_data = true;
+            super::refuse::note("Cook.RayData", &[]);
+        }
         let image = match pbr["baseColorTexture"]["index"].as_u64() {
             Some(t) => Some(image_of_texture(t)?),
             None => None,
@@ -1525,7 +1529,6 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
             lit,
             pbr_maps,
             shader,
-            ray,
         });
     }
     let default_material = materials.len();
@@ -1541,7 +1544,6 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
         pbr_maps: [None; 5],
         glow: None,
         shader: None,
-        ray: Default::default(),
     });
     // A lit record for each material when the file has any material (materials.md); a mesh with none has glTF's default.
     let has_materials = root["materials"].as_array().is_some_and(|m| !m.is_empty());
@@ -2000,12 +2002,8 @@ fn ir_for(bytes: &[u8], folder: Option<&Path>, game: Option<&GameModel>, hidden:
                     uv: [0, 1].map(|k| coordinate_present.get(k).copied().unwrap_or(false)),
                     reads: shader.reads,
                     emission,
-                    ray: shader.ray.clone(),
                 });
             }
-            // What a ray takes of it: its own `ray` over its shader's.
-            let no_rows = super::model_ir::RayRows::default();
-            made.ray = source.ray.over(source.shader.as_ref().map_or(&no_rows, |(shader, _, _)| &shader.ray));
             // Its base texture's transform: texture matrix 0 on its first coordinates.
             if let Some(t) = source.transform {
                 let [sx, sy, rotation, tx, ty] = texture_transform(&t, &source.name)?;
@@ -2424,36 +2422,9 @@ pub fn to_files_for(bytes: &[u8], folder: Option<&Path>, stem: &str, game: Optio
     if let Some(table) = params_table(&ir)? {
         files.push((format!("{stem}.params"), table));
     }
-    if let Some(table) = ray_hit_table(&ir)? {
-        files.push((format!("{stem}.rayhit"), table));
-    }
     Ok((model, files, facts))
 }
 
-/// The most materials with a surface shader a model has: the tracer numbers its `.rayhit` rows in a byte.
-pub const MOST_SHADER_MATERIALS: usize = 255;
-
-/// `<model>.rayhit` (materials.md section 3.4, layer 3; the tracer reads it): a row for each material with a surface
-/// shader: material (its name; a name met twice keeps its first row) and text (its ray-hit form,
-/// programs::ray_hit_form). None without one; more than MOST_SHADER_MATERIALS rows refuse the model.
-pub fn ray_hit_table(ir: &ModelIr) -> Result<Option<Vec<u8>>> {
-    let mut rows: Vec<Value> = Vec::new();
-    let mut seen = BTreeSet::new();
-    for m in &ir.materials {
-        let Some(sf) = &m.surface else { continue };
-        if seen.insert(m.name.clone()) {
-            rows.push(serde_json::json!({ "material": m.name, "text": super::programs::ray_hit_form(sf) }));
-        }
-    }
-    if rows.is_empty() {
-        return Ok(None);
-    }
-    if rows.len() > MOST_SHADER_MATERIALS {
-        return Err(refuse("Cook.Shader.Materials", &[("count", rows.len().to_string()), ("max", MOST_SHADER_MATERIALS.to_string())]));
-    }
-    let json = serde_json::json!({ "columns": { "material": "string", "text": "string" }, "rows": rows });
-    Ok(Some(super::table::TableIr::from_json(json.to_string().as_bytes())?.to_ntbl()))
-}
 
 /// `<model>.params` (materials.md section 3.4; content.model set_param reads it): a row for each parameter of each
 /// material with a surface shader: material (its name), param, register (its place, 0 to 6). None without one.
@@ -2619,7 +2590,6 @@ fn standing_material(name: String, images: Vec<(usize, u8)>, transform: Option<[
         pbr_maps: [None; 5],
         glow: None,
         shader: None,
-        ray: Default::default(),
     }
 }
 

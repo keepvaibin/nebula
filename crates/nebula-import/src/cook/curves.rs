@@ -88,8 +88,6 @@ struct Limits {
     straight: f64,
     turn: f64,
     agree: f64,
-    solid_crease: f64,
-    splayed: f64,
 }
 
 impl Limits {
@@ -104,8 +102,6 @@ impl Limits {
             straight: cos_deg(0.5),
             turn: cos_deg(62.0),
             agree: cos_deg(10.0),
-            solid_crease: cos_deg(40.0),
-            splayed: cos_deg(10.0),
         }
     }
 }
@@ -367,30 +363,6 @@ fn sampled(lim: &Limits, q: u32, n0: &D3, group: &[&At], places: &[D3]) -> bool 
     lengthwise.iter().all(|&j| curvature(j) <= bound)
 }
 
-/// Whether a group of corners with normal n0 is a flat solid's corner shaded soft: its faces in at most three planes, each 40
-/// degrees or more from the others, and the normal 10 degrees or more off one of them.
-fn flat_solid(lim: &Limits, n0: &D3, group: &[&At]) -> bool {
-    let mut planes: Vec<D3> = Vec::with_capacity(3);
-    for c in group {
-        if planes.iter().any(|p| dot(p, &c.face) >= lim.parallel) {
-            continue;
-        }
-        if planes.len() == 3 {
-            return false;
-        }
-        planes.push(c.face);
-    }
-    let mut splayed = false;
-    for i in 0..planes.len() {
-        for j in i + 1..planes.len() {
-            if dot(&planes[i], &planes[j]) > lim.solid_crease {
-                return false;
-            }
-        }
-        splayed = splayed || dot(&planes[i], n0).abs() < lim.splayed;
-    }
-    !planes.is_empty() && splayed
-}
 
 /// T-junctions: (inner place, edge end, edge end) where a place lies inside another edge. Places are entered in a grid of the
 /// median edge's size; each edge looks in the cells along it.
@@ -493,7 +465,6 @@ pub fn unpack_normal(packed: u32) -> Vec3 {
 /// What the analysis left for each position of a model.
 #[derive(Default, Clone)]
 pub struct Curves {
-    pub bends: bool,
     pub places: Vec<u32>, // one u32 place ID per source position
     pub neighbour: Vec<u32>, // first crease neighbour, NO_PLACE for none
     pub second: Vec<u32>, // second crease neighbour
@@ -501,7 +472,6 @@ pub struct Curves {
     pub first: Vec<u32>,  // positions + 1
     pub bend_normal: Vec<u32>,
     pub bend: Vec<u32>,
-    pub bend_flat: Vec<bool>,
 }
 
 impl Curves {
@@ -516,20 +486,9 @@ impl Curves {
         }
         0
     }
-    pub fn flat_of(&self, position: u32, normal: u32) -> bool {
-        if position as usize + 1 >= self.first.len() {
-            return false;
-        }
-        for i in self.first[position as usize]..self.first[position as usize + 1] {
-            if u32::from(self.bend_normal[i as usize]) == normal {
-                return self.bend_flat[i as usize];
-            }
-        }
-        false
-    }
 }
 
-/// The analysis of a model's triangles (three (position, normal) corners each). None when nothing bends and no corner is flat.
+/// The analysis of a model's triangles (three (position, normal) corners each). None when nothing bends.
 pub fn analyse(positions: &[Vec3], normals: &[Vec3], corners: &[(u32, u32)]) -> Option<Curves> {
     let lim = Limits::new();
     // Places: positions equal by value (-0 as 0; a NaN equals nothing), numbered in the order they first appear.
@@ -665,8 +624,6 @@ pub fn analyse(positions: &[Vec3], normals: &[Vec3], corners: &[(u32, u32)]) -> 
     let mut crease_places = vec![[NO_PLACE; 2]; place_count];
     let mut bends: Vec<(u32, D3)> = Vec::new();
     let mut bend_first = vec![0u32; place_count + 1];
-    let mut flats: Vec<u32> = Vec::new();
-    let mut flat_first = vec![0u32; place_count + 1];
     let mut crease_normal = vec![[0.0f64; 3]; place_count];
     fn root(sets: &mut [u32], mut x: u32) -> u32 {
         while sets[x as usize] != x {
@@ -687,7 +644,6 @@ pub fn analyse(positions: &[Vec3], normals: &[Vec3], corners: &[(u32, u32)]) -> 
     }
     for q in 0..place_count {
         bend_first[q] = bends.len() as u32;
-        flat_first[q] = flats.len() as u32;
         let cs = &at[corner_first[q] as usize..corner_first[q + 1] as usize];
         let count = cs.len();
         if count == 0 {
@@ -735,11 +691,6 @@ pub fn analyse(positions: &[Vec3], normals: &[Vec3], corners: &[(u32, u32)]) -> 
             for c in cs {
                 bends.push((c.normal_index, [0.0; 3]));
             }
-            for g in &group_refs {
-                if flat_solid(&lim, &g[0].normal, g) {
-                    flats.extend(g.iter().map(|c| c.normal_index));
-                }
-            }
             bends[bend_first[q] as usize..].sort_by_key(|b| b.0);
             continue;
         }
@@ -785,9 +736,6 @@ pub fn analyse(positions: &[Vec3], normals: &[Vec3], corners: &[(u32, u32)]) -> 
         for (g, m) in group_refs.iter().enumerate() {
             let n0 = m[0].normal;
             let curved = sampled(&lim, q as u32, &n0, m, &places);
-            if !curved && flat_solid(&lim, &n0, m) {
-                flats.extend(m.iter().map(|c| c.normal_index));
-            }
             let value = if curved { n0 } else { [0.0; 3] };
             let r = root(&mut slot_sets, slot_of[members[g][0]]) as usize;
             let set = &mut set_bends[r];
@@ -812,7 +760,6 @@ pub fn analyse(positions: &[Vec3], normals: &[Vec3], corners: &[(u32, u32)]) -> 
         bends[bend_first[q] as usize..].sort_by_key(|b| b.0);
     }
     bend_first[place_count] = bends.len() as u32;
-    flat_first[place_count] = flats.len() as u32;
 
     // T-junctions (and zero-area triangles' corners): where any edge along the line would bend, the three places stay put.
     find_junctions(&places, &edges, &mut junctions);
@@ -855,25 +802,22 @@ pub fn analyse(positions: &[Vec3], normals: &[Vec3], corners: &[(u32, u32)]) -> 
     // Per place, then per position.
     let bends_at = |v: &Vec3| v[0] != 0.0 || v[1] != 0.0 || v[2] != 0.0;
     let mut place_first = vec![0u32; place_count + 1];
-    let mut out_bends: Vec<(u32, Vec3, bool)> = Vec::with_capacity(bends.len());
+    let mut out_bends: Vec<(u32, Vec3)> = Vec::with_capacity(bends.len());
     let mut crease: Vec<Vec3> = vec![[0.0; 3]; place_count];
     for q in 0..place_count {
         place_first[q] = out_bends.len() as u32;
-        let flat = &flats[flat_first[q] as usize..flat_first[q + 1] as usize];
         for k in bend_first[q]..bend_first[q + 1] {
             let (index, bend) = bends[k as usize];
-            out_bends.push((index, if fixed[q] { [0.0; 3] } else { narrow(&bend) }, flat.contains(&index)));
+            out_bends.push((index, if fixed[q] { [0.0; 3] } else { narrow(&bend) }));
         }
         crease[q] = if fixed[q] { [0.0; 3] } else { narrow(&crease_normal[q]) };
     }
     place_first[place_count] = out_bends.len() as u32;
     let any_bend = crease.iter().any(bends_at) || out_bends.iter().any(|b| bends_at(&b.1));
-    let any_flat = out_bends.iter().any(|b| b.2);
-    if !any_bend && !any_flat {
+    if !any_bend {
         return None;
     }
     let mut model = Curves {
-        bends: any_bend,
         places: vec![0; positions.len()],
         neighbour: vec![NO_PLACE; positions.len()],
         second: vec![0; positions.len()],
@@ -891,7 +835,6 @@ pub fn analyse(positions: &[Vec3], normals: &[Vec3], corners: &[(u32, u32)]) -> 
         for b in &out_bends[place_first[q] as usize..place_first[q + 1] as usize] {
             model.bend_normal.push(b.0);
             model.bend.push(pack_normal(&b.1));
-            model.bend_flat.push(b.2);
         }
     }
     model.first[positions.len()] = model.bend.len() as u32;
@@ -920,7 +863,6 @@ pub struct Vertex {
     pub place: u32,
     pub neighbour: u32,
     pub second: u32,
-    pub flat: bool,
 }
 
 fn refine_edge_normal(a: &Vertex, b: &Vertex) -> Vec3 {
