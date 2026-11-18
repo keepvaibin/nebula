@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "menu-text-fit-ja",
-  "about": "Every settings page in Japanese in the smallest window at the largest menu text: each text is narrowed, then cut short, inside its room; none runs past it (P-162).",
+  "about": "Every settings page in Japanese in the smallest window at the largest menu text: each text is narrowed, then cut short, inside its room; none runs past it (P-162). The System page is last: its picture waits for the renderer check's answers, which come from other processes at their own time.",
   "language": "JpJapanese",
   "disc": "RMGJ01",
   "window": [
@@ -11,7 +11,7 @@
   "settings": [
     "GALAXY_MENU_TEXT_SIZE=200"
   ],
-  "limit_seconds": 180,
+  "limit_seconds": 240,
   "steps": [
     {
       "at": 120,
@@ -63,22 +63,25 @@
     },
     {
       "at": 480,
-      "settings": "system"
-    },
-    {
-      "at": 520,
-      "picture": "system"
-    },
-    {
-      "at": 540,
       "settings": "advanced"
     },
     {
-      "at": 580,
+      "at": 520,
       "picture": "advanced"
     },
     {
-      "at": 600,
+      "at": 540,
+      "settings": "system"
+    },
+    {
+      "after": {
+        "log": "\\[renderers\\] checked"
+      },
+      "picture": "system",
+      "timeout": 1200
+    },
+    {
+      "at": 1560,
       "end": true
     }
   ],

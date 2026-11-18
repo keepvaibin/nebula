@@ -33,6 +33,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <chrono>
 #include <iostream>
 #include <mutex>
 #include <system_error>
@@ -401,11 +402,19 @@ RendererCheck renderer_check() {
         state.started = true;
         try {
             std::thread([] {
+                const auto started = std::chrono::steady_clock::now();
                 std::vector<CardRenderers> cards = check_renderers_now(15000u);
-                CheckState& done = check_state();
-                const std::lock_guard<std::mutex> finished(done.lock);
-                done.result.cards = std::move(cards);
-                done.result.done = true;
+                const std::size_t count = cards.size();
+                const auto took = std::chrono::steady_clock::now() - started;
+                {
+                    CheckState& done = check_state();
+                    const std::lock_guard<std::mutex> finished(done.lock);
+                    done.result.cards = std::move(cards);
+                    done.result.done = true;
+                }
+                // The System page's RENDERER row shows the answers from now (a test's picture of it waits for this line).
+                std::cerr << "[renderers] checked: " << count << " card" << (count == 1u ? "" : "s") << " in "
+                          << std::chrono::duration_cast<std::chrono::milliseconds>(took).count() << " ms\n";
             }).detach();
         } catch (const std::system_error&) {
             state.result.done = true;  // no thread: nothing known
