@@ -49,6 +49,7 @@
 #include "galaxy/ui/settings_display_page.h"
 #include "galaxy/ui/settings_advanced_page.h"
 #include "galaxy/ui/settings_system_page.h"
+#include "galaxy/host_extension.h"
 #include "galaxy/save_transfer.h"
 #if defined(NEBULA_UPDATE_CHECK)
 #include "galaxy/update.h"
@@ -6335,7 +6336,10 @@ NativeSettingsView build_native_settings_view() {
         view.status_number = static_cast<int>(pending);
     } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
         view.status = NativeSettingsStatus::Applied;
-    } else if (const PipelineProgress pipelines = pipeline_progress(); pipelines.left != 0u) {
+    } else if (const PipelineProgress pipelines = pipeline_progress();
+               pipelines.left != 0u && (galaxy::extensions::flags() & NEBULA_EXT_FIXED_STEPS) == 0u) {
+        // Not in fixed steps (deterministic test mode): the workers' pace is the machine's, so the line would differ run
+        // to run; the title does not wait for them there either, and a draw makes its own pipeline when it needs one.
         view.status = NativeSettingsStatus::Preparing;
         view.status_number = static_cast<int>(std::uint64_t{pipelines.done} * 100u / (std::uint64_t{pipelines.done} + pipelines.left));
     } else if (GameLanguage running{}; tab == 4u && running_game_language(running) &&
