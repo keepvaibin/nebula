@@ -428,6 +428,7 @@ constexpr std::uint32_t kPictureSettlePresents = 10u;
 struct State {
     const NebulaHostForExtension* host = nullptr;
     std::uint32_t presents_clear = kPictureSettlePresents;  // presents since a menu showed pipelines left
+    std::optional<std::int64_t> held_from;  // the test frame the steps began to wait for a held picture
     void (*log)(const std::string&) = nullptr;
     void (*quit)() = nullptr;
     bool on = false;
@@ -1271,6 +1272,27 @@ void frame(std::uint64_t game_frames) {
     }
     const std::int64_t now = test_frame();
     sample_memory();
+    // A picture held for the menu's pipelines (picture_path) holds the steps after it: what it shows is what the steps
+    // before it left, however long this machine takes to make them (a run beside others takes longer). The frames held
+    // count toward no step's wait (N-2062).
+    if (!g.pictures.empty() && g.pictures.front().held && g.game_frame >= g.pictures.front().game_frame) {
+        if (!g.held_from) {
+            g.held_from = now;
+        }
+        return;
+    }
+    if (g.held_from) {
+        const std::int64_t held = now - *g.held_from;
+        g.held_from.reset();
+        for (Step& s : g.steps) {
+            if (s.armed && !s.done) {
+                *s.armed += held;
+            }
+            if (s.waiting) {
+                s.wait_from += held;
+            }
+        }
+    }
     bool before_done = true;      // every step written before this one has run
     bool game_waiting = false;    // a game step written before this one is not answered yet
     for (Step& s : g.steps) {

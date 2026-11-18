@@ -7,7 +7,9 @@
 // the plan's out folder; the test reads them. The first line on standard output is the plan's clock: "clock steps" or
 // "clock real" (tools/lumacore/tests/harness_time_test.py). With --host before the plan, the half is given a host
 // that sizes its window and loses its device by printing "window <w> <h>" and "lose_device" (harness_steps_test.py);
-// without it, no host.
+// without it, no host. With --pipelines-until <frame> after --host, the host shows its settings menu with one pipeline
+// left until that game frame; each frame's picture is asked for as the host does after presenting, and a picture taken
+// prints "picture <file name> <game frame>" (harness_steps_test.py: a picture held for pipelines holds the steps).
 #include "harness.h"
 
 #include <nebula_host_extension.h>
@@ -40,6 +42,17 @@ void lose_gpu_device(void*) {
     std::fflush(stdout);
 }
 
+long g_frame = 0;
+long g_pipelines_until = 0;
+
+std::uint32_t menu_open(void*) {
+    return g_pipelines_until != 0 ? NEBULA_EXT_MENU_SETTINGS : NEBULA_EXT_MENU_NONE;
+}
+
+std::uint32_t pipelines_left(void*) {
+    return g_frame < g_pipelines_until ? 1u : 0u;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -48,6 +61,11 @@ int main(int argc, char** argv) {
         --argc;
         ++argv;
     }
+    if (with_host && argc > 2 && std::string(argv[1]) == "--pipelines-until") {
+        g_pipelines_until = std::strtol(argv[2], nullptr, 10);
+        argc -= 2;
+        argv += 2;
+    }
     if (argc < 3) {
         std::fprintf(stderr, "usage: harness_selftest [--host] <plan> <frames> [<log line> ...]\n");
         return 2;
@@ -55,6 +73,10 @@ int main(int argc, char** argv) {
     static NebulaHostForExtension host{NEBULA_HOST_EXTENSION_VERSION, sizeof(NebulaHostForExtension)};
     host.resize_window = resize_window;
     host.lose_gpu_device = lose_gpu_device;
+    if (g_pipelines_until != 0) {
+        host.menu_open = menu_open;
+        host.pipelines_left = pipelines_left;
+    }
     if (!harness::start(with_host ? &host : nullptr, argv[1], log, quit)) {
         return 1;
     }
@@ -87,8 +109,16 @@ int main(int argc, char** argv) {
     };
     const long frames = std::strtol(argv[2], nullptr, 10);
     for (long f = 1; f <= frames && !g_quit; ++f) {
+        g_frame = f;
         give(f);
         harness::frame(static_cast<std::uint64_t>(f));
+        if (g_pipelines_until != 0 && !g_quit) {
+            if (const char* const path = harness::picture_path(static_cast<std::uint64_t>(f), NEBULA_EXT_PICTURE_GAME)) {
+                const std::string file = path;
+                std::printf("picture %s %ld\n", file.substr(file.find_last_of("/\\") + 1).c_str(), f);
+                std::fflush(stdout);
+            }
+        }
     }
     return 0;
 }

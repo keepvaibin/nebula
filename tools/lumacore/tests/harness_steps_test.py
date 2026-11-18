@@ -7,7 +7,10 @@ Builds the host half with harness_selftest.cpp (as harness_wait_test.py does) an
 - with a host that lacks it, window, lose_device and key are harness errors that say so (a step the host cannot do is
   never passed over in silence);
 - a window of 0 pixels or with one size is refused when the plan is read;
-- the runner (luma_test.py) writes the plan lines for "window" and "lose_device", and refuses malformed ones.
+- the runner (luma_test.py) writes the plan lines for "window" and "lose_device", and refuses malformed ones;
+- a picture held while the host's menu has pipelines left holds the steps after it: the picture asked at 20 is taken
+  once they are made (frame 40 here, then the settle presents), and the window step at 22 reaches the host after it
+  (N-2062: a run beside others makes pipelines more slowly, and the step ran first).
 Exit 0 when every case holds.
 """
 import json
@@ -23,12 +26,14 @@ import harness_wait_test  # noqa: E402
 import luma_test  # noqa: E402
 
 
-def run(exe, work, name, steps, host):
+def run(exe, work, name, steps, host, frames=40, pipelines_until=0):
     out = work / name
     out.mkdir()
     plan = out / "plan.txt"
     plan.write_text("harness 1\nout %s\nbare 1\n%s" % (out.as_posix(), steps), encoding="utf-8")
-    result = subprocess.run([str(exe)] + (["--host"] if host else []) + [str(plan), "40"], capture_output=True, text=True)
+    held = ["--pipelines-until", str(pipelines_until)] if pipelines_until else []
+    result = subprocess.run([str(exe)] + (["--host"] + held if host else []) + [str(plan), str(frames)], capture_output=True,
+                            text=True)
     facts_file = out / "facts.jsonl"
     facts = [json.loads(l) for l in facts_file.read_text(encoding="utf-8").splitlines() if l] if facts_file.exists() else []
     ends = [f for f in facts if f["key"] in ("harness.end", "harness.stop")]
@@ -59,6 +64,13 @@ def main():
         end, printed = run(exe, work, name, "step 5 %s\nstep 20 end\n" % step, True)
         check(end is not None and end["value"].get("verdict") == "harness-error" and printed == [],
               "%s refused when the plan is read: %s %s" % (step, end, printed))
+
+    end, printed = run(exe, work, "picture_held", "step 20 picture p\nstep 22 window 640 360\nstep 80 end\n", True, 120, 40)
+    taken = [l for l in printed if l.startswith("picture ")]
+    check(len(taken) == 1 and int(taken[0].split()[2]) >= 40, "the picture waits for the pipelines: %s" % printed)
+    check(printed[:1] == taken[:1] and "window 640 360" in printed[1:],
+          "the window step after the held picture reaches the host after it: %s" % printed)
+    check(end is not None and end["key"] == "harness.end", "the held run ends: %s" % end)
 
     steps = luma_test.read_steps({"steps": [{"at": 5, "window": [640, 360]}, {"at": 10, "lose_device": True},
                                             {"at": 20, "end": True}]}, True, None)
