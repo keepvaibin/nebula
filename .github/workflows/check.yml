@@ -358,6 +358,8 @@ jobs:
           tar -xJf "$RUNNER_TEMP/llvm.tar.xz" -C "$llvm" --strip-components=1
           rm "$RUNNER_TEMP/llvm.tar.xz"
           test "$("$llvm/bin/llvm-config" --version)" = "$LLVM_VERSION"
+          # The row generator's libclang (native/CMakeLists.txt: a cross build looks under LLVM_ROOT).
+          echo "LLVM_ROOT=$llvm" >> "$GITHUB_ENV"
           rustup target add aarch64-apple-darwin
       - name: Restore libc++
         id: libcxx-cache
