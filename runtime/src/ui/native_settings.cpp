@@ -878,9 +878,8 @@ ControlsRowInfo controls_row(unsigned row) {
 
 // The rows changed under the selection (a Joy-Con half came or went, a sensitivity row with its source): the selection
 // stays on the row it was on.
-void keep_controls_selection() {
+void keep_controls_selection(const std::vector<ControlsRowInfo>& rows) {
     static std::vector<ControlsRowInfo> s_last;
-    const std::vector<ControlsRowInfo> rows = controls_rows();
     if (rows == s_last) return;
     const unsigned selected = s_native_settings_row.load(std::memory_order_relaxed);
     if (selected < s_last.size()) {
@@ -5321,11 +5320,148 @@ std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, 
     return rows;
 }
 
+// A CONTROLS row's text as the overlay shows it, from its place in controls_rows(); `actions` is mod_action_list(), read
+// for a mod's action row only.
+std::string controls_row_text(const ControlsRowInfo& info, const std::vector<galaxy::input::mod_actions::Listed>& actions) {
+    char text[128]{};
+    using galaxy::input::ControlScheme;
+    const galaxy::input::SchemeTuning& tuning = s_controls_draft.tune(s_controls_scheme);
+    const auto on_off = [](bool value) { return value ? "ON" : "OFF"; };
+    switch (info.kind) {
+    case ControlsRow::InputMode:
+        switch (s_input_mode_draft) {
+        case RuntimeInputMode::Controller: return "INPUT: CONTROLLER ONLY";
+        case RuntimeInputMode::RealWiimote: return "INPUT: WII REMOTE (SENSOR BAR)";
+        case RuntimeInputMode::WiimoteMotion: return "INPUT: WII REMOTE (MOTION)";
+        case RuntimeInputMode::KeyboardMouse: return "INPUT: KEYBOARD+MOUSE ONLY";
+        case RuntimeInputMode::Phone: return "INPUT: PHONE";
+        default: {
+            // Auto names what it is using now.
+            for (std::size_t i = 0; i < s_controls_devices.count; ++i) {
+                if (s_controls_devices.entries[i].active) {
+                    return "INPUT: AUTO (" + upper_ascii(s_controls_devices.entries[i].label.data()) + ")";
+                }
+            }
+            return "INPUT: AUTO";
+        }
+        }
+    case ControlsRow::Device: {
+        if (s_controls_devices.count == 0u) {
+            return s_input_mode_draft == RuntimeInputMode::KeyboardMouse ? "NO KEYBOARD OR MOUSE CONNECTED" : "NO CONTROLLER CONNECTED";
+        }
+        const galaxy::input::DeviceEntry& entry = s_controls_devices.entries[
+            galaxy::input::resolve_device(s_controls_devices, s_controls_device)];
+        // Bluetooth is abbreviated: the row has no room for the longest names.
+        std::string line = upper_ascii(entry.label.data());
+        const std::size_t bluetooth = line.find("(BLUETOOTH)");
+        if (bluetooth != std::string::npos) line.replace(bluetooth, 11u, "(BT)");
+        if (line.size() > 40u) line = line.substr(0, 38u) + "..";
+        return "EDIT: " + line + (entry.active ? "  ACTIVE" : "");
+    }
+    case ControlsRow::Binding: {
+        std::string line = std::string(galaxy::input::game_input_label(info.target)) + ": ";
+        if (controls_capturing() && s_capture_target == static_cast<std::size_t>(info.target)) {
+            return line + "PRESS AN INPUT";
+        }
+        std::string bound = upper_ascii(menu_bindings(
+            s_controls_scheme, s_controls_draft.table(s_controls_scheme)[info.target]));
+        if (bound.size() > 34u) bound = bound.substr(0, 32u) + "..";
+        return line + bound;
+    }
+    case ControlsRow::ModAction: {
+        if (info.action >= actions.size()) return {};
+        const galaxy::input::mod_actions::Listed& action = actions[info.action];
+        std::string_view name = action.name.empty() ? std::string_view(action.id) : std::string_view(action.name);
+        while (!name.empty() && (name.back() == ':' || name.back() == ' ')) name.remove_suffix(1);
+        const std::string line = mods_ui_text(name, 24u) + ": ";
+        if (s_capture_target == kModCaptureBase + info.action) return line + "PRESS AN INPUT";
+        const galaxy::input::TargetBindings bindings = mod_action_draft(s_controls_scheme, action);
+        if (no_bindings(bindings)) return line + mod_action_follows(action);
+        std::string bound = upper_ascii(menu_bindings(s_controls_scheme, bindings));
+        if (bound.size() > 34u) bound = bound.substr(0, 32u) + "..";
+        return line + bound;
+    }
+    case ControlsRow::CoStar:
+        return std::string("CO-STAR: ") + on_off(s_runtime_draft.co_star);
+    case ControlsRow::PointerSpeed:
+        std::snprintf(text, sizeof(text), "POINTER SPEED: %.1f", static_cast<double>(tuning.pointer_speed));
+        return text;
+    case ControlsRow::InvertPointerY:
+        return std::string("INVERT POINTER Y: ") + on_off(tuning.invert_pointer_y);
+    case ControlsRow::StickDeadzone:
+        std::snprintf(text, sizeof(text), "STICK DEADZONE: %u%%",
+                      static_cast<unsigned>(std::lround(tuning.stick_deadzone * 100.0f)));
+        return text;
+    case ControlsRow::PointerDeadzone:
+        std::snprintf(text, sizeof(text), "POINTER STICK DEADZONE: %u%%",
+                      static_cast<unsigned>(std::lround(tuning.pointer_deadzone * 100.0f)));
+        return text;
+    case ControlsRow::PointerHide:
+        if (tuning.pointer_hide_seconds <= 0.0f) return "HIDE STILL POINTER: NEVER";
+        std::snprintf(text, sizeof(text), "HIDE STILL POINTER: %.0f S",
+                      static_cast<double>(tuning.pointer_hide_seconds));
+        return text;
+    case ControlsRow::Vibration:
+        return std::string("VIBRATION: ") + on_off(tuning.vibration);
+    case ControlsRow::VibrationStrength:
+        std::snprintf(text, sizeof(text), "VIBRATION STRENGTH: %u%%", static_cast<unsigned>(tuning.rumble));
+        return text;
+    case ControlsRow::MotionShake: {
+        static constexpr const char* kMotion[] = {"OFF", "WII REMOTE", "NUNCHUK"};
+        return std::string("MOTION SHAKE: ") + kMotion[static_cast<unsigned>(tuning.motion_shake) % 3u];
+    }
+    case ControlsRow::ShakeSensitivity:
+        std::snprintf(text, sizeof(text), "SHAKE SENSITIVITY: %u", static_cast<unsigned>(tuning.shake_sensitivity));
+        return text;
+    case ControlsRow::Pointer: {
+        static constexpr const char* kSources[] = {"STICK", "MOTION", "TOUCHPAD", "MOTION + TOUCHPAD"};
+        const ControlsSensors have = controls_sensors();
+        return std::string("POINTER: ") +
+               kSources[(tuning.gyro_pointer && have.gyro ? 1u : 0u) | (tuning.touch_pointer && have.touch ? 2u : 0u)];
+    }
+    case ControlsRow::TouchSensitivity:
+        std::snprintf(text, sizeof(text), "TOUCHPAD SENSITIVITY: %.1f",
+                      static_cast<double>(tuning.touch_sensitivity));
+        return text;
+    case ControlsRow::GyroSensitivity:
+        std::snprintf(text, sizeof(text), "GYRO SENSITIVITY: %.1f",
+                      static_cast<double>(tuning.gyro_sensitivity));
+        return text;
+    case ControlsRow::WiimoteStatus: {
+        const galaxy::host::WiiRemoteState remote = galaxy::host::wii_remote_state();
+        // One line, no value: a state, not a setting (NebulaText has each whole).
+        if (!remote.connected) return "NO WII REMOTE CONNECTED";
+        if (s_input_mode_draft == RuntimeInputMode::WiimoteMotion) {
+            if (remote.motion_plus) return "PRESS 2 TO CENTER THE POINTER";
+            if (remote.has_motion_plus) return "TURNING ON THE MOTIONPLUS";
+            return "NO MOTIONPLUS. POINTING AT THE SENSOR BAR";
+        }
+        return remote.nunchuk ? "WII REMOTE AND NUNCHUK CONNECTED" : "WII REMOTE CONNECTED";
+    }
+    case ControlsRow::PairJoyCon:
+        return "PAIR JOY-CON";
+    case ControlsRow::ArrangeTouch:
+        return "ON-SCREEN CONTROLS";
+    case ControlsRow::TouchSize: {
+        const unsigned size = touch_draft_settings().size;
+        return size == 0u ? std::string("BUTTON SIZE: AUTO") : "BUTTON SIZE: " + std::to_string(size) + "%";
+    }
+    case ControlsRow::TouchOpacity:
+        return "BUTTON OPACITY: " + std::to_string(std::clamp(touch_draft_settings().opacity, 20u, 100u)) + "%";
+    case ControlsRow::TouchVibration:
+        return std::string("VIBRATION: ") + on_off(touch_draft_settings().vibration);
+    case ControlsRow::TouchPlaces:
+        return std::string("BUTTON PLACES: ") + (s_touch_draft.reset_places ? "KEEP" : "RESET");
+    case ControlsRow::Reset:
+        return std::string("RESET ") + galaxy::input::control_scheme_label(s_controls_scheme) + " TO DEFAULTS";
+    }
+    return {};
+}
+
 std::string native_settings_row_text(
     unsigned tab, unsigned row,
     const RenderConfig& render, const RuntimeSettings& runtime,
     const RenderFeatureCaps& caps) {
-    char text[128]{};
     if (settings_page_tab(tab % kNativeSettingsTabCount)) {
         const auto page = settings_page(tab % kNativeSettingsTabCount, render, runtime, caps);
         if (row >= page.size()) {
@@ -5336,140 +5472,9 @@ std::string native_settings_row_text(
     switch (tab % kNativeSettingsTabCount) {
     case 2: {
         (void)runtime;
-        using galaxy::input::ControlScheme;
         const ControlsRowInfo info = controls_row(row);
-        const galaxy::input::SchemeTuning& tuning = s_controls_draft.tune(s_controls_scheme);
-        const auto on_off = [](bool value) { return value ? "ON" : "OFF"; };
-        switch (info.kind) {
-        case ControlsRow::InputMode:
-            switch (s_input_mode_draft) {
-            case RuntimeInputMode::Controller: return "INPUT: CONTROLLER ONLY";
-            case RuntimeInputMode::RealWiimote: return "INPUT: WII REMOTE (SENSOR BAR)";
-            case RuntimeInputMode::WiimoteMotion: return "INPUT: WII REMOTE (MOTION)";
-            case RuntimeInputMode::KeyboardMouse: return "INPUT: KEYBOARD+MOUSE ONLY";
-            case RuntimeInputMode::Phone: return "INPUT: PHONE";
-            default: {
-                // Auto names what it is using now.
-                for (std::size_t i = 0; i < s_controls_devices.count; ++i) {
-                    if (s_controls_devices.entries[i].active) {
-                        return "INPUT: AUTO (" + upper_ascii(s_controls_devices.entries[i].label.data()) + ")";
-                    }
-                }
-                return "INPUT: AUTO";
-            }
-            }
-        case ControlsRow::Device: {
-            if (s_controls_devices.count == 0u) {
-                return s_input_mode_draft == RuntimeInputMode::KeyboardMouse ? "NO KEYBOARD OR MOUSE CONNECTED" : "NO CONTROLLER CONNECTED";
-            }
-            const galaxy::input::DeviceEntry& entry = s_controls_devices.entries[
-                galaxy::input::resolve_device(s_controls_devices, s_controls_device)];
-            // Bluetooth is abbreviated: the row has no room for the longest names.
-            std::string line = upper_ascii(entry.label.data());
-            const std::size_t bluetooth = line.find("(BLUETOOTH)");
-            if (bluetooth != std::string::npos) line.replace(bluetooth, 11u, "(BT)");
-            if (line.size() > 40u) line = line.substr(0, 38u) + "..";
-            return "EDIT: " + line + (entry.active ? "  ACTIVE" : "");
-        }
-        case ControlsRow::Binding: {
-            std::string line = std::string(galaxy::input::game_input_label(info.target)) + ": ";
-            if (controls_capturing() && s_capture_target == static_cast<std::size_t>(info.target)) {
-                return line + "PRESS AN INPUT";
-            }
-            std::string bound = upper_ascii(menu_bindings(
-                s_controls_scheme, s_controls_draft.table(s_controls_scheme)[info.target]));
-            if (bound.size() > 34u) bound = bound.substr(0, 32u) + "..";
-            return line + bound;
-        }
-        case ControlsRow::ModAction: {
-            const std::vector<galaxy::input::mod_actions::Listed> actions = mod_action_list();
-            if (info.action >= actions.size()) return {};
-            const galaxy::input::mod_actions::Listed& action = actions[info.action];
-            std::string_view name = action.name.empty() ? std::string_view(action.id) : std::string_view(action.name);
-            while (!name.empty() && (name.back() == ':' || name.back() == ' ')) name.remove_suffix(1);
-            const std::string line = mods_ui_text(name, 24u) + ": ";
-            if (s_capture_target == kModCaptureBase + info.action) return line + "PRESS AN INPUT";
-            const galaxy::input::TargetBindings bindings = mod_action_draft(s_controls_scheme, action);
-            if (no_bindings(bindings)) return line + mod_action_follows(action);
-            std::string bound = upper_ascii(menu_bindings(s_controls_scheme, bindings));
-            if (bound.size() > 34u) bound = bound.substr(0, 32u) + "..";
-            return line + bound;
-        }
-        case ControlsRow::CoStar:
-            return std::string("CO-STAR: ") + on_off(s_runtime_draft.co_star);
-        case ControlsRow::PointerSpeed:
-            std::snprintf(text, sizeof(text), "POINTER SPEED: %.1f", static_cast<double>(tuning.pointer_speed));
-            return text;
-        case ControlsRow::InvertPointerY:
-            return std::string("INVERT POINTER Y: ") + on_off(tuning.invert_pointer_y);
-        case ControlsRow::StickDeadzone:
-            std::snprintf(text, sizeof(text), "STICK DEADZONE: %u%%",
-                          static_cast<unsigned>(std::lround(tuning.stick_deadzone * 100.0f)));
-            return text;
-        case ControlsRow::PointerDeadzone:
-            std::snprintf(text, sizeof(text), "POINTER STICK DEADZONE: %u%%",
-                          static_cast<unsigned>(std::lround(tuning.pointer_deadzone * 100.0f)));
-            return text;
-        case ControlsRow::PointerHide:
-            if (tuning.pointer_hide_seconds <= 0.0f) return "HIDE STILL POINTER: NEVER";
-            std::snprintf(text, sizeof(text), "HIDE STILL POINTER: %.0f S",
-                          static_cast<double>(tuning.pointer_hide_seconds));
-            return text;
-        case ControlsRow::Vibration:
-            return std::string("VIBRATION: ") + on_off(tuning.vibration);
-        case ControlsRow::VibrationStrength:
-            std::snprintf(text, sizeof(text), "VIBRATION STRENGTH: %u%%", static_cast<unsigned>(tuning.rumble));
-            return text;
-        case ControlsRow::MotionShake: {
-            static constexpr const char* kMotion[] = {"OFF", "WII REMOTE", "NUNCHUK"};
-            return std::string("MOTION SHAKE: ") + kMotion[static_cast<unsigned>(tuning.motion_shake) % 3u];
-        }
-        case ControlsRow::ShakeSensitivity:
-            std::snprintf(text, sizeof(text), "SHAKE SENSITIVITY: %u", static_cast<unsigned>(tuning.shake_sensitivity));
-            return text;
-        case ControlsRow::Pointer: {
-            static constexpr const char* kSources[] = {"STICK", "MOTION", "TOUCHPAD", "MOTION + TOUCHPAD"};
-            const ControlsSensors have = controls_sensors();
-            return std::string("POINTER: ") +
-                   kSources[(tuning.gyro_pointer && have.gyro ? 1u : 0u) | (tuning.touch_pointer && have.touch ? 2u : 0u)];
-        }
-        case ControlsRow::TouchSensitivity:
-            std::snprintf(text, sizeof(text), "TOUCHPAD SENSITIVITY: %.1f",
-                          static_cast<double>(tuning.touch_sensitivity));
-            return text;
-        case ControlsRow::GyroSensitivity:
-            std::snprintf(text, sizeof(text), "GYRO SENSITIVITY: %.1f",
-                          static_cast<double>(tuning.gyro_sensitivity));
-            return text;
-        case ControlsRow::WiimoteStatus: {
-            const galaxy::host::WiiRemoteState remote = galaxy::host::wii_remote_state();
-            // One line, no value: a state, not a setting (NebulaText has each whole).
-            if (!remote.connected) return "NO WII REMOTE CONNECTED";
-            if (s_input_mode_draft == RuntimeInputMode::WiimoteMotion) {
-                if (remote.motion_plus) return "PRESS 2 TO CENTER THE POINTER";
-                if (remote.has_motion_plus) return "TURNING ON THE MOTIONPLUS";
-                return "NO MOTIONPLUS. POINTING AT THE SENSOR BAR";
-            }
-            return remote.nunchuk ? "WII REMOTE AND NUNCHUK CONNECTED" : "WII REMOTE CONNECTED";
-        }
-        case ControlsRow::PairJoyCon:
-            return "PAIR JOY-CON";
-        case ControlsRow::ArrangeTouch:
-            return "ON-SCREEN CONTROLS";
-        case ControlsRow::TouchSize: {
-            const unsigned size = touch_draft_settings().size;
-            return size == 0u ? std::string("BUTTON SIZE: AUTO") : "BUTTON SIZE: " + std::to_string(size) + "%";
-        }
-        case ControlsRow::TouchOpacity:
-            return "BUTTON OPACITY: " + std::to_string(std::clamp(touch_draft_settings().opacity, 20u, 100u)) + "%";
-        case ControlsRow::TouchVibration:
-            return std::string("VIBRATION: ") + on_off(touch_draft_settings().vibration);
-        case ControlsRow::TouchPlaces:
-            return std::string("BUTTON PLACES: ") + (s_touch_draft.reset_places ? "KEEP" : "RESET");
-        case ControlsRow::Reset:
-            return std::string("RESET ") + galaxy::input::control_scheme_label(s_controls_scheme) + " TO DEFAULTS";
-        }
-        return {};
+        return controls_row_text(info, info.kind == ControlsRow::ModAction ? mod_action_list()
+                                                                           : std::vector<galaxy::input::mod_actions::Listed>{});
     }
     case 3:
         switch (row) {
@@ -6133,18 +6138,28 @@ NativeSettingsView build_native_settings_view() {
     const std::lock_guard<std::recursive_mutex> settings_lock(s_native_settings_mutex);
     expire_display_confirmation();
     expire_controls_capture();
+    // The page's rows, or the CONTROLS rows and the mods' actions, made once for the count and every row (P-088).
+    std::vector<ControlsRowInfo> controls;
+    std::vector<galaxy::input::mod_actions::Listed> actions;
     if (tab == kControlsTab) {
         refresh_controls_devices(false);
-        keep_controls_selection();
+        controls = controls_rows();
+        keep_controls_selection(controls);
+        if (std::any_of(controls.begin(), controls.end(),
+                        [](const ControlsRowInfo& info) { return info.kind == ControlsRow::ModAction; })) {
+            actions = mod_action_list();
+        }
     }
     const RenderConfig row_render = s_settings_draft;
     const RuntimeSettings row_runtime = s_runtime_draft;
     const RenderFeatureCaps row_caps = get_render_feature_caps();
-    const unsigned row_count = native_settings_row_count(tab);
-    view.selected = std::min(s_native_settings_row.load(std::memory_order_relaxed), row_count == 0u ? 0u : row_count - 1u);
     const bool page_tab = settings_page_tab(tab);
     const std::vector<SettingsRow> page =
         page_tab ? settings_page(tab, row_render, row_runtime, row_caps) : std::vector<SettingsRow>{};
+    const unsigned row_count = page_tab ? static_cast<unsigned>(page.size())
+                               : tab == kControlsTab ? static_cast<unsigned>(controls.size())
+                                                     : native_settings_row_count(tab);
+    view.selected = std::min(s_native_settings_row.load(std::memory_order_relaxed), row_count == 0u ? 0u : row_count - 1u);
     view.rows.reserve(row_count);
     const std::uint32_t shared_targets =
         tab == kControlsTab ? galaxy::input::shared_binding_targets(s_controls_draft.table(s_controls_scheme)) : 0u;
@@ -6166,7 +6181,8 @@ NativeSettingsView build_native_settings_view() {
                 view.help_as_is = (page[row].names & 4u) != 0u;
             }
         } else {
-            shown.label = native_settings_row_text(tab, row, row_render, row_runtime, row_caps);
+            shown.label = tab == kControlsTab ? controls_row_text(controls[row], actions)
+                                              : native_settings_row_text(tab, row, row_render, row_runtime, row_caps);
             if (const std::size_t colon = shown.label.find(": "); colon != std::string::npos) {
                 shown.value = shown.label.substr(colon + 2u);
                 shown.label.resize(colon);
@@ -6177,7 +6193,7 @@ NativeSettingsView build_native_settings_view() {
         if (tab == kControlsTab) {
             // The controller being set up by its own name (the overlay's row has it in capitals), and the bindings as
             // lists of inputs.
-            const ControlsRowInfo info = controls_row(row);
+            const ControlsRowInfo& info = controls[row];
             // Nothing to set up (controller only, none attached): the device row shows none, fixed.
             // The Wii Remote's state is a line to read, nothing to change.
             shown.changes = (info.kind != ControlsRow::Device || s_controls_devices.count != 0u) &&
@@ -6199,7 +6215,6 @@ NativeSettingsView build_native_settings_view() {
             if (info.kind == ControlsRow::ModAction) {
                 // A mod's action: its name as the mod gave it; its own inputs, else the game control it follows (in
                 // the played language already), or the wait for an input.
-                const std::vector<galaxy::input::mod_actions::Listed> actions = mod_action_list();
                 if (info.action < actions.size()) {
                     const galaxy::input::mod_actions::Listed& action = actions[info.action];
                     std::string_view name = action.name.empty() ? std::string_view(action.id) : std::string_view(action.name);
