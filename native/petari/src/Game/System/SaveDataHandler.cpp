@@ -118,13 +118,7 @@ void SaveDataHandler::initializeAllUserFileMemory(const UserFile* pUserFile) {
 }
 
 void SaveDataHandler::waitRequest() const {
-    while (!mSaveRequest->isDone()) {
-#if defined(__x86_64__) || defined(__i386__)
-        __builtin_ia32_pause();
-#elif defined(__aarch64__) || defined(__arm__)
-        __asm__ volatile("yield");
-#endif
-    }
+    mSaveRequest->wait();
 }
 
 bool SaveDataHandler::requestLoadSaveData(int index) {

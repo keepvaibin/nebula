@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 159u
+#define NEBULA_GAME_API_VERSION 160u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -1093,6 +1093,9 @@ typedef struct NebulaHostServices {
     /* The finger on a touch screen, for Nebula's menus (NebulaMenuFinger): 1 and `finger` filled while a finger is the
        pointer, 0 while a mouse moved last or none has touched. Game thread. */
     int32_t (*menu_finger)(void* user, NebulaMenuFinger* finger);
+    /* Returns once a save_request's `status` has left NEBULA_SAVE_PENDING, the thread asleep meanwhile (an acquire
+       load: the request's buffer and length are the host's result). Game thread. */
+    void (*save_wait)(void* user, const int32_t* status);
 } NebulaHostServices;
 
 

@@ -9,8 +9,31 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <thread>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <time.h>
+#endif
 
 namespace {
+
+// The calling thread's processor time so far.
+std::chrono::nanoseconds thread_cpu_time() {
+#if defined(_WIN32)
+    FILETIME created, exited, kernel, user;
+    GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user);
+    const auto ticks = [](FILETIME t) { return (static_cast<std::uint64_t>(t.dwHighDateTime) << 32) | t.dwLowDateTime; };
+    return std::chrono::nanoseconds((ticks(kernel) + ticks(user)) * 100u);
+#else
+    timespec t{};
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t);
+    return std::chrono::seconds(t.tv_sec) + std::chrono::nanoseconds(t.tv_nsec);
+#endif
+}
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -129,6 +152,29 @@ int main() {
                      "an older format, and another tag, are written over");
     passed &= expect(!fs::exists(sameFolder / "Nebula.sav.v4") && !fs::exists(sameFolder / "GameData.bin.v5"),
                      "only a newer format of the same tag is kept aside");
+
+    // A save request's wait sleeps (P-080: the game's thread spun a whole core while a slow save was written).
+    {
+        StatusBoard board;
+        constexpr std::int32_t kPending = 1;
+        std::int32_t done = kDone;
+        passed &= expect(!board.wait(&done, kPending), "a request already done is not waited for");
+        std::int32_t status = kPending;
+        bool slept = false;
+        std::int32_t seen = kPending;
+        std::chrono::nanoseconds used{};
+        std::thread waiter([&] {
+            const std::chrono::nanoseconds before = thread_cpu_time();
+            slept = board.wait(&status, kPending);
+            seen = status;
+            used = thread_cpu_time() - before;
+        });
+        std::this_thread::sleep_for(std::chrono::milliseconds(800));
+        board.store(&status, kFailed);
+        waiter.join();
+        passed &= expect(slept && seen == kFailed, "the wait ends with the worker's result");
+        passed &= expect(used < std::chrono::milliseconds(80), "the waiting thread sleeps (under 10% of the 800 ms)");
+    }
 
     std::error_code error;
     fs::remove_all(root, error);
