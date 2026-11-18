@@ -860,6 +860,48 @@ pub fn is_record(bytes: &[u8]) -> bool {
     bytes.len() >= HEADER && &bytes[..8] == MAGIC && u32::from_le_bytes(bytes[8..12].try_into().unwrap()) == VERSION
 }
 
+/// A record checked as the renderer takes it (M-168): texture_register is handed the record's own `size` and reads
+/// `levels` levels of its width, height and layout, so the header must name 1 to 32 levels of a known layout whose bytes,
+/// counted without wrapping, are its size, and the size must lie in `bytes`. The record's length.
+pub fn check_record(bytes: &[u8]) -> Result<usize> {
+    if !is_record(bytes) {
+        bail!("not a texture record of this version");
+    }
+    let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+    let (size, width, height, levels, layout) = (word(12), word(16), word(20), word(24), bytes[28]);
+    if width == 0 || height == 0 || levels == 0 || levels > MAX_LEVELS || layout > LAYOUT_BLOCK4 {
+        bail!("a texture record of {width} x {height}, {levels} levels, layout {layout}");
+    }
+    let mut need = HEADER as u64;
+    for l in 0..levels {
+        let (w, h) = (u64::from((width >> l).max(1)), u64::from((height >> l).max(1)));
+        need += match layout {
+            LAYOUT_BLOCK4 => w.div_ceil(4) * h.div_ceil(4) * 8,
+            LAYOUT_L8 => w * h,
+            LAYOUT_LA8 => w * h * 2,
+            _ => w * h * 4,
+        };
+    }
+    if need != u64::from(size) || size as usize > bytes.len() {
+        bail!("a texture record of {width} x {height}, {levels} levels whose size {size} is not its levels' {need} bytes, or past its file of {}", bytes.len());
+    }
+    Ok(size as usize)
+}
+
+/// A texture file in host order (NBTI, native_data::bti_host): its 64-byte info, then one record that ends the file,
+/// checked (check_record).
+pub fn check_nbti(bytes: &[u8]) -> Result<()> {
+    let word = |at: usize| bytes.get(at..at + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+    if word(0) != Some(0x4954_424E) || word(4) != Some(1) || word(20) != Some(HEADER as u32) {
+        bail!("a texture file (NBTI) not as the cook writes it");
+    }
+    let record = &bytes[HEADER..];
+    if check_record(record)? != record.len() {
+        bail!("a texture file (NBTI) with bytes after its record");
+    }
+    Ok(())
+}
+
 /// The RGBA texels of a record's level 0 (tests and the cook check).
 pub fn record_level0(record: &[u8]) -> Option<(u32, u32, Vec<[u8; 4]>)> {
     if !is_record(record) {
@@ -951,6 +993,44 @@ mod tests {
             assert!(record_level0(&sized(4096, 4096, layout)).is_none(), "layout {layout}");
         }
         assert_eq!(record_level0(&record).unwrap().2, [[1, 2, 3, 4]]);
+    }
+
+    /// M-168: a record is kept only when its own size is its levels' bytes and lies in the file; the renderer reads that
+    /// many. 65 536 x 65 536 RGBA8 counted in 32 bits is 0.
+    #[test]
+    fn a_record_is_checked_as_the_renderer_takes_it() {
+        let record = cook_rgba(2, 2, &[7; 16]).unwrap();
+        assert_eq!(check_record(&record).unwrap(), record.len());
+        let with = |at: usize, word: u32| {
+            let mut r = record.clone();
+            r[at..at + 4].copy_from_slice(&word.to_le_bytes());
+            r
+        };
+        let levels = u32::from_le_bytes(record[24..28].try_into().unwrap());
+        for (at, word) in [(12, 1 << 20), (12, 63), (16, 65536), (20, 0), (24, 0), (24, 33), (24, levels + 1)] {
+            assert!(check_record(&with(at, word)).is_err(), "word at {at} = {word}");
+        }
+        let mut wrapped = with(16, 65536);
+        wrapped[20..24].copy_from_slice(&65536u32.to_le_bytes());
+        wrapped[12..16].copy_from_slice(&(HEADER as u32).to_le_bytes());
+        assert!(check_record(&wrapped).is_err());
+        let mut layout = record.clone();
+        layout[28] = 4;
+        assert!(check_record(&layout).is_err());
+        assert!(check_record(&record[..record.len() - 1]).is_err());
+        let mut nbti = vec![0u8; HEADER];
+        nbti[..4].copy_from_slice(&0x4954_424Eu32.to_le_bytes());
+        nbti[4..8].copy_from_slice(&1u32.to_le_bytes());
+        nbti[20..24].copy_from_slice(&(HEADER as u32).to_le_bytes());
+        nbti.extend_from_slice(&record);
+        check_nbti(&nbti).unwrap();
+        let mut longer = nbti.clone();
+        longer.push(0);
+        assert!(check_nbti(&longer).is_err());
+        let mut elsewhere = nbti.clone();
+        elsewhere[20..24].copy_from_slice(&0x7FFF_FFF0u32.to_le_bytes());
+        assert!(check_nbti(&elsewhere).is_err());
+        assert!(check_nbti(&with(12, 1 << 20)).is_err());
     }
 
     #[test]

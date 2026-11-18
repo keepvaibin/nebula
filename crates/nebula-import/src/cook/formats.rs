@@ -87,7 +87,10 @@ fn point_timg(out: &mut [u8], header: usize, record_at: usize) {
 
 /// A BTI file: its ResTIMG, then the record, named `name` (its file's stem).
 pub fn bti(bytes: &[u8], name: &str, stats: &mut Stats) -> Result<Vec<u8>> {
-    if bytes.starts_with(b"NBTI") { return Ok(bytes.to_vec()); }
+    if bytes.starts_with(b"NBTI") {
+        texture::check_nbti(bytes)?;
+        return Ok(bytes.to_vec());
+    }
     if bytes.len() < RES_TIMG {
         bail!("a texture file shorter than its header");
     }

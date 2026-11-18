@@ -179,11 +179,19 @@ fn host_timg(src: &[u8], out: &mut [u8], at: usize) -> Result<()> {
 
 /// A texture file (BTI, after cook::formats::bti) in host order: its image header.
 pub fn bti_host(bytes: &[u8]) -> Result<Vec<u8>> {
-    if bytes.starts_with(b"NBTI") { return Ok(bytes.to_vec()); }
+    // A texture file kept as given, and the record a BTI's image offset names, are checked as the renderer takes them
+    // (M-168): its size is what the renderer reads.
+    if bytes.starts_with(b"NBTI") {
+        super::texture::check_nbti(bytes)?;
+        return Ok(bytes.to_vec());
+    }
     if bytes.len() < 0x20 { bail!("a texture file shorter than its header"); }
     let image_at = be32(bytes, 0x1C)? as usize;
     let image_at = if image_at == 0 { 32 } else { image_at };
     let image = bytes.get(image_at..).context("texture image past its file")?;
+    if super::texture::check_record(image)? != image.len() {
+        bail!("a texture file with bytes after its image's record");
+    }
     let mut out = Vec::with_capacity(64 + image.len());
     let word = |out: &mut Vec<u8>, value: u32| out.extend_from_slice(&value.to_le_bytes());
     for value in [0x4954_424E, 1, be16(bytes, 2)? as u32, be16(bytes, 4)? as u32, bytes[0x18] as u32, 64] {
