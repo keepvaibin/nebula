@@ -1278,12 +1278,81 @@ def move_main(sha, run_name, work, board, who, covers, tree=TREE):
 
 
 def long_due(work, hours=6.0, now=None):
-    """Whether a long run is due (section 14): none in history.tsv started within `hours`."""
+    """Whether a long run is due (section 14): none in history.tsv and none started by a move (long-started.txt, the
+    run's history line comes only at its end) within `hours`."""
     path = pathlib.Path(work) / "history.tsv"
     now = now or datetime.datetime.now()
     rows = [l.split("\t") for l in path.read_text(encoding="utf-8").splitlines()[1:]] if path.exists() else []
     started = [datetime.datetime.fromisoformat(r[0]) for r in rows if len(r) > 2 and r[2] == "long"]
+    marker = pathlib.Path(work) / "long-started.txt"
+    if marker.exists():
+        started.append(datetime.datetime.fromisoformat(marker.read_text(encoding="utf-8").split()[0]))
     return not started or (now - max(started)).total_seconds() >= hours * 3600
+
+
+# The long run's own tree (Planner 11-18 04:39, N-1046): the gate's, not an agent's. It reads its tree for hours and
+# must be on main's newest commit, so it cannot be the mover's (the agent edits that next). gate.py makes it with git
+# worktree add on first use and brings it to each moved commit, detached, reset and cleaned; nobody edits or builds in
+# it by hand. Its build folder is gate-Nebula-long beside the others (--build-root's default), pruned as they are.
+LONG_TREE = pathlib.Path(os.environ.get("NEBULA_GATE_LONG_TREE", "D:/NebulaWork/MarioGalaxyRecomp/Nebula-long"))
+
+
+def long_tree_at(sha, tree=LONG_TREE, source=TREE):
+    """Brings the long run's tree to `sha` (made from `source`'s repository on first use): None, or why not."""
+    tree = pathlib.Path(tree)
+
+    def git_in(where, *a):
+        r = subprocess.run([GIT, "-C", str(where), *a], capture_output=True, text=True)
+        return None if r.returncode == 0 else "git %s: %s" % (a[0], (r.stderr or r.stdout).strip()[-300:])
+
+    if not (tree / ".git").exists():
+        return git_in(source, "worktree", "add", "--detach", str(tree), sha)
+    for a in (("checkout", "-q", "--force", "--detach", sha), ("reset", "-q", "--hard", sha), ("clean", "-q", "-d", "-f", "-f")):
+        why = git_in(tree, *a)
+        if why is not None:
+            return why
+    return None
+
+
+def long_lock_free(lock, alive=process_alive):
+    """Whether the long lock is free: no lock folder, or one whose process has ended (the run then takes it over)."""
+    if not pathlib.Path(lock).exists():
+        return True
+    _, pid = lock_holder(lock)
+    return pid is not None and not alive(pid)
+
+
+def long_command(sha, args, tree=LONG_TREE):
+    """The long run a move starts: gate.py --long of the long run's tree, with the mover's folders, locks and tablet."""
+    cmd = [sys.executable, "-X", "utf8", "-I", str(pathlib.Path(tree) / "tools" / "gate" / "gate.py"), "--long",
+           "--who", args.who, "--covers", "main %s, started by its move (section 14)" % sha[:9], "--work", args.work,
+           "--board", args.board, "--status", args.status, "--gate-lock", args.gate_lock, "--long-lock", args.long_lock,
+           "--tablet-lock", args.tablet_lock, "--pak", args.pak, "--paks", args.paks, "--discs", args.discs,
+           "--jobs", args.jobs]
+    return cmd + (["--tablet", args.tablet] if args.tablet else [])
+
+
+def start_long(sha, args, tree=LONG_TREE, source=TREE, popen=subprocess.Popen, now=None):
+    """After a move: when a long run is due and the long lock is free, brings the long run's tree to `sha` and starts
+    the run there, detached and below normal priority (it lowers itself too, below_normal), its output in
+    <work>/long-<sha>.log. Returns (command or None, what happened) for the board."""
+    if not long_due(args.work, now=now):
+        return None, "a long run started within 6 hours"
+    if not long_lock_free(args.long_lock):
+        return None, "the long lock is held (%s)" % lock_holder(args.long_lock)[0]
+    why = long_tree_at(sha, tree, source)
+    if why is not None:
+        return None, "its tree %s could not be brought to %s: %s" % (tree, sha[:9], why)
+    cmd = long_command(sha, args, tree)
+    log = pathlib.Path(args.work) / ("long-%s.log" % sha[:9])
+    log.parent.mkdir(parents=True, exist_ok=True)
+    # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | BELOW_NORMAL_PRIORITY_CLASS: the run outlives the mover's gate.
+    detach = {"creationflags": 0x8 | 0x200 | 0x4000} if os.name == "nt" else {"start_new_session": True}
+    with open(log, "ab") as out:
+        popen(cmd, cwd=str(tree), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, close_fds=True, **detach)
+    (pathlib.Path(args.work) / "long-started.txt").write_text(
+        "%s %s\n" % ((now or datetime.datetime.now()).isoformat(timespec="seconds"), sha), encoding="utf-8")
+    return cmd, "the long run of main %s started in %s (log %s)" % (sha[:9], tree, log)
 
 
 # The tablet --------------------------------------------------------------------------------------------------------
@@ -1786,8 +1855,12 @@ def main(argv=None):
                     args.who, g.name, commit[:9], why))
             else:
                 summary = "passed, GitHub green (%s), main moved to %s" % (detail, commit[:9])
-                if long_due(args.work):
-                    print("gate.py: no long run started in 6 hours: start one on main's newest commit (section 14)")
+                started, what = start_long(commit, args)
+                print("gate.py: long run: %s" % what)
+                if started is not None:
+                    board_line(args.board, "%s LONG: %s; none had started in 6 hours (section 14, N-1046)." % (args.who, what))
+                elif what.startswith("its tree"):
+                    board_line(args.board, "%s NOTICE: main moved to %s; no long run started: %s." % (args.who, commit[:9], what))
     finally:
         for lock in taken:
             free_gate_lock(lock, holder, args.board, args.who, summary)
