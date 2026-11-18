@@ -33,6 +33,14 @@ extern "C" void nebula_panic(const char* file, int line, const char* format, ...
 // The hook runner's ask marker (LumaHook.cpp): a method row's invoke answers its result's kind when given it.
 namespace luma {
     void* kAskKind[1] = {nullptr};
+    // The guard's probe (LumaGuard.cpp): with no host half to resume a fault, the copy is plain, as the kernel's is
+    // then. The fixture's objects are all readable.
+    namespace guard {
+        bool probe(void* pDest, const void* pSource, uintptr_t size) {
+            std::memcpy(pDest, pSource, size);
+            return true;
+        }
+    }  // namespace guard
 }
 extern "C" int nebula_vsnprintf(char* pDst, size_t length, const char* pFormat, va_list args) {
     return std::vsnprintf(pDst, length, pFormat, args);
