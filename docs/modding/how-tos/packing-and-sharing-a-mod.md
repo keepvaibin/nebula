@@ -12,21 +12,17 @@ A `.luma` file holds a whole mod: its `luma.json`, layers, files, assets and cod
 ## Packing a mod
 
 1. Set the version in `luma.json`. Use `MAJOR.MINOR.PATCH`, such as `1.2.0`, and raise it with every release, so players and other mods can tell versions apart.
-1. If the mod has code, build it for every platform.
-
-   ```shell
-   lumalink build MOD-FOLDER
-   ```
-
 1. Pack the mod.
 
    ```shell
    lumalink pack MOD-FOLDER
    ```
 
-   LumaLink checks the mod with every rule first. If the check finds an error, nothing is written. When the check passes, LumaLink writes `MOD-ID-VERSION.luma` beside the folder. To choose another file, use `-o FILE`.
+   If the mod has code, LumaLink builds it first for every platform, unless its last build was made from the same source, the same LumaLink, the same game and the same versions of the mods it needs. Then LumaLink checks the mod with every rule, against the same game it built for. If the check finds an error, nothing is written. When the check passes, LumaLink writes `MOD-ID-VERSION.luma` beside the folder. To choose another file, use `-o FILE`.
 
-To also check that every mod your mod needs is present, pass the folder that holds them with `--mods FOLDER`. For every option, see [lumalink pack](../reference/lumalink-commands/pack.md).
+To take the mods your mod needs from one folder, and check that each one is there, pass that folder with `--mods FOLDER`. The build then takes them from that folder too, and from the mods that come with the game, never from what is installed on this computer. For every option, see [lumalink pack](../reference/lumalink-commands/pack.md).
+
+`lumalink check` says when a mod's code was not built from its source against the game it checks. Build it again with `lumalink build MOD-FOLDER`.
 
 ## Checking a .luma
 

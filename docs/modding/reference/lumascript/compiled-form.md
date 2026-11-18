@@ -47,8 +47,12 @@ the Windows targets each object also takes `-mno-incremental-linker-compatible`.
 |---|---|---|
 | `windows-x64` | `x86_64-pc-windows-msvc` | lld-link `-shared /NOENTRY /NODEFAULTLIB /NOIMPLIB /Brepro` |
 | `windows-arm64` | `aarch64-pc-windows-msvc` | the same |
-| `linux-x64`, `linux-arm64` | `x86_64-` / `aarch64-unknown-linux-gnu`, `-fPIC -fno-use-init-array` | ld.lld `-shared --build-id=none --hash-style=gnu -z defs -z noexecstack -T luma_ctors.ld` |
+| `linux-x64`, `linux-arm64` | `x86_64-` / `aarch64-unknown-linux-gnu`, `-fPIC -fno-use-init-array`; arm64 also `-mno-outline-atomics` | ld.lld `-shared --build-id=none --hash-style=gnu -z defs -z noexecstack --script luma_ctors.ld` |
 | `android-arm64`, `android-x64` | `aarch64-` / `x86_64-linux-android24`, `-fPIC -fno-use-init-array`; arm64 also `-mno-outline-atomics` | the same and `-z max-page-size=16384` |
+
+On arm64 Linux and Android, atomics are inline: clang's own default there depends on the machine
+that builds (it calls `__aarch64_*` helpers when it finds a GCC 9.3.1 or newer), and those helpers
+live in a runtime a mod does not link.
 | `macos-arm64`, `macos-x64` | `arm64-` / `x86_64-apple-macos12.0`, `-fPIC` | ld64.lld `-dynamiclib -undefined error -adhoc_codesign -install_name @rpath/mod.dylib -platform_version macos 12.0 12.0` |
 | `ios-arm64` | `arm64-apple-ios15.0`, `-fPIC` | the same with `-platform_version ios 15.0 15.0`; the device signs it again when the mod is installed |
 

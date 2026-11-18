@@ -5,6 +5,8 @@ intro: Build the mod, run each tests/**/test.json in the game (hidden, silent) a
 contentType: reference
 ---
 
+<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
+
 ## About lumalink test
 
 Build the mod, run each tests/**/test.json in the game (hidden, silent) and print each check with what was found.
@@ -54,7 +56,7 @@ When `--bin` names a game build's folder that has its own test extension, `lumal
 | `--python <FILE>` | The Python that runs it. Default: LUMALINK_PYTHON, then python. |
 | `--work <FOLDER>` | Where the runs are left. Default: <folder>-tests beside the mod. |
 | `--lock <FILE>` | The run lock. Default: LUMA_TEST_LOCK, then run.lock in the work folder. |
-| `--renderer <RENDERER>` | d3d12 or vulkan. Default: the runner's. |
+| `--renderer <RENDERER>` | d3d12, d3d11, vulkan or metal. Default: each test's own list. |
 | `--game <FILE>` | Your imported game (Nebula's game.pak), the one each run plays. Default: the game.pak of the install the bin folder belongs to, then the installed game's. |
 | `-h, --help` | Print this help. |
 | `--language <LANGUAGE>` | The language LumaLink and the validator speak: one of the game's 14, by its name in the game (UsEnglish, EuGerman, JpJapanese...). Default: UsEnglish. |

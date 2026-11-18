@@ -5,6 +5,8 @@ intro: Build a mod's code (LumaScript and C) for every platform.
 contentType: reference
 ---
 
+<!-- Written by tools/modding/lumalink_commands.py from LumaLink's help. Do not edit by hand. -->
+
 ## About lumalink build
 
 Build a mod's code (LumaScript and C) for every platform.
@@ -36,6 +38,8 @@ lumalink build [OPTIONS] <FOLDER>
 | `--clang <FILE>` | The clang to build with. Default: LUMALINK_CLANG, then the clang that comes with LumaLink, then LLVM's own folder, then the system's search path. |
 | `--work <FOLDER>` | Keep the generated C in this folder. Default: a temporary folder, removed after. |
 | `--platform <PLATFORM>` | A platform to build for (repeat for several). Default: all nine. |
+| `--mods <FOLDER>` | Your mod folder: the mods (folders and .luma files) a mod's needs are found in. Without it, they are looked for beside the mod, in the installed game's mods and in the mods that come with the game. |
+| `--no-installed` | Leave out the installed game: --names names the self-description, and no needed mod is taken from the installed game's mods. |
 | `-h, --help` | Print this help. |
 | `--language <LANGUAGE>` | The language LumaLink and the validator speak: one of the game's 14, by its name in the game (UsEnglish, EuGerman, JpJapanese...). Default: UsEnglish. |
 
