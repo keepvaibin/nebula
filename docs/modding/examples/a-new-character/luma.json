@@ -1,0 +1,101 @@
+{
+  "format": "1.0",
+  "id": "robo",
+  "version": "1.0.0",
+  "name": "Robo",
+  "summary": "Play as Robo, a robot with its own look, moves and voice, and a higher jump.",
+  "text": {
+    "UsEnglish": {
+      "name": "Robo",
+      "summary": "Play as Robo, a robot with its own look, moves and voice, and a higher jump."
+    },
+    "EuEnglish": {
+      "name": "Robo",
+      "summary": "Play as Robo, a robot with its own look, moves and voice, and a higher jump."
+    },
+    "UsFrench": {
+      "name": "Robo",
+      "summary": "Jouez Robo, un robot avec son propre aspect, ses mouvements, sa voix et un saut plus haut."
+    },
+    "EuFrench": {
+      "name": "Robo",
+      "summary": "Jouez Robo, un robot avec son propre aspect, ses mouvements, sa voix et un saut plus haut."
+    },
+    "UsSpanish": {
+      "name": "Robo",
+      "summary": "Juega como Robo, un robot con su propio aspecto, movimientos y voz, y un salto más alto."
+    },
+    "EuSpanish": {
+      "name": "Robo",
+      "summary": "Juega como Robo, un robot con su propio aspecto, movimientos y voz, y un salto más alto."
+    },
+    "EuGerman": {
+      "name": "Robo",
+      "summary": "Spiele als Robo, ein Roboter mit eigenem Aussehen, eigenen Bewegungen und eigener Stimme, der höher springt."
+    },
+    "EuItalian": {
+      "name": "Robo",
+      "summary": "Gioca come Robo, un robot con aspetto, mosse e voce propri e un salto più alto."
+    },
+    "EuDutch": {
+      "name": "Robo",
+      "summary": "Speel als Robo, een robot met een eigen uiterlijk, eigen bewegingen en stem, die hoger springt."
+    },
+    "UsPortuguese": {
+      "name": "Robo",
+      "summary": "Jogue como Robo, um robô com aparência, movimentos e voz próprios e um pulo mais alto."
+    },
+    "JpJapanese": {
+      "name": "ロボ",
+      "summary": "ロボでプレイ。見た目も動きも声も独自で、ジャンプがより高いロボットです。"
+    },
+    "KrKorean": {
+      "name": "로보",
+      "summary": "로보로 플레이합니다. 모습, 동작, 목소리가 따로 있고 더 높이 뛰는 로봇입니다."
+    },
+    "CnSimpChinese": {
+      "name": "机器人",
+      "summary": "以机器人身份游玩：它有自己的外观、动作和声音，跳得更高。"
+    },
+    "TwTradChinese": {
+      "name": "機器人",
+      "summary": "以機器人身分遊玩：它有自己的外觀、動作和聲音，跳得更高。"
+    }
+  },
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  },
+  "needs": [
+    {
+      "id": "lumakit",
+      "version": ">=1.0.0"
+    }
+  ],
+  "kit": {
+    "lumakit.player.character": 1
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ],
+  "code": {
+    "platforms": [
+      "windows-x64",
+      "linux-x64",
+      "linux-arm64",
+      "macos-arm64",
+      "macos-x64",
+      "android-arm64",
+      "android-x64"
+    ]
+  }
+}

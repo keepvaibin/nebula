@@ -14,6 +14,7 @@
     "07b-call-unsupported",
     "07c-two-ends",
     "07d-wrong-type",
+    "07e-refused-own-name",
     "08-bare-boot",
     "09-object-missing",
     "10-same-twice",

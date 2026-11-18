@@ -13,7 +13,8 @@
 #                 [-Harness <the folder of a test runner's Harness.java>: test builds; without it the app runs none.
 #                  With it (and -Debuggable, so the app is dev.nebula.galaxy.test beside the game) the APK carries the
 #                  test extension, and <Work>\test-bin-<ABI> is the Android runner's bin folder: libsmg_game.so,
-#                  libsmg_game_plain.so, libnebula_test_extension.so, the game half luma-test.so, luma_types.json]
+#                  libsmg_game_plain.so, libnebula_test_extension.so, the game half luma-test.so, luma_types.json, and luma\ the
+#                  names a mod's code is built against]
 #                 [-Plain: no ThinLTO for the game module and host; links in a fraction of the time, for development]
 #                 [-ReleaseKey <the release key's private XML>: Nebula.apk.sig, the release-key signature the app's
 #                  updates check (Updates.kt); default the Windows setups' key at its usual place, '' for none]
@@ -152,6 +153,19 @@ foreach ($abi in $Abis -split ",") {
         }
         Copy-Item "$testBin/libnebula_test_extension.so" $dest -Force
         Copy-Item "$module/libsmg_game.so", "$module/libsmg_game_plain.so", "$module/luma_types/luma_types.json" $testBin -Force
+        # The names a mod's code is built against for this module, in luma\ as tools/gate/build_windows.ps1 gives the
+        # Windows bins: the call lists, the generator's types, functions and numbers, the placement facts and the
+        # self-description (a cross build makes both). The services catalog needs the module run (luma_describe), so
+        # it is not here; a mod's code builds without it.
+        Invoke-Logged "$Work\names-$abi.log" { cmake --build $module --target luma_self_description }
+        $names = Join-Path $testBin "luma"
+        if (Test-Path -LiteralPath $names) { Remove-Item -Recurse -Force -LiteralPath $names }
+        New-Item -ItemType Directory -Force $names | Out-Null
+        Copy-Item -Recurse "$module/luma/*" $names
+        foreach ($f in "luma_types/luma_types.json", "luma_types/luma_functions.json", "luma_types/luma_numbers.json",
+                "smg_game.luma-placement.json", "smg_game.luma-self.json") {
+            Copy-Item "$module/$f" $names -Force
+        }
     }
 }
 

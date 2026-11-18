@@ -366,6 +366,10 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     const LookSample look_sample = host.look();
     const bool look_holding = look_choice.on && window_focused && !frame.host_menu &&
                               play_context == galaxy::input::PlayContext::Play && !galaxy::luma_input::text_open();
+    // An extension's turn (a test's look step) holds the look as a player's would, in a window with no focus too (an
+    // unseen test window); the window's mouse is held only by look_holding.
+    const bool script_look = look_choice.on && script.has_look && !frame.host_menu &&
+                             play_context == galaxy::input::PlayContext::Play && !galaxy::luma_input::text_open();
     if (look_choice.on) {
         galaxy::input::LookMotion motion{};
         std::uint32_t look_device = 0u;
@@ -392,8 +396,16 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
                                 motion.gyro_y != 0.0f || touch_x != 0.0f || touch_y != 0.0f;
             look_device = by_mouse ? 1u : by_finger ? 3u : by_pad ? 2u : 0u;  // LUMA_INPUT_DEVICE_*
         }
-        const galaxy::input::LookTurn turn = galaxy::input::look_turn(motion);
-        galaxy::luma_input::look_sample(turn.yaw, turn.pitch, look_device, look_holding);
+        galaxy::input::LookTurn turn = galaxy::input::look_turn(motion);
+        if (script_look) {
+            // Turned as given (the mod's scale is the service's), on the device the extension plays as.
+            turn.yaw += script.look_yaw;
+            turn.pitch += script.look_pitch;
+            if (look_device == 0u && (script.look_yaw != 0.0f || script.look_pitch != 0.0f)) {
+                look_device = frame.use_pads ? 2u : 1u;  // LUMA_INPUT_DEVICE_PAD or _KEYBOARD_MOUSE
+            }
+        }
+        galaxy::luma_input::look_sample(turn.yaw, turn.pitch, look_device, look_holding || script_look);
     }
     result.mouse_look = look_holding && use_keyboard && allow_absolute_pointer;
     const float gyro_motion = std::sqrt(gyro_x * gyro_x + gyro_y * gyro_y);

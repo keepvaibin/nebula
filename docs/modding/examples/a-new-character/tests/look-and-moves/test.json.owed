@@ -1,0 +1,56 @@
+{
+  "harness": 1,
+  "name": "robo-look-and-moves",
+  "about": "Good Egg, star 1, as Robo: a jump plays Robo's somersault, not the game's jump, and Robo's voice, not Mario's; the pictures show Robo's model in Mario's place. Handed to Agent 2 with N-4014 and N-4015 (docs/plan/ledger.tsv): named test.json when they are fixed",
+  "proves": [
+    "kit.player.character",
+    "model.mod_model"
+  ],
+  "mods": [
+    "../..",
+    "../probe"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 120,
+  "steps": [
+    {
+      "at": 20,
+      "picture": "robo"
+    },
+    {
+      "at": 30,
+      "hold": [
+        "A"
+      ],
+      "frames": 12
+    },
+    {
+      "at": 40,
+      "picture": "jump"
+    },
+    {
+      "at": 60,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.robo-probe.somersault_seen",
+      "is": true
+    },
+    {
+      "fact": "mod.robo-probe.jump_clip_seen",
+      "is": false
+    },
+    {
+      "fact": "mod.robo-probe.game_jump_voice",
+      "is": 0
+    },
+    {
+      "no_log": "script error"
+    }
+  ]
+}

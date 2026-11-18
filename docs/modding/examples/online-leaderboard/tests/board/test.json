@@ -2,6 +2,7 @@
   "harness": 1,
   "name": "leaderboard-board",
   "about": "With a leaderboard server on this computer (tests/board/server: ten times for Good Egg's first star, the slowest 1 second): the first star asks for a name; Marix, Backspace, o and Enter make it Mario and the star's time goes as JSON; back in the galaxy, the pause menu's Leaderboard shows the server's top ten with the player's place, 11th, in its title; B closes it; a second star sends its time under Mario without asking again",
+  "holds": ["port 47613"],
   "proves": ["services.net.local", "services.net.http", "services.input", "services.save.global", "kit.menu", "kit.screen", "kit.hud", "kernel.hook.before", "kernel.hook.after"],
   "mods": ["server", {"path": "../..", "options": {"server": "http://127.0.0.1:47613/board"}}],
   "stage": {"name": "EggStarGalaxy", "scenario": 1},

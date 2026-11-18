@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "ghost-run",
-  "about": "Good Egg, star 1. First attempt: it begins with the stage's play, 89 frames before the test clock's frame 0, so the timer reads 0:01.48 (89 steps) at frame 0; the stick walks Mario ahead, then right; at frame 300 the game's star demo is asked for: the time is 389 steps (300 + 89), the timer stops at 0:06.48, the run is written to its own file and is the star's best. At frame 400 the stage is entered again; its play begins at frame 1240. The second attempt has the ghost (389 steps long): at frames 1410, 1490 and 1530 it stands where Mario stood at the same steps of the first run (frames 80, 160 and 200), while the player stands at the start; its timer counts from 0.",
+  "about": "Good Egg, star 1. First attempt: it begins with the stage's play, 89 frames before the test clock's frame 0, so the timer reads 0:01.48 (89 steps) at frame 0; the stick walks Mario ahead, then right; at frame 300 the game's star demo is asked for: the time is 389 steps (300 + 89), the timer stops at 0:06.48, the run is written to its own file and is the star's best. At frame 400 the stage is entered again; its play begins at frame 1240. The second attempt has the ghost (389 steps long): at frames 1410, 1490 and 1530 it stands where Mario stood at the same steps of the first run (frames 80, 160 and 200), while the player stands at the start; its timer counts from 0. The walk and the ghost are checked to 0.002 units against the same numbers on every platform: the steps are the same everywhere.",
   "proves": [
     "kit.replay",
     "kit.hud",
@@ -169,13 +169,40 @@
       "when": "last"
     },
     {
+      "fact": "player_a",
+      "near": [
+        -3628.877,
+        -13027.402,
+        -15686.758
+      ],
+      "within": 0.002
+    },
+    {
+      "fact": "player_b",
+      "near": [
+        -4124.655,
+        -12960.923,
+        -16450.516
+      ],
+      "within": 0.002
+    },
+    {
+      "fact": "player_c",
+      "near": [
+        -3624.317,
+        -12992.757,
+        -16528.148
+      ],
+      "within": 0.002
+    },
+    {
       "fact": "ghost_a",
       "near": [
         -3628.877,
         -13027.402,
         -15686.758
       ],
-      "within": 20
+      "within": 0.002
     },
     {
       "fact": "ghost_b",
@@ -184,7 +211,7 @@
         -12960.923,
         -16450.516
       ],
-      "within": 20
+      "within": 0.002
     },
     {
       "fact": "ghost_c",
@@ -193,7 +220,7 @@
         -12992.757,
         -16528.148
       ],
-      "within": 20
+      "within": 0.002
     },
     {
       "no_log": "script error"

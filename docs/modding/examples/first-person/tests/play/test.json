@@ -1,0 +1,86 @@
+{
+  "harness": 1,
+  "name": "first-person-play",
+  "about": "First person in Good Egg: the eye in Mario's head with his body not drawn, the view along his front; the look turns it 90 degrees right; the stick runs him along the view; the switch key gives the game's camera back with his body drawn",
+  "proves": [
+    "kernel.hook.after"
+  ],
+  "mods": [
+    "../..",
+    "../probe"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 120,
+  "steps": [
+    {
+      "at": 100,
+      "look": [
+        2,
+        0
+      ],
+      "frames": 45
+    },
+    {
+      "at": 170,
+      "picture": "turned"
+    },
+    {
+      "at": 180,
+      "stick": [
+        0,
+        1
+      ],
+      "frames": 50
+    },
+    {
+      "at": 240,
+      "hold": [
+        "ONE"
+      ],
+      "frames": 2
+    },
+    {
+      "at": 290,
+      "picture": "given-back"
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.first-person-probe.start_hidden",
+      "is": true
+    },
+    {
+      "fact": "mod.first-person-probe.start_height",
+      "near": 100,
+      "within": 60
+    },
+    {
+      "fact": "mod.first-person-probe.start_along",
+      "at_least": 0.9
+    },
+    {
+      "fact": "mod.first-person-probe.turned",
+      "near": 90,
+      "within": 10
+    },
+    {
+      "fact": "mod.first-person-probe.walk_along",
+      "at_least": 0.85
+    },
+    {
+      "fact": "mod.first-person-probe.hidden",
+      "is": false
+    },
+    {
+      "fact": "mod.first-person-probe.height",
+      "more": 160
+    }
+  ]
+}

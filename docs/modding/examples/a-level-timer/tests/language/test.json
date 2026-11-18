@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "level-timer-language",
+  "about": "In French the timer's label reads Temps (the mod's messages in the player's language)",
+  "proves": [
+    "kernel.hook.after"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "language": "UsFrench",
+  "steps": [
+    {
+      "at": 200,
+      "picture": "language"
+    },
+    {
+      "at": 210,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ui.text.2",
+      "has": {
+        "pane": "Label",
+        "text": "Temps"
+      },
+      "when": "last"
+    },
+    {
+      "fact": "mod.level-timer.opened",
+      "is": true
+    },
+    {
+      "fact": "mod.level-timer.seconds",
+      "at_least": 3
+    }
+  ]
+}

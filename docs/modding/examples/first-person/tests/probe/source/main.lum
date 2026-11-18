@@ -1,0 +1,51 @@
+// The first-person tests' probe: the camera the game shows and the player, as facts, every 15 frames while there is
+// a player. Each stretch of first person (his body not drawn) is measured from its first sample, which keeps where he
+// faced and his up; while the game's camera shows (a scene, or first person switched off) only hidden and height are
+// written. Facts: start_height (the eye above his feet, along his up), start_along (the view along his front, 1 is
+// straight ahead), start_hidden (his body not drawn), near (the near plane), turned (degrees right of his front at the
+// stretch's start), walk_along (his last step along the view, 1 is straight ahead), hidden and height (now).
+var frames: u32 = 0
+var front0: vec3? = none
+var up0: vec3? = none
+var last_feet: vec3? = none
+
+on frame {
+    guard holds("player"), let p = MarioAccess::getPlayerActor(), let feet = MR::getPlayerPos() else { return }
+    frames += 1
+    if frames % 15 != 0 {
+        return
+    }
+    let up = normal(p.mGravity * -1.0)
+    let eye = MR::getCamPos()
+    let view = MR::getCamZdir()
+    let hidden = (p.mModHidden & 1) != 0
+    log fact "hidden" hidden
+    log fact "height" dot(eye - feet, up)
+    if not hidden {
+        front0 = none
+        last_feet = none
+        return
+    }
+    if front0 == none {
+        var f = vec3(0.0, 0.0, 0.0)
+        MR::getPlayerFrontVec(var f)
+        front0 = f
+        up0 = up
+        log fact "start_height" dot(eye - feet, up)
+        log fact "start_along" dot(view, f)
+        log fact "start_hidden" hidden
+        log fact "near" MR::getNearZ()
+    }
+    guard let f0 = front0, let u0 = up0 else { return }
+    let right0 = cross(f0, u0)
+    log fact "turned" atan2(dot(view, right0), dot(view, f0)) * 57.29578
+    if let before = last_feet {
+        let step = feet - before
+        let level = step - up * dot(step, up)
+        if length(level) > 20.0 {
+            let flat = view - up * dot(view, up)
+            log fact "walk_along" dot(normal(level), normal(flat))
+        }
+    }
+    last_feet = feet
+}

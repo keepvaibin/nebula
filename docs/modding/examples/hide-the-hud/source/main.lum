@@ -1,8 +1,9 @@
 option hide: bool
 
-// The game shows the HUD when a level starts. Put it away on the first frame it is up.
+// The game shows the HUD when a level starts. Put it away on the first frame it is up. holds("stage"): a stage is
+// there with its scene objects (the HUD's among them), which the HUD's functions need.
 on frame {
-    if hide and MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder as i32) and MR::isActiveDefaultGameLayout() {
+    if hide and holds("stage") and MR::isActiveDefaultGameLayout() {
         MR::deactivateDefaultGameLayout()
     }
 }
@@ -16,7 +17,7 @@ hook before GameSceneLayoutHolder::activateDefaultGameLayout() {
 
 // The option turned off during play: the HUD comes back at once.
 on option hide {
-    if not hide and MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder as i32) and not MR::isDemoActive() {
+    if not hide and holds("player") and not MR::isDemoActive() {
         MR::activateDefaultGameLayout()
     }
 }

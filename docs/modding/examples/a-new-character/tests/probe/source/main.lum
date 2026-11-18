@@ -1,0 +1,34 @@
+// The Robo tests' probe. Each frame with a player: whether the clip playing is Robo's for a jump (空中一回転, the
+// somersault) or the game's own (ジャンプ); and every time the game's own jump voice reaches Mario's sound player.
+// Facts: somersault_seen, jump_clip_seen, game_jump_voice (how many times), each written when it changes.
+var somersault_seen = false
+var jump_clip_seen = false
+var game_jump_voice: int = 0
+
+wrap Mario::playSoundJ(name, timing) {
+    if let n = name {
+        if n == "声小ジャンプ" or n == "声中ジャンプ" or n == "声大ジャンプ" {
+            game_jump_voice += 1
+            log fact "game_jump_voice" game_jump_voice
+        }
+    }
+    proceed()
+}
+
+on frame {
+    guard holds("player"), let p = MarioAccess::getPlayerActor() else { return }
+    if not somersault_seen and p.isAnimationRun("空中一回転") {
+        somersault_seen = true
+        log fact "somersault_seen" true
+    }
+    if not jump_clip_seen and p.isAnimationRun("ジャンプ") {
+        jump_clip_seen = true
+        log fact "jump_clip_seen" true
+    }
+}
+
+on start {
+    log fact "game_jump_voice" 0
+    log fact "somersault_seen" false
+    log fact "jump_clip_seen" false
+}

@@ -1358,6 +1358,83 @@ static void do_read(const Words* w) {
     finish(1, 0);
 }
 
+/* "count <fact> <name>|class:<Class> [<x> <y> <z> <distance>]": the number of live objects of that name (or class),
+   only those within the distance of the place when one is given (an object that is no actor has no place and is not
+   counted then). The fact is the number. A list that lost objects (more than the harness keeps) fails the step. */
+static void do_count(const Words* w) {
+    if (w->count != 3u && w->count != 7u) {
+        finish(0, "a count needs a fact and a name or class:Class, then a place and a distance or none");
+        return;
+    }
+    const char* const of_class = after_prefix(w->word[2], "class:");
+    int32_t number = -1;
+    if (of_class != 0) {
+        number = core->class_of(of_class);
+        if (number < 0) {
+            finish(0, "count: the game has no class of that name");
+            return;
+        }
+    }
+    const int placed = w->count == 7u;
+    Vec3 at = {0.0f, 0.0f, 0.0f};
+    float distance = 0.0f;
+    if (placed) {
+        int g1 = 0, g2 = 0, g3 = 0, g4 = 0;
+        at.x = to_float(w->word[3], &g1);
+        at.y = to_float(w->word[4], &g2);
+        at.z = to_float(w->word[5], &g3);
+        distance = to_float(w->word[6], &g4);
+        if (!(g1 && g2 && g3 && g4) || !(distance >= 0.0f)) {
+            finish(0, "count: a place is three numbers and a distance of 0 or more");
+            return;
+        }
+    }
+    int64_t n = 0;
+    for (uint32_t i = 0; i < object_count; i++) {
+        if (objects[i] == 0) {
+            continue;
+        }
+        if (number >= 0) {
+            if (!object_is(objects[i], number)) {
+                continue;
+            }
+        } else {
+            const char* const its = *(const char* const*)((const char*)objects[i] + field_name);
+            if (its == 0 || !same(its, w->word[2])) {
+                continue;
+            }
+        }
+        const int actor = object_is(objects[i], class_live_actor);
+        if (actor) {
+            unsigned char dead = 0;
+            call1(is_dead, &objects[i], &dead);
+            if (dead != 0) {
+                continue;
+            }
+        }
+        if (placed) {
+            if (!actor) {
+                continue;
+            }
+            const Vec3* const p = (const Vec3*)((const char*)objects[i] + field_position);
+            const float dx = p->x - at.x, dy = p->y - at.y, dz = p->z - at.z;
+            if (dx * dx + dy * dy + dz * dz > distance * distance) {
+                continue;
+            }
+        }
+        n++;
+    }
+    if (objects_lost != 0) {
+        finish(0, "count: more objects than the harness keeps (" MOST_OBJECTS_TEXT "), the count would be short");
+        return;
+    }
+    Out o;
+    out_empty(&o);
+    put_int(&o, n);
+    fact(w->word[1], &o);
+    finish(1, 0);
+}
+
 /* --- The step hash (tools/verify/step_hash.py) --------------------------------------------------------------------
    With "hash on", after every step one fact hash.step = {"h":"<16 hex>","actors":N}: FNV-1a 64 over every live actor in
    the order the game made them, each its name's bytes and its position, rotation, scale, velocity and gravity (the
@@ -1534,6 +1611,10 @@ static void do_line(const char* line) {
     }
     if (same(w.word[0], "read")) {
         do_read(&w);
+        return;
+    }
+    if (same(w.word[0], "count")) {
+        do_count(&w);
         return;
     }
     if (same(w.word[0], "hash") && w.count == 2u) {

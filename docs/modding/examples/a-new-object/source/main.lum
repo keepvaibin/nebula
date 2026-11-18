@@ -1,0 +1,76 @@
+// The Sky Lift: a new object with its own model (assets/SkyLift.glb), its own ground (assets/SkyLift.kcl.glb, a
+// moving part of the map the player stands on), what it does each step, and its place in a stage (a patch of the Good
+// Egg Galaxy's placement table names it "sky-lift/SkyLift"). It rises while Mario stands on it, at most
+// `rise_most` units above its place, and sinks back when he leaves.
+use kit.actor
+
+let rise_most: f32 = 300.0
+let speed: f32 = 2.0
+
+// Each lift's place as the stage put it and how far it has risen: one entry for each lift, in the order they were made.
+var lifts: list<ref<LiveActor>> = []
+var homes: list<vec3> = []
+var risen: list<f32> = []
+
+fn placed(a: LiveActor) {
+    lifts.push(ref(a))
+    homes.push(a.mPosition)
+    risen.push(0.0)
+}
+
+fn index_of(a: LiveActor) -> int? {
+    for i in 0..lifts.len() {
+        if let l = lifts[i].get() {
+            if same(l, a) {
+                return i
+            }
+        }
+    }
+    return none
+}
+
+// Mario stands on the lift: on the ground, over its top (3 m square, along its front and side) and no more than a
+// step above it.
+fn ridden(a: LiveActor, up: vec3) -> bool {
+    guard holds("player"), let feet = MR::getPlayerPos() else { return false }
+    if not MR::isOnGroundPlayer() {
+        return false
+    }
+    var front = vec3(0.0, 0.0, 1.0)
+    MR::calcFrontVec(var front, a)
+    let side = cross(up, front)
+    let d = feet - a.mPosition
+    let above = dot(d, up)
+    return above > -5.0 and above < 40.0 and abs(dot(d, front)) < 160.0 and abs(dot(d, side)) < 160.0
+}
+
+// Each step: up while ridden, down while not, along the lift's own up (its placed turn).
+fn step(a: LiveActor) {
+    guard holds("stage"), let i = index_of(a) else { return }
+    var up = vec3(0.0, 1.0, 0.0)
+    MR::calcUpVec(var up, a)
+    let h = risen[i]
+    let next = if ridden(a, up) { min(h + speed, rise_most) } else { max(h - speed, 0.0) }
+    risen[i] = next
+    a.mPosition = homes[i] + up * next
+}
+
+// A stage's lifts are made again with it.
+on stage ended {
+    lifts = []
+    homes = []
+    risen = []
+}
+
+on start {
+    actor.define(actor.Kind {
+        name: "SkyLift"                        // placed in a stage as "sky-lift/SkyLift"
+        look: model "SkyLift"
+        collision: "SkyLift"                   // SkyLift.kcl.glb, cooked beside the model
+        on_ground: false                       // stays where it is placed; it moves only as step moves it
+        shadow: false
+        sensors: [actor.Sensor.Body(150.0)]
+        on_init: placed
+        on_frame: step
+    })
+}

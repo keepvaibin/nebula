@@ -257,6 +257,7 @@ task watch(track: replay.Track) {
     end_attempt()
     watch_no += 1
     let mine = watch_no
+    guard holds("player") else { return }       // the stage ended while the run was chosen
     watching = true
     MR::offPlayerControl()
     MR::hidePlayer()
@@ -316,7 +317,9 @@ fn end_watch() {
         replay.free(t)
     }
     view_track = none
-    MR::showPlayer()
-    MR::onPlayerControl(true)
+    if holds("player") {                         // with the stage gone, the next one starts with the player shown
+        MR::showPlayer()
+        MR::onPlayerControl(true)
+    }
     log fact "watching" false
 }

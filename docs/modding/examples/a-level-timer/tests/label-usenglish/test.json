@@ -1,0 +1,36 @@
+{
+  "harness": 1,
+  "name": "level-timer-label-usenglish",
+  "about": "In UsEnglish the timer's label reads Time (the mod's message line in the player's language)",
+  "proves": [
+    "kernel.hook.after"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "language": "UsEnglish",
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ui.text.2",
+      "has": {
+        "pane": "Label",
+        "text": "Time"
+      },
+      "when": "last"
+    },
+    {
+      "fact": "mod.level-timer.opened",
+      "is": true
+    }
+  ]
+}

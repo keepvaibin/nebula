@@ -1,0 +1,23 @@
+{
+  "harness": 1,
+  "name": "refused-under-another-name",
+  "about": "A test refused before it is read (a language no disc has) is a harness-error with the reason, also when its name is not its folder's",
+  "proves": [
+    "harness.self"
+  ],
+  "mods": [
+    "../mods/hello"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "language": "UsPortuguese",
+  "steps": [
+    {
+      "at": 10,
+      "end": true
+    }
+  ],
+  "expect": []
+}

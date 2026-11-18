@@ -65,6 +65,7 @@ Any key that is not on this page, anywhere in the file, stops the test with an e
 | `stage` | No | Where the test starts. See [Stage](#stage). Without it, the test starts on the title screen. |
 | `player` | No | The player at the start. See [Player](#player). Needs `stage`. |
 | `continue_from` | No | The name of an earlier test in the same suite. This test starts with the saves, settings and mods that test left, and needs that test to have passed. |
+| `holds` | No | Names of things only one run at a time may have, such as `["port 47613"]` for a test whose mod listens on that port. Runs that hold the same name never run at the same time. |
 | `device` | No | `keyboard` (the default) or `pad`. With `pad`, the controller's rumble is recorded as the fact `input.motor`. |
 | `faults` | No | Mods that are expected to fault, as `[{"mod": "ID"}]`. Without it, any fault in a mod fails the test. |
 | `ends` | No | `end` (the default), `crash` or `crash-at-stop`. With `crash`, the game must crash before the `end` step. With `crash-at-stop`, the run must reach its `end` step and the game must then crash while it stops (a mod's stop function runs then); a crash before the `end` step fails the test. Both need a `log` check whose pattern starts with `crash: `. |
@@ -161,12 +162,14 @@ A fact condition takes any check from [Fact checks](#fact-checks) except `far`. 
 | `stick` | `{"stick": [0, 1], "frames": 30}` | Tilts the main stick. Each value is from -1 to 1. |
 | `shake` | `{"shake": 10}` | Shakes for a number of frames, which spins. |
 | `pointer` | `{"pointer": [0.5, 0.5], "frames": 30}` | Moves the pointer, from 0 to 1 across the screen. |
+| `look` | `{"look": [2, 0], "frames": 45}` | Turns a first-person look (a mod's `input.look_mode` on) each frame by these degrees: right, then up, each from -45 to 45, as a mouse or a stick would. The window's mouse is not held. |
 | `key` | `{"key": "enter"}` | Presses a key in Nebula's own menus: `up`, `down`, `left`, `right`, `enter`, `esc`, `tab`, `space` or `backspace`. While a mod's text box is open, `enter`, `esc`, `backspace`, `left` and `right` edit it. |
 | `text` | `{"text": "Gold Mario"}` | Types into the open text box, 1 to 256 characters. |
 | `settings` | `{"settings": "mods"}` | Opens Nebula's settings on a page: `display`, `graphics`, `controls`, `audio`, `general`, `mods`, `system` or `advanced`. Then `key` steps move in it. |
 | `picture` | `{"picture": "after-spin"}` | Saves the next frame shown as `pictures/NAME.png`. Each name is used once in a test. |
 | `call` | `{"call": "MR::getPlayerPos", "signature": "Vec3f *()", "args": [], "fact": "pos"}` | Calls a game function by name. See [Calling game functions](#calling-game-functions). |
 | `read` | `{"read": "Mario.mVelocity", "of": "player", "type": "TVec3f", "fact": "speed"}` | Reads a field by name, from `"player"` or `"object:NAME#N"`, and records it as a fact. Types: `f32`, `s32`, `u32`, `u16`, `s16`, `u8`, `bool`, `TVec3f`, `Vec3f` and `const char *`. |
+| `count` | `{"count": "class:Coin", "near": [-3542.0, -13042.0, -15598.0], "within": 400, "fact": "coins"}` | Counts the live objects of a name (`"object:NAME"`, the name the game gives the object, as in `object:NAME#N`), or of a class (`"class:CLASS"`), and records the number as a fact. With `near` and `within`, only those within that distance of the place. Use it to prove an object was added or removed. |
 | `stage` | `{"stage": {"name": "HeavensDoorGalaxy", "scenario": 1}}` | Changes stage. The fact `stage.ready` is written when the new stage is ready. The clock keeps running. |
 | `new_file` | `{"new_file": 2}` | Creates save file 1, 2 or 3 and makes it the current file. Writes `file.created`. |
 | `load_file` | `{"load_file": 2}` | Loads a save file as the file select does. Writes `file.loaded`. |

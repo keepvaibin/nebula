@@ -1,0 +1,35 @@
+{
+  "patch": 1,
+  "key": [
+    "l_id"
+  ],
+  "select": [
+    {
+      "match": {
+        "name": {
+          "equals": "Takobo"
+        }
+      },
+      "values": {
+        "scale_x": 1.5,
+        "scale_y": 1.5,
+        "scale_z": 1.5
+      }
+    }
+  ],
+  "set": [
+    {
+      "where": {
+        "l_id": 60
+      },
+      "values": {
+        "pos_z": -319.0
+      }
+    }
+  ],
+  "remove": [
+    {
+      "l_id": 81
+    }
+  ]
+}

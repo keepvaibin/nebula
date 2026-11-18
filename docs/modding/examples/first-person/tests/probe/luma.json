@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "first-person-probe",
+  "version": "1.0.0",
+  "name": "First person probe",
+  "summary": "The first-person tests' facts: the camera shown and the player.",
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  }
+}

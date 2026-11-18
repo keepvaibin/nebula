@@ -51,7 +51,9 @@ fn hit(h: projectile.Hit, mine: HitSensor, other: HitSensor) -> projectile.Then 
     }
     if let enemy = other.mHost {
         start flash(ref(enemy))
-        MR::appearCoinPop(enemy, enemy.mPosition, 3)
+        if can(MR::appearCoinPop) {              // its needs there now (the coins' holder among them)
+            MR::appearCoinPop(enemy, enemy.mPosition, 3)
+        }
         log fact "defeated" true
     }
     return projectile.Then.Burst

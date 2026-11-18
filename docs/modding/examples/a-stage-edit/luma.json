@@ -1,0 +1,81 @@
+{
+  "format": "1.0",
+  "id": "good-egg-remix",
+  "version": "1.0.0",
+  "name": "Good Egg Remix",
+  "summary": "Changes the Good Egg Galaxy's first planet: a line of coins on the way, bigger Octoombas, no timer block.",
+  "text": {
+    "UsEnglish": {
+      "name": "Good Egg Remix",
+      "summary": "Changes the Good Egg Galaxy's first planet: a line of coins on the way, bigger Octoombas, no timer block."
+    },
+    "EuEnglish": {
+      "name": "Good Egg Remix",
+      "summary": "Changes the Good Egg Galaxy's first planet: a line of coins on the way, bigger Octoombas, no timer block."
+    },
+    "UsFrench": {
+      "name": "Œuf-galaxie remixée",
+      "summary": "Change la première planète de l'Œuf-galaxie : une ligne de pièces sur le chemin, des Octoombas plus grands, plus de bloc chrono."
+    },
+    "EuFrench": {
+      "name": "Œuf-galaxie remixée",
+      "summary": "Change la première planète de l'Œuf-galaxie : une ligne de pièces sur le chemin, des Octoombas plus grands, plus de bloc chrono."
+    },
+    "UsSpanish": {
+      "name": "Galaxia Huevo remix",
+      "summary": "Cambia el primer planeta de la Galaxia Huevo: una fila de monedas en el camino, Octoombas más grandes, sin bloque de tiempo."
+    },
+    "EuSpanish": {
+      "name": "Galaxia Huevo remix",
+      "summary": "Cambia el primer planeta de la Galaxia Huevo: una fila de monedas en el camino, Octoombas más grandes, sin bloque de tiempo."
+    },
+    "EuGerman": {
+      "name": "Eiland-Galaxie Remix",
+      "summary": "Ändert den ersten Planeten der Eiland-Galaxie: eine Münzreihe auf dem Weg, größere Oktumbas, kein Zeitblock."
+    },
+    "EuItalian": {
+      "name": "Galassia Ovo remix",
+      "summary": "Cambia il primo pianeta della Galassia Ovo: una fila di monete sulla strada, Octoomba più grandi, niente blocco a tempo."
+    },
+    "EuDutch": {
+      "name": "Eiland-melkweg remix",
+      "summary": "Verandert de eerste planeet van het Eiland-melkwegstelsel: een rij munten op de weg, grotere Octoomba’s, geen tijdblok."
+    },
+    "UsPortuguese": {
+      "name": "Galáxia Ovo remix",
+      "summary": "Muda o primeiro planeta da Galáxia Ovo: uma fileira de moedas no caminho, Octoombas maiores, sem bloco de tempo."
+    },
+    "JpJapanese": {
+      "name": "エッグギャラクシー リミックス",
+      "summary": "エッグギャラクシーの最初の惑星を変えます。道にコインの列、大きなタコボー、タイマーブロックなし。"
+    },
+    "KrKorean": {
+      "name": "에그 갤럭시 리믹스",
+      "summary": "에그 갤럭시의 첫 행성을 바꿉니다. 길 위의 코인 줄, 더 큰 타코보, 타이머 블록 없음."
+    },
+    "CnSimpChinese": {
+      "name": "蛋蛋银河混音版",
+      "summary": "改变蛋蛋银河的第一颗星球：路上一排金币、更大的章鱼栗宝宝、没有计时砖块。"
+    },
+    "TwTradChinese": {
+      "name": "蛋蛋銀河混音版",
+      "summary": "改變蛋蛋銀河的第一顆星球：路上一排金幣、更大的章魚栗寶寶、沒有計時磚塊。"
+    }
+  },
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

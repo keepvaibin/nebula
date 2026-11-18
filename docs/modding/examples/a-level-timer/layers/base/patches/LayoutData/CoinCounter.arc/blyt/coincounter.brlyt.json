@@ -1,0 +1,11 @@
+{
+  "patch": 1,
+  "panes": {
+    "CoinCounter": {
+      "position": [
+        276,
+        -100
+      ]
+    }
+  }
+}

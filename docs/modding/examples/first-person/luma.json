@@ -1,0 +1,259 @@
+{
+  "format": "1.0",
+  "id": "first-person",
+  "version": "1.0.0",
+  "name": "First Person",
+  "summary": "Shows the game through Mario's eyes. Look around with the mouse, the pointer or a gyro; Mario runs where you look.",
+  "text": {
+    "UsEnglish": {
+      "name": "First Person",
+      "summary": "Shows the game through Mario's eyes. Look around with the mouse, the pointer or a gyro; Mario runs where you look.",
+      "options": {
+        "first_person": {
+          "name": "First person"
+        },
+        "fov": {
+          "name": "Field of view"
+        },
+        "switch": {
+          "name": "Switch camera"
+        }
+      }
+    },
+    "EuEnglish": {
+      "name": "First Person",
+      "summary": "Shows the game through Mario's eyes. Look around with the mouse, the pointer or a gyro; Mario runs where you look.",
+      "options": {
+        "first_person": {
+          "name": "First person"
+        },
+        "fov": {
+          "name": "Field of view"
+        },
+        "switch": {
+          "name": "Switch camera"
+        }
+      }
+    },
+    "UsFrench": {
+      "name": "Vue subjective",
+      "summary": "Montre le jeu à travers les yeux de Mario. Regardez autour avec la souris, le pointeur ou un gyroscope ; Mario court là où vous regardez.",
+      "options": {
+        "first_person": {
+          "name": "Vue subjective"
+        },
+        "fov": {
+          "name": "Champ de vision"
+        },
+        "switch": {
+          "name": "Changer de caméra"
+        }
+      }
+    },
+    "EuFrench": {
+      "name": "Vue subjective",
+      "summary": "Montre le jeu à travers les yeux de Mario. Regardez autour avec la souris, le pointeur ou un gyroscope ; Mario court là où vous regardez.",
+      "options": {
+        "first_person": {
+          "name": "Vue subjective"
+        },
+        "fov": {
+          "name": "Champ de vision"
+        },
+        "switch": {
+          "name": "Changer de caméra"
+        }
+      }
+    },
+    "UsSpanish": {
+      "name": "Primera persona",
+      "summary": "Muestra el juego con los ojos de Mario. Mira a tu alrededor con el ratón, el puntero o un giroscopio; Mario corre hacia donde miras.",
+      "options": {
+        "first_person": {
+          "name": "Primera persona"
+        },
+        "fov": {
+          "name": "Campo de visión"
+        },
+        "switch": {
+          "name": "Cambiar cámara"
+        }
+      }
+    },
+    "EuSpanish": {
+      "name": "Primera persona",
+      "summary": "Muestra el juego con los ojos de Mario. Mira a tu alrededor con el ratón, el puntero o un giroscopio; Mario corre hacia donde miras.",
+      "options": {
+        "first_person": {
+          "name": "Primera persona"
+        },
+        "fov": {
+          "name": "Campo de visión"
+        },
+        "switch": {
+          "name": "Cambiar cámara"
+        }
+      }
+    },
+    "EuGerman": {
+      "name": "Ego-Perspektive",
+      "summary": "Zeigt das Spiel durch Marios Augen. Schau dich mit der Maus, dem Pointer oder einem Gyroskop um; Mario läuft dorthin, wohin du schaust.",
+      "options": {
+        "first_person": {
+          "name": "Ego-Perspektive"
+        },
+        "fov": {
+          "name": "Sichtfeld"
+        },
+        "switch": {
+          "name": "Kamera wechseln"
+        }
+      }
+    },
+    "EuItalian": {
+      "name": "Prima persona",
+      "summary": "Mostra il gioco attraverso gli occhi di Mario. Guardati intorno con il mouse, il puntatore o un giroscopio; Mario corre dove guardi.",
+      "options": {
+        "first_person": {
+          "name": "Prima persona"
+        },
+        "fov": {
+          "name": "Campo visivo"
+        },
+        "switch": {
+          "name": "Cambia visuale"
+        }
+      }
+    },
+    "EuDutch": {
+      "name": "Eerste persoon",
+      "summary": "Toont het spel door de ogen van Mario. Kijk rond met de muis, de aanwijzer of een gyroscoop; Mario rent waar je kijkt.",
+      "options": {
+        "first_person": {
+          "name": "Eerste persoon"
+        },
+        "fov": {
+          "name": "Gezichtsveld"
+        },
+        "switch": {
+          "name": "Camera wisselen"
+        }
+      }
+    },
+    "UsPortuguese": {
+      "name": "Primeira pessoa",
+      "summary": "Mostra o jogo pelos olhos do Mario. Olhe em volta com o mouse, o ponteiro ou um giroscópio; o Mario corre para onde você olha.",
+      "options": {
+        "first_person": {
+          "name": "Primeira pessoa"
+        },
+        "fov": {
+          "name": "Campo de visão"
+        },
+        "switch": {
+          "name": "Trocar câmera"
+        }
+      }
+    },
+    "JpJapanese": {
+      "name": "一人称視点",
+      "summary": "マリオの目線でゲームを映します。マウス、ポインター、ジャイロで見回せます。マリオは見ている方向へ走ります。",
+      "options": {
+        "first_person": {
+          "name": "一人称"
+        },
+        "fov": {
+          "name": "視野角"
+        },
+        "switch": {
+          "name": "カメラ切り替え"
+        }
+      }
+    },
+    "KrKorean": {
+      "name": "1인칭 시점",
+      "summary": "마리오의 눈으로 게임을 보여 줍니다. 마우스, 포인터, 자이로로 둘러볼 수 있고, 마리오는 보는 쪽으로 달립니다.",
+      "options": {
+        "first_person": {
+          "name": "1인칭"
+        },
+        "fov": {
+          "name": "시야각"
+        },
+        "switch": {
+          "name": "카메라 전환"
+        }
+      }
+    },
+    "CnSimpChinese": {
+      "name": "第一人称视角",
+      "summary": "用马力欧的眼睛看游戏。用鼠标、指针或陀螺仪环顾四周；马力欧会朝你看的方向跑。",
+      "options": {
+        "first_person": {
+          "name": "第一人称"
+        },
+        "fov": {
+          "name": "视野"
+        },
+        "switch": {
+          "name": "切换镜头"
+        }
+      }
+    },
+    "TwTradChinese": {
+      "name": "第一人稱視角",
+      "summary": "用瑪利歐的眼睛看遊戲。用滑鼠、指標或陀螺儀環顧四周；瑪利歐會朝你看的方向跑。",
+      "options": {
+        "first_person": {
+          "name": "第一人稱"
+        },
+        "fov": {
+          "name": "視野"
+        },
+        "switch": {
+          "name": "切換鏡頭"
+        }
+      }
+    }
+  },
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  },
+  "options": [
+    {
+      "key": "first_person",
+      "kind": "toggle",
+      "name": "First person",
+      "default": true
+    },
+    {
+      "key": "fov",
+      "kind": "number",
+      "name": "Field of view",
+      "min": 40,
+      "max": 110,
+      "step": 5,
+      "default": 75
+    },
+    {
+      "key": "switch",
+      "kind": "key",
+      "name": "Switch camera",
+      "default": "one"
+    }
+  ],
+  "needs": [
+    {
+      "id": "lumakit",
+      "version": ">=1.0.0"
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "format": "1.0",
+  "id": "sky-lift",
+  "version": "1.0.0",
+  "name": "Sky Lift",
+  "summary": "A new platform in the Good Egg Galaxy that rises while Mario stands on it.",
+  "text": {
+    "UsEnglish": {
+      "name": "Sky Lift",
+      "summary": "A new platform in the Good Egg Galaxy that rises while Mario stands on it."
+    },
+    "EuEnglish": {
+      "name": "Sky Lift",
+      "summary": "A new platform in the Good Egg Galaxy that rises while Mario stands on it."
+    },
+    "UsFrench": {
+      "name": "Plateforme céleste",
+      "summary": "Une nouvelle plateforme dans l'Œuf-galaxie, qui monte tant que Mario se tient dessus."
+    },
+    "EuFrench": {
+      "name": "Plateforme céleste",
+      "summary": "Une nouvelle plateforme dans l'Œuf-galaxie, qui monte tant que Mario se tient dessus."
+    },
+    "UsSpanish": {
+      "name": "Plataforma celeste",
+      "summary": "Una plataforma nueva en la Galaxia Huevo que sube mientras Mario está encima."
+    },
+    "EuSpanish": {
+      "name": "Plataforma celeste",
+      "summary": "Una plataforma nueva en la Galaxia Huevo que sube mientras Mario está encima."
+    },
+    "EuGerman": {
+      "name": "Himmelslift",
+      "summary": "Eine neue Plattform in der Eiland-Galaxie, die steigt, solange Mario darauf steht."
+    },
+    "EuItalian": {
+      "name": "Piattaforma celeste",
+      "summary": "Una nuova piattaforma nella Galassia Ovo che sale finché Mario ci sta sopra."
+    },
+    "EuDutch": {
+      "name": "Hemellift",
+      "summary": "Een nieuw platform in het Eiland-melkwegstelsel dat stijgt zolang Mario erop staat."
+    },
+    "UsPortuguese": {
+      "name": "Plataforma celeste",
+      "summary": "Uma plataforma nova na Galáxia Ovo que sobe enquanto o Mario está em cima dela."
+    },
+    "JpJapanese": {
+      "name": "スカイリフト",
+      "summary": "エッグギャラクシーの新しい足場。マリオが乗っている間、上がっていきます。"
+    },
+    "KrKorean": {
+      "name": "스카이 리프트",
+      "summary": "에그 갤럭시의 새 발판. 마리오가 올라서 있는 동안 올라갑니다."
+    },
+    "CnSimpChinese": {
+      "name": "空中升降台",
+      "summary": "蛋蛋银河里的新平台，马力欧站在上面时会上升。"
+    },
+    "TwTradChinese": {
+      "name": "空中升降台",
+      "summary": "蛋蛋銀河裡的新平台，瑪利歐站在上面時會上升。"
+    }
+  },
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  },
+  "needs": [
+    {
+      "id": "lumakit",
+      "version": ">=1.0.0"
+    }
+  ],
+  "layers": [
+    {
+      "name": "base"
+    }
+  ],
+  "code": {
+    "platforms": [
+      "windows-x64",
+      "linux-x64",
+      "linux-arm64",
+      "macos-arm64",
+      "macos-x64",
+      "android-arm64",
+      "android-x64"
+    ]
+  }
+}

@@ -4371,6 +4371,7 @@ void attach_extensions() {
     host.reload_mod = extension_reload_mod;
     host.forget_mod = extension_forget_mod;
     host.started_again = ::galaxy::launch_args().started_again;
+    host.controls_size = sizeof(NebulaExtensionControls);
 #if defined(NEBULA_HOST_RENDERER)
     host.menu_key = extension_menu_key;
     host.menu_open = extension_menu_open;

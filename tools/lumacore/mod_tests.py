@@ -1,7 +1,7 @@
 """mod_tests.py: the mod system's tests in the gate (tests/mods). Python 3, standard library.
 
     mod_tests.py --renderer d3d12|vulkan|d3d11 --bin <folder> --work <folder> [--only suite[/test]] [--lock <file>]
-                 [--jobs n] [--pak <file>]
+                 [--jobs n] [--pak <file>] [--device <serial> [--device-lock <folder>]]
 
 The lumalink program and LumaLink's tree are the LumaLink commit in tools/lumacore/lumalink.commit: without LUMALINK,
 that commit is fetched into a checkout of its own (--lumalink-cache, default ./lumalink-pin, kept between runs so the
@@ -19,6 +19,13 @@ One row per test: suite/name, renderer, verdict, reason. A test with an expected
 when the runner answered as expected.json says (harness_self.py), so a test that must fail passes by failing. A test
 whose expected.json has "twice_same_facts" is run twice and passes when both runs left the same facts (but the keys
 its "except" lists: measured times).
+The documentation's worked examples (docs/modding/examples, the reference mods) are an origin too: each example's
+tests/ is a suite, labelled examples/<example>, built and run like the rest with LumaKit beside them.
+
+--device runs on an Android device instead (luma_test.py run --device; the test app prepared with
+luma_test_android.py prepare, --bin its test-bin folder, --renderer vulkan): every mod is built for the platforms its
+luma.json names, else android-arm64, and the tests run one at a time.
+
 Exit 0 only when every row is a pass.
 """
 import argparse
@@ -30,6 +37,7 @@ import pathlib
 import platform
 import shutil
 import subprocess
+import threading
 import sys
 import time
 
@@ -39,6 +47,7 @@ import harness_self  # noqa: E402
 
 TREE = pathlib.Path(__file__).resolve().parents[2]
 TESTS = TREE / "tests" / "mods"
+EXAMPLES = TREE / "docs" / "modding" / "examples"
 RUNNER = TREE / "tools" / "lumacore" / "luma_test.py"
 # Beside each suite.json of the copy, its list as copied: run_suite rewrites suite.json to the tests one run takes (the
 # runner reads a suite by that name), so a later run of the same copy reads what the suite holds from here.
@@ -52,12 +61,112 @@ if platform.machine().lower() in ("arm64", "aarch64"):
 
 def copies(ll_tree):
     """(source folder, its place under <work>/tree): what is copied and built."""
-    out = [(TESTS, "tests/mods")] + [(TREE / name, name) for name in INCLUDED]
+    out = [(TESTS, "tests/mods"), (EXAMPLES, "examples")] + [(TREE / name, name) for name in INCLUDED]
     if ll_tree is not None:
         # LumaKit beside the tests' mods, where `lumalink build` looks first for a mod a mod needs (../<id>), and
         # where the tests name it (../../mods/lumakit); without it, the build would take this machine's installed kit.
-        out += [(ll_tree / "tests" / "game", "lumalink/tests/game"), (ll_tree / "lumakit", "lumalink/tests/game/mods/lumakit")]
+        # The examples get it beside them too, as a mod author has the kit installed.
+        out += [(ll_tree / "tests" / "game", "lumalink/tests/game"), (ll_tree / "lumakit", "lumalink/tests/game/mods/lumakit"),
+                (ll_tree / "lumakit", "examples/lumakit")]
     return out
+
+
+# Where each origin's suites are in the copy: tests/mods' and LumaLink's are <copy>/<suite>/suite.json; an example's
+# tests are its tests/ folder, which the copy moves out of the mod to <copy>/.suites/<example> (example_suites): its
+# label, its runs and its logs carry the example's name, no two examples share a suite folder, and the mod the game
+# is given holds only what a .luma holds.
+SUITE_GLOB = {"examples/": ".suites/*/suite.json"}
+
+
+def suite_files(prefix, copy):
+    return sorted(copy.glob(SUITE_GLOB.get(prefix, "*/suite.json")))
+
+
+def picked(only, prefix, label, name):
+    """Whether --only takes the test: its origin (examples, lumalink), its suite, or itself."""
+    return (prefix and prefix.rstrip("/") in only) or label in only or "%s/%s" % (label, name) in only
+
+
+def run_name(suite: pathlib.Path, name: str):
+    """The test's name (test.json "name"): the runner's run folder and what continue_from names. A suite lists
+    folders, and an example's test folder may be named apart from its test (tests/hidden holds hud-hidden)."""
+    try:
+        named = json.loads((suite / name / "test.json").read_text(encoding="utf-8")).get("name", name)
+    except (OSError, ValueError, AttributeError):
+        return name
+    return named if isinstance(named, str) else name
+
+
+def example_suites(examples: pathlib.Path):
+    """In the copy, each example's tests/ (every folder in it with a test.json) becomes the suite .suites/<example>,
+    its suite.json listing them with each test after the one it continues from. A test's mods that were outside
+    tests/ (the example itself, "../..") are named from the suite's new place; those inside it (a probe beside the
+    tests) moved with it. The mods the game comes with (LumaKit, copied beside the examples) are added to a test that
+    starts a mod needing one, as the game installs them for a player."""
+    if not examples.is_dir():
+        return
+    suites = examples / ".suites"
+    shipped = {}
+    for folder in examples.iterdir():
+        if not (EXAMPLES / folder.name).is_dir() and (folder / "luma.json").is_file():
+            shipped[json.loads((folder / "luma.json").read_text(encoding="utf-8")).get("id")] = folder
+
+    def needs_of(mod):
+        try:
+            needs = json.loads((mod / "luma.json").read_text(encoding="utf-8")).get("needs", [])
+        except (OSError, ValueError):
+            return []
+        return [n.get("id") for n in needs if isinstance(n, dict)]
+    for example in sorted(p for p in examples.iterdir() if (EXAMPLES / p.name).is_dir() and (p / "tests").is_dir()):
+        suite = example / "tests"
+        folders = sorted(p.name for p in suite.iterdir() if (p / "test.json").is_file())
+        if not folders:
+            continue
+        folder_of = {run_name(suite, f): f for f in folders}
+        ordered = []
+
+        def place(folder, seen=()):
+            if folder in ordered or folder in seen:
+                return
+            try:
+                before = json.loads((suite / folder / "test.json").read_text(encoding="utf-8")).get("continue_from")
+            except ValueError:
+                before = None
+            if isinstance(before, str) and before in folder_of:
+                place(folder_of[before], seen + (folder,))
+            ordered.append(folder)
+
+        for folder in folders:
+            place(folder)
+        (suite / "suite.json").write_text(json.dumps({"harness": 1, "tests": ordered}, indent=2), encoding="utf-8")
+        moved = suites / example.name
+        for folder in folders:
+            path = suite / folder / "test.json"
+            test = json.loads(path.read_text(encoding="utf-8"))
+            mods = test.get("mods")
+            if not isinstance(mods, list):
+                continue
+            renamed = []
+            started = []
+            for m in mods:
+                # A mod is a path, or {"path": ..., "options": ...}.
+                given = m.get("path") if isinstance(m, dict) else m
+                at = pathlib.Path(os.path.normpath(suite / folder / given)) if isinstance(given, str) else None
+                if at is not None:
+                    started.append(at)
+                if at is None or at == suite or suite in at.parents:
+                    renamed.append(m)
+                    continue
+                there = pathlib.Path(os.path.relpath(at, moved / folder)).as_posix()
+                renamed.append(dict(m, path=there) if isinstance(m, dict) else there)
+            for need in sorted({n for at in started for n in needs_of(at)}):
+                if need in shipped and shipped[need] not in started:
+                    renamed.append(pathlib.Path(os.path.relpath(shipped[need], moved / folder)).as_posix())
+            if renamed != mods:
+                test["mods"] = renamed
+                path.write_text(json.dumps(test, indent=2, ensure_ascii=False), encoding="utf-8")
+        suites.mkdir(exist_ok=True)
+        suite.rename(moved)
 
 
 def stamp_of(lumalink: pathlib.Path, ll_tree, names: pathlib.Path):
@@ -97,19 +206,21 @@ def needed_ids(mod: pathlib.Path):
     return [n.get("id") for n in manifest_of(mod).get("needs", []) if isinstance(n, dict)]
 
 
-def platforms_of(mod: pathlib.Path):
+def platforms_of(mod: pathlib.Path, system=None):
+    """The platforms luma.json's code names, else `system` (the device's), else this computer's."""
+    system = system or HOST_PLATFORM
     try:
         manifest = json.loads((mod / "luma.json").read_text(encoding="utf-8"))
     except ValueError:
-        return [HOST_PLATFORM]
+        return [system]
     code = manifest.get("code") if isinstance(manifest, dict) else None
     platforms = code.get("platforms") if isinstance(code, dict) else None
-    return list(platforms) if isinstance(platforms, list) and platforms else [HOST_PLATFORM]
+    return list(platforms) if isinstance(platforms, list) and platforms else [system]
 
 
-def build_one(lumalink, mod, names, sdk, log_folder):
+def build_one(lumalink, mod, names, sdk, log_folder, system=None):
     cmd = [str(lumalink), "build", str(mod), "--names", str(names), "--sdk", str(sdk)]
-    for p in platforms_of(mod):
+    for p in platforms_of(mod, system):
         cmd += ["--platform", p]
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if r.returncode != 0:
@@ -127,7 +238,8 @@ def prepare(args, lumalink, work, ll_tree):
     if not (names / "luma_types.json").exists() and (pathlib.Path(args.bin) / "luma_types.json").exists():
         names = pathlib.Path(args.bin)
     # What is built depends on the selection too: a run of some tests builds only their mods.
-    stamp = stamp_of(lumalink, ll_tree, names) + ("" if not args.only else " only " + " ".join(sorted(args.only)))
+    stamp = (stamp_of(lumalink, ll_tree, names) + ("" if not args.only else " only " + " ".join(sorted(args.only)))
+             + ("" if not args.system else " for " + args.system))
     stamp_file = work / "tree.stamp"
     failed_file = work / "tree.failed.json"
     if stamp_file.exists() and stamp_file.read_text() == stamp and failed_file.exists():
@@ -140,6 +252,7 @@ def prepare(args, lumalink, work, ll_tree):
             shutil.copy2(source, tree / place)
         else:
             shutil.copytree(source, tree / place)
+    example_suites(tree / "examples")
     for listed in tree.rglob("suite.json"):
         shutil.copy2(listed, listed.with_name(COPIED))
     logs = work / "build-logs"
@@ -168,7 +281,7 @@ def prepare(args, lumalink, work, ll_tree):
             if not wave:
                 # Needs in a circle (a loader test of exactly that): built as they are, each without the others.
                 wave = left
-            for mod, why in pool.map(lambda m: build_one(lumalink, m, names, sdk, logs), wave):
+            for mod, why in pool.map(lambda m: build_one(lumalink, m, names, sdk, logs, args.system), wave):
                 if why is not None:
                     failed[mod] = why
             left = [m for m in left if m not in wave]
@@ -183,11 +296,13 @@ def selected_mods(tree, only, mods):
     directly or through others: what a run of some tests builds."""
     beside = {(m.parent, manifest_id(m)): m for m in mods}
     todo = []
-    for prefix, copy in (("", tree / "tests" / "mods"), ("lumalink/", tree / "lumalink" / "tests" / "game")):
-        for suite_json in sorted(copy.glob("*/suite.json")):
+    for prefix, copy in (("", tree / "tests" / "mods"), ("lumalink/", tree / "lumalink" / "tests" / "game"),
+                         ("examples/", tree / "examples")):
+        for suite_json in suite_files(prefix, copy):
             label = prefix + suite_json.parent.name
             listed = json.loads((suite_json.parent / COPIED).read_text(encoding="utf-8"))["tests"]
-            names = [n for n in listed if label in only or "%s/%s" % (label, n) in only]
+            folder_of = {run_name(suite_json.parent, n): n for n in listed}
+            names = [n for n in listed if picked(only, prefix, label, n)]
             seen = set()
             while names:
                 name = names.pop()
@@ -198,7 +313,7 @@ def selected_mods(tree, only, mods):
                 test = json.loads((folder / "test.json").read_text(encoding="utf-8"))
                 todo += test_mods(folder, test)
                 if isinstance(test.get("continue_from"), str):
-                    names.append(test["continue_from"])
+                    names.append(folder_of.get(test["continue_from"], test["continue_from"]))
     wanted = set()
     while todo:
         mod = todo.pop()
@@ -218,9 +333,27 @@ def test_mods(folder: pathlib.Path, test: dict):
     return out
 
 
+HOLDS = {}
+HOLDS_GUARD = threading.Lock()
+
+
 def run_unit(args, unit, work):
     """One runner on some tests of one suite (luma_test.py run <the copy's suite.json> --test ...), with its own lock
-    and log: the runner's exit code and log. Units run side by side; each test has its own run folder."""
+    and log: the runner's exit code and log. Units run side by side; each test has its own run folder. A unit
+    whose tests hold something (test.json "holds": a fixed port) first takes that thing's lock, so two runs never
+    hold it at once."""
+    with HOLDS_GUARD:
+        locks = [HOLDS.setdefault(h, threading.Lock()) for h in sorted(unit.get("holds", ()))]
+    for held in locks:
+        held.acquire()
+    try:
+        return run_unit_held(args, unit, work)
+    finally:
+        for held in reversed(locks):
+            held.release()
+
+
+def run_unit_held(args, unit, work):
     log = work / "logs" / ("%s%s-%s-%d%s.log" % (unit["origin"], unit["suite"].name, args.renderer, unit["index"], unit["tag"]))
     lock = work / "locks" / log.with_suffix(".lock").name
     log.parent.mkdir(parents=True, exist_ok=True)
@@ -230,6 +363,8 @@ def run_unit(args, unit, work):
            "--lock", str(lock)]
     for name in unit["tests"]:
         cmd += ["--test", name]
+    if args.device:
+        cmd += ["--device", args.device] + (["--device-lock", args.device_lock] if args.device_lock else [])
     if args.pak:
         cmd += ["--pak", args.pak]
     while args.wait_while and pathlib.Path(args.wait_while).exists():
@@ -260,7 +395,7 @@ def run_units(args, units, work):
         if unit["tag"]:
             continue
         for name in unit["tests"]:
-            result, _ = read_result(unit["run_root"], unit["suite"].name, name, args.renderer)
+            result, _ = read_result(unit["run_root"], unit["suite"].name, run_name(unit["suite"], name), args.renderer)
             if result is not None and isinstance(result.get("seconds"), (int, float)):
                 times["%s%s/%s" % (unit["origin"], unit["suite"].name, name)] = result["seconds"]
     times_file.write_text(json.dumps(times, indent=1, sort_keys=True), encoding="utf-8")
@@ -283,7 +418,7 @@ def facts_lines(folder, ignored=()):
     return [line for line in path.read_text(encoding="utf-8").splitlines() if json.loads(line).get("key") not in ignored]
 
 
-def chains(names, tests):
+def chains(names, tests, folder_of=None):
     """The suite's tests (in its order) as the units that each run in one runner: a test continuing from another
     (continue_from) runs after it in the same runner, which keeps a passed test's folder for the next; every other
     test is a unit of its own."""
@@ -296,6 +431,7 @@ def chains(names, tests):
 
     for name in names:
         before = tests[name].get("continue_from")
+        before = (folder_of or {}).get(before, before)
         if isinstance(before, str) and before in group:
             group[root(name)] = root(before)
     units = {}
@@ -308,17 +444,19 @@ def plan_origin(args, prefix, copy, run_root, build_failed):
     """What one origin's suites run: (rows already known, units, the tests to judge). A test the selection takes
     brings the tests it continues from. Each test's run folder is emptied first."""
     rows, units, judged = [], [], []
-    for suite_json in sorted(copy.glob("*/suite.json")):
+    for suite_json in suite_files(prefix, copy):
         suite = suite_json.parent
         label = prefix + suite.name
         listed = json.loads((suite / COPIED).read_text(encoding="utf-8"))["tests"]
         tests = {name: json.loads((suite / name / "test.json").read_text(encoding="utf-8")) for name in listed}
-        chosen = [name for name in listed if not args.only or label in args.only or "%s/%s" % (label, name) in args.only]
+        folder_of = {run_name(suite, name): name for name in listed}
+        chosen = [name for name in listed if not args.only or picked(args.only, prefix, label, name)]
         wanted = set()
         for name in chosen:
             while isinstance(name, str) and name in tests and name not in wanted:
                 wanted.add(name)
                 name = tests[name].get("continue_from")
+                name = folder_of.get(name, name)
         to_run, once, twice = [], {}, []
         for name in listed:
             if name not in wanted:
@@ -339,28 +477,38 @@ def plan_origin(args, prefix, copy, run_root, build_failed):
         if not to_run:
             continue
         for name in to_run:
+            shutil.rmtree(run_root / "runs" / suite.name / run_name(suite, name), ignore_errors=True)
             shutil.rmtree(run_root / "runs" / suite.name / name, ignore_errors=True)
         second = run_root / "second"
         for name in twice:
-            shutil.rmtree(second / "runs" / suite.name / name, ignore_errors=True)
-        for index, chain in enumerate(chains(to_run, tests)):
+            shutil.rmtree(second / "runs" / suite.name / run_name(suite, name), ignore_errors=True)
+        for index, chain in enumerate(chains(to_run, tests, folder_of)):
+            holds = {h for name in chain for h in tests[name].get("holds", [])}
             units.append({"origin": prefix.replace("/", "-"), "suite": suite, "tests": chain, "run_root": run_root,
-                          "index": index, "tag": ""})
+                          "index": index, "tag": "", "holds": holds})
             if any(name in twice for name in chain):
                 units.append({"origin": prefix.replace("/", "-"), "suite": suite, "tests": chain, "run_root": second,
-                              "index": index, "tag": "-second"})
+                              "index": index, "tag": "-second", "holds": holds})
         judged += [(label, suite, name, once[name], name in twice) for name in to_run]
     return rows, units, judged
 
 
-def judge(args, judged, run_root, logs_by_suite):
+def logs_of_tests(units, logs):
+    """{(suite, test folder): the log of the runner that ran it} (the first run's, not a second run's)."""
+    return {(u["suite"], name): logs.get(id(u)) for u in units if not u["tag"] for name in u["tests"]}
+
+
+def judge(args, judged, run_root, logs_by_test):
     """The rows of the tests run: the runner's verdict, or for a harness test its expected.json's (harness_self)."""
     rows = []
     second = run_root / "second"
     for label, suite, name, expected, twice in judged:
-        result, folder = read_result(run_root, suite.name, name, args.renderer)
+        result, folder = read_result(run_root, suite.name, run_name(suite, name), args.renderer)
+        if result is None and run_name(suite, name) != name:
+            # A test.json the runner refused before reading its name: reported under its folder's name.
+            result, folder = read_result(run_root, suite.name, name, args.renderer)
         if result is None:
-            rows.append((label, name, "no-result", "the runner left no result.json (log: %s)" % logs_by_suite.get(suite, "?")))
+            rows.append((label, name, "no-result", "the runner left no result.json (log: %s)" % logs_by_test.get((suite, name), "?")))
             continue
         if expected is None:
             rows.append((label, name, result["verdict"], result.get("reason", "")))
@@ -369,7 +517,7 @@ def judge(args, judged, run_root, logs_by_suite):
         if twice:
             twin = expected["twice_same_facts"]
             ignored = set(twin.get("except", [])) if isinstance(twin, dict) else set()
-            again, folder2 = read_result(second, suite.name, name, args.renderer)
+            again, folder2 = read_result(second, suite.name, run_name(suite, name), args.renderer)
             if again is None or facts_lines(folder2) is None:
                 problems.append("the second run left no facts")
             elif facts_lines(folder, ignored) != facts_lines(folder2, ignored):
@@ -391,13 +539,12 @@ def run_origin(args, prefix, copy, run_root, work, build_failed):
     every origin first and runs all their units in one pool; this is the same for one origin."""
     rows, units, judged = plan_origin(args, prefix, copy, run_root, build_failed)
     logs = run_units(args, units, work)
-    by_suite = {u["suite"]: logs.get(id(u)) for u in units}
-    return rows + judge(args, judged, run_root, by_suite)
+    return rows + judge(args, judged, run_root, logs_of_tests(units, logs))
 
 
 QUICK = TESTS / "quick.json"
 # The label prefixes of the origins other than this tree's tests/mods.
-ORIGINS = ("lumalink/",)
+ORIGINS = ("lumalink/", "examples/")
 
 
 def quick_set(copies):
@@ -408,6 +555,11 @@ def quick_set(copies):
     problems = []
     known = {}
     for prefix, copy in copies:
+        if prefix == "examples/":
+            # The source's examples: each one's test folders, which example_suites makes its suite in the copy.
+            for example in sorted(p for p in copy.iterdir() if (p / "tests").is_dir()):
+                known[prefix + example.name] = sorted(t.parent.name for t in (example / "tests").glob("*/test.json"))
+            continue
         for suite_json in sorted(copy.glob("*/suite.json")):
             known[prefix + suite_json.parent.name] = json.loads(suite_json.read_text(encoding="utf-8"))["tests"]
     given = {prefix for prefix, _ in copies}
@@ -490,7 +642,7 @@ def main():
     parser.add_argument("--renderer", required=True, choices=("d3d12", "vulkan", "d3d11"))
     parser.add_argument("--bin", required=True)
     parser.add_argument("--work", required=True)
-    parser.add_argument("--only", action="append", default=[], help="a suite, or suite/test (repeat for several)")
+    parser.add_argument("--only", action="append", default=[], help="a suite, suite/test, or an origin: examples, lumalink (repeat for several)")
     parser.add_argument("--lock", help="held for the whole run; refused while it exists (default: <work>/run.lock)")
     parser.add_argument("--pak", help="the game.pak (default: the bin folder's pak.path)")
     parser.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) // 2), help="mods built at once")
@@ -504,7 +656,15 @@ def main():
     parser.add_argument("--lumalink-cache", default=os.environ.get("LUMALINK_CACHE", "lumalink-pin"),
                         help="the pinned LumaLink's checkout and build when LUMALINK is not given (or LUMALINK_CACHE)")
     parser.add_argument("--commit", help="the commit the results are recorded under (default: the tree's HEAD)")
+    parser.add_argument("--device", help="an Android device's serial: the tests run there (--bin: the test app's test-bin)")
+    parser.add_argument("--device-lock", default=os.environ.get("LUMA_TEST_DEVICE_LOCK"),
+                        help="the device's lock folder, which each runner takes (luma_test.py run --device-lock)")
     args = parser.parse_args()
+    args.system = None
+    if args.device:
+        # One device plays one game at a time; its mods are built for it.
+        args.parallel = 1
+        args.system = "android-arm64"
     lumalink = os.environ.get("LUMALINK")
     if not lumalink:
         lumalink, ll_checkout = pinned_lumalink(pathlib.Path(args.lumalink_cache).resolve())
@@ -542,7 +702,7 @@ def main():
 
 def run_all(args, lumalink, work, ll_tree):
     if args.set == "quick":
-        sources = [("", TESTS)] + ([("lumalink/", ll_tree / "tests" / "game")] if ll_tree is not None else [])
+        sources = [("", TESTS), ("examples/", EXAMPLES)] + ([("lumalink/", ll_tree / "tests" / "game")] if ll_tree is not None else [])
         selection, problems = quick_set(sources)
         if problems:
             for problem in problems:
@@ -556,7 +716,8 @@ def run_all(args, lumalink, work, ll_tree):
             print("build-failed %s: %s" % (mod.relative_to(tree).as_posix(), why))
         return 0 if not build_failed else 1
     # (label prefix, the copy's suites, the runs' folder)
-    origins = [("", tree / "tests" / "mods", work / args.renderer)]
+    origins = [("", tree / "tests" / "mods", work / args.renderer),
+               ("examples/", tree / "examples", work / args.renderer / "examples")]
     rows = []
     if ll_tree is not None:
         origins.append(("lumalink/", tree / "lumalink" / "tests" / "game", work / args.renderer / "lumalink"))
@@ -565,9 +726,9 @@ def run_all(args, lumalink, work, ll_tree):
     planned = [(run_root,) + plan_origin(args, prefix, copy, run_root, build_failed) for prefix, copy, run_root in origins]
     units = [u for _, _, origin_units, _ in planned for u in origin_units]
     logs = run_units(args, units, work)
-    by_suite = {u["suite"]: logs.get(id(u)) for u in units}
+    by_test = logs_of_tests(units, logs)
     for run_root, known, _, judged in planned:
-        rows += known + judge(args, judged, run_root, by_suite)
+        rows += known + judge(args, judged, run_root, by_test)
     for suite, name, verdict, reason in rows:
         print("%-40s %-7s %-14s %s" % ("%s/%s" % (suite, name), args.renderer, verdict, reason))
     passed = sum(1 for r in rows if r[2] == "pass")

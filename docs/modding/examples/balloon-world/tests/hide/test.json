@@ -2,6 +2,7 @@
   "harness": 1,
   "name": "balloon-hide",
   "about": "Good Egg, star 1, with a balloon server on this computer: Mario walks ahead, the pause menu's Hide a balloon (the mod's first entry) starts the clock and the line at the top; back in play he walks on and Place (D-pad down) puts the balloon on the ground under him; the hint typed and Enter send it with the stage, star and position; the result screen says it is hidden, and A closes it.",
+  "holds": ["port 18741"],
   "proves": ["kit.menu", "kit.hud", "kit.actor", "kit.screen", "services.input", "services.net.local", "services.net.http"],
   "mods": ["../server", {"path": "../..", "options": {"server": "http://127.0.0.1:18741", "hide_seconds": 30, "find_seconds": 60}}],
   "stage": {"name": "EggStarGalaxy", "scenario": 1},

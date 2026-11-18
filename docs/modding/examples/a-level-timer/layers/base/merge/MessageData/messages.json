@@ -1,0 +1,17 @@
+{
+  "lines": {
+    "LevelTimer_Label": {
+      "default": "Time",
+      "fr": "Temps",
+      "es": "Tiempo",
+      "de": "Zeit",
+      "it": "Tempo",
+      "nl": "Tijd",
+      "pt": "Tempo",
+      "ja": "タイム",
+      "ko": "타임",
+      "zh-Hans": "时间",
+      "zh-Hant": "時間"
+    }
+  }
+}

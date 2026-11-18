@@ -2,6 +2,7 @@
   "harness": 1,
   "name": "balloon-find",
   "about": "Good Egg, star 1, the server holding one balloon there (hint \"Ahead of the start\"): Find a balloon (the mod's second pause entry) asks the server for this stage and star, the hints show to choose from, A takes the first; back in play the balloon stands ahead with its hint and the clock; Mario walks into it, it pops, the time is sent and the result screen shows it.",
+  "holds": ["port 18741"],
   "proves": ["kit.menu", "kit.screen", "kit.actor", "kit.hud", "services.net.local", "services.net.http"],
   "mods": ["../server", {"path": "../..", "options": {"server": "http://127.0.0.1:18741", "hide_seconds": 30, "find_seconds": 60}}],
   "stage": {"name": "EggStarGalaxy", "scenario": 1},

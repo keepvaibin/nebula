@@ -37,15 +37,20 @@ enum {
 };
 
 /* A sample of the controls from an extension. They add to the devices': a button either holds is held; a stick or
-   pointer the extension gives replaces the devices'. */
+   pointer the extension gives replaces the devices'; a look turn adds to theirs. The host's buffer is
+   NebulaHostForExtension.controls_size bytes: a field past it is not the host's to read, and not written. */
 typedef struct NebulaExtensionControls {
     uint32_t buttons;        /* NEBULA_EXT_BUTTON_* */
     uint8_t has_stick;       /* stick_x/y are given */
     uint8_t has_pointer;     /* pointer_x/y are given */
     uint8_t shake;           /* a Wii Remote shake */
-    uint8_t reserved;
+    uint8_t has_look;        /* look_yaw/pitch are given (0 in an extension that has no look) */
     float stick_x, stick_y;  /* the Nunchuk stick, -1 to 1 */
     float pointer_x, pointer_y; /* the pointer on the game's picture, -1 to 1 (y down) */
+    /* A first-person look's turn this sample (input 1.4 look_mode), radians: right, and up. Given while a mod's look is
+       on and the game is in play, the window's focus aside (the extension plays, as a test window does unseen); it never
+       makes the window hold the mouse. */
+    float look_yaw, look_pitch;
 } NebulaExtensionControls;
 
 /* Where the game is, as the host counts it. */
@@ -126,6 +131,9 @@ typedef struct NebulaHostForExtension {
        does): taken out with the mods that use it, loaded again, then they are; the harness fact reload.<id> once it
        ends. Null in a host without mods. */
     void (*reload_mod)(void* host, const char* mod_id);
+    /* sizeof(NebulaExtensionControls) as the host has it: the bytes `controls` may write (0: the struct up to
+       pointer_y). */
+    uint32_t controls_size;
 } NebulaHostForExtension;
 
 /* What the extension offers. Each function may be null. */

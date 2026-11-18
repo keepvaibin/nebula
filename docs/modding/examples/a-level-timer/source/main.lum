@@ -1,0 +1,49 @@
+// A level timer: the mod's own screen (LayoutData/LevelTimer.arc) at the bottom right, where the coin counter stood
+// (its patch moves it up), counting the level's world steps; its label in the player's language from the mod's
+// messages. The clock stops while the game is paused, as the world does.
+use svc.ui
+
+var screen: ui.Screen? = none
+var time_pane: ui.Pane? = none
+var steps: u32 = 0
+
+// m:ss.cc of world steps (60 a second).
+fn clock(n: u32) -> text {
+    let hundredths = n * 100 / 60
+    let seconds = hundredths / 100
+    let cc = hundredths % 100
+    let ss = seconds % 60
+    return "{seconds / 60}:{if ss < 10 { "0" } else { "" }}{ss}.{if cc < 10 { "0" } else { "" }}{cc}"
+}
+
+// A star's level starts: the screen opens with its label and a zero time.
+on stage ready {
+    steps = 0
+    if MR::isStageFileSelect() or MR::isStageAstroLocation() {
+        return
+    }
+    guard let s = ui.open("LevelTimer", ui.Layer.Hud) else { return }
+    if let label = ui.pane(s, "Label") {
+        ui.set_text(label, text "LevelTimer_Label")
+    }
+    time_pane = ui.pane(s, "Time")
+    ui.play(s, "In", false, none)
+    screen = s
+    log fact "opened" true
+}
+
+// The world's steps: none while the game is paused.
+on step {
+    guard let p = time_pane else { return }
+    steps += 1
+    ui.set_text(p, clock(steps))
+    if steps % 60 == 0 {
+        log fact "seconds" steps / 60
+    }
+}
+
+// The stage's screens close with it.
+on stage ended {
+    screen = none
+    time_pane = none
+}

@@ -41,7 +41,8 @@ M12 platforms for mods; M14 the six reference mods; M11 documentation, from the 
   stream at the mod's rate and channels, SDL's camera converted to RGBA at the camera's own size), replacing the AAudio
   and Camera2 code; on macOS and iOS through AVFoundation (runtime/src/luma_capture_apple.mm); the item, its lock and
   the hand-offs shared in luma_capture_backend.h. Proof: audio/2606-capture-mic and 2607-capture-camera on the tablet
-  (real microphone blocks (48 kHz mono) and real camera pictures (640×480 RGBA) from the tablet's devices); Linux and Apple compile in GitHub's check.
+  (real microphone blocks (48 kHz mono) and real camera pictures (640×480 RGBA) from the tablet's devices); Linux and Apple
+  compile in GitHub's check (run 44250438876 on c50533c71: the Linux and Mac jobs green; M-074 the same Mac job).
 - M-074 fixed: draw.native 1.1 calls a Metal mod's function (LUMA_DRAW_NATIVE_METAL, LumaDrawNativeMetal with
   get_proc_addr); world/2491-native's mod clears through Metal too and still passes on d3d12. backend() answers the
   renderer (2 for Vulkan on MoltenVK, 4 for Metal), not 0 on every Apple build.
@@ -49,3 +50,27 @@ M12 platforms for mods; M14 the six reference mods; M11 documentation, from the 
   compiled but never run.
 - Files of others touched, one line each: native/petari/src/Game/System/LumaServices.cpp (draw.native's minor 1),
   native/host/host_main.cpp (backend()), platform/sdl and platform/apple CMake (the capture sources and frameworks).
+
+## 2026-11-17 M14 reference mods, M10 look (LumaLink 104f6c8)
+
+- The six reference mods, each a worked example of docs/modding (examples/<name>, a tutorial each), built from the
+  public docs and the released tools: first-person (kit.camera's eye rig with look: the player turns the view, Mario
+  runs where he looks), a-new-object (the Sky Lift, a new object kind the player rides), a-level-timer (a HUD timer
+  whose label is the game's own text in every disc language), ghost-time-trial (a ghost replay, the same steps to
+  0.002 units on every platform), a-stage-edit (Good Egg Remix: five coins added along a walk, a timer block taken
+  out) and a-new-character (Robo: a model from any 3D tool bound to Mario's skeleton with `lumalink add character`,
+  his own actions, voice and jump).
+- Gated: mod_tests runs docs/modding/examples as the origin examples/ (N-4007), every example's tests in the mods
+  level and one of each in the quick set. examples/together: the six at once, and with each one installed and
+  switched off in turn (the other five still do what each does alone, the one off does nothing). 48 of 48 pass on
+  Direct3D 12, Vulkan and Direct3D 11; the tablet builds all 20 example mods (N-4016).
+- a-level-timer's label tests run in every language the discs have (US English, Spanish and French; EU English,
+  Spanish, French, German, Italian and Dutch on RMGP01; Japanese on RMGJ01).
+- Fixed with tests: N-4006 (look step, M10), N-4008 (kit.camera look, M10), N-4009 (list models joints, M8),
+  N-4010 (count step), N-4012 (holds), N-4013 (add character report, M8), N-4016 (scripts build for a device),
+  N-4017 (a test refused before it is read).
+- Handed to Agent 2 (Planner 23:09): N-4011 (a mod's animation file in an archive with no model), N-4014 (a
+  character's look never attached) and N-4015 (its actions and voice never replace the game's). Their test is
+  docs/modding/examples/a-new-character/tests/look-and-moves/test.json.owed; the gated tests/play checks the tuning.
+- Files of others touched: platform/android/build_apk.ps1 (the names set in test-bin), tools/lumacore/mod_tests.py
+  and luma_test.py (holds, logs per test, the folder's result, the examples origin); board 23:16.

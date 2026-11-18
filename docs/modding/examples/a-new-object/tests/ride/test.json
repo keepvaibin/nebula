@@ -1,0 +1,111 @@
+{
+  "harness": 1,
+  "name": "sky-lift-ride",
+  "about": "Good Egg, star 1: Mario is put 100 units over the Sky Lift, which floats 150 over the ground; he lands on its top (its own ground, not the planet's), it carries him up 300 units and holds there; he runs off and it sinks back to its place",
+  "proves": [
+    "stage.place",
+    "model.mod_model",
+    "kit.actor"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "player": {
+    "position": [
+      -3200.0,
+      -12850.0,
+      -15950.0
+    ]
+  },
+  "limit_seconds": 120,
+  "steps": [
+    {
+      "at": 20,
+      "call": "MR::isOnGroundPlayer",
+      "signature": "bool()",
+      "args": [],
+      "fact": "landed"
+    },
+    {
+      "at": 20,
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "args": [],
+      "fact": "on_top"
+    },
+    {
+      "at": 20,
+      "picture": "landed"
+    },
+    {
+      "at": 200,
+      "call": "MR::getPlayerPos",
+      "signature": "Vec3f *()",
+      "args": [],
+      "fact": "carried"
+    },
+    {
+      "at": 200,
+      "picture": "carried"
+    },
+    {
+      "at": 210,
+      "stick": [
+        0,
+        1
+      ],
+      "frames": 90
+    },
+    {
+      "at": 420,
+      "count": "object:LumaObj",
+      "near": [
+        -3200.0,
+        -12950.0,
+        -15950.0
+      ],
+      "within": 5,
+      "fact": "lift_home"
+    },
+    {
+      "at": 420,
+      "picture": "sunk-back"
+    },
+    {
+      "at": 422,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "landed",
+      "is": true
+    },
+    {
+      "fact": "on_top",
+      "near": [
+        -3200.0,
+        -12940.0,
+        -15950.0
+      ],
+      "within": 15
+    },
+    {
+      "fact": "carried",
+      "near": [
+        -3200.0,
+        -12650.0,
+        -15950.0
+      ],
+      "within": 10
+    },
+    {
+      "fact": "lift_home",
+      "at_least": 1
+    }
+  ]
+}

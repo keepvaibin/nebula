@@ -2,6 +2,7 @@
   "harness": 1,
   "name": "balloon-hide-time-up",
   "about": "Good Egg, star 1, 10 seconds to hide: Hide a balloon is chosen in the pause menu and Mario never presses Place; when the clock reaches 0 the clock and line go, the result screen says time is up, and nothing is placed or sent.",
+  "holds": ["port 18741"],
   "proves": ["kit.menu", "kit.hud", "kit.screen", "services.time"],
   "mods": ["../server", {"path": "../..", "options": {"server": "http://127.0.0.1:18741", "hide_seconds": 10, "find_seconds": 60}}],
   "stage": {"name": "EggStarGalaxy", "scenario": 1},

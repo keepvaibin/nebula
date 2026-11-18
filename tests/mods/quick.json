@@ -1,6 +1,6 @@
 {
  "harness": 1,
- "about": "The quick gate's mod tests (plan 04, section 3.1; mod_tests.py --set quick): one or more tests of every suite, here and in LumaLink's tests/game, about two minutes on Direct3D 12. mod_tests refuses the set when a suite has none of its tests here or a name is not a test.",
+ "about": "The quick gate's mod tests (plan 04, section 3.1; mod_tests.py --set quick): one or more tests of every suite, here, in the documentation's examples and in LumaLink's tests/game, about two minutes on Direct3D 12. mod_tests refuses the set when a suite has none of its tests here or a name is not a test.",
  "tests": [
   "aftercrash/6701-start-crash",
   "anim/3603-walk-events",
@@ -63,6 +63,23 @@
   "varargs/1901-va-call",
   "world/2492-native-declined",
   "lumalink/script/k1-hook",
-  "lumalink/kit/kit-boot-menus"
+  "lumalink/kit/kit-boot-menus",
+  "examples/a-level-timer/label-usenglish",
+  "examples/a-new-character/play",
+  "examples/a-new-galaxy/visit",
+  "examples/a-new-npc/talk",
+  "examples/a-new-object/ride",
+  "examples/a-new-power-up/gold",
+  "examples/a-small-tweak/reloaded",
+  "examples/a-stage-edit/remix",
+  "examples/a-video-in-a-galaxy/movie",
+  "examples/balloon-world/hide",
+  "examples/first-mod/jump",
+  "examples/first-person/play",
+  "examples/ghost-time-trial/run",
+  "examples/hide-the-hud/hidden",
+  "examples/livesplit-link/run",
+  "examples/online-leaderboard/internet-declined",
+  "examples/together/all-six"
  ]
 }

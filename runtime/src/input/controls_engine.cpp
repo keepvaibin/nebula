@@ -49,6 +49,9 @@ NativeInputScriptOverlay extension_controls(std::uint64_t frame) {
     overlay.has_pointer = given.has_pointer != 0u;
     overlay.pointer_x = given.pointer_x;
     overlay.pointer_y = given.pointer_y;
+    overlay.has_look = given.has_look != 0u;
+    overlay.look_yaw = given.look_yaw;
+    overlay.look_pitch = given.look_pitch;
     return overlay;
 }
 

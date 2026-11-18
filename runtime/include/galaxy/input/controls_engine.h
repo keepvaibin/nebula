@@ -15,6 +15,10 @@ struct NativeInputScriptOverlay {
     float pointer_x = 0.0f;
     float pointer_y = 0.0f;
     bool shake = false;
+    // A first-person look's turn this sample (radians: right, up), NebulaExtensionControls.look_*.
+    bool has_look = false;
+    float look_yaw = 0.0f;
+    float look_pitch = 0.0f;
 };
 
 // An XInput trigger is down from this far (of 255).

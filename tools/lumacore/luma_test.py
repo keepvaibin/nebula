@@ -109,6 +109,8 @@ MOD_ID = re.compile(r"[a-z0-9.-]{3,64}")
 MOD_KEY = re.compile(r"[a-z0-9_]+")
 # Revision 6: an object by name or by class, the n-th live one.
 OBJECT_REF = re.compile(r"(object:[^\s#]+|class:[^\s#]+)#\d+")
+# A count step's objects: every live one of a name or class (no #n).
+OBJECT_KIND = re.compile(r"(object:[^\s#]+|class:[^\s#]+)")
 
 
 class HarnessError(Exception):
@@ -260,7 +262,10 @@ def read_test(folder, types=None):
     keys_known(t, "", {"harness", "name", "about", "proves", "mods", "code", "language", "seed", "continue_from",
                        "renderers", "limit_seconds", "bare", "save", "stage", "player", "steps", "expect",
                        "faults", "hide_game_files", "safe_start", "device", "ends", "starts", "fresh", "window",
-                       "time", "visible", "settings", "diagnostics", "disc", "memory"})
+                       "time", "visible", "settings", "diagnostics", "disc", "memory", "holds"})
+    holds = t.get("holds", [])
+    if not isinstance(holds, list) or not all(isinstance(h, str) and h for h in holds):
+        raise HarnessError("holds is a list of names (\"port 47613\")")
     for key in ("harness", "name", "about", "steps", "expect"):
         if key not in t:
             raise HarnessError("the test has no %s" % key)
@@ -585,14 +590,15 @@ def read_steps(t, bare, classes):
     out = []
     ends = 0
     pictures = set()
-    actions = {"hold", "stick", "shake", "pointer", "key", "text", "settings", "picture", "call", "read", "stage", "wait", "hash",
+    actions = {"hold", "stick", "shake", "pointer", "look", "key", "text", "settings", "picture", "call", "read", "count", "stage", "wait", "hash",
                "end", "take_out", "reload", "forget", "copy_file", "load_file", "erase_file", "new_file", "window",
                "lose_device"}
     for i, s in enumerate(steps):
         path = "steps[%d]" % i
         if not isinstance(s, dict):
             raise HarnessError("%s is not an object" % path)
-        keys_known(s, path, actions | {"at", "after", "timeout", "frames", "signature", "args", "fact", "of", "type"}
+        keys_known(s, path, actions | {"at", "after", "timeout", "frames", "signature", "args", "fact", "of", "type",
+                                       "near", "within"}
                    | ({"wait"} if "take_out" in s or "reload" in s else set()))
         # take_out's and reload's "wait" (true or false) is their option, not the wait action.
         kinds = [k for k in s if k in actions and not (k == "wait" and ("take_out" in s or "reload" in s))]
@@ -631,10 +637,10 @@ def read_steps(t, bare, classes):
                 step["after"] = ("fact", key, op, value, within, "when" in a)
             if "timeout" in s:
                 step["timeout"] = whole(s, "timeout", path, 1)
-        needs = {"hold": {"frames"}, "stick": {"frames"}, "pointer": {"frames"}, "call": {"signature"},
-                 "read": {"of", "type", "fact"}}.get(action, set())
-        allowed = needs | {"call": {"args", "fact"}}.get(action, set())
-        for key in ("frames", "signature", "args", "fact", "of", "type"):
+        needs = {"hold": {"frames"}, "stick": {"frames"}, "pointer": {"frames"}, "look": {"frames"}, "call": {"signature"},
+                 "read": {"of", "type", "fact"}, "count": {"fact"}}.get(action, set())
+        allowed = needs | {"call": {"args", "fact"}, "count": {"near", "within"}}.get(action, set())
+        for key in ("frames", "signature", "args", "fact", "of", "type", "near", "within"):
             if key in s and key not in allowed:
                 raise HarnessError("%s: %s does not belong with %s" % (path, key, action))
         for key in needs:
@@ -654,6 +660,13 @@ def read_steps(t, bare, classes):
             if not all(low <= n <= 1 for n in v):
                 raise HarnessError("%s.%s: each is %d to 1" % (path, action, low))
             step["line"] = "%s %r %r %d" % (action, float(v[0]), float(v[1]), whole(s, "frames", path, 1))
+        elif action == "look":
+            # A first-person look's turn each game frame (input 1.4, while a mod's look_mode is on): degrees right, up.
+            if not (isinstance(v, list) and len(v) == 2 and all(isinstance(n, (int, float)) and not isinstance(n, bool) for n in v)):
+                raise HarnessError("%s.look must be two numbers (degrees right, up, each game frame)" % path)
+            if not all(-45 <= n <= 45 for n in v):
+                raise HarnessError("%s.look: each is -45 to 45 degrees" % path)
+            step["line"] = "look %r %r %d" % (float(v[0]), float(v[1]), whole(s, "frames", path, 1))
         elif action == "shake":
             step["line"] = "shake %d" % whole(s, "shake", path, 1)
         elif action == "key":
@@ -760,6 +773,27 @@ def read_steps(t, bare, classes):
             if ty not in READ_TYPES:
                 raise HarnessError("%s.type %s: the harness reads %s" % (path, ty, ", ".join(sorted(READ_TYPES))))
             step["line"] = "game read %s %s %s %s" % (plain(s["fact"], path + ".fact"), of, field, ty)
+        elif action == "count":
+            # The live objects of a name or class, within `within` of `near` when given: the fact is their number.
+            kind = text(s, "count", path)
+            if not OBJECT_KIND.fullmatch(kind):
+                raise HarnessError("%s.count must be \"object:<name>\" or \"class:<Class>\" (every one, no #n)" % path)
+            if kind.startswith("class:"):
+                object_ref(kind + "#0", path + ".count", classes)
+            if ("near" in s) != ("within" in s):
+                raise HarnessError("%s: near and within go together" % path)
+            line = "game count %s %s" % (plain(s["fact"], path + ".fact"),
+                                         kind[len("object:"):] if kind.startswith("object:") else kind)
+            if "near" in s:
+                at = s["near"]
+                if not (isinstance(at, list) and len(at) == 3
+                        and all(isinstance(n, (int, float)) and not isinstance(n, bool) for n in at)):
+                    raise HarnessError("%s.near is a place: three numbers" % path)
+                far = s["within"]
+                if not (isinstance(far, (int, float)) and not isinstance(far, bool) and far >= 0):
+                    raise HarnessError("%s.within is a distance of 0 or more" % path)
+                line += " %r %r %r %r" % (float(at[0]), float(at[1]), float(at[2]), float(far))
+            step["line"] = line
         elif action == "hash":
             # The step hash (tools/verify/step_hash.py): "on" from this step, a fact hash.step after every step; "detail"
             # one fact hash.actor per actor at this step.

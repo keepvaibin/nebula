@@ -1,0 +1,12 @@
+// Robo: the player plays Robo in Mario's place from the start. Robo itself is data, kit/player.character/robo.json:
+// its model (assets/Robot.glb, made from source/Robot.glb by `lumalink add character`), the clips it plays for some
+// of Mario's actions, its voice and its higher jump. When the mod is switched off, Mario comes back.
+use kit.player.character as pc
+
+on start {
+    guard let robo = pc.find("robo") else {
+        log "robo: kit/player.character/robo.json was not read"
+        return
+    }
+    robo.play()
+}

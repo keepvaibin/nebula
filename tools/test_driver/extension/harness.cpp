@@ -18,6 +18,7 @@
 //   cond log <regular expression>            ... or for a log line that matches (the rest of the line)
 //   timeout <frames>                         an `after` step's wait, from the frame the steps before it have all run
 // Actions: hold <BUTTON+BUTTON> <frames> | stick <x> <y> <frames> | shake <frames> | pointer <x> <y> <frames> |
+// look <right degrees> <up degrees> <frames> (each game frame's turn of a first-person look) |
 // key <name> | picture <name> | wait | end | game <line for the game half: call, read, stage>.
 //
 // Facts go to <out>/facts.jsonl: {"frame": <test clock, -1 before frame 0>, "key": ..., "value": <JSON>}. Besides the
@@ -372,8 +373,8 @@ std::string json_string(std::string_view text) {
 
 // --- The plan ------------------------------------------------------------------------------------------------------
 
-enum class Action { Hold, Stick, Shake, Pointer, Key, Text, Settings, Picture, Wait, End, Game, TakeOut, Reload, Forget,
-                    Window, LoseDevice };
+enum class Action { Hold, Stick, Shake, Pointer, Look, Key, Text, Settings, Picture, Wait, End, Game, TakeOut, Reload,
+                    Forget, Window, LoseDevice };
 
 struct Cond {
     bool log = false;
@@ -411,8 +412,8 @@ struct Step {
 struct Input {
     std::int64_t start, frames;
     std::uint32_t buttons;
-    bool shake, stick, pointer;
-    float x, y;
+    bool shake, stick, pointer, look;
+    float x, y;  // a look's: radians a game frame
 };
 
 struct Picture {
@@ -448,6 +449,7 @@ struct State {
     std::size_t given_step = 0u;         // its step, 0 for setup or a frame line
     bool given_frame_line = false;
     std::vector<Input> inputs;
+    std::int64_t look_given = -1;  // the test frame whose look turn was given (once a frame, however often it samples)
     std::deque<Picture> pictures;
     std::string picture_file;
     std::map<std::string, std::string> latest;  // each fact's newest value, as JSON text
@@ -668,6 +670,17 @@ bool read_line(const std::string& line, std::string& why) {
                 s.buttons |= bit;
             }
             s.frames = frames_at(1u);
+        } else if (a == "look" && args.size() == 3u) {
+            s.action = Action::Look;
+            double x = 0.0, y = 0.0;
+            if (!number(args[0], x) || !number(args[1], y) || std::fabs(x) > 45.0 || std::fabs(y) > 45.0) {
+                why = "step " + std::to_string(s.number) + ": look takes two numbers of degrees, -45 to 45";
+                return false;
+            }
+            constexpr double kRadians = 3.14159265358979323846 / 180.0;
+            s.x = static_cast<float>(x * kRadians);
+            s.y = static_cast<float>(y * kRadians);
+            s.frames = frames_at(2u);
         } else if ((a == "stick" || a == "pointer") && args.size() == 3u) {
             s.action = a == "stick" ? Action::Stick : Action::Pointer;
             double x = 0.0, y = 0.0;
@@ -910,11 +923,19 @@ bool holds(const Cond& c) {
 void run_step(Step& s, std::int64_t now) {
     g.since_step.clear();
     switch (s.action) {
-    case Action::Hold: g.inputs.push_back({now, s.frames, s.buttons, false, false, false, 0.0f, 0.0f}); break;
-    case Action::Shake: g.inputs.push_back({now, s.frames, 0u, true, false, false, 0.0f, 0.0f}); break;
-    case Action::Stick: g.inputs.push_back({now, s.frames, 0u, false, true, false, s.x, s.y}); break;
+    case Action::Hold: g.inputs.push_back({now, s.frames, s.buttons, false, false, false, false, 0.0f, 0.0f}); break;
+    case Action::Shake: g.inputs.push_back({now, s.frames, 0u, true, false, false, false, 0.0f, 0.0f}); break;
+    case Action::Stick: g.inputs.push_back({now, s.frames, 0u, false, true, false, false, s.x, s.y}); break;
     // The plan's pointer is in 0..1 of the screen; the host's in -1..1.
-    case Action::Pointer: g.inputs.push_back({now, s.frames, 0u, false, false, true, s.x * 2.0f - 1.0f, s.y * 2.0f - 1.0f}); break;
+    case Action::Pointer: g.inputs.push_back({now, s.frames, 0u, false, false, true, false, s.x * 2.0f - 1.0f, s.y * 2.0f - 1.0f}); break;
+    case Action::Look:
+        if (g.host == nullptr || g.host->size < offsetof(NebulaHostForExtension, controls_size) + sizeof(g.host->controls_size) ||
+            g.host->controls_size < offsetof(NebulaExtensionControls, look_pitch) + sizeof(float)) {
+            finish("harness-error", "step " + std::to_string(s.number) + ": this host takes no look");
+            return;
+        }
+        g.inputs.push_back({now, s.frames, 0u, false, false, false, true, s.x, s.y});
+        break;
     case Action::Key:
         if (g.host == nullptr || g.host->menu_key == nullptr) {
             finish("harness-error", "step " + std::to_string(s.number) + ": this host takes no menu keys");
@@ -1327,6 +1348,15 @@ void controls(std::uint64_t game_frames, NebulaExtensionControls* out) {
             out->pointer_x = i.x;
             out->pointer_y = i.y;
         }
+        // A look turns its amount once a game frame: the host may sample the controls more often than that.
+        if (i.look && g.look_given != now) {
+            out->has_look = 1u;
+            out->look_yaw += i.x;
+            out->look_pitch += i.y;
+        }
+    }
+    if (out->has_look != 0u) {
+        g.look_given = now;
     }
 }
 

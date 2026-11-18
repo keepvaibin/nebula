@@ -1,0 +1,78 @@
+// First person: the camera at Mario's eyes, turned by the player's look (the mouse held by the window, the pointer
+// stick, a gyro or a finger). The game moves Mario by the stick along the camera it shows, so he runs where the player
+// looks. His body is not drawn while the camera is in his head (his shadow is). A key turns it off and on during play.
+use kit.camera
+use svc.input
+
+option first_person: bool
+option fov: int
+
+var fp: camera.Control? = none
+var wanted = true
+var switcher: input.Action? = none
+
+on start {
+    wanted = first_person
+    switcher = input.action("switch")
+}
+
+// The camera on the player's eye joint, the look turning it, the field of view the option's.
+fn begin() {
+    if fp != none {
+        return
+    }
+    guard let p = MarioAccess::getPlayerActor() else { return }
+    let c = camera.take(camera.eye(p, "EyePosition"))
+    camera.look(c)
+    camera.fov(fov as f32)
+    fp = c
+}
+
+// The game's camera again, and its field of view.
+fn finish() {
+    if let c = fp {
+        camera.end(c)
+    }
+    fp = none
+    camera.fov(none)
+}
+
+// Each stage's player: first person from his first frame.
+on player ready {
+    if wanted {
+        begin()
+    }
+}
+
+// A stage ends (a load, the file select): the game's camera until the next stage's player.
+on stage ended {
+    finish()
+}
+
+// The switch key, in play.
+on frame {
+    guard let a = switcher else { return }
+    if input.read(a).pressed != 0 and holds("player") {
+        wanted = not wanted
+        if wanted {
+            begin()
+        } else {
+            finish()
+        }
+    }
+}
+
+on option first_person {
+    wanted = first_person
+    if not wanted {
+        finish()
+    } else if holds("player") {
+        begin()
+    }
+}
+
+on option fov {
+    if fp != none {
+        camera.fov(fov as f32)
+    }
+}

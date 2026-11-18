@@ -256,6 +256,7 @@
     "model.levels": "An attached model with a Low level is drawn at its host's level: its Low while the level's view cube shows the host's far model, its base otherwise (models 6)",
     "model.levels_freed": "Taking out a mod ends its two-level model's handle once, and neither level draws after (models 6)",
     "model.mod_model": "content.model attaches a mod's own model by its name <id>:<path>: the archive the cook made of assets/<path>.gltf, at its true size",
+    "stage.patch": "A mod's patch of a stage's placement table, the galaxy's or a zone's, changes the game's rows by key (set), every row that matches (select) and takes rows out (remove); the stage plays the result, the changed objects at their new places and sizes and the removed ones never made",
     "stage.place": "Objects a mod adds to an existing stage by a patch of its placement table are made by the game's factory as the scene makes its own, and drawn and moving, with no mod code",
     "draw.line3": "draw.line3 draws a line between two points of the world at a draw point, in the scene's view and projection",
     "draw.tri3": "draw.tri3 draws a coloured or textured triangle in the world at a draw point",

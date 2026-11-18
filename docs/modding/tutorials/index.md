@@ -15,8 +15,13 @@ Every tutorial includes a download of the finished mod, with its tests, so you c
 |---|---|
 | [Making a small tweak](a-small-tweak.md) | |
 | [Hiding the HUD](hide-the-hud.md) | |
+| [Changing a stage](a-stage-edit.md) | |
+| [Adding a level timer to the HUD](a-level-timer.md) | |
+| [Adding a new object to a stage](a-new-object.md) | |
 | [Adding a new character to talk to](a-new-npc.md) | |
 | [Adding a new power-up](a-new-power-up.md) | |
+| [Playing as a new character](a-new-character.md) | |
+| [Playing in first person](first-person.md) | |
 | [Adding a new galaxy](a-new-galaxy.md) | |
 | [Playing a video inside a galaxy](a-video-in-a-galaxy.md) | |
 | [Making a game mode: Balloon World](balloon-world.md) | |

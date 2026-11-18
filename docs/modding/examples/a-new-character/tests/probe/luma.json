@@ -1,0 +1,29 @@
+{
+  "format": "1.0",
+  "id": "robo-probe",
+  "version": "1.0.0",
+  "name": "Robo probe",
+  "summary": "The Robo tests' probe: the clip the jump plays and the game's own jump voice, as facts.",
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  },
+  "code": {
+    "platforms": [
+      "windows-x64",
+      "linux-x64",
+      "linux-arm64",
+      "macos-arm64",
+      "macos-x64",
+      "android-arm64",
+      "android-x64"
+    ]
+  }
+}

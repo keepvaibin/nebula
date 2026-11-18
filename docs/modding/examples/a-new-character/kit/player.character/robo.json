@@ -1,0 +1,19 @@
+{
+  "id": "robo",
+  "name": "Robo",
+  "look": "Robot",
+  "actions": {
+    "ジャンプ": "空中一回転",
+    "着地": "着地幅とび"
+  },
+  "voice": {
+    "声小ジャンプ": "voice/Hup",
+    "声中ジャンプ": "voice/Hup",
+    "声大ジャンプ": "voice/HupHigh",
+    "声スピン": "voice/Spin",
+    "声小ダメージ": "voice/Ouch"
+  },
+  "tuning": {
+    "mJumpHeight": 1.25
+  }
+}

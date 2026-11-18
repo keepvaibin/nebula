@@ -218,6 +218,11 @@ bool controls(const NebulaExtensionFrame& frame, NebulaExtensionControls& contro
             controls.pointer_x = one.pointer_x;
             controls.pointer_y = one.pointer_y;
         }
+        if (one.has_look != 0u) {
+            controls.has_look = 1u;
+            controls.look_yaw += one.look_yaw;
+            controls.look_pitch += one.look_pitch;
+        }
     }
     return true;
 }

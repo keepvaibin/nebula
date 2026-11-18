@@ -1,0 +1,81 @@
+{
+  "format": "1.0",
+  "id": "level-timer",
+  "version": "1.0.0",
+  "name": "A Level Timer",
+  "summary": "Shows how long you have been in the level, under the coin counter's new place.",
+  "text": {
+    "UsEnglish": {
+      "name": "A Level Timer",
+      "summary": "Shows how long you have been in the level, under the coin counter's new place."
+    },
+    "EuEnglish": {
+      "name": "A Level Timer",
+      "summary": "Shows how long you have been in the level, under the coin counter's new place."
+    },
+    "UsFrench": {
+      "name": "Chronomètre de niveau",
+      "summary": "Affiche depuis combien de temps vous êtes dans le niveau, sous le compteur de pièces déplacé."
+    },
+    "EuFrench": {
+      "name": "Chronomètre de niveau",
+      "summary": "Affiche depuis combien de temps vous êtes dans le niveau, sous le compteur de pièces déplacé."
+    },
+    "UsSpanish": {
+      "name": "Cronómetro de nivel",
+      "summary": "Muestra cuánto tiempo llevas en el nivel, bajo el contador de monedas en su nuevo sitio."
+    },
+    "EuSpanish": {
+      "name": "Cronómetro de nivel",
+      "summary": "Muestra cuánto tiempo llevas en el nivel, bajo el contador de monedas en su nuevo sitio."
+    },
+    "EuGerman": {
+      "name": "Level-Stoppuhr",
+      "summary": "Zeigt, wie lange du schon im Level bist, unter dem verschobenen Münzzähler."
+    },
+    "EuItalian": {
+      "name": "Cronometro del livello",
+      "summary": "Mostra da quanto tempo sei nel livello, sotto il contamonete spostato."
+    },
+    "EuDutch": {
+      "name": "Levelstopwatch",
+      "summary": "Toont hoe lang je al in het level bent, onder de verplaatste muntenteller."
+    },
+    "UsPortuguese": {
+      "name": "Cronômetro de fase",
+      "summary": "Mostra há quanto tempo você está na fase, abaixo do contador de moedas em seu novo lugar."
+    },
+    "JpJapanese": {
+      "name": "コースタイマー",
+      "summary": "コースに入ってからの時間を、位置を移したコインカウンターの下に表示します。"
+    },
+    "KrKorean": {
+      "name": "코스 타이머",
+      "summary": "코스에 들어온 뒤 지난 시간을 자리를 옮긴 코인 카운터 아래에 보여 줍니다."
+    },
+    "CnSimpChinese": {
+      "name": "关卡计时器",
+      "summary": "在移动后的金币计数器下方显示你进入关卡后的时间。"
+    },
+    "TwTradChinese": {
+      "name": "關卡計時器",
+      "summary": "在移動後的金幣計數器下方顯示你進入關卡後的時間。"
+    }
+  },
+  "authors": [
+    "you"
+  ],
+  "game": {
+    "id": "RMG",
+    "regions": [
+      "RMGE01",
+      "RMGP01",
+      "RMGJ01"
+    ]
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

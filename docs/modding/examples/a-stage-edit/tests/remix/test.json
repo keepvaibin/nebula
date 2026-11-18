@@ -1,0 +1,180 @@
+{
+  "harness": 1,
+  "name": "good-egg-remix",
+  "about": "Good Egg, star 1, with the patches alone: five coins stand on the first walk and Mario takes all five; the start planet's three Octoombas are one and a half times bigger and another planet's are not; one star piece stands 400 units from its place; the timer block under the start is gone",
+  "proves": [
+    "stage.place",
+    "stage.patch"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 120,
+  "steps": [
+    {
+      "at": 2,
+      "count": "class:Coin",
+      "near": [
+        -3541.9,
+        -13042.2,
+        -15597.6
+      ],
+      "within": 600,
+      "fact": "coins_on_the_walk"
+    },
+    {
+      "at": 2,
+      "count": "object:タイマーピースブロック",
+      "near": [
+        -3827.0,
+        -14353.0,
+        -15625.0
+      ],
+      "within": 300,
+      "fact": "timer_blocks"
+    },
+    {
+      "at": 2,
+      "count": "class:StarPiece",
+      "near": [
+        -6324.9,
+        -14706.0,
+        -16141.9
+      ],
+      "within": 60,
+      "fact": "piece_before"
+    },
+    {
+      "at": 2,
+      "count": "class:StarPiece",
+      "near": [
+        -6042.0,
+        -14706.0,
+        -15859.1
+      ],
+      "within": 60,
+      "fact": "piece_after"
+    },
+    {
+      "at": 2,
+      "read": "LiveActor.mScale",
+      "of": "object:タコボー#3",
+      "type": "Vec3f",
+      "fact": "octoomba_3"
+    },
+    {
+      "at": 2,
+      "read": "LiveActor.mScale",
+      "of": "object:タコボー#4",
+      "type": "Vec3f",
+      "fact": "octoomba_4"
+    },
+    {
+      "at": 2,
+      "read": "LiveActor.mScale",
+      "of": "object:タコボー#5",
+      "type": "Vec3f",
+      "fact": "octoomba_5"
+    },
+    {
+      "at": 2,
+      "read": "LiveActor.mScale",
+      "of": "object:タコボー#0",
+      "type": "Vec3f",
+      "fact": "octoomba_elsewhere"
+    },
+    {
+      "at": 4,
+      "picture": "start"
+    },
+    {
+      "at": 10,
+      "stick": [
+        0,
+        1
+      ],
+      "frames": 22
+    },
+    {
+      "at": 40,
+      "stick": [
+        0,
+        1
+      ],
+      "frames": 60
+    },
+    {
+      "at": 105,
+      "call": "MR::getCoinNum",
+      "signature": "s32()",
+      "args": [],
+      "fact": "coins_taken"
+    },
+    {
+      "at": 106,
+      "picture": "walked"
+    },
+    {
+      "at": 108,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "coins_on_the_walk",
+      "is": 5
+    },
+    {
+      "fact": "timer_blocks",
+      "is": 0
+    },
+    {
+      "fact": "octoomba_3",
+      "is": [
+        1.5,
+        1.5,
+        1.5
+      ]
+    },
+    {
+      "fact": "octoomba_4",
+      "is": [
+        1.5,
+        1.5,
+        1.5
+      ]
+    },
+    {
+      "fact": "octoomba_5",
+      "is": [
+        1.5,
+        1.5,
+        1.5
+      ]
+    },
+    {
+      "fact": "octoomba_elsewhere",
+      "is": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "fact": "piece_before",
+      "is": 0
+    },
+    {
+      "fact": "piece_after",
+      "is": 1
+    },
+    {
+      "fact": "coins_taken",
+      "is": 5
+    }
+  ]
+}

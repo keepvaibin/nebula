@@ -1,0 +1,130 @@
+{
+  "harness": 1,
+  "name": "together-without-first-person",
+  "about": "The six reference mods with First Person installed and switched off: it does nothing, and the other five each do what each does alone",
+  "proves": [
+    "mods.together"
+  ],
+  "mods": [
+    {
+      "path": "../../../first-person",
+      "enabled": false
+    },
+    {
+      "path": "../../../a-new-object"
+    },
+    {
+      "path": "../../../a-level-timer"
+    },
+    {
+      "path": "../../../ghost-time-trial"
+    },
+    {
+      "path": "../../../a-stage-edit"
+    },
+    {
+      "path": "../../../a-new-character"
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 120,
+  "steps": [
+    {
+      "at": 2,
+      "count": "object:LumaObj",
+      "near": [
+        -3200.0,
+        -12950.0,
+        -15950.0
+      ],
+      "within": 5,
+      "fact": "sky_lifts"
+    },
+    {
+      "at": 2,
+      "count": "class:Coin",
+      "near": [
+        -3541.9,
+        -13042.2,
+        -15597.6
+      ],
+      "within": 600,
+      "fact": "remix_coins"
+    },
+    {
+      "at": 2,
+      "count": "object:タイマーピースブロック",
+      "near": [
+        -3827.0,
+        -14353.0,
+        -15625.0
+      ],
+      "within": 300,
+      "fact": "timer_blocks"
+    },
+    {
+      "at": 10,
+      "call": "getMarioConstant",
+      "signature": "f32(s32, const char *, s32)",
+      "args": [
+        0,
+        "mJumpHeight",
+        0
+      ],
+      "fact": "jump_height"
+    },
+    {
+      "at": 50,
+      "read": "MarioActor.mModHidden",
+      "of": "player",
+      "type": "u8",
+      "fact": "hidden_bits"
+    },
+    {
+      "at": 60,
+      "picture": "together"
+    },
+    {
+      "at": 62,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "hidden_bits",
+      "is": 0
+    },
+    {
+      "fact": "sky_lifts",
+      "is": 1
+    },
+    {
+      "fact": "mod.level-timer.opened",
+      "is": true
+    },
+    {
+      "fact": "mod.ghost-time-trial.attempt",
+      "is": "EggStarGalaxy 1",
+      "when": "first"
+    },
+    {
+      "fact": "remix_coins",
+      "is": 5
+    },
+    {
+      "fact": "timer_blocks",
+      "is": 0
+    },
+    {
+      "fact": "jump_height",
+      "near": 27.5,
+      "within": 0.001
+    },
+    {
+      "no_log": "script error"
+    }
+  ]
+}

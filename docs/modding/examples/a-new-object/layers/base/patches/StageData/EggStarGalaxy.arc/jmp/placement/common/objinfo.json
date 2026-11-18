@@ -1,0 +1,18 @@
+{
+  "patch": 1,
+  "key": [
+    "l_id"
+  ],
+  "add": [
+    {
+      "name": "sky-lift/SkyLift",
+      "l_id": 9801,
+      "pos_x": -3200.0,
+      "pos_y": -12950.0,
+      "pos_z": -15950.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0
+    }
+  ]
+}

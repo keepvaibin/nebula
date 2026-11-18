@@ -1,0 +1,37 @@
+{
+  "harness": 1,
+  "name": "level-timer-label-euitalian",
+  "about": "In EuItalian the timer's label reads Tempo (the mod's message line in the player's language)",
+  "proves": [
+    "kernel.hook.after"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "language": "EuItalian",
+  "disc": "RMGP01",
+  "steps": [
+    {
+      "at": 30,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ui.text.2",
+      "has": {
+        "pane": "Label",
+        "text": "Tempo"
+      },
+      "when": "last"
+    },
+    {
+      "fact": "mod.level-timer.opened",
+      "is": true
+    }
+  ]
+}

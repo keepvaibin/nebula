@@ -1,0 +1,35 @@
+{
+  "harness": 1,
+  "name": "level-timer-shown",
+  "about": "The timer opens with a level and counts its world steps: after three seconds of play it reads 0:03, and the coin counter stands above it",
+  "proves": [
+    "kernel.hook.after"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 200,
+      "picture": "shown"
+    },
+    {
+      "at": 210,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.level-timer.opened",
+      "is": true
+    },
+    {
+      "fact": "mod.level-timer.seconds",
+      "at_least": 3
+    }
+  ]
+}

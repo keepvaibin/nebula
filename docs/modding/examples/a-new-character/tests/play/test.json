@@ -1,0 +1,82 @@
+{
+  "harness": 1,
+  "name": "robo-play",
+  "about": "Good Egg, star 1, as Robo: his jump constant is a quarter higher (27.5), and with the mod taken out Mario's own (22) comes back; the pictures show Robo, a jump and Mario again",
+  "proves": [
+    "kit.player.character"
+  ],
+  "mods": [
+    "../.."
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 120,
+  "steps": [
+    {
+      "at": 10,
+      "call": "getMarioConstant",
+      "signature": "f32(s32, const char *, s32)",
+      "args": [
+        0,
+        "mJumpHeight",
+        0
+      ],
+      "fact": "jump_robo"
+    },
+    {
+      "at": 20,
+      "picture": "robo"
+    },
+    {
+      "at": 30,
+      "hold": [
+        "A"
+      ],
+      "frames": 12
+    },
+    {
+      "at": 40,
+      "picture": "jump"
+    },
+    {
+      "at": 100,
+      "take_out": "robo"
+    },
+    {
+      "at": 110,
+      "call": "getMarioConstant",
+      "signature": "f32(s32, const char *, s32)",
+      "args": [
+        0,
+        "mJumpHeight",
+        0
+      ],
+      "fact": "jump_mario"
+    },
+    {
+      "at": 120,
+      "picture": "mario"
+    },
+    {
+      "at": 122,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "jump_robo",
+      "near": 27.5,
+      "within": 0.001
+    },
+    {
+      "fact": "jump_mario",
+      "near": 22.0,
+      "within": 0.001
+    },
+    {
+      "no_log": "script error"
+    }
+  ]
+}

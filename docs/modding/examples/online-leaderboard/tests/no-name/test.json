@@ -2,6 +2,7 @@
   "harness": 1,
   "name": "leaderboard-no-name",
   "about": "With the test server on this computer, the player closes the name prompt with Esc: the star's time is not sent, the message says no name was typed, and the next star asks again; there Mario and Enter send that star's time",
+  "holds": ["port 47613"],
   "proves": ["services.input", "services.save.global"],
   "mods": [
     "../board/server",
