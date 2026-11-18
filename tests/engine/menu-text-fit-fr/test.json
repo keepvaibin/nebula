@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "menu-text-fit-fr",
-  "about": "Every settings page in French in the smallest window at the largest menu text: each text is narrowed, then cut short, inside its room; none runs past it (P-162). The System page is last: its picture waits for the renderer check's answers, which come from other processes at their own time.",
+  "about": "Every settings page in French in the smallest window at the largest menu text: each text is narrowed, then cut short, inside its room; none runs past it (P-162). The System page is last, 23 s after the menu opens: the renderer check it shows runs in other processes from then, 15 s at most, and the step after the menu opens fails the test if its end is not logged.",
   "language": "EuFrench",
   "disc": "RMGP01",
   "window": [
@@ -16,6 +16,13 @@
     {
       "at": 120,
       "settings": "display"
+    },
+    {
+      "after": {
+        "log": "\\[renderers\\] checked"
+      },
+      "wait": true,
+      "timeout": 1300
     },
     {
       "at": 160,
@@ -70,15 +77,12 @@
       "picture": "advanced"
     },
     {
-      "at": 540,
+      "at": 1500,
       "settings": "system"
     },
     {
-      "after": {
-        "log": "\\[renderers\\] checked"
-      },
-      "picture": "system",
-      "timeout": 1200
+      "at": 1540,
+      "picture": "system"
     },
     {
       "at": 1560,
