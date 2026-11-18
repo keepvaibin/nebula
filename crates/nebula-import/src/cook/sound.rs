@@ -171,8 +171,9 @@ enum Code {
 
 /// SeqOp::cRegisterForm: written with the register prefix.
 const REGISTER_FORM: u16 = 0x8000;
-/// The console's track had 16 children and a channel 8 note slots.
+/// The console's track had 16 children, 16 ports and a channel 8 note slots.
 const CHILDREN: u32 = 16;
+const PORTS: u32 = 16;
 const NOTE_SLOTS: u32 = 8;
 
 /// An operation from 0xA0 up as the console's parser reads it: its code, operand count and operand widths, two bits an
@@ -444,6 +445,18 @@ fn decode_program(b: &[u8], roots: &[usize]) -> Result<Program> {
         match op.code {
             Code::OpenTrack if op.registers & 1 != 0 => bail!("a track opened by a register's number at {at:#x}"),
             Code::OpenTrack if op.args[0] >= CHILDREN => bail!("track {} opened at {at:#x} (the console had {CHILDREN})", op.args[0]),
+            // The game indexes its 16 ports (SeqTrack::mPorts) and their import and export bits by the number as it is;
+            // a child's port operations take the number's low 4 bits.
+            Code::ReadPort | Code::WritePort | Code::CheckImport | Code::CheckExport | Code::ParentWritePort | Code::ParentReadPort
+                if op.registers & 1 != 0 =>
+            {
+                bail!("a port named by a register's number at {at:#x}")
+            }
+            Code::ReadPort | Code::WritePort | Code::CheckImport | Code::CheckExport | Code::ParentWritePort | Code::ParentReadPort
+                if op.args[0] >= PORTS =>
+            {
+                bail!("port {} at {at:#x} (the console had {PORTS})", op.args[0])
+            }
             Code::NoteOn if op.registers & 1 == 0 && op.args[0] >= NOTE_SLOTS => {
                 bail!("note slot {} at {at:#x} (the console had {NOTE_SLOTS})", op.args[0])
             }
