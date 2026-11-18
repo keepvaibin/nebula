@@ -263,7 +263,7 @@ object SaveTransfer {
                          else earlier + '\n'.code.toByte() + content
             val writing = File(dataDir, ".${file.name}.writing")
             writing.writeBytes(joined)
-            if (!writing.renameTo(file)) {
+            if (!replaceFile(writing, file)) {
                 writing.delete()
                 throw IOException("${file.name} could not be written")
             }

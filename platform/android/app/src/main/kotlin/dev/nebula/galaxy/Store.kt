@@ -69,7 +69,7 @@ data class Install(
         val file = GameFiles.install(context)
         val temporary = File(file.parentFile, ".${file.name}.writing")
         temporary.outputStream().use { properties.store(it, "Nebula setup") }
-        temporary.renameTo(file)
+        replaceFile(temporary, file)
     }
 }
 

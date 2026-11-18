@@ -68,7 +68,7 @@ object GameSwap {
      */
     fun commit(folder: File, writeInstall: () -> Unit): Boolean {
         File(folder, INSTALL).delete()
-        if (!File(folder, NEW).renameTo(File(folder, PAK))) return false
+        if (!replaceFile(File(folder, NEW), File(folder, PAK))) return false
         writeInstall()
         return true
     }

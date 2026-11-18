@@ -278,7 +278,7 @@ object Updates {
         val file = cacheFile(context)
         val temp = File(file.path + ".tmp")
         temp.writeText(o.toString())
-        if (!temp.renameTo(file)) temp.delete()
+        if (!replaceFile(temp, file)) temp.delete()
     }
 
     private fun readCache(context: Context): Pair<Release?, Long>? = runCatching {
