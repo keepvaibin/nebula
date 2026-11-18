@@ -741,6 +741,9 @@ static const LumaImport imports[] = {
     LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
 };
 
+/* Out of LT_START: its commas would split the macro's argument. */
+static const int32_t alias_args[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+
 LT_START({
     int32_t defined = 0;
     for (int i = 0; i < WIDE; i++) {
@@ -766,14 +769,13 @@ LT_START({
     kuribo_class = core->define_class(mod, &kuribo_def);
     lt_fact("defined", defined + (kuribo_class >= 0));
     lt_fact("last_found", last_class >= 0 && core->class_of("LcWide1099") == last_class);
-    static const int32_t args[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
     int32_t aliased = 0;
     for (int i = 0; i < ALIASES; i++) {
         char* const n = alias_names[i];
         n[0] = 'L'; n[1] = 'c'; n[2] = 'W'; n[3] = 'i'; n[4] = 'd'; n[5] = 'e'; n[6] = 'A'; n[7] = 'l';
         n[8] = (char)('0' + i / 1000); n[9] = (char)('0' + i / 100 % 10); n[10] = (char)('0' + i / 10 % 10);
         n[11] = (char)('0' + i % 10); n[12] = 0;
-        aliased += core->alias_class(mod, n, "LcWide1099", args) == 0;
+        aliased += core->alias_class(mod, n, "LcWide1099", alias_args) == 0;
     }
     lt_fact("aliased", aliased);
 })
