@@ -125,4 +125,57 @@ One dated entry per package step. Newest last.
   No thread sanitizer tour exists; the rows that named one now name that job.
 - N-1041 (2d6f62121): the long run plays every mod test on the AddressSanitizer build.
 - From Agent 4's 03:09 report: a test whose asked picture was never written passed. The harness now fails it
-  (4ef8c033f, harness_pictures_written_test fails before). Gates sharing the machine is a question to the Planner.
+  (314dc3185, harness_pictures_written_test fails before). Gates sharing the machine is a question to the Planner.
+
+## 2026-11-18, 03:30 to 04:00 (engine/e13a)
+
+- The main gate of fc23ce733 failed on pictures alone: stop 030-FactoryGalaxy-4 runs since P-122's fed save, and its
+  pictures had never been approved (two new pictures a renderer and region). Looked at, the same pixels on Vulkan,
+  Direct3D 12 and 11 and PAL, the Japanese banner aside; approved in b7328ccb5, pushed with N-1041, P-098, P-058, the
+  P-005 test and the harness picture check, so the next quick and main gate prove them together. E5 (0b2e023bf)
+  stays after it, local, until its suite run.
+- N-4036 (Agent 4's pictures not written): 33 runs of that gate had the GPU's answers late, 30 during play, all while
+  my quick gates ran beside it; the lone gate of fc23ce733 had one, the D3D12 present gate during a test's pipeline
+  warm-up (N-1067, a deterministic run's title does not wait for the start set).
+- Designs written from reading: P-030, P-049, P-050, P-057 (one retire a frame slot in place of mid-frame drains;
+  DLSS and SGSR 2 made on a worker), P-059 (the cook judges authored levels once), P-065 (Metal's own shaders as
+  bytecode), I-002 and I-004 (E6a: a lead at multiples of 60 on refreshes; a shown list starts its in-between pictures
+  when it arrives). P-053: Direct3D already skips a resolve with no draw since the last; Vulkan and Metal remain.
+- E5 reviewed again: a mod's paint_level(uv, level) is now exactly that level on every renderer; Vulkan added the
+  sampler's frame bias to an explicit level before.
+
+## 2026-11-18, 04:00 to 04:20 (engine/e13a, E3 opening trace)
+
+- Candidate b4b11bbe1: gate lock at every level with a queue (Agents 3 and 4 first), pre-push checks under the lock,
+  the long run part by part, --github-wait (Planner 03:44, 03:49; N-1069). Its quick gate waits for Agent 3's slot.
+- E3 trace step 0: the frame timeline recorded nothing outside Windows (clock 0, no file). Ported (053586a0d): the
+  runtime clock, the system's thread ids, a file through open_path; the Android harness already passes --timeline
+  and ends by --seconds, so the dump runs there. New events: Vulkan and Metal slot waits, swap image waits, and the
+  Direct3D 12 present gate's wait (N-1067's interim). Unit test on every desktop system (88c3607a7); it fails before
+  outside Windows. Unproven until the Linux build and a tablet run.
+- Quick gate length (fc23ce733, 986 s): 497 s of CPU-only checks (LumaLink 362 s, of it 128 s rebuilding its 5
+  crates) run in series before the game lanes start; the mod suite, 358 s, is the critical lane. Design waits for
+  the N-1052 suite times of b4b11bbe1's quick gate.
+
+## 2026-11-18, 04:20 to 05:15 (Nebula-A1h, beside the gates of b4b11bbe1)
+
+- Quick gate of b4b11bbe1 passed, 24 of 24, 804 s (fc23ce733: 986 s; the mod suite 285 s from 358 s, N-1052). Its
+  main gate holds gate.lock since 05:00.
+- N-1070 (quick gate length): the CPU-only checks run in a lane of their own at below-normal priority beside the game
+  lanes (a475a4d02). LumaLink's rebuilds at every gate had two causes, measured with cargo's fingerprint log: the
+  junction (git rewrites file times) and two feature sets (-p lumalink, then --workspace). nebula/ is now a copy
+  synced by content and one build covers both (1608278e7): with nothing changed, 69 s + 218 s became 1 s + 3 s.
+  Shared with Agents 2 and 4 (Planner 04:39).
+- N-1046 (5677376c9): a move starts the long run in the gate's own tree Nebula-long when none started in 6 hours
+  and long.lock is free (Planner 04:39). Test fails before.
+- P-043 (1f17962c7): the console census, cast_check and byte_order_check run as the gate's repo/code and in
+  check.yml's Linux unit job. cast_check's one hit (CameraAnim cutCount, the NCAM count as cooked) is reviewed.
+- P-023 (0a2c4a65b): release.yml builds only from a commit main holds whose Check run passed, and each package job
+  starts its package (Windows through a start-check action check.yml now shares, Linux under xvfb, Mac on Metal).
+  The dry run on GitHub is owed.
+- P-012 (85325d957): the arena test of a new inside another new. Timeline unit test runs on Linux (gcc 14, fails
+  before the port) and Windows. texture_pack_tests built again on the new sampler key (67b6198ac).
+- N-1045 read: candidates' C/C++ cache hits are 9 to 18 %, main's own first run had none; the next candidate after
+  b4b11bbe1 tells E13a's one-time cost from a cache fault. P-044: the display clock half was done on 11-17.
+- Reviewed Agent 3's shared worker pool (P-040) render half: correct; asked that the chunk count follow the pool's
+  threads, so its replays with 0 or 1 worker test the path players take.
