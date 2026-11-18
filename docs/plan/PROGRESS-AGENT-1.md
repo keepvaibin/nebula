@@ -109,3 +109,20 @@ One dated entry per package step. Newest last.
   The host on Android and Apple was built with clang's default -ffp-contract=on: nunchuk_stick_counts' x*x + y*y fused
   into one rounding, so the stick of the step at 354 differed by one ulp on each axis. All hosts now build with
   -ffp-contract=off (as the game module already did); native_input_tests pins the bits.
+
+## 2026-11-18, 02:40 to 03:30 (engine/e13a)
+
+- Quick gate of fc23ce733 passed 24 of 24 (986 s); its main gate with --move took gate.lock at 03:09, after Agent 4
+  stopped a main gate whose candidate was already red.
+- Closed by main's 00:01 move (run 44263531077, 12 of 12 jobs green): N-1010, N-1011, N-1047, N-1048.
+- Settled by reading: P-021 decided (the camera's cover freezes the picture the player sees). Confirmed with a design
+  and its proof in the row: P-010 and P-052 (pipelines made while a stage loads, a draw never compiles), P-020, P-026,
+  P-034 (code in, a Mac check owed), P-108, P-117, I-006, I-010, I-013, I-014, N-1046.
+- P-098 (fbdf60a64): GameActivity declares every configuration change; ConfigChangesTest fails before. The JVM tests
+  now take src/main as an input: before, Gradle left them up to date after a manifest change and they did not run.
+- P-058 (7f4a07281): VMA is told the Vulkan version both the instance and the device have (1.1 before).
+- P-005 (fbf316b8a): a two-thread test of the frame list's release and acquire, for the Linux thread sanitizer job.
+  No thread sanitizer tour exists; the rows that named one now name that job.
+- N-1041 (2d6f62121): the long run plays every mod test on the AddressSanitizer build.
+- From Agent 4's 03:09 report: a test whose asked picture was never written passed. The harness now fails it
+  (4ef8c033f, harness_pictures_written_test fails before). Gates sharing the machine is a question to the Planner.
