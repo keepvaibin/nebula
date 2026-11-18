@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// nebula-import overlay.rs reads them): every ending of SOURCE_ENDINGS is cooked there or listed here (a test holds
 /// it). A font, movie or MIDI file is read by a `.font.json`, `.movie.json` or `.sound.json` in a layer's assets/; a
 /// buffer or image only by the model that names it; a `.dds` also as a texture pack's texture.
-pub const WHERE: [(&str, &str); 11] = [
+pub const WHERE: [(&str, &str); 12] = [
     (".bin", "Where.ModelPart"),
     (".jpg", "Where.ModelPart"),
     (".jpeg", "Where.ModelPart"),
@@ -19,6 +19,7 @@ pub const WHERE: [(&str, &str); 11] = [
     (".ttf", "Where.Font"),
     (".otf", "Where.Font"),
     (".webm", "Where.Movie"),
+    (".ivf", "Where.Movie"),
     (".mp4", "Where.Movie"),
 ];
 
@@ -72,14 +73,15 @@ fn glb_json(bytes: &[u8]) -> Option<&[u8]> {
 }
 
 /// Source endings a whole file may have instead of the game format's (luma.md 5).
-pub const SOURCE_ENDINGS: [&str; 16] =
-    [".gltf", ".glb", ".bin", ".png", ".jpg", ".jpeg", ".ktx2", ".dds", ".wav", ".ogg", ".mid", ".json", ".ttf", ".otf", ".webm", ".mp4"];
+pub const SOURCE_ENDINGS: [&str; 17] =
+    [".gltf", ".glb", ".bin", ".png", ".jpg", ".jpeg", ".ktx2", ".dds", ".wav", ".ogg", ".mid", ".json", ".ttf", ".otf", ".webm", ".ivf", ".mp4"];
 
 /// A source file (lowercase path under `files/`) of a kind the cook makes: a model, an animation file, collision, a
 /// cutscene camera (`.glb`, `.gltf` and their `.anim.`, `.kcl.`, `.canm.` forms), a picture (`.png`), a stream (`.wav`,
 /// `.ogg`), a table (`.bcsv.json`, `.bcam.json`, a stage's placement `.arc/jmp/**.json`), a screen layout
 /// (`.layout.json`), a clip's frame events (`.anim.json` in an archive), a sound (`.sound.json`), a font (`.font.json`)
-/// or a movie (`.movie.json`); the last three belong in `assets/`: the cook refuses them here by name.
+/// or a movie (`.movie.json`); the last three belong in `assets/`: the cook refuses them here by name. A loose movie
+/// (`MovieData/<name>.webm` or `.ivf`, see `loose_movie`) is cooked into the game movie's place when it is AV1.
 /// What it stands in for is the cook's to say (nebula-import cook::overlay::cook_source, which a test holds to this
 /// list): it refuses by name (L804) at the game's start and in LumaLink's check before a pack.
 pub fn cooked_source(lower: &str) -> bool {
@@ -87,6 +89,22 @@ pub fn cooked_source(lower: &str) -> bool {
         .iter()
         .any(|e| lower.ends_with(e))
         || (lower.ends_with(".json") && lower.contains(".arc/jmp/"))
+        || loose_movie(lower).is_some()
+}
+
+/// The game movie a loose movie stands for: a path `MovieData/<name>.webm` or `.ivf` (any case, a leading '/' or
+/// none) gives `<name>` as spelled. The cook makes it that movie's `MovieData/<name>.thp` when it is AV1 (nebula-import
+/// movie_cook.rs cook_loose); the run time's movie player finds it by that name too (movie_playback.cpp).
+pub fn loose_movie(path: &str) -> Option<&str> {
+    let (folder, file) = path.trim_start_matches('/').split_once('/')?;
+    if !folder.eq_ignore_ascii_case("moviedata") || file.contains('/') {
+        return None;
+    }
+    let stem = [".webm", ".ivf"].iter().find_map(|e| {
+        let at = file.len().checked_sub(e.len())?;
+        (file.is_char_boundary(at) && file[at..].eq_ignore_ascii_case(e)).then_some(at)
+    })?;
+    (stem > 0).then(|| &file[..stem])
 }
 
 /// The game path a file at `layers/<l>/files/<path>` stands at, as kept for L305: lowercase, and a source form with
@@ -97,6 +115,10 @@ fn replaced(path: &str) -> String {
     // A hidden model replaces the model it names.
     if let Some(model) = lower.strip_suffix(".model.json") {
         return model.to_string();
+    }
+    // A loose movie replaces the game movie it names.
+    if let Some(movie) = loose_movie(&lower) {
+        return format!("moviedata/{movie}.thp");
     }
     match lower.strip_suffix(".json") {
         Some(stem) if stem.rsplit('/').next().is_some_and(|name| name.contains('.')) => stem.to_string(),
@@ -221,6 +243,14 @@ pub(crate) fn check(ctx: &mut Ctx) {
                     };
                     if !model {
                         ctx.add(308, &item.name, None, None, vec![("found", t(hidden.to_string()))]);
+                    }
+                    continue;
+                }
+                // A loose movie is the picture of the game movie it names: L302 when the game has no such movie (the
+                // cook keeps the file as it is then, and nothing plays it).
+                if let Some(movie) = loose_movie(&lower) {
+                    if store.path(&format!("moviedata/{movie}.thp")).is_none() {
+                        ctx.add(302, &item.name, None, None, vec![("found", t(path))]);
                     }
                     continue;
                 }

@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 pub use names::Names;
-pub use rules::{cooked_source, mergeable, save_problem, MERGE_TABLES, SOURCE_ENDINGS, WHERE};
+pub use rules::{cooked_source, loose_movie, mergeable, save_problem, MERGE_TABLES, SOURCE_ENDINGS, WHERE};
 pub use saved::{About, Saved};
 
 /// The validator's version: `<format major>.<rules minor>` (validator.md section 6).

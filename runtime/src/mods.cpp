@@ -702,6 +702,20 @@ void number_reset_once(const std::string& mod_id, const luma::Option& entry, con
                  entry.id.c_str(), kept.c_str(), entry.fallback.c_str());
 }
 
+// The files of a mod's movies/ the cook takes (.webm, .ivf: an AV1 one becomes the game movie of its name), sorted.
+std::vector<fs::path> cooked_movies(const fs::path& movies) {
+    std::vector<fs::path> out;
+    if (movies.empty()) return out;
+    std::error_code error;
+    for (const fs::directory_entry& entry : entries_of(movies)) {
+        if (!entry.is_regular_file(error)) continue;
+        const std::string ending = lower(galaxy::path_text(entry.path().extension()));
+        if (ending == ".webm" || ending == ".ivf") out.push_back(entry.path());
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
 ModLayout layout_of(const fs::path& mod) {
     ModLayout layout;
     std::error_code error;
@@ -1296,6 +1310,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         mod.files = !layout.files_root.empty();
         mod.textures = !layout.textures.empty();
         mod.movies = !layout.movies.empty();
+        mod.movies_cooked = !cooked_movies(layout.movies).empty();
         mod.loose = !layout.loose.empty();
         mod.package = !layout.package.empty();
         const auto it = saved.find(mod.id);
@@ -1878,7 +1893,7 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
 }
 
 bool changes_game_files(const ModInfo& mod) noexcept {
-    return mod.riivolution || mod.files || mod.loose || mod.luma_changes_game;
+    return mod.riivolution || mod.files || mod.loose || mod.luma_changes_game || mod.movies_cooked;
 }
 
 std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods) {
@@ -2459,6 +2474,9 @@ ModPlan plan_mod_changes(const galaxy::assets::AssetStore& store, const std::str
                 }
             }
         }
+        // movies/'s .webm and .ivf files at their game path: the cook makes an AV1 one the game movie of its name
+        // (nebula-import movie_cook.rs cook_loose); the run time's movie player still finds each by name in movies/.
+        for (const fs::path& file : cooked_movies(layout.movies)) set_file("/MovieData/" + utf8_name(file), file);
         for (const fs::path& file : layout.loose) {
             std::vector<std::string> paths;
             find_names(store, 0, {}, utf8_name(file), lower(galaxy::assets::store_path(utf8_name(file))), paths);

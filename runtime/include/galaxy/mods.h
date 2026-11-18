@@ -6,11 +6,13 @@
 //   loose files        files with nothing else beside them (Mario.arc). Each replaces every game file with that name,
 //                      like a Riivolution path without a '/'.
 //   textures/          a texture pack (tex1_ names). A mod holding only tex1_ files is a pack.
-//   movies/            HD videos for the game's movies (movie_playback.h).
+//   movies/            HD videos for the game's movies (movie_playback.h), by the movie's name. One in AV1 (.webm,
+//                      .ivf) is also cooked into the game movie's place (MovieData/<name>.thp), which every system plays.
 // If a mod's text lacks the language being played, its text in a near language is shown (the same language from
 // another region, else English), unless its TEXT choice keeps the game's text.
 // The mods form one ordered list. When two change the same file or texture, the higher one wins (order 1 is the top).
-// A newly added mod goes on top. Texture packs and movies apply at once; file changes apply at the next start. The
+// A newly added mod goes on top. Texture packs and movies apply at once (a cooked movie at the next start); file
+// changes apply at the next start. The
 // order, on/off state and choices are saved in mods.ini next to the settings.
 #pragma once
 
@@ -98,6 +100,7 @@ struct ModInfo {
     bool files = false;
     bool textures = false;
     bool movies = false;
+    bool movies_cooked = false;  // its movies/ holds a .webm or .ivf: the cook makes the game movie of it
     bool loose = false;
     bool package = false;  // a .luma: luma.json plus layers of files
     std::shared_ptr<const galaxy::luma::Manifest> luma;
@@ -147,7 +150,7 @@ struct ModInfo {
 
 // The kinds of change a mod makes, as the Mods page lists them ("FILES, SETTINGS, TEXTURES"). Empty when none.
 [[nodiscard]] std::string change_kinds(const ModInfo& mod);
-// True when a mod changes game files, code patches or saves. Those need a restart.
+// True when a mod changes game files (a movie the cook makes too), code patches or saves. Those need a restart.
 [[nodiscard]] bool changes_game_files(const ModInfo& mod) noexcept;
 // The textures/ and movies/ folders of the enabled mods, lowest in the list first (the last one wins).
 [[nodiscard]] std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods);

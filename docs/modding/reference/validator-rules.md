@@ -435,7 +435,7 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 |---|---|
 | `Where.Font` | a font goes in assets/ with a .font.json that names it |
 | `Where.ModelPart` | a model's buffer or image, read only when a .gltf or .glb beside it names it |
-| `Where.Movie` | a movie goes in assets/ as AV1 in WebM or IVF, with a .movie.json that names it |
+| `Where.Movie` | a movie goes in assets/ as AV1 in WebM or IVF, with a .movie.json that names it, or in files/MovieData/ under the name of the game movie it replaces |
 | `Where.Music` | a MIDI file goes in assets/ with a .sound.json that makes it a sequence |
 | `Where.Table` | files/ cooks a .json only as .bcsv.json, .bcam.json, a placement table in .arc/jmp/, .layout.json, .anim.json or .model.json; other .json sources go in assets/ |
 | `Where.Texture` | a model's image, read only when a .gltf or .glb beside it names it, or a game texture in textures/ |
@@ -771,6 +771,8 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Model.ViewPast` | buffer view {view} reaches past its buffer |
 | `Cook.Model.WeightsOver4` | the mesh {mesh} weighs {vertices} vertices on more than four joints; a vertex follows up to four |
 | `Cook.Movie.AudioTrack` | {uri}: its own sound track ({found}) is not read; give the sound as a WAV, FLAC or Ogg Vorbis file in audio |
+| `Cook.Movie.LooseSystem` | {uri} is {found}: it plays only where the system can decode it; as AV1 in WebM or IVF it plays on every system |
+| `Cook.Movie.LooseNoGame` | {uri}: the game has no movie {name}; nothing plays it |
 | `Cook.Movie.Codec` | {uri} is {found}; give the video as AV1 in WebM or IVF (the game decodes AV1 itself on every system) |
 | `Cook.Movie.Colour` | {uri} has the color {found}; give BT.709 limited range or BT.601 full range |
 | `Cook.Movie.File` | {uri} cannot be read as a WebM or IVF movie: {detail} |

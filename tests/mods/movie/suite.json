@@ -6,6 +6,7 @@
     "3103-movie-subtitles",
     "3104-movie-skip",
     "3105-movie-sound-ends",
-    "3106-movie-bad-pointers"
+    "3106-movie-bad-pointers",
+    "3107-movie-loose"
   ]
 }

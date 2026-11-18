@@ -9,7 +9,7 @@ mod manifest;
 mod mods;
 mod patches;
 
-pub use layers::{cooked_source, mergeable, MERGE_TABLES, SOURCE_ENDINGS, WHERE};
+pub use layers::{cooked_source, loose_movie, mergeable, MERGE_TABLES, SOURCE_ENDINGS, WHERE};
 pub use manifest::save_problem;
 
 use crate::json::{self, Pos};

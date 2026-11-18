@@ -280,3 +280,116 @@ fn the_sequence_header_reads_as_written() {
     let s = sequence_header(&sequence_payload(8, 8, false, None, true)).unwrap();
     assert_eq!((s.matrix, s.full_range), (2, true));
 }
+
+/// A two-frame AV1 IVF, 64 x 48 at 25 a second, and a three-frame game movie with sound (other modules' tests).
+pub(crate) fn small_av1_ivf() -> Vec<u8> {
+    let s = seq(64, 48);
+    ivf(64, 48, 25, &[tu(Some(&s), true, 1), tu(None, false, 2)])
+}
+pub(crate) fn small_game_movie() -> Vec<u8> {
+    game_nmov(3, 25.0, 1280, 0)
+}
+
+/// A game movie as the store holds it (NMOV, no picture checks): `frames` frames at `rate`, `per_frame` stereo samples
+/// each, sample k of the movie (left and right) k, and the flags word.
+fn game_nmov(frames: usize, rate: f64, per_frame: usize, flags: u32) -> Vec<u8> {
+    let samples: Vec<i16> = (0..frames * per_frame).flat_map(|k| [k as i16, k as i16]).collect();
+    let video: Vec<Vec<u8>> = (0..frames).map(|i| vec![0xFF, i as u8]).collect();
+    // nmov() cuts the sound at 32 kHz; at 32,000 / per_frame frames a second each frame takes per_frame.
+    assert_eq!((f64::from(AUDIO_RATE) / rate).round() as usize, per_frame);
+    let mut out = nmov(&video, rate, (640, 368), 0, flags, Some(&samples));
+    out[0x24..0x28].copy_from_slice(&0u32.to_le_bytes());
+    out
+}
+
+/// N-2057: a loose AV1 movie at MovieData/<name>.ivf or .webm is the game movie <name>'s NMOV: its own frames, the
+/// game movie's sound cut to its frames (silence past the game's), the game's flags; the fact names the movie.
+#[test]
+fn a_loose_av1_movie_takes_the_game_movie_s_place_with_its_sound() {
+    let _reading = crate::cook::refuse::reading();
+    let s = seq(64, 48);
+    let source = vec![tu(Some(&s), true, 1), tu(None, false, 2), tu(None, false, 3), tu(None, false, 4)];
+    // The game's movie: 3 frames at 25 a second, 1280 samples a frame; the loose one 4 frames at 25.
+    let game = game_nmov(3, 25.0, 1280, 4);
+    let (out, facts) = cook_loose(&ivf(64, 48, 25, &source), "MovieData/PrologueA.ivf", Some(Some(&game))).unwrap().unwrap();
+    assert_eq!(&out[..4], b"NMOV");
+    assert_eq!((word(&out, 4), word(&out, 20), word(&out, 24), word(&out, 28)), (4, 64, 48, 1));
+    assert_eq!((word(&out, 0x24), word(&out, 0x2C)), (1, 4), "AV1, the game's flags");
+    let frames = frames_of(&out);
+    for (i, (_, record)) in frames.iter().enumerate() {
+        assert_eq!(word(record, 0), 1280, "frame {i}");
+        let first = i16::from_le_bytes([record[4], record[5]]);
+        let last = i16::from_le_bytes([record[record.len() - 2], record[record.len() - 1]]);
+        if i < 3 {
+            assert_eq!((first, last), ((i * 1280) as i16, (i * 1280 + 1279) as i16), "frame {i}: the game's sound");
+        } else {
+            assert_eq!((first, last), (0, 0), "past the game's sound: silence");
+        }
+    }
+    assert_eq!((facts.frames, facts.replaces.as_str(), facts.subtitles), (4, "PrologueA", 0));
+    assert!((facts.audio_seconds - 0.12).abs() < 0.001, "{facts:?}");
+
+    // A WebM, any case of the folder and ending; a game movie with no sound gives none.
+    let blocks = vec![obu(6, &[0x10, 9]), obu(6, &[0x30, 8])];
+    let silent = nmov(&[vec![1], vec![2]], 25.0, (640, 368), 0, 0, None);
+    let (out, facts) = cook_loose(&webm("V_AV1", 64, 48, 40_000_000, &s, &blocks), "moviedata/EndingA.WEBM", Some(Some(&silent))).unwrap().unwrap();
+    assert_eq!((word(&out, 4), word(&out, 28), facts.replaces.as_str()), (2, 0, "EndingA"));
+    // No store known (LumaLink's check without a game): the picture is still checked and cooked, without sound.
+    let (out, _) = cook_loose(&ivf(64, 48, 25, &source), "MovieData/PrologueA.ivf", None).unwrap().unwrap();
+    assert_eq!(word(&out, 28), 0);
+}
+
+/// N-2057: a loose movie in another codec stays as it is, with a Note naming its codec; one naming no game movie stays
+/// as it is with a Note; a broken one is refused as a movie is.
+#[test]
+fn a_loose_movie_the_cook_cannot_make_is_named() {
+    let _reading = crate::cook::refuse::reading();
+    let s = seq(64, 48);
+    let good = || vec![tu(Some(&s), true, 1), tu(None, false, 2)];
+    let game = game_nmov(2, 25.0, 1280, 0);
+    crate::cook::refuse::take_notes();
+    assert!(cook_loose(&webm("V_VP9", 64, 48, 33_333_333, &s, &good()), "MovieData/PrologueA.webm", Some(Some(&game))).unwrap().is_none());
+    let notes = crate::cook::refuse::said_notes();
+    assert!(notes.iter().any(|(why, args)| *why == "Cook.Movie.LooseSystem" && args.contains(&("found", "V_VP9".to_string()))), "{notes:?}");
+    let mut vp9 = ivf(64, 48, 30, &good());
+    vp9[8..12].copy_from_slice(b"VP90");
+    assert!(cook_loose(&vp9, "MovieData/PrologueA.ivf", Some(Some(&game))).unwrap().is_none());
+    assert!(crate::cook::refuse::said_notes().iter().any(|(why, args)| *why == "Cook.Movie.LooseSystem" && args.contains(&("found", "VP90".to_string()))));
+    assert!(cook_loose(&ivf(64, 48, 30, &good()), "MovieData/Nope.ivf", Some(None)).unwrap().is_none());
+    assert!(crate::cook::refuse::said_notes().iter().any(|(why, args)| *why == "Cook.Movie.LooseNoGame" && args.contains(&("name", "Nope".to_string()))));
+    assert_eq!(said(&cook_loose(b"nothing", "MovieData/PrologueA.ivf", Some(Some(&game))).unwrap_err()).0, "Cook.Movie.File");
+    assert_eq!(said(&cook_loose(&[], "MovieData/PrologueA.ivf", Some(Some(&game))).unwrap_err()).0, "Cook.Sound.Empty");
+    let wide = seq(3840, 2160);
+    let big = ivf(3840, 2160, 30, &[tu(Some(&wide), true, 1)]);
+    assert_eq!(said(&cook_loose(&big, "MovieData/PrologueA.ivf", Some(Some(&game))).unwrap_err()).0, "Cook.Movie.Size");
+}
+
+/// The game movie's sound is read from the store's file, which a damaged store may cut anywhere: every cut, and every
+/// byte changed in the header and the first frame's words, gives sound or none, never a panic or a read past the end.
+#[test]
+fn a_damaged_game_movie_gives_no_sound_and_no_panic() {
+    let game = game_nmov(3, 25.0, 1280, 0);
+    assert_eq!(game_sound(&game).0.map(|s| s.len()), Some(3 * 1280 * 2));
+    for cut in 0..game.len() {
+        // Cut in the last frame's padding, the sound is all there; cut anywhere before, none.
+        let (sound, _) = game_sound(&game[..cut]);
+        assert!(sound.map_or(true, |s| s.len() == 3 * 1280 * 2), "cut at {cut}");
+    }
+    for at in (0..HEADER + FRAME_HEADER + 8).chain([HEADER + FRAME_HEADER + 2]) {
+        for value in [0u8, 1, 0x7F, 0x80, 0xFF] {
+            let mut bad = game.clone();
+            bad[at] = value;
+            let _ = game_sound(&bad);
+        }
+    }
+    assert_eq!(game_sound(b"THP\0 not cooked").0, None);
+}
+
+#[test]
+fn a_loose_movie_is_named_by_its_path() {
+    for (path, name) in [("MovieData/PrologueA.webm", Some("PrologueA")), ("/moviedata/EndingB.IVF", Some("EndingB")), ("MovieData/a.b.webm", Some("a.b")),
+                         ("MovieData/.webm", None), ("MovieData/x/PrologueA.webm", None), ("Luma/m/MovieData/PrologueA.webm", None),
+                         ("MovieData/PrologueA.mp4", None), ("MovieData/PrologueA.thp", None), ("MovieData", None), ("MovieData/é.webm", Some("é"))] {
+        assert_eq!(luma_validate::loose_movie(path), name, "{path}");
+    }
+}

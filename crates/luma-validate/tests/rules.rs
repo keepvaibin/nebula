@@ -27,7 +27,7 @@ const HUD: &str = "LayoutData/Hud.arc/blyt/Hud.brlyt";
 
 impl Store for FakeStore {
     fn path(&self, lower: &str) -> Option<String> {
-        [TABLE, "ObjectData/Kuribo.arc", COMMON, LAYER_A, HUD].iter().find(|p| p.to_lowercase() == lower).map(|p| p.to_string())
+        [TABLE, "ObjectData/Kuribo.arc", COMMON, LAYER_A, HUD, "MovieData/PrologueA.thp"].iter().find(|p| p.to_lowercase() == lower).map(|p| p.to_string())
     }
     fn table(&self, path: &str) -> Option<Table> {
         if path == COMMON || path == LAYER_A {
@@ -1137,17 +1137,38 @@ fn a_file_a_model_names_is_the_model_s_and_any_other_source_is_named_with_where_
             file("layers/base/files/ObjectData/Spin.glb", &glb),
             file("layers/base/files/ObjectData/Spin.bin", b"x"),
             file("layers/base/files/ObjectData/Stray.bin", b"x"),
-            file("layers/base/files/MovieData/Intro.webm", b"x"),
+            file("layers/base/files/Intro.webm", b"x"),
             file("layers/base/files/SystemData/Notes.json", b"{}"),
         ],
     );
     let report = check(&bytes, &with_game_ref(&game));
     let named: Vec<(&str, String)> = report.findings.iter().filter(|f| f.code == 304).map(|f| (f.file.as_str(), message(f, "UsEnglish"))).collect();
     let files: Vec<&str> = named.iter().map(|(f, _)| *f).collect();
-    assert_eq!(files, vec!["layers/base/files/MovieData/Intro.webm", "layers/base/files/ObjectData/Stray.bin", "layers/base/files/SystemData/Notes.json"], "{named:?}");
+    assert_eq!(files, vec!["layers/base/files/Intro.webm", "layers/base/files/ObjectData/Stray.bin", "layers/base/files/SystemData/Notes.json"], "{named:?}");
     for f in report.findings.iter().filter(|f| f.code == 304) {
         assert!(unfilled(f).is_none(), "{:?}", unfilled(f));
     }
+}
+
+/// N-2057: a loose movie at MovieData/<name>.webm or .ivf is the cook's (the game movie's picture): nothing said when the
+/// game has the movie, L302 when it has none; a movie file anywhere else is L304 with where it belongs.
+#[test]
+fn a_loose_movie_names_a_game_movie() {
+    let store = FakeStore { case_insensitive: false };
+    let game = Game { nebula: Version::parse("2.0.0").unwrap(), region: Some("RMGE01"), extra_languages: &[], device_features: None, names: None, store: Some(&store) };
+    let bytes = luma(
+        &[("layers", r#"[{"name": "base"}]"#)],
+        &[
+            file("layers/base/files/MovieData/PrologueA.webm", b"x"),
+            file("layers/base/files/moviedata/prologuea.IVF", b"x"),
+            file("layers/base/files/MovieData/Nope.ivf", b"x"),
+            file("layers/base/files/ObjectData/Clip.ivf", b"x"),
+        ],
+    );
+    let report = check(&bytes, &with_game_ref(&game));
+    let of = |code: u16| -> Vec<&str> { report.findings.iter().filter(|f| f.code == code).map(|f| f.file.as_str()).collect() };
+    assert_eq!(of(302), ["layers/base/files/MovieData/Nope.ivf"], "{:?}", report.findings);
+    assert_eq!(of(304), ["layers/base/files/ObjectData/Clip.ivf"], "{:?}", report.findings);
 }
 
 /// Every source ending is one the cook makes at a game path or one L304 says where it belongs.

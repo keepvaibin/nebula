@@ -700,6 +700,38 @@ bool luma_rules() {
     return ok;
 }
 
+// N-2057: a folder mod's movies/ .webm and .ivf files go to the cook at their game path (MovieData/<name>), which makes
+// an AV1 one the game movie of its name; such a mod changes the game's files (a restart). Other kinds stay with the
+// run time's movie player only.
+bool folder_movies_go_to_the_cook() {
+    bool ok = true;
+    const fs::path root = galaxy::test_temp_path("nebula_mods_folder_movies");
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    write(root / "mods" / "hd" / "movies" / "PrologueA.webm", "webm");
+    write(root / "mods" / "hd" / "movies" / "EndingA.IVF", "ivf");
+    write(root / "mods" / "hd" / "movies" / "EpilogueA.mp4", "mp4");
+    write(root / "mods" / "mp4" / "movies" / "PrologueB.mp4", "mp4");
+    write(root / "mods.ini", "[hd]\nenabled=1\norder=1\n[mp4]\nenabled=1\norder=2\n");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
+    const auto info = [&](const char* id) {
+        return *std::find_if(mods.begin(), mods.end(), [&](const galaxy::mods::ModInfo& m) { return m.id == id; });
+    };
+    ok &= expect(mods.size() == 2u && info("hd").movies_cooked && galaxy::mods::changes_game_files(info("hd")),
+                 "a mod with an AV1-able movie changes the game's files");
+    ok &= expect(info("mp4").movies && !info("mp4").movies_cooked && !galaxy::mods::changes_game_files(info("mp4")),
+                 "a mod of other movies only applies at once");
+    const galaxy::assets::AssetStore store;
+    const galaxy::mods::ModPlan plan = galaxy::mods::plan_mod_changes(store, "RMGE01", "UsEnglish", mods);
+    std::vector<std::string> got;
+    for (const galaxy::mods::ModPlan::File& f : plan.files) got.push_back(f.disc + " " + f.host.filename().string());
+    ok &= expect(got == std::vector<std::string>{"/MovieData/EndingA.IVF EndingA.IVF", "/MovieData/PrologueA.webm PrologueA.webm"},
+                 "movies/'s .webm and .ivf files are planned at MovieData/, nothing else");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
 }  // namespace
 
 // Each kind of game file goes to the category a player would look for it in.
@@ -1069,7 +1101,7 @@ int main() {
     test_texture_categories();
     // Every test runs, whichever fail.
     const bool results[] = {texture_names(), xml(), importing(), code_patch_notes(), setting_overlaps(), patches_by_key_in_the_plan(), layer_only_mods(), layer_assets(), libraries_load_when_needed(), libraries_act_with_their_users_permissions(), galaxy_saves(),
-                            luma_rules(), luma_import(), text_options(), crash_record_text(),
+                            luma_rules(), folder_movies_go_to_the_cook(), luma_import(), text_options(), crash_record_text(),
                             crash_record_files()};
     bool ok = true;
     for (const bool passed : results) ok = ok && passed;

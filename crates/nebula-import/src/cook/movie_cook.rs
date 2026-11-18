@@ -6,6 +6,11 @@
 //! a game movie's place (`MovieData/<name>.thp`). Subtitles go beside it as `<name>.subs` (a table: text key, from,
 //! to, in seconds).
 //!
+//! A loose movie, `MovieData/<name>.webm` or `.ivf` among a mod's game files (a .luma layer's files/, a folder mod's
+//! movies/), is the picture of the game movie `<name>`: in AV1 it is cooked the same way into `MovieData/<name>.thp`,
+//! with the game movie's own sound (its first track) and flags; in another codec it stays as it is, for the system's
+//! decoder (Windows), and a Note says so.
+//!
 //! Nothing is transcoded: the cook carries no video encoder. VP9, H.264 and the rest are refused by name
 //! (Cook.Movie.Codec) with what to give instead; a WebM's own sound track (Opus or Vorbis) is not read (a Note).
 //!
@@ -625,38 +630,7 @@ pub fn cook(json: &[u8], around: &Around) -> Result<(Vec<(Made, Vec<u8>)>, Movie
         None => String::new(),
     };
     let bytes = (around.file)(file).ok_or_else(|| refuse("Cook.Effect.FileMissing", &[("where", "/file".into()), ("uri", file.to_string())]))?;
-    if bytes.is_empty() {
-        return Err(refuse("Cook.Sound.Empty", &[("uri", file.to_string())]));
-    }
-    let (mut video, audio_tracks) = if bytes.starts_with(b"DKIF") {
-        (read_ivf(&bytes, file)?, Vec::new())
-    } else if bytes.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
-        read_webm(&bytes, file)?
-    } else if bytes.get(4..8) == Some(b"ftyp") {
-        return Err(codec(file, "MP4"));
-    } else {
-        return Err(bad(file, "not a WebM or IVF file"));
-    };
-    for codec in audio_tracks {
-        super::refuse::note("Cook.Movie.AudioTrack", &[("uri", file.to_string()), ("found", codec)]);
-    }
-    if !(video.rate > 0.0) || video.rate > MOST_RATE + 0.01 {
-        return Err(refuse("Cook.Movie.Rate", &[("uri", file.to_string()), ("value", format!("{:.3}", video.rate)), ("max", format!("{MOST_RATE:.0}"))]));
-    }
-    let (sequence, colour) = check_video(&mut video, file)?;
-    let (width, height) = (sequence.width, sequence.height);
-    if width > MOST_WIDTH.max(1080) || height > MOST_WIDTH || u64::from(width) * u64::from(height) > MOST_PIXELS {
-        return Err(refuse("Cook.Movie.Size", &[("uri", file.to_string()), ("width", width.to_string()), ("height", height.to_string())]));
-    }
-    if let Some((w, h)) = video.size {
-        if (w, h) != (width, height) {
-            return Err(bad(file, format!("the container says {w} x {h}, the AV1 sequence {width} x {height}")));
-        }
-    }
-    let seconds = video.frames.len() as f64 / video.rate;
-    if seconds > MOST_SECONDS {
-        return Err(refuse("Cook.Movie.TooLong", &[("seconds", format!("{seconds:.1}")), ("max", format!("{MOST_SECONDS:.0}"))]));
-    }
+    let (video, colour, (width, height), seconds) = picture(&bytes, file)?;
     let sound_samples = match audio_file {
         Some(a) => {
             let bytes = (around.file)(a).ok_or_else(|| refuse("Cook.Effect.FileMissing", &[("where", "/audio".into()), ("uri", a.to_string())]))?;
@@ -709,6 +683,126 @@ pub fn cook(json: &[u8], around: &Around) -> Result<(Vec<(Made, Vec<u8>)>, Movie
     Ok((files, facts))
 }
 
+/// A movie file's picture as the game decodes it: its frames, colour, size and seconds. Refused as `cook` refuses it;
+/// another codec is `Cook.Movie.Codec`.
+fn picture(bytes: &[u8], file: &str) -> Result<(Video, u32, (u32, u32), f64)> {
+    if bytes.is_empty() {
+        return Err(refuse("Cook.Sound.Empty", &[("uri", file.to_string())]));
+    }
+    let (mut video, audio_tracks) = if bytes.starts_with(b"DKIF") {
+        (read_ivf(bytes, file)?, Vec::new())
+    } else if bytes.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+        read_webm(bytes, file)?
+    } else if bytes.get(4..8) == Some(b"ftyp") {
+        return Err(codec(file, "MP4"));
+    } else {
+        return Err(bad(file, "not a WebM or IVF file"));
+    };
+    for codec in audio_tracks {
+        super::refuse::note("Cook.Movie.AudioTrack", &[("uri", file.to_string()), ("found", codec)]);
+    }
+    if !(video.rate > 0.0) || video.rate > MOST_RATE + 0.01 {
+        return Err(refuse("Cook.Movie.Rate", &[("uri", file.to_string()), ("value", format!("{:.3}", video.rate)), ("max", format!("{MOST_RATE:.0}"))]));
+    }
+    let (sequence, colour) = check_video(&mut video, file)?;
+    let (width, height) = (sequence.width, sequence.height);
+    if width > MOST_WIDTH.max(1080) || height > MOST_WIDTH || u64::from(width) * u64::from(height) > MOST_PIXELS {
+        return Err(refuse("Cook.Movie.Size", &[("uri", file.to_string()), ("width", width.to_string()), ("height", height.to_string())]));
+    }
+    if let Some((w, h)) = video.size {
+        if (w, h) != (width, height) {
+            return Err(bad(file, format!("the container says {w} x {h}, the AV1 sequence {width} x {height}")));
+        }
+    }
+    let seconds = video.frames.len() as f64 / video.rate;
+    if seconds > MOST_SECONDS {
+        return Err(refuse("Cook.Movie.TooLong", &[("seconds", format!("{seconds:.1}")), ("max", format!("{MOST_SECONDS:.0}"))]));
+    }
+    Ok((video, colour, (width, height), seconds))
+}
+
+/// A cooked game movie's (NMOV) sound: its first track's samples in turn (stereo PCM16, interleaved) and its flags
+/// word. None when the bytes are no NMOV with sound, or a frame runs past them.
+fn game_sound(nmov: &[u8]) -> (Option<Vec<i16>>, u32) {
+    let word = |at: usize| nmov.get(at..at + 4).map(|s| u32::from_le_bytes(s.try_into().unwrap()));
+    if !nmov.starts_with(super::thp::MAGIC) || nmov.len() < HEADER {
+        return (None, 0);
+    }
+    let flags = word(0x2C).unwrap_or(0);
+    let (frames, tracks, mut size) = (word(4).unwrap_or(0) as usize, word(28).unwrap_or(0), word(16).unwrap_or(0) as usize);
+    if tracks == 0 {
+        return (None, flags);
+    }
+    let mut samples = Vec::new();
+    let mut at = HEADER;
+    for _ in 0..frames {
+        let (Some(next), Some(video), Some(record)) = (word(at), word(at + 4), word(at + 8)) else { return (None, flags) };
+        let record_at = at + FRAME_HEADER + video as usize;
+        let Some(count) = word(record_at) else { return (None, flags) };
+        let count = count as usize;
+        if size < FRAME_HEADER || count.checked_mul(4).map_or(true, |n| n + 4 > record as usize) {
+            return (None, flags);
+        }
+        let Some(data) = nmov.get(record_at + 4..record_at + 4 + count * 4) else { return (None, flags) };
+        samples.extend(data.chunks_exact(2).map(|s| i16::from_le_bytes([s[0], s[1]])));
+        at += size;
+        size = next as usize;
+    }
+    (Some(samples), flags)
+}
+
+/// The codec a `Cook.Movie.Codec` refusal names; None for any other error.
+fn codec_found(error: &anyhow::Error) -> Option<String> {
+    let finding = super::refuse::refusal_of(error)?;
+    let mut args = finding.args.iter();
+    if !matches!(args.next(), Some(("why", luma_validate::Arg::Phrase("Cook.Movie.Codec")))) {
+        return None;
+    }
+    args.find_map(|(name, value)| match value {
+        luma_validate::Arg::Text(text) if *name == "found" => Some(text.clone()),
+        _ => None,
+    })
+}
+
+/// A loose movie at `MovieData/<name>.webm` or `.ivf` (`file`) as the game movie `<name>`'s NMOV, with that movie's
+/// sound and flags (`game`: Some(the store's cooked movie, None when the game has none), None when no store is known:
+/// then without sound). Ok(None) when the video is not AV1, or the game has no such movie: it stays as it is (a Note).
+/// Refused as `cook` refuses a movie.
+pub fn cook_loose(bytes: &[u8], file: &str, game: Option<Option<&[u8]>>) -> Result<Option<(Vec<u8>, MovieFacts)>> {
+    let name = luma_validate::loose_movie(file).unwrap_or(file);
+    let (video, colour, (width, height), seconds) = match picture(bytes, file) {
+        Ok(made) => made,
+        Err(error) => {
+            if let Some(found) = codec_found(&error) {
+                super::refuse::note("Cook.Movie.LooseSystem", &[("uri", file.to_string()), ("found", found)]);
+                return Ok(None);
+            }
+            return Err(error);
+        }
+    };
+    let (sound, flags) = match game {
+        Some(None) => {
+            super::refuse::note("Cook.Movie.LooseNoGame", &[("uri", file.to_string()), ("name", name.to_string())]);
+            return Ok(None);
+        }
+        Some(Some(game)) => game_sound(game),
+        None => (None, 0),
+    };
+    let out = nmov(&video.frames, video.rate, (width, height), colour, flags, sound.as_deref());
+    let facts = MovieFacts {
+        frames: video.frames.len() as u32,
+        width,
+        height,
+        rate: video.rate as f32,
+        seconds: seconds as f32,
+        audio_seconds: sound.as_ref().map_or(0.0, |s| s.len() as f32 / 2.0 / AUDIO_RATE as f32),
+        colour,
+        subtitles: 0,
+        replaces: name.to_string(),
+    };
+    Ok(Some((out, facts)))
+}
+
 /// Whether a path is a movie's source (`.movie.json`).
 pub fn is_movie_source(lower: &str) -> bool {
     lower.ends_with(".movie.json")
@@ -722,4 +816,4 @@ pub fn is_asset_source(path: &str) -> bool {
 
 #[cfg(test)]
 #[path = "movie_cook_tests.rs"]
-mod tests;
+pub(crate) mod tests;

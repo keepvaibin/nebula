@@ -79,7 +79,9 @@ Files with rows are patched, never replaced. These include tables (`.bcsv` and t
 
 Whole files, such as models, textures, streams, layout pictures and movies, replace the game's. When two mods that are on replace the same path, the one higher in the mod list wins (L305), and the **MODS** page names both mods and the path.
 
-A whole file can be a game format, such as an `.arc` with `.bdl` files, a `.bti` or an `.ast`. It can also be an ordinary source at the game path with its own extension, for example `files/ObjectData/Mario.arc/Mario.glb`. These source formats are accepted: `.gltf`, `.glb`, `.png`, `.ktx2`, `.dds`, `.wav`, `.ogg`, `.mid`, `.json`, `.ttf`, `.otf`, `.webm` and `.mp4`. Each content kind's page says what a source can stand in for and how it is checked, for example units, joints and materials.
+A whole file can be a game format, such as an `.arc` with `.bdl` files, a `.bti` or an `.ast`. It can also be an ordinary source at the game path with its own extension, for example `files/ObjectData/Mario.arc/Mario.glb`. These source formats are accepted: `.gltf`, `.glb`, `.png`, `.ktx2`, `.dds`, `.wav`, `.ogg`, `.mid`, `.json`, `.ttf`, `.otf`, `.webm`, `.ivf` and `.mp4`. Each content kind's page says what a source can stand in for and how it is checked, for example units, joints and materials.
+
+A game movie's picture is `files/MovieData/<name>.webm` or `.ivf`, where `<name>` is the game movie, such as `PrologueA`. In AV1 it is cooked into the game movie's place and plays on every system, with the game movie's own sound; a movie with its own sound or subtitles is a `.movie.json` with `replace` in `assets/`. In another codec it plays only where the system can decode it (Cook.Movie.LooseSystem). A name that is no game movie is L302. A folder mod's `movies/` folder is read the same way.
 
 ### Mod paths
 

@@ -392,6 +392,17 @@ fn modern_files(change: &Change, bytes: &[u8], base: Option<&Path>) -> Result<Ve
         super::refuse::record(super::refuse::CookFact::Sound { path: files[0].0.clone(), source: change.path.clone(), facts });
         return Ok(files);
     }
+    // MovieData/<name>.webm or .ivf: a loose movie, the picture of the game movie <name> (movie_cook.rs). In AV1 it is
+    // that movie's MovieData/<name>.thp, with the game movie's sound; in another codec, the file as it is.
+    if let Some(name) = luma_validate::loose_movie(&change.path) {
+        let game_path = format!("MovieData/{name}.thp");
+        let game = base.map(|b| if store::has_file(b, &game_path).unwrap_or(false) { store::read_file(b, &game_path).ok() } else { None });
+        let Some((out, facts)) = super::movie_cook::cook_loose(bytes, &change.path, game.as_ref().map(Option::as_deref))? else {
+            return Ok(Vec::new());
+        };
+        super::refuse::record(super::refuse::CookFact::Movie { path: game_path.clone(), source: change.path.clone(), facts });
+        return Ok(vec![(game_path, out, true)]);
+    }
     // Name.movie.json in a mod's assets: a movie, Name.nmov (AV1), its subtitles Name.subs beside it, and with `replace`
     // the same movie at the game's MovieData/<name>.thp. The files it names are read beside it.
     if super::movie_cook::is_movie_source(&lower) {
@@ -1267,6 +1278,31 @@ mod tests {
         assert_eq!(collision_stem("Ground.kcl.glb"), "Ground.arc/Ground");
     }
 
+    /// N-2057: a loose AV1 movie among a mod's game files becomes the game movie's MovieData/<name>.thp (the loose file
+    /// itself is not placed); in another codec, or naming no game movie, it is placed as it is.
+    #[test]
+    fn a_loose_movie_becomes_the_game_movie() {
+        let _reading = super::super::refuse::reading();
+        let dir = tempfile::tempdir().unwrap();
+        let game = super::super::movie_cook::tests::small_game_movie();
+        let base = game_store(dir.path(), &[("MovieData/PrologueA.thp", &game)]);
+        let cook = |path: &str, bytes: Vec<u8>| {
+            let change = Change { path: path.into(), source: dir.path().join("x"), merge: false };
+            cook_one(&change, bytes, &BTreeMap::new(), Some(&base), &mut Stats::default()).unwrap()
+        };
+        let made = cook("MovieData/PrologueA.ivf", super::super::movie_cook::tests::small_av1_ivf());
+        assert_eq!(made.len(), 1);
+        assert_eq!(made[0].0, "MovieData/PrologueA.thp");
+        let bytes = made[0].1[0].bytes.as_ref().unwrap();
+        let word = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+        assert_eq!((&bytes[..4], word(4), word(28), word(0x24)), (&b"NMOV"[..], 2, 1, 1), "two AV1 frames with the game's sound");
+        // The game has no movie Nope: the file as it is.
+        let made = cook("MovieData/Nope.ivf", super::super::movie_cook::tests::small_av1_ivf());
+        assert_eq!(made.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), ["MovieData/Nope.ivf"]);
+        let notes = super::super::refuse::said_notes();
+        assert!(notes.iter().any(|(why, _)| *why == "Cook.Movie.LooseNoGame"), "{notes:?}");
+    }
+
     #[test]
     fn every_kind_the_validator_hands_the_cook_is_cooked() {
         // luma_validate::cooked_source passes these to the cook (L304): each is cooked or refused by name, none ignored.
@@ -1289,6 +1325,8 @@ mod tests {
             "ObjectData/Kuribo.arc/Walk.anim.json",
             "LayoutData/Fonts/Title.font.json",
             "ObjectData/MarioHandL.arc/MarioHandL.bdl.model.json",
+            "MovieData/Intro.webm",
+            "MovieData/Intro.ivf",
         ];
         let dir = tempfile::tempdir().unwrap();
         for path in cooked {
@@ -1300,7 +1338,7 @@ mod tests {
         }
         // Source kinds the cook does not make are the validator's (L304, each named with where it goes); the cook places
         // such a file as it is, as the overlay does.
-        for path in ["Fonts/Title.ttf", "MovieData/Intro.webm", "ObjectData/Kuribo.arc/Notes.json"] {
+        for path in ["Fonts/Title.ttf", "ObjectData/Intro.webm", "ObjectData/Kuribo.arc/Notes.json"] {
             assert!(!luma_validate::cooked_source(&path.to_lowercase()), "{path}");
             assert_eq!(cook_source(path, &dir.path().join("x"), b"not this", None, None).unwrap(), 1, "{path}");
         }

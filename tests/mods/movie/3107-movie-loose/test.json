@@ -1,0 +1,38 @@
+{
+  "harness": 1,
+  "name": "3107-movie-loose",
+  "about": "N-2057: jv-loose brings layers/base/files/MovieData/PrologueA.ivf, 6 s of one colour in AV1 (IVF, which the system movie player never takes): the cook makes it the game's MovieData/PrologueA.thp, so MR::startMovie(0) plays it over the stage, full screen (pictures f150, f200: the colour; before the fix, the game's own prologue)",
+  "proves": [
+    "movie.av1"
+  ],
+  "mods": [
+    "../mods/jv-loose"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::startMovie",
+      "signature": "void(s32)",
+      "args": [
+        0
+      ]
+    },
+    {
+      "at": 150,
+      "picture": "f150"
+    },
+    {
+      "at": 200,
+      "picture": "f200"
+    },
+    {
+      "at": 220,
+      "end": true
+    }
+  ],
+  "expect": []
+}

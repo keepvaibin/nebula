@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "jv-loose",
+  "name": "jv-loose",
+  "version": "1.0.0",
+  "summary": "J's test mod jv-loose: a loose AV1 PrologueA.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}
