@@ -335,6 +335,16 @@ jobs:
           mkdir -p "$d/data" "$d/settings"
           SDL_AUDIO_DRIVER=dummy timeout 300 xvfb-run -a "$RUNNER_TEMP/work/bin/nebula" --start-check 300 \
             --data "$d/data" --settings "$d/settings" --crash-dumps "$d"
+      - name: No file picker (P-036)
+        # No desktop portal (no session bus) and no Zenity: the pick answers "failed", which the game turns into its
+        # "drop the files on the window" text, instead of nothing at all.
+        run: |
+          if command -v zenity >/dev/null; then echo "zenity is installed on this runner"; exit 1; fi
+          d="$RUNNER_TEMP/pick"
+          mkdir -p "$d/data" "$d/settings"
+          env -u DBUS_SESSION_BUS_ADDRESS SDL_AUDIO_DRIVER=dummy timeout 120 xvfb-run -a "$RUNNER_TEMP/work/bin/nebula" \
+            --start-check 10 --pick-check 1 --data "$d/data" --settings "$d/settings" --crash-dumps "$d" | tee "$d/out.txt"
+          grep -qx 'start check: file picker: failed' "$d/out.txt"
 
   macos:
     name: Mac

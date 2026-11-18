@@ -180,6 +180,7 @@ inline bool perf_hint_on_battery() noexcept { return false; }
 #include <functional>
 #include <limits>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -2037,7 +2038,31 @@ int run_start_check(unsigned frames) {
     const galaxy::render::DisplayPresentStats shown = galaxy::render::display_present_stats();
     std::printf("start check: %u frames drawn, %llu pictures shown\n", frames, static_cast<unsigned long long>(shown.presented));
     std::fflush(stdout);
-    return shown.presented != 0u ? 0 : 4;
+    if (shown.presented == 0u) return 4;
+    if (::galaxy::launch_args().pick_check) {
+        // One pick of a mod's files, answered on another thread: "failed" (no picker to show), "cancelled" or the
+        // count chosen. Exit 6: no answer in 30 seconds (a picker opened that nobody answers).
+        namespace window = galaxy::render::host_window;
+        const auto answer = std::make_shared<std::atomic<int>>(-1);  // -1 none yet, -2 failed, else the count
+        window::pick_files(window::FilePick::ModArchives, [answer](std::vector<std::filesystem::path> files, bool failed) {
+            answer->store(failed ? -2 : static_cast<int>(files.size()), std::memory_order_release);
+        });
+        const auto asked = std::chrono::steady_clock::now();
+        while (answer->load(std::memory_order_acquire) == -1) {
+            if (std::chrono::steady_clock::now() - asked > std::chrono::seconds(30)) {
+                std::fprintf(stderr, "start check: the file picker gave no answer in 30 seconds\n");
+                return 6;
+            }
+            galaxy::render::pump_messages();
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        const int got = answer->load(std::memory_order_acquire);
+        if (got == -2) std::printf("start check: file picker: failed\n");
+        else if (got == 0) std::printf("start check: file picker: cancelled\n");
+        else std::printf("start check: file picker: %d chosen\n", got);
+        std::fflush(stdout);
+    }
+    return 0;
 }
 
 [[noreturn]] void finish_and_exit(bool restart);
@@ -5729,6 +5754,8 @@ void read_launch_args(int argc, char** argv) {
             args.timed = std::atof(argv[i + 1]) > 0.0;
         } else if (key == "--start-check") {
             args.start_check = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
+        } else if (key == "--pick-check") {
+            args.pick_check = std::atoi(argv[i + 1]) != 0;
         } else if (key == "--diagnostics") {
             std::string_view unknown;
             unsigned what = 0u;
@@ -6010,7 +6037,7 @@ int main(int argc, char** argv) {
                    key == "--gpu-start-retry" || key == "--extension" || key == "--import" || key == "--imports-taken" ||
                    key == "--safe-start" || key == "--shipped-mods" || key == "--mod-dev" || key == "--renderer" || key == "--started-again" ||
                    key == "--start-again-of" || key == "--hidden" || key == "--gpu-driver" || key == "--gpu-driver-library" ||
-                   key == "--gpu-driver-hooks" || key == "--start-check") {
+                   key == "--gpu-driver-hooks" || key == "--start-check" || key == "--pick-check") {
             // Read above, before anything uses them.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
