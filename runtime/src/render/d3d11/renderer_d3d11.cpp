@@ -5,6 +5,7 @@
 #include "../dxgi_pacing.h"
 
 #include "galaxy/content_viewport.h"
+#include "galaxy/crash_report.h"
 #include "galaxy/display_aspect.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/frame_timeline.h"
@@ -56,6 +57,10 @@ bool fsr_frame_generation_compiled() noexcept { return false; }
 // presenting, which goes through the same recovery as a real removal (render_core.cpp restart_device).
 void RendererD3D11::lose_device() {
     loss_asked_ = true;
+}
+
+void RendererD3D11::allocation_failed(const char* what) const {
+    throw std::runtime_error(galaxy::crash::gpu_allocation_failure(what, gpu::device_removed(d3d11::Context::get().device())));
 }
 
 bool RendererD3D11::initialize(int window_width, int window_height, const FrameMap& frame) {
@@ -1310,7 +1315,8 @@ gpu::Address RendererD3D11::zero_stream(std::uint32_t bytes) {
         zero_stream_bytes_ = std::max(bytes, 1u << 16u);
         UploadBuffer memory = gpu::create_upload_memory(device(), zero_stream_bytes_, "zero stream");
         if (!memory) {
-            throw std::runtime_error("the zero stream could not be made");
+            zero_stream_bytes_ = 0u;
+            allocation_failed("the zero stream");
         }
         std::memset(memory.cpu, 0, zero_stream_bytes_);
         zero_vertices_ = std::move(memory.buffer);

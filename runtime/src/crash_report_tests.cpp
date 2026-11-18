@@ -26,7 +26,23 @@ std::string code_of(const Facts& facts) { return classify(facts).code; }
 
 }  // namespace
 
+// P-062: a GPU allocation that fails inside a frame reads as a device loss when the device is gone, or as memory
+// run out; the old texts ("scene target colour unavailable") read as neither and ended the game as a renderer error.
+void allocation_failures() {
+    const std::string removed = galaxy::crash::gpu_allocation_failure("the scene target colour", true);
+    expect(galaxy::crash::is_gpu_lost(removed.c_str()), "a removed device's failed allocation is a device loss");
+    const std::string memory = galaxy::crash::gpu_allocation_failure("the scene target colour", false);
+    expect(!galaxy::crash::is_gpu_lost(memory.c_str()), "memory run out is not a device loss");
+    Facts facts;
+    facts.kind = Facts::Kind::Exception;
+    facts.text = memory;
+    expect(code_of(facts) == "NEB-R01", "memory run out is reported as such");
+    facts.text = removed;
+    expect(code_of(facts) == "NEB-G01", "a device loss that could not be borne is reported as one");
+}
+
 int main() {
+    allocation_failures();
     expect(galaxy::crash::translated("The game crashed", "EuGerman") == "Das Spiel ist abgest\xC3\xBCrzt", "a row in a language");
     expect(galaxy::crash::translated("The game crashed", "UsEnglish") == "The game crashed", "English is the words given");
     expect(galaxy::crash::translated("no such row", "EuGerman") == "no such row", "no row: the words given");
