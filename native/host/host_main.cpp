@@ -3557,6 +3557,10 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
                     result = galaxy::saves::read(folder, file, r.buffer, r.size, r.length);
                     break;
                 case NEBULA_SAVE_WRITE:
+                    // An extension's slow storage (a test's): the write takes this long longer.
+                    if (const uint32_t delay_us = galaxy::extensions::save_write_delay_us(); delay_us != 0) {
+                        std::this_thread::sleep_for(std::chrono::microseconds(delay_us));
+                    }
                     result = galaxy::saves::write(folder, file, r.buffer, r.size, backups);
                     break;
                 case NEBULA_SAVE_DELETE:
@@ -4752,11 +4756,15 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
 #endif
     log_line("host:", restart ? "restart" : "the game ended");
     {
+        // Every save on the worker ends before the process does, however slow the drive (an SD card, a network folder):
+        // a write cut off keeps the old file, and the player's latest progress would be lost without a word.
         std::unique_lock<std::mutex> lock(gSavesMutex);
-        gSavesDone.wait_for(lock, std::chrono::seconds(5), [] { return gSavesPending.load(std::memory_order_acquire) == 0; });
-    }
-    if (gSavesPending.load(std::memory_order_acquire) != 0) {
-        log_line("host:", "a save still pending at exit");
+        const auto none_pending = [] { return gSavesPending.load(std::memory_order_acquire) == 0; };
+        if (!gSavesDone.wait_for(lock, std::chrono::seconds(1), none_pending)) {
+            log_line("host:", "waiting for a save to finish before the game ends");
+            gSavesDone.wait(lock, none_pending);
+            log_line("host:", "the save finished");
+        }
     }
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::achievements::flush();
