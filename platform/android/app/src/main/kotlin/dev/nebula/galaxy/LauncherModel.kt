@@ -6,7 +6,10 @@ import android.app.Application
 import android.app.ApplicationExitInfo
 import android.content.Context
 import android.content.Intent
+import android.app.Activity
 import android.net.Uri
+import android.os.Bundle
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -128,6 +132,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     /** A mod or texture pack from a file the player picked, in the background; the game shows it under Mods. */
     fun importMod(uri: Uri) {
+        if (refusedWhileRunning()) return
         if (modProgress != null) {
             modQueue.addLast(uri)
             return
@@ -474,6 +479,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
             GameSwap.Room.REPLACE_FIRST
 
     fun startImport() {
+        if (refusedWhileRunning()) return
         val pick = disc ?: return
         val identity = pick.identity ?: return
         // A store the game no longer reads only takes room the new one needs.
@@ -500,17 +506,40 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeGame() {
+        if (refusedWhileRunning()) return
         Storage.removeGame(app)
         install = null
         freeBytes = Storage.freeBytes(app)
         screen = Screen.Welcome
     }
 
-    /** From the launcher's activity, so the game joins its task and ends back here. */
-    fun launchGame(activity: Context) {
+    /** From the launcher's activity, so the game joins its task and ends back here; `extras`: a restarted run's. */
+    fun launchGame(activity: Context, extras: Bundle? = null) {
         GameFiles.launcher(app).edit().putLong(LAUNCHED_AT, System.currentTimeMillis()).commit()
-        activity.startActivity(Intent(activity, GameActivity::class.java)
-            .putStringArrayListExtra(GpuDrivers.EXTRA, ArrayList(GpuDrivers.launchArguments(app))))
+        val intent = Intent(activity, GameActivity::class.java)
+        if (extras != null) intent.putExtras(extras)
+        activity.startActivity(intent.putStringArrayListExtra(GpuDrivers.EXTRA, ArrayList(GpuDrivers.launchArguments(app))))
+    }
+
+    /**
+     * The game's Restart (GameActivity.restartGame): the next run starts from here once the last one's process has
+     * ended, as any run does, so it joins this task, ends back here and is watched (P-020, P-099). The ended run is
+     * not a crash. A process still there after [RESTART_WAIT_MS] is not started over: the player has Play.
+     */
+    fun restartGame(activity: Activity, extras: Bundle?) {
+        GameFiles.launcher(app).edit().remove(LAUNCHED_AT).commit()
+        viewModelScope.launch {
+            val until = SystemClock.uptimeMillis() + RESTART_WAIT_MS
+            while (SaveTransfer.gameRunning(app) && SystemClock.uptimeMillis() < until) delay(20)
+            if (!SaveTransfer.gameRunning(app) && !activity.isFinishing && !activity.isDestroyed) launchGame(activity, extras)
+        }
+    }
+
+    /** While the game runs in its own process, what it reads and writes (the game, its mods) stays as it is (P-100). */
+    private fun refusedWhileRunning(): Boolean {
+        if (!SaveTransfer.gameRunning(app)) return false
+        transferResult = TransferResult(false, app.getString(R.string.GameRunning), app.getString(R.string.CloseGameFirst))
+        return true
     }
 
     private fun checkLastRun() {
@@ -547,5 +576,6 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
 
     companion object {
         private const val LAUNCHED_AT = "launchedAt"
+        private const val RESTART_WAIT_MS = 5000L
     }
 }

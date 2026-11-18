@@ -2,6 +2,11 @@
 package dev.nebula.galaxy.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -36,6 +41,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -235,9 +241,20 @@ fun ChoiceRow(title: String, detail: String?, selected: Boolean, onClick: () -> 
     }
 }
 
-/** A ring that fills clockwise from the top, with whatever goes in its middle. */
+/** A ring that fills clockwise from the top, with whatever goes in its middle; indeterminate, an arc going round. */
 @Composable
 fun ProgressRing(progress: Float, size: Dp, indeterminate: Boolean, content: @Composable () -> Unit) {
+    val turn = if (indeterminate) {
+        val spin by rememberInfiniteTransition(label = "ring").animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
+            label = "turn",
+        )
+        spin
+    } else {
+        0f
+    }
     Box(Modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(size)) {
             val width = 10.dp.toPx()
@@ -248,7 +265,7 @@ fun ProgressRing(progress: Float, size: Dp, indeterminate: Boolean, content: @Co
             if (sweep > 0f) {
                 drawArc(
                     Brush.sweepGradient(listOf(Night.Blue, Night.Lavender, Night.Gold, Night.Blue)),
-                    -90f, sweep, false, Offset(inset, inset), arcSize, style = Stroke(width, cap = StrokeCap.Round),
+                    -90f + turn, sweep, false, Offset(inset, inset), arcSize, style = Stroke(width, cap = StrokeCap.Round),
                 )
             }
         }

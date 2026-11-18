@@ -73,9 +73,6 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     static native int nativeTouchWanted(int which);
     static native void nativeInputDevices(boolean keyboard, boolean mouse);
     static native int nativeInputMode();
-    // As RuntimeInputMode.
-    private static final int INPUT_AUTO = 0;
-    private static final int INPUT_PHONE = 4;
     static native void nativePointer(int action, int id, float x, float y);
     static native boolean nativeMenuContext();
     static native boolean nativeTitleScreen();
@@ -104,7 +101,6 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     private TouchControlsView controls;
     private boolean menuOpen;
-    private String controlsMode = "auto";
     private boolean realWiimote;  // a real Wii Remote (WiimoteUsb) is in the player's hand
     private boolean controlsWanted = true;   // the player's choice in the HOME Menu
 
@@ -328,7 +324,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             @Override
             public void onInputDeviceAdded(int deviceId) {
                 reportInputDevices();
-                if (nativeInputMode() == INPUT_AUTO && isController(InputDevice.getDevice(deviceId))) {
+                if (nativeInputMode() == ControlsRules.INPUT_AUTO && isController(InputDevice.getDevice(deviceId))) {
                     hideControlsForController();
                 }
             }
@@ -336,7 +332,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             @Override
             public void onInputDeviceRemoved(int deviceId) {
                 reportInputDevices();
-                if (nativeInputMode() == INPUT_AUTO && !controllerConnected()) {
+                if (nativeInputMode() == ControlsRules.INPUT_AUTO && !controllerConnected()) {
                     revealControls();
                 }
             }
@@ -472,7 +468,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     // What the input mode says of the on-screen controls: Phone always, Auto while no controller is in hand, others never.
     private void applyInputMode() {
         final int mode = nativeInputMode();
-        controlsWanted = mode == INPUT_PHONE || (mode == INPUT_AUTO && !controllerConnected() && !realWiimote);
+        controlsWanted = ControlsRules.controlsWanted(mode, controllerConnected() || realWiimote);
         applyControlsVisibility();
     }
 
@@ -715,18 +711,21 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     }
 
     // Called by libmain.so (host_window.h Restart, on SDL's thread): the game starts again, straight back into the game, as
-    // `kind` asks: 1 a normal start, 2 one that records diagnostics. One game per process, so a new process takes over
-    // this one's task.
+    // `kind` asks: 1 a normal start, 2 one that records diagnostics. One game per process: the launcher, in the app's
+    // main process, starts the next run once this process has ended (P-020), so the launcher stays under it and watches
+    // it as any run (P-099). This activity finishes, and its onDestroy ends the process.
     public void restartGame(int kind) {
         runOnUiThread(() -> {
-            final Intent intent = new Intent(getIntent());
             if (kind == 2) {
                 GameFiles.setRecordNextRun(this, true);
             }
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-            startActivity(intent);
+            final Intent restart = new Intent(this, LauncherActivity.class)
+                    .setAction(LauncherActivity.ACTION_RESTART)
+                    .putExtra(LauncherActivity.EXTRA_GAME_EXTRAS, getIntent().getExtras())
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(restart);
             overridePendingTransition(0, 0);
-            Process.killProcess(Process.myPid());
+            finish();
         });
     }
 
@@ -754,14 +753,15 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
     }
 
     private void revealControls() {
-        if (nativeInputMode() == INPUT_AUTO && !controlsWanted) {
+        if (nativeInputMode() == ControlsRules.INPUT_AUTO && !controlsWanted) {
             controlsWanted = true;
             applyControlsVisibility();
         }
     }
 
+    // In Auto only: Phone keeps them whatever is in hand (ControlsRules).
     private void hideControlsForController() {
-        if (controlsWanted) {
+        if (controlsWanted && ControlsRules.controllerHidesControls(nativeInputMode())) {
             controlsWanted = false;
             applyControlsVisibility();
         }
@@ -800,7 +800,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
             }
             return true;
         }
-        if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
+        if (fromController(event.getSource())) {
             hideControlsForController();
         }
         return super.dispatchKeyEvent(event);
@@ -808,7 +808,7 @@ public class GameActivity extends SDLActivity implements SensorEventListener {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
+        if (fromController(event.getSource())) {
             hideControlsForController();
         }
         return super.dispatchGenericMotionEvent(event);
