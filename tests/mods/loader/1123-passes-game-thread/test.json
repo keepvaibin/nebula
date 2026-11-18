@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "1123-passes-game-thread",
-  "about": "With a mod hooking a function inside each pass the plain module may run on worker threads (P-040: the frustum judge, the shadows' first part, actor animation), every call reaches the hook on the game thread",
+  "about": "With a mod hooking a function inside each pass the plain module may run on worker threads (P-040: the frustum judge, the shadows' first part, actor animation), every call reaches the hook on the game thread; ClippingJudge::isJudgedToClipFrustum's f32 form is not called in this stage (its s32 form is, by the clipping holder), so only its calls off the game thread are counted",
   "proves": [
     "kernel.threads"
   ],
@@ -29,10 +29,6 @@
     }
   ],
   "expect": [
-    {
-      "fact": "mod.lt-passes.judge_on",
-      "at_least": 1
-    },
     {
       "fact": "mod.lt-passes.judge_off",
       "is": 0
