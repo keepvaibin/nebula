@@ -52,3 +52,6 @@ native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_lis
 native_test(native_cutscene_skip_bound_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/cutscene_skip_bound_tests.cpp")
 # The kernel's growing table: entries never move, and a reader on another thread reads what the writer published.
 native_test(native_grow_table_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/grow_table_tests.cpp")
+# The kernel's weak references to game objects (LumaWeak.cpp, N-4003), against a kernel the test provides.
+native_test(native_luma_weak_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/luma_weak_tests.cpp"
+    "${game_src}/System/LumaWeak.cpp")

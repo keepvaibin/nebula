@@ -7,12 +7,13 @@
 
 #include "Game/System/LumaLoader.hpp"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdarg>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
-#include <random>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -70,7 +71,28 @@ bool expect(bool condition, const char* message) {
     return condition;
 }
 
+// SplitMix64: eight bytes of state, so a test function stays inside the game's 4 KB stack frames (std::mt19937 keeps
+// five).
+class Rng {
+public:
+    explicit Rng(uint64_t seed) : mState(seed) {}
+    uint32_t operator()() {
+        uint64_t z = (mState += 0x9e3779b97f4a7c15ull);
+        z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ull;
+        z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
+        return static_cast<uint32_t>((z ^ (z >> 31)) >> 32);
+    }
+
+private:
+    uint64_t mState;
+};
+
+// Cell i; an index past the cells stops the test (a sanitizer build found one the others did not).
 const void* obj(size_t i) {
+    if (i >= kObjects) {
+        std::fprintf(stderr, "FAILED: object %zu of %zu\n", i, kObjects);
+        std::_Exit(70);  // as test_support.c's panic: no error report window on Windows
+    }
     return gObjects[i];
 }
 
@@ -129,7 +151,7 @@ void arenaRange() {
 
 // A model: the handle each object has now, and handles that went (each must read null forever).
 void randomAgainstModel(uint32_t seed, int steps) {
-    std::mt19937 rng(seed);
+    Rng rng(seed);
     std::unordered_map<size_t, uint64_t> live;
     std::vector<uint64_t> went;
     for (int step = 0; step < steps; step++) {
@@ -159,7 +181,7 @@ void randomAgainstModel(uint32_t seed, int steps) {
                 live.erase(found);
             }
         } else if (what < 92) {
-            const size_t end = i + rng() % 300 + 1 > kObjects ? kObjects : i + rng() % 300 + 1;
+            const size_t end = std::min(kObjects, i + rng() % 300 + 1);
             luma::weak::released(obj(i), end == kObjects ? static_cast<const void*>(gObjects + kObjects) : obj(end));
             for (size_t k = i; k < end; k++) {
                 const auto found = live.find(k);
@@ -207,7 +229,7 @@ void threads() {
     std::vector<std::thread> workers;
     for (int t = 0; t < kThreads; t++) {
         workers.emplace_back([t, &shared] {
-            std::mt19937 rng(1000u + static_cast<uint32_t>(t));
+            Rng rng(1000u + static_cast<uint32_t>(t));
             std::vector<uint64_t> mine(kBand, 0);
             for (int step = 0; step < 300000; step++) {
                 const size_t k = rng() % kBand;
@@ -243,7 +265,7 @@ void threads() {
         });
     }
     std::thread ender([&stop] {
-        std::mt19937 rng(77u);
+        Rng rng(77u);
         const size_t first = kThreads * kBand;
         while (!stop.load()) {
             const size_t a = first + rng() % (kObjects - first);
