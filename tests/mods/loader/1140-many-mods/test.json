@@ -1,7 +1,7 @@
 {
   "harness": 1,
   "name": "1140-many-mods",
-  "about": "600 code mods on at once in a stage (N-3008: the loader held 256 and refused the next with Lib.TooManyMods; services, time, events and draw held 512 mods, 256 at a draw point, 1024 textures and 128 fonts; ui 256 open screens and 512 animation ends; the take-out queue 16 a frame): every copy of lt-crowd starts, MR::getRandom(1140, 1140) runs all 600 after hooks (1740), the last copy watches, draws, makes two textures, takes a font, opens CoinCounter, finds its pane and plays its Wait; MR::getRandom(1141, 1141) counts the copies whose screen came (1741); 20 copies taken out in one frame are all out, and the next MR::getRandom(1140, 1140) runs 580 hooks (1720)",
+  "about": "600 code mods on at once in a stage (N-3008: the loader held 256 and refused the next with Lib.TooManyMods; services, time, events and draw held 512 mods, 256 at a draw point, 1024 textures and 128 fonts; ui 256 open screens and 512 animation ends; the take-out queue 16 a frame; N-2033: the guard kept code time and faults for 256 mods a session): every copy of lt-crowd starts, MR::getRandom(1140, 1140) runs all 600 after hooks (1740), the last copy watches, draws, makes two textures, takes a font, opens CoinCounter, finds its pane and plays its Wait; MR::getRandom(1141, 1141) counts the copies whose screen came (1741); 20 copies taken out in one frame are all out, and the next MR::getRandom(1140, 1140) runs 580 hooks (1720); lt-crowd-600's code time is kept and found (kernel.guard_time)",
   "proves": [
     "kernel.mods.many"
   ],
@@ -210,6 +210,14 @@
     {
       "fact": "takeout.lt-crowd-20",
       "exists": true
+    },
+    {
+      "fact": "kernel.guard_time",
+      "has": {
+        "mod": "lt-crowd-600",
+        "found": 0
+      },
+      "when": "any"
     }
   ],
   "limit_seconds": 600,

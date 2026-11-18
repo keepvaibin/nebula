@@ -1,4 +1,5 @@
 #include "Game/System/LumaGuard.hpp"
+#include "Game/System/LumaGrowTable.hpp"
 #include "Game/System/LumaHook.hpp"
 
 #include "Game/System/LumaLoader.hpp"
@@ -364,7 +365,7 @@ namespace luma {
             }
 
             const u32 cCostFrames = 120;
-            const u32 cCostSlots = 256;  // mods loaded in a session (a reload of the same id reuses its slot)
+            // One per mod id loaded in a session (a reload of the same id reuses its slot), as many as memory holds.
             struct CostSlot {
                 u32 seq;           // even: steady; odd: being written (game thread only writes)
                 u32 live;          // rolled each frame (0 once its mod ended)
@@ -387,14 +388,14 @@ namespace luma {
                 u32 callersSet;
                 char callers[2][72];
             };
-            // Zero, so no page of it is touched until a mod loads.
-            CostSlot sCostSlots[cCostSlots];
+            // Reserved on the game thread (modBegin); read on any thread and in a fault handler (at(): two loads), below
+            // sCostUsed. An entry never moves.
+            GrowTable<CostSlot, 4u> sCostSlots;
             u32 sCostUsed = 0;    // slots ever handed out (published with release; readers scan below it)
-            bool sCostFull = false;
 
             CostSlot* costSlotOf(LumaMod* pMod) {
                 const u32 slot = *modCostSlot(pMod);
-                return slot != 0 ? &sCostSlots[slot - 1] : nullptr;
+                return slot != 0 ? &sCostSlots.at(slot - 1) : nullptr;
             }
 
             void charge(LumaMod* pMod, u64 ownTicks) {
@@ -1028,19 +1029,17 @@ namespace luma {
             const char* const pId = modId(pMod);
             u32 found = sCostUsed;
             for (u32 i = 0; i < sCostUsed; i++) {
-                if (same(sCostSlots[i].id, pId)) {
+                if (same(sCostSlots.at(i).id, pId)) {
                     found = i;
                     break;
                 }
             }
-            if (found == cCostSlots) {
-                if (!sCostFull) {
-                    sCostFull = true;
-                    nebula_log("LumaCore: %u mods' code times are kept this session; later ones are not measured\n", cCostSlots);
-                }
+            CostSlot* const pFound = sCostSlots.reserve(found);
+            if (pFound == nullptr) {
+                nebula_log("LumaCore: no memory to keep %s's code time; it is not measured\n", pId);
                 return;
             }
-            CostSlot& rSlot = sCostSlots[found];
+            CostSlot& rSlot = *pFound;
             __atomic_store_n(&rSlot.seq, rSlot.seq + 1u, __ATOMIC_RELAXED);
             __atomic_thread_fence(__ATOMIC_RELEASE);
             u32 at = 0;
@@ -1097,7 +1096,7 @@ namespace luma {
                 }
             }
             for (u32 s = 0; s < used; s++) {
-                CostSlot& rSlot = sCostSlots[s];
+                CostSlot& rSlot = sCostSlots.at(s);
                 if (rSlot.live == 0) {
                     continue;
                 }
@@ -1197,7 +1196,7 @@ NEBULA_GAME_API int32_t luma_guard_faults(const char* mod, uint32_t* count, char
     }
     const u32 used = __atomic_load_n(&sCostUsed, __ATOMIC_ACQUIRE);
     for (u32 s = 0; s < used; s++) {
-        const CostSlot& rSlot = sCostSlots[s];
+        const CostSlot& rSlot = sCostSlots.at(s);
         if (!same(rSlot.id, mod)) {
             continue;
         }
@@ -1235,7 +1234,7 @@ NEBULA_GAME_API int32_t luma_guard_cost(const char* mod, uint64_t* avg_ns, uint6
     }
     const u32 used = __atomic_load_n(&sCostUsed, __ATOMIC_ACQUIRE);
     for (u32 s = 0; s < used; s++) {
-        const CostSlot& rSlot = sCostSlots[s];
+        const CostSlot& rSlot = sCostSlots.at(s);
         for (;;) {
             const u32 before = __atomic_load_n(&rSlot.seq, __ATOMIC_ACQUIRE);
             if ((before & 1u) != 0) {
