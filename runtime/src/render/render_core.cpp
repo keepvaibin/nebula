@@ -1688,6 +1688,9 @@ bool RenderCore::restart_device() {
     device_lost_ = false;
     const std::int64_t started = galaxy::qpc_now();
     g_device_rebuilding.store(true, std::memory_order_release);
+    struct Steps {
+        std::int64_t waited = 0, pipelines = 0, textures = 0, rest = 0, device = 0, starts = 0;
+    } steps;
     struct RebuildMark {
         ~RebuildMark() { g_device_rebuilding.store(false, std::memory_order_release); }
     } rebuild_mark;
@@ -1697,12 +1700,22 @@ bool RenderCore::restart_device() {
             std::this_thread::sleep_for(std::chrono::milliseconds(delay));  // a test's slow driver
         }
         const FrameMap frame = renderer_.frame_map();
+        std::int64_t mark = started;
+        const auto lap = [&](std::int64_t& ms) {
+            const std::int64_t now = galaxy::qpc_now();
+            ms = (now - mark) * 1000 / galaxy::qpc_frequency();
+            mark = now;
+        };
+        lap(steps.waited);
         pipelines_.shutdown();
+        lap(steps.pipelines);
         movie_playback_.shutdown();
         texture_store_.shutdown();
+        lap(steps.textures);
         registries_.lose_device();
         display_pictures_.shutdown();
         drop_device_state();
+        lap(steps.rest);
 
         // The driver takes a moment to come back.
         constexpr unsigned kTries = 5u;
@@ -1713,6 +1726,7 @@ bool RenderCore::restart_device() {
             }
             back = restart_renderer(frame, attempt + 1u != kTries);
         }
+        lap(steps.device);
         if (!back || !display_pictures_.initialize(renderer_.device(), frame)) {
             throw std::runtime_error("[render] no device came back: DEVICE_LOST");
         }
@@ -1721,6 +1735,7 @@ bool RenderCore::restart_device() {
         registries_.restart(renderer_.device());
         pipelines_.initialize(renderer_.device(), renderer_.pipeline_root(), renderer_.pipeline_backend());
         cap_texture_packs();
+        lap(steps.starts);
         device_gate_.end_rebuild(rebuilding);
     } catch (...) {
         device_gate_.give_up();
@@ -1730,7 +1745,11 @@ bool RenderCore::restart_device() {
         queue_space_cv_.notify_all();
         return false;
     }
-    std::cerr << "[render] a new device in " << (galaxy::qpc_now() - started) * 1000 / galaxy::qpc_frequency() << " ms\n";
+    // Each step's time, so a slow restore names the step that took it (N-1072).
+    std::cerr << "[render] a new device in " << (galaxy::qpc_now() - started) * 1000 / galaxy::qpc_frequency()
+              << " ms (the gate " << steps.waited << ", pipeline workers stopped " << steps.pipelines << ", movies and textures "
+              << steps.textures << ", the rest " << steps.rest << ", the device " << steps.device << ", started again "
+              << steps.starts << ")\n";
     if (asked_loss_frame_ != 0u) {
         std::cerr << "[gpu] recovered from the device loss asked at frame " << asked_loss_frame_ << " (rendering goes on)\n";
         asked_loss_frame_ = 0u;
