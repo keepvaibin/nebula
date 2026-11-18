@@ -577,6 +577,8 @@ galaxy_test(galaxy_key_positions_win32_tests SOURCES ${rt}/input/key_positions_w
     ${rt}/input/key_positions_win32.cpp LIBS user32)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
 galaxy_test(galaxy_windows_child_tests SOURCES ${rt}/windows_child_tests.cpp)
+# The settings menu's view per page: the same rows on every ask, and an ask's time (P-088).
+galaxy_test(galaxy_native_settings_view_tests SOURCES ${rt}/ui/native_settings_view_tests.cpp LIBS galaxy_render)
 galaxy_test(galaxy_settings_graphics_page_tests SOURCES ${rt}/ui/settings_graphics_page_tests.cpp
     ${rt}/ui/settings_graphics_page.cpp ${rt}/ui/settings_model.cpp LIBS galaxy_render)
 # The HDR calibration's steps, with the renderer library's levels and patterns.
