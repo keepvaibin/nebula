@@ -297,8 +297,9 @@ void GameScene::draw() const {
     // The scene shows play, whatever is over it: the HDR calibration's reference stage is ready once it does.
     NebulaHost::gameContext(NEBULA_CONTEXT_SCENE_PLAY,
                             !MR::isActiveMoviePlayer() && isNerve(GET_NERVE(GameScene, GameSceneAction)) ? 1 : 0);
-    // Where the camera is in water, how deep: ray tracing lights the water it looks through.
-    {
+    // Where the camera is in water, how deep: ray tracing lights the water it looks through. Asked only while ray
+    // tracing is on (P-127); nothing else reads it.
+    if (NebulaHost::option(NEBULA_OPTION_RAY_TRACING) != 0) {
         const f32 depth = MR::isCameraInWater() ? WaterAreaFunction::getCameraWaterDepth() : -1.0f;
         NebulaHost::gameContext(NEBULA_CONTEXT_CAMERA_WATER, depth < 0.0f ? 0 : static_cast< s32 >(depth) + 1);
     }
