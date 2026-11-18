@@ -1,0 +1,40 @@
+{
+  "patch": 1,
+  "key": [
+    "l_id"
+  ],
+  "add": [
+    {
+      "name": "ViewGroupCtrlCube",
+      "l_id": 9201,
+      "pos_x": -3264.6,
+      "pos_y": -14000.0,
+      "pos_z": -15332.0,
+      "dir_x": 0.0,
+      "dir_y": 0.0,
+      "dir_z": 0.0,
+      "scale_x": 10.0,
+      "scale_y": 10.0,
+      "scale_z": 10.0,
+      "Obj_arg0": -1,
+      "Obj_arg1": 1,
+      "Obj_arg2": -1,
+      "Obj_arg3": -1,
+      "Obj_arg4": -1,
+      "Obj_arg5": -1,
+      "Obj_arg6": -1,
+      "Obj_arg7": -1,
+      "SW_APPEAR": -1,
+      "SW_A": -1,
+      "SW_B": -1,
+      "SW_SLEEP": -1,
+      "FollowId": -1,
+      "ClippingGroupId": -1,
+      "CommonPath_ID": -1,
+      "GroupId": -1,
+      "MapParts_ID": -1,
+      "Obj_ID": -1,
+      "DemoGroupId": -1
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "harness": 1,
+  "name": "3903-flat-shadow-one-joint",
+  "about": "P-178: sh-flat1 gives each of js-stage's two Kuribos, after its init, a flat-model shadow (ShadowVolumeFlatModel) of the Coin's model, which has one joint: the game does not crash, and the player walks past them",
+  "proves": [
+    "stage.place"
+  ],
+  "mods": [
+    {
+      "path": "../mods/js-stage",
+      "loads": false
+    },
+    "../mods/sh-flat1"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 130,
+      "stick": [
+        1,
+        0
+      ],
+      "frames": 40
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.sh-flat1.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.sh-flat1.flat_made",
+      "is": 2
+    }
+  ]
+}

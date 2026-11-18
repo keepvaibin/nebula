@@ -1,0 +1,4 @@
+{
+  "3902-view-group-no-group": "waits for P-177's fix (Agent 1): on the bins of mods/m2 (M-029) the log line is not there; the cube writes view group data at index -1. Goes into suite.json with the fix.",
+  "3903-flat-shadow-one-joint": "waits for P-178's fix (Agent 1): on the bins of mods/m2 (M-029) the game crashes reading address 0x5c in smg_game.dll as ShadowVolumeFlatModel looks for its root joint's child. Goes into suite.json with the fix."
+}

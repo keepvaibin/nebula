@@ -1,0 +1,18 @@
+{
+  "format": "1.0",
+  "id": "vg-nogroup",
+  "version": "1.0.0",
+  "name": "vg-nogroup",
+  "summary": "vg-nogroup (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  },
+  "layers": [
+    {
+      "name": "base"
+    }
+  ]
+}

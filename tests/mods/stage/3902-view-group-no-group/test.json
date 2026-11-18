@@ -1,0 +1,44 @@
+{
+  "harness": 1,
+  "name": "3902-view-group-no-group",
+  "about": "P-177: vg-nogroup adds a ViewGroupCtrlCube with Obj_arg0 -1 (no view group) about scenario 1's start by a patch of EggStarGalaxy's areaobjinfo; the player stands inside it and walks: the game does not crash, the cube does nothing and says so once in the log",
+  "proves": [
+    "stage.place"
+  ],
+  "mods": [
+    {
+      "path": "../mods/vg-nogroup",
+      "loads": false
+    }
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 130,
+      "stick": [
+        1,
+        0
+      ],
+      "frames": 40
+    },
+    {
+      "at": 240,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "view group cube [0-9]+ has no group \\(Obj_arg0 -1\\): it does nothing"
+    },
+    {
+      "fact": "modlog",
+      "matching": {
+        "mod": "vg-nogroup"
+      },
+      "absent": true
+    }
+  ]
+}

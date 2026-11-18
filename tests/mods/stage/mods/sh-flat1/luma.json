@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "sh-flat1",
+  "name": "sh-flat1",
+  "summary": "sh-flat1 (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}
