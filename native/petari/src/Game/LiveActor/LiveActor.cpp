@@ -107,6 +107,9 @@ void LiveActor::makeActorDead() {
     }
 
     mFlag.mIsDead = true;
+#if defined(NEBULA_PLAIN_MODULE)
+    sDeathCount++;
+#endif
     mFlag.mIsDrawnClipped = false;
 
     MR::removeFromClippingTarget(this);
@@ -290,6 +293,9 @@ MtxPtr LiveActor::getBaseMtx() const {
 }
 
 LiveActor::ClipScope LiveActor::sClipScope = LiveActor::ClipScope_All;
+#if defined(NEBULA_PLAIN_MODULE)
+u64 LiveActor::sDeathCount = 0;
+#endif
 
 void LiveActor::startClipped() {
     mFlag.mIsClipped = true;
