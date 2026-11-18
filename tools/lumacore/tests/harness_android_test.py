@@ -116,6 +116,32 @@ class GoneDevice(android.Device):
         return False
 
 
+class PrepareDevice(android.Device):
+    """A device for prepare: it answers, installs, and keeps every run-as line; stat gives the pak's size."""
+
+    def __init__(self, size):
+        super().__init__("fake")
+        self.size, self.lines = size, []
+
+    def answers(self):
+        return True
+
+    def installed(self):
+        return True
+
+    def adb(self, *args, timeout=600, stdin=None):
+        class Done:
+            returncode, stdout, stderr = 0, b"Success\n", b""
+        return Done()
+
+    def shell(self, command, timeout=600):
+        if command.startswith("run-as "):
+            self.lines.append(command)
+            if "stat -c" in command:
+                return 0, "%d\n" % self.size
+        return 0, ""
+
+
 def main():
     work = pathlib.Path(sys.argv[sys.argv.index("--work") + 1]) if "--work" in sys.argv else pathlib.Path(tempfile.mkdtemp())
     work.mkdir(parents=True, exist_ok=True)
@@ -222,6 +248,28 @@ def main():
         check(False, "an ABI the app is not built for is refused")
     except SystemExit:
         pass
+
+    # prepare: the pak's install record goes beside it once the pak is whole, or the launcher's start removes the pak
+    # as a cut-off setup's (GameSwap.sweep; N-1079: every tablet run after a restart found no game).
+    with tempfile.TemporaryDirectory() as folder:
+        pak = pathlib.Path(folder) / "game.pak"
+        pak.write_bytes(b"NBSTORE\0" + bytes(56))
+        device = PrepareDevice(64)
+        real_device = android.Device
+        android.Device = lambda serial: device
+
+        class PrepareArgs:
+            device, device_lock, who, apk, game_id = "fake", None, "test", "app.apk", "RMGE01"
+        PrepareArgs.pak = str(pak)
+        code = android.prepare(PrepareArgs())
+        android.Device = real_device
+        copied = next((i for i, line in enumerate(device.lines) if "files/game/game.pak" in line and " mv " in line), None)
+        record = next((i for i, line in enumerate(device.lines) if "install.properties" in line), None)
+        check(code == 0 and copied is not None and record is not None and record > copied,
+              "prepare writes install.properties after game.pak: %s" % device.lines)
+        check(record is not None and "bytes=64" in device.lines[record] and "gameId=RMGE01" in device.lines[record]
+              and ".install.properties.writing && mv " in device.lines[record],
+              "the record names the pak's size and game, written aside then moved: %s" % (device.lines[record:] or ""))
 
     print("\n".join(failed) if failed else "harness android: every case holds")
     return 1 if failed else 0

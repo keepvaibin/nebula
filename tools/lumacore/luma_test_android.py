@@ -369,6 +369,16 @@ def run_on_device(lt, device, test, args, run_folder, previous):
     return {"code": ended, "seconds": seconds, "frozen": frozen, "mods": placed, "exe": "GameActivity", "starts": starts}
 
 
+def install_command(game_id, size, installed_at):
+    """The shell line that writes files/game/install.properties as setup does (Store.kt Install.write: written aside,
+    then moved over, so no reader sees half a file)."""
+    lines = ["# Nebula setup (luma_test_android.py prepare)", "gameId=" + game_id, "title=", "format=store",
+             "source=luma_test_android.py prepare", "bytes=%d" % size, "installedAt=%d" % installed_at]
+    return ("printf '%%s\\n' %s > files/game/.install.properties.writing && "
+            "mv files/game/.install.properties.writing files/game/install.properties"
+            % " ".join("\"%s\"" % line for line in lines))
+
+
 def prepare(args):
     device = Device(args.device)
     if not device.answers():
@@ -402,7 +412,13 @@ def prepare(args):
         code, out = device.run_as("stat -c %s files/game/game.pak")
         if out.strip() != str(size):
             raise SystemExit("the device's game.pak is %s bytes, the pak %d" % (out.strip() or "no", size))
-        print("pak: %s (%d bytes) in %s's files/game" % (pak, size, PACKAGE))
+        # The record setup writes once game.pak is whole (Store.kt Install, GameSwap.INSTALL): without it the launcher's
+        # start takes the pak for a cut-off setup's and removes it (GameSwap.sweep), so a run the launcher starts (a
+        # restart, P-020) would find no game (N-1079).
+        code, out = device.run_as(install_command(args.game_id, size, int(time.time() * 1000)))
+        if code != 0:
+            raise SystemExit("the install record could not be written: %s" % out.strip()[:200])
+        print("pak: %s (%d bytes) in %s's files/game, with its install record" % (pak, size, PACKAGE))
     finally:
         release_lock(args.device_lock)
     return 0
@@ -451,6 +467,7 @@ def main():
     p.add_argument("--device", required=True)
     p.add_argument("--apk", required=True)
     p.add_argument("--pak", required=True)
+    p.add_argument("--game-id", default="RMGE01", help="the pak's game, for its install record (the app's save imports read it)")
     p.add_argument("--who", default="?")
     p.add_argument("--device-lock", default=os.environ.get("LUMA_TEST_DEVICE_LOCK"))
     r = sub.add_parser("remove")
