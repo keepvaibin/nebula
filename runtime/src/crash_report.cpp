@@ -159,8 +159,8 @@ Report classify(const Facts& facts) noexcept {
     }
     if (running && gpu_lost(text)) {
         set(r, "NEB-G01", "The graphics card stopped responding",
-            "Update the graphics driver. If it happens again, turn off ray tracing and frame generation or lower the "
-            "internal resolution.");
+            "Update the graphics driver. If it happens again, turn off frame generation or lower the internal "
+            "resolution.");
         put(r.detail, sizeof(r.detail), "The graphics driver reset the graphics card while the game was running.");
         return r;
     }

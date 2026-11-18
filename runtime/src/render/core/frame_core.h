@@ -69,50 +69,13 @@ struct GpuMesh {
     gpu::Address further = 0u;
     gpu::Address indices = 0u;
     gpu::Address refined_indices = 0u;
-    gpu::Address gains = 0u;  // vertex 0's de-light gain word in stream 3 (NEBULA_MESH_GAIN; 0 none)
     std::uint32_t vertex_count = 0u, refined_vertex_count = 0u;
     std::uint32_t index_count = 0u, refined_index_count = 0u;
     std::uint32_t site_stride = 0u;     // nonzero: one stream at `positions`
     std::uint32_t further_stride = 0u;
     std::uint32_t single_matrix = NEBULA_MODEL_NONE;
-    std::uint32_t glow_shape_first = 0u, glow_shape_count = 0u;  // among its model's glow_shapes
     std::uint8_t index_bytes = 4u;
     std::uint8_t billboard = 0u;  // NebulaModelMesh.billboard: 1 a billboard, 2 a Y billboard (it turns to the eye)
-    // What a ray reads of the mesh's material (nebula_model.h NebulaModelHit): its class and flags, what it shows with
-    // no light, its colour under full light, and its numbers.
-    std::uint8_t hit_class = 0u, hit_flags = 0u;
-    float hit_emission[3]{}, hit_base[3]{0.5f, 0.5f, 0.5f};
-    float hit_roughness = 0.45f, hit_metal = 0.0f, hit_transmission = 0.0f;
-    float hit_environment = 0.0f;  // how much of its look a painted reflection carries
-    float glow[4]{};  // the light it gives: colour, and its strength (0: none)
-    std::uint8_t glow_source = 0u;  // NebulaModelHit.glow_source: where the glow's colour comes from as it animates
-    std::uint8_t glow_rule = 0u;    // its bits 5-7: why it glows (hit_record.rs GLOW_*; 2 a hot body by name)
-    std::uint8_t hit_env_map = 0xFFu;
-    float hit_ior = 1.5f, hit_thickness = 0.0f;
-    float hit_env_tint[3]{};
-    float hit_body = -1.0f, hit_shine = -1.0f, hit_tint_keep = -1.0f;  // the review's; below 0: the class's own
-    float hit_through = 0.0f;  // the share of the sun its far side takes (NebulaModelHit.through / 255)
-    // The live colour of glow_source: its row among the material's form 0 rows (vertex rows first; 0xFFFF
-    // none), how many rows that form has, and the row's cooked colour, which the live one is measured against.
-    std::uint16_t glow_row = 0xFFFFu;
-    std::uint16_t glow_row_count = 0u;
-    float glow_cooked[3]{};
-    // Map 0's coordinate (the water's ripple): the first of its two rows (u, v) among the material's own
-    // form's rows (vertex rows first; 0xFFFF none: no stage samples map 0 through a coordinate made from a uv set by a
-    // matrix), the uv set it reads, and that form's row count (a draw's rows are the form's where they agree).
-    std::uint16_t map0_row = 0xFFFFu;
-    std::uint16_t map0_form_rows = 0u;
-    std::uint8_t map0_uv = 0u;
-    // Map 1's the same way (water moves by both of its maps), in the same form; map1_slot its place in the
-    // item's texture table (the form's second map).
-    std::uint16_t map1_row = 0xFFFFu;
-    std::uint8_t map1_uv = 0u;
-    std::uint8_t map1_slot = 0xFFu;
-    float hit_alpha = 0.5f;  // an alpha-tested material: the alpha from which it is there
-    // Its paint as one light (nebula_model.h NebulaModelPaintLight; the Physical style): the share b / (a + b)
-    // (0: it stays painted) and the light's direction in the model's space, octahedral.
-    float paint_share = 0.0f;
-    std::int16_t paint_direction[2]{};
     float min[3]{}, max[3]{};
     std::uint32_t object_slots_first = 0u, object_slots_count = 0u;
     std::uint32_t arena = 0u;
@@ -129,7 +92,6 @@ struct GpuModel {
     std::vector<float> inverse_binds;  // 12 per joint
     std::vector<NebulaModelJoint> joints;
     std::vector<ao::ObjectSlot> object_slots;
-    std::vector<NebulaModelGlowShape> glow_shapes;  // its glowing meshes' light shapes, model space
     ModelTables tables{};
     std::uint32_t first_mesh = 0u, mesh_count = 0u;
     std::uint32_t arena = 0u;

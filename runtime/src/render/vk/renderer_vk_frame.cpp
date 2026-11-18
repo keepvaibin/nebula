@@ -3542,7 +3542,7 @@ bool RendererVk::debug_copy_scene_to_readback() {
     vk::Context& context = vk::Context::get();
     const unsigned w = scene_map_.width;
     const unsigned h = scene_map_.height;
-    // The 10-bit scene target, or the wide one (RGBA16F, a traced scene's): 8 bytes a pixel, its halves
+    // The 10-bit scene target, or the wide one (RGBA16F, begin_wide_scene): 8 bytes a pixel, its halves
     // read as the 10-bit target's words (debug_log_readback). Any other format is not read.
     const bool wide = scene_.color->format == VK_FORMAT_R16G16B16A16_SFLOAT;
     if (!wide && scene_.color->format != vk::kSceneColorFormat) {

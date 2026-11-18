@@ -2944,10 +2944,6 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
         galaxy::render::note_frame_generation_allowed(value != 0);
 #endif
-    } else if (what == NEBULA_CONTEXT_CAMERA_WATER) {
-#if defined(NEBULA_HOST_RENDERER)
-        galaxy::render::note_camera_water(value > 0 ? static_cast<float>(value - 1) : -1.0f);
-#endif
     } else if (what == NEBULA_CONTEXT_TOUCH_TARGET) {
 #if defined(NEBULA_HOST_RENDERER)
         galaxy::host::note_touch_target(static_cast<std::uint32_t>(value));

@@ -358,7 +358,7 @@ namespace luma {
                         pPoint->requestPointLightBy(&rLight, distance, at, colour, h2 / (h2 + cReference * cReference), -1);
                     }
                     if (facts && rLight.facts < 120u) {
-                        // Whether the game's point light is this one now (not traced: lit by it).
+                        // Whether the game's point light is this one now (what it lights).
                         const bool chosen = pPoint != nullptr && pPoint->mCurrentActor == &rLight;
                         lightFact("", rLight, chosen ? ",\"chosen\":true" : ",\"chosen\":false");
                         rLight.facts++;

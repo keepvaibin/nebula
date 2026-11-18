@@ -390,6 +390,14 @@ def run(cmd, log, env=None, cwd=None, timeout=None):
 # Checks ---------------------------------------------------------------------------------------------------------
 
 
+def settings_table(g):
+    """tools/settings_table.py --check: the settings table against the engine's readers, the apps and the game's menu."""
+    def fn(log):
+        code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools" / "settings_table.py", "--check"], log, cwd=TREE)
+        return code == 0, last_line(pathlib.Path(log).read_text(encoding="utf-8", errors="replace"))
+    return fn
+
+
 def repo_audit(g):
     """The tracked files (tools/audit_repo.ps1): no game content, build outputs, oversized files or credentials."""
     def fn(log):
@@ -1178,6 +1186,7 @@ def tablet_part(g, stops, device=None):
 
 def build_part(g):
     """The repository checks and the Windows build: False when the build failed (nothing after it can run)."""
+    g.check("repo/settings", settings_table(g))
     g.check("repo/audit", repo_audit(g))
     g.check("repo/scripts", parse_scripts(g))
     if g.args.no_build:

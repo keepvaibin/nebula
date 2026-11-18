@@ -1,8 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* LumaCore's draw.light service (docs/modding/reference/services/draw.md): a mod's own lights in the world. A light is a
-   glowing body at a place, of a colour and an intensity in candela. Traced (ray tracing on), it is an emitter like
-   the game's lamps: it lights what it sees, casts shadows where `casts` says, and is seen in reflections. Not traced,
-   it joins the game's own light set as the game's lamps do (a Luma's glow, a fireball's): the game lights with one
+   glowing body at a place, of a colour and an intensity in candela. It joins the game's own light set as the game's
+   lamps do (a Luma's glow, a fireball's): the game lights with one
    such lamp at a time, the one nearest the player, blending to it over half a second. A light lives until remove or
    the mod's end; it is in whatever scene runs, and in none while the game loads one. Import:
    LUMA_SERVICE(slot, "draw.light", "1.0").
@@ -37,8 +36,8 @@ extern "C" {
 
 /* LumaDrawLightDesc.flags. */
 enum {
-    LUMA_DRAW_LIGHT_CASTS = 1u << 0 /* traced: what it lights is shadowed by what stands between (else it lights
-                                       through); not traced the game's lamp casts none either way */
+    LUMA_DRAW_LIGHT_CASTS = 1u << 0 /* kept for a renderer that shadows a lamp's light; the game's lamps cast none,
+                                       so today it changes nothing */
 };
 
 /* A light: owned by the mod until remove or its end. */
@@ -70,8 +69,8 @@ typedef struct LumaDrawLightService {
     /* 1.0. Game thread. Everything of the light as `desc` says (its handle stays). LUMA_OK; answers as add, and as
        move for the handle. */
     int32_t (*set)(const LumaMod* mod, LumaDrawLight light, const LumaDrawLightDesc* desc);
-    /* 1.0. Game thread. The light is gone from the next frame drawn (not traced, the game's lamp fades out from it as
-       from any lamp that goes). LUMA_OK; an ended light or another mod's: LUMA_E_HANDLE, reported. Thread and taking
+    /* 1.0. Game thread. The light is gone from the next frame drawn (the game's lamp fades out from it as from any
+       lamp that goes). LUMA_OK; an ended light or another mod's: LUMA_E_HANDLE, reported. Thread and taking
        out as add. */
     int32_t (*remove)(const LumaMod* mod, LumaDrawLight light);
 } LumaDrawLightService;

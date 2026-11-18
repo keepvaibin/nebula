@@ -33,7 +33,6 @@
 #include "Game/Map/OceanBowl.hpp"
 #include "Game/Map/OceanRing.hpp"
 #include "Game/Map/OceanSphere.hpp"
-#include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Map/WaterPoint.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Player/MarioAccess.hpp"
@@ -297,11 +296,6 @@ void GameScene::draw() const {
     // The scene shows play, whatever is over it: the HDR calibration's reference stage is ready once it does.
     NebulaHost::gameContext(NEBULA_CONTEXT_SCENE_PLAY,
                             !MR::isActiveMoviePlayer() && isNerve(GET_NERVE(GameScene, GameSceneAction)) ? 1 : 0);
-    // Where the camera is in water, how deep: ray tracing lights the water it looks through.
-    {
-        const f32 depth = MR::isCameraInWater() ? WaterAreaFunction::getCameraWaterDepth() : -1.0f;
-        NebulaHost::gameContext(NEBULA_CONTEXT_CAMERA_WATER, depth < 0.0f ? 0 : static_cast< s32 >(depth) + 1);
-    }
     // The settings' galaxy select (its ADVANCED page) names its galaxies and stars in the game's own words, asked once.
     if (NebulaHost::galaxySelectNamesWanted() != 0) {
         MR::FormattedName id;

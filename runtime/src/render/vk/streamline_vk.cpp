@@ -13,7 +13,6 @@
 #include <sl.h>
 #include <sl_consts.h>
 #include <sl_dlss.h>
-#include <sl_dlss_d.h>
 #include <sl_helpers_vk.h>
 #include <sl_security.h>
 

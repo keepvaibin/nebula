@@ -6732,7 +6732,7 @@ void RendererD3D12::queue_debug_ppm_capture(
 }
 
 bool RendererD3D12::debug_copy_scene_to_readback() {
-    // The scene target as it is: the 10-bit one (R10G10B10A2), or the wide one (RGBA16F, a traced scene's),
+    // The scene target as it is: the 10-bit one (R10G10B10A2), or the wide one (RGBA16F, begin_wide_scene),
     // whose halves debug_log_readback turns into the 10-bit target's words.
     resolve_scene(false);
     debug_log_readback();
