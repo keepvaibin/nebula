@@ -11,6 +11,7 @@
 #include "Game/MapObj.hpp"
 #include "Game/NPC.hpp"
 #include "Game/NameObj/NameObjFactoryStubs.hpp"
+#include "Game/System/NebulaOnce.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Ride.hpp"
 #include "Game/Screen.hpp"
@@ -4805,9 +4806,9 @@ namespace {
     const u32 cCreateIndexRoom = 4096;
     static_assert(ARRAY_SIZEU(cCreateTable) * 2 <= cCreateIndexRoom, "the index stays at most half full");
     u16 sCreateIndex[cCreateIndexRoom];
-    // 0 not built, 1 being built, 2 built (P-183): the first lookup builds the index, on whichever thread it comes
-    // (a scene load, the mod loader); a lookup on another thread meanwhile waits the few microseconds it takes.
-    u32 sCreateIndexState = 0;
+    // The first lookup builds the index, on whichever thread it comes (a scene load, the mod loader); a lookup on
+    // another thread meanwhile waits the few microseconds it takes (P-183).
+    NebulaOnce sCreateIndexOnce;
 
     u32 hashNameCase(const char* pName) {
         u32 hash = 2166136261u;
@@ -4838,19 +4839,7 @@ namespace {
         }
     }
 
-    void ensureCreateIndex() {
-        if (__atomic_load_n(&sCreateIndexState, __ATOMIC_ACQUIRE) == 2) {
-            return;
-        }
-        u32 notBuilt = 0;
-        if (__atomic_compare_exchange_n(&sCreateIndexState, &notBuilt, 1u, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)) {
-            buildCreateIndex();
-            __atomic_store_n(&sCreateIndexState, 2u, __ATOMIC_RELEASE);
-            return;
-        }
-        while (__atomic_load_n(&sCreateIndexState, __ATOMIC_ACQUIRE) != 2) {
-        }
-    }
+    void ensureCreateIndex() { sCreateIndexOnce.run(buildCreateIndex); }
 };  // namespace
 
 namespace NameObjFactory {

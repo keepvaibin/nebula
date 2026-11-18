@@ -51,6 +51,8 @@ elseif(NEBULA_SANITIZE MATCHES "thread")
     # operators are the program's, as in the module (P-012).
     target_link_options(native_arena_tests PRIVATE -fno-sanitize-link-c++-runtime)
 endif()
+# Work done once by the first thread that asks (P-183: the creator index), header only.
+native_test(native_once_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/once_tests.cpp")
 # The frame-list writer, against the list the renderer reads.
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
 # The cutscene skip's bound, in steps of play (header only).
