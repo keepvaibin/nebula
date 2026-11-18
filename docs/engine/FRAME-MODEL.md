@@ -284,3 +284,103 @@ Each pass of the frame list states what it reads and writes; a planner on the re
 | Upscale (temporal or spatial) | scene, depth, motion | the display-size picture | after post |
 | 2-D layer (HUD, menus) | layouts | the display-size picture | merged with bloom's composite and the final picture where no upscaler sits between |
 | Show | the picture | the swap chain | last; "the last picture" is asked for by name, the last real frame |
+
+### 2.6 Each open row of stages 2 to 6: its pile and the step that does it
+
+Pile B: the foundation changes or replaces its code, done once in that step. Pile C: it needs the new model under
+it. Pile A: the foundation does not touch its code; it comes after. Where this differs from the planner's reading
+(file 07), the line says why.
+
+| Row | Pile | Step | What | Note |
+| --- | --- | --- | --- | --- |
+| P-022 | B | F3 | The same per-renderer logic is written four times. |  |
+| P-010 | B | F4, E3 step 1 | A draw whose pipeline is not made yet compiles it on the render thread |  |
+| N-1067 | B | F4, E3 step 1 | a Present waits for every pipeline creation in flight (core/present_ga |  |
+| P-157 | B | F4, E3 step 1 | the imported material format still stores the console's register layou |  |
+| P-052 | B | F4, E3 step 1 | Utility pipelines are compiled on the render thread at first use, outs | pile A in the planner's reading: its Direct3D 12 half is written; Vulkan's first-frame bloom and post builds (1.8) are open |
+| P-065 | B | F4, E3 step 1 | performance (hitches; Metal): the renderer's own shaders are compiled  | planner: A; it breaks rule 1, so it ends where every pipeline is made at load |
+| P-155 | B | F4, E3 step 2 | a texture is still known by the address of its bytes and described by  |  |
+| P-048 | B | F4, E3 step 2 | The D3D12 sampler heap is drained with a full GPU wait when it fills.  |  |
+| P-056 | B | F4, E3 step 2 | When the sampler array fills, the Vulkan reset waits for the last subm |  |
+| P-066 | B | F4, E3 step 2 | performance: Metal waits for the GPU whenever its sampler array nears  |  |
+| P-061 | B | F4, E3 step 2 | performance (and a limit that can fail): the D3D11 sampler cache is ne |  |
+| P-059 | B | F4, E3 step 2 | Every texture record with authored-looking levels is analysed on the g |  |
+| P-151 | B | F4, E3 step 3 | the material path keeps the console's per-draw register model: texture |  |
+| P-173 | B | F4, E3 step 3 | A material touched once never returns to its registered slot |  |
+| P-060 | B | F4, E3 step 3 | performance: every recorded draw renames the root constant buffer with |  |
+| P-064 | B | F4, E3 step 3 | performance: D3D11 upload_written scans every upload buffer on every f |  |
+| P-154 | B | F4, E3 step 4 | the "site" draws (effects, shadows, 2D, gauges, glows) still work as t |  |
+| P-149 | B | F4, E3 step 4 | every particle is built as a matrix in eye space on the CPU, multiplie |  |
+| P-150 | B | F4, E3 step 4 | the particle material copies GX alpha-compare, combiner-stage and indi |  |
+| P-143 | B | F4, E3 step 4 | each shadow volume is drawn twice, front faces then back faces, with t |  |
+| P-181 | B | F4, E3 step 4 | Shadow shapes are rebuilt on the CPU every draw, and the oval surface  |  |
+| P-145 | B | F4, E3 step 4 | the scenario-select and mod mesh draw buffers merge same-material entr |  |
+| P-038 | B | F4, E3 step 4 | Draw-buffer packet insertion, removal and light re-sort are linear per |  |
+| P-127 | B | F4, E3 step 4 | GameScene::draw does work every game frame that the shipping build nev |  |
+| P-128 | B | F4, E3 step 4 | each CategoryList call fetches the list executor through two pointer h |  |
+| P-156 | B | F4, E3 step 5 | every presented picture recomputes, on the CPU, the eye-space position |  |
+| P-144 | B | F4, E3 step 5 | each animated model's joint matrices are copied twice per frame after  |  |
+| P-046 | B | F4, E3 step 5 | Ring-run merging patches matrix numbers and indices in place in write- |  |
+| I-003 | B | F4, E3 step 5 | performance (T3). Each in-between picture is a full CPU walk and a ful | the in-between picture as a GPU pass (rule 5) |
+| P-142 | B | F4, E3 step 6 | lights are loaded per object draw in the console's eight-register mode |  |
+| P-140 | B | F4, E3 step 6 | every moving actor asks for its shadow to be recomputed every step, an |  |
+| P-152 | B | F4, E3 step 6 | every visible actor scans every light area every step to find which on |  |
+| P-006 | B | F5, E4 | Every Vulkan scene pass stores depth and stencil, and the multisampled |  |
+| P-007 | B | F5, E4 | Vulkan parallel recording splits the scene pass into several render pa |  |
+| P-025 | B | F5, E4 | With MSAA, bloom and scene AA resolve the scene and then copy the reso |  |
+| P-027 | B | F5, E4 | Opening the HDR 2D layer takes two full-size conversion draws from the |  |
+| P-031 | B | F5, E4 | The Metal scene pass always stores depth and stencil, MSAA stores the  |  |
+| P-053 | B | F5, E4 | A resolve is recorded for each consumer even when nothing was drawn si |  |
+| P-055 | B | F5, E4 | see the finding's own text |  |
+| P-063 | B | F5, E4 | performance (D3D11 parity): D3D11 scene AA always copies the scene; D3 |  |
+| P-054 | B | F5, E4 | Vulkan waits for the GPU in the middle of a frame whenever it makes a  |  |
+| P-026 | B | F5, E4 | The present pass recreates its shader views every frame, and the post- |  |
+| N-1068 | B | F5, E4 | the game thread waits for frame F-2's screen probe answers (RenderCore | planner: not placed; rule 2: a probe is answered by the frame it belongs to |
+| P-028 | B | F5, E4 (a size change makes new targets beside the old, retired by the fence) | Several size changes drain the whole GPU in the middle of a frame (`wa | planner: A; Direct3D 12 written on engine/b, Vulkan's drains at size changes (1.4) open |
+| P-030 | B | F5, E4 (a size change makes new targets beside the old, retired by the fence) | The frame-generation and FSR 3 paths call `vkDeviceWaitIdle` from the  | planner: not placed |
+| P-049 | B | F5, E4 (a size change makes new targets beside the old, retired by the fence) | DLSS is created on the render thread inside begin_frame, after a full  | planner: not placed |
+| P-050 | B | F5, E4 (a size change makes new targets beside the old, retired by the fence) | The FSR 3 frame-generation context is recreated mid-frame, with the co | planner: not placed |
+| P-057 | B | F5, E4 (a size change makes new targets beside the old, retired by the fence) | Vulkan creates DLSS synchronously on the render thread, as D3D12 does  | planner: not placed |
+| I-016 | B | F2 | gap in tests. The scheduler is not under test (J.8): the arrival clock |  |
+| I-002 | C | F6, E6b | design gap (T3, T6). On vblanks, the real picture of a step is almost  |  |
+| I-013 | C | F6, E6b | wrong behaviour (minor), suspected. FramePhase measures the wrong work |  |
+| P-034 | C | F6, E6b | The Apple display link is never stopped. |  |
+| I-004 | C | F6, E6b | wrong behaviour (T4). Interpolation adds about one to two steps of lat |  |
+| I-005 | C | F6, E6b | wrong behaviour (T2, T7). Linux has no display clock. |  |
+| I-006 | C | F6, E6b | wrong behaviour (T2), suspected. Metal drops a picture when `nextDrawa |  |
+| I-007 | C | F6, E6b | wrong behaviour (T2), suspected. VRR detection and slot timing. |  |
+| I-010 | C | F6, E6b | design gap (T6), suspected. Two governors act on the same GPU time wit |  |
+| I-012 | C | F6, E6b | design gap (T7). Only Android Vulkan presents at a requested time; onl |  |
+| I-014 | C | F6, E6b | wrong behaviour (T2), suspected. Game-declared camera cuts come from t |  |
+| P-078 | C | F6, E6b | wrong behaviour (suspected). The star pointer and the mod look are sam |  |
+| P-163 | C | F6, E6b | performance (input latency, small): the menu reads the mouse, touch an |  |
+| P-040 | C | F7 | The step has no worker parallelism, and the shared state that blocks i |  |
+| P-146 | C | F7 | frame-list building, skeleton evaluation and collision results live in |  |
+| P-082 | A | after the foundation: lost data | wrong behaviour (suspected). The in-game import's write is not ordered |  |
+| P-094 | A | after the foundation: lost data | Setting up again deletes the installed game before the new one is buil |  |
+| P-095 | A | after the foundation: lost data | A full device during setup ends with an untranslated OS error, and set |  |
+| P-096 | A | after the foundation: lost data | Mod imports never check free space, show a raw ENOSPC text when the de |  |
+| P-013 | A | after the foundation: the step's speed | Every object construction and every `delete` searches all arenas linea |  |
+| P-039 | A | after the foundation: the step's speed | Sensor hits are found by testing every pair between groups, each step. |  |
+| P-088 | A | after the foundation: the step's speed | performance: the open settings menu rebuilds its page twice a frame on |  |
+| P-129 | A | after the foundation: the step's speed | every collision query walks every part in the global zone and in each  |  |
+| P-130 | A | after the foundation: the step's speed | a moving part whose sphere touches its zone's box edge recomputes the  |  |
+| P-131 | A | after the foundation: the step's speed | once any ball or line query has filled 64 hits, every later query allo |  |
+| P-132 | A | after the foundation: the step's speed | ball queries against a moving part invert the part's previous matrix a |  |
+| P-133 | A | after the foundation: the step's speed | prism lists deduplicate by linear search over the hits found so far, a |  |
+| P-134 | A | after the foundation: the step's speed | each collision prism stores one vertex plus normals, and the other two |  |
+| P-135 | A | after the foundation: the step's speed | the clipping pass is linear and cheap, but it calls MR::getClippingJud |  |
+| P-136 | A | after the foundation: the step's speed | looking up a sensor by name hashes the string on every call, and actor |  |
+| P-137 | A | after the foundation: the step's speed | picking a free actor from a pool scans the pool from the start every t |  |
+| P-138 | A | after the foundation: the step's speed | a bound actor that does not move runs the same map query twice per ste |  |
+| P-139 | A | after the foundation: the step's speed | gravity is found by testing every registered gravity for every actor a |  |
+| P-141 | A | after the foundation: the step's speed | the emitter pool is walked in full, empty slots included, up to three  |  |
+| P-058 | A | after the foundation | VMA is told Vulkan 1.1 even when the device and instance are 1.2 or 1. |  |
+| P-117 | A | after the foundation | AV1 movie decode is plain C and can stall the render thread. |  |
+| P-042 | A | after the foundation | The default frame-rate setting is 60, the game step, on every platform |  |
+| new: the aspect latch's whole-queue wait (`host_main.cpp:3236`) | B | F5, E4 | the game holds for the render queue | rule 2 |
+| new: a capture's readback inside a frame (`renderer_d3d12.cpp:6904`) | B | F5, E4 | a capture answered by its frame later | rule 1 |
+| new: loads read from the mapped store on the game thread (`host_main.cpp:3152`) | B | F7 | read ahead by the loader | rule 3 |
+
+The list of 1.9 holds nothing that P-022, E3, E4, E6b and the step's threading do not cover: the three new rows
+fall in E4 and F7. So these are the last rewrites the frame's rules ask for.
