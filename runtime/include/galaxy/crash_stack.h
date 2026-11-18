@@ -7,6 +7,7 @@
 #pragma once
 
 #if !defined(_WIN32)
+#include <pthread.h>
 #include <signal.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -21,23 +22,41 @@ namespace crash_stack_detail {
 // gives a thread (luma_guard.cpp kAltBytes), above one page that faults if even that runs out.
 constexpr std::size_t kBytes = 64 * 1024;
 
-struct Stack {
-    char* map = nullptr;  // the guard page, then the stack
-    std::size_t size = 0;
+// The guard page below the stack: one page.
+inline std::size_t guard_bytes() noexcept {
+    const long page = sysconf(_SC_PAGESIZE);
+    return page > 0 ? static_cast<std::size_t>(page) : 4096u;
+}
 
-    ~Stack() {
-        if (map == nullptr) return;
-        stack_t now{};
-        if (sigaltstack(nullptr, &now) == 0 && now.ss_sp == map + (size - kBytes)) {
-            stack_t off{};
-            off.ss_flags = SS_DISABLE;
-            sigaltstack(&off, nullptr);
-        }
-        munmap(map, size);
+// A thread's stack (its mapping: the guard page, then the stack), freed as the thread ends: off as its signal stack
+// first, if it still is.
+inline void free_stack(void* mapping) noexcept {
+    char* const map = static_cast<char*>(mapping);
+    const std::size_t guard = guard_bytes();
+    stack_t now{};
+    if (sigaltstack(nullptr, &now) == 0 && now.ss_sp == map + guard) {
+        stack_t off{};
+        off.ss_flags = SS_DISABLE;
+        sigaltstack(&off, nullptr);
     }
-};
+    munmap(map, guard + kBytes);
+}
 
-inline thread_local Stack t_stack;
+// The thread's stack is the value of this key, whose destructor frees it as the thread ends. A thread_local with a
+// destructor would serve too, but in a header each file that uses it makes its own initialisation routine, and Apple's
+// linker takes those as one symbol defined twice.
+struct StackKey {
+    pthread_key_t key{};
+    bool made = false;  // no key when the system has none left
+};
+inline const StackKey& stack_key() noexcept {
+    static const StackKey key = [] {
+        StackKey made;
+        made.made = pthread_key_create(&made.key, &free_stack) == 0;
+        return made;
+    }();
+    return key;
+}
 
 }  // namespace crash_stack_detail
 
@@ -52,8 +71,7 @@ inline thread_local Stack t_stack;
 inline void crash_stack_for_this_thread() noexcept {
     using namespace crash_stack_detail;
     if (has_crash_stack()) return;
-    const long page = sysconf(_SC_PAGESIZE);
-    const std::size_t guard = page > 0 ? static_cast<std::size_t>(page) : 4096u;
+    const std::size_t guard = guard_bytes();
     void* const map = mmap(nullptr, guard + kBytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (map == MAP_FAILED) return;
     char* const bytes = static_cast<char*>(map);
@@ -65,8 +83,8 @@ inline void crash_stack_for_this_thread() noexcept {
         munmap(map, guard + kBytes);
         return;
     }
-    t_stack.map = bytes;
-    t_stack.size = guard + kBytes;
+    // Without a key (none left), the stack stays until the process ends rather than being taken away while in use.
+    if (const StackKey& key = stack_key(); key.made) (void)pthread_setspecific(key.key, bytes);
 }
 
 }  // namespace galaxy::host
