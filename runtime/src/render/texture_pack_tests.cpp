@@ -351,18 +351,36 @@ struct Gpu {
     }
 };
 
-// Pumps until `done` or about two seconds.
+// How long a test waits for what a worker publishes (N-1073). The workers run below the normal priority, so on a
+// busy computer (the gate's games beside ctest) they can stand still for seconds before Windows lifts a starved
+// thread; the wait ends as soon as the work is there, and this bound only keeps a broken worker from hanging the test.
+constexpr std::chrono::seconds kWorkerWait{60};
+
+// Pumps until `done`, or kWorkerWait without it.
 template <typename Done>
 bool pump_until(TexturePacks& packs, std::vector<std::pair<std::uint32_t, TexturePackPixels>>& uploads, Done done,
                 bool* changed = nullptr) {
-    for (int i = 0; i < 400; ++i) {
+    const auto until = std::chrono::steady_clock::now() + kWorkerWait;
+    while (true) {
         packs.begin_frame();
         const bool now = packs.pump(uploads);
         if (changed != nullptr) *changed = *changed || now;
         if (done()) return true;
+        if (std::chrono::steady_clock::now() >= until) return false;
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    return false;
+}
+
+// Waits until `done`, or kWorkerWait without it; `each` runs before every look (a frame, for the cache's work).
+template <typename Done, typename Each>
+bool wait_until(Done done, Each each) {
+    const auto until = std::chrono::steady_clock::now() + kWorkerWait;
+    while (true) {
+        each();
+        if (done()) return true;
+        if (std::chrono::steady_clock::now() >= until) return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
 }
 
 void test_packs(Gpu& gpu, const std::filesystem::path& root) {
@@ -471,9 +489,7 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     packs.dump(name_hash("Coin"), 4u, 4u, pixels.data());
     packs.dump(name_hash("NotAName"), 4u, 4u, pixels.data());
     const std::filesystem::path file = settings.dumps / TexturePacks::kGameId / "Items" / "Coin.png";
-    for (int i = 0; i < 2000 && (packs.stats().dumped == 0u || packs.stats().unnamed_dumps == 0u); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
+    wait_until([&] { return packs.stats().dumped != 0u && packs.stats().unnamed_dumps != 0u; }, [] {});
     TexturePackPixels back;
     expect(packs.stats().dumped == 1u && packs.stats().unnamed_dumps == 1u &&
                load_texture_pack_image(file, false, back, nullptr) && back.width == 4u && back.levels[0] == pixels,
@@ -575,21 +591,16 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     settings.dumps = root / "cache-dumps";
     settings.budget_bytes = 64ull << 20;
     cache.configure_texture_packs(settings);
-    for (int i = 0; i < 400 && cache.texture_pack_stats().names == 0u; ++i) {
-        next_frame();
-        if (cache.texture_pack_stats().names == 0u) std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
+    wait_until([&] { return cache.texture_pack_stats().names != 0u; }, [&] { next_frame(); });
     expect(cache.texture_pack_stats().names == 1u, "cache publishes the pack index");
     const TextureHandle original = cache.handle(id);
     expect(original.resource != nullptr && original.resource->GetDesc().Width == 32u && original.lod_shift == 0u,
            "the original shows while its replacement loads");
     TextureHandle replaced{};
-    for (int i = 0; i < 400; ++i) {
+    wait_until([&] { return replaced.resource != nullptr && replaced.resource->GetDesc().Width == 96u; }, [&] {
         next_frame();
         replaced = cache.handle(id);
-        if (replaced.resource != nullptr && replaced.resource->GetDesc().Width == 96u) break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
+    });
     expect(replaced.resource != nullptr && replaced.resource->GetDesc().Width == 96u && replaced.width == 32u &&
                replaced.height == 32u && replaced.mip_levels == 7u && std::fabs(replaced.lod_shift - std::log2(3.0f)) < 1e-6f,
            "the replacement takes the original's place (source size kept, 3x shift)");
@@ -609,9 +620,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     (void)cache.register_image(made);
     next_frame();
     const std::filesystem::path dumped = settings.dumps / TexturePacks::kGameId / "Objects" / "CacheTex.png";
-    for (int i = 0; i < 2000 && !std::filesystem::exists(dumped); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
+    wait_until([&] { return std::filesystem::exists(dumped); }, [] {});
     TexturePackPixels pixels;
     expect(load_texture_pack_image(dumped, false, pixels, nullptr) && pixels.width == 32u && pixels.height == 32u,
            "dump writes the texture under its name");

@@ -1,6 +1,7 @@
 #include "galaxy/windows_api.h"
 #include "galaxy/frame_telemetry.h"
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -9,6 +10,10 @@
 void require(bool condition, const char* message) {
     if (!condition) throw std::runtime_error(message);
 }
+
+// How long the test waits for a publication (N-1073): the publisher's thread may stand still for seconds on a busy
+// computer; the wait ends at the publication, and this bound only keeps a broken publisher from hanging the test.
+constexpr std::chrono::seconds kPublishWait{60};
 
 int main() try {
     using namespace galaxy::telemetry;
@@ -28,8 +33,9 @@ int main() try {
         ReleaseMutex(guard); return result;
     };
     Packet initial{};
-    for (int attempt = 0; attempt != 40; ++attempt) {
-        initial = read(); if (initial[5]) break; Sleep(25);
+    for (const auto until = std::chrono::steady_clock::now() + kPublishWait;
+         !(initial = read())[5] && std::chrono::steady_clock::now() < until;) {
+        Sleep(25);
     }
     require(initial[0] == kMagic && initial[1] == 1 && initial[2] == sizeof(Packet), "Invalid protocol header");
     require(initial[3] == GetCurrentProcessId() && initial[4] && initial[6] && initial[7], "Identity/freshness missing");
@@ -40,8 +46,12 @@ int main() try {
     Packet held{}; std::memcpy(held.data(), view, sizeof(held));
     require(held[5] == initial[5], "Publisher wrote through held reader guard");
     ReleaseMutex(guard);
-    Sleep(1100);
-    const auto next = read();
+    // The next publication after the reader let go, however late its thread runs.
+    Packet next{};
+    for (const auto until = std::chrono::steady_clock::now() + kPublishWait;
+         ((next = read())[5] <= initial[5] || next[9] != 25) && std::chrono::steady_clock::now() < until;) {
+        Sleep(25);
+    }
     require(next[5] > initial[5] && next[6] > initial[6] && next[9] == 25 && next[10] == 10, "Missed publication recovery/count coherence failed");
     publisher.reset();
     require(read()[8] == 0, "Normal shutdown did not invalidate retained reader mapping");
