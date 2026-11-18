@@ -22,6 +22,7 @@
 #include "sdl_host.h"
 
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/display_reconcile.h"
 #include "galaxy/render/host_window.h"
 #if defined(NEBULA_GPU_METAL)
 #include <cstdint>
@@ -1090,6 +1091,205 @@ void update_window_size() {
     }
 }
 
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
+// The display setting on the desktop (P-103): MONITOR, DISPLAY MODE and RESOLUTION, applied on SDL's thread at each
+// pump by the rule the Windows host keeps (display_reconcile.h). A size or display the player gives the window by hand
+// is written back once the window has stopped changing for kPlacedByHandSettle, so a drag writes the settings once.
+struct SdlDisplay {
+    SDL_DisplayID id = 0;
+    std::string key;   // RenderConfig::monitor: the name, with " (2)" for a second screen of one name
+    bool primary = false;
+    unsigned width = 0, height = 0, refresh_hz = 0;  // the desktop mode, in pixels
+    long max_client_width = 0, max_client_height = 0;
+    std::vector<std::pair<unsigned, unsigned>> resolutions;
+};
+
+std::mutex g_display_mutex;            // g_displays: written on SDL's thread, read by the settings
+std::vector<SdlDisplay> g_displays;
+bool g_displays_changed = true;        // SDL's thread only: displays came, went or changed mode (the window placed again)
+bool g_displays_stale = false;         // SDL's thread only: a scale changed (the sizes read again, the window left)
+galaxy::render::host_window::AppliedDisplay g_applied_display;  // SDL's thread only
+bool g_placed_by_hand = false;         // SDL's thread only
+std::chrono::steady_clock::time_point g_placed_by_hand_at{};
+constexpr auto kPlacedByHandSettle = std::chrono::milliseconds(300);
+
+std::vector<SdlDisplay> read_displays() {
+    std::vector<SdlDisplay> out;
+    int count = 0;
+    SDL_DisplayID* const ids = SDL_GetDisplays(&count);
+    if (ids == nullptr) {
+        return out;
+    }
+    const SDL_DisplayID primary = SDL_GetPrimaryDisplay();
+    std::vector<std::string> names;
+    for (int i = 0; i < count; ++i) {
+        const char* const name = SDL_GetDisplayName(ids[i]);
+        names.emplace_back(name != nullptr && name[0] != '\0' ? name : "Display");
+    }
+    const std::vector<std::string> keys = galaxy::render::host_window::display_keys(names);
+    // The window's frame, as Windows takes it from the monitor's work area (settings_monitors).
+    int top = 0, left = 0, bottom = 0, right = 0;
+    if (g_window == nullptr || !SDL_GetWindowBordersSize(g_window, &top, &left, &bottom, &right)) {
+        top = left = bottom = right = 0;
+    }
+    const float density = g_window != nullptr ? std::max(SDL_GetWindowPixelDensity(g_window), 1.0f) : 1.0f;
+    const auto pixels = [](int points, float scale) { return static_cast<unsigned>(std::lround(static_cast<float>(points) * scale)); };
+    for (int i = 0; i < count; ++i) {
+        SdlDisplay display;
+        display.id = ids[i];
+        display.key = keys[static_cast<std::size_t>(i)];
+        display.primary = ids[i] == primary;
+        if (const SDL_DisplayMode* desktop = SDL_GetDesktopDisplayMode(ids[i]); desktop != nullptr) {
+            const float scale = std::max(desktop->pixel_density, 1.0f);
+            display.width = pixels(desktop->w, scale);
+            display.height = pixels(desktop->h, scale);
+            display.refresh_hz = static_cast<unsigned>(std::lround(desktop->refresh_rate));
+        }
+        SDL_Rect usable{};
+        if (SDL_GetDisplayUsableBounds(ids[i], &usable)) {
+            display.max_client_width = static_cast<long>(pixels(std::max(usable.w - left - right, 0), density));
+            display.max_client_height = static_cast<long>(pixels(std::max(usable.h - top - bottom, 0), density));
+        } else {
+            display.max_client_width = static_cast<long>(display.width);
+            display.max_client_height = static_cast<long>(display.height);
+        }
+        int modes = 0;
+        if (SDL_DisplayMode** const list = SDL_GetFullscreenDisplayModes(ids[i], &modes); list != nullptr) {
+            for (int m = 0; m < modes; ++m) {
+                const float scale = std::max(list[m]->pixel_density, 1.0f);
+                const std::pair<unsigned, unsigned> size{pixels(list[m]->w, scale), pixels(list[m]->h, scale)};
+                if (std::find(display.resolutions.begin(), display.resolutions.end(), size) == display.resolutions.end()) {
+                    display.resolutions.push_back(size);
+                }
+            }
+            SDL_free(list);
+        }
+        if (display.resolutions.empty() && display.width > 0) {
+            display.resolutions.emplace_back(display.width, display.height);
+        }
+        out.push_back(std::move(display));
+    }
+    SDL_free(ids);
+    std::stable_sort(out.begin(), out.end(), [](const SdlDisplay& a, const SdlDisplay& b) { return a.primary > b.primary; });
+    return out;
+}
+
+const SdlDisplay* find_display(const std::vector<SdlDisplay>& displays, const char* key) {
+    for (const SdlDisplay& display : displays) {
+        if (display.key == key) return &display;
+    }
+    for (const SdlDisplay& display : displays) {
+        if (display.primary) return &display;
+    }
+    return displays.empty() ? nullptr : &displays.front();
+}
+
+std::string window_display_key() {
+    const SDL_DisplayID id = SDL_GetDisplayForWindow(g_window);
+    const std::lock_guard<std::mutex> lock(g_display_mutex);
+    for (const SdlDisplay& display : g_displays) {
+        if (display.id == id) return display.key;
+    }
+    return {};
+}
+
+galaxy::render::host_window::DisplayState display_state_of(const galaxy::render::RenderConfig& cfg) {
+    galaxy::render::host_window::DisplayState state;
+    state.mode = std::min(cfg.display_mode, galaxy::render::kDisplayBorderless);
+    state.monitor = cfg.monitor;
+    state.window_width = cfg.window_width;
+    state.window_height = cfg.window_height;
+    return state;
+}
+
+// SDL's thread, each pump: the displays read again when they changed, then the window placed for the setting.
+void reconcile_display() {
+    using namespace galaxy::render::host_window;
+    if (g_window == nullptr || hidden_window_mode_enabled()) {
+        return;
+    }
+    const bool monitors_changed = g_displays_changed;
+    if (monitors_changed || g_displays_stale) {
+        std::vector<SdlDisplay> displays = read_displays();
+        const std::lock_guard<std::mutex> lock(g_display_mutex);
+        g_displays = std::move(displays);
+        g_displays_changed = false;
+        g_displays_stale = false;
+    }
+    const galaxy::render::RenderConfig cfg = galaxy::render::get_render_config();
+    const DisplayState wanted = display_state_of(cfg);
+    const bool windowed = wanted.mode == galaxy::render::kDisplayWindowed;
+    // A drag never differs from the setting here: what the player places is written to both (keep_placed_by_hand).
+    if (!display_needs_placing(g_applied_display, wanted, monitors_changed, windowed, false)) {
+        return;
+    }
+    SdlDisplay target;
+    {
+        const std::lock_guard<std::mutex> lock(g_display_mutex);
+        const SdlDisplay* const found = find_display(g_displays, wanted.monitor.data());
+        if (found == nullptr) {
+            return;
+        }
+        target = *found;
+    }
+    if (windowed) {
+        const float density = std::max(SDL_GetWindowPixelDensity(g_window), 1.0f);
+        const auto points = [density](unsigned pixels, long most) {
+            const long fit = most > 0 ? std::min(static_cast<long>(pixels), most) : static_cast<long>(pixels);
+            return std::max(static_cast<int>(std::lround(static_cast<float>(std::max(fit, 1L)) / density)), 1);
+        };
+        (void)SDL_SetWindowFullscreen(g_window, false);
+        (void)SDL_SetWindowSize(g_window, points(wanted.window_width, target.max_client_width),
+                                points(wanted.window_height, target.max_client_height));
+        (void)SDL_SetWindowPosition(g_window, SDL_WINDOWPOS_CENTERED_DISPLAY(target.id), SDL_WINDOWPOS_CENTERED_DISPLAY(target.id));
+    } else {
+        // Borderless: the desktop's own mode on that display (a null fullscreen mode). A Wayland compositor picks the
+        // display itself; elsewhere the window is moved there first.
+        if (SDL_GetDisplayForWindow(g_window) != target.id) {
+            (void)SDL_SetWindowFullscreen(g_window, false);
+            (void)SDL_SetWindowPosition(g_window, SDL_WINDOWPOS_CENTERED_DISPLAY(target.id),
+                                        SDL_WINDOWPOS_CENTERED_DISPLAY(target.id));
+        }
+        (void)SDL_SetWindowFullscreenMode(g_window, nullptr);
+        (void)SDL_SetWindowFullscreen(g_window, true);
+    }
+    // A window not shown yet (until its first picture) takes the placement when shown: an X server answers nothing
+    // for it, so there is nothing to wait for.
+    if ((SDL_GetWindowFlags(g_window) & SDL_WINDOW_HIDDEN) == 0u) {
+        (void)SDL_SyncWindow(g_window);
+    }
+    g_applied_display = {true, wanted};
+    std::fprintf(stderr, "[window] display %s %s\n", windowed ? "windowed" : "borderless", target.key.c_str());
+}
+
+// A size or display the player gave the window: noted at its events, written once the window has settled.
+void note_placed_by_hand() {
+    if ((SDL_GetWindowFlags(g_window) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_MINIMIZED | SDL_WINDOW_MAXIMIZED)) != 0u ||
+        galaxy::render::get_render_config().display_mode != galaxy::render::kDisplayWindowed) {
+        return;
+    }
+    g_placed_by_hand = true;
+    g_placed_by_hand_at = std::chrono::steady_clock::now();
+}
+
+void keep_placed_by_hand() {
+    using namespace galaxy::render::host_window;
+    if (!g_placed_by_hand || std::chrono::steady_clock::now() - g_placed_by_hand_at < kPlacedByHandSettle) {
+        return;
+    }
+    g_placed_by_hand = false;
+    int width = 0, height = 0;
+    if (g_window == nullptr || !SDL_GetWindowSizeInPixels(g_window, &width, &height) || width <= 0 || height <= 0) {
+        return;
+    }
+    const std::string key = window_display_key();
+    galaxy::render::native_settings_window_placed(static_cast<unsigned>(width), static_cast<unsigned>(height), key.c_str());
+    g_applied_display = {true, placed_by_player(display_state_of(galaxy::render::get_render_config()),
+                                                static_cast<unsigned>(width), static_cast<unsigned>(height), key)};
+}
+
+#endif
+
 }  // namespace
 
 bool start() noexcept {
@@ -1217,6 +1417,10 @@ void pump_events(int timeout_ms) noexcept {
     static std::uint32_t waits = 0;
     static auto report_time = std::chrono::steady_clock::now();
     const std::int64_t wait_start = galaxy::render::vk::thread_cpu_ns();
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
+    reconcile_display();
+    keep_placed_by_hand();
+#endif
 #if defined(__ANDROID__)
     sync_display_rate();
     // SDL's timed event wait polls without sleeping on Android, keeping a core busy: the events are pumped here and
@@ -1291,6 +1495,25 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_WINDOW_RESTORED:
             g_background.store(false, std::memory_order_release);
             break;
+#if !(defined(__APPLE__) && TARGET_OS_IPHONE)
+        case SDL_EVENT_DISPLAY_ADDED:
+        case SDL_EVENT_DISPLAY_REMOVED:
+        case SDL_EVENT_DISPLAY_DESKTOP_MODE_CHANGED:
+        case SDL_EVENT_DISPLAY_CURRENT_MODE_CHANGED:
+            g_displays_changed = true;
+            break;
+        case SDL_EVENT_DISPLAY_CONTENT_SCALE_CHANGED:
+        case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
+            g_displays_stale = true;
+            break;
+        case SDL_EVENT_WINDOW_RESIZED:
+            note_placed_by_hand();
+            break;
+        case SDL_EVENT_WINDOW_DISPLAY_CHANGED:
+            g_displays_stale = true;
+            note_placed_by_hand();
+            break;
+#endif
 #endif
         case SDL_EVENT_WINDOW_MOUSE_ENTER:
             g_input.mouse_inside = true;
@@ -1838,6 +2061,29 @@ bool present_grid(std::int64_t& slot_ns, std::int64_t& period_ns, std::int64_t& 
 
 // What the settings menu asks of its platform (host_window.h).
 std::vector<SettingsMonitor> settings_monitors() {
+#if !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
+    // The desktop's displays as SDL's thread last read them (reconcile_display), each with its own sizes.
+    {
+        std::vector<SettingsMonitor> out;
+        const std::lock_guard<std::mutex> lock(galaxy::sdl::g_display_mutex);
+        for (const galaxy::sdl::SdlDisplay& display : galaxy::sdl::g_displays) {
+            SettingsMonitor entry;
+            entry.id = display.key;
+            entry.name = display.key;
+            entry.width = display.width;
+            entry.height = display.height;
+            entry.refresh_hz = display.refresh_hz;
+            entry.max_client_width = display.max_client_width;
+            entry.max_client_height = display.max_client_height;
+            entry.primary = display.primary;
+            entry.resolutions = display.resolutions;
+            out.push_back(std::move(entry));
+        }
+        if (!out.empty()) {
+            return out;
+        }
+    }
+#endif
     const galaxy::sdl::InputState state = galaxy::sdl::input_state();
     SettingsMonitor monitor;
     monitor.id = "display";
