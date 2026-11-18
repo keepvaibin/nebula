@@ -54,6 +54,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # The Linux package's install.sh with a stand-in package (P-126).
     add_test(NAME nebula_linux_install_tests
         COMMAND sh "${galaxy_root}/installer/tests/linux_install_test.sh" "${galaxy_root}/installer/linux")
+    # The update's install step for install.sh's install, with the real install.sh (P-125).
+    galaxy_test(galaxy_update_linux_install_tests SOURCES ${rt}/update/update_install_linux.cpp
+        ${rt}/update/update_install_linux_tests.cpp)
+    target_compile_definitions(galaxy_update_linux_install_tests PRIVATE
+        NEBULA_INSTALLER_LINUX="${galaxy_root}/installer/linux")
 endif()
 
 # Files and saves.

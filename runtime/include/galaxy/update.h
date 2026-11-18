@@ -88,6 +88,12 @@ void finish();
 bool start_setup_update();
 #endif
 
+#if defined(__linux__) && !defined(__ANDROID__)
+// Linux, for a restart (host_main): when install.sh's install got an update during this run, the new version's program,
+// with LD_LIBRARY_PATH pointed at its folder instead of the running one's; "" to start the running program again.
+[[nodiscard]] std::string switch_to_installed_update();
+#endif
+
 // The rules, shared with the platform files and the tests.
 [[nodiscard]] int compare_versions(std::string_view a, std::string_view b) noexcept;
 [[nodiscard]] bool is_beta(std::string_view version) noexcept;
