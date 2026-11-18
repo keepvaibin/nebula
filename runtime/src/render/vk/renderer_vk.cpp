@@ -2862,9 +2862,6 @@ void RendererVk::read_gpu_passes() {
     stats_pending_[frame_slot_] = false;
 }
 
-// The share of wall time the GPU may spend on the frame before Match Output steps down (RendererD3D12's rule).
-constexpr double kGpuBudgetBusy = 0.80;
-
 void RendererVk::sync_post_process() {
     const bool was_ready = post_.ready();
     if (!post_.poll_ready()) {

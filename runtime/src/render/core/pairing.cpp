@@ -241,58 +241,6 @@ void Pairing::pair(ListData& now, const ListData* before) {
     }
 }
 
-namespace {
-
-std::uint64_t fnv(const void* data, std::size_t bytes, std::uint64_t h = 0xCBF29CE484222325ull) noexcept {
-    const auto* p = static_cast<const unsigned char*>(data);
-    for (std::size_t i = 0; i < bytes; ++i) {
-        h = (h ^ p[i]) * 0x100000001B3ull;
-    }
-    return h;
-}
-
-// A light as shading resolves it: whole steps of its 0-255 colour, its direction at 1e-4, its eye-space position as a
-// direction at 1e-4 and a distance, and the distance and attenuation terms to 13 mantissa bits (about 1e-4 relative).
-// Bit noise below that (a far sun's position through a view matrix that moves in its last bits) is the same light.
-std::uint64_t shading_hash(const NebulaFrameLight& light) noexcept {
-    const auto steps = [](double v, double per_unit) { return static_cast<std::int64_t>(std::llround(v * per_unit)); };
-    const auto relative = [](float v) {
-        std::uint32_t bits = 0u;
-        std::memcpy(&bits, &v, sizeof(bits));
-        return (bits + 0x200u) & ~0x3FFu;
-    };
-    const double length = std::sqrt(static_cast<double>(light.position[0]) * light.position[0] +
-                                    static_cast<double>(light.position[1]) * light.position[1] +
-                                    static_cast<double>(light.position[2]) * light.position[2]);
-    std::int64_t fixed[10]{};
-    for (unsigned c = 0; c < 4u; ++c) fixed[c] = steps(light.color[c], 1.0);
-    for (unsigned d = 0; d < 3u; ++d) {
-        fixed[4u + d] = steps(light.direction[d], 1e4);
-        fixed[7u + d] = length > 0.0 ? steps(light.position[d] / length, 1e4) : 0;
-    }
-    std::uint32_t terms[7]{relative(static_cast<float>(length))};
-    for (unsigned t = 0; t < 3u; ++t) {
-        terms[1u + t] = relative(light.angle[t]);
-        terms[4u + t] = relative(light.distance[t]);
-    }
-    return fnv(terms, sizeof(terms), fnv(fixed, sizeof(fixed)));
-}
-
-// A colour row in whole 1/255 steps.
-std::uint64_t row_hash(const float* row) noexcept {
-    std::int64_t fixed[4]{};
-    for (unsigned c = 0; c < 4u; ++c) fixed[c] = static_cast<std::int64_t>(std::llround(static_cast<double>(row[c]) * 255.0));
-    return fnv(fixed, sizeof(fixed));
-}
-
-// The largest change of a colour row's channels, in 1/255 steps.
-float row_change(const float* a, const float* b) noexcept {
-    float most = 0.0f;
-    for (unsigned c = 0; c < 4u; ++c) most = std::max(most, std::fabs(a[c] - b[c]) * 255.0f);
-    return most;
-}
-
-}  // namespace
 
 
 

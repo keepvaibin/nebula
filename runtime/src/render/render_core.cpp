@@ -188,8 +188,6 @@ bool RenderCore::initialize(int w, int h) {
 
     reset_session_state();
 
-    const RenderConfig cfg = get_render_config();
-
     boot_step("begins");
     // The scene at the window's picture: its exact size, square pixels.
     const auto start_aspect = galaxy::latched_display_aspect();

@@ -739,9 +739,6 @@ private:
     void sync_post_process_settings();
     // A scale refused for the memory budget is tried again at this tick.
     std::uint64_t window_size_refused_ms_ = 0;
-    // Match Output's GPU budget: the frame command lists' measured GPU time over 2 s windows. When it stays above
-    // kGpuBudgetBusy of the wall time for two windows, the internal resolution Match Output may pick is capped one step
-    // lower for the session, so a GPU too slow for the window's resolution keeps every frame.
     // (Re)creates the scene target color/depth conversion SRVs in their fixed slots.
     void refresh_scene_conversion_source_views();
     // The scene target's conversion views (colour and depth) into `table`.

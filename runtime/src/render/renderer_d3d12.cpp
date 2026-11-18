@@ -1895,10 +1895,6 @@ gpu::TextureRef RendererD3D12::swap_scene_color(gpu::TextureRef fresh) {
     return picture;
 }
 
-// The share of wall time the GPU may spend on the frame's command lists before Match Output steps down: the rest is
-// headroom for heavier frames than the window's average, the compositor and other processes.
-constexpr double kGpuBudgetBusy = 0.80;
-
 void RendererD3D12::sync_post_process_settings() {
     if (!post_process_.ready()) {
         return;
@@ -6313,7 +6309,6 @@ bool RendererD3D12::begin_output_scene(bool resolve_msaa_only) {
     }
     // The whole scene scene target, resampled into the output target with the display
     // copy's identity settings (no filter, gamma 1.0, alpha kept).
-    FramePassRequest params{};
     const unsigned w = output.width;
     const unsigned h = output.height;
     const FramePassGeometry sampling = frame_pass_geometry(w, h, frame_);
