@@ -72,8 +72,11 @@ object Updates {
 
     private val running = AtomicBoolean(false)
 
-    /** The asset this build updates from: a beta's has its own name, so a release build never sees it. */
-    fun assetName(installed: String): String = if (isBeta(installed)) "Nebula-Beta-Android.apk" else "Nebula-Android.apk"
+    /** The asset of a release of [version]: a beta's has its own name, so a release build never sees it. */
+    fun assetName(version: String): String = if (isBeta(version)) "Nebula-Beta-Android.apk" else "Nebula-Android.apk"
+
+    /** A release install takes releases; a beta install takes betas and the releases after them (P-092). */
+    fun takes(installed: String, version: String): Boolean = isBeta(installed) || !isBeta(version)
 
     /** The check runs: the player has not turned it off, and no store installed the app. */
     fun enabled(context: Context): Boolean =
@@ -137,15 +140,13 @@ object Updates {
     private fun offered(context: Context, release: Release?): Release? {
         if (release == null) return null
         val installed = BuildConfig.VERSION_NAME
-        if (compareVersions(release.version, installed) <= 0 || isBeta(release.version) != isBeta(installed)) return null
+        if (compareVersions(release.version, installed) <= 0 || !takes(installed, release.version)) return null
         val skipped = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(SKIPPED, null)
         return if (skipped.isNullOrEmpty() || compareVersions(release.version, skipped) > 0) release else null
     }
 
-    // The release list: the newest of this build's channel newer than it, with its APK and signature over HTTPS.
+    // The release list: the newest release this build takes newer than it, with its APK and signature over HTTPS.
     internal fun selectNewer(json: String, installed: String): Release? {
-        val beta = isBeta(installed)
-        val asset = assetName(installed)
         val list = JSONArray(json)
         var best: Release? = null
         for (i in 0 until list.length()) {
@@ -153,8 +154,9 @@ object Updates {
             if (release.optBoolean("draft")) continue
             val tag = release.text("tag_name")
             val version = tag.removePrefix("v")
-            if (isBeta(version) != beta) continue
+            if (!takes(installed, version)) continue
             if (compareVersions(version, best?.version ?: installed) <= 0) continue
+            val asset = assetName(version)
             var apk: String? = null
             var signature: String? = null
             var bytes = 0L

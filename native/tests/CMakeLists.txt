@@ -34,6 +34,8 @@ native_test(native_text_string_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/text_str
 native_test(native_name_text_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_text_tests.cpp")
 # Windows Setup's uninstall questions (installer/native/uninstall_choice.h, header only): run on every platform.
 native_test(native_uninstall_choice_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/uninstall_choice_tests.cpp")
+# Windows Setup's update channels (installer/native/release_channel.h, header only): run on every platform.
+native_test(native_release_channel_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/release_channel_tests.cpp")
 native_test(native_formatted_name_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/formatted_name_tests.cpp"
     "${game_src}/Util/StringUtil.cpp" "${game_src}/Util/TextString.cpp" "${game_src}/System/NebulaFormat.c")
 native_test(native_name_index_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/name_index_tests.cpp" "${game_src}/Util/HashUtil.cpp")
