@@ -185,3 +185,7 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
 - N-2042 fixed a80085385: the Direct3D 11 references of ui 3813, 3815, 3816 and 3817, made on NebulaD11 and looked at
   against the Direct3D 12 and Vulkan ones (within 7 of 255 everywhere, one edge pixel of 3817 apart as Vulkan is). The
   four pass on d3d11. They were not in known-failures.tsv, so without them mods/d3d11 would have failed the main gate.
+- N-2037 fixed 28d67f310 (a crash fault, done at once): the checker reads a mod's Windows unwind tables as the
+  system's unwinder will, before the mod loads. Before, a .pdata entry or its unwind data outside the image, or a chain
+  that loops, reached RtlLookupFunctionEntry and RtlVirtualUnwind in the guard's fault handler unchecked. 21 lies (x64
+  and arm64) are refused and fail before; a byte sweep finds no panic; 417 real mod libraries still read.
