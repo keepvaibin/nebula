@@ -188,14 +188,14 @@ P-009	1	E9 upscalers, HDR and option parity	open		(platform gap) Feature parity:
 P-010	1	E5 hitches and GPU waits	open		(performance) A draw whose pipeline is not made yet compiles it on the render thread; only Vulkan with graphics pipeline libraries gets a quick link.	
 P-011	1	E5 hitches and GPU waits	open		(performance, D3D11) D3D11's `video_memory` queries the adapter on every walk, generated pictures included; D3D12 and Vulkan cache it for 100 ms.	
 P-012	1	E2 crashes and wrong behaviour	open	code in 5d66a2740; a stop inside new or delete clears the flag (native_arena_tests failed: its trapped panic left the flag set, the next new said two threads); proof: the thread sanitizer tour and the replay at the next main gate	(wrong behaviour, latent) The game's global `operator new`/`delete` are not thread-safe and nothing enforces the "game thread only" rule.	
-P-013	1	E7 game step speed	open		(performance, scales with object count) Every object construction and every `delete` searches all arenas linearly.	
+P-013	3	E7 game step speed	open		(performance, scales with object count) Every object construction and every `delete` searches all arenas linearly.	
 P-014	1	E0 gate	open		(maintainability) The Windows release links a stored PGO profile whose staleness warnings are switched off.	
-P-015	1	E12 Windows, Linux, Mac	open		(platform gap) macOS and iOS write no crash report of Nebula's own.	
-P-016	1	E12 Windows, Linux, Mac	open		(platform gap, Linux) A Linux start from the app menu keeps no log file, so a crash report goes nowhere.	
-P-017	1	E12 Windows, Linux, Mac	open		(crash reporting) The SDL crash handler sets `SA_ONSTACK` but the render thread and game thread have no alternate stack of their own, so a stack overf	
+P-015	3	E12 Windows, Linux, Mac	open		(platform gap) macOS and iOS write no crash report of Nebula's own.	
+P-016	3	E12 Windows, Linux, Mac	open		(platform gap, Linux) A Linux start from the app menu keeps no log file, so a crash report goes nowhere.	
+P-017	3	E12 Windows, Linux, Mac	open		(crash reporting) The SDL crash handler sets `SA_ONSTACK` but the render thread and game thread have no alternate stack of their own, so a stack overf	
 P-018	1	E1 data safety	open		(wrong behaviour, rare) At exit or restart the host waits at most 5 s for pending saves, then ends the process anyway.	code in eb5247a91; its tests tests/engine/save-slow-exit and save-slow-exit-again run after the build
-P-019	1	E11 Android app	open		(platform gap, Android) Corrected in Round 2. The app gives the system a performance hint, but it never reads the thermal state, and its hint reports 	Corrected: the hint exists; its fault is P-069.
-P-020	1	E11 Android app	open		(wrong behaviour, suspected) Android's restart starts the new activity in the `:game` process and kills that same process in the same UI-thread task.	
+P-019	3	E11 Android app	open		(platform gap, Android) Corrected in Round 2. The app gives the system a performance hint, but it never reads the thermal state, and its hint reports 	Corrected: the hint exists; its fault is P-069.
+P-020	3	E11 Android app	open		(wrong behaviour, suspected) Android's restart starts the new activity in the `:game` process and kills that same process in the same UI-thread task.	
 P-021	1	E4 the frame	open		(console-era remnant) A frame copy asked before the frame's first draw returns the previous shown picture, "as the console's frame buffer still held i	
 P-022	1	E13 tidy	open		(maintainability) The same per-renderer logic is written four times.	
 P-023	1	E0 gate	open		see the finding's own text	
@@ -210,12 +210,12 @@ P-031	1	E4 the frame	open		(performance, Apple silicon and iOS) The Metal scene 
 P-032	1	E9 upscalers, HDR and option parity	open		(platform gap) Neither Metal nor Direct3D 11 offers HDR output.	Owner keeps Direct3D 11. Where HDR cannot be offered, the option is not shown.
 P-033	1	E6 pacing and in-between pictures	open		(wrong behaviour, macOS and iOS) The Apple display clock locks the game to the display under the same loose 3 % tolerance as Android.	
 P-034	1	E6 pacing and in-between pictures	open		(performance, macOS and iOS) The Apple display link is never stopped.	
-P-035	1	E12 Windows, Linux, Mac	open		(untested, macOS) The released Mac app runs only on Apple silicon, but the only Mac runs the tree records are on Intel Macs. The Intel-only code paths	Owner: must compile and be complete in code; the owner tests on Apple silicon later.
-P-036	1	E12 Windows, Linux, Mac	open		(wrong behaviour, Linux) With no XDG desktop portal and no Zenity installed, every file pick (saves, mods, Miis) silently does nothing.	
-P-037	1	E10 audio, input, menus, text	open		(performance, Linux and Android) The SDL audio callback can allocate on the audio thread.	
-P-038	1	E7 game step speed	open		(performance, scales with object count) Draw-buffer packet insertion, removal and light re-sort are linear per call, so clipping churn costs O(n) per 	
-P-039	1	E7 game step speed	open		(performance, worse than linear) Sensor hits are found by testing every pair between groups, each step.	
-P-040	1	E7 game step speed	open		(performance, structure) The step has no worker parallelism, and the shared state that blocks it is named here, so a plan can start from it.	
+P-035	3	E12 Windows, Linux, Mac	open		(untested, macOS) The released Mac app runs only on Apple silicon, but the only Mac runs the tree records are on Intel Macs. The Intel-only code paths	Owner: must compile and be complete in code; the owner tests on Apple silicon later.
+P-036	3	E12 Windows, Linux, Mac	open		(wrong behaviour, Linux) With no XDG desktop portal and no Zenity installed, every file pick (saves, mods, Miis) silently does nothing.	
+P-037	3	E10 audio, input, menus, text	open		(performance, Linux and Android) The SDL audio callback can allocate on the audio thread.	
+P-038	3	E7 game step speed	open		(performance, scales with object count) Draw-buffer packet insertion, removal and light re-sort are linear per call, so clipping churn costs O(n) per 	
+P-039	3	E7 game step speed	open		(performance, worse than linear) Sensor hits are found by testing every pair between groups, each step.	
+P-040	3	E7 game step speed	open		(performance, structure) The step has no worker parallelism, and the shared state that blocks it is named here, so a plan can start from it.	
 P-041	1	E6 pacing and in-between pictures	open		(console-era remnant) Several host and renderer timers count frames or presents but are written and named as time, so they run 2-4x faster at 120-240 	
 P-042	1	E6 pacing and in-between pictures	open		(console-era remnant, a decision for the owner) The default frame-rate setting is 60, the game step, on every platform.	Owner did not answer; the recommendation stands: a 120 Hz display starts at 120 once the measures hold.
 P-043	1	E0 gate	open		(untested) This extends P-023 with two facts it did not have. The three code checks are enforced only by one machine's local hook. The SDL and Apple b	
@@ -246,24 +246,24 @@ P-067	1	E1 data safety	fixed	c49c27f31; galaxy_bounded_call_tests (a call blocke
 P-068	1	E0 gate	fixed	1519a5829; galaxy_perf_hint_tests (run on the tablet: game 40.4 ms, render 6.0 ms), tests/android/walk's pacing checks on the tablet	untested (a diagnostic that cannot answer its question). The SDL "[pacing] frame work … longest" line reports the largest CPU time of any registered t	
 P-069	1	E6 pacing and in-between pictures	open		performance. Android's performance-hint session is told the busiest thread's CPU time as the "actual work duration". The API asks for the wall time of	
 P-070	1	E5 hitches and GPU waits	open		performance. Every host log line does fprintf(stdout) plus fflush(stdout) on the calling thread, and the game thread is a caller (svc_log, context and	
-P-071	1	E10 audio, input, menus, text	open		wrong behaviour. On SDL hosts (Linux, Android) and Apple, a movie's picture runs ahead of its sound by the audio the device and SDL's stream still hol	
-P-072	1	E10 audio, input, menus, text	open		wrong behaviour (audible). The Windows output starts at one engine period and lowers the fill again after 10 quiet seconds. A machine that needs two p	
-P-073	1	E10 audio, input, menus, text	open		wrong behaviour. On Windows the left stick has a per-axis (square) dead zone for both XInput and HID pads, while the SDL hosts use a radial one. A sma	
-P-074	1	E10 audio, input, menus, text	open		wrong behaviour. A Wii Remote's Nunchuk stick takes its centre from the first report after connecting, not from the Nunchuk's calibration. A stick tha	
-P-075	1	E10 audio, input, menus, text	open		wrong behaviour. Short controller presses can be lost. Buttons are carried as levels, the newest sample replaces the last, and nothing latches a press	
-P-076	1	E10 audio, input, menus, text	open		platform gap (the host half of the mouse-held look). The look's mouse motion is unusable or differs between platforms:	
-P-077	1	E10 audio, input, menus, text	open		performance. The Windows HID worker registers a new thread-pool wait for every report: UnregisterWait, then RegisterWaitForSingleObject with WT_EXECUT	
+P-071	3	E10 audio, input, menus, text	open		wrong behaviour. On SDL hosts (Linux, Android) and Apple, a movie's picture runs ahead of its sound by the audio the device and SDL's stream still hol	
+P-072	3	E10 audio, input, menus, text	open		wrong behaviour (audible). The Windows output starts at one engine period and lowers the fill again after 10 quiet seconds. A machine that needs two p	
+P-073	3	E10 audio, input, menus, text	open		wrong behaviour. On Windows the left stick has a per-axis (square) dead zone for both XInput and HID pads, while the SDL hosts use a radial one. A sma	
+P-074	3	E10 audio, input, menus, text	open		wrong behaviour. A Wii Remote's Nunchuk stick takes its centre from the first report after connecting, not from the Nunchuk's calibration. A stick tha	
+P-075	3	E10 audio, input, menus, text	open		wrong behaviour. Short controller presses can be lost. Buttons are carried as levels, the newest sample replaces the last, and nothing latches a press	
+P-076	3	E10 audio, input, menus, text	open		platform gap (the host half of the mouse-held look). The look's mouse motion is unusable or differs between platforms:	
+P-077	3	E10 audio, input, menus, text	open		performance. The Windows HID worker registers a new thread-pool wait for every report: UnregisterWait, then RegisterWaitForSingleObject with WT_EXECUT	
 P-078	1	E6 pacing and in-between pictures	open		wrong behaviour (suspected). The star pointer and the mod look are sampled once per game step. Above 60 Hz the pointer the player aims with moves at 6	
 P-079	1	E1 data safety	open		wrong behaviour (data loss after a downgrade). A Nebula.sav written by a newer Nebula (version above 4) is reported to the player as damaged. The play	code in e7a300379 (save_files_tests: keep_newer fails on the old code); its game test tests/engine/save-newer and the step-hash replay run after the build
 P-080	1	E1 data safety	fixed	ff9f8d6f7; save_files_tests (a waiting thread under 10% of a core; the old spin fails it)	performance. SaveDataHandler::waitRequest spins the game thread with a pause/yield loop, without sleeping, while an earlier save request is in flight.	
 P-081	1	E1 data safety	fixed	7f30290ce; runtime/src/save_transfer_tests.cpp (the import stopped at each of its four moves, then recover_import: every file back; the old code has no journal, so nothing to recover)	wrong behaviour (rare data loss). A whole-save import moves the existing files aside and then moves the new ones in, one rename at a time, with no jou	
 P-082	1	E1 data safety	open		wrong behaviour (suspected). The in-game import's write is not ordered against the game's own save worker. The merged file is built from the save as t	Withdrawn by the reader. Confirm by test and close.
-P-083	1	E10 audio, input, menus, text	open		performance (input stalls on Windows). The HID worker's own comment says it never stalls on a busy radio (controller_hid.cpp:1193-1196). Several paths	
-P-084	1	E10 audio, input, menus, text	open		wrong behaviour (it widens P-073 to every platform). On every host, every stick source goes through a second per-axis dead zone and per-axis clamp bef	
+P-083	3	E10 audio, input, menus, text	open		performance (input stalls on Windows). The HID worker's own comment says it never stalls on a busy radio (controller_hid.cpp:1193-1196). Several paths	
+P-084	3	E10 audio, input, menus, text	open		wrong behaviour (it widens P-073 to every platform). On every host, every stick source goes through a second per-axis dead zone and per-axis clamp bef	
 P-085	1	E1 data safety	fixed	9e6b6d12b; mii_import_tests import_beside_the_game (the old code fails it)	performance. A Mii import holds the library mutex while it reads every chosen file (up to 64 MB each), copies each into the Miis folder, and writes th	
-P-086	1	E10 audio, input, menus, text	open		wrong behaviour. Some host texts shown in the settings menu have no NebulaText entry, so they appear in English capitals in every language.	
+P-086	3	E10 audio, input, menus, text	open		wrong behaviour. Some host texts shown in the settings menu have no NebulaText entry, so they appear in English capitals in every language.	
 P-087	1	E9 upscalers, HDR and option parity	open		platform gap (the P-032 pattern; a complete list for the pages read so far). These options are offered where the active platform or renderer cannot do	
-P-088	1	E7 game step speed	open		performance: the open settings menu rebuilds its page twice a frame on the game thread, and the CONTROLS page rebuilds its row list several times per 	
+P-088	3	E7 game step speed	open		performance: the open settings menu rebuilds its page twice a frame on the game thread, and the CONTROLS page rebuilds its row list several times per 	
 P-089	1	E0 gate	fixed	70309e4b1; galaxy_benchmark_stats_tests verdict_tests (pictures 140 with steps 45 said fits before), galaxy_settings_benchmark_page_tests; benchmark on Direct3D 12, Vulkan and Direct3D 11 (hidden): each scene about 60 game steps a second beside 800 to 4,950 pictures	wrong behaviour: the benchmark's FPS, lows and "SMOOTH AT 60 FPS" verdict count Nebula's interpolated pictures, so a device that cannot run the game a	
 P-090	1	E0 gate	fixed	70309e4b1; the benchmark's GPU times count one per game step on all three renderers (D3D12 AstroGalaxy: 779 steps, GPU times for 780, of 30,020 pictures)	wrong behaviour: the GPU times behind the recommendation average the interpolated pictures' cheap GPU frames in with the scene's, so the probe prices 	
 P-091	1	E0 gate	fixed	70309e4b1; benchmark_menu shows THE LAST RESULT IS FROM ANOTHER RENDERER when the result's backend is not the running one (text in 14 languages)	wrong behaviour: the settings menu offers a benchmark's recommendation on a renderer other than the one it was measured on	
@@ -272,62 +272,62 @@ P-093	1	E1 data safety	fixed	7656c787a; ProcessFilesTest 2 of 2 (Android unit te
 P-094	1	E1 data safety	open	c1193a208; GameSwapTest 6 of 6 (Android unit tests 17:46 on engine/e1 (20 of 20)); a setup on the tablet (test package) owed	(wrong behaviour) Setting up again deletes the installed game before the new one is built, so a failure, a full device or Cancel leaves no game.	code in; the tablet setup run is what is left
 P-095	1	E1 data safety	open	c1193a208; GameSwapTest 6 of 6 (Android unit tests 17:46 on engine/e1 (20 of 20)); a setup on the tablet (test package) owed	(wrong behaviour) A full device during setup ends with an untranslated OS error, and setup killed midway can leave a 3.9 GB orphan that blocks the nex	code in; the tablet setup run is what is left
 P-096	1	E1 data safety	open	c1193a208; GameSwapTest 6 of 6 (Android unit tests 17:46 on engine/e1 (20 of 20)); a setup on the tablet (test package) owed	(wrong behaviour) Mod imports never check free space, show a raw ENOSPC text when the device fills, and their staging folders are never swept after a 	code in; the tablet setup run is what is left
-P-097	1	E11 Android app	open		(wrong behaviour) In the Phone input mode a controller press hides the touch controls for good, because the field it checks is never set.	
-P-098	1	E11 Android app	open		(crash, suspected) GameActivity handles every configuration change but colorMode, touchscreen, mcc and mnc. One of those recreates it inside a process	
-P-099	1	E11 Android app	open		(wrong behaviour) The restart's CLEAR_TASK removes the launcher from the task, so after a restarted game ends the player lands on the home screen and 	
-P-100	1	E11 Android app	open		(wrong behaviour, suspected) A launcher opened by "Open with" or Share while the game runs can import mods into, or delete, files the running game is 	
-P-101	1	E11 Android app	open		(performance) The launcher's sky is redrawn every display frame for as long as the launcher is open, and it jumps every two minutes.	
-P-102	1	E11 Android app	open		(platform gap, suspected) On Android a mouse's buttons never reach the game: the touch overlay takes every click as a finger.	
-P-103	1	E12 Windows, Linux, Mac	open		(platform gap) On Linux the Display page offers Windowed or Borderless and a window size, but the SDL host never applies either. There is no full scre	
-P-104	1	E12 Windows, Linux, Mac	open		(platform gap): iOS and iPadOS have no host that can build.	Owner: out of scope until the game builds there; mods stop building for it (M-006).
-P-105	1	E12 Windows, Linux, Mac	open		(wrong behaviour): full screen entered or left through the system is never written back to the display setting.	
-P-106	1	E10 audio, input, menus, text	open		(wrong behaviour): the Mac app's own texts are English only, while the game ships 14 languages and NebulaText.tsv already holds most of these strings.	
-P-107	1	E12 Windows, Linux, Mac	open		(wrong behaviour): two screens with the same name cannot be told apart.	
-P-108	1	E12 Windows, Linux, Mac	open		(maintainability, suspected thread fault): settings_monitors reads NSScreen off the main thread.	
-P-109	1	E12 Windows, Linux, Mac	open		(wrong behaviour, suspected): rumble stops for good after a haptic-engine reset, and the reset handler races the main thread.	
-P-110	1	E12 Windows, Linux, Mac	open		(wrong behaviour): on the Direct3D 11 renderer, display changes made during play never reach the window, and neither do monitor changes.	
-P-111	1	E12 Windows, Linux, Mac	open		(wrong behaviour): after the player resizes the window by dragging its edge, or drags it onto a monitor with a different scale, the window jumps back 	
-P-112	1	E12 Windows, Linux, Mac	open		(wrong behaviour, small): the settings' window-size change uses the system DPI, not the window's.	
+P-097	3	E11 Android app	open		(wrong behaviour) In the Phone input mode a controller press hides the touch controls for good, because the field it checks is never set.	
+P-098	3	E11 Android app	open		(crash, suspected) GameActivity handles every configuration change but colorMode, touchscreen, mcc and mnc. One of those recreates it inside a process	
+P-099	3	E11 Android app	open		(wrong behaviour) The restart's CLEAR_TASK removes the launcher from the task, so after a restarted game ends the player lands on the home screen and 	
+P-100	3	E11 Android app	open		(wrong behaviour, suspected) A launcher opened by "Open with" or Share while the game runs can import mods into, or delete, files the running game is 	
+P-101	3	E11 Android app	open		(performance) The launcher's sky is redrawn every display frame for as long as the launcher is open, and it jumps every two minutes.	
+P-102	3	E11 Android app	open		(platform gap, suspected) On Android a mouse's buttons never reach the game: the touch overlay takes every click as a finger.	
+P-103	3	E12 Windows, Linux, Mac	open		(platform gap) On Linux the Display page offers Windowed or Borderless and a window size, but the SDL host never applies either. There is no full scre	
+P-104	3	E12 Windows, Linux, Mac	open		(platform gap): iOS and iPadOS have no host that can build.	Owner: out of scope until the game builds there; mods stop building for it (M-006).
+P-105	3	E12 Windows, Linux, Mac	open		(wrong behaviour): full screen entered or left through the system is never written back to the display setting.	
+P-106	3	E10 audio, input, menus, text	open		(wrong behaviour): the Mac app's own texts are English only, while the game ships 14 languages and NebulaText.tsv already holds most of these strings.	
+P-107	3	E12 Windows, Linux, Mac	open		(wrong behaviour): two screens with the same name cannot be told apart.	
+P-108	3	E12 Windows, Linux, Mac	open		(maintainability, suspected thread fault): settings_monitors reads NSScreen off the main thread.	
+P-109	3	E12 Windows, Linux, Mac	open		(wrong behaviour, suspected): rumble stops for good after a haptic-engine reset, and the reset handler races the main thread.	
+P-110	3	E12 Windows, Linux, Mac	open		(wrong behaviour): on the Direct3D 11 renderer, display changes made during play never reach the window, and neither do monitor changes.	
+P-111	3	E12 Windows, Linux, Mac	open		(wrong behaviour): after the player resizes the window by dragging its edge, or drags it onto a monitor with a different scale, the window jumps back 	
+P-112	3	E12 Windows, Linux, Mac	open		(wrong behaviour, small): the settings' window-size change uses the system DPI, not the window's.	
 P-113	1	E1 data safety	fixed	86f5b2316; native/tests/uninstall_choice_tests.cpp (the old question's No deleted the saves: its first case)	(wrong behaviour, data loss): in Windows Setup, answering "No" to "Uninstall Nebula?" uninstalls Nebula and also deletes every save and setting.	
 P-114	1	E1 data safety	open		(wrong behaviour): the uninstall runs on Setup's window thread, so the window stops responding while it deletes.	code in 86f5b2316 (the uninstall on its own thread, the window kept open until it ends); its test, a Setup run on a portable copy, is to come
-P-115	1	E12 Windows, Linux, Mac	open		(wrong behaviour): Setup declares per-monitor DPI awareness but lays out everything at the system DPI, and never handles WM_DPICHANGED.	
-P-116	1	E12 Windows, Linux, Mac	open		(platform gap): HD replacement movies play only on Windows, and AV1 movies do not decode on macOS.	
+P-115	3	E12 Windows, Linux, Mac	open		(wrong behaviour): Setup declares per-monitor DPI awareness but lays out everything at the system DPI, and never handles WM_DPICHANGED.	
+P-116	3	E12 Windows, Linux, Mac	open		(platform gap): HD replacement movies play only on Windows, and AV1 movies do not decode on macOS.	
 P-117	1	E5 hitches and GPU waits	open		(performance, suspected): AV1 movie decode is plain C and can stall the render thread.	
-P-118	1	E8 console limits and gameplay rules	open		(console-era remnant): the THP movie decoder keeps the SDK's IDCT column swap on purpose.	Owner: leave as it is.
+P-118	3	E8 console limits and gameplay rules	open		(console-era remnant): the THP movie decoder keeps the SDK's IDCT column swap on purpose.	Owner: leave as it is.
 P-119	1	E1 data safety	fixed	74b5eb514; achievements_tests, stats_tests, galaxy_save_transfer_tests (pass); SaveTransferTest.aComputersArchiveIsRead, progressIsHandedOverToTheGame (Android unit tests 17:46 on engine/e1 (20 of 20)); the new tests do not build on the old code (no merge, no Progress, no savePaths)	(wrong behaviour): save export and import carry the game's save files only, not achievements or stats.	
-P-120	1	E12 Windows, Linux, Mac	open		(platform gap): Windows Setup refuses any install folder that is not on NTFS.	
-P-121	1	E12 Windows, Linux, Mac	open		(maintainability): small faults in the Windows Setup's helpers.	
+P-120	3	E12 Windows, Linux, Mac	open		(platform gap): Windows Setup refuses any install folder that is not on NTFS.	
+P-121	3	E12 Windows, Linux, Mac	open		(maintainability): small faults in the Windows Setup's helpers.	
 P-122	1	E2 crashes and wrong behaviour	open	cause in the data: every CrossRingZone object (both ring planets included) sleeps under SW 1005, and only the Hungry Luma (TicoFat l_id 100, LayerB, 50 star bits, TicoSeed 4) turns it on, at once on load when the save says it was fed (TicoFat::initStarPieceSaveData, initAfterPlacement). Scenario 2 places it without needing it; scenario 4 starts on the ring. A save that never fed it starts beside an absent planet, held by cube gravity 24: the audit run was a direct start on a fresh save. Owed: a run with TicoSeed 4 at 50 (control expected) and the owner's call on waking the zone in scenario 4 regardless (gameplay)	(wrong behaviour, suspected soft lock): FactoryGalaxy scenario 4 (the fast-foe comet) never gives control to the player after its opening flight.	The owner checks it in play later; do not wait: find the cause by run and fix it.
 P-123	1	E2 crashes and wrong behaviour	open		(maintainability): the comet time limit is converted between seconds and steps three times, and the default is right only because two conversions canc	
 P-124	1	E0 gate	fixed	f8746bc45, 357d25a18; tests/engine and the gate tour replace the run.sh scripts	(untested): every verify script that starts the game goes through run.sh, so all of them depend on the refused plug-in. Each needs the plug-in for its	E0.5: each script's replacement in PROGRESS-AGENT-1.md
-P-125	1	E12 Windows, Linux, Mac	open		(platform gap): the in-game update installs itself only on Windows. On macOS and Linux, as released, it can only name the new version.	
-P-126	1	E12 Windows, Linux, Mac	open		(wrong behaviour, small): the Linux install.sh and uninstall.sh have rough edges.	
-P-127	1	E7 game step speed	open		(performance, small): GameScene::draw does work every game frame that the shipping build never uses.	
-P-128	1	E7 game step speed	open		(performance, small): each CategoryList call fetches the list executor through two pointer hops and the draw pass walks about 25 category lists per fr	
-P-129	1	E7 game step speed	open		(performance, medium): every collision query walks every part in the global zone and in each overlapping zone; there is no spatial index over parts, s	
-P-130	1	E7 game step speed	open		(performance, small): a moving part whose sphere touches its zone's box edge recomputes the whole zone's bounds every step.	
-P-131	1	E7 game step speed	open		(performance, medium): once any ball or line query has filled 64 hits, every later query allocates three heap arrays per part tested, for the rest of 	
-P-132	1	E7 game step speed	open		(performance, small): ball queries against a moving part invert the part's previous matrix and take the inverse matrix's scale (three square roots) on	
-P-133	1	E7 game step speed	open		(performance, small): prism lists deduplicate by linear search over the hits found so far, and a prism that misses is retested in every block it appea	
-P-134	1	E7 game step speed	open		(performance, small; console-era remnant): each collision prism stores one vertex plus normals, and the other two vertices are rebuilt at every use wi	
-P-135	1	E7 game step speed	open		(performance, small): the clipping pass is linear and cheap, but it calls MR::getClippingJudge (a scene-object lookup) once per target actor per step,	
-P-136	1	E7 game step speed	open		(performance, small): looking up a sensor by name hashes the string on every call, and actors ask by name in their per-step code.	
-P-137	1	E7 game step speed	open		(performance, small): picking a free actor from a pool scans the pool from the start every time.	
-P-138	1	E7 game step speed	open		(performance, small): a bound actor that does not move runs the same map query twice per step.	
-P-139	1	E7 game step speed	open		(performance, medium): gravity is found by testing every registered gravity for every actor and every shadow every step; there is no spatial filter.	
-P-140	1	E7 game step speed	open		(performance, medium): every moving actor asks for its shadow to be recomputed every step, and each recompute is a gravity search plus a map line quer	
-P-141	1	E7 game step speed	open		(performance, small): the emitter pool is walked in full, empty slots included, up to three times per step.	
+P-125	3	E12 Windows, Linux, Mac	open		(platform gap): the in-game update installs itself only on Windows. On macOS and Linux, as released, it can only name the new version.	
+P-126	3	E12 Windows, Linux, Mac	open		(wrong behaviour, small): the Linux install.sh and uninstall.sh have rough edges.	
+P-127	3	E7 game step speed	open		(performance, small): GameScene::draw does work every game frame that the shipping build never uses.	
+P-128	3	E7 game step speed	open		(performance, small): each CategoryList call fetches the list executor through two pointer hops and the draw pass walks about 25 category lists per fr	
+P-129	3	E7 game step speed	open		(performance, medium): every collision query walks every part in the global zone and in each overlapping zone; there is no spatial index over parts, s	
+P-130	3	E7 game step speed	open		(performance, small): a moving part whose sphere touches its zone's box edge recomputes the whole zone's bounds every step.	
+P-131	3	E7 game step speed	open		(performance, medium): once any ball or line query has filled 64 hits, every later query allocates three heap arrays per part tested, for the rest of 	
+P-132	3	E7 game step speed	open		(performance, small): ball queries against a moving part invert the part's previous matrix and take the inverse matrix's scale (three square roots) on	
+P-133	3	E7 game step speed	open		(performance, small): prism lists deduplicate by linear search over the hits found so far, and a prism that misses is retested in every block it appea	
+P-134	3	E7 game step speed	open		(performance, small; console-era remnant): each collision prism stores one vertex plus normals, and the other two vertices are rebuilt at every use wi	
+P-135	3	E7 game step speed	open		(performance, small): the clipping pass is linear and cheap, but it calls MR::getClippingJudge (a scene-object lookup) once per target actor per step,	
+P-136	3	E7 game step speed	open		(performance, small): looking up a sensor by name hashes the string on every call, and actors ask by name in their per-step code.	
+P-137	3	E7 game step speed	open		(performance, small): picking a free actor from a pool scans the pool from the start every time.	
+P-138	3	E7 game step speed	open		(performance, small): a bound actor that does not move runs the same map query twice per step.	
+P-139	3	E7 game step speed	open		(performance, medium): gravity is found by testing every registered gravity for every actor and every shadow every step; there is no spatial filter.	
+P-140	3	E7 game step speed	open		(performance, medium): every moving actor asks for its shadow to be recomputed every step, and each recompute is a gravity search plus a map line quer	
+P-141	3	E7 game step speed	open		(performance, small): the emitter pool is walked in full, empty slots included, up to three times per step.	
 P-142	1	E3 render data path	open		(performance, small; console-era remnant): lights are loaded per object draw in the console's eight-register model, with each world light moved into v	
 P-143	1	E3 render data path	open		(performance, small; console-era remnant): each shadow volume is drawn twice, front faces then back faces, with the shape's vertices rebuilt and emitt	
 P-144	1	E3 render data path	open		(performance, small): each animated model's joint matrices are copied twice per frame after the skeleton is evaluated: into the model's pose, then int	
 P-145	1	E3 render data path	open		(performance, small): the scenario-select and mod mesh draw buffers merge same-material entries by scanning every entry already in the buffer, so entr	
-P-146	1	E7 game step speed	open		(maintainability, small): frame-list building, skeleton evaluation and collision results live in file-scope or member state that only one caller at a 	
+P-146	3	E7 game step speed	open		(maintainability, small): frame-list building, skeleton evaluation and collision results live in file-scope or member state that only one caller at a 	
 P-147	1	E6 pacing and in-between pictures	open		(console-era remnant, small): the mod log notice counts its line lifetimes in game frames, not in time.	
-P-148	1	E8 console limits and gameplay rules	open		(console-era remnant, wrong behaviour possible): a sensor's list of touching sensors is fixed at its group size and drops any more without a word.	Owner: let it grow, like every other console limit.
+P-148	3	E8 console limits and gameplay rules	open		(console-era remnant, wrong behaviour possible): a sensor's list of touching sensors is fixed at its group size and drops any more without a word.	Owner: let it grow, like every other console limit.
 P-149	1	E3 render data path	open		(performance, medium on phones; console-era remnant): every particle is built as a matrix in eye space on the CPU, multiplied back to world space, and	
 P-150	1	E3 render data path	open		(console-era remnant, small): the particle material copies GX alpha-compare, combiner-stage and indirect-matrix settings into a constant array on ever	
 P-151	1	E3 render data path	open		(console-era remnant, performance on phones): the material path keeps the console's per-draw register model: texture matrices, the two ambient registe	
-P-152	1	E7 game step speed	open		(performance, small; same family as P-139): every visible actor scans every light area every step to find which one it stands in.	
+P-152	3	E7 game step speed	open		(performance, small; same family as P-139): every visible actor scans every light area every step to find which one it stands in.	
 P-153	1	E2 crashes and wrong behaviour	open		(wrong behaviour when the option changes; maintainability): which light record a "shadow" light set returns depends on the ray-tracing option, but the	
 P-154	1	E3 render data path	open		(console-era remnant, performance on phones): the "site" draws (effects, shadows, 2D, gauges, glows) still work as the console's immediate mode: each 	
 P-155	1	E3 render data path	open		(console-era remnant, small; performance on phones): a texture is still known by the address of its bytes and described by the console's texture heade	
@@ -335,15 +335,15 @@ P-156	1	E3 render data path	open		(performance on high frame rates and phones; c
 P-157	1	E3 render data path	open		(console-era remnant, maintainability): the imported material format still stores the console's register layout (combiner colour registers as signed 1	
 P-158	1	E2 crashes and wrong behaviour	open		(wrong behaviour on slow devices): a cutscene skip stops after 15 seconds of wall time even if the cutscene has not ended. On a phone, where fewer ext	
 P-159	1	E0 gate	fixed	70309e4b1; Vulkan benchmark hidden: "the window cannot be seen: nothing is presented until it can", pictures 2,500 a second like Direct3D 12 (Metal: the same rule with macOS occlusion; its build is the push workflow's Mac job, not yet run)	(wrong measurement; platform gap): on a hidden window, Direct3D 12 and Direct3D 11 draw every picture but present none, while Vulkan acquires and pres	
-P-160	1	E10 audio, input, menus, text	open		(wrong behaviour: text shows in English): host texts are translated by building an id from the English words, so any change to a host string drops tha	
+P-160	3	E10 audio, input, menus, text	open		(wrong behaviour: text shows in English): host texts are translated by building an id from the English words, so any change to a host string drops tha	
 P-161	1	E2 crashes and wrong behaviour	open		maintainability (a latent dead end; it would strand the player): if the menu could not make a row or page button while it is open, the game would stay	
-P-162	1	E10 audio, input, menus, text	open		wrong behaviour (text fitting): long translations are squeezed past readability or run out of their boxes, with different floors in each place.	
+P-162	3	E10 audio, input, menus, text	open		wrong behaviour (text fitting): long translations are squeezed past readability or run out of their boxes, with different floors in each place.	
 P-163	1	E6 pacing and in-between pictures	open		performance (input latency, small): the menu reads the mouse, touch and wheel once per system step, so on a fast display the pointer's hover, drag and	
 P-164	1	E2 crashes and wrong behaviour	open		wrong behaviour (late unlock): the Prankster Comet, Daredevil, Cosmic, Speedy, purple coin and hidden-star achievements do not unlock with the star th	
-P-165	1	E7 game step speed	open		performance (small): every NebulaText lookup is a linear scan of the 1,292-row table, and NebulaText::get with a growing buffer expands each text twic	
-P-166	1	E8 console limits and gameplay rules	open		Binder keeps every plane, so Mario's push-out and ground can differ from the console's	Owner: keep the port's behaviour.
-P-167	1	E8 console limits and gameplay rules	open		The hip drop no longer marks a digital jump when the actor's gravity is zero	Owner: restore the console's rule.
-P-168	1	E8 console limits and gameplay rules	open		Collision and movement arithmetic rounds differently from the console	Owner: a small difference is fine where it is faster. Keep unless a faster form is measured; replays must still match.
+P-165	3	E7 game step speed	open		performance (small): every NebulaText lookup is a linear scan of the 1,292-row table, and NebulaText::get with a growing buffer expands each text twic	
+P-166	3	E8 console limits and gameplay rules	open		Binder keeps every plane, so Mario's push-out and ground can differ from the console's	Owner: keep the port's behaviour.
+P-167	3	E8 console limits and gameplay rules	open		The hip drop no longer marks a digital jump when the actor's gravity is zero	Owner: restore the console's rule.
+P-168	3	E8 console limits and gameplay rules	open		Collision and movement arithmetic rounds differently from the console	Owner: a small difference is fine where it is faster. Keep unless a faster form is measured; replays must still match.
 P-169	1	E0 gate	fixed	5e6d7b0df; every import walks both octrees of each collision model and stops on a difference (the import summary counts them); nebula-import tests an_import_proves_every_collision_model and a_cooked_model_that_reaches_other_prisms_is_refused; gate import/collision/<disc>: US, PAL and Japanese discs, 1016 models, 691,761 leaves agreeing each	A normal import does not prove the cooked collision octree reaches the same prisms	
 P-170	1	E2 crashes and wrong behaviour	open		A starter without a rail strands the player in space instead of failing	
 P-171	1	E2 crashes and wrong behaviour	open		The port loads layer folders past LayerP that the console never loads	
@@ -355,7 +355,7 @@ P-176	1	E9 upscalers, HDR and option parity	open		SGSR 2 and MetalFX temporal ge
 P-177	1	E2 crashes and wrong behaviour	open	data: 624 view cubes in the cooked stages, none with a negative group, so only a mod's stage reaches it; fix waits for the unproven-pieces limit	A view-group cube with a negative group number writes before the start of the group table	
 P-178	1	E2 crashes and wrong behaviour	open	data: every flat-model shadow model shipped has 2 joints (NMDL joint_count: SpinDriverShadow, SuperSpinDriverShadow, RainCloudVolume, ShadowVolumeOval, SkeletalFishGuard/Boss/BabyShadow, SnakeheadShadow, SnakeheadSmallShadow, TripodBossLegShadow); a mod's 1-joint model also crashes (root has no child); fix waits for the unproven-pieces limit	A flat-model shadow hands the renderer joint matrices it never wrote	
 P-179	1	E2 crashes and wrong behaviour	open		Effects marked as lit by their area never take the area's light	
-P-180	1	E8 console limits and gameplay rules	open		A wire gravity has no point at the rail's end	Owner: leave as it is.
+P-180	3	E8 console limits and gameplay rules	open		A wire gravity has no point at the rail's end	Owner: leave as it is.
 P-181	1	E3 render data path	open		Shadow shapes are rebuilt on the CPU every draw, and the oval surface shadow draws its model three times	
 P-182	1	E2 crashes and wrong behaviour	decided	the cooked stages (us-pak-35, 624 view cubes, script ntbl_dump over every areaobjinfo) have two hiding cubes under an appear switch: Gateway's id 18 (switch 1020, its planets) and Airship Armada's id 17 (switch 60, Bowser Jr.'s ship, group 76). A rule on the cube itself would change Airship Armada, so it is not taken; an appear switch already keeps any cube off until the switch is on (AreaObj.cpp:48-50). The Gateway exception is the owner's look choice from his phone report (053382714) and stays; a mod's stage built the same way gets the console's behaviour	View groups special-case one galaxy by name	
 P-183	1	E2 crashes and wrong behaviour	open	code in a3d4cdb49; proof: the thread sanitizer tour and the replay at the next main gate	The creator index is built lazily with no lock, and NameObjAdaptor leaks a replaced functor	
