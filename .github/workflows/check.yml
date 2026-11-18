@@ -75,7 +75,11 @@ jobs:
           if (-not $dll) { Write-Output "the loader build made no vulkan-1.dll"; exit 1 }
           Copy-Item $dll.FullName (Join-Path $env:RUNNER_TEMP 'host')
           $icd = (Resolve-Path "$t/mesa/x64/lvp_icd.x86_64.json").Path
-          "VK_DRIVER_FILES=$icd" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          # The driver is named in the registry, where the loader looks for installed drivers: the runner's processes
+          # are elevated, and an elevated process's loader ignores VK_DRIVER_FILES (seen: "Found no drivers").
+          $drivers = 'HKLM:\SOFTWARE\Khronos\Vulkan\Drivers'
+          New-Item -Force -Path $drivers | Out-Null
+          New-ItemProperty -Force -Path $drivers -Name $icd -PropertyType DWord -Value 0 | Out-Null
           # The loader names the drivers it found and why one was not taken, in the start check's log.
           "VK_LOADER_DEBUG=error,warn,driver" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: Start check (Direct3D 12, Vulkan and Direct3D 11)
