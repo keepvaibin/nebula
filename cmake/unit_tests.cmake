@@ -141,6 +141,8 @@ if(APPLE)
 else()
     galaxy_test(galaxy_thermal_state_tests SOURCES ${rt}/thermal_state_tests.cpp ${rt}/thermal_state.cpp)
 endif()
+# The Mac's first start on integrated graphics (P-035): which Macs draw the scene at the display's points.
+galaxy_test(galaxy_first_start_scale_tests SOURCES ${rt}/render/first_start_scale_tests.cpp)
 galaxy_test(galaxy_frame_phase_tests SOURCES ${rt}/frame_phase_tests.cpp ${rt}/frame_phase.cpp)
 galaxy_test(galaxy_precise_wait_tests SOURCES ${rt}/precise_wait_tests.cpp)
 

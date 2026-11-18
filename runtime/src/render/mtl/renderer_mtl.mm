@@ -8,6 +8,7 @@
 #include "galaxy/content_viewport.h"
 #include "galaxy/display_aspect.h"
 #include "galaxy/render/device_memory.h"
+#include "galaxy/render/first_start_scale.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/whole_lines.h"
 #include "galaxy/platform_time.h"
@@ -246,26 +247,33 @@ void RendererMtl::read_display_hdr() {
 // Apple GPU keep the display's own pixels: the Radeon Pro 560 draws the heavier galaxies at 3360 by 1856 in 7.9 ms.
 void RendererMtl::choose_first_start_scale() {
 #if TARGET_OS_OSX
-    if (!galaxy::ordinary_start() || galaxy::bench::running()) {
-        // A hidden, timed or extension-driven start (a test's, a tool's), or a benchmark, which measures the settings
-        // as they are: the first start stays the player's.
+    // The decision is galaxy/render/first_start_scale.h's, tested on every platform.
+    galaxy::render::FirstStartFacts facts;
+    facts.ordinary_start = galaxy::ordinary_start();
+    facts.benchmark = galaxy::bench::running();
+    if (!facts.ordinary_start || facts.benchmark) {
         return;
     }
     std::error_code ignored;
     const std::filesystem::path settings = render_config_path();
     const mtl::DeviceCaps& caps = mtl::Context::get().caps();
-    // Integrated graphics on an Intel Mac: not Apple's GPU, and one memory with the CPU.
-    if (settings.empty() || std::filesystem::exists(settings, ignored) || caps.apple_gpu || !caps.unified_memory ||
-        layer_.layer == nullptr) {
+    facts.settings_path = !settings.empty();
+    facts.settings_exist = facts.settings_path && std::filesystem::exists(settings, ignored);
+    facts.apple_gpu = caps.apple_gpu;
+    facts.unified_memory = caps.unified_memory;
+    facts.layer = layer_.layer != nullptr;
+    RenderConfig cfg = get_render_config_chosen();
+    facts.upscaler = cfg.upscaler;
+    facts.internal_height = cfg.internal_height;
+    facts.spatial_quality = cfg.spatial_quality;
+    if (facts.layer) {
+        facts.contents_scale = static_cast<double>(((__bridge CAMetalLayer*)layer_.layer).contentsScale);
+    }
+    if (!galaxy::render::first_start_draws_at_points(facts)) {
         return;
     }
-    RenderConfig cfg = get_render_config_chosen();
-    if (cfg.upscaler != 0u || cfg.internal_height != 0u || cfg.spatial_quality != 0u ||
-        ((__bridge CAMetalLayer*)layer_.layer).contentsScale < 1.5) {
-        return;  // a choice made another way (a test's), or a display whose pixels are its points
-    }
-    cfg.upscaler = 1u;         // FSR 1
-    cfg.spatial_quality = 3u;  // performance: half the output's size each way
+    cfg.upscaler = galaxy::render::kFirstStartUpscaler;                 // FSR 1
+    cfg.spatial_quality = galaxy::render::kFirstStartSpatialQuality;  // performance: half the output's size each way
     set_render_config(cfg);
     (void)save_render_config_to_file();
     std::fprintf(stderr, "[metal] first start on integrated graphics: the scene at the display's size in points, FSR 1 to its pixels\n");

@@ -429,6 +429,89 @@ jobs:
           cmake --build "$RUNNER_TEMP/unit" -- -k 0
           ctest --test-dir "$RUNNER_TEMP/unit" --output-on-failure --timeout 600
 
+  # The Mac app ships universal (P-035): its Intel half is built, tested and started here on an Intel Mac, beside the
+  # Mac job, so the wait does not grow. LLVM publishes no Intel Mac package, so the compiler is Homebrew's, as in the
+  # release workflow. What only a real Intel Mac with its own GPU shows (integrated graphics, a Retina panel, the
+  # first start's scale) is the owner's test, written in docs/plan/ledger.tsv P-035.
+  macos-intel:
+    name: Mac (Intel)
+    runs-on: macos-15-intel
+    timeout-minutes: 300
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - id: cache
+        uses: ./.github/actions/compiler-cache
+        with:
+          name: macos-intel
+      - name: Build tools
+        run: |
+          echo "TOOLS=$HOME/nebula-tools" >> "$GITHUB_ENV"
+          echo "WORK=$HOME/nebula-work" >> "$GITHUB_ENV"
+          brew install llvm ninja
+          llvm="$(brew --prefix llvm)"
+          echo "LLVM_ROOT=$llvm" >> "$GITHUB_ENV"
+          echo "BREW_LLVM_VERSION=$("$llvm/bin/llvm-config" --version)" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/nebula-tools/toolchain"
+          ln -sfn "$llvm" "$HOME/nebula-tools/toolchain/llvm"
+          test "$(uname -m)" = x86_64
+          rustup target add x86_64-apple-darwin
+      - name: Restore libc++
+        id: libcxx-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/nebula-tools/toolchain/libcxx
+          key: libcxx-macos-x86_64-${{ env.BREW_LLVM_VERSION }}-${{ hashFiles('platform/apple/build_libcxx.sh') }}
+      - name: Build libc++
+        if: steps.libcxx-cache.outputs.cache-hit != 'true'
+        run: |
+          src="$RUNNER_TEMP/llvm-src"
+          mkdir -p "$src"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/llvm-project.tar.xz" \
+            "https://github.com/llvm/llvm-project/releases/download/llvmorg-$BREW_LLVM_VERSION/llvm-project-$BREW_LLVM_VERSION.src.tar.xz"
+          tar -xJf "$RUNNER_TEMP/llvm-project.tar.xz" -C "$src" --strip-components 1
+          sh platform/apple/build_libcxx.sh "$src" "$TOOLS/toolchain/llvm" "$TOOLS/toolchain/libcxx" macos x86_64
+          rm -rf "$TOOLS/toolchain/libcxx/build-macos-x86_64"
+      - name: Save libc++
+        if: steps.libcxx-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/nebula-tools/toolchain/libcxx
+          key: ${{ steps.libcxx-cache.outputs.cache-primary-key }}
+      - name: Dependencies
+        run: sh tools/fetch_build_deps.sh "$TOOLS/deps" apple
+      - name: Build Nebula.app (Intel)
+        run: |
+          mkdir -p "$RUNNER_TEMP/shipped"
+          cp installer/lumakit/lumakit.luma "$RUNNER_TEMP/shipped/"
+          sh platform/apple/build_macos.sh -t "$TOOLS" -w "$WORK" -a x86_64 -m "$RUNNER_TEMP/shipped"
+          lipo -archs "$WORK/Nebula.app/Contents/MacOS/Nebula" | grep -qx x86_64
+      - name: The compiler cache's hits and misses
+        if: always() && steps.cache.outputs.key != ''
+        shell: bash
+        run: sccache --show-stats
+      - name: Save the compiler cache
+        if: always() && steps.cache.outputs.key != '' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/sccache
+          key: ${{ steps.cache.outputs.key }}
+      - name: Start check (Metal)
+        timeout-minutes: 5
+        run: |
+          d="$RUNNER_TEMP/start"
+          mkdir -p "$d/data" "$d/settings"
+          "$WORK/Nebula.app/Contents/MacOS/Nebula" --start-check 300 --data "$d/data" --settings "$d/settings" \
+            --crash-dumps "$d"
+      - name: Unit tests
+        if: ${{ !cancelled() }}
+        run: |
+          cmake -S tests/unit -B "$RUNNER_TEMP/unit" -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build "$RUNNER_TEMP/unit" -- -k 0
+          ctest --test-dir "$RUNNER_TEMP/unit" --output-on-failure --timeout 600
+
   android:
     name: Android (${{ matrix.abi }})
     # Main, candidates and a start by hand (file 04, 8): this machine builds and tests Windows and Android itself.
