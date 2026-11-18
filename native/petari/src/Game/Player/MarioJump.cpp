@@ -1675,6 +1675,12 @@ void Mario::procHipDrop() {
         return;
     }
 
+    // Outside every gravity field the hip drop counts as a digital jump, which procJump's connect gravity reads (P-167,
+    // as the console's procHipDrop).
+    if (MR::isNearZero(mActor->mGravityVec)) {
+        mMovementStates.digitalJump = true;
+    }
+
     if (mActor->mGravityJumpTimer != 0) {
         mHipDropJumpVec.x *= 0.5f;
         mHipDropJumpVec.y *= 0.5f;
