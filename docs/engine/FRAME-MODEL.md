@@ -127,6 +127,38 @@ Not part of a frame: controllers (`controller_hid.cpp`, `wiimote_hid.cpp`, `swit
 (`luma_net.cpp`, `luma_fs.cpp`, `luma_mods.cpp`, `luma_assets.cpp`, `luma_capture.cpp`, `luma_input.cpp`), the settings
 screen's workers (`ui/native_settings.cpp`), updates (`update/update.cpp`), vendor downloads, Discord.
 
+### 1.8 The walk (`runtime/src/render/core/draw_walker.cpp`)
+
+The render thread turns one list into GPU work in `walk_list` (:1464): `prepare_walk` (:194), then each pass in list
+order (`walk_pass` :1523), then `walk_show` (:1787). What it does on the CPU, each walk, for each picture (an in-between
+picture walks the same list again at its own t):
+
+1. Cameras at t (:219-223): each of the list's cameras, moved to t when the picture is an in-between one.
+2. Matrix rows (:225-316): for every block, `compose_rows` makes its rows in eye space, the camera's view times each
+   joint, on the CPU; a skinned model's envelopes are made here too (:263-273), and a block in calc mode 1 arrives with
+   the view already in its joints, so its world rows take the view out again (:309-313). Both poses are blended here for
+   an in-between picture (`joints_at`, :288-294). The rows go to the matrix ring.
+3. Light sets (:318 on) as the game gives them, blended at t.
+4. The frame's vertices (:399 on): the vertices the game built this step on the CPU are copied into the ring once a
+   walk; for an in-between picture their positions are moved to t on the CPU first, in a copy.
+5. Views (:457 on) and each view's side planes in eye space (:482), for culling on the CPU.
+6. Binding (`walk_bound_tables` :838): a target's picture is a texture made this frame, so its table lives one frame
+   (:878); every draw that binds a table names its textures again (:920).
+7. Draws (`walk_draw_items` :1102): consecutive draws of one mesh and material become one instanced draw, consecutive
+   ring draws of one material one draw (:1145, :1166); a pass of many draws is recorded in chunks on the record workers
+   (:1036, :1086).
+8. Passes (`walk_pass` :1523): a target pass (the console's copy of the frame into a texture) breaks the frame's pass
+   where it stands, so on a tiled GPU the frame's colour, depth and stencil are stored and loaded around it (:1461); one
+   that reads nothing of the frame is moved first (:1501). A copy asked before the list writes the frame takes the
+   picture shown last, "as the console's frame buffer still held it" (:1583). The scene's camera is taken at its opaque
+   end, because the game loads its projection after the scene begins (:1356). The HUD and menus are passes of the same
+   list after the scene (:1399, :1408).
+9. `draw.post` (`walk_post` :1667) and `draw.native` (`walk_native` :1716): the frame so far becomes a mod program's
+   input; the scene's depth is turned back into distance from GX's perspective terms (:1681-1696).
+
+So the CPU work of a picture grows with the blocks, joints and vertices of the scene, and an in-between picture repeats
+it: the records hold eye-space work for one camera, not geometry the GPU places itself.
+
 ### 1.7 What breaks the frame's rules today, or keeps the console's shape
 
 The rules (part 2): the render thread never compiles, never reads a file and never waits for the whole GPU inside a
@@ -144,6 +176,14 @@ with no row has a new one.
 | The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3236` | to be given |
 | A capture's readback waits for the GPU inside a frame | `renderer_d3d12.cpp:6904`, :6907 | to be given |
 | The game thread copies loads from the mapped store: a page not in memory is a drive read inside a step | `host_main.cpp:3152` (`svc_asset_read`) | to be given |
+| Matrix rows made in eye space for one camera on the CPU, each walk and again for each in-between picture; skin envelopes on the CPU | `draw_walker.cpp:225-316` | E3 |
+| A block in calc mode 1 comes with the view inside its joints (the console's billboards and camera-bound models) | `draw_walker.cpp:309-313` | E3 |
+| Vertices the game builds on the CPU each step, copied each walk and moved at t on the CPU | `draw_walker.cpp:399` on | E3 |
+| Culling against the view's planes on the CPU | `draw_walker.cpp:482` | E3 |
+| A target pass (the console's copy of the frame into a texture) breaks the frame's pass: store and load on tiled GPUs | `draw_walker.cpp:1461` | E4 |
+| A copy before the list writes the frame reads the picture shown last, as the console's frame buffer held it | `draw_walker.cpp:1583` | E4 |
+| The scene's camera found at its opaque end, as the game loads its projection after the scene begins | `draw_walker.cpp:1356` | E4 |
+| A target's texture table rebuilt each frame; each draw names its textures again | `draw_walker.cpp:878`, :920 | E4 |
 
 The list grows with the files still to read (the post-process files for Vulkan and Metal, the upscaler and
-frame-generation bodies, `draw_walker.cpp`).
+frame-generation bodies).
