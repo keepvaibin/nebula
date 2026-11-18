@@ -2353,7 +2353,14 @@ def run_tests(args):
         keys_known(suite, "suite", {"harness", "tests"})
         if suite.get("harness") != HARNESS or not isinstance(suite.get("tests"), list):
             raise SystemExit("suite.json: harness 1 and a list of tests")
-        folders = [target.parent / t for t in suite["tests"]]
+        names = suite["tests"]
+        if args.test:
+            # Some of the suite's tests, in the suite's order: runners side by side each take their own.
+            unknown = [t for t in args.test if t not in names]
+            if unknown:
+                raise SystemExit("--test %s: not in %s" % (unknown[0], target))
+            names = [t for t in names if t in args.test]
+        folders = [target.parent / t for t in names]
         suite_name = target.parent.name
     else:
         folders = [target]
@@ -2549,6 +2556,8 @@ def main():
     run.add_argument("--gpu", default=os.environ.get("LUMA_TEST_GPU") or None,
                      help="the GPU every run starts on (or LUMA_TEST_GPU): vendor:device:subsystem in lowercase hex, as "
                           "Nebula Settings writes config.ini gpu; result.json's gpu names the adapter the game used")
+    run.add_argument("--test", action="append", default=[],
+                     help="with a suite.json: only this test of it (repeat for several; they run in the suite's order)")
     run.add_argument("--lock", default=os.environ.get("LUMA_TEST_LOCK"),
                      help="the run lock file (or LUMA_TEST_LOCK); the runner refuses to start while it exists")
     run.add_argument("--limit-scale", type=float, default=float(os.environ.get("LUMA_TEST_LIMIT_SCALE") or 1),

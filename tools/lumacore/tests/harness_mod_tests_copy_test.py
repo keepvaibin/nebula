@@ -8,9 +8,9 @@ suite.json edited), and a later run reuses the copy while nothing changed.
    judge from the copy alone: no row, no error. Before the N-2025 fix it read each suite.json from the checkout, and a
    test listed there but not in the copy ended the run with no rows.
 2. The same copy run twice, first for one test (--only), then for the whole suite: the second run takes both tests.
-   run_suite rewrites the copy's suite.json to the tests one run takes (the runner reads a suite by that name); before
-   the N-2031 fix run_origin read that file, so the second run took only the first run's test. The runner is not
-   started: subprocess.run is replaced by one that records the list it was given.
+   Before the N-2031 fix a run rewrote the copy's suite.json to the tests it took and run_origin read that file, so the
+   second run took only the first run's test. The runner is not started: subprocess.run is replaced by one that records
+   the tests it was given (--test, one runner per test or chain since runs go side by side).
 Exit 0 when both hold.
 """
 import argparse
@@ -70,20 +70,25 @@ def case_reused(root):
     given = []
 
     def runner(cmd, **_kw):
-        given.append(json.loads(pathlib.Path(cmd[3]).read_text(encoding="utf-8"))["tests"])
+        named = [cmd[i + 1] for i, a in enumerate(cmd) if a == "--test"]
+        given.append(named or json.loads(pathlib.Path(cmd[3]).read_text(encoding="utf-8"))["tests"])
         return subprocess.CompletedProcess(cmd, 0)
 
     real = mod_tests.subprocess.run
     mod_tests.subprocess.run = runner
     try:
+        runs = []
         for only in (["s/t1"], []):
-            run_origin(argparse.Namespace(only=only, renderer="d3d12", bin="", commit="", lock="", pak=None, wait_while=None), copy, root)
+            before = len(given)
+            run_origin(argparse.Namespace(only=only, renderer="d3d12", bin="", commit="", lock="", pak=None, wait_while=None,
+                                          parallel=2), copy, root)
+            runs.append(sorted(t for g in given[before:] for t in g))
     except Exception as e:  # noqa: BLE001
         return "run_origin: %r" % e
     finally:
         mod_tests.subprocess.run = real
-    if given != [["t1"], ["t1", "t2"]]:
-        return "the runs took %r, not [['t1'], ['t1', 't2']]" % given
+    if runs != [["t1"], ["t1", "t2"]]:
+        return "the runs took %r, not [['t1'], ['t1', 't2']]" % runs
     return None
 
 

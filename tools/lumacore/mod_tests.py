@@ -126,7 +126,8 @@ def prepare(args, lumalink, work, ll_tree):
     names = pathlib.Path(args.bin) / "luma"
     if not (names / "luma_types.json").exists() and (pathlib.Path(args.bin) / "luma_types.json").exists():
         names = pathlib.Path(args.bin)
-    stamp = stamp_of(lumalink, ll_tree, names)
+    # What is built depends on the selection too: a run of some tests builds only their mods.
+    stamp = stamp_of(lumalink, ll_tree, names) + ("" if not args.only else " only " + " ".join(sorted(args.only)))
     stamp_file = work / "tree.stamp"
     failed_file = work / "tree.failed.json"
     if stamp_file.exists() and stamp_file.read_text() == stamp and failed_file.exists():
@@ -147,6 +148,9 @@ def prepare(args, lumalink, work, ll_tree):
     logs.mkdir(parents=True)
     sdk = TREE / "native" / "include"
     mods = mod_folders(tree)
+    if args.only:
+        wanted = selected_mods(tree, args.only, mods)
+        mods = [m for m in mods if m in wanted]
     failed = {}
     # In waves: a mod is built once every mod beside it that it needs is (its interface, code/<id>.lumi, is read
     # by the build). A mod needing one that failed fails without a build.
@@ -174,6 +178,37 @@ def prepare(args, lumalink, work, ll_tree):
     return tree, failed
 
 
+def selected_mods(tree, only, mods):
+    """The mods the selected tests start (with the tests they continue from) and every mod beside them they need,
+    directly or through others: what a run of some tests builds."""
+    beside = {(m.parent, manifest_id(m)): m for m in mods}
+    todo = []
+    for prefix, copy in (("", tree / "tests" / "mods"), ("lumalink/", tree / "lumalink" / "tests" / "game")):
+        for suite_json in sorted(copy.glob("*/suite.json")):
+            label = prefix + suite_json.parent.name
+            listed = json.loads((suite_json.parent / COPIED).read_text(encoding="utf-8"))["tests"]
+            names = [n for n in listed if label in only or "%s/%s" % (label, n) in only]
+            seen = set()
+            while names:
+                name = names.pop()
+                folder = suite_json.parent / name
+                if name in seen or not (folder / "test.json").is_file():
+                    continue
+                seen.add(name)
+                test = json.loads((folder / "test.json").read_text(encoding="utf-8"))
+                todo += test_mods(folder, test)
+                if isinstance(test.get("continue_from"), str):
+                    names.append(test["continue_from"])
+    wanted = set()
+    while todo:
+        mod = todo.pop()
+        if mod in wanted or not (mod / "luma.json").is_file():
+            continue
+        wanted.add(mod)
+        todo += [beside[(mod.parent, n)] for n in needed_ids(mod) if (mod.parent, n) in beside]
+    return wanted
+
+
 def test_mods(folder: pathlib.Path, test: dict):
     out = []
     for m in test.get("mods", []):
@@ -183,20 +218,53 @@ def test_mods(folder: pathlib.Path, test: dict):
     return out
 
 
-def run_suite(args, suite_json, names, work, run_root, origin="", tag=""):
-    """Runs the named tests of one suite (the copy's suite.json, rewritten to list them); the runner's exit code and log."""
-    suite = suite_json.parent
-    listed = suite / "suite.json"   # the runner takes a suite by that name; this is the copy's, rewritten each run
-    listed.write_text(json.dumps({"harness": 1, "tests": names}, indent=1), encoding="utf-8")
-    log = work / "logs" / ("%s%s-%s%s.log" % (origin, suite.name, args.renderer, tag))
+def run_unit(args, unit, work):
+    """One runner on some tests of one suite (luma_test.py run <the copy's suite.json> --test ...), with its own lock
+    and log: the runner's exit code and log. Units run side by side; each test has its own run folder."""
+    log = work / "logs" / ("%s%s-%s-%d%s.log" % (unit["origin"], unit["suite"].name, args.renderer, unit["index"], unit["tag"]))
+    lock = work / "locks" / log.with_suffix(".lock").name
     log.parent.mkdir(parents=True, exist_ok=True)
-    cmd = [sys.executable, str(RUNNER), "run", str(listed), "--bin", args.bin, "--work", str(run_root),
-           "--renderer", args.renderer, "--who", "mod_tests", "--commit", args.commit, "--lock", str(args.lock)]
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [sys.executable, str(RUNNER), "run", str(unit["suite"] / "suite.json"), "--bin", args.bin,
+           "--work", str(unit["run_root"]), "--renderer", args.renderer, "--who", "mod_tests", "--commit", args.commit,
+           "--lock", str(lock)]
+    for name in unit["tests"]:
+        cmd += ["--test", name]
     if args.pak:
         cmd += ["--pak", args.pak]
+    while args.wait_while and pathlib.Path(args.wait_while).exists():
+        time.sleep(30)
     with open(log, "w", encoding="utf-8") as out:
         r = subprocess.run(cmd, stdout=out, stderr=subprocess.STDOUT)
     return r.returncode, log
+
+
+def run_units(args, units, work):
+    """Every unit, `args.parallel` at a time, the longest first (by the seconds the last run of its tests took,
+    <work>/times.json; a test never timed counts 10 s). Returns {id(unit): log}."""
+    if not units:
+        return {}
+    times_file = work / "times.json"
+    try:
+        times = json.loads(times_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        times = {}
+    for unit in units:
+        unit["cost"] = sum(times.get("%s%s/%s" % (unit["origin"], unit["suite"].name, t), 10.0) for t in unit["tests"])
+    logs = {}
+    with concurrent.futures.ThreadPoolExecutor(max(1, args.parallel)) as pool:
+        running = {pool.submit(run_unit, args, u, work): u for u in sorted(units, key=lambda u: -u["cost"])}
+        for done in concurrent.futures.as_completed(running):
+            logs[id(running[done])] = done.result()[1]
+    for unit in units:
+        if unit["tag"]:
+            continue
+        for name in unit["tests"]:
+            result, _ = read_result(unit["run_root"], unit["suite"].name, name, args.renderer)
+            if result is not None and isinstance(result.get("seconds"), (int, float)):
+                times["%s%s/%s" % (unit["origin"], unit["suite"].name, name)] = result["seconds"]
+    times_file.write_text(json.dumps(times, indent=1, sort_keys=True), encoding="utf-8")
+    return logs
 
 
 def read_result(run_root, suite, name, renderer):
@@ -215,24 +283,48 @@ def facts_lines(folder, ignored=()):
     return [line for line in path.read_text(encoding="utf-8").splitlines() if json.loads(line).get("key") not in ignored]
 
 
-def run_origin(args, prefix, copy, run_root, work, build_failed):
-    """The rows of every suite under `copy` (the copy of this tree's tests/mods, or of LumaLink's tests/game): each
-    suite's tests as the copy lists them (COPIED: its suite.json as copied, not as an earlier run of the same copy
-    rewrote it), run on args.renderer, judged. The checkouts are not read again: a test added there while a run goes
-    on is in the next run's copy."""
-    rows = []
+def chains(names, tests):
+    """The suite's tests (in its order) as the units that each run in one runner: a test continuing from another
+    (continue_from) runs after it in the same runner, which keeps a passed test's folder for the next; every other
+    test is a unit of its own."""
+    group = {name: name for name in names}
+
+    def root(name):
+        while group[name] != name:
+            name = group[name]
+        return name
+
+    for name in names:
+        before = tests[name].get("continue_from")
+        if isinstance(before, str) and before in group:
+            group[root(name)] = root(before)
+    units = {}
+    for name in names:
+        units.setdefault(root(name), []).append(name)
+    return list(units.values())
+
+
+def plan_origin(args, prefix, copy, run_root, build_failed):
+    """What one origin's suites run: (rows already known, units, the tests to judge). A test the selection takes
+    brings the tests it continues from. Each test's run folder is emptied first."""
+    rows, units, judged = [], [], []
     for suite_json in sorted(copy.glob("*/suite.json")):
         suite = suite_json.parent
         label = prefix + suite.name
-        if args.only and not any(o == label or o.startswith(label + "/") for o in args.only):
-            continue
         listed = json.loads((suite / COPIED).read_text(encoding="utf-8"))["tests"]
+        tests = {name: json.loads((suite / name / "test.json").read_text(encoding="utf-8")) for name in listed}
+        chosen = [name for name in listed if not args.only or label in args.only or "%s/%s" % (label, name) in args.only]
+        wanted = set()
+        for name in chosen:
+            while isinstance(name, str) and name in tests and name not in wanted:
+                wanted.add(name)
+                name = tests[name].get("continue_from")
         to_run, once, twice = [], {}, []
         for name in listed:
-            if args.only and label not in args.only and "%s/%s" % (label, name) not in args.only:
+            if name not in wanted:
                 continue
             folder = suite / name
-            test = json.loads((folder / "test.json").read_text(encoding="utf-8"))
+            test = tests[name]
             if test.get("renderers") and args.renderer not in test["renderers"]:
                 continue
             broken = [m for m in test_mods(folder, test) if m in build_failed]
@@ -246,42 +338,91 @@ def run_origin(args, prefix, copy, run_root, work, build_failed):
                 twice.append(name)
         if not to_run:
             continue
-        while args.wait_while and pathlib.Path(args.wait_while).exists():
-            time.sleep(30)
         for name in to_run:
             shutil.rmtree(run_root / "runs" / suite.name / name, ignore_errors=True)
-        code, log = run_suite(args, suite_json, to_run, work, run_root, prefix.replace("/", "-"))
         second = run_root / "second"
+        for name in twice:
+            shutil.rmtree(second / "runs" / suite.name / name, ignore_errors=True)
+        for index, chain in enumerate(chains(to_run, tests)):
+            units.append({"origin": prefix.replace("/", "-"), "suite": suite, "tests": chain, "run_root": run_root,
+                          "index": index, "tag": ""})
+            if any(name in twice for name in chain):
+                units.append({"origin": prefix.replace("/", "-"), "suite": suite, "tests": chain, "run_root": second,
+                              "index": index, "tag": "-second"})
+        judged += [(label, suite, name, once[name], name in twice) for name in to_run]
+    return rows, units, judged
+
+
+def judge(args, judged, run_root, logs_by_suite):
+    """The rows of the tests run: the runner's verdict, or for a harness test its expected.json's (harness_self)."""
+    rows = []
+    second = run_root / "second"
+    for label, suite, name, expected, twice in judged:
+        result, folder = read_result(run_root, suite.name, name, args.renderer)
+        if result is None:
+            rows.append((label, name, "no-result", "the runner left no result.json (log: %s)" % logs_by_suite.get(suite, "?")))
+            continue
+        if expected is None:
+            rows.append((label, name, result["verdict"], result.get("reason", "")))
+            continue
+        problems = harness_self.judge(expected, result, folder, suite / name)
         if twice:
-            for name in twice:
-                shutil.rmtree(second / "runs" / suite.name / name, ignore_errors=True)
-            run_suite(args, suite_json, twice, work, second, prefix.replace("/", "-"), tag="-second")
-        for name in to_run:
-            result, folder = read_result(run_root, suite.name, name, args.renderer)
-            if result is None:
-                rows.append((label, name, "no-result", "the runner left no result.json (log: %s)" % log))
-                continue
-            expected = once[name]
-            if expected is None:
-                rows.append((label, name, result["verdict"], result.get("reason", "")))
-                continue
-            problems = harness_self.judge(expected, result, folder, suite / name)
-            if name in twice:
-                twin = expected["twice_same_facts"]
-                ignored = set(twin.get("except", [])) if isinstance(twin, dict) else set()
-                again, folder2 = read_result(second, suite.name, name, args.renderer)
-                if again is None or facts_lines(folder2) is None:
-                    problems.append("the second run left no facts")
-                elif facts_lines(folder, ignored) != facts_lines(folder2, ignored):
-                    first, other = facts_lines(folder, ignored), facts_lines(folder2, ignored)
-                    at = next((i for i, (a, b) in enumerate(zip(first, other)) if a != b), min(len(first), len(other)))
-                    problems.append("the two runs' facts differ at line %d: %r / %r" % (at + 1, first[at:at + 1], other[at:at + 1]))
-            if problems:
-                rows.append((label, name, "fail", "the runner answered %s (%s); %s" %
-                             (result["verdict"], result.get("reason", ""), "; ".join(problems))))
-            else:
-                rows.append((label, name, "pass", "the runner answered %s, as expected.json says" % result["verdict"]))
+            twin = expected["twice_same_facts"]
+            ignored = set(twin.get("except", [])) if isinstance(twin, dict) else set()
+            again, folder2 = read_result(second, suite.name, name, args.renderer)
+            if again is None or facts_lines(folder2) is None:
+                problems.append("the second run left no facts")
+            elif facts_lines(folder, ignored) != facts_lines(folder2, ignored):
+                first, other = facts_lines(folder, ignored), facts_lines(folder2, ignored)
+                at = next((i for i, (a, b) in enumerate(zip(first, other)) if a != b), min(len(first), len(other)))
+                problems.append("the two runs' facts differ at line %d: %r / %r" % (at + 1, first[at:at + 1], other[at:at + 1]))
+        if problems:
+            rows.append((label, name, "fail", "the runner answered %s (%s); %s" %
+                         (result["verdict"], result.get("reason", ""), "; ".join(problems))))
+        else:
+            rows.append((label, name, "pass", "the runner answered %s, as expected.json says" % result["verdict"]))
     return rows
+
+
+def run_origin(args, prefix, copy, run_root, work, build_failed):
+    """The rows of every suite under `copy` (the copy of this tree's tests/mods, or of LumaLink's tests/game): each
+    suite's tests as the copy lists them (COPIED: its suite.json as copied), run on args.renderer, judged. The
+    checkouts are not read again: a test added there while a run goes on is in the next run's copy. main() plans
+    every origin first and runs all their units in one pool; this is the same for one origin."""
+    rows, units, judged = plan_origin(args, prefix, copy, run_root, build_failed)
+    logs = run_units(args, units, work)
+    by_suite = {u["suite"]: logs.get(id(u)) for u in units}
+    return rows + judge(args, judged, run_root, by_suite)
+
+
+QUICK = TESTS / "quick.json"
+# The label prefixes of the origins other than this tree's tests/mods.
+ORIGINS = ("lumalink/",)
+
+
+def quick_set(copies):
+    """--set quick: tests/mods/quick.json's tests, which take one or more of every suite of the copies given
+    ((label prefix, the copy's suites) pairs). Returns (selection, problems): a suite with none, or a name that is not
+    a test, is a problem, so the set cannot fall behind the suites."""
+    listed = json.loads(QUICK.read_text(encoding="utf-8"))["tests"]
+    problems = []
+    known = {}
+    for prefix, copy in copies:
+        for suite_json in sorted(copy.glob("*/suite.json")):
+            known[prefix + suite_json.parent.name] = json.loads(suite_json.read_text(encoding="utf-8"))["tests"]
+    given = {prefix for prefix, _ in copies}
+    for entry in listed:
+        label, _, name = entry.rpartition("/")
+        if any(entry.startswith(prefix) and prefix not in given for prefix in ORIGINS):
+            continue  # LumaLink's suites, judged when its tests/game is given
+        if label not in known:
+            problems.append("%s: no such suite" % entry)
+        elif label in known and name not in known[label]:
+            problems.append("%s: no such test in %s" % (entry, label))
+    for label in sorted(known):
+        if not any(entry.rpartition("/")[0] == label for entry in listed):
+            problems.append("%s: no test of it in the quick set" % label)
+    return listed, problems
 
 
 LUMALINK_PIN = TREE / "tools" / "lumacore" / "lumalink.commit"
@@ -350,9 +491,13 @@ def main():
     parser.add_argument("--bin", required=True)
     parser.add_argument("--work", required=True)
     parser.add_argument("--only", action="append", default=[], help="a suite, or suite/test (repeat for several)")
-    parser.add_argument("--lock", help="the runner's run lock (default: <work>/run.lock)")
+    parser.add_argument("--lock", help="held for the whole run; refused while it exists (default: <work>/run.lock)")
     parser.add_argument("--pak", help="the game.pak (default: the bin folder's pak.path)")
-    parser.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) // 2))
+    parser.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) // 2), help="mods built at once")
+    parser.add_argument("--parallel", type=int, default=max(1, min(4, (os.cpu_count() or 4) // 4)),
+                        help="tests run at once, each game in its own folder (plan 04, section 7)")
+    parser.add_argument("--set", choices=("quick",),
+                        help="quick: tests/mods/quick.json, one or more tests of every suite (the quick gate's)")
     parser.add_argument("--build-only", action="store_true", help="copy and build the test mods, run nothing")
     parser.add_argument("--wait-while", default=os.environ.get("LUMA_TEST_WAIT_WHILE"),
                         help="a path (or LUMA_TEST_WAIT_WHILE): no suite starts while it exists (another's measuring lock)")
@@ -384,6 +529,27 @@ def main():
     ll_tree = pathlib.Path(ll_tree).resolve() if ll_tree else built_in(lumalink)
     if ll_tree is not None and not (ll_tree / "tests" / "game").is_dir():
         raise SystemExit("LUMALINK_TREE has no tests/game: %s" % ll_tree)
+    lock = pathlib.Path(args.lock)
+    if lock.exists():
+        raise SystemExit("run lock held: %s: %s" % (lock, lock.read_text(encoding="utf-8", errors="replace").strip()))
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.write_text("mod_tests %s %s\n" % (args.renderer, time.strftime("%Y-%m-%d %H:%M:%S")), encoding="utf-8")
+    try:
+        return run_all(args, lumalink, work, ll_tree)
+    finally:
+        lock.unlink()
+
+
+def run_all(args, lumalink, work, ll_tree):
+    if args.set == "quick":
+        sources = [("", TESTS)] + ([("lumalink/", ll_tree / "tests" / "game")] if ll_tree is not None else [])
+        selection, problems = quick_set(sources)
+        if problems:
+            for problem in problems:
+                print("quick-set %s" % problem)
+            print("mod_tests: %s: the quick set does not match the suites" % args.renderer)
+            return 1
+        args.only = list(args.only) + [e for e in selection if ll_tree is not None or not e.startswith("lumalink/")]
     tree, build_failed = prepare(args, lumalink, work, ll_tree)
     if args.build_only:
         for mod, why in sorted(build_failed.items()):
@@ -396,8 +562,12 @@ def main():
         origins.append(("lumalink/", tree / "lumalink" / "tests" / "game", work / args.renderer / "lumalink"))
     elif not args.only or any(o.startswith("lumalink/") for o in args.only):
         rows.append(("lumalink", "-", "not-run", "no LUMALINK_TREE, and LUMALINK was built in no LumaLink checkout: LumaLink's tests/game did not run"))
-    for prefix, copy, run_root in origins:
-        rows += run_origin(args, prefix, copy, run_root, work, build_failed)
+    planned = [(run_root,) + plan_origin(args, prefix, copy, run_root, build_failed) for prefix, copy, run_root in origins]
+    units = [u for _, _, origin_units, _ in planned for u in origin_units]
+    logs = run_units(args, units, work)
+    by_suite = {u["suite"]: logs.get(id(u)) for u in units}
+    for run_root, known, _, judged in planned:
+        rows += known + judge(args, judged, run_root, by_suite)
     for suite, name, verdict, reason in rows:
         print("%-40s %-7s %-14s %s" % ("%s/%s" % (suite, name), args.renderer, verdict, reason))
     passed = sum(1 for r in rows if r[2] == "pass")
