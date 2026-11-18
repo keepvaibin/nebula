@@ -666,7 +666,8 @@ def scripts(g, paths, extra=()):
 HARNESS_SELF = sorted([*(TREE / "tools" / "lumacore").glob("harness_*_test.py"),
                        *(TREE / "tools" / "lumacore" / "tests").glob("harness_*_test.py"),
                        *(TREE / "tools" / "test_driver" / "tests").glob("*_test.py"),
-                       *(TREE / "tools" / "gate" / "tests").glob("*_test.py")])
+                       *(TREE / "tools" / "gate" / "tests").glob("*_test.py"),
+                       *(TREE / "tools" / "measure" / "tests").glob("*_test.py")])
 # The game description's tools on their fixtures, with the game build's compile commands.
 DESCRIPTION_SELF = sorted((TREE / "tools" / "lumacore").glob("*_fixture_test.py"))
 
@@ -718,18 +719,59 @@ def start_soak(g):
     return process, log
 
 
-def measure_short(g):
-    """The short measurement set at the long run's end (tools/gate/measure_short.py, section 10, N-1043): one renderer
-    a run in turn, the 120 Hz pacing run and the benchmark under measure.lock, against the last ten runs' spread in
-    gate-runs/measure-history.tsv."""
+MEASURE = TREE / "tools" / "measure" / "measure.py"
+# Where a move's measure runs from: a copy of the moved commit's build, so a later gate's build of the same folder
+# never changes what is measured.
+MEASURE_BINS = pathlib.Path("D:/NebulaWork/build/measure-bins")
+
+
+def measure_command(sha, bin_dir, android_bin, work, args):
+    """tools/measure/measure.py run: the play route on the PC's renderers, the PC held to four cores, and the tablet
+    when the gate has one (N-1043, 07-BASE-FIRST stage 1 item 1)."""
+    runs = "d3d12,vulkan,d3d11,d3d12-4cores" + (",tablet" if args.tablet and android_bin else "")
+    cmd = [sys.executable, "-X", "utf8", "-I", str(MEASURE), "run", "--bin", str(bin_dir), "--work", str(work),
+           "--commit", sha, "--runs", runs, "--history", str(pathlib.Path(args.work) / "measure-history.tsv"),
+           "--paks", args.paks, "--who", args.who]
+    if args.tablet and android_bin:
+        cmd += ["--device", args.tablet, "--android-bin", str(android_bin), "--device-lock", args.tablet_lock]
+    return cmd
+
+
+def measure_route(g):
+    """The play route measure in the long run (the part holds the gate lock): one line per run in
+    gate-runs/measure-history.tsv, compared with the last ten of its device and renderer."""
     def fn(log):
-        code = run([sys.executable, "-X", "utf8", "-I", HERE / "measure_short.py", "run", "--bin", g.bin, "--pak",
-                    g.args.pak, "--paks", g.args.paks, "--work", g.work / "measure", "--commit", g.commit, "--history",
-                    pathlib.Path(g.args.work) / "measure-history.tsv"], log)
+        code = run(measure_command(g.commit, g.bin, g.android_bin, g.work / "measure", g.args), log)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         said = next((l for l in reversed(text.splitlines()) if l.startswith("measure: ")), "measure: no summary")
         return code == 0, said[len("measure: "):]
     return fn
+
+
+def start_measure(sha, g, args, popen=subprocess.Popen, bins=MEASURE_BINS):
+    """After a move: the moved commit's build copied (MEASURE_BINS/<sha>, the two before it kept), then the measure
+    started there, detached; it takes the gate lock through the queue, so the gates and long run parts behind it wait
+    and nothing runs beside it. Returns what happened, for the board."""
+    bins.mkdir(parents=True, exist_ok=True)
+    for old in sorted((p for p in bins.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime)[:-2]:
+        shutil.rmtree(old, ignore_errors=True)
+    copy = bins / sha[:9]
+    try:
+        shutil.rmtree(copy, ignore_errors=True)
+        shutil.copytree(g.bin, copy / "bin")
+        android = None
+        if args.tablet and pathlib.Path(g.android_bin).is_dir():
+            android = copy / "android"
+            shutil.copytree(g.android_bin, android)
+    except OSError as e:
+        return "no measure: the build could not be copied: %s" % e
+    cmd = measure_command(sha, copy / "bin", android, pathlib.Path(args.work) / ("%s-measure" % g.name), args)
+    cmd += ["--gate-lock", args.gate_lock, "--board", args.board]
+    log = pathlib.Path(args.work) / ("measure-%s.log" % sha[:9])
+    detach = {"creationflags": 0x8 | 0x200} if os.name == "nt" else {"start_new_session": True}
+    with open(log, "ab") as out:
+        popen(cmd, cwd=str(TREE), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, close_fds=True, **detach)
+    return "the play route measure of main %s started (log %s)" % (sha[:9], log)
 
 
 def soak_result(process, soak_log):
@@ -1766,8 +1808,8 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         else:
             g.check("soak", soak_result(*soak))
     if level in ("long", "final"):
-        # Last, with the machine alone: the gate lock keeps gates out, measure_short.py takes measure.lock.
-        locked_part(g, "measure", lambda: g.check("measure/short", measure_short(g), ("build/windows",)))
+        # Last, with the machine alone: the gate lock keeps gates out, measure.py takes measure.lock.
+        locked_part(g, "measure", lambda: g.check("measure/route", measure_route(g), ("build/windows",)))
     if every and not getattr(g.args, "move", False):
         # With --move the gate waits for GitHub after its own checks, outside gate.lock (main()).
         g.check("github", github_check(g))
@@ -1981,6 +2023,10 @@ def main(argv=None):
                     args.who, g.name, commit[:9], why))
             else:
                 summary = "passed, GitHub green (%s), main moved to %s" % (detail, commit[:9])
+                # First the measure (it queues for the gate lock now), then the long run, whose parts queue behind it.
+                measured = start_measure(commit, g, args)
+                print("gate.py: measure: %s" % measured)
+                board_line(args.board, "%s MEASURE: %s." % (args.who, measured))
                 started, what = start_long(commit, args)
                 print("gate.py: long run: %s" % what)
                 if started is not None:

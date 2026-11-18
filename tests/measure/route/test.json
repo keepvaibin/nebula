@@ -1,0 +1,796 @@
+{
+  "harness": 1,
+  "name": "measure-route",
+  "about": "The play route of tools/measure (stage 1 item 1, N-1043): the Honeyhive in real time, a visible window, 120 pictures a second with VSync on, three minutes from the stage's first frame; Mario walks round the compass in 150-frame legs and jumps every 400 frames. tools/measure/measure.py reads its timeline, [pace] lines and memory facts.",
+  "time": "real",
+  "visible": true,
+  "settings": [
+    "GALAXY_MAX_FPS=120",
+    "GALAXY_VSYNC_INTERVAL=1"
+  ],
+  "diagnostics": [
+    "timeline"
+  ],
+  "memory": 5,
+  "stage": {
+    "name": "HoneyBeeKingdomGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 480,
+  "steps": [
+    {
+      "at": 60,
+      "stick": [
+        0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 210,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 260,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 360,
+      "stick": [
+        0.0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 510,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 660,
+      "stick": [
+        -0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 660,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 810,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 960,
+      "stick": [
+        0.0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1060,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 1110,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1260,
+      "stick": [
+        0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1410,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1460,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 1560,
+      "stick": [
+        0.0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1710,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1860,
+      "stick": [
+        -0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 1860,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 2010,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2160,
+      "stick": [
+        0.0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2260,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 2310,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2460,
+      "stick": [
+        0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2610,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2660,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 2760,
+      "stick": [
+        0.0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 2910,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3060,
+      "stick": [
+        -0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3060,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 3210,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3360,
+      "stick": [
+        0.0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3460,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 3510,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3660,
+      "stick": [
+        0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3810,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 3860,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 3960,
+      "stick": [
+        0.0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4110,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4260,
+      "stick": [
+        -0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4260,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 4410,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4560,
+      "stick": [
+        0.0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4660,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 4710,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 4860,
+      "stick": [
+        0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 5010,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 5060,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 5160,
+      "stick": [
+        0.0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 5310,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 5460,
+      "stick": [
+        -0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 5460,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 5610,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 5760,
+      "stick": [
+        0.0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 5860,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 5910,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 6060,
+      "stick": [
+        0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 6210,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 6260,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 6360,
+      "stick": [
+        0.0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 6510,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 6660,
+      "stick": [
+        -0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 6660,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 6810,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 6960,
+      "stick": [
+        0.0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 7060,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 7110,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 7260,
+      "stick": [
+        0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 7410,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 7460,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 7560,
+      "stick": [
+        0.0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 7710,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 7860,
+      "stick": [
+        -0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 7860,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 8010,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 8160,
+      "stick": [
+        0.0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 8260,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 8310,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 8460,
+      "stick": [
+        0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 8610,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 8660,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 8760,
+      "stick": [
+        0.0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 8910,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 9060,
+      "stick": [
+        -0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 9060,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 9210,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 9360,
+      "stick": [
+        0.0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 9460,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 9510,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 9660,
+      "stick": [
+        0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 9810,
+      "stick": [
+        0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 9860,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 9960,
+      "stick": [
+        0.0,
+        0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 10110,
+      "stick": [
+        -0.6,
+        0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 10260,
+      "stick": [
+        -0.9,
+        0.0
+      ],
+      "frames": 150
+    },
+    {
+      "at": 10260,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 10410,
+      "stick": [
+        -0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 10560,
+      "stick": [
+        0.0,
+        -0.9
+      ],
+      "frames": 150
+    },
+    {
+      "at": 10660,
+      "hold": [
+        "A"
+      ],
+      "frames": 6
+    },
+    {
+      "at": 10710,
+      "stick": [
+        0.6,
+        -0.6
+      ],
+      "frames": 150
+    },
+    {
+      "at": 10860,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "\\[pace\\] seconds="
+    }
+  ]
+}
