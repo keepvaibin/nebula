@@ -182,9 +182,14 @@ if [ -z "$portable" ]; then
     command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q "$share/icons/hicolor" >/dev/null 2>&1 || true
 fi
 
-# Older versions go once the new one is in place.
+# Older versions go once the new one is in place, except the one that ran before it: an update from inside the game
+# (the update's install step) runs this while that version still runs and may still load files from its folder.
 for old in "$root"/versions/*; do
-    [ -d "$old" ] && [ "$old" != "$target" ] && rm -rf "$old"
+    [ -d "$old" ] || continue
+    case ${old##*/} in
+        "$version" | "$previous") ;;
+        *) rm -rf "$old" ;;
+    esac
 done
 
 say ""

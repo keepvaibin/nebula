@@ -4850,6 +4850,10 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
         // An AppImage: the image file itself, which mounts itself again (the program in the old mount goes with the
         // mount, which ends when the descriptors closed at the exec do).
         if (const char* image = std::getenv("APPIMAGE"); image != nullptr && image[0] == '/') exe = image;
+#if defined(NEBULA_UPDATE_CHECK) && defined(NEBULA_HOST_RENDERER)
+        // install.sh's install with an update put in during this run: its new version (P-125).
+        else if (std::string next = galaxy::update::switch_to_installed_update(); !next.empty()) exe = std::move(next);
+#endif
         const char* const folder = "/proc/self/fd";
 #endif
         std::vector<char*> arguments;

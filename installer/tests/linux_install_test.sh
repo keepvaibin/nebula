@@ -70,6 +70,16 @@ sh "$package/install.sh" --yes --portable "$root" --disc "$work/second.iso" < /d
     { cat "$work/out.txt" >&2; failed=1; }
 check "a new disc replaces the game" '[ "$(cat "$root/content/game.pak")" = "game second.iso" ]'
 
+# Updates (P-125): the version that ran before stays beside the new one; the one before that goes.
+printf '9.9.10\n' > "$package/VERSION"
+sh "$package/install.sh" --yes --portable "$root" < /dev/null > "$work/out.txt" 2>&1 || { cat "$work/out.txt" >&2; failed=1; }
+check "an update names the new version" 'grep -q "\"version\": \"9.9.10\"" "$root/current.json" && grep -q "\"previous\": \"9.9.9\"" "$root/current.json"'
+check "and keeps the one that ran, and the game" '[ -f "$root/versions/9.9.9/nebula" ] && [ "$(cat "$root/content/game.pak")" = "game second.iso" ]'
+printf '9.9.11\n' > "$package/VERSION"
+sh "$package/install.sh" --yes --portable "$root" < /dev/null > "$work/out.txt" 2>&1 || { cat "$work/out.txt" >&2; failed=1; }
+check "a second update lets the oldest go" '[ ! -e "$root/versions/9.9.9" ] && [ -f "$root/versions/9.9.10/nebula" ] && [ -f "$root/versions/9.9.11/nebula" ]'
+printf '9.9.9\n' > "$package/VERSION"
+
 elf "$package/files/nebula" "$other"
 if sh "$package/install.sh" --yes --portable "$work/other" --disc "$work/first.iso" < /dev/null > "$work/out.txt" 2>&1; then
     printf 'FAILED: a package for another processor was installed\n' >&2
