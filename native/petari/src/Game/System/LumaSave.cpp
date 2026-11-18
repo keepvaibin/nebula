@@ -1,4 +1,5 @@
 #include "Game/System/LumaSave.hpp"
+#include "Game/System/LumaGrowTable.hpp"
 
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/GameDataHolder.hpp"
@@ -697,7 +698,6 @@ namespace luma {
             // Per game-data file in memory (6 users, Mario and Luigi): the mods with values in its chunk. Written on
             // the game thread, read by the host from any thread, both under sKeptLock.
             const u32 cKeptFiles = 12;
-            const u32 cForgetMost = 256;  // ids forgotten in one session (one past it is logged, not forgotten)
             struct KeptRow {
                 char mId[LumaSaveChunk::cIdMost + 1];
                 u32 mBytes;
@@ -707,7 +707,10 @@ namespace luma {
                 u32 mCount;
             };
             KeptFile sKeptFiles[cKeptFiles] = {};
-            char sForgetting[cForgetMost][LumaSaveChunk::cIdMost + 1];
+            // The ids forgotten this session, as many as memory holds (N-3008): written under sKeptLock (any thread),
+            // never changed once counted, so the game thread reads those below a count it took under the lock.
+            typedef char ForgetId[LumaSaveChunk::cIdMost + 1];
+            luma::GrowTable<ForgetId> sForgetting;
             u32 sForgettingCount = 0;
             u32 sForgetApplied = 0;  // of them, applied by forgetWork (game thread)
             char sKeptLock = 0;
@@ -740,7 +743,7 @@ namespace luma {
             // Under sKeptLock.
             bool isForgotten(const char* pId) {
                 for (u32 i = 0; i < sForgettingCount; i++) {
-                    if (sameId(sForgetting[i], pId)) {
+                    if (sameId(sForgetting.at(i), pId)) {
                         return true;
                     }
                 }
@@ -767,10 +770,6 @@ namespace luma {
                 u32 mCount;
             };
 
-            // applyForgets' and forgetWork's copy of the forgotten ids, taken under sKeptLock and used outside it (game
-            // thread only; off the stack: 4 KiB is a stack probe the module cannot link).
-            char sApplying[cForgetMost][LumaSaveChunk::cIdMost + 1];
-
             // The frame's start after a FORGET (woken from the host's thread): the new ids out of the files in memory at
             // once, the stored ones and the loaded file's values, and when a stored file held values of one, the files
             // written by the quiet save, so a FORGET holds with no save of the player's. Waits while a sequence runs and
@@ -778,9 +777,6 @@ namespace luma {
             bool forgetWork() {
                 lockKept();
                 const u32 count = sForgettingCount;
-                for (u32 i = sForgetApplied; i < count; i++) {
-                    nebula_snprintf(sApplying[i], sizeof(sApplying[i]), "%s", sForgetting[i]);
-                }
                 unlockKept();
                 if (count == sForgetApplied) {
                     return false;
@@ -800,9 +796,9 @@ namespace luma {
                 bool held = false;
                 GameDataHolder* const pHolder = loadedHolder();
                 for (u32 i = sForgetApplied; i < count; i++) {
-                    held = pSequence->mSaveDataHandler->forgetLumaMod(sApplying[i]) || held;
+                    held = pSequence->mSaveDataHandler->forgetLumaMod(sForgetting.at(i)) || held;
                     if (pHolder != nullptr) {
-                        pHolder->getLumaChunk()->forgetMod(sApplying[i]);
+                        pHolder->getLumaChunk()->forgetMod(sForgetting.at(i));
                     }
                 }
                 sForgetApplied = count;
@@ -859,18 +855,14 @@ namespace luma {
         }
 
         void applyForgets(SaveDataHandler* pHandler, GameDataHolder* pHolder) {
-            char (&ids)[cForgetMost][LumaSaveChunk::cIdMost + 1] = sApplying;
             lockKept();
             const u32 count = sForgettingCount;
-            for (u32 i = 0; i < count; i++) {
-                nebula_snprintf(ids[i], sizeof(ids[i]), "%s", sForgetting[i]);
-            }
             unlockKept();
             // A forgotten mod is a removed one: it cannot come back this session, so its id stays forgotten to the end.
             for (u32 i = 0; i < count; i++) {
-                pHandler->forgetLumaMod(ids[i]);
+                pHandler->forgetLumaMod(sForgetting.at(i));
                 if (pHolder != nullptr) {
-                    pHolder->getLumaChunk()->forgetMod(ids[i]);
+                    pHolder->getLumaChunk()->forgetMod(sForgetting.at(i));
                 }
             }
         }
@@ -1642,15 +1634,14 @@ NEBULA_GAME_API void luma_save_forget(const char* id) {
     }
     lockKept();
     const bool known = isForgotten(id);
-    const bool room = sForgettingCount < cForgetMost;
-    if (!known && room) {
-        nebula_snprintf(sForgetting[sForgettingCount], sizeof(sForgetting[0]), "%s", id);
+    ForgetId* const pRoom = known ? nullptr : sForgetting.reserve(sForgettingCount);
+    if (pRoom != nullptr) {
+        nebula_snprintf(*pRoom, sizeof(*pRoom), "%s", id);
         sForgettingCount++;
     }
     unlockKept();
-    if (!known && !room) {
-        nebula_log("LumaCore save: %u mods forgotten this session already; %s is not forgotten (FORGET it after a restart)\n",
-                   cForgetMost, id);
+    if (!known && pRoom == nullptr) {
+        nebula_log("LumaCore save: no memory to forget %s (FORGET it after a restart)\n", id);
     } else if (!known) {
         luma::services::wakeSaveHook(saveFrame);
     }

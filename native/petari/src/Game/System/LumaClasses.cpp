@@ -13,6 +13,8 @@
 #include "Game/System/LumaTypes.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/GravityUtil.hpp"
+#include "Game/Util/SceneUtil.hpp"
+#include "Game/System/LumaGrowTable.hpp"
 
 #include <nebula_format.h>
 #include <nebula_module.h>
@@ -21,15 +23,17 @@
 namespace luma {
     namespace classes {
         namespace {
-            // Live at once. A row is used again once its class's mod finished and a new scene began; a number names one
-            // class in the session all the same (classCount() + generation * kMaxClasses + row).
-            constexpr u32 kMaxClasses = 1024;
+            // Rows: as many as memory holds (N-3008). A row is used again once its class's mod finished and a new scene
+            // began; a number names one class in the session all the same (classCount() + its definition's serial). The
+            // first kMakerRows rows each have a creator of their own (kMakers); a row past them is made by makeNamed,
+            // which finds its class from the name the game gives the creator.
+            constexpr u32 kMakerRows = 1024;
             constexpr u32 kNameBytes = 64;
 
             struct ClassRow;
 
             // One override: a slot of the class's table (from its address point) and the mod's hook. Kept for the session
-            // (a call on another thread may still read it after the mod went; the rows are at most kMaxClasses).
+            // (a call on another thread may still read it after the mod went).
             struct Override {
                 const MethodRow* method;    // the virtual the mod named
                 const Function* original;   // method->original: the call's function, and the entry's key
@@ -81,36 +85,47 @@ namespace luma {
                 bool gravity;    // its base is PlanetGravity: make_gravity makes its objects, no stage or alias
             };
 
-            ClassRow* sRows[kMaxClasses];
+            // A row: its class (a used-again row's old record stays allocated, as its table copy and overrides do: a call
+            // that began on another thread may still read it), the serial of the definition it holds, and whether it is
+            // free (its class ended and its mod finished) since which scene. The scene that asked the factory may still
+            // hold the row's creator (kMakers), so a free row is used again only in a later scene. Reserved and written
+            // under sLock, on the game thread only; sRowCount rows are in use.
+            struct RowSlot {
+                ClassRow* row;
+                u32 serial;
+                bool free;
+                u32 freeScene;
+            };
+            GrowTable<RowSlot> sRowSlots;
             u32 sRowCount = 0;
             u32 sLiveCount = 0;
-            // Per row: its generation (a number names that generation's class only), and whether it is free (its class
-            // ended and its mod finished) since which scene. The scene that asked the factory may still hold the row's
-            // creator (kMakers), so a free row is used again only in a later scene. Under sLock; written on the game
-            // thread only.
-            u32 sRowGeneration[kMaxClasses];
-            bool sRowFree[kMaxClasses];
-            u32 sRowFreeScene[kMaxClasses];
+            // Each definition's row, by its serial (a number's class). Under sLock.
+            GrowTable<u32> sRowOfSerial;
+            u32 sSerialCount = 0;
             u32 sSceneSerial = 0;  // scenes gone in the session
 
-            s32 numberOfRow(u32 r) { return static_cast<s32>(classCount() + sRowGeneration[r] * kMaxClasses + r); }
+            ClassRow* rowAt(u32 r) { return sRowSlots.at(r).row; }
 
-            // The row a mod class's number names, or -1 (below the mod classes, never a row, or a row used again since).
-            // Under sLock.
+            s32 numberOfRow(u32 r) { return static_cast<s32>(classCount() + sRowSlots.at(r).serial); }
+
+            // The row a mod class's number names, or -1 (below the mod classes, never a class, or its row used again
+            // since). Under sLock.
             s32 rowOfNumberLocked(s32 number) {
                 const s32 from = static_cast<s32>(classCount());
                 if (number < from) {
                     return -1;
                 }
-                const u32 at = static_cast<u32>(number - from);
-                const u32 r = at % kMaxClasses;
-                return r < sRowCount && sRowGeneration[r] == at / kMaxClasses ? static_cast<s32>(r) : -1;
+                const u32 serial = static_cast<u32>(number - from);
+                if (serial >= sSerialCount) {
+                    return -1;
+                }
+                const u32 r = sRowOfSerial.at(serial);
+                return r < sRowCount && sRowSlots.at(r).serial == serial ? static_cast<s32>(r) : -1;
             }
 
             // Aliases (classes.md, "alias"): a name the factory answers with a live class's maker, its placements'
             // arguments as the alias gives them. A dead alias's row is used again; rows are never freed (read under
             // sLock, written on the game thread only). A live alias's class is live: modGone ends both together.
-            constexpr u32 kMaxAliases = 4096;
             struct AliasRow {
                 bool live;
                 const LumaMod* mod;
@@ -118,8 +133,9 @@ namespace luma {
                 u32 row;  // the class's
                 s32 args[8];
             };
-            AliasRow* sAliases[kMaxAliases];
+            GrowTable<AliasRow*> sAliases;  // reserved under sLock
             u32 sAliasCount = 0;
+            AliasRow* aliasAt(u32 a) { return sAliases.at(a); }
             // The placements initialising objects an alias placed, innermost first (AliasPlacing).
             LUMA_THREAD AliasPlacing* tPlacing = nullptr;
 
@@ -287,8 +303,8 @@ namespace luma {
             // Under sLock. The live alias of the name, or null.
             AliasRow* aliasLocked(const char* pName) {
                 for (u32 a = 0; pName != nullptr && a < sAliasCount; a++) {
-                    if (sAliases[a]->live && same(sAliases[a]->name, pName)) {
-                        return sAliases[a];
+                    if (aliasAt(a)->live && same(aliasAt(a)->name, pName)) {
+                        return aliasAt(a);
                     }
                 }
                 return nullptr;
@@ -301,7 +317,7 @@ namespace luma {
                     return -1;
                 }
                 for (u32 r = 0; r < sRowCount; r++) {
-                    const ClassRow* const pRow = sRows[r];
+                    const ClassRow* const pRow = rowAt(r);
                     if (pRow->live && !pRow->gravity && (same(pRow->name, pName) || (pRow->replaces[0] != 0 && same(pRow->replaces, pName)))) {
                         return static_cast<s32>(r);
                     }
@@ -340,7 +356,7 @@ namespace luma {
                     // The game's objects are made on the game thread only: its arenas take no lock. So no make runs
                     // when a take-out ends a class (take-outs run on the game thread between frames' work).
                     lock();
-                    ClassRow* const pAsked = r < sRowCount ? sRows[r] : nullptr;
+                    ClassRow* const pAsked = r < sRowCount ? rowAt(r) : nullptr;
                     const bool tell = pAsked != nullptr && !pAsked->saidThread;
                     if (tell) {
                         pAsked->saidThread = true;
@@ -353,7 +369,7 @@ namespace luma {
                     return nullptr;
                 }
                 lock();
-                ClassRow* const pRow = r < sRowCount ? sRows[r] : nullptr;
+                ClassRow* const pRow = r < sRowCount ? rowAt(r) : nullptr;
                 if (pRow == nullptr || !pRow->live) {
                     unlock();
                     // The class went between the factory's answer and this call: the object it replaced, if any.
@@ -396,9 +412,9 @@ namespace luma {
                             if (replaced.object != nullptr) {
                                 // The object at this address went without its destructor seen: its class's gone, then
                                 // its data.
-                                callGone(sRows[replaced.row], nullptr, replaced.data);
+                                callGone(rowAt(replaced.row), nullptr, replaced.data);
                                 if (replaced.data != nullptr) {
-                                    core()->free(sRows[replaced.row]->mod, replaced.data);
+                                    core()->free(rowAt(replaced.row)->mod, replaced.data);
                                 }
                             }
                             if (pRow->overrideCount != 0 && !takeTable(pRow, const_cast<void*>(pComplete))) {
@@ -426,7 +442,57 @@ namespace luma {
                 static constexpr CreatorFuncPtr kAll[sizeof...(Rows)] = {&makeRow<Rows>...};
             };
             // Row r's creator, for every row a session can have.
-            constexpr const CreatorFuncPtr* kMakers = __make_integer_seq<Makers, u32, kMaxClasses>::kAll;
+            constexpr const CreatorFuncPtr* kMakers = __make_integer_seq<Makers, u32, kMakerRows>::kAll;
+
+            // A name as the game's creators are given it: the game's objects by their Japanese names (PlacementInfoOrdered,
+            // LumaMake), so a replaced class's creator gets the Japanese name of what it replaces.
+            const char* creatorName(const char* pName) {
+                return inScene() && MR::isExistSceneObj(SceneObj_StageDataHolder) ? MR::getJapaneseObjectName(pName) : pName;
+            }
+
+            // The creator of every row past kMakerRows: the class the name the game gives names (its own name, an alias of
+            // it, or what it replaces, as is or as the game's creators are given it). A live class first; else the one
+            // that held the name last, which ended since the factory's answer (make says so and makes the object it
+            // replaced, if any).
+            NameObj* makeNamed(const char* pName) {
+                if (pName == nullptr) {
+                    return nullptr;
+                }
+                lock();
+                s32 r = rowForPlacement(pName);
+                const u32 count = sRowCount;
+                unlock();
+                if (r < 0) {
+                    s32 ended = -1;
+                    u32 latest = 0;
+                    for (u32 i = kMakerRows; i < count && r < 0; i++) {
+                        lock();
+                        const RowSlot slot = sRowSlots.at(i);
+                        const bool live = slot.row->live;
+                        unlock();
+                        // A class's names never change once it is defined (a row used again holds a new record).
+                        const ClassRow* const pRow = slot.row;
+                        const bool named = !pRow->gravity && (same(pRow->name, pName) ||
+                                                              (pRow->replaces[0] != 0 && (same(pRow->replaces, pName) ||
+                                                                                          same(creatorName(pRow->replaces), pName))));
+                        if (named && live) {
+                            r = static_cast<s32>(i);
+                        } else if (named && (ended < 0 || slot.serial > latest)) {
+                            ended = static_cast<s32>(i);
+                            latest = slot.serial;
+                        }
+                    }
+                    if (r < 0) {
+                        r = ended;
+                    }
+                }
+                if (r < 0) {
+                    nebula_log("LumaCore: a mod class's creator was given %s, which no mod class past the first %u has; nothing is "
+                               "made\n", pName, kMakerRows);
+                    return nullptr;
+                }
+                return make(static_cast<u32>(r), pName);
+            }
 
             // After NameObjFactory::getCreator: a live class's name (or the name it replaces) gets the kernel's maker.
             s32 factoryHook(Call* pCall, void*) {
@@ -438,7 +504,7 @@ namespace luma {
                 const s32 r = rowForPlacement(pName);
                 unlock();
                 if (r >= 0) {
-                    *static_cast<CreatorFuncPtr*>(pCall->result) = kMakers[r];
+                    *static_cast<CreatorFuncPtr*>(pCall->result) = r < static_cast<s32>(kMakerRows) ? kMakers[r] : &makeNamed;
                 }
                 return 0;
             }
@@ -458,9 +524,9 @@ namespace luma {
                 }
                 unlock();
                 if (gone.object != nullptr) {
-                    callGone(sRows[gone.row], gone.object, gone.data);
+                    callGone(rowAt(gone.row), gone.object, gone.data);
                     if (gone.data != nullptr) {
-                        core()->free(sRows[gone.row]->mod, gone.data);
+                        core()->free(rowAt(gone.row)->mod, gone.data);
                     }
                 }
                 return 0;
@@ -498,7 +564,7 @@ namespace luma {
                 lock();
                 bool taken = rowForPlacement(pName) >= 0;
                 for (u32 r = 0; !taken && r < sRowCount; r++) {
-                    taken = sRows[r]->live && sRows[r]->gravity && same(sRows[r]->name, pName);
+                    taken = rowAt(r)->live && rowAt(r)->gravity && same(rowAt(r)->name, pName);
                 }
                 unlock();
                 return taken;
@@ -615,7 +681,7 @@ namespace luma {
                 }
                 lock();
                 const s32 at = findLocked(pComplete);
-                ClassRow* const pRow = at >= 0 ? sRows[sSlots[at].row] : nullptr;
+                ClassRow* const pRow = at >= 0 ? rowAt(sSlots[at].row) : nullptr;
                 unlock();
                 return pRow;
             }
@@ -728,15 +794,17 @@ namespace luma {
             }
             s32 freeRow = -1;
             for (u32 r = 0; freeRow < 0 && r < sRowCount; r++) {
-                // A next generation whose numbers still fit an s32.
-                const bool fits = (sRowGeneration[r] + 1u) <= (0x7FFFFFFFu - classCount() - r) / kMaxClasses;
-                if (sRowFree[r] && sRowFreeScene[r] != sSceneSerial && fits) {
+                if (sRowSlots.at(r).free && sRowSlots.at(r).freeScene != sSceneSerial) {
                     freeRow = static_cast<s32>(r);
                 }
             }
-            if (freeRow < 0 && sRowCount == kMaxClasses) {
-                say(pMod, "define_class %s: %u classes are defined; a class whose mod has finished frees its place when a new "
-                          "scene begins", pName, kMaxClasses);
+            // Room for the row and its number before anything is made: a number is an s32, classCount() + the serial.
+            lock();
+            const bool room = sSerialCount < 0x7FFFFFFFu - classCount() && sRowOfSerial.reserve(sSerialCount) != nullptr &&
+                              (freeRow >= 0 || sRowSlots.reserve(sRowCount) != nullptr);
+            unlock();
+            if (!room) {
+                say(pMod, "define_class %s: no memory for one more class (or the session's class numbers are all used)", pName);
                 return -1;
             }
             if (nameTaken(pName)) {
@@ -848,15 +916,18 @@ namespace luma {
             pRow->tableCount = pBase->vtableCount;
             pRow->gravity = gravity;
             lock();
+            RowSlot& rSlot = sRowSlots.at(row);  // reserved above
             if (freeRow >= 0) {
-                // The ended class's own record stays allocated, as its table copy and overrides do (a call that began on
-                // another thread may still read it); its objects went with their scene. This generation's numbers are new.
-                sRowGeneration[row]++;
-                sRowFree[row] = false;
+                // The ended class's own record stays allocated (RowSlot); its objects went with their scene. The row's
+                // number is new: the next serial.
+                rSlot.free = false;
             } else {
                 sRowCount = row + 1;
             }
-            sRows[row] = pRow;
+            rSlot.row = pRow;
+            rSlot.serial = sSerialCount;
+            sRowOfSerial.at(sSerialCount) = row;
+            sSerialCount++;
             sLiveCount++;
             unlock();
             if (gravity) {
@@ -919,7 +990,7 @@ namespace luma {
             lock();
             s32 number = -1;
             for (u32 r = 0; r < sRowCount; r++) {
-                if (sRows[r]->live && same(sRows[r]->name, pName)) {
+                if (rowAt(r)->live && same(rowAt(r)->name, pName)) {
                     number = numberOfRow(r);
                     break;
                 }
@@ -944,7 +1015,7 @@ namespace luma {
             lock();
             s32 target = -1;
             for (u32 r = 0; r < sRowCount; r++) {
-                if (sRows[r]->live && same(sRows[r]->name, pClass)) {
+                if (rowAt(r)->live && same(rowAt(r)->name, pClass)) {
                     target = static_cast<s32>(r);
                     break;
                 }
@@ -955,7 +1026,7 @@ namespace luma {
                 say(pMod, "alias_class %s: %s is no live mod class", pName, pClass);
                 return -5;
             }
-            if (sRows[target]->gravity) {
+            if (rowAt(target)->gravity) {
                 say(pMod, "alias_class %s: %s is a gravity class: make_gravity makes its objects, no stage places them", pName, pClass);
                 return -5;
             }
@@ -968,24 +1039,24 @@ namespace luma {
             if (pRow == nullptr) {
                 lock();
                 for (u32 a = 0; pRow == nullptr && a < sAliasCount; a++) {
-                    pRow = sAliases[a]->live ? nullptr : sAliases[a];
+                    pRow = aliasAt(a)->live ? nullptr : aliasAt(a);
                 }
                 unlock();
             }
             if (pRow == nullptr) {
-                if (sAliasCount == kMaxAliases) {
-                    say(pMod, "alias_class %s: the session's %u aliases are all standing", pName, kMaxAliases);
-                    return -1;
-                }
                 pRow = static_cast<AliasRow*>(::calloc(1, sizeof(AliasRow)));
-                if (pRow == nullptr) {
+                lock();
+                AliasRow** const pSlot = pRow != nullptr ? sAliases.reserve(sAliasCount) : nullptr;
+                if (pSlot != nullptr) {
+                    *pSlot = pRow;
+                    sAliasCount++;
+                }
+                unlock();
+                if (pSlot == nullptr) {
+                    ::free(pRow);
                     say(pMod, "alias_class %s: no memory for the alias", pName);
                     return -1;
                 }
-                lock();
-                sAliases[sAliasCount] = pRow;
-                sAliasCount++;
-                unlock();
             }
             lock();
             pRow->mod = pMod;
@@ -994,7 +1065,7 @@ namespace luma {
             __builtin_memcpy(pRow->args, pArgs, sizeof(pRow->args));
             pRow->live = true;
             unlock();
-            say(pMod, "alias %s: places %s (arguments %d %d %d %d %d %d %d %d; -1 the placement's own)", pName, sRows[target]->name, pArgs[0],
+            say(pMod, "alias %s: places %s (arguments %d %d %d %d %d %d %d %d; -1 the placement's own)", pName, rowAt(target)->name, pArgs[0],
                 pArgs[1], pArgs[2], pArgs[3], pArgs[4], pArgs[5], pArgs[6], pArgs[7]);
             return 0;
         }
@@ -1015,12 +1086,12 @@ namespace luma {
             lock();
             s32 r = -1;
             for (u32 i = 0; pClass != nullptr && i < sRowCount; i++) {
-                if (sRows[i]->live && same(sRows[i]->name, pClass)) {
+                if (rowAt(i)->live && same(rowAt(i)->name, pClass)) {
                     r = static_cast<s32>(i);
                     break;
                 }
             }
-            ClassRow* const pRow = r >= 0 ? sRows[r] : nullptr;
+            ClassRow* const pRow = r >= 0 ? rowAt(r) : nullptr;
             const bool gravity = pRow != nullptr && pRow->gravity;
             unlock();
             if (!gravity) {
@@ -1053,9 +1124,9 @@ namespace luma {
                 } else {
                     if (replaced.object != nullptr) {
                         // An object at this address went without its destructor seen: its class's gone, then its data.
-                        callGone(sRows[replaced.row], nullptr, replaced.data);
+                        callGone(rowAt(replaced.row), nullptr, replaced.data);
                         if (replaced.data != nullptr) {
-                            core()->free(sRows[replaced.row]->mod, replaced.data);
+                            core()->free(rowAt(replaced.row)->mod, replaced.data);
                         }
                     }
                     if (pRow->overrideCount != 0 && !takeTable(pRow, pGravity)) {
@@ -1205,15 +1276,15 @@ namespace luma {
             u32 ended = 0;
             lock();
             for (u32 r = 0; r < sRowCount; r++) {
-                if (sRows[r]->live && sRows[r]->mod == pMod) {
-                    __atomic_store_n(&sRows[r]->live, false, __ATOMIC_RELEASE);
+                if (rowAt(r)->live && rowAt(r)->mod == pMod) {
+                    __atomic_store_n(&rowAt(r)->live, false, __ATOMIC_RELEASE);
                     sLiveCount--;
                     ended++;
                 }
             }
             for (u32 a = 0; a < sAliasCount; a++) {
-                if (sAliases[a]->live && (sAliases[a]->mod == pMod || !sRows[sAliases[a]->row]->live)) {
-                    sAliases[a]->live = false;
+                if (aliasAt(a)->live && (aliasAt(a)->mod == pMod || !rowAt(aliasAt(a)->row)->live)) {
+                    aliasAt(a)->live = false;
                 }
             }
             unlock();
@@ -1224,8 +1295,8 @@ namespace luma {
             u32 objects = 0;
             lock();
             for (u32 at = 0; at < sSlotCount;) {
-                if (sSlots[at].object != nullptr && sRows[sSlots[at].row]->mod == pMod) {
-                    const ClassRow* const pRow = sRows[sSlots[at].row];
+                if (sSlots[at].object != nullptr && rowAt(sSlots[at].row)->mod == pMod) {
+                    const ClassRow* const pRow = rowAt(sSlots[at].row);
                     void** const pObject = static_cast<void**>(const_cast<void*>(sSlots[at].object));
                     if (pRow->table != nullptr && *pObject == static_cast<void*>(pRow->table)) {
                         *pObject = const_cast<void*>(static_cast<const void*>(pRow->baseTable));
@@ -1243,9 +1314,10 @@ namespace luma {
         void modFinished(const LumaMod* pMod) {
             lock();
             for (u32 r = 0; r < sRowCount; r++) {
-                if (!sRowFree[r] && !sRows[r]->live && sRows[r]->mod == pMod) {
-                    sRowFree[r] = true;
-                    sRowFreeScene[r] = sSceneSerial;
+                RowSlot& rSlot = sRowSlots.at(r);
+                if (!rSlot.free && !rSlot.row->live && rSlot.row->mod == pMod) {
+                    rSlot.free = true;
+                    rSlot.freeScene = sSceneSerial;
                 }
             }
             unlock();
@@ -1268,9 +1340,9 @@ namespace luma {
             unlock();
             for (u32 i = 0; i < count; i++) {
                 if (pOld[i].object != nullptr) {
-                    callGone(sRows[pOld[i].row], nullptr, pOld[i].data);
+                    callGone(rowAt(pOld[i].row), nullptr, pOld[i].data);
                     if (pOld[i].data != nullptr) {
-                        core()->free(sRows[pOld[i].row]->mod, pOld[i].data);
+                        core()->free(rowAt(pOld[i].row)->mod, pOld[i].data);
                     }
                 }
             }

@@ -1,0 +1,68 @@
+{
+  "harness": 1,
+  "name": "1412-past-1024",
+  "about": "lc-wide defines 1100 classes and one in place of every Kuribo, all live at once, and 4100 aliases (N-3008: the rows held 1024 and the aliases 4096, and refused the next): the stage's Kuribos are made as the class past the 1024 rows with a creator of their own, and a class from each side of 1024 is made and known by its number",
+  "proves": [
+    "kernel.classes.rows_grow"
+  ],
+  "mods": [
+    "../mods/lc-wide"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        1412
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.lc-wide.first_own",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lc-wide.defined",
+      "is": 1101
+    },
+    {
+      "fact": "mod.lc-wide.last_found",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-wide.stage_made",
+      "at_least": 1
+    },
+    {
+      "fact": "mod.lc-wide.wide_own",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-wide.kuribo_own",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-wide.first_own",
+      "is": 1
+    },
+    {
+      "fact": "mod.lc-wide.aliased",
+      "is": 4100
+    },
+    {
+      "fact": "mod.lc-wide.alias_own",
+      "is": 1
+    }
+  ],
+  "limit_seconds": 300
+}

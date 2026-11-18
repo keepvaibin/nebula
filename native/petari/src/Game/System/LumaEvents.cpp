@@ -1,6 +1,7 @@
 #include "Game/System/LumaEvents.hpp"
 
 #include "Game/System/NebulaMods.hpp"
+#include "Game/System/LumaGrowTable.hpp"
 #include <luma.h>
 #include <luma_events.h>
 #include <luma_service_provider.h>
@@ -26,7 +27,6 @@ static_assert(sizeof(((LumaEventsGame*)nullptr)->name) == LUMA_EVENTS_NAME_MOST,
 namespace luma {
     namespace events {
         namespace {
-            const u32 kMostWatches = LUMA_MAX_MODS * 2u;  // as the registry's records: mods in their grace keep theirs
             const u32 kFirstRoom = 64u;                   // records a list holds before it first grows
 
             // One event as raised.
@@ -60,7 +60,9 @@ namespace luma {
             };
 
             const LumaServiceKernel* sKernel = nullptr;
-            Watch sWatches[kMostWatches];
+            // One a mod, as many as memory holds (N-3008): reserved on the game thread, entries never move (the kernel
+            // holds their nodes). Mods in their grace keep theirs.
+            luma::GrowTable<Watch> sWatches;
             u32 sWatchHigh = 0;  // slots in use are below it
             u32 sLock = 0;       // atomic: the lists and `lost`
             u32 sSerial = 0;     // atomic: scenes gone since the start
@@ -75,8 +77,8 @@ namespace luma {
             void kindsChanged() {
                 u32 any = 0;
                 for (u32 i = 0; i < sWatchHigh; i++) {
-                    if (sWatches[i].mod != nullptr) {
-                        any |= sWatches[i].kinds;
+                    if (sWatches.at(i).mod != nullptr) {
+                        any |= sWatches.at(i).kinds;
                     }
                 }
                 for (u32 event = 1; event < NEBULA_MOD_EVENT_COUNT; event++) {
@@ -86,8 +88,8 @@ namespace luma {
 
             Watch* findWatch(const LumaMod* pMod) {
                 for (u32 i = 0; i < sWatchHigh; i++) {
-                    if (sWatches[i].mod == pMod) {
-                        return &sWatches[i];
+                    if (sWatches.at(i).mod == pMod) {
+                        return &sWatches.at(i);
                     }
                 }
                 return nullptr;
@@ -211,23 +213,30 @@ namespace luma {
                     return LUMA_OK;
                 }
                 if (pWatch == nullptr) {
-                    // A free slot whose node is idle (a gone mod's node may still be the kernel's until its end).
-                    for (u32 i = 0; i < kMostWatches && pWatch == nullptr; i++) {
-                        if (sWatches[i].mod == nullptr && sWatches[i].node.state == 0u) {
-                            pWatch = &sWatches[i];
+                    // A free slot whose node is idle (a gone mod's node may still be the kernel's until its end), else a
+                    // new one.
+                    u32 at = 0;
+                    for (; at < sWatches.reserved() && pWatch == nullptr; at++) {
+                        if (sWatches.at(at).mod == nullptr && sWatches.at(at).node.state == 0u) {
+                            pWatch = &sWatches.at(at);
+                            break;
                         }
                     }
                     if (pWatch == nullptr) {
-                        return LUMA_E_MEMORY;  // more watches than twice the most mods: cannot happen (one a mod)
+                        pWatch = sWatches.reserve(at);
+                    }
+                    if (pWatch == nullptr) {
+                        return LUMA_E_MEMORY;
                     }
                     __builtin_memset(pWatch, 0, sizeof(*pWatch));
                     pWatch->node.mod = pMod;
                     pWatch->node.deliver = deliver;
                     pWatch->node.drop = drop;
                     pWatch->mod = pMod;
-                    const u32 at = static_cast< u32 >(pWatch - sWatches);
                     if (at >= sWatchHigh) {
+                        lock();
                         sWatchHigh = at + 1u;
+                        unlock();
                     }
                 }
                 lock();
@@ -278,7 +287,7 @@ namespace luma {
                 freeList(pMod, &kept);
                 freeList(pMod, &pWatch->giving);
                 pWatch->mod = nullptr;
-                while (sWatchHigh > 0 && sWatches[sWatchHigh - 1].mod == nullptr) {
+                while (sWatchHigh > 0 && sWatches.at(sWatchHigh - 1).mod == nullptr) {
                     sWatchHigh--;
                 }
             }
@@ -319,7 +328,7 @@ namespace luma {
             lock();
             const u32 high = sWatchHigh;
             for (u32 i = 0; i < high; i++) {
-                Watch& rWatch = sWatches[i];
+                Watch& rWatch = sWatches.at(i);
                 if (rWatch.mod == nullptr || (rWatch.kinds >> event & 1u) == 0) {
                     continue;
                 }

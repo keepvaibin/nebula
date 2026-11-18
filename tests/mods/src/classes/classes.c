@@ -28,6 +28,13 @@
                          (harness 1.2 thread_start): it makes nothing there (off_made_null).
    lc-many   (-DCASE=10): 400 classes LcMany000 to LcMany399 from Kuribo at every start (defined: how many were);
                          MR::getRandom(0, 1411) makes one LcMany000 (made_own: own_class gives its number).
+   lc-wide   (-DCASE=11): 1100 classes LcWide0000 to LcWide1099 from Kuribo, then LcWideKuribo from Kuribo in place of
+                         every Kuribo: past the 1024 rows with a creator of their own (N-3008). defined: how many were;
+                         stage_made: LcWideKuribo's `made` ran for the stage's Kuribos (its creator is given their
+                         Japanese name). 4100 aliases LcWideAl0000 to LcWideAl4099 of LcWide1099 (aliased: how many
+                         stand; the session held 4096). MR::getRandom(0, 1412) makes one LcWide1099 (wide_own), one
+                         Kuribo (kuribo_own: an LcWideKuribo), one LcWideAl4099 (alias_own: an LcWide1099), each known
+                         by its number, and one LcWide0000 (first_own).
    Cases 4 and 5 need a luma.h with LumaClassDef.gone (build.sh builds them only then). */
 #include "../loader/lt.h"
 
@@ -693,6 +700,82 @@ LT_START({
     }
     lt_fact("defined", defined);
     lt_fact("first_found", first_class >= 0 && core->class_of("LcMany000") == first_class);
+})
+LUMA_MOD(imports, start, 0);
+
+#elif CASE == 11
+#define WIDE 1100
+#define ALIASES 4100
+static char names[WIDE][12];
+static char alias_names[ALIASES][14];
+static LumaClassDef defs[WIDE];
+static LumaClassDef kuribo_def;
+static int32_t first_class = -1, last_class = -1, kuribo_class = -1;
+static volatile int32_t kuribo_made;
+
+static void made(void* object, void* data, void* user) {
+    (void)object;
+    (void)data;
+    (void)user;
+    kuribo_made++;
+}
+
+static int32_t own(const char* name, int32_t number) {
+    void* object = 0;
+    const int32_t n = lt_core->make(lt_mod, name, 1, 0, 0, &object);
+    return n == 1 && object != 0 && number >= 0 && lt_core->own_class(lt_mod, object) == number;
+}
+
+static int32_t trigger(LumaCall* call, void* user) {
+    (void)user;
+    if (LUMA_ARG(call, 1, int32_t) != 0 || LUMA_ARG(call, 2, int32_t) != 1412) return 0;
+    lt_fact("stage_made", kuribo_made);
+    lt_fact("wide_own", own("LcWide1099", last_class));
+    lt_fact("kuribo_own", own("Kuribo", kuribo_class));
+    lt_fact("alias_own", own("LcWideAl4099", last_class));
+    lt_fact("first_own", own("LcWide0000", first_class));
+    return 0;
+}
+
+static const LumaImport imports[] = {
+    LUMA_HOOK_ON("MR::getRandom", "s32(s32, s32)", LUMA_AFTER, trigger),
+};
+
+LT_START({
+    int32_t defined = 0;
+    for (int i = 0; i < WIDE; i++) {
+        char* const n = names[i];
+        n[0] = 'L'; n[1] = 'c'; n[2] = 'W'; n[3] = 'i'; n[4] = 'd'; n[5] = 'e';
+        n[6] = (char)('0' + i / 1000); n[7] = (char)('0' + i / 100 % 10); n[8] = (char)('0' + i / 10 % 10);
+        n[9] = (char)('0' + i % 10); n[10] = 0;
+        defs[i].size = sizeof(LumaClassDef);
+        defs[i].name = n;
+        defs[i].base = "Kuribo";
+        const int32_t number = core->define_class(mod, &defs[i]);
+        if (number >= 0) {
+            defined++;
+            if (i == 0) first_class = number;
+            if (i == WIDE - 1) last_class = number;
+        }
+    }
+    kuribo_def.size = sizeof(LumaClassDef);
+    kuribo_def.name = "LcWideKuribo";
+    kuribo_def.base = "Kuribo";
+    kuribo_def.replaces = "Kuribo";
+    kuribo_def.made = made;
+    kuribo_class = core->define_class(mod, &kuribo_def);
+    lt_fact("defined", defined + (kuribo_class >= 0));
+    lt_fact("last_found", last_class >= 0 && core->class_of("LcWide1099") == last_class);
+    static const int32_t args[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+    int32_t aliased = 0;
+    for (int i = 0; i < ALIASES; i++) {
+        char* const n = alias_names[i];
+        n[0] = 'L'; n[1] = 'c'; n[2] = 'W'; n[3] = 'i'; n[4] = 'd'; n[5] = 'e'; n[6] = 'A'; n[7] = 'l';
+        n[8] = (char)('0' + i / 1000); n[9] = (char)('0' + i / 100 % 10); n[10] = (char)('0' + i / 10 % 10);
+        n[11] = (char)('0' + i % 10); n[12] = 0;
+        aliased += core->alias_class(mod, n, "LcWide1099", args) == 0;
+    }
+    lt_fact("aliased", aliased);
 })
 LUMA_MOD(imports, start, 0);
 #endif

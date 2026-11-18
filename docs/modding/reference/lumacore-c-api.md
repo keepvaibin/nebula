@@ -20,7 +20,6 @@ Header: `native/include/luma.h`.
 | Name | Value | Description |
 |---|---|---|
 | `LUMA_API` | `1` | The layout version. A struct with a `size` field grows only at its end, and each side reads only what both sizes cover. A struct without one (`LumaFunction`, `LumaCall`, `LumaImport`, `LumaExport`, `LumaOverride`, `LumaTable`) keeps its layout for every mod whose `LumaModInfo`.api is 1; a game that changes one reads and writes the old layout for such a mod. Enum values and LumaCore's order never change. |
-| `LUMA_MAX_MODS` | `256` | The most mods with code that may be on at once. |
 | `LUMA_OPTIONAL` | `1` |  |
 | `LUMA_MAKE_DEAD` | `1` | Made, then dead (makeActorDead) until something makes it appear; actors only. |
 | `LUMA_REPORT_OUT_OF_MEMORY` | `1` | `Hook.OutOfMemory`: args[0] the size; luma.h's `new` then stops the game. |
@@ -466,7 +465,7 @@ Writes `size` bytes at `offset` in the table for the mod. When the mod goes, the
 int32_t make(const LumaMod* mod, const char* name, uint32_t count, const LumaMakePlace* place, uint32_t flags, void** objects);
 ```
 
-Objects (classes contract, "make"): `count` objects by a name the factory makes (a game object's, a mod class's, a mod's object: as a stage places it, its changes and replacements applied), each made and initialized as a placed one, at `place[i]` (null: the origin, unturned, scale 1, every argument -1). While the scene makes its objects (from a hook that runs then: after StageDataHolder::initPlacementMario, a class's init) or once it is made (during play: each object then takes its after-placement step in this call); they stand in the main stage and live as long as the scene; made inside another object's init, they join that placement's view group. Flags: `LUMA_MAKE_DEAD`. Each object's address in objects[i] (objects may be null). Returns the count made (fewer when a creator makes nothing, said), or -1 the factory makes nothing by that name, -2 its files are not in this game, -3 not on the game thread, no scene, or the scene is starting, -4 a bad argument (count not 1 to 1024, a place smaller than `LumaMakePlace` or not finite, an unknown flag) or no memory. Every refusal is said in the log with the name.
+Objects (classes contract, "make"): `count` objects by a name the factory makes (a game object's, a mod class's, a mod's object: as a stage places it, its changes and replacements applied), each made and initialized as a placed one, at `place[i]` (null: the origin, unturned, scale 1, every argument -1). While the scene makes its objects (from a hook that runs then: after StageDataHolder::initPlacementMario, a class's init) or once it is made (during play: each object then takes its after-placement step in this call); they stand in the main stage and live as long as the scene; made inside another object's init, they join that placement's view group. Flags: `LUMA_MAKE_DEAD`. Each object's address in objects[i] (objects may be null). Returns the count made (fewer when a creator makes nothing, said), or -1 the factory makes nothing by that name, -2 its files are not in this game, -3 not on the game thread, no scene, or the scene is starting, -4 a bad argument (count not 1 to 29826104, a place smaller than `LumaMakePlace` or not finite, an unknown flag) or no memory. Every refusal is said in the log with the name.
 
 ### `alias_class`
 

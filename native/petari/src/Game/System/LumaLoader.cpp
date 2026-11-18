@@ -10,6 +10,7 @@
 #include "Game/System/LumaClasses.hpp"
 #include "Game/System/LumaMake.hpp"
 #include "Game/System/LumaGuard.hpp"
+#include "Game/System/LumaGrowTable.hpp"
 #include "Game/System/LumaNumbers.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <luma_host.h>
@@ -219,13 +220,14 @@ namespace luma {
                   "luma.h and LumaHook.hpp number the hook kinds alike");
 
     namespace {
-        const u32 cMaxMods = LUMA_MAX_MODS;
         // luma.h's LumaModInfo before begin and finish: a mod built so far still binds; it has neither.
         const u32 cInfoLeast = static_cast<u32>(offsetof(LumaModInfo, begin));
-        LumaMod* sMods[cMaxMods];
+        // The mods on: as many as memory holds (N-3008). Entries never move (modAt reads them on any thread); a begin
+        // reserves its place in both lists and the take-out list first, so a start never runs out.
+        GrowTable<LumaMod*> sMods;
         u32 sModCount = 0;
-        // Begun and not started yet (luma_begin_mod): later mods bind to their exports; they count toward cMaxMods.
-        LumaMod* sWaiting[cMaxMods];
+        // Begun and not started yet (luma_begin_mod): later mods bind to their exports.
+        GrowTable<LumaMod*> sWaiting;
         u32 sWaitingCount = 0;
         // Mods taken out (or refused after their code ran) whose grace has not ended.
         LumaMod* sGone = nullptr;
@@ -235,16 +237,19 @@ namespace luma {
         u32 sStartedCount = 0;
 
         // Take-out requests (reload.md 2): any thread queues a mod's id under sTakeLock; the game thread takes them all
-        // at a frame's start. No request, no cost: sTakeCount is 0 and the frame's check is one load.
-        const u32 cTakeQueue = 16;
+        // at a frame's start. No request, no cost: sTakeCount is 0 and the frame's check is one load. The queue grows.
         const u32 cIdBytes = 64;  // LumaMod::name's size: an id is at most 63 bytes
-        char sTakeQueue[cTakeQueue][cIdBytes];
+        typedef char TakeId[cIdBytes];
+        TakeId* sTakeQueue = nullptr;  // under sTakeLock
+        u32 sTakeRoom = 0;
         u32 sTakeCount = 0;
         u32 sTakeLock = 0;
-        // takeOutRequested's own lists (game thread only), here rather than on its stack: the module links no
-        // __chkstk, so no frame may reach a page (LUMA_MAX_MODS pointers are 2 KiB).
-        char sTakeIds[cTakeQueue][cIdBytes];
-        LumaMod* sTakeOut[cMaxMods];
+        // takeOutRequested's own lists (game thread only): the ids taken from the queue, and the mods each takes out
+        // (room for every mod on: a begin grows it).
+        TakeId* sTakeIds = nullptr;
+        u32 sTakeIdsRoom = 0;
+        LumaMod** sTakeOut = nullptr;
+        u32 sTakeOutRoom = 0;
         // The host, told each mod's id as it is taken out (luma_set_taken_out); null: nobody.
         LumaTakenOut sTakenOut = nullptr;
 
@@ -256,7 +261,7 @@ namespace luma {
             u32 size;
             bool read;  // given by kept during the start under way
         };
-        Kept sKept[cMaxMods];
+        GrowTable<Kept> sKept;  // game thread; an entry is used again once free
         const u32 cKeepMost = 1u << 20;
 
         const LumaFunction* asPublic(const Function* pFunction) { return reinterpret_cast<const LumaFunction*>(pFunction); }
@@ -1031,11 +1036,29 @@ namespace luma {
             return held;
         }
 
+        // Places for one more mod in every list a mod is on (sMods, sWaiting, sTakeOut), made before it begins.
+        bool roomForOneMore() {
+            const u32 n = sModCount + sWaitingCount + 1u;
+            if (n == 0u || !sMods.reserveTo(n) || !sWaiting.reserveTo(n)) {
+                return false;
+            }
+            if (sTakeOutRoom < n) {
+                const u32 room = n < 16u ? 16u : n * 2u;
+                LumaMod** const pGrown = static_cast<LumaMod**>(::realloc(sTakeOut, sizeof(LumaMod*) * room));
+                if (pGrown == nullptr) {
+                    return false;
+                }
+                sTakeOut = pGrown;
+                sTakeOutRoom = room;
+            }
+            return true;
+        }
+
         // The kept entry for a mod id, or null.
         Kept* keptOf(const char* pId) {
-            for (u32 i = 0; i < cMaxMods; i++) {
-                if (sKept[i].id[0] != 0 && sameText(sKept[i].id, pId)) {
-                    return &sKept[i];
+            for (u32 i = 0; i < sKept.reserved(); i++) {
+                if (sKept.at(i).id[0] != 0 && sameText(sKept.at(i).id, pId)) {
+                    return &sKept.at(i);
                 }
             }
             return nullptr;
@@ -1059,14 +1082,16 @@ namespace luma {
             }
             Kept* pEntry = keptOf(pConstMod->name);
             if (pEntry == nullptr) {
-                for (u32 i = 0; i < cMaxMods && pEntry == nullptr; i++) {
-                    if (sKept[i].id[0] == 0) {
-                        pEntry = &sKept[i];
+                for (u32 i = 0; i < sKept.reserved() && pEntry == nullptr; i++) {
+                    if (sKept.at(i).id[0] == 0) {
+                        pEntry = &sKept.at(i);
                     }
                 }
                 if (pEntry == nullptr) {
-                    // Every entry is a mod's that kept bytes and was not loaded again; said, never silent.
-                    nebula_log("[mod %s] keep: the game already holds kept bytes for %u mods; nothing was kept\n", pConstMod->name, cMaxMods);
+                    pEntry = sKept.reserve(sKept.reserved());
+                }
+                if (pEntry == nullptr) {
+                    nebula_log("[mod %s] keep: no memory for one more mod's kept bytes; nothing was kept\n", pConstMod->name);
                     return -1;
                 }
             }
@@ -1354,13 +1379,13 @@ namespace luma {
         // A loaded mod by id, started or begun and waiting for its start; null when none is.
         LumaMod* loadedMod(const char* pId, u32 length) {
             for (u32 i = 0; i < sModCount; i++) {
-                if (sameUpTo(pId, length, sMods[i]->name)) {
-                    return sMods[i];
+                if (sameUpTo(pId, length, sMods.at(i)->name)) {
+                    return sMods.at(i);
                 }
             }
             for (u32 i = 0; i < sWaitingCount; i++) {
-                if (sameUpTo(pId, length, sWaiting[i]->name)) {
-                    return sWaiting[i];
+                if (sameUpTo(pId, length, sWaiting.at(i)->name)) {
+                    return sWaiting.at(i);
                 }
             }
             return nullptr;
@@ -1535,13 +1560,13 @@ namespace luma {
     // ones and the ones in their grace, whose code can still be on a stack.
     LumaMod* modAt(uintptr_t pc) {
         for (u32 i = 0; i < sModCount; i++) {
-            if (pc >= sMods[i]->codeBegin && pc < sMods[i]->codeEnd) {
-                return sMods[i];
+            if (pc >= sMods.at(i)->codeBegin && pc < sMods.at(i)->codeEnd) {
+                return sMods.at(i);
             }
         }
         for (u32 i = 0; i < sWaitingCount; i++) {
-            if (pc >= sWaiting[i]->codeBegin && pc < sWaiting[i]->codeEnd) {
-                return sWaiting[i];
+            if (pc >= sWaiting.at(i)->codeBegin && pc < sWaiting.at(i)->codeEnd) {
+                return sWaiting.at(i);
             }
         }
         for (LumaMod* pMod = sGone; pMod != nullptr; pMod = pMod->nextGone) {
@@ -1617,7 +1642,7 @@ namespace luma {
             // and it must not be told about it later, when this one's library is closed (a mod that needs this one is
             // dropped before its start).
             for (u32 w = 0; w < sWaitingCount; w++) {
-                LumaMod* const pOther = sWaiting[w];
+                LumaMod* const pOther = sWaiting.at(w);
                 u32 kept = 0;
                 for (u32 k = 0; k < pOther->useCount; k++) {
                     if (pOther->uses[k] != pMod) {
@@ -1658,7 +1683,7 @@ namespace luma {
         // a lower mod's replace of the same function is refused at its begin, as against a published one (section 1).
         const LumaMod* waitingReplacer(const Function* pFunction) {
             for (u32 w = 0; w < sWaitingCount; w++) {
-                const LumaModInfo* const pInfo = sWaiting[w]->info;
+                const LumaModInfo* const pInfo = sWaiting.at(w)->info;
                 for (u32 i = 0; i < pInfo->import_count; i++) {
                     const LumaImport& rImport = pInfo->imports[i];
                     if (rImport.kind != LUMA_IMPORT_HOOK || rImport.hook_kind != LUMA_REPLACE) {
@@ -1667,7 +1692,7 @@ namespace luma {
                     const Function* pOther = nullptr;
                     s32 number = -1;
                     if (resolve(rImport, &pOther, &number) && pOther == pFunction) {
-                        return sWaiting[w];
+                        return sWaiting.at(w);
                     }
                 }
             }
@@ -1677,13 +1702,13 @@ namespace luma {
         // A waiting mod by its info; `take` takes it off the waiting list.
         LumaMod* waitingMod(const LumaModInfo* pInfo, bool take) {
             for (u32 i = 0; i < sWaitingCount; i++) {
-                LumaMod* const pMod = sWaiting[i];
+                LumaMod* const pMod = sWaiting.at(i);
                 if (pMod->info != pInfo) {
                     continue;
                 }
                 if (take) {
                     for (u32 j = i + 1; j < sWaitingCount; j++) {
-                        sWaiting[j - 1] = sWaiting[j];
+                        sWaiting.at(j - 1) = sWaiting.at(j);
                     }
                     sWaitingCount--;
                     pMod->waiting = false;
@@ -1802,10 +1827,9 @@ namespace luma {
         } else if (pInfo->import_count != 0 && pInfo->imports == nullptr) {
             refuse.start(512);
             refuse.put("why", 'P', "Lib.ImportsUnreadable");
-        } else if (sModCount + sWaitingCount == cMaxMods) {
+        } else if (!roomForOneMore()) {
             refuse.start(500);
-            refuse.put("why", 'P', "Lib.TooManyMods");
-            refuse.number("count", LUMA_MAX_MODS);
+            refuse.put("why", 'P', "Lib.NoMemory");
         } else {
             refused = false;
         }
@@ -2106,15 +2130,15 @@ namespace luma {
             return nullptr;
         }
         pMod->waiting = true;
-        sWaiting[sWaitingCount++] = pMod;
+        sWaiting.at(sWaitingCount++) = pMod;
         return pMod;
     }
 
     const char* chosenLayers(const LumaModInfo* pInfo, u64* pBytes) {
         LumaMod* pMod = waitingMod(pInfo, false);
         for (u32 i = 0; i < sModCount && pMod == nullptr; i++) {
-            if (sMods[i]->info == pInfo) {
-                pMod = sMods[i];
+            if (sMods.at(i)->info == pInfo) {
+                pMod = sMods.at(i);
             }
         }
         *pBytes = pMod != nullptr ? pMod->chosenBytes : 0;
@@ -2193,26 +2217,26 @@ namespace luma {
             }
         }
         pMod->startedAt = ++sStartedCount;
-        sMods[sModCount++] = pMod;
+        sMods.at(sModCount++) = pMod;
         return true;
     }
 
     void unloadMod(const LumaModInfo* pInfo) {
         for (u32 i = 0; i < sModCount; i++) {
-            if (sMods[i]->info != pInfo) {
+            if (sMods.at(i)->info != pInfo) {
                 continue;
             }
-            LumaMod* const pMod = sMods[i];
+            LumaMod* const pMod = sMods.at(i);
             // A mod another loaded mod imports from goes after it (the host stops the dependents first); taken
             // out before, the other would call into a closed library.
             for (u32 j = 0; j < sModCount; j++) {
-                for (u32 k = 0; k < sMods[j]->useCount; k++) {
-                    if (sMods[j]->uses[k] == pMod) {
-                        NEBULA_PANIC("LumaCore: %s was taken out while %s, which uses it, is on", pMod->name, sMods[j]->name);
+                for (u32 k = 0; k < sMods.at(j)->useCount; k++) {
+                    if (sMods.at(j)->uses[k] == pMod) {
+                        NEBULA_PANIC("LumaCore: %s was taken out while %s, which uses it, is on", pMod->name, sMods.at(j)->name);
                     }
                 }
             }
-            sMods[i] = sMods[--sModCount];
+            sMods.at(i) = sMods.at(--sModCount);
             // Unbind, its stop, the mods it imported from told, then after the grace its destructors, memory and
             // library.
             pMod->going = true;
@@ -2249,10 +2273,16 @@ namespace luma {
                 return true;  // one request
             }
         }
-        if (count == cTakeQueue) {
-            unlockTakes();
-            nebula_log("[mod %s] take-out not queued: %u requests already wait for the next frame\n", pId, cTakeQueue);
-            return false;
+        if (count == sTakeRoom) {
+            const u32 room = sTakeRoom == 0u ? 16u : sTakeRoom * 2u;
+            TakeId* const pGrown = room > sTakeRoom ? static_cast<TakeId*>(::realloc(sTakeQueue, sizeof(TakeId) * room)) : nullptr;
+            if (pGrown == nullptr) {
+                unlockTakes();
+                nebula_log("[mod %s] take-out not queued: no memory for one more request\n", pId);
+                return false;
+            }
+            sTakeQueue = pGrown;
+            sTakeRoom = room;
         }
         copyText(sTakeQueue[count], cIdBytes, pId);
         __atomic_store_n(&sTakeCount, count + 1u, __ATOMIC_RELEASE);
@@ -2265,12 +2295,12 @@ namespace luma {
             return true;
         }
         for (u32 i = 0; i < sModCount; i++) {
-            if (sameText(sMods[i]->name, pId)) {
+            if (sameText(sMods.at(i)->name, pId)) {
                 return false;
             }
         }
         for (u32 i = 0; i < sWaitingCount; i++) {
-            if (sameText(sWaiting[i]->name, pId)) {
+            if (sameText(sWaiting.at(i)->name, pId)) {
                 return false;
             }
         }
@@ -2289,20 +2319,33 @@ namespace luma {
         if (!onGameThread()) {
             NEBULA_PANIC("LumaCore: take-out requests were taken off the game thread");
         }
-        char (&ids)[cTakeQueue][cIdBytes] = sTakeIds;
         lockTakes();
-        const u32 count = __atomic_load_n(&sTakeCount, __ATOMIC_RELAXED);
-        for (u32 i = 0; i < count; i++) {
-            copyText(ids[i], cIdBytes, sTakeQueue[i]);
+        u32 count = __atomic_load_n(&sTakeCount, __ATOMIC_RELAXED);
+        if (count > sTakeIdsRoom) {
+            TakeId* const pGrown = static_cast<TakeId*>(::realloc(sTakeIds, sizeof(TakeId) * sTakeRoom));
+            if (pGrown != nullptr) {
+                sTakeIds = pGrown;
+                sTakeIdsRoom = sTakeRoom;
+            }
         }
-        __atomic_store_n(&sTakeCount, 0u, __ATOMIC_RELEASE);
+        // No memory to take them all: those that fit now, the rest at the next frame.
+        const u32 taken = count < sTakeIdsRoom ? count : sTakeIdsRoom;
+        for (u32 i = 0; i < taken; i++) {
+            copyText(sTakeIds[i], cIdBytes, sTakeQueue[i]);
+        }
+        for (u32 i = taken; i < count; i++) {
+            copyText(sTakeQueue[i - taken], cIdBytes, sTakeQueue[i]);
+        }
+        __atomic_store_n(&sTakeCount, count - taken, __ATOMIC_RELEASE);
         unlockTakes();
+        count = taken;
+        TakeId* const ids = sTakeIds;
 
         for (u32 r = 0; r < count; r++) {
             LumaMod* pMod = nullptr;
             for (u32 i = 0; i < sModCount && pMod == nullptr; i++) {
-                if (sameText(sMods[i]->name, ids[r])) {
-                    pMod = sMods[i];
+                if (sameText(sMods.at(i)->name, ids[r])) {
+                    pMod = sMods.at(i);
                 }
             }
             if (pMod == nullptr) {
@@ -2318,7 +2361,7 @@ namespace luma {
             for (bool grew = true; grew;) {
                 grew = false;
                 for (u32 j = 0; j < sModCount; j++) {
-                    LumaMod* const pOther = sMods[j];
+                    LumaMod* const pOther = sMods.at(j);
                     bool listed = false;
                     for (u32 k = 0; k < outCount && !listed; k++) {
                         listed = out[k] == pOther;

@@ -1,0 +1,61 @@
+{
+  "harness": 1,
+  "name": "1140-many-mods",
+  "about": "600 code mods on at once (N-3008: the loader held 256 and refused the next with Lib.TooManyMods; services, time, events and draw held 512 mods, 256 at a draw point, 1024 textures and 128 fonts): every copy of lt-crowd starts, MR::getRandom(1140, 1140) runs all 600 after hooks (1740), and the last copy watches, draws, makes two textures and takes a font",
+  "proves": [
+    "kernel.mods.many"
+  ],
+  "mods": [
+    {
+      "path": "../mods/lt-crowd",
+      "copies": 600
+    }
+  ],
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        1140,
+        1140
+      ],
+      "fact": "crowd"
+    },
+    {
+      "at": 130,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "crowd",
+      "is": 1740
+    },
+    {
+      "fact": "mod.lt-crowd-600.started",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-crowd-600.watch",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-crowd-600.at",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-crowd-600.tex",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-crowd-600.tex2",
+      "is": 0
+    },
+    {
+      "fact": "mod.lt-crowd-600.font",
+      "is": 0
+    }
+  ],
+  "limit_seconds": 600
+}

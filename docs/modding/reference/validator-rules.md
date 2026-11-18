@@ -509,7 +509,7 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Lib.StartRefused` | its start refused to run (it returned {found}) |
 | `Lib.ThirtyTwoBit` | a 32-bit library |
 | `Lib.TooManyImports` | it lists more than 65536 imports |
-| `Lib.TooManyMods` | more mods with code are on than the {count} this game takes |
+| `Lib.NoMemory` | the game has no memory left to take one more mod with code |
 | `Lib.Universal` | a universal Mach-O file holding several machines (give one file per platform) |
 | `Lib.WholeLibrary` | loaded as a whole |
 

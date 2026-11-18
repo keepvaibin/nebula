@@ -1,4 +1,5 @@
 #include "Game/System/LumaUi.hpp"
+#include "Game/System/LumaGrowTable.hpp"
 
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutManager.hpp"
@@ -47,9 +48,6 @@
 namespace luma {
     namespace ui {
         namespace {
-            const u32 kMostMade = LUMA_UI_MOST_SCREENS * 8u;  // screens made in one scene, across mods
-            const u32 kMostOpen = LUMA_UI_MOST_SCREENS * 16u;
-            const u32 kMostPanes = LUMA_UI_MOST_PANES * 4u;
             const u32 cMissingLayoutCode = 570;
             const u32 cMissingPaneCode = 571;
             const u32 cTextCutCode = 572;
@@ -58,7 +56,6 @@ namespace luma {
             const u32 cNotUtf8Code = 575;
             const u32 cMissingAnimationCode = 576;
             const u32 cNoGlyphCode = 577;
-            const u32 kMostEnds = kMostOpen * 2u;  // end events waiting or being given, across mods
             const u32 kMostBoxes = 32;              // text boxes one set_text reaches
 
             // A layout actor the service made: the game's LayoutActor, connected to the layer it was made for.
@@ -149,15 +146,17 @@ namespace luma {
             };
 
             const LumaServiceKernel* sKernel = nullptr;
-            Screen sScreens[kMostOpen];
+            // Screens open, panes found and animation ends being given, across mods: as many as memory holds (N-3008);
+            // game thread. Entries never move (the kernel holds the ends' nodes).
+            luma::GrowTable<Screen> sScreens;
             u32 sHigh = 0;  // slots below are in use or were
             u32 sLive = 0;  // open handles
-            Pane sPanes[kMostPanes];
+            luma::GrowTable<Pane> sPanes;
             u32 sPaneHigh = 0;
             LumaHandle sNextHandle = 0;
-            Made* sMade = nullptr;
+            Made* sMade = nullptr;  // in the scene's arena: as many as it holds
             u32 sMadeCount = 0;
-            End sEnds[kMostEnds];
+            luma::GrowTable<End> sEnds;
 
             // ---- Calls ----
 
@@ -291,8 +290,8 @@ namespace luma {
                     return nullptr;
                 }
                 for (u32 i = 0; i < sHigh; i++) {
-                    if (sScreens[i].handle == handle) {
-                        return sScreens[i].mod == pMod ? &sScreens[i] : nullptr;
+                    if (sScreens.at(i).handle == handle) {
+                        return sScreens.at(i).mod == pMod ? &sScreens.at(i) : nullptr;
                     }
                 }
                 return nullptr;
@@ -303,8 +302,8 @@ namespace luma {
                     return nullptr;
                 }
                 for (u32 i = 0; i < sPaneHigh; i++) {
-                    if (sPanes[i].handle == handle) {
-                        return sPanes[i].mod == pMod ? &sPanes[i] : nullptr;
+                    if (sPanes.at(i).handle == handle) {
+                        return sPanes.at(i).mod == pMod ? &sPanes.at(i) : nullptr;
                     }
                 }
                 return nullptr;
@@ -434,8 +433,12 @@ namespace luma {
                 if (fn == nullptr) {
                     return;
                 }
-                for (u32 i = 0; i < kMostEnds; i++) {
-                    End& rEnd = sEnds[i];
+                for (u32 i = 0; i <= sEnds.reserved(); i++) {
+                    End* const pEnd = i < sEnds.reserved() ? &sEnds.at(i) : sEnds.reserve(i);
+                    if (pEnd == nullptr) {
+                        break;
+                    }
+                    End& rEnd = *pEnd;
                     if (rEnd.busy) {
                         continue;
                     }
@@ -452,7 +455,7 @@ namespace luma {
                     }
                     return;
                 }
-                nebula_log("ui: no room for an animation end of %s; it is not given\n", sKernel->mod_id(pMod));
+                nebula_log("ui: no memory for an animation end of %s; it is not given\n", sKernel->mod_id(pMod));
             }
 
             void finishPlay(Screen& rScreen, s32 status) {
@@ -476,7 +479,7 @@ namespace luma {
 
             void endPanes(LumaHandle screen, bool restore) {
                 for (u32 i = 0; i < sPaneHigh; i++) {
-                    Pane& rPane = sPanes[i];
+                    Pane& rPane = sPanes.at(i);
                     if (rPane.handle == 0 || rPane.screen != screen) {
                         continue;
                     }
@@ -486,7 +489,7 @@ namespace luma {
                     }
                     rPane = Pane();
                 }
-                while (sPaneHigh > 0 && sPanes[sPaneHigh - 1].handle == 0) {
+                while (sPaneHigh > 0 && sPanes.at(sPaneHigh - 1).handle == 0) {
                     sPaneHigh--;
                 }
             }
@@ -545,7 +548,7 @@ namespace luma {
                 }
                 rScreen = Screen();
                 sLive--;
-                while (sHigh > 0 && sScreens[sHigh - 1].handle == 0) {
+                while (sHigh > 0 && sScreens.at(sHigh - 1).handle == 0) {
                     sHigh--;
                 }
             }
@@ -626,24 +629,24 @@ namespace luma {
                     return LUMA_E_BUSY;
                 }
                 u32 open = 0;
-                u32 slot = kMostOpen;
-                for (u32 i = 0; i < kMostOpen; i++) {
-                    if (sScreens[i].handle == 0) {
-                        if (slot == kMostOpen) {
+                u32 slot = sHigh;  // the first free slot, else a new one
+                for (u32 i = 0; i < sHigh; i++) {
+                    if (sScreens.at(i).handle == 0) {
+                        if (slot == sHigh) {
                             slot = i;
                         }
-                        if (i >= sHigh) {
-                            break;
-                        }
-                    } else if (sScreens[i].mod == pMod) {
+                    } else if (sScreens.at(i).mod == pMod) {
                         open++;
                     }
                 }
-                if (open >= LUMA_UI_MOST_SCREENS || slot == kMostOpen) {
+                if (open >= LUMA_UI_MOST_SCREENS) {
                     char text[16];
-                    nebula_snprintf(text, sizeof(text), "%u", open >= LUMA_UI_MOST_SCREENS ? LUMA_UI_MOST_SCREENS : kMostOpen);
+                    nebula_snprintf(text, sizeof(text), "%u", LUMA_UI_MOST_SCREENS);
                     report(pMod, pWhere, 104u, text, nullptr);
                     return LUMA_E_LIMIT;
+                }
+                if (sScreens.reserve(slot) == nullptr) {
+                    return LUMA_E_MEMORY;
                 }
                 // The layout: the mod's cooked one or the game's, LayoutData/<layout>.arc in a store (references.md 4:
                 // a screen has no placeholder; nothing is drawn).
@@ -662,14 +665,11 @@ namespace luma {
                 }
                 const bool reused = pMade != nullptr;
                 if (pMade == nullptr) {
-                    if (sMadeCount >= kMostMade) {
-                        char text[16];
-                        nebula_snprintf(text, sizeof(text), "%u", kMostMade);
-                        report(pMod, pWhere, 104u, text, nullptr);
-                        return LUMA_E_LIMIT;
-                    }
                     const NebulaArena::CurrentScope scope(Arenas::scene());
                     pMade = new Made();
+                    if (pMade == nullptr) {
+                        return LUMA_E_MEMORY;  // the scene's arena is full
+                    }
                     pMade->mod = pMod;
                     pMade->layout = copyText(pLayout);
                     pMade->layer = placed;
@@ -687,7 +687,7 @@ namespace luma {
                 MR::showLayout(pMade->actor);
                 pMade->actor->appear();
 
-                Screen& rScreen = sScreens[slot];
+                Screen& rScreen = sScreens.at(slot);
                 rScreen = Screen();
                 rScreen.handle = ++sNextHandle;
                 rScreen.mod = pMod;
@@ -737,33 +737,33 @@ namespace luma {
                         pName);
                     return LUMA_E_NOT_FOUND;
                 }
-                u32 slot = kMostPanes;
+                u32 slot = sPaneHigh;  // the first free slot, else a new one
                 u32 found = 0;
-                for (u32 i = 0; i < kMostPanes; i++) {
-                    if (sPanes[i].handle == 0) {
-                        if (slot == kMostPanes) {
+                for (u32 i = 0; i < sPaneHigh; i++) {
+                    if (sPanes.at(i).handle == 0) {
+                        if (slot == sPaneHigh) {
                             slot = i;
-                        }
-                        if (i >= sPaneHigh) {
-                            break;
                         }
                         continue;
                     }
-                    if (sPanes[i].screen == screen && sPanes[i].pane == pFound) {
-                        (void)luma_value_out(sKernel, pMod, pOut, sPanes[i].handle);
+                    if (sPanes.at(i).screen == screen && sPanes.at(i).pane == pFound) {
+                        (void)luma_value_out(sKernel, pMod, pOut, sPanes.at(i).handle);
                         return LUMA_OK;
                     }
-                    if (sPanes[i].mod == pMod) {
+                    if (sPanes.at(i).mod == pMod) {
                         found++;
                     }
                 }
-                if (found >= LUMA_UI_MOST_PANES || slot == kMostPanes) {
+                if (found >= LUMA_UI_MOST_PANES) {
                     char text[16];
-                    nebula_snprintf(text, sizeof(text), "%u", found >= LUMA_UI_MOST_PANES ? LUMA_UI_MOST_PANES : kMostPanes);
+                    nebula_snprintf(text, sizeof(text), "%u", LUMA_UI_MOST_PANES);
                     report(pMod, pWhere, 104u, text, nullptr);
                     return LUMA_E_LIMIT;
                 }
-                Pane& rPane = sPanes[slot];
+                if (sPanes.reserve(slot) == nullptr) {
+                    return LUMA_E_MEMORY;
+                }
+                Pane& rPane = sPanes.at(slot);
                 rPane.handle = ++sNextHandle;
                 rPane.screen = screen;
                 rPane.mod = pMod;
@@ -951,8 +951,8 @@ namespace luma {
                 // The root's control is the screen's: a play_pane on the root pane ends here as well.
                 const Ui::Pane* const pRoot = pActor->getLayoutManager()->getPane(nullptr);
                 for (u32 i = 0; i < sPaneHigh; i++) {
-                    if (sPanes[i].handle != 0 && sPanes[i].screen == screen && sPanes[i].pane == pRoot) {
-                        finishPanePlay(sPanes[i], LUMA_E_CANCELLED);
+                    if (sPanes.at(i).handle != 0 && sPanes.at(i).screen == screen && sPanes.at(i).pane == pRoot) {
+                        finishPanePlay(sPanes.at(i), LUMA_E_CANCELLED);
                     }
                 }
                 MR::startAnim(pActor, pAnimation, 0);
@@ -1155,8 +1155,8 @@ namespace luma {
                 }
                 // The mod's rows replaced: a row kept keeps its highlight and its taking until the next reading.
                 for (u32 i = 0; i < sPaneHigh; i++) {
-                    if (sPanes[i].handle != 0 && sPanes[i].mod == pMod) {
-                        sPanes[i].shared = false;
+                    if (sPanes.at(i).handle != 0 && sPanes.at(i).mod == pMod) {
+                        sPanes.at(i).shared = false;
                     }
                 }
                 for (u32 i = 0; i < count; i++) {
@@ -1164,9 +1164,9 @@ namespace luma {
                     found[i]->sharedOn = pRows[i].enabled;
                 }
                 for (u32 i = 0; i < sPaneHigh; i++) {
-                    if (sPanes[i].handle != 0 && sPanes[i].mod == pMod && !sPanes[i].shared) {
-                        sPanes[i].focused = false;
-                        sPanes[i].chosen = false;
+                    if (sPanes.at(i).handle != 0 && sPanes.at(i).mod == pMod && !sPanes.at(i).shared) {
+                        sPanes.at(i).focused = false;
+                        sPanes.at(i).chosen = false;
                     }
                 }
                 return LUMA_OK;
@@ -1185,7 +1185,7 @@ namespace luma {
                 LumaUiPane focused = 0;
                 LumaUiPane chosen = 0;
                 for (u32 i = 0; i < sPaneHigh; i++) {
-                    const Pane& rPane = sPanes[i];
+                    const Pane& rPane = sPanes.at(i);
                     if (rPane.handle == 0 || rPane.mod != pMod || !rPane.shared) {
                         continue;
                     }
@@ -1301,8 +1301,8 @@ namespace luma {
             void modGone(void* pUser, const LumaMod* pMod) {
                 (void)pUser;
                 for (u32 i = 0; i < sHigh; i++) {
-                    if (sScreens[i].handle != 0 && sScreens[i].mod == pMod) {
-                        end(sScreens[i], "mod", true);
+                    if (sScreens.at(i).handle != 0 && sScreens.at(i).mod == pMod) {
+                        end(sScreens.at(i), "mod", true);
                     }
                 }
                 // Its dead screens are no one's: another mod never reuses them, and the scene's end frees them.
@@ -1336,7 +1336,7 @@ namespace luma {
             Screen* topMenu() {
                 Screen* pTop = nullptr;
                 for (u32 i = 0; i < sHigh; i++) {
-                    Screen& rScreen = sScreens[i];
+                    Screen& rScreen = sScreens.at(i);
                     if (rScreen.handle == 0 || rScreen.menu.count == 0u || rScreen.made == nullptr) {
                         continue;
                     }
@@ -1358,7 +1358,7 @@ namespace luma {
             // step's hooks between and the mods' tasks each see it once.
             void menuFrame() {
                 for (u32 i = 0; i < sHigh; i++) {
-                    sScreens[i].menu.chosen = -1;
+                    sScreens.at(i).menu.chosen = -1;
                 }
                 Screen* const pTop = topMenu();
                 if (pTop == nullptr) {
@@ -1399,7 +1399,7 @@ namespace luma {
             // The screen's actor while it is open, shown and drawn this frame; else null.
             const LayoutActor* drawnActor(LumaHandle screen) {
                 for (u32 i = 0; i < sHigh; i++) {
-                    const Screen& rScreen = sScreens[i];
+                    const Screen& rScreen = sScreens.at(i);
                     if (rScreen.handle != screen) {
                         continue;
                     }
@@ -1446,7 +1446,7 @@ namespace luma {
                 const bool decide = !still && MR::testPointerMenuPadDecideTrigger();
                 bool pointed = false;  // the pointer highlights one row
                 for (u32 i = 0; i < sPaneHigh; i++) {
-                    Pane& rPane = sPanes[i];
+                    Pane& rPane = sPanes.at(i);
                     if (rPane.handle == 0 || !rPane.shared) {
                         continue;
                     }
@@ -1488,13 +1488,13 @@ namespace luma {
             shareFrame();
             // Animations played to their end (a loop never ends).
             for (u32 i = 0; i < sHigh; i++) {
-                Screen& rScreen = sScreens[i];
+                Screen& rScreen = sScreens.at(i);
                 if (rScreen.handle != 0 && rScreen.playing && !rScreen.loop && MR::isAnimStopped(rScreen.made->actor, 0)) {
                     finishPlay(rScreen, LUMA_OK);
                 }
             }
             for (u32 i = 0; i < sPaneHigh; i++) {
-                Pane& rPane = sPanes[i];
+                Pane& rPane = sPanes.at(i);
                 if (rPane.handle == 0 || !rPane.playing || rPane.loop) {
                     continue;
                 }
@@ -1511,7 +1511,7 @@ namespace luma {
                 return;
             }
             for (u32 i = 0; i < sHigh; i++) {
-                Screen& rScreen = sScreens[i];
+                Screen& rScreen = sScreens.at(i);
                 if (rScreen.handle == 0 || rScreen.frame >= 120u) {
                     continue;
                 }
@@ -1537,7 +1537,7 @@ namespace luma {
                        static_cast< const char* >(p) < static_cast< const char* >(pEnd);
             };
             for (u32 i = 0; i < sHigh; i++) {
-                Screen& rScreen = sScreens[i];
+                Screen& rScreen = sScreens.at(i);
                 if (rScreen.handle != 0 && inRange(rScreen.made)) {
                     end(rScreen, "scene", false);
                 }

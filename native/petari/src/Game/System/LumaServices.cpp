@@ -1,4 +1,5 @@
 #include "Game/System/LumaServices.hpp"
+#include "Game/System/LumaGrowTable.hpp"
 
 #include "Game/System/LumaGuard.hpp"
 #include "Game/System/LumaHook.hpp"
@@ -121,9 +122,8 @@ namespace luma {
             // A provider as far as v1 defines it: everything up to mod_end.
             const u32 kProviderLeast = static_cast<u32>(offsetof(LumaServiceProvider, mod_end) + sizeof(void (*)(void*, const LumaMod*)));
 
-            // One mod, from its begin to its end. Slots are reused only after an end; a mod taken out waits for its
-            // grace in its slot, so there are twice as many slots as mods may be on.
-            const u32 kMostRecords = LUMA_MAX_MODS * 2u;
+            // One mod, from its begin to its end, as many as memory holds (N-3008). Slots are reused only after an end; a
+            // mod taken out waits for its grace in its slot.
             // A mod's id and its 0: luma.md 2 allows 3 to 64 characters.
             const u32 kIdBytes = 64u + 1u;
             struct Record {
@@ -137,16 +137,17 @@ namespace luma {
                 LumaEventNode* first;  // taken and not yet delivered, oldest first (game thread)
                 LumaEventNode* last;
                 u32 carried;           // nodes in first..last (game thread)
+                u32 slot;              // its own index in sRecords
             };
-            Record sRecords[kMostRecords];
+            luma::GrowTable<Record> sRecords;  // reserved on the game thread; entries never move
             u32 sRecordHigh = 0;  // slots below it may be in use; atomic
 
-            // The live records by list order, top first (game thread). Gone ones leave it.
-            Record* sByOrder[kMostRecords];
-            // frameStart's copy of sByOrder (game thread; a frame's start never runs inside another). Not on the
-            // stack: 4 KiB there needs __chkstk, which the module (no C runtime) does not have.
-            Record* sDeliverOrder[kMostRecords];
+            // The live records by list order, top first (game thread). Gone ones leave it. Grows.
+            Record** sByOrder = nullptr;
+            // frameStart's copy of sByOrder (game thread; a frame's start never runs inside another).
+            Record** sDeliverOrder = nullptr;
             u32 sByOrderCount = 0;
+            u32 sByOrderRoom = 0;
 
             u32 sPosted = 0;   // 1 when a node was posted since the frame's start took the stacks, or nodes are carried; atomic
             u32 sCarried = 0;  // nodes taken but kept for a later frame, all mods (game thread)
@@ -261,8 +262,8 @@ namespace luma {
                 }
                 const u32 high = __atomic_load_n(&sRecordHigh, __ATOMIC_ACQUIRE);
                 for (u32 i = 0; i < high; i++) {
-                    if (__atomic_load_n(&sRecords[i].mod, __ATOMIC_ACQUIRE) == pMod) {
-                        return &sRecords[i];
+                    if (__atomic_load_n(&sRecords.at(i).mod, __ATOMIC_ACQUIRE) == pMod) {
+                        return &sRecords.at(i);
                     }
                 }
                 return nullptr;
@@ -283,13 +284,13 @@ namespace luma {
                 const uintptr_t key = reinterpret_cast<uintptr_t>(pMod);
                 const u32 line = static_cast<u32>((key >> 4) ^ (key >> 12)) & (kRecordCacheSize - 1u);
                 const u32 cached = sRecordCache[line];
-                if (cached != 0u && __atomic_load_n(&sRecords[cached - 1u].mod, __ATOMIC_ACQUIRE) == pMod) {
-                    return &sRecords[cached - 1u];
+                if (cached != 0u && __atomic_load_n(&sRecords.at(cached - 1u).mod, __ATOMIC_ACQUIRE) == pMod) {
+                    return &sRecords.at(cached - 1u);
                 }
                 sRecordScans++;
                 const Record* const pRecord = recordOf(pMod);
                 if (pRecord != nullptr) {
-                    sRecordCache[line] = static_cast<u32>(pRecord - sRecords) + 1u;
+                    sRecordCache[line] = pRecord->slot + 1u;
                 }
                 return pRecord;
             }
@@ -948,14 +949,27 @@ namespace luma {
             }
             u32 slot = 0;
             const u32 high = __atomic_load_n(&sRecordHigh, __ATOMIC_RELAXED);
-            while (slot < high && sRecords[slot].mod != nullptr) {
+            while (slot < high && sRecords.at(slot).mod != nullptr) {
                 slot++;
             }
-            if (slot == kMostRecords) {
-                NEBULA_PANIC("LumaCore: %s's services cannot begin: all %u slots hold mods that are on or waiting for their end",
-                             pId != nullptr ? pId : "a mod", kMostRecords);
+            if (sRecords.reserve(slot) == nullptr) {
+                NEBULA_PANIC("LumaCore: no memory to begin %s's services", pId != nullptr ? pId : "a mod");
             }
-            Record& rRecord = sRecords[slot];
+            if (sByOrderCount == sByOrderRoom) {
+                const u32 room = sByOrderRoom == 0u ? 16u : sByOrderRoom * 2u;
+                Record** const pOrder = static_cast<Record**>(::realloc(sByOrder, room * sizeof(Record*)));
+                if (pOrder != nullptr) {
+                    sByOrder = pOrder;
+                }
+                Record** const pDeliver = pOrder != nullptr ? static_cast<Record**>(::realloc(sDeliverOrder, room * sizeof(Record*))) : nullptr;
+                if (pDeliver == nullptr) {
+                    NEBULA_PANIC("LumaCore: no memory to begin %s's services", pId != nullptr ? pId : "a mod");
+                }
+                sDeliverOrder = pDeliver;
+                sByOrderRoom = room;
+            }
+            Record& rRecord = sRecords.at(slot);
+            rRecord.slot = slot;
             nebula_snprintf(rRecord.id, sizeof(rRecord.id), "%s", pId != nullptr ? pId : "");
             rRecord.order = order;
             rRecord.granted = nullptr;

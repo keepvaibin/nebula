@@ -1,4 +1,5 @@
 #include "Game/System/LumaDraw.hpp"
+#include "Game/System/LumaGrowTable.hpp"
 
 #include "Game/Render/FrameList.hpp"
 #include "Game/Map/LightFunction.hpp"
@@ -62,9 +63,6 @@ namespace luma {
     namespace draw {
         namespace {
             const u32 kPoints = LUMA_DRAW_POINTS;
-            const u32 kMostMods = LUMA_MAX_MODS;
-            const u32 kMostTextures = LUMA_DRAW_TEXTURES_MOST * 4u;  // across mods
-            const u32 kMostFonts = LUMA_DRAW_FONTS_MOST * 4u;
             const u32 cOutsideCode = 470;
             const u32 cNotUtf8Code = 471;
             const u32 cNoGlyphCode = 472;
@@ -127,20 +125,26 @@ namespace luma {
             };
 
             const LumaServiceKernel* sKernel = nullptr;
-            Handler sHandlers[kPoints][kMostMods];
+            // As many mods, textures and fonts as memory holds (N-3008); game thread. The tables' entries never move
+            // (calls hold them); a point's handlers and the copy a point calls grow as arrays.
+            Handler* sHandlers[kPoints];
             u32 sHandlerCount[kPoints];
-            Handler sCalling[kMostMods];  // the point's copy, sorted (points never nest)
-            ModDraw sMods[kMostMods];
+            u32 sHandlerRoom[kPoints];
+            Handler* sCalling = nullptr;  // the point's copy, sorted (points never nest); grown as a point begins
+            u32 sCallingRoom = 0;
+            luma::GrowTable<ModDraw> sMods;
             u32 sModHigh = 0;
-            Texture sTextures[kMostTextures];
+            luma::GrowTable<Texture> sTextures;
             u32 sTextureHigh = 0;
-            FontEntry sFonts[kMostFonts];
+            luma::GrowTable<FontEntry> sFonts;
             u32 sFontHigh = 0;
             LumaHandle sNextHandle = 0;
-            // Freed from pixels: they leave the renderer at the next frame's update (drawn this frame still).
-            GameTexture* sFreed[kMostTextures];
-            bool sFreedTarget[kMostTextures];  // a view's target: its key is forgotten, not its pixels
+            // Freed from pixels: they leave the renderer at the next frame's update (drawn this frame still). Room for
+            // every texture slot (textureSlot grows it).
+            GameTexture** sFreed = nullptr;
+            bool* sFreedTarget = nullptr;  // a view's target: its key is forgotten, not its pixels
             u32 sFreedCount = 0;
+            u32 sFreedRoom = 0;
             GameTexture* sPlaceholder = nullptr;
 
             // The call being made: its point (kPoints: none), its mod, its stacks.
@@ -240,21 +244,22 @@ namespace luma {
             ModDraw* modDraw(const LumaMod* pMod, bool make) {
                 ModDraw* pFree = nullptr;
                 for (u32 i = 0; i < sModHigh; i++) {
-                    if (sMods[i].mod == pMod) {
-                        return &sMods[i];
+                    if (sMods.at(i).mod == pMod) {
+                        return &sMods.at(i);
                     }
-                    if (sMods[i].mod == nullptr && pFree == nullptr) {
-                        pFree = &sMods[i];
+                    if (sMods.at(i).mod == nullptr && pFree == nullptr) {
+                        pFree = &sMods.at(i);
                     }
                 }
                 if (!make) {
                     return nullptr;
                 }
                 if (pFree == nullptr) {
-                    if (sModHigh == kMostMods) {
-                        return nullptr;
+                    pFree = sMods.reserve(sModHigh);
+                    if (pFree == nullptr) {
+                        return nullptr;  // no memory
                     }
-                    pFree = &sMods[sModHigh++];
+                    sModHigh++;
                 }
                 memset(pFree, 0, sizeof(*pFree));
                 pFree->mod = pMod;
@@ -387,8 +392,8 @@ namespace luma {
                     return nullptr;
                 }
                 for (u32 i = 0; i < sTextureHigh; i++) {
-                    if (sTextures[i].handle == handle) {
-                        return sTextures[i].mod == pMod ? &sTextures[i] : nullptr;
+                    if (sTextures.at(i).handle == handle) {
+                        return sTextures.at(i).mod == pMod ? &sTextures.at(i) : nullptr;
                     }
                 }
                 return nullptr;
@@ -399,8 +404,8 @@ namespace luma {
                     return nullptr;
                 }
                 for (u32 i = 0; i < sFontHigh; i++) {
-                    if (sFonts[i].handle == handle) {
-                        return sFonts[i].mod == pMod ? &sFonts[i] : nullptr;
+                    if (sFonts.at(i).handle == handle) {
+                        return sFonts.at(i).mod == pMod ? &sFonts.at(i) : nullptr;
                     }
                 }
                 return nullptr;
@@ -425,13 +430,9 @@ namespace luma {
 
             void freeTexture(Texture& rTexture) {
                 if (rTexture.pixels || rTexture.target) {
-                    if (sFreedCount < kMostTextures) {
-                        sFreedTarget[sFreedCount] = rTexture.target;
-                        sFreed[sFreedCount++] = rTexture.texture;
-                    } else {
-                        // Never: there are no more textures than slots. Kept rather than freed under the frame.
-                        nebula_log("LumaDraw: a freed texture kept (the freed list is full)\n");
-                    }
+                    // Room for every slot (textureSlot), so always room here.
+                    sFreedTarget[sFreedCount] = rTexture.target;
+                    sFreed[sFreedCount++] = rTexture.texture;
                 } else {
                     delete rTexture.texture;  // the store's image stays mapped (the game's or the mod's file)
                 }
@@ -595,7 +596,7 @@ namespace luma {
                 if (fn != nullptr && sKernel->mod_code(pMod, reinterpret_cast<const void*>(fn)) != 1) {
                     return badArgument(pMod, pWhere, "fn");
                 }
-                Handler* const pList = sHandlers[p];
+                Handler* pList = sHandlers[p];
                 u32& rCount = sHandlerCount[p];
                 for (u32 i = 0; i < rCount; i++) {
                     if (pList[i].mod == pMod) {
@@ -611,11 +612,17 @@ namespace luma {
                 if (fn == nullptr) {
                     return LUMA_OK;
                 }
-                if (rCount == kMostMods || modDraw(pMod, true) == nullptr) {
-                    char most[16];
-                    nebula_snprintf(most, sizeof(most), "%u", kMostMods);
-                    report(pMod, pWhere, 104u, most, nullptr);
-                    return LUMA_E_LIMIT;
+                if (rCount == sHandlerRoom[p]) {
+                    const u32 room = sHandlerRoom[p] == 0u ? 8u : sHandlerRoom[p] * 2u;
+                    Handler* const pGrown = static_cast<Handler*>(::realloc(pList, room * sizeof(Handler)));
+                    if (pGrown == nullptr) {
+                        return LUMA_E_MEMORY;
+                    }
+                    pList = sHandlers[p] = pGrown;
+                    sHandlerRoom[p] = room;
+                }
+                if (modDraw(pMod, true) == nullptr) {
+                    return LUMA_E_MEMORY;
                 }
                 pList[rCount++] = {pMod, fn, pUser, 0};
                 if (luma::modlog::facts()) {
@@ -1099,7 +1106,7 @@ namespace luma {
                 FontEntry* pFree = nullptr;
                 u32 mine = 0;
                 for (u32 i = 0; i < sFontHigh; i++) {
-                    FontEntry& rEntry = sFonts[i];
+                    FontEntry& rEntry = sFonts.at(i);
                     if (rEntry.handle == 0) {
                         pFree = pFree == nullptr ? &rEntry : pFree;
                         continue;
@@ -1136,7 +1143,7 @@ namespace luma {
                         return LUMA_E_NOT_FOUND;
                     }
                 }
-                if (mine >= LUMA_DRAW_FONTS_MOST || (pFree == nullptr && sFontHigh == kMostFonts)) {
+                if (mine >= LUMA_DRAW_FONTS_MOST) {
                     char most[16];
                     nebula_snprintf(most, sizeof(most), "%u", LUMA_DRAW_FONTS_MOST);
                     report(pMod, pWhere, 104u, most, nullptr);
@@ -1147,7 +1154,15 @@ namespace luma {
                     return LUMA_E_MEMORY;
                 }
                 memcpy(pCopy, pName, strlen(pName) + 1);
-                FontEntry& rNew = pFree != nullptr ? *pFree : sFonts[sFontHigh++];
+                if (pFree == nullptr) {
+                    pFree = sFonts.reserve(sFontHigh);
+                    if (pFree == nullptr) {
+                        ::free(pCopy);
+                        return LUMA_E_MEMORY;
+                    }
+                    sFontHigh++;
+                }
+                FontEntry& rNew = *pFree;
                 rNew.handle = ++sNextHandle;
                 rNew.mod = pMod;
                 rNew.kind = kind;
@@ -1162,18 +1177,41 @@ namespace luma {
             }
 
             // A free texture slot, or null after the report (LUMA_E_LIMIT) when the mod or the service has no room.
-            Texture* textureSlot(const LumaMod* pMod, const char* pWhere, u64 bytes, ModDraw** ppDraw) {
+            Texture* textureSlot(const LumaMod* pMod, const char* pWhere, u64 bytes, ModDraw** ppDraw, s32* pStatus) {
+                *pStatus = LUMA_E_MEMORY;
                 ModDraw* const pDraw = modDraw(pMod, true);
                 Texture* pFree = nullptr;
                 for (u32 i = 0; i < sTextureHigh && pFree == nullptr; i++) {
-                    if (sTextures[i].handle == 0) {
-                        pFree = &sTextures[i];
+                    if (sTextures.at(i).handle == 0) {
+                        pFree = &sTextures.at(i);
                     }
                 }
-                if (pFree == nullptr && sTextureHigh < kMostTextures) {
-                    pFree = &sTextures[sTextureHigh++];
+                if (pFree == nullptr && sFreedRoom <= sTextureHigh) {
+                    // The freed list has room for every slot: a slot's texture is freed at most once a frame.
+                    const u32 room = sFreedRoom == 0u ? 64u : sFreedRoom * 2u;
+                    GameTexture** const pFreed = static_cast<GameTexture**>(::realloc(sFreed, room * sizeof(GameTexture*)));
+                    if (pFreed != nullptr) {
+                        sFreed = pFreed;
+                    }
+                    bool* const pTarget = pFreed != nullptr ? static_cast<bool*>(::realloc(sFreedTarget, room * sizeof(bool))) : nullptr;
+                    if (pTarget == nullptr) {
+                        return nullptr;
+                    }
+                    sFreedTarget = pTarget;
+                    sFreedRoom = room;
                 }
-                if (pDraw == nullptr || pFree == nullptr || pDraw->textures >= LUMA_DRAW_TEXTURES_MOST) {
+                if (pFree == nullptr) {
+                    pFree = sTextures.reserve(sTextureHigh);
+                    if (pFree == nullptr) {
+                        return nullptr;
+                    }
+                    sTextureHigh++;
+                }
+                if (pDraw == nullptr) {
+                    return nullptr;
+                }
+                *pStatus = LUMA_E_LIMIT;
+                if (pDraw->textures >= LUMA_DRAW_TEXTURES_MOST) {
                     char most[16];
                     nebula_snprintf(most, sizeof(most), "%u", LUMA_DRAW_TEXTURES_MOST);
                     report(pMod, pWhere, 104u, most, nullptr);
@@ -1212,9 +1250,10 @@ namespace luma {
                     return LUMA_E_NOT_FOUND;
                 }
                 ModDraw* pDraw = nullptr;
-                Texture* const pSlot = textureSlot(pMod, pWhere, 0, &pDraw);
+                s32 status = LUMA_E_LIMIT;
+                Texture* const pSlot = textureSlot(pMod, pWhere, 0, &pDraw, &status);
                 if (pSlot == nullptr) {
-                    return LUMA_E_LIMIT;
+                    return status;
                 }
                 pSlot->info = ResTIMG::fromNative(*pInfo);
                 pSlot->texture = new GameTexture();
@@ -1251,9 +1290,10 @@ namespace luma {
                 }
                 const u64 bytes = static_cast< u64 >(w) * h * 4u;
                 ModDraw* pDraw = nullptr;
-                Texture* const pSlot = textureSlot(pMod, pWhere, bytes, &pDraw);
+                s32 status = LUMA_E_LIMIT;
+                Texture* const pSlot = textureSlot(pMod, pWhere, bytes, &pDraw, &status);
                 if (pSlot == nullptr) {
-                    return LUMA_E_LIMIT;
+                    return status;
                 }
                 GameTexture* const pTexture = new GameTexture(w, h, NEBULA_TEXTURE_LINEAR_RGBA8);
                 if (pTexture->image() == nullptr) {
@@ -1820,14 +1860,14 @@ namespace luma {
                     }
                 }
                 for (u32 i = 0; i < sTextureHigh; i++) {
-                    if (sTextures[i].handle != 0 && sTextures[i].mod == pMod) {
-                        freeTexture(sTextures[i]);
+                    if (sTextures.at(i).handle != 0 && sTextures.at(i).mod == pMod) {
+                        freeTexture(sTextures.at(i));
                     }
                 }
                 for (u32 i = 0; i < sFontHigh; i++) {
-                    if (sFonts[i].handle != 0 && sFonts[i].mod == pMod) {
-                        ::free(sFonts[i].name);
-                        memset(&sFonts[i], 0, sizeof(sFonts[i]));
+                    if (sFonts.at(i).handle != 0 && sFonts.at(i).mod == pMod) {
+                        ::free(sFonts.at(i).name);
+                        memset(&sFonts.at(i), 0, sizeof(sFonts.at(i)));
                     }
                 }
                 if (ModDraw* const pDraw = modDraw(pMod, false); pDraw != nullptr) {
@@ -1908,8 +1948,19 @@ namespace luma {
             if (point >= kPoints || sHandlerCount[point] == 0 || sKernel == nullptr) {
                 return;
             }
-            // Bottom of the Mods list first: the top one draws over.
-            const u32 count = sHandlerCount[point];
+            // Bottom of the Mods list first: the top one draws over. The copy grows here only: a handler that adds one
+            // (at any point) grows its point's list, never the copy being called.
+            u32 count = sHandlerCount[point];
+            if (count > sCallingRoom) {
+                Handler* const pGrown = static_cast<Handler*>(::realloc(sCalling, count * sizeof(Handler)));
+                if (pGrown != nullptr) {
+                    sCalling = pGrown;
+                    sCallingRoom = count;
+                } else {
+                    nebula_log("LumaDraw: no memory to call all %u mods drawing at point %u; the first %u draw\n", count, point, sCallingRoom);
+                    count = sCallingRoom;
+                }
+            }
             for (u32 i = 0; i < count; i++) {
                 sCalling[i] = sHandlers[point][i];
                 sCalling[i].order = sKernel->mod_order(sCalling[i].mod);
@@ -2030,10 +2081,11 @@ namespace luma {
         s32 adoptTarget(const LumaMod* pMod, const char* pWhere, GameTexture* pTexture, u32 w, u32 h, LumaHandle* pOut) {
             const u64 bytes = static_cast< u64 >(w) * h * 4u;
             ModDraw* pDraw = nullptr;
-            Texture* const pSlot = textureSlot(pMod, pWhere, bytes, &pDraw);
+            s32 status = LUMA_E_LIMIT;
+            Texture* const pSlot = textureSlot(pMod, pWhere, bytes, &pDraw, &status);
             if (pSlot == nullptr) {
                 delete pTexture;
-                return LUMA_E_LIMIT;
+                return status;
             }
             pSlot->texture = pTexture;
             pSlot->handle = ++sNextHandle;

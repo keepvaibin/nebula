@@ -31,7 +31,6 @@
 namespace luma {
     namespace make {
         namespace {
-            constexpr u32 kMost = 1024;  // objects in one call
             // A made table's two reserved words (the importer cooks them 0): StageDataHolder knows it by them.
             constexpr u32 kMark0 = 0x4C554D41u;  // "LUMA"
             constexpr u32 kMark1 = 0x4D414B45u;  // "MAKE"
@@ -50,6 +49,10 @@ namespace luma {
                 kArg0,
                 kColumns = kArg0 + 8,
             };
+            // Objects in one call: as many as one table's rows (N-3008), its size in a u32 below 2 GiB with its header
+            // (29826104); the scene's memory refuses fewer.
+            constexpr u32 kMost = (0x7FFFFFFFu - 4096u) / (kColumns * sizeof(u32));
+            static_assert(kMost == 29826104u, "luma.h and lumacore-c-api.md give the number");
             const char* const cColumnNames[kColumns] = {"name",    "pos_x",   "pos_y",    "pos_z",    "dir_x",    "dir_y",
                                                         "dir_z",   "scale_x", "scale_y",  "scale_z",  "Obj_arg0", "Obj_arg1",
                                                         "Obj_arg2", "Obj_arg3", "Obj_arg4", "Obj_arg5", "Obj_arg6", "Obj_arg7"};
@@ -264,7 +267,7 @@ namespace luma {
                 (pPlace != nullptr && pPlace->size < sizeof(LumaMakePlace))) {
                 say(pMod, "make %s: %s", pName != nullptr ? pName : "(no name)",
                     pName == nullptr || pName[0] == 0 ? "no name"
-                    : count == 0 || count > kMost     ? "the count is not 1 to 1024"
+                    : count == 0 || count > kMost     ? "the count is not 1 to 29826104"
                     : (flags & ~LUMA_MAKE_DEAD) != 0  ? "a flag luma.h does not define"
                                                       : "a place smaller than luma.h's LumaMakePlace");
                 return -4;

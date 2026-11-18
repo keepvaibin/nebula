@@ -1,4 +1,5 @@
 #include "Game/System/LumaTime.hpp"
+#include "Game/System/LumaGrowTable.hpp"
 
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
@@ -34,13 +35,12 @@ extern "C" const NebulaHostServices* nebula_host(void);
 namespace luma {
     namespace time {
         namespace {
-            const u32 kMostClocks = LUMA_MAX_MODS * 2u;  // as the registry's records: mods in their grace keep theirs
             const u64 kNsPerSecond = 1000000000ull;
             // 2000-01-01 00:00 minus 1970-01-01 00:00, seconds: the calendar counts from 2000, UTC from 1970.
             const s64 kSeconds1970To2000 = 946684800ll;
             // The exact product of the mods' rates (services/time.md 4, G-T1): 32-bit limbs; each factor is below 2^14
-            // and there are at most kMostClocks of them.
-            const u32 kRateLimbs = (kMostClocks * 14u) / 32u + 2u;
+            // and there is at most one a clock: (clocks * 14) / 32 + 2 limbs.
+            u32 limbsFor(u32 clocks) { return (clocks * 14u) / 32u + 2u; }
 
             struct Clock;
 
@@ -72,21 +72,26 @@ namespace luma {
                 void* stepUser;
                 Timer* timers;       // LUMA_TIME_TIMERS_MOST of them, from the kernel's memory for the mod; null until the first
                 u32 timersOpen;      // open (not closed) timers
+                u32 slot;            // its own index in sClocks
             };
 
             const LumaServiceKernel* sKernel = nullptr;
-            Clock sClocks[kMostClocks];
+            // One clock a mod, as many as memory holds (N-3008); game thread. Entries never move: timers and the order
+            // lists point at them. Mods in their grace keep theirs.
+            luma::GrowTable<Clock> sClocks;
             u32 sClockHigh = 0;  // slots below it may be in use
 
-            // Clocks with a frame or step handler, in list order (top first): the passes walk these only.
-            Clock* sFrameOrder[kMostClocks];
+            // Clocks with a frame or step handler, in list order (top first): the passes walk these only. Each list
+            // and the passes' copies have room for every clock slot reserved (sListRoom); modBegin grows them.
+            Clock** sFrameOrder = nullptr;
             u32 sFrameOrderCount = 0;
-            Clock* sStepOrder[kMostClocks];
-            // beginStep's copy of sStepOrder (game thread; a step never begins inside a step handler). Not on the
-            // stack: 4 KiB there needs __chkstk, which the module (no C runtime) does not have.
-            Clock* sStepPass[kMostClocks];
-            Clock* sFramePass[kMostClocks];  // frameHandlers' copy of sFrameOrder, the same way
+            Clock** sStepOrder = nullptr;
+            // beginStep's copy of sStepOrder (game thread; a step never begins inside a step handler).
+            Clock** sStepPass = nullptr;
+            Clock** sFramePass = nullptr;  // frameHandlers' copy of sFrameOrder, the same way
             u32 sStepOrderCount = 0;
+            u32 sListRoom = 0;
+            u32* sLimbs = nullptr;  // worldRate's, limbsFor(sListRoom) of them
             u32 sTimerClocks = 0;  // clocks with an open timer or a timer whose node is queued
 
             // The world clock.
@@ -112,12 +117,18 @@ namespace luma {
                 u32 holds;
                 char id[kIdBytes];
             };
-            Shown sShown[kMostClocks];
-            // "Let go" asked from any thread, applied by the next beginFrame: ids under a spin flag.
-            const u32 kLetGoMost = 8u;
+            // A slot each clock slot (reserved on the game thread); sShownCount published with release after it.
+            luma::GrowTable<Shown> sShown;
+            u32 sShownCount = 0;
+            // "Let go" asked from any thread, applied by the next beginFrame: ids under a spin flag, one request a mod.
+            // The queue grows; beginFrame swaps it with its spare and works through that one.
+            typedef char LetGoId[kIdBytes];
             u32 sLetGoLock = 0;
             u32 sLetGoCount = 0;  // atomic: beginFrame's one load
-            char sLetGo[kLetGoMost][kIdBytes];
+            LetGoId* sLetGo = nullptr;
+            u32 sLetGoRoom = 0;
+            LetGoId* sLetGoSpare = nullptr;  // game thread, but swapped under the flag
+            u32 sLetGoSpareRoom = 0;
 
             // The counts and the frame's clock readings.
             u64 sFrame = 0;
@@ -135,8 +146,8 @@ namespace luma {
 
             Clock* findClock(const LumaMod* pMod) {
                 for (u32 i = 0; i < sClockHigh; i++) {
-                    if (sClocks[i].mod == pMod && pMod != nullptr) {
-                        return &sClocks[i];
+                    if (sClocks.at(i).mod == pMod && pMod != nullptr) {
+                        return &sClocks.at(i);
                     }
                 }
                 return nullptr;
@@ -218,12 +229,12 @@ namespace luma {
             // floor(r1 * ... * rk / 1000^(k-1)) over the mods whose rate is not 1000, clamped to 1..16000: the same in any
             // list order.
             u32 worldRate() {
-                u32 limbs[kRateLimbs];
+                u32* const limbs = sLimbs;
                 u32 used = 1;
                 limbs[0] = 1;
                 u32 factors = 0;
                 for (u32 i = 0; i < sClockHigh; i++) {
-                    const Clock& rClock = sClocks[i];
+                    const Clock& rClock = sClocks.at(i);
                     if (rClock.mod == nullptr || rClock.gone || rClock.rate == LUMA_TIME_REAL) {
                         continue;
                     }
@@ -259,7 +270,7 @@ namespace luma {
             }
 
             void showWrite(u32 slot, const char* pId, u32 rate, u32 holds) {
-                Shown& rShown = sShown[slot];
+                Shown& rShown = sShown.at(slot);
                 const u32 seq = __atomic_load_n(&rShown.seq, __ATOMIC_RELAXED);
                 __atomic_store_n(&rShown.seq, seq + 1u, __ATOMIC_RELAXED);
                 __atomic_thread_fence(__ATOMIC_RELEASE);
@@ -277,7 +288,7 @@ namespace luma {
 
             // The slot's id equals `pId` and its rate and hold, read whole (retried while written). False: not this one.
             bool showRead(u32 slot, const char* pId, u32* pRate, u32* pHolds) {
-                const Shown& rShown = sShown[slot];
+                const Shown& rShown = sShown.at(slot);
                 for (;;) {
                     const u32 before = __atomic_load_n(&rShown.seq, __ATOMIC_ACQUIRE);
                     if ((before & 1u) != 0) {
@@ -316,7 +327,7 @@ namespace luma {
                 u32 holders = 0;
                 bool owed = false;
                 for (u32 i = 0; i < sClockHigh; i++) {
-                    const Clock& rClock = sClocks[i];
+                    const Clock& rClock = sClocks.at(i);
                     if (rClock.mod == nullptr || rClock.gone) {
                         continue;
                     }
@@ -841,23 +852,52 @@ namespace luma {
 
             // ---- The provider ----
 
+            // Clock slot `slot` (the next one) and room for it in every list, the limbs and the Mods page's view.
+            bool roomForClock(u32 slot) {
+                if (sClocks.reserve(slot) == nullptr || sShown.reserve(slot) == nullptr) {
+                    return false;
+                }
+                if (slot >= sListRoom) {
+                    const u32 room = sListRoom == 0u ? 16u : sListRoom * 2u;
+                    Clock*** const lists[4] = {&sFrameOrder, &sStepOrder, &sStepPass, &sFramePass};
+                    for (Clock*** const pList : lists) {
+                        Clock** const pGrown = static_cast<Clock**>(::realloc(*pList, room * sizeof(Clock*)));
+                        if (pGrown == nullptr) {
+                            return false;
+                        }
+                        *pList = pGrown;
+                    }
+                    u32* const pLimbs = static_cast<u32*>(::realloc(sLimbs, limbsFor(room) * sizeof(u32)));
+                    if (pLimbs == nullptr) {
+                        return false;
+                    }
+                    sLimbs = pLimbs;
+                    sListRoom = room;
+                }
+                if (slot >= sShownCount) {
+                    __atomic_store_n(&sShownCount, slot + 1u, __ATOMIC_RELEASE);
+                }
+                return true;
+            }
+
             void modBegin(void* pUser, const LumaMod* pMod) {
                 (void)pUser;
                 u32 slot = sClockHigh;
                 for (u32 i = 0; i < sClockHigh; i++) {
-                    if (sClocks[i].mod == nullptr) {
+                    if (sClocks.at(i).mod == nullptr) {
                         slot = i;
                         break;
                     }
                 }
-                if (slot == kMostClocks) {
-                    NEBULA_PANIC("LumaCore: time has no clock left for the mod %s (%u)", sKernel->mod_id(pMod), kMostClocks);
+                if (slot == sClockHigh && !roomForClock(slot)) {
+                    NEBULA_PANIC("LumaCore: time has no memory for the mod %s's clock", sKernel->mod_id(pMod));
                 }
                 if (slot == sClockHigh) {
                     sClockHigh++;
                 }
-                Clock& rClock = sClocks[slot];
+                Clock& rClock = sClocks.at(slot);
                 rClock = Clock();
+                rClock.slot = slot;
                 rClock.mod = pMod;
                 rClock.order = sKernel->mod_order(pMod);
                 rClock.rate = LUMA_TIME_REAL;
@@ -879,7 +919,7 @@ namespace luma {
                 pClock->gone = true;
                 clearControl(pClock);
                 clockChanged();
-                showWrite(static_cast<u32>(pClock - sClocks), "", LUMA_TIME_REAL, 0u);
+                showWrite(pClock->slot, "", LUMA_TIME_REAL, 0u);
                 listSet(sFrameOrder, &sFrameOrderCount, pClock, false);
                 listSet(sStepOrder, &sStepOrderCount, pClock, false);
                 pClock->frameFn = nullptr;
@@ -909,9 +949,11 @@ namespace luma {
                     }
                     sKernel->free(pMod, pClock->timers);
                 }
+                const u32 slot = pClock->slot;
                 *pClock = Clock();
-                showWrite(static_cast<u32>(pClock - sClocks), "", LUMA_TIME_REAL, 0u);
-                while (sClockHigh > 0 && sClocks[sClockHigh - 1].mod == nullptr) {
+                pClock->slot = slot;
+                showWrite(slot, "", LUMA_TIME_REAL, 0u);
+                while (sClockHigh > 0 && sClocks.at(sClockHigh - 1).mod == nullptr) {
                     sClockHigh--;
                 }
             }
@@ -946,7 +988,7 @@ namespace luma {
                     return nullptr;
                 }
                 for (u32 i = 0; i < sClockHigh; i++) {
-                    Clock& rClock = sClocks[i];
+                    Clock& rClock = sClocks.at(i);
                     if (rClock.mod == nullptr || rClock.gone) {
                         continue;
                     }
@@ -968,12 +1010,12 @@ namespace luma {
                 while (__atomic_exchange_n(&sLetGoLock, 1u, __ATOMIC_ACQUIRE) != 0u) {
                 }
                 const u32 count = __atomic_load_n(&sLetGoCount, __ATOMIC_RELAXED);
-                char ids[kLetGoMost][kIdBytes];
-                for (u32 n = 0; n < count; n++) {
-                    for (u32 i = 0; i < kIdBytes; i++) {
-                        ids[n][i] = sLetGo[n][i];
-                    }
-                }
+                LetGoId* const ids = sLetGo;
+                const u32 room = sLetGoRoom;
+                sLetGo = sLetGoSpare;
+                sLetGoRoom = sLetGoSpareRoom;
+                sLetGoSpare = ids;
+                sLetGoSpareRoom = room;
                 __atomic_store_n(&sLetGoCount, 0u, __ATOMIC_RELAXED);
                 __atomic_store_n(&sLetGoLock, 0u, __ATOMIC_RELEASE);
                 for (u32 n = 0; n < count; n++) {
@@ -1013,8 +1055,8 @@ namespace luma {
                 // Loading, a movie, the skip: the world clock is 1000 and steps asked are dropped (step said BUSY).
                 bool dropped = false;
                 for (u32 i = 0; i < sClockHigh; i++) {
-                    dropped = dropped || sClocks[i].owed != 0;
-                    sClocks[i].owed = 0;
+                    dropped = dropped || sClocks.at(i).owed != 0;
+                    sClocks.at(i).owed = 0;
                 }
                 if (dropped) {
                     clockChanged();
@@ -1026,8 +1068,8 @@ namespace luma {
             } else if (sHolders != 0) {
                 u32 owed = 0;
                 for (u32 i = 0; i < sClockHigh; i++) {
-                    owed += sClocks[i].owed;
-                    sClocks[i].owed = 0;
+                    owed += sClocks.at(i).owed;
+                    sClocks.at(i).owed = 0;
                 }
                 steps = owed < LUMA_TIME_STEPS_MOST ? owed : LUMA_TIME_STEPS_MOST;
                 sound = 0;
@@ -1090,7 +1132,7 @@ namespace luma {
 
         void framePost() {
             for (u32 c = 0; c < sClockHigh; c++) {
-                Clock& rClock = sClocks[c];
+                Clock& rClock = sClocks.at(c);
                 if (rClock.mod == nullptr || rClock.gone || rClock.timersOpen == 0) {
                     continue;
                 }
@@ -1148,7 +1190,8 @@ NEBULA_GAME_API int32_t luma_time_clock_of(const char* id, uint32_t* rate, int32
     if (id == nullptr || rate == nullptr || holds == nullptr) {
         return 0;
     }
-    for (u32 slot = 0; slot < luma::time::kMostClocks; slot++) {
+    const u32 shown = __atomic_load_n(&luma::time::sShownCount, __ATOMIC_ACQUIRE);
+    for (u32 slot = 0; slot < shown; slot++) {
         u32 shownRate = 0;
         u32 shownHolds = 0;
         if (luma::time::showRead(slot, id, &shownRate, &shownHolds)) {
@@ -1175,8 +1218,8 @@ NEBULA_GAME_API uint64_t luma_services_monotonic_ns(void) {
 }
 
 // The player's "Let go" (services/time.md 1 item 10), any thread (J22-6): the mod's rate, hold and owed steps cleared
-// at the next frame's start. The page writes the mod log's Note Time.LetGo. 1: asked; 0: time does not know the mod (or
-// eight requests already wait for the next frame).
+// at the next frame's start. The page writes the mod log's Note Time.LetGo. 1: asked (again: one request); 0: time does
+// not know the mod, or no memory for the request.
 NEBULA_GAME_API int32_t luma_time_let_go(const char* id) {
     uint32_t rate = 0;
     int32_t holds = 0;
@@ -1187,7 +1230,23 @@ NEBULA_GAME_API int32_t luma_time_let_go(const char* id) {
     }
     const u32 count = __atomic_load_n(&luma::time::sLetGoCount, __ATOMIC_RELAXED);
     int32_t asked = 0;
-    if (count < luma::time::kLetGoMost) {
+    for (u32 n = 0; n < count && asked == 0; n++) {
+        u32 i = 0;
+        while (i < luma::time::kIdBytes && luma::time::sLetGo[n][i] == id[i] && id[i] != 0) {
+            i++;
+        }
+        asked = i < luma::time::kIdBytes && luma::time::sLetGo[n][i] == id[i] ? 1 : 0;
+    }
+    if (asked == 0 && count == luma::time::sLetGoRoom) {
+        const u32 room = count == 0u ? 8u : count * 2u;
+        luma::time::LetGoId* const pGrown =
+            static_cast<luma::time::LetGoId*>(::realloc(luma::time::sLetGo, room * sizeof(luma::time::LetGoId)));
+        if (pGrown != nullptr) {
+            luma::time::sLetGo = pGrown;
+            luma::time::sLetGoRoom = room;
+        }
+    }
+    if (asked == 0 && count < luma::time::sLetGoRoom) {
         u32 i = 0;
         for (; i + 1 < luma::time::kIdBytes && id[i] != 0; i++) {
             luma::time::sLetGo[count][i] = id[i];

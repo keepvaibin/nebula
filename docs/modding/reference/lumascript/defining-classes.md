@@ -19,7 +19,7 @@ signature, and a wrap hook).
 
 | Call | Does | Refuses |
 |---|---|---|
-| `define_class` | Takes each override's slot in the class's own table (below); makes the factory answer the class's name (and `replaces`) with the kernel's maker. Returns the class's number, at or above the game's record count. Logs `class <name>: from <base> (made by the factory's <maker>[; in place of <replaces>]), <n> bytes of its own, <k> overrides`. | -1 the definition is not whole: null, `size` below luma.h's, name empty or over 63 bytes, base not a polymorphic class with a row or without NameObj at its start, data_align not a power of two up to 4096, 1024 classes defined (a class whose mod has finished frees its place when a new scene begins); -2 the name is a game class's, a factory row's or a live class's, or `replaces` is replaced already; -3 not the game thread; -4 an override names no virtual, one not of the base (or the base's twice), one declared by a class the factory does not make, one of a base not at the base's start, has no hook, returns a class with a destructor or no default constructor, names one slot twice, or the build gives no layout of the base's table (a template's instance) or its slot; -5 no factory row named `maker`, or `replaces` names nothing the factory makes. Each is logged `define_class <name>: <why>`; nothing of the class is left. |
+| `define_class` | Takes each override's slot in the class's own table (below); makes the factory answer the class's name (and `replaces`) with the kernel's maker. Returns the class's number, at or above the game's record count. Logs `class <name>: from <base> (made by the factory's <maker>[; in place of <replaces>]), <n> bytes of its own, <k> overrides`. | -1 the definition is not whole: null, `size` below luma.h's, name empty or over 63 bytes, base not a polymorphic class with a row or without NameObj at its start, data_align not a power of two up to 4096, no memory for one more class; -2 the name is a game class's, a factory row's or a live class's, or `replaces` is replaced already; -3 not the game thread; -4 an override names no virtual, one not of the base (or the base's twice), one declared by a class the factory does not make, one of a base not at the base's start, has no hook, returns a class with a destructor or no default constructor, names one slot twice, or the build gives no layout of the base's table (a template's instance) or its slot; -5 no factory row named `maker`, or `replaces` names nothing the factory makes. Each is logged `define_class <name>: <why>`; nothing of the class is left. |
 | `class_data` | The object's own data (from the object or any subobject) when it is one of that class's, else null. Any thread. | |
 | `class_of`, `own_class`, `as_class`, `is_a` | Know the class: `class_of(name)` its number (a game record of the name wins: such names are refused); `own_class` of one of its objects is the class's number; `as_class(object, class)` the whole object; `is_a` true for the class and every game class of the base's. | |
 
@@ -66,7 +66,7 @@ start) is refused for now. The game's own tables are never written.
 ## make
 
 `int32_t (*make)(const LumaMod* mod, const char* name, uint32_t count, const LumaPlace* place, uint32_t flags, void objects)`,
-the last field of LumaCore. `count` (1 to 1024) objects by a name the factory makes, made as PlacementInfoOrdered makes a
+the last field of LumaCore. `count` (1 to 29826104) objects by a name the factory makes, made as PlacementInfoOrdered makes a
 placed one: NameObjFactory::getCreator (a game object, a mod class, a mod's object, a mod's change of the name), the
 creator given the mod object's name or the Japanese name, initStep to the end with a placement row, then the old
 object_classes attach. The row is a table the kernel writes in the scene's memory (one per call, a row per object):
@@ -97,10 +97,9 @@ initStep, make's), its placement row's Obj_argN read as args[N] where args[N] is
 override is in PlacementUtil's one Obj_arg reader (getPlacementArgNoInit), on the thread that places, for that row only
 (nested placements each their own); the stage's tables are never written (they may be read-only file mappings). The
 alias is the calling mod's; it goes when that mod goes or the class does; the same mod calling again for the name
-changes it. 0 stands; -1 a bad argument (null, a name empty or over 63 bytes, null args, 4096 aliases standing, no
-memory); -2 the name is a game class's, a factory row's, a mod class's or another mod's alias; -3 not on the game
-thread; -5 no live mod class `class_name`. Each said `alias_class <name>: <why>`; a standing one `alias <name>: places
-<class> (arguments ...)`.
+changes it. 0 stands; -1 a bad argument (null, a name empty or over 63 bytes, null args, no memory); -2 the name is a
+game class's, a factory row's, a mod class's or another mod's alias; -3 not on the game thread; -5 no live mod class
+`class_name`. Each said `alias_class <name>: <why>`; a standing one `alias <name>: places <class> (arguments ...)`.
 
 ## placement
 

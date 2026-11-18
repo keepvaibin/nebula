@@ -21,8 +21,6 @@ extern "C" {
    layout for every mod whose LumaModInfo.api is 1; a game that changes one reads and writes the old layout for
    such a mod. Enum values and LumaCore's order never change. */
 #define LUMA_API 1u
-/* The most mods with code that may be on at once (docs/modding/concepts/how-nebula-loads-mods.md). */
-#define LUMA_MAX_MODS 256u
 
 /* A function of the game. `invoke` calls it: args[0] is `this` (null for a function without one), args[1..] point at
    the arguments, and `result` is where what it returns is put. Hooks on the function run. A parameter of reference
@@ -325,7 +323,7 @@ typedef struct LumaCore {
        and live as long as the scene; made inside another object's init, they join that placement's view group. Flags: LUMA_MAKE_DEAD. Each object's address in objects[i] (objects may be null).
        Returns the count made (fewer when a creator makes nothing, said), or -1 the factory makes nothing by that
        name, -2 its files are not in this game, -3 not on the game thread, no scene, or the scene is starting,
-       -4 a bad argument (count not 1 to 1024, a place smaller than LumaMakePlace or not finite, an unknown flag) or no
+       -4 a bad argument (count not 1 to 29826104, a place smaller than LumaMakePlace or not finite, an unknown flag) or no
        memory. Every refusal is said in the log with the name. */
     int32_t (*make)(const LumaMod* mod, const char* name, uint32_t count, const LumaMakePlace* place, uint32_t flags,
                     void** objects);

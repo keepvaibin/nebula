@@ -50,3 +50,5 @@ endif()
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")
 # The cutscene skip's bound, in steps of play (header only).
 native_test(native_cutscene_skip_bound_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/cutscene_skip_bound_tests.cpp")
+# The kernel's growing table: entries never move, and a reader on another thread reads what the writer published.
+native_test(native_grow_table_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/grow_table_tests.cpp")

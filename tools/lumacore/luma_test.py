@@ -345,12 +345,19 @@ def read_test(folder, types=None):
             if isinstance(entry, str):
                 entry = {"path": entry}
             keys_known(entry, path, {"path", "options", "code", "permissions", "install", "loads", "folder", "enabled",
-                                     "remove"})
+                                     "remove", "copies"})
             if "path" not in entry:
                 raise HarnessError("%s has no path" % path)
             mod = {"path": (folder / text(entry, "path", path)).resolve(), "code": code, "loads": True,
                    "install": "placed", "permissions": "allow", "options": {}, "folder": None, "enabled": True,
-                   "remove": False}
+                   "remove": False, "copies": 1}
+            # "copies": n (2 or more): the mod placed n times, copy k with the id <id>-<k> in its own folder, one after
+            # another in the order, each its own library loaded from its own folder (as n mods built alike): a test
+            # of as many mods as it likes from one source (N-3008: past the 256 the loader held).
+            if "copies" in entry:
+                mod["copies"] = whole(entry, "copies", path, 2)
+                if "folder" in entry or "remove" in entry or entry.get("install") == "import":
+                    raise HarnessError("%s: copies are placed under their own ids: no folder, remove or import" % path)
             # "enabled": false: installed and switched off, as the Mods screen keeps a mod turned off (enabled=0 in
             # its mods.ini section); a kept mod (continue_from) is switched off or on in place when the entry says so,
             # else its switch stays as the test before left it (a player's choice saved then). "remove": true: a mod
@@ -1277,14 +1284,15 @@ def carry_data(previous, run_folder):
 
 
 def install(settings, mod_folder, code_allowed, order, kept=False, permissions="allow", broken_ok=False, folder=None, options=None,
-            enabled=True):
+            enabled=True, copy=None):
     """A mod folder holding luma.json (the base's form, as examples/luma-hello) into the run's mods, on, in order.
     kept: the mods an earlier test left (continue_from) stay as they are, with their data; only new ids are added.
     permissions: "allow", "deny" or {name: "allow"|"deny"}: each declared permission's answer, as the consent screen
     records a player's (consent.md 1.2; a name the object leaves out is allowed).
     broken_ok: a mod the test expects not to load (loads false) may have a luma.json that is not JSON on purpose: it is
     placed as it is, under its folder's name, as the game names a mod whose manifest cannot be read (mod-log 1).
-    enabled: None for a kept mod whose switch stays as the test before left it."""
+    enabled: None for a kept mod whose switch stays as the test before left it.
+    copy: k for the test's copy k of the mod ("copies"): placed with the id <id>-<k>, its luma.json saying so."""
     switch = True if enabled is None else enabled
     try:
         manifest = load_json(mod_folder / "luma.json")
@@ -1303,6 +1311,11 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
     mod_id = manifest.get("id")
     if not isinstance(mod_id, str) or not mod_id:
         raise HarnessError("%s/luma.json has no id" % mod_folder)
+    if copy is not None:
+        mod_id = "%s-%d" % (mod_id, copy)
+        if len(mod_id) > 64:
+            raise HarnessError("%s: the copy's id %s is over 64 characters" % (mod_folder, mod_id))
+        manifest = dict(manifest, id=mod_id, name=mod_id)
     # The previous runtime's form would install with no code and fail far from here: named at once instead.
     if "plugins" in manifest:
         raise HarnessError("%s/luma.json has \"plugins\": a mod's code is code/<platform>/mod.<ending> with "
@@ -1331,6 +1344,8 @@ def install(settings, mod_folder, code_allowed, order, kept=False, permissions="
             return mod_id
         raise HarnessError("two mods have the id %s (a second copy takes \"folder\")" % mod_id)
     shutil.copytree(mod_folder, target)
+    if copy is not None:
+        (target / "luma.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     ini = settings / "mods.ini"
     if kept and ini.exists() and "[%s]" % ini_escaped(place) in ini.read_text(encoding="utf-8").splitlines():
         # A mod removed earlier in the chain comes back: its section stayed (remove_kept), so the player's answers in
@@ -1463,6 +1478,7 @@ def place_mods(test, settings, previous, frozen, ports=None):
     mod_ids, imports = [], []
     if ports is None:
         ports = free_ports(test)
+    later = 0  # the places in the order the copies before took past their entry's own
     for i, m in enumerate(test["mods"]):
         if m["install"] == "import":
             # Not placed: the game imports it as "Open with" starts it (--import), a .luma file or a folder,
@@ -1482,20 +1498,24 @@ def place_mods(test, settings, previous, frozen, ports=None):
         if m["remove"]:
             mod_ids.append((remove_kept(settings, m["path"], m["folder"]), dict(m, has_code=False)))
             continue
-        mod_id = install(settings, m["path"], m["code"] == "allow", i + 1, kept=previous is not None,
-                         permissions="ask" if m["code"] == "ask" else m["permissions"],
-                         broken_ok=not m["loads"] and m["enabled"], folder=m["folder"],
-                         options=with_ports(m["options"], ports),
-                         enabled=m["enabled"] if m["enabled_given"] or previous is None else None)
-        # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
-        # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
-        try:
-            m["has_code"] = "code" in load_json(settings / "mods" / mod_id / "luma.json")
-        except HarnessError:
-            m["has_code"] = True
-        mod_ids.append((mod_id, m))
-        for lib in sorted((settings / "mods" / mod_id).rglob("*" + HOST["ending"])):
-            frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
+        for k in range(1, m["copies"] + 1):
+            mod_id = install(settings, m["path"], m["code"] == "allow", i + 1 + later + k - 1, kept=previous is not None,
+                             permissions="ask" if m["code"] == "ask" else m["permissions"],
+                             broken_ok=not m["loads"] and m["enabled"], folder=m["folder"],
+                             options=with_ports(m["options"], ports),
+                             enabled=m["enabled"] if m["enabled_given"] or previous is None else None,
+                             copy=k if m["copies"] > 1 else None)
+            # A mod with no code (luma.json has no "code": content only) is never started, so the host writes no start
+            # or refusal line for it and there is no mod.<id>.loaded fact: its test's own facts show its content.
+            placed = dict(m) if m["copies"] > 1 else m
+            try:
+                placed["has_code"] = "code" in load_json(settings / "mods" / mod_id / "luma.json")
+            except HarnessError:
+                placed["has_code"] = True
+            mod_ids.append((mod_id, placed))
+            for lib in sorted((settings / "mods" / mod_id).rglob("*" + HOST["ending"])):
+                frozen["mods/%s/%s" % (mod_id, lib.relative_to(settings / "mods" / mod_id).as_posix())] = sha256(lib)
+        later += m["copies"] - 1
     if test["safe_start"] == "asked":
         imports += ["--safe-start", "1"]
     elif test["safe_start"] in ("crash", "crash-code"):
