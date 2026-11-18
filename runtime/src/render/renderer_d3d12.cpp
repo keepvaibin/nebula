@@ -2,6 +2,7 @@
 #include "galaxy/render/present_clock.h"
 #include "galaxy/render/utility_shaders.h"
 #include "dxgi_pacing.h"
+#include "galaxy/host_extension.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -53,9 +54,11 @@
 #include <cstring>
 #include <exception>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -1141,7 +1144,7 @@ bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* color, ID
 // the descriptor ring).
 void RendererD3D12::write_msaa_depth_view(SceneMsaa& msaa) {
     if (!msaa.depth_srv) {
-        msaa.depth_srv = allocate_persistent_descriptors(1u);
+        msaa.depth_srv = fresh_persistent(1u);
     }
     D3D12_SHADER_RESOURCE_VIEW_DESC view{};
     view.Format = kSceneDepthSrvFormat;
@@ -1201,26 +1204,7 @@ void RendererD3D12::record_scene_resolve(ID3D12GraphicsCommandList* list, bool c
         uses.undo();
     }
     if (depth) {
-        if (!depth_resolve_pso_) {
-            const UtilityShaderBytes vs = utility_shader(UtilityShader::BlitVs);
-            const UtilityShaderBytes ps = utility_shader(UtilityShader::DepthResolvePs);
-            D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
-            pd.pRootSignature = s_blit_root_sig.Get();
-            pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
-            pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
-            pd.SampleMask = UINT_MAX;
-            pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-            pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-            pd.DepthStencilState.DepthEnable = TRUE;
-            pd.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-            pd.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-            pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-            pd.NumRenderTargets = 0;
-            pd.DSVFormat = kSceneDepthFormat;
-            pd.SampleDesc.Count = 1;
-            d3d_check(core::utility_pipeline(device_.Get(), pd, &depth_resolve_pso_),
-                      "depth resolve PSO");
-        }
+        make_depth_resolve_pipeline();
         if (!msaa.depth_srv) {
             write_msaa_depth_view(msaa);
         }
@@ -1572,6 +1556,43 @@ void RendererD3D12::refresh_scene_conversion_source_views() {
     write_scene_conversion_views(*conv_scene_source_table_);
 }
 
+void RendererD3D12::retire_persistent(std::optional<DescriptorRing::Persistent>& table, unsigned count) {
+    if (table) {
+        retired_persistent_.push_back({*table, count, frame_index_ + kFramesInFlight + 1u});
+        table.reset();
+    }
+}
+
+DescriptorRing::Persistent RendererD3D12::fresh_persistent(unsigned count) {
+    for (auto it = retired_persistent_.begin(); it != retired_persistent_.end(); ++it) {
+        if (it->count == count && frame_index_ >= it->free_from) {
+            const DescriptorRing::Persistent table = it->table;
+            retired_persistent_.erase(it);
+            return table;
+        }
+    }
+    return allocate_persistent_descriptors(count);
+}
+
+void RendererD3D12::retire_scene_set(SceneTargetSet& set, bool own_depth_view) {
+    // std::addressof: ComPtr's operator& releases what it holds.
+    for (ComPtr<ID3D12Resource>* resource : {std::addressof(set.color), std::addressof(set.depth),
+                                             std::addressof(set.msaa.color), std::addressof(set.msaa.depth)}) {
+        if (*resource) {
+            retired_targets_[frame_slot_].push_back(std::move(*resource));
+        }
+        resource->Reset();
+    }
+    retire_persistent(set.conv_table, 2u);
+    set.conv_color_index = set.conv_depth_index = DescriptorRing::kNoPersistent;
+    if (own_depth_view) {
+        retire_persistent(set.msaa.depth_srv, 1u);
+    } else {
+        set.msaa.depth_srv.reset();
+    }
+    release_conv_table(set.conv_ring);
+}
+
 // A set's views left a ring entry: free once the frames that could read it are done.
 void RendererD3D12::release_conv_table(std::size_t& entry) {
     if (entry < conv_scene_tables_.size()) {
@@ -1672,24 +1693,7 @@ bool RendererD3D12::publish_scene_depth_copy(std::uint64_t key, TextureStore& te
     if (extent.width == 0u || extent.height == 0u || conv_scene_depth_index_ == ~0u) {
         return false;
     }
-    if (!depth_copy_pso_) {
-        const UtilityShaderBytes vs = utility_shader(UtilityShader::BlitVs);
-        const UtilityShaderBytes ps = utility_shader(UtilityShader::DepthCopyPs);
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
-        pd.pRootSignature = s_conv_root_sig.Get();
-        pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
-        pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
-        pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-        pd.SampleMask = UINT_MAX;
-        pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-        pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-        pd.RasterizerState.DepthClipEnable = TRUE;
-        pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        pd.NumRenderTargets = 1;
-        pd.RTVFormats[0] = DXGI_FORMAT_R32_FLOAT;
-        pd.SampleDesc.Count = 1;
-        d3d_check(core::utility_pipeline(device_.Get(), pd, &depth_copy_pso_), "depth copy PSO");
-    }
+    make_depth_copy_pipeline();
     // Its own key beside the colour captures' (channels in bits 48 and up, at most 4): freed with the texture's id.
     const std::uint64_t dest_key = static_cast<std::uint64_t>(static_cast<std::uint32_t>(key)) | (0xFFull << 48);
     FramePassTarget& dest = frame_pass_targets_[dest_key];
@@ -2044,8 +2048,7 @@ bool RendererD3D12::create_clear_pipeline() {
     return clear_pipeline(true) != nullptr && clear_pipeline(false) != nullptr;
 }
 
-ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color) {
-    const std::uint8_t variant = scene_variant();
+ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color, std::uint8_t variant) {
     ComPtr<ID3D12PipelineState>& pipeline =
         (color ? clear_rgb_pipelines_ : clear_alpha_pipelines_)[variant];
     if (pipeline) {
@@ -2071,6 +2074,78 @@ ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color) {
     d3d_check(core::utility_pipeline(device_.Get(), pd, &pipeline),
               color ? "CreateClearRgbPSO" : "CreateClearAlphaPSO");
     return pipeline.Get();
+}
+
+void RendererD3D12::make_depth_resolve_pipeline() {
+    if (depth_resolve_pso_) {
+        return;
+    }
+    const UtilityShaderBytes vs = utility_shader(UtilityShader::BlitVs);
+    const UtilityShaderBytes ps = utility_shader(UtilityShader::DepthResolvePs);
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
+    pd.pRootSignature = s_blit_root_sig.Get();
+    pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+    pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+    pd.SampleMask = UINT_MAX;
+    pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    pd.DepthStencilState.DepthEnable = TRUE;
+    pd.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+    pd.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+    pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    pd.NumRenderTargets = 0;
+    pd.DSVFormat = kSceneDepthFormat;
+    pd.SampleDesc.Count = 1;
+    d3d_check(core::utility_pipeline(device_.Get(), pd, &depth_resolve_pso_),
+              "depth resolve PSO");
+}
+
+void RendererD3D12::make_depth_copy_pipeline() {
+    if (depth_copy_pso_) {
+        return;
+    }
+    const UtilityShaderBytes vs = utility_shader(UtilityShader::BlitVs);
+    const UtilityShaderBytes ps = utility_shader(UtilityShader::DepthCopyPs);
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
+    pd.pRootSignature = s_conv_root_sig.Get();
+    pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+    pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+    pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    pd.SampleMask = UINT_MAX;
+    pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    pd.RasterizerState.DepthClipEnable = TRUE;
+    pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    pd.NumRenderTargets = 1;
+    pd.RTVFormats[0] = DXGI_FORMAT_R32_FLOAT;
+    pd.SampleDesc.Count = 1;
+    d3d_check(core::utility_pipeline(device_.Get(), pd, &depth_copy_pso_), "depth copy PSO");
+}
+
+void RendererD3D12::prepare_utility_pipelines() {
+    const unsigned max_samples = msaa_max_samples();
+    // The texture targets' format at a sample count the scene's formats take may still be one the device does not
+    // draw: asked, not assumed (CreateGraphicsPipelineState would fail and the clear's check throws).
+    const auto target_takes = [&](unsigned samples) {
+        D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS levels{kTargetColorFormat, samples};
+        return samples == 1u ||
+               (SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &levels, sizeof(levels))) &&
+                levels.NumQualityLevels > 0u);
+    };
+    for (std::uint8_t variant = 0u; variant < kSceneVariantCount; ++variant) {
+        const unsigned samples = 1u << (variant & kSceneVariantSamplesMask);
+        if (samples > max_samples || ((variant & kSceneVariantTarget) != 0u && !target_takes(samples))) {
+            continue;
+        }
+        (void)clear_pipeline(true, variant);
+        (void)clear_pipeline(false, variant);
+    }
+    for (unsigned samples = 1u; samples <= max_samples; samples *= 2u) {
+        (void)layer_pipeline(false, samples);
+        (void)layer_pipeline(true, samples);
+    }
+    make_depth_resolve_pipeline();
+    make_depth_copy_pipeline();
 }
 
 bool RendererD3D12::initialize(int window_width, int window_height, const FrameMap& frame) {
@@ -2621,6 +2696,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         frame_pass_heap_.initialize(device_.Get());
         boot_step("targets, root signature, blit");
 
+        // The passes' pipelines for every sample count, each pass on a thread of its own beside the rest of the start
+        // (P-052); a future's destructor waits for its thread on every way out of initialize.
+        std::vector<std::future<void>> preparing;
         // Presentation post-processing (SMAA, FSR 1, RCAS, box resample).
         {
             const RenderConfig cfg = get_render_config();
@@ -2655,6 +2733,14 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             if (!game_bloom_.initialize(device_.Get())) {
                 std::cerr << "[bloom] unavailable: the game's own chain\n";
             }
+            const unsigned max_samples = msaa_max_samples();
+            const auto prepare = [max_samples](auto& pass) {
+                return std::async(std::launch::async, [&pass, max_samples] { pass.prepare_pipelines(max_samples); });
+            };
+            if (post_process_.ready()) preparing.push_back(prepare(post_process_));
+            if (ambient_occlusion_.ready()) preparing.push_back(prepare(ambient_occlusion_));
+            if (camera_pass_.ready()) preparing.push_back(prepare(camera_pass_));
+            if (game_bloom_.ready()) preparing.push_back(prepare(game_bloom_));
         }
         boot_step("post-process and ambient occlusion");
 
@@ -2703,6 +2789,17 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         // Conversion sources occupy the descriptor ring's immutable prefix.
         if (!create_conversion_pipeline()) return false;
         if (!create_clear_pipeline()) return false;
+        prepare_utility_pipelines();
+        for (std::future<void>& prepared : preparing) {
+            prepared.get();
+        }
+        {
+            const core::UtilityPipelineCounts counts = core::utility_pipeline_counts();
+            utility_pipelines_seen_ = counts.loaded + counts.made;
+            std::cerr << "[pipelines] the renderer's own: " << counts.loaded << " loaded from the driver cache, " << counts.made
+                      << " made\n";
+        }
+        boot_step("pass pipelines");
 
         // Upload-ring buffers, logged next to the [gpu] adapter line.
         std::cerr << "[gpu-rings]"
@@ -3089,6 +3186,7 @@ void RendererD3D12::shutdown() {
     conv_scene_color_index_ = conv_scene_depth_index_ = DescriptorRing::kNoPersistent;
     conv_scene_source_table_.reset();
     conv_scene_tables_.clear();
+    retired_persistent_.clear();
     conv_scene_table_ = ~std::size_t{0};
     for (SceneTargetSet* set : {&alt_scene_, &target_scene_, &fg_hudless_scene_target_, &hdr_scene_scene_, &layer2d_set_}) {
         set->conv_ring = ~std::size_t{0};
@@ -3605,6 +3703,15 @@ void RendererD3D12::lose_device() {
 
 void RendererD3D12::begin_frame() {
     scene_drawn_ = false;
+    {
+        // The passes' pipelines are made at the start (P-052): one made since (a settings change) is named here.
+        const core::UtilityPipelineCounts counts = core::utility_pipeline_counts();
+        if (const std::uint64_t now = counts.loaded + counts.made; now != utility_pipelines_seen_) {
+            std::cerr << "[pipelines] the renderer's own after the start: " << now - utility_pipelines_seen_
+                      << " more by frame " << frame_index_ << "\n";
+            utility_pipelines_seen_ = now;
+        }
+    }
     // Display and size changes apply here, between command-list recordings.
     // They wait for the GPU themselves, so they come before any per-slot state
     // below is touched.
@@ -4106,7 +4213,7 @@ ID3D12Resource* RendererD3D12::hdr_capture_picture(const DisplayTexture& source,
     if (!hdr_capture_target_ || hdr_capture_target_->GetDesc().Width != host_window::backbuffer_width ||
         hdr_capture_target_->GetDesc().Height != host_window::backbuffer_height) {
         if (hdr_capture_target_) {
-            wait_for_gpu();
+            retired_targets_[frame_slot_].push_back(std::move(hdr_capture_target_));  // P-028: no GPU drain
         }
         hdr_capture_target_.Reset();
         if (!hdr_capture_rtv_heap_) {
@@ -5299,13 +5406,9 @@ bool RendererD3D12::create_scene_set(
     bool unordered_access, unsigned samples, bool hdr, unsigned width, unsigned height, bool target) {
     const UINT w = static_cast<UINT>(std::lround(static_cast<double>(width) * map.sx));
     const UINT h = static_cast<UINT>(std::lround(static_cast<double>(height) * map.sy));
-    if (set.color) {
-        wait_for_gpu();
-    }
-    set.color.Reset();
-    set.depth.Reset();
+    // The old set goes when the frames that drew or read it are done (P-028); its own views with it.
+    retire_scene_set(set, true);
     set.map = set.extent = FrameMap{};
-    release_conv_table(set.conv_ring);
     if (!rtv_heap) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
         dhd.NumDescriptors = 1;
@@ -5357,8 +5460,7 @@ bool RendererD3D12::create_scene_set(
         return false;
     }
     if (persistent_views) {
-        write_scene_set_views(set, set.conv_table ? *set.conv_table
-                                                : allocate_persistent_descriptors(2u));
+        write_scene_set_views(set, set.conv_table ? *set.conv_table : fresh_persistent(2u));
     } else {
         // The caller writes views into the frame's descriptor segment per use.
         set.conv_table.reset();
@@ -5427,7 +5529,9 @@ bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint32_t width, st
     }
     TargetSlot& slot = target_slots_[key];
     const FrameMap map(width, height);
-    const bool kept = slot.set.color && slot.set.map == map;
+    // The test hook NEBULA_EXT_REMAKE_TARGETS makes it again at the same size, as a size change does (P-028).
+    const bool kept = slot.set.color && slot.set.map == map &&
+                      (galaxy::extensions::flags() & NEBULA_EXT_REMAKE_TARGETS) == 0u;
     // A new set starts as a render target; the pass's first clear (RenderCore) fills it. Its copy views are written
     // per use (no persistent descriptors per key).
     if (!kept) {
@@ -5563,11 +5667,6 @@ void RendererD3D12::take_fg_hudless_scene() {
         return;
     }
     if (!fg_hudless_scene_target_.color || fg_hudless_scene_target_.map != frame_) {
-        if (fg_hudless_scene_target_.color) {
-            wait_for_gpu();
-        }
-        fg_hudless_scene_target_.color.Reset();
-        fg_hudless_scene_target_.depth.Reset();
         if (!create_scene_set(fg_hudless_scene_target_, fg_hudless_rtv_heap_, fg_hudless_dsv_heap_, frame_)) {
             return;
         }
@@ -5592,7 +5691,7 @@ void RendererD3D12::copy_fg_hudless_display(const DisplayTexture& dest) {
     if (!fg_hudless_display_.texture || fg_hudless_display_.texture->GetDesc().Width != desc.Width ||
         fg_hudless_display_.texture->GetDesc().Height != desc.Height) {
         if (fg_hudless_display_.texture) {
-            wait_for_gpu();
+            retired_targets_[frame_slot_].push_back(std::move(fg_hudless_display_.texture));  // P-028: no GPU drain
         }
         fg_hudless_display_.texture.Reset();
         D3D12_HEAP_PROPERTIES hp{};
@@ -5638,7 +5737,7 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
     if (!fg_hudless_target_ || fg_hudless_target_->GetDesc().Width != host_window::backbuffer_width ||
         fg_hudless_target_->GetDesc().Height != host_window::backbuffer_height) {
         if (fg_hudless_target_) {
-            wait_for_gpu();
+            retired_targets_[frame_slot_].push_back(std::move(fg_hudless_target_));  // P-028: no GPU drain
         }
         fg_hudless_target_.Reset();
         if (!fg_hudless_target_rtv_heap_) {
@@ -5749,11 +5848,7 @@ bool RendererD3D12::ensure_wide_set(SceneTargetSet& set, ComPtr<ID3D12Descriptor
                       set.color->GetDesc().Height == desc.Height && set.color->GetDesc().Format == format &&
                       set.msaa.samples == samples;
     if (!same) {
-        if (set.color) {
-            wait_for_gpu();
-        }
-        set.color.Reset();
-        set.msaa.color.Reset();
+        retire_scene_set(set, false);  // P-028: no GPU drain
         if (!rtv_heap) {
             D3D12_DESCRIPTOR_HEAP_DESC heap{};
             heap.NumDescriptors = 2;
@@ -5809,7 +5904,7 @@ bool RendererD3D12::ensure_wide_set(SceneTargetSet& set, ComPtr<ID3D12Descriptor
     set.msaa.depth_dirty = scene_msaa_.depth_dirty;
     if (set.depth != scene_depth_) {
         set.depth = scene_depth_;
-        write_scene_set_views(set, set.conv_table ? *set.conv_table : allocate_persistent_descriptors(2u));
+        write_scene_set_views(set, set.conv_table ? *set.conv_table : fresh_persistent(2u));
     }
     return true;
 }

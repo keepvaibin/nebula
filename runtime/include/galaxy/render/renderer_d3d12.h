@@ -765,6 +765,14 @@ private:
     void reset_sampler_frame(); // only after this slot's fence completes
     bool create_conversion_pipeline();  // the capture pipelines and the screen probes' compute pipeline
     bool create_clear_pipeline();
+    // Every variant of the renderer's own passes' pipelines the device can draw (the clear's per scene variant, the 2D
+    // layer's per sample count, the depth resolve and copy) while the renderer starts (P-052): a frame never makes one.
+    void prepare_utility_pipelines();
+    void make_depth_resolve_pipeline();
+    void make_depth_copy_pipeline();
+    // The driver cache's loaded and made count at the end of the start, then as last logged: begin_frame names the
+    // pipelines made after it (a settings change; none in play).
+    std::uint64_t utility_pipelines_seen_ = 0u;
 
     // Records the conversion blit: fullscreen triangle into `dest` (RTV),
     // sampling the scene target color (or depth) SRV.  (src_x, src_y) is the source
@@ -923,7 +931,9 @@ private:
     bool create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* color, ID3D12Resource* depth, unsigned samples,
                          D3D12_CPU_DESCRIPTOR_HANDLE& rtv, D3D12_CPU_DESCRIPTOR_HANDLE& dsv);
     void write_msaa_depth_view(SceneMsaa& msaa);
-    [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color);
+    [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color) { return clear_pipeline(color, scene_variant()); }
+    // The clear's pipeline for a scene variant (scene_variant()'s bits).
+    [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color, std::uint8_t variant);
     SceneMsaa scene_msaa_;
     mutable unsigned msaa_max_samples_ = 0u;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> depth_resolve_pso_;
@@ -943,6 +953,20 @@ private:
         std::size_t conv_ring = ~std::size_t{0};  // the conv_scene_tables_ entry its views are in after a swap_scene_color
     };
     SceneTargetSet alt_scene_;
+    // A target made again at another size while frames are in flight (P-028): its resources wait in
+    // retired_targets_[frame_slot_] and its persistent views in retired_persistent_ until the frames that could still
+    // read them are done, in place of a GPU drain. The open command list may name them too: they outlive it.
+    // `own_depth_view`: the set's multisampled depth view is its own (a wide set shares the scene's).
+    void retire_scene_set(SceneTargetSet& set, bool own_depth_view);
+    void retire_persistent(std::optional<DescriptorRing::Persistent>& table, unsigned count);
+    // `count` persistent descriptors: a retired table no frame can read any more, else new ones.
+    [[nodiscard]] DescriptorRing::Persistent fresh_persistent(unsigned count);
+    struct RetiredPersistent {
+        DescriptorRing::Persistent table;
+        unsigned count = 0u;
+        std::uint64_t free_from = 0u;  // the frame index from which no frame in flight reads it
+    };
+    std::vector<RetiredPersistent> retired_persistent_;
     // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes
     // ( its colour shared with its picture), dropped after kIdleSteps game steps (idle_clock.h) unused. A picture is sampled
     // through its own view slot (TextureStore::allocate_view) reading the pass's channels.

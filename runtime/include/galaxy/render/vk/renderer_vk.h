@@ -395,6 +395,14 @@ public:
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
         return static_cast<std::uint8_t>(std::countr_zero(scene_.samples));
     }
+    // The scene target passes by samples (log2), wide (float) or not; null where the device has none.
+    [[nodiscard]] std::array<VkRenderPass, 4> scene_passes(bool wide) const noexcept {
+        std::array<VkRenderPass, 4> passes{};
+        for (unsigned samples_log2 = 0u; samples_log2 < 4u; ++samples_log2) {
+            passes[samples_log2] = draw_layout_.pass_for(samples_log2 | (wide ? kSceneVariantHdr : 0u), false);
+        }
+        return passes;
+    }
     // The pipelines' scene target variant (render_state_key.h RenderStateKey::samples_log2): no HDR scene scene target here.
     [[nodiscard]] std::uint8_t scene_variant() const noexcept {
         return static_cast<std::uint8_t>(scene_samples_log2() | (scene_.wide ? kSceneVariantHdr : 0u) |

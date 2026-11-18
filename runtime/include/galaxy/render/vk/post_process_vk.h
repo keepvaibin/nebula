@@ -40,6 +40,9 @@ public:
     // renderer's passes over that format. Between frames with the GPU done with the old pipelines (they are destroyed
     // deferred), the chain ready.
     void set_wide(bool wide, VkRenderPass scene_pass, VkRenderPass color_pass);
+    // The scene passes' multisampled pipelines (FXAA's, SMAA's) in the renderer's scene target passes of the current
+    // format, by samples (log2; null where none) (P-052): when the chain is ready and after each set_wide.
+    void prepare_pipelines(const std::array<VkRenderPass, 4>& scene_passes);
     [[nodiscard]] bool wide() const noexcept { return color_format_ == VK_FORMAT_R16G16B16A16_SFLOAT; }
     void shutdown() noexcept;
     // Once the worker has finished: builds the pipelines and runs the SMAA and FXAA self-tests (a submission the
@@ -186,6 +189,7 @@ private:
     VkPipeline fxaa_scene_ = VK_NULL_HANDLE;
     // FXAA's, SMAA's last pass over MSAA: per sample count (log2).
     VkPipeline scene_pass_ms_[2][4]{};
+    unsigned scene_pass_failed_ = 0u;  // scene_pass_ms_ entries the device would not make: bit smaa * 4 + log2 samples
     PassPipelines to_color_{};
     PassPipelines to_window_{};
     PassPipelines to_present_{};

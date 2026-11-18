@@ -355,6 +355,7 @@ void PostProcessorVk::destroy_scene_pipelines() noexcept {
     for (auto& pass : scene_pass_ms_) {
         for (VkPipeline& pipeline : pass) retire(pipeline);
     }
+    scene_pass_failed_ = 0u;
     for (VkPipeline* pipeline : {&to_color_.easu, &to_color_.resample, &smaa_blend_, &smaa_blend_rgb_, &fxaa_, &fxaa_rgb_,
                                  &smaa_blend_scene_, &fxaa_scene_}) {
         retire(*pipeline);
@@ -385,6 +386,7 @@ void PostProcessorVk::destroy_pipelines() noexcept {
         return;
     }
     const VkDevice device = context.device();
+    scene_pass_failed_ = 0u;
     for (auto& pass : scene_pass_ms_) {
         for (VkPipeline& pipeline : pass) {
             if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
@@ -708,20 +710,36 @@ void PostProcessorVk::finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsi
     }
 }
 
-// The last pass of the scene's AA, in the scene target pass: over MSAA every sample takes the result. Those are made at
-// first use.
+void PostProcessorVk::prepare_pipelines(const std::array<VkRenderPass, 4>& scene_passes) {
+    if (!built_) {
+        return;
+    }
+    for (unsigned samples_log2 = 1u; samples_log2 < 4u; ++samples_log2) {
+        if (scene_passes[samples_log2] != VK_NULL_HANDLE) {
+            (void)scene_pass_pipeline(false, scene_passes[samples_log2], samples_log2);
+            (void)scene_pass_pipeline(true, scene_passes[samples_log2], samples_log2);
+        }
+    }
+}
+
+// The last pass of the scene's AA, in the scene target pass: over MSAA every sample takes the result. Those are
+// prepare_pipelines'.
 VkPipeline PostProcessorVk::scene_pass_pipeline(bool smaa, VkRenderPass pass, unsigned samples_log2) {
     if (samples_log2 == 0u) {
         return smaa ? smaa_blend_rgb_ : fxaa_rgb_;
     }
     const unsigned index = std::min(samples_log2, 3u);
     VkPipeline& out = scene_pass_ms_[smaa ? 1u : 0u][index];
-    if (out == VK_NULL_HANDLE) {
+    const unsigned failed = 1u << ((smaa ? 4u : 0u) + index);
+    if (out == VK_NULL_HANDLE && (scene_pass_failed_ & failed) == 0u) {
         constexpr VkColorComponentFlags kRgb =
             VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
         const auto samples = static_cast<VkSampleCountFlagBits>(1u << index);
         out = smaa ? create_pipeline(kSmaaBlendVs, kSmaaBlendKeepPs, pass, kRgb, 0, samples)
                    : create_pipeline(kFullscreenVs, kFxaaPs, pass, kRgb, 0, samples);
+        if (out == VK_NULL_HANDLE) {
+            scene_pass_failed_ |= failed;  // not tried again each frame
+        }
     }
     return out;
 }

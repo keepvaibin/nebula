@@ -98,6 +98,9 @@ enum {
     /* The extension's controls are a controller's: player 1 plays with a controller (input's LUMA_INPUT_DEVICE_PAD)
        whose motor is the extension's (`motor`), whatever devices are attached. */
     NEBULA_EXT_CONTROLS_PAD = 1u << 3,
+    /* Every texture target pass makes its target again at the same size, as a size change does: a test of a target
+       made again while frames are in flight (Direct3D 12, P-028). The pictures are the same as without it. */
+    NEBULA_EXT_REMAKE_TARGETS = 1u << 4,
 };
 
 /* What the host offers. Any thread unless said. */

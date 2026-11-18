@@ -107,6 +107,7 @@ void AmbientOcclusion::shutdown() noexcept {
     ssao_.Reset();
     denoise_.Reset();
     for (auto& pipeline : apply_) pipeline.Reset();
+    apply_failed_ = 0u;
     root_signature_.Reset();
     distance_ = {};
     raw_ = {};
@@ -121,6 +122,9 @@ ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr
     const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u) + (hdr ? 4u : 0u);
     if (apply_[index]) {
         return apply_[index].Get();
+    }
+    if ((apply_failed_ & (1u << index)) != 0u) {
+        return nullptr;
     }
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_signature_.Get();
@@ -148,9 +152,18 @@ ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr
     pd.SampleDesc.Count = 1u << (index & 3u);
     if (FAILED(core::utility_pipeline(device_, pd, &apply_[index]))) {
         std::cerr << "[ambient-occlusion] multiply pipeline failed for " << (1u << (index & 3u)) << " samples\n";
+        apply_failed_ |= 1u << index;
         return nullptr;
     }
     return apply_[index].Get();
+}
+
+void AmbientOcclusion::prepare_pipelines(unsigned max_samples) {
+    for (const bool hdr : {false, true}) {
+        for (unsigned samples = 1u; samples <= std::min(max_samples, 8u); samples *= 2u) {
+            (void)apply_pipeline(samples, hdr);
+        }
+    }
 }
 
 bool AmbientOcclusion::ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height,

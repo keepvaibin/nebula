@@ -250,9 +250,13 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_pass, color_pass_, rgba8_pass_);
             if (!ao_.initialize()) {
                 std::cerr << "[ambient-occlusion] off on this device" << std::endl;
+            } else {
+                ao_.prepare_pipelines(scene_passes(false), scene_passes(true));
             }
             if (!scene_camera_.initialize()) {
                 std::cerr << "[scene-camera] off on this device" << std::endl;
+            } else {
+                scene_camera_.prepare_pipelines(scene_passes(false), scene_passes(true));
             }
             post_.set_present_pass(present_pass_);
         } else {
@@ -2869,6 +2873,7 @@ void RendererVk::sync_post_process() {
     }
     if (!was_ready) {
         set_post_process_status(post_.status());
+        post_.prepare_pipelines(scene_passes(float_scene_));
     }
     const PostProcessSettings next = post_process_settings_from(get_render_config());
     const PostProcessSettings& current = post_.settings();

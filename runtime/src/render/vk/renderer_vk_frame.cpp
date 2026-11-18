@@ -445,6 +445,7 @@ void RendererVk::apply_window_size() {
     if (format_changes) {
         post_.set_wide(float_scene_, draw_layout_.pass_for(float_scene_ ? kSceneVariantHdr : 0u, false),
                        float_scene_ ? color_pass_wide_ : color_pass_);
+        post_.prepare_pipelines(scene_passes(float_scene_));
         std::cerr << "[hdr] scene " << (float_scene_ ? "float: light past white kept" : "10-bit") << '\n';
     }
     reset_draw_bindings();
