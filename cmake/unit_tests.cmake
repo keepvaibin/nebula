@@ -38,6 +38,8 @@ galaxy_test(galaxy_pacing_tests SOURCES ${rt}/pacing_tests.cpp ${rt}/pacing.cpp 
 if(NOT WIN32)
     galaxy_test(galaxy_perf_hint_tests SOURCES ${rt}/perf_hint_tests.cpp ${rt}/perf_hint.cpp)
 endif()
+# A frame thread's work as wall time between its marks (P-069), on every platform.
+galaxy_test(galaxy_busy_window_tests SOURCES ${rt}/busy_window_tests.cpp)
 
 # Files and saves.
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
@@ -148,6 +150,8 @@ galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpo
 galaxy_test(galaxy_present_slots_tests SOURCES ${render_src}/present_slots_tests.cpp ${render_src}/present_slots.cpp)
 # The temporal upscaler's hold on generated frames ends (header-only).
 galaxy_test(galaxy_temporal_hold_tests SOURCES ${render_src}/temporal_hold_tests.cpp)
+# The renderers' video memory read: at most every 100 ms, at once when the budget moved (P-011).
+galaxy_test(galaxy_video_memory_reading_tests SOURCES ${render_src}/video_memory_reading_tests.cpp)
 # The game thread's place in the render queue (header-only).
 galaxy_test(galaxy_render_queue_tests SOURCES ${render_src}/render_queue_tests.cpp)
 # The vsync grid the Android and Apple display clocks run the game's frames on (header-only).

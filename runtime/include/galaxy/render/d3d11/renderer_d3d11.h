@@ -21,6 +21,7 @@
 #include "galaxy/render/d3d11/d3d11_context.h"
 #include "galaxy/render/d3d11/fx_d3d11.h"
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/dxgi_memory.h"
 #include "galaxy/render/dynamic_resolution.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
@@ -137,7 +138,7 @@ public:
     void trace_rings() const;
     void copy_fg_hudless_display(const DisplayTexture&) {}
     void attach_texture_uploads(TextureStore& cache);
-    // The video memory in use and its budget (IDXGIAdapter3::QueryVideoMemoryInfo), read at a frame boundary.
+    // The video memory in use and its budget (dxgi_memory.h: asked at most every 100 ms, at once when the budget moved).
     [[nodiscard]] bool video_memory(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
     void wait_for_gpu_idle();
     void pump_messages() {}
@@ -468,6 +469,8 @@ private:
     bool window_shown_ = false;
     bool keep_window_ = false;
     bool occluded_ = false;
+    // The device's adapter's video memory (video_memory); render thread.
+    mutable DxgiMemory memory_;
     bool loss_asked_ = false;  // lose_device, until the present that reports it
     TextureStore* mirrored_store_ = nullptr;
 

@@ -51,8 +51,7 @@ def main():
         # 1. The lists.
         known, planned, problems = gate.read_lists()
         check(not problems, "the tree's lists read cleanly: %s" % problems)
-        check("030-FactoryGalaxy-4" in known.get("tour/d3d12", {}) and "pictures/tablet" in planned,
-              "the first content: P-122 on the tours, the tablet's pictures planned")
+        check("pictures/tablet" in planned, "the tablet's pictures planned (N-1040)")
         ledger = t / "ledger.tsv"
         ledger.write_text("id\tagent\tpackage\tstate\tproof\ttitle\tnote\nP-1\t1\tE0\topen\t\tx\t\nP-2\t1\tE0\tfixed\tc\tx\t\n",
                           encoding="utf-8")

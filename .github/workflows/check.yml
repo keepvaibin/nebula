@@ -246,7 +246,8 @@ jobs:
       - id: cache
         uses: ./.github/actions/compiler-cache
         with:
-          name: sanitizers-${{ matrix.sanitize }}
+          # A cache key holds no comma: 'address,undefined' is named address-undefined (N-1045).
+          name: sanitizers-${{ matrix.sanitize == 'thread' && 'thread' || 'address-undefined' }}
       - name: LLVM
         run: |
           sudo apt-get update

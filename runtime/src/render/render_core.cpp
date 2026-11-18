@@ -639,10 +639,12 @@ void RenderCore::render_frame(bool present_swap_chain, bool black) {
 
 void RenderCore::render_work_begins() noexcept {
     render_work_started_ns_.store(steady_now_ns(), std::memory_order_release);
+    galaxy::host::perf_hint_busy(true);
 }
 
 void RenderCore::render_work_ends() noexcept {
     render_work_started_ns_.store(0u, std::memory_order_release);
+    galaxy::host::perf_hint_busy(false);
 }
 
 void RenderCore::finish_pictures_here() {
@@ -1270,7 +1272,6 @@ void RenderCore::advance_interp_sequence(bool flush) {
                 ++interp_failed_;
             }
             ++sequence.next;
-            // Rates that are not multiples of 60 rarely present real frames.
             report_interp_stats();
             return;
         }
@@ -1720,7 +1721,7 @@ bool RenderCore::restart_device() {
 }
 
 void RenderCore::render_loop() {
-    // Called with queue_mutex_ held.
+    // A failure ends the queued utilities' waits; the caller holds queue_mutex_.
     const auto fail_queued_utilities = [&](std::exception_ptr error) {
         if (bear_device_loss(error)) {
             device_lost_ = true;

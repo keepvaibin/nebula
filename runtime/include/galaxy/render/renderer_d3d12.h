@@ -29,6 +29,7 @@
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/post_process.h"
 #include "galaxy/render/display_modes.h"
+#include "galaxy/render/dxgi_memory.h"
 #include "galaxy/render/os_hdr.h"
 #include "galaxy/render/ambient_occlusion.h"
 #include "galaxy/render/scene_camera.h"
@@ -756,16 +757,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     // The device's enhanced-barrier interface when it has them (BarrierPath::device points at it).
     Microsoft::WRL::ComPtr<ID3D12Device10> barrier_device_;
-    // The selected adapter, for video-memory budget queries.
-    Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3_;
-    // The OS signals this event when it changes the process's video memory budget (RegisterVideoMemoryBudgetChangeNotificationEvent;
-    // auto-reset; null where not registered); video_memory then reads again at once, else at most every 100 ms.
-    HANDLE budget_event_ = nullptr;
-    DWORD budget_cookie_ = 0u;
-    mutable std::int64_t memory_read_ms_ = 0;
-    mutable std::uint64_t memory_usage_ = 0u;
-    mutable std::uint64_t memory_budget_ = 0u;
-    void release_budget_notification() noexcept;
+    // The selected adapter's video memory (dxgi_memory.h: at most every 100 ms, at once when the OS moved the budget).
+    mutable DxgiMemory memory_;
     std::atomic<bool> occluded_{false};
     // The swap chain's frame latency waitable object (create_swap_chain): a present waits on it, bounded, so a frame is queued
     // when the display can take it. Owned (closed with the chain); null where the chain has none.
