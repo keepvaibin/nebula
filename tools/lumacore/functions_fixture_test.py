@@ -46,7 +46,8 @@ def mark(way, count=None, fixed=None, nullable=False):
 
 EXPECTED = [
     # Variadic functions (docs/modding/reference/lumascript/compiled-form.md)
-    fact("fnVaList", "int(const char *, va_list)", "free", None),
+    # Its format is read only (N-4002, texts_fixture_test.py): `in`.
+    fact("fnVaList", "int(const char *, va_list)", "free", None, marks=[mark("in"), None]),
     fact("fnVariadic", "int(const char *, ...)", "free", None, marks=[None]),
     fact("fnVariadicAgain", "int(int, const char *, ...)", "free", None, marks=[None, None]),
     fact("fnConstexpr", "int(int)", "free", None),

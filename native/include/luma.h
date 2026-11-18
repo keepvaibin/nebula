@@ -36,7 +36,9 @@ typedef struct LumaFunction {
 /* One call of a hooked function. */
 typedef struct LumaCall {
     const LumaFunction* function;
-    void** args;  /* as LumaFunction.invoke takes them; a hook may change what they point at */
+    void** args;  /* as LumaFunction.invoke takes them; a hook may change what they point at. A `const char *` the
+                     functions file marks `in` may be a caller's text that lives only during the call: a hook that
+                     keeps it keeps a copy */
     void* result; /* where the result is, or goes; null for a constructor or destructor. Zero (a class: as its
                      default constructor makes it; a reference: a null pointer) until a hook or the function writes it
                      (lumalink/loader.md) */

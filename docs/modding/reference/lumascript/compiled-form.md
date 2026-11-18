@@ -445,7 +445,12 @@ lumart pass it. Unmarked and `kept` pointer parameters stay refused (S0060 with 
 | S0915 | a list of another length for a `fixed` in or inout parameter | function, parameter number, n, length | `{0}: parameter {1} takes exactly {2} elements; the list has {3}, so it was not called` |
 | S0916 | a list longer than its count parameter's type holds | function, parameter number, length, count type | `{0}: parameter {1}'s list has {2} elements, more than its count, a {3}, holds, so it was not called` |
 
-- Text (addition 6): C-6 marks no `const char *`, so made text still goes through `lumart_text_keep`.
+- Text (addition 6): a `const char *` is marked `in` when the game's code proves it read during the call only: the
+  function lets the address out nowhere (no member, global, static, return, lambda or initializer list holds it),
+  and every function it hands it to reads it only, as does every override of each (instrument.py's TextUses,
+  gen_types.py's prove_text_in, N-4002; tools/lumacore/texts_fixture_test.py). luma_texts.left, beside the functions
+  file, lists each text parameter left unmarked and why. A made text given to an `in` one goes to the scratch; any
+  other still goes through `lumart_text_keep`.
 - Tested in 4.8 with C-6's first marks: `MR::getPlayerFrontVec(var front)` (out), `MR::calcScreenPosition`
   (out, both overloads), and once the headers mark them, one count, one fixed and one nullable function; each
   S0915 and S0916 raised once. The checker's half is tested now (tests/body.rs: marked_pointer_parameters,

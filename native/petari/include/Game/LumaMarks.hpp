@@ -17,6 +17,9 @@
 //                        when it was given one)
 //
 // Except under LUMA_KEPT, the pointer is to a number, an enum or a vector (2 to 4 floats x, y, z, w).
+// A `const char *` takes no mark: instrument.py proves from the function's code, and every function it reaches, whether
+// it reads the text during the call only, and gen_types.py gives those `in` (N-4002; luma_texts.left lists the others
+// with why).
 
 #define LUMA_OUT
 #define LUMA_IN

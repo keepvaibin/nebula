@@ -924,6 +924,7 @@ class Reader:
             if wrong:
                 sys.exit("gen_types.py: the function rows' facts (luma_functions.json) do not hold:\n  " +
                          "\n  ".join(wrong[:200]) + ("\n  ... %d in all" % len(wrong) if len(wrong) > 200 else ""))
+            I.write_if_changed(OUT / "luma_texts.left", prove_text_in(functions).encode("utf-8"))
             guarantees, wrong = read_guarantees(GUARANTEES_TABLE)
             if wrong:
                 sys.exit("gen_types.py: the sets a handler proves (guarantees.json) do not hold:\n  " + "\n  ".join(wrong))
@@ -1561,6 +1562,91 @@ def merge_functions(folder, records, left_records):
                 wrong.append("%s %s: it overrides a function with no name a row can have" % (f["name"], f["signature"]))
             o["row"] = (o["name"], o["signature"]) in every
     return functions, wrong
+
+
+# N-4002: the C library functions with no row that only read a text argument during the call: name -> the argument
+# indexes read, or ("from", n): every argument from n on (a formatter's format and its values).
+TEXT_READERS = {
+    "strcmp": (0, 1), "strncmp": (0, 1), "strcasecmp": (0, 1), "strncasecmp": (0, 1), "stricmp": (0, 1),
+    "strnicmp": (0, 1), "_stricmp": (0, 1), "_strnicmp": (0, 1), "strlen": (0,), "strnlen": (0,), "strspn": (0, 1),
+    "strcspn": (0, 1), "strcpy": (1,), "strncpy": (1,), "strcat": (1,), "strncat": (1,), "memcmp": (0, 1),
+    "memcpy": (1,), "memmove": (1,), "atoi": (0,), "atol": (0,), "atof": (0,), "sscanf": (0, 1), "puts": (0,),
+    "fputs": (0,), "printf": ("from", 0), "sprintf": ("from", 1), "snprintf": ("from", 2), "vsprintf": (1,),
+    "vsnprintf": (2,), "vprintf": (0,),
+}
+
+
+def prove_text_in(functions):
+    """N-4002: gives `in` (read during the call only, not kept) to each `const char *` parameter the game's code proves
+    so: the function lets it out nowhere (instrument.py's TextUses), every callee parameter it hands it to is `in` or a
+    C library reader (TEXT_READERS), and so is the parameter in every function that overrides it, at every level (a
+    call may reach any of them). The greatest set where that holds (a cycle of calls that keeps nothing is `in`).
+    A variadic function's parameters are not marked (the compiler calls no marked variadic function). Takes each row's
+    "texts" out and fills an unmarked text parameter's mark; returns luma_texts.left: each text parameter left
+    unmarked, and why."""
+    by = {(f["name"], f["signature"]): f for f in functions}
+    overriders = {}
+    for f in functions:
+        for name, signature in (f.get("texts") or {}).get("bases", []):
+            overriders.setdefault((name, signature), []).append(f)
+    holds, why = {}, {}
+    for f in functions:
+        for k, t in enumerate((f.get("texts") or {}).get("params", [])):
+            if t is not None:
+                key = (f["name"], f["signature"], k)
+                holds[key] = t["escape"] is None
+                if t["escape"] is not None:
+                    why[key] = "line " + t["escape"]
+
+    def reaches(name, signature, k):
+        """Whether a call to (name, signature) with the text as argument k keeps it nowhere: the row's own parameter
+        and every override's; a C library reader; else no."""
+        rows = ([by[(name, signature)]] if (name, signature) in by else []) + overriders.get((name, signature), [])
+        if rows:
+            return all(holds.get((r["name"], r["signature"], k), False) for r in rows)
+        read = TEXT_READERS.get(name)
+        if read is None:
+            return False
+        return k >= read[1] if read[0] == "from" else k in read
+
+    changed = True
+    while changed:
+        changed = False
+        for f in functions:
+            texts = f.get("texts") or {}
+            for k, t in enumerate(texts.get("params", [])):
+                key = (f["name"], f["signature"], k)
+                if t is None or not holds[key]:
+                    continue
+                for name, signature, j, line in t["passes"]:
+                    if not reaches(name, signature, j):
+                        to = ("%s's ... (argument %d)" % (name, j + 1) if signature == "..." else
+                              "%s, which no row names (argument %d)" % (name, j + 1) if signature == "?" else
+                              "%s %s argument %d" % (name, signature, j + 1))
+                        holds[key], why[key] = False, "line %s: given to %s" % (line, to)
+                        break
+                else:
+                    for o in overriders.get((f["name"], f["signature"]), []):
+                        if not holds.get((o["name"], o["signature"], k), False):
+                            holds[key], why[key] = False, "overridden by %s %s" % (o["name"], o["signature"])
+                            break
+                if not holds[key]:
+                    changed = True
+    left = []
+    for f in functions:
+        texts = f.pop("texts", None) or {}
+        for k, t in enumerate(texts.get("params", [])):
+            if t is None:
+                continue
+            key = (f["name"], f["signature"], k)
+            if f["signature"].endswith("...)") or f["signature"].endswith("...) const"):
+                left.append("%s %s parameter %d: a variadic function" % (f["name"], f["signature"], k + 1))
+            elif holds[key]:
+                if f["marks"][k] is None:
+                    f["marks"][k] = {"way": "in", "count": None, "fixed": None, "nullable": False}
+            else:
+                left.append("%s %s parameter %d: %s" % (f["name"], f["signature"], k + 1, why[key]))
+    return "".join(line + "\n" for line in sorted(left))
 
 
 # What each function needs (M2; the audit's design note "marking every function with what it needs"): the units'

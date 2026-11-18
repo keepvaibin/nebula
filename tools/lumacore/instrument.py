@@ -1257,7 +1257,34 @@ class Unit:
                 'name': name, 'signature': signature, 'kind': role, 'owner': owner,
                 'virtual': member and bool(api.isVirtual(cursor)), 'pure': member and bool(api.isPure(cursor)),
                 'const': role == 'method' and bool(api.isConst(cursor)), 'overrides': overrides,
-                'marks': self.marks_of(cursor)})
+                'marks': self.marks_of(cursor), 'texts': self.text_facts(cursor, types)})
+
+    def text_facts(self, cursor, types):
+        """N-4002: None for a row with no `const char *` parameter; else {"params": TextUses' facts, "bases": every
+        function it overrides, through every level ([name, signature]; gen_types.py's prove_text_in reads a call
+        through any of them as able to reach this one)."""
+        params = TextUses(self, cursor).facts()
+        if all(p is None for p in params):
+            return None
+        api = self.api
+        bases, seen, todo = [], set(), [cursor]
+        while todo:
+            found, count = POINTER(CXCursor)(), c_uint()
+            api.overridden(todo.pop(), byref(found), byref(count))
+            for i in range(count.value):
+                base = CXCursor.from_buffer_copy(found[i])
+                known = self.identity(base)
+                if known is None:
+                    record = types.name(api.semanticParent(base))
+                    rest = self.identity_signature(base)
+                    known = (f'{record}::{self.string(api.spelling(base))}', rest) if record and rest else None
+                if known is not None and known not in seen:
+                    seen.add(known)
+                    bases.append(list(known))
+                todo.append(base)
+            if count.value:
+                api.disposeOverridden(found)
+        return {'params': params, 'bases': bases}
 
     # Places (docs/modding/concepts/the-game-description.md; the cook reads a stage's placement arguments by name): what
     # each function this unit gives a row does with a placement iterator, read from its body, nothing matched by name:
@@ -2023,6 +2050,266 @@ class Needs:
             if child.kind != K_LAMBDA:
                 self.go(child, stack)
             stack.pop()
+
+# N-4002: which `const char *` parameters a function reads during the call only. Per row, per text parameter: where
+# the function lets the address out of the call ("escape", its first place), and each callee parameter it hands the
+# address to ("passes"); gen_types.py's prove_text_in closes these over the game. A use reads when it dereferences,
+# compares or tests the address; a local copy, a pointer derived from it (p + n, ++p, &p[i], strchr's result) and a
+# ?: branch are followed to their own uses; a call hands it on to the callee's parameter. Anything else lets it out: kept
+# in a member, a global, a static local or an initializer list, returned, captured by a lambda, cast to a number, its
+# address taken, or given to a call through a function pointer or past a variadic function's named parameters.
+U_POST_INC, U_POST_DEC, U_PRE_INC, U_PRE_DEC, U_ADDR_OF = 1, 2, 3, 4, 5
+B_ADD, B_SUB, B_COMMA = 6, 7, 33
+B_READS = (10, 11, 12, 13, 14, 15, 16, 20, 21)  # <=>, <, >, <=, >=, ==, !=, &&, ||
+T_CHARS = (4, 13)  # Char_U, Char_S: plain char
+SC_NONE, SC_AUTO, SC_REGISTER = 1, 6, 7
+# C library functions whose result points into a text argument: (argument index), followed as the text is.
+TEXT_DERIVED = {'strchr': 0, 'strrchr': 0, 'strstr': 0, 'strpbrk': 0}
+
+
+class TextUses:
+    """One row's walk for N-4002 (Unit.text_facts)."""
+
+    def __init__(self, unit, function):
+        self.unit, self.api, self.function = unit, unit.api, function
+        self.params = {}  # a parameter's hash -> [(its cursor, index)]
+        self.aliases = {}  # a local's hash -> [(its cursor, the text parameters' indexes it may hold)]
+
+    def is_text(self, cxtype):
+        api = self.api
+        t = api.canonicalType(cxtype)
+        if t.kind != T_POINTER:
+            return False
+        pointee = api.pointeeType(t)
+        return api.canonicalType(pointee).kind in T_CHARS and bool(api.isConstType(pointee))
+
+    def facts(self):
+        """[None or {"escape": "line: why" or None, "passes": [[name, signature, index, line]]}] per parameter."""
+        api = self.api
+        count = max(api.numArgs(self.function), 0)
+        texts = [None] * count
+        for i in range(count):
+            p = api.argument(self.function, i)
+            if self.is_text(api.type(p)):
+                texts[i] = {'escape': None, 'passes': []}
+                self.params.setdefault(api.hashCursor(p), []).append((p, i))
+        if not self.params:
+            return texts
+        # The locals that may hold a text parameter, to a fixed point (a copy made after its use in a loop), then the uses.
+        while True:
+            held = sum(len(ix) for bucket in self.aliases.values() for _, ix in bucket)
+            self.texts = None
+            self.walk(self.function, [], False)
+            if sum(len(ix) for bucket in self.aliases.values() for _, ix in bucket) == held:
+                break
+        self.texts = texts
+        self.walk(self.function, [], False)
+        for t in texts:
+            if t is not None:
+                t['passes'] = sorted({tuple(p) for p in t['passes']}, key=lambda p: (p[3], p[0], p[1], p[2]))
+                t['passes'] = [list(p) for p in t['passes']]
+        return texts
+
+    def held(self, ref):
+        """The text parameters' indexes a reference names: a parameter's own, or those a local holds."""
+        api = self.api
+        target = api.referenced(ref)
+        if api.isNull(target):
+            return set()
+        key = api.hashCursor(target)
+        found = set()
+        for c, i in self.params.get(key, []):
+            if api.equalCursors(c, target):
+                found.add(i)
+        for c, ix in self.aliases.get(key, []):
+            if api.equalCursors(c, target):
+                found.update(ix)
+        return found
+
+    def hold(self, local, indexes):
+        api = self.api
+        bucket = self.aliases.setdefault(api.hashCursor(local), [])
+        for c, ix in bucket:
+            if api.equalCursors(c, local):
+                ix.update(indexes)
+                return
+        bucket.append((local, set(indexes)))
+
+    def walk(self, node, stack, in_lambda):
+        unit = self.unit
+        for i, child in enumerate(unit.children(node)):
+            stack.append((node, i))
+            if child.kind == K_DECL_REF_EXPR:
+                indexes = self.held(child)
+                if indexes:
+                    self.note(indexes, self.use(stack + [(child, -1)], in_lambda), unit.line(child))
+            self.walk(child, stack, in_lambda or child.kind == K_LAMBDA)
+            stack.pop()
+
+    def note(self, indexes, use, line):
+        if use[0] == 'alias':
+            self.hold(use[1], indexes)
+            return
+        if self.texts is None or use[0] == 'read':
+            return
+        for i in indexes:
+            t = self.texts[i]
+            if use[0] == 'pass':
+                t['passes'].append([use[1], use[2], use[3], line])
+            elif t['escape'] is None:
+                t['escape'] = f'{line}: {use[1]}'
+
+    def local(self, cursor):
+        """A non-static local variable or parameter of this function holding a pointer."""
+        api = self.api
+        if cursor.kind not in (K_VAR, K_PARM) or api.canonicalType(api.type(cursor)).kind != T_POINTER:
+            return False
+        if cursor.kind == K_VAR and (api.storageClass(cursor) not in (SC_NONE, SC_AUTO, SC_REGISTER) or api.tlsKind(cursor)):
+            return False
+        return bool(api.equalCursors(api.semanticParent(cursor), self.function))
+
+    def use(self, path, in_lambda):
+        """How the address at the top of `path` is used: ('read',), ('alias', local), ('pass', name, signature, index)
+        or ('escape', why). path: [(cursor, index of the child on the path)]."""
+        api, unit = self.api, self.unit
+        if in_lambda:
+            return ('escape', 'used in a lambda')
+        at = len(path) - 1
+        while True:
+            if at == 0:
+                return ('escape', 'used where no rule reads it')
+            parent, index = path[at - 1]
+            kind = parent.kind
+            if kind in (K_UNEXPOSED_EXPR, K_PAREN) or kind in K_CASTS:
+                t = api.canonicalType(api.type(parent)).kind
+                if t == T_POINTER or kind == K_PAREN:
+                    at -= 1
+                    continue
+                if t == T_BOOL:
+                    return ('read',)
+                return ('escape', 'converted to ' + unit.string(api.typeSpelling(api.type(parent))))
+            if kind == K_CONDITIONAL:
+                if index == 0:
+                    return ('read',)
+                at -= 1
+                continue
+            if kind == K_ARRAY_SUBSCRIPT or kind == K_UNARY_OPERATOR and api.unaryKind(parent) == U_DEREF:
+                # A character read, or (under &) an address into the text.
+                up = at - 1
+                while up > 0 and path[up - 1][0].kind == K_PAREN:
+                    up -= 1
+                if up > 0 and path[up - 1][0].kind == K_UNARY_OPERATOR and api.unaryKind(path[up - 1][0]) == U_ADDR_OF:
+                    at = up - 1
+                    continue
+                return ('read',)
+            if kind == K_UNARY_OPERATOR:
+                op = api.unaryKind(parent)
+                if op == U_LNOT:
+                    return ('read',)
+                if op in (U_POST_INC, U_POST_DEC, U_PRE_INC, U_PRE_DEC):
+                    at -= 1
+                    continue
+                return ('escape', 'its address taken' if op == U_ADDR_OF else 'used by an operator')
+            if kind == K_BINARY:
+                op = api.binaryKind(parent)
+                if op in B_READS:
+                    return ('read',)
+                if op in (B_ADD, B_SUB):
+                    if api.canonicalType(api.type(parent)).kind == T_POINTER:
+                        at -= 1
+                        continue
+                    return ('read',)
+                if op == B_COMMA:
+                    if index == 0:
+                        return ('read',)
+                    at -= 1
+                    continue
+                if op == B_ASSIGN:
+                    if index == 0:
+                        return ('read',)  # the local itself given another address
+                    left = unit.bare(unit.children(parent)[0])
+                    target = api.referenced(left) if left.kind == K_DECL_REF_EXPR else None
+                    if target is not None and not api.isNull(target) and self.local(target):
+                        return ('alias', target)
+                    return ('escape', 'stored')
+                return ('escape', 'used by an operator')
+            if kind == K_COMPOUND_ASSIGN:
+                return ('read',)
+            if kind in (K_IF_STMT, K_WHILE) and index == 0 or kind == K_DO and index == 1 or kind in (K_FOR, K_COMPOUND):
+                return ('read',)
+            if kind == K_VAR:
+                if self.local(parent):
+                    return ('alias', parent)
+                return ('escape', 'kept in ' + unit.string(api.spelling(parent)))
+            if kind == K_RETURN:
+                return ('escape', 'returned')
+            if kind == K_CALL:
+                found = self.call(parent, path[at][0])
+                if found == 'derived':
+                    at -= 1
+                    continue
+                return found
+            if kind == K_INIT_LIST:
+                return ('escape', 'kept in an initializer list')
+            if kind in FUNCTIONS:
+                return ('escape', 'kept by a member initializer')
+            return ('escape', 'used where no rule reads it')
+
+    def span(self, cursor):
+        """(file, start, end) where an expression is, as expanded; None when unknown."""
+        api = self.api
+        extent = api.extent(cursor)
+        ends = []
+        for location in (api.rangeStart(extent), api.rangeEnd(extent)):
+            file, line, column, offset = c_void_p(), c_uint(), c_uint(), c_uint()
+            api.expansion(location, byref(file), byref(line), byref(column), byref(offset))
+            ends.append((file.value, offset.value))
+        if ends[0][0] is None or ends[0][0] != ends[1][0]:
+            return None
+        return ends[0][0], ends[0][1], ends[1][1]
+
+    @staticmethod
+    def holds(outer, inner):
+        return outer is not None and outer[0] == inner[0] and outer[1] <= inner[1] and inner[2] <= outer[2] and outer[1] < outer[2]
+
+    def call(self, call, argument):
+        """The use of `argument`, one of `call`'s arguments: ('pass', ...), 'derived' (the result points into it), or
+        ('escape', why)."""
+        api, unit = self.api, self.unit
+        n = api.numArgs(call)
+        j = next((j for j in range(max(n, 0)) if api.equalCursors(api.argument(call, j), argument)), None)
+        if j is None:
+            # The visit's cursor and the call's argument may be two nodes of one expression (a constructor's, an
+            # overload's): the argument whose written place holds it, when exactly one does.
+            at = self.span(argument)
+            inside = [j for j in range(max(n, 0)) if at is not None and self.holds(self.span(api.argument(call, j)), at)]
+            if len(inside) != 1:
+                return ('escape', 'used by a call, not as an argument')
+            j = inside[0]
+        target = api.referenced(call)
+        if api.isNull(target) or target.kind not in FUNCTIONS:
+            return ('escape', 'given to a call through a function pointer')
+        spelling = unit.string(api.spelling(target))
+        if target.kind in (K_METHOD, K_CONVERSION) and spelling.startswith('operator') and not api.isStatic(target) \
+                and n == api.numArgs(target) + 1:
+            j -= 1  # a member operator's call: argument 0 is the object
+            if j < 0:
+                return ('escape', 'the object of a call')
+        scope = unit.scope(target)
+        library = scope is not None and [name for name, _, _ in scope] in ([], ['std'])
+        if library and TEXT_DERIVED.get(spelling) == j:
+            return 'derived'
+        if j >= max(api.numArgs(target), 0):
+            # Past the named parameters: only a C library formatter reads them (gen_types.py's TEXT_READERS).
+            if library:
+                return ('pass', spelling, '...', j)
+            return ('escape', f'given to {spelling}\'s ...')
+        ident = unit.identity(target)
+        if ident is None:
+            if library:
+                return ('pass', spelling, '?', j)
+            return ('escape', f'given to {spelling}, which no row names')
+        return ('pass', ident[0], ident[1], j)
 
 
 def number_value(written, floating):
