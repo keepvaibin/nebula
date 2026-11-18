@@ -2,8 +2,8 @@
    MR::getRandom(k, 4003) runs step k on the game thread and answers 1:
    - 1: a handle for the player: nonzero, the same twice and for both mods (each says it; the test compares), and it
         reads the player as its NameObj; null, an object whose vtable is unmapped and an unmapped object give 0; handle
-        0 and handles weak never gave read null; the kernel hooks neither NameObj::~NameObj nor NebulaArena::free for
-        it (M-132: lumart's refs did);
+        0 and handles weak never gave read null; NebulaArena::free is not hooked (M-132: lumart's refs hooked it and
+        NameObj::~NameObj; the harness's own mod hooks the destructor, so its flag says nothing here);
    - 2 (weak-a taken out before): the handle still reads the player;
    - 3 (a new scene before): the handle reads null; the new player gets a new handle, which reads it. */
 #include "../loader/lt.h"
@@ -52,7 +52,6 @@ static void made(void) {
     read += lt_core->weak_get(handle + 1) != 0;
     read += lt_core->weak_get(handle & 0xffffffff00000000ull) != 0;
     lt_fact("bogus_read", read);
-    lt_fact("dtor_hooked", hooked("NameObj::~NameObj", 0));
     lt_fact("free_hooked", hooked("NebulaArena::free", "void(void *)"));
 }
 

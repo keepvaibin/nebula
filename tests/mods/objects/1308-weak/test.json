@@ -104,10 +104,6 @@
       "is": 0
     },
     {
-      "fact": "mod.weak-a.dtor_hooked",
-      "is": 0
-    },
-    {
       "fact": "mod.weak-a.free_hooked",
       "is": 0
     },
@@ -145,10 +141,6 @@
     },
     {
       "fact": "mod.weak-b.bogus_read",
-      "is": 0
-    },
-    {
-      "fact": "mod.weak-b.dtor_hooked",
       "is": 0
     },
     {
