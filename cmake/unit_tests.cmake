@@ -40,6 +40,8 @@ endif()
 # Files and saves.
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
 galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
+# The bounded call of a process's last work (galaxy/bounded_call.h, header only).
+galaxy_test(galaxy_bounded_call_tests SOURCES ${rt}/bounded_call_tests.cpp)
 galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
 target_include_directories(galaxy_save_format_tests PRIVATE "${galaxy_root}/native/petari/include")
 galaxy_test(galaxy_launch_args_tests SOURCES ${rt}/launch_args_tests.cpp)
