@@ -457,6 +457,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/texture_pack.cpp
     runtime/src/render/texture_pack_codecs.cpp
     runtime/src/render/movie_playback.cpp
+    runtime/src/render/movie_source_win.cpp
     runtime/src/movie_video.cpp
     runtime/src/render/gpu_texture_backend_d3d12.cpp
     runtime/src/render/gpu_placed_textures.cpp
@@ -516,7 +517,7 @@ if(GALAXY_STREAMLINE_SDK)
     target_include_directories(galaxy_render SYSTEM PRIVATE "${GALAXY_STREAMLINE_SDK}/include")
     target_compile_definitions(galaxy_render PRIVATE GALAXY_WITH_STREAMLINE=1)
 endif()
-# HD movie replacements decode through Media Foundation (movie_playback.cpp).
+# HD movie replacements decode through Media Foundation (movie_source_win.cpp).
 target_link_libraries(galaxy_render PRIVATE mfplat mfreadwrite mfuuid d3d11)
 # The game window's cloak until its first picture (window_owner.cpp).
 target_link_libraries(galaxy_render PRIVATE dwmapi)
@@ -646,6 +647,9 @@ endforeach()
 # The pictures the mod check reads with the same answers (crates/nebula-import cook/pack_texture.rs).
 target_compile_definitions(galaxy_texture_pack_tests PRIVATE
     NEBULA_PACK_PICTURES="${CMAKE_CURRENT_SOURCE_DIR}/crates/nebula-import/data/pack-pictures")
+# The replacement movie the playback test plays (tests/data/movie, as galaxy_movie_source_tests reads it).
+target_compile_definitions(galaxy_movie_playback_tests PRIVATE
+    NEBULA_MOVIE_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/movie/h264_64x64.mp4")
 # The tests compile their own small shaders; the program itself never compiles any.
 target_link_libraries(galaxy_frame_pass_tests PRIVATE d3dcompiler)
 
@@ -711,6 +715,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/texture_pack.cpp
         runtime/src/render/texture_pack_codecs.cpp
         runtime/src/render/movie_playback.cpp
+        runtime/src/render/movie_source_win.cpp
         runtime/src/movie_video.cpp
         runtime/src/render/frame_pass.cpp
         runtime/src/render/post_process_settings.cpp
@@ -854,6 +859,7 @@ if(NEBULA_D3D11)
         runtime/src/render/texture_pack.cpp
         runtime/src/render/texture_pack_codecs.cpp
         runtime/src/render/movie_playback.cpp
+        runtime/src/render/movie_source_win.cpp
         runtime/src/movie_video.cpp
         runtime/src/render/frame_pass.cpp
         runtime/src/render/post_process_settings.cpp

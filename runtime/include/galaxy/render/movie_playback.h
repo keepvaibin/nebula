@@ -10,9 +10,10 @@
 // render thread only records copies):
 // - the cooked movie (NMOV in the asset store, galaxy/movie_video.h's JPEG frames): every frame exactly the one the
 //   game names, the render thread waiting for it when the decoder is behind;
-// - an HD replacement video (MP4 and what else the platform decodes): <folder>/<name>.<ext> for the disc's
-//   /MovieData/<name>.thp, from the folders configure() gives (a later folder wins), the frame of the same time at the
-//   replacement's resolution, in place of the cooked one once its first frame is decoded.
+// - an HD replacement video (MP4 and what else the system's decoder takes: Media Foundation, AVFoundation, MediaCodec,
+//   GStreamer; render/movie_source.h): <folder>/<name>.<ext> for the disc's /MovieData/<name>.thp, from the folders
+//   configure() gives (a later folder wins), the frame of the same time at the replacement's resolution, in place of
+//   the cooked one once its first frame is decoded.
 
 #include "galaxy/render/gpu_texture_backend.h"
 
@@ -70,6 +71,13 @@ struct MovieYuvTransform {
     std::int32_t krb = 0, krr = 65536;
 };
 [[nodiscard]] MovieYuvTransform movie_yuv_transform(bool bt709, bool full_range) noexcept;
+// 4:2:0 YCbCr (`y` rows; `cb` and `cr` rows at half size, `uv_pitch` apart, `chroma_step` bytes between a row's
+// samples: 1 planar, 2 interleaved) into the planes as convert_bgra_to_movie_planes writes them.
+void convert_yuv420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* cb,
+                                    const std::uint8_t* cr, std::int32_t uv_pitch, std::uint32_t chroma_step,
+                                    std::uint32_t width, std::uint32_t height, const MovieYuvTransform& transform,
+                                    std::uint8_t* out, const std::array<std::uint64_t, 3>& offsets,
+                                    const std::array<std::uint32_t, 3>& pitches) noexcept;
 // I420 (`y` rows; `u` and `v` rows at half size, `uv_pitch` apart) into the planes as convert_bgra_to_movie_planes
 // writes them.
 void convert_i420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* u,

@@ -6,6 +6,9 @@
 #   ctest --test-dir <build> --output-on-failure
 cmake_minimum_required(VERSION 3.22)
 project(NebulaUnitTests LANGUAGES C CXX ASM)
+if(APPLE)
+    enable_language(OBJCXX)  # the movie source test's AVFoundation reader (cmake/unit_tests.cmake)
+endif()
 # What the host computes for the game (a stick's position above all) is the same bits on every CPU: no multiply and
 # add is fused into one rounding. Clang fuses them by default on CPUs with a fused multiply-add (arm64, and x86-64 at
 # AVX2): a tablet's stick then differed from a computer's by one ulp, and its replay from the computer's (N-1064). The

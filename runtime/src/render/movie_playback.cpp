@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The game's movies (movie_playback.h). The cooked movie decodes with galaxy/movie_video.h on its own thread. An HD
-// replacement decodes with Media Foundation's source reader on Windows, on the GPU's video decoder where it has one for
-// the format (through a D3D11 device), else in software; its planes are JPEG's YCbCr of that picture.
+// replacement decodes on its own thread through the system's decoder (movie_source.h: Media Foundation, AVFoundation,
+// MediaCodec or GStreamer); its planes are JPEG's YCbCr of that picture.
 
 #include "galaxy/render/movie_playback.h"
+#include "movie_source.h"
 #include "galaxy/cpu_count.h"
 #include "galaxy/movie_video.h"
 #include "galaxy/path_text.h"
@@ -20,18 +21,6 @@
 
 #if defined(NEBULA_AV1)
 #include <dav1d/dav1d.h>
-#endif
-
-#if defined(_WIN32)
-#include "galaxy/windows_api.h"
-#include <d3d11.h>
-#include <d3d10.h>
-#include <mfapi.h>
-#include <mfidl.h>
-#include <mfreadwrite.h>
-#include <mferror.h>
-#include <propvarutil.h>
-#include <wrl/client.h>
 #endif
 
 namespace galaxy::render {
@@ -233,11 +222,7 @@ MovieYuvTransform movie_yuv_transform(bool bt709, bool full_range) noexcept {
     return t;
 }
 
-namespace {
-
-// 4:2:0 chroma at `cb` and `cr`, `step` bytes between a row's samples (2 for NV12's pairs, 1 for I420's planes), into
-// the planes.
-void convert_420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* cb_in,
+void convert_yuv420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* cb_in,
                                  const std::uint8_t* cr_in, std::int32_t uv_pitch, std::uint32_t step,
                                  std::uint32_t width, std::uint32_t height, const MovieYuvTransform& t,
                                  std::uint8_t* out, const std::array<std::uint64_t, 3>& offsets,
@@ -287,14 +272,12 @@ void convert_420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, co
     });
 }
 
-}  // namespace
-
 void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* uv,
                                   std::int32_t uv_pitch, std::uint32_t width, std::uint32_t height,
                                   const MovieYuvTransform& t, std::uint8_t* out,
                                   const std::array<std::uint64_t, 3>& offsets,
                                   const std::array<std::uint32_t, 3>& pitches) noexcept {
-    convert_420_to_movie_planes(y, y_pitch, uv, uv + 1, uv_pitch, 2u, width, height, t, out, offsets, pitches);
+    convert_yuv420_to_movie_planes(y, y_pitch, uv, uv + 1, uv_pitch, 2u, width, height, t, out, offsets, pitches);
 }
 
 void convert_i420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, const std::uint8_t* u,
@@ -302,50 +285,8 @@ void convert_i420_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
                                   std::uint32_t height, const MovieYuvTransform& t, std::uint8_t* out,
                                   const std::array<std::uint64_t, 3>& offsets,
                                   const std::array<std::uint32_t, 3>& pitches) noexcept {
-    convert_420_to_movie_planes(y, y_pitch, u, v, uv_pitch, 1u, width, height, t, out, offsets, pitches);
+    convert_yuv420_to_movie_planes(y, y_pitch, u, v, uv_pitch, 1u, width, height, t, out, offsets, pitches);
 }
-
-#if defined(_WIN32)
-namespace {
-
-// Media Foundation is delay-loaded: on a Windows edition without it the first call into it would raise the loader's
-// exception instead of failing, so everything that calls it asks here first (its two libraries, loaded once).
-bool media_foundation_present() {
-    static const bool present = LoadLibraryExW(L"mfplat.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32) != nullptr &&
-                                LoadLibraryExW(L"mfreadwrite.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32) != nullptr;
-    return present;
-}
-
-// The GPU's video decoder for every movie: Media Foundation uses it only through a D3D device manager. Made once, ahead
-// of the first movie (MoviePlayback::configure), so a movie's first frames are not held up by it; null where the
-// GPU has no D3D11 video device (the movies decode in software).
-Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> video_device_manager() {
-    static std::once_flag once;
-    static Microsoft::WRL::ComPtr<ID3D11Device> device;
-    static Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> manager;
-    std::call_once(once, [] {
-        if (!media_foundation_present()) {
-            return;
-        }
-        UINT reset_token = 0;
-        Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> made;
-        if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
-                                     D3D11_CREATE_DEVICE_VIDEO_SUPPORT | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0,
-                                     D3D11_SDK_VERSION, &device, nullptr, nullptr)) ||
-            FAILED(MFCreateDXGIDeviceManager(&reset_token, &made)) ||
-            FAILED(made->ResetDevice(device.Get(), reset_token))) {
-            device.Reset();
-            return;
-        }
-        Microsoft::WRL::ComPtr<ID3D10Multithread> multithread;
-        if (SUCCEEDED(device.As(&multithread))) multithread->SetMultithreadProtected(TRUE);
-        manager = made;
-    });
-    return manager;
-}
-
-}  // namespace
-#endif
 
 // Decodes one replacement file on its own thread, up to kAhead frames ahead of the game.
 class MoviePlayback::Decoder {
@@ -366,16 +307,19 @@ public:
     }
 
     // Render thread: the newest decoded frame at or before `frame`; false when there is none (yet).
-    bool take(std::int32_t frame, std::int32_t shown, MovieFrame& out) {
+    bool take(std::int32_t frame, MovieFrame& out) {
         std::lock_guard<std::mutex> lock(mutex_);
         wanted_ = frame;
         if (!(rate_ > 0.0)) return false;
         number_ready();
-        // The game went back (a loop or a restart) or far ahead of what is decoded: start again there.
-        const bool behind = shown >= 0 && frame + 2 < shown;
+        // The game went back (a loop or a restart) from the last frame taken since the last seek, or far ahead of what
+        // is decoded: start again there. Until the seek's frames come the caller keeps showing the last one, so the
+        // last one taken cannot be what decides (each call would seek again).
+        const bool behind = taken_ >= 0 && frame + 2 < taken_;
         const bool ahead = !ready_.empty() && ready_.back().frame + static_cast<std::int32_t>(kAhead) * 4 < frame;
         if ((behind || ahead) && seek_to_ < 0) {
             seek_to_ = frame;
+            taken_ = -1;
             ready_.clear();
             ++seeks_;
             wake_.notify_all();
@@ -388,6 +332,7 @@ public:
             return false;
         }
         out = std::move(*best);
+        taken_ = out.frame;
         ready_.erase(ready_.begin(), best + 1);
         wake_.notify_all();
         return true;
@@ -456,182 +401,85 @@ private:
         return chunk;
     }
 
-#if defined(_WIN32)
     void run() {
-        using Microsoft::WRL::ComPtr;
         // A crash while this movie plays names it (NEB-V01).
         const galaxy::crash::ScopedActivity activity(galaxy::crash::Activity::Movie, file_);
-        const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        const bool mf = media_foundation_present() && SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE));
-        decode(mf);
-        if (mf) MFShutdown();
-        if (SUCCEEDED(com)) CoUninitialize();
+        std::string error;
+        const std::unique_ptr<MovieSource> source = open_movie_source(file_, error);
+        if (!source) {
+            fail(error);
+            return;
+        }
+        decode(*source);
     }
 
-    void decode(bool mf) {
-        using Microsoft::WRL::ComPtr;
-        const auto fail = [&](const char* what, HRESULT hr) {
-            std::cerr << "[movie] " << galaxy::path_text(file_.filename()) << ": " << what << " (0x" << std::hex
-                      << static_cast<std::uint32_t>(hr) << std::dec << ")\n";
-            std::lock_guard<std::mutex> lock(mutex_);
-            failed_ = true;
-        };
-        if (!mf) {
-            fail("Media Foundation is unavailable", E_FAIL);
-            return;
-        }
-        ComPtr<IMFAttributes> attributes;
-        ComPtr<IMFSourceReader> reader;
-        HRESULT hr = MFCreateAttributes(&attributes, 3);
-        if (SUCCEEDED(hr)) hr = attributes->SetUINT32(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, TRUE);
-        if (SUCCEEDED(hr)) hr = attributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
-        // Decoded on the GPU and only copied back where it can (video_device_manager), else in software.
-        if (const ComPtr<IMFDXGIDeviceManager> device_manager = video_device_manager(); SUCCEEDED(hr) && device_manager) {
-            attributes->SetUnknown(MF_SOURCE_READER_D3D_MANAGER, device_manager.Get());
-        }
-        if (SUCCEEDED(hr)) hr = MFCreateSourceReaderFromURL(file_.c_str(), attributes.Get(), &reader);
-        if (FAILED(hr)) {
-            fail("cannot open", hr);
-            return;
-        }
-        constexpr DWORD kVideo = static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM);
-        reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE);
-        reader->SetStreamSelection(kVideo, TRUE);
-        // NV12, the decoders' own output: re-encoded as the game's YCbCr with no RGB step. RGB32 (Media Foundation's
-        // colour conversion) where a decoder gives no NV12.
-        bool nv12 = false;
-        for (const GUID& subtype : {MFVideoFormat_NV12, MFVideoFormat_RGB32}) {
-            ComPtr<IMFMediaType> type;
-            hr = MFCreateMediaType(&type);
-            if (SUCCEEDED(hr)) hr = type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-            if (SUCCEEDED(hr)) hr = type->SetGUID(MF_MT_SUBTYPE, subtype);
-            if (SUCCEEDED(hr)) hr = reader->SetCurrentMediaType(kVideo, nullptr, type.Get());
-            if (SUCCEEDED(hr)) {
-                nv12 = subtype == MFVideoFormat_NV12;
-                break;
-            }
-        }
-        if (FAILED(hr)) {
-            fail("no decoder for its video", hr);
-            return;
-        }
-        UINT32 coded_width = 0;
-        UINT32 coded_height = 0;
-        UINT32 width = 0;   // the picture shown (the display aperture)
-        UINT32 height = 0;
-        UINT32 left = 0;
-        UINT32 top = 0;
-        LONG stride = 0;
-        MovieYuvTransform transform{};
-        double file_rate = 0.0;
-        const auto read_format = [&]() {
-            ComPtr<IMFMediaType> current;
-            if (FAILED(reader->GetCurrentMediaType(kVideo, &current))) return false;
-            if (FAILED(MFGetAttributeSize(current.Get(), MF_MT_FRAME_SIZE, &coded_width, &coded_height)) ||
-                coded_width == 0u || coded_height == 0u) {
-                return false;
-            }
-            width = coded_width;
-            height = coded_height;
-            left = top = 0;
-            MFVideoArea area{};
-            if (SUCCEEDED(current->GetBlob(MF_MT_MINIMUM_DISPLAY_APERTURE, reinterpret_cast<UINT8*>(&area), sizeof(area),
-                                           nullptr)) &&
-                area.Area.cx > 0 && area.Area.cy > 0) {
-                left = static_cast<UINT32>(std::max<SHORT>(0, area.OffsetX.value));
-                top = static_cast<UINT32>(std::max<SHORT>(0, area.OffsetY.value));
-                width = std::min<UINT32>(static_cast<UINT32>(area.Area.cx), coded_width - std::min(left, coded_width));
-                height = std::min<UINT32>(static_cast<UINT32>(area.Area.cy), coded_height - std::min(top, coded_height));
-            }
-            UINT32 default_stride = 0;
-            stride = SUCCEEDED(current->GetUINT32(MF_MT_DEFAULT_STRIDE, &default_stride))
-                         ? static_cast<LONG>(static_cast<INT32>(default_stride))
-                         : static_cast<LONG>(nv12 ? coded_width : coded_width * 4u);
-            // The source's colours: its matrix and range, else HD BT.709 / SD BT.601, limited range.
-            UINT32 matrix = MFVideoTransferMatrix_Unknown;
-            UINT32 range = MFNominalRange_Unknown;
-            current->GetUINT32(MF_MT_YUV_MATRIX, &matrix);
-            current->GetUINT32(MF_MT_VIDEO_NOMINAL_RANGE, &range);
-            const bool bt709 = matrix == MFVideoTransferMatrix_BT709 ||
-                               (matrix != MFVideoTransferMatrix_BT601 && coded_height >= 720u);
-            transform = movie_yuv_transform(bt709, range == MFNominalRange_0_255);
-            UINT32 numerator = 0;
-            UINT32 denominator = 0;
-            file_rate = SUCCEEDED(MFGetAttributeRatio(current.Get(), MF_MT_FRAME_RATE, &numerator, &denominator)) &&
-                                numerator != 0u && denominator != 0u
-                            ? static_cast<double>(numerator) / static_cast<double>(denominator)
-                            : 0.0;
-            return width >= 2u && height >= 2u;
-        };
-        if (!read_format()) {
-            fail("no picture size", E_FAIL);
-            return;
-        }
+    void fail(const std::string& what) {
+        std::cerr << "[movie] " << galaxy::path_text(file_.filename()) << ": " << what << "\n";
+        std::lock_guard<std::mutex> lock(mutex_);
+        failed_ = true;
+    }
+
+    void decode(MovieSource& source) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            file_rate_ = file_rate;
+            file_rate_ = source.format().rate;
         }
-        std::cerr << "[movie] " << galaxy::path_text(file_.filename()) << " " << width << "x" << height
-                  << (nv12 ? " nv12" : " rgb32") << " at " << file_rate << " fps\n";
         std::array<std::uint64_t, 3> offsets{};
         std::array<std::uint32_t, 3> pitches{};
         bool first = true;
         for (;;) {
             std::int32_t seek = -1;
             std::int32_t wanted = 0;
+            double rate = 0.0;
             {
                 std::unique_lock<std::mutex> lock(mutex_);
                 wake_.wait(lock, [&] { return stop_ || seek_to_ >= 0 || (!eof_ && ready_.size() < kAhead); });
                 if (stop_) return;
                 seek = std::exchange(seek_to_, -1);
                 wanted = wanted_;
+                rate = index_rate();
                 if (seek >= 0) eof_ = false;
             }
-            if (seek >= 0) {
-                PROPVARIANT position;
-                PropVariantInit(&position);
-                position.vt = VT_I8;
-                double rate = 0.0;
-                {
-                    std::lock_guard<std::mutex> lock(mutex_);
-                    rate = index_rate();
+            // A seek comes only after frames were numbered: the rate and the first frame's time are known.
+            if (seek >= 0 && rate > 0.0) {
+                if (!source.seek(static_cast<std::int64_t>(static_cast<double>(seek) / rate * 1.0e7) + start_time_)) {
+                    fail("cannot seek: " + source.error());
+                    return;
                 }
-                position.hVal.QuadPart =
-                    static_cast<LONGLONG>(static_cast<double>(seek) / rate * 1.0e7) + start_time_;
-                reader->SetCurrentPosition(GUID_NULL, position);
-                PropVariantClear(&position);
                 first = true;
             }
-            DWORD stream = 0;
-            DWORD flags = 0;
-            LONGLONG timestamp = 0;
-            ComPtr<IMFSample> sample;
-            hr = reader->ReadSample(kVideo, 0, &stream, &flags, &timestamp, &sample);
-            if (FAILED(hr)) {
-                fail("decoding stopped", hr);
+            MovieSourcePicture picture;
+            const MovieSource::Read read = source.read(picture);
+            if (read == MovieSource::Read::Failed) {
+                fail("decoding stopped: " + source.error());
                 return;
             }
-            if ((flags & MF_SOURCE_READERF_ENDOFSTREAM) != 0u) {
+            if (read == MovieSource::Read::End) {
                 std::lock_guard<std::mutex> lock(mutex_);
                 eof_ = true;
                 continue;
             }
-            if ((flags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED) != 0u && !read_format()) {
-                fail("no picture size after a format change", E_FAIL);
-                return;
-            }
-            if (!sample) continue;
+            const MovieSourceFormat& format = source.format();
             // Numbered now if the game has given the THP's rate; else when it does (the first frames, decoded
             // while the game reads the movie's header).
             std::int32_t frame = -1;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                if (start_time_ < 0) start_time_ = timestamp;
-                if (rate_ > 0.0) frame = frame_at(timestamp);
+                if (start_time_ < 0) {
+                    start_time_ = picture.time;
+                    std::cerr << "[movie] " << galaxy::path_text(file_.filename()) << " " << format.width << "x"
+                              << format.height << (format.pixels == MoviePixels::Yuv420 ? " yuv 4:2:0" : " bgra")
+                              << " at " << format.rate << " fps\n";
+                }
+                // A container that names its rate only with its pictures (GStreamer's caps).
+                if (!(file_rate_ > 0.0) && format.rate > 0.0) file_rate_ = format.rate;
+                if (rate_ > 0.0) frame = frame_at(picture.time);
             }
             // Catching up after a seek or a slow start: frames the game has passed are not converted.
             if (!first && frame >= 0 && frame + 1 < wanted) continue;
             first = false;
+            const std::uint32_t width = format.width;
+            const std::uint32_t height = format.height;
             const std::uint64_t size = movie_plane_layout(width, height, offsets, pitches);
             std::shared_ptr<TextureBackend::UploadChunk> chunk;
             try {
@@ -640,52 +488,25 @@ private:
                     if (stop_) return;
                     wake_.wait_for(lock, std::chrono::milliseconds(4));
                 }
-            } catch (const std::exception& error) {
-                std::cerr << "[movie] upload buffer: " << error.what() << "\n";
-                std::lock_guard<std::mutex> lock(mutex_);
-                failed_ = true;
+            } catch (const std::exception& exception) {
+                fail(std::string("upload buffer: ") + exception.what());
                 return;
             }
-            ComPtr<IMFMediaBuffer> media;
-            if (FAILED(sample->ConvertToContiguousBuffer(&media))) continue;
             const auto start = std::chrono::steady_clock::now();
-            ComPtr<IMF2DBuffer> planar;
-            BYTE* scan0 = nullptr;
-            LONG pitch = 0;
-            bool locked2d = false;
-            BYTE* data = nullptr;
-            DWORD length = 0;
-            if (SUCCEEDED(media.As(&planar)) && SUCCEEDED(planar->Lock2D(&scan0, &pitch))) {
-                locked2d = true;
-            } else if (SUCCEEDED(media->Lock(&data, nullptr, &length))) {
-                pitch = stride;
-                scan0 = stride < 0 ? data + static_cast<std::ptrdiff_t>(coded_height - 1u) * -stride : data;
-                const std::uint64_t needed = static_cast<std::uint64_t>(std::abs(stride)) * coded_height *
-                                             (nv12 ? 3u : 2u) / 2u;
-                if (needed > length) {
-                    media->Unlock();
-                    continue;
-                }
+            if (format.pixels == MoviePixels::Yuv420) {
+                convert_yuv420_to_movie_planes(picture.planes[0], picture.pitches[0], picture.planes[1],
+                                               picture.planes[2], picture.pitches[1], picture.chroma_step, width,
+                                               height, movie_yuv_transform(format.bt709, format.full_range),
+                                               chunk->cpu_base, offsets, pitches);
             } else {
-                continue;
-            }
-            if (nv12) {
-                // The interleaved chroma follows the coded rows.
-                const BYTE* luma = scan0 + static_cast<std::ptrdiff_t>(top) * pitch + left;
-                const BYTE* chroma = scan0 + static_cast<std::ptrdiff_t>(coded_height) * pitch +
-                                     static_cast<std::ptrdiff_t>(top / 2u) * pitch + (left & ~1u);
-                convert_nv12_to_movie_planes(luma, pitch, chroma, pitch, width, height, transform, chunk->cpu_base,
+                convert_bgra_to_movie_planes(picture.planes[0], width, height, picture.pitches[0], chunk->cpu_base,
                                              offsets, pitches);
-            } else {
-                convert_bgra_to_movie_planes(scan0 + static_cast<std::ptrdiff_t>(top) * pitch + left * 4u, width,
-                                             height, pitch, chunk->cpu_base, offsets, pitches);
             }
-            if (locked2d) planar->Unlock2D(); else media->Unlock();
             const double ms =
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
             MovieFrame decoded{};
             decoded.frame = frame;
-            decoded.time = timestamp;
+            decoded.time = picture.time;
             decoded.width = width;
             decoded.height = height;
             decoded.staging = std::move(chunk);
@@ -706,12 +527,6 @@ private:
             convert_ms_ += ms;
         }
     }
-#else
-    void run() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        failed_ = true;
-    }
-#endif
 
     std::filesystem::path file_;
     double rate_;  // the THP's frame rate; 0 until the game's first frame gives it (mutex_)
@@ -725,6 +540,7 @@ private:
     std::deque<MovieFrame> ready_;
     std::int32_t wanted_ = 0;
     std::int32_t seek_to_ = -1;
+    std::int32_t taken_ = -1;  // the last frame take() handed out since the last seek
     bool stop_ = false;
     bool eof_ = false;
     bool failed_ = false;
@@ -1195,10 +1011,8 @@ void MoviePlayback::configure(std::vector<std::filesystem::path> folders,
     if (folders != folders_) {
         close();
         folders_ = std::move(folders);
-#if defined(_WIN32)
-        // The video decoder's device, ready before the first movie opens.
-        if (!folders_.empty()) std::thread([] { (void)video_device_manager(); }).detach();
-#endif
+        // What the system's decoder needs first, ready before the first movie opens.
+        if (!folders_.empty()) std::thread([] { prepare_movie_sources(); }).detach();
     }
     stager_ = std::move(stager);
 }
@@ -1220,7 +1034,6 @@ void MoviePlayback::close() noexcept {
 }
 
 std::filesystem::path MoviePlayback::find(const char* disc_path) const {
-#if defined(_WIN32)
     if (disc_path == nullptr) return {};
     const std::string path(disc_path);
     const std::size_t slash = path.find_last_of('/');
@@ -1239,9 +1052,6 @@ std::filesystem::path MoviePlayback::find(const char* disc_path) const {
             }
         }
     }
-#else
-    (void)disc_path;
-#endif
     return {};
 }
 
@@ -1285,7 +1095,7 @@ const MovieFrame* MoviePlayback::frame(const MovieFrameMark& mark) {
     if (!current_missing_ && decoder_ != nullptr && !decoder_->failed()) {
         decoder_->set_rate(mark.frame_rate);
         MovieFrame next{};
-        if (decoder_->take(mark.frame, shown_.frame, next)) {
+        if (decoder_->take(mark.frame, next)) {
             shown_ = std::move(next);
         }
         if (shown_.frame >= 0 && shown_.staging) {

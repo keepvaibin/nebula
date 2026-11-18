@@ -236,6 +236,20 @@ add_library(galaxy_render_vk STATIC
     ${rt}/discord_presence.cpp
     ${rt}/controller_roster.cpp
     ${rt}/wiimote_speaker.cpp)
+# A replacement movie through the system's decoder (runtime/src/render/movie_source.h): MediaCodec on Android,
+# AVFoundation on Apple's systems, GStreamer (opened at run time) elsewhere.
+if(ANDROID)
+    target_sources(galaxy_render_vk PRIVATE ${rt}/render/movie_source_android.cpp)
+    target_link_libraries(galaxy_render_vk PRIVATE mediandk)
+elseif(APPLE)
+    target_sources(galaxy_render_vk PRIVATE ${rt}/render/movie_source_apple.mm)
+    set_source_files_properties(${rt}/render/movie_source_apple.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    target_link_libraries(galaxy_render_vk PRIVATE "-framework AVFoundation" "-framework CoreMedia"
+        "-framework CoreVideo" "-framework Foundation")
+else()
+    target_sources(galaxy_render_vk PRIVATE ${rt}/render/movie_source_gstreamer.cpp)
+    target_link_libraries(galaxy_render_vk PRIVATE ${CMAKE_DL_LIBS})
+endif()
 # Mod import (folders and archives).
 if(NOT IOS)
     set(NEBULA_ARCHIVE_SOURCES "${nebula_root}/third_party/archive" CACHE PATH "zlib, xz and libarchive sources")
