@@ -31,6 +31,7 @@
 #include "galaxy/path_text.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/game_step.h"
+#include "galaxy/worker_pool.h"
 #include "galaxy/asset_store.h"
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
@@ -67,7 +68,6 @@
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/display_aspect.h"
 #include "galaxy/pacing_recorder.h"
-#include "galaxy/worker_pool.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/calibration_scene.h"
 #include "galaxy/ui/benchmark_menu.h"
