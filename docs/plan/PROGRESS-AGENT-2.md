@@ -397,3 +397,59 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   region discs) and eleven refusal tests that still looked for the loader's line after N-2054 moved the refusal to the
   start's check. They expect the check's mod log row now; loader5, types and varargs 28 of 28 on a2w5.
 - engine/e13a a8796ab68 merged (8ce3d9560), at Agent 1's request.
+
+## 2026-11-18 mods/n3008: N-3008 evidence, N-2057, N-4002, N-4003, N-4004, the key hold
+
+- N-3008 evidence: on bins a2w6 (before) classes/1412-past-1024 stops at 1024 classes (fact defined 1024, wanted
+  1101) and loader/1140-many-mods' take-out never ends (takeout.lt-crowd-20 not within 600 frames); on a2w7 (after)
+  both pass, with 1407-make. 1412's mod did not build at all until its alias arguments left LT_START (a macro's
+  argument split at their commas).
+- N-4002: tools/lumacore/instrument.py proves a `const char *` parameter `in` when the callee and every overrider only
+  read it during the call (followed through aliases, casts, the strchr family and calls to parameters themselves
+  proven); gen_types.py marks them and writes luma_texts.left with the reason for each one left. texts_fixture_test.py
+  (45 rows: 20 in, 25 left with their reasons) is in the gate's fixture tests.
+- N-4004: LUMA_NULLABLE before a pointer field reaches the types file as "nullable": true (luma-validate Field.nullable);
+  a mark on a field that is no pointer, any other mark, or a mark twice stops the build by name.
+- N-4003: LumaCore.weak and weak_get, one table of weak references in the kernel for every mod, emptied by the game
+  itself (NameObj's destructor, NebulaArena::free, an arena's end): a mod holding references adds no hook. Unit test
+  galaxy_luma_weak_tests (a model through 800 000 random steps and four threads; it fails with the hash's removal
+  broken, with the generation not moved on, and without the lock); 1308-weak in the game with two mods (the same
+  handle, one taken out, a new scene, hostile objects and handles, no hook on NameObj::~NameObj or NebulaArena::free).
+- Harness: a key step holds the steps after it until the menus have taken the key (NebulaHostForExtension.
+  menu_keys_waiting): beside other runs the window's thread took 6709's Escape after the picture meant to show it.
+  busy_window keeps that thread busy; 21-key-waits gives keys to a window busy for 1.5 s.
+- 3107-movie-loose called MR::startMovie(s32), which the game does not have; it calls MR::startMoviePlayer.
+
+## 2026-11-18 mods/n3008: the text proof's helpers, 1123, 3107's pictures, the harness clock, faults GitHub found
+
+- N-4002 (e0ef5207b): the text proof also reads the functions with no row that a proven one calls (static inline
+  helpers, the kernel's own) and overrides defined in a header, which it had passed over: an override that kept the
+  text could make its base `in`. texts_fixture_test.py: 51 rows; luma_texts.left lists 2306 parameters left kept with
+  a reason each (most are an object's name given to its constructor). M-114's note names what could still be proven:
+  texts given to mods' events and to the kernel's services, through function pointers.
+- LumaLink pinned at 592614e (M-123, M-132, N-4014, N-4015) and LumaKit built with it (e5a34f52b; verify passes).
+- loader/1123-passes-game-thread (P-040 condition 3, for Agent 3): a mod hooks a function inside each pass the plain
+  module may move to workers. On bins a2w9: 0 calls off the game thread for every hook; on it, the s32 frustum judge
+  472336, MR::isClipped 1217661, ShadowController::updateDirection 24698, PlanetGravity::calcGravity 2831612, the
+  three animation calls 101279 to 125895. The f32 judge is never called in EggStarGalaxy and is checked off the game
+  thread only (87680a431).
+- N-2057: 3107-movie-loose checks its pictures (the mod's one-colour movie, looked at, references made from a2w9).
+  Before (bins a2w8, importer older than the fix): fails, rmse 125.6, no cook.movie fact; after: passes.
+- GitHub run 44303790236 on mods/n3008 failed two jobs, both mine:
+  - Linux did not link: native_settings_keys_waiting and busy_window existed on the Windows window only. The SDL and
+    Apple windows count the keys they hold now (b8182f504); the next run's Linux job links.
+  - galaxy_luma_weak_tests read past its cells under the undefined-behaviour sanitizer (a range end drawn twice). It
+    is a game unit test now (native/tests, the game's compiler and flags; MSVC cannot build LumaWeak.cpp), draws once,
+    and stops on any index past the cells: object 6081 of 6000 with the old line, passes with the fix (20864244d).
+- Run 44308720250: LeakSanitizer in the game's unit tests: a GrowTable dropped the directories it retires (32 and 64
+  bytes in the weak test) and the grow test never freed its tables. A retired directory is now reachable from the one
+  that replaced it, and release() frees a test's table (b723b7a24).
+- busy_window's window message had the show-instance message's number (my slip): every 21-key-waits run showed its
+  hidden window and the window thread never waited. Own number, and a compile-time check that the window procedure's
+  messages differ (fails with the old number) (e513a1e64).
+- With the window really busy, 21-key-waits showed the harness's clock fault: steps with a frame ran at that test
+  frame while held steps let test frames go on, so after a hold every due step ran in one frame and the end and the
+  facts after it carried the frames held (end step 160, ended at 693). Test frames now stand still while the steps are
+  held (4e3de9ba5); harness_steps_test.py's run held by a menu key ends at frame 59 with the old harness, 30 now.
+- same_mod_runs.py (6332a038c): unsteady tests (facts differ between two runs one at a time: device, network and
+  thread events) judged by verdict and pictures; loopback ports and shader file names written as one.
