@@ -58,6 +58,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -912,12 +913,6 @@ void RendererD3D12::trace_rings() const {
     line("matrix", matrix_ring_);
 }
 
-// A GPU drain while a frame records, to make a target again at another size: named, so a run counts them (P-028).
-void RendererD3D12::drain_mid_frame(const char* what) {
-    std::fprintf(stderr, "[gpu-drain] %s made again at frame %llu\n", what, static_cast<unsigned long long>(frame_index_));
-    wait_for_gpu();
-}
-
 void RendererD3D12::wait_for_gpu() {
     if (device_gone_) {
         return;
@@ -1149,7 +1144,7 @@ bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* color, ID
 // the descriptor ring).
 void RendererD3D12::write_msaa_depth_view(SceneMsaa& msaa) {
     if (!msaa.depth_srv) {
-        msaa.depth_srv = allocate_persistent_descriptors(1u);
+        msaa.depth_srv = fresh_persistent(1u);
     }
     D3D12_SHADER_RESOURCE_VIEW_DESC view{};
     view.Format = kSceneDepthSrvFormat;
@@ -1559,6 +1554,43 @@ void RendererD3D12::refresh_scene_conversion_source_views() {
     }
     release_conv_table(conv_scene_table_);
     write_scene_conversion_views(*conv_scene_source_table_);
+}
+
+void RendererD3D12::retire_persistent(std::optional<DescriptorRing::Persistent>& table, unsigned count) {
+    if (table) {
+        retired_persistent_.push_back({*table, count, frame_index_ + kFramesInFlight + 1u});
+        table.reset();
+    }
+}
+
+DescriptorRing::Persistent RendererD3D12::fresh_persistent(unsigned count) {
+    for (auto it = retired_persistent_.begin(); it != retired_persistent_.end(); ++it) {
+        if (it->count == count && frame_index_ >= it->free_from) {
+            const DescriptorRing::Persistent table = it->table;
+            retired_persistent_.erase(it);
+            return table;
+        }
+    }
+    return allocate_persistent_descriptors(count);
+}
+
+void RendererD3D12::retire_scene_set(SceneTargetSet& set, bool own_depth_view) {
+    // std::addressof: ComPtr's operator& releases what it holds.
+    for (ComPtr<ID3D12Resource>* resource : {std::addressof(set.color), std::addressof(set.depth),
+                                             std::addressof(set.msaa.color), std::addressof(set.msaa.depth)}) {
+        if (*resource) {
+            retired_targets_[frame_slot_].push_back(std::move(*resource));
+        }
+        resource->Reset();
+    }
+    retire_persistent(set.conv_table, 2u);
+    set.conv_color_index = set.conv_depth_index = DescriptorRing::kNoPersistent;
+    if (own_depth_view) {
+        retire_persistent(set.msaa.depth_srv, 1u);
+    } else {
+        set.msaa.depth_srv.reset();
+    }
+    release_conv_table(set.conv_ring);
 }
 
 // A set's views left a ring entry: free once the frames that could read it are done.
@@ -3154,6 +3186,7 @@ void RendererD3D12::shutdown() {
     conv_scene_color_index_ = conv_scene_depth_index_ = DescriptorRing::kNoPersistent;
     conv_scene_source_table_.reset();
     conv_scene_tables_.clear();
+    retired_persistent_.clear();
     conv_scene_table_ = ~std::size_t{0};
     for (SceneTargetSet* set : {&alt_scene_, &target_scene_, &fg_hudless_scene_target_, &hdr_scene_scene_, &layer2d_set_}) {
         set->conv_ring = ~std::size_t{0};
@@ -4226,7 +4259,7 @@ ID3D12Resource* RendererD3D12::hdr_capture_picture(const DisplayTexture& source,
     if (!hdr_capture_target_ || hdr_capture_target_->GetDesc().Width != host_window::backbuffer_width ||
         hdr_capture_target_->GetDesc().Height != host_window::backbuffer_height) {
         if (hdr_capture_target_) {
-            drain_mid_frame("the HDR capture picture");
+            retired_targets_[frame_slot_].push_back(std::move(hdr_capture_target_));  // P-028: no GPU drain
         }
         hdr_capture_target_.Reset();
         if (!hdr_capture_rtv_heap_) {
@@ -5419,13 +5452,9 @@ bool RendererD3D12::create_scene_set(
     bool unordered_access, unsigned samples, bool hdr, unsigned width, unsigned height, bool target) {
     const UINT w = static_cast<UINT>(std::lround(static_cast<double>(width) * map.sx));
     const UINT h = static_cast<UINT>(std::lround(static_cast<double>(height) * map.sy));
-    if (set.color) {
-        drain_mid_frame("a scene target set");
-    }
-    set.color.Reset();
-    set.depth.Reset();
+    // The old set goes when the frames that drew or read it are done (P-028); its own views with it.
+    retire_scene_set(set, true);
     set.map = set.extent = FrameMap{};
-    release_conv_table(set.conv_ring);
     if (!rtv_heap) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
         dhd.NumDescriptors = 1;
@@ -5477,8 +5506,7 @@ bool RendererD3D12::create_scene_set(
         return false;
     }
     if (persistent_views) {
-        write_scene_set_views(set, set.conv_table ? *set.conv_table
-                                                : allocate_persistent_descriptors(2u));
+        write_scene_set_views(set, set.conv_table ? *set.conv_table : fresh_persistent(2u));
     } else {
         // The caller writes views into the frame's descriptor segment per use.
         set.conv_table.reset();
@@ -5685,11 +5713,6 @@ void RendererD3D12::take_fg_hudless_scene() {
         return;
     }
     if (!fg_hudless_scene_target_.color || fg_hudless_scene_target_.map != frame_) {
-        if (fg_hudless_scene_target_.color) {
-            drain_mid_frame("the HUD-less scene");
-        }
-        fg_hudless_scene_target_.color.Reset();
-        fg_hudless_scene_target_.depth.Reset();
         if (!create_scene_set(fg_hudless_scene_target_, fg_hudless_rtv_heap_, fg_hudless_dsv_heap_, frame_)) {
             return;
         }
@@ -5714,7 +5737,7 @@ void RendererD3D12::copy_fg_hudless_display(const DisplayTexture& dest) {
     if (!fg_hudless_display_.texture || fg_hudless_display_.texture->GetDesc().Width != desc.Width ||
         fg_hudless_display_.texture->GetDesc().Height != desc.Height) {
         if (fg_hudless_display_.texture) {
-            drain_mid_frame("the HUD-less display picture");
+            retired_targets_[frame_slot_].push_back(std::move(fg_hudless_display_.texture));  // P-028: no GPU drain
         }
         fg_hudless_display_.texture.Reset();
         D3D12_HEAP_PROPERTIES hp{};
@@ -5760,7 +5783,7 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
     if (!fg_hudless_target_ || fg_hudless_target_->GetDesc().Width != host_window::backbuffer_width ||
         fg_hudless_target_->GetDesc().Height != host_window::backbuffer_height) {
         if (fg_hudless_target_) {
-            drain_mid_frame("the HUD-less target");
+            retired_targets_[frame_slot_].push_back(std::move(fg_hudless_target_));  // P-028: no GPU drain
         }
         fg_hudless_target_.Reset();
         if (!fg_hudless_target_rtv_heap_) {
@@ -5871,11 +5894,7 @@ bool RendererD3D12::ensure_wide_set(SceneTargetSet& set, ComPtr<ID3D12Descriptor
                       set.color->GetDesc().Height == desc.Height && set.color->GetDesc().Format == format &&
                       set.msaa.samples == samples;
     if (!same) {
-        if (set.color) {
-            drain_mid_frame("a wide scene set");
-        }
-        set.color.Reset();
-        set.msaa.color.Reset();
+        retire_scene_set(set, false);  // P-028: no GPU drain
         if (!rtv_heap) {
             D3D12_DESCRIPTOR_HEAP_DESC heap{};
             heap.NumDescriptors = 2;
@@ -5931,7 +5950,7 @@ bool RendererD3D12::ensure_wide_set(SceneTargetSet& set, ComPtr<ID3D12Descriptor
     set.msaa.depth_dirty = scene_msaa_.depth_dirty;
     if (set.depth != scene_depth_) {
         set.depth = scene_depth_;
-        write_scene_set_views(set, set.conv_table ? *set.conv_table : allocate_persistent_descriptors(2u));
+        write_scene_set_views(set, set.conv_table ? *set.conv_table : fresh_persistent(2u));
     }
     return true;
 }
