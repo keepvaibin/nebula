@@ -421,8 +421,11 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     instance_info.ppEnabledExtensionNames = instance_extensions.data();
     instance_info.enabledLayerCount = static_cast<std::uint32_t>(layers.size());
     instance_info.ppEnabledLayerNames = layers.data();
-    if (vkCreateInstance(&instance_info, nullptr, &instance_) != VK_SUCCESS) {
-        std::fprintf(stderr, "[vulkan] vkCreateInstance failed\n");
+    const VkResult created = vkCreateInstance(&instance_info, nullptr, &instance_);
+    if (created != VK_SUCCESS) {
+        // The result says which: no driver (VK_ERROR_INCOMPATIBLE_DRIVER), an extension or a layer missing.
+        std::fprintf(stderr, "[vulkan] vkCreateInstance failed: VkResult %d (%u extensions, %u layers asked for)\n",
+                     static_cast<int>(created), instance_info.enabledExtensionCount, instance_info.enabledLayerCount);
         return false;
     }
     volkLoadInstance(instance_);
