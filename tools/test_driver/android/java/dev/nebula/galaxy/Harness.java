@@ -94,6 +94,23 @@ final class Harness {
                 "--crash-dumps", folder.getPath()};
         }
         final String libraries = activity.getApplicationInfo().nativeLibraryDir;
+        // The run's game module: module.txt's name, lib<name>.so in the app's libraries (the host takes
+        // lib<name>_plain.so beside it when no mod has code), so one test app can carry two builds' modules for an A/B;
+        // libsmg_game.so without the file.
+        final String module = libraries + "/lib" + moduleName(new File(folder, "module.txt")) + ".so";
+        // A benchmark run (benchmark.txt in the folder): the built-in benchmark, its results in benchmark.json, with
+        // no test extension.
+        if (new File(folder, "benchmark.txt").isFile()) {
+            return new String[] {
+                "--data", new File(folder, "appdata").getPath(),
+                "--pak", GameFiles.pak(activity).getPath(),
+                "--saves", new File(folder, "saves").getPath(),
+                "--settings", new File(folder, "settings").getPath(),
+                "--crash-dumps", folder.getPath(),
+                "--module", module,
+                "--benchmark", "1",
+                "--benchmark-out", new File(folder, "benchmark.json").getPath()};
+        }
         final List<String> arguments = new ArrayList<>(List.of(
             "--data", new File(folder, "appdata").getPath(),
             "--pak", GameFiles.pak(activity).getPath(),
@@ -101,7 +118,7 @@ final class Harness {
             "--settings", new File(folder, "settings").getPath(),
             "--seconds", String.valueOf(seconds),
             "--crash-dumps", folder.getPath(),
-            "--module", libraries + "/libsmg_game.so",
+            "--module", module,
             "--extension", libraries + "/libnebula_test_extension.so"));
         // The run's --diagnostics (luma_test_android.py writes the runner's and the test's names to diagnostics.txt);
         // the game checks the names, so one it does not know ends the start with its message.
@@ -115,6 +132,22 @@ final class Harness {
             }
         }
         return arguments.toArray(new String[0]);
+    }
+
+    /** module.txt's one name ("smg_before"), or "smg_game" without the file. */
+    private static String moduleName(File file) {
+        if (!file.isFile()) {
+            return "smg_game";
+        }
+        try {
+            final String name = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8).trim();
+            if (!name.matches("[a-z0-9_]{1,64}")) {
+                throw new IllegalStateException("harness run: module.txt takes one name of a-z, 0-9 and _: " + name);
+            }
+            return name;
+        } catch (IOException failed) {
+            throw new IllegalStateException("harness run: module.txt could not be read", failed);
+        }
     }
 
     /** diagnostics.txt's one line of names ("timeline,frame-times"), or "" without the file. */
