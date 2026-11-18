@@ -139,9 +139,9 @@ void install() noexcept {
                 },
                 nullptr);
             g_writer->start();
-            // A normal end (main returns, exit): what is queued goes out before stdio closes. The thread is not
-            // joined: a line written after this goes out at once.
-            std::atexit([] { g_writer->stop(); });
+            // A normal end (main returns, exit): what is queued goes out before stdio closes, and the thread is
+            // joined (let go if its output is stuck). A line written after this goes out at once.
+            std::atexit([] { g_writer->finish(); });
         } catch (...) {
             g_writer = nullptr;  // no thread: every line is written where it is made, as before
         }

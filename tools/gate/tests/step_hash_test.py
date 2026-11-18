@@ -117,6 +117,19 @@ def main():
         ok, lines = step_hash.check(tour("device2", {one: (["r1", "r2", "y3"], "pass")}), against=t / "pc")
         check(not ok and "differs from step 2" in lines[-1], "a device that steps differently: fails")
 
+    # Values the same to 1/1000: the bits name the float that differs, with both values in full (N-1064).
+    import struct
+    def bits(*floats):
+        return "".join("%08x" % struct.unpack("<I", struct.pack("<f", f))[0] for f in floats)
+    rest = [0.0] * 3 + [1.0] * 3 + [0.0] * 3 + [0.0, -1.0, 0.0]
+    a = dict(actor(5, "Mario", 1.0), h="aa", bits=bits(1.0, 2.0, 3.0, *rest))
+    b = dict(actor(5, "Mario", 1.0), h="bb", bits=bits(1.0, 2.0000002, 3.0, *rest))
+    said = step_hash.first_actor([a], [b])
+    check(said is not None and "(bits)" in said and "pos.y 2.0 / 2.000000" in said and "pos.x" not in said,
+          "a difference below 1/1000 is named from the bits: %s" % said)
+    check("below 1/1000" in step_hash.first_actor([dict(a, bits=None)], [dict(b, bits=None)]),
+          "without bits it is still said to be below 1/1000")
+
     if failures:
         print("step_hash_test.py: FAILED:\n  " + "\n  ".join(failures))
         return 1

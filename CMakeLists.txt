@@ -1,5 +1,16 @@
 cmake_minimum_required(VERSION 3.24)
 project(Nebula VERSION 2.0.0 LANGUAGES C CXX)
+# What the host computes for the game (a stick's position above all) is the same bits on every CPU: no multiply and
+# add is fused into one rounding. Clang fuses them by default on CPUs with a fused multiply-add (arm64, and x86-64 at
+# AVX2): a tablet's stick then differed from a computer's by one ulp, and its replay from the computer's (N-1064). The
+# game module is built the same way (native/CMakeLists.txt). MSVC fuses none at /fp:precise without /fp:contract.
+if(MSVC)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/clang:-ffp-contract=off>)
+    endif()
+else()
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-ffp-contract=off>)
+endif()
 
 # The programs' debug information (crash dumps, the profiler): one PDB per program (/Zi), or inside each object (/Z7)
 # when a compiler cache sits in front of the compiler (the push workflow's sccache), which cannot cache a shared PDB.

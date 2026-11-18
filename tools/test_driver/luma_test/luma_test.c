@@ -1389,8 +1389,8 @@ static void do_read(const Words* w) {
    the order the game made them, each its name's bytes and its position, rotation, scale, velocity and gravity (the
    floats' bits) and its spine's step. No addresses: two builds of the same game give the same hash, so a change to the
    game's source that changes nothing the game does keeps every step's hash. "hash detail" writes one fact hash.actor
-   per actor at that step: its place in the order, its name, its own hash and its values, so the first actor two runs
-   differ in can be named. */
+   per actor at that step: its place in the order, its name, its own hash, its values and their bits (the 15 floats
+   in the hash's order, 8 hex digits each), so the first actor two runs differ in, and the value, can be named. */
 
 static int hashing;
 static int32_t hashed_frame = -1;
@@ -1431,6 +1431,27 @@ static void put_hex(Out* out, uint64_t value) {
     put_string(out, hex);
 }
 
+/* The bits of the floats the hash reads, position to gravity, as 120 hex digits. */
+static void put_bits(Out* out, const char* actor) {
+    const int32_t at[5] = {field_position, field_rotation, field_scale, field_velocity, field_gravity};
+    char hex[121];
+    uint32_t n = 0;
+    for (uint32_t f = 0; f < 5u; f++) {
+        for (uint32_t c = 0; c < 3u; c++) {
+            const char* const from = actor + at[f] + c * 4u;
+            uint32_t bits = (uint32_t)(unsigned char)from[0] | (uint32_t)(unsigned char)from[1] << 8u |
+                   (uint32_t)(unsigned char)from[2] << 16u | (uint32_t)(unsigned char)from[3] << 24u;
+            for (int i = 7; i >= 0; i--) {
+                hex[n + (uint32_t)i] = "0123456789abcdef"[bits & 15u];
+                bits >>= 4u;
+            }
+            n += 8u;
+        }
+    }
+    hex[n] = 0;
+    put_string(out, hex);
+}
+
 static void hash_step(int detail) {
     uint64_t h = 14695981039346656037ull;
     uint32_t actors = 0;
@@ -1464,6 +1485,8 @@ static void hash_step(int detail) {
             put(&each, ",\"step\":");
             const char* const spine = *(const char* const*)(actor + field_spine);
             put_int(&each, spine != 0 ? *(const int32_t*)(spine + field_spine_step) : -1);
+            put(&each, ",\"bits\":");
+            put_bits(&each, actor);
             put(&each, "}");
             fact("hash.actor", &each);
         }

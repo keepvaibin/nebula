@@ -3,6 +3,11 @@
 # the cache paths below; the game module is native/CMakeLists.txt.
 cmake_minimum_required(VERSION 3.22)
 project(NebulaSDL LANGUAGES C CXX)
+# What the host computes for the game (a stick's position above all) is the same bits on every CPU: no multiply and
+# add is fused into one rounding. Clang fuses them by default on CPUs with a fused multiply-add (arm64, and x86-64 at
+# AVX2): a tablet's stick then differed from a computer's by one ulp, and its replay from the computer's (N-1064). The
+# game module is built the same way (native/CMakeLists.txt). MSVC fuses none at /fp:precise without /fp:contract.
+add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-ffp-contract=off>)
 # The game's version, from the main project's file.
 file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../../CMakeLists.txt" nebula_project_line REGEX "^project\\(Nebula VERSION ")
 string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" nebula_version "${nebula_project_line}")

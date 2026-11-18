@@ -168,9 +168,7 @@ void camera_motion(const Affine34* a, const Affine34* b, float previous_move,
             out.inv_sin_theta = 1.0f / std::sin(out.theta);
         }
     }
-    out.cut = out.turn_degrees > limits.max_turn_degrees ||
-              (out.moved > limits.max_move_units &&
-               out.moved > limits.relative * previous_move + limits.slack);
+    out.cut = out.moved > limits.max_move_units && out.moved > limits.relative * previous_move + limits.slack;
 }
 
 Affine34 camera_at(const CameraMotion& m, float t) noexcept {

@@ -91,3 +91,21 @@ One dated entry per package step. Newest last.
 - N-1012 (3465976af): the gate's Android build runs the launcher's JVM tests (8 of 8), with JUnit and org.json
   downloaded under the owner's permission.
 - Unit tests 85 of 85, nebula-import 334 pass, telemetry 6 of 6.
+
+## 2026-11-18, early morning (engine/e13a)
+
+- The main gate of a8796ab68 did not start: GitHub's 'Linux sanitizers (thread)' job was red. N-1066 (9916b2544): P-070's
+  log writer thread was stopped at the process's end but never joined, a thread leak the sanitizer reported into the
+  test's own stderr (/dev/null by then). LineWriter::finish joins it (lets it go when its output is stuck). The job is
+  green on f89429c9b.
+- P-029 (9ce65eef0): not a fault; a ring test holds that a heap handed back leaves the ring empty.
+- The step hash names a difference below 1/1000 (f89429c9b): detail facts carry the 15 floats' bits.
+- M-068, the renderer's side (40ce46953): a turn is never a camera cut; the game and a mod's camera say their own cuts.
+  frame_interpolation_tests: 2 failures before, none after.
+- P-004 fixed: on the tablet the vsync thread wakes 0 times in 10 s in the background (848 on main 87b6d3db5).
+- N-1064: the tablet's replay of HeavenlyBeachGalaxy-2 left the computer's at step 356 (Mario's rotation, a few ulps).
+  Not char signedness (a -funsigned-char module replays the same), not an out-of-range float conversion or a shift (a
+  module with those checks trapping ran all 600 steps), not long's width, the game's libm, sorts or hash containers.
+  The host on Android and Apple was built with clang's default -ffp-contract=on: nunchuk_stick_counts' x*x + y*y fused
+  into one rounding, so the stick of the step at 354 differed by one ulp on each axis. All hosts now build with
+  -ffp-contract=off (as the game module already did); native_input_tests pins the bits.

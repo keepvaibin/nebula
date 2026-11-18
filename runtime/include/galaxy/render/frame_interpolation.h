@@ -32,9 +32,11 @@ struct CameraMotion {
     bool cut = false;         // a and b are not one frame of camera motion
 };
 
-// Thresholds of a camera cut (a teleport of the view between two frames).
+// Thresholds of a camera cut the camera did not say (a teleport of the view between two frames). A turn is never one:
+// the game says its own cuts (a forced camera change, a camera animation's cut frames: NEBULA_FRAME_CAMERA_CUT) and
+// blends every other change of camera over frames, and a mod's camera says its own; a fast look (a mouse flick) is
+// motion, shown turning between the steps (M-068).
 struct CameraCutLimits {
-    float max_turn_degrees = 60.0f;
     // The eye moved further than this many units, and further than
     // `relative` times the previous frame's movement plus `slack`.
     float max_move_units = 1500.0f;

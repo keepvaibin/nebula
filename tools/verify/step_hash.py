@@ -83,13 +83,37 @@ def compare_runs(a, b):
     return True, "the same over %d steps" % len(frames)
 
 
+BIT_FIELDS = ("pos", "rot", "scale", "vel", "grav")
+
+
+def bit_values(bits):
+    """{"pos.x": float, ...} of a hash.actor's "bits" (15 floats as 8 hex digits each, the hash's order)."""
+    import struct
+    out = {}
+    for f, name in enumerate(BIT_FIELDS):
+        for c, axis in enumerate("xyz"):
+            word = bits[(f * 3 + c) * 8:(f * 3 + c + 1) * 8]
+            out["%s.%s" % (name, axis)] = struct.unpack("<f", struct.pack("<I", int(word, 16)))[0]
+    return out
+
+
+def struct_bits(value):
+    import struct
+    return struct.pack("<f", value)
+
+
 def first_actor(a, b):
-    """The first actor two detail lists differ in, as text; None without both lists."""
+    """The first actor two detail lists differ in, as text; None without both lists. Values the same to 1/1000 are
+    named from their bits where both runs wrote them: each float that differs, with both values in full."""
     if not a or not b:
         return None
     for x, y in zip(a, b):
         if x != y:
             fields = [k for k in ("name", "pos", "rot", "scale", "vel", "grav", "step") if x.get(k) != y.get(k)]
+            if not fields and x.get("bits") and y.get("bits") and x["bits"] != y["bits"]:
+                xv, yv = bit_values(x["bits"]), bit_values(y["bits"])
+                differ = ["%s %r / %r" % (k, xv[k], yv[k]) for k in xv if struct_bits(xv[k]) != struct_bits(yv[k])]
+                return "first actor that differs: #%d %s (bits): %s" % (x["i"], x["name"], "; ".join(differ))
             return "first actor that differs: #%d %s (%s): %s / %s" % (
                 x["i"], x["name"], ", ".join(fields) or "below 1/1000",
                 {k: x.get(k) for k in fields} if fields else x["h"], {k: y.get(k) for k in fields} if fields else y["h"])

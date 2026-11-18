@@ -8,8 +8,9 @@ starts the game for a test goes through here.
          two stops of each other disc. Before asking for a main gate.
 --main   level 2, what moves main: everything deterministic. Every renderer's engine tests and 102-stop tour with
          pictures and step hashes, the other discs, the mod tests on every renderer, the Android build, the tablet's
-         short part (the 12 stops, their step hashes against the PC's at the tablet's screen size) and GitHub's
-         Linux, Linux unit tests, Mac and Rust-on-Linux jobs of the same commit.
+         short part (the 12 stops, their step hashes against the PC's at the tablet's screen size) and every job of
+         GitHub's Check run of the same commit (Linux, Linux unit tests, both sanitizer jobs, Mac, Mac (Intel), Android,
+         Rust-on-Linux and any job added later), planned.tsv's github/<job> lines aside.
          --move: main moves to this commit when it passes (section 5). It needs a whole quick gate of the commit
          passed, the branch pushed and main an ancestor of it; it takes the gate lock (or waits --wait minutes),
          and on a pass fast-forwards main and pushes it itself, writes MAIN-MOVED on the board and frees the lock.
