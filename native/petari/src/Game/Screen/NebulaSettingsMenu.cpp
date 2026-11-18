@@ -81,7 +81,6 @@ namespace {
     const f32 cEdgeDrop = 2.0f;  // a row's own button's darker edge under it; the two centred together on the row
     const f32 cRowButtonRadius = 11.0f;  // a row's own buttons have the rows' corners, near enough (the rows': 12)
     const f32 cReach = 8.0f;  // how far past a button's edge above and below the pointer still has it
-    const f32 cMinSqueeze = 0.6f;  // the narrowest a line of text is drawn
     const f32 cKeyGap = 6.0f;  // a key from its word
     const f32 cBadgeScale = 1.35f;  // a controller's button: its height for the text's size
     const f32 cBadgeGap = 3.0f;
@@ -429,8 +428,8 @@ namespace {
         TextBox* mLabel;
         TextBox* mValue;
         Window* mRule;
-        f32 mLabelWidth;
-        f32 mValueWidth;
+        FitLine mLabelFit;  // NebulaUi's one rule for a line in its room
+        FitLine mValueFit;
         bool mIndented;
         s32 mOnPlace;  // the number drawn before its label (a mod on), 0 for none
         // A row of buttons: their words in the played language, those unavailable, and where each was drawn (its centre
@@ -513,7 +512,7 @@ namespace {
     struct Button {
         Chip mChip;
         KeyCap mKey;
-        f32 mWordWidth;
+        FitLine mWord;
         s32 mAction;
         bool mOff;  // unavailable (the results window's first and last pages): grey, the pointer passes over it
     };
@@ -535,11 +534,11 @@ namespace {
     struct Hint {
         KeyCap mKey;
         TextBox* mWord;
-        f32 mWordWidth;
+        FitLine mWordFit;
     };
 
-    // UTF-8 (the host's text) as the game's 16-bit text, after the first `used` units of `rDst` (MR::utf8ToText: a
-    // character past U+FFFF is one U+FFFD, P-160).
+    // UTF-8 (the host's text) as the game's UTF-16 text, after the first `used` units of `rDst` (MR::utf8ToText, the
+    // game's one decoder, P-160).
     void fromUtf8(MR::Text16& rDst, u32 used, const char* pSrc) {
         // A unit takes at least one byte.
         char16_t* const pDst = rDst.grow(used, used + static_cast< u32 >(strlen(pSrc)) + 1);
@@ -693,20 +692,6 @@ namespace {
         }
         getExpanded(rDst, id, args.begin(), args.size());
         return true;
-    }
-
-    // `pText`'s first `length` letters (no space at their end) and an ellipsis.
-    void shorten(MR::Text16& rDst, const char16_t* pText, s32 length) {
-        char16_t* const pDst = rDst.room(static_cast< u32 >(length) + 2);
-        s32 i = 0;
-        for (; i < length && pText[i] != 0; i++) {
-            pDst[i] = pText[i];
-        }
-        while (i > 0 && pDst[i - 1] == u' ') {
-            i--;
-        }
-        pDst[i++] = 0x2026;
-        pDst[i] = 0;
     }
 
     // A sentence's first letter as a capital (the Latin letters the game's font has; other scripts have none).
@@ -1268,7 +1253,6 @@ private:
     f32 modButtonY(s32 i) const;
     void showMods(bool shown);
     void readModsPointer(const NebulaSettingsView& rView, f32 x, f32 y, f32 wheel);
-    void fitStatus(f32 room);
     void place(const NebulaSettingsView& rView);
     void placeHome();
     void hideQuestionExtras();
@@ -1301,7 +1285,7 @@ private:
     Window* mPanel;
     TextBox* mTitle;
     MR::GrowBuffer< Chip > mTabs;  // the page buttons, made as the pages need them
-    MR::GrowBuffer< f32 > mTabWordWidths;
+    MR::GrowBuffer< FitLine > mTabWords;
     s32 mTabsMade;
     Pane* mList;
     Window* mHighlight;
@@ -1313,7 +1297,7 @@ private:
     // where a dragged mod would land, and the launcher's buttons under them.
     Window* mModPanels[2];
     TextBox* mModTitles[2];
-    f32 mModTitleWidths[2];  // each title's width as set, unscaled
+    FitLine mModTitleFits[2];
     TextBox* mModEmpty[2];
     // A line over both lists that is in neither (a safe start's notice): its box, its text whole, the width it was
     // broken at and the height from its first capitals' tops to its last baseline.
@@ -1323,6 +1307,7 @@ private:
     f32 mModNoticeInk;
     Window* mDropLine;
     MR::GrowBuffer< Chip > mModButtons;  // made as the launcher's row has buttons
+    MR::GrowBuffer< FitLine > mModButtonWords;
     s32 mModButtonsMade;
     u32 mModButtonsVersion;  // the words they show (Row::mButtonsVersion)
     s32 mModButtonCount;
@@ -1361,8 +1346,7 @@ private:
     Window* mThumb;
     TextBox* mStatus;
     MR::Text16 mStatusText;     // the line under the page, whole
-    f32 mStatusWidth;          // as shown
-    f32 mStatusRoom;           // the room it was fitted to
+    FitLine mStatusFit;
     Hint mHints[cHintsMax];
     Button mFooter[FooterNum];
     Pane* mQuestion;
@@ -1410,7 +1394,7 @@ private:
     // (two a line: the first group's, the second's).
     TextBox* mResultsNumber;
     f32 mResultsNumberWidth;
-    f32 mResultsTitleWidth;
+    FitLine mResultsTitleFit;
     MR::GrowBuffer< TextBox* > mCellBoxes;
     s32 mCellBoxesMade;
     MR::GrowBuffer< TableCell > mCells;
@@ -1456,8 +1440,8 @@ private:
     f32 mHdrHeight;
     f32 mHdrTextSize;
     f32 mHdrScale;
-    f32 mHdrTitleWidth;
-    f32 mHdrValueWidth;
+    FitLine mHdrTitleFit;
+    FitLine mHdrValueFit;
     f32 mHdrX;
     f32 mHdrY;
     f32 mHdrSliderLeft;
@@ -1569,7 +1553,7 @@ namespace {
 NebulaSettingsScreen::NebulaSettingsScreen()
     : LayoutActor("NebulaSettingsMenu", true), mBuilt(false), mRoot(nullptr), mDim(nullptr), mMenu(nullptr), mPage(nullptr), mShadow(nullptr),
       mPanel(nullptr), mTitle(nullptr), mList(nullptr), mHighlight(nullptr), mTrack(nullptr), mThumb(nullptr), mStatus(nullptr),
-      mStatusWidth(0.0f), mStatusRoom(-1.0f), mQuestion(nullptr), mQuestionDim(nullptr), mQuestionShadow(nullptr), mQuestionPanel(nullptr),
+      mQuestion(nullptr), mQuestionDim(nullptr), mQuestionShadow(nullptr), mQuestionPanel(nullptr),
       mQuestionText(nullptr), mProgressTrack(nullptr), mProgressFill(nullptr), mChoiceCount(0), mJoyCon(nullptr), mJoyConPaired(false), mJoyConBits(0), mQuestionInk(0.0f), mModPicture(nullptr), mModPictureRecord(nullptr), mModPictureFrom(nullptr), mModPictureWidth(0), mModPictureHeight(0), mModPictureReady(false), mModPictureNew(false), mOpen(0.0f), mClosing(false), mFading(false), mQuestionShown(-1), mHome(false), mHomeView(-1),
       mFocusButton(nullptr), mFrame(0), mScroll(0.0f),
       mScrollTarget(0.0f), mHighlightY(0.0f), mPointerMode(false), mPointerX(0.0f), mPointerY(0.0f), mPointerRow(-1), mHoverRow(-1),
@@ -1580,7 +1564,10 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     memset(&mTabs, 0, sizeof(mTabs));
     mTabsMade = 0;
     memset(mHalves, 0, sizeof(mHalves));
-    memset(&mTabWordWidths, 0, sizeof(mTabWordWidths));
+    memset(&mTabWords, 0, sizeof(mTabWords));
+    memset(&mModTitleFits, 0, sizeof(mModTitleFits));
+    memset(&mModButtonWords, 0, sizeof(mModButtonWords));
+    memset(&mStatusFit, 0, sizeof(mStatusFit));
     memset(&mRows, 0, sizeof(mRows));
     mRowsMade = 0;
     memset(&mRowChips, 0, sizeof(mRowChips));
@@ -1641,7 +1628,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     mTurnFromHeight = 0.0f;
     mResultsNumber = nullptr;
     mResultsNumberWidth = 0.0f;
-    mResultsTitleWidth = 0.0f;
+    memset(&mResultsTitleFit, 0, sizeof(mResultsTitleFit));
     mHdrBlack = nullptr;
     mHdrShade = nullptr;
     mHdrTitle = nullptr;
@@ -1653,8 +1640,8 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     mHdrHeight = 0.0f;
     mHdrTextSize = cTextSize + 1.0f;
     mHdrScale = 1.0f;
-    mHdrTitleWidth = 0.0f;
-    mHdrValueWidth = 0.0f;
+    memset(&mHdrTitleFit, 0, sizeof(mHdrTitleFit));
+    memset(&mHdrValueFit, 0, sizeof(mHdrValueFit));
     mHdrX = 0.0f;
     mHdrY = 0.0f;
     mHdrSliderLeft = 0.0f;
@@ -1748,6 +1735,7 @@ bool NebulaSettingsScreen::addModButtons(s32 count) {
         const s32 i = mModButtonsMade;
         Chip& rChip = mModButtons.room(static_cast< u32 >(i) + 1)[i];
         memset(static_cast< void* >(&rChip), 0, sizeof(rChip));
+        memset(static_cast< void* >(&mModButtonWords.room(static_cast< u32 >(i) + 1)[i]), 0, sizeof(FitLine));
         const MR::FormattedName name("NsModBtn%d", static_cast< int >(i));
         if (!makeChip(mKits, mPage, &rChip, name.c_str(), false, cButtonSize, cButtonText)) {
             return false;
@@ -1762,7 +1750,7 @@ bool NebulaSettingsScreen::addTab() {
     const s32 i = mTabsMade;
     Chip& rTab = mTabs.room(static_cast< u32 >(i) + 1)[i];
     memset(static_cast< void* >(&rTab), 0, sizeof(rTab));
-    mTabWordWidths.room(static_cast< u32 >(i) + 1)[i] = 0.0f;
+    memset(static_cast< void* >(&mTabWords.room(static_cast< u32 >(i) + 1)[i]), 0, sizeof(FitLine));
     char name[16];
     nebula_snprintf(name, sizeof(name), "NsTab%d", static_cast< int >(i));
     if (!makeChip(mKits, mPage, &rTab, name, false, cTabSize, cButtonText)) {
@@ -1905,7 +1893,6 @@ bool NebulaSettingsScreen::build() {
         mModPanels[i] = makeWindow(mKits, mPage, name);
         nebula_snprintf(name, sizeof(name), "NsModTitle%d", static_cast< int >(i));
         mModTitles[i] = makeText(mKits, mPage, name, 64);
-        mModTitleWidths[i] = 0.0f;
         nebula_snprintf(name, sizeof(name), "NsModEmpty%d", static_cast< int >(i));
         mModEmpty[i] = makeText(mKits, mPage, name, 96);
         if (mModPanels[i] == nullptr || mModTitles[i] == nullptr || mModEmpty[i] == nullptr) {
@@ -2170,10 +2157,8 @@ void NebulaSettingsScreen::arrange() {
 
 void NebulaSettingsScreen::fillButton(Button& rButton, const char* pWordId) {
     MR::Text16 text;
-    f32 height = 0.0f;
     getText(text, pWordId);
-    setText(rButton.mChip.mText, text.c_str());
-    measure(rButton.mChip.mText, 4000.0f, &rButton.mWordWidth, &height);
+    setFitLine(rButton.mWord, rButton.mChip.mText, text.c_str());
 }
 
 // The texts in the played language, again for whatever changed from `pShown` (all of them when it is null): the page
@@ -2205,8 +2190,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
                 continue;
             }
             translateLine(text, rView.pages[i], false);
-            setText(rTab.mText, text.c_str());
-            measure(rTab.mText, 4000.0f, &mTabWordWidths[i], &height);
+            setFitLine(mTabWords[i], rTab.mText, text.c_str());
         }
     }
     const bool samePage = pShown != nullptr && pShown->page == rView.page && pShown->input == rView.input;
@@ -2232,10 +2216,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         rRow.mIndented = rData.label[0] == ' ' && rData.label[1] == ' ';
         translateLine(text, rRow.mIndented ? rData.label + 2 : rData.label, (rData.flags & NEBULA_SETTINGS_ROW_LABEL_NAME) != 0);
         if (heading && modList(rData) >= 0) {
-            TextBox* const pTitle = mModTitles[modList(rData)];
-            f32 height = 0.0f;
-            setText(pTitle, text.c_str());
-            measure(pTitle, 4000.0f, &mModTitleWidths[modList(rData)], &height);
+            setFitLine(mModTitleFits[modList(rData)], mModTitles[modList(rData)], text.c_str());
         }
         if (heading && modList(rData) < 0 && modLists) {
             // The line over the lists (a safe start's notice): broken to the window's width where the lists are placed.
@@ -2256,13 +2237,12 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
                 pText[k] = static_cast< char16_t >(digits.c_str()[k]);
             }
         }
-        setText(rRow.mLabel, text.c_str());
         setTextStyle(rRow.mLabel, heading ? cHeadingSize : cTextSize, heading ? cAccent : cText, heading ? cAccent : cText, 3);
-        measure(rRow.mLabel, 4000.0f, &rRow.mLabelWidth, &height);
+        setFitLine(rRow.mLabelFit, rRow.mLabel, text.c_str());
         rRow.mRule->SetVisible(heading);
         rRow.mFrame->SetVisible(!heading);
         rRow.mValue->SetVisible(!heading && !hasButtons(&rData));
-        rRow.mValueWidth = 0.0f;
+        setFitLine(rRow.mValueFit, rRow.mValue, u"");
         rRow.mButtonCount = 0;
         rRow.mButtonsVersion++;
         if (hasButtons(&rData)) {
@@ -2307,10 +2287,9 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
                 pText[valueLength + 2 + k] = inUse.c_str()[k];
             }
         }
-        setText(rRow.mValue, text.c_str());
         // Between its arrows, centred; else at the row's end.
         setTextStyle(rRow.mValue, cTextSize, valueColor, valueColor, hasArrows(rData) ? 4 : 5);
-        measure(rRow.mValue, 4000.0f, &rRow.mValueWidth, &height);
+        setFitLine(rRow.mValueFit, rRow.mValue, text.c_str());
     }
 
     const s32 hint = firstHint(rView);
@@ -2380,7 +2359,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         translateLine(mStatusText, pStatusText, false);
     }
     setTextColor(mStatus, statusColor, statusColor);
-    mStatusRoom = -1.0f;  // fitted again where it is placed
+    setFitLine(mStatusFit, mStatus, mStatusText.c_str());  // fitted where it is placed
 
     // The hints: changing (pressing, on a row of buttons; moving a mod), the page's own key, the pages.
     const bool controls = rView.page == rView.controls_page;
@@ -2406,8 +2385,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         if (pWord != nullptr && rView.input != NEBULA_SETTINGS_INPUT_TOUCH) {
             getText(text, pWord);
         }
-        setText(rHint.mWord, text.c_str());
-        measure(rHint.mWord, 4000.0f, &rHint.mWordWidth, &height);
+        setFitLine(rHint.mWordFit, rHint.mWord, text.c_str());
     }
     fillButton(mFooter[FooterApply], "SettingsApply");
     fillKeyCap(mFooter[FooterApply].mKey, KeyApply, rView.input, controls);
@@ -2594,7 +2572,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
     }
     f32 size = cTextSize + 1.0f;
     if (width > room) {
-        size *= clamp(room / width, 0.75f, 1.0f);
+        size *= clamp(room / width, cMinSqueeze, 1.0f);
         setTextSize(mQuestionText, size);
         measure(mQuestionText, 4000.0f, &width, &height);
     }
@@ -2946,8 +2924,7 @@ void NebulaSettingsScreen::fillHdr(const NebulaSettingsView& rView, const Questi
     f32 width = 0.0f;
     f32 height = 0.0f;
     getText(text, rQuestion.mText);
-    setText(mHdrTitle, text.c_str());
-    measure(mHdrTitle, 4000.0f, &mHdrTitleWidth, &height);
+    setFitLine(mHdrTitleFit, mHdrTitle, text.c_str());
     mHdrTitle->SetVisible(true);
     const MR::FormattedName number("%d / %d", static_cast< int >(shown), static_cast< int >(cHdrSteps));
     fromUtf8(text, 0, number.c_str());
@@ -2955,8 +2932,7 @@ void NebulaSettingsScreen::fillHdr(const NebulaSettingsView& rView, const Questi
     measure(mResultsNumber, 4000.0f, &mResultsNumberWidth, &height);
     mResultsNumber->SetVisible(true);
     translateLine(text, rView.status_text, false);
-    setText(mHdrValue, text.c_str());
-    measure(mHdrValue, 4000.0f, &mHdrValueWidth, &height);
+    setFitLine(mHdrValueFit, mHdrValue, text.c_str());
     mHdrValue->SetVisible(true);
     fillKeyCap(mHdrKey, KeyChange, rView.input, false);
 
@@ -3031,10 +3007,7 @@ void NebulaSettingsScreen::placeHdr(const NebulaSettingsView& rView, f32 panelWi
     const f32 top = height * 0.5f - cQuestionMargin;
     const f32 titleY = top - cResultsTitleSize * cCapHeight * 0.5f;
     const f32 numberRoom = mResultsNumberWidth + cResultsGap;
-    const f32 titleRoom = panelWidth - cQuestionMargin * 2.0f - numberRoom;
-    const f32 squeeze = mHdrTitleWidth > titleRoom && mHdrTitleWidth > 0.0f ? clamp(titleRoom / mHdrTitleWidth, cMinSqueeze, 1.0f)
-                                                                              : 1.0f;
-    mHdrTitle->mScale = Vec2f(squeeze, 1.0f);
+    fitLine(mHdrTitleFit, mHdrTitle, panelWidth - cQuestionMargin * 2.0f - numberRoom);
     mHdrTitle->mTranslate = Vec3f(-panelWidth * 0.5f + cQuestionMargin, textCentre(titleY, cResultsTitleSize), 0.0f);
     mResultsNumber->mTranslate = Vec3f(panelWidth * 0.5f - cQuestionMargin, textCentre(titleY, cResultsNumberSize), 0.0f);
     const f32 textTop = top - cResultsTitleSize * cCapHeight - cHdrGap;
@@ -3045,11 +3018,9 @@ void NebulaSettingsScreen::placeHdr(const NebulaSettingsView& rView, f32 panelWi
     const f32 key = mHdrKey.mWidth;
     const f32 gap = key > 0.0f ? cKeyGap * 1.5f : 0.0f;
     const f32 valueRoom = panelWidth - cQuestionMargin * 2.0f - key - gap;
-    const f32 valueSqueeze = mHdrValueWidth > valueRoom && mHdrValueWidth > 0.0f ? clamp(valueRoom / mHdrValueWidth, cMinSqueeze, 1.0f)
-                                                                               : 1.0f;
-    const f32 line = key + gap + mHdrValueWidth * valueSqueeze;
+    const f32 valueSqueeze = fitLine(mHdrValueFit, mHdrValue, valueRoom);
+    const f32 line = key + gap + mHdrValueFit.mWidth * valueSqueeze;
     placeKeyCap(mHdrKey, -line * 0.5f, valueY);
-    mHdrValue->mScale = Vec2f(valueSqueeze, 1.0f);
     mHdrValue->mTranslate = Vec3f(-line * 0.5f + key + gap, textCentre(valueY, cHdrValueSize), 0.0f);
 
     // The slider: a row's, across the window.
@@ -3098,8 +3069,7 @@ void NebulaSettingsScreen::fillResults(const NebulaSettingsView& rView) {
     setAnchor(mQuestionText, 4);
     setTextSize(mQuestionText, cResultsTitleSize);
     translateLine(text, rView.status_text, false);
-    setText(mQuestionText, text.c_str());
-    measure(mQuestionText, 4000.0f, &mResultsTitleWidth, &height);
+    setFitLine(mResultsTitleFit, mQuestionText, text.c_str());
     const s32 page = rView.status_number >> 8 & 0xFF;
     const s32 pages = rView.status_number & 0xFF;
     const MR::FormattedName number("%d / %d", static_cast< int >(page + 1), static_cast< int >(pages));
@@ -3381,10 +3351,7 @@ void NebulaSettingsScreen::placeResults(f32 panelWidth, f32 height, f32 answersY
     const f32 titleY = top - cResultsTitleSize * cCapHeight * 0.5f;
     const f32 numberRoom = mResultsNumber->IsVisible() ? mResultsNumberWidth + cResultsGap : 0.0f;
     const f32 titleRoom = panelWidth - cQuestionMargin * 2.0f - numberRoom * 2.0f;
-    const f32 squeeze = mResultsTitleWidth > titleRoom && mResultsTitleWidth > 0.0f
-                            ? clamp(titleRoom / mResultsTitleWidth, cMinSqueeze, 1.0f)
-                            : 1.0f;
-    mQuestionText->mScale = Vec2f(squeeze, 1.0f);
+    fitLine(mResultsTitleFit, mQuestionText, titleRoom);
     mQuestionText->mTranslate = Vec3f(0.0f, textCentre(titleY, cResultsTitleSize), 0.0f);
     mResultsNumber->mTranslate = Vec3f(panelWidth * 0.5f - cQuestionMargin, textCentre(titleY, cResultsNumberSize), 0.0f);
 
@@ -4195,36 +4162,6 @@ void NebulaSettingsScreen::readHomePointer(f32 x, f32 y) {
     }
 }
 
-// The line under the page in the room beside Apply and Back: narrowed down to cMinSqueeze, then cut short with an
-// ellipsis (a mod's long list of conflicts).
-void NebulaSettingsScreen::fitStatus(f32 room) {
-    mStatusRoom = room;
-    f32 height = 0.0f;
-    setText(mStatus, mStatusText.c_str());
-    measure(mStatus, 4000.0f, &mStatusWidth, &height);
-    if (mStatusWidth * cMinSqueeze <= room) {
-        return;
-    }
-    // The longest start that fits with its ellipsis.
-    MR::Text16 cut;
-    s32 fits = 0;
-    s32 longest = static_cast< s32 >(MR::textLength(mStatusText.c_str())) - 1;
-    while (fits < longest) {
-        const s32 length = (fits + longest + 1) / 2;
-        shorten(cut, mStatusText.c_str(), length);
-        setText(mStatus, cut.c_str());
-        measure(mStatus, 4000.0f, &mStatusWidth, &height);
-        if (mStatusWidth * cMinSqueeze <= room) {
-            fits = length;
-        } else {
-            longest = length - 1;
-        }
-    }
-    shorten(cut, mStatusText.c_str(), fits);
-    setText(mStatus, cut.c_str());
-    measure(mStatus, 4000.0f, &mStatusWidth, &height);
-}
-
 // A button's art `width` x `height` centred on (x, y); it grows and shines while focused (under the pointer, or the
 // selected one).
 void NebulaSettingsScreen::placeChip(Chip& rChip, f32 x, f32 y, f32 width, f32 height, bool focused) {
@@ -4266,11 +4203,10 @@ void NebulaSettingsScreen::placeButton(Button& rButton, f32 x, f32 y, f32 width)
     const f32 key = rButton.mKey.mWidth;
     const f32 gap = key > 0.0f ? cKeyGap : 0.0f;
     const f32 wordRoom = width - cButtonHeight - key - gap;
-    const f32 word = rButton.mWordWidth;
-    const f32 squeeze = word > wordRoom && word > 0.0f ? clamp(wordRoom / word, cMinSqueeze, 1.0f) : 1.0f;
+    const f32 squeeze = fitLine(rButton.mWord, rChip.mText, wordRoom);
+    const f32 word = rButton.mWord.mWidth;
     const f32 total = key + gap + word * squeeze;
     placeKeyCap(rButton.mKey, -total * 0.5f, 0.0f);
-    rChip.mText->mScale = Vec2f(squeeze, 1.0f);
     rChip.mText->mTranslate = Vec3f(total * 0.5f - word * squeeze * 0.5f, textCentre(0.0f, cButtonSize), 0.0f);
 }
 
@@ -4362,14 +4298,12 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
     if (pButtons != nullptr && pButtons->mButtonsVersion != mModButtonsVersion) {
         mModButtonsVersion = pButtons->mButtonsVersion;
         for (s32 i = 0; i < mModButtonCount; i++) {
-            f32 height = 0.0f;
-            setText(mModButtons[i].mText, pButtons->mButtons[i].mWord.mItems);
-            measure(mModButtons[i].mText, 4000.0f, &mModButtons[i].mText->mSize.width, &height);
+            setFitLine(mModButtonWords[i], mModButtons[i].mText, pButtons->mButtons[i].mWord.mItems);
         }
     }
     mModButtonsPerRow = mModButtonCount;
     for (s32 i = 0; i < mModButtonCount; i++) {
-        if (mModButtons[i].mText->mSize.width * cMinSqueeze > modButtonWidth(mModButtonCount) - 20.0f) {
+        if (mModButtonWords[i].mWholeWidth * cMinSqueeze > modButtonWidth(mModButtonCount) - 20.0f) {
             mModButtonsPerRow = (mModButtonCount + 1) / 2;
             break;
         }
@@ -4455,8 +4389,7 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
         if (!inView) {
             continue;  // out of sight: nothing of it is laid out until it scrolls in
         }
-        const f32 room = mModWidth - 28.0f;
-        rRow.mLabel->mScale = Vec2f(rRow.mLabelWidth > room && rRow.mLabelWidth > 0.0f ? clamp(room / rRow.mLabelWidth, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
+        fitLine(rRow.mLabelFit, rRow.mLabel, mModWidth - 28.0f);
         rRow.mLabel->mTranslate = Vec3f(14.0f, textCentre(0.0f, cTextSize), 0.0f);
         rRow.mValue->SetVisible(false);
         rRow.mFrame->SetVisible(false);
@@ -4486,9 +4419,7 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
     // The lists' frames and titles, and what an empty one says.
     for (s32 l = 0; l < 2; l++) {
         shape(mModPanels[l], mModLeft[l] + mModWidth * 0.5f, (frameTop + frameBottom) * 0.5f, mModWidth, frameTop - frameBottom, 12.0f);
-        const f32 titleRoom = mModWidth - 8.0f;
-        const f32 titleWidth = mModTitleWidths[l];
-        mModTitles[l]->mScale = Vec2f(titleWidth > titleRoom && titleWidth > 0.0f ? clamp(titleRoom / titleWidth, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
+        fitLine(mModTitleFits[l], mModTitles[l], mModWidth - 8.0f);
         mModTitles[l]->mTranslate = Vec3f(mModLeft[l] + 4.0f, textCentre(titleY, cHeadingSize), 0.0f);
         const bool none = l == 1 && mModCounts[0] == 0 && mModCounts[1] == 0;
         mModEmpty[l]->SetVisible(none);
@@ -4529,9 +4460,7 @@ void NebulaSettingsScreen::placeMods(const NebulaSettingsView& rView) {
                       (i - row * mModButtonsPerRow) * (width + cModButtonsGap);
         placeChip(rChip, x, modButtonY(i), width, cButtonHeight, focused);
         setTextColor(rChip.mText, off ? cDisabled : cButtonText, off ? cDisabled : cButtonText);
-        const f32 word = rChip.mText->mSize.width;
-        const f32 room = width - 20.0f;
-        rChip.mText->mScale = Vec2f(word > room && word > 0.0f ? clamp(room / word, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
+        fitLine(mModButtonWords[i], rChip.mText, width - 20.0f);
         rChip.mText->mTranslate = Vec3f(0.0f, textCentre(0.0f, cButtonSize), 0.0f);
     }
 
@@ -4714,7 +4643,6 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
             continue;  // out of sight: nothing of it is laid out until it scrolls in
         }
         const f32 labelX = mLeft + (rRow.mIndented ? 30.0f : heading ? 2.0f : 16.0f);
-        rRow.mLabel->mScale = Vec2f(1.0f, 1.0f);
         rRow.mLabel->mTranslate = Vec3f(labelX, textCentre(heading ? -2.0f : 0.0f, heading ? cHeadingSize : cTextSize), 0.0f);
         rRow.mArrows = false;
         rRow.mSliderLeft = 0.0f;
@@ -4722,7 +4650,9 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
         rRow.mSliderTrack->SetVisible(false);
         rRow.mSliderFill->SetVisible(false);
         if (heading) {
-            const f32 start = labelX + rRow.mLabelWidth + 10.0f;
+            // The rule after the heading, the heading narrowed (or cut) to leave it room.
+            const f32 shown = fitLine(rRow.mLabelFit, rRow.mLabel, mRight - labelX - 10.0f) * rRow.mLabelFit.mWidth;
+            const f32 start = labelX + shown + 10.0f;
             shape(rRow.mRule, (start + mRight) * 0.5f, -2.0f, mRight > start ? mRight - start : 0.0f, 2.0f, 1.0f);
             continue;
         }
@@ -4744,9 +4674,7 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
             rRow.mArrows = true;
             rRow.mArrowX[0] = start + cArrowWidth * 0.5f;
             rRow.mArrowX[1] = end - cArrowWidth * 0.5f;
-            const f32 room = box - 12.0f;
-            const f32 squeeze = rRow.mValueWidth > room && rRow.mValueWidth > 0.0f ? clamp(room / rRow.mValueWidth, 0.55f, 1.0f) : 1.0f;
-            rRow.mValue->mScale = Vec2f(squeeze, 1.0f);
+            fitLine(rRow.mValueFit, rRow.mValue, box - 12.0f);
             rRow.mValue->mTranslate =
                 Vec3f(end - cArrowWidth - cRowButtonGap - box * 0.5f, textCentre(cEdgeDrop * 0.5f, cTextSize), 0.0f);
             labelRoom = start - labelX - 12.0f;
@@ -4762,19 +4690,19 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
             shape(rRow.mSliderFill, (trackLeft + knob) * 0.5f, cEdgeDrop * 0.5f, knob - trackLeft, cSliderHeight, cSliderHeight * 0.5f);
             rRow.mSliderTrack->SetVisible(true);
             rRow.mSliderFill->SetVisible(true);
-            const f32 squeeze = rRow.mValueWidth > cSliderValue && rRow.mValueWidth > 0.0f ? clamp(cSliderValue / rRow.mValueWidth, 0.55f, 1.0f) : 1.0f;
-            rRow.mValue->mScale = Vec2f(squeeze, 1.0f);
+            fitLine(rRow.mValueFit, rRow.mValue, cSliderValue);
             rRow.mValue->mTranslate = Vec3f(mValueRight, textCentre(cEdgeDrop * 0.5f, cTextSize), 0.0f);
             labelRoom = start - labelX - 12.0f;
         } else {
-            // A value too long for the room its label leaves is narrowed to fit.
-            const f32 room = mValueRight - labelX - rRow.mLabelWidth - 24.0f;
-            const f32 squeeze = rRow.mValueWidth > room && rRow.mValueWidth > 0.0f ? clamp(room / rRow.mValueWidth, 0.55f, 1.0f) : 1.0f;
-            rRow.mValue->mScale = Vec2f(squeeze, 1.0f);
+            // The value takes the room its whole label leaves, half the row at least; the label what the value
+            // leaves.
+            const f32 both = mValueRight - labelX - 24.0f;
+            const f32 left = both - rRow.mLabelFit.mWholeWidth;
+            const f32 valueSqueeze = fitLine(rRow.mValueFit, rRow.mValue, left > both * 0.5f ? left : both * 0.5f);
             rRow.mValue->mTranslate = Vec3f(mValueRight, textCentre(0.0f, cTextSize), 0.0f);
+            labelRoom = both - rRow.mValueFit.mWidth * valueSqueeze;
         }
-        const f32 label = rRow.mLabelWidth;
-        rRow.mLabel->mScale = Vec2f(label > labelRoom && label > 0.0f ? clamp(labelRoom / label, 0.5f, 1.0f) : 1.0f, 1.0f);
+        fitLine(rRow.mLabelFit, rRow.mLabel, labelRoom);
     }
 
     placeRowButtons(rView);
@@ -4827,9 +4755,7 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
         rTab.mRoot->mScale = Vec2f(grow, grow);
         rTab.mLayers[LayerShine]->SetVisible(rTab.mFocusLevel > 0.02f);
         rTab.mLayers[LayerShine]->mAlpha = toAlpha(rTab.mFocusLevel * 0.7f);
-        const f32 room = tabWidth - 22.0f;
-        const f32 word = mTabWordWidths[i];
-        rTab.mText->mScale = Vec2f(word > room && word > 0.0f ? room / word : 1.0f, 1.0f);
+        fitLine(mTabWords[i], rTab.mText, tabWidth - 22.0f);
         rTab.mText->mTranslate = Vec3f(0.0f, textCentre(0.0f, cTabSize), 0.0f);
         setTextColor(rTab.mText, active ? cAccent : cButtonText, active ? cAccent : cButtonText);
     }
@@ -4849,7 +4775,7 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
     f32 buttonsWidth = 0.0f;
     for (s32 i = 0; i < FooterNum; i++) {
         const Button& rButton = mFooter[i];
-        buttonWidths[i] = rButton.mKey.mWidth + cKeyGap + rButton.mWordWidth + 44.0f;
+        buttonWidths[i] = rButton.mKey.mWidth + cKeyGap + rButton.mWord.mWholeWidth + 44.0f;
         buttonWidths[i] = buttonWidths[i] < 110.0f ? 110.0f : buttonWidths[i];
         buttonsWidth += buttonWidths[i] + (i > 0 ? cButtonGap : 0.0f);
     }
@@ -4859,38 +4785,39 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
         x -= buttonWidths[i] + cButtonGap;
     }
     const f32 textRoom = mRight - mLeft - buttonsWidth - 20.0f;
-    if (mStatusRoom != textRoom) {
-        fitStatus(textRoom);
-    }
-    const f32 statusScale = mStatusWidth > textRoom && mStatusWidth > 0.0f ? clamp(textRoom / mStatusWidth, cMinSqueeze, 1.0f) : 1.0f;
-    mStatus->mScale = Vec2f(statusScale, 1.0f);
+    fitLine(mStatusFit, mStatus, textRoom);
     mStatus->mTranslate = Vec3f(mLeft + 2.0f, textCentre(mStatusY, cFooterSize), 0.0f);
-    // The hints' keys keep their size; their words and the room between them narrow when a language runs long. A hint
-    // with neither key nor word (none for the row, or touch) takes no room.
+    // The hints' keys keep their size. Their words share the room the keys leave, each its part of it as the one rule
+    // fits a line (narrowed, then cut short), the gaps narrowed with them. A hint with neither key nor word (none for
+    // the row, or touch) takes no room.
     f32 keysWidth = 0.0f;
     f32 wordsWidth = 0.0f;
+    f32 gapsWidth = 0.0f;
     s32 placed = 0;
     for (s32 i = 0; i < cHintsMax; i++) {
-        if (mHints[i].mKey.mWidth <= 0.0f && mHints[i].mWordWidth <= 0.0f) {
+        if (mHints[i].mKey.mWidth <= 0.0f && mHints[i].mWordFit.mWholeWidth <= 0.0f) {
             continue;
         }
         keysWidth += mHints[i].mKey.mWidth;
-        wordsWidth += cKeyGap + mHints[i].mWordWidth + (placed > 0 ? cHintGap : 0.0f);
+        wordsWidth += mHints[i].mWordFit.mWholeWidth;
+        gapsWidth += cKeyGap + (placed > 0 ? cHintGap : 0.0f);
         placed++;
     }
-    const f32 wordsRoom = textRoom - keysWidth;
-    const f32 hintScale = wordsWidth > wordsRoom && wordsWidth > 0.0f ? clamp(wordsRoom / wordsWidth, 0.6f, 1.0f) : 1.0f;
+    const f32 hintsRoom = textRoom - keysWidth;
+    const f32 gapScale = squeezeTo(wordsWidth + gapsWidth, hintsRoom);
+    const f32 wordsRoom = hintsRoom - gapsWidth * gapScale;
     x = mLeft + 2.0f;
     for (s32 i = 0; i < cHintsMax; i++) {
         Hint& rHint = mHints[i];
-        if (rHint.mKey.mWidth <= 0.0f && rHint.mWordWidth <= 0.0f) {
+        if (rHint.mKey.mWidth <= 0.0f && rHint.mWordFit.mWholeWidth <= 0.0f) {
             continue;
         }
-        rHint.mWord->mScale = Vec2f(hintScale, 1.0f);
+        const f32 share = wordsWidth > 0.0f ? wordsRoom * rHint.mWordFit.mWholeWidth / wordsWidth : 0.0f;
+        const f32 squeeze = fitLine(rHint.mWordFit, rHint.mWord, share);
         placeKeyCap(rHint.mKey, x, mHintsY);
-        x += rHint.mKey.mWidth + cKeyGap * hintScale;
+        x += rHint.mKey.mWidth + cKeyGap * gapScale;
         rHint.mWord->mTranslate = Vec3f(x, textCentre(mHintsY, cFooterSize), 0.0f);
-        x += (rHint.mWordWidth + cHintGap) * hintScale;
+        x += rHint.mWordFit.mWidth * squeeze + cHintGap * gapScale;
     }
 
     // The question, centred on the window, its answers along its foot; Pair Joy-Con's picture over its text.
@@ -5498,20 +5425,6 @@ namespace {
     // What a step measures (NEBULA_BENCHMARK_PART_*), as the host's texts name it.
     const char* const cRunParts[] = {"YOUR SETTINGS", "EACH EFFECT ALONE", "FIRST STAGE AGAIN"};
 
-    // `rText` cut with an ellipsis until `pBox` (at its size, drawn `squeeze` wide) is no wider than `room`.
-    void fitLine(TextBox* pBox, MR::Text16& rText, f32 room, f32 squeeze, f32* pWidth) {
-        f32 height = 0.0f;
-        setText(pBox, rText.c_str());
-        measure(pBox, 4000.0f, pWidth, &height);
-        s32 length = static_cast< s32 >(MR::textLength(rText.c_str()));
-        while (*pWidth * squeeze > room && length > 1) {
-            length--;
-            MR::Text16 shortText;
-            shorten(shortText, rText.c_str(), length);
-            setText(pBox, shortText.c_str());
-            measure(pBox, 4000.0f, pWidth, &height);
-        }
-    }
 };  // namespace
 
 class NebulaBenchmarkScreen : public LayoutActor {
@@ -5526,6 +5439,9 @@ public:
         mKits.mButton = nullptr;
         memset(&mKey, 0, sizeof(mKey));
         memset(&mLast, 0, sizeof(mLast));
+        memset(&mNameFit, 0, sizeof(mNameFit));
+        memset(&mPartFit, 0, sizeof(mPartFit));
+        memset(&mStopFit, 0, sizeof(mStopFit));
     }
 
     virtual void init(const TableIter& /*rIter*/) {
@@ -5683,10 +5599,8 @@ private:
         } else {
             translateLine(text, "BENCHMARK", false);
         }
-        const f32 nameRoom = inner - (rateWidth > 0.0f ? rateWidth + cRunSideGap : 0.0f);
-        f32 nameWidth = 0.0f;
-        fitLine(mName, text, nameRoom, cMinSqueeze, &nameWidth);
-        mName->mScale = Vec2f(nameWidth > nameRoom && nameWidth > 0.0f ? clamp(nameRoom / nameWidth, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
+        setFitLine(mNameFit, mName, text.c_str());
+        fitLine(mNameFit, mName, inner - (rateWidth > 0.0f ? rateWidth + cRunSideGap : 0.0f));
 
         // The step and what it measures.
         const MR::FormattedName stepLine("STEP %u OF %u", static_cast< unsigned >(rState.step), static_cast< unsigned >(rState.steps));
@@ -5695,20 +5609,16 @@ private:
         setText(mStep, text.c_str());
         measure(mStep, 4000.0f, &stepWidth, &height);
         translateLine(text, cRunParts[rState.part < 4 ? rState.part : 0], false);
-        const f32 partRoom = inner - stepWidth - cRunSideGap;
-        f32 partWidth = 0.0f;
-        fitLine(mPart, text, partRoom, cMinSqueeze, &partWidth);
-        mPart->mScale = Vec2f(partWidth > partRoom && partWidth > 0.0f ? clamp(partRoom / partWidth, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
+        setFitLine(mPartFit, mPart, text.c_str());
+        fitLine(mPartFit, mPart, inner - stepWidth - cRunSideGap);
 
         // How to stop it: the key and Stop; on a touch screen, Back in words; once stopped, Stopping.
         const bool touch = rState.input == NEBULA_SETTINGS_INPUT_TOUCH;
         const bool key = rState.stopping == 0 && !touch;
         fillKeyCap(mKey, key ? KeyBack : -1, rState.input, false);
         translateLine(text, rState.stopping != 0 ? "STOPPING" : touch ? "PRESS BACK TO STOP" : "STOP", false);
-        const f32 stopRoom = inner - (key ? mKey.mWidth + cRunKeyGap : 0.0f);
-        f32 stopWidth = 0.0f;
-        fitLine(mStop, text, stopRoom, cMinSqueeze, &stopWidth);
-        mStop->mScale = Vec2f(stopWidth > stopRoom && stopWidth > 0.0f ? clamp(stopRoom / stopWidth, cMinSqueeze, 1.0f) : 1.0f, 1.0f);
+        setFitLine(mStopFit, mStop, text.c_str());
+        fitLine(mStopFit, mStop, inner - (key ? mKey.mWidth + cRunKeyGap : 0.0f));
 
         // Top to bottom by what is drawn: the stage's capitals, the step's, the bar, the stop's row (as tall as its
         // controller badge, its keyboard key, or its capitals when it is words alone). Stopping keeps the row's height,
@@ -5762,6 +5672,9 @@ private:
     Window* mTrack;
     Window* mFill;
     TextBox* mStop;
+    FitLine mNameFit;  // the stage, the part and the stop line by NebulaUi's one rule
+    FitLine mPartFit;
+    FitLine mStopFit;
     KeyCap mKey;
     f32 mWidth;
     f32 mHeight;

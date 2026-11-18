@@ -61,20 +61,35 @@ int main() {
         sFailures++;
     }
 
-    // UTF-8 as the game's text (P-160): two- and three-byte characters, one U+FFFD for a four-byte one and for a broken
-    // sequence, never more units than bytes.
+    // UTF-8 as the game's text (P-160): two- and three-byte characters, a surrogate pair for a four-byte one, one
+    // U+FFFD for each broken sequence (the Encoding Standard's decoder), never more units than bytes.
     {
+        const auto same = [](const char16_t* pGot, size_t count, const char16_t* pWant, size_t wantCount) {
+            bool ok = count == wantCount && pGot[count] == 0;
+            for (size_t i = 0; ok && i < count; i++) {
+                ok = pGot[i] == pWant[i];
+            }
+            return ok;
+        };
         char16_t units[32];
-        const char* const pMixed = "A\xC3\xA9\xE3\x81\x82\xF0\x9F\x98\x80Z";  // A, e acute, hiragana a, an emoji, Z
-        const size_t count = MR::utf8ToText(units, pMixed);
-        const char16_t want[] = {u'A', 0xE9, 0x3042, 0xFFFD, u'Z', 0};
-        bool same = count == 5;
-        for (size_t i = 0; same && i < 6; i++) {
-            same = units[i] == want[i];
-        }
-        // A cut sequence (each of its bytes one mark), a letter, a stray continuation byte.
-        const size_t broken = MR::utf8ToText(units, "\xE3\x81Z\x80");
-        if (!same || broken != 4 || units[0] != 0xFFFD || units[1] != 0xFFFD || units[2] != u'Z' || units[3] != 0xFFFD) {
+        // A, e acute, hiragana a, an emoji, Z.
+        size_t count = MR::utf8ToText(units, "A\xC3\xA9\xE3\x81\x82\xF0\x9F\x98\x80Z");
+        const char16_t mixed[] = {u'A', 0xE9, 0x3042, 0xD83D, 0xDE00, u'Z'};
+        bool ok = same(units, count, mixed, 6) && MR::utf8ToText(nullptr, "A\xC3\xA9\xE3\x81\x82\xF0\x9F\x98\x80Z") == 6;
+        // A cut sequence, a letter, a stray continuation byte.
+        count = MR::utf8ToText(units, "\xE3\x81Z\x80");
+        const char16_t cut[] = {0xFFFD, u'Z', 0xFFFD};
+        ok = ok && same(units, count, cut, 3);
+        // An overlong slash, a surrogate's own code, past U+10FFFF, a lead that cannot start: one mark per byte, as
+        // their second bytes are out of range.
+        count = MR::utf8ToText(units, "\xC0\xAF\xED\xA0\x80\xF4\x90\x80\x80\xFF");
+        const char16_t bad[] = {0xFFFD, 0xFFFD, 0xFFFD, 0xFFFD, 0xFFFD, 0xFFFD, 0xFFFD, 0xFFFD, 0xFFFD, 0xFFFD};
+        ok = ok && same(units, count, bad, 10);
+        // The last characters of each range.
+        count = MR::utf8ToText(units, "\xDF\xBF\xEF\xBF\xBF\xF4\x8F\xBF\xBF");
+        const char16_t ends[] = {0x7FF, 0xFFFF, 0xDBFF, 0xDFFF};
+        ok = ok && same(units, count, ends, 4);
+        if (!ok) {
             printf("FAIL utf8ToText\n");
             sFailures++;
         }

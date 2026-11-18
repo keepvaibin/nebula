@@ -38,7 +38,7 @@ RUNTIME = [
     ("GALAXY_AUDIO_SFX_GAIN", "audio_sfx_gain"), ("GALAXY_AUDIO_VOICE_GAIN", "audio_voice_gain"),
     ("GALAXY_AUDIO_AMBIENCE_GAIN", "audio_ambience_gain"), ("GALAXY_AUDIO_CUTSCENE_GAIN", "audio_cutscene_gain"),
     ("GALAXY_AUDIO_WIIMOTE_SPEAKER_GAIN", "audio_wiimote_speaker_gain"), ("GALAXY_TEXT_SPEED", "text_speed"),
-    ("GALAXY_LANGUAGE", "language"),
+    ("GALAXY_LANGUAGE", "language"), ("GALAXY_MENU_TEXT_SIZE", "menu_text_size"),
 ]
 FILES = {"config.ini": RENDER, "runtime_settings.ini": RUNTIME}
 SIDECAR = ".run_settings.json"
