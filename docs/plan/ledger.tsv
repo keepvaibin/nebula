@@ -2,28 +2,28 @@ id	agent	package	state	proof	title	note
 M-001	2	M1 kernel	fixed	tests/mods/guard 1643-1652; galaxy_luma_guard_walk_tests; LumaLink tests/game script k11-callback, k11-cut; lumascript emit_small a_function_value_entry_is_one_for_every_module	crash: a fault inside a library mod's code (LumaKit) called by another mod is never resumed; the game ends	Fixed 11-17 as the planner decided at 12:33 (BOARD): 0db33cebb, 10c00dfd1, 305c2a62a, 53e6733a2, 7ca155215, 918f98174, 6aeb306b5, 1c858d763, 47cbeee62; LumaLink 19e3a91, 341b31d, 8bb18e5. Who is turned off goes by need along the chain of mods between the boundary and the fault (luma_guard_walk.h); LumaCore.call_mod is the boundary of a library's call into code a mod gave it (LumaScript uses it for every other mod's function value); mods left with cut code get LumaModInfo.cut (on mods.cut); the log, mod log, crash record and notice name the mod off, the mod whose code faulted and <id>/<file>+offset; per-mod count of faults under others and the Mods page's common-place question; the library span table grows. Before: 0 of 10 guard tests, k11 tests fail.
 M-002	2	M1 kernel	open		wrong behaviour: the hook-chain grace covers hooks only; a mod with no published hook is freed at once, with no grace, while its service callbacks may	
 M-003	2	M1 kernel	open		wrong behaviour: a block header overwrite by a mod (buffer underflow) stops the whole game instead of turning the mod off	
-M-004	2	M11 documentation	open		docs wrong: luma.h says an out-of-memory `new` "stops the game"; inside any boundary the trap is a mod fault the guard resumes	
+M-004	4	M11 documentation	open		docs wrong: luma.h says an out-of-memory `new` "stops the game"; inside any boundary the trap is a mod fault the guard resumes	
 M-005	2	M1 kernel	open		maintainability: kernel entry points that take a mod-supplied `LumaFunction*` dereference it without checking it is a row	
-M-006	2	M12 platforms for mods	open		missing feature: Windows on ARM64 has no guard in the game module and no build; mods still ship windows-arm64 code	Owner: stop building mods for iOS and Windows on ARM until the game builds there.
+M-006	4	M12 platforms for mods	open		missing feature: Windows on ARM64 has no guard in the game module and no build; mods still ship windows-arm64 code	Owner: stop building mods for iOS and Windows on ARM until the game builds there.
 M-007	2	M1 kernel	open		crash: own_class, as_class, is_a, class_data, overrider and call_method read the object's vtable in the kernel; a stale or wrong object pointer ends t	
 M-008	2	M1 kernel	open		crash: an override whose call is still running on another thread when its mod is taken out panics the game in slotOriginal	
 M-009	2	M1 kernel	open		wrong behaviour: LumaClasses.modGone spins on the game thread until every make in progress on any thread ends	
 M-010	2	M1 kernel	open		maintainability: kMaxClasses (1024) class rows are never reused in a session; dev reloads use them up	
 M-011	2	M3 services	open		crash: every pointer a mod gives a service is read in kernel or host code; a bad pointer ends the game, not the mod	
-M-012	2	M12 platforms for mods	open		missing feature: the microphone and camera services have backends only on Windows and Android	
+M-012	4	M12 platforms for mods	open		missing feature: the microphone and camera services have backends only on Windows and Android	
 M-013	2	M1 kernel	open		wrong behaviour: draw.native's take-out waits without limit for a mod function running on the render thread	
 M-014	2	M2 call safety	fixed	959dc09b1, b51bfb2db, 50d2f1714; tools/lumacore/needs_fixture_test.py; tests/mods/needs 6801-call-not-now (the first boot-frame call crashed before, NEB-M03); LumaLink tests/game kit kit-boot, kit-boot-menus	crash: a game function a mod calls when its state is missing (no scene, no player) faults in game code and ends the game; the rows carry no preconditi	Run by the coordinator: the crash is at boot frames, not on the title. The crash is gone: a call whose scene objects are missing is not made (Call.NotNow, the empty value). The build-time proof in LumaScript is N-2023.
 M-015	2	M2 call safety	fixed	eff71d620; tests/mods/events 6901-events-told (fails before: no events service), 6902-achievement-events; LumaLink tests/game/script s-events	missing feature: the 29 NEBULA_MOD_EVENT_* events never reach mod code; only the host's achievement rows subscribe, so their "return to cancel / retur	
-M-016	2	M11 documentation	open		docs wrong: events.md links docs/modding/EVENTS.md, which does not exist	
-M-017	2	M11 documentation	open		docs wrong: detailed-rules.md promises a build warning for hooking a function that runs off the game thread, from a self-description mark that does no	
+M-016	4	M11 documentation	open		docs wrong: events.md links docs/modding/EVENTS.md, which does not exist	
+M-017	4	M11 documentation	open		docs wrong: detailed-rules.md promises a build warning for hooking a function that runs off the game thread, from a self-description mark that does no	
 M-018	2	M1 kernel	open		see the finding's own text	
 M-019	2	M0 mod tests into the gate	open		maintainability: the compiler's run-time checks (overflow, division, shifts, conversions) are tested as text only; the one test that runs generated C 	
 M-020	2	M1 kernel	open		maintainability: an off-thread hook's report reads the runtime's global caller without synchronisation	
 M-021	2	M4 ownership	open		wrong behaviour: kit.camera's field of view, mirror and shake are one value each; with two mods the newer one's end resets the game's default instead 	
-M-022	2	M11 documentation	open		docs wrong: "A call from another thread is a script error" for LumaKit; the library's export wrappers have no thread test	
-M-023	2	M8 LumaLink	open		maintainability: `pack` rebuilds code only when a source file is newer than the oldest code file; a LumaLink update or a new game self-description pac	
-M-024	2	M11 documentation	open		see the finding's own text	Owner: mods must be able to do anything. Correct the wording about permissions; do not narrow what a mod can do.
-M-025	2	M11 documentation	open		docs wrong: concepts/lumascript.md says a script cannot read a game object after it is gone, and errors.md that a script error cannot damage memory; a	
+M-022	4	M11 documentation	open		docs wrong: "A call from another thread is a script error" for LumaKit; the library's export wrappers have no thread test	
+M-023	4	M8 LumaLink	open		maintainability: `pack` rebuilds code only when a source file is newer than the oldest code file; a LumaLink update or a new game self-description pac	
+M-024	4	M11 documentation	open		see the finding's own text	Owner: mods must be able to do anything. Correct the wording about permissions; do not narrow what a mod can do.
+M-025	4	M11 documentation	open		docs wrong: concepts/lumascript.md says a script cannot read a game object after it is gone, and errors.md that a script error cannot damage memory; a	
 M-026	2	M0 mod tests into the gate	open		maintainability: no recorded run covers this tree; PROVEN.md proves an older commit, and the two board files disagree on its count	
 M-027	2	M1 kernel	fixed	3dc47e80f; ctest galaxy_luma_guard_words_tests (fails with the old scan range); tests/mods guard 1619b-1621b	wrong behaviour: every service event (guard kind 6) of a mod without unwind data is refused by the word scan, because luma_guard_call's own saved rbx 	
 M-028	2	M1 kernel	open		maintainability: time handlers and draw points are resumable only because the compiler turns the trampoline's call into a tail jump	
@@ -32,12 +32,12 @@ M-030	2	M3 services	open		wrong behaviour: player.make and player.remove leak ea
 M-031	2	M5 after a crash	open		crash: on Linux, macOS and Android a fault with mods on never makes the next start safe; a mod whose code crashes the game at start crashes it on ever	Fixed in b32f454fd for Windows, Linux and Android (on_fatal) and for a mod's own fault on every platform (the guard); proof on Linux/Android waits for the Android gate run of tests/mods/aftercrash. macOS has no fatal handler (platform, Agent 1; board 11-17 08:44).
 M-032	2	M5 after a crash	fixed	b32f454fd, abc38ec4e; tests/mods/aftercrash 6701-6713 (start, play and stop); galaxy_mods_tests crash_record_text, crash_record_files	missing feature: after a crash that names a mod, nothing turns that mod off or offers to; the next start turns off every mod's code once, and a restar	
 M-033	2	M4 ownership	open		see the finding's own text	
-M-034	2	M11 documentation	open		docs wrong: three LumaKit doc comments lost words, and the reference pages print the gap	
+M-034	4	M11 documentation	open		docs wrong: three LumaKit doc comments lost words, and the reference pages print the gap	
 M-035	2	M0 mod tests into the gate	fixed	LumaLink 6039139; lumalink-core add::tests::each_manifest_part_is_written_in_the_format_order_and_checked (hermetic; failed with the kit at 1.0.0)	maintainability: the LumaLink test each_manifest_part_is_written_in_the_format_order_and_checked asks for lumakit >=1.2.0 while LumaKit is 1.0.0, so i	
 M-036	2	M0 mod tests into the gate	open		missing feature: behaviours with no test in any suite	
 M-037	2	M4 ownership	open		wrong behaviour: kit.gravity's timed overrides count down once per MarioActor, so with svc.player's extra players a `frames` override ends early	
 M-038	2	M2 call safety	fixed	959dc09b1, 50d2f1714; LumaLink tests/game kit kit-any-time, kit-any-time-title (LumaLink 4a3ec20) (shop.open at boot and on the title)	crash: kit.shop.open in a scene without a stage's playing result (the title, the file select, a mod's own menu before any stage) ends the game	The call that reads the missing object is not made (Call.NotNow); the shop opens with none of it.
-M-039	2	M11 documentation	open		docs wrong: kit.shop's header says coins are taken with MR::incCoin and a negative count, and that the shop closes when the keeper goes; the code uses	
+M-039	4	M11 documentation	open		docs wrong: kit.shop's header says coins are taken with MR::incCoin and a negative count, and that the shop closes when the keeper goes; the code uses	
 M-040	2	M4 ownership	open		maintainability: kit.projectile's slot lists only grow; a slot is reused only while its object is alive in the current stage, so each new stage, and e	
 M-041	2	M4 ownership	open		wrong behaviour: kit.talk says one line at a time for all mods with no hand-over; a second `say` while a line shows takes the globals, and whichever e	
 M-042	2	M4 ownership	open		wrong behaviour: kit.hud's handles are bare slot numbers checked against no owner; a mod's handle to an element that went (removed, timed out, or its 	
@@ -54,25 +54,25 @@ M-052	2	M4 ownership	open		wrong behaviour: kit.net.kit trusts what any peer say
 M-053	2	M4 ownership	open		wrong behaviour: the kit data schemas accept values the kit cannot take; a data-only mod that passes the validator can stop LumaKit's data read or han	
 M-054	2	M4 ownership	open		wrong behaviour: kit.cutscene and kit.stage share svc.audio's one music without knowing of each other; a cutscene with music in a galaxy that has a mo	
 M-055	2	M3 services	open		wrong behaviour: a WebSocket server can make the game queue pongs without limit; pongs bypass the send budget every other send is held to	
-M-056	2	M10 camera, look and first person	open		wrong behaviour: the game's mirrors reflect the game's own camera, not the mod's main camera	
-M-057	2	M10 camera, look and first person	open		wrong behaviour: on macOS the look turns by the system's accelerated pointer motion, not the mouse's counts	
-M-058	2	M10 camera, look and first person	open		wrong behaviour: on macOS the held cursor is frozen where it was, not moved into the picture	
+M-056	4	M10 camera, look and first person	open		wrong behaviour: the game's mirrors reflect the game's own camera, not the mod's main camera	
+M-057	4	M10 camera, look and first person	open		wrong behaviour: on macOS the look turns by the system's accelerated pointer motion, not the mouse's counts	
+M-058	4	M10 camera, look and first person	open		wrong behaviour: on macOS the held cursor is frozen where it was, not moved into the picture	
 M-059	2	M4 ownership	open		wrong behaviour: one look for all mods: a second mod's on silently replaces the first, its off or end ends both, and its scale reaches every reader	
-M-060	2	M10 camera, look and first person	open		wrong behaviour: with more than one controller read in a frame, look() keeps only the last read's turn	
-M-061	2	M10 camera, look and first person	open		wrong behaviour (Windows): the mouse clip is given back only by the next controller read	
-M-062	2	M10 camera, look and first person	open		wrong behaviour (Linux): where SDL cannot hold the mouse the look gets no mouse motion and asks again every pump	
-M-063	2	M10 camera, look and first person	open		wrong behaviour (Android): a mouse click on the picture drops the mouse hold	
-M-064	2	M10 camera, look and first person	open		see the finding's own text	
+M-060	4	M10 camera, look and first person	open		wrong behaviour: with more than one controller read in a frame, look() keeps only the last read's turn	
+M-061	4	M10 camera, look and first person	open		wrong behaviour (Windows): the mouse clip is given back only by the next controller read	
+M-062	4	M10 camera, look and first person	open		wrong behaviour (Linux): where SDL cannot hold the mouse the look gets no mouse motion and asks again every pump	
+M-063	4	M10 camera, look and first person	open		wrong behaviour (Android): a mouse click on the picture drops the mouse hold	
+M-064	4	M10 camera, look and first person	open		see the finding's own text	
 M-065	2	M4 ownership	open		wrong behaviour: set_drawn's four slots fill with removed extra players; a later hide is not recorded and outlives its mod	
-M-066	2	M10 camera, look and first person	open		wrong behaviour: a JOINT rig on Mario reads the skeleton without Mario's own body scale and look offset	
-M-067	2	M10 camera, look and first person	open		docs wrong: luma_input.h's first comment names input 1.3	
-M-068	2	M10 camera, look and first person	open		wrong behaviour: a fast turn of the look counts as a camera cut for the player and for the frame interpolation	
-M-069	2	M10 camera, look and first person	open		maintainability: the look's host work runs on every controller read with no mod	
+M-066	4	M10 camera, look and first person	open		wrong behaviour: a JOINT rig on Mario reads the skeleton without Mario's own body scale and look offset	
+M-067	4	M10 camera, look and first person	open		docs wrong: luma_input.h's first comment names input 1.3	
+M-068	4	M10 camera, look and first person	open		wrong behaviour: a fast turn of the look counts as a camera cut for the player and for the frame interpolation	
+M-069	4	M10 camera, look and first person	open		maintainability: the look's host work runs on every controller read with no mod	
 M-070	2	M4 ownership	open		draw.inst: two mods on one actor compound each other's colours (and scale) every frame	
 M-071	2	M4 ownership	open		Shared pools behind per-mod limits: draw textures and fonts, draw.mesh, draw.post programs and slots	
 M-072	2	M3 services	open		draw.mesh answers LUMA_E_LIMIT "32" when no scene runs	
 M-073	2	M3 services	open		draw.light: radius and CASTS are checked and then dropped; the header describes traced lights	
-M-074	2	M12 platforms for mods	open		draw.native on macOS and iOS: at() succeeds, the function never runs, backend() answers 0	
+M-074	4	M12 platforms for mods	open		draw.native on macOS and iOS: at() succeeds, the function never runs, backend() answers 0	
 M-075	2	M3 services	open		draw.post.program takes a store path from the root, undocumented	
 M-076	2	M2 call safety	fixed	0c05e409d; tests/mods/save 2272-export-at-boot (the game ended before)	save.game.export_file during the boot ends the game	
 M-077	2	M2 call safety	fixed	0c05e409d; tests/mods/save 2272-export-at-boot (export waits, offer answers busy until the read)	export_file and offer read the user files before the game has read them	
@@ -112,46 +112,46 @@ M-110	2	M1 kernel	open		maintainability: a game class the header scanner misses 
 M-111	2	M2 call safety	fixed	eff71d620, 54d490ab5; tools/gate/tests/events_page_test.py (40 faults on the tree before)	docs wrong / maintainability: the events' return-value contracts have no possible user, and the events page is stale	
 M-112	2	M1 kernel	open		wrong behaviour (cost): an achievement on a frequent event does string work for every achievement on every raise, for the whole session	
 M-113	2	M2 call safety	fixed	959dc09b1; tools/lumacore/needs_fixture_test.py (MR::getSceneObj< T >(id) through templates and callers)	maintainability: the only call lists the build keeps drop template callees, so a needs pass built on them would see no scene reach at all	
-M-114	2	M7 compiler	open		wrong behaviour: texts given to the game and closures given to services are kept until the mod stops, one per distinct value; a mod that does either e	
-M-115	2	M11 documentation	open		docs wrong: detailed-rules.md tells modders to write `if let p = MarioAccess::getPlayerActor { ... }`, which the compiler refuses	
-M-116	2	M7 compiler	open		wrong behaviour (compatibility): a mod asks each service at the SDK's newest minor version, not the lowest one that has the functions it calls, so a m	
+M-114	4	M7 compiler	open		wrong behaviour: texts given to the game and closures given to services are kept until the mod stops, one per distinct value; a mod that does either e	
+M-115	4	M11 documentation	open		docs wrong: detailed-rules.md tells modders to write `if let p = MarioAccess::getPlayerActor { ... }`, which the compiler refuses	
+M-116	4	M7 compiler	open		wrong behaviour (compatibility): a mod asks each service at the SDK's newest minor version, not the lowest one that has the functions it calls, so a m	
 M-117	2	M0 mod tests into the gate	open		maintainability (tests): language features that no in-game suite runs, and features no compiler test compiles	
-M-118	2	M7 compiler	open		the checker refuses a `T?` that the game takes. This is too strict, not unsound.	
-M-119	2	M7 compiler	open		S0067 says "test it first", but only optional services narrow on a test. For a value, `if x != none`	
-M-120	2	M11 documentation	open		docs wrong: the reference writes calls without `()` and uses `vec3` alone as a zero vector; the compiler refuses both	
-M-121	2	M7 compiler	open		wrong behaviour (diagnostics): an error on any part of a postfix chain is placed at the chain's first word	
-M-122	2	M7 compiler	open		missing feature: no zero or default value for the built-in value types, though the docs promise one	
-M-123	2	M7 compiler	open		the checker lets a `none` reach a game pointer field the game may read without a test.	
-M-124	2	M7 compiler	open		maintainability (C and scripts): an `extern fn` is never compared with the C header it names	
-M-125	2	M7 compiler	open		docs wrong: `hook ... every override of` is documented and checked, but the back end refuses it	
-M-126	2	M7 compiler	open		crash: `skip <text>` in a before hook of a `const char *` or `const char16_t *` function hands the game the runtime's block, not characters	
-M-127	2	M7 compiler	open		wrong behaviour (C does not compile): reading `result`, or an after hook's named result, of a `const char *` function	
-M-128	2	M7 compiler	open		maintainability (cost): each hook body copies every named `const char *` parameter on every call	
+M-118	4	M7 compiler	open		the checker refuses a `T?` that the game takes. This is too strict, not unsound.	
+M-119	4	M7 compiler	open		S0067 says "test it first", but only optional services narrow on a test. For a value, `if x != none`	
+M-120	4	M11 documentation	open		docs wrong: the reference writes calls without `()` and uses `vec3` alone as a zero vector; the compiler refuses both	
+M-121	4	M7 compiler	open		wrong behaviour (diagnostics): an error on any part of a postfix chain is placed at the chain's first word	
+M-122	4	M7 compiler	open		missing feature: no zero or default value for the built-in value types, though the docs promise one	
+M-123	4	M7 compiler	open		the checker lets a `none` reach a game pointer field the game may read without a test.	
+M-124	4	M7 compiler	open		maintainability (C and scripts): an `extern fn` is never compared with the C header it names	
+M-125	4	M7 compiler	open		docs wrong: `hook ... every override of` is documented and checked, but the back end refuses it	
+M-126	4	M7 compiler	open		crash: `skip <text>` in a before hook of a `const char *` or `const char16_t *` function hands the game the runtime's block, not characters	
+M-127	4	M7 compiler	open		wrong behaviour (C does not compile): reading `result`, or an after hook's named result, of a `const char *` function	
+M-128	4	M7 compiler	open		maintainability (cost): each hook body copies every named `const char *` parameter on every call	
 M-129	2	M1 kernel	open		maintainability (cost): every service event call formats a string and scans every mod record	
-M-130	2	M7 compiler	open		wrong behaviour: JSON of a map keyed by a game enum writes a bare number as an object key	
-M-131	2	M7 compiler	open		wrong behaviour: `clamp(v, lo, hi)` with lo > hi gives lo for every v below hi, with no report	
-M-132	2	M7 compiler	open		maintainability (cost): a mod holding any live `ref` keeps two before hooks on every game free and every NameObj destruction	
-M-133	2	M7 compiler	open		crash: a class override keeps the object's data pointer across `base.f()`; if the base call destroys the object, later field reads and writes use free	
-M-134	2	M7 compiler	open		wrong behaviour: tasks started by `on stop` have their way-outs run inside lumart_end, after luma_finish	
+M-130	4	M7 compiler	open		wrong behaviour: JSON of a map keyed by a game enum writes a bare number as an object key	
+M-131	4	M7 compiler	open		wrong behaviour: `clamp(v, lo, hi)` with lo > hi gives lo for every v below hi, with no report	
+M-132	4	M7 compiler	open		maintainability (cost): a mod holding any live `ref` keeps two before hooks on every game free and every NameObj destruction	
+M-133	4	M7 compiler	open		crash: a class override keeps the object's data pointer across `base.f()`; if the base call destroys the object, later field reads and writes use free	
+M-134	4	M7 compiler	open		wrong behaviour: tasks started by `on stop` have their way-outs run inside lumart_end, after luma_finish	
 M-135	2	M4 ownership	open		crash: a library function that returns its own struct or enum writes its own size into the caller's value; a struct that gained a field overruns the o	
 M-136	2	M4 ownership	open		crash: a library keeps a dependent's closure past that mod's stop; the generated dependent_gone drops nothing	
-M-137	2	M7 compiler	open		maintainability (memory, cost): every distinct closure given to a service is kept until unload, and each keep scans the whole table	
+M-137	4	M7 compiler	open		maintainability (memory, cost): every distinct closure given to a service is kept until unload, and each keep scans the whole table	
 M-138	2	M4 ownership	open		wrong behaviour: a struct a caller passes to a newer library gets zero, not the defaults, in the fields the caller does not have	
-M-139	2	M7 compiler	open		docs wrong (low): `keep()` logs "more than 1 MiB as json" when the core refused the value for another reason	
-M-140	2	M7 compiler	open		crash (low): an `export c fn` runs script code on whatever thread the mod's C calls it from	
-M-141	2	M8 LumaLink	open		maintainability (low): `pack` leaves `<id>-<version>.luma.part` beside the folder when writing or the second check fails with an error (a full disk)	
-M-142	2	M8 LumaLink	open		wrong behaviour: linux-arm64 is built with outline atomics on a Linux host that has GCC 9.3.1 or newer, so its link fails, and the output depends on t	
+M-139	4	M7 compiler	open		docs wrong (low): `keep()` logs "more than 1 MiB as json" when the core refused the value for another reason	
+M-140	4	M7 compiler	open		crash (low): an `export c fn` runs script code on whatever thread the mod's C calls it from	
+M-141	4	M8 LumaLink	open		maintainability (low): `pack` leaves `<id>-<version>.luma.part` beside the folder when writing or the second check fails with an error (a full disk)	
+M-142	4	M8 LumaLink	open		wrong behaviour: linux-arm64 is built with outline atomics on a Linux host that has GCC 9.3.1 or newer, so its link fails, and the output depends on t	
 M-143	2	M6 files from strangers	open		crash (disk and memory exhaustion): an archive added to the game is unpacked up to 256 GiB before the validator sees it, and an asset up to 4 GiB is r	
 M-144	2	M6 files from strangers	open		wrong behaviour (fails open): when the validator cannot run, import accepts the mod and the start records no refusal	
 M-145	2	M6 files from strangers	open		crash (memory exhaustion): a small glTF can make the cook allocate gigabytes; only each accessor is limited	
 M-146	2	M6 files from strangers	open		hang: a BRSTM, BCSTM or BFSTM header with a block size of 0 and a large block count loops for billions of iterations	
-M-147	2	M8 LumaLink	open		docs wrong (usability): `check` and `pack` check against the installed game, `build` against what `--names` or LUMA_INCLUDE gave, and nothing records 	
-M-148	2	M8 LumaLink	open		maintainability (low): `build` rewrites luma.json in place, and silently does not record a platform for a luma.json with a byte order mark	
-M-149	2	M8 LumaLink	open		maintainability (low): an SDK path that contains a comma breaks every ELF link	
+M-147	4	M8 LumaLink	open		docs wrong (usability): `check` and `pack` check against the installed game, `build` against what `--names` or LUMA_INCLUDE gave, and nothing records 	
+M-148	4	M8 LumaLink	open		maintainability (low): `build` rewrites luma.json in place, and silently does not record a platform for a luma.json with a byte order mark	
+M-149	4	M8 LumaLink	open		maintainability (low): an SDK path that contains a comma breaks every ELF link	
 M-150	2	M6 files from strangers	open		wrong behaviour (fails open, verified): a package the validator cannot finish is started with its code	
 M-151	2	M6 files from strangers	open		crash (memory exhaustion): FLAC and OGG are decoded whole before the length limit is checked; FLAC can reach 1 GiB a channel	
 M-152	2	M6 files from strangers	open		crash (device lost) or hang: a mod's shader may loop without bound; neither the compiler nor the game limits it	
-M-153	2	M8 LumaLink	fixed	LumaLink 50e28b7; update::tests::removing_lumalinks_data_leaves_everything_else_in_the_folder, update::tests::old_downloads_take_only_the_setups_they_wrote	wrong behaviour (data loss): uninstall deletes the whole LUMALINK_DATA folder	
+M-153	4	M8 LumaLink	fixed	LumaLink 50e28b7; update::tests::removing_lumalinks_data_leaves_everything_else_in_the_folder, update::tests::old_downloads_take_only_the_setups_they_wrote	wrong behaviour (data loss): uninstall deletes the whole LUMALINK_DATA folder	
 M-154	2	M9 mod manager	open		wrong behaviour: a reload asked while another runs is dropped, though the log says it will be asked again	
 M-155	2	M9 mod manager	open		wrong behaviour: a mod that cannot be taken out is loaded a second time beside its running copy	
 M-156	2	M6 files from strangers	open		crash (memory exhaustion): a mod's sound archive can ask for 64 GiB with one 12-byte command	
@@ -161,21 +161,21 @@ M-159	2	M6 files from strangers	open		crash (memory exhaustion), corrects M-151:
 M-160	2	M6 files from strangers	open		hang: a library mod's data schema can make the check take exponential time, in LumaLink and at every game start	
 M-161	2	M6 files from strangers	open		wrong behaviour (fails open, partly): a mod that makes the validator fail only when the game's self-description is given is checked again without it	
 M-162	2	M6 files from strangers	open		wrong behaviour, revises M-152: a post program a mod's code registers while running skips the cook's checks; three of four renderers compile it in the	
-M-163	2	M8 LumaLink	fixed	LumaLink 50e28b7; install::tests::the_install_list_names_only_files_inside_the_folder	maintainability (low): uninstall deletes every path the install manifest lists, including absolute ones	
+M-163	4	M8 LumaLink	fixed	LumaLink 50e28b7; install::tests::the_install_list_names_only_files_inside_the_folder	maintainability (low): uninstall deletes every path the install manifest lists, including absolute ones	
 M-164	2	M0 mod tests into the gate	fixed	LumaLink 183ce97; jobs::tests::a_test_passes_only_when_every_renderer_asked_left_a_pass (fails on the old code)	wrong behaviour (low): `test` counts a test as passed when any one renderer left a pass, and one unreadable result loses every result	
-M-165	2	M8 LumaLink	open		wrong behaviour (low): failures that LumaLink's window does not show	
+M-165	4	M8 LumaLink	open		wrong behaviour (low): failures that LumaLink's window does not show	
 M-166	2	M6 files from strangers	open		crash (suspected): a texture record's width times height is computed in 32 bits before anything is read	Withdrawn by the reader. Confirm by test and close.
 M-167	2	M6 files from strangers	open		crash (stack overflow) and hang: a patch selector's `glob` recurses once per `*` and backtracks without limit, in the validator at every start and in 	
 M-168	2	M6 files from strangers	open		memory safety (game process): the cook passes already-cooked files through unchecked, and the game reads them in place with only a magic check	
 M-169	2	M6 files from strangers	open		crash (memory exhaustion): a mod's cooked table reserves rows and columns from its header before reading any	
-M-170	2	M11 documentation	open		docs wrong: code blocks the compiler refuses	
-M-171	2	M11 documentation	open		docs wrong: features documented as working that the compiler refuses with S0800	
-M-172	2	M11 documentation	open		docs missing: 80 of the compiler's build-time codes appear on no page, including S0012 and S0800	
+M-170	4	M11 documentation	open		docs wrong: code blocks the compiler refuses	
+M-171	4	M11 documentation	open		docs wrong: features documented as working that the compiler refuses with S0800	
+M-172	4	M11 documentation	open		docs missing: 80 of the compiler's build-time codes appear on no page, including S0012 and S0800	
 M-173	2	M2 call safety	fixed	b51bfb2db, 50d2f1714; docs/modding/reference/lumascript/lifecycle.md (what a call in the boot frames gives); tests/mods/needs 6801-call-not-now proves it	docs missing: no page warns about calls that crash on the first `on frame`	
 M-174	2	M0 mod tests into the gate	open		missing feature (tests): behaviours no test proves, most likely to be hit first (extends M-036 and M-117)	
-M-175	2	M10 camera, look and first person	open		docs wrong (misleading): kit.camera promises the player's body stays hidden while a first-person rig holds the camera; it is hidden once and comes bac	
-M-176	2	M11 documentation	open		docs wrong: three service pages tell C modders to import an older version than the header provides	
-M-177	2	M11 documentation	open		docs wrong (low): anim.md's limits table gives three limits one description	
+M-175	4	M10 camera, look and first person	open		docs wrong (misleading): kit.camera promises the player's body stays hidden while a first-person rig holds the camera; it is hidden once and comes bac	
+M-176	4	M11 documentation	open		docs wrong: three service pages tell C modders to import an older version than the header provides	
+M-177	4	M11 documentation	open		docs wrong (low): anim.md's limits table gives three limits one description	
 P-001	1	E6 pacing and in-between pictures	open		(maintainability) `frame_rate_decouple` is a dead setting with a live branch in the render loop.	
 P-002	1	E5 hitches and GPU waits	open		(performance) Every renderer's begin_frame stats config.ini twice a second on the render thread and can block on the settings UI mutex.	
 P-003	1	E6 pacing and in-between pictures	open		(wrong behaviour) The game's speed follows the display, not 60 Hz, whenever the display is within 3 % (Android) or 1 % (Windows) of a multiple of the 	
@@ -421,21 +421,21 @@ N-1043	1	E0 gate	open		(no measure) no short measurement set at the long run's e
 N-1044	1	E0 gate	open		(slow gate) the main gate runs its parts one after another, about 90 minutes; file 04 holds it to 30 (step 5, with the proof that side by side gives the same pictures and hashes)	file 04
 N-1045	1	E0 gate	open		(slow gate) GitHub's push workflow takes about two hours (its Android job 1 h 50 min); file 04 holds it under 20 minutes (step 6)	file 04
 N-1046	1	E0 gate	open		(by hand) the long run is started by hand; file 04 section 14 has whoever moves main start it under long.lock when none ran in 6 hours	file 04
-N-2001	2	M8 LumaLink	fixed	LumaLink 7433bbd, 46e4b30; tests/build_c_alone.rs; docs bdac49f54; tests/mods/docs 3301-c-alone-hook	missing feature: `lumalink build` refused a mod of C alone (NoScripts) though the loader runs them; writing-code-in-c.md said a mod can't be C alone	
-N-2002	2	M8 LumaLink	open		maintainability (low): lumalink-gui chrome::tests::gear_is_centred_symmetric_and_round takes 326 s in a debug build; the workspace test run waits on it	
+N-2001	4	M8 LumaLink	fixed	LumaLink 7433bbd, 46e4b30; tests/build_c_alone.rs; docs bdac49f54; tests/mods/docs 3301-c-alone-hook	missing feature: `lumalink build` refused a mod of C alone (NoScripts) though the loader runs them; writing-code-in-c.md said a mod can't be C alone	
+N-2002	4	M8 LumaLink	open		maintainability (low): lumalink-gui chrome::tests::gear_is_centred_symmetric_and_round takes 326 s in a debug build; the workspace test run waits on it	
 N-2003	2	M0 mod tests into the gate	open		wrong behaviour (low): luma_test.py defaults to renderer d3d12 on every system; on Linux a run without --renderer has no adapter; LumaLink's asked_renderers mirrors the default	
 N-2004	2	M0 mod tests into the gate	open		untested: LumaLink tests that need clang or the SDK skip silently (build_c_alone; build_nine is #[ignore]); the gate must run them (with M-019)	
-N-2005	2	M7 compiler	fixed	LumaLink a1a3e01; build_c_alone::an_authors_c_may_have_a_frame_over_4_kib (fails on the old build)	wrong behaviour: `lumalink build` put the 4 KiB frame limit meant for generated C on an author's own C/C++, so a C mod with a 64 KiB frame (loader test 1117-frame) did not build	
-N-2006	2	M8 LumaLink	open		maintainability (low): `lumalink build` takes a needed mod from the machine's installed game when none is beside the mod, so a build depends on the machine; the build has no option naming the needed mods' folder	
+N-2005	4	M7 compiler	fixed	LumaLink a1a3e01; build_c_alone::an_authors_c_may_have_a_frame_over_4_kib (fails on the old build)	wrong behaviour: `lumalink build` put the 4 KiB frame limit meant for generated C on an author's own C/C++, so a C mod with a 64 KiB frame (loader test 1117-frame) did not build	
+N-2006	4	M8 LumaLink	open		maintainability (low): `lumalink build` takes a needed mod from the machine's installed game when none is beside the mod, so a build depends on the machine; the build has no option naming the needed mods' folder	
 N-2007	2	M0 mod tests into the gate	fixed	a6e360eec; tools/lumacore/functions_fixture_test.py (KEPT+NULLABLE a checked row)	untested (stale test): functions_fixture_test.py's planted cases 9 and 16 expected refusals instrument.py does not make by design	
 N-2008	2	M0 mod tests into the gate	fixed	c0fc5b303, 6771c0335; tests/mods/harness 19-settings-step, 10-same-twice, 06a-picture-self	untested (stale tests): harness 19-settings-step (key path of the old Mods page), 10-same-twice (no automatic comparison), 06a-picture-self (reference before the version label)	
 N-2009	2	M0 mod tests into the gate	fixed	6771c0335; tests/mods/kitdata 2901, 2902	untested (lost in the import): kd-lib's kit schema (code/kd-lib.kit/player.form/1.json) was not carried into tests/mods, so kitdata 2901 failed; luma-file-format.md lacked the row	
 N-2010	2	M0 mod tests into the gate	fixed	6771c0335; tests/mods/mods 2245, 2246	untested (order): suite mods listed 2245 before 2246, whose saved state it continues from	
 N-2011	2	M0 mod tests into the gate	fixed	e742afce3; tests/mods/modlog 3127, 3129 (failed on the old key path)	untested (stale tests): modlog 3127 and 3129 pressed a key path of the old Mods page and never reached LOG	
-N-2012	2	M10 camera, look and first person	fixed	fb6859aa8; tests/mods/world 2471-view main_watch_d2, back_watch_d2 (failed: 400); LumaLink kit/kit-area side_distance	wrong behaviour: with a mod's main camera (main_eye, main_rig) MR::getCameraWatchPos kept the game's watch point, so sound emitters, the ocean ring and LumaKit camera.now() read a mixed camera (kit-area's side camera measured 1520 for 1500)	
-N-2013	2	M7 compiler	fixed	LumaLink f83c070; lumascript parse a_fact_name_of_text_ends_before_its_value (fails on the old parser)	wrong behaviour: `log fact "name" (a & 1) != 0` read the name as a call of the text; a value could not start with (, [ or - after a text name	
-N-2014	2	M10 camera, look and first person	fixed	LumaLink f943d21; kit/kit-camera fp_hidden, fp_shown	untested (stale test): kit-camera read the game's mHidden after kit.camera moved to player.set_drawn (mModHidden)	
-N-2015	2	M11 documentation	open		docs missing: services/draw-view.md has no draw.view 1.1 (main_rig, LumaDrawViewLook, LUMA_DRAW_VIEW_AHEAD_MOST) and says version 1.0	
+N-2012	4	M10 camera, look and first person	fixed	fb6859aa8; tests/mods/world 2471-view main_watch_d2, back_watch_d2 (failed: 400); LumaLink kit/kit-area side_distance	wrong behaviour: with a mod's main camera (main_eye, main_rig) MR::getCameraWatchPos kept the game's watch point, so sound emitters, the ocean ring and LumaKit camera.now() read a mixed camera (kit-area's side camera measured 1520 for 1500)	
+N-2013	4	M7 compiler	fixed	LumaLink f83c070; lumascript parse a_fact_name_of_text_ends_before_its_value (fails on the old parser)	wrong behaviour: `log fact "name" (a & 1) != 0` read the name as a call of the text; a value could not start with (, [ or - after a text name	
+N-2014	4	M10 camera, look and first person	fixed	LumaLink f943d21; kit/kit-camera fp_hidden, fp_shown	untested (stale test): kit-camera read the game's mHidden after kit.camera moved to player.set_drawn (mModHidden)	
+N-2015	4	M11 documentation	open		docs missing: services/draw-view.md has no draw.view 1.1 (main_rig, LumaDrawViewLook, LUMA_DRAW_VIEW_AHEAD_MOST) and says version 1.0	
 N-2016	2	M0 mod tests into the gate	fixed	51e02aaeb; the six d3d11 references, made after N-1032 (465dbbe23): each equals its d3d12 one (rmse 0.00 or within 0.3); the old ones fail on today's d3d11 (rmse 1.26 to 1.65)	untested (pinned fault): the D3D11 refs of safestart 6604-6607 and aftercrash 6704, 6709 hold the Mods list's blurred key-label glyphs (D3D11 fault, Agent 1; board 11-17 08:44); rewrite them after the fix	
 N-2017	2	M13 the last check	open		wrong look (low): kit.ui's panel puts a widget's label (Slide, Flip, Tint) on the panel's inner edge with no margin, while plain rows are indented (LumaKit kit-ui.kit picture panel, every renderer)	
 N-2018	2	M13 the last check	open		wrong look (low): kit.hud's corner places draw over the game's own HUD (the star count, the lives, the life meter); no place keeps clear of it (LumaKit kit-hud picture hud)	
@@ -458,9 +458,9 @@ N-2034	2	M1 kernel	open		fixed limit: at most 16 take-outs wait for the next fra
 N-2035	2	M2 call safety	fixed	tests/mods/needs 6801	test: needs 6801 expected validateSensor to need MarioHolder; since d3e9454ae (N-2027) the call names the object it reads, MarioActor, so 6801 failed on every build after it	Found 11-17 in the M-001 regression; fails on the bins before M-001 too. The expectation now names MarioActor.
 N-2036	2	M1 kernel	fixed	luma_guard_walk_tests (unwind); tools/fuzz/luma_unwind_fuzz.cpp	crash: the guard read a mod library's unwind data (.pdata unwind info in the Windows walk's frame_register, .eh_frame_hdr and .pdata in function_at) with no bound; a table that lies sent the reads outside the image, in the fault handler	Found 11-17 in M-001 (function_at is new there; frame_register is from M5). Fixed 5faa713d7: luma_guard_unwind.h reads within the image. The address sanitizer build of the tests overflows on the unbounded reading; libFuzzer 43M runs, every point reached, no fault.
 N-2037	2	M6 files from strangers	fixed	28d67f310; crates/luma-validate tests/libraries.rs x64 and arm64 unwind tables that lie (fail before), and a sweep of every byte	a mod library's exception directory (Windows .pdata) is not checked before its code runs: the guard hands it to the system's unwinder (RtlLookupFunctionEntry, RtlVirtualUnwind) in the fault handler, and a table that lies can make that read outside the image	Found 11-17 in M-001. The guard's own reads are bounded (N-2036); the system's are not. The loader (or the checker at install) checks each RUNTIME_FUNCTION and its unwind codes lie in the image, sorted, before the mod starts; a mod that fails is not started. Fixed in the checker (luma-validate binary.rs, which the start check runs on every mod): a table that does not hold is a damaged PE file (L502). 417 real mod libraries still read.
-N-2038	2	M12 platforms for mods	fixed	LumaLink f468f20, 59e178605; lumalink-core tests/same_float.rs (fails before on the five arm64 targets)	wrong behaviour: mods were built without -ffp-contract=off: on every arm64 target clang fused a*b+c, so a mod's floating point (LumaScript's sin, cos and atan2 among it) gave other bits than on an x86-64 PC, and a mod touching game state parted the PC's and a device's step hashes and replays	Found 11-17 reading Agent 1's N-1033 (sincosf from bionic). That case cannot happen in a mod: -ffreestanding (no builtins), -nostdlib, ELF -z defs, Mach-O -undefined error, PE /NODEFAULTLIB.
+N-2038	4	M12 platforms for mods	fixed	LumaLink f468f20, 59e178605; lumalink-core tests/same_float.rs (fails before on the five arm64 targets)	wrong behaviour: mods were built without -ffp-contract=off: on every arm64 target clang fused a*b+c, so a mod's floating point (LumaScript's sin, cos and atan2 among it) gave other bits than on an x86-64 PC, and a mod touching game state parted the PC's and a device's step hashes and replays	Found 11-17 reading Agent 1's N-1033 (sincosf from bionic). That case cannot happen in a mod: -ffreestanding (no builtins), -nostdlib, ELF -z defs, Mach-O -undefined error, PE /NODEFAULTLIB.
 N-2039	2	M0 mod tests into the gate	fixed	5023c2cf3; the gate's lumalink check (every LumaLink test with clang, the SDK and the build's names)	missing test: the gate ran none of LumaLink's own tests (only nebula-import and luma-validate), and LumaLink's nine-platform build test skipped itself: its checker, check_luma_platforms.py, was in no repository	The first run with the SDK found LumaLink's every_sdk_header_reads counting 33 services where the SDK has had 34 since the events service (fixed in LumaLink 9cf2ebe). The checker is now tools/lumacore/check_luma_platforms.py.
-N-2040	2	M11 documentation	fixed	07d4228e0	doc promise: compiled-form.md's targets and flags said Android 31, Apple platforms refused, link flags LumaLink does not pass and "no UUID"; byte-identical libraries "on every host system" is proven nowhere	
+N-2040	4	M11 documentation	fixed	07d4228e0	doc promise: compiled-form.md's targets and flags said Android 31, Apple platforms refused, link flags LumaLink does not pass and "no UUID"; byte-identical libraries "on every host system" is proven nowhere	
 N-2041	2	M0 mod tests into the gate	fixed	297bcef3e; tools/lumacore/tests/harness_mod_tests_parallel_test.py (fails before)	slow: the mod tests ran one at a time (one runner per suite, one lock for every harness run of the gate): about 40 minutes a renderer; plan 04 wants them side by side, and a quick set for the quick gate	Plan 04 section 13 step 3. mod_tests.py --parallel N: a test (with those it continues from) is a runner of its own with its own lock and log, the longest first; --set quick: tests/mods/quick.json, refused when a suite has none. Same results alone and side by side: see PROGRESS-AGENT-2.
 N-2042	2	M0 mod tests into the gate	fixed	a80085385; the four tests pass on d3d11 (D:/NebulaWork/build/a2-d11refs2)	missing test: tests/mods ui 3813, 3815, 3816 and 3817 have no Direct3D 11 reference pictures: harness-error on d3d11 in every gate	Found 11-17 in the 09:56 full gate (fe204003b). The pictures are made on d3d11, looked at against the d3d12 and Vulkan ones, and approved naming why. Made on NebulaD11 at 37ce7f3cc and approved naming the cause (the commit message): the same screen as Direct3D 12 within 7 of 255, one edge pixel apart as Vulkan is.
 N-2043	2	M0 mod tests into the gate	open		missing test: the mod tests do not run on the tablet in the gate (planned.tsv mods/tablet-quick at the main gate, mods/tablet in the long run)	Plan 04 sections 3.2 and 3.3.
