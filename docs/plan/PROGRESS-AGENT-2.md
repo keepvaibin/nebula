@@ -343,3 +343,27 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   outlived its mod. A player's slots are freed when it goes. Test player 2965: three hidden extras removed, a fourth
   hidden, then the game's player; the mod is taken out; before, the player stayed hidden (isAllHidden 1), now 0.
 - Player suite 5 of 5 on d3d12 with the new game (a2m16).
+
+## 2026-11-18 mods/m2-w: engine/e13a merged; M-013, M-051, M-039, M-034, M-055
+
+- mods/m2-w is mods/m2 2d5e90fed merged with engine/e13a ff596d04c (b920c5fd8; main 87b6d3db5 is below it). On it,
+  with bins a2w1 (d3d12): stage 3902, 3903 and 3904 pass and join stage/suite.json (P-177, P-178, P-164; 3903 now
+  expects the scene's ten Kuribos, not two), and world 2493 passes and joins world/suite.json (M-013 fixed).
+- M-051 (LumaLink 9c1df9c): a text field's on_done was held by LumaKit's edit task while the keyboard was open; when
+  its mod was taken out, the task let the closure go after the grace had freed the mod's code, and the game crashed
+  in lumakit (NEB-M03). on_done is now let go while the mod stops. LumaLink kit-ui-gone fails before, passes after.
+- M-039 (LumaLink 4aeb8cf): kit.shop checks its keeper again when a row is taken; a keeper killed while the list
+  shows sells nothing. The header and shop.md say MR::payCoin. LumaLink kit-shop-keeper fails before (sold, 10 coins
+  paid), passes after.
+- M-034: the LumaKit pages' three lost words (screen.md, ui-kit.md; replay.md was whole) and ui/kit.lum's header.
+  tools/gate/tests/lumakit_pages_test.py finds them on 2d5e90fed's pages.
+- M-055: a WebSocket server that pings without end and reads nothing made the service queue a pong a ping, taking the
+  mod's send budget. A pong waiting whole in the queue is now replaced by the newest ping's (RFC 6455 5.5.3).
+  net 2712-net-ws-ping-flood (200000 pings, then a 3 MiB ws_send): before, the server's sends were refused at frame
+  14 and the pings never all went; after, a pass. It runs on the real clock: the fixed steps wait up to a second a
+  frame for bytes this process sent itself that the server never takes.
+- M-098, M-092: evidence only. Every exit of a running game is finish_and_exit: TerminateProcess, std::_Exit or execv,
+  so no static destructor runs under the net and device threads on Windows, Linux, macOS or Android. iOS's own exit()
+  at termination is the case left; no iOS device here.
+- LumaLink pin 4aeb8cf (mods/m2-w, on f329a8b); installer/lumakit/lumakit.luma packed with it and the merge's
+  self-description (store 37); build_lumakit --verify passes.
