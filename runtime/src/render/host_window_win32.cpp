@@ -1499,6 +1499,13 @@ std::uint32_t native_settings_keys_waiting() noexcept {
     return s_settings_keys_posted.load(std::memory_order_relaxed) - taken;
 }
 
+void busy_window(std::uint32_t ms) noexcept {
+    const HWND window = reinterpret_cast<HWND>(host_window::settings_window.load(std::memory_order_acquire));
+    if (window != nullptr) {
+        (void)PostMessageW(window, kBusyWindowMessage, static_cast<WPARAM>(ms), 0);
+    }
+}
+
 namespace host_window {
 
 std::vector<SettingsMonitor> settings_monitors() {
@@ -1525,13 +1532,6 @@ std::vector<SettingsMonitor> settings_monitors() {
 
 bool window_modal_active() noexcept {
     return s_system_menu_active.load(std::memory_order_acquire) || move_size_active.load(std::memory_order_acquire);
-}
-
-void busy_window(std::uint32_t ms) noexcept {
-    const HWND window = reinterpret_cast<HWND>(settings_window.load(std::memory_order_acquire));
-    if (window != nullptr) {
-        (void)PostMessageW(window, kBusyWindowMessage, static_cast<WPARAM>(ms), 0);
-    }
 }
 
 void resize_window_client(unsigned width, unsigned height) noexcept {
