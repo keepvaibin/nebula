@@ -1,0 +1,46 @@
+{
+  "harness": 1,
+  "name": "device-lost-busy-cpu",
+  "about": "device-lost-building on a busy machine: one thread a logical processor busy at the normal priority for the whole run (GALAXY_TEST_CPU_LOAD). Each restore stops the pipeline workers, which run at the lowest priority: they finish their jobs raised to the normal priority, so the stop takes under a second (N-1072: 4.9 to 7.4 s here before, 16.7 s in a gate, the workers starved).",
+  "save": {
+    "spin": true
+  },
+  "stage": {
+    "name": "BattleShipGalaxy",
+    "scenario": 1
+  },
+  "limit_seconds": 240,
+  "steps": [
+    {
+      "at": 2,
+      "lose_device": true
+    },
+    {
+      "at": 6,
+      "lose_device": true
+    },
+    {
+      "at": 300,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "the graphics card was reset",
+      "times": 2
+    },
+    {
+      "no_log": "\\[pipelines\\] [0-9]+ prepared .*, [1-9][0-9]* refused,"
+    },
+    {
+      "no_log": "refused twice"
+    },
+    {
+      "log": "pipeline workers stopped [0-9]{1,3},",
+      "times": 2
+    }
+  ],
+  "settings": [
+    "GALAXY_TEST_CPU_LOAD=1"
+  ]
+}

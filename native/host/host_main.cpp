@@ -6552,9 +6552,13 @@ int main(int argc, char** argv) {
     // goes on, and the runner fails it for the stall. Test runs only (an extension loaded): a player's long stop (a
     // debugger, a sleeping laptop) is not a fault worth a file.
     constexpr auto kStall = std::chrono::seconds(10);
+    // A new graphics device after a loss is no stall while it is being made (a loaded PC's driver can take seconds,
+    // N-1072), for up to kRebuild: a driver call that never returns is still one.
+    constexpr auto kRebuild = std::chrono::seconds(60);
     const bool watch_stalls = !::galaxy::launch_args().extensions.empty();
     uint32_t stall_frames = 0;
     auto stall_since = Clock::now();
+    auto rebuild_since = Clock::time_point{};
     bool stall_dumped = false;
 #endif
 #if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
@@ -6642,7 +6646,17 @@ int main(int argc, char** argv) {
         next_report += std::chrono::seconds(1);
         const uint32_t frames = gGameFrames.load(std::memory_order_relaxed);
 #if defined(_WIN32)
-        if (frames != stall_frames || frames == 0u || gSuspended) {
+#if defined(NEBULA_HOST_RENDERER)
+        const bool rebuilding = galaxy::render::device_rebuilding();
+#else
+        constexpr bool rebuilding = false;
+#endif
+        if (!rebuilding) {
+            rebuild_since = Clock::time_point{};
+        } else if (rebuild_since == Clock::time_point{}) {
+            rebuild_since = Clock::now();
+        }
+        if (frames != stall_frames || frames == 0u || gSuspended || (rebuilding && Clock::now() - rebuild_since < kRebuild)) {
             stall_frames = frames;
             stall_since = Clock::now();
         } else if (watch_stalls && !stall_dumped && gCrashing.load() == 0 && Clock::now() - stall_since >= kStall) {

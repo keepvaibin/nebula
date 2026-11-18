@@ -4,14 +4,15 @@
 // fixed-step clock, and keeps the run's sound (GALAXY_AUDIO_WAV_DUMP). Without a plan it declines, so a run never
 // goes on without the checks it was started for. A few test hooks stay in the environment because the host reads
 // them when it starts (GALAXY_TEST_VRAM_BUDGET_MB, GALAXY_TEST_DISC_DELAY_US, GALAXY_TEST_SAVE_DELAY_US,
-// GALAXY_TEST_MODS_SCREEN, GALAXY_TEST_MODS_CHANGED, GALAXY_TEST_REMAKE_TARGETS, GALAXY_TEST_REBUILD_DELAY_MS);
-// luma_test.py's TEST_HOOKS lists them.
+// GALAXY_TEST_MODS_SCREEN, GALAXY_TEST_MODS_CHANGED, GALAXY_TEST_REMAKE_TARGETS, GALAXY_TEST_REBUILD_DELAY_MS), and
+// GALAXY_TEST_CPU_LOAD is the extension's own; luma_test.py's TEST_HOOKS lists them.
 #include <nebula_host_extension.h>
 
 #include "harness.h"
 #include "test_services.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +24,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #if defined(_WIN32)
@@ -326,9 +328,36 @@ void sound(void*, const float* samples, std::uint32_t frames, std::uint32_t chan
     g_wav.add(samples, frames, channels, rate);
 }
 
-// The host's process end, a start-again's too: the dump complete.
+// GALAXY_TEST_CPU_LOAD=<n>: n threads a logical processor busy at the normal priority from the start to the end, a machine loaded by other
+// programs (N-1072: a device restore that waited for lowered threads took 16 s on one).
+struct CpuLoad {
+    std::atomic<bool> stop{false};
+    std::vector<std::thread> threads;
+    void start(std::uint64_t per_processor) {
+        const std::uint64_t count = std::min<std::uint64_t>(per_processor * std::max(1u, std::thread::hardware_concurrency()), 1024u);
+        for (std::uint64_t i = 0; i < count; ++i) {
+            threads.emplace_back([this] {
+                volatile std::uint64_t spin = 0u;
+                while (!stop.load(std::memory_order_relaxed)) {
+                    spin = spin + 1u;
+                }
+            });
+        }
+    }
+    void end() {
+        stop.store(true, std::memory_order_relaxed);
+        for (std::thread& thread : threads) {
+            thread.join();
+        }
+        threads.clear();
+    }
+};
+CpuLoad g_cpu_load;
+
+// The host's process end, a start-again's too: the dump complete, the load stopped.
 void process_ending(void*, std::uint32_t) {
     g_wav.end();
+    g_cpu_load.end();
 }
 
 bool g_mods_changed = false;
@@ -403,6 +432,7 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
     e.disc_read_delay_us = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_DISC_DELAY_US", 0u));
     e.save_write_delay_us = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_SAVE_DELAY_US", 0u));
     e.device_rebuild_delay_ms = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_REBUILD_DELAY_MS", 0u));
+    g_cpu_load.start(env_u64("GALAXY_TEST_CPU_LOAD", 0u));
     e.log_line = [](void*, const char* tag, const char* text) { harness::log_line(tag, text); };
     e.service = [](void*, const char* name, std::uint32_t major, std::uint32_t minor) { return harness::service(name, major, minor); };
     // The registry's test services (services/registry.md 14).
