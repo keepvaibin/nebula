@@ -20,7 +20,9 @@
 #include <nebula_game_api.h>
 #include <nebula_module.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 namespace luma {
     // `count` zeroed items of `size` bytes from the module's malloc (it has no calloc); null when there is no memory or
@@ -429,9 +431,9 @@ namespace luma {
 
         void unlockMod(LumaMod* pMod) { __atomic_store_n(&pMod->lock, 0u, __ATOMIC_RELEASE); }
 
-        // The take-out queue's lock (any thread; held for a few copies only).
-        void lockTakes() {
-            while (__atomic_exchange_n(&sTakeLock, 1u, __ATOMIC_ACQUIRE) != 0u) {
+        // A lock held for a few copies only (any thread).
+        void spinLock(u32* pLock) {
+            while (__atomic_exchange_n(pLock, 1u, __ATOMIC_ACQUIRE) != 0u) {
 #if defined(__x86_64__) || defined(__i386__)
                 __builtin_ia32_pause();
 #elif defined(__aarch64__) || defined(__arm__)
@@ -440,7 +442,88 @@ namespace luma {
             }
         }
 
-        void unlockTakes() { __atomic_store_n(&sTakeLock, 0u, __ATOMIC_RELEASE); }
+        void spinUnlock(u32* pLock) { __atomic_store_n(pLock, 0u, __ATOMIC_RELEASE); }
+
+        // The take-out queue's lock.
+        void lockTakes() { spinLock(&sTakeLock); }
+
+        void unlockTakes() { spinUnlock(&sTakeLock); }
+
+        // Texts the game keeps for mods (keep_text, N-4094): each distinct text once, never freed before the game's
+        // end. A table of {hash, length, text} (open addressing, a power of two, at most half full) and the block the
+        // next texts are copied into; a text over a quarter of a block gets a block of its own. Under sTextLock.
+        struct KeptText {
+            u64 hash;
+            u64 length;
+            const char* text;
+        };
+        const u64 cTextBlock = 64u * 1024u;
+        KeptText* sTexts = nullptr;
+        u64 sTextRoom = 0;
+        u64 sTextCount = 0;
+        char* sTextBlock = nullptr;
+        u64 sTextLeft = 0;
+        u32 sTextLock = 0;
+
+        void placeText(KeptText* pTable, u64 room, const KeptText& rText) {
+            u64 i = rText.hash & (room - 1u);
+            while (pTable[i].text != nullptr) {
+                i = (i + 1u) & (room - 1u);
+            }
+            pTable[i] = rText;
+        }
+
+        // Under sTextLock. Null: no memory.
+        const char* keepTextLocked(const char* pText, u64 length, u64 hash) {
+            for (u64 i = sTextRoom != 0u ? hash & (sTextRoom - 1u) : 0u; sTextRoom != 0u && sTexts[i].text != nullptr; i = (i + 1u) & (sTextRoom - 1u)) {
+                if (sTexts[i].hash == hash && sTexts[i].length == length && ::memcmp(sTexts[i].text, pText, length) == 0) {
+                    return sTexts[i].text;
+                }
+            }
+            if ((sTextCount + 1u) * 2u > sTextRoom) {
+                const u64 room = sTextRoom != 0u ? sTextRoom * 2u : 256u;
+                if (room > SIZE_MAX / sizeof(KeptText)) {
+                    return nullptr;
+                }
+                KeptText* const pGrown = static_cast<KeptText*>(::calloc(static_cast<size_t>(room), sizeof(KeptText)));
+                if (pGrown == nullptr) {
+                    return nullptr;
+                }
+                for (u64 i = 0; i < sTextRoom; i++) {
+                    if (sTexts[i].text != nullptr) {
+                        placeText(pGrown, room, sTexts[i]);
+                    }
+                }
+                ::free(sTexts);
+                sTexts = pGrown;
+                sTextRoom = room;
+            }
+            const u64 size = length + 1u;
+            char* pCopy;
+            if (size > cTextBlock / 4u) {
+                pCopy = static_cast<char*>(::malloc(static_cast<size_t>(size)));
+            } else {
+                if (sTextLeft < size) {
+                    char* const pBlock = static_cast<char*>(::malloc(static_cast<size_t>(cTextBlock)));
+                    if (pBlock == nullptr) {
+                        return nullptr;
+                    }
+                    sTextBlock = pBlock;
+                    sTextLeft = cTextBlock;
+                }
+                pCopy = sTextBlock;
+                sTextBlock += size;
+                sTextLeft -= size;
+            }
+            if (pCopy == nullptr) {
+                return nullptr;
+            }
+            ::memcpy(pCopy, pText, static_cast<size_t>(length));
+            pCopy[length] = '\0';
+            placeText(sTexts, sTextRoom, KeptText{hash, length, pCopy});
+            sTextCount++;
+            return pCopy;
+        }
 
         bool sameText(const char* pA, const char* pB) {
             if (pA == nullptr || pB == nullptr) {
@@ -1244,12 +1327,35 @@ namespace luma {
             return refusedWhileGoing(pMod, "make_gravity") ? nullptr : luma::classes::makeGravity(pMod, pClass, pPlace);
         }
 
+        const char* apiKeepText(const LumaMod* pMod, const char* pText, u64 length) {
+            if (pMod == nullptr || (pText == nullptr && length != 0u) || length >= SIZE_MAX) {
+                return nullptr;
+            }
+            if (pText == nullptr) {
+                pText = "";
+            }
+            u64 hash = 14695981039346656037ull;  // FNV-1a
+            for (u64 i = 0; i < length; i++) {
+                if (pText[i] == '\0') {
+                    return nullptr;
+                }
+                hash = (hash ^ static_cast<u8>(pText[i])) * 1099511628211ull;
+            }
+            spinLock(&sTextLock);
+            const char* const pKept = keepTextLocked(pText, length, hash);
+            spinUnlock(&sTextLock);
+            if (pKept == nullptr) {
+                nebula_log("[mod %s] keep_text: no memory for a text of %llu bytes\n", pMod->name, static_cast<unsigned long long>(length));
+            }
+            return pKept;
+        }
+
         const LumaCore sCore = {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
             apiKeep, apiKept, apiDefineClass, apiClassData, apiNumber, apiSetNumber, apiTable, apiSetTable, apiMake,
             apiAliasClass, apiPlacementOf, apiPlacedAt, apiMakeGravity, luma::guard::callMod, apiCanCall, apiHolds,
-            luma::weak::make, luma::weak::get,
+            luma::weak::make, luma::weak::get, apiKeepText,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,
@@ -1488,8 +1594,8 @@ namespace luma {
             return length != 0 && !partStart;
         }
 
-        // After the grace: the mod's destructors, its memory, its library. A mod taken out or ended after a refused
-        // start says what it still held, and the harness gets takeout.<id> once its library is closed (reload.md 3).
+        // After the grace: the mod's destructors and its memory. A mod taken out or ended after a refused start says
+        // what it still held, and the harness gets takeout.<id> once it ended (reload.md 3).
         void finishMod(LumaMod* pMod) {
             const LumaModInfo* const pInfo = pMod->info;
             bool finished = pMod->begun && covers(pInfo, offsetof(LumaModInfo, finish) + sizeof(pInfo->finish)) && pInfo->finish != nullptr;
@@ -1498,10 +1604,13 @@ namespace luma {
             }
             luma::services::modEnd(pMod);
             const Held held = freeAll(pMod);
-            if (pMod->library != nullptr && pMod->close != nullptr) {
+            // A library whose code ran stays loaded until the game's end (N-4094): the game may keep a pointer into its
+            // image (a literal it was given as an object's name) in objects that outlive the mod, as it keeps any name
+            // it is given. None of its code runs again. One whose begin never ran gave the game nothing, and closes.
+            if (!pMod->begun && pMod->library != nullptr && pMod->close != nullptr) {
                 pMod->close(pMod->library);
-                forgetVtables();
             }
+            forgetVtables();
             luma::classes::modFinished(pMod);
             if (pMod->takenOut || pMod->startRefused) {
                 if (held.blocks != 0) {

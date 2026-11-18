@@ -1,0 +1,92 @@
+{
+  "harness": 1,
+  "name": "1146-take-out-name-pair",
+  "about": "Two mods keep the same text; lt-name-made names the player with it and is taken out; lt-name-pair's keep then gives the very pointer the player's name holds, and the game still finds the player by it (N-4094: one copy for every mod, kept after either goes)",
+  "proves": [
+    "kernel.reload.kept_text"
+  ],
+  "mods": [
+    "../../loader/mods/lt-name-made",
+    "../../loader/mods/lt-name-pair"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4411
+      ],
+      "fact": "first"
+    },
+    {
+      "at": 150,
+      "take_out": "lt-name-made",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.lt-name-made",
+        "exists": true
+      },
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4412
+      ],
+      "fact": "second"
+    },
+    {
+      "after": {
+        "fact": "second",
+        "exists": true
+      },
+      "call": "NameObjFinder::find",
+      "signature": "NameObj *(const char *)",
+      "args": [
+        "lt-name made 4411"
+      ],
+      "fact": "found"
+    },
+    {
+      "after": {
+        "fact": "found",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-name-made.named",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-name-made.kept",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-name-pair.shared",
+      "is": 1
+    },
+    {
+      "fact": "found",
+      "is": true
+    },
+    {
+      "fact": "takeout.lt-name-made",
+      "is": {
+        "blocks": 0,
+        "bytes": 0,
+        "stopped": true,
+        "finished": true
+      }
+    }
+  ]
+}

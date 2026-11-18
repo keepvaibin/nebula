@@ -61,6 +61,7 @@
     "kernel.classes.gone": "A mod class's gone runs once for each object it made, with that object's data, before the kernel frees it; a definition without it is taken",
     "kernel.classes.make": "A mod makes objects by a name the factory makes while the scene makes its objects, each at its place with its placement arguments, alive or dead; refused, and said, at any other time",
     "kernel.layers": "A mod's code chooses which of its layers with when.code are on, after every mod begins and before any starts; the content is cooked with that choice, the game starting again once when it differs from the cooked one and never more; a fault in that call refuses the mod as a fault in its start, and a mod whose needed mod did not begin or start is left off, named",
+    "kernel.reload.kept_text": "A name a mod gave the game (a literal, or a text kept with keep_text) is still read after the mod is taken out (N-4094)",
     "kernel.reload.take_out": "A mod taken out while the game runs: its hooks go, its stop runs, dependents first, what it held counted and freed",
     "kernel.reload.code": "A running mod's code reloaded from its installed folder while the game runs: taken out with the mods that use it, loaded again in start order, the outcome written for LumaLink",
     "kernel.numbers.by_name": "Every number the game reads in a function's code, by the function's name, signature and place, and every file's number constant by its name: address and kind",

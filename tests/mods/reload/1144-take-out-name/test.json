@@ -1,0 +1,74 @@
+{
+  "harness": 1,
+  "name": "1144-take-out-name",
+  "about": "lt-name names the player with a literal of its own and is taken out: the game still finds the player by that name, so the mod's image stays mapped (N-4094; before, its library was closed and the find read unmapped memory)",
+  "proves": [
+    "kernel.reload.kept_text"
+  ],
+  "mods": [
+    "../../loader/mods/lt-name"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4410
+      ],
+      "fact": "first"
+    },
+    {
+      "at": 150,
+      "take_out": "lt-name",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.lt-name",
+        "exists": true
+      },
+      "call": "NameObjFinder::find",
+      "signature": "NameObj *(const char *)",
+      "args": [
+        "lt-name literal"
+      ],
+      "fact": "found"
+    },
+    {
+      "after": {
+        "fact": "found",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-name.named",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-name.stopped",
+      "is": 1
+    },
+    {
+      "fact": "found",
+      "is": true
+    },
+    {
+      "fact": "takeout.lt-name",
+      "is": {
+        "blocks": 0,
+        "bytes": 0,
+        "stopped": true,
+        "finished": true
+      }
+    }
+  ]
+}

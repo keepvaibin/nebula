@@ -1,0 +1,94 @@
+{
+  "harness": 1,
+  "name": "1145-take-out-name-made",
+  "about": "lt-name-made names the player with a text made while it ran, kept with keep_text, and is taken out: the game still finds the player by it, and the text is the game's, not a block the mod held (N-4094); 1000 short texts and 20 of 4000 bytes are kept, each once",
+  "proves": [
+    "kernel.reload.kept_text"
+  ],
+  "mods": [
+    "../../loader/mods/lt-name-made"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4411
+      ],
+      "fact": "first"
+    },
+    {
+      "at": 150,
+      "take_out": "lt-name-made",
+      "wait": true
+    },
+    {
+      "after": {
+        "fact": "takeout.lt-name-made",
+        "exists": true
+      },
+      "call": "NameObjFinder::find",
+      "signature": "NameObj *(const char *)",
+      "args": [
+        "lt-name made 4411"
+      ],
+      "fact": "found"
+    },
+    {
+      "after": {
+        "fact": "found",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.lt-name-made.named",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-name-made.stopped",
+      "is": 1
+    },
+    {
+      "fact": "found",
+      "is": true
+    },
+    {
+      "fact": "mod.lt-name-made.kept",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-name-made.same",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-name-made.copied",
+      "is": 1
+    },
+    {
+      "fact": "takeout.lt-name-made",
+      "is": {
+        "blocks": 0,
+        "bytes": 0,
+        "stopped": true,
+        "finished": true
+      }
+    },
+    {
+      "fact": "mod.lt-name-made.many_same",
+      "is": 1
+    },
+    {
+      "fact": "mod.lt-name-made.many_right",
+      "is": 1
+    }
+  ]
+}

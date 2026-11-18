@@ -548,6 +548,14 @@ const void* weak_get(uint64_t handle);
 
 The object a `weak` handle refers to, as its `NameObj`, while it lives; null once it is gone, for `0`, or for a handle `weak` never gave. Any thread.
 
+### `keep_text`
+
+```c
+const char* keep_text(const LumaMod* mod, const char* text, uint64_t length);
+```
+
+A copy of `length` bytes of `text`, NUL-terminated, in the game's memory, for a text the game may keep, such as an object's name or a label. The copy lives until the game ends, also after your mod is taken out or reloaded, so an object that keeps the name never reads freed memory. Equal bytes give the same copy, from any mod, so each distinct text is kept once. It is not counted as your mod's memory. Null: `mod` is null, `text` is null with a length, the text holds a NUL byte, or there is no memory (said in the log). A literal in your code needs no copy: a library whose code ran stays loaded until the game ends. LumaScript passes every made text through `keep_text`. Any thread.
+
 ## Further reading
 
 * [When a mod fails](../concepts/when-a-mod-fails.md)

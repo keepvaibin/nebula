@@ -29,7 +29,10 @@
 #if defined(_WIN32)
 #include "galaxy/windows_api.h"
 #else
+#include <cerrno>
 #include <dlfcn.h>
+#include <signal.h>
+#include <unistd.h>
 #endif
 
 namespace galaxy::mods {
@@ -133,19 +136,35 @@ void* open_library(const std::filesystem::path& path) {
     return library;
 }
 
-// The library a plugin runs from. On Windows, a copy of its folder's files (mods/.cooked/code/<process>-<n>): Windows
-// holds a loaded library's file, and the mod's own folder then stays free to update or remove while the game runs.
-// The copies of runs that have ended go when the first plugin starts; a copy that can't be made runs the mod's own.
+// The library a plugin runs from: a copy of its folder's files (mods/.cooked/code/<process>-<n>), on every system. A
+// library whose code ran stays loaded until the game's end (N-4094), so a reload's build must be a file of its own:
+// the system's loader gives a library already loaded at that path back again. On Windows, which holds a loaded
+// library's file, the mod's own folder also stays free to update or remove while the game runs. The copies of runs
+// that have ended go when the first plugin starts; a copy that can't be made runs the mod's own.
 std::filesystem::path running_copy(const std::filesystem::path& library, std::size_t index) {
-#if defined(_WIN32)
     namespace fs = std::filesystem;
     std::error_code error;
     const fs::path root = galaxy::mods::mods_folder() / ".cooked" / "code";
+#if defined(_WIN32)
     const std::string mine = std::to_string(GetCurrentProcessId()) + "-";
+#else
+    const std::string mine = std::to_string(getpid()) + "-";
+#endif
     if (index == 0u) {
         for (auto it = fs::directory_iterator(root, error); !error && it != fs::directory_iterator(); it.increment(error)) {
+#if !defined(_WIN32)
+            // A running game's copies stay (Windows holds them; here, a folder named for a live process is kept).
+            const std::string name = it->path().filename().string();
+            const std::size_t dash = name.find('-');
+            char* end = nullptr;
+            const long pid = dash != std::string::npos ? std::strtol(name.c_str(), &end, 10) : 0;
+            if (pid > 0 && end == name.c_str() + dash && pid != static_cast<long>(getpid()) &&
+                (kill(static_cast<pid_t>(pid), 0) == 0 || errno == EPERM)) {
+                continue;
+            }
+#endif
             std::error_code remove_error;
-            fs::remove_all(it->path(), remove_error);  // a running game's copies are held and stay
+            fs::remove_all(it->path(), remove_error);  // on Windows a running game's copies are held and stay
         }
         error.clear();
     }
@@ -161,9 +180,6 @@ std::filesystem::path running_copy(const std::filesystem::path& library, std::si
         }
     }
     if (!error && fs::is_regular_file(folder / library.filename(), error)) return folder / library.filename();
-#else
-    (void)index;
-#endif
     return library;
 }
 

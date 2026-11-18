@@ -401,10 +401,10 @@ on another that has the same names and types.
 - Addition 5, corrected: a bit-field write that should keep the low bits uses `low_bits<T>(...)`;
   `wrap(...)` is not a conversion.
 
-The scratch is only for a parameter C-6 marks not kept. When 1.11 adds
-unloading, the loader frees a reloaded mod's image and text store only at the next stage change (where the game's
-objects are rebuilt) or at the game's end, never at the unload itself; the reload test reads a kept label after the
-reload.
+The scratch is only for a parameter C-6 marks not kept. A mod's library stays loaded until the game's end, after it
+is taken out or reloaded too (an object outside every stage may keep its name), and kept texts are the game's
+(LumaCore `keep_text`): tests 1144 and 1145 find the player by a literal name and by a kept one after the mod is
+taken out (N-4094).
 
 ## Marked pointer parameters
 

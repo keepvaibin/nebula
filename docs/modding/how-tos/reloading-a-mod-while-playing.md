@@ -104,13 +104,13 @@ In C, use LumaCore's `keep(mod, bytes, size)` in `stop` and `kept(mod, &size)` i
 
 The game checks for a reload request every 30 frames, at the start of a frame. When it finds one:
 
-1. The game takes out the mods that use your mod, then your mod. Each mod's `on stop` runs, the game frees the memory the mod still holds, and the mod's library closes. The game keeps running while it waits.
+1. The game takes out the mods that use your mod, then your mod. Each mod's `on stop` runs and the game frees the memory the mod still holds. None of the mod's code runs again. Its library stays loaded until the game ends, so a name it gave the game stays readable. The game keeps running while it waits.
 1. The game loads your mod from its installed folder, then the mods that use it, in their start order. Each load is checked as at a start.
 1. The game answers with the result, which LumaLink shows.
 
 If the mods are not taken out within 600 frames, the reload ends and is not done.
 
-On Windows, the game runs each mod's code from a copy, so LumaLink can replace the installed files while the game runs.
+The game runs each mod's code from a copy, so a reload loads the new build beside the old one, and on Windows LumaLink can replace the installed files while the game runs.
 
 ## Troubleshooting
 

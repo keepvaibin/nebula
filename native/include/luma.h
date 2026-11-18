@@ -385,6 +385,13 @@ typedef struct LumaCore {
        a handle never given. Any thread. */
     uint64_t (*weak)(const LumaMod* mod, const void* object);
     const void* (*weak_get)(uint64_t handle);
+
+    /* A text the game may keep (an object's name, a label): `length` bytes of `text` copied NUL-terminated into the
+       game's memory, which lives until the game's end, after the mod is taken out or reloaded too. One copy per
+       distinct text: equal bytes give the first copy, from any mod. Not counted as the mod's memory. Null: `mod` is
+       null, `text` is null with a length, the text holds a NUL byte, or no memory. Any thread. A literal needs none:
+       a mod's library stays loaded until the game's end. LumaScript passes every made text through it. */
+    const char* (*keep_text)(const LumaMod* mod, const char* text, uint64_t length);
 } LumaCore;
 
 /* What a mod's `cut` is told (LumaModInfo.cut; docs/modding/concepts/when-a-mod-fails.md, "Code cut short"): a fault in
