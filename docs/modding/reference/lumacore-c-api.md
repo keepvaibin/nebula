@@ -532,6 +532,22 @@ int32_t holds(const char* set);
 
 Whether a set of needs that handlers prove holds now (`luma_functions.json` "guarantees"): `"system"` (the save files and the comet scheduler), `"stage"` (a game scene whose making is finished, and its scene objects that every stage makes), `"player"` (a stage, and the player's actor). `1`: it holds; `0`: it does not, or not on the game thread; `-1`: no set has that name, or a null name. The handlers that run only while a set holds are in [Lifecycle](lumascript/lifecycle.md).
 
+### `weak`
+
+```c
+uint64_t weak(const LumaMod* mod, const void* object);
+```
+
+A weak reference to a game object: a handle that reads the object while it lives and null once it is gone. `object` may be any part of a game object; the handle is for its `NameObj`. Every mod gets the same handle for the same object while it lives. `0`: `object` is null or no `NameObj`, or no memory (said in the log). The kernel keeps one table for every mod and empties it as objects go (the object's destructor, `NebulaArena::free` of its block, or the end of its arena), so referring to objects adds no hook. LumaScript's `ref<C>` is made with it. Any thread.
+
+### `weak_get`
+
+```c
+const void* weak_get(uint64_t handle);
+```
+
+The object a `weak` handle refers to, as its `NameObj`, while it lives; null once it is gone, for `0`, or for a handle `weak` never gave. Any thread.
+
 ## Further reading
 
 * [When a mod fails](../concepts/when-a-mod-fails.md)

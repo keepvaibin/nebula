@@ -67,6 +67,11 @@ galaxy_test(galaxy_native_calendar_tests SOURCES ${rt}/native_calendar_tests.cpp
     "${galaxy_root}/native/petari/src/Game/System/NebulaCalendar.cpp")
 target_include_directories(galaxy_native_calendar_tests PRIVATE "${galaxy_root}/native/include"
     "${galaxy_root}/native/petari/include")
+# The kernel's weak references to game objects (LumaWeak.cpp, N-4003), against a kernel the test provides.
+galaxy_test(galaxy_luma_weak_tests SOURCES ${rt}/luma_weak_tests.cpp
+    "${galaxy_root}/native/petari/src/Game/System/LumaWeak.cpp")
+target_include_directories(galaxy_luma_weak_tests PRIVATE "${galaxy_root}/native/include"
+    "${galaxy_root}/native/petari/include")
 galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii_import.cpp
     LIBS galaxy_atomic_file galaxy_mii_formats)
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)

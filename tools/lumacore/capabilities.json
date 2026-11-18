@@ -41,6 +41,7 @@
     "kernel.objects.method": "A mod finds a virtual by name and signature and calls it on any object, the object's own override running with its hooks",
     "kernel.objects.overrider": "A mod asks which function overrides a virtual for an object, as that function's row",
     "kernel.objects.call_method": "A mod calls a virtual on an object by name and signature in one call, the object adjusted to the declaring class",
+    "kernel.objects.weak": "A mod refers to a game object by a weak handle: the same for every mod while the object lives, null once it goes (destructor, free or its arena's end), with no hook of the mod's",
     "kernel.classes.define": "A mod defines a class of its own from a game class: its name, base, maker, data and overrides; its number known to class_of",
     "kernel.classes.made": "The game's own factory makes a mod class's objects where a stage places its name or the name it replaces, through the base's maker",
     "kernel.classes.data": "Each object of a mod class has its own data, zeroed, found from the object",

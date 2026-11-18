@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "weak-a",
+  "name": "weak-a",
+  "summary": "weak-a (a conformance mod).",
+  "authors": [
+    "keepvaibin"
+  ],
+  "version": "1.0.0",
+  "game": {
+    "id": "RMG"
+  }
+}

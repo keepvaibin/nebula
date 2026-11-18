@@ -2,6 +2,7 @@
 #include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/NameObj/NameObjRegister.hpp"
 #include "Game/Scene/SceneNameObjMovementController.hpp"
+#include "Game/System/LumaWeak.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 
 NameObj::NameObj(const char* pName) : mName(pName), mMovementFlag(), mLumaClass(0), mExecutorIdx(-1) {
@@ -17,6 +18,8 @@ NameObj::NameObj(const char* pName) : mName(pName), mMovementFlag(), mLumaClass(
 }
 
 NameObj::~NameObj() {
+    // The mods' weak references to it read null from here (LumaCore.weak).
+    luma::weak::gone(this);
 }
 
 void NameObj::init(const TableIter& /*rIter*/) {

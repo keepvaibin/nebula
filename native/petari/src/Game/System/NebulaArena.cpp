@@ -13,6 +13,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/System/LumaContentFx.hpp"
 #include "Game/System/LumaContentModel.hpp"
 #include "Game/System/LumaDraw.hpp"
+#include "Game/System/LumaWeak.hpp"
 #include "Game/System/LumaDrawInst.hpp"
 #include "Game/System/LumaDrawView.hpp"
 #include "Game/System/LumaAnim.hpp"
@@ -187,6 +188,8 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
 }
 
 void NebulaArena::destroy(NebulaArena* pArena) {
+    // The mods' weak references to objects in it read null from here (LumaCore.weak), whatever a hook below does.
+    luma::weak::released(pArena->mStart, pArena->mEnd);
     // Mods that keep objects forget those in it, before any of them or its memory goes.
     lumacore::released(pArena->mStart, pArena->mEnd);
     // The mods' effects on actors in it (content.fx): ended, never touched again.
@@ -301,6 +304,8 @@ void NebulaArena::free(void* pData) {
     if (pData == nullptr) {
         return;
     }
+    // An object freed without its destructor: the mods' weak references to it read null from here (LumaCore.weak).
+    luma::weak::freed(pData);
 
     Header* const pHeader = static_cast< Header* >(pData) - 1;
     const u32 index = pHeader->mClass;

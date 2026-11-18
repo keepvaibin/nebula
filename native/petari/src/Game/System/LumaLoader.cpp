@@ -12,6 +12,7 @@
 #include "Game/System/LumaGuard.hpp"
 #include "Game/System/LumaGrowTable.hpp"
 #include "Game/System/LumaNumbers.hpp"
+#include "Game/System/LumaWeak.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <luma_host.h>
 #include <luma_modlog.h>
@@ -1248,6 +1249,7 @@ namespace luma {
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
             apiKeep, apiKept, apiDefineClass, apiClassData, apiNumber, apiSetNumber, apiTable, apiSetTable, apiMake,
             apiAliasClass, apiPlacementOf, apiPlacedAt, apiMakeGravity, luma::guard::callMod, apiCanCall, apiHolds,
+            luma::weak::make, luma::weak::get,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,

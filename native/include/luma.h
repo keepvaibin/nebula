@@ -376,6 +376,15 @@ typedef struct LumaCore {
        "player"; lifecycle.md). 1: every need of the set is there (and for "stage" and "player" the game scene's
        making is finished); 0: not, or not on the game thread; -1: no set has that name, or a null name. */
     int32_t (*holds)(const char* set);
+
+    /* Weak references to the game's objects: one table in the kernel for every mod, emptied as an object goes (its
+       NameObj's destructor, NebulaArena::free of its block, or its arena's end), so a mod that refers to objects adds
+       no hook of its own. weak: a handle for `object` (any subobject of a game object; the table keeps its NameObj),
+       nonzero and the same for every mod while the object lives; 0 for null, an object that is no NameObj, or no
+       memory (said in the log). weak_get: the object, as its NameObj, while it lives; null once it went, for 0, or for
+       a handle never given. Any thread. */
+    uint64_t (*weak)(const LumaMod* mod, const void* object);
+    const void* (*weak_get)(uint64_t handle);
 } LumaCore;
 
 /* What a mod's `cut` is told (LumaModInfo.cut; docs/modding/concepts/when-a-mod-fails.md, "Code cut short"): a fault in

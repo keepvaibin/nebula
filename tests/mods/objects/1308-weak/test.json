@@ -1,0 +1,183 @@
+{
+  "harness": 1,
+  "name": "1308-weak",
+  "about": "two mods get the same weak handle for the player, which reads it as its NameObj; with one mod taken out the other's still reads; after a new scene it reads null and the new player gets a new handle; null, unmapped objects and handles never given read nothing; no hook on NameObj::~NameObj or NebulaArena::free",
+  "proves": [
+    "kernel.objects.weak"
+  ],
+  "mods": [
+    "../mods/weak-a",
+    "../mods/weak-b"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 120,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        1,
+        4003
+      ],
+      "fact": "ran"
+    },
+    {
+      "at": 160,
+      "take_out": "weak-a",
+      "wait": true
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        2,
+        4003
+      ]
+    },
+    {
+      "at": 240,
+      "stage": {
+        "name": "EggStarGalaxy",
+        "scenario": 2
+      }
+    },
+    {
+      "at": 900,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        3,
+        4003
+      ]
+    },
+    {
+      "after": {
+        "fact": "mod.weak-b.new_reads",
+        "exists": true
+      },
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "ran",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-a.player",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-a.handle",
+      "is": 4294967297
+    },
+    {
+      "fact": "mod.weak-a.reads",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-a.same_again",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-a.same_as_nameobj",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-a.null_none",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-a.hollow_none",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-a.nowhere_none",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-a.bogus_read",
+      "is": 0
+    },
+    {
+      "fact": "mod.weak-a.dtor_hooked",
+      "is": 0
+    },
+    {
+      "fact": "mod.weak-a.free_hooked",
+      "is": 0
+    },
+    {
+      "fact": "mod.weak-b.player",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.handle",
+      "is": 4294967297
+    },
+    {
+      "fact": "mod.weak-b.reads",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.same_again",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.same_as_nameobj",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.null_none",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.hollow_none",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.nowhere_none",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.bogus_read",
+      "is": 0
+    },
+    {
+      "fact": "mod.weak-b.dtor_hooked",
+      "is": 0
+    },
+    {
+      "fact": "mod.weak-b.free_hooked",
+      "is": 0
+    },
+    {
+      "fact": "mod.weak-a.still_reads",
+      "absent": true
+    },
+    {
+      "fact": "mod.weak-b.still_reads",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.old_null",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.new_some",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.new_differs",
+      "is": 1
+    },
+    {
+      "fact": "mod.weak-b.new_reads",
+      "is": 1
+    }
+  ]
+}
