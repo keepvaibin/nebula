@@ -288,8 +288,8 @@ P-109	1	E12 Windows, Linux, Mac	open		(wrong behaviour, suspected): rumble stops
 P-110	1	E12 Windows, Linux, Mac	open		(wrong behaviour): on the Direct3D 11 renderer, display changes made during play never reach the window, and neither do monitor changes.	
 P-111	1	E12 Windows, Linux, Mac	open		(wrong behaviour): after the player resizes the window by dragging its edge, or drags it onto a monitor with a different scale, the window jumps back 	
 P-112	1	E12 Windows, Linux, Mac	open		(wrong behaviour, small): the settings' window-size change uses the system DPI, not the window's.	
-P-113	1	E1 data safety	open		(wrong behaviour, data loss): in Windows Setup, answering "No" to "Uninstall Nebula?" uninstalls Nebula and also deletes every save and setting.	
-P-114	1	E1 data safety	open		(wrong behaviour): the uninstall runs on Setup's window thread, so the window stops responding while it deletes.	
+P-113	1	E1 data safety	fixed	86f5b2316; native/tests/uninstall_choice_tests.cpp (the old question's No deleted the saves: its first case)	(wrong behaviour, data loss): in Windows Setup, answering "No" to "Uninstall Nebula?" uninstalls Nebula and also deletes every save and setting.	
+P-114	1	E1 data safety	open		(wrong behaviour): the uninstall runs on Setup's window thread, so the window stops responding while it deletes.	code in 86f5b2316 (the uninstall on its own thread, the window kept open until it ends); its test, a Setup run on a portable copy, is to come
 P-115	1	E12 Windows, Linux, Mac	open		(wrong behaviour): Setup declares per-monitor DPI awareness but lays out everything at the system DPI, and never handles WM_DPICHANGED.	
 P-116	1	E12 Windows, Linux, Mac	open		(platform gap): HD replacement movies play only on Windows, and AV1 movies do not decode on macOS.	
 P-117	1	E5 hitches and GPU waits	open		(performance, suspected): AV1 movie decode is plain C and can stall the render thread.	
