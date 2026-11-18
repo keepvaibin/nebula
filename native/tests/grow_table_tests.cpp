@@ -45,6 +45,7 @@ namespace {
             Entry* const pEntry = table.reserve(i);
             if (pEntry == nullptr) {
                 expect(false, "reserve gives every next entry");
+                table.release();
                 return;
             }
             zeroed = zeroed && pEntry->index == 0u && pEntry->check == 0u;
@@ -60,6 +61,13 @@ namespace {
         expect(table.reserved() == kMany, "reserved counts the entries");
         expect(table.reserve(5u) == &table.at(5u), "reserving an entry again gives the same one");
         expect(table.reserve(kMany + 1u) == nullptr && table.reserved() == kMany, "an entry past the next is refused, nothing changed");
+        table.release();
+        expect(table.reserved() == 0u, "release empties the table");
+        Entry* const pAgain = table.reserve(0u);
+        expect(pAgain != nullptr && pAgain->index == 0u && pAgain->check == 0u, "a released table grows again from a zeroed entry");
+        table.release();
+        table.release();
+        expect(table.reserved() == 0u, "release of an empty table changes nothing");
     }
 
     // The writer reserves, fills, then publishes the count; the reader reads every published entry.
@@ -120,6 +128,7 @@ namespace {
         pthread_join(thread, nullptr);
 #endif
         expect(sReaderBad == 0u, "a reader on another thread reads each published entry as written");
+        sShared.release();
     }
 }  // namespace
 
