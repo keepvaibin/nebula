@@ -286,6 +286,27 @@ fn read_nintendo_stream(bytes: &[u8]) -> Result<Audio> {
     if info.channels == 0 || info.blocks == 0 {
         bail!("a stream with no sound");
     }
+    // The blocks lie one after another from `data`, each holding every channel's part in turn, the last its own size:
+    // the header's counts are checked against the file's length before a block is read. A block size of 0 let any
+    // count of blocks each read nothing, for billions of turns (M-146); now every block but the last takes bytes of
+    // the file, so there are never more blocks than bytes.
+    let past = || anyhow::anyhow!("the stream's {} blocks run past the file's end", info.blocks);
+    if info.blocks > 1 && info.block_size == 0 {
+        bail!("the stream's {} blocks have a size of 0", info.blocks);
+    }
+    let last_start = (info.blocks - 1)
+        .checked_mul(info.block_size)
+        .and_then(|n| n.checked_mul(info.channels))
+        .and_then(|n| n.checked_add(info.data))
+        .ok_or_else(past)?;
+    let last_end = (info.channels - 1)
+        .checked_mul(info.last_padded)
+        .and_then(|n| n.checked_add(info.last_size))
+        .and_then(|n| n.checked_add(last_start))
+        .ok_or_else(past)?;
+    if last_end > bytes.len() {
+        return Err(past());
+    }
     let frames = info.frames as usize;
     // A header may claim any count: no channel holds more samples than two a byte of the file (DSP ADPCM's 14 from 8).
     let mut channels: Vec<Vec<i16>> = vec![Vec::with_capacity(frames.min(bytes.len() * 2)); info.channels];
@@ -524,6 +545,26 @@ mod tests {
         assert_eq!((word(&s, 1), word(&s, 2), word(&s, 3)), (1, 48000, 2));
         let samples: Vec<i16> = s[32..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
         assert_eq!(samples, [7, -7]);
+    }
+
+    /// M-146: a header's block count and size are checked against the file before a block is read. A block size of 0
+    /// let 4 294 967 295 blocks each read nothing, for billions of turns; blocks past the file's end are refused too.
+    #[test]
+    fn a_streams_blocks_must_lie_in_the_file() {
+        let info = 0x40 + 8 + 0x20;
+        let with = |blocks: u32, block_size: u32| {
+            let mut f = brstm(&[[1, -1], [2, -2]], None);
+            f[info + 0x14..info + 0x18].copy_from_slice(&blocks.to_be_bytes());
+            f[info + 0x18..info + 0x1C].copy_from_slice(&block_size.to_be_bytes());
+            f
+        };
+        let started = std::time::Instant::now();
+        let error = format!("{:#}", to_stream("a.brstm", &with(u32::MAX, 0)).unwrap_err());
+        assert!(error.contains("blocks"), "{error}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(1), "{:?}", started.elapsed());
+        let error = format!("{:#}", to_stream("a.brstm", &with(3, 0x40)).unwrap_err());
+        assert!(error.contains("blocks"), "{error}");
+        to_stream("a.brstm", &with(1, 0x40)).unwrap();
     }
 
     #[test]
