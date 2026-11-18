@@ -12,6 +12,13 @@
 #define NEBULA_NO_ASAN
 #endif
 
+/* The plain module's own ways to the game's results (E7: bounds, indexes, reused answers): on in the plain module, and in
+   a module with hook points built only to play them on the step-hash replays (NEBULA_PLAIN_PATHS_IN_ROWS; never shipped,
+   as that module keeps every call a hook can see). */
+#if defined(NEBULA_PLAIN_MODULE) || defined(NEBULA_PLAIN_PATHS_IN_ROWS)
+#define NEBULA_PLAIN_PATHS 1
+#endif
+
 #include <errno.h>
 #include <float.h>
 #include <limits.h>

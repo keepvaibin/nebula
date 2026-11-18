@@ -13,7 +13,7 @@ PlanetGravity::PlanetGravity() {
     mValidFollower = true;
     mIsRegistered = false;
     mAppeared = true;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     mBoundCenter.zero();
     mBoundRadiusSquared = -1.0f;
     mBoundRange = mRange;
@@ -110,12 +110,12 @@ void PlanetGravity::updateIdentityMtx() {
     Pos3f mtx;
     mtx.identity();
     updateMtx(mtx);
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     refreshBound();
 #endif
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 void PlanetGravity::refreshBound() {
     mBoundRange = mRange;
     mBoundDistant = mDistant;

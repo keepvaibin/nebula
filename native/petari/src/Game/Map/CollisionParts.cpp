@@ -15,7 +15,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 namespace {
     // Where a part's triangles can be: noted before and after a change to a valid part (P-140). An invalid part is left
     // out of every query; it is noted when a zone takes it again.
@@ -143,14 +143,14 @@ void CollisionParts::forceResetAllMtxAndSetUpdateMtxOneTime() {
 }
 
 void CollisionParts::resetAllMtxPrivate(const Pos3f& rMatrix) {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     noteParts(this);
 #endif
     mPrevBaseMatrix.setInline(rMatrix);
     mBaseMatrix.setInline(rMatrix);
     mMatrix.setInline(rMatrix);
     NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     noteParts(this);
 #endif
 }
@@ -195,7 +195,7 @@ void CollisionParts::updateMtx() {
         mIsUpdateOnce = false;
 
         if (mStillCount < 2) {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
             // A part that keeps its place is not noted: its matrix is written again as it was.
             const bool moved = !MR::isSameMtx(mMatrix.toMtxPtr(), mBaseMatrix.toMtxPtr());
             if (moved) {
@@ -205,7 +205,7 @@ void CollisionParts::updateMtx() {
             mPrevBaseMatrix.setInline(mBaseMatrix);
             mBaseMatrix.setInline(mMatrix);
             NebulaMtxInverse(mBaseMatrix.toMtxPtr(), mInvBaseMatrix.toMtxPtr());
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
             if (moved) {
                 noteParts(this);
             }
@@ -262,12 +262,12 @@ void CollisionParts::updateBoundingSphereRange(Vec3f scale) {
 }
 
 void CollisionParts::updateBoundingSphereRangePrivate(f32 scale) {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     noteParts(this);
 #endif
     mScale = scale;
     mBoundingRadius = scale * mServer->mMaxVertexDistance;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     noteParts(this);
 #endif
 }

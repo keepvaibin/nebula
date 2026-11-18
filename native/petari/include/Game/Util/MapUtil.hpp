@@ -29,7 +29,7 @@ namespace MR {
     bool getFirstPolyOnLineToMap(LUMA_OUT LUMA_NULLABLE Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*, const TriangleFilterBase*);
     bool getFirstPolyOnLineToWaterSurface(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*,
                                           const TriangleFilterBase*);
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // getFirstPolyOnLineToMap (category 0) or getFirstPolyOnLineToWaterSurface (category 2) with no triangle filter,
     // and whether the parts in any order give the same answer: no other hit is as near as the one found (P-140).
     bool getFirstPolyOnLineOrderFree(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*, s32, bool*);

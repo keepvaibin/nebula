@@ -53,14 +53,14 @@ void ParallelGravity::setRangeBox(const Pos3f& rMtx) {
 void ParallelGravity::setRangeCylinder(f32 radius, f32 height) {
     mCylinderRadius = radius;
     mCylinderHeight = height;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     refreshBound();
 #endif
 }
 
 void ParallelGravity::setRangeType(RANGE_TYPE rangeType) {
     mRangeType = rangeType;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     refreshBound();
 #endif
 }
@@ -175,7 +175,7 @@ bool ParallelGravity::isInRange(const Vec3f& rPosition, f32* pScalar) const {
     return false;
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 // The range itself: the sphere of mRange about the plane's point (mDistant plays no part), the box (half sides the
 // directions' lengths, square corners only, as the test is along each direction alone) or the cylinder over the plane.
 bool ParallelGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {

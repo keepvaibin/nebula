@@ -40,7 +40,7 @@ bool WireGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& 
     return false;
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 // The box round the wire's points and the range past it. isInRangeSquare squares the range, so its size counts.
 bool WireGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {
     if (mRange < 0.0f || mPoints.size() < 2) {

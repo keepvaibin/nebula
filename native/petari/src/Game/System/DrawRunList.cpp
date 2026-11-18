@@ -1,6 +1,6 @@
 #include "Game/System/DrawRunList.hpp"
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 #include "Game/System/NebulaArena.hpp"
 
 #include <stdint.h>

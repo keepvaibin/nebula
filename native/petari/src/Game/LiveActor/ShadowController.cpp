@@ -12,7 +12,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/LumaCore.hpp"
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 namespace {
     // Equal to the bit: a NaN equals a NaN of the same bits, 0 and -0 differ (a query with either may answer differently).
     bool isSameBits(const Vec3f& rA, const Vec3f& rB) {
@@ -146,7 +146,7 @@ void ShadowController::updateProjection() {
     position -= direction * mStartOffset;
 
     const Vec3f line = direction * (mDropLength + mStartOffset);
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // The same line as last time, nothing changed near it since: the same answer, without the query (P-140). A miss
     // leaves the projection's place and normal as they were, as the query does.
     if (mLineKept && mLineType == mDropType && mLineFilter == mCollisionPartsFilter && isSameBits(mLineStart, position) &&

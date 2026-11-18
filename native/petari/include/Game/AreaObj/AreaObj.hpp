@@ -87,7 +87,7 @@ public:
     MR::Vector< MR::AssignableArray< AreaObj* > > mArray;
     s32 mFirstCapacity;  // entry grows past it
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // Each area's form bound beside mArray, so find_in passes the far areas without reading them (P-152). Every override
     // of isInVolume is true only where AreaObj::isInVolume is, and that only inside the form.
     struct Bound {

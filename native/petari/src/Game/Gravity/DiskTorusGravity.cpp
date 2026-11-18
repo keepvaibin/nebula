@@ -28,7 +28,7 @@ void DiskTorusGravity::setDiskRadius(f32 diskRadius) {
     } else {
         mDiskRadius = diskRadius;
     }
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     refreshBound();
 #endif
 }
@@ -111,7 +111,7 @@ bool DiskTorusGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Ve
     return true;
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 // The edges are at the outer radius and at the outer less the disk's (on the far side when that is below 0).
 bool DiskTorusGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {
     f32 room;

@@ -287,7 +287,7 @@ void AreaFormCylinder::init(const TableIter& rIter) {
     mHeight *= 500.0f;
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 // The box about its middle (the base matrix only turns and moves it).
 bool AreaFormCube::calcBound(Vec3f* pCenter, f32* pRadius) const {
     if (mFollowMtx != nullptr) {

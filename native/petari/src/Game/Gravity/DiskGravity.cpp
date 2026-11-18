@@ -106,7 +106,7 @@ void DiskGravity::updateMtx(const Pos3f& rMtx) {
     mWorldRadius = mLocalRadius * axisScale;
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 // Over the disk the distance is the height; past its rim, the distance to the rim.
 bool DiskGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {
     f32 room;

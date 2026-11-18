@@ -20,7 +20,7 @@ void DynamicCollisionObj::init(const TableIter& rIter) {
 }
 
 void DynamicCollisionObj::syncCollision() {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // The triangles are made again in place: a change where the part was (P-140). The new bounds note where it is.
     if (mParts->mIsValid) {
         CollisionChanges::note(mParts->getTrans(), mParts->mBoundingRadius);

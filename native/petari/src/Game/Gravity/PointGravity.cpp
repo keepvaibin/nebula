@@ -35,7 +35,7 @@ void PointGravity::updateMtx(const Pos3f& rMtx) {
     rMtx.mult(mOrigPosition, mTranslation);
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 bool PointGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {
     f32 room;
     if (!rangeRoom(&room)) {

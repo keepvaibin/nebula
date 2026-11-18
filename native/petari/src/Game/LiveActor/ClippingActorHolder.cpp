@@ -37,13 +37,13 @@ ClippingActorHolder::ClippingActorHolder()
 void ClippingActorHolder::movement() {
     mViewGroupCtrl->update();
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     ClippingActorInfo::sPassJudge = MR::getClippingJudge();
 #endif
     for (s32 i = 0; i < mTargets->mCount; i++) {
         mTargets->mClippingActorList[i]->judgeClipping();
     }
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     ClippingActorInfo::sPassJudge = nullptr;
 #endif
 }

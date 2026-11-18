@@ -51,7 +51,7 @@ namespace {
         }
     }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // The steps of laying out a group of `count` sensors for the sweep, as the sort's comparisons: count times the bits
     // of count. None when the group is laid out this frame already.
     inline s64 layOutSteps(const SensorGroup* pGroup) {
@@ -88,7 +88,7 @@ namespace {
 
 SensorGroup::SensorGroup(int maxSensors)
     : mMaxSensors(maxSensors), mSensorCount(0), mSensors(new HitSensor*[maxSensors]()), mActiveCount(0),
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
       mActive(new SensorHitEntry[maxSensors]), mSweepMade(false), mSweepCount(0), mSweep(new SensorSweepItem[maxSensors]),
       mUnplacedCount(0), mUnplaced(new s32[maxSensors]) {
 #else
@@ -109,7 +109,7 @@ void SensorGroup::gatherActive() {
     }
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 // The plain module's sweep (P-039): the active sensors with a place laid out along x, sorted by where each starts, once a
 // frame, on the group's first sweep; a frame whose pairs are all walked lays out nothing.
 void SensorGroup::layOutSweep() {
@@ -202,7 +202,7 @@ void SensorHitChecker::movement() {
     mSimpleGroup->clear();
     mMapObjGroup->clear();
     mCharacterGroup->clear();
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     mPlayerGroup->gatherActive();
     mRideGroup->gatherActive();
     mEyeGroup->gatherActive();
@@ -226,7 +226,7 @@ void SensorHitChecker::movement() {
     doObjColInSameGroup(mCharacterGroup);
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 // The pairs that touched, sorted, and each one's calls: the order of the console's walk (the first group's sensors in
 // order, each with the second's in order), so every sensor keeps the sensors it touches in the console's order.
 void SensorHitChecker::addFoundPairs(const SensorHitEntry* pActive1, const SensorHitEntry* pActive2) const {
@@ -252,7 +252,7 @@ void SensorHitChecker::testPair(const SensorHitEntry* pActive1, s32 first, const
 // with hook points calls isSensorActive and checkAttack for every pair, as the game does, so a mod that hooks them sees
 // every pair.
 void SensorHitChecker::doObjColGroup(SensorGroup* pGroup1, SensorGroup* pGroup2) const {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     const s32 group1Count = pGroup1->mActiveCount;
     const s32 group2Count = pGroup2->mActiveCount;
     const SensorHitEntry* const pActive1 = pGroup1->mActive;
@@ -328,7 +328,7 @@ void SensorHitChecker::doObjColGroup(SensorGroup* pGroup1, SensorGroup* pGroup2)
 // Pairs each sensor with itself too; the test skips sensors of one host. The plain module's sweep leaves those pairs out
 // for that reason.
 void SensorHitChecker::doObjColInSameGroup(SensorGroup* pSensorGroup) const {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     const s32 count = pSensorGroup->mActiveCount;
     const SensorHitEntry* const pActive = pSensorGroup->mActive;
     if (static_cast< s64 >(count) * (count + 1) / 2 <= ::layOutSteps(pSensorGroup) + count) {

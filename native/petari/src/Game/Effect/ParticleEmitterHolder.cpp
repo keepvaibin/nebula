@@ -44,7 +44,7 @@ void ParticleEmitterHolder::update(bool ignorePause) {
         }
     };
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // The records in use, in place order as the walk of every record meets them (P-141). A word is read again after each
     // visit, and the count of words and chunks at each step, as a visit may fill or free records further on (a callback
     // may make an emitter).
@@ -77,7 +77,7 @@ void ParticleEmitterHolder::update(bool ignorePause) {
 }
 
 void ParticleEmitterHolder::taken(const ParticleEmitter* pEmitter) {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     const u32 word = pEmitter->mPlace / 64u;
     if (word >= mLiveWords) {
         u64* const pWords = mLive.room(word + 1u);

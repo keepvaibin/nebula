@@ -98,7 +98,7 @@ bool AreaObj::isValidSwitchB() const {
 
 void AreaObj::setFollowMtx(const Pos3f* pMtx) {
     mForm->mFollowMtx = const_cast< Pos3f* >(pMtx);
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     AreaObjMgr::sFollowChanges++;
 #endif
 }
@@ -107,13 +107,13 @@ Pos3f* AreaObj::getFollowMtx() const {
     return mForm->mFollowMtx;
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 u32 AreaObjMgr::sFollowChanges = 0;
 #endif
 
 AreaObjMgr::AreaObjMgr(s32 firstCapacity, const char* pName)
     : NameObj(pName), mArray(), mFirstCapacity(firstCapacity)
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
       ,
       mBounds(), mBoundsMade(0), mBoundsFollow(0)
 #endif
@@ -130,7 +130,7 @@ void AreaObjMgr::entry(AreaObj* pAreaObj) {
 }
 
 AreaObj* AreaObjMgr::find_in(const Vec3f& rVec) const {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     const u32 count = static_cast< u32 >(mArray.size());
     if (mBoundsFollow != sFollowChanges || mBoundsMade > count) {
         mBoundsMade = 0;
@@ -178,7 +178,7 @@ AreaObj* AreaObjMgr::find_in(const Vec3f& rVec) const {
 #endif
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 void AreaObjMgr::makeBound(u32 index) const {
     const AreaObj* const pArea = mArray[static_cast< s32 >(index)];
     Bound& rBound = mBounds[index];

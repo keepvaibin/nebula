@@ -16,7 +16,7 @@ LiveActor* LiveActorGroup::getActor(int index) const {
 }
 
 LiveActor* LiveActorGroup::getDeadActor() const {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     s32 i = mDeadCheck == LiveActor::sDeathCount ? mDeadFrom : 0;
     mDeadCheck = LiveActor::sDeathCount;
     for (; i < getObjNum(); i++) {

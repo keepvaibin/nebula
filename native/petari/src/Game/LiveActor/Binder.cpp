@@ -205,7 +205,7 @@ u32 Binder::findBindedPos(Vec3f* pPosition, Vec3f* pMovement, bool* pHasRemainin
     }
 
     pMovement->zero();
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // No movement: the second check is at the first one's place against the same parts, so it finds what the first
     // found, nothing (P-138). Only with no triangle filter, as a filter may act on the triangles it is shown (the
     // launcher's sends a message). A module with hook points makes both calls.
@@ -215,7 +215,7 @@ u32 Binder::findBindedPos(Vec3f* pPosition, Vec3f* pMovement, bool* pHasRemainin
         if (i != 0) {
             pPosition->add(step);
             pMovement->add(step);
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
             if (still && i == 1 && !(mIsSkipFirstCheck || skipInitial)) {
                 continue;
             }

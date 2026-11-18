@@ -233,7 +233,7 @@ namespace MR {
         return ::getFirstPolyOnLineCategory(pPos, pTriangle, rStart, rDirection, pTriangleFilter, pPartsFilter, 2);
     }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     bool getFirstPolyOnLineOrderFree(Vec3f* pPos, Triangle* pTriangle, const Vec3f& rStart, const Vec3f& rDirection,
                                      const CollisionPartsFilterBase* pPartsFilter, s32 category, bool* pOrderFree) {
         *pOrderFree = true;

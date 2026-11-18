@@ -20,7 +20,7 @@ void CollisionCategorizedKeeper::movement() {
 
     for (CollisionZone** pZone = mZones.begin(); pZone != mZones.end(); pZone++) {
         s32 count = (*pZone)->mParts.size();
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
         // The global zone (the first) has no bounds: every query takes its parts without a zone test, and addParts
         // never makes them. The others' first bounds are made once, from every part's new matrix (as the last of a
         // remake per valid part left them). A module with hook points makes the game's calls.
@@ -578,7 +578,7 @@ CollisionZone::CollisionZone(s32 zoneID) : mZoneID(zoneID), mCenter(0, 0, 0), mR
 }
 
 void CollisionZone::addParts(CollisionParts* pParts) {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     CollisionChanges::note(pParts->getTrans(), pParts->mBoundingRadius);
 #endif
     mParts.push_back(pParts);
@@ -589,7 +589,7 @@ void CollisionZone::addParts(CollisionParts* pParts) {
 }
 
 void CollisionZone::calcMinMaxAndRadius() {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // The global zone's bounds are never tested; another zone's sphere decides which of its parts a line query takes.
     const Vec3f lastCenter(mCenter);
     const f32 lastRadius = mRadius;
@@ -623,7 +623,7 @@ void CollisionZone::calcMinMaxAndRadius() {
     }
 
     mRadius = radius;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     if (mZoneID != 0 && (lastCenter.x != mCenter.x || lastCenter.y != mCenter.y || lastCenter.z != mCenter.z || lastRadius != mRadius)) {
         CollisionChanges::note(lastCenter, lastRadius);
         CollisionChanges::note(mCenter, mRadius);
@@ -689,7 +689,7 @@ void CollisionZone::eraseParts(CollisionParts* pParts) {
     }
 
     if (pFound != pEnd) {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
         CollisionChanges::note(pParts->getTrans(), pParts->mBoundingRadius);
 #endif
         mParts[pFound - mParts.begin()] = mParts[count - 1];

@@ -631,7 +631,7 @@ void WaterBazooka::makeActorDead() {
     mCapsule->makeActorDead();
     mBreakModel->makeActorDead();
     mDemoActor->makeActorDead();
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // The cannon's collision leaves every query without leaving its zone (P-140).
     if (mCannonCollisionParts->mIsValid) {
         CollisionChanges::note(mCannonCollisionParts->getTrans(), mCannonCollisionParts->mBoundingRadius);

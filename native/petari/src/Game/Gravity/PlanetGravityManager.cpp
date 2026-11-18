@@ -38,7 +38,7 @@ bool PlanetGravityManager::calcTotalGravityVector(Vec3f* pGravity, GravityInfo* 
             break;
         }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
         // Outside the gravity's bound its own test gives nothing (P-139).
         if (!gravity->isInBound(rPosition)) {
 #if defined(NEBULA_GRAVITY_BOUND_VERIFY)

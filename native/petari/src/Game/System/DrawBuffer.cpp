@@ -10,7 +10,7 @@ DrawBufferShapeDrawer::DrawBufferShapeDrawer(Material* pMaterial, MaterialEntry*
     : mMaterial(pMaterial), mMatPacket(pMatPacket), mNumShapes(1), mMaxPackets(0), mNumPackets(0), mPackets(nullptr) {
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 namespace {
     bool isSameLight(const void* pCtrl, const void* pLoader) {
         return static_cast< const ActorLightCtrl* >(pCtrl)->isSameLight(static_cast< const ActorLightCtrl* >(pLoader));
@@ -24,7 +24,7 @@ namespace {
 
 void DrawBufferShapeDrawer::init(s32 maxActors) {
     mMaxPackets = maxActors * mNumShapes;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     mList.reserve(mMaxPackets);
 #else
     mPackets = new PacketInfo[mMaxPackets]();
@@ -33,7 +33,7 @@ void DrawBufferShapeDrawer::init(s32 maxActors) {
 
 void DrawBufferShapeDrawer::reserve(s32 maxActors) {
     const s32 maxPackets = maxActors * mNumShapes;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     mList.reserve(maxPackets);
     mMaxPackets = maxPackets;
 #else
@@ -65,7 +65,7 @@ void DrawBufferShapeDrawer::draw() const {
     Material* pShared = mMatPacket->getMaterial();
     MaterialDraw draw(pShared);
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     for (s32 slot = mList.first(); slot >= 0; slot = mList.next(slot)) {
         const DrawRunList::Packet& rPacket = mList.at(slot);
         MeshEntry* packet = static_cast< MeshEntry* >(const_cast< void* >(rPacket.mEntry));
@@ -94,7 +94,7 @@ void DrawBufferShapeDrawer::draw() const {
 }
 
 void DrawBufferShapeDrawer::add(const MeshEntry* pShapePacket, const ActorLightCtrl* pLightCtrl) {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     mList.add(pShapePacket, pLightCtrl, ::isSameLight, ::isBlending);
     mNumPackets = mList.count();
 #else
@@ -121,7 +121,7 @@ void DrawBufferShapeDrawer::add(const MeshEntry* pShapePacket, const ActorLightC
 
 // A removed run head hands the light load to the packet after it.
 void DrawBufferShapeDrawer::remove(const MeshEntry* pShapePacket) {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     mList.remove(pShapePacket);
     mNumPackets = mList.count();
 #else
@@ -142,7 +142,7 @@ void DrawBufferShapeDrawer::remove(const MeshEntry* pShapePacket) {
 }
 
 void DrawBufferShapeDrawer::resetLightSort(const ActorLightCtrl* pLightCtrl) {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     mList.resetLightSort(pLightCtrl, ::isSameLight, ::isBlending);
     mNumPackets = mList.count();
 #else

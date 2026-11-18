@@ -361,7 +361,7 @@ void CubeGravity::updateMtx(const Pos3f& rMtx) {
     lenZ = dir.length();
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 // A face, edge or corner of the box (half sides lenX, lenY, lenZ along the matrix's directions) and the range past it.
 // Only for a box with square corners, as the regions are found along each direction alone.
 bool CubeGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {

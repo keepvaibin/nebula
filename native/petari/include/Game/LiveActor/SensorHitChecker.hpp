@@ -21,7 +21,7 @@ public:
 
     void checkAttack(HitSensor*, HitSensor*) const;
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     void testPair(const SensorHitEntry*, s32, const SensorHitEntry*, s32) const;
     void addFoundPairs(const SensorHitEntry*, const SensorHitEntry*) const;
 #endif

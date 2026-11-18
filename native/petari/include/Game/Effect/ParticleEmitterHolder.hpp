@@ -22,7 +22,7 @@ public:
         if (pEmitter->mPlace < mFreeFrom) {
             mFreeFrom = pEmitter->mPlace;
         }
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
         mLive[pEmitter->mPlace / 64u] &= ~(1ull << (pEmitter->mPlace % 64u));
 #endif
     }

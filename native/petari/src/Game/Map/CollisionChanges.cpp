@@ -1,6 +1,6 @@
 #include "Game/Map/CollisionChanges.hpp"
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 namespace {
     // The last cKept changes, at their count modulo cKept. A query whose line was checked more changes ago queries again.
     constexpr u64 cKept = 64;

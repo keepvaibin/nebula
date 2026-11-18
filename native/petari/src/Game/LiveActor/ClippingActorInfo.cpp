@@ -15,7 +15,7 @@ namespace {
     const f32 sClipLeaveMargin = 150.0f;
 
     ClippingJudge* getJudge() {
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
         if (ClippingActorInfo::sPassJudge != nullptr) {
             return ClippingActorInfo::sPassJudge;
         }
@@ -24,7 +24,7 @@ namespace {
     }
 };  // namespace
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 ClippingJudge* ClippingActorInfo::sPassJudge = nullptr;
 #endif
 

@@ -21,7 +21,7 @@ public:
     // Each form defines both; the game has no body for the base's, and no AreaForm of its own is made.
     virtual void init(const TableIter&) = 0;
     virtual bool isInVolume(const Vec3f&) const = 0;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // A sphere outside of which isInVolume is false while the form follows nothing; false when there is none (P-152).
     virtual bool calcBound(Vec3f* /*pCenter*/, f32* /*pRadius*/) const {
         return false;
@@ -37,7 +37,7 @@ public:
 
     virtual void init(const TableIter&) override;
     virtual bool isInVolume(const Vec3f&) const override;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     virtual bool calcBound(Vec3f* pCenter, f32* pRadius) const override;
 #endif
 
@@ -76,7 +76,7 @@ public:
 
     virtual void init(const TableIter&) override;
     virtual bool isInVolume(const Vec3f&) const override;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     virtual bool calcBound(Vec3f* pCenter, f32* pRadius) const override;
 #endif
 
@@ -94,7 +94,7 @@ public:
 
     virtual void init(const TableIter&) override;
     virtual bool isInVolume(const Vec3f&) const override;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     virtual bool calcBound(Vec3f* pCenter, f32* pRadius) const override;
 #endif
 
@@ -111,7 +111,7 @@ public:
 
     virtual void init(const TableIter&) override;
     virtual bool isInVolume(const Vec3f&) const override;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     virtual bool calcBound(Vec3f* pCenter, f32* pRadius) const override;
 #endif
 

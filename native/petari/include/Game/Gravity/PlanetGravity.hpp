@@ -42,7 +42,7 @@ public:
     void setPriority(s32 priority);
     void updateIdentityMtx();
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // A sphere outside of which calcOwnGravityVector gives nothing, false when there is none (P-139). It reads the shape
     // as updateMtx left it, and the setters' values the shape's own test reads directly.
     virtual bool calcBound(Vec3f* /*pCenter*/, f32* /*pRadius*/) const {
@@ -83,7 +83,7 @@ public:
     bool mValidFollower;
     bool mIsRegistered;  // is registered by PlanetGravityManager?
     bool mAppeared;      // corresponding GlobalGravityObj has appeared?
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     Vec3f mBoundCenter;
     f32 mBoundRadiusSquared;  // below 0: no bound
     f32 mBoundRange;          // mRange and mDistant when the bound was made

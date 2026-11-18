@@ -170,7 +170,7 @@ bool ConeGravity::calcOwnGravityVector(Vec3f* pDest, f32* pScalar, const Vec3f& 
     return calcGravityFromMassPosition(pDest, pScalar, rPos, pointOfAttraction);
 }
 
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
 // The cone (base disk of mWorldRadius, apex at the end of the Y direction) in a sphere about its axis's middle; a point
 // inside it or within the range of its surface.
 bool ConeGravity::calcBound(Vec3f* pCenter, f32* pRadius) const {

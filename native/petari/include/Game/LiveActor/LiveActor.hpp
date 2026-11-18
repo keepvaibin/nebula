@@ -60,7 +60,7 @@ public:
     // distance) or its being seen alone (past its distance, entering or leaving the view).
     enum ClipScope { ClipScope_All, ClipScope_Run, ClipScope_Seen };
     static ClipScope sClipScope;
-#if defined(NEBULA_PLAIN_MODULE)
+#if defined(NEBULA_PLAIN_PATHS)
     // The actors made dead so far (makeActorDead, the one place an actor dies): a group's search for a dead member starts
     // where the last one stopped while this has not moved (P-137).
     static u64 sDeathCount;
