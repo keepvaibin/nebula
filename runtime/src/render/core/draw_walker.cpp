@@ -2,6 +2,7 @@
 // The one path every presented frame takes through a frame list: a real frame at t = 1, a generated one at its t.
 #include "galaxy/render/program_table.h"
 #include "galaxy/render/render_core.h"
+#include "galaxy/render/render_queue.h"
 
 #include "galaxy/cpu_count.h"
 #include "galaxy/frame_timeline.h"
@@ -1759,7 +1760,15 @@ void RenderCore::walk_native(const NebulaFrameList& list, const NebulaFramePass&
             frame.projection[3u * 4u + c] = rows[3][c];
         }
     }
-    renderer_.record_native_call(call, frame, scene_point);
+    // The function's time is the mod's: the game's probe read does not wait on it once it holds the thread.
+    native_call_started_ns_.store(steady_now_ns(), std::memory_order_release);
+    try {
+        renderer_.record_native_call(call, frame, scene_point);
+    } catch (...) {
+        native_call_started_ns_.store(0u, std::memory_order_release);
+        throw;
+    }
+    native_call_started_ns_.store(0u, std::memory_order_release);
 }
 
 void RenderCore::walk_show() {

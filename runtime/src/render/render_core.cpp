@@ -149,12 +149,6 @@ std::int64_t vblanks_per_slot(double refresh, double rate) {
     return slot;
 }
 
-// The steady clock in nanoseconds (the render queue's work clock, render_queue.h).
-std::uint64_t steady_now_ns() noexcept {
-    return static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
-}
-
 // Adds its lifetime to the game thread's time blocked on the render thread (RenderCore::game_wait_qpc_).
 struct GameWaitTimer {
     std::atomic<std::uint64_t>& total;
@@ -2006,12 +2000,26 @@ void RenderCore::render_loop() {
 std::uint32_t RenderCore::screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity,
                                                std::uint32_t game_frame) {
     std::unique_lock lock(probe_answers_lock_);
-    if (!probe_book_.ready(game_frame) &&
-        !probe_answers_cv_.wait_for(lock, std::chrono::seconds(2), [&] { return probe_book_.ready(game_frame); }) &&
-        probe_waits_logged_ < 4u) {
-        ++probe_waits_logged_;
-        std::fprintf(stderr, "[render] frame %u: the probes of frame %u were not back within 2 s; the answers before them are used\n",
-                     game_frame, probe_book_.oldest_pending());
+    const std::uint64_t deadline = steady_now_ns() + kProbeWaitNs;
+    while (!probe_book_.ready(game_frame)) {
+        const std::uint64_t now = steady_now_ns();
+        const ProbeWait wait = probe_wait(now, deadline, native_call_started_ns_.load(std::memory_order_acquire), kRenderStallNs);
+        if (wait == ProbeWait::Wait) {
+            // Woken by answers; looked at again a stall time on, when a draw.native call may have held the thread that long.
+            probe_answers_cv_.wait_for(lock, std::chrono::nanoseconds(std::min(deadline - now, kRenderStallNs)));
+            continue;
+        }
+        if (probe_waits_logged_ < 4u) {
+            ++probe_waits_logged_;
+            if (wait == ProbeWait::Held) {
+                std::fprintf(stderr, "[render] frame %u: a draw.native function holds the render thread; the answers before frame %u's probes are used\n",
+                             game_frame, probe_book_.oldest_pending());
+            } else {
+                std::fprintf(stderr, "[render] frame %u: the probes of frame %u were not back within 2 s; the answers before them are used\n",
+                             game_frame, probe_book_.oldest_pending());
+            }
+        }
+        break;
     }
     return probe_book_.answers(channel, game_frame, probes, capacity);
 }

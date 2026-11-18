@@ -629,6 +629,10 @@ private:
     std::condition_variable probe_answers_cv_;
     core::ProbeBook probe_book_;
     unsigned probe_waits_logged_ = 0u;
+    static constexpr std::uint64_t kProbeWaitNs = 2'000'000'000u;
+    // When the draw.native function the render thread runs began (steady clock; 0: none runs): the game's probe read
+    // waits on none that has run kRenderStallNs (render_queue.h probe_wait).
+    std::atomic<std::uint64_t> native_call_started_ns_{0};
     // Render thread: the list's real walk is over (it asks no more probes), or it leaves unwalked.
     void probes_walked(std::uint32_t game_frame);
     void probes_released(std::uint32_t game_frame);
