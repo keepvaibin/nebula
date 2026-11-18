@@ -149,6 +149,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/frame_interpolation.cpp
     ${rt}/frame_telemetry.cpp
     ${rt}/perf_hint.cpp
+    ${rt}/thermal_state.cpp
     ${rt}/pacing.cpp
     ${rt}/pacing_recorder.cpp
     ${rt}/render/vk/vk_context.cpp

@@ -461,6 +461,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/core/pipelines_d3d12.cpp
     runtime/src/frame_telemetry.cpp
     runtime/src/perf_hint.cpp
+    runtime/src/thermal_state.cpp
     runtime/src/pacing.cpp
     runtime/src/pacing_recorder.cpp
 )
@@ -704,6 +705,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/streamline_bridge.cpp
         runtime/src/frame_telemetry.cpp
         runtime/src/perf_hint.cpp
+        runtime/src/thermal_state.cpp
         runtime/src/pacing.cpp
         runtime/src/pacing_recorder.cpp
         runtime/src/render/vk/vk_context.cpp
@@ -848,6 +850,7 @@ if(NEBULA_D3D11)
         runtime/src/render/xess_library.cpp
         runtime/src/frame_telemetry.cpp
         runtime/src/perf_hint.cpp
+        runtime/src/thermal_state.cpp
         runtime/src/pacing.cpp
         runtime/src/pacing_recorder.cpp
         runtime/src/render/mod_shaders.cpp
