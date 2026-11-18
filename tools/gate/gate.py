@@ -460,18 +460,31 @@ def rust_tests(g):
 PLATFORM_CHECK = TREE / "tools" / "lumacore" / "check_luma_platforms.py"
 
 
+PIN_LOCK = threading.Lock()
+
+
+def pinned(g):
+    """The pinned LumaLink, (program, checkout): mod_tests.pinned_lumalink in <build root>/lumalink-pin (its nebula/ a
+    link to this tree), built once for the lumalink check and every mods lane, whichever asks first (the lanes run side
+    by side; --only may leave the lumalink check out). SystemExit names why it could not be built."""
+    with PIN_LOCK:
+        if getattr(g, "pin", None) is None:
+            sys.path.insert(0, str(TREE / "tools" / "lumacore"))
+            import mod_tests  # noqa: E402 - tools/lumacore, beside the mod tests it serves
+            g.pin = mod_tests.pinned_lumalink(pathlib.Path(g.args.build_root) / "lumalink-pin")
+        return g.pin
+
+
 def lumalink_tests(g):
     """LumaLink's own tests at the commit tools/lumacore/lumalink.commit pins, in the checkout the mod tests build it in
     (mod_tests.pinned_lumalink: <build root>/lumalink-pin, its nebula/ a link to this tree): every crate's tests, and
     those that need clang, this tree's SDK and this build (the generated C compiled for every platform, one mod built
     for all nine and each library read as its loader will, the same floating point on every platform, the programs
-    checked and emitted against this build's names); the VS Code one needs VS Code. When --lumalink names no program,
-    the mod tests then use the one built there."""
+    checked and emitted against this build's names); the VS Code one needs VS Code. The mod tests use the same build
+    unless --lumalink names another program."""
     def fn(log):
-        sys.path.insert(0, str(TREE / "tools" / "lumacore"))
-        import mod_tests  # noqa: E402 - tools/lumacore, beside the mod tests it serves
         try:
-            program, checkout = mod_tests.pinned_lumalink(pathlib.Path(g.args.build_root) / "lumalink-pin")
+            _, checkout = pinned(g)
         except SystemExit as stop:
             pathlib.Path(log).write_text("%s\n" % stop, encoding="utf-8")
             return False, str(stop)
@@ -482,8 +495,6 @@ def lumalink_tests(g):
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")
         passed = sum(int(l.split()[3]) for l in text.splitlines() if l.startswith("test result:"))
         failed = sum(int(l.split()[5]) for l in text.splitlines() if l.startswith("test result:"))
-        if not g.args.lumalink:
-            g.args.lumalink = str(program)
         pin = (TREE / "tools" / "lumacore" / "lumalink.commit").read_text(encoding="utf-8").strip()
         return code == 0 and failed == 0, "%d passed, %d failed (LumaLink %s)" % (passed, failed, pin[:9])
     return fn
@@ -813,15 +824,28 @@ MOD_TESTS = TREE / "tools" / "lumacore" / "mod_tests.py"
 
 
 def mod_tests(g, renderer):
-    """Every mod test in tests/mods on one renderer, through the mods' own entry point (it builds the test mods with
-    LumaLink, then runs them). Passes when it exits 0; its rows name each test that did not pass."""
+    """The mod tests on one renderer, through the mods' own entry point (it builds the test mods with LumaLink, then
+    runs them side by side, --mod-parallel at a time, each game in its own folder): every suite of tests/mods and of
+    the pinned LumaLink's tests/game, or at the quick level the quick set (tests/mods/quick.json, one or more of every
+    suite). Passes when it exits 0; its rows name each test that did not pass."""
     def fn(log):
         work = g.work / ("runs-mods-%s" % renderer)
-        env = {"LUMALINK": g.args.lumalink} if g.args.lumalink else {}
-        env["LUMA_TEST_PAKS"] = g.args.paks
-        code = run([sys.executable, "-X", "utf8", "-I", MOD_TESTS, "--bin", g.bin, "--work", work,
-                    "--renderer", renderer, "--lock", g.work / ("harness-mods-%s.lock" % renderer), "--commit", g.commit], log, env=env,
-                   cwd=g.args.build_root)
+        env = {"LUMA_TEST_PAKS": g.args.paks}
+        if g.args.lumalink:
+            env["LUMALINK"] = g.args.lumalink
+        else:
+            try:
+                program, checkout = pinned(g)
+            except SystemExit as stop:
+                pathlib.Path(log).write_text("%s\n" % stop, encoding="utf-8")
+                return False, str(stop)
+            env["LUMALINK"], env["LUMALINK_TREE"] = str(program), str(checkout)
+        cmd = [sys.executable, "-X", "utf8", "-I", MOD_TESTS, "--bin", g.bin, "--work", work, "--renderer", renderer,
+               "--lock", g.work / ("harness-mods-%s.lock" % renderer), "--commit", g.commit, "--jobs", g.args.jobs,
+               "--parallel", str(g.args.mod_parallel)]
+        if g.level == "quick":
+            cmd += ["--set", "quick"]
+        code = run(cmd, log, env=env, cwd=g.args.build_root)
         for d in work.rglob("bin"):
             if d.is_dir():
                 shutil.rmtree(d, ignore_errors=True)
@@ -1235,7 +1259,11 @@ def parser():
     p.add_argument("--record", action="store_true", help="also keep the result in docs/plan/gate-runs, for a commit")
     p.add_argument("--seed-from", default=os.environ.get("NEBULA_GATE_SEED", ""),
                    help="a configured MSVC build folder whose compiled shader stages seed a new build (content-keyed)")
-    p.add_argument("--lumalink", default=os.environ.get("LUMALINK", ""), help="the lumalink program the mod tests use")
+    p.add_argument("--lumalink", default=os.environ.get("LUMALINK", ""),
+                   help="a lumalink program for the mod tests in place of the pinned one the gate builds")
+    p.add_argument("--mod-parallel", type=int, default=2,
+                   help="mod tests run at once in each mods lane, each game in its own folder (the lanes run side by "
+                        "side too)")
     p.add_argument("--tablet", default=os.environ.get("NEBULA_GATE_TABLET", ""),
                    help="the main, long and final levels: the tablet's serial (its part is owed when it does not answer)")
     p.add_argument("--tablet-lock", default=os.environ.get("NEBULA_GATE_TABLET_LOCK", "D:/NebulaWork/plan/tablet.lock"))
