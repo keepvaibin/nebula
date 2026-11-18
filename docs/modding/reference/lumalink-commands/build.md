@@ -1,7 +1,7 @@
 ---
 title: lumalink build
 shortTitle: build
-intro: Build a mod's code (LumaScript and C) for every platform.
+intro: Build a mod's code (LumaScript and C) for every platform the game runs on.
 contentType: reference
 ---
 
@@ -9,7 +9,7 @@ contentType: reference
 
 ## About lumalink build
 
-Build a mod's code (LumaScript and C) for every platform.
+Build a mod's code (LumaScript and C) for every platform the game runs on.
 
 ## Example
 
@@ -37,7 +37,7 @@ lumalink build [OPTIONS] <FOLDER>
 | `--sdk <FOLDER>` | The folder with the game's luma.h. Default: LUMA_INCLUDE, then the self-description folder's sdk. |
 | `--clang <FILE>` | The clang to build with. Default: LUMALINK_CLANG, then the clang that comes with LumaLink, then LLVM's own folder, then the system's search path. |
 | `--work <FOLDER>` | Keep the generated C in this folder. Default: a temporary folder, removed after. |
-| `--platform <PLATFORM>` | A platform to build for (repeat for several). Default: all nine. |
+| `--platform <PLATFORM>` | A platform to build for (repeat for several). Default: every platform the game runs on, and every one the mod lists already. |
 | `--mods <FOLDER>` | Your mod folder: the mods (folders and .luma files) a mod's needs are found in. Without it, they are looked for beside the mod, in the installed game's mods and in the mods that come with the game. |
 | `--no-installed` | Leave out the installed game: --names names the self-description, and no needed mod is taken from the installed game's mods. |
 | `-h, --help` | Print this help. |

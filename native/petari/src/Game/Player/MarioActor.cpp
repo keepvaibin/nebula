@@ -131,6 +131,7 @@ MarioActor::MarioActor(const char* pName, bool extra) : LiveActor(pName), mFlash
     mHidden = 0;
     mMorphHidden = 0;
     mModHidden = false;
+    mModHiddenCarry = nullptr;
 
     mThrowProbePos.zero();
 

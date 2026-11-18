@@ -417,13 +417,13 @@ void MarioActor::calcViewAndEntry() {
     }
 
     // A mod's hidden body (player.set_drawn): his attachments hidden each frame (the game shows new ones as they come:
-    // a morph's wings, a taken shell), shown once when the body is drawn again.
+    // a morph's wings, a taken shell), shown once when the body is drawn again (modHideAttached, modShowAttached).
     if ((mModHidden & kModHiddenBody) != 0) {
-        hideBeeFur();
+        modHideAttached();
         mModHidden |= kModHiddenAttached;
     } else if ((mModHidden & kModHiddenAttached) != 0) {
         mModHidden &= static_cast< u8 >(~kModHiddenAttached);
-        showBeeFur();
+        modShowAttached();
     }
 
     switch (mCurrModel) {

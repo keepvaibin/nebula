@@ -175,19 +175,53 @@ void MarioActor::calc1stPersonView() {
 }
 
 void MarioActor::hideBeeFur() {
+    hideMorphParts();
+    if (getCarrySensor() != nullptr) {
+        MR::hideModel(getCarrySensor()->mHost);
+    }
+}
+
+// The morph's own parts: the Bee's fur and wings, the Rainbow's glow.
+void MarioActor::hideMorphParts() {
     if (mMario->isPlayerModeBee()) {
         mBeeWing->kill();
         mBeeFur->offDraw(-1);
     }
-
-    if (getCarrySensor() != nullptr) {
-        MR::hideModel(getCarrySensor()->mHost);
-    }
-
     if (mMario->isPlayerModeInvincible()) {
         mBlurState = 0;
         stopEffect("無敵中");
     }
+}
+
+// A mod's hidden body, each frame: the morph's parts, and what he carries. The carried object hidden here is
+// remembered, so one he lets go of while the body is hidden (a shell thrown, a carrier dropped) is drawn again at
+// once, and the one he holds when the body comes back is shown then (M-064). One the game hid itself is left to it.
+void MarioActor::modHideAttached() {
+    hideMorphParts();
+    const HitSensor* const sensor = getCarrySensor();
+    LiveActor* const carried = sensor != nullptr ? sensor->mHost : nullptr;
+    if (carried != mModHiddenCarry) {
+        if (mModHiddenCarry != nullptr) {
+            MR::showModel(mModHiddenCarry);
+        }
+        mModHiddenCarry = carried != nullptr && !MR::isHiddenModel(carried) ? carried : nullptr;
+    }
+    if (mModHiddenCarry != nullptr) {
+        MR::hideModel(mModHiddenCarry);
+    }
+}
+
+// The body drawn again: the carried object this hid comes back; the morph's parts come back unless the game's own
+// first-person fade hides them now (calc1stPersonView, mFpViewHidden), as it would without the mod.
+void MarioActor::modShowAttached() {
+    if (mModHiddenCarry != nullptr) {
+        MR::showModel(mModHiddenCarry);
+        mModHiddenCarry = nullptr;
+    }
+    if (mMario->isStatusActive(MarioStatus_FpView) && mFpViewHidden) {
+        return;
+    }
+    showMorphParts();
 }
 
 void MarioActor::calcFogLighting() {
@@ -696,15 +730,17 @@ bool MarioActor::drawDarkMask() const {
 }
 
 void MarioActor::showBeeFur() {
+    showMorphParts();
+    if (getCarrySensor() != nullptr) {
+        MR::showModel(getCarrySensor()->mHost);
+    }
+}
+
+void MarioActor::showMorphParts() {
     if (mMario->isPlayerModeBee()) {
         mBeeWing->appear();
         mBeeFur->onDraw(-1);
     }
-
-    if (getCarrySensor() != nullptr) {
-        MR::showModel(getCarrySensor()->mHost);
-    }
-
     if (mMario->isPlayerModeInvincible()) {
         MR::showJoint(getModel(), "Face0");
         mBlurState = 2;

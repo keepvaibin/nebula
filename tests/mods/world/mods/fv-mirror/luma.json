@@ -1,0 +1,13 @@
+{
+  "format": "1.0",
+  "id": "fv-mirror",
+  "name": "fv-mirror",
+  "version": "1.0.0",
+  "summary": "The game's mirror and a mod's main camera.",
+  "authors": [
+    "keepvaibin"
+  ],
+  "game": {
+    "id": "RMG"
+  }
+}

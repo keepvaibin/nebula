@@ -1,0 +1,100 @@
+{
+  "harness": 1,
+  "name": "2963-hidden-carry",
+  "about": "player.set_drawn (M-064): with the game player's body hidden (SHADOW only), he takes a shell (PcShell from JetTurtle in place of every Kuribo) and it is hidden while held; thrown, it is drawn again at once though his body stays hidden; drawn whole again, the shell stays drawn",
+  "proves": [
+    "services.player",
+    "kernel.classes.define"
+  ],
+  "mods": [
+    "../mods/pl-carry"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 150,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4301
+      ]
+    },
+    {
+      "at": 200,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4302
+      ]
+    },
+    {
+      "at": 260,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4303
+      ]
+    },
+    {
+      "at": 300,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        4304
+      ]
+    },
+    {
+      "at": 330,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.pl-carry.defined",
+      "is": 1
+    },
+    {
+      "fact": "mod.pl-carry.missing",
+      "absent": true
+    },
+    {
+      "fact": "mod.pl-carry.hide",
+      "is": 0
+    },
+    {
+      "fact": "mod.pl-carry.taken",
+      "is": 1
+    },
+    {
+      "fact": "mod.pl-carry.held_hidden",
+      "is": 1
+    },
+    {
+      "fact": "mod.pl-carry.thrown",
+      "is": 1
+    },
+    {
+      "fact": "mod.pl-carry.thrown_shown",
+      "is": 1
+    },
+    {
+      "fact": "mod.pl-carry.body_hidden",
+      "is": 1
+    },
+    {
+      "fact": "mod.pl-carry.whole",
+      "is": 0
+    },
+    {
+      "fact": "mod.pl-carry.end_shown",
+      "is": 1
+    }
+  ]
+}

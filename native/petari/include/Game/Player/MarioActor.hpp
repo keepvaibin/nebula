@@ -402,6 +402,9 @@ public:
     void writeBackScreenBox() const;
     void calc1stPersonView();
     void hideBeeFur();
+    void hideMorphParts();
+    void modHideAttached();
+    void modShowAttached();
     void calcFogLighting();
     void resetFog();
     void updateAlphaList(u8);
@@ -425,6 +428,7 @@ public:
     void initDarkMask();
     void updateDarkMask(u16);
     void showBeeFur();
+    void showMorphParts();
     bool drawDarkMask() const;
 
     // Defined in MarioActorMatrix
@@ -698,6 +702,9 @@ public:
     // LumaCore's note that it hid his attachments (the Bee's fur and wings, what he carries, the Rainbow's glow). He
     // still moves, animates and plays effects; his reflection stays.
     u8 mModHidden;
+    // The carried object a mod's hidden body hid (modHideAttached): shown again when he lets go of it or the body is
+    // drawn again. Null when none, or when the game had hidden it itself.
+    LiveActor* mModHiddenCarry;
     Vec3f mThrowProbePos;  // the throw vector's probe point (updateThrowVector)
     f32 mTakingWobble;  // the taken item's wobble phase
     FixedPosition* mTakingFixedPos;  // the hand point the taken item follows

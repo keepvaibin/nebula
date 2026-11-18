@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* LumaCore's input services (docs/modding/reference/services/input.md).
 
-   `input` 1.3, no permission: LUMA_SERVICE(slot, "input", "1.3").
+   `input` 1.4, no permission: LUMA_SERVICE(slot, "input", "1.4") (import the lowest minor that has what the mod calls).
    - The mod's own actions (1.0), which the player binds in Controls. An action is a `key` option of the mod's
      luma.json (luma-format revision 5): its `key` is the action's id, its `name` what Controls shows, its `default`
      the game control it follows until the player binds it (one of input_bindings.cpp's kTargetIds: "c" follows the
@@ -111,12 +111,13 @@ typedef struct LumaInputGame {
     uint8_t injected;       /* 1: a mod supplied it (input.inject); read only */
 } LumaInputGame;            /* 1.1: 28 bytes */
 
-/* 1.4. The main player's look in one game frame (look). */
+/* 1.4. The main player's look since the mod's last look call (look). */
 typedef struct LumaInputLook {
     uint32_t size;     /* sizeof(LumaInputLook) as the mod was built */
-    float yaw;         /* radians the view turned right this frame (left negative), the mod's scale applied */
+    float yaw;         /* radians the view turned right since the mod's last look (left negative), the scale applied */
     float pitch;       /* radians it turned up (down negative) */
-    uint32_t on;       /* 1: the look holds the controls this frame (look_mode on, in play, the window in front, no menu) */
+    uint32_t on;       /* 1: the look held the controls at the game's last read (look_mode on, in play, the window in
+                          front, no menu) */
     uint32_t device;   /* LUMA_INPUT_DEVICE_* that turned it last; 0 before any */
 } LumaInputLook;       /* 1.4: 20 bytes */
 
@@ -223,9 +224,11 @@ typedef struct LumaInputService {
        every turn: a mod's sensitivity option. The newest mod's on holds; it ends with off or the mod. LUMA_OK; a pad
        other than LUMA_INPUT_PAD_MAIN, a scale out of range with on: LUMA_E_ARGUMENT, reported. */
     int32_t (*look_mode)(const LumaMod* mod, LumaInputPad pad, int32_t on, float scale);
-    /* 1.4. Game thread. The main player's look this game frame (the turn the game's read of the controller carries):
-       LUMA_OK and *out; yaw and pitch 0 while no look is on or nothing turned it. A pad other than LUMA_INPUT_PAD_MAIN,
-       a null out: LUMA_E_ARGUMENT, reported; an out smaller than 1.4's: LUMA_E_ARGUMENT, reported (Service.StructSize). */
+    /* 1.4. Game thread. The main player's look: the turn of every read of the main player's controller since this
+       mod's last look call, each turn given to each mod once however often the game reads (a world rate above real
+       time reads more than once a frame) and however often the mod calls. The mod's first call gives no turn: it
+       starts from then. LUMA_OK and *out; yaw and pitch 0 while no look is on or nothing turned it. A pad other
+       than LUMA_INPUT_PAD_MAIN, a null out: LUMA_E_ARGUMENT, reported; an out smaller than 1.4's: LUMA_E_ARGUMENT, reported (Service.StructSize). */
     int32_t (*look)(const LumaMod* mod, LumaInputPad pad, LumaInputLook* out);
 } LumaInputService;
 

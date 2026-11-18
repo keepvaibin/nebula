@@ -2,6 +2,7 @@
 
 #include "Game/Camera/CameraContext.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/LiveActor/MirrorCamera.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Render/FrameList.hpp"
 #include "Game/Render/GameTexture.hpp"
@@ -606,12 +607,23 @@ namespace luma {
 
                 // The main camera given back: the game's last view, field of view and near plane, in the same scene's
                 // context.
+                // The game's mirror is made from the main camera's view and projection (MirrorCamera::updateViewMtx and
+                // updateModelTexMtx), once a frame in its movement, which runs before the mod's camera is applied
+                // (SceneExecutor) and before the rig's second apply (GameScene::calcAnim): made again from the camera
+                // as it is now, so the reflection is the mod's view (M-056).
+                void mirrorFollow() {
+                    if (MR::isExistMirrorCamera()) {
+                        MR::getMirrorCamera()->movement();
+                    }
+                }
+
                 void mainGiveBack() {
                     CameraContext* const pContext = cameraContext();
                     if (pContext != nullptr && pContext == sGameContext) {
                         MR::setCameraViewMtx(sGameView);
                         pContext->setFovy(sGameFov);
                         pContext->setNearZ(sGameNear);
+                        mirrorFollow();
                     }
                     sMainMod = nullptr;
                     sGameContext = nullptr;
@@ -695,6 +707,7 @@ namespace luma {
                     sAppliedFov = pContext->mFovy;
                     sAppliedNear = pContext->mNearZ;
                     sMainApplied = true;
+                    mirrorFollow();
                 }
 
                 int32_t svcMainEye(const LumaMod* pMod, const LumaDrawViewEye* pEye) {

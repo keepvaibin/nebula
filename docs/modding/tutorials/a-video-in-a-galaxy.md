@@ -78,7 +78,7 @@ a-video-in-a-galaxy/
      "game": { "id": "RMG" },
      "needs": [{ "id": "lumakit", "version": ">=1.0.0" }],
      "layers": [{ "name": "base" }],
-     "code": { "platforms": ["windows-x64", "windows-arm64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64", "ios-arm64"]}
+     "code": { "platforms": ["windows-x64", "linux-x64", "linux-arm64", "macos-arm64", "macos-x64", "android-arm64", "android-x64"]}
    }
    ```
 

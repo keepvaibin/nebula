@@ -62,7 +62,7 @@ lumalink new moon-jump --id moon.jump --name "Moon jump" --summary "Hold jump to
     { "name": "matte", "when": { "option": { "look": "matte" } } },
     { "name": "pal-text", "when": { "region": ["RMGP01"] } }
   ],
-  "code": { "platforms": ["windows-x64", "linux-x64", "android-arm64", "macos-arm64", "ios-arm64"],
+  "code": { "platforms": ["windows-x64", "linux-x64", "android-arm64", "macos-arm64"],
             "libraries": { "windows-x64": ["steam_api64.dll"] } },
   "saves": [ { "region": "RMGE01", "file": "saves/RMGE01/GameData.bin", "why": "Starts you at the first level." } ],
   "kit": { "lumakit.player.form": 1 },

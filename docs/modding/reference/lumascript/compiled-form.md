@@ -49,12 +49,16 @@ the Windows targets each object also takes `-mno-incremental-linker-compatible`.
 | `windows-arm64` | `aarch64-pc-windows-msvc` | the same |
 | `linux-x64`, `linux-arm64` | `x86_64-` / `aarch64-unknown-linux-gnu`, `-fPIC -fno-use-init-array`; arm64 also `-mno-outline-atomics` | ld.lld `-shared --build-id=none --hash-style=gnu -z defs -z noexecstack --script luma_ctors.ld` |
 | `android-arm64`, `android-x64` | `aarch64-` / `x86_64-linux-android24`, `-fPIC -fno-use-init-array`; arm64 also `-mno-outline-atomics` | the same and `-z max-page-size=16384` |
+| `macos-arm64`, `macos-x64` | `arm64-` / `x86_64-apple-macos12.0`, `-fPIC` | ld64.lld `-dynamiclib -undefined error -adhoc_codesign -install_name @rpath/mod.dylib -platform_version macos 12.0 12.0` |
+| `ios-arm64` | `arm64-apple-ios15.0`, `-fPIC` | the same with `-platform_version ios 15.0 15.0`; the device signs it again when the mod is installed |
 
 On arm64 Linux and Android, atomics are inline: clang's own default there depends on the machine
 that builds (it calls `__aarch64_*` helpers when it finds a GCC 9.3.1 or newer), and those helpers
 live in a runtime a mod does not link.
-| `macos-arm64`, `macos-x64` | `arm64-` / `x86_64-apple-macos12.0`, `-fPIC` | ld64.lld `-dynamiclib -undefined error -adhoc_codesign -install_name @rpath/mod.dylib -platform_version macos 12.0 12.0` |
-| `ios-arm64` | `arm64-apple-ios15.0`, `-fPIC` | the same with `-platform_version ios 15.0 15.0`; the device signs it again when the mod is installed |
+
+`lumalink build` with no `--platform` builds every platform the game runs on and every platform the
+mod's `luma.json` lists already. The game does not run on Windows on ARM or iOS yet, so `windows-arm64`
+and `ios-arm64` are built only when named with `--platform` or listed.
 
 - The libraries import nothing but what `luma.h` and the loader allow (the compiler's `memcpy`,
   `memset`, `memmove` and, on the MSVC targets, the stack probe, all given by `luma.h`'s freestanding helpers; F,
@@ -257,7 +261,7 @@ different order in another language (Japanese puts S0904's `{1}` first).
 
 | Code | Raised when | Arguments | English |
 |---|---|---|---|
-| S0901 | a hook was called off the game thread | hook name | `{0} was called off the game thread, so this hook did not run there` |
+| S0901 | a hook or an `export c fn` was called off the game thread | function name | `{0} was called off the game thread, so the mod's script did not run there` |
 | S0902 | `list[i]` out of range | index, length | `index {0} is outside a list of {1}` |
 | S0903 | `h!` or a call through an empty `ref<C>` | class name | `the handle to {0} is empty` |
 | S0904 | integer overflow (`__builtin_*_overflow`) | type, expression source | `{0} overflow in {1}` |

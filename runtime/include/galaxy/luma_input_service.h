@@ -13,8 +13,9 @@
 namespace galaxy::luma_input {
 
 // The providers, for luma_services::provide_all (game thread, once, before the first mod). `log` says what goes
-// wrong outside any mod's call (an action left out when they are declared).
-[[nodiscard]] std::span<const LumaServiceProvider* const> providers(void (*log)(const char*)) noexcept;
+// wrong outside any mod's call (an action left out when they are declared). `monotonic_ns` is the game's steady clock
+// as the module reads it (frames in deterministic mode), a rumble's clock; null: the system's.
+[[nodiscard]] std::span<const LumaServiceProvider* const> providers(void (*log)(const char*), std::uint64_t (*monotonic_ns)()) noexcept;
 
 // Game thread, at each of the game's reads of `player`'s controller (svc_input_read), the sample made: recorded for
 // `game` and `game_raw`, replaced by a mod's injection, held at rest while a text request is open. `device` is the
@@ -23,6 +24,8 @@ void game_read(std::uint32_t player, NebulaInputSample* sample, std::uint32_t de
 // Game thread, at the same read: the strongest rumble the mods ask on `player` now, 0 to 255 (0: none). The host
 // drives the stronger of it and the game's.
 [[nodiscard]] std::uint8_t mod_rumble(std::uint32_t player) noexcept;
+// Tests: the steady clock a rumble's seconds are counted on (nanoseconds); null: the system's.
+void set_clock_for_tests(std::uint64_t (*now)()) noexcept;
 
 // What aims the main player's pointer (input 1.2 pointer_source), for the live controls at each sample (any thread):
 // `source` a galaxy::input::PointerSource (None: the player's controls choose), `gyro_scale` the gyro's turn.

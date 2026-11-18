@@ -95,6 +95,10 @@ galaxy_test(galaxy_precise_wait_tests SOURCES ${rt}/precise_wait_tests.cpp)
 # Mods.
 galaxy_test(galaxy_luma_tests SOURCES ${rt}/luma_tests.cpp ${rt}/luma.cpp)
 galaxy_test(galaxy_luma_net_reach_tests SOURCES ${rt}/luma_net_reach_tests.cpp ${rt}/luma_net_reach.cpp)
+# input's look with a stand-in kernel (M-060): each read's turn reaches each reading mod once.
+galaxy_test(galaxy_luma_input_tests SOURCES ${rt}/luma_input_tests.cpp ${rt}/luma_input.cpp ${rt}/input/mod_actions.cpp
+    ${rt}/input_bindings.cpp ${rt}/mods.cpp ${rt}/mod_consent.cpp ${rt}/mod_xml.cpp ${rt}/luma.cpp ${rt}/mod_import.cpp ${rt}/texture_categories.cpp
+    ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
 galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/mods.cpp ${rt}/mod_consent.cpp ${rt}/luma.cpp
     ${rt}/mod_import.cpp ${rt}/texture_categories.cpp ${rt}/dolphin_pack.cpp ${rt}/asset_store.cpp LIBS galaxy_atomic_file nebula_archive)
 # The consent store (docs/modding/concepts/permissions.md): answers, digests and their round trip through the mod settings.

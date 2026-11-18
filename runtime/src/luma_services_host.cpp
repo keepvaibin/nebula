@@ -167,7 +167,8 @@ bool provide_all(void* (*find_symbol)(const char*), void (*log)(const char*),
         provide(provider);
     }
     // The input service (services/input.md): every host has it; a host that samples no controls leaves every action up.
-    for (const LumaServiceProvider* const provider : galaxy::luma_input::providers(log)) {
+    // A rumble's seconds on the game's steady clock, as the system services' (N-4001).
+    for (const LumaServiceProvider* const provider : galaxy::luma_input::providers(log, monotonic)) {
         provide(provider);
     }
     // The audio service (services/audio.md): a mod's cooked sounds, its streams, music, taps; the game's own sounds and

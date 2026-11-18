@@ -20,3 +20,17 @@ M12 platforms for mods; M14 the six reference mods; M11 documentation, from the 
 - Docs: compiled-form.md (arm64 Linux atomics, --script), packing-and-sharing-a-mod.md, and every
   lumalink-commands page written again by tools/modding/lumalink_commands.py from this LumaLink.
 - M8 left: none open in this package but what M11 owns of its docs.
+
+## 2026-11-17 M10 and M7 first sweep (LumaLink b32a890)
+
+- M10 fixed with tests: M-056 (the game's mirror follows a mod's main camera; world/2473-mirror, the player put at the
+  twin-falls mirror object), M-060 and M-067 (galaxy_luma_input_tests), M-064 (a hidden body's carried object shown
+  again once let go; player/2963-hidden-carry), M-175 (kit.camera keeps the body hidden across a new player actor;
+  LumaLink kit/kit-camera-fp), N-4001 (new: a mod's rumble lasted 60 reads a second, now the game's steady clock).
+  M-066 not-a-fault: the joint matrices already hold the body scale (Skeleton::evaluate with mBaseScale).
+- M7 fixed with tests: M-018, M-020 (taken from Agent 2), M-116, M-118, M-119, M-121, M-122, M-124 to M-128, M-130,
+  M-131, M-133, M-134, M-137, M-139, M-140; M-006 (M12) in the same LumaLink commit. In the game: LumaLink's script
+  suite (25 tests with the new script/m7-sweep) and the camera kit tests pass on d3d12; the input suite (13) passes.
+- Open, waiting on others: M-114's text half (N-4002, `in` marks), M-132 (N-4003, a kernel watch), M-123 (a planner
+  question; N-4004, field marks). Host rows M-057, M-058, M-061 to M-063, M-069 wait for Agent 3's app/work; M-068 is
+  a request to Agent 1.

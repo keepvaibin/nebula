@@ -125,10 +125,15 @@ def main():
         else:
             output = os.path.abspath(arguments.output)
             os.makedirs(os.path.dirname(output), exist_ok=True)
+            # Packed beside the file (pack writes over nothing), then put in its place in one rename.
+            packed = os.path.splitext(output)[0] + ".new.luma"
+            if os.path.exists(packed):
+                os.remove(packed)
             pack = [arguments.lumalink, "pack", merged, "--no-installed", "--names", names, "--game",
-                    os.path.abspath(arguments.game), "--output", output]
+                    os.path.abspath(arguments.game), "--output", packed]
             if subprocess.run(pack).returncode != 0:
                 sys.exit("lumalink pack failed")
+            os.replace(packed, output)
             print(f"{output}: LumaKit for {', '.join(platforms)}")
     finally:
         shutil.rmtree(work, ignore_errors=True)

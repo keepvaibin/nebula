@@ -1,0 +1,89 @@
+{
+  "harness": 1,
+  "name": "2473-mirror",
+  "about": "fv-mirror (M-056): at the lake of HeavenlyBeachGalaxy's ColdTwinFallZone (in its MirrorArea, the mirror there), main_eye 600 to the player's side and 300 up: the mirror's eye is the reflection of that eye (their distance apart is twice the eye's distance to the mirror, 1000 milli within 5, and their middle is on the mirror); with main_eye null the mirror's eye is the game camera's reflection again",
+  "proves": [
+    "draw.view"
+  ],
+  "mods": [
+    "../mods/fv-mirror"
+  ],
+  "stage": {
+    "name": "HeavenlyBeachGalaxy",
+    "scenario": 2
+  },
+  "player": {
+    "at": "class:SimpleMirrorObj#0"
+  },
+  "steps": [
+    {
+      "at": 90,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2476
+      ]
+    },
+    {
+      "at": 100,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2477
+      ]
+    },
+    {
+      "at": 110,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2478
+      ]
+    },
+    {
+      "at": 120,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fv-mirror.in_area",
+      "is": 1
+    },
+    {
+      "fact": "mod.fv-mirror.mirror",
+      "is": 1
+    },
+    {
+      "fact": "mod.fv-mirror.main",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-mirror.gap_milli",
+      "near": 1000,
+      "within": 5
+    },
+    {
+      "fact": "mod.fv-mirror.mid",
+      "near": 0,
+      "within": 2
+    },
+    {
+      "fact": "mod.fv-mirror.back",
+      "is": 0
+    },
+    {
+      "fact": "mod.fv-mirror.back_gap_milli",
+      "near": 1000,
+      "within": 5
+    },
+    {
+      "fact": "mod.fv-mirror.back_mid",
+      "near": 0,
+      "within": 2
+    }
+  ]
+}

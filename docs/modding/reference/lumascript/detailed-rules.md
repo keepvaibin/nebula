@@ -85,8 +85,10 @@ block's `}`, the next statement may follow on the same line (`enter { ... } wait
   every hook twice).
 - Every script hook, task and handler runs on the game thread only. The generated code tests it first; a call on
   another thread does nothing (a `before` does not skip, a `wrap` proceeds, an `after` leaves the result) and logs
-  once per hook `S0901: <function> called off the game thread: the hook is left out there`. The self-description marks
-  functions known to run off the game thread (the self-description); hooking one is a build warning naming it.
+  once per hook `S0901: <function> was called off the game thread, so the mod's script did not run there`. An
+  `export c fn` the mod's own C calls on another thread runs none of its script either: it returns its result's zero
+  and logs the same S0901. Which functions the game calls off the game thread is not in the self-description: the
+  build does not warn, and the log line is how a mod learns it.
 - Between mods: the mod higher in the list is outermost: its `before` runs first, its `after` last (its result
   stands), its `wrap` encloses the lower mods' wraps.
 

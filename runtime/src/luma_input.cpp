@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -61,8 +62,19 @@ static_assert(bit(LUMA_INPUT_BUTTON_A) == bit(NEBULA_BUTTON_A) && bit(LUMA_INPUT
                   bit(LUMA_INPUT_BUTTON_HOME) == bit(NEBULA_BUTTON_HOME) && bit(LUMA_INPUT_BUTTON_C) == bit(NEBULA_BUTTON_C),
               "the input service's buttons are the game's (nebula_game_api.h)");
 
-constexpr float kReadsPerSecond = 60.0f;  // the game reads its controllers once a frame
 constexpr float kRumbleMostSeconds = 10.0f;
+
+// The clock of a rumble's seconds: the game's steady clock as the module reads it (the frames' clock in deterministic
+// mode, as the time service's `monotonic`), so a rumble lasts what the mod asked at any rate of reads: a frame may read
+// the controllers more than once or not at all, and frames are not 1/60 s (N-4001). The system's steady clock when the
+// module gives none.
+std::atomic<std::uint64_t (*)()> g_clock{nullptr};
+std::int64_t now_ns() noexcept {
+    if (std::uint64_t (*const clock)() = g_clock.load(std::memory_order_acquire); clock != nullptr) {
+        return static_cast<std::int64_t>(clock());
+    }
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 constexpr std::size_t kReportsKept = 64u;
 
 std::atomic<const LumaServiceKernel*> g_kernel{nullptr};
@@ -220,7 +232,7 @@ struct PlayerRead {
     LumaInputGame raw{};        // what the player gave
     std::uint32_t device = LUMA_INPUT_DEVICE_NONE;
     bool motor = false;         // the host drives a motor for that device
-    std::uint64_t reads = 0;    // reads of this player, the clock of rumble
+    std::uint64_t reads = 0;    // reads of this player
 };
 PlayerRead g_players[LUMA_INPUT_PLAYERS];  // game thread
 
@@ -266,7 +278,12 @@ struct ModRecord {
     void* watch_user = nullptr;
     std::uint32_t changed = 0;  // players whose device changed since the last delivery (bits)
     float rumble[LUMA_INPUT_PLAYERS] = {};
-    std::uint64_t rumble_until[LUMA_INPUT_PLAYERS] = {};  // the player's read count it stops at
+    std::int64_t rumble_until[LUMA_INPUT_PLAYERS] = {};  // the steady time it stops at (now_ns)
+    // input 1.4 look: the mod has read the look, and the turn of every read of the main player since its last read
+    // (a frame with more world steps has more reads; each turn reaches each reader once).
+    bool looks = false;
+    float look_yaw = 0.0f;
+    float look_pitch = 0.0f;
     bool orphan = false;  // ended while its node was queued: freed by drop
 };
 std::vector<ModRecord*> g_records;  // game thread
@@ -1060,7 +1077,7 @@ std::int32_t input_rumble(const LumaMod* mod, std::uint32_t player, float streng
     }
     ModRecord* record = record_of(mod, true);
     record->rumble[player] = strength;
-    record->rumble_until[player] = g_players[player].reads + static_cast<std::uint64_t>(std::ceil(seconds * kReadsPerSecond));
+    record->rumble_until[player] = now_ns() + static_cast<std::int64_t>(std::llround(static_cast<double>(seconds) * 1e9));
     g_active.store(true, std::memory_order_release);
     return LUMA_OK;
 }
@@ -1114,7 +1131,8 @@ std::int32_t input_pointer_source(const LumaMod* mod, LumaInputPad pad, LumaInpu
 // ---- input 1.4: a first-person look ---------------------------------------------------------------------------------
 
 // The mod whose look holds (game thread), whether one is on and its scale (the live controls read them at each sample),
-// the turn the live controls gathered since the game's last read of the main player, and the frame's (the game's read).
+// the turn the live controls gathered since the game's last read of the main player, and the last read's state (on,
+// device). Each reading mod's turn since its own last read is its ModRecord's.
 const LumaMod* g_look_mod = nullptr;
 std::atomic<bool> g_look_on{false};
 std::atomic<float> g_look_scale{1.0f};
@@ -1132,6 +1150,9 @@ void look_off() {
     g_look_yaw = g_look_pitch = 0.0f;
     g_look_holding = false;
     g_look_frame = LumaInputLook{};
+    for (ModRecord* record : g_records) {
+        record->look_yaw = record->look_pitch = 0.0f;  // a look starts from still
+    }
 }
 
 std::int32_t input_look_mode(const LumaMod* mod, LumaInputPad pad, std::int32_t on, float scale) {
@@ -1175,8 +1196,15 @@ std::int32_t input_look(const LumaMod* mod, LumaInputPad pad, LumaInputLook* out
     if (out->size < kLookLeast) {
         return struct_size(mod, where, "LumaInputLook", out->size, kLookLeast);
     }
+    // The turn since this mod's last look (none at its first: it starts from now), with the last read's on and device.
+    ModRecord* record = record_of(mod, true);
+    LumaInputLook look = g_look_frame;
+    look.yaw = record->looks ? record->look_yaw : 0.0f;
+    look.pitch = record->looks ? record->look_pitch : 0.0f;
+    record->looks = true;
+    record->look_yaw = record->look_pitch = 0.0f;
     const std::uint32_t size = out->size;
-    std::memcpy(out, &g_look_frame, kLookLeast);
+    std::memcpy(out, &look, kLookLeast);
     out->size = size;
     return LUMA_OK;
 }
@@ -1569,7 +1597,8 @@ const LumaServiceProvider* const kProviders[] = {&kInputProvider, &kInjectProvid
 
 }  // namespace
 
-std::span<const LumaServiceProvider* const> providers(void (*log)(const char*)) noexcept {
+std::span<const LumaServiceProvider* const> providers(void (*log)(const char*), std::uint64_t (*monotonic_ns)()) noexcept {
+    g_clock.store(monotonic_ns, std::memory_order_release);
     g_log = log;
     return kProviders;
 }
@@ -1587,6 +1616,12 @@ void game_read(std::uint32_t player, NebulaInputSample* sample, std::uint32_t de
         g_look_frame.on = g_look_holding ? 1u : 0u;
         g_look_frame.device = g_look_device;
         g_look_yaw = g_look_pitch = 0.0f;
+        for (ModRecord* record : g_records) {
+            if (record->looks) {
+                record->look_yaw += g_look_frame.yaw;
+                record->look_pitch += g_look_frame.pitch;
+            }
+        }
     }
     PlayerRead& read = g_players[player];
     const std::uint32_t before = read.device;
@@ -1661,7 +1696,7 @@ std::uint8_t mod_rumble(std::uint32_t player) noexcept {
         return 0u;
     }
     float strongest = 0.0f;
-    const std::uint64_t now = g_players[player].reads;
+    const std::int64_t now = now_ns();
     for (ModRecord* record : g_records) {
         if (record->rumble[player] <= 0.0f) {
             continue;
@@ -1673,6 +1708,10 @@ std::uint8_t mod_rumble(std::uint32_t player) noexcept {
         strongest = std::max(strongest, record->rumble[player]);
     }
     return static_cast<std::uint8_t>(std::lround(strongest * 255.0f));
+}
+
+void set_clock_for_tests(std::uint64_t (*now)()) noexcept {
+    g_clock.store(now, std::memory_order_release);
 }
 
 void set_text_entry_available(bool available) noexcept {
