@@ -275,7 +275,7 @@ impl Ncol {
             positions: vectors(w(1)? as usize, w(2)? as usize)?,
             normals: vectors(w(3)? as usize, w(4)? as usize)?,
             prisms,
-            octree: words(octree_at, (lists_at - octree_at) / 4)?,
+            octree: words(octree_at, lists_at.checked_sub(octree_at).context("a cooked collision model whose lists come before its octree")? / 4)?,
             lists: words(lists_at, w(9)? as usize)?,
             thickness: f(10)?,
             low: [f(11)?, f(12)?, f(13)?],
@@ -287,13 +287,81 @@ impl Ncol {
     }
 }
 
+impl Ncol {
+    /// What the game's collision reader (KCollisionServer, native/petari/src/Game/Map/KCollision.cpp) indexes without a
+    /// check lies in the model (M-168): each prism's position, normal and edge normals; every octree slot a place inside
+    /// the masks reaches (searchBlock: the root slot from the shifts, then one child slot a level, a level for each
+    /// step of the block shift), each child block and each list; a list's prisms and its end. A mod's collision,
+    /// from a KCL or given cooked, passes this or is refused.
+    pub fn check(&self) -> Result<()> {
+        for (i, p) in self.prisms.iter().enumerate() {
+            let normal = |n: u32| (n as usize) < self.normals.len();
+            if p.position as usize >= self.positions.len() || !normal(p.normal) || !p.edges.iter().all(|&e| normal(e)) {
+                bail!("prism {} names a position or normal the model does not have", i + 1);
+            }
+        }
+        let one_root = self.x_shift as i32 == -1 && self.xy_shift as i32 == -1;
+        if self.shift > 31 || (!one_root && (self.x_shift > 31 || self.xy_shift > 31)) {
+            bail!("an octree with shifts {}, {} and {}", self.shift, self.x_shift, self.xy_shift);
+        }
+        // The root slots: from 0 to the largest the game can make of a place inside the masks (a sum bounds the
+        // `|` of the three parts; the game shifts in 32 bits, so the sum must not pass them).
+        let last = if one_root {
+            0
+        } else {
+            let top = |mask: u32| u64::from((!mask) >> self.shift);
+            (top(self.masks[2]) << self.xy_shift) + (top(self.masks[1]) << self.x_shift) + top(self.masks[0])
+        };
+        if last >= self.octree.len() as u64 || last > u64::from(u32::MAX) {
+            bail!("an octree of {} words whose root slots reach {last}", self.octree.len());
+        }
+        // Each block once for each block shift it is reached with; each list once.
+        let mut blocks: BTreeMap<usize, u32> = BTreeMap::new();
+        let mut lists: BTreeSet<usize> = BTreeSet::new();
+        let mut stack = vec![(0usize, last as usize + 1, self.shift)];
+        while let Some((block, count, shift)) = stack.pop() {
+            for slot in 0..count {
+                let word = self.octree[block + slot];
+                if word & 0x8000_0000 == 0 {
+                    let child = block + word as usize;
+                    if shift == 0 || child + 8 > self.octree.len() {
+                        bail!("octree word {} leads to a block the model does not have", block + slot);
+                    }
+                    if blocks.get(&child).map_or(true, |&seen| seen < shift) {
+                        blocks.insert(child, shift);
+                        stack.push((child, 8, shift - 1));
+                    }
+                } else if lists.insert((word & 0x7FFF_FFFF) as usize) {
+                    let start = (word & 0x7FFF_FFFF) as usize + 1;
+                    let end = self.lists.get(start..).and_then(|rest| rest.iter().position(|&p| p == 0));
+                    let Some(end) = end else {
+                        bail!("octree word {} leads to a list with no end", block + slot);
+                    };
+                    if let Some(p) = self.lists[start..start + end].iter().find(|&&p| p as usize > self.prisms.len()) {
+                        bail!("an octree list names prism {p} of {}", self.prisms.len());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A collision file cooked: a disc's KCL to NCOL, proved to reach the same prisms from every place (proof::walks_agree,
-/// counted in `stats`); a cooked one as it is.
+/// counted in `stats`) and to hold what the game reads (Ncol::check); a cooked one as it is, once it reads whole,
+/// holds what the game reads and writes back to the same bytes.
 pub fn cook(bytes: &[u8], stats: &mut super::Stats) -> Result<Vec<u8>> {
     if bytes.starts_with(MAGIC) {
+        let ncol = Ncol::from_ncol(bytes)?;
+        ncol.check()?;
+        if ncol.to_bytes() != bytes {
+            bail!("a cooked collision model that is not as the cook writes it");
+        }
         return Ok(bytes.to_vec());
     }
-    let ncol = Ncol::from_disc(bytes)?.to_bytes();
+    let model = Ncol::from_disc(bytes)?;
+    model.check()?;
+    let ncol = model.to_bytes();
     stats.octree_leaves += proof::walks_agree(bytes, &ncol)?;
     stats.collision_models += 1;
     Ok(ncol)
@@ -690,6 +758,51 @@ mod tests {
         cook(&disc(), &mut stats).unwrap();
         assert_eq!((stats.collision_models, stats.octree_leaves), (2, 2));
         assert!(stats.summary().contains("collision models proved: 2, octree leaves agreeing: 2"));
+    }
+
+    /// M-168: a collision model the game would read past is refused, from a KCL or given cooked. The finding's file: 88
+    /// bytes, "NCOL", the octree at 0x7FFFFFF0, which the cook passed through and the game read from.
+    #[test]
+    fn a_model_the_game_would_read_past_is_refused() {
+        let mut stats = super::super::Stats::default();
+        let mut far = vec![0u8; 0x58];
+        far[..4].copy_from_slice(MAGIC);
+        far[28..32].copy_from_slice(&0x7FFF_FFF0u32.to_le_bytes());
+        assert!(cook(&far, &mut stats).is_err());
+        let good = Ncol::from_disc(&disc()).unwrap();
+        let refused = |change: &dyn Fn(&mut Ncol)| {
+            let mut ncol = Ncol::from_disc(&disc()).unwrap();
+            change(&mut ncol);
+            let error = ncol.check().unwrap_err();
+            assert!(cook(&ncol.to_bytes(), &mut super::super::Stats::default()).is_err(), "{error:#}");
+        };
+        refused(&|n| n.prisms[0].position = 2);
+        refused(&|n| n.prisms[0].normal = 4);
+        refused(&|n| n.prisms[0].edges[2] = 0xFFFF);
+        refused(&|n| n.lists = vec![0, 2, 0]);
+        refused(&|n| n.lists = vec![0, 1, 1]);
+        refused(&|n| n.octree = vec![0x8000_0007]);
+        refused(&|n| n.octree = vec![1]);
+        refused(&|n| {
+            n.x_shift = 40;
+            n.xy_shift = 0;
+        });
+        // A root slot past the octree: masks of 0 let x reach 2^32 - 1.
+        refused(&|n| {
+            n.x_shift = 0;
+            n.xy_shift = 0;
+        });
+        // A child block reached with no block shift left: the game's next slot would shift by -1.
+        refused(&|n| {
+            n.octree = vec![1, 0x8000_0000, 0x8000_0000, 0x8000_0000, 0x8000_0000, 0x8000_0000, 0x8000_0000, 0x8000_0000, 0x8000_0000];
+        });
+        good.check().unwrap();
+        assert_eq!(cook(&good.to_bytes(), &mut stats).unwrap(), good.to_bytes());
+        // The same faults in a disc KCL: prism 1's position, 1, made 2.
+        let mut kcl = disc();
+        let prism = be32(&kcl, 8).unwrap() as usize + 0x10;
+        kcl[prism + 4..prism + 6].copy_from_slice(&2u16.to_be_bytes());
+        assert!(cook(&kcl, &mut stats).is_err());
     }
 
     #[test]
