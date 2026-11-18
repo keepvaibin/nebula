@@ -66,9 +66,28 @@ The LumaScript declaration must match the C one. These types cross between the t
 | `i8` to `i64`, `u8` to `u64` | `int8_t` to `int64_t`, `uint8_t` to `uint64_t` |
 | `f32`, `f64` | `float`, `double` |
 | `bool` | `bool` |
+| `vec2`, `vec3`, `vec4`, `quat` | `lm_vec2`, `lm_vec3`, `lm_vec4`, `lm_quat`: `float x, y` (and `z`, `w`) |
+| `mat34` | `lm_mat34`: `float m[3][4]` |
+| `color` | `lm_color`: `float r, g, b, a` |
+| A struct marked `c struct` | The C struct of the same name |
+| `ref<C>` | `lumart_ref`, a handle C may keep: `lm_ref_get_C(r)` gives the object, or null once it is gone |
 | `text`, `bytes` | A pointer and a length, valid until the call returns |
 
-A result is a number or a `bool`. Other types don't cross yet: vectors, `color`, structs (a struct marked `c struct` too), handles and containers. LumaLink refuses them with S0800. Pass a vector or a struct as its numbers, and a list one item at a time or as `bytes`.
+A result can be any of these but `text` and `bytes`. Containers don't cross: pass a list one item at a time or as `bytes`. LumaLink refuses a type that doesn't cross with S0800.
+
+Mark a struct `c struct` to share it with C. Its fields must be types from the table, but not `text` or `bytes`. LumaLink writes it into `lm_exports.h` under its own name, laid out as C lays it out:
+
+```lumascript
+c struct Spot { at: vec3, radius: f32, lit: bool }
+```
+
+```c
+typedef struct Spot {
+    lm_vec3 at;
+    float radius;
+    bool lit;
+} Spot;
+```
 
 ## Calling LumaScript from C
 
@@ -82,7 +101,7 @@ export c fn bits_times() -> i32 {
 }
 ```
 
-LumaLink writes a header with every exported function, `lm_exports.h`. Include it in your C:
+LumaLink writes a header, `lm_exports.h`, with every exported function, every `c struct`, the types that cross and the handles' getters. Include it in your C or C++:
 
 ```c
 #include "lm_exports.h"

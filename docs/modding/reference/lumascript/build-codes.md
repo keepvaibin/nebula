@@ -184,46 +184,234 @@ Codes S0901 and above are script errors while the game runs, not build codes. Fo
 
 S0800 is a construct that LumaScript has and LumaLink cannot build yet. These are the constructs it names:
 
+* `!`
+* ! on this type
+* % on floats
+* `( )`
+* `-`
+* \- on this type
+* == on {type}
+* `?.`
+* ?. on a call of this kind
+* ?. on this type
+* `[ ]`
+* \[ ] on this game place
+* \[ ] on {type}
+* a bit-field of a game enum whose storage does not read
+* a bit-field of this type
+* a bit-field wider than 32 bits
+* a bool
+* a C argument of this type
+* a C call with named or missing arguments
+* a C parameter of type {type}
+* a C result of type {type}
+* a c struct field of type {type}
+* a call
+* a call leaving out a parameter of another mod whose default is not a literal
+* a call missing an argument
+* a call of another mod's function giving {type}
+* a call of another mod's function with a `var` parameter
+* a call of another mod's function with a parameter of type {type}
+* a call of this item
+* a call of this item of another mod
+* a call of this kind
+* a call of this task
+* a call of this value
 * a class field bound by a pattern
 * a class field of this type
+* a class field outside its class's overrides
 * a class's own fn
+* a closure
+* a closure of this type
+* a colour literal
+* a component of this value
+* a content name
+* a content name made at run time (write `<kind>_named(..)`)
+* a copy of a game struct
+* a copy of this game struct after ?.
+* a field of self outside a hook
+* a field of this game place
+* a field of this service struct
+* a field of this value
+* a field the types file does not give
+* a field whose type does not read
 * a function with a parameter or result of this type
+* a game argument of type {type}
+* a game argument past its signature
+* a game array as a whole
+* a game call whose signature does not cross
+* a game call whose signature does not read
+* a game call with a counted list
+* a game call with another number of arguments than its parameters
+* a game constant of this type
+* a game constant whose value does not read
+* a game enum stored in other than 32 bits
+* a game name in backquotes
+* a game place of type {type}
+* a game record argument of this kind
+* a game result of type {type}
+* a global the types file does not give
+* a global whose type does not read
 * a hook in a class
-* a hook on a function returning ...
-* a hook parameter of type ...
+* a hook on a function returning {type}
+* a hook parameter of type {type}
 * a hook whose signature does not cross
+* a list
+* a list literal of this type
+* a literal of this service struct
+* a literal pattern on {type}
+* a local fn
+* a local of type {type}
+* a map key of an enum with values in JSON
+* a map or set
+* a member
+* a member function called on self outside a hook
+* a member place of this kind
+* a module value of type {type}
 * a module-level pattern
+* a name
+* a number
+* a number of this type
 * a pattern without a value
+* a place of this kind
+* a request whose event's take its value does not size
+* a service function giving two out buffers
+* a service function taking bytes
+* a service function taking or giving {type}
+* a service its header gives no version
+* a set in JSON
+* a stream whose events' fields or takes are not written yet
+* a string
+* a string as {type}
+* a struct function called without its value
 * a struct holding a value of this kind
+* a struct literal
 * a task giving a value of this type
 * a task with a parameter of this type
 * a task's var parameter
+* a text argument without its placeholder's name
+* a text key made at run time
+* a text struct passed this way
+* a text that is no string literal
+* a tuple
+* a tuple pattern on this value
+* a value missing its field
+* a value of type {type}
+* a waited request of this value
 * a whole game array written
 * a whole game object written
+* abs of this type
+* an array of a game enum whose storage does not read
+* an array of this element type
+* an assignment
 * an enum holding a value of this kind
+* an exported C function's parameter of type {type}
 * an exported C function's var parameter
+* an expression
 * an extern C function's var parameter
+* an operator
+* an option of type {type}
 * an option without the mods (or input) service's header
-* an override of a function returning ...
-* an override parameter of type ...
+* an override of a function returning {type}
+* an override parameter of type {type}
 * an override whose signature does not cross
 * an override's result that may be none for a pointer to a number
-* c struct
+* `as`
+* base.f(...) given another object for a reference parameter
+* base.f(...) given another value for a pointer parameter to a number or vector
+* braces of this type
+* `break`
+* bytes as text
+* bytes in JSON
+* `continue`
+* `defer`
+* dot of this type
+* `expect`
 * expect outside a test
+* `fail`
+* `for`
+* for over {type}
+* {from} where {to} goes
+* get() on a handle of this type
+* `go`
 * go from here
 * go to this state
-* hook ... every override of, on ..., whose object or arguments are not those of ...
-* on ...
+* `guard`
+* hook ... every override of, on {on}, whose object or arguments are not those of {target}
+* if as a value
+* if let on {type}
+* if or match giving {type}
+* is_state from here
+* is_state of this
+* json.decode of a map keyed by {type}
+* json.decode of this type
+* json.decode of {type}
+* length of this type
+* lerp of this type
+* let or var
+* `log`
+* low_bits of this type
+* `match`
+* match on {type}
+* `{name}()`
+* `none`
+* none of this type
+* `not`
 * on draw at this point
 * on draw without the draw service's header
-* on layers
+* `on layers`
 * on option without the mods service's header
 * on stage with a name made while running
 * on step without the time service's header
+* `on {event}`
+* {op} on {left} and {right}
+* `proceed()`
+* proceed() outside a wrap
+* ref of this value
+* `ref(...)`
+* `result`
+* result of a function with none
+* `return`
 * return with a value here
+* same() of these values
+* `self`
+* self as a place
+* self here
+* `skip`
 * skip with a value that may be none for a pointer to a number
+* `start`
+* start of another mod's task (call it: `wait f(args)` waits on its pending)
+* start of this kind
 * states for a class whose base has no control() to run them from
+* `stop`
+* this case
+* this conversion
+* this field of a service struct
+* this function as a value
+* this game place as a whole
+* this literal
+* this member
+* this member after ?.
+* this name as a value
+* this number
+* this number in JSON
+* this pattern
 * this pattern in for
+* this place
+* this shorthand field
+* this struct function
+* this struct function of another mod
+* this tuple
+* this tuple index
+* this value in JSON
+* {type} as text
+* `{type}.{name}()`
+* {type}.{name}() given a function value (a closure written in the call is compiled)
+* `wait`
+* wait here
+* wait on a pending of this type
+* wait on a pending result
+* `while`
 
 ## Further reading
 

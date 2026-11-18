@@ -95,3 +95,15 @@ M12 platforms for mods; M14 the six reference mods; M11 documentation, from the 
   a device loss; the quick gate's engine/device-lost failure).
 - Files of others touched, comments only: native/include/luma.h, luma_anim.h (Agent 2); tools/gate/gate.py one
   check (Agent 1); board 00:20 and 00:34.
+
+## 2026-11-18 M7 second sweep, M13 reading begun (LumaLink ccd66a0)
+
+- Quick gate of the merge with main 87b6d3db5 (20261118-003953-2cb19a8c8): 23 of 24 pass; docs failed on
+  nerves-n-z.md, as main's P-079 added a nerve (SaveErrorSequenceNewer) after M11's pages were made: made again.
+- Fixed with tests: N-4023 (vec2 to vec4, quat, mat34, color, `c struct` and ref<C> cross to C by value;
+  lum/lm_exports.h), N-4022 (S0800 names its construct in the reader's language: 229 phrase rows in 14 languages),
+  N-4026 (new, M13: a run of blank lines lexed in linear time). N-2015 closed: the generated draw-view page has 1.1.
+- Handed to Agent 2 (Planner 01:15): M-114, M-123 and M-132, which wait only on N-4002, N-4004 and N-4003; each
+  row's note names its test.
+- N-4005 owed to the owner's later Mac and iPhone test, as P-035.
+- M13 reading so far: the lexer whole; the parser begun.

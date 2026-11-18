@@ -1,7 +1,7 @@
 """docs/modding/reference/lumascript/build-codes.md: every code LumaLink's compiler gives when it builds a mod, made from
 the compiler: its list of codes and notes (crates/lumascript/src/diag.rs, code::ALL and code::NOTES), each code's message
 (LumaLink's text table, crates/lumalink-core/text/LumaLinkText.tsv, its US English row LumaLink.Script.S<code>), and
-the things S0800 names (each place the emitter says it, crates/lumascript/src/emit*).
+the things S0800 names (the same table's rows LumaLink.Script.NotYet.*, by which the emitter names them).
 
     python -X utf8 -I tools/modding/build_codes.py <LumaLink tree> [--page <file>] [--check]
 
@@ -65,17 +65,17 @@ def messages(tsv):
     return out
 
 
-def not_yet(tree):
-    """What S0800 names: each literal the emitter says (a format's values shown as ...), sorted."""
-    found = set()
-    for f in sorted((tree / "crates" / "lumascript" / "src").rglob("emit*.rs")) + \
-            sorted((tree / "crates" / "lumascript" / "src" / "emit").rglob("*.rs")):
-        text = f.read_text(encoding="utf-8")
-        for m in re.finditer(r"\.say\(\s*[\w.]+\s*,\s*[^,]+,\s*(&?format!\()?\"((?:[^\"\\]|\\.)*)\"", text):
-            words = re.sub(r"\{[^}]*\}", "...", m.group(2)).replace('\\"', '"')
-            if words != "this construct":
-                found.add(words)
-    return sorted(found, key=str.lower)
+def not_yet(tsv):
+    """What S0800 names, each a list item: the US English of each phrase row LumaLink.Script.NotYet.<id> (the
+    emitter names its construct by one; a word in braces is filled in), sorted. A row the same in every language is
+    code, shown as code; a leading [ or - is escaped, so the item is not a check box or a list of its own."""
+    found = {}
+    for line in tsv.split("\n"):
+        cells = line.rstrip("\r").split("\t")
+        if cells[0].startswith("LumaLink.Script.NotYet.") and len(cells) > 1 and cells[1] != "this construct":
+            code = len({c for c in cells[1:] if c}) == 1
+            found[cells[1]] = "`%s`" % cells[1] if code else re.sub(r"^([\[-])", r"\\\1", cells[1])
+    return [found[w] for w in sorted(found, key=lambda w: (w.lower().lstrip("{"), w))]
 
 
 def cell(t):
@@ -97,7 +97,7 @@ def made(tree):
         lines.append("| S%04d | %s | %s |" % (number, "note" if number in notes else "error", cell(text)))
     lines += ["", "## What S0800 names", "",
               "S0800 is a construct that LumaScript has and LumaLink cannot build yet. These are the constructs it names:", ""]
-    lines += ["* %s" % w for w in not_yet(tree)]
+    lines += ["* %s" % cell(w) for w in not_yet(tsv)]
     lines.append(TAIL)
     return "\n".join(lines), problems
 

@@ -1381,6 +1381,7 @@ src/Game/System/SaveErrorSequence.cpp
 | `SaveErrorSequenceError` | `SaveErrorSequence::exeError` |  |
 | `SaveErrorSequenceDamagedConfirm` | `SaveErrorSequence::exeDamagedConfirm` |  |
 | `SaveErrorSequenceNoSaveConfirm` | `SaveErrorSequence::exeNoSaveConfirm` |  |
+| `SaveErrorSequenceNewer` | `SaveErrorSequence::exeNewer` |  |
 
 ## ScaleController
 

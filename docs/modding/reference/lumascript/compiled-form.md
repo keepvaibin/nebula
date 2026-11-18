@@ -145,15 +145,15 @@ script names are `LUMA_ARG(call, n, T)` (n from 1; `call->args[0]` is `this`, `s
 |---|---|---|
 | `bool` | `uint8_t` | the game's `bool` (1 byte on every target of 1.1.1) |
 | integers, `f32`, `f64` | `int8_t` ... `uint64_t`, `float`, `double` | the same |
-| `vec2 vec3 vec4 quat` | `struct { float x, y(, z(, w)); }` | `TVec3f` / `Vec3f` by value or `const &`: the address of a copy; a `Vec3f *` result: copied when the call returns |
-| `mat34` | `float[3][4]` | `MtxPtr`, `const TPos3f &` |
-| `color` | `struct { float r, g, b, a; }` | not a game type; converted by the service that takes it |
+| `vec2 vec3 vec4 quat` | `lm_vec2` ... `lm_quat`: `struct { float x, y(, z(, w)); }` | `TVec3f` / `Vec3f` by value or `const &`: the address of a copy; a `Vec3f *` result: copied when the call returns |
+| `mat34` | `lm_mat34`: `struct { float m[3][4]; }` | `MtxPtr`, `const TPos3f &` |
+| `color` | `lm_color`: `struct { float r, g, b, a; }` | not a game type; converted by the service that takes it |
 | `text` | `lumart_text` (pointer to a counted, NUL-ended UTF-8 buffer) | `const char *`: the buffer's bytes for the call; a `const char *` result: copied into a new `text` |
 | `bytes`, containers | `lumart_bytes`, `lumart_list` ... (pointer to counted storage, copy on write) | do not cross to the game |
 | `T?` | `struct { uint8_t some; T value; }`; a view's `none` is a null pointer | a game pointer that may be null |
 | a view of a game class | `void *` | the object's address; fields at `base + lm_off_<n>` |
-| `ref<C>` | `lumart_ref` | never crosses; `get` gives a view |
-| tuples, structs, enums of the mod | C structs and tagged unions in source order | do not cross (`c struct` is not built yet: S0800) |
+| `ref<C>` | `lumart_ref` | never crosses to the game; `get` gives a view; to the mod's own C as it is |
+| tuples, structs, enums of the mod | C structs and tagged unions in source order | do not cross; a `c struct` is the C struct of its name as written, in `lm_exports.h`, and crosses to the mod's own C by value |
 
 A game function is called through its slot: the compiler fills `void* args[1 + n]` with `this` (or null) and the
 address of each argument (a copy for values), calls `lm_fn_<n>->invoke(args, &result)`, and converts the result.
@@ -245,7 +245,8 @@ added with `core->hook` (1.1's `unhook`), releases every value (the kernel then 
 
 The mod's C and C++ sources are compiled with the same flags (C++: `-std=c++20 -fno-exceptions -fno-rtti`, no
 standard library), linked into the same library. They see `luma.h`, `lumart.h` (text and bytes as `(const char*,
-uint64_t)`, `lumart_ref_get`, `lumart_alloc`) and the header the compiler writes for every `export c fn`. A fault in
+uint64_t)`, the value types, `lumart_ref_get`, `lumart_alloc`) and `lm_exports.h`, the header the compiler writes: every
+`c struct`, a getter `lm_ref_get_<C>` for each handle type that crosses, and every `export c fn`. A fault in
 that C is the guard's, not a script error.
 
 ## Run-time error codes
