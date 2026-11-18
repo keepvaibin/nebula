@@ -8,6 +8,7 @@
 #include "Game/MapObj/SpiderThreadMainPoint.hpp"
 #include "Game/MapObj/SpiderThreadPart.hpp"
 #include "Game/MapObj/SpiderThreadRadialLine.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/MapObj/SpiderThreadWindCtrl.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -53,7 +54,7 @@ inline SpiderThreadPart* connectPoints(SpiderThreadPoint* pPointA, SpiderThreadP
 }
 
 SpiderThread::SpiderThread(const char* pName)
-    : LiveActor(pName), mMainPoint(nullptr), mHangInfos(nullptr), mNumHangInfos(0), mShootHangInfo(nullptr), mNumRadialLines(8),
+    : LiveActor(pName), mMainPoint(nullptr), mHangInfos(nullptr), mNumHangInfos(0), mHangInfoRoom(0), mShootHangInfo(nullptr), mNumRadialLines(8),
       mRadialLines(nullptr), mAnchorPoints(nullptr), mRadialPartsBufferSize(0), mNumRadialParts(0), mRadialParts(nullptr), mNumCircleParts(0),
       mCircleParts(nullptr), mCutPointsBufferSize(0), mNumCutPoints(0), mCutPoints(nullptr), mFront(0.0f, 0.0f, 1.0f), mWindCtrl(nullptr),
       mIsBloomOn(false), mThreadTexture(nullptr), mIndirectTexture(nullptr) {
@@ -91,6 +92,7 @@ void SpiderThread::initThread(const Vec3f& rPos) {
     for (s32 idx = 0; idx < ::sHangActorNumMax; idx++) {
         mHangInfos[idx] = new SpiderThreadHangInfo();
     }
+    mHangInfoRoom = ::sHangActorNumMax;
 
     MR::registerDemoSimpleCastAll(this);
     makeActorDead();
@@ -157,6 +159,15 @@ void SpiderThread::startActorBind(LiveActor* pActor, const Vec3f** pPointPos, co
     s32 pointNum = 0;
     findNearestPointPos(pPointPos, pNeutralPos, &nearestIndex, &pointNum, rPos);
 
+    // Every actor placed on the web gets a hang info: past the ones made, more are made (N-3007). The decompiled code wrote
+    // a 65th past the end of the 64.
+    if (mNumHangInfos == mHangInfoRoom) {
+        mHangInfos = MR::growArray(mHangInfos, mHangInfoRoom);
+        for (s32 idx = mHangInfoRoom; idx < mHangInfoRoom * 2; idx++) {
+            mHangInfos[idx] = new (NebulaArena::findFromRoot(mHangInfos), 0) SpiderThreadHangInfo();
+        }
+        mHangInfoRoom *= 2;
+    }
     SpiderThreadHangInfo* hangInfo = getActorHangInfo(mNumHangInfos);
     hangInfo->startBind(pActor, &pActor->mPosition, mCircleParts[nearestIndex], pointNum, rVel, priority);
     *pUp = &hangInfo->mThreadPart->mUp;

@@ -59,6 +59,7 @@ public:
     SpiderThreadMainPoint* mMainPoint;
     SpiderThreadHangInfo** mHangInfos;
     s32 mNumHangInfos;
+    s32 mHangInfoRoom;  // the hang infos made; more are made as more actors bind (N-3007)
     SpiderThreadHangInfo* mShootHangInfo;
     s32 mNumRadialLines;
     SpiderThreadRadialLine** mRadialLines;
