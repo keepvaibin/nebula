@@ -127,7 +127,7 @@ Not part of a frame: controllers (`controller_hid.cpp`, `wiimote_hid.cpp`, `swit
 (`luma_net.cpp`, `luma_fs.cpp`, `luma_mods.cpp`, `luma_assets.cpp`, `luma_capture.cpp`, `luma_input.cpp`), the settings
 screen's workers (`ui/native_settings.cpp`), updates (`update/update.cpp`), vendor downloads, Discord.
 
-### 1.8 The walk (`runtime/src/render/core/draw_walker.cpp`)
+### 1.7 The walk (`runtime/src/render/core/draw_walker.cpp`)
 
 The render thread turns one list into GPU work in `walk_list` (:1464): `prepare_walk` (:194), then each pass in list
 order (`walk_pass` :1523), then `walk_show` (:1787). What it does on the CPU, each walk, for each picture (an in-between
@@ -159,7 +159,27 @@ picture walks the same list again at its own t):
 So the CPU work of a picture grows with the blocks, joints and vertices of the scene, and an in-between picture repeats
 it: the records hold eye-space work for one camera, not geometry the GPU places itself.
 
-### 1.7 What breaks the frame's rules today, or keeps the console's shape
+### 1.8 After the scene: post-process, upscalers, frame generation
+
+Read for the rules (whole-GPU waits, compiles, file reads on the render thread): `post_process.cpp`,
+`vk/post_process_vk.cpp`, `mtl/post_process_mtl.mm`, `temporal_upscaler.cpp`, `vk/temporal_upscaler_vk.cpp`,
+`xess_upscaler.cpp`, `mtl/metalfx_mtl.mm`, `mtl/sgsr2_mtl.mm`, `fsr_frame_generation.cpp`,
+`fsr_frame_generation_core.inl`, `vk/fsr_frame_generation_vk.cpp`.
+
+- Direct3D 12: the post-process programs are made at the renderer's start (`renderer_d3d12.cpp:2713`), where a
+  self-test of the anti-aliasing waits for the GPU once (`post_process.cpp:296`, :794); allowed, it is before any frame.
+  The temporal upscaler's preparation and record drain the whole GPU (1.4; P-028, written).
+- Vulkan: the bloom's pipelines are built in `begin_frame` the first time it runs (`vk/renderer_vk.cpp:1998`,
+  `vk/game_bloom_vk.cpp:52`) and the post-process's in `sync_post_process` the first frame that needs them
+  (`vk/renderer_vk.cpp:2871`, `vk/post_process_vk.cpp:441`): compiles inside a frame. A swap chain made again builds
+  the present pipelines again (`vk/post_process_vk.cpp:152-170`, from `create_swapchain`), outside a frame's walk.
+- Metal: the post-process, bloom, ambient occlusion and MetalFX depth copy compile their programs from MSL source when
+  first made (`mtl/post_process_mtl.mm:130`, `mtl/game_bloom_mtl.mm:56`, `mtl/ambient_occlusion_mtl.mm:59`,
+  `mtl/metalfx_mtl.mm:244`), as the game's own pipelines do (`mtl/pipelines_mtl.mm:283`).
+- The upscalers' and frame generation's bodies (XeSS, FSR, the Vulkan temporal upscaler, SGSR 2) wait for no fence and
+  read no file in a frame.
+
+### 1.9 What breaks the frame's rules today, or keeps the console's shape
 
 The rules (part 2): the render thread never compiles, never reads a file and never waits for the whole GPU inside a
 frame; the game thread waits for the render thread only at the points this file names. Each part with its row; a part
@@ -184,6 +204,8 @@ with no row has a new one.
 | A copy before the list writes the frame reads the picture shown last, as the console's frame buffer held it | `draw_walker.cpp:1583` | E4 (the last picture asked for by name) |
 | The scene's camera found at its opaque end, as the game loads its projection after the scene begins | `draw_walker.cpp:1356` | E4 (`GameScene::draw3D` states its passes) |
 | A target's texture table rebuilt each frame; each draw names its textures again | `draw_walker.cpp:878`, :920 | E3 step 2 (each form's texture list) |
+| Vulkan's bloom and post-process pipelines built on the render thread in the first frame that needs them | `vk/renderer_vk.cpp:1998`, :2871 | P-052 (its Vulkan half: open) |
+| Metal's own programs (post-process, bloom, ambient occlusion, MetalFX depth copy) compiled from source at first use | `mtl/*_mtl.mm` (1.9) | P-065 |
 
-The list grows with the files still to read (the post-process files for Vulkan and Metal, the upscaler and
-frame-generation bodies).
+Every file stage 2 item 1 names has been read for this list. The parts marked "to be given" get new rows in the
+ledger with the model's landing.
