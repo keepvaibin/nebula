@@ -911,6 +911,12 @@ void RendererD3D12::trace_rings() const {
     line("matrix", matrix_ring_);
 }
 
+// A GPU drain while a frame records, to make a target again at another size: named, so a run counts them (P-028).
+void RendererD3D12::drain_mid_frame(const char* what) {
+    std::fprintf(stderr, "[gpu-drain] %s made again at frame %llu\n", what, static_cast<unsigned long long>(frame_index_));
+    wait_for_gpu();
+}
+
 void RendererD3D12::wait_for_gpu() {
     if (device_gone_) {
         return;
@@ -4219,7 +4225,7 @@ ID3D12Resource* RendererD3D12::hdr_capture_picture(const DisplayTexture& source,
     if (!hdr_capture_target_ || hdr_capture_target_->GetDesc().Width != host_window::backbuffer_width ||
         hdr_capture_target_->GetDesc().Height != host_window::backbuffer_height) {
         if (hdr_capture_target_) {
-            wait_for_gpu();
+            drain_mid_frame("the HDR capture picture");
         }
         hdr_capture_target_.Reset();
         if (!hdr_capture_rtv_heap_) {
@@ -5413,7 +5419,7 @@ bool RendererD3D12::create_scene_set(
     const UINT w = static_cast<UINT>(std::lround(static_cast<double>(width) * map.sx));
     const UINT h = static_cast<UINT>(std::lround(static_cast<double>(height) * map.sy));
     if (set.color) {
-        wait_for_gpu();
+        drain_mid_frame("a scene target set");
     }
     set.color.Reset();
     set.depth.Reset();
@@ -5677,7 +5683,7 @@ void RendererD3D12::take_fg_hudless_scene() {
     }
     if (!fg_hudless_scene_target_.color || fg_hudless_scene_target_.map != frame_) {
         if (fg_hudless_scene_target_.color) {
-            wait_for_gpu();
+            drain_mid_frame("the HUD-less scene");
         }
         fg_hudless_scene_target_.color.Reset();
         fg_hudless_scene_target_.depth.Reset();
@@ -5705,7 +5711,7 @@ void RendererD3D12::copy_fg_hudless_display(const DisplayTexture& dest) {
     if (!fg_hudless_display_.texture || fg_hudless_display_.texture->GetDesc().Width != desc.Width ||
         fg_hudless_display_.texture->GetDesc().Height != desc.Height) {
         if (fg_hudless_display_.texture) {
-            wait_for_gpu();
+            drain_mid_frame("the HUD-less display picture");
         }
         fg_hudless_display_.texture.Reset();
         D3D12_HEAP_PROPERTIES hp{};
@@ -5751,7 +5757,7 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
     if (!fg_hudless_target_ || fg_hudless_target_->GetDesc().Width != host_window::backbuffer_width ||
         fg_hudless_target_->GetDesc().Height != host_window::backbuffer_height) {
         if (fg_hudless_target_) {
-            wait_for_gpu();
+            drain_mid_frame("the HUD-less target");
         }
         fg_hudless_target_.Reset();
         if (!fg_hudless_target_rtv_heap_) {
@@ -5863,7 +5869,7 @@ bool RendererD3D12::ensure_wide_set(SceneTargetSet& set, ComPtr<ID3D12Descriptor
                       set.msaa.samples == samples;
     if (!same) {
         if (set.color) {
-            wait_for_gpu();
+            drain_mid_frame("a wide scene set");
         }
         set.color.Reset();
         set.msaa.color.Reset();

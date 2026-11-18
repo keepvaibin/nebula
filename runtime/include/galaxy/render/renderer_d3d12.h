@@ -685,6 +685,7 @@ private:
     // The display's rate for pacing; `read_mode`: the mode's rate read again (the display changed).
     void refresh_display_rate(bool read_mode);
     void wait_for_gpu();            // shutdown, resize and finish_pictures only
+    void drain_mid_frame(const char* what);  // wait_for_gpu while a frame records, logged
     // Applies a pending window resize (the extent mailbox in renderer_d3d12.cpp).
     // Called only from begin_frame(), between command-list recordings.
     void apply_pending_resize();
