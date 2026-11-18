@@ -29,6 +29,14 @@ public:
     // that is not a number), when the caller takes every part. `changes` is the zone's count of changes.
     bool gather(const CollisionZone& rZone, u32 changes, const Vec3f& rMin, const Vec3f& rMax, u64* pBits);
 
+    // gather's count of quiet queries and its build when they are enough, without a gather: a pass of queries on the
+    // step threads (gatherBuilt) is counted as one, on the game thread before it.
+    bool ready(const CollisionZone& rZone, u32 changes);
+
+    // gather for a query on a step thread: only from an index made for the zone as it is, and nothing written; false
+    // when there is none (the caller takes every part).
+    bool gatherBuilt(const CollisionZone& rZone, u32 changes, const Vec3f& rMin, const Vec3f& rMax, u64* pBits) const;
+
 private:
     struct Cell {
         u64 mKey;  // 0: empty
@@ -37,6 +45,7 @@ private:
     };
 
     void build(const CollisionZone& rZone);
+    void collect(const CollisionZone& rZone, const Vec3f& rMin, const Vec3f& rMax, u64* pBits) const;
     Cell* find(u64 key) const;
     Cell* findOrAdd(u64 key);
 
@@ -63,6 +72,10 @@ private:
 class CollisionPartWalk {
 public:
     CollisionPartWalk(CollisionZone* pZone, const Vec3f& rMin, const Vec3f& rMax);
+    // A walk for a query on a step thread: the index only as it was made (CollisionPartIndex::gatherBuilt), and no
+    // memory taken (a zone past the room of mBits is walked whole).
+    struct OnStepThread {};
+    CollisionPartWalk(const CollisionZone* pZone, const Vec3f& rMin, const Vec3f& rMax, OnStepThread);
     CollisionPartWalk(const CollisionPartWalk&) = delete;
     CollisionPartWalk& operator=(const CollisionPartWalk&) = delete;
 

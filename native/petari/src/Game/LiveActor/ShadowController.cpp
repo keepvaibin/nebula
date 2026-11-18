@@ -54,26 +54,39 @@ void ShadowControllerHolder::initAfterPlacement() {
 
 #if defined(NEBULA_PLAIN_PATHS)
 namespace {
-    // The requested shadows' first part on the step threads: a range of the request list.
+    // Shadows a step thread takes at a time: a gravity search each, and a line query each whose answer is not kept.
+    const u32 sPrepareGrain = 16;
+
+    // The pass: the requests, and a room of hits for each range of them.
+    struct ShadowPass {
+        ShadowController* const* mRequested;
+        HitInfo* mRooms;
+    };
+
+    // The requested shadows' first part on the step threads: a range of the request list (its first a multiple of the
+    // grain), with the range's room.
     void prepareShadows(void* pContext, u32 first, u32 last) {
-        ShadowController* const* const pRequested = static_cast< ShadowController* const* >(pContext);
+        const ShadowPass* const pPass = static_cast< const ShadowPass* >(pContext);
+        HitInfo* const pRoom = pPass->mRooms + (first / sPrepareGrain) * MR::cLineRoom;
         for (u32 i = first; i < last; i++) {
-            pRequested[i]->prepareUpdate();
+            pPass->mRequested[i]->prepareUpdate(pRoom);
         }
     }
-
-    // Shadows a step thread takes at a time: a gravity search each.
-    const u32 sPrepareGrain = 16;
 }  // namespace
 #endif
 
 void ShadowControllerHolder::updateController() {
     const s32 count = mRequested.size();
 #if defined(NEBULA_PLAIN_PATHS)
-    // Each requested shadow's draw test, direction (its gravity search), line and kept answer on the step threads; then
-    // the projections in request order on this one. A shadow's first part reads nothing another's changes.
+    // Each requested shadow's draw test, direction (its gravity search), line, kept answer and else its line's query on
+    // the step threads; then the projections in request order on this one. A shadow's first part reads nothing another's
+    // changes. The parts' indexes are counted and made first, as the queries on this thread would.
     if (count > 0) {
-        NebulaHost::parallelFor(static_cast< u32 >(count), ::sPrepareGrain, &::prepareShadows, &mRequested[0]);
+        MR::readyLineQueries(0);
+        MR::readyLineQueries(2);
+        const u32 ranges = (static_cast< u32 >(count) + ::sPrepareGrain - 1) / ::sPrepareGrain;
+        const ::ShadowPass pass = {&mRequested[0], mLineRooms.room(ranges * MR::cLineRoom)};
+        NebulaHost::parallelFor(static_cast< u32 >(count), ::sPrepareGrain, &::prepareShadows, const_cast< ::ShadowPass* >(&pass));
     }
     for (s32 i = 0; i < count; i++) {
         mRequested[i]->finishUpdate();
@@ -190,7 +203,7 @@ bool ShadowController::isLineAnswerKept(const Vec3f& rStart, const Vec3f& rLine)
 }
 
 // The projection of the line: the kept answer, or the query's (kept for the next time).
-void ShadowController::projectLine(const Vec3f& rStart, const Vec3f& rLine, bool kept) {
+void ShadowController::projectLine(const Vec3f& rStart, const Vec3f& rLine, bool kept, const MR::LineAnswer* pAsked) {
     Triangle triangle;
     const Vec3f position(rStart);
     const Vec3f& line = rLine;
@@ -217,6 +230,29 @@ void ShadowController::projectLine(const Vec3f& rStart, const Vec3f& rLine, bool
             NEBULA_PANIC("shadow line reuse differs from the query: %s, hit %d kept %d", mName, checkHit, mLineHit);
         }
 #endif
+    } else if (pAsked != nullptr) {
+        // The query made on a step thread (P-146): its answer, as the query here would give it.
+        mIsProjected = pAsked->mHit;
+        if (mIsProjected) {
+            mProjectionPos = pAsked->mPos;
+            mProjectedSensor = pAsked->mSensor;
+            mProjectionNormal.set(pAsked->mNormal);
+        } else {
+            mProjectedSensor = nullptr;
+        }
+#if defined(NEBULA_SHADOW_LINE_VERIFY)
+        // A build that checks the step thread's query: the query made here too, its answer the same to the bit.
+        Vec3f checkPos(mProjectionPos);
+        bool checkFree = false;
+        const bool checkHit = MR::getFirstPolyOnLineOrderFree(&checkPos, &triangle, position, line, mCollisionPartsFilter,
+                                                              mDropType == DropType::Map ? 0 : 2, &checkFree);
+        if (checkHit != pAsked->mHit || checkFree != pAsked->mOrderFree ||
+            (checkHit && (!isSameBits(checkPos, pAsked->mPos) || triangle.getSensor() != pAsked->mSensor ||
+                          !isSameBits(*triangle.getNormal(0), pAsked->mNormal)))) {
+            NEBULA_PANIC("shadow line query on a step thread differs: %s, hit %d asked %d", mName, checkHit, pAsked->mHit);
+        }
+#endif
+        rememberLine(position, line, pAsked->mOrderFree);
     } else {
         bool orderFree = false;
         mIsProjected = MR::getFirstPolyOnLineOrderFree(&mProjectionPos, &triangle, position, line, mCollisionPartsFilter,
@@ -228,16 +264,7 @@ void ShadowController::projectLine(const Vec3f& rStart, const Vec3f& rLine, bool
             mProjectedSensor = nullptr;
         }
 
-        mLineKept = orderFree;
-        mLineHit = mIsProjected;
-        mLineType = mDropType;
-        mLineFilter = mCollisionPartsFilter;
-        mLineChanges = CollisionChanges::count();
-        mLineStart = position;
-        mLine = line;
-        mLinePos = mProjectionPos;
-        mLineNormal = mProjectionNormal;
-        mLineSensor = mProjectedSensor;
+        rememberLine(position, line, orderFree);
     }
 
     if (mCollisionCalc == CollisionCalc::Once) {
@@ -245,12 +272,28 @@ void ShadowController::projectLine(const Vec3f& rStart, const Vec3f& rLine, bool
     }
 }
 
-// On a step thread: whether it draws, its direction, its line, and whether the last answer holds. Reads its actor, the
-// gravities and the collision change log, which nothing changes while the pass runs; writes only its own fields.
-void ShadowController::prepareUpdate() {
+// A query's answer kept for the next time (P-140): the line, the state it was asked in and the projection it gave.
+void ShadowController::rememberLine(const Vec3f& rStart, const Vec3f& rLine, bool orderFree) {
+    mLineKept = orderFree;
+    mLineHit = mIsProjected;
+    mLineType = mDropType;
+    mLineFilter = mCollisionPartsFilter;
+    mLineChanges = CollisionChanges::count();
+    mLineStart = rStart;
+    mLine = rLine;
+    mLinePos = mProjectionPos;
+    mLineNormal = mProjectionNormal;
+    mLineSensor = mProjectedSensor;
+}
+
+// On a step thread: whether it draws, its direction, its line, whether the last answer holds, and else the line's query
+// (P-146). Reads its actor, the gravities, the collision and its change log, which nothing changes while the pass runs;
+// writes only its own fields and the step thread's room.
+void ShadowController::prepareUpdate(HitInfo* pRoom) {
     mPassDraw = isDraw();
     mPassCollide = false;
     mPassKept = false;
+    mPassAsked = false;
     if (!mPassDraw) {
         return;
     }
@@ -259,13 +302,17 @@ void ShadowController::prepareUpdate() {
     if (mPassCollide) {
         lineOf(&mPassStart, &mPassLine);
         mPassKept = isLineAnswerKept(mPassStart, mPassLine);
+        if (!mPassKept) {
+            mPassAsked = MR::askFirstPolyOnLine(&mPassAnswer, pRoom, mPassStart, mPassLine, mCollisionPartsFilter,
+                                                mDropType == DropType::Map ? 0 : 2);
+        }
     }
 }
 
 // On the game thread, in request order: the projection, as update makes it.
 void ShadowController::finishUpdate() {
     if (mPassCollide) {
-        projectLine(mPassStart, mPassLine, mPassKept);
+        projectLine(mPassStart, mPassLine, mPassKept, mPassAsked ? &mPassAnswer : nullptr);
     }
     mIsRequested = false;
 }

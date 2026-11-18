@@ -37,6 +37,22 @@ public:
     bool searchSameHostParts(CollisionParts**, CollisionParts*) const;
     HitInfo* getStrikeInfo(u32);
     CollisionZone* getZone(int);
+#if defined(NEBULA_PLAIN_PATHS)
+    // collectStrikeLine on a step thread (P-146): the hits into pHits, at most `room`, nothing of the keeper written. A
+    // count of `room` may have left hits out: the caller asks again on the game thread.
+    s32 collectStrikeLineOnStepThread(HitInfo* pHits, s32 room, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*,
+                                      const TriangleFilterBase*);
+    // Before a pass of collectStrikeLineOnStepThread, on the game thread: each zone's index counted and made as one
+    // query would (CollisionPartIndex::ready).
+    void readyStepThreadQueries();
+
+private:
+    template < bool kStepThread >
+    s32 strikeLineInto(HitInfo* pHits, s32 maxHits, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*,
+                       const TriangleFilterBase*);
+
+public:
+#endif
 
     HitInfo* mHitInfoArray;
     s32 mHitInfoRoom;

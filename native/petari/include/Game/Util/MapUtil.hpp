@@ -33,6 +33,23 @@ namespace MR {
     // getFirstPolyOnLineToMap (category 0) or getFirstPolyOnLineToWaterSurface (category 2) with no triangle filter,
     // and whether the parts in any order give the same answer: no other hit is as near as the one found (P-140).
     bool getFirstPolyOnLineOrderFree(Vec3f*, Triangle*, const Vec3f&, const Vec3f&, const CollisionPartsFilterBase*, s32, bool*);
+
+    // getFirstPolyOnLineOrderFree's answer, asked on a step thread (P-146): whether it hit, where, the hit triangle's
+    // sensor and face normal, and whether the parts in any order give the same answer.
+    struct LineAnswer {
+        Vec3f mPos;
+        Vec3f mNormal;
+        HitSensor* mSensor;
+        bool mHit;
+        bool mOrderFree;
+    };
+    // getFirstPolyOnLineOrderFree on a step thread, its hits in pRoom (cRoom of them, the caller's): false when they
+    // did not fit, when the caller asks on the game thread. Reads the collision only; writes the answer and the room.
+    static const u32 cLineRoom = 32;
+    bool askFirstPolyOnLine(LineAnswer* pAnswer, HitInfo* pRoom, const Vec3f& rStart, const Vec3f& rDirection,
+                            const CollisionPartsFilterBase* pPartsFilter, s32 category);
+    // Before a pass of askFirstPolyOnLine, on the game thread (CollisionCategorizedKeeper::readyStepThreadQueries).
+    void readyLineQueries(s32 category);
 #endif
     bool getFirstPolyNormalOnLineToMap(LUMA_OUT Vec3f*, const Vec3f&, const Vec3f&, LUMA_OUT Vec3f*, const HitSensor*);
     u32 getNearPolyOnLineSort(const Vec3f&, const Vec3f&, const Vec3f&, const HitSensor*);

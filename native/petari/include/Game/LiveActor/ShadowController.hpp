@@ -3,9 +3,13 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/Array.hpp"
+#if defined(NEBULA_PLAIN_PATHS)
+#include "Game/Util/MapUtil.hpp"
+#endif
 #include <nebula_geometry.hpp>
 
 class CollisionPartsFilterBase;
+class HitInfo;
 class HitSensor;
 class LiveActor;
 class ShadowController;
@@ -38,6 +42,10 @@ public:
 
     MR::Vector< MR::AssignableArray< ShadowController* > > mControllers;
     MR::Vector< MR::AssignableArray< ShadowController* > > mRequested;  // this frame's, each once
+#if defined(NEBULA_PLAIN_PATHS)
+    // The step pass's rooms of hits for its line queries, MR::cLineRoom a range of requests (P-146).
+    MR::GrowBuffer< HitInfo > mLineRooms = {};
+#endif
 };
 
 // Where an actor's shadow falls: a drop point and direction, and the projection a line along them finds.
@@ -109,11 +117,14 @@ public:
 #if defined(NEBULA_PLAIN_PATHS)
     // A step's update in two parts (P-040): prepareUpdate for every requested shadow on the step threads, then
     // finishUpdate on the game thread in request order.
-    void prepareUpdate();
+    // pRoom: MR::cLineRoom hits for the line query, the range's own.
+    void prepareUpdate(HitInfo* pRoom);
     void finishUpdate();
     void lineOf(Vec3f* pStart, Vec3f* pLine) const;
     bool isLineAnswerKept(const Vec3f& rStart, const Vec3f& rLine) const;
-    void projectLine(const Vec3f& rStart, const Vec3f& rLine, bool kept);
+    // pAsked: the line query's answer made on a step thread, or null (asked here).
+    void projectLine(const Vec3f& rStart, const Vec3f& rLine, bool kept, const MR::LineAnswer* pAsked = nullptr);
+    void rememberLine(const Vec3f& rStart, const Vec3f& rLine, bool orderFree);
 #endif
 
     LiveActor* mActor;
@@ -164,6 +175,9 @@ public:
     bool mPassKept;
     Vec3f mPassStart;
     Vec3f mPassLine;
+    // The line query's answer from the step thread (mPassAsked: made; not when its hits did not fit its room).
+    bool mPassAsked;
+    MR::LineAnswer mPassAnswer;
 #endif
 };
 

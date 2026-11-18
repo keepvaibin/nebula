@@ -327,6 +327,123 @@ s32 CollisionCategorizedKeeper::collectStrikeBallWithThickness(const Vec3f& rPos
     return hitCount;
 }
 
+#if defined(NEBULA_PLAIN_PATHS)
+s32 CollisionCategorizedKeeper::collectStrikeLine(const Vec3f& rStart, const Vec3f& rDirection, s32 maxHits,
+                                                const CollisionPartsFilterBase* pPartsFilter, const TriangleFilterBase* pTriangleFilter) {
+    if (maxHits == 0 || maxHits > mHitInfoRoom) {
+        maxHits = mHitInfoRoom;
+    }
+
+    mNumHits = 0;
+    mNumHits = strikeLineInto< false >(mHitInfoArray, maxHits, rStart, rDirection, pPartsFilter, pTriangleFilter);
+    return mNumHits;
+}
+
+s32 CollisionCategorizedKeeper::collectStrikeLineOnStepThread(HitInfo* pHits, s32 room, const Vec3f& rStart, const Vec3f& rDirection,
+                                                            const CollisionPartsFilterBase* pPartsFilter,
+                                                            const TriangleFilterBase* pTriangleFilter) {
+    return strikeLineInto< true >(pHits, room, rStart, rDirection, pPartsFilter, pTriangleFilter);
+}
+
+void CollisionCategorizedKeeper::readyStepThreadQueries() {
+    for (CollisionZone** pZone = mZones.begin(); pZone != mZones.end(); pZone++) {
+        (*pZone)->mIndex.ready(**pZone, (*pZone)->mChanges);
+    }
+}
+
+// The line query's walk of the zones and their parts, into pHits (at most maxHits): the keeper's own list, or on a
+// step thread a room its caller owns, the parts' index only as it was made and each part's check with its own lists.
+template < bool kStepThread >
+s32 CollisionCategorizedKeeper::strikeLineInto(HitInfo* pHits, s32 maxHits, const Vec3f& rStart, const Vec3f& rDirection,
+                                               const CollisionPartsFilterBase* pPartsFilter, const TriangleFilterBase* pTriangleFilter) {
+    s32 hitCount = 0;
+    Vec3f min(rStart);
+    Vec3f max(rStart);
+
+    if (rDirection.x < 0.0f) {
+        min.x += rDirection.x;
+    } else {
+        max.x += rDirection.x;
+    }
+
+    if (rDirection.y < 0.0f) {
+        min.y += rDirection.y;
+    } else {
+        max.y += rDirection.y;
+    }
+
+    if (rDirection.z < 0.0f) {
+        min.z += rDirection.z;
+    } else {
+        max.z += rDirection.z;
+    }
+
+    for (CollisionZone** pZone = mZones.begin(); pZone != mZones.end(); pZone++) {
+        if (pZone != mZones.begin()) {
+            Vec3f position((*pZone)->mCenter);
+            f32 radius = (*pZone)->mRadius;
+
+            if (!isSphereOverlappingWithBox(min, max, position, radius)) {
+                continue;
+            }
+
+            if (!MR::checkHitSegmentSphere(position, rStart, rStart + rDirection, radius, nullptr)) {
+                continue;
+            }
+        }
+
+        // The zone's parts the walk gives, in list order; true once the room is full.
+        auto takeParts = [&](CollisionPartWalk& rWalk) {
+            for (int i; (i = rWalk.next()) >= 0;) {
+                CollisionParts* const pParts = (*pZone)->mParts[i];
+
+                if (!pParts->mIsValid) {
+                    continue;
+                }
+
+                if (pPartsFilter != nullptr && pPartsFilter->isInvalidParts(pParts)) {
+                    continue;
+                }
+
+                Vec3f position(pParts->getTrans());
+                f32 radius = pParts->mBoundingRadius;
+
+                if (!isSphereOverlappingWithBox(min, max, position, radius)) {
+                    continue;
+                }
+
+                if (!MR::checkHitSegmentSphere(position, rStart, rStart + rDirection, radius, nullptr)) {
+                    continue;
+                }
+
+                if constexpr (kStepThread) {
+                    hitCount += pParts->checkStrikeLineOnStepThread(&pHits[hitCount], maxHits - hitCount, rStart, rDirection, pTriangleFilter);
+                } else {
+                    hitCount += pParts->checkStrikeLine(&pHits[hitCount], maxHits - hitCount, rStart, rDirection, pTriangleFilter);
+                }
+
+                if (maxHits <= hitCount) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if constexpr (kStepThread) {
+            CollisionPartWalk walk(*pZone, min, max, CollisionPartWalk::OnStepThread());
+            if (takeParts(walk)) {
+                return hitCount;
+            }
+        } else {
+            CollisionPartWalk walk(*pZone, min, max);
+            if (takeParts(walk)) {
+                return hitCount;
+            }
+        }
+    }
+
+    return hitCount;
+}
+#else
 s32 CollisionCategorizedKeeper::collectStrikeLine(const Vec3f& rStart, const Vec3f& rDirection, s32 maxHits,
                                                 const CollisionPartsFilterBase* pPartsFilter, const TriangleFilterBase* pTriangleFilter) {
     if (maxHits == 0 || maxHits > mHitInfoRoom) {
@@ -372,14 +489,9 @@ s32 CollisionCategorizedKeeper::collectStrikeLine(const Vec3f& rStart, const Vec
 
         CollisionParts* pParts;
 
-#if defined(NEBULA_PLAIN_PATHS)
-        CollisionPartWalk walk(*pZone, min, max);
-        for (int i; (i = walk.next()) >= 0;) {
-#else
         s32 count = (*pZone)->mParts.size();
 
         for (int i = 0; i < count; i++) {
-#endif
             pParts = (*pZone)->mParts[i];
 
             if (!pParts->mIsValid) {
@@ -413,6 +525,7 @@ s32 CollisionCategorizedKeeper::collectStrikeLine(const Vec3f& rStart, const Vec
     mNumHits = hitCount;
     return hitCount;
 }
+#endif
 
 u32 CollisionCategorizedKeeper::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles, const Vec3f& rStart, const Vec3f& rEnd) {
     u32 triangleCount = 0;

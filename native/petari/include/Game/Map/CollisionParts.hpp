@@ -46,6 +46,12 @@ public:
     void calcCollidePosition(Vec3f*, const KC_PrismData&, u8);
     void projectToPlane(Vec3f*, const Vec3f&, const Vec3f&, const Vec3f&);
     u32 checkStrikeLine(HitInfo*, u32, const Vec3f&, const Vec3f&, const TriangleFilterBase*);
+#if defined(NEBULA_PLAIN_PATHS)
+    // checkStrikeLine for a query on a step thread: at most cStepThreadHits hits, its working lists its own, nothing of
+    // the parts written.
+    static const u32 cStepThreadHits = 64;
+    u32 checkStrikeLineOnStepThread(HitInfo*, u32, const Vec3f&, const Vec3f&, const TriangleFilterBase*);
+#endif
     u32 createAreaPolygonList(Triangle*, u32, const Vec3f&, const Vec3f&);
     u32 createAreaPolygonListArray(Triangle*, u32, Vec3f*, u32);
     void calcForceMovePower(Vec3f*, const Vec3f&) const;

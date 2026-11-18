@@ -176,6 +176,30 @@ bool CollisionPartIndex::gather(const CollisionZone& rZone, u32 changes, const V
     if (!isNumber(rMin.x) || !isNumber(rMin.y) || !isNumber(rMin.z) || !isNumber(rMax.x) || !isNumber(rMax.y) || !isNumber(rMax.z)) {
         return false;
     }
+    if (!ready(rZone, changes)) {
+        return false;
+    }
+    collect(rZone, rMin, rMax, pBits);
+    return true;
+}
+
+bool CollisionPartIndex::gatherBuilt(const CollisionZone& rZone, u32 changes, const Vec3f& rMin, const Vec3f& rMax, u64* pBits) const {
+    const s32 count = rZone.mParts.size();
+    if (count < cFewParts || !mBuilt || mBuiltChanges != changes || mBuiltCount != count) {
+        return false;
+    }
+    if (!isNumber(rMin.x) || !isNumber(rMin.y) || !isNumber(rMin.z) || !isNumber(rMax.x) || !isNumber(rMax.y) || !isNumber(rMax.z)) {
+        return false;
+    }
+    collect(rZone, rMin, rMax, pBits);
+    return true;
+}
+
+bool CollisionPartIndex::ready(const CollisionZone& rZone, u32 changes) {
+    const s32 count = rZone.mParts.size();
+    if (count < cFewParts) {
+        return false;
+    }
 
     if (mSeenChanges != changes || mSeenCount != count) {
         mSeenChanges = changes;
@@ -194,7 +218,13 @@ bool CollisionPartIndex::gather(const CollisionZone& rZone, u32 changes, const V
         mBuiltChanges = changes;
         mBuiltCount = count;
     }
+    return true;
+}
 
+void CollisionPartIndex::collect(const CollisionZone& rZone, const Vec3f& rMin, const Vec3f& rMax, u64* pBits) const {
+#if !defined(NEBULA_COLLISION_INDEX_VERIFY)
+    (void)rZone;
+#endif
     for (u32 i = 0; i < mAlwaysCount; i++) {
         const u32 place = static_cast< u32 >(mAlways[i]);
         pBits[place / 64u] |= 1ull << (place % 64u);
@@ -243,6 +273,7 @@ bool CollisionPartIndex::gather(const CollisionZone& rZone, u32 changes, const V
 
 #if defined(NEBULA_COLLISION_INDEX_VERIFY)
     // A build that checks the index: every part whose box meets the query's is among those given.
+    const s32 count = rZone.mParts.size();
     for (s32 i = 0; i < count; i++) {
         CollisionParts* const pParts = rZone.mParts[i];
         const Vec3f place(pParts->getTrans());
@@ -254,7 +285,6 @@ bool CollisionPartIndex::gather(const CollisionZone& rZone, u32 changes, const V
         }
     }
 #endif
-    return true;
 }
 
 CollisionPartWalk::CollisionPartWalk(CollisionZone* pZone, const Vec3f& rMin, const Vec3f& rMax)
@@ -268,6 +298,22 @@ CollisionPartWalk::CollisionPartWalk(CollisionZone* pZone, const Vec3f& rMin, co
         mBits[i] = 0;
     }
     mIndexed = pZone->mIndex.gather(*pZone, pZone->mChanges, rMin, rMax, &mBits[0]);
+    if (mIndexed) {
+        mCurrent = mBits[0];
+    }
+}
+
+CollisionPartWalk::CollisionPartWalk(const CollisionZone* pZone, const Vec3f& rMin, const Vec3f& rMax, OnStepThread)
+    : mCount(pZone->mParts.size()), mAt(0), mWords((static_cast< u32 >(mCount) + 63u) / 64u), mWord(0), mCurrent(0), mIndexed(false),
+      mBits(mWords > 0 && mWords <= ARRAY_SIZEU(mBits.mRoom) ? mWords : 1u) {
+    if (mCount < CollisionPartIndex::cFewParts || mWords > ARRAY_SIZEU(mBits.mRoom)) {
+        return;
+    }
+
+    for (u32 i = 0; i < mWords; i++) {
+        mBits[i] = 0;
+    }
+    mIndexed = pZone->mIndex.gatherBuilt(*pZone, pZone->mChanges, rMin, rMax, &mBits[0]);
     if (mIndexed) {
         mCurrent = mBits[0];
     }

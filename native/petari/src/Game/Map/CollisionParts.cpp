@@ -608,6 +608,57 @@ void CollisionParts::projectToPlane(Vec3f* pProjected, const Vec3f& rPos, const 
     pProjected->set(projected);
 }
 
+#if defined(NEBULA_PLAIN_PATHS)
+namespace {
+    // A part's line check with the working lists given (checkStrikeLine's; checkStrikeLineOnStepThread's own).
+    u32 strikeLine(CollisionParts* pParts, HitInfo* pHitInfo, u32 maxHits, const Vec3f& rPos, const Vec3f& rDirection,
+                   const TriangleFilterBase* pFilter, KC_PrismData** prisms, f32* distances, u8* classifications) {
+        f32 length = rDirection.length();
+        Vec3f localPos;
+        Vec3f localDirection;
+        pParts->mInvBaseMatrix.mult(rPos, localPos);
+        pParts->mInvBaseMatrix.mult(rPos + rDirection, localDirection);
+        localDirection = localDirection - localPos;
+        u32 count = 0;
+        pParts->mServer->checkArrow(localPos, localDirection, distances, classifications, &count, prisms, maxHits);
+        u32 hitCount = 0;
+
+        for (u32 i = 0; i < count; i++) {
+            HitInfo& hit = pHitInfo[hitCount];
+            Vec3f position(localPos + localDirection * distances[i]);
+            pParts->mBaseMatrix.mult(position, position);
+            hit.mParentTriangle.fillData(pParts, pParts->mServer->toIndex(prisms[i]), pParts->mHitSensor);
+
+            if (pFilter != nullptr && pFilter->isInvalidTriangle(&hit.mParentTriangle)) {
+                continue;
+            }
+
+            hit.mDepth = length * distances[i];
+            hit.mHitPos = position;
+            hit.mHitPart = classifications[i];
+            hitCount++;
+        }
+
+        return hitCount;
+    }
+}  // namespace
+
+u32 CollisionParts::checkStrikeLine(HitInfo* pHitInfo, u32 maxHits, const Vec3f& rPos, const Vec3f& rDirection, const TriangleFilterBase* pFilter) {
+    StrikeLists lists(maxHits);
+    return ::strikeLine(this, pHitInfo, maxHits, rPos, rDirection, pFilter, lists.mPrisms, lists.mDistances, lists.mClassifications);
+}
+
+u32 CollisionParts::checkStrikeLineOnStepThread(HitInfo* pHitInfo, u32 maxHits, const Vec3f& rPos, const Vec3f& rDirection,
+                                                const TriangleFilterBase* pFilter) {
+    KC_PrismData* prisms[cStepThreadHits];
+    f32 distances[cStepThreadHits];
+    u8 classifications[cStepThreadHits];
+    if (maxHits > cStepThreadHits) {
+        maxHits = cStepThreadHits;
+    }
+    return ::strikeLine(this, pHitInfo, maxHits, rPos, rDirection, pFilter, prisms, distances, classifications);
+}
+#else
 u32 CollisionParts::checkStrikeLine(HitInfo* pHitInfo, u32 maxHits, const Vec3f& rPos, const Vec3f& rDirection, const TriangleFilterBase* pFilter) {
     StrikeLists lists(maxHits);
     KC_PrismData** const prisms = lists.mPrisms;
@@ -641,6 +692,7 @@ u32 CollisionParts::checkStrikeLine(HitInfo* pHitInfo, u32 maxHits, const Vec3f&
 
     return hitCount;
 }
+#endif
 
 namespace {
     // Area lists are asked for on the game thread. The list lives in the permanent arena and grows to the largest request.

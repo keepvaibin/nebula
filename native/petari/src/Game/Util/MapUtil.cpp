@@ -32,10 +32,67 @@ namespace {
         return MR::getCollisionDirector()->getCategoryKeeper(category)->mNumHits;
     }
 
+#if !defined(NEBULA_PLAIN_PATHS)
     const HitInfo* getStrikeInfoCategory(s32 category, u32 index) {
         return MR::getCollisionDirector()->getCategoryKeeper(category)->getStrikeInfo(index);
     }
+#endif
 
+#if defined(NEBULA_PLAIN_PATHS)
+    // The nearest of a line query's hits that the filter takes (-1: none), and whether no other is as near (the parts in
+    // any order would give the same one). The first of equally near hits is taken, as the keeper found them.
+    s32 nearestHit(const HitInfo* pHits, u32 count, const TriangleFilterBase* pTriangleFilter, bool* pOrderFree) {
+        f32 minDistance = 1000000.0f;
+        s32 nearest = -1;
+        for (u32 i = 0; i < count; i++) {
+            if (pTriangleFilter && pTriangleFilter->isInvalidTriangle(&pHits[i].mParentTriangle)) {
+                continue;
+            }
+
+            if (minDistance > pHits[i].mDepth) {
+                nearest = i;
+                minDistance = pHits[i].mDepth;
+            }
+        }
+
+        if (nearest != -1 && pOrderFree != nullptr) {
+            *pOrderFree = true;
+            for (u32 i = 0; i < count; i++) {
+                if (static_cast< s32 >(i) != nearest && pHits[i].mDepth == minDistance &&
+                    !(pTriangleFilter && pTriangleFilter->isInvalidTriangle(&pHits[i].mParentTriangle))) {
+                    *pOrderFree = false;
+                }
+            }
+        }
+        return nearest;
+    }
+
+    bool getFirstPolyOnLineCategory(Vec3f* pPos, Triangle* pTriangle, const Vec3f& rStart, const Vec3f& rDirection,
+                                    const TriangleFilterBase* pTriangleFilter, const CollisionPartsFilterBase* pPartsFilter, s32 category,
+                                    bool* pOrderFree = nullptr) {
+        CollisionCategorizedKeeper* const pKeeper = MR::getCollisionDirector()->getCategoryKeeper(category);
+        const u32 count = pKeeper->checkStrikeLine(rStart, rDirection, 0, pPartsFilter, nullptr);
+        if (count == 0) {
+            return false;
+        }
+
+        const s32 nearest = nearestHit(pKeeper->getStrikeInfo(0), count, pTriangleFilter, pOrderFree);
+        if (nearest == -1) {
+            return false;
+        }
+
+        const HitInfo* const pHit = pKeeper->getStrikeInfo(nearest);
+        if (pPos) {
+            *pPos = pHit->mHitPos;
+        }
+
+        if (pTriangle) {
+            *pTriangle = pHit->mParentTriangle;
+        }
+
+        return true;
+    }
+#else
     bool getFirstPolyOnLineCategory(Vec3f* pPos, Triangle* pTriangle, const Vec3f& rStart, const Vec3f& rDirection,
                                     const TriangleFilterBase* pTriangleFilter, const CollisionPartsFilterBase* pPartsFilter, s32 category,
                                     bool* pOrderFree = nullptr) {
@@ -86,6 +143,7 @@ namespace {
 
         return true;
     }
+#endif
 
     bool getFirstPolyOnLineCategoryExceptSensor(Vec3f* pPos, Triangle* pTriangle, const Vec3f& rStart, const Vec3f& rDirection,
                                                 const HitSensor* pSensor, s32 category) {
@@ -238,6 +296,31 @@ namespace MR {
                                      const CollisionPartsFilterBase* pPartsFilter, s32 category, bool* pOrderFree) {
         *pOrderFree = true;
         return ::getFirstPolyOnLineCategory(pPos, pTriangle, rStart, rDirection, nullptr, pPartsFilter, category, pOrderFree);
+    }
+
+    bool askFirstPolyOnLine(LineAnswer* pAnswer, HitInfo* pRoom, const Vec3f& rStart, const Vec3f& rDirection,
+                            const CollisionPartsFilterBase* pPartsFilter, s32 category) {
+        CollisionCategorizedKeeper* const pKeeper = MR::getCollisionDirector()->getCategoryKeeper(category);
+        const s32 count = pKeeper->collectStrikeLineOnStepThread(pRoom, static_cast< s32 >(cLineRoom), rStart, rDirection, pPartsFilter,
+                                                                 nullptr);
+        if (count >= static_cast< s32 >(cLineRoom)) {
+            return false;
+        }
+
+        pAnswer->mOrderFree = true;
+        const s32 nearest = ::nearestHit(pRoom, static_cast< u32 >(count), nullptr, &pAnswer->mOrderFree);
+        pAnswer->mHit = nearest != -1;
+        if (pAnswer->mHit) {
+            const HitInfo& rHit = pRoom[nearest];
+            pAnswer->mPos = rHit.mHitPos;
+            pAnswer->mSensor = rHit.mParentTriangle.getSensor();
+            pAnswer->mNormal = *rHit.mParentTriangle.getNormal(0);
+        }
+        return true;
+    }
+
+    void readyLineQueries(s32 category) {
+        MR::getCollisionDirector()->getCategoryKeeper(category)->readyStepThreadQueries();
     }
 #endif
 
