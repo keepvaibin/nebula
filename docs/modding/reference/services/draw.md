@@ -375,7 +375,7 @@ draw.mesh(model: text, matrix: (f32, f32, f32, f32, f32, f32, f32, f32, f32, f32
 int32_t mesh(const LumaMod* mod, const char* model, const float matrix[12], LumaColor colour);
 ```
 
-A cooked model by name (the mod's "Luma/<id>/<path>", 3.2, or the game's object model name) at `matrix` (3 rows of 4: rotation and scale, then the place in the 4th column), times `colour`, in its own materials. Not found: `LUMA_E_NOT_FOUND` (`Content.MissingModel` in the mod log).
+A cooked model by name (the mod's "Luma/<id>/<path>", 3.2, or the game's object model name) at `matrix` (3 rows of 4: rotation and scale, then the place in the 4th column), times `colour`, in its own materials. Not found: `LUMA_E_NOT_FOUND` (`Content.MissingModel` in the mod log). A scene holds as many models as mods draw; no memory for one more: `LUMA_E_MEMORY`.
 
 ### `billboard`
 

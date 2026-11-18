@@ -1,0 +1,48 @@
+{
+  "harness": 1,
+  "name": "2455-many-meshes",
+  "about": "N-2061: fw-many draws 48 different game models with draw.mesh at world.after every frame: every call LUMA_OK, none past a limit (a scene once held 32 models, all mods together); f90 shows them round Mario",
+  "proves": [
+    "draw.world"
+  ],
+  "mods": [
+    "../mods/fw-many"
+  ],
+  "stage": {
+    "name": "EggStarGalaxy",
+    "scenario": 1
+  },
+  "steps": [
+    {
+      "at": 60,
+      "call": "MR::getRandom",
+      "signature": "s32(s32, s32)",
+      "args": [
+        0,
+        2450
+      ]
+    },
+    {
+      "at": 90,
+      "picture": "f90"
+    },
+    {
+      "at": 100,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "fact": "mod.fw-many.at",
+      "is": 0
+    },
+    {
+      "fact": "mod.fw-many.found",
+      "is": 48
+    },
+    {
+      "fact": "mod.fw-many.limited",
+      "is": 0
+    }
+  ]
+}

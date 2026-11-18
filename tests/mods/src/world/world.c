@@ -22,7 +22,10 @@
    fw-mesh  (5) 2454: its own model (layers/base/assets/metre.gltf, the 1 m cube on a joint 1 m up, cooked to
                  Luma/fw-mesh/metre): k 1 at world.after every frame, draw.mesh "Luma/fw-mesh/metre" 150 to the
                  player's +x at his feet ("mesh"; first frame), "Luma/fw-mesh/FwNone" ("missing": E_NOT_FOUND);
-                 k 2 off ("off"). */
+                 k 2 off ("off").
+   fw-many  (6) 2455 (N-2061): k 1 at world.after every frame, draw.mesh of 48 different game models on a grid 200 apart
+                 round the player ("at"); the first frame's "found" (calls LUMA_OK, 48: a scene holds as many models as mods
+                 draw) and "limited" (LUMA_E_LIMIT, 0); k 2 off ("off"). */
 #include "../loader/lt.h"
 #include <luma_draw.h>
 #include <luma_draw_inst.h>
@@ -130,6 +133,29 @@ static void paint(void* user, const LumaDrawScreen* screen) {
 }
 #endif
 
+#if CASE == 6
+static const char* const many[] = {"AirBubble", "AstroDomeEntranceKitchen", "BallBeamer", "BeeFlowerHover", "BiriBiriBegomanSpikePistonA", "BreakableCage", "CaretakerGarbage", "ClipVolumeBox", "CollapsePlane", "CrystalCageSBreak", "DemoLetter", "DodoryuRabbit", "ElectricBazookaBreak", "FileSelectDataKinopio", "FishD", "FluffLeaf", "GlareLine", "HiddenBlock", "IceLuigi", "IceMountainSeesawSlipC", "ItemBlock", "JumpStand", "Kinoko", "KirairaChain", "KoopaShockWaveBloom", "Larva", "LensFlare", "MarioHair", "Mirror", "NearFire", "OceanRingRuinsMove", "PackunFlower", "PenguinGoodsLeader", "Pole", "PowerStarKeeperC", "QuestionCoin", "RVCon", "SearchLightCone", "SkeletalFishGuardShadow", "SpaceMine", "SpinTico", "StarWand", "SunshineMario", "TalkBalloonIcon", "Tico", "TombSpiderVitalSpot", "TwilightAir", "UFOSandObstacleC"};
+#define MANY ((int)(sizeof(many) / sizeof(many[0])))
+static void paint(void* user, const LumaDrawScreen* screen) {
+    (void)user;
+    (void)screen;
+    const int first = frames++ == 0;
+    const Vec3 p = player_pos();
+    int32_t found = 0, limited = 0;
+    for (int i = 0; i < MANY; i++) {
+        const float x = (float)(i % 7 - 3) * 200.0f, z = (float)(i / 7 - 3) * 200.0f;
+        const float m[12] = {0.5f, 0, 0, p.x + x, 0, 0.5f, 0, p.y, 0, 0, 0.5f, p.z + z};
+        const int32_t r = draw->mesh(lt_mod, many[i], m, RGBA(255, 255, 255, 255));
+        found += r == LUMA_OK;
+        limited += r == LUMA_E_LIMIT;
+    }
+    if (first) {
+        lt_fact("found", found);
+        lt_fact("limited", limited);
+    }
+}
+#endif
+
 #if CASE == 3 || CASE == 4
 static LumaDrawInst gold;
 #endif
@@ -186,7 +212,7 @@ static int32_t trigger(LumaCall* call, void* user) {
         lt_fact("release2", inst->release(lt_mod, gold));
         lt_fact("colour_ended", inst->set_colour(lt_mod, gold, RGBA(255, 0, 0, 255)));
     }
-#elif CASE == 5
+#elif CASE == 5 || CASE == 6
     if (k == 1) lt_fact("at", draw->at(lt_mod, LUMA_DRAW_WORLD_AFTER, paint, 0));
     if (k == 2) lt_fact("off", draw->at(lt_mod, LUMA_DRAW_WORLD_AFTER, 0, 0));
 #endif

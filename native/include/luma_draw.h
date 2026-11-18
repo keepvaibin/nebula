@@ -194,7 +194,8 @@ typedef struct LumaDrawService {
     int32_t (*tri3)(const LumaMod* mod, const LumaDrawVec3 points[3], const LumaColor colours[3]);
     /* 1.0. A cooked model by name (the mod's "Luma/<id>/<path>", 3.2, or the game's object model name) at `matrix`
        (3 rows of 4: rotation and scale, then the place in the 4th column), times `colour`, in its own materials.
-       Not found: LUMA_E_NOT_FOUND (Content.MissingModel in the mod log). */
+       Not found: LUMA_E_NOT_FOUND (Content.MissingModel in the mod log). A scene holds as many models as mods
+       draw; no memory for one more: LUMA_E_MEMORY. */
     int32_t (*mesh)(const LumaMod* mod, const char* model, const float matrix[12], LumaColor colour);
     /* 1.0. `texture` on a w x h quad centred at `pos`, facing the camera, times `colour`. A texture freed: the
        placeholder, LUMA_E_HANDLE, reported. */

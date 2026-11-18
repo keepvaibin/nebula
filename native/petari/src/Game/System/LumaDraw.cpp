@@ -1496,7 +1496,6 @@ namespace luma {
             // A model by name, made once a scene in the scene's arena (its memory goes with the scene) and drawn where a
             // mod asks at a world point: its base the matrix, its joints at rest, its own material copies with the
             // model's colours times the call's, in white light, through the service's own ItemBuffers right there.
-            const u32 kMeshesMost = 32;    // models made a scene, all mods together
             const u32 kMeshName = 248;
             const u32 kMeshColours = 8;    // a material's: material 0 1, ambient 0 1, constant 0 to 3
             const u32 cMissingModelCode = 621;  // content's block (references.md 4)
@@ -1509,8 +1508,37 @@ namespace luma {
                 u32 materials;
                 LumaColor applied;         // the colour its copies hold now
             };
-            MeshModel sMeshes[kMeshesMost];
+            // The scene's models, as many as mods draw (game thread): a table that grows, and an index of it by the
+            // name's hash (open addressing, entry + 1; 0 free) at most half full, made again when it grows or a scene
+            // ends (N-2061). A MeshModel* is used within one call only, so the table may move.
+            MeshModel* sMeshes = nullptr;
             u32 sMeshCount = 0;
+            u32 sMeshRoom = 0;
+            u32* sMeshIndex = nullptr;
+            u32 sMeshIndexSize = 0;  // a power of two, or 0
+
+            void indexMesh(u32 entry) {
+                u32 at = sMeshes[entry].hash & (sMeshIndexSize - 1u);
+                while (sMeshIndex[at] != 0) {
+                    at = (at + 1u) & (sMeshIndexSize - 1u);
+                }
+                sMeshIndex[at] = entry + 1u;
+            }
+
+            // The index made again for sMeshCount entries; false: no memory (the old index stays).
+            bool reindexMeshes(u32 size) {
+                u32* const pIndex = static_cast<u32*>(::calloc(size, sizeof(u32)));
+                if (pIndex == nullptr) {
+                    return false;
+                }
+                ::free(sMeshIndex);
+                sMeshIndex = pIndex;
+                sMeshIndexSize = size;
+                for (u32 i = 0; i < sMeshCount; i++) {
+                    indexMesh(i);
+                }
+                return true;
+            }
             ItemBuffer* sMeshOpa = nullptr;  // made once, in the permanent arena (file-scope pointers: no local statics)
             ItemBuffer* sMeshXlu = nullptr;
 
@@ -1529,18 +1557,32 @@ namespace luma {
             MeshModel* meshOf(const char* pName, bool* pNew) {
                 *pNew = false;
                 const u32 hash = MR::getHashCode(pName) | 1u;
-                for (u32 i = 0; i < sMeshCount; i++) {
-                    if (sMeshes[i].hash == hash && strcmp(sMeshes[i].name, pName) == 0) {
-                        return &sMeshes[i];
+                for (u32 at = hash & (sMeshIndexSize - 1u); sMeshIndexSize != 0 && sMeshIndex[at] != 0; at = (at + 1u) & (sMeshIndexSize - 1u)) {
+                    MeshModel& rFound = sMeshes[sMeshIndex[at] - 1u];
+                    if (rFound.hash == hash && strcmp(rFound.name, pName) == 0) {
+                        return &rFound;
                     }
                 }
                 NebulaArena* const pScene = Arenas::scene();
-                if (sMeshCount == kMeshesMost || pScene == nullptr) {
+                if (pScene == nullptr) {
                     return nullptr;
                 }
-                MeshModel& rMesh = sMeshes[sMeshCount++];
+                if (sMeshCount == sMeshRoom) {
+                    const u32 room = sMeshRoom == 0 ? 32u : sMeshRoom * 2u;
+                    void* const pGrown = ::realloc(sMeshes, room * sizeof(MeshModel));
+                    if (pGrown == nullptr) {
+                        return nullptr;
+                    }
+                    sMeshes = static_cast<MeshModel*>(pGrown);
+                    sMeshRoom = room;
+                }
+                if ((sMeshCount + 1u) * 2u > sMeshIndexSize && !reindexMeshes(sMeshIndexSize == 0 ? 64u : sMeshIndexSize * 2u)) {
+                    return nullptr;
+                }
+                MeshModel& rMesh = sMeshes[sMeshCount];
                 memset(&rMesh, 0, sizeof(rMesh));
                 rMesh.hash = hash;
+                indexMesh(sMeshCount++);
                 memcpy(rMesh.name, pName, strlen(pName) + 1);
                 rMesh.applied = 0xFFFFFFFFu;
                 *pNew = true;
@@ -1661,10 +1703,7 @@ namespace luma {
                 bool made = false;
                 MeshModel* const pMesh = meshOf(pModel, &made);
                 if (pMesh == nullptr) {
-                    char most[16];
-                    nebula_snprintf(most, sizeof(most), "%u", kMeshesMost);
-                    report(pMod, pWhere, 104u, most, nullptr);
-                    return LUMA_E_LIMIT;
+                    return LUMA_E_MEMORY;  // no scene, or no memory for one more model
                 }
                 if (pMesh->model == nullptr) {
                     if (made) {
@@ -1972,6 +2011,12 @@ namespace luma {
                 kept++;
             }
             sMeshCount = kept;
+            if (sMeshIndexSize != 0) {
+                memset(sMeshIndex, 0, sMeshIndexSize * sizeof(u32));
+                for (u32 i = 0; i < sMeshCount; i++) {
+                    indexMesh(i);
+                }
+            }
         }
 
         const LumaMod* inWorld() {
