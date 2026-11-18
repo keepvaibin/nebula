@@ -1360,8 +1360,15 @@ pub fn archive(bytes: &[u8]) -> Result<Vec<u8>> {
         match &command {
             b">_AA" => break,
             b"ws  " => {
-                if wave_banks.insert(word(0)? as u32, word(1)?).is_some() {
-                    bail!("wave bank {} twice", word(0)?);
+                // The cooked archive, and the game after it, keep a place for every number up to the largest
+                // (mWaveBankCount). A number is at most the count of 16-byte `ws  ` commands the archive could hold, so
+                // those places grow with the file: one command naming 0xFFFFFFFE asked for 64 GiB (M-156).
+                let number = word(0)?;
+                if number >= bytes.len() / 16 {
+                    bail!("wave bank number {number}: more than an archive of {} bytes can number (one for each 16 bytes)", bytes.len());
+                }
+                if wave_banks.insert(number as u32, word(1)?).is_some() {
+                    bail!("wave bank {number} twice");
                 }
                 p += 12;
             }

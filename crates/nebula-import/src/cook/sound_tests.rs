@@ -271,3 +271,22 @@ fn a_cooked_archives_sound_names_are_read_in_order() {
     assert!(sound_names(&file[..file.len() - 4]).is_err());
     assert!(sound_names(b"AA_<").is_err());
 }
+
+/// M-156: a wave bank number is at most one for each 16 bytes of the archive. One `ws  ` command naming 0xFFFFFFFE
+/// asked for a table of 4 294 967 295 places (64 GiB) before any wave bank was read.
+#[test]
+fn a_wave_bank_number_grows_with_the_archive() {
+    let archive_of = |number: u32| {
+        let mut f = b"AA_<ws  ".to_vec();
+        for v in [number, 0x40, 0] {
+            f.extend_from_slice(&v.to_be_bytes());
+        }
+        f.extend_from_slice(b">_AA");
+        f
+    };
+    let error = format!("{:#}", archive(&archive_of(0xFFFF_FFFE)).unwrap_err());
+    assert!(error.contains("wave bank number 4294967294"), "{error}");
+    // A number the archive's size allows goes on to the wave bank, which this one does not have.
+    let error = format!("{:#}", archive(&archive_of(0)).unwrap_err());
+    assert!(error.contains("wave bank 0"), "{error}");
+}
