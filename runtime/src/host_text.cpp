@@ -8,6 +8,7 @@
 #include <cstring>
 #include <utility>
 #include <iterator>
+#include <string>
 
 #if defined(_WIN32)
 #ifndef NOMINMAX
@@ -110,12 +111,19 @@ const char* language_of(GameLanguage setting, std::string_view system) noexcept 
 
 std::string system_tag() {
 #if defined(_WIN32)
-    wchar_t name[LOCALE_NAME_MAX_LENGTH]{};
-    if (LCIDToLocaleName(MAKELCID(GetUserDefaultUILanguage(), SORT_DEFAULT), name, LOCALE_NAME_MAX_LENGTH, 0) <= 0) {
+    // The player's first display language by name ("fr-CA"), as Setup reads it (installer/native/text.cpp) and as the
+    // Mac reads its preferred languages.
+    ULONG count = 0;
+    ULONG size = 0;
+    if (!GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, nullptr, &size) || size == 0) {
+        return {};
+    }
+    std::wstring names(size, L'\0');
+    if (!GetUserPreferredUILanguages(MUI_LANGUAGE_NAME, &count, names.data(), &size) || names[0] == L'\0') {
         return {};
     }
     std::string tag;
-    for (const wchar_t* c = name; *c != L'\0'; ++c) tag += static_cast<char>(*c < 0x80 ? *c : '?');
+    for (const wchar_t* c = names.c_str(); *c != L'\0'; ++c) tag += static_cast<char>(*c < 0x80 ? *c : '?');
     return tag;
 #elif defined(__APPLE__)
     std::string tag;
