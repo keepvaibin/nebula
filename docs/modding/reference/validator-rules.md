@@ -5,6 +5,8 @@ intro: Every code the validator reports, with its level and its words, and every
 contentType: reference
 ---
 
+<!-- Written by tools/modding/validator_rules.py from localization/NebulaText.tsv. Do not edit by hand. -->
+
 ## About validator rules
 
 The validator checks a mod in LumaLink (`lumalink check`, `build` and `pack`) and again in the game, when it
@@ -498,6 +500,7 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Lib.InfoTooSmall` | it is shorter than luma.h's LumaModInfo (it was not built with luma.h) |
 | `Lib.InfoUnreadable` | it points outside the library |
 | `Lib.NoIos` | it does not say it is built for iOS devices (no LC_BUILD_VERSION or LC_VERSION_MIN_IPHONEOS) |
+| `Lib.NoMemory` | the game has no memory left to take one more mod with code |
 | `Lib.NoNames` | loaded as a whole |
 | `Lib.NotALibrary` | not a library of any system |
 | `Lib.NotIos` | it is built for {found}, not for iOS devices |
@@ -509,7 +512,6 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Lib.StartRefused` | its start refused to run (it returned {found}) |
 | `Lib.ThirtyTwoBit` | a 32-bit library |
 | `Lib.TooManyImports` | it lists more than 65536 imports |
-| `Lib.NoMemory` | the game has no memory left to take one more mod with code |
 | `Lib.Universal` | a universal Mach-O file holding several machines (give one file per platform) |
 | `Lib.WholeLibrary` | loaded as a whole |
 
@@ -613,6 +615,7 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Anim.NoGame` | {file}: an animation file is made from the game's model, which is not known here (give the game: --game) |
 | `Cook.Anim.NoGameMaterial` | the animation file's material {material} is no material of the game's {model} (its materials: {materials}) |
 | `Cook.Anim.NoGameTexture` | the animation file swaps in the texture {texture}, which is no texture of the game's {model} (its textures: {textures}) |
+| `Cook.Anim.NoModel` | {file}: {archive} has no model, so an animation file there moves the model in the archive of its own name, and {model} has none |
 | `Cook.Anim.NoName` | animation {animation} has no name; its name is the name of the clip it makes |
 | `Cook.Anim.None` | {file} has no animation |
 | `Cook.Anim.NotAJoint` | animation {animation} moves {node}, which is no joint of the game's model {model} |
@@ -626,7 +629,6 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Anim.TooLong` | animation {animation} lasts {seconds} seconds; a clip lasts at most {max} |
 | `Cook.Anim.Twice` | two animations are named {name} |
 | `Cook.Anim.WhichModel` | {archive} has more than one model ({models}) and none has the archive's name: an animation file there cannot tell which it moves |
-| `Cook.Anim.NoModel` | {file}: {archive} has no model, so an animation file there moves the model in the archive of its own name, and {model} has none |
 | `Cook.Camera.NoAnimation` | no animation moves the camera's node or its yfov |
 | `Cook.Camera.NoFov` | camera {camera} has no yfov |
 | `Cook.Camera.None` | no node has a camera: give the camera's node a "camera" |
@@ -719,7 +721,6 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Material.CoordSet` | the material {material}'s {map} reads texture coordinates {set}, which the mesh {mesh} does not have |
 | `Cook.Material.MissingTexture` | the material {material}'s {map} names texture {texture}, which has no image in the file |
 | `Cook.Material.Ray` | the material {material}: {key} is not a ray value a material takes, or not in its range (ior, thickness, body, shine, tint_keep, traced, sun_through, metal_kind, glow, vertex_colour) |
-| `Cook.RayData` | ray tracing data: read and not used by this game (a note: shader.json `ray`, a glTF material's `extras.nebula.ray`, or a `merge/NebulaData/Rt*.tsv` table, each checked as before) |
 | `Cook.Material.TextureTransform` | the material {material}'s {map} has a KHR_texture_transform; it was baked into its texture coordinates |
 | `Cook.Material.TransformShared` | the material {material}'s {map} has its own KHR_texture_transform on texture coordinates {set}, which another of its textures also reads; give it a set of its own |
 | `Cook.Merge.ChangeForm` | each item of "change" must have a "where" and a "set", each a set of columns |
@@ -729,8 +730,6 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Merge.RemoveForm` | each item of "remove" must be a set of columns |
 | `Cook.Merge.RemoveNoRow` | "remove" {row} matched no row; the rest of the file was added |
 | `Cook.Model.Accessor` | accessor {accessor} has {count} elements; a model has up to {max} |
-| `Cook.Model.Numbers` | the model reads {count} numbers from its accessors; a model reads up to {max} |
-| `Cook.Model.Indices` | the model's meshes have {count} indices in all; a model has up to {max} |
 | `Cook.Model.AccessorPast` | accessor {accessor} reaches past its buffer view |
 | `Cook.Model.Billboard` | the node {node}'s billboard is {value}; it can be "y" or "xy" |
 | `Cook.Model.Blends` | the mesh {mesh} needs more blends of joints than a model has room for ({max}) |
@@ -742,6 +741,7 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Model.GameUnknown` | the game's model for {file} was not read: its joints keep the file's numbers, not the game's |
 | `Cook.Model.Hide` | {file}: a model entry holds exactly "hide": true, which hides the game's model it names |
 | `Cook.Model.HideNoGame` | {file}: a hidden model keeps the game model's joints, and that model is not known here (give the game: --game) |
+| `Cook.Model.Indices` | the model's meshes have {count} indices in all; a model has up to {max} |
 | `Cook.Model.Invalid` | the file is not valid glTF 2.0 at {where}: it is missing or not what glTF says it is |
 | `Cook.Model.JointName` | joint "{joint}" has a letter the game's models cannot hold; name it with English letters, digits and signs only |
 | `Cook.Model.JointTwice` | two joints are named "{joint}"; each joint needs a name of its own |
@@ -758,6 +758,7 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Model.NoTriangles` | the model has no triangles |
 | `Cook.Model.NodeMissing` | the file names node {node}, which it does not have |
 | `Cook.Model.NotTriangles` | the mesh {mesh} is drawn as points or lines (mode {mode}); a model is drawn in triangles |
+| `Cook.Model.Numbers` | the model reads {count} numbers from its accessors; a model reads up to {max} |
 | `Cook.Model.SkinNoWeights` | the mesh {mesh} has a skin but no JOINTS_0 and WEIGHTS_0 |
 | `Cook.Model.SkinOutside` | the skin names the node {node}, which is not in the scene |
 | `Cook.Model.SocketIsJoint` | the socket "{name}" has the name of a joint; give it a name of its own |
@@ -773,13 +774,13 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Model.ViewPast` | buffer view {view} reaches past its buffer |
 | `Cook.Model.WeightsOver4` | the mesh {mesh} weighs {vertices} vertices on more than four joints; a vertex follows up to four |
 | `Cook.Movie.AudioTrack` | {uri}: its own sound track ({found}) is not read; give the sound as a WAV, FLAC or Ogg Vorbis file in audio |
-| `Cook.Movie.LooseSystem` | {uri} is {found}: it plays only where the system can decode it; as AV1 in WebM or IVF it plays on every system |
-| `Cook.Movie.LooseNoGame` | {uri}: the game has no movie {name}; nothing plays it |
 | `Cook.Movie.Codec` | {uri} is {found}; give the video as AV1 in WebM or IVF (the game decodes AV1 itself on every system) |
 | `Cook.Movie.Colour` | {uri} has the color {found}; give BT.709 limited range or BT.601 full range |
 | `Cook.Movie.File` | {uri} cannot be read as a WebM or IVF movie: {detail} |
 | `Cook.Movie.FirstKey` | {uri} does not start with a key frame |
 | `Cook.Movie.Form` | {uri} is AV1 {found}; the game decodes AV1 main profile, 8 bits, 4:2:0 |
+| `Cook.Movie.LooseNoGame` | {uri}: the game has no movie {name}; nothing plays it |
+| `Cook.Movie.LooseSystem` | {uri} is {found}: it plays only where the system can decode it; as AV1 in WebM or IVF it plays on every system |
 | `Cook.Movie.Name` | {where}: "{name}" is not a game movie's name (its file name in MovieData without .thp) |
 | `Cook.Movie.NoGameMovie` | {where} names the game movie "{name}", which the game does not have |
 | `Cook.Movie.NotAsset` | {file}: a movie goes in a layer's assets folder (assets/<path>.movie.json) |
@@ -796,6 +797,7 @@ A finding's `{why}`, `{what}` or `{kind}` is one of these phrases, listed by its
 | `Cook.Post.TooLarge` | {file} is {value} bytes; a screen pass has at most {max} |
 | `Cook.Post.TooManyParams` | {file}: the parameters take {count} floats; a screen pass has {max}, in 4 rows of 4, and a parameter never crosses a row |
 | `Cook.Post.Twice` | {file}: the name "{name}" is given twice |
+| `Cook.RayData` | ray tracing data: read and not used by this game |
 | `Cook.Shader.Compile` | {file} line {line} does not compile for {target}: {detail} |
 | `Cook.Shader.CompileProgram` | the material {material} with the shader {file} does not compile for {target} where the shader's code meets the material's: {detail} |
 | `Cook.Shader.Compiler` | the shader compiler {file} did not run: {detail} |
