@@ -360,6 +360,9 @@ std::string NativeGameAudio::stats_line() const {
          << " iir=" << s.iir_renders << " panner=" << s.panner_renders << " effect-subframes=" << s.effect_subframes
          << " stream-frames=" << s.stream_frames << " unresolved=" << s.unresolved_reads
          << " mix-ms=" << s.mix_ns / 1000000u;
+    if (state_->device != nullptr) {
+        line << " fill=" << state_->device->fill_frames() << " underruns=" << state_->device->underruns();
+    }
     return line.str();
 }
 

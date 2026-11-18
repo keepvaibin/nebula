@@ -2,6 +2,7 @@
 // Windows' sound output (audio_device.h): WASAPI shared mode, event driven, on one MMCSS thread that also runs the game's
 // sound (the render callback). The default endpoint is followed; with none, the thread paces itself and retries.
 #include "galaxy/audio_device.h"
+#include "galaxy/audio_fill.h"
 
 #include <algorithm>
 #include <array>
@@ -29,12 +30,8 @@ namespace {
 
 using Microsoft::WRL::ComPtr;
 
-// The buffer when the system offers no low-latency stream.
+// The buffer when the system offers no low-latency stream. How much of it is kept filled: OutputFill (audio_fill.h).
 constexpr REFERENCE_TIME kBufferDuration = 400000;  // 40 ms
-// The fill starts at one engine period, the least there is. A wake or a render that took too long of it raises the fill a
-// period at a time, up to this many; ten quiet seconds lower it a period.
-constexpr std::uint32_t kMostFillPeriods = 4u;
-constexpr LONGLONG kQuietSecondsToLower = 10;
 
 void set_mmcss() {
     using SetFn = HANDLE(WINAPI*)(LPCWSTR, LPDWORD);
@@ -110,6 +107,8 @@ public:
     [[nodiscard]] std::uint32_t rate() const override { return rate_.load(std::memory_order_relaxed); }
 
     [[nodiscard]] std::uint32_t queued_frames() const override { return queued_.load(std::memory_order_relaxed); }
+    [[nodiscard]] std::uint64_t underruns() const override { return fill_.underruns(); }
+    [[nodiscard]] std::uint32_t fill_frames() const override { return fill_.fill(); }
 
     void start(Render render) override {
         {
@@ -250,19 +249,11 @@ private:
         }
         CoTaskMemFree(current);
         period_frames_ = std::max(period_frames, 1u);
-        fill_frames_ = std::min(period_frames_, buffer_frames_);
+        fill_.open(period_frames_, buffer_frames_);
         rate_.store(rate, std::memory_order_relaxed);
         std::cout << "[audio] output " << rate << " Hz, " << speaker_count_ << " channels, buffer " << buffer_frames_
-                  << ", fill " << fill_frames_ << ", period " << period_frames << " frames\n";
+                  << ", fill " << fill_.fill() << ", period " << period_frames << " frames\n";
         return true;
-    }
-
-    void raise_fill() {
-        const std::uint32_t raised = std::min({fill_frames_ + period_frames_, period_frames_ * kMostFillPeriods, buffer_frames_});
-        if (raised != fill_frames_) {
-            fill_frames_ = raised;
-            std::cout << "[audio] fill raised to " << fill_frames_ << " frames\n";
-        }
     }
 
     void close_endpoint() {
@@ -277,14 +268,15 @@ private:
     // Until the endpoint fails or the default changes. True when the device gave up (it is reopened); the fill never blocks on
     // the device: only the render callback's own locks can hold this thread.
     void play() {
-        std::vector<float> first(static_cast<std::size_t>(fill_frames_) * speaker_count_);
-        render_(first.data(), fill_frames_, rate_.load(std::memory_order_relaxed));
+        const std::uint32_t start_frames = fill_.fill();
+        std::vector<float> first(static_cast<std::size_t>(start_frames) * speaker_count_);
+        render_(first.data(), start_frames, rate_.load(std::memory_order_relaxed));
         BYTE* data = nullptr;
-        if (FAILED(renderer_->GetBuffer(fill_frames_, &data))) {
+        if (FAILED(renderer_->GetBuffer(start_frames, &data))) {
             return;
         }
         std::memcpy(data, first.data(), first.size() * sizeof(float));
-        if (FAILED(renderer_->ReleaseBuffer(fill_frames_, 0)) || FAILED(client_->Start())) {
+        if (FAILED(renderer_->ReleaseBuffer(start_frames, 0)) || FAILED(client_->Start())) {
             return;
         }
         const HANDLE waits[2] = {samples_, changed_};
@@ -293,7 +285,6 @@ private:
         const LONGLONG period_ticks = static_cast<LONGLONG>(period_frames_) * frequency.QuadPart / rate_.load(std::memory_order_relaxed);
         LARGE_INTEGER last_wake{};
         QueryPerformanceCounter(&last_wake);
-        LARGE_INTEGER last_trouble = last_wake;
         for (;;) {
             const DWORD woke = WaitForMultipleObjects(2, waits, FALSE, 500);
             if (woke == WAIT_OBJECT_0 + 1u) {
@@ -303,22 +294,15 @@ private:
             if (FAILED(client_->GetCurrentPadding(&padding))) {
                 return;
             }
-            // This machine cannot keep to the fill: a little more of it, not a gap in the sound.
+            // This machine cannot keep to the fill: a little more of it for good, not a gap in the sound again.
             LARGE_INTEGER wake{};
             QueryPerformanceCounter(&wake);
-            if (wake.QuadPart - last_wake.QuadPart > period_ticks * 3 / 2) {
-                raise_fill();
-                last_trouble = wake;
-            } else if (fill_frames_ > period_frames_ && wake.QuadPart - last_trouble.QuadPart > frequency.QuadPart * kQuietSecondsToLower) {
-                fill_frames_ -= period_frames_;
-                last_trouble = wake;
-            }
+            const UINT32 frames = fill_.wake(wake.QuadPart - last_wake.QuadPart, period_ticks, padding);
             last_wake = wake;
-            if (padding >= fill_frames_) {
+            if (frames == 0u) {
                 continue;
             }
             queued_.store(padding, std::memory_order_relaxed);
-            const UINT32 frames = fill_frames_ - padding;
             if (FAILED(renderer_->GetBuffer(frames, &data))) {
                 return;
             }
@@ -335,10 +319,7 @@ private:
             }
             LARGE_INTEGER rendered{};
             QueryPerformanceCounter(&rendered);
-            if (rendered.QuadPart - wake.QuadPart > period_ticks * 3 / 4) {
-                raise_fill();
-                last_trouble = rendered;
-            }
+            fill_.rendered(rendered.QuadPart - wake.QuadPart, period_ticks);
         }
     }
 
@@ -402,7 +383,7 @@ private:
     ComPtr<IAudioClient> client_;
     ComPtr<IAudioRenderClient> renderer_;
     UINT32 buffer_frames_{};
-    std::uint32_t fill_frames_{};
+    OutputFill fill_;
     std::uint32_t period_frames_{1u};
 };
 
