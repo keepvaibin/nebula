@@ -3,7 +3,7 @@
 
 #![allow(non_snake_case)]
 
-use crate::{identify, json_string, DiscFile, Partition};
+use crate::{error_text, identify, json_string, reason_json, refusal_of, DiscFile, Partition};
 use jni_sys::{jboolean, jclass, jint, jlong, jobject, jstring, jvalue, JNIEnv, JNI_FALSE};
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
@@ -78,25 +78,35 @@ pub unsafe extern "system" fn Java_dev_nebula_galaxy_Importer_storeVersion(_: *m
     crate::cook::store::VERSION as jint
 }
 
-/// `{"supported":…,"gameId":…,"title":…,"format":…,"message":…}`; on a failure, supported false and the reason.
+/// `{"supported":…,"gameId":…,"title":…,"format":…,"message":…,"reason":…}`; on a failure, supported false and the
+/// reason. `reason` is the refusal's id (crate::Refusal::id) the app shows in the player's language, null when it has
+/// none.
 #[no_mangle]
 pub unsafe extern "system" fn Java_dev_nebula_galaxy_Importer_identify(env: *mut JNIEnv, _: jclass, fd: jint) -> jstring {
-    let json = match disc_from_fd(fd).and_then(|disc| identify(disc).map_err(|error| format!("{error:#}"))) {
-        Ok(identity) => format!(
-            "{{\"supported\":{},\"gameId\":{},\"title\":{},\"format\":{},\"message\":{}}}",
-            identity.supported,
-            json_string(&identity.game_id),
-            json_string(&identity.title),
-            json_string(&identity.format),
-            json_string(&identity.message)
-        ),
-        Err(message) => format!("{{\"supported\":false,\"message\":{}}}", json_string(&message)),
+    let failed = |message: &str, reason: String| {
+        format!("{{\"supported\":false,\"message\":{},\"reason\":{reason}}}", json_string(message))
+    };
+    let json = match disc_from_fd(fd) {
+        Err(message) => failed(&message, reason_json(None)),
+        Ok(disc) => match identify(disc) {
+            Ok(identity) => format!(
+                "{{\"supported\":{},\"gameId\":{},\"title\":{},\"format\":{},\"message\":{},\"reason\":{}}}",
+                identity.supported,
+                json_string(&identity.game_id),
+                json_string(&identity.title),
+                json_string(&identity.format),
+                json_string(&identity.message),
+                reason_json(identity.reason)
+            ),
+            Err(error) => failed(&format!("{error:#}"), reason_json(refusal_of(&error))),
+        },
     };
     new_string(env, &json)
 }
 
-/// Builds game.pak at `output`; null when it succeeded, else the reason. `progress.update(done, total)` returns false
-/// to cancel.
+/// Builds game.pak at `output`; null when it succeeded, else why: "<id>\t<English>" for a refusal
+/// (crate::Refusal::id, which the app shows in the player's language), else the English alone.
+/// `progress.update(done, total)` returns false to cancel.
 #[no_mangle]
 pub unsafe extern "system" fn Java_dev_nebula_galaxy_Importer_build(
     env: *mut JNIEnv,
@@ -131,7 +141,7 @@ pub unsafe extern "system" fn Java_dev_nebula_galaxy_Importer_build(
     let result = disc_from_fd(fd).and_then(|disc| {
         Partition::from_disc(disc)
             .and_then(|mut partition| partition.write_cooked_pak(&PathBuf::from(output), &mut report))
-            .map_err(|error| format!("{error:#}"))
+            .map_err(|error| error_text(&error))
     });
     match result {
         Ok(_) => std::ptr::null_mut(),

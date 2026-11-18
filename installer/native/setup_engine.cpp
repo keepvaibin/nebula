@@ -431,6 +431,24 @@ void Swap(const wstring& fresh, const wstring& destination, const wstring& aside
     }
 }
 
+// The importer's refusal (crates/nebula-import Refusal::id: its REFUSED line, identify's "reason") in the player's
+// words; empty for an id this Setup does not know, which then shows what the importer said. A stopped import is
+// Setup's own cancel.
+wstring RefusalText(const wstring& id) {
+    if (id == L"folders-only") return Of(L"This version of Nebula sets up the game from an extracted game folder, not from a disc image.");
+    if (id == L"not-a-disc") return Of(L"This file is not a Wii disc image.");
+    if (id == L"missing") return Of(L"The file could not be found.");
+    if (id == L"not-a-folder") return Of(L"This folder is not an extracted Wii game. Choose the folder that holds sys/main.dol.");
+    if (id == L"damaged") return Of(L"This disc image is damaged or incomplete. Make a new copy of the disc, then try again.");
+    if (id == L"gamecube") return Of(L"This is a GameCube game, not Super Mario Galaxy.");
+    if (id == L"galaxy-2") return Of(L"This is Super Mario Galaxy 2. Nebula plays Super Mario Galaxy.");
+    if (id == L"not-galaxy") return Of(L"This is not Super Mario Galaxy.");
+    if (id == L"region") return Of(L"It is not Super Mario Galaxy for North America, Europe or Japan.");
+    if (id == L"changed") return Of(L"This copy of Super Mario Galaxy is changed or another revision. Nebula needs an unchanged copy of the disc.");
+    if (id == L"no-space") return Of(L"The drive is full. Free up space, then try again.");
+    return {};
+}
+
 }  // namespace
 
 struct InstallEngine::Impl {
@@ -442,6 +460,7 @@ struct InstallEngine::Impl {
     std::mutex logLock;
     ULONGLONG started = GetTickCount64();
     wstring staging;
+    wstring refused;  // the importer's last REFUSED id (RefusalText)
     double stageBase = 0, stageWeight = 0;
     wstring stepText;
     InstallEngine& owner;
@@ -539,8 +558,22 @@ struct InstallEngine::Impl {
     int RunTool(const std::vector<wstring>& arguments, const std::function<void(const wstring&)>& onLine) {
         wstring importer = ImporterPath();
         Log(L"> nebula-import.exe " + JoinArgs(arguments));
+        refused.clear();
         ProcessRunner runner;
-        return runner.Run(importer, arguments, staging, nullptr, onLine, cancel);
+        return runner.Run(importer, arguments, staging, nullptr, [&](const wstring& line) {
+            if (StartsWith(line, L"REFUSED ")) {
+                refused = line.substr(8);
+                Log(line);
+                return;
+            }
+            onLine(line);
+        }, cancel);
+    }
+
+    // A failed import's words: the refusal's in the player's language, else `otherwise`.
+    [[noreturn]] void FailImport(const wstring& otherwise) {
+        const wstring text = RefusalText(refused);
+        Fail(ErrorKind::InvalidOperation, text.empty() ? otherwise : text);
     }
 
     // The importer's output: PROGRESS done total, STEP n text, and log lines.
@@ -572,19 +605,22 @@ struct InstallEngine::Impl {
             size_t brace = json.find(L'{');
             identity = ParseJson(brace == wstring::npos ? json : json.substr(brace));
         } catch (const std::exception&) {
-            Fail(ErrorKind::InvalidOperation, !lines.empty() ? lines.back() : Of(L"The selected file could not be read."));
+            FailImport(!lines.empty() ? lines.back() : Of(L"The selected file could not be read."));
         }
-        if (code != 0 || !JBool(&identity, L"supported")) Fail(ErrorKind::InvalidOperation, JStr(&identity, L"message").value_or(Of(L"The selected file could not be read.")));
+        if (code != 0 || !JBool(&identity, L"supported")) {
+            if (const auto reason = JStr(&identity, L"reason")) refused = *reason;
+            FailImport(JStr(&identity, L"message").value_or(Of(L"The selected file could not be read.")));
+        }
     }
 
     void Import(const wstring& input, const wstring& content) {
         int code = RunTool({L"import", input, L"--output", content}, ImportLines());
-        if (code != 0) Fail(ErrorKind::InvalidOperation, Of(L"Could not read the game (error {0}). See the Setup log.", {Num(code)}));
+        if (code != 0) FailImport(Of(L"Could not read the game (error {0}). See the Setup log.", {Num(code)}));
     }
 
     void Cook(const wstring& content, const wstring& output) {
         int code = RunTool({L"cook", content, L"--output", output}, ImportLines());
-        if (code != 0) Fail(ErrorKind::InvalidOperation, Of(L"Could not pack the game (error {0}). See the Setup log.", {Num(code)}));
+        if (code != 0) FailImport(Of(L"Could not pack the game (error {0}). See the Setup log.", {Num(code)}));
     }
 
     void RememberSource(const wstring& input) {

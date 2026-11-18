@@ -487,7 +487,7 @@ pub fn write_cooked_pak(
     let mut placed = Vec::with_capacity(files.len());
     let mut done = 0u64;
     if !progress(0, total) {
-        bail!("the import was cancelled");
+        return Err(crate::refused(crate::Refusal::Cancelled, "the import was cancelled"));
     }
     // AW files have no header: the audio archive's wave systems say where their waves lie.
     let mut waves = std::collections::BTreeMap::new();
@@ -583,7 +583,7 @@ pub fn write_cooked_pak(
                     placed.extend(place(&mut pak, &mut at, &file.path, items, stats)?.into_iter().map(|p| (file.node, p)));
                     done += file.length;
                     if !progress(done, total) {
-                        bail!("the import was cancelled");
+                        return Err(crate::refused(crate::Refusal::Cancelled, "the import was cancelled"));
                     }
                 }
                 next_write += 1;

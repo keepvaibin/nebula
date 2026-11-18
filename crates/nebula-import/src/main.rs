@@ -10,7 +10,8 @@
 //!   nebula-import cook <content folder> --output <content folder>
 //!       Cooks a content folder packed before cooking (an update's migration, D-07), with the same output lines.
 //!
-//! A failure prints `Error: <reason>` on stderr and exits with code 1.
+//! A failure prints `Error: <reason>` on stderr and exits with code 1; a refusal the player is told about prints
+//! `REFUSED <id>` (nebula_import::Refusal::id) on stdout first, which Setup shows in the player's language.
 
 use anyhow::{bail, Result};
 use nebula_import::{cook, identify_input, Partition};
@@ -26,6 +27,9 @@ fn main() -> ExitCode {
     match run(&arguments) {
         Ok(code) => code,
         Err(error) => {
+            if let Some(why) = nebula_import::refusal_of(&error) {
+                println!("REFUSED {}", why.id());
+            }
             eprintln!("Error: {error:#}");
             ExitCode::from(1)
         }

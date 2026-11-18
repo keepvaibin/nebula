@@ -29,16 +29,21 @@ data class DiscIdentity(
     val title: String,
     val format: String,
     val message: String,
+    /** Why it is not supported (crates/nebula-import Refusal::id); null when it is, or when the importer names none. */
+    val reason: String? = null,
 ) {
     companion object {
-        fun parse(json: String): DiscIdentity {
+        /** The importer's answer, its message in the player's words where it names its refusal (ImportRefusals). */
+        fun parse(context: Context, json: String): DiscIdentity {
             val o = JSONObject(json)
+            val reason = if (o.isNull("reason")) null else o.optString("reason")
             return DiscIdentity(
                 supported = o.optBoolean("supported"),
                 gameId = o.optString("gameId"),
                 title = o.optString("title"),
                 format = o.optString("format"),
-                message = o.optString("message"),
+                message = ImportRefusals.text(context, reason) ?: o.optString("message"),
+                reason = reason,
             )
         }
     }
@@ -453,7 +458,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         screen = Screen.Disc
         viewModelScope.launch(Dispatchers.IO) {
             val identity = runCatching {
-                resolver.openFileDescriptor(uri, "r")!!.use { DiscIdentity.parse(Importer.identify(it.fd)) }
+                resolver.openFileDescriptor(uri, "r")!!.use { DiscIdentity.parse(app, Importer.identify(it.fd)) }
             }.getOrElse { DiscIdentity(false, "", "", "", app.getString(R.string.DiscUnreadable, it.message.orEmpty())) }
             withContext(Dispatchers.Main) {
                 if (disc?.uri == uri) disc = disc?.copy(identity = identity)
@@ -501,7 +506,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeGame() {
-        if (refusedWhileRunning()) return
+        if (refusedWhileRunning(R.string.CloseGameThenRetry)) return
         Storage.removeGame(app)
         install = null
         freeBytes = Storage.freeBytes(app)
@@ -530,10 +535,11 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** While the game runs in its own process, what it reads and writes (the game, its mods) stays as it is (P-100). */
-    private fun refusedWhileRunning(): Boolean {
+    /** While the game runs in its own process, what it reads and writes (the game, its mods) stays as it is (P-100).
+     *  `then`: what the player does after closing it (an import: import again). */
+    private fun refusedWhileRunning(then: Int = R.string.CloseGameFirst): Boolean {
         if (!SaveTransfer.gameRunning(app)) return false
-        transferResult = TransferResult(false, app.getString(R.string.GameRunning), app.getString(R.string.CloseGameFirst))
+        transferResult = TransferResult(false, app.getString(R.string.GameRunning), app.getString(then))
         return true
     }
 

@@ -1,7 +1,7 @@
 //! The importer as C functions, for an app that links it (Apple's): what the command line's `identify`
 //! and `import` do, by path. A document picker's file is read where it lies; nothing is copied.
 
-use crate::{identify_input, json_string, Partition};
+use crate::{error_text, identify_input, json_string, reason_json, refusal_of, Partition};
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::path::PathBuf;
 
@@ -27,26 +27,32 @@ pub extern "C" fn nebula_import_store_version() -> u32 {
 }
 
 /// The game of a disc image or an extracted folder, as the command line's `identify` prints it (JSON: format, gameId,
-/// title, revision, mainDolSha1, languages, supported, message); on a failure `{"supported":false,"message":…}`.
-/// The text is the caller's to give back to nebula_import_free.
+/// title, revision, mainDolSha1, languages, supported, message, reason); on a failure
+/// `{"supported":false,"message":…,"reason":…}`. `reason` is the refusal's id (crate::Refusal::id) the caller shows
+/// in the player's language, null when it has none. The text is the caller's to give back to nebula_import_free.
 ///
 /// # Safety
 /// `input` is null or a NUL-terminated path.
 #[no_mangle]
 pub unsafe extern "C" fn nebula_import_identify(input: *const c_char) -> *mut c_char {
     let Some(input) = path_of(input) else {
-        return c_string("{\"supported\":false,\"message\":\"no file was given\"}");
+        return c_string("{\"supported\":false,\"message\":\"no file was given\",\"reason\":\"missing\"}");
     };
     let json = match std::panic::catch_unwind(|| identify_input(&input)) {
         Ok(Ok(identity)) => identity.to_json(),
-        Ok(Err(error)) => format!("{{\"supported\":false,\"message\":{}}}", json_string(&format!("{error:#}"))),
-        Err(_) => "{\"supported\":false,\"message\":\"the file could not be read\"}".to_owned(),
+        Ok(Err(error)) => format!(
+            "{{\"supported\":false,\"message\":{},\"reason\":{}}}",
+            json_string(&format!("{error:#}")),
+            reason_json(refusal_of(&error))
+        ),
+        Err(_) => "{\"supported\":false,\"message\":\"the file could not be read\",\"reason\":null}".to_owned(),
     };
     c_string(&json)
 }
 
-/// Builds game.pak at `output` from the disc image or extracted folder `input`. Null when it succeeded, else the
-/// reason, the caller's to give back to nebula_import_free. `progress` may be null.
+/// Builds game.pak at `output` from the disc image or extracted folder `input`. Null when it succeeded, else why:
+/// "<id>\t<English>" for a refusal (crate::Refusal::id, which the caller shows in the player's language), else the
+/// English alone; the caller's to give back to nebula_import_free. `progress` may be null.
 ///
 /// # Safety
 /// `input` and `output` are null or NUL-terminated paths; `progress`, when given, may be called with `context` on
@@ -73,7 +79,7 @@ pub unsafe extern "C" fn nebula_import_build(
     });
     match result {
         Ok(Ok(_)) => std::ptr::null_mut(),
-        Ok(Err(error)) => c_string(&format!("{error:#}")),
+        Ok(Err(error)) => c_string(&error_text(&error)),
         Err(_) => c_string("the import stopped unexpectedly"),
     }
 }
