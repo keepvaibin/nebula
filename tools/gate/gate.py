@@ -804,32 +804,95 @@ def board_line(board, text):
             f.write("%s %s\n" % (datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), text))
 
 
-def take_gate_lock(path, holder, wait_minutes, board, who, alive=process_alive, sleep=time.sleep, poll=30.0):
+# Who goes first among waiting gates (Planner, 11-18 03:44): Agents 3 and 4 before Agents 1 and 2 (DECISION 01:15),
+# otherwise first come. gate.py keeps the order, not the agents.
+FIRST_IN_QUEUE = ("Agent 3", "Agent 4")
+
+
+def queue_rank(who):
+    """0 for an agent whose waiting gate goes first, 1 for the rest."""
+    return 0 if any(who.startswith(name) for name in FIRST_IN_QUEUE) else 1
+
+
+def queue_folder(lock):
+    """The waiting gates of a lock: <lock>.queue beside it, one file each."""
+    return pathlib.Path(str(lock) + ".queue")
+
+
+def queue_order(lock, alive):
+    """The waiting gates in the order they take the lock, (rank, time, pid, file), from files named
+    <rank>-<time in ms>-<pid>.txt. An entry whose process has ended is removed."""
+    entries = []
+    for f in queue_folder(lock).glob("*.txt"):
+        parts = f.stem.split("-")
+        if len(parts) != 3 or not all(x.isdigit() for x in parts):
+            continue
+        rank, stamp, pid = (int(x) for x in parts)
+        if not alive(pid):
+            f.unlink(missing_ok=True)
+            continue
+        entries.append((rank, stamp, pid, f))
+    return sorted(entries)
+
+
+def locks_for(mode, patterns, gate_lock, long_lock):
+    """The locks a gate of this level takes: the gate lock at every level but the long run (--only runs too), the long
+    lock for the long and final runs of all their checks."""
+    locks = [gate_lock] if mode in ("quick", "main", "final") else []
+    if mode in ("long", "final") and not patterns:
+        locks.append(long_lock)
+    return locks
+
+
+def take_gate_lock(path, holder, wait_minutes, board, who, alive=process_alive, sleep=time.sleep, poll=30.0,
+                   pid=None, clock=time.time):
     """Takes the gate lock for `holder` (a line naming the run, with "pid N"): None when taken, else why not. Waits
-    up to wait_minutes while another holds it; a holder whose process has ended loses it, and the board says so."""
+    up to wait_minutes while another holds it; a holder whose process has ended loses it, and the board says so.
+    A gate that has to wait joins the lock's queue and takes the lock only when it is the queue's first (queue_rank,
+    then first come). A lock taken by hand (a holder.txt naming no process) holds until its holder frees it."""
     lock = pathlib.Path(path)
-    deadline = time.time() + 60.0 * wait_minutes
+    pid = os.getpid() if pid is None else pid
+    deadline = clock() + 60.0 * wait_minutes
     said_waiting = False
-    while True:
-        try:
-            lock.mkdir()
-        except FileExistsError:
-            text, pid = lock_holder(lock)
-            if pid is not None and not alive(pid):
-                board_line(board, "%s NOTICE: the gate lock held by a process that has ended (%s) is taken over." % (who, text))
-                shutil.rmtree(lock, ignore_errors=True)
-                continue
-            if time.time() >= deadline:
+    mine = None
+    try:
+        while True:
+            # A newcomer takes a free lock only when nobody waits (one freed between two polls is not its to
+            # take); a waiter takes it when it heads the queue.
+            order = queue_order(lock, alive)
+            first = not order if mine is None else order[0][3] == mine
+            if first:
+                try:
+                    lock.mkdir()
+                except FileExistsError:
+                    text, holder_pid = lock_holder(lock)
+                    if holder_pid is not None and not alive(holder_pid):
+                        board_line(board, "%s NOTICE: the gate lock held by a process that has ended (%s) is taken over."
+                                   % (who, text))
+                        shutil.rmtree(lock, ignore_errors=True)
+                        continue
+                else:
+                    (lock / "holder.txt").write_text("%s %s\n" % (holder, datetime.datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S")), encoding="utf-8")
+                    board_line(board, "%s LOCK: gate.lock taken by gate.py: %s." % (who, holder))
+                    return None
+                text = lock_holder(lock)[0]
+            else:
+                text = "a gate before this one in the queue"
+            if clock() >= deadline:
                 return "the gate lock %s is held: %s" % (lock, text)
+            if mine is None:
+                queue_folder(lock).mkdir(exist_ok=True)
+                mine = queue_folder(lock) / ("%d-%d-%d.txt" % (queue_rank(who), int(clock() * 1000), pid))
+                mine.write_text(holder + "\n", encoding="utf-8")
+                continue
             if not said_waiting:
                 print("gate.py: the gate lock is held (%s); waiting up to %g minutes" % (text, wait_minutes), flush=True)
                 said_waiting = True
             sleep(poll)
-            continue
-        (lock / "holder.txt").write_text("%s %s\n" % (holder, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                                         encoding="utf-8")
-        board_line(board, "%s LOCK: gate.lock taken by gate.py: %s." % (who, holder))
-        return None
+    finally:
+        if mine is not None:
+            mine.unlink(missing_ok=True)
 
 
 def free_gate_lock(path, holder, board, who, summary):
@@ -1516,7 +1579,8 @@ def parser():
                    help="the lock one main gate (or final check) at a time holds")
     p.add_argument("--long-lock", default=os.environ.get("NEBULA_GATE_LONG_LOCK", "D:/NebulaWork/plan/long.lock"),
                    help="the lock one long run (or final check) at a time holds")
-    p.add_argument("--wait", type=float, default=0.0, help="minutes to wait for a held gate or long lock (0: refuse)")
+    p.add_argument("--wait", type=float, default=240.0,
+                   help="minutes to wait in the queue for a held gate or long lock (0: refuse at once)")
     p.add_argument("--board", default=os.environ.get("NEBULA_GATE_BOARD", "D:/NebulaWork/plan/BOARD.md"),
                    help="the board the lock, owed and MAIN-MOVED lines go to ('' for none)")
     p.add_argument("--status", default=os.environ.get("NEBULA_GATE_STATUS", "D:/NebulaWork/plan/STATUS.md"),
@@ -1593,11 +1657,10 @@ def main(argv=None):
             return refuse("no whole quick gate of %s passed in %s: run --quick first" % (commit[:9], args.work))
     if args.mode == "long":
         below_normal()
-    locks = []
-    if args.mode in ("main", "final") and not patterns:
-        locks.append(args.gate_lock)
-    if args.mode in ("long", "final") and not patterns:
-        locks.append(args.long_lock)
+    # Every level takes the gate lock for its own checks, --only runs too (Planner 11-18 03:44, one gate at a time: a
+    # quick gate beside a main gate finishes no sooner, and beside a hand slot it disturbs a measurement). The long run
+    # keeps the long lock alone until it takes the gate lock part by part.
+    locks = locks_for(args.mode, patterns, args.gate_lock, args.long_lock)
     holder = "%s gate of %s@%s pid %d%s%s" % (args.mode, TREE.name, commit[:9], os.getpid(),
                                              ("; covers " + args.covers) if args.covers else "",
                                              ("; quick gate " + quick.name) if quick else "")
