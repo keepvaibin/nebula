@@ -453,3 +453,40 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   held (4e3de9ba5); harness_steps_test.py's run held by a menu key ends at frame 59 with the old harness, 30 now.
 - same_mod_runs.py (6332a038c): unsteady tests (facts differ between two runs one at a time: device, network and
   thread events) judged by verdict and pictures; loopback ports and shader file names written as one.
+
+## 2026-11-18 mods/n3008: M6 first part: the importer's readers bounded; a check that does not finish is no pass
+
+- The importer's readers of a stranger's files, each with a test that failed before:
+  - M-145 (2c9514f44): a glTF model is bounded as a whole. Before, two primitives each drawing all 4,194,304
+    vertices of one accessor were cooked, and a byteStride of 0 was taken.
+  - M-146 (b69f40e53): a stream's blocks must lie in the file. Before, a block size of 0 ran 768 s.
+  - M-151 (a80dc0eda): a stream too long is refused from its header. Before, 28 s of FLAC decoding came first.
+  - M-159 (a80dc0eda): an Ogg is read within the stream's bounds. Before, an Ogg saying 2,000 seconds was decoded to
+    its end.
+  - M-156 (f40c7e4f0): a ws command's wave bank number grows with the archive. Before, one command made a 64 GiB table.
+  - M-157 (bdcc7ef9b): a layout animation's records are each read once. Before, billions of targets came from a few
+    hundred kilobytes; the disc's 445 layout animations still read.
+  - M-160 (daf433719): the schema check compares each pair once. Before, it was killed after 300 s.
+  - M-166 (c0c030f66): a texture record's size must have its texels. Before, width x height was computed in 32 bits.
+  - M-167 (dc871acdd): a hostile glob answers at once. Before, it overflowed the stack.
+  - M-169 (d48c4ae40): a cooked table's sizes and bytes are checked. Before, rows 0xFFFFFFFF reserved about 100 GB;
+    the US pak's 13,552 tables write back the same.
+- M-168: collision (6d14f543f), recordings (d9b638444) and textures (d63ce8f76) are checked as the game reads them,
+  with Agent 1's level bytes (b6387edc7). NSND is left. N-2069 is new: a stream within its bounds is still decoded
+  whole, about 11 GB at 384 kHz, 6 channels and 20 minutes.
+- M-144, M-150, M-161 (7ca329d3a): a check that does not run or does not finish adds nothing at import, and at the
+  start it leaves the package off, with the reason in its log (Mods.NotChecked, Mods.NotCheckedFile,
+  Mods.NotCheckedFolder) and "This mod was not checked. Its log says why" on the Mods page, in all 14 languages. A
+  check that fails with the game's self-description is no longer made again without it. Before (bins a2w12):
+  - 6106-import-unchecked: IMPORTED with the importer's library gone;
+  - 3137-start-unchecked: a mod with a locked file started unchecked, and its code ran (sum 8189175);
+  - galaxy_mods_tests: the unfinished import added the mod, and the weaker second check passed it.
+  After (bins a2x3), all pass.
+- N-2070 (7ca329d3a), found by 3138-start-any-name: a package with a file named outside the Windows code page ended the
+  game at the start check. Every path in the check is now UTF-8.
+- N-2071 (7ca329d3a), found by 3133-start-kept-cut: a kept report cut short made the other packages' checks fail, and
+  they started unchecked. A report that does not read back is now made again.
+- Harness (5d034864e): `unreadable` holds a placed mod's files so no program can read them during the run. `cut_files`
+  halves files that the test named in continue_from left. A bare test may import mods and check the game's own
+  facts: with the importer's library hidden every mod is off, the game half too (6106 first ran to its time limit).
+  harness_files_test.py and harness_bare_test.py check them; the bare one fails on the harness before.
