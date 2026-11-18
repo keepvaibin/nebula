@@ -92,23 +92,27 @@ in::LogicalInput touch_logic(const sdl::InputState& state) {
     return logic;
 }
 
+// A first-person look's motion at controller read `read` (below), worked out only when the controls ask (M-069).
+controls::LookSample look_sample(const sdl::InputState& state, std::uint64_t read);
+
 // The shared live controls' window services: the finger (or the mouse) is the absolute pointer, as the mouse is on
 // Windows; nothing is injected.
 class SdlControlsHost final : public controls::LiveControlsHost {
 public:
-    SdlControlsHost(const controls::PointerSample& finger, const controls::LookSample& look, std::uint64_t now_ms,
-                    std::uint64_t now_us)
-        : finger_(finger), look_(look), now_ms_(now_ms), now_us_(now_us) {}
+    SdlControlsHost(const controls::PointerSample& finger, const sdl::InputState& state, std::uint64_t read,
+                    std::uint64_t now_ms, std::uint64_t now_us)
+        : finger_(finger), state_(state), read_(read), now_ms_(now_ms), now_us_(now_us) {}
     std::uint64_t now_ms() override { return now_ms_; }
     std::uint64_t now_us() override { return now_us_; }
     bool injected(bool) override { return false; }
     controls::PointerSample pointer(bool, bool) override { return finger_; }
     in::NativeMousePointerProjection cursor() override { return {}; }
-    controls::LookSample look() override { return look_; }
+    controls::LookSample look() override { return look_sample(state_, read_); }
 
 private:
     controls::PointerSample finger_;
-    controls::LookSample look_;
+    const sdl::InputState& state_;
+    std::uint64_t read_;
     std::uint64_t now_ms_;
     std::uint64_t now_us_;
 };
@@ -153,6 +157,33 @@ bool project_window_point(const sdl::InputState& state, float x, float y, float&
     out_x = projection.x;
     out_y = projection.y;
     return true;
+}
+
+// The mouse's own motion while the window holds it, and a finger's travel on the picture (a phone; pointer units, y
+// down) while it is down and no mouse points. A finger's travel counts from the last read that asked: after reads that
+// did not (no look), it starts again where the finger is, so a look turned on never turns by the travel before it.
+controls::LookSample look_sample(const sdl::InputState& state, std::uint64_t read) {
+    static bool s_look_finger = false;
+    static float s_look_finger_x = 0.0f;
+    static float s_look_finger_y = 0.0f;
+    static std::uint64_t s_last_read = 0;
+    if (read != s_last_read + 1u) s_look_finger = false;
+    s_last_read = read;
+    controls::LookSample look{};
+    look.mouse_x = state.mouse_dx;
+    look.mouse_y = state.mouse_dy;
+    float fx = 0.0f;
+    float fy = 0.0f;
+    const bool down = state.finger_down && !state.mouse_pointer &&
+                      project_window_point(state, state.finger_x, state.finger_y, fx, fy);
+    if (down && s_look_finger) {
+        look.finger_x = fx - s_look_finger_x;
+        look.finger_y = fy - s_look_finger_y;
+    }
+    s_look_finger = down;
+    s_look_finger_x = fx;
+    s_look_finger_y = fy;
+    return look;
 }
 
 std::uint32_t g_rumble_pad = 0;  // the gamepad the player used last (SDL id; 0: none)
@@ -475,27 +506,8 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
             s_finger_ms = now;
         }
     }
-    // A first-person look's motion: the mouse's own while the window holds it, and a finger's travel on the picture (a
-    // phone; pointer units, y down) while it is down and no mouse points.
-    controls::LookSample look{};
-    look.mouse_x = state.mouse_dx;
-    look.mouse_y = state.mouse_dy;
-    {
-        static bool s_look_finger = false;
-        static float s_look_finger_x = 0.0f;
-        static float s_look_finger_y = 0.0f;
-        float fx = 0.0f;
-        float fy = 0.0f;
-        const bool down = state.finger_down && !state.mouse_pointer &&
-                          project_window_point(state, state.finger_x, state.finger_y, fx, fy);
-        if (down && s_look_finger) {
-            look.finger_x = fx - s_look_finger_x;
-            look.finger_y = fy - s_look_finger_y;
-        }
-        s_look_finger = down;
-        s_look_finger_x = fx;
-        s_look_finger_y = fy;
-    }
+    static std::uint64_t s_reads = 0;
+    const std::uint64_t read = ++s_reads;
     controls::PointerSample finger{};
     finger.polled = true;
     finger.window_focused = state.window_focused;
@@ -563,7 +575,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
             state.device_motion.shake_until_us != 0u && now_us < state.device_motion.shake_until_us;
     }
     static controls::LiveControlsEngine s_engine;
-    SdlControlsHost host(finger, look, now, now_us);
+    SdlControlsHost host(finger, state, read, now, now_us);
     const controls::LiveControlsResult result = s_engine.sample(controls_frame, host);
     // Held only for a mouse that points here: a phone's finger is no mouse (Android's pointer capture is a mouse's).
     sdl::set_mouse_look(result.mouse_look && state.mouse_pointer);

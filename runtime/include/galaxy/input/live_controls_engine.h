@@ -56,7 +56,9 @@ struct LookSample {
 class LiveControlsHost {
 public:
     virtual ~LiveControlsHost() = default;
-    // Taken at every sample (so motion from before a look never arrives late); none by default.
+    // A mod's look's motion since the last call, asked at each sample while a look is on and never otherwise (M-069). A
+    // host counts motion only while its window holds the mouse for the look, so none from before a look arrives late.
+    // None by default.
     virtual LookSample look() { return {}; }
     virtual std::uint64_t now_ms() = 0;
     virtual std::uint64_t now_us() = 0;

@@ -369,7 +369,8 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     // host menu, no text being typed) every pointer source turns the view instead of moving the pointer, the window
     // holds the mouse, and the pointer stays at the picture's middle below: the game's crosshair.
     const galaxy::luma_input::LookChoice look_choice = galaxy::luma_input::look_choice();
-    const LookSample look_sample = host.look();
+    // No look, no host work (M-069): the host's look motion is asked only while a mod's look is on.
+    const LookSample look_sample = look_choice.on ? host.look() : LookSample{};
     const bool look_holding = look_choice.on && window_focused && !frame.host_menu &&
                               play_context == galaxy::input::PlayContext::Play && !galaxy::luma_input::text_open();
     // An extension's turn (a test's look step) holds the look as a player's would, in a window with no focus too (an

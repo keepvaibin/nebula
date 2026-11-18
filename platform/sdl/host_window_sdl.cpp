@@ -10,6 +10,7 @@
 #include "galaxy/steam_controller.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/input/host_input.h"
+#include "galaxy/input/mouse_look_hold.h"
 #include "galaxy/input/press_latch.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/native_settings_pad.h"
@@ -101,6 +102,25 @@ InputState g_input;                 // guarded by g_input_mutex
 std::atomic<bool> g_mouse_look_wanted{false};
 bool g_mouse_look_held = false;
 SDL_Window* g_window = nullptr;
+// How it holds (galaxy/input/mouse_look_hold.h, M-062): SDL's relative mode, or where the system refuses that, a grab
+// with the cursor hidden and put back at the window's middle as it nears an edge. The pump's thread's.
+galaxy::input::SdlMouseLookHold g_mouse_look;
+// A grab's own warp to the middle makes one motion event of its own (SDL_WarpMouseInWindow outside relative mode):
+// that one is no motion of the mouse's.
+bool g_look_warp_pending = false;
+float g_look_warp_x = 0.0f;
+float g_look_warp_y = 0.0f;
+
+// The cursor put back at the window's middle while a grab holds it.
+void look_warp_to_middle() noexcept {
+    int width = 0;
+    int height = 0;
+    if (g_window == nullptr || !SDL_GetWindowSize(g_window, &width, &height) || width <= 0 || height <= 0) return;
+    g_look_warp_x = static_cast<float>(width) * 0.5f;
+    g_look_warp_y = static_cast<float>(height) * 0.5f;
+    g_look_warp_pending = true;
+    SDL_WarpMouseInWindow(g_window, g_look_warp_x, g_look_warp_y);
+}
 std::atomic<bool> g_background{false};
 std::atomic<bool> g_low_memory{false};
 std::atomic<bool> g_menu_context{false};
@@ -1455,8 +1475,24 @@ void pump_events(int timeout_ms) noexcept {
             focused = g_input.window_focused;
         }
         const bool hold = g_mouse_look_wanted.load(std::memory_order_acquire) && focused;
-        if (hold != g_mouse_look_held && SDL_SetWindowRelativeMouseMode(g_window, hold)) {
-            g_mouse_look_held = hold;
+        const bool was_held = g_mouse_look_held;
+        const auto mode = g_mouse_look.update(
+            hold, [](bool on) { return SDL_SetWindowRelativeMouseMode(g_window, on); },
+            [](bool on) {
+                if (on) {
+                    std::fprintf(stderr, "[input] relative mouse mode refused (%s): the look holds the mouse by a grab\n",
+                                 SDL_GetError());
+                    (void)SDL_SetWindowMouseGrab(g_window, true);
+                    (void)SDL_HideCursor();
+                    look_warp_to_middle();
+                } else {
+                    (void)SDL_SetWindowMouseGrab(g_window, false);
+                    (void)SDL_ShowCursor();
+                    g_look_warp_pending = false;
+                }
+            });
+        g_mouse_look_held = mode != galaxy::input::SdlMouseLookHold::Mode::None;
+        if (g_mouse_look_held != was_held) {
             const std::lock_guard<std::mutex> lock(g_input_mutex);
             g_input.mouse_dx = g_input.mouse_dy = 0.0f;
         }
@@ -1606,7 +1642,21 @@ void pump_events(int timeout_ms) noexcept {
             break;
         case SDL_EVENT_MOUSE_MOTION: {
             if (g_mouse_look_held) {
-                // Held for a first-person look: the mouse's own motion (SDL's relative mode), not a place.
+                // Held for a first-person look: the mouse's own motion (SDL's relative mode, or a grab's plain motion),
+                // not a place.
+                if (g_mouse_look.mode() == galaxy::input::SdlMouseLookHold::Mode::Grab) {
+                    if (g_look_warp_pending && event.motion.x == g_look_warp_x && event.motion.y == g_look_warp_y) {
+                        g_look_warp_pending = false;  // the warp's own event
+                        break;
+                    }
+                    int width = 0;
+                    int height = 0;
+                    if (SDL_GetWindowSize(g_window, &width, &height) &&
+                        (event.motion.x < width * 0.25f || event.motion.x > width * 0.75f ||
+                         event.motion.y < height * 0.25f || event.motion.y > height * 0.75f)) {
+                        look_warp_to_middle();
+                    }
+                }
                 g_input.mouse_dx += event.motion.xrel;
                 g_input.mouse_dy += event.motion.yrel;
                 g_input.mouse_pointer = true;
