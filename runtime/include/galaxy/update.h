@@ -91,11 +91,15 @@ bool start_setup_update();
 // The rules, shared with the platform files and the tests.
 [[nodiscard]] int compare_versions(std::string_view a, std::string_view b) noexcept;
 [[nodiscard]] bool is_beta(std::string_view version) noexcept;
-// The newest release in a GitHub release listing newer than `installed`, of its channel, with `asset`, its manifest and
-// the manifest's signature served over HTTPS (HTTP to 127.0.0.1 only). is_list false: the answer is no release list
-// (a rate limit's message, a captive portal's page).
-[[nodiscard]] std::optional<Release> select_newer(std::string_view listing_json, std::string_view installed, std::string_view asset,
-                                                  bool& is_list);
+// The newest release in a GitHub release listing newer than `installed` that it takes (takes), with its package (a
+// release's `release_asset`, a beta's `beta_asset`), the package's manifest and the manifest's signature served over
+// HTTPS (HTTP to 127.0.0.1 only). is_list false: the answer is no release list (a rate limit's message, a captive
+// portal's page).
+[[nodiscard]] std::optional<Release> select_newer(std::string_view listing_json, std::string_view installed,
+                                                  std::string_view release_asset, std::string_view beta_asset, bool& is_list);
+// Whether an install of `installed` updates to `version`'s channel: a release takes releases; a beta takes betas and
+// the releases after them (its final release among them).
+[[nodiscard]] bool takes(std::string_view installed, std::string_view version) noexcept;
 // RSA PKCS#1 v1.5 with SHA-256 over `data`, against the Nebula release key.
 [[nodiscard]] bool verify_signature(std::string_view data, std::string_view signature_base64) noexcept;
 // Release notes as GitHub holds them (Markdown) as plain text, cut at a line end before `limit` bytes.
