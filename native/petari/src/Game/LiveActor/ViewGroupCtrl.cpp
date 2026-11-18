@@ -4,6 +4,7 @@
 #include "Game/LiveActor/LodCtrl.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/Array.hpp"
+#include "Game/Util/PlacementIndex.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -68,8 +69,10 @@ void ViewGroupCtrl::update() {
 
     for (s32 i = 0; i < mViewCubeMgr->getNumAreaObj(); i++) {
         AreaObj* area = mViewCubeMgr->getAreaObj(i);
-        if (area->isInVolume(*MR::getPlayerPos())) {
-            ViewGroupCtrlDataEntry* entry = &mViewGroupData[area->mObjArg0];
+        // A cube with no group (argument 0 unset) marks none (N-3031).
+        const s32 group = MR::placementIndexOr< s32 >(area->mObjArg0, static_cast< u32 >(mMaxViewGroupId), -1);
+        if (group >= 0 && area->isInVolume(*MR::getPlayerPos())) {
+            ViewGroupCtrlDataEntry* entry = &mViewGroupData[group];
             entry->mIsPlayerInside = true;
             if (area->mObjArg1 == 1) {
                 entry->mIsNear = true;

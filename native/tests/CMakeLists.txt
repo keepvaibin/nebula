@@ -101,5 +101,11 @@ native_test(native_rabbit_run_turn_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/rabb
 native_test(native_mario_model_index_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_model_index_tests.cpp")
 # The dash ring's times hold every time its placement gives (N-3023).
 native_test(native_mario_ring_dash_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/mario_ring_dash_tests.cpp")
+# A sequence's data reads stay in its program, and a tick that never waits ends (N-3025, N-3026).
+native_test(native_seq_read_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/seq_read_tests.cpp")
+# A Me track's note ranges move a note by whole octaves and always end (N-3027).
+native_test(native_note_octave_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/note_octave_tests.cpp")
+# A placement argument names a table's entry or takes the fallback (N-3031, N-3032).
+native_test(native_placement_index_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/placement_index_tests.cpp")
 # The frame-list writer, against the list the renderer reads.
 native_test(native_frame_list_tests SOURCES "${CMAKE_CURRENT_LIST_DIR}/frame_list_tests.cpp" "${game_src}/Render/FrameList.cpp")

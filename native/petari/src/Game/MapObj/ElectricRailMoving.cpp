@@ -8,6 +8,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/ElectricRailHolder.hpp"
+#include "Game/Util/PlacementIndex.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
 #include <nebula_geometry.hpp>
@@ -61,6 +62,8 @@ ElectricRailMoving::ElectricRailMoving(const char* pName)
 void ElectricRailMoving::init(const TableIter& rIter) {
     s32 railType = 0;
     MR::getPlacementArg4NoInit(rIter, &railType);
+    // Yellow or red; another colour is yellow, as an unset one (N-3032).
+    railType = MR::placementIndexOr< s32 >(railType, 2, 0);
     ElectricRailFunction::registerRail(this, static_cast< ElectricRailType >(railType + 2));
     MR::connectToSceneMapObjMovement(this);
     initMapToolInfo(rIter);

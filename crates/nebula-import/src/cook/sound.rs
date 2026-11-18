@@ -607,21 +607,49 @@ fn stack_bound(program: &Program, entry: u32) -> Result<u32> {
     Ok(most)
 }
 
-/// The points of the envelope an envelope operation names (6 bytes each), through the first whose mode (0xD, 0xE, 0xF) ends it.
+/// The points of an envelope through the one that ends it, as the oscillator walks them (Oscillator::update): `point(i)`
+/// gives point i's mode, time and value. Its points are curves (modes 0 to 3, the oscillator's cCurves) until one of mode
+/// 0xD (go back to point `value`), 0xE (hold) or 0xF (stop). The oscillator starts on the first point's curve, so that
+/// point is a curve; a go back names an earlier point, and the points it repeats take time. The console took a mode
+/// past its four curves as a curve (a read past the table), and walked a go back to points that took no time, or to
+/// itself, for ever (N-3030).
+fn envelope_walk(point: impl Fn(usize) -> Result<(i16, i16, i16)>) -> Result<u32> {
+    let mut times: Vec<i64> = Vec::new();
+    loop {
+        let i = times.len();
+        let (mode, time, value) = point(i)?;
+        match mode {
+            0..=3 => times.push(i64::from(time)),
+            0xD..=0xF if i == 0 => bail!("an envelope that starts with its end (mode {mode:#x})"),
+            0xD => {
+                let back = usize::try_from(value).ok().filter(|&b| b < i).with_context(|| format!("an envelope going back to point {value} of its {i}"))?;
+                if times[back..].iter().sum::<i64>() <= 0 {
+                    bail!("an envelope going back to point {back} over points that take no time");
+                }
+                return Ok(i as u32 + 1);
+            }
+            0xE | 0xF => return Ok(i as u32 + 1),
+            _ => bail!("an envelope point of mode {mode:#x} (the curves are 0 to 3)"),
+        }
+    }
+}
+
+/// An envelope's point `i` of 6 bytes at `start` of `data`, within `end`.
+fn envelope_point(data: &[u8], start: usize, end: usize, i: usize) -> Result<(i16, i16, i16)> {
+    let at = start + 6 * i;
+    if at + 6 > end {
+        bail!("an envelope at {start:#x} past its points");
+    }
+    Ok((be16(data, at)? as i16, be16(data, at + 2)? as i16, be16(data, at + 4)? as i16))
+}
+
+/// The points of the envelope an envelope operation names (6 bytes each), through the one that ends it.
 fn envelope_points(data: &[u8], op: &Op) -> Result<u32> {
     if op.registers & 2 != 0 {
         bail!("an envelope at an address in a register at {:#x}", op.at);
     }
     let start = op.args[1] as usize;
-    let mut points = 0u32;
-    loop {
-        let mode = be16(data, start + 6 * points as usize).with_context(|| format!("the envelope of {:#x} at {start:#x}", op.at))? as i16;
-        be16(data, start + 6 * points as usize + 4).with_context(|| format!("the envelope of {:#x} at {start:#x}", op.at))?;
-        points += 1;
-        if mode >= 0xd {
-            return Ok(points);
-        }
-    }
+    envelope_walk(|i| envelope_point(data, start, data.len(), i)).with_context(|| format!("the envelope of {:#x} at {start:#x}", op.at))
 }
 
 /// A program as NSEQ: its bytes `data`, entered at the byte offsets of `groups`.
@@ -770,8 +798,16 @@ fn me_op(b: &[u8], at: usize) -> Result<MeOp> {
         0x81..=0x83 => {
             let list = arg(1, 3)? as usize;
             let count = be8(b, list)? as usize;
-            if list + 2 + count > b.len() {
+            // The chromatic pick (0x83) reads the list's first note even when it counts none (N-3028).
+            let read = if code == 0x83 { count.max(1) } else { count };
+            if list + 2 + read > b.len() {
                 bail!("a Me note list at {list:#x} past the program's end");
+            }
+            // The scale pick (0x82) reads note (entry & 0x7F) of the scale's 12 (N-3028).
+            if code == 0x82 {
+                if let Some(entry) = b[list + 2..list + 2 + count].iter().find(|&&e| e & 0x7F >= 12) {
+                    bail!("a Me scale pick at {at:#x} of note {} (a scale has 12)", entry & 0x7F);
+                }
             }
         }
         0x30 | 0x31 | 0x35 | 0x36 | 0x3A | 0x3B | 0x40 => op.targets.push(arg(1, 3)? as usize),
@@ -999,6 +1035,10 @@ fn bank_file(b: &[u8], base: usize, wave_bank: u32) -> Result<Vec<u8>> {
         let release = be32(b, r + 0x10)? as usize;
         if table >= envelope_bytes || release >= envelope_bytes {
             bail!("oscillator {i}'s envelopes past the bank's points");
+        }
+        for (way, start) in [("envelope", table), ("release", release)] {
+            envelope_walk(|p| envelope_point(b, envelopes + start, envelopes + envelope_bytes, p))
+                .with_context(|| format!("oscillator {i}'s {way} at {start:#x}"))?;
         }
         put32(&mut oscs, be8(b, r + 4)?);
         putf32(&mut oscs, bef32(b, r + 8)?);
