@@ -58,6 +58,22 @@ namespace luma {
     // need, then counted).
     bool present(const Function* fn, unsigned short needs);
 
+    // The sets a handler proves (tools/lumacore/guarantees.json, gen_types.py guarantee_rows; docs/plan/
+    // M2-NEEDS-PROOF.md): each its name, whether the game scene's making must be finished too, and its needs' ids as a
+    // NeedsRow's, ended by kNeedsEnd. The table ends with a row whose name is null.
+    struct GuaranteeSet {
+        const char* name;
+        bool made;
+        const unsigned char* ids;
+    };
+    extern const GuaranteeSet kGuaranteeSets[];
+
+    // Whether every need of fn is there now, whoever asks (LumaCore.can_call). Nothing is logged.
+    bool canCall(const Function* fn);
+    // Whether the set named holds now (LumaCore.holds): 1 it does, 0 it does not, -1 no set has that name. look: false
+    // finds the set only (1 when there is one), reading nothing of the game, for a caller off the game thread.
+    int holds(const char* name, bool look = true);
+
     // The function whose own code the hook runner is about to enter on this thread.
     [[clang::require_constant_initialization]] extern LUMA_THREAD const Function* tBody;
 

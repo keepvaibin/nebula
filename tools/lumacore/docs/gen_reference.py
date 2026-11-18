@@ -77,7 +77,7 @@ def spelled(function):
 
 
 def notes_of(function):
-    """What the description marks on a function: virtual, pure, what it overrides, and each parameter's mark."""
+    """What the description marks on a function: virtual, pure, what it overrides, each parameter's mark, its needs."""
     notes = []
     if function.get('virtual'):
         notes.append('pure virtual' if function.get('pure') else 'virtual')
@@ -93,6 +93,11 @@ def notes_of(function):
             if mark.get('nullable'):
                 parts.append('may be null')
             notes.append('parameter %d: %s' % (i + 1, ', '.join(parts)))
+    # What must be there for a mod's call (LumaCore.can_call, LumaScript's `can`), and what the result is null without.
+    if function.get('needs'):
+        notes.append('needs ' + ', '.join(function['needs']))
+    if function.get('null_when'):
+        notes.append('null without ' + ', '.join(function['null_when']))
     return '; '.join(notes)
 
 

@@ -1,5 +1,5 @@
 """gen_types.py --commands COMPILE_COMMANDS --out DIR [--entry FILE] [--defined DIR] [--depfile FILE] [--libclang PATH]
-                [--tree DIR] [--needs FILE]
+                [--tree DIR] [--needs FILE] [--guarantees FILE]
 
 The type rows of every record, field, base, enum, alias and global the game's headers declare (language/types.md).
 One unit includes every game header (native/petari/include, native/math/include, native/include) and is parsed by libclang
@@ -24,6 +24,7 @@ What a .cpp defines (nerve classes, file-level structs) comes from instrument.py
 The tree is the one this script is in (tools/lumacore). --tree: one folder's headers in place of the game's (the
 fixture of tools/lumacore/types_fixture_test.py), and no hand table of needs unless --needs names one.
 --needs: the hand table of what functions need (default tools/lumacore/needs.json).
+--guarantees: the sets a handler proves (default tools/lumacore/guarantees.json; none with --tree unless named).
 """
 import ctypes
 import json
@@ -202,7 +203,7 @@ class Api:
 
 
 def main():
-    global OUT, DEFINED, DEPFILE, NEEDS_TABLE
+    global OUT, DEFINED, DEPFILE, NEEDS_TABLE, GUARANTEES_TABLE
     if option("--commands") is None or option("--out") is None:
         sys.exit(__doc__)
     OUT = pathlib.Path(option("--out")).resolve()
@@ -216,8 +217,11 @@ def main():
         global GAME_INCLUDES, GAME_TREES
         GAME_INCLUDES = GAME_TREES = [pathlib.Path(option("--tree")).resolve()]
         NEEDS_TABLE = None
+        GUARANTEES_TABLE = None
     if option("--needs"):
         NEEDS_TABLE = pathlib.Path(option("--needs")).resolve()
+    if option("--guarantees"):
+        GUARANTEES_TABLE = pathlib.Path(option("--guarantees")).resolve()
     commands = json.loads(pathlib.Path(option("--commands")).read_text(encoding="utf-8"))
     wanted = option("--entry")
 
@@ -262,6 +266,8 @@ def main():
             included.append(reader.text(api.fileName(file)))
 
         api.inclusions(tu, I.INCLUSION(note), None)
+        # The hand tables are read here too: a change to one makes the rows again.
+        included += [str(t) for t in (NEEDS_TABLE, GUARANTEES_TABLE) if t is not None]
         I.write_depfile(str(DEPFILE), str(OUT / "luma_types_table.cpp"), included)
 
 
@@ -918,13 +924,20 @@ class Reader:
             if wrong:
                 sys.exit("gen_types.py: the function rows' facts (luma_functions.json) do not hold:\n  " +
                          "\n  ".join(wrong[:200]) + ("\n  ... %d in all" % len(wrong) if len(wrong) > 200 else ""))
-            wrong = merge_needs(DEFINED, functions, NEEDS_TABLE)
+            guarantees, wrong = read_guarantees(GUARANTEES_TABLE)
+            if wrong:
+                sys.exit("gen_types.py: the sets a handler proves (guarantees.json) do not hold:\n  " + "\n  ".join(wrong))
+            # What every game scene makes (the sets' needs) and the game system's: a need on anything else stops at a
+            # member function's call (merge_needs). Without sets (--tree alone), every need goes through every call.
+            every_scene = set(SYSTEM_NEEDS).union(*(g["needs"] for g in guarantees)) if guarantees else None
+            wrong = merge_needs(DEFINED, functions, NEEDS_TABLE, every_scene)
             if wrong:
                 sys.exit("gen_types.py: what the functions need (luma_functions.json needs) does not hold:\n  " +
                          "\n  ".join(wrong[:200]) + ("\n  ... %d in all" % len(wrong) if len(wrong) > 200 else ""))
             lines += needs_rows(functions)
+            lines += guarantee_rows(guarantees)
             I.write_if_changed(OUT / "luma_functions.json", (json.dumps(
-                {"functions": functions}, indent=1, ensure_ascii=False) + "\n").encode("utf-8"))
+                {"functions": functions, "guarantees": guarantees}, indent=1, ensure_ascii=False) + "\n").encode("utf-8"))
             numbers, wrong = merge_numbers(DEFINED, {(f["name"], f["signature"]) for f in functions})
             if wrong:
                 sys.exit("gen_types.py: the numbers (luma_numbers.json) do not hold:\n  " + "\n  ".join(wrong[:200]))
@@ -1559,7 +1572,15 @@ def merge_functions(folder, records, left_records):
 #   needs      the needs whose absence makes it fault: a scene object or a callee's null result it uses untested, a
 #              scene object read without MR::isExistSceneObj ("scene"), and every callee's needs
 #   needs_why  for each need, the first place that adds it: "file:line callee" (or the scene object)
-# A call through a virtual function adds the named row's needs only (each override keeps its own). The hand table
+# A call under a test that a scene object is there (MR::isExistSceneObj(id) around it or in an earlier `if (...) return;`,
+# the call's guards) passes on none of the callee's needs on that object, nor "scene" (the test reads the scene's
+# holder): MR::getKarikariClingNum tests KarikariDirector, then calls the helper that reads it.
+# A call through a virtual function adds the named row's needs only (each override keeps its own). A call of a member
+# function (a method or destructor: of an object that already exists) adds only the needs every game scene makes or the
+# game system's (the sets' needs, SYSTEM_NEEDS; `every_scene`): an object only some stages make (KarikariDirector,
+# WaterAreaHolder, BlueChipHolder) is made by the objects whose code reaches it (Karikari::init makes KarikariDirector),
+# so an existing object's member reaches it only while it is there (MarioActor touches KarikariDirector for an attached
+# Karikari). A free or static function's call, and a constructor's (a new object), add every need. The hand table
 # (tools/lumacore/needs.json) adds what the pass cannot see; a row it names that does not exist stops the build. Its
 # rows name one function (name, signature) or a class (class, except): each member function of the class but the
 # named ones (all their overloads; each must exist) gets the row's needs. Besides the scene objects and "scene", a
@@ -1569,7 +1590,7 @@ SYSTEM_NEEDS = {"scene": "luma::kNeedScene", "UserFile": "luma::kNeedUserFile",
                 "CometScheduler": "luma::kNeedCometScheduler", "MarioActor": "luma::kNeedMarioActor"}
 
 
-def merge_needs(folder, functions, table_path):
+def merge_needs(folder, functions, table_path, every_scene=None):
     wrong = []
     by_key = {(f["name"], f["signature"]): f for f in functions}
     facts = {}
@@ -1625,13 +1646,16 @@ def merge_needs(folder, functions, table_path):
         for c in e["calls"]:
             callee = (c["name"], c["signature"])
             if callee in by_key:
-                callers[callee].append((key, c["use"], "%s:%d %s" % (source, c["line"], c["name"])))
+                guards = set(c.get("guards", []))
+                if guards:
+                    guards.add("scene")
+                callers[callee].append((key, c["use"], "%s:%d %s" % (source, c["line"], c["name"]), guards))
     work = [k for k in by_key if makes[k]]
     queued = set(work)
     while work:
         callee = work.pop()
         queued.discard(callee)
-        for caller, _use, _why in callers[callee]:
+        for caller, _use, _why, _guards in callers[callee]:
             if not makes[callee] <= makes[caller]:
                 makes[caller] |= makes[callee]
                 if caller not in queued:
@@ -1661,15 +1685,20 @@ def merge_needs(folder, functions, table_path):
     while work:
         callee = work.pop()
         queued.discard(callee)
-        for caller, use, why in callers[callee]:
+        member = every_scene is not None and by_key[callee]["kind"] in ("method", "destructor")
+        for caller, use, why, guards in callers[callee]:
             grew = False
             for need in needs[callee]:
+                if member and need not in every_scene or need in guards:
+                    continue
                 if need not in needs[caller] and need not in makes[caller]:
                     needs[caller][need] = why
                     grew = True
             if use in ("returned", "deref") or use == "tested" and gives_pointer[caller]:
                 into = null_when[caller] if use != "deref" else needs[caller]
                 for need in null_when[callee]:
+                    if member and need not in every_scene or need in guards:
+                        continue
                     if need not in into and need not in makes[caller]:
                         into[need] = why
                         grew = True
@@ -1697,6 +1726,67 @@ def result_text(signature):
             if depth == 0:
                 return signature[:i].strip()
     return signature.strip()
+
+
+# The sets a handler proves (docs/plan/M2-NEEDS-PROOF.md): a set's needs hold together at a frame's start when the
+# kernel says so (LumaCore.holds), so the checker takes them as proved in a handler that runs only then.
+GUARANTEES_TABLE = pathlib.Path(__file__).resolve().parent / "guarantees.json"
+SET_NAME = re.compile(r"[a-z][a-z_]{0,30}")
+NEED_NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,62}")
+
+
+def read_guarantees(path):
+    """guarantees.json's sets in order, each {name, holds, made, needs: {need: why}} with the needs of the sets it
+    names in "with" (earlier ones) folded in, and what is wrong with the table. made: the game scene's making is
+    finished too (the kernel's check). A need's name the module does not know fails its compile (SceneObj_<name>)."""
+    if path is None:
+        return [], []
+    table = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+    sets, wrong, known = [], [], {}
+    for i, row in enumerate(table.get("sets", [])):
+        name = row.get("name")
+        at = "sets[%d]" % i
+        if not isinstance(name, str) or not SET_NAME.fullmatch(name) or name in known:
+            wrong.append("%s: the name %r is not a new one of a-z and _" % (at, name))
+            continue
+        if not isinstance(row.get("holds"), str) or not row["holds"]:
+            wrong.append("%s (%s): no holds" % (at, name))
+        needs = {}
+        made = bool(row.get("made", False))
+        for earlier in row.get("with", []):
+            if earlier not in known:
+                wrong.append("%s (%s): with %r is no earlier set" % (at, name, earlier))
+                continue
+            needs.update(known[earlier][0])
+            made = made or known[earlier][1]
+        for need, why in row.get("needs", {}).items():
+            if not NEED_NAME.fullmatch(need):
+                wrong.append("%s (%s): %r is no need's name" % (at, name, need))
+            if need in needs:
+                wrong.append("%s (%s): %s is named twice" % (at, name, need))
+            if not isinstance(why, str) or not why:
+                wrong.append("%s (%s): %s has no why" % (at, name, need))
+            needs[need] = why
+        if not needs:
+            wrong.append("%s (%s): no needs" % (at, name))
+        known[name] = (needs, made)
+        sets.append({"name": name, "holds": row.get("holds", ""), "made": made, "needs": needs})
+    return sets, wrong
+
+
+def guarantee_rows(sets):
+    """The kernel's table of the sets (luma_hook.h GuaranteeSet): each its name, whether the scene's making must be
+    finished, and its needs' ids as a NeedsRow's, ended by kNeedsEnd."""
+    lines = ["", "// The sets a handler proves (M2): luma_hook.h GuaranteeSet.", "namespace {"]
+    for i, g in enumerate(sets):
+        ids = "".join(SYSTEM_NEEDS.get(n, "SceneObj_" + n) + ", " for n in g["needs"])
+        lines.append("const unsigned char kGs%d[] = {%sluma::kNeedsEnd};" % (i, ids))
+    lines.append("}  // namespace")
+    rows = ["{%s, %s, kGs%d}" % (I.quote(g["name"]), "true" if g["made"] else "false", i) for i, g in enumerate(sets)]
+    lines.append("namespace luma {")
+    lines.append("extern const GuaranteeSet kGuaranteeSets[] = {%s};" % ", ".join(rows + ["{nullptr, false, nullptr}"]))
+    lines.append("}  // namespace luma")
+    return lines
 
 
 def needs_rows(functions):

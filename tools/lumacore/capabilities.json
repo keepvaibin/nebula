@@ -278,6 +278,7 @@
     "kernel.classes.slots": "A mod's class with fields of its own gets its slots beside the game object, zeroed when made and released when the object goes",
     "kernel.reload": "A mod taken out while the game runs leaves nothing behind: its hooks, objects and service state are released, and the game goes on",
     "script.fn_value.other_mod": "A LumaScript call of a function value another mod made goes to its maker through LumaCore.call_mod: a fault in it turns the maker off and the caller goes on with an empty result; a value of its own is a plain call",
+    "script.needs": "A LumaScript mod's handlers that prove a set (on stage ready, on stage NAME, on player ready, on play, on stage ended) run when the set holds, in that order in each stage, and the calls in them that need the set are made; a call nothing proves is refused at build time (S0154)",
     "script.on_cut": "A LumaScript mod's calls in progress cut short by a fault in another mod's code are put back by its runtime (the caller its reports go to, its scratch), then its on mods.cut runs with the export's name",
     "script.library.export": "A library mod's pub functions are exports another mod binds by name and calls (LumaScript, import kind 6)",
     "script.library.call": "A LumaScript mod calls a library mod's exported function with values of every kind that crosses, and gets its result (language 12)",

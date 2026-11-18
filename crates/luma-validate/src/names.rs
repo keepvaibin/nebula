@@ -443,6 +443,23 @@ pub struct Facts {
     /// Marks: one entry per declared parameter (a method's `this` not counted): what the function does through a
     /// pointer parameter its header marks; None for no mark.
     pub marks: Vec<Option<Mark>>,
+    /// What must be there for a call of it not to fault (docs/plan/M2-NEEDS-PROOF.md): scene objects by their
+    /// SceneObj_ names without the prefix, `scene`, `UserFile`, `CometScheduler`, `MarioActor`; sorted. A mod's call
+    /// while one is missing is not made (LumaCore.can_call says so beforehand).
+    pub needs: Vec<String>,
+    /// What its pointer result is null without: a test that it is not null proves these; sorted.
+    pub null_when: Vec<String>,
+    /// What it makes when it is not there (MR::declareCoin: CoinHolder): there after a call of it; sorted.
+    pub makes: Vec<String>,
+}
+
+/// A set of needs that handlers prove (luma_functions.json "guarantees"; LumaCore.holds): its name, when it holds,
+/// and its needs, sorted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Guarantee {
+    pub name: String,
+    pub holds: String,
+    pub needs: Vec<String>,
 }
 
 /// What a function does through a pointer parameter (Game/LumaMarks.hpp).
@@ -526,10 +543,18 @@ pub fn signature_variadic(signature: &str) -> bool {
     signature[..close].trim_end().ends_with("...")
 }
 
+/// A need's name: a letter, then letters, digits and `_`, at most 63 bytes (gen_types.py NEED_NAME).
+fn is_need(name: &str) -> bool {
+    let b = name.as_bytes();
+    !b.is_empty() && b.len() <= 63 && b[0].is_ascii_alphabetic() && b.iter().all(|c| c.is_ascii_alphanumeric() || *c == b'_')
+}
+
 /// luma_functions.json (docs/modding/reference/lumascript/the-game-by-name.md): each row's facts by its name and signature.
 #[derive(Clone, Debug, Default)]
 pub struct FunctionFacts {
     pub rows: HashMap<(String, String), Facts>,
+    /// The sets in the file's order; none in a file made before them.
+    pub guarantees: Vec<Guarantee>,
 }
 
 impl FunctionFacts {
@@ -579,11 +604,51 @@ impl FunctionFacts {
                 return Err(bad(format!("{at}.overrides"), "only a virtual overrides"));
             }
             let marks = Self::marks(row, &at, &signature)?;
-            if facts.rows.insert((name, signature), Facts { kind, owner, is_virtual, pure, is_const, overrides, marks }).is_some() {
+            let needs = Self::names(row, "needs", &at)?;
+            let null_when = Self::names(row, "null_when", &at)?;
+            let makes = Self::names(row, "makes", &at)?;
+            if facts.rows.insert((name, signature), Facts { kind, owner, is_virtual, pure, is_const, overrides, marks, needs, null_when, makes }).is_some() {
                 return Err(bad(at, "a row given twice"));
             }
         }
+        if let Some(sets) = root.get("guarantees") {
+            if !sets.is_array() {
+                return Err(bad("guarantees".into(), "not a list"));
+            }
+            for (i, g) in sets.items().iter().enumerate() {
+                let at = format!("guarantees[{i}]");
+                let name = text(g, "name", &at)?;
+                if facts.guarantees.iter().any(|h| h.name == name) {
+                    return Err(bad(at, "a set given twice"));
+                }
+                let need_list = g.get("needs").filter(|v| v.is_object()).ok_or_else(|| bad(format!("{at}.needs"), "missing, or not an object"))?;
+                let mut needs: Vec<String> = need_list.members().iter().map(|m| m.key.clone()).collect();
+                if needs.is_empty() || needs.iter().any(|n| !is_need(n)) {
+                    return Err(bad(format!("{at}.needs"), "empty, or a name that is no need's"));
+                }
+                needs.sort();
+                facts.guarantees.push(Guarantee { name, holds: text(g, "holds", &at)?, needs });
+            }
+        }
         Ok(facts)
+    }
+
+    /// A row's list of needs' names (`needs`, `null_when`, `makes`), sorted; missing in a file made before them: none.
+    fn names(row: &crate::json::Value, key: &str, at: &str) -> Result<Vec<String>, TypesError> {
+        let bad = |why: &str| TypesError::Row { at: format!("{at}.{key}"), why: why.to_string() };
+        let Some(list) = row.get(key) else { return Ok(Vec::new()) };
+        if !list.is_array() {
+            return Err(bad("not a list"));
+        }
+        let mut names = Vec::with_capacity(list.items().len());
+        for v in list.items() {
+            match v.as_str() {
+                Some(n) if is_need(n) && !names.iter().any(|m: &String| m == n) => names.push(n.to_string()),
+                _ => return Err(bad("an entry that is not a need's name, or one given twice")),
+            }
+        }
+        names.sort();
+        Ok(names)
     }
 
     /// A row's "marks": a list with one entry per parameter of its signature, each null or an

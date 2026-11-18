@@ -10,8 +10,13 @@ unit's flags (Game/System/LumaLoader.cpp's command):
      ones, to their callers, and to the needs rows as the game system's id (luma::kNeedUserFile);
   4. gen_types.py stops, naming the fault, on planted ones: a hand row that is no function, a hand row with no why,
      a class with no functions, a class's except that is no function of it, a unit without .needs, a .needs that is
-     not its .rows row for row.
-Exit 0 only when all four hold.
+     not its .rows row for row;
+  5. the sets a handler proves (--guarantees): none with --tree alone (the kernel's table holds its end row only); a
+     table's sets reach luma_functions.json "guarantees" with the sets they name in "with" folded in, and the kernel's
+     table as their ids; gen_types.py stops, naming the fault, on a set named twice, a "with" that is no earlier set, a
+     need with no why, a need named twice, a set with no needs and a set with no "holds"; with the sets, a need on
+     an object no set names stops at a member function's call (a free function's call passes it on).
+Exit 0 only when all five hold.
 """
 import json
 import pathlib
@@ -49,6 +54,18 @@ EXPECTED = {
     ("NdFile::init", "void()"): ([], [], []),
     ("NdFile::use", "int()"): ([], [], []),
     ("ndCallsFile", "int(NdFile *)"): ([], [], []),
+    ("NdKeeper::peek", "int()"): (["Holder", "scene"], [], []),
+    ("ndCallsPeek", "int(NdKeeper *)"): (["Holder", "scene"], [], []),
+    ("ndGuardedCall", "void()"): ([], [], []),
+    ("ndGuardedBranch", "void()"): ([], [], []),
+    ("ndOtherGuard", "void()"): (["Counter"], [], []),
+}
+# With the sets of step 5 (Holder in none): a member's call passes on only the sets' needs and the game system's; a
+# free function's call every need.
+WITH_SETS = {
+    ("ndCallsPeek", "int(NdKeeper *)"): ["scene"],
+    ("NdKeeper::peek", "int()"): ["Holder", "scene"],
+    ("ndDeep", "void()"): ["Holder"],
 }
 # With the hand table of step 3: (name, signature) -> needs
 HAND = {
@@ -177,6 +194,64 @@ def main():
     code, so, se = run(generate)
     if code != 0:
         failed.append("gen_types.py fails on the restored needs")
+
+    # 5. the sets a handler proves
+    def generated():
+        functions = json.loads((out / "gen" / "luma_functions.json").read_text(encoding="utf-8"))
+        return functions.get("guarantees"), (out / "gen" / "luma_types_table.cpp").read_text(encoding="utf-8")
+
+    sets, table_text = generated()
+    if sets != [] or "kGuaranteeSets[] = {{nullptr, false, nullptr}};" not in table_text:
+        failed.append("--tree alone gives the sets %s, or a kernel table with rows" % sets)
+    guarantees = out / "guarantees.json"
+    guarantees.write_text(json.dumps({"sets": [
+        {"name": "system", "holds": "the fixture's files", "needs": {"UserFile": "the fixture"}},
+        {"name": "stage", "holds": "the fixture's scene", "made": True, "with": ["system"],
+         "needs": {"scene": "the fixture", "Counter": "the fixture"}},
+        {"name": "player", "holds": "the fixture's player", "with": ["stage"], "needs": {"MarioActor": "the fixture"}},
+    ]}), encoding="utf-8")
+    code, so, se = run(generate + ["--guarantees", str(guarantees)])
+    if code != 0:
+        failed.append("gen_types.py failed with a good table of sets: " + se[-400:])
+    else:
+        sets, table_text = generated()
+        want = [("system", False, ["UserFile"]), ("stage", True, ["UserFile", "scene", "Counter"]),
+                ("player", True, ["UserFile", "scene", "Counter", "MarioActor"])]
+        got = [(g["name"], g["made"], list(g["needs"])) for g in sets or []]
+        if got != want:
+            failed.append("the sets are %s, not %s" % (got, want))
+        if any(not all(g["needs"].values()) for g in sets or []):
+            failed.append("a set's need has no why: %s" % sets)
+        rows = ('kGuaranteeSets[] = {{"system", false, kGs0}, {"stage", true, kGs1}, {"player", true, kGs2}, '
+                '{nullptr, false, nullptr}};')
+        with_sets = {(f["name"], f["signature"]): f["needs"] for f in
+                     json.loads((out / "gen" / "luma_functions.json").read_text(encoding="utf-8"))["functions"]}
+        for key, needs in WITH_SETS.items():
+            if with_sets.get(key) != needs:
+                failed.append("with the sets %s %s needs %s, not %s" % (key + (with_sets.get(key), needs)))
+        ids = "const unsigned char kGs2[] = {luma::kNeedUserFile, luma::kNeedScene, SceneObj_Counter, luma::kNeedMarioActor, luma::kNeedsEnd};"
+        if rows not in table_text or ids not in table_text:
+            failed.append("the kernel's table of sets is not the table's:\n" +
+                          "\n".join(l for l in table_text.splitlines() if "kGs" in l or "kGuarantee" in l))
+    planted_sets = [
+        ("a set named twice", [{"name": "a", "holds": "h", "needs": {"scene": "w"}}, {"name": "a", "holds": "h", "needs": {"scene": "w"}}],
+         "sets[1]: the name 'a' is not a new one"),
+        ("a with that is no earlier set", [{"name": "a", "holds": "h", "with": ["b"], "needs": {"scene": "w"}},
+                                           {"name": "b", "holds": "h", "needs": {"Counter": "w"}}],
+         "sets[0] (a): with 'b' is no earlier set"),
+        ("a need with no why", [{"name": "a", "holds": "h", "needs": {"scene": ""}}], "sets[0] (a): scene has no why"),
+        ("a need named twice", [{"name": "a", "holds": "h", "needs": {"scene": "w"}},
+                                {"name": "b", "holds": "h", "with": ["a"], "needs": {"scene": "w"}}],
+         "sets[1] (b): scene is named twice"),
+        ("a set with no needs", [{"name": "a", "holds": "h", "needs": {}}], "sets[0] (a): no needs"),
+        ("a set with no holds", [{"name": "a", "needs": {"scene": "w"}}], "sets[0] (a): no holds"),
+    ]
+    for what, rows, named in planted_sets:
+        guarantees.write_text(json.dumps({"sets": rows}), encoding="utf-8")
+        code, so, se = run(generate + ["--guarantees", str(guarantees)])
+        print("planted, %s:" % what, se.strip()[-300:])
+        if code == 0 or named not in se:
+            failed.append("gen_types.py did not stop naming %r (%s)" % (named, what))
 
     if failed:
         print("needs_fixture_test.py: FAILED:\n  " + "\n  ".join(failed))

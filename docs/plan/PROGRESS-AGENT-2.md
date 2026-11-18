@@ -199,3 +199,20 @@ One dated entry per package step. Newest last. Ledger rows are in ledger.tsv (ag
   N%" in place of the page's own. aftercrash 6702 and 6709 failed so under load on Vulkan and 6702 on d3d11, and pass
   unloaded. It cannot be a known-failures line (a pass would fail the gate). The renderer, the status line and the
   host's deterministic mode are Agent 1's files; he takes the row.
+
+## 2026-11-17 N-2023, N-2024, N-2050, N-2051: a call's needs are proved at build time
+
+- N-2023 and N-2024 fixed (docs/plan/M2-NEEDS-PROOF.md). LumaScript refuses at build time a game call whose needs
+  (luma_functions.json) nothing proves at that place (S0154, with what would prove them). Proofs: the handler's set
+  (system, stage, player: tools/lumacore/guarantees.json; on stage ready and on stage "NAME" prove stage, on player
+  ready and on play prove player, on stage ended proves system), `can(F)`, `holds("SET")` (new, S0156 for a name that
+  is not a set), an if-let on a result that is null without them, a call that makes them (makes in the rows), a hook
+  or an override's own row, and the left side of `and`/`or` inside its right side. A wait ends every proof. The kernel
+  answers holds at run time (LumaCore.holds; LUMA_CAN_CALL 1, API 161), so the C side can ask the same.
+- N-2050 fixed: the rows' merge passed a method's needs to its callers, so 3431 rows needed an object only some
+  stages make; a member call now passes on only needs every scene has (657 left). N-2051 fixed: a call under a test
+  of MR::isExistSceneObj(X) passes on neither X nor the scene (484 left). needs_fixture_test.py fails before each.
+- LumaKit (52 refusals to 0): camera settles only with a stage; cutscene, shop, talk, ride, player forms and replay
+  touch the player only while holds("player"), checked again after every wait; actor, item and projectile kill and
+  give only with their set. 18 kit-* test mods got the same guards after their waits. New game test k12-sets: every
+  handler's order and the sets it proves across two stages and a death (EggStarGalaxy, HoneyBeeKingdomGalaxy).

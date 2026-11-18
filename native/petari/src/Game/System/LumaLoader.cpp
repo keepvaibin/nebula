@@ -1140,6 +1140,19 @@ namespace luma {
         void* apiPlacedAt(const LumaMod* pMod, const LumaPlacement* pPlace) { return luma::make::placedAt(pMod, pPlace); }
 
         // Gravity classes (classes.md, "gravity").
+        // A game function's needs, and the sets handlers prove (docs/plan/M2-NEEDS-PROOF.md): read on the game thread
+        // only, where the scene's objects come and go.
+        s32 apiCanCall(const LumaFunction* pFunction) {
+            return luma::onGameThread() && luma::canCall(asRow(pFunction)) ? 1 : 0;
+        }
+
+        s32 apiHolds(const char* pSet) {
+            if (!luma::onGameThread()) {
+                return luma::holds(pSet, false) < 0 ? -1 : 0;
+            }
+            return luma::holds(pSet);
+        }
+
         void* apiMakeGravity(const LumaMod* pMod, const char* pClass, const LumaGravityPlace* pPlace) {
             return refusedWhileGoing(pMod, "make_gravity") ? nullptr : luma::classes::makeGravity(pMod, pClass, pPlace);
         }
@@ -1148,7 +1161,7 @@ namespace luma {
             sizeof(LumaCore), LUMA_API, apiLog, apiFunction, apiFunctionAt, apiHook, apiProceed, apiField, apiSizeOf, apiClassOf, apiIsA, apiService,
             apiGameThread, apiUnhook, apiAlloc, apiFree, apiReport, apiOwnClass, apiAsClass, apiMethod, apiOverrider, apiCallMethod,
             apiKeep, apiKept, apiDefineClass, apiClassData, apiNumber, apiSetNumber, apiTable, apiSetTable, apiMake,
-            apiAliasClass, apiPlacementOf, apiPlacedAt, apiMakeGravity, luma::guard::callMod,
+            apiAliasClass, apiPlacementOf, apiPlacedAt, apiMakeGravity, luma::guard::callMod, apiCanCall, apiHolds,
         };
 
         // One import: its function (functions and hooks) or number (fields, sizes, classes). False: the game has none,
