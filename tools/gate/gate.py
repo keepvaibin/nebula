@@ -494,7 +494,9 @@ def lumalink_tests(g):
             pathlib.Path(log).write_text("%s\n" % stop, encoding="utf-8")
             return False, str(stop)
         env = {"LUMA_SDK": str(TREE / "native" / "include"), "LUMA_PLATFORM_CHECK": str(PLATFORM_CHECK),
-               "LUMA_ROWS": str(pathlib.Path(g.bin) / "luma"), "LUMA_TYPES": str(pathlib.Path(g.bin) / "luma_types.json")}
+               "LUMA_ROWS": str(pathlib.Path(g.bin) / "luma"), "LUMA_TYPES": str(pathlib.Path(g.bin) / "luma_types.json"),
+               # lumalink test's `test game` blocks run in this build (its pak.path), by this tree's runner.
+               "LUMA_TEST_BIN": str(g.bin), "LUMA_TEST_RUNNER": str(TREE / "tools" / "lumacore" / "luma_test.py")}
         code = run(["cargo", "test", "--release", "--locked", "--no-fail-fast", "-j", g.args.jobs, "--workspace", "--",
                     "--include-ignored", "--skip", "vscode"], log, env=env, cwd=checkout)
         text = pathlib.Path(log).read_text(encoding="utf-8", errors="replace")

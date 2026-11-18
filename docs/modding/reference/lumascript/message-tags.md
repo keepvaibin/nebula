@@ -9,9 +9,8 @@ contentType: reference
 
 Game text holds tags for waits, pages, pictures, sizes, colors and the player's name. Mod text writes each tag as a word in brackets.
 
-The game's text holds tags for waits, pages, pictures, sizes, colors and the player's name. Mod text writes
-each as a word in brackets; the cook, the game's mod API and LumaScript all read this one table. Words are
-matched without case; a number is decimal or 0x and hex digits.
+The cook, the game's mod API and LumaScript all read this one table (`luma_text_tags.h`). Words are matched
+without case; a number is decimal or 0x and hex digits.
 
 | Written | Group | Tag | Largest number | What it does |
 |---|---|---|---|---|

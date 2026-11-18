@@ -49,10 +49,10 @@ SECTIONS = {
         "* The source of the test's game half, `luma_test.c`. LumaLink builds it against the installed game's SDK "
         "before the tests run.", "",
         "The kit is built for Windows x64 and Linux x64. On other systems, including Windows on ARM, `lumalink test` "
-        "stops with this message:", "",
+        "runs the mod's plain `test` blocks, then stops with this message before a game run:", "",
         "```text",
-        "this LumaLink has no test kit for this system: lumalink test runs on Windows x64 and Linux x64. Reinstall "
-        "LumaLink with its Setup, or set LUMA_TEST_KIT",
+        "this LumaLink has no test kit for this system: the game runs of lumalink test need Windows x64 or Linux x64 "
+        "(plain test blocks run without them). Reinstall LumaLink with its Setup, or set LUMA_TEST_KIT",
         "```", "",
         "When `--bin` names a game build's folder that has its own test extension, `lumalink test` uses that build's "
         "parts and no kit.", "",

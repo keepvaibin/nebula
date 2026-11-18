@@ -26,7 +26,7 @@ For every key a test can use, see [Test files](../reference/test-files.md).
 ## Prerequisites
 
 * Nebula, installed with Nebula Setup. `lumalink test` uses the installed game.
-* A computer with Windows x64 or Linux x64. The test kit that LumaLink installs runs on these systems only.
+* A computer with Windows x64 or Linux x64. The test kit that LumaLink installs runs on these systems only. Plain `test` blocks in your mod's code run on every system LumaLink runs on.
 * LumaLink. For more information, see [Installing LumaLink](../get-started/installing-lumalink.md).
 * Python 3, which runs the tests. If `python` is not on your PATH, set `LUMALINK_PYTHON` to the Python program.
 
@@ -78,6 +78,10 @@ jump (d3d12): pass
 The command exits with 0 when every test passes, so you can run it in CI.
 
 To run on Vulkan instead of Direct3D 12, add `--renderer vulkan`. To run each test on several renderers, list them in the test's `renderers` key.
+
+## Testing your mod's code
+
+To test your mod's own functions, write `test` blocks in its LumaScript. `lumalink test` runs them before the test folders: plain tests without the game, `test game` blocks in the game. For more information, see [Tests in the mod](../reference/lumascript/tests.md).
 
 ## Checking what your mod does
 
@@ -200,10 +204,10 @@ From the kit, `lumalink test` takes:
 * The test extension that the game loads for each run.
 * The source of the test's game half, `luma_test.c`. LumaLink builds it against the installed game's SDK before the tests run.
 
-The kit is built for Windows x64 and Linux x64. On other systems, including Windows on ARM, `lumalink test` stops with this message:
+The kit is built for Windows x64 and Linux x64. On other systems, including Windows on ARM, `lumalink test` runs the mod's plain `test` blocks, then stops with this message before a game run:
 
 ```text
-this LumaLink has no test kit for this system: lumalink test runs on Windows x64 and Linux x64. Reinstall LumaLink with its Setup, or set LUMA_TEST_KIT
+this LumaLink has no test kit for this system: the game runs of lumalink test need Windows x64 or Linux x64 (plain test blocks run without them). Reinstall LumaLink with its Setup, or set LUMA_TEST_KIT
 ```
 
 When `--bin` names a game build's folder that has its own test extension, `lumalink test` uses that build's parts and no kit.

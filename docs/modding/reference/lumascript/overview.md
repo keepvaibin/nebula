@@ -17,8 +17,8 @@ to machine code inside the mod's own library. The game contains nothing of LumaS
 2. Safe by construction. No raw pointers, no manual freeing, no reading a game object after it is gone. Each
    mistake the compiler cannot rule out (an index outside a list, an empty handle, division by zero, an overflow) is
    a script error: reported with the mod, the file and the line, and the game goes on with its own behavior.
-3. No garbage collector. Values, owned containers freed when their owner ends, and a scratch area emptied each
-   frame. Nothing pauses.
+3. No garbage collector. Values, owned containers freed when their owner ends, and a scratch area given back as
+   soon as its text is used. Nothing pauses.
 4. The game by name. Every function, field, class, enum and global of the game's self-description is in scope
    by its own name; the compiler checks each use against the installed game's description and writes the mod's
    import list from what the script uses.

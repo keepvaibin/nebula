@@ -23,7 +23,7 @@ A service the game lacks, such as on an older game or a platform without it, mak
 
 ## Permissions
 
-Declare the permissions a service needs in `luma.json`. Using a service whose permission is not declared is a compile error that names the permission. For the list, see [Permissions](../../concepts/permissions.md).
+Declare the permissions a service needs in `luma.json`. A mod whose code uses a service without its permission is refused by the validator (L506), which names the service and the permission. For the list, see [Permissions](../../concepts/permissions.md).
 
 ## Events and waiting
 

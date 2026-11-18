@@ -39,7 +39,7 @@ Run `lumalink COMMAND --help` to print any command's help, or `lumalink --help` 
 | [`verify`](verify.md) | Check that a .luma is exactly what its folder packs to. |
 | [`build`](build.md) | Build a mod's code (LumaScript and C) for every platform the game runs on. |
 | [`run`](run.md) | Start the installed game with a mod: a folder is packed first, then imported into the game's mods. A mod folder with code plays in dev mode: each change to its code is built and reloaded in the running game until the game is closed. |
-| [`test`](test.md) | Build the mod, run each tests/**/test.json in the game (hidden, silent) and print each check with what was found. |
+| [`test`](test.md) | Build the mod, run its test blocks and each tests/**/test.json in the game (hidden, silent), and print each test and check with what was found. |
 | [`format`](format.md) | Format LumaScript files: four spaces of indent for each open bracket, at most one blank line, LF line ends. Strings and comments are not changed. |
 | [`add`](add.md) | Add a part to a mod by command, checked before it is kept: `add need lumakit <folder>`, `add option balls <folder> --kind number --default 3 --name Balls`, `add file title.arc <folder> --at LayoutData/Title.arc`, `add character <model.glb> <folder> --replaces mario`. |
 | [`convert`](convert.md) | Convert a published mod (Riivolution pack, disc-layout folder, loose files, texture pack, Gecko list) to a mod folder, each file cooked as the game cooks it. |

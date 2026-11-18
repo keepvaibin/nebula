@@ -27,7 +27,7 @@ Phones and tablets (Android and iOS) have no LumaLink. Nebula on these devices l
 | macOS on Apple silicon | `LumaLink-Setup-macos-arm64` |
 | macOS on Intel | `LumaLink-Setup-macos-x64` |
 
-On Windows on ARM, Linux on ARM64 and macOS, `lumalink test` is not available, because its test parts are built for Windows x64 and Linux x64 only. Every other command works.
+On Windows on ARM, Linux on ARM64 and macOS, `lumalink test` runs only the plain `test` blocks in a mod's code, because the test parts that run the game are built for Windows x64 and Linux x64 only. Every other command works.
 
 ## Installing LumaLink on Windows
 

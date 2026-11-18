@@ -40,14 +40,16 @@ can make a cycle, so nothing leaks and nothing waits for a collector.
 
 ## Scratch
 
-Text made only to hand to the game for one call (a `const char *` argument, a log line) is made in the frame's
-scratch area, which the run-time support empties at the end of each frame. The script never sees this; it is how
-the compiler avoids an allocation per call.
+Text made only to hand to the game for one call (a `const char *` argument the game does not keep, a log line) is
+made in the run-time support's scratch area and given back as soon as it is used: after the log line or the game
+call, and when the function that made it ends, however it ends. The script never sees this; it is how the compiler
+avoids an allocation per call. For more information, see [The compiled form](compiled-form.md).
 
 ## Module state
 
-`var` and `let` at the top of a module live for the mod's whole life (from `on start` until the mod is stopped).
-`let` at the top must be a constant expression or the result of `on start`.
+`var` and `let` at the top of a module live for the mod's whole life, until the mod is stopped. Each may be any
+expression. They are made when the mod starts, in module order, before every `on start`; one that reads the game is
+made after the mod's game names are bound. A top-level `let` that is constant is folded by the compiler.
 
 ## Further reading
 

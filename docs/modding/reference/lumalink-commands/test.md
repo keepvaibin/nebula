@@ -1,7 +1,7 @@
 ---
 title: lumalink test
 shortTitle: test
-intro: Build the mod, run each tests/**/test.json in the game (hidden, silent) and print each check with what was found.
+intro: Build the mod, run its test blocks and each tests/**/test.json in the game (hidden, silent), and print each test and check with what was found.
 contentType: reference
 ---
 
@@ -9,7 +9,7 @@ contentType: reference
 
 ## About lumalink test
 
-Build the mod, run each tests/**/test.json in the game (hidden, silent) and print each check with what was found.
+Build the mod, run its test blocks and each tests/**/test.json in the game (hidden, silent), and print each test and check with what was found.
 
 ## Example
 
@@ -39,10 +39,10 @@ From the kit, `lumalink test` takes:
 * The test extension that the game loads for each run.
 * The source of the test's game half, `luma_test.c`. LumaLink builds it against the installed game's SDK before the tests run.
 
-The kit is built for Windows x64 and Linux x64. On other systems, including Windows on ARM, `lumalink test` stops with this message:
+The kit is built for Windows x64 and Linux x64. On other systems, including Windows on ARM, `lumalink test` runs the mod's plain `test` blocks, then stops with this message before a game run:
 
 ```text
-this LumaLink has no test kit for this system: lumalink test runs on Windows x64 and Linux x64. Reinstall LumaLink with its Setup, or set LUMA_TEST_KIT
+this LumaLink has no test kit for this system: the game runs of lumalink test need Windows x64 or Linux x64 (plain test blocks run without them). Reinstall LumaLink with its Setup, or set LUMA_TEST_KIT
 ```
 
 When `--bin` names a game build's folder that has its own test extension, `lumalink test` uses that build's parts and no kit.
