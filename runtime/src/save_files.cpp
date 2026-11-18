@@ -2,6 +2,7 @@
 
 #include "galaxy/atomic_file.h"
 
+#include <cstring>
 #include <fstream>
 #include <string>
 #include <system_error>
@@ -71,6 +72,42 @@ Result read(const std::filesystem::path& folder, std::string_view name, void* bu
     }
 }
 
+namespace {
+
+std::uint32_t little_u32(const unsigned char* bytes) {
+    return std::uint32_t{bytes[0]} | std::uint32_t{bytes[1]} << 8 | std::uint32_t{bytes[2]} << 16 | std::uint32_t{bytes[3]} << 24;
+}
+
+// A file that begins with the same tag as the new contents and a higher format number (the word after the tag) was
+// written by a newer build: copied to <name>.v<format> before the write, once, so the two backups never rotate it out.
+void keep_newer(const std::filesystem::path& path, std::string_view contents) noexcept {
+    try {
+        if (contents.size() < 8) {
+            return;
+        }
+        unsigned char head[8] = {};
+        std::ifstream in(path, std::ios::binary);
+        in.read(reinterpret_cast<char*>(head), sizeof(head));
+        if (!in || std::memcmp(head, contents.data(), 4) != 0) {
+            return;
+        }
+        const std::uint32_t had = little_u32(head + 4);
+        if (had <= little_u32(reinterpret_cast<const unsigned char*>(contents.data()) + 4)) {
+            return;
+        }
+        in.close();
+        std::filesystem::path kept = path;
+        kept += ".v" + std::to_string(had);
+        std::error_code error;
+        if (!std::filesystem::exists(kept, error)) {
+            std::filesystem::copy_file(path, kept, error);
+        }
+    } catch (...) {
+    }
+}
+
+}  // namespace
+
 Result write(const std::filesystem::path& folder, std::string_view name, const void* data, std::uint32_t size,
              Backups backups) noexcept {
     try {
@@ -82,6 +119,7 @@ Result write(const std::filesystem::path& folder, std::string_view name, const v
         // The last two saves stay beside it, for a player whose newest file is damaged.
         std::error_code error;
         if (backups == Backups::kKeep && std::filesystem::is_regular_file(path, error)) {
+            keep_newer(path, contents);
             std::filesystem::path first = path;
             first += ".1";
             std::filesystem::path second = path;

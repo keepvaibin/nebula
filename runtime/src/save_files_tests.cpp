@@ -99,6 +99,37 @@ int main() {
                      "the second write is read back whole");
     passed &= expect(!fs::exists(mods / "m.bin.1") && !fs::exists(mods / "m.bin.2"), "no backups beside a mod's file");
 
+    // A newer build's file (P-079): the same tag, a higher format word. Kept as <name>.v<format> before the first
+    // write over it, and kept as it was through every later write (the two backups would rotate it out after two).
+    const auto header = [](std::uint32_t format, unsigned char fill) {
+        std::array<unsigned char, 32> bytes{};
+        std::memcpy(bytes.data(), "NBSV", 4);
+        for (int i = 0; i < 4; i++) bytes[4 + i] = static_cast<unsigned char>(format >> (8 * i));
+        for (std::size_t i = 8; i < bytes.size(); i++) bytes[i] = fill;
+        return bytes;
+    };
+    const auto newer = header(5, 0x55);
+    const auto ours = header(4, 0x44);
+    const fs::path newerFolder = root / "newer";
+    passed &= expect(write(newerFolder, "Nebula.sav", newer.data(), 32) == kDone, "a newer build's save is on the drive");
+    for (int i = 0; i < 3; i++) {
+        passed &= expect(write(newerFolder, "Nebula.sav", ours.data(), 32) == kDone, "this build saves three times");
+    }
+    passed &= expect(read(newerFolder, "Nebula.sav.v5", buffer.data(), kBufferSize, &length) == kDone && length == 32 &&
+                         std::memcmp(buffer.data(), newer.data(), 32) == 0,
+                     "the newer save is kept whole as Nebula.sav.v5");
+    passed &= expect(read(newerFolder, "Nebula.sav.2", buffer.data(), kBufferSize, &length) == kDone &&
+                         std::memcmp(buffer.data(), ours.data(), 32) == 0,
+                     "the backups rotate as before");
+    const fs::path sameFolder = root / "same";
+    passed &= expect(write(sameFolder, "Nebula.sav", ours.data(), 32) == kDone &&
+                         write(sameFolder, "Nebula.sav", newer.data(), 32) == kDone &&
+                         write(sameFolder, "GameData.bin", newer.data(), 32) == kDone &&
+                         write(sameFolder, "GameData.bin", save.data(), 32) == kDone,
+                     "an older format, and another tag, are written over");
+    passed &= expect(!fs::exists(sameFolder / "Nebula.sav.v4") && !fs::exists(sameFolder / "GameData.bin.v5"),
+                     "only a newer format of the same tag is kept aside");
+
     std::error_code error;
     fs::remove_all(root, error);
     if (!passed) {

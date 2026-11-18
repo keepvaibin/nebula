@@ -15,6 +15,7 @@ namespace {
     NEW_NERVE(SaveErrorSequenceError, SaveErrorSequence, Error);
     NEW_NERVE(SaveErrorSequenceDamagedConfirm, SaveErrorSequence, DamagedConfirm);
     NEW_NERVE(SaveErrorSequenceNoSaveConfirm, SaveErrorSequence, NoSaveConfirm);
+    NEW_NERVE(SaveErrorSequenceNewer, SaveErrorSequence, Newer);
 
     MR::GrowBuffer< char16_t > sText;
 };  // namespace
@@ -35,6 +36,12 @@ void SaveErrorSequence::startDamaged() {
     appear();
     mResult = Result_None;
     setNerve(GET_NERVE_ANON(SaveErrorSequenceDamagedConfirm));
+}
+
+void SaveErrorSequence::startNewer() {
+    appear();
+    mResult = Result_None;
+    setNerve(GET_NERVE_ANON(SaveErrorSequenceNewer));
 }
 
 bool SaveErrorSequence::tryUnrecoverable(SaveRequest::Result result) {
@@ -103,9 +110,23 @@ void SaveErrorSequence::exeNoSaveConfirm() {
     }
 }
 
+// A newer Nebula's save: said, and the game plays on without saving. There is no choice to make a new file, which would
+// write over it.
+void SaveErrorSequence::exeNewer() {
+    if (MR::isFirstStep(this)) {
+        mSysInfoWindow->appearKeyWithText(NebulaText::get(&sText, "SaveNewer"));
+        MR::startSystemSE("SE_SY_SAVE_CONFIRM_INFO");
+    }
+
+    if (MR::isDead(mSysInfoWindow)) {
+        mResult = Result_NoSave;
+        kill();
+    }
+}
+
 bool SaveErrorSequence::isEnablePointer() const {
     return isNerve(GET_NERVE_ANON(SaveErrorSequenceError)) || isNerve(GET_NERVE_ANON(SaveErrorSequenceDamagedConfirm)) ||
-           isNerve(GET_NERVE_ANON(SaveErrorSequenceNoSaveConfirm));
+           isNerve(GET_NERVE_ANON(SaveErrorSequenceNoSaveConfirm)) || isNerve(GET_NERVE_ANON(SaveErrorSequenceNewer));
 }
 
 bool SaveErrorSequence::isResultFileCorrupted() const {
