@@ -64,8 +64,6 @@ def engine_keys():
     keys = {'config': set(), 'runtime': set()}
     render = strip_comments(read('runtime/src/render/render_config.cpp'))
     keys['config'] |= set(re.findall(r'strcmp\(key, "([a-z0-9_]+)"\)', render))
-    parts = re.search(r'kRtPartKeys\[\] = \{([^}]*)\}', render)
-    keys['config'] |= set(re.findall(r'"([a-z_]+)"', parts.group(1)))
     runtime = strip_comments(read('runtime/src/runtime_settings.cpp'))
     keys['runtime'] |= set(re.findall(r'strcmp\(key, "([a-z0-9_]+)"\)', runtime))
     keys['runtime'] |= set(re.findall(r'key_text == "([a-z_]+)"', runtime))

@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Direct3D 11 renderer (d3d11/renderer_d3d11.h): device, swap chain, frames, present, the draws' replay, samplers and
 // tables. The scene target, its passes, copies, pictures, probes and the renderer's parts are renderer_d3d11_scene.cpp.
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/d3d11/renderer_d3d11.h"
 #include "../dxgi_pacing.h"
 
 #include "galaxy/content_viewport.h"
+#include "galaxy/crash_report.h"
 #include "galaxy/display_aspect.h"
+#include "galaxy/render/device_memory.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
@@ -56,6 +59,10 @@ bool fsr_frame_generation_compiled() noexcept { return false; }
 // presenting, which goes through the same recovery as a real removal (render_core.cpp restart_device).
 void RendererD3D11::lose_device() {
     loss_asked_ = true;
+}
+
+void RendererD3D11::allocation_failed(const char* what) const {
+    throw std::runtime_error(galaxy::crash::gpu_allocation_failure(what, gpu::device_removed(d3d11::Context::get().device())));
 }
 
 bool RendererD3D11::initialize(int window_width, int window_height, const FrameMap& frame) {
@@ -244,7 +251,8 @@ void RendererD3D11::report_adapter() {
     DXGI_ADAPTER_DESC1 desc{};
     IDXGIAdapter1* const adapter = context.adapter();
     const bool described = adapter != nullptr && SUCCEEDED(adapter->GetDesc1(&desc));
-    record_render_adapter(name.c_str(), vendor, described ? desc.DeviceId : 0u, described ? desc.SubSysId : 0u, false);
+    set_device_unified_memory(context.caps().unified_memory);
+    record_render_adapter(name.c_str(), vendor, described ? desc.DeviceId : 0u, described ? desc.SubSysId : 0u);
     record_render_driver(dxgi_driver_version(adapter));
     RenderFeatureCaps caps{};
     caps.adapter_vendor_id = vendor;
@@ -253,7 +261,6 @@ void RendererD3D11::report_adapter() {
     caps.msaa = make_render_feature_status(true, msaa, true, true,
                                            msaa ? "the scene target is multisampled" : "the GPU has no multisampled scene target formats");
     caps.taa = make_render_feature_status(false, false, false, false, "temporal upscaling runs on Direct3D 12 and Vulkan");
-    caps.dxr = make_render_feature_status(false, false, false, false, "ray tracing runs on Direct3D 12");
     caps.streamline_bridge_built = false;
     caps.streamline = make_render_feature_status(false, false, false, false, "NVIDIA Streamline runs on Direct3D 12");
     caps.reflex = make_render_feature_status(false, false, false, false, "Reflex runs on Direct3D 12");
@@ -380,7 +387,7 @@ void RendererD3D11::shutdown() {
         target_slots_.clear();
         pictures_.clear();
         frame_pass_targets_.clear();
-        scene_capture_ = backbuffer_capture_ = display_capture_ = Readback{};
+        backbuffer_capture_ = display_capture_ = Readback{};
         probe_slots_.clear();
         for (Frame& frame : frames_) {
             frame = Frame{};
@@ -523,7 +530,7 @@ void RendererD3D11::attach_texture_uploads(TextureStore& cache) {
 }
 
 void RendererD3D11::begin_frame() {
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     follow_window_and_resize();
     apply_window_size();
     apply_dynamic_resolution();
@@ -630,9 +637,13 @@ unsigned RendererD3D11::present_sync_interval(unsigned configured, float max_fps
     if (hz <= 0.0) {
         return 1u;
     }
-    // As renderer_d3d12.cpp present_sync_interval: a game frame holds for its whole 60 Hz frame on a display of a multiple.
+    // As renderer_d3d12.cpp present_sync_interval: a game frame at 60 goes out at once; a capped or in-between rate
+    // that is a part of the refresh keeps whole refreshes per picture.
     const double rate = game_frame ? std::min(kGameStepRate, present_frame_rate(max_fps, configured, hz))
                                    : present_frame_rate(max_fps, configured, hz);
+    if ((game_frame || !interpolation_mode()) && rate >= kGameStepRate - 0.5) {
+        return 1u;
+    }
     const double multiple = std::round(hz / rate);
     if (multiple >= 2.0 && multiple <= 4.0 && std::abs(hz - rate * multiple) <= 0.015 * hz) {
         return static_cast<unsigned>(multiple);
@@ -717,9 +728,6 @@ std::uint64_t RendererD3D11::end_frame(bool present_swap_chain, SubmissionCallba
         if (probes.fence == kProbesInFrame) {
             probes.fence = fence;
         }
-    }
-    if (scene_capture_.staging && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {
-        scene_capture_.fence = fence;
     }
     if (backbuffer_capture_.staging && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
         backbuffer_capture_.fence = fence;
@@ -908,6 +916,7 @@ void RendererD3D11::refresh_display_rate() {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';
@@ -1310,7 +1319,8 @@ gpu::Address RendererD3D11::zero_stream(std::uint32_t bytes) {
         zero_stream_bytes_ = std::max(bytes, 1u << 16u);
         UploadBuffer memory = gpu::create_upload_memory(device(), zero_stream_bytes_, "zero stream");
         if (!memory) {
-            throw std::runtime_error("the zero stream could not be made");
+            zero_stream_bytes_ = 0u;
+            allocation_failed("the zero stream");
         }
         std::memset(memory.cpu, 0, zero_stream_bytes_);
         zero_vertices_ = std::move(memory.buffer);

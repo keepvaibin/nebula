@@ -9,15 +9,16 @@
 #include "Game/System/LumaCore.hpp"
 
 namespace {
-    const s32 sCometTimeLimitDefault = NebulaFrameClock::stepsOfSeconds(30);
+    // A mission with no limit in the table or a mod: thirty minutes, the console's 108,000 steps.
+    const u32 sCometTimeLimitDefault = NebulaFrameClock::stepsOfSeconds(30 * 60);
 };  // namespace
 
 namespace NrvCometEventExecutorTimeLimit {
     NEW_NERVE(CometEventExecutorTimeLimitStartEvent, CometEventExecutorTimeLimit, StartEvent);
 };  // namespace NrvCometEventExecutorTimeLimit
 
-CometEventExecutorTimeLimit::CometEventExecutorTimeLimit(u32 timeLimit)
-    : LiveActor("制限時間コメット実行者"), mTimeLimitLayout(nullptr), mTimeLimit(timeLimit) {
+CometEventExecutorTimeLimit::CometEventExecutorTimeLimit(u32 timeLimitSteps)
+    : LiveActor("制限時間コメット実行者"), mTimeLimitLayout(nullptr), mTimeLimitSteps(timeLimitSteps) {
     lumacore::setClass(this, lumacore::kClassId< CometEventExecutorTimeLimit >);
 }
 
@@ -57,5 +58,5 @@ void CometEventExecutorTimeLimit::exeStartEvent() {
 }
 
 u32 CometEventExecutorTimeLimit::getTimeLimit() const {
-    return NebulaFrameClock::stepsOfSeconds(mTimeLimit != 0 ? mTimeLimit : ::sCometTimeLimitDefault);
+    return mTimeLimitSteps != 0 ? mTimeLimitSteps : ::sCometTimeLimitDefault;
 }

@@ -38,15 +38,6 @@ float3 mii_light(float3 eye, float3 nrm) {
     return material.mat_color.rgb * saturate((AMBIENT_TERM(material.amb_color.rgb) * 255.0 + sum) / 255.0);
 }
 
-#if NATIVE_TRACED
-bool material_relight(inout NativeVaryings i, float3 nrm) {
-    if (uint(material.params.y) == 0u) {
-        return false;  // no lit chain: the part's constant colour, painted
-    }
-    i.color.rgb = mii_light(i.lit_eye, nrm);
-    return true;
-}
-#endif
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.uv[0] = float4(v.uv[0], 1.0, 0.0);

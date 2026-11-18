@@ -36,7 +36,6 @@ constexpr RegisterBinding kDrawBindings[] = {
     // Set 1 the images and set 2 the samplers, as one array each over every texture and sampler (space1) or as a bound
     // table (program.hlsli).
     {"t0, space1", 1, 0},
-    {"t0, space2", 1, 0},  // the same images as Texture3D (program.hlsli gVolumes)
     {"s0, space1", 2, 0},
     {"t0", 1, 0},
     {"s0", 2, 0},
@@ -244,7 +243,7 @@ void make_bindless_arrays_runtime(std::vector<std::uint32_t>& spirv) {
     constexpr std::uint32_t kDecorationDescriptorSet = 34;
     constexpr std::uint32_t kStorageUniformConstant = 0;
     constexpr std::uint32_t kCapabilityRuntimeDescriptorArray = 5302;
-    constexpr std::uint32_t kImageSet = 1;    // kDrawBindings: t0 space1 and t0 space2
+    constexpr std::uint32_t kImageSet = 1;    // kDrawBindings: t0 space1
     constexpr std::uint32_t kSamplerSet = 2;  // kDrawBindings: s0 space1
     constexpr char kExtension[] = "SPV_EXT_descriptor_indexing";
     // The extension's name as literal string words (nul-terminated, padded with zeros).

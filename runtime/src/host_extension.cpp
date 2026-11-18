@@ -37,6 +37,7 @@ bool g_motor = false;              // an extension takes the motor (NEBULA_EXT_C
 std::uint8_t g_motor_given = 0u;   // the strength it was last given
 std::uint32_t g_vram_budget_mb = 0u;
 std::uint32_t g_disc_read_delay_us = 0u;
+std::uint32_t g_save_write_delay_us = 0u;
 
 void* load_library(const std::filesystem::path& file, std::string& error) {
 #if defined(_WIN32)
@@ -121,6 +122,7 @@ bool attach(std::span<const std::filesystem::path> files, const NebulaHostForExt
             g_vram_budget_mb = kept.vram_budget_mb;
         }
         g_disc_read_delay_us = std::max(g_disc_read_delay_us, kept.disc_read_delay_us);
+        g_save_write_delay_us = std::max(g_save_write_delay_us, kept.save_write_delay_us);
     }
     return true;
 }
@@ -139,6 +141,10 @@ std::uint64_t vram_budget_bytes() noexcept {
 
 std::uint32_t disc_read_delay_us() noexcept {
     return g_disc_read_delay_us;
+}
+
+std::uint32_t save_write_delay_us() noexcept {
+    return g_save_write_delay_us;
 }
 
 void log_line(const char* tag, const char* text) noexcept {

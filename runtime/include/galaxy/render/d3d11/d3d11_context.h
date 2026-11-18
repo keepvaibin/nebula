@@ -124,6 +124,12 @@ struct RenderLayout {
     unsigned max_samples = 1u;
 };
 
+// Whether an adapter with `dedicated_bytes` of video memory of its own (DXGI_ADAPTER_DESC1::DedicatedVideoMemory) shares
+// the system's memory: an integrated GPU reserves at most a few hundred megabytes, WARP none.
+[[nodiscard]] constexpr bool unified_memory(std::uint64_t dedicated_bytes) noexcept {
+    return dedicated_bytes < (std::uint64_t{512} << 20u);
+}
+
 struct DeviceCaps {
     D3D_FEATURE_LEVEL level = D3D_FEATURE_LEVEL_11_0;
     bool tearing = false;               // DXGI_FEATURE_PRESENT_ALLOW_TEARING

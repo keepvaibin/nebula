@@ -1,0 +1,39 @@
+{
+  "harness": 1,
+  "name": "save-newer",
+  "about": "A Nebula.sav a newer Nebula wrote (save format 5) is told apart from a damaged one: the start says so, offers no new file, and the game plays on without writing over it (P-079).",
+  "bare": true,
+  "saves": "saves",
+  "clock": "start",
+  "limit_seconds": 120,
+  "steps": [
+    {
+      "at": 300,
+      "key": "enter"
+    },
+    {
+      "at": 420,
+      "key": "enter"
+    },
+    {
+      "at": 660,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "save: Nebula\\.sav was written by a newer Nebula \\(save format 5; this one reads 4\\)"
+    },
+    {
+      "no_log": "save: Nebula\\.sav is damaged"
+    },
+    {
+      "save_file": "RMGE/Nebula.sav",
+      "is": "same"
+    },
+    {
+      "save_file": "RMGE/Nebula.sav.1",
+      "is": "absent"
+    }
+  ]
+}

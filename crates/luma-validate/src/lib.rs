@@ -149,7 +149,7 @@ pub struct Table {
     pub repeated: std::collections::HashMap<String, usize>,
     /// Each row's values as text (the same text as `rows`' parts), in `columns`' order, when known: for L407.
     pub cells: Option<Vec<Vec<String>>>,
-    /// Whether a key matches a row whatever its case (the table's own rule: RtEffects, RtMaterials, RtWater, RtGlow).
+    /// Whether a key matches a row whatever its case (the table's own rule).
     pub case_insensitive: bool,
 }
 

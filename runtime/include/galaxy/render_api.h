@@ -257,7 +257,6 @@ enum class NativeSettingsStatus : unsigned {
     Leave,            // leaving with changes not applied: apply or discard them first
     ModsRestartAsk,   // mod changes applied: restart now? (yes: Apply, later: Close)
     JoyCon,           // Pair Joy-Con: status_number has the halves (kJoyCon* bits); Close leaves
-    RtRestartAsk,     // ray tracing turned on before its shaders are prepared: restart now? (yes: Apply, later: Close)
     DiagnosticsAsk,   // restart and record a diagnostics run? (yes: Apply, no: Close)
     ModsCodeAsk,      // a mod turned on brings code: allow it? (status_text: its name; yes: Apply, no: Close)
     XessAsk,          // download XeSS? (yes: Apply, its license: Revert, no: Close)

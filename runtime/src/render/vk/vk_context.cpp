@@ -5,7 +5,6 @@
 #include "galaxy/launch_args.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_choice.h"
-#include "galaxy/render/rt/rt_shaders.h"
 #include "galaxy/runtime_settings.h"
 
 #include "galaxy/render/vk/temporal_upscaler_vk.h"
@@ -298,8 +297,7 @@ Context& Context::get() noexcept {
 
 bool Context::initialize(const std::string& chosen_gpu, bool validation,
                          std::vector<const char*> instance_extensions,
-                         const std::function<VkSurfaceKHR(VkInstance)>& create_surface, VkSurfaceKHR* surface,
-                         bool ray_tracing) {
+                         const std::function<VkSurfaceKHR(VkInstance)>& create_surface, VkSurfaceKHR* surface) {
     if (device_ != VK_NULL_HANDLE) {
         return true;
     }
@@ -691,8 +689,8 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         // (a larger set is made while the frames that read the smaller finish: together at most twice the larger).
         const std::uint64_t others = std::uint64_t{kBindlessSamplerSlots} + 16u;
         const auto beyond = [others](std::uint64_t limit) { return limit > others ? limit - others : 0u; };
-        // The tracer's passes name the array beside their own sampled images (rt_backend_vk.cpp: set 0's textures and
-        // reads, 16 with room): both image limits count a pipeline layout's every set.
+        // A draw's other sets name sampled images beside the array (16 with room): both image limits count a pipeline
+        // layout's every set.
         const auto beside = [](std::uint64_t limit) { return limit > 16u ? limit - 16u : 0u; };
         const std::uint64_t images =
             std::min({beside(limits.maxDescriptorSetUpdateAfterBindSampledImages),
@@ -1046,78 +1044,12 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
             enabled.shaderStorageImageExtendedFormats = VK_TRUE;
         }
     }
-    // Ray tracing (rt_caps.h): acceleration structures and ray queries, with device addresses, on Vulkan 1.2 (descriptor
-    // indexing, SPIR-V 1.4 and the address feature are core there). Reported for every device; the device is made with
-    // them only when `ray_tracing` asks.
-    VkPhysicalDeviceAccelerationStructureFeaturesKHR rt_structures{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
-    VkPhysicalDeviceRayQueryFeaturesKHR rt_queries{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
-    rt_caps_ = RtCaps{};
-    rt_caps_.shaders = rt_shaders_present();
-    rt_caps_.bindless = bindless_;
-    rt_caps_.unified_memory = properties_.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
-    // --diagnostics rt-absent: taken as a device without ray tracing.
-    if (!::galaxy::diagnosing(::galaxy::kDiagnoseRtAbsent) && core_12 &&
-        has_device_extension(physical_, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
-        has_device_extension(physical_, VK_KHR_RAY_QUERY_EXTENSION_NAME) &&
-        has_device_extension(physical_, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME)) {
-        VkPhysicalDeviceVulkan12Features have12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
-        rt_structures.pNext = &rt_queries;
-        rt_queries.pNext = &have12;
-        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-        features.pNext = &rt_structures;
-        vkGetPhysicalDeviceFeatures2(physical_, &features);
-        rt_caps_.acceleration_structures = rt_structures.accelerationStructure == VK_TRUE && have12.bufferDeviceAddress == VK_TRUE;
-        rt_caps_.ray_queries = rt_queries.rayQuery == VK_TRUE;
-        // Opacity micromaps: the extension and its feature, with synchronization2's barriers (a micromap
-        // build's stage has no version-1 bit).
-        if (has_device_extension(physical_, VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) && (sync2_core || sync2_extension)) {
-            VkPhysicalDeviceOpacityMicromapFeaturesEXT have_micromaps{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT};
-            VkPhysicalDeviceFeatures2 micromap_features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
-            micromap_features.pNext = &have_micromaps;
-            vkGetPhysicalDeviceFeatures2(physical_, &micromap_features);
-            rt_caps_.micromaps = have_micromaps.micromap == VK_TRUE;
-        }
-        // A pass reads the texture a ray meets: an index that differs from pixel to pixel.
-        rt_caps_.bindless = bindless_ && have12.shaderSampledImageArrayNonUniformIndexing == VK_TRUE;
-    }
-    // The prepass's pixel stage reads its triangle's number where Vulkan gives a fragment shader one: on a device with
-    // geometry shaders. Without them (or under rt-no-geometry, the test of that) the prepass names its item only and
-    // the surface pass finds the triangle by a ray.
-    rt_caps_.triangle_ids = available.geometryShader == VK_TRUE && !::galaxy::diagnosing(::galaxy::kDiagnoseRtNoGeometry);
-    const bool rt_enable = ray_tracing && rt_caps_.ray_queries && rt_caps_.acceleration_structures && rt_caps_.bindless;
-    if (rt_enable && rt_caps_.triangle_ids) {
-        enabled.geometryShader = VK_TRUE;
-    }
-    // Only what the tracer uses is enabled, whatever else the device reports in these structures.
-    rt_structures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR};
-    rt_structures.accelerationStructure = VK_TRUE;
-    rt_queries = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR};
-    rt_queries.rayQuery = VK_TRUE;
-    VkPhysicalDeviceOpacityMicromapFeaturesEXT micromaps_on{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT};
-    micromaps_on.micromap = VK_TRUE;
-    if (rt_enable) {
-        device_extensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
-        device_extensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
-        device_extensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
-        if (rt_caps_.micromaps) {
-            device_extensions.push_back(VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME);
-        }
-    }
     depth_clamp_ = available.depthClamp == VK_TRUE;
     VkDeviceCreateInfo device_info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     if (depth_clip_enable_) {
         depth_clip.pNext = nullptr;
         depth_clip.depthClipEnable = VK_TRUE;
         device_info.pNext = &depth_clip;
-    }
-    if (rt_enable) {
-        rt_queries.pNext = const_cast<void*>(device_info.pNext);
-        rt_structures.pNext = &rt_queries;
-        device_info.pNext = &rt_structures;
-    }
-    if (rt_enable && rt_caps_.micromaps) {
-        micromaps_on.pNext = const_cast<void*>(device_info.pNext);
-        device_info.pNext = &micromaps_on;
     }
     if (sync2_extension) {
         sync2.pNext = const_cast<void*>(device_info.pNext);
@@ -1155,10 +1087,6 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         device_info.pNext = &timeline_features;
     }
     if (core_12) {
-        if (rt_enable) {
-            features12.bufferDeviceAddress = VK_TRUE;
-            features12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-        }
         if (temporal_upscaling_) {
             features11.storageBuffer16BitAccess = VK_TRUE;
             features12.shaderFloat16 = VK_TRUE;
@@ -1299,7 +1227,6 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
         return fail("vkCreateDevice failed");
     }
     volkLoadDevice(device_);
-    rt_caps_.enabled = rt_enable;
     fault_reported_.store(false, std::memory_order_relaxed);
     simulated_loss_.store(false, std::memory_order_relaxed);
     loss_was_simulated_ = false;
@@ -1367,11 +1294,6 @@ bool Context::initialize(const std::string& chosen_gpu, bool validation,
     allocator_info.preferredLargeHeapBlockSize = VkDeviceSize{64} << 20u;
     if (memory_budget_) {
         allocator_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
-    }
-    if (rt_caps_.enabled) {
-        // Buffers an acceleration structure is built from are named by device address (core in the device's Vulkan 1.2).
-        allocator_info.vulkanApiVersion = VK_API_VERSION_1_2;
-        allocator_info.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     }
     if (vmaCreateAllocator(&allocator_info, &allocator_) != VK_SUCCESS) {
         allocator_ = nullptr;
@@ -2183,14 +2105,10 @@ UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name, 
     const bool local = place == UploadPlace::GpuLocal && context.device_mapped_memory();
     // One buffer serves any ring: vertices, indices, constants (uniform) and rows (storage). A binding's whole range must
     // lie in its buffer at any offset an allocation can have, hence the room past the end.
-    // With ray tracing on, an acceleration structure is built from the vertices and indices where they lie.
-    const VkBufferUsageFlags traced = context.rt_caps().enabled ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                                                                      VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
-                                                                : VkBufferUsageFlags{0u};
     std::shared_ptr<vk::Buffer> buffer = context.create_buffer(
         bytes + kBindingRoom,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | traced,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         name, local ? vk::BufferPlace::DeviceMapped : vk::BufferPlace::Host);
     if (!buffer) {
         return {};

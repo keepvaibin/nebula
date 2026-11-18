@@ -566,6 +566,26 @@ int Message(Form* owner, const wstring& text, const wstring& caption, UINT flags
     return MessageBoxW(owner && owner->Handle() ? owner->Handle() : nullptr, text.c_str(), caption.c_str(), flags);
 }
 
+bool Ask(Form* owner, const wstring& caption, const wstring& question, const wstring& text, bool yesDefault,
+         const wstring& check, bool* ticked) {
+    TASKDIALOGCONFIG config = {};
+    config.cbSize = sizeof(config);
+    config.hwndParent = owner && owner->Handle() ? owner->Handle() : nullptr;
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_POSITION_RELATIVE_TO_WINDOW;
+    config.dwCommonButtons = TDCBF_YES_BUTTON | TDCBF_NO_BUTTON;
+    config.pszWindowTitle = caption.c_str();
+    config.pszMainIcon = TD_WARNING_ICON;
+    config.pszMainInstruction = question.c_str();
+    config.pszContent = text.c_str();
+    config.nDefaultButton = yesDefault ? IDYES : IDNO;
+    if (!check.empty()) config.pszVerificationText = check.c_str();
+    int button = IDNO;
+    BOOL verified = FALSE;
+    if (FAILED(TaskDialogIndirect(&config, &button, nullptr, check.empty() ? nullptr : &verified))) button = IDNO;
+    if (ticked) *ticked = verified != FALSE;
+    return button == IDYES;
+}
+
 std::optional<wstring> OpenFileDialog(Form* owner, const wstring& title, const std::vector<std::pair<wstring, wstring>>& filters) {
     IFileOpenDialog* dialog = nullptr;
     if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) return std::nullopt;

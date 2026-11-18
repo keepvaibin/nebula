@@ -220,10 +220,6 @@ namespace {
          {"SettingsChoiceRestart", "SettingsChoiceLater", nullptr},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
          {KeyApply, KeyBack, 0}},
-        {NEBULA_SETTINGS_STATUS_RT_RESTART_ASK, "SettingsRtRestartAsk", "SettingsRtRestartAsk", 2,
-         {"SettingsChoiceRestart", "SettingsChoiceLater", nullptr},
-         {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
-         {KeyApply, KeyBack, 0}},
         {NEBULA_SETTINGS_STATUS_MODS_CODE_ASK, "SettingsModsCodeAsk", "SettingsModsCodeAsk", 2,
          {"SettingsChoiceAllow", "SettingsChoiceNotNow", nullptr},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
@@ -5393,9 +5389,32 @@ namespace NebulaSettingsMenu {
         sScreen->initWithoutIter();
     }
 
+    // The scene waits (and its sound with it) or goes on: on each change only.
+    void setFreezing(bool freezing) {
+        if (freezing == sFreezing) {
+            return;
+        }
+        sFreezing = freezing;
+        AudSystem* pAudio = AudWrap::getSystem();
+        if (pAudio != nullptr) {
+            pAudio->holdForSettingsMenu(freezing, NebulaCutsceneSkip::isFreezingScene() || NebulaCutsceneSkip::isSkipping());
+            if (!freezing && sMusicPaused) {
+                pAudio->unpause();
+            }
+        }
+        sMusicPaused = false;
+    }
+
     void update() {
-        // Unbuilt: the game's own layouts lack a pane (a damaged store; init logged it). The game runs on.
+        // Unbuilt: the game's own layouts lack a pane (a damaged store; init logged it), or a row or page button could
+        // not be made while the menu was open (ensureRows, ensureTabs; logged). The game runs on: a menu that was up
+        // lets go as a close does, so the scene, its sound and the file select never wait on a menu that is not drawn.
         if (sScreen == nullptr || !sScreen->isBuilt()) {
+            if (sFreezing) {
+                NebulaHost::settingsInput(NEBULA_SETTINGS_CLOSE, 0);
+                setFreezing(false);
+                setSharp(SharpSettings, false);
+            }
             return;
         }
         NebulaHost::settingsView(&sView);
@@ -5413,17 +5432,8 @@ namespace NebulaSettingsMenu {
         // stops as under the pause menu, and both come back as they were. The HOME Menu holds the game itself
         // (HomeButtonLayout).
         const bool freezing = sView.open || (sScreen->isShown() && !sScreen->isHome());
+        setFreezing(freezing);
         AudSystem* pAudio = AudWrap::getSystem();
-        if (freezing != sFreezing) {
-            sFreezing = freezing;
-            if (pAudio != nullptr) {
-                pAudio->holdForSettingsMenu(freezing, NebulaCutsceneSkip::isFreezingScene() || NebulaCutsceneSkip::isSkipping());
-                if (!freezing && sMusicPaused) {
-                    pAudio->unpause();
-                }
-            }
-            sMusicPaused = false;
-        }
         // Again whenever it plays under the open menu: a scene there (the HDR calibration's reference stage) lets its
         // music go at each start (AudSystem::initSceneVolume).
         if (freezing && sScreen->isOpenFully() && pAudio != nullptr && !pAudio->mIsPaused && !pAudio->isPauseMenuActive() &&

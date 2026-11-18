@@ -177,6 +177,8 @@ typedef struct NebulaHostExtension {
        (a test's setup, before the test's first frame). A menu the boot's close hid with its question standing opens
        again at the first 3D scene that no extension holds, so what the extension prepares runs with the scene going. */
     uint32_t (*holds_menus)(void* user);
+    /* Nonzero: each write of a save file waits this long first, slow storage (the longest of the extensions'). */
+    uint32_t save_write_delay_us;
 } NebulaHostExtension;
 
 typedef const NebulaHostExtension* (*NebulaExtensionAttach)(const NebulaHostForExtension* host);

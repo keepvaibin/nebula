@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Metal device (mtl_context.h).
 #include "galaxy/render/mtl/mtl_context.h"
+#include "galaxy/render/mtl/command_buffer_failure.h"
 
 #include "galaxy/render/render_config.h"
 
@@ -19,18 +20,11 @@ namespace galaxy::render::mtl {
 
 namespace {
 
-// A failed command buffer's words. Metal's description of an error is the system's text, so the error's code decides:
-// a device removed, its access revoked by the system, or a hang the system reset leads with "device lost", which the
-// render core's recovery answers with a new device (crash_report.cpp gpu_lost) as it does Direct3D's and Vulkan's.
+// A failed command buffer's words (command_buffer_failure.h: every error is a lost device, P-008).
 std::string failure_text(NSError* error) {
     const char* const words = error != nil ? error.localizedDescription.UTF8String : nullptr;
-    std::string text = words != nullptr ? words : "no description";
-    if (error != nil && [error.domain isEqualToString:MTLCommandBufferErrorDomain] &&
-        (error.code == MTLCommandBufferErrorDeviceRemoved || error.code == MTLCommandBufferErrorAccessRevoked ||
-         error.code == MTLCommandBufferErrorTimeout)) {
-        text = "device lost (Metal command buffer error " + std::to_string(static_cast<long>(error.code)) + "): " + text;
-    }
-    return text;
+    return command_buffer_failure_text(error != nil && [error.domain isEqualToString:MTLCommandBufferErrorDomain],
+                                       error != nil ? static_cast<long>(error.code) : 0L, words != nullptr ? words : "");
 }
 
 }  // namespace

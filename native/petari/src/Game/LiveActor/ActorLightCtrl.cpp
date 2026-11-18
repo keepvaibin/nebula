@@ -3,7 +3,6 @@
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include "Game/System/DrawBuffer.hpp"
 #include "Game/Util.hpp"
-#include "Game/Util/GameLightSignal.hpp"
 
 ActorLightCtrl::ActorLightCtrl(const LiveActor* pActor)
     : mActor(pActor), mLightType(-1), mDrawBuffer(), mHasFixedType(), mAreaLightInf(), mLightID(), mBlendFrom(), mInterpolate(-1), mBlendStep(-1) {
@@ -30,7 +29,6 @@ void ActorLightCtrl::update(bool direct) {
 
 void ActorLightCtrl::loadLight() const {
     if (mAreaLightInf) {
-        GameLightSignal::actorLightType(mLightType);  // the set's kind (characters or the environment)
         if (mBlendFrom) {
             LightFunction::loadActorLightInfo(&mLightInfo);
         } else {

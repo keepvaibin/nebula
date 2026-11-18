@@ -24,8 +24,8 @@ class DescriptorRing;
 // size are stretched over the screen. Here the same chain runs on the internal resolution: the threshold over the
 // game's own 4 x 4 pixel footprint, each ring replaced by the Gaussian of its spread (a ring of radius r spreads r^2 / 2
 // along each axis, plus what the game's bilinear taps and resampling add at its resolution, less what this chain's own
-// resampling adds), the game's tap weights, clamps and intensity. The scene keep is the scene target's own format, so the
-// ray tracer's HDR scene passes through whole.
+// resampling adds), the game's tap weights, clamps and intensity. The scene keep is the scene target's own format, so a
+// wide scene passes through whole.
 class GameBloom {
 public:
     GameBloom() = default;

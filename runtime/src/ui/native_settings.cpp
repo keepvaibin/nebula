@@ -6,6 +6,7 @@
 #include "galaxy/content_viewport.h"
 #include "galaxy/desktop_window.h"
 #include "galaxy/discord_presence.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/ui/benchmark_menu.h"
 #include "galaxy/ui/hdr_calibration.h"
@@ -49,6 +50,9 @@
 #include "galaxy/ui/settings_display_page.h"
 #include "galaxy/ui/settings_advanced_page.h"
 #include "galaxy/ui/settings_system_page.h"
+#include "galaxy/achievements.h"
+#include "galaxy/host_extension.h"
+#include "galaxy/stats.h"
 #include "galaxy/save_transfer.h"
 #if defined(NEBULA_UPDATE_CHECK)
 #include "galaxy/update.h"
@@ -98,7 +102,7 @@ std::atomic<bool> rtx_adapter{false};
 }  // namespace host_window
 
 using host_window::flush_native_settings_if_dirty;
-using host_window::poll_render_config_file;
+using host_window::watch_render_config_file;
 using host_window::hidden_window_mode_enabled;
 
 namespace {
@@ -240,15 +244,12 @@ bool s_hdr_calibration_due = false;
 std::atomic<bool> s_settings_held{false};
 // Apply saved mod changes this session did not start with: the menu asks whether to restart now.
 std::atomic<bool> s_mods_restart_ask{false};
-// RAY TRACING turned on (applied) before its shaders are prepared: the menu asks to restart, which prepares them.
-std::atomic<bool> s_rt_restart_ask{false};
 // SYSTEM > DIAGNOSTICS > RECORD: the menu asks to restart into a recorded session (the launcher's recording).
 std::atomic<bool> s_diagnostics_ask{false};
 
-// A restart question is up (the mods', ray tracing's, the diagnostics run's).
+// A restart question is up (the mods', the diagnostics run's).
 bool restart_asking() {
-    return s_mods_restart_ask.load(std::memory_order_acquire) || s_rt_restart_ask.load(std::memory_order_acquire) ||
-           s_diagnostics_ask.load(std::memory_order_acquire);
+    return s_mods_restart_ask.load(std::memory_order_acquire) || s_diagnostics_ask.load(std::memory_order_acquire);
 }
 // The pages, in order.
 constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM",
@@ -296,7 +297,7 @@ unsigned shown_position(unsigned tab) {
 // The GRAPHICS page's rows for what is not built natively yet. Each goes with its feature.
 bool graphics_row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
-        "RAY TRACING", "RAY TRACING QUALITY", "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "TEXTURE DUMPS FOLDER",
+        "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "TEXTURE DUMPS FOLDER",
     };
     for (const char* hidden : kHidden) {
         if (std::strcmp(label, hidden) == 0) return true;
@@ -307,7 +308,7 @@ bool graphics_row_hidden(const char* label) {
 // Rows of the shown pages for what is not there yet or not on this platform.
 bool row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
-        "POST-PROCESS", "RAY TRACING HARDWARE", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
+        "POST-PROCESS", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
 #if defined(__ANDROID__)
         // MONITOR, DISPLAY MODE and RESOLUTION: the display page has none on a phone (fullscreen_only). VSYNC stays: off,
         // the swap chain keeps only the newest picture (mailbox) and runs uncapped; on, it shows every picture.
@@ -448,7 +449,8 @@ ui::FrameRateCaps settings_frame_rate_caps(const RenderConfig& render, bool offe
     return {settings_refresh_hz(render), offer && frame_generation_offered(),
             host_window::upscaler_caps().frame_generation, host_window::upscaler_caps().frame_generation_dynamic,
             host_window::upscaler_caps().frame_generation_max, host_window::upscaler_caps().fsr_frame_generation,
-            render.vsync_interval == 0u && !vsync_fixed, vsync_fixed};
+            render.vsync_interval == 0u && !vsync_fixed, vsync_fixed,
+            galaxy::render::g_variable_refresh.load(std::memory_order_relaxed)};
 }
 Interpolation interpolation_of(const RenderConfig& render) { return ui::interpolation_of(render); }
 std::vector<unsigned> interpolation_targets(const RenderConfig& render, Interpolation mode) {
@@ -691,11 +693,6 @@ unsigned pending_settings_changes() {
     changes += d.bloom != live.bloom;
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.hud_internal_resolution != live.hud_internal_resolution;
-    changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
-    changes += d.rt_quality != live.rt_quality;
-    changes += d.rt_parts != live.rt_parts;
-    changes += d.rt_lens_bloom != live.rt_lens_bloom;
-    changes += d.rt_landing_shadow != live.rt_landing_shadow;
     changes += d.texture_packs != live.texture_packs ||
         (d.texture_packs && d.texture_pack_preload != live.texture_pack_preload);
     changes += d.texture_dump != live.texture_dump;
@@ -1176,12 +1173,6 @@ void apply_native_settings_draft() {
     applied.bloom = next.bloom;
     applied.hud_output_resolution = next.hud_output_resolution;
     applied.hud_internal_resolution = next.hud_internal_resolution;
-    applied.ray_tracing_enabled = next.ray_tracing_enabled;
-    applied.rt_quality = next.rt_quality;
-    applied.rt_parts = next.rt_parts;
-    applied.rt_chosen = next.rt_chosen;
-    applied.rt_lens_bloom = next.rt_lens_bloom;
-    applied.rt_landing_shadow = next.rt_landing_shadow;
     applied.texture_packs = next.texture_packs;
     applied.texture_pack_preload = next.texture_pack_preload;
     applied.texture_dump = next.texture_dump;
@@ -2122,8 +2113,6 @@ public:
         state.dlss_installed = dlss_installed_now();
         state.xess_supported = host_window::upscaler_caps().xess;
         state.xess_installed = xess_installed_now();
-        state.ray_tracing_offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
-        state.traced_temporal = fsr3_available();
         state.temporal_upscaling = temporal_upscaler(render) != 0u;
         state.spatial_upscaling = spatial_quality_mode(render);
         state.curved_surfaces_offered = curved_surfaces_offered();
@@ -2463,7 +2452,15 @@ void confirm_saves_import(bool whole) {
         return;
     }
     std::thread([plan] {
-        finish_saves_import(galaxy::save_transfer::commit_import(*plan, galaxy::save_transfer::game_save_root()));
+        const galaxy::save_transfer::ImportResult result =
+            galaxy::save_transfer::commit_import(*plan, galaxy::save_transfer::game_save_root());
+        if (result.error == galaxy::save_transfer::Error::kNone) {
+            // The archive's unlocks and counters (P-119), merged once its saves are in place.
+            const unsigned unlocks = galaxy::achievements::merge(plan->achievements);
+            const unsigned counters = galaxy::stats::merge(plan->stats);
+            std::cerr << "[settings] save import: " << unlocks << " achievements and " << counters << " stats merged\n";
+        }
+        finish_saves_import(result);
     }).detach();
 }
 
@@ -2475,8 +2472,9 @@ void start_saves_export() {
         const std::filesystem::path folder = galaxy::runtime_settings_folder() / ".export";
         std::error_code error;
         std::filesystem::remove_all(folder, error);
-        const galaxy::save_transfer::ExportResult made =
-            galaxy::save_transfer::export_saves(galaxy::save_transfer::game_save_root(), folder, NEBULA_VERSION);
+        const galaxy::save_transfer::ExportResult made = galaxy::save_transfer::export_saves(
+            galaxy::save_transfer::game_save_root(), folder, NEBULA_VERSION,
+            galaxy::save_transfer::Progress{galaxy::achievements::text(), galaxy::stats::text()});
         if (made.error != galaxy::save_transfer::Error::kNone) {
             {
                 const std::lock_guard<std::mutex> lock(s_saves_mutex);
@@ -5674,7 +5672,7 @@ bool dlss_prompt_key(std::uintptr_t key, bool was_down) {
     return true;
 }
 
-// After changes that take a restart were applied (mods; ray tracing turned on before its shaders are prepared): Enter,
+// After changes that take a restart were applied (mods): Enter,
 // Space or Y restarts the game now; Escape, Backspace or B keeps them for the next start. Every other key waits for
 // the answer.
 bool restart_ask_key(std::uintptr_t key, bool was_down) {
@@ -5682,7 +5680,6 @@ bool restart_ask_key(std::uintptr_t key, bool was_down) {
     if (was_down) return true;
     if (key == VK_RETURN || key == VK_SPACE) {
         s_mods_restart_ask.store(false, std::memory_order_release);
-        s_rt_restart_ask.store(false, std::memory_order_release);
         const bool record = s_diagnostics_ask.exchange(false, std::memory_order_acq_rel);
         if (host_window::restart_game(record ? host_window::Restart::Diagnostics : host_window::Restart::Start)) {
             std::cerr << (record ? "[settings] restarting into a diagnostics run\n" : "[settings] restarting\n");
@@ -5691,7 +5688,6 @@ bool restart_ask_key(std::uintptr_t key, bool was_down) {
         }
     } else if (key == VK_ESCAPE || key == VK_BACK || key == VK_F1) {
         s_mods_restart_ask.store(false, std::memory_order_release);
-        s_rt_restart_ask.store(false, std::memory_order_release);
         s_diagnostics_ask.store(false, std::memory_order_release);
     }
     return true;
@@ -5988,8 +5984,6 @@ bool native_settings_mods_changed() {
 
 namespace host_window {
 
-// DXR 1.1 with shader model 6.6 and resource binding tier 3 on an adapter with dedicated memory (the RAY TRACING row).
-std::atomic<bool> ray_tracing_offered{false};
 // Queues a save of the settings files when something changed; never waits on the disk.
 bool flush_native_settings_if_dirty() {
     return s_settings_save.queue();
@@ -6002,18 +5996,13 @@ float upscaler_render_fraction(const RenderConfig& render, unsigned output_width
 // Exit paths: waits for a queued or running save (at most 5 s), then writes what is still unsaved here.
 void save_native_settings_now() { s_settings_save.save_now(); }
 
+namespace {
 // Nebula Settings can save config.ini while the game runs. The game takes the file's settings as the menu's
-// apply does, so the next save from the game writes them back rather than over them. Checked twice a second,
-// and not while the menu is open: its draft and display confirmation belong to the settings it opened with, and
-// a change made meanwhile lands once it closes.
-void poll_render_config_file() {
-    static std::uint64_t s_next_check_ms = 0u;
-    const std::uint64_t now = galaxy::steady_ms();
-    if (now < s_next_check_ms) {
-        return;
-    }
-    s_next_check_ms = now + 500u;
-    // A save of the game's own still in flight would read back as a change made outside it.
+// apply does, so the next save from the game writes them back rather than over them. Checked twice a second on the
+// settings' own thread (s_settings_save), between its saves, and not while the menu is open: its draft and display
+// confirmation belong to the settings it opened with, and a change made meanwhile lands once it closes.
+void look_at_render_config_file() {
+    // A save asked for since would read back as a change made outside the game.
     if (s_settings_save.pending()) {
         return;
     }
@@ -6030,6 +6019,17 @@ void poll_render_config_file() {
     if (const std::string gpu = next_start_gpu(); gpu != gpu_before) {
         std::cerr << "[settings] gpu=" << gpu << " applies at the next start\n";
     }
+}
+}  // namespace
+
+// The render thread's only part: starting the watch, once (a flag's load after that). It never takes the settings'
+// lock or reads their files.
+void watch_render_config_file() {
+    static std::atomic<bool> s_watching{false};
+    if (s_watching.load(std::memory_order_relaxed) || s_watching.exchange(true, std::memory_order_relaxed)) {
+        return;
+    }
+    s_settings_save.watch(look_at_render_config_file, std::chrono::milliseconds(500));
 }
 
 // A renderer chosen in Nebula Settings during the session that is not the one the game runs on.
@@ -6311,8 +6311,6 @@ NativeSettingsView build_native_settings_view() {
         view.status_number = static_cast<int>(pending_settings_changes());
     } else if (s_mods_restart_ask.load(std::memory_order_acquire)) {
         view.status = NativeSettingsStatus::ModsRestartAsk;
-    } else if (s_rt_restart_ask.load(std::memory_order_acquire)) {
-        view.status = NativeSettingsStatus::RtRestartAsk;
     } else if (s_diagnostics_ask.load(std::memory_order_acquire)) {
         view.status = NativeSettingsStatus::DiagnosticsAsk;
     } else if (controls_capturing()) {
@@ -6335,7 +6333,10 @@ NativeSettingsView build_native_settings_view() {
         view.status_number = static_cast<int>(pending);
     } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
         view.status = NativeSettingsStatus::Applied;
-    } else if (const PipelineProgress pipelines = pipeline_progress(); pipelines.left != 0u) {
+    } else if (const PipelineProgress pipelines = pipeline_progress();
+               pipelines.left != 0u && (galaxy::extensions::flags() & NEBULA_EXT_FIXED_STEPS) == 0u) {
+        // Not in fixed steps (deterministic test mode): the workers' pace is the machine's, so the line would differ run
+        // to run; the title does not wait for them there either, and a draw makes its own pipeline when it needs one.
         view.status = NativeSettingsStatus::Preparing;
         view.status_number = static_cast<int>(std::uint64_t{pipelines.done} * 100u / (std::uint64_t{pipelines.done} + pipelines.left));
     } else if (GameLanguage running{}; tab == 4u && running_game_language(running) &&

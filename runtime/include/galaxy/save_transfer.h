@@ -92,6 +92,10 @@ struct ImportPlan {
     bool banner_left_out = false;    // a banner.bin that failed its check
     bool miis_left_out = false;      // a Wii Mii database or nebula-miis.txt that failed its check
     bool mii_library = false;        // the import writes nebula-miis.txt (the Mii library is read again)
+    // A Nebula saves archive's unlocks and counters (nebula-achievements.ini, nebula-stats.ini): not written by
+    // commit_import; merged into this install's after it (achievements::merge, stats::merge). Empty when not held.
+    std::string achievements;
+    std::string stats;
 };
 
 // The releases' codes ("RMGE", "RMGP", "RMGJ", "RMGK") and their save folders.
@@ -121,13 +125,27 @@ struct ImportResult {
 };
 
 // Places `plan`'s files in the save root. Call it with no save request in flight; the game reads the save again after.
+// A journal beside the root (<root>.import-journal) names every move before the first and goes after the last, or
+// after a failure's moves are all undone; a move that cannot be undone leaves it for recover_import.
 [[nodiscard]] ImportResult commit_import(const ImportPlan& plan, const std::filesystem::path& save_root) noexcept;
 
+// At the start, before the game reads its save: an import that stopped half way (its journal is still there: the
+// process ended, the power went) is undone, the replaced files put back and the new ones and the import's folders
+// removed. Returns what it did, for the log; empty when there was no journal.
+[[nodiscard]] std::string recover_import(const std::filesystem::path& save_root) noexcept;
+
+// The install's achievements and stats as their files hold them (achievements::text, stats::text); an export carries
+// them as nebula-achievements.ini and nebula-stats.ini, an empty one left out.
+struct Progress {
+    std::string achievements;
+    std::string stats;
+};
+
 // The save root's saves as a Nebula saves archive: each release's save (the newest copy that passes the game's check,
-// as Nebula.sav or GameData.bin), its banner, its mods' files (<code>/luma), the Mii library and the Wii Mii database.
-// `nebula_version` goes in the manifest. kNoSaves when the root holds no save.
+// as Nebula.sav or GameData.bin), its banner, its mods' files (<code>/luma), the Mii library and the Wii Mii database,
+// and `progress`. `nebula_version` goes in the manifest. kNoSaves when the root holds no save.
 [[nodiscard]] Error make_export(const std::filesystem::path& save_root, std::string_view nebula_version,
-                                std::vector<std::byte>* zip) noexcept;
+                                std::vector<std::byte>* zip, const Progress& progress = {}) noexcept;
 
 struct ExportResult {
     Error error = Error::kNone;
@@ -137,7 +155,7 @@ struct ExportResult {
 // Writes Nebula-Saves-<yyyyMMdd-HHmmss>.zip (local time; -2, -3... when taken) into `folder`, read back before it is
 // named.
 [[nodiscard]] ExportResult export_saves(const std::filesystem::path& save_root, const std::filesystem::path& folder,
-                                        std::string_view nebula_version) noexcept;
+                                        std::string_view nebula_version, const Progress& progress = {}) noexcept;
 
 // The running game's save root and release ("RMGE"), for the settings' SAVES rows: the host sets them once the disc
 // is open. Empty before, and in a run without a save folder.
@@ -190,6 +208,9 @@ struct ZipEntry {
 
 // Tests: commit_import fails at its `step`th move (0: never), and puts back what it moved.
 void set_commit_fault(int step) noexcept;
+// Tests: commit_import stops at its `step`th move as if the process ended there (0: never): nothing is undone and its
+// journal stays.
+void set_commit_crash(int step) noexcept;
 
 }  // namespace detail
 

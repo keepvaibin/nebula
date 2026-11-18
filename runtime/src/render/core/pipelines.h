@@ -33,16 +33,15 @@ public:
 
     // The pipeline of `id` for a target of `variant` (samples, HDR, a texture target) with `aux` beside the colour: 0 none,
     // 1 the motion, 2 the reactive mask, 3 the reactive mask and the effects layer, 4 the motion target there but not
-    // written (a draw sharing the motion draws' pass); from 5 the tracer's forms (program_table.h kAux*), kept in pages
-    // of their own that exist only once one is asked for.
+    // written (a draw sharing the motion draws' pass).
     // A texture target's form is noted the first time a run draws it (note_target_drawn): the forms a target pass has drawn
     // are the ones prepared ahead (the targets file).
     gpu::Pipeline* get(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux) {
         const std::uint32_t key = key_of(variant, aux);
         const bool target = target_form(variant, aux);
-        const Page* page = page_of(id, key / kKeys);
+        const Page* page = page_of(id);
         if (page != nullptr) {
-            gpu::Pipeline* found = page->rows[id & kPageMask][key & (kKeys - 1u)].load(std::memory_order_acquire);
+            gpu::Pipeline* found = page->rows[id & kPageMask][key].load(std::memory_order_acquire);
             if (found != nullptr) {
                 if (target && page->drawn[id & kPageMask].load(std::memory_order_relaxed) == 0u) {
                     note_target_drawn(id, entry, variant, aux);
@@ -64,11 +63,10 @@ public:
     };
     // Queues each entry for every target kind and aux set of the settings, for the background threads: with `motion`, the
     // aux a scene draw of its state can take (scene_aux; 4 for every other with `one_pass`, 3 only with `layer`), and while
-    // the wide variant is listed the narrow variant's left for after the first scene (defer). With `traced` (ray tracing
-    // on), aux 1 and either 4 or 2 and 3 whatever the state, the prepass of an opaque entry and a lit program's traced
-    // forms. The jobs are made before the queue's lock is taken, and the queue takes them all at once.
+    // the wide variant is listed the narrow variant's left for after the first scene (defer). The jobs are made before
+    // the queue's lock is taken, and the queue takes them all at once.
     void prepare(const std::vector<Prepared>& entries, const std::vector<unsigned>& variants, bool motion, bool layer,
-                 bool one_pass, bool traced = false);
+                 bool one_pass);
     [[nodiscard]] std::uint32_t pending() const noexcept { return pending_.load(std::memory_order_relaxed); }
     // Whether the cache the driver took holds the start's whole set, made by an earlier run of these programs at these
     // settings (the targets file, decide_warm): each of its pipelines is then a load from the cache, not a compile, and
@@ -96,12 +94,9 @@ private:
     static constexpr unsigned kDirectoryBits = 12u;
     static constexpr unsigned kDirectorySize = 1u << kDirectoryBits;
     static constexpr unsigned kRootSize = 1u << (33u - kPageBits - kDirectoryBits);
-    // Below kKeys: aux 0-4. From kKeys: the tracer's forms (aux 5 and up), in the second pages; from 2 kKeys their
-    // exchange forms (aux bit 16, program_table.h kAuxExchange), in the third. Every key is under 512 (refused_).
-    static constexpr unsigned kExchangeBit = 16u;
+    // aux 0-4 by the variant: every key is under kKeys.
     [[nodiscard]] static constexpr std::uint32_t key_of(unsigned variant, unsigned aux) noexcept {
-        return aux >= 5u ? ((aux & kExchangeBit) != 0u ? 2u * kKeys : kKeys) | (variant & 15u) | ((aux - 5u) & 7u) << 4u
-                         : (variant & 15u) | (aux & 7u) << 4u;
+        return (variant & 15u) | (aux & 7u) << 4u;
     }
     struct Page {
         std::array<std::array<std::atomic<gpu::Pipeline*>, kKeys>, 1u << kPageBits> rows{};
@@ -113,23 +108,14 @@ private:
     }
     struct Directory {
         std::array<std::atomic<Page*>, kDirectorySize> pages{};
-        std::array<std::atomic<Page*>, kDirectorySize> traced_pages{};
-        std::array<std::atomic<Page*>, kDirectorySize> exchange_pages{};
-        [[nodiscard]] std::array<std::atomic<Page*>, kDirectorySize>& set(unsigned which) noexcept {
-            return which == 0u ? pages : which == 1u ? traced_pages : exchange_pages;
-        }
-        [[nodiscard]] const std::array<std::atomic<Page*>, kDirectorySize>& set(unsigned which) const noexcept {
-            return which == 0u ? pages : which == 1u ? traced_pages : exchange_pages;
-        }
     };
-    // `which`: the key's page set, key / kKeys (0 the game's forms, 1 the tracer's, 2 their exchange forms).
-    [[nodiscard]] Page* page_of(std::uint64_t id, unsigned which) const noexcept {
+    [[nodiscard]] Page* page_of(std::uint64_t id) const noexcept {
         const auto root = static_cast<std::size_t>(id >> (kPageBits + kDirectoryBits));
         if (root >= directories_.size()) { return nullptr; }
         const Directory* directory = directories_[root].load(std::memory_order_acquire);
         if (directory == nullptr) { return nullptr; }
         const std::size_t at = (id >> kPageBits) & (kDirectorySize - 1u);
-        return directory->set(which)[at].load(std::memory_order_acquire);
+        return directory->pages[at].load(std::memory_order_acquire);
     }
     struct Job {
         std::uint32_t id;
@@ -239,21 +225,12 @@ private:
 };
 
 
-// Whether the tracer's prepass draws an entry of this state (and the scene pass then finds its depth laid).
-[[nodiscard]] bool prepass_draws(std::uint32_t state) noexcept;
-// Whether the tracer's second prepass draws this entry: a surface blended over the scene by its alpha (water, glass,
-// crystal). Not what adds its own light to the picture, nor a stencil's marks.
-[[nodiscard]] bool blended_prepass_draws(std::uint32_t state) noexcept;
 // Which targets a draw of the 3D scene writes beside the colour: an opaque surface the motion, a blended draw the reactive
 // mask, and in a layer window a blended draw whose factors never read the scene the effects layer too.
 [[nodiscard]] std::uint8_t scene_aux(std::uint32_t state, bool layer_window) noexcept;
 
 // For a back end's build: the driver refused a pipeline for lack of memory (pipeline_workers.h), on this thread.
 void note_pipeline_out_of_memory() noexcept;
-// A state the second prepass takes when its surface is a glass row's (an added clear shell, drawn as an
-// exchange): added to the picture (dst factor one) or tinting it and adding (dst source colour), depth tested,
-// no stencil.
-[[nodiscard]] bool added_prepass_draws(std::uint32_t state) noexcept;
 
 // Writes `bytes` beside `file` and renames it over, so a crash mid-write leaves the old cache whole.
 bool replace_file(const std::filesystem::path& file, const char* bytes, std::size_t size) noexcept;

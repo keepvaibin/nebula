@@ -1,0 +1,34 @@
+{
+  "harness": 1,
+  "name": "save-slow-exit",
+  "about": "Slow storage (each save write takes 7 s): file 1 is copied to 3 and the game is ended at once. The end waits for the save, however long it takes, and says so (P-018: it gave up after 5 s and the copy was lost).",
+  "time": "real",
+  "save": {
+    "spin": true
+  },
+  "settings": [
+    "GALAXY_TEST_SAVE_DELAY_US=7000000"
+  ],
+  "limit_seconds": 300,
+  "steps": [
+    {
+      "at": 60,
+      "copy_file": [
+        1,
+        3
+      ]
+    },
+    {
+      "at": 90,
+      "end": true
+    }
+  ],
+  "expect": [
+    {
+      "log": "host: waiting for a save to finish before the game ends"
+    },
+    {
+      "log": "host: the save finished"
+    }
+  ]
+}

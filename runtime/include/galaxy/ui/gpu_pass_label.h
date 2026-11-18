@@ -16,7 +16,6 @@ namespace galaxy::ui {
     if (pass == "scene aa") return "ANTI-ALIASING";
     if (pass == "scene ao" || pass.substr(0u, 3u) == "ao ") return "AMBIENT OCCLUSION";
     if (pass == "upscale") return "UPSCALING";
-    if (pass == "ray tracing") return "RAY TRACING";
     if (pass == "present") return "SCREEN OUTPUT";
     if (pass == "camera") return "CAMERA EFFECTS";
     if (pass == "uploads") return "DATA UPLOADS";

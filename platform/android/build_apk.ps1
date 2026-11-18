@@ -132,12 +132,13 @@ foreach ($abi in $Abis -split ",") {
         Copy-Item "$hostBuild/adrenotools/src/hook/libhook_impl.so", "$hostBuild/adrenotools/src/hook/libmain_hook.so" $dest -Force
     }
     if ($Harness -ne "") {
-        # The test runs' extension (tools/test_driver/test_driver.cmake's sources) in the app, and the runner's bin
+        # The test runs' extension (the test driver's test_driver.cmake sources) in the app, and the runner's bin
         # folder: the game modules, the extension, the game half (built as tools/gate/build_windows.ps1 builds it for
-        # Windows) and the game's self-description.
+        # Windows) and the game's self-description. The test driver is the folder two above the harness's.
+        $driver = Split-Path (Split-Path $Harness -Parent) -Parent
         $testBin = Join-Path $Work "test-bin-$abi"
         New-Item -ItemType Directory -Force $testBin | Out-Null
-        $ext = "$root/tools/test_driver/extension"
+        $ext = "$driver/extension"
         Invoke-Logged "$Work\test-extension-$abi.log" {
             & "$llvm\${triple}31-clang++.cmd" -std=c++20 -O2 -fPIC -shared -static-libstdc++ "-Wl,--no-undefined" `
                 -Wall -Wextra -Werror "-I$root/runtime/include" "-I$root/native/include" `
@@ -148,7 +149,7 @@ foreach ($abi in $Abis -split ",") {
             & "$llvm\${triple}31-clang.cmd" -O2 -shared -fPIC -nostdlib -ffreestanding -fno-stack-protector `
                 -fvisibility=hidden -fno-use-init-array -fuse-ld=lld "-Wl,-T,$root/native/include/luma_ctors.ld" `
                 "-Wl,--no-undefined" "-Wl,-z,defs" -Wall -Wextra -Werror "-I$root/native/include" `
-                "$root/tools/test_driver/luma_test/luma_test.c" -o "$testBin/luma-test.so"
+                "$driver/luma_test/luma_test.c" -o "$testBin/luma-test.so"
         }
         Copy-Item "$testBin/libnebula_test_extension.so" $dest -Force
         Copy-Item "$module/libsmg_game.so", "$module/libsmg_game_plain.so", "$module/luma_types/luma_types.json" $testBin -Force

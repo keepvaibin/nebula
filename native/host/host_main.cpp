@@ -116,10 +116,9 @@
 #include "galaxy/update.h"
 #endif
 #endif
+#include "galaxy/bounded_call.h"
 #include "galaxy/save_transfer.h"
 #include <nebula_frame_list.h>
-#include "galaxy/render/rt_materials.h"
-#include "galaxy/render/rt_caps.h"
 #include "galaxy/render/texture_pack.h"
 #if defined(NEBULA_HOST_D3D12)
 #endif
@@ -252,10 +251,17 @@ std::string utf8_of(const fs::path& path) {
     return std::string(reinterpret_cast<const char*>(text.data()), text.size());
 }
 
+// The line goes to the log by its writer's thread (galaxy/whole_lines.h): the game thread, a caller, never waits on
+// the log's disk. A process that ends other than by returning from main flushes it first (whole_lines::flush).
 void log_line(const char* tag, const char* text) {
     const double t = std::chrono::duration<double>(Clock::now() - kStart).count();
-    std::fprintf(stdout, "[%9.3f] %s %s\n", t, tag, text);
-    std::fflush(stdout);
+    char stamp[32];
+    const int stamped = std::snprintf(stamp, sizeof(stamp), "[%9.3f] ", t);
+    const std::size_t stamp_size = stamped > 0 ? static_cast<std::size_t>(stamped) : 0u;
+    std::string line;
+    line.reserve(stamp_size + std::strlen(tag) + std::strlen(text) + 2u);
+    line.append(stamp, stamp_size).append(tag).append(1, ' ').append(text).append(1, '\n');
+    galaxy::whole_lines::write(stdout, line.data(), line.size());
     galaxy::extensions::log_line(tag, text);
 }
 
@@ -366,26 +372,17 @@ FILE* open_for_writing(const fs::path& file) {
 
 #if defined(NEBULA_HOST_RENDERER)
 // The unlocks and counts waiting out their write delay (galaxy::achievements 0.25 s, galaxy::stats 1.5 s) are written before a
-// process ends the hard way (a crash, a fatal error). On a thread of its own and waited for at most `wait_ms`: the thread that
-// failed may hold the lock of one of them, and the report must not wait on it for ever.
-#if defined(_WIN32)
-DWORD WINAPI flush_progress_thread(LPVOID) {
+// process ends the hard way (a crash, a fatal error). On a thread of its own and waited for at most `wait_ms`, on every
+// platform: the thread that failed may hold the lock of one of them, and the report must not wait on it for ever.
+void flush_progress() {
     galaxy::achievements::flush();
     galaxy::stats::flush();
-    return 0;
 }
-#endif
+galaxy::BoundedCall gFlushProgress{flush_progress};
 void flush_progress_bounded(unsigned wait_ms) {
-#if defined(_WIN32)
-    if (const HANDLE thread = CreateThread(nullptr, 0, flush_progress_thread, nullptr, 0, nullptr); thread != nullptr) {
-        WaitForSingleObject(thread, wait_ms);
-        CloseHandle(thread);
+    if (!galaxy::call_bounded(gFlushProgress, wait_ms)) {
+        log_line("host:", "the achievements and stats were not all written: their writer waited past its time");
     }
-#else
-    (void)wait_ms;
-    galaxy::achievements::flush();
-    galaxy::stats::flush();
-#endif
 }
 #endif
 
@@ -447,13 +444,13 @@ void report_crash_facts(const fs::path& dump) {
     std::vsnprintf(text, sizeof(text), format, args);
     va_end(args);
     log_line("fatal:", text);
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
     gather_crash_facts(galaxy::crash::Facts::Kind::Startup, text);
     report_crash_facts({});
 #if defined(NEBULA_HOST_RENDERER)
     flush_progress_bounded(1500u);
 #endif
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
     std::_Exit(3);
 }
 
@@ -1046,8 +1043,8 @@ void audio_frame_tick() {
 std::optional<galaxy::host::DisplayRefresh> display_refresh() {
     static std::optional<galaxy::host::DisplayRefresh> known;
     static int64_t earlier_vblank_ns = 0;
-    static uint32_t frames = 0;
-    if (frames++ % 30u != 0u) return known;
+    static galaxy::ClockInterval look{500, true};
+    if (!look.due()) return known;
     known.reset();
     DWM_TIMING_INFO timing{};
     timing.cbSize = sizeof(timing);
@@ -1074,7 +1071,8 @@ Clock::time_point next_frame_start(Clock::time_point start, std::chrono::nanosec
     const int64_t present_ns = galaxy::render::g_last_present_ns.load(std::memory_order_relaxed);
     const int64_t work_ns = previous_ns != 0 && present_ns > previous_ns ? present_ns - previous_ns : 0;
     previous_ns = start_ns;
-    const int64_t next_ns = phase.next_start(start_ns, work_ns, period.count(), display_refresh());
+    const int64_t next_ns = phase.next_start(start_ns, work_ns, period.count(), display_refresh(),
+                                             galaxy::render::g_in_between_on.load(std::memory_order_relaxed));
     return start + std::chrono::nanoseconds(next_ns - start_ns);
 }
 
@@ -1135,7 +1133,8 @@ void svc_frame_wait(void*) {
         // reached by a precise wait (precise_wait.h: a timer woken late would start the step late).
         std::int64_t due_qpc = 0;
 #if defined(NEBULA_HOST_SDL)
-        const bool vsync = galaxy::sdl::wait_display_frame(period.count(), vsync_ns);
+        const bool vsync = galaxy::sdl::wait_display_frame(period.count(), vsync_ns,
+                                                           galaxy::render::g_in_between_on.load(std::memory_order_relaxed));
         if (vsync) {
             due_qpc = vsync_ns;
         } else {
@@ -1177,7 +1176,7 @@ void svc_frame_wait(void*) {
             next = now + period;  // the host's clock continues from the display's
             ++on_vsync;
         }
-        // Every 600 frames: how they were paced (the window's wall time, how many began on the display's vsync) and
+        // Every 10 s: how the frames were paced (the window's wall time, how many began on the display's vsync) and
         // each frame thread's CPU time (average, and the longest with its frame's number), so a slow frame is the game
         // step's or the render thread's.
         galaxy::host::ThreadWork work_now[kThreads];
@@ -1193,7 +1192,8 @@ void svc_frame_wait(void*) {
                 t.longest_step = steps;
             }
         }
-        if (++frames == 600u) {
+        ++frames;
+        if (now - window_began >= std::chrono::seconds(10)) {
             const double wall_ms = std::chrono::duration<double, std::milli>(now - window_began).count();
             galaxy::whole_lines::Line line;
             line.add("[pacing] %u frames in %.1f ms (%.3f ms a frame), %u on the display's vsync (%.1f Hz)", frames,
@@ -1405,6 +1405,7 @@ constexpr DWORD kHeapCorruption = 0xC0000374u;  // STATUS_HEAP_CORRUPTION (ntsta
     // The dump and report are written: whatever the crashed thread still does (a flush behind a lock another thread
     // held when it stopped) never keeps the process alive.
     Sleep(5000);
+    galaxy::whole_lines::flush(1000u);
     TerminateProcess(GetCurrentProcess(), 4);
     std::_Exit(4);
 }
@@ -1482,7 +1483,7 @@ void report_crash(EXCEPTION_POINTERS* info) {
     gCrashThread = GetCurrentThreadId();
     SetEvent(gCrashRequest);
     WaitForSingleObject(gCrashDone, 60000);
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
 }
 
 // The mod whose plugin's code was running at a fault: the fault's own place, else the nearest plugin frame the stack
@@ -1571,6 +1572,7 @@ void note_crash_plugin(const EXCEPTION_POINTERS* info) noexcept {
                        code == EXCEPTION_STACK_OVERFLOW);
     note_crash_plugin(info);
     report_crash(info);
+    galaxy::whole_lines::flush(1000u);
     TerminateProcess(GetCurrentProcess(), 4);
     std::_Exit(4);
 }
@@ -1715,6 +1717,7 @@ void abort_handler(int) {
         EXCEPTION_POINTERS pointers{&record, &context};
         report_crash(&pointers);
     }
+    galaxy::whole_lines::flush(1000u);
     TerminateProcess(GetCurrentProcess(), 3);
     std::_Exit(3);
 }
@@ -1775,6 +1778,7 @@ LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
     }
     gCrashForeign = !cpp && owner != GetModuleHandleW(nullptr) && owner != static_cast<HMODULE>(gModule.module);
     report_crash(info);
+    galaxy::whole_lines::flush(1000u);
     TerminateProcess(GetCurrentProcess(), 4);
     std::_Exit(4);
 }
@@ -1910,7 +1914,7 @@ void svc_fatal(void*, const char* text) {
 #else
     report_crash_facts({});
 #endif
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
     std::_Exit(3);
 }
 
@@ -2054,7 +2058,7 @@ int run_start_check(unsigned frames) {
         galaxy::render::pump_messages();
         NebulaFrameList& list = lists[frame % 3u];
         const auto asked = std::chrono::steady_clock::now();
-        while (list.released == 0u) {
+        while (nebula_frame_list_released(&list) == 0u) {
             if (std::chrono::steady_clock::now() - asked > std::chrono::seconds(10)) {
                 std::fprintf(stderr, "start check: frame %u was not let go of in 10 seconds\n", frame - 3u);
                 return 5;
@@ -2069,7 +2073,7 @@ int run_start_check(unsigned frames) {
     galaxy::render::wait_for_render_idle();
     const galaxy::render::DisplayPresentStats shown = galaxy::render::display_present_stats();
     std::printf("start check: %u frames drawn, %llu pictures shown\n", frames, static_cast<unsigned long long>(shown.presented));
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
     return shown.presented != 0u ? 0 : 4;
 }
 
@@ -2117,13 +2121,6 @@ void submit_frame(bool present, bool black) {
 void svc_game_stage(void*, const char* name) {
     if (name != nullptr && gSceneStage != name) {
         gSceneStage = name;
-#if defined(NEBULA_HOST_RENDERER)
-        if (::galaxy::diagnosing(::galaxy::kDiagnoseRtInputs)) {
-            const std::uint32_t hash = galaxy::render::rt_stage_hash(gSceneStage);
-            std::fprintf(stderr, "[rt-inputs] stage %s: %08x, %s\n", name, hash,
-                         galaxy::render::rt_stage(hash) != nullptr ? "a row of its own" : "the defaults");
-        }
-#endif
     }
 }
 
@@ -2405,8 +2402,6 @@ static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Prepar
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModsRestartAsk) == NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::JoyCon) == NEBULA_SETTINGS_STATUS_JOYCON &&
-              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::RtRestartAsk) ==
-                  NEBULA_SETTINGS_STATUS_RT_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::DiagnosticsAsk) ==
                   NEBULA_SETTINGS_STATUS_DIAGNOSTICS_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModsCodeAsk) == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK &&
@@ -2810,7 +2805,7 @@ void svc_submit_frame(void*, NebulaFrameList* list) {
         end_boot_fast("first 3D scene");
         if (!gStartDone) note_start_done();
     }
-    list->released = 1u;
+    nebula_frame_list_release(list);
 }
 uint32_t svc_probe_results(void*, uint32_t, NebulaScreenProbe*, uint32_t) {
     return 0u;
@@ -2963,10 +2958,6 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
         galaxy::render::note_frame_generation_allowed(value != 0);
 #endif
-    } else if (what == NEBULA_CONTEXT_CAMERA_WATER) {
-#if defined(NEBULA_HOST_RENDERER)
-        galaxy::render::note_camera_water(value > 0 ? static_cast<float>(value - 1) : -1.0f);
-#endif
     } else if (what == NEBULA_CONTEXT_TOUCH_TARGET) {
 #if defined(NEBULA_HOST_RENDERER)
         galaxy::host::note_touch_target(static_cast<std::uint32_t>(value));
@@ -2987,24 +2978,6 @@ const galaxy::assets::AssetStore& asset_table() {
     return gPak.store;
 }
 
-#if defined(NEBULA_HOST_RENDERER)
-// Ray tracing's tables in the pak (nebula-import: each stage's numbers, the particle effects' light), read once before
-// the renderer starts; a pak without them leaves the defaults.
-void load_rt_tables() {
-    const auto text_of = [](const char* path) {
-        std::string text;
-        const std::optional<galaxy::assets::Entry> entry = asset_table().find(path);
-        if (entry && !entry->folder) {
-            text.resize(static_cast<std::size_t>(entry->length));
-            if (!gPak.store.read(entry->position, text.size(), text.data())) {
-                text.clear();
-            }
-        }
-        return text;
-    };
-    galaxy::render::set_rt_tables(text_of(galaxy::render::kRtStagesPath), text_of(galaxy::render::kRtEffectsPath));
-}
-#endif
 
 int asset_entry_out(const std::optional<galaxy::assets::Entry>& entry, NebulaAssetEntry* out) {
     if (!entry) {
@@ -3416,28 +3389,6 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 0u;
 #endif
-    case NEBULA_OPTION_RAY_TRACING:
-#if defined(NEBULA_HOST_RENDERER)
-    {
-        if (!galaxy::render::get_render_config().ray_tracing_enabled || !galaxy::render::rt_capable(galaxy::render::rt_caps())) {
-            return 0u;
-        }
-        // A stage's row may keep its shadow light sets as the artists made them (rt_stages.tsv `shadow sets`).
-        const galaxy::render::RtStage* stage = galaxy::render::rt_stage(galaxy::render::rt_stage_hash(gSceneStage));
-        // Reflections traced at High show what a mirror shows: the game's mirror pass is not drawn.
-        // The reflections pass's own rule (rt_pass_reflect.cpp rt_pass_reflect_on): not under the reference
-        // (its preset or rt-reference) nor rt-added or rt-motion, which leave the pass out.
-        const galaxy::render::RenderConfig config = galaxy::render::get_render_config();
-        const bool mirror = galaxy::render::rt_part(config, galaxy::render::RtPart::Reflect) >= 3u &&
-                            config.rt_quality != galaxy::render::kRtPresetReference &&
-                            !::galaxy::diagnosing(::galaxy::kDiagnoseRtReference) && !::galaxy::diagnosing(::galaxy::kDiagnoseRtAdded) &&
-                            !::galaxy::diagnosing(::galaxy::kDiagnoseRtMotion);
-        return NEBULA_RAY_TRACING_ON | (stage != nullptr && stage->shadow_sets_kept ? 0u : NEBULA_RAY_TRACING_SHADOW_SETS) |
-               (mirror ? NEBULA_RAY_TRACING_MIRROR : 0u);
-    }
-#else
-        return 0u;
-#endif
     case NEBULA_OPTION_SCENE_TEXTURES:
 #if defined(NEBULA_HOST_RENDERER)
         return scene_textures_wait() ? 1u : 0u;
@@ -3506,6 +3457,15 @@ std::vector<std::pair<std::string, std::string>> gCookOwners;
 // The exit waits here for the saves still on the worker.
 std::mutex gSavesMutex;
 std::condition_variable gSavesDone;
+// The requests' status words: the worker stores each, the game's save_wait sleeps on its own.
+galaxy::saves::StatusBoard gSaveStatus;
+
+// The game's wait for its last request (SaveDataHandler::waitRequest), asleep until the worker ends it.
+void svc_save_wait(void*, const int32_t* status) {
+    if (gSaveStatus.wait(status, NEBULA_SAVE_PENDING)) {
+        log_line("saves:", "the game waited for its last save request to end");
+    }
+}
 
 // gFs stays one worker taking its queue in order (FIFO): the game's save, save.global's luma/<id>.bin writes and a
 // broken file's luma/<id>.bin.broken copy rely on a later request never passing an earlier one.
@@ -3557,6 +3517,10 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
                     result = galaxy::saves::read(folder, file, r.buffer, r.size, r.length);
                     break;
                 case NEBULA_SAVE_WRITE:
+                    // An extension's slow storage (a test's): the write takes this long longer.
+                    if (const uint32_t delay_us = galaxy::extensions::save_write_delay_us(); delay_us != 0) {
+                        std::this_thread::sleep_for(std::chrono::microseconds(delay_us));
+                    }
                     result = galaxy::saves::write(folder, file, r.buffer, r.size, backups);
                     break;
                 case NEBULA_SAVE_DELETE:
@@ -3565,11 +3529,7 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
                 }
             }
         }
-#if defined(__cpp_lib_atomic_ref)
-        std::atomic_ref<int32_t>(*r.status).store(result, std::memory_order_release);
-#else  // libc++ without atomic_ref (Android NDK r28): the compiler's builtin, the same release store.
-        __atomic_store_n(r.status, result, __ATOMIC_RELEASE);
-#endif
+        gSaveStatus.store(r.status, result);
         if (gSavesPending.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             { const std::lock_guard<std::mutex> lock(gSavesMutex); }
             gSavesDone.notify_all();
@@ -4500,8 +4460,7 @@ DWORD WINAPI hand_over_backstop(void* event) {
 
 void hand_over(HANDLE event, const std::wstring& cooked) {
     log_line("host:", "ending: the new process takes over");
-    std::fflush(stdout);
-    std::fflush(stderr);
+    galaxy::whole_lines::flush();
     // Before the stop: every mapped view's base, and those of files under .cooked, by the path the system names them
     // with (\Device\...\mods\.cooked\...): the folder's path past its drive is found in it, letters in any case.
     static const void* mapped[kHandOverViews];
@@ -4719,14 +4678,13 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
         return;
     }
     log_line((std::string("host: ") + renderer_title(kind) + " takes the start:").c_str(), why);
-    std::fflush(stdout);
-    std::fflush(stderr);
+    galaxy::whole_lines::flush();
     unsigned long code = 1u;
     if (!nebula_run_sibling(path.c_str(), &code)) {
         log_line((std::string("host: the ") + renderer_title(kind) + " program did not start:").c_str(), why);
         return;
     }
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
     TerminateProcess(GetCurrentProcess(), static_cast<UINT>(code));
 }
 #endif
@@ -4754,11 +4712,15 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
 #endif
     log_line("host:", restart ? "restart" : "the game ended");
     {
+        // Every save on the worker ends before the process does, however slow the drive (an SD card, a network folder):
+        // a write cut off keeps the old file, and the player's latest progress would be lost without a word.
         std::unique_lock<std::mutex> lock(gSavesMutex);
-        gSavesDone.wait_for(lock, std::chrono::seconds(5), [] { return gSavesPending.load(std::memory_order_acquire) == 0; });
-    }
-    if (gSavesPending.load(std::memory_order_acquire) != 0) {
-        log_line("host:", "a save still pending at exit");
+        const auto none_pending = [] { return gSavesPending.load(std::memory_order_acquire) == 0; };
+        if (!gSavesDone.wait_for(lock, std::chrono::seconds(1), none_pending)) {
+            log_line("host:", "waiting for a save to finish before the game ends");
+            gSavesDone.wait(lock, none_pending);
+            log_line("host:", "the save finished");
+        }
     }
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::achievements::flush();
@@ -4784,7 +4746,7 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
     // Windows HDR the game turned on goes off again; a restart hands it to the next process (render/os_hdr.h).
     galaxy::render::os_hdr::finish(restart);
 #endif
-    std::fflush(stdout);
+    galaxy::whole_lines::flush();
 #if defined(_WIN32)
     if (restart) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -4922,7 +4884,7 @@ void hand_off_to(galaxy::render::RendererKind kind, const char* why) {
         }
         if (!exe.empty()) execv(exe.c_str(), arguments.data());
         log_line("host:", ("the game could not start again: " + std::string(std::strerror(errno))).c_str());
-        std::fflush(stdout);
+        galaxy::whole_lines::flush();
     }
 #else
     (void)restart;  // an iOS app cannot replace its own image: kHostStartsAgain is false there
@@ -6086,8 +6048,7 @@ int main(int argc, char** argv) {
     if (const unsigned frames = ::galaxy::launch_args().start_check; frames != 0u) {
         // The process ends here without the renderer's shutdown, as a game's end does (finish_and_exit).
         const int code = run_start_check(frames);
-        std::fflush(stdout);
-        std::fflush(stderr);
+        galaxy::whole_lines::flush();
         std::_Exit(code);
     }
     if (benchmark) {
@@ -6199,6 +6160,12 @@ int main(int argc, char** argv) {
         const galaxy::saves::SaveFolders save_folders = galaxy::saves::save_folders(std::string_view(gPak.id, 4));
         gOldSaveDataPath = save_folders.earlier;
         gSaveDataPath = save_folders.current;
+        // A save import that stopped half way (the process ended between two of its moves) is undone first.
+        if (!gSaveRoot.empty()) {
+            if (const std::string recovered = galaxy::save_transfer::recover_import(gSaveRoot); !recovered.empty()) {
+                log_line("saves:", recovered.c_str());
+            }
+        }
         if (!gSaveRoot.empty()) fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
         if (!gSaveRoot.empty()) {
             galaxy::save_transfer::set_game_saves(gSaveRoot, std::string_view(gPak.id, 4));  // SAVES rows
@@ -6286,11 +6253,6 @@ int main(int argc, char** argv) {
             galaxy::render::set_movie_mod_folders(galaxy::mods::movie_folders(mods));
             prepare_mod_files(settings_folder, game_id, std::move(mods));
         }
-#if defined(NEBULA_HOST_RENDERER)
-        // Ray tracing's tables, with the mods' rows (their merge/NebulaData/RtStages.tsv and RtEffects.tsv) now that
-        // their store is attached.
-        load_rt_tables();
-#endif
         {
             // The session's mods, for crash reports: one line each, and whether one changes the game itself.
             std::string lines;
@@ -6394,6 +6356,7 @@ int main(int argc, char** argv) {
     services.frame_wait = svc_frame_wait;
     services.frame_begun = svc_frame_begun;
     services.save_request = svc_save_request;
+    services.save_wait = svc_save_wait;
     services.system_setting = svc_system_setting;
     services.input_read = svc_input_read;
     services.input_control = svc_input_control;
@@ -6585,6 +6548,7 @@ int main(int argc, char** argv) {
             }
             gSuspendWake.notify_all();
             gAudio->set_paused(away);
+            galaxy::sdl::set_display_clock_held(away);
             log_line("host:", away ? "suspended (out of sight)" : "resumed");
         }
         if constexpr (galaxy::kDesktopWindow) {

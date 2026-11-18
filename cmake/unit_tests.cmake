@@ -29,6 +29,8 @@ set(render_src "${galaxy_rt}/render")
 
 # The process's output: every line whole, whichever threads write.
 galaxy_test(galaxy_whole_lines_tests SOURCES ${rt}/whole_lines_tests.cpp ${rt}/whole_lines.cpp)
+# Its writer's thread: no caller waits on a stuck output; order kept; flush bounded.
+galaxy_test(galaxy_line_writer_tests SOURCES ${rt}/line_writer_tests.cpp)
 # The pacing measures (file 00 4.3) on synthetic runs, and the recorder that feeds them.
 galaxy_test(galaxy_pacing_tests SOURCES ${rt}/pacing_tests.cpp ${rt}/pacing.cpp ${rt}/pacing_recorder.cpp)
 # The frame threads' CPU time by thread (the pacing line). Windows reads no thread's CPU time there (perf_hint.cpp's
@@ -40,6 +42,8 @@ endif()
 # Files and saves.
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
 galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
+# The bounded call of a process's last work (galaxy/bounded_call.h, header only).
+galaxy_test(galaxy_bounded_call_tests SOURCES ${rt}/bounded_call_tests.cpp)
 galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
 target_include_directories(galaxy_save_format_tests PRIVATE "${galaxy_root}/native/petari/include")
 galaxy_test(galaxy_launch_args_tests SOURCES ${rt}/launch_args_tests.cpp)
@@ -131,6 +135,9 @@ galaxy_test(galaxy_renderer_choice_tests SOURCES ${render_src}/renderer_choice_t
 galaxy_test(galaxy_settings_benchmark_page_tests SOURCES ${rt}/ui/settings_benchmark_page_tests.cpp
     ${rt}/ui/settings_benchmark_page.cpp ${rt}/benchmark_results.cpp ${rt}/benchmark_stats.cpp ${rt}/strict_json.cpp)
 if(WIN32)
+    # The crash watcher (native/host/crash_watch.cpp): the test program is its own watcher process.
+    galaxy_test(galaxy_crash_watch_tests SOURCES "${galaxy_root}/native/host/crash_watch.cpp"
+        "${galaxy_root}/native/host/crash_watch_tests.cpp")
     target_link_libraries(galaxy_settings_benchmark_page_tests PRIVATE shell32)
 endif()
 galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.cpp ${rt}/discord_presence.cpp)
@@ -139,8 +146,10 @@ galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.c
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${render_src}/frame_interpolation_tests.cpp
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 galaxy_test(galaxy_present_slots_tests SOURCES ${render_src}/present_slots_tests.cpp ${render_src}/present_slots.cpp)
-galaxy_test(galaxy_core_world_lights_tests SOURCES ${render_src}/core/world_lights_tests.cpp ${render_src}/core/world_lights.cpp)
-target_include_directories(galaxy_core_world_lights_tests PRIVATE "${galaxy_root}/runtime/src" "${galaxy_root}/native/include")
+# The temporal upscaler's hold on generated frames ends (header-only).
+galaxy_test(galaxy_temporal_hold_tests SOURCES ${render_src}/temporal_hold_tests.cpp)
+# The game thread's place in the render queue (header-only).
+galaxy_test(galaxy_render_queue_tests SOURCES ${render_src}/render_queue_tests.cpp)
 # The vsync grid the Android and Apple display clocks run the game's frames on (header-only).
 galaxy_test(galaxy_vsync_grid_tests SOURCES ${rt}/vsync_grid_tests.cpp)
 # The draw walker's plans for a list (header-only).

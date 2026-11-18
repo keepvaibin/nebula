@@ -36,15 +36,15 @@ spatial_quality	config	spatial_quality	enum	manual|quality|balanced|performance|
 sharpness	config	sharpness	int	0..100/10	0	Graphics	-	y	y	-	Sharpening (0-100)
 aa	config	aa_mode	enum	off|smaa|auto|fxaa	0	Graphics	-	y	y	no temporal upscaler	Anti-aliasing
 smaa_quality	config	smaa_quality	enum	low|medium|high|ultra	2	Graphics	-	y	y	aa smaa or auto	Anti-aliasing quality
-msaa_samples	config	msaa_samples	set	1|2|4|8	1	Graphics	-	y	y	no temporal upscaler, no ray tracing	MSAA
+msaa_samples	config	msaa_samples	set	1|2|4|8	1	Graphics	-	y	y	no temporal upscaler	MSAA
 frame_generation	config	frame_generation	int	0..5	0	Graphics	-	y	y	1 DLSS on NVIDIA RTX, 2 FSR on a display of 119 Hz or more	Interpolation
 max_fps	config	max_fps	float	0;1..;unlimited	60	Graphics	-	y	y	0 the display's rate, unlimited no cap (VSync off); without interpolation 30 or 60	Frame rate limit
 anisotropic_filtering	config	anisotropic_filtering	set	1|2|4|8|16	1	Graphics	-	y	y	-	Texture filtering
 curved_surfaces	config	curved_surfaces	bool	0|1	1	Graphics	-	y	y	the renderer offers it (curved_surfaces_offered)	Curved surfaces
-per_pixel_lighting	config	per_pixel_lighting	bool	0|1	0	Graphics	-	y	y	no ray tracing; one Lighting choice with enhanced_lighting	Lighting
-enhanced_lighting	config	enhanced_lighting	bool	0|1	0	Graphics	-	y	y	no ray tracing; one Lighting choice with per_pixel_lighting	Lighting
-ambient_occlusion	config	ambient_occlusion	bool	0|1	0	Graphics	-	y	y	no ray tracing; one choice with ambient_occlusion_ssao	Ambient occlusion
-ambient_occlusion_ssao	config	ambient_occlusion_ssao	bool	0|1	0	Graphics	-	y	y	no ray tracing; one choice with ambient_occlusion	Ambient occlusion
+per_pixel_lighting	config	per_pixel_lighting	bool	0|1	0	Graphics	-	y	y	one Lighting choice with enhanced_lighting	Lighting
+enhanced_lighting	config	enhanced_lighting	bool	0|1	0	Graphics	-	y	y	one Lighting choice with per_pixel_lighting	Lighting
+ambient_occlusion	config	ambient_occlusion	bool	0|1	0	Graphics	-	y	y	one choice with ambient_occlusion_ssao	Ambient occlusion
+ambient_occlusion_ssao	config	ambient_occlusion_ssao	bool	0|1	0	Graphics	-	y	y	one choice with ambient_occlusion	Ambient occlusion
 bloom	config	bloom	int	0..200/10	100	Graphics	-	y	y	-	Bloom
 texture_packs	config	texture_packs	bool	0|1	1	Graphics	-	y	y	one choice with texture_pack_preload	Texture packs
 texture_pack_preload	config	texture_pack_preload	bool	0|1	0	Graphics	-	y	y	one choice with texture_packs	Texture packs
@@ -53,20 +53,6 @@ texture_pack_budget_mb	config	texture_pack_budget_mb	int	64..65536	2048	-	-	-	-	
 texture_lod_bias	config	texture_lod_bias	int	0..8	0	-	-	-	-	read by the Metal renderer only	-
 wide_scene	config	wide_scene	bool	0|1	1	-	-	-	-	-	-
 post_process	config	post_process	bool	0|1	1	-	-	s	-	-	-
-frame_rate_decouple	config	frame_rate_decouple	bool	0|1	0	-	-	-	-	read, always off	-
-ray_tracing_enabled	config	ray_tracing_enabled	bool	0|1	0	Graphics	-	y	-	the GPU traces (rt_caps.h kRayTracingRowOffered)	Ray tracing
-rt_quality	config	rt_quality	enum	medium|high|low|reference|custom	0	Graphics	-	y	-	ray tracing on	Ray tracing quality
-rt_sun	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_lights	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_indirect	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_reflect	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_transmit	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_volume	config	rt_parts	enum	off|low|medium|high	2	Graphics	-	y	-	ray tracing on	-
-rt_lens_bloom	config	rt_lens_bloom	bool	0|1	1	Graphics	-	y	-	ray tracing on	-
-rt_landing_shadow	config	rt_landing_shadow	bool	0|1	1	Graphics	-	y	-	ray tracing on	-
-rt_light_style	config	rt_style	enum	painted|physical	1	Graphics	-	y	-	ray tracing on	-
-rt_probe_ms	config	rt_probe_ms	state	0..1000	0	-	-	-	-	-	-
-rt_chosen	config	rt_chosen	state	0|1	0	-	-	-	-	-	-
 input_mode	runtime	input_mode	enum	auto|keyboard_mouse|controller|real_wiimote|phone|wiimote_motion	auto	Controls	-	y	y	real_wiimote, wiimote_motion where a Wii Remote can connect; phone on Android	Input
 co_star	runtime	co_star	bool	0|1	0	Controls	-	y	-	Windows' host (the others run no second player yet)	Co-Star
 audio_master_gain	runtime	master	float	0..2/0.05	1	Audio	-	y	y	the engine accepts up to 4 in a file	Master

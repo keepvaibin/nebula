@@ -21,7 +21,7 @@
 
 cbuffer AoConstants : register(b0) {
     float4 g_ray;         // an scene target pixel's eye ray at distance 1: x = px * x + y, y = py * z + w (z = -1)
-    float4 g_depth;       // RtView z_scale, z_offset, min_depth, max_depth
+    float4 g_depth;       // SceneView z_scale, z_offset, min_depth, max_depth
     float4 g_viewport;    // the scene viewport in scene target pixels: x, y, width, height
     float4 g_params;      // radius (eye units), visibility exponent, display exponent, largest radius in occlusion pixels
     uint4 g_size;         // occlusion target width, height; scene target pixels per occlusion pixel; 1: show the occlusion

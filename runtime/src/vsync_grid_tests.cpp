@@ -58,14 +58,14 @@ void test_skipped_callbacks() {
     const std::int64_t last = feed(grid, 1000000000, kHz60, 200, 100000, 7);
     check(near(grid.interval_ns, kHz60, kHz60 / 200), "skipped callbacks are not a new rate (within 0.5%)");
     std::int64_t slot = 0, frame_period = 0;
-    check(grid.next_slot(kGamePeriod, 0, last + 1000, slot, frame_period), "the grid holds through skipped callbacks");
+    check(grid.next_slot(kGamePeriod, 0, last + 1000, false, slot, frame_period), "the grid holds through skipped callbacks");
 
     // One skipped callback right after a steady run: the very next slot is still on the grid.
     galaxy::VsyncGrid one;
     const std::int64_t end = feed(one, 1000000000, kHz60, 60, 0, 0);
     one.note(end + 2 * kHz60, 0);
     check(near(one.interval_ns, kHz60, kHz60 / 200), "one skipped callback moves the interval under 0.5%");
-    check(one.next_slot(kGamePeriod, end + kHz60, end + 2 * kHz60 + 1000, slot, frame_period),
+    check(one.next_slot(kGamePeriod, end + kHz60, end + 2 * kHz60 + 1000, false, slot, frame_period),
           "the frame after one skipped callback is on the grid");
 }
 
@@ -88,7 +88,7 @@ void test_rate_changes() {
     const std::int64_t at = feed(ninety, 1000000000, kHz60, 60, 0, 0);
     const std::int64_t last = feed(ninety, at + kHz90, kHz90, 30, 0, 0);
     check(near(ninety.interval_ns, kHz90, 1000), "90 Hz is taken");
-    check(!ninety.next_slot(kGamePeriod, 0, last + 1000, slot, frame_period), "90 Hz does not divide a 60 Hz frame");
+    check(!ninety.next_slot(kGamePeriod, 0, last + 1000, false, slot, frame_period), "90 Hz does not divide a 60 Hz frame");
 }
 
 void test_stated_and_gaps() {
@@ -102,7 +102,7 @@ void test_stated_and_gaps() {
     const std::int64_t end = feed(gap, 1000000000, kHz60, 60, 0, 0);
     gap.note(end + 2000000000, 0);
     check(near(gap.interval_ns, kHz60, 1000), "a two-second gap keeps the interval");
-    check(!gap.next_slot(kGamePeriod, end, end + 2000000000 + 300000000, slot, frame_period), "no slot on a stale grid");
+    check(!gap.next_slot(kGamePeriod, end, end + 2000000000 + 300000000, false, slot, frame_period), "no slot on a stale grid");
     // Out of order and repeated vsyncs change nothing.
     const std::int64_t before = gap.interval_ns;
     gap.note(end, 0);
@@ -124,7 +124,7 @@ void test_slots() {
             grid.note(grid.vsync_ns + kHz120, 0);
         }
         std::int64_t next = 0;
-        if (!grid.next_slot(kGamePeriod, last, now, next, frame_period)) {
+        if (!grid.next_slot(kGamePeriod, last, now, false, next, frame_period)) {
             on_grid = false;
             break;
         }
@@ -137,21 +137,30 @@ void test_slots() {
     check(spaced, "60 Hz frames on 120 Hz are two vsyncs apart");
     check(frame_period == 2 * grid.interval_ns, "the frame period is two vsyncs");
     // After a stall, from now: the slot is the first vsync from now, not a run of missed slots.
-    check(grid.next_slot(kGamePeriod, last, last + 100000000, slot, frame_period) && slot >= last + 100000000 &&
+    check(grid.next_slot(kGamePeriod, last, last + 100000000, false, slot, frame_period) && slot >= last + 100000000 &&
               slot - (last + 100000000) < grid.interval_ns,
           "after a stall the next slot is the first vsync from now");
     // The first slot, with no last: the first vsync from now.
-    check(grid.next_slot(kGamePeriod, 0, grid.vsync_ns + 5000000, slot, frame_period) && slot == grid.vsync_ns + kHz120,
+    check(grid.next_slot(kGamePeriod, 0, grid.vsync_ns + 5000000, false, slot, frame_period) && slot == grid.vsync_ns + kHz120,
           "the first slot is the next vsync");
-    // 59.94 Hz runs a 60 Hz game on its grid (within 3%).
+    // 59.94 Hz runs a 60 Hz game on its grid (within 0.2%, in-between pictures off).
     galaxy::VsyncGrid ntsc;
     const std::int64_t end = feed(ntsc, 1000000000, kHz5994, 60, 0, 0);
-    check(ntsc.next_slot(kGamePeriod, 0, end + 1000, slot, frame_period) && frame_period == ntsc.interval_ns,
+    check(ntsc.next_slot(kGamePeriod, 0, end + 1000, false, slot, frame_period) && frame_period == ntsc.interval_ns,
           "59.94 Hz carries a 60 Hz game, one vsync a frame");
+    // A 61 Hz panel (1.7% off) does not set the game's speed: the host's clock runs it (it did within 3%).
+    galaxy::VsyncGrid fast;
+    const std::int64_t fast_end = feed(fast, 1000000000, 16393443, 60, 0, 0);
+    check(!fast.next_slot(kGamePeriod, 0, fast_end + 1000, false, slot, frame_period), "61 Hz does not carry the game");
+    // In-between pictures on: 59.94 Hz keeps the game at exactly 60; 120 Hz carries it.
+    check(!ntsc.next_slot(kGamePeriod, 0, end + 1000, true, slot, frame_period),
+          "59.94 Hz with in-between pictures keeps exactly 60");
+    check(grid.next_slot(kGamePeriod, 0, grid.vsync_ns + 1000, true, slot, frame_period) && frame_period == 2 * grid.interval_ns,
+          "120 Hz with in-between pictures carries the game, two vsyncs a frame");
     // No grid before the first interval.
     galaxy::VsyncGrid none;
     none.note(1000000000, 0);
-    check(!none.next_slot(kGamePeriod, 0, 1000000000, slot, frame_period), "one vsync is no grid");
+    check(!none.next_slot(kGamePeriod, 0, 1000000000, false, slot, frame_period), "one vsync is no grid");
 }
 
 }  // namespace

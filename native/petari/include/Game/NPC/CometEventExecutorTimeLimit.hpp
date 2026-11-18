@@ -7,7 +7,8 @@ class TimeLimitLayout;
 class CometEventExecutorTimeLimit : public LiveActor {
 public:
     /// @param timeLimit The number of seconds to initialize the timer with.
-    CometEventExecutorTimeLimit(u32 timeLimit);
+    // Steps of play; 0: the default (thirty minutes).
+    CometEventExecutorTimeLimit(u32 timeLimitSteps);
 
     virtual void init(const TableIter&) override;
     virtual void appear() override;
@@ -21,5 +22,5 @@ private:
     TimeLimitLayout* mTimeLimitLayout;
 
     /// @brief The number of seconds to initialize the timer with.
-    u32 mTimeLimit;
+    u32 mTimeLimitSteps;
 };

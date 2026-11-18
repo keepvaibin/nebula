@@ -157,7 +157,7 @@ private:
     void fill() {
         MR::Text16 text;
         const u32 kind = NebulaHost::option(NEBULA_OPTION_PREPARE_KIND);
-        getText(text, kind == 1 ? "ModsPrepareTitle" : kind == 2 ? "PipelinePrepareTitle" : "RtPrepareTitle");
+        getText(text, kind == 1 ? "ModsPrepareTitle" : "PipelinePrepareTitle");
         setText(mTitle, text.c_str());
         f32 width = 0.0f;
         f32 titleHeight = 0.0f;
@@ -204,7 +204,7 @@ private:
         if (percent != mPercentShown) {
             mPercentShown = percent;
             MR::Text16 patternText;
-            getText(patternText, "RtPreparePercent");
+            getText(patternText, "PreparePercent");
             const char16_t* const pattern = patternText.c_str();
             // Room for the pattern with each {n} written out in up to eight digits.
             u32 room = 1;

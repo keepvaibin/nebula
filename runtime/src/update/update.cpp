@@ -321,21 +321,27 @@ bool is_beta(std::string_view version) noexcept {
     return false;
 }
 
-std::optional<Release> select_newer(std::string_view listing_json, std::string_view installed, std::string_view asset, bool& is_list) {
+bool takes(std::string_view installed, std::string_view version) noexcept {
+    return is_beta(installed) || !is_beta(version);
+}
+
+std::optional<Release> select_newer(std::string_view listing_json, std::string_view installed, std::string_view release_asset,
+                                    std::string_view beta_asset, bool& is_list) {
     Json root;
     is_list = false;
     if (!JsonReader(listing_json).read(root)) return std::nullopt;
     const auto* list = std::get_if<JsonArray>(&root.value);
     if (list == nullptr) return std::nullopt;
     is_list = true;
-    const bool beta = is_beta(installed);
     std::optional<Release> best;
     for (const Json& item : *list) {
         if (!std::holds_alternative<JsonObject>(item.value) || item.flag("draft")) continue;
         const std::string tag = item.text("tag_name");
         const std::string version = tag.starts_with('v') ? tag.substr(1) : tag;
-        if (version.empty() || is_beta(version) != beta) continue;
+        if (version.empty() || !takes(installed, version)) continue;
         if (compare_versions(version, best ? std::string_view(best->version) : installed) <= 0) continue;
+        const std::string_view asset = is_beta(version) ? beta_asset : release_asset;
+        if (asset.empty()) continue;
         Release release;
         release.version = version;
         release.tag = tag;
@@ -635,7 +641,7 @@ void persist_kept(Service& s) {
 }
 
 bool offered(const std::optional<Release>& release, std::string_view installed, std::string_view skipped) {
-    if (!release || compare_versions(release->version, installed) <= 0 || is_beta(release->version) != is_beta(installed)) return false;
+    if (!release || compare_versions(release->version, installed) <= 0 || !takes(installed, release->version)) return false;
     return skipped.empty() || compare_versions(release->version, skipped) > 0;
 }
 
@@ -655,13 +661,14 @@ void start_check(Service& s) {
     auto check = std::make_shared<Check>();
     s.check = check;
     detail::Transport* transport = &transport_of(s);
-    const std::string installed = s.installed, asset = s.asset;
-    s.worker = std::thread([check, transport, installed, asset] {
+    const std::string installed = s.installed;
+    const std::string release_asset = detail::platform_asset(false), beta_asset = detail::platform_asset(true);
+    s.worker = std::thread([check, transport, installed, release_asset, beta_asset] {
         std::string body;
         const int status = transport->get(kReleasesUrl, body, kMaxListingBytes, kCheckTimeoutMs);
         bool is_list = false;
         std::optional<Release> release;
-        if (status == 200) release = select_newer(body, installed, asset, is_list);
+        if (status == 200) release = select_newer(body, installed, release_asset, beta_asset, is_list);
         Service& owner = service();
         if (is_list) {
             // Kept as the next start's answer (in memory now, on disk below); a failed check (offline, portal, rate
@@ -938,7 +945,9 @@ bool start_install(const Release& release) {
     s.installing = true;
     s.cancel.store(false, std::memory_order_relaxed);
     s.progress = {InstallState::Downloading, 0, release.package_bytes, {}};
-    s.installer = std::thread(install, release, s.installed, s.asset, &transport_of(s), data / "update-staging");
+    // The release's own package: a beta install updating to its final release takes the release's.
+    s.installer = std::thread(install, release, s.installed, detail::platform_asset(is_beta(release.version)), &transport_of(s),
+                              data / "update-staging");
     return true;
 }
 

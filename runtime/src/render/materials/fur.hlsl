@@ -60,15 +60,6 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.uv[0] = float4(fur_coord(v, 0u), fur_coord(v, 1u));
 }
 
-#if NATIVE_TRACED
-bool material_relight(inout NativeVaryings i, float3 nrm) {
-    float3 c0, c1;
-    fur_light(i.lit_eye, nrm, i.lit_color0, c0, c1);
-    i.color.rgb = c0;
-    i.color1.rgb = c1;
-    return true;
-}
-#endif
 
 float4 material_color(NativeVaryings i) {
     const float4 t0 = TEX(0).Sample(SAMP(0), i.uv[0].xy);

@@ -27,7 +27,9 @@ EggStarGalaxy 5
 FactoryGalaxy 1
 FactoryGalaxy 2
 FactoryGalaxy 3
-FactoryGalaxy 4
+# Scenario 4 starts on the ring zone that Hungry Luma seed 4 (50 star bits) brings in; unfed, the player lands beside
+# the absent ring and never gets control (ledger P-122).
+FactoryGalaxy 4 tico_seed=4:50
 FactoryGalaxy 5
 FishTunnelGalaxy 1
 FlipPanelExGalaxy 1

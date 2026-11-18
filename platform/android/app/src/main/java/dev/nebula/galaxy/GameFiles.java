@@ -13,6 +13,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Map;
 
 /**
  * Where everything lives, in the app's private storage (--data for the native game), and the settings both
@@ -121,13 +122,62 @@ final class GameFiles {
         }
     }
 
-    // The on-screen controls' settings (the game's menu writes them; the game's process reads them when it starts).
+    // Each settings file has one writer process (P-093): a process keeps its own copy of a file it has read and writes
+    // that copy whole, so a second writer's change would be undone. The launcher and the game run in two processes.
+
+    // The on-screen controls' settings: the game's process only (its menu writes them, it reads them when it starts).
     static final String CONTROLS = "controls";
     static final String CONTROLS_OPACITY = "opacity";    // 0.2 .. 1
     static final String CONTROLS_HAPTICS = "haptics";
-    static final String RECORD_NEXT_RUN = "recordNextRun";  // the next run records diagnostics in its log
 
     static SharedPreferences controls(Context context) {
         return context.getSharedPreferences(CONTROLS, Context.MODE_PRIVATE);
+    }
+
+    // The launcher's process only: the selected graphics driver (GpuDrivers), the time it started the game. Earlier
+    // builds kept them in the controls file; they are carried over once (that file is left as it is).
+    static final String LAUNCHER = "launcher";
+    private static final String LAUNCHER_CARRIED = "carriedOver";
+    private static final String[] LAUNCHER_KEYS = {"gpuDriver", "launchedAt"};
+
+    static SharedPreferences launcher(Context context) {
+        final SharedPreferences prefs = context.getSharedPreferences(LAUNCHER, Context.MODE_PRIVATE);
+        if (!prefs.getBoolean(LAUNCHER_CARRIED, false)) {
+            final Map<String, ?> old = controls(context).getAll();
+            final SharedPreferences.Editor edit = prefs.edit();
+            for (String key : LAUNCHER_KEYS) {
+                final Object value = old.get(key);
+                if (value instanceof String) {
+                    edit.putString(key, (String) value);
+                } else if (value instanceof Long) {
+                    edit.putLong(key, (Long) value);
+                }
+            }
+            edit.putBoolean(LAUNCHER_CARRIED, true).commit();
+        }
+        return prefs;
+    }
+
+    // The next normal run records diagnostics in its log: set by the launcher or by the game's restart for it, cleared
+    // by the run that records. A file, read afresh each time, as both processes write it.
+    static File recordNextRunFile(Context context) {
+        return new File(data(context), "record-next-run");
+    }
+
+    static boolean recordNextRun(Context context) {
+        return recordNextRunFile(context).isFile();
+    }
+
+    static boolean setRecordNextRun(Context context, boolean on) {
+        return setFlag(recordNextRunFile(context), on);
+    }
+
+    /** A flag file made or removed; true when it is as asked. */
+    static boolean setFlag(File flag, boolean on) {
+        try {
+            return on ? flag.createNewFile() || flag.isFile() : flag.delete() || !flag.exists();
+        } catch (IOException e) {
+            return false;
+        }
     }
 }

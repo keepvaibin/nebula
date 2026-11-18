@@ -1,7 +1,6 @@
 #include "Game/Render/Material.hpp"
 #include "Game/Map/LightFunction.hpp"
 #include "Game/Render/FrameList.hpp"
-#include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/AreaObj/LightAreaHolder.hpp"
 #include "Game/Map/LightDirector.hpp"
@@ -181,7 +180,6 @@ void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
     Frame::setLightFollows(1, pInfo->mInfo1.mIsFollowCamera);
     // Light 2 (the alpha light) sits at the eye.
     Frame::setLightFollows(2, true);
-    GameLightSignal::actorLight(pInfo);
     ::loadLightInfoDiffuse(pInfo->mInfo0, 0);
     ::loadLightInfoDiffuse(pInfo->mInfo1, 1);
 
@@ -195,7 +193,6 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
     Frame::setLightFollows(0, pInfo->base.mIsFollowCamera);
     // The shine: a direction fixed in view space.
     Frame::setLightFollows(3, true);
-    GameLightSignal::coinLight(pInfo);
     ::loadLightInfoDiffuse(pInfo->base, 0);
     NebulaLight obj = {};
     f32 shininess = pInfo->mShininess;
@@ -208,7 +205,6 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
 void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
     // A world point (moved into view space below).
     Frame::setLightFollows(4, false);
-    GameLightSignal::pointLight(pInfo);
     Vec3f viewPos(pInfo->mPos);
     MR::getCameraViewMtx().mult(viewPos, viewPos);
     NebulaLight obj = {};
@@ -222,7 +218,6 @@ void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
 void LightFunction::loadAllLightWhite() {
     // All eight at the eye.
     Frame::setLightFollowsCamera(0xffu);
-    GameLightSignal::noLight();
 
     for (u32 i = 0; i < 8; i++) {
         NebulaLight lightObj = {};

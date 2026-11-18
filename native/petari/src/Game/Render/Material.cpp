@@ -872,12 +872,6 @@ void meshLayoutInput(NebulaPipelineDesc* pDesc, NebulaLayoutInput* pInputs, u16 
                 return;
             }
             break;
-        case NEBULA_INPUT_GAIN:
-            if ((rMesh.attributes & NEBULA_MESH_GAIN) != 0) {
-                further(3, static_cast< u32 >(afterColor + ((rMesh.attributes & NEBULA_MESH_TANGENTS) != 0 ? 24 : 0)));
-                return;
-            }
-            break;
         default: {
             const u32 number = semantic - NEBULA_INPUT_COORD0;
             if (number < rMesh.coord_count && pCoords[number].stream != NEBULA_MESH_NO_COORD) {
@@ -896,7 +890,6 @@ void meshLayoutInput(NebulaPipelineDesc* pDesc, NebulaLayoutInput* pInputs, u16 
         place(NEBULA_STREAM_ZERO,
               semantic >= NEBULA_INPUT_COORD0                                    ? 1
               : semantic == NEBULA_INPUT_COLOR0 || semantic == NEBULA_INPUT_COLOR1 ? 2
-              : semantic == NEBULA_INPUT_GAIN                                    ? 3
                                                                                  : 0,
               0, 0);
     }

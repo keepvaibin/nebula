@@ -16,11 +16,8 @@
 //! - Surface: base (display-encoded colour, 0 to 1), alpha, normal (eye space), roughness, metal, emission
 //!   (display-encoded, added after the light; above 1 feeds bloom).
 //!
-//! - ray (layer 3): shader.json `ray` {class, base, roughness, metal, emission, through}, each optional: what a ray
-//!   reads of the material in place of its factors (the hit record). The ray-hit form (programs::ray_hit_form) runs the
-//!   same `surface` at a ray's hit: SurfaceIn from the hit (normal and view in world space there, eye space in the
-//!   raster: only their relations are the shader's), a texture sampled at the ray cone's level, `ddx`/`ddy`/`fwidth`
-//!   0, and `discard`/`clip` mark the hit as not there (alpha 0) instead of ending it.
+//! - ray (layer 3): shader.json `ray`, each row optional: ray tracing's rows. This game has none: they are checked
+//!   (a .luma 1.0 file valid before stays valid) and used for nothing; the cook notes Cook.RayData once a file.
 //!
 //! Refused, each by name with the file (and the line where there is one), L804 `Cook.Shader.<Kind>`: no source, a
 //! JSON outside the interface, HLSL that binds anything of its own (`register`, a texture, sampler or buffer type,
@@ -74,6 +71,9 @@ const RESERVED: [&str; 42] = [
 const RESERVED_PREFIXES: [&str; 15] =
     ["g_", "pbr_", "enh_", "traced_", "native_", "program_", "lit", "nm_", "NEBULA_", "NATIVE_", "float", "int", "rt_", "Rt", "RT_"];
 /// The classes a shader's `ray` may name: what its rows alone make (ramp needs a ramp map, water the pack's row).
+/// The metal kinds a `ray` row may name, and `art`.
+pub const RAY_METAL_KINDS: [&str; 8] = ["gold", "silver", "copper", "iron", "chrome", "brass", "platinum", "art"];
+
 pub const RAY_CLASSES: [&str; 8] = ["dielectric", "gloss", "metal", "glass", "cutout", "translucent", "emissive", "painted"];
 
 /// A shader as its files say, checked.
@@ -88,8 +88,8 @@ pub struct Source {
     /// Declared textures: (slot 0 to 7, name).
     pub textures: Vec<(u8, String)>,
     pub reads: u8,
-    /// shader.json `ray`: the rows a ray reads in place of the material's factors.
-    pub ray: super::model_ir::RayRows,
+    /// Whether shader.json gives `ray` rows (materials.md section 3.4, layer 3): checked, used for nothing.
+    pub ray: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -218,7 +218,8 @@ pub fn read(name: &str, file: &str, json: &[u8], hlsl: &[u8]) -> Result<Source> 
     if !root["reads"].is_null() && !root["reads"].is_array() {
         return Err(bad("/reads"));
     }
-    let ray = ray_rows(&root["ray"]).map_err(|key| bad(&format!("/ray{key}")))?;
+    ray_rows(&root["ray"]).map_err(|key| bad(&format!("/ray{key}")))?;
+    let ray = !root["ray"].is_null();
     if hlsl.len() > MOST_BYTES {
         return Err(refuse("Cook.Shader.TooLarge", &[("file", file.to_string()), ("value", hlsl.len().to_string()), ("max", MOST_BYTES.to_string())]));
     }
@@ -237,9 +238,9 @@ pub const RAY_KEYS: [&str; 16] = [
 pub const MATERIAL_RAY_KEYS: [&str; 10] =
     ["ior", "thickness", "body", "shine", "tint_keep", "traced", "sun_through", "metal_kind", "glow", "vertex_colour"];
 
-/// A glTF material's `extras.nebula.ray` (absent: no rows), or the key under it that is not one it takes or not in
-/// its range (as ray_rows).
-pub fn material_ray(v: &Value) -> std::result::Result<super::model_ir::RayRows, String> {
+/// A glTF material's `extras.nebula.ray` checked (absent: nothing to check), or the key under it that is not one it
+/// takes or not in its range (as ray_rows).
+pub fn material_ray(v: &Value) -> std::result::Result<(), String> {
     if let Some(key) = v.as_object().and_then(|o| o.keys().find(|k| !MATERIAL_RAY_KEYS.contains(&k.as_str()))) {
         return Err(format!("/{key}"));
     }
@@ -248,87 +249,78 @@ pub fn material_ray(v: &Value) -> std::result::Result<super::model_ir::RayRows, 
 
 /// shader.json `ray`, or the key (under `/ray`) that is outside it: a class of RAY_CLASSES; colours of three numbers 0
 /// to 1 (emission 0 or more); roughness, metal, through, body, tint_keep and sun_through 0 to 1; ior 1 to 3; shine 0 to
-/// 16; thickness 0 or more; traced `seen` or `hidden`; metal_kind a name of hit_record::METAL_KINDS or `art`; glow
-/// {color: three numbers 0 to 1 or `own`, and candela or luminance 0 or more}; vertex_colour `auto`, `albedo` or
-/// `light`. Nothing given: no row, the record is the cook's.
-fn ray_rows(v: &Value) -> std::result::Result<super::model_ir::RayRows, String> {
-    use super::model_ir::RayGlow;
-    let mut rows = super::model_ir::RayRows::default();
+/// 16; thickness 0 or more; traced `seen` or `hidden`; metal_kind a name of RAY_METAL_KINDS; glow {color: three
+/// numbers 0 to 1 or `own`, and candela or luminance 0 or more}; vertex_colour `auto`, `albedo` or `light`. The rows
+/// were ray tracing's; this game has none, so they are checked (a .luma 1.0 file valid before stays valid) and used for
+/// nothing (Cook.RayData).
+fn ray_rows(v: &Value) -> std::result::Result<(), String> {
     if v.is_null() {
-        return Ok(rows);
+        return Ok(());
     }
     let object = v.as_object().ok_or_else(String::new)?;
     if let Some(key) = object.keys().find(|k| !RAY_KEYS.contains(&k.as_str())) {
         return Err(format!("/{key}"));
     }
-    let number_in = |v: &Value, at: &str, low: f64, high: f64| -> std::result::Result<Option<f32>, String> {
+    let number_in = |v: &Value, at: &str, low: f64, high: f64| -> std::result::Result<Option<f64>, String> {
         match v {
             Value::Null => Ok(None),
-            x => x.as_f64().filter(|x| x.is_finite() && (low..=high).contains(x)).map(|x| Some(x as f32)).ok_or_else(|| at.to_string()),
+            x => x.as_f64().filter(|x| x.is_finite() && (low..=high).contains(x)).map(Some).ok_or_else(|| at.to_string()),
         }
     };
     let number = |key: &str, low: f64, high: f64| number_in(&v[key], &format!("/{key}"), low, high);
-    let colour_in = |x: &Value, at: &str, top: f64| -> std::result::Result<Option<[f32; 3]>, String> {
+    let colour_in = |x: &Value, at: &str, top: f64| -> std::result::Result<(), String> {
         match x {
-            Value::Null => Ok(None),
+            Value::Null => Ok(()),
             x => {
                 let a = x.as_array().filter(|a| a.len() == 3).ok_or_else(|| at.to_string())?;
-                let mut out = [0.0f32; 3];
                 for (k, c) in a.iter().enumerate() {
-                    out[k] = c.as_f64().filter(|c| c.is_finite() && *c >= 0.0 && *c <= top).ok_or_else(|| format!("{at}/{k}"))? as f32;
+                    c.as_f64().filter(|c| c.is_finite() && *c >= 0.0 && *c <= top).ok_or_else(|| format!("{at}/{k}"))?;
                 }
-                Ok(Some(out))
+                Ok(())
             }
         }
     };
-    let word = |key: &str, words: &[&str]| -> std::result::Result<Option<usize>, String> {
+    let word = |key: &str, words: &[&str]| -> std::result::Result<(), String> {
         match &v[key] {
-            Value::Null => Ok(None),
-            x => x.as_str().and_then(|w| words.iter().position(|o| *o == w)).map(Some).ok_or_else(|| format!("/{key}")),
+            Value::Null => Ok(()),
+            x => x.as_str().filter(|w| words.contains(w)).map(|_| ()).ok_or_else(|| format!("/{key}")),
         }
     };
     let most = f64::from(f32::MAX);
-    rows.class = word("class", &RAY_CLASSES)?.map(|k| RAY_CLASSES[k].to_string());
-    rows.base = colour_in(&v["base"], "/base", 1.0)?;
-    rows.emission = colour_in(&v["emission"], "/emission", most)?;
-    rows.roughness = number("roughness", 0.0, 1.0)?;
-    rows.metal = number("metal", 0.0, 1.0)?;
-    rows.through = number("through", 0.0, 1.0)?;
-    rows.ior = number("ior", 1.0, 3.0)?;
-    rows.thickness = number("thickness", 0.0, most)?;
-    rows.body = number("body", 0.0, 1.0)?;
-    rows.shine = number("shine", 0.0, 16.0)?;
-    rows.tint_keep = number("tint_keep", 0.0, 1.0)?;
-    rows.traced_hidden = word("traced", &["seen", "hidden"])?.map(|k| k == 1);
-    rows.sun_through = number("sun_through", 0.0, 1.0)?;
-    let kinds: Vec<&str> = super::hit_record::METAL_KINDS.iter().map(|(name, _)| *name).chain(["art"]).collect();
-    rows.metal_kind = word("metal_kind", &kinds)?.map(|k| if k < super::hit_record::METAL_KINDS.len() { k as u8 + 1 } else { 255 });
-    rows.vertex_colour = word("vertex_colour", &["auto", "albedo", "light"])?.map(|k| match k {
-        1 => super::model_ir::VertexColour::Albedo,
-        2 => super::model_ir::VertexColour::Light,
-        _ => super::model_ir::VertexColour::Auto,
-    });
-    rows.glow = match &v["glow"] {
-        Value::Null => None,
-        g => {
-            let o = g.as_object().ok_or_else(|| "/glow".to_string())?;
-            if let Some(key) = o.keys().find(|k| !matches!(k.as_str(), "color" | "candela" | "luminance")) {
-                return Err(format!("/glow/{key}"));
-            }
-            let colour = match &g["color"] {
-                Value::String(s) if s == "own" => None,
-                Value::Null => None,
-                c => colour_in(c, "/glow/color", 1.0)?,
-            };
-            let strength = match (number_in(&g["candela"], "/glow/candela", 0.0, most)?, number_in(&g["luminance"], "/glow/luminance", 0.0, most)?) {
-                (Some(candela), None) => candela,
-                (None, Some(luminance)) => 0.0 - luminance,
-                _ => return Err("/glow".to_string()),
-            };
-            Some(RayGlow { colour, strength })
+    word("class", &RAY_CLASSES)?;
+    colour_in(&v["base"], "/base", 1.0)?;
+    colour_in(&v["emission"], "/emission", most)?;
+    for (key, low, high) in [
+        ("roughness", 0.0, 1.0),
+        ("metal", 0.0, 1.0),
+        ("through", 0.0, 1.0),
+        ("ior", 1.0, 3.0),
+        ("thickness", 0.0, most),
+        ("body", 0.0, 1.0),
+        ("shine", 0.0, 16.0),
+        ("tint_keep", 0.0, 1.0),
+        ("sun_through", 0.0, 1.0),
+    ] {
+        number(key, low, high)?;
+    }
+    word("traced", &["seen", "hidden"])?;
+    word("metal_kind", &RAY_METAL_KINDS)?;
+    word("vertex_colour", &["auto", "albedo", "light"])?;
+    let g = &v["glow"];
+    if !g.is_null() {
+        let o = g.as_object().ok_or_else(|| "/glow".to_string())?;
+        if let Some(key) = o.keys().find(|k| !matches!(k.as_str(), "color" | "candela" | "luminance")) {
+            return Err(format!("/glow/{key}"));
         }
-    };
-    Ok(rows)
+        if !matches!(&g["color"], Value::String(s) if s == "own") {
+            colour_in(&g["color"], "/glow/color", 1.0)?;
+        }
+        match (number_in(&g["candela"], "/glow/candela", 0.0, most)?, number_in(&g["luminance"], "/glow/luminance", 0.0, most)?) {
+            (Some(_), None) | (None, Some(_)) => {}
+            _ => return Err("/glow".to_string()),
+        }
+    }
+    Ok(())
 }
 
 /// The HLSL's words outside comments and strings, each with its line: what it may not write, and its `surface`.
@@ -589,28 +581,6 @@ pub fn check_compile(ir: &super::model_ir::ModelIr) -> Result<()> {
             }
         }
     }
-    // The ray-hit form (layer 3) over a stand-in of the tracer's side, as a compute program: what cannot run at a
-    // ray's hit is refused at its line too.
-    seen.clear();
-    for m in &ir.materials {
-        let (Some(sf), Some(dxc)) = (&m.surface, &compiler) else { continue };
-        if !seen.insert(m.name.clone()) {
-            continue;
-        }
-        let dir = Scratch::new()?;
-        let source = dir.0.join("surface.ray.hlsl");
-        std::fs::write(&source, format!("{RAY_HIT_STAND_IN}{}{RAY_HIT_ENTRY}", super::programs::ray_hit_form(sf)))?;
-        let output = std::process::Command::new(dxc)
-            .args(["-nologo", "-T", "cs_6_0", "-E", "ray_hit_check", "-O3", "-Fo"])
-            .arg(dir.0.join("surface.ray.bin"))
-            .arg(&source)
-            .output()
-            .map_err(|e| refuse("Cook.Shader.Compiler", &[("file", dxc.display().to_string()), ("detail", e.to_string())]))?;
-        if !output.status.success() {
-            let said = String::from_utf8_lossy(&output.stderr).to_string() + &String::from_utf8_lossy(&output.stdout);
-            return Err(compile_refusal(&said, m, sf, D3D12));
-        }
-    }
     Ok(())
 }
 
@@ -629,46 +599,7 @@ fn compile_refusal(said: &str, m: &super::model_ir::MaterialIr, sf: &super::mode
     }
 }
 
-/// What the tracer gives a ray-hit form (programs::ray_hit_form), as the check stands it in: the hit, the record it
-/// fills, a place's value and a map's texel. The tracer's own is the same three names with its tables behind them.
-pub const RAY_HIT_STAND_IN: &str = "\
-struct RtModHit {
-    float2 uv;
-    float4 color;
-    float3 normal;
-    float3 world_position;
-    float3 view;
-    float time;
-    float lod;
-};
-struct RtModSurface {
-    float3 base;
-    float alpha;
-    float3 normal;
-    float roughness;
-    float metal;
-    float3 emission;
-};
-RWStructuredBuffer<float4> rt_check_out : register(u0);
-float4 rt_mod_place(uint place) { return float4(0.5, 0.5, 0.5, 0.5) * float(place + 1u); }
-float4 rt_mod_map(uint slot, float2 uv, float lod) { return float4(uv, lod, float(slot)); }
-#line 1 \"program\"
-";
 
-/// The check's entry: one hit through the form, its outputs kept so nothing is optimized away.
-const RAY_HIT_ENTRY: &str = "\
-[numthreads(1, 1, 1)]
-void ray_hit_check(uint3 id : SV_DispatchThreadID) {
-    RtModHit h = (RtModHit)0;
-    h.uv = float2(id.xy);
-    h.normal = float3(0.0, 0.0, 1.0);
-    h.view = float3(0.0, 0.0, 1.0);
-    h.color = float4(1.0, 1.0, 1.0, 1.0);
-    RtModSurface o = (RtModSurface)0;
-    RT_MOD_SURFACE_NS::surface_hit(h, o);
-    rt_check_out[0] = float4(o.base, o.alpha) + float4(o.normal, o.roughness) + float4(o.emission, o.metal);
-}
-";
 
 /// A folder of its own under the system's temporary folder for one compile, removed when dropped.
 struct Scratch(std::path::PathBuf);

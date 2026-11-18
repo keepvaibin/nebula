@@ -18,7 +18,10 @@ runs:
     - id: key
       shell: bash
       run: |
-        echo "key=sccache-${{ inputs.name }}-${{ runner.os }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+        # A cache key holds no commas (a matrix value such as address,undefined).
+        name="$(printf '%s' '${{ inputs.name }}' | tr ',' '-')"
+        echo "prefix=sccache-$name-${{ runner.os }}-" >> "$GITHUB_OUTPUT"
+        echo "key=sccache-$name-${{ runner.os }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"
         dir="$(cd "$RUNNER_TEMP" && pwd -W 2>/dev/null || pwd)/sccache"
         {
           echo "SCCACHE_DIR=$dir"
@@ -30,5 +33,5 @@ runs:
     - uses: actions/cache/restore@v6
       with:
         path: ${{ runner.temp }}/sccache
-        key: sccache-${{ inputs.name }}-${{ runner.os }}-${{ github.sha }}
-        restore-keys: sccache-${{ inputs.name }}-${{ runner.os }}-
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: ${{ steps.key.outputs.prefix }}

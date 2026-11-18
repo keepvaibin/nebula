@@ -39,7 +39,7 @@ public:
     // all of it), whose steps go down to `lowest_sixteenths` (16: none): the targets are made at the largest field of
     // those steps and the passes work in this step's part, so a step change makes none again.
     bool prepare(Object commands, const Texture& depth, unsigned part_width, unsigned part_height, unsigned lowest_sixteenths,
-                 const RtView& view, bool ssao, std::span<const ao::ObjectOccluder> objects, UploadRing& ring,
+                 const SceneView& view, bool ssao, std::span<const ao::ObjectOccluder> objects, UploadRing& ring,
                  const StageMarker& mark = {});
     // Inside a scene pass `encoder` (an id<MTLRenderCommandEncoder>) whose colour is `color_format` over `samples`
     // samples a pixel: the multiply.

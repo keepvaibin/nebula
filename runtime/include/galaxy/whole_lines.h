@@ -7,6 +7,10 @@
 // one write when its '\n' comes. A line with no '\n' yet waits for it, or for its thread's end.
 //
 // C's stdio writes each call whole: a line made of several calls is composed first (Line), then written once.
+//
+// Once installed, the lines are written by one thread of their own (galaxy/line_writer.h), in the order they came:
+// the game, render and audio threads never wait on the log's disk, a pipe or a console. An end of the process
+// flushes first (flush); a normal end does it itself.
 #pragma once
 
 #include <cstdarg>
@@ -17,6 +21,13 @@ namespace galaxy::whole_lines {
 
 // Once, at the start of main, before any other thread writes.
 void install() noexcept;
+
+// Text for stdout or stderr, whole, in one write (by the writer's thread once installed; another file at once).
+void write(std::FILE* to, const char* data, std::size_t size) noexcept;
+
+// Every line written before this call is in its file, flushed, waiting `bound_ms` at most (a writer stuck in a
+// write that does not end). Before a process ends without returning from main (_Exit, TerminateProcess, exec).
+bool flush(unsigned bound_ms = 2000u) noexcept;
 
 // One line made of parts (a list of passes, a list of counts), written in one call. Longer text is cut at the end.
 class Line {
@@ -40,7 +51,7 @@ public:
     // The line and its '\n', in one write.
     void write(std::FILE* to) noexcept {
         text_[used_] = '\n';
-        std::fwrite(text_, 1u, used_ + 1u, to);
+        whole_lines::write(to, text_, used_ + 1u);
         used_ = 0u;
     }
 

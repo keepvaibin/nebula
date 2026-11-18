@@ -19,6 +19,7 @@
 #include <nebula_frame_list.h>
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <cstring>
@@ -601,7 +602,17 @@ bool RendererD3D11::publish_picture(std::uint64_t key, std::uint32_t width, std:
             picture.sampled =
                 d3d11::Context::get().create_texture(whole.width, whole.height, 1u, whole.format, kTargetBinds, "picture channels");
             if (!picture.sampled) {
-                throw std::runtime_error("a picture's channel copy could not be made");
+                // Not published this time (P-062): the next publish tries again; a removed device is a device loss.
+                if (gpu::device_removed(d3d11::Context::get().device())) {
+                    allocation_failed("a picture's channel copy");
+                }
+                drop_picture(picture, textures);
+                pictures_.erase(key);
+                static std::atomic<unsigned> reported{0u};
+                if (reported.fetch_add(1u, std::memory_order_relaxed) < 8u) {
+                    std::cerr << "[picture] a channel copy " << width << 'x' << height << " could not be made; not published\n";
+                }
+                return false;
             }
         }
         conversion_draw(whole.view.Get(), *picture.sampled, whole.width, whole.height, channels, 0.0f, 0.0f, 1.0f, 1.0f);
@@ -842,7 +853,7 @@ gpu::TextureRef RendererD3D11::swap_scene_color(gpu::TextureRef fresh) {
         fresh = d3d11::Context::get().create_texture(picture.width, picture.height, 1u, picture.format, kTargetBinds,
                                                      "scene target color");
         if (!fresh) {
-            throw std::runtime_error("scene target colour unavailable");
+            allocation_failed("the scene target colour");
         }
     }
     gpu::TextureRef handed = std::move(scene_.color);
@@ -1113,7 +1124,7 @@ bool RendererD3D11::begin_wide_scene(bool wanted, const SceneClearValues* initia
     return true;
 }
 
-void RendererD3D11::end_wide_scene(unsigned) {
+void RendererD3D11::end_wide_scene() {
     if (!scene_.wide) {
         return;
     }
@@ -1193,8 +1204,12 @@ bool RendererD3D11::record_screen_probes(std::size_t slot, std::span<const Scree
         desc.StructureByteStride = 0u;
         made = made && SUCCEEDED(device->CreateBuffer(&desc, nullptr, &out.readback));
         if (!made) {
+            // No answers this time (P-062): the probes are asked again; a removed device is a device loss.
             out = ProbeSlot{};
-            throw std::runtime_error("the screen probe buffers could not be made");
+            if (gpu::device_removed(device)) {
+                allocation_failed("the screen probe buffers");
+            }
+            return false;
         }
         out.capacity = count;
     }
@@ -1260,9 +1275,6 @@ void RendererD3D11::finish_pictures() {
     if (context.ready()) {
         // A copy recorded since the last frame's end is fenced here, as that end would have fenced it.
         const std::uint64_t fence = context.signal();
-        if (scene_capture_.staging && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {
-            scene_capture_.fence = fence;
-        }
         if (backbuffer_capture_.staging && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
             backbuffer_capture_.fence = fence;
         }
@@ -1271,49 +1283,12 @@ void RendererD3D11::finish_pictures() {
         }
         (void)context.wait(fence);
     }
-    debug_log_readback();
     debug_log_backbuffer_readback();  // the display picture's too
     wait_picture_files();
 }
 
-void RendererD3D11::set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path) {
-    scene_capture_path_ = std::move(scene_ppm_path);
+void RendererD3D11::set_debug_capture_paths(std::string backbuffer_ppm_path) {
     backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
-}
-
-bool RendererD3D11::debug_copy_scene_to_readback() {
-    debug_log_readback();
-    if (scene_capture_path_.empty() || !scene_capture_pending_path_.empty() || !scene_.color ||
-        scene_.color->format != draw_layout_.scene_color) {
-        return false;
-    }
-    const unsigned w = std::min(scene_map_.width, scene_.color->width);
-    const unsigned h = std::min(scene_map_.height, scene_.color->height);
-    end_scene_pass();
-    resolve_scene_color();
-    if (!ensure_staging(scene_capture_.staging, w, h, scene_.color->format)) {
-        return false;
-    }
-    const D3D11_BOX box{0u, 0u, 0u, w, h, 1u};
-    context()->CopySubresourceRegion(scene_capture_.staging.Get(), 0u, 0u, 0u, 0u, scene_.color->texture.Get(), 0u, &box);
-    scene_capture_.fence = 0u;
-    scene_capture_pending_path_ = scene_capture_path_;
-    scene_capture_width_ = w;
-    scene_capture_height_ = h;
-    return true;
-}
-
-void RendererD3D11::debug_log_readback() {
-    if (scene_capture_pending_path_.empty() || scene_capture_.fence == 0u || completed_fence_value() < scene_capture_.fence) {
-        return;
-    }
-    const std::vector<std::uint8_t> rgba =
-        read_staging(context(), scene_capture_.staging.Get(), scene_capture_width_, scene_capture_height_);
-    if (!rgba.empty()) {
-        write_rgba_ppm_async(std::move(scene_capture_pending_path_), rgba, scene_capture_width_, scene_capture_height_);
-    }
-    scene_capture_pending_path_.clear();
-    scene_capture_.fence = 0u;
 }
 
 bool RendererD3D11::debug_copy_selected_display_to_readback(const DisplayTexture& source) {

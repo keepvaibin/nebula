@@ -8,6 +8,7 @@
 #include "galaxy/frame_timeline.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/whole_lines.h"
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/vk/streamline_vk.h"
 #if defined(_WIN32)
 #include "galaxy/render/streamline_bridge.h"
@@ -24,8 +25,7 @@
 #include "galaxy/render/host_window_win32.h"
 #endif
 #include "galaxy/render/program_table.h"
-#include "galaxy/render/rt/rt_backend.h"
-#include "galaxy/render/rt_caps.h"
+#include "galaxy/render/device_memory.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/game_paths.h"
 #include "galaxy/render/idle_clock.h"
@@ -277,7 +277,9 @@ void RendererVk::report_adapter() {
     const VkPhysicalDeviceProperties& properties = context.properties();
     const bool rtx = properties.vendorID == 0x10DEu && std::strstr(properties.deviceName, "RTX") != nullptr;
     host_window::rtx_adapter.store(rtx, std::memory_order_relaxed);
-    record_render_adapter(properties.deviceName, properties.vendorID, properties.deviceID, context.subsys_id(), false);
+    record_render_adapter(properties.deviceName, properties.vendorID, properties.deviceID, context.subsys_id());
+    // The GPU shares the system's memory: an integrated one.
+    set_device_unified_memory(properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
     {
         // The version number decoded by the driver's own scheme. driverInfo is free text: Qualcomm's is several lines of
         // build ids and dates, longer than a report's driver field.
@@ -296,17 +298,6 @@ void RendererVk::report_adapter() {
                                                                   : "the GPU has no multisampled scene target formats");
     caps.taa = make_render_feature_status(false, false, false, false,
                                           "motion vectors, jitter, and history resources are not built");
-    const RtCaps rt = context.rt_caps();
-    const bool rt_wanted = get_render_config().ray_tracing_enabled;
-    set_rt_caps(rt);
-    log_rt_caps("vulkan", rt, rt_wanted);
-    host_window::ray_tracing_offered.store(kRayTracingRowOffered && rt_capable(rt), std::memory_order_relaxed);
-    if (rt_wanted && rt_capable(rt)) {
-        (void)rt::shaders_load(context.device());
-    }
-    caps.dxr = make_render_feature_status(true, rt.ray_queries && rt.acceleration_structures, rt_capable(rt),
-                                          kRayTracingRowOffered && rt_capable(rt),
-                                          rt_refusal(rt) != nullptr ? rt_refusal(rt) : "ray tracing is not offered yet");
 #if defined(_WIN32)
     const bool dlss_ready = streamline::dlss_supported();
 #else
@@ -332,8 +323,7 @@ bool RendererVk::create_surface_and_device() {
         return host_window::create_vulkan_surface(instance, window);
     };
     if (!vk::Context::get().initialize(get_render_config().gpu.data(), validation,
-                                       host_window::vulkan_instance_extensions(), make_surface, &surface_,
-                                       true)) {  // the tracer's features wherever it can trace: the setting changes in play
+                                       host_window::vulkan_instance_extensions(), make_surface, &surface_)) {
         return false;
     }
     const vk::Context& context = vk::Context::get();
@@ -403,7 +393,6 @@ bool RendererVk::create_layouts() {
                                  " maps in a table, and it has no descriptor indexing");
     }
     program_use_bound_tables(!bindless_);
-    program_use_triangle_ids(context.rt_caps().triangle_ids);
     static_assert(kSamplerHeapSlots == vk::kBindlessSamplerSlots);
     {
         // Set 0: b0, b1, b2, the composed rows, the instance table and, with descriptor indexing, the frame's texture lists.
@@ -433,8 +422,7 @@ bool RendererVk::create_layouts() {
             const VkDescriptorSetLayoutBinding binding{
                 0, images ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER,
                 bindless_ ? (images ? texture_array_limit_ : vk::kBindlessSamplerSlots) : vk::kBoundTableSlots,
-                // The image array is the tracer's passes' too (rt_backend_vk.cpp: set 1 of a pass).
-                static_cast<VkShaderStageFlags>(VK_SHADER_STAGE_FRAGMENT_BIT | (images && bindless_ ? VK_SHADER_STAGE_COMPUTE_BIT : 0)), nullptr};
+                VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
             VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
             info.bindingCount = 1;
             info.pBindings = &binding;
@@ -802,55 +790,6 @@ bool RendererVk::create_layouts() {
         attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &draw_layout_.aux_passes_clear[wide ? 1u : 0u][aux]),
                   "temporal scene clearing render pass");
-    }
-    // The tracer's prepass: the item target and the scene's depth. The clearing form takes the item target whatever
-    // it held (cleared to no item); both leave it a render target.
-    for (const bool clears : {false, true}) {
-        VkAttachmentDescription attachments[2]{};
-        attachments[0].format = VK_FORMAT_R32G32_UINT;
-        attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-        attachments[0].loadOp = clears ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
-        attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachments[0].initialLayout = clears ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachments[1].format = depth_format_;
-        attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-        attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-        attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-        attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-        attachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        const VkAttachmentReference color{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
-        const VkAttachmentReference depth{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
-        VkSubpassDescription subpass{};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1u;
-        subpass.pColorAttachments = &color;
-        subpass.pDepthStencilAttachment = &depth;
-        VkSubpassDependency dependencies[2]{};
-        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[0].dstSubpass = 0;
-        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-            VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-        dependencies[0].dstStageMask = dependencies[0].srcStageMask;
-        dependencies[0].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        dependencies[1] = dependencies[0];
-        dependencies[1].srcSubpass = 0;
-        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-        VkRenderPassCreateInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-        info.attachmentCount = 2u;
-        info.pAttachments = attachments;
-        info.subpassCount = 1;
-        info.pSubpasses = &subpass;
-        info.dependencyCount = 2;
-        info.pDependencies = dependencies;
-        vk::check(vkCreateRenderPass(device, &info, nullptr, clears ? &draw_layout_.item_pass_clear : &draw_layout_.item_pass),
-                  "ray tracing prepass render pass");
     }
     // One target written whole (copies; RGBA8: screen probes): its old contents are dropped; it ends shader-readable.
     {
@@ -1872,7 +1811,6 @@ void RendererVk::shutdown() {
         }
         probe_slots_.clear();
         held_probe_slots_.clear();
-        scene_capture_ = Readback{};
         backbuffer_capture_ = Readback{};
         display_capture_ = Readback{};
         display_capture_pending_path_.clear();
@@ -1923,10 +1861,6 @@ void RendererVk::shutdown() {
                 if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
                 pass = VK_NULL_HANDLE;
             }
-        }
-        for (VkRenderPass* pass : {&draw_layout_.item_pass, &draw_layout_.item_pass_clear}) {
-            if (*pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, *pass, nullptr);
-            *pass = VK_NULL_HANDLE;
         }
         temporal_pending_ = {};
         temporal_.reset();
@@ -2035,7 +1969,7 @@ void RendererVk::wait_for_fence_value(std::uint64_t fence_value) {
 }
 
 void RendererVk::begin_frame() {
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     if (!streamline_frame_open_) {
         vk::streamline_vk::open_frame(swapchain_fsr_);
         streamline_frame_open_ = true;
@@ -2047,9 +1981,14 @@ void RendererVk::begin_frame() {
     apply_dynamic_resolution();
     // draw.post: a program reading motion registers only while a temporal upscaler makes it.
     set_mod_post_motion(temporal_ != nullptr && temporal_mode());
-    if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
-        // The settings changed: decided again.
-        temporal_interp_suspended_ = false;
+    if (temporal_interp_hold_.held()) {
+        if (temporal_interp_key() != temporal_interp_key_) {
+            temporal_interp_hold_.settings_changed();  // the settings changed: decided again
+        } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+            // Its wait passed: the governor measures generated frames again, not by the cost that held it.
+            reset_generated_gpu_ema();
+            std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
+        }
     }
     sync_post_process();
     bloom_.poll_ready();
@@ -2221,9 +2160,6 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
             probes.fence = fence;
         }
     }
-    if (scene_capture_.buffer && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {
-        scene_capture_.fence = fence;
-    }
     if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u &&
         !backbuffer_capture_pending_path_.empty()) {
         backbuffer_capture_.fence = fence;
@@ -2277,8 +2213,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         }
         if (!trace_present_stats_enabled() && profile_samples_ != 0u) {
             static constexpr const char* names[] = {"scene", "resolve", "frame-read", "display-copy", "bloom", "scene-aa",
-                                                    "scene-ao", "upscale", "rt", "present", "camera",
+                                                    "scene-ao", "upscale", "present", "camera",
                                                     "ao-distance", "ao-occlusion", "ao-denoise", "ao-upsample", "ao-apply"};
+            static_assert(std::size(names) == static_cast<std::size_t>(GpuPass::Count));
             galaxy::whole_lines::Line line;
             line.add("[gpu-profile] %u sampled submissions; GPU ms:", profile_samples_);
             for (std::size_t p = 0; p < std::size(names); ++p) line.add(" %s=%.3f", names[p], pass_ms_[p] / profile_samples_);
@@ -2761,7 +2698,7 @@ void RendererVk::report_present_stats() {
     message << " gpu-samples=" << stats_.gpu_samples << " gpu-total-ms=" << stats_.gpu_ms;
     if (pass_queries_ != VK_NULL_HANDLE) {
         static constexpr const char* kPassNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom", "scene-aa",
-                                                     "scene-ao", "upscale", "rt", "present", "camera",
+                                                     "scene-ao", "upscale", "present", "camera",
                                                      "ao-distance", "ao-occlusion", "ao-denoise", "ao-upsample", "ao-apply"};
         static_assert(std::size(kPassNames) == static_cast<std::size_t>(GpuPass::Count));
         const double profiled = static_cast<double>(std::max(profile_samples_, 1u));
@@ -2788,7 +2725,7 @@ void RendererVk::report_present_stats() {
 
 namespace {
 constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
-                                          "upscale", "ray tracing", "present", "camera", "ao distance", "ao occlusion",
+                                          "upscale", "present", "camera", "ao distance", "ao occlusion",
                                           "ao denoise", "ao upsample", "ao apply"};
 }  // namespace
 
@@ -2962,6 +2899,7 @@ void RendererVk::refresh_display_rate() {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';

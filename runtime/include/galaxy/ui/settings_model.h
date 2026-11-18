@@ -60,6 +60,8 @@ struct FrameRateCaps {
     bool unlimited = false;
     // The surface presents only at its refresh (render_config.h present_waits_for_refresh): VSync stays on.
     bool vsync_fixed = false;
+    // The display varies its refresh with the presents: every rate shows evenly.
+    bool variable_refresh = false;
 };
 // A frame-rate target as the settings list it: frames a second, 0 for the display's rate, kUnlimitedTarget for no cap.
 inline constexpr unsigned kUnlimitedTarget = std::numeric_limits<unsigned>::max();

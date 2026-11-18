@@ -584,6 +584,28 @@ void test_commit(const fs::path& base) {
         CHECK(siblings(root).empty());
     }
 
+    // The process ends at any move (P-081: before, the save folder could be left with no save, and nothing at the
+    // start found the import's folders): its journal stays, and the next start's recover_import puts the save back.
+    CHECK(st::recover_import(root).empty());
+    for (const int step : {1, 2, 3, 4}) {
+        st::detail::set_commit_crash(step);
+        const st::ImportResult crashed = st::commit_import(plan, root);
+        st::detail::set_commit_crash(0);
+        CHECK(crashed.error == Error::kIo);
+        CHECK(fs::exists(root.parent_path() / "saves.import-journal"));
+        const std::string said = st::recover_import(root);
+        CHECK(said.starts_with("a save import that stopped half way was undone"));
+        CHECK(listing(root) == before);
+        CHECK(siblings(root).empty());
+        CHECK(st::recover_import(root).empty());
+    }
+    // A journal this Nebula did not write moves nothing and stays.
+    write_all(root.parent_path() / "saves.import-journal",
+              bytes_of("nebula save import journal 1\nstaging\tsaves.import\nbackup\t../elsewhere\nreplaced\tRMGE/Nebula.sav\n"));
+    CHECK(st::recover_import(root).find("is not one this Nebula wrote") != std::string::npos);
+    CHECK(listing(root) == before);
+    fs::remove(root.parent_path() / "saves.import-journal");
+
     const st::ImportResult result = st::commit_import(plan, root);
     CHECK(result.error == Error::kNone && result.written == 1 && !result.backup.empty());
     const auto after = listing(root);
@@ -650,6 +672,29 @@ void test_export(const fs::path& base) {
         return file.first == "RMGE/Nebula.sav.1" || file.first == "unrelated.txt" || file.first.ends_with("not a mod file.txt");
     });
     CHECK(listing(copy) == expected);
+
+    // The install's achievements and stats travel with the saves (P-119); not written into the save root.
+    {
+        std::vector<std::byte> with_progress;
+        CHECK(st::make_export(root, "2.0.0", &with_progress, st::Progress{"comets=2026-01-01T00:00:00Z\n", "coins=5\n"}) ==
+              Error::kNone);
+        std::vector<st::detail::ZipEntry> progress_entries;
+        CHECK(st::detail::read_zip(with_progress, &progress_entries) == Error::kNone && progress_entries.size() == 10);
+        const st::ImportPlan carried = st::plan_import(with_progress, "RMGE");
+        CHECK(carried.error == Error::kNone && carried.files.size() == 7);
+        CHECK(carried.achievements == "comets=2026-01-01T00:00:00Z\n" && carried.stats == "coins=5\n");
+        CHECK(plan.achievements.empty() && plan.stats.empty());
+        std::vector<std::byte> stats_only;
+        CHECK(st::make_export(root, "2.0.0", &stats_only, st::Progress{"", "coins=5\n"}) == Error::kNone);
+        CHECK(st::detail::read_zip(stats_only, &progress_entries) == Error::kNone && progress_entries.size() == 9);
+        // A changed progress file fails the archive's digest check, as a save would.
+        std::vector<st::detail::ZipEntry> tampered;
+        CHECK(st::detail::read_zip(with_progress, &tampered) == Error::kNone);
+        for (st::detail::ZipEntry& entry : tampered) {
+            if (entry.name == "saves/nebula-stats.ini") entry.bytes = bytes_of("coins=9\n");
+        }
+        CHECK(st::plan_import(make_zip(tampered), "RMGE").error == Error::kDamaged);
+    }
 
     // The archive's own checks.
     const auto with_manifest = [&entries](std::string manifest) {

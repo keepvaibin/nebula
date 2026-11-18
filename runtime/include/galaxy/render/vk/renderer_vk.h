@@ -15,14 +15,13 @@
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/platform_time.h"
+#include "galaxy/render/temporal_hold.h"
 #include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/present_slots.h"
 #include "galaxy/render/renderer_common.h"
-#include "galaxy/render/rt_types.h"
-#include "galaxy/render/rt/rt_backend.h"
-#include "galaxy/render/rt/rt_denoiser.h"
+#include "galaxy/render/scene_view.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/present_slots.h"
 #include "galaxy/render/gpu_upload_ring.h"
@@ -100,10 +99,6 @@ struct RenderLayout {
     // The same, every attachment cleared as the pass begins (the scene's first clear; the layer's two load): compatible with
     // aux_passes.
     std::array<std::array<VkRenderPass, 3>, 2> aux_passes_clear{};
-    // The tracer's prepass (aux kAuxPrepass): the item target (R32_UINT) and the scene's depth, single-sample; the
-    // clearing form clears the item target as the pass begins and loads the depth.
-    VkRenderPass item_pass = VK_NULL_HANDLE;
-    VkRenderPass item_pass_clear = VK_NULL_HANDLE;
     [[nodiscard]] VkRenderPass aux_pass_for(unsigned samples_log2, unsigned aux, bool clear = false) const noexcept {
         const unsigned wide = (samples_log2 & kSceneVariantHdr) != 0u ? 1u : 0u;
         return clear ? aux_passes_clear[wide][aux - 1u] : aux_passes[wide][aux - 1u];
@@ -154,45 +149,10 @@ public:
     void record_scene_aa();
     // Ambient occlusion of the opaque scene (ambient_occlusion_vk.h).
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ao_.ready(); }
-    void set_scene_ao_view(const RtView& view) noexcept { scene_ao_view_ = view; }
+    void set_scene_ao_view(const SceneView& view) noexcept { scene_ao_view_ = view; }
     // The scene's models (ambient_occlusion_objects.h).
     void set_scene_ao_objects(std::vector<ao::ObjectOccluder>& objects) noexcept { scene_ao_objects_.swap(objects); }
     void record_scene_ao();
-    // What the tracer records through (rt_backend.h Backend::begin: the frame's commands, no pass open, and where a
-    // pass's views go), timed as the ray tracing pass until rt_commands_end.
-    struct RtCommands {
-        void* commands = nullptr;
-        void* descriptors = nullptr;
-    };
-    [[nodiscard]] RtCommands rt_commands_begin();
-    void rt_commands_end();
-    // The scene's depth as a pass reads it, until rt_depth_end, with its size and the format an image must have to be
-    // copied over the scene's colour (rt_copy_to_scene). With `color_view`, the scene's colour as drawn so far for the
-    // pass to read as well. False when no pass can read them now (a multisampled scene).
-    [[nodiscard]] bool rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color,
-                                      rt::TextureView* color_view = nullptr);
-    void rt_depth_end();
-    // An image of the tracer's (Backend::image_to_copy) over the scene's colour: the tracer's views.
-    void rt_copy_to_scene(void* image);
-    // The tracer's prepass: the item target (each pixel's item of the list, from 1; 0 none) beside the scene's depth,
-    // made at the scene's size and cleared by the first draw's pass. Draws of aux kAuxPrepass write it. False when
-    // there can be none (a multisampled scene, a texture target).
-    [[nodiscard]] bool rt_items_begin();
-    // The scene's depth and the item target as a pass reads them, until rt_light_end.
-    [[nodiscard]] bool rt_light_begin(rt::TextureView& depth, rt::TextureView& items, unsigned& width, unsigned& height);
-    void rt_light_end();
-    // The reactive mask as the tracer writes it, at the scene's end: false without one this frame or where
-    // the device cannot. Until rt_reactive_end.
-    [[nodiscard]] bool rt_reactive_begin(rt::TextureView& reactive);
-    void rt_reactive_end();
-    // The tracer's outside denoiser this frame (rt_denoiser.h: DLSS Ray Reconstruction), null for the built-in filters.
-    [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return temporal_ ? temporal_->denoiser() : nullptr; }
-    // An image of the tracer's (Backend::image_to_sample) as a texture the draws' programs read: its place among the
-    // textures (the view constants' view_traced). `which`: 0 the traced light, 1 the added light.
-    [[nodiscard]] std::uint32_t rt_publish_light(void* image, TextureStore& textures, unsigned which = 0u);
-    // The tracer stops while the game runs: its pictures leave the draws (their views retire), after the GPU is idle.
-    void rt_unpublish_lights(TextureStore& textures);
-    void rt_wait_idle() { wait_for_gpu_idle(); }
     // The game's bloom (game_bloom_vk.h): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return bloom_.ready(); }
     void game_bloom(std::uint32_t kind, std::uint32_t a, std::uint32_t b);
@@ -213,7 +173,7 @@ public:
     [[nodiscard]] unsigned temporal_output_width() const noexcept { return temporal_output_w_; }
     // Milliseconds a GPU timestamp tick (0: the device has no compute timestamps).
     [[nodiscard]] double gpu_ms_per_tick() const noexcept { return timestamp_period_ns_ / 1'000'000.0; }
-    // Smoothed GPU time of a frame that drew the scene (0 until measured): the tracer's build budget.
+    // Smoothed GPU time of a frame that drew the scene (0 until measured).
     [[nodiscard]] double scene_gpu_ema_ms() const noexcept { return native_scene_gpu_ema_ms_; }
     void set_scene_view(const std::array<float, 12>* view) noexcept {
         scene_view_known_ = view != nullptr;
@@ -228,7 +188,7 @@ public:
     [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (scene_camera_vk.h).
     bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
-    void end_wide_scene(unsigned finish = 0u);  // finish: the traced relight's camera (scene_camera.hlsl g_finish)
+    void end_wide_scene();
     [[nodiscard]] bool temporal_mode() const;
     // The upscaler reads the motion but no reactive mask (SGSR 2): every draw of the scene shares the motion pass, the
     // ones without motion leaving it as it is, so the pass is not closed and reopened between them.
@@ -413,15 +373,13 @@ public:
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
 
-    // Test captures: the scene target and the presented backbuffer as PPM files (paths from set_debug_capture_paths).
-    bool debug_copy_scene_to_readback();
-    void debug_log_readback();
+    // Test captures: the presented backbuffer as PPM files (paths from set_debug_capture_paths).
     void debug_log_backbuffer_readback();
     // The presented display picture itself (before the post chain), copied in the present's command buffer to
     // <backbuffer path>.display.ppm, as the Direct3D 12 renderer's selected-display capture.
     bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
     void debug_log_display_readback();
-    void set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path);
+    void set_debug_capture_paths(std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
@@ -623,7 +581,7 @@ private:
     vk::PostProcessorVk post_;
     vk::GameBloomVk bloom_;
     vk::AmbientOcclusionVk ao_;
-    RtView scene_ao_view_{};
+    SceneView scene_ao_view_{};
     std::vector<ao::ObjectOccluder> scene_ao_objects_;
     void sync_post_process();
     // DLSS Frame Generation (RendererD3D12's fg_hudless_*): the frame without its 2D layer, and whether a frame's Streamline
@@ -820,7 +778,7 @@ private:
     // A set over the live scene target's depth at its size and samples, in `format` (the wide set's, or the 2D layer's).
     bool ensure_wide_set(SceneSet& set, VkFormat format = VK_FORMAT_R16G16B16A16_SFLOAT);
     void record_wide_begin(const SceneClearValues* initial_clear);
-    void record_wide_end(unsigned finish = 0u);
+    void record_wide_end();
     vk::SceneCameraVk scene_camera_;
     std::chrono::steady_clock::time_point camera_metered_{};
     std::uint64_t scene_depth_serial_ = 0;
@@ -923,7 +881,6 @@ private:
     bool layer_targets_ok_ = false;  // create_layouts: the format and the attachment count are there
     bool layer_window_ = false;
     bool reactive_scene_ = false;  // this scene's blended draws write the reactive mask (begin_motion_scene)
-    bool reactive_storable_ = false;  // the tracer writes it too (a storage image: R8 stores here and the device traces)
     void destroy_motion_framebuffers();
     [[nodiscard]] VkFramebuffer motion_framebuffer(unsigned aux);
     void prepare_temporal_upscaler();
@@ -938,7 +895,6 @@ private:
     unsigned temporal_output_h_ = 0u;
     unsigned temporal_frame_ = 0u;
     unsigned temporal_kind_ = 0u;
-    bool temporal_rr_ = false;  // DLSS made as Ray Reconstruction (the tracer running)
     bool temporal_wide_ = false;  // made for the float scene (HDR output): colour past white
     unsigned temporal_quality_ = 0u;
     bool temporal_history_valid_ = false;
@@ -974,7 +930,7 @@ private:
         friend bool operator==(const TemporalInterpKey&, const TemporalInterpKey&) = default;
     };
     [[nodiscard]] TemporalInterpKey temporal_interp_key() const;
-    bool temporal_interp_suspended_ = false;
+    TemporalInterpHold temporal_interp_hold_;
     TemporalInterpKey temporal_interp_key_{};
     std::array<float, 12> scene_view_{};
     bool scene_view_known_ = false;
@@ -1112,13 +1068,7 @@ private:
     VkCommandPool utility_pool_ = VK_NULL_HANDLE;  // one-time submissions (run_one_time)
 
     // Captures and telemetry.
-    std::string scene_capture_path_;
     std::string backbuffer_capture_path_;
-    Readback scene_capture_;
-    std::string scene_capture_pending_path_;
-    unsigned scene_capture_width_ = 0;
-    unsigned scene_capture_height_ = 0;
-    bool scene_capture_wide_ = false;  // the copy is of the wide (RGBA16F) scene target: 8 bytes a pixel
     Readback backbuffer_capture_;
     std::string backbuffer_capture_pending_path_;
     unsigned backbuffer_capture_width_ = 0;
@@ -1262,7 +1212,7 @@ private:
     // the frame's commands; the time to the next mark (or the frame's end) is that pass's. The curved surfaces' sort,
     // in the upload commands, takes the two queries after the frame's marks.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, Camera,
+        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, Present, Camera,
         AoDistance, AoOcclusion, AoDenoise, AoUpsample, AoApply, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
@@ -1296,18 +1246,6 @@ private:
     std::array<std::array<GpuPass, kGpuPassSlots>, kFramesInFlight> pass_marks_{};
     std::array<unsigned, kFramesInFlight> pass_mark_count_{};
     GpuPass current_pass_ = GpuPass::Scene;
-    GpuPass rt_outer_pass_ = GpuPass::Scene;
-    bool rt_color_read_ = false;  // rt_depth_begin put the scene's colour in a pass's hands
-    rt::Backend::TextureTable rt_textures_{};  // what rt_commands_begin hands the tracer: the image array's set and layout
-    // The tracer's item target (rt_items_begin) and its framebuffer with the scene's depth.
-    gpu::TextureRef item_target_;
-    VkFramebuffer item_framebuffer_ = VK_NULL_HANDLE;
-    VkImageView item_framebuffer_depth_ = VK_NULL_HANDLE;
-    bool item_clear_pending_ = false;  // the prepass's next pass clears the item target
-    [[nodiscard]] VkFramebuffer item_framebuffer();
-    void destroy_item_framebuffer();
-    static constexpr std::uint64_t kRtLightPicture = 1ull << 62u | 1u;  // the traced light's key among the pictures
-    static constexpr unsigned kRtLightPictures = 10u;  // its pictures, kRtLightPicture + 0 to 9 (rt_publish_light's which)
     bool pass_recording_ = false;  // between begin_frame and end_frame
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> pass_ms_{};
     // The settings page's timing: asked for by gpu_timing_wanted_ (every frame is profiled while it is), and each pass's running

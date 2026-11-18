@@ -68,6 +68,9 @@ void note_vsync(std::int64_t vsync, std::int64_t stated) noexcept {
     g_grid.note(vsync, stated);
 }
 
+// Held (set_display_clock_held): the link gives no vsyncs. Read on the main queue, where the link starts and is held.
+std::atomic<bool> g_held{false};
+
 #if TARGET_OS_OSX
 
 CVDisplayLinkRef g_link = nullptr;
@@ -96,9 +99,11 @@ void start_clock() {
         return;
     }
     CVDisplayLinkSetOutputCallback(g_link, on_vsync, nullptr);
-    CVDisplayLinkStart(g_link);
     // The window's own display, now and whenever the window moves to another (the main thread's to ask).
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (!g_held.load(std::memory_order_relaxed)) {
+            CVDisplayLinkStart(g_link);
+        }
         for (NSWindow* window in NSApp.windows) {
             if (window.isVisible) {
                 follow_window(window);
@@ -133,6 +138,8 @@ void start_clock() {
 
 namespace {
 
+CADisplayLink* g_ios_link = nil;  // main queue only
+
 void start_clock() {
     dispatch_async(dispatch_get_main_queue(), ^{
         static NebulaDisplayClock* target = [NebulaDisplayClock new];
@@ -143,7 +150,9 @@ void start_clock() {
             const float fastest = static_cast<float>(UIScreen.mainScreen.maximumFramesPerSecond);
             link.preferredFrameRateRange = CAFrameRateRangeMake(fastest, fastest, fastest);
         }
+        link.paused = g_held.load(std::memory_order_relaxed);
         [link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+        g_ios_link = link;
     });
 }
 
@@ -153,7 +162,7 @@ void start_clock() {
 
 namespace galaxy::sdl {
 
-bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept {
+bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns, bool in_between) noexcept {
     std::call_once(g_started, [] { start_clock(); });
     galaxy::VsyncGrid grid;
     {
@@ -164,7 +173,7 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept 
     // keeps the game at its speed.
     std::int64_t target = 0;
     std::int64_t frame_period = 0;
-    if (!grid.next_slot(period_ns, last_ns, now_ns(), target, frame_period)) {
+    if (!grid.next_slot(period_ns, last_ns, now_ns(), in_between, target, frame_period)) {
         g_frame_slot_ns.store(0, std::memory_order_relaxed);
         return false;
     }
@@ -175,15 +184,21 @@ bool wait_display_frame(std::int64_t period_ns, std::int64_t& last_ns) noexcept 
         static std::int64_t late_max = 0;
         static unsigned late_over_1ms = 0;
         static unsigned waits = 0;
+        static std::int64_t window_began = 0;
         const std::int64_t late = now_ns() - target;
+        if (window_began == 0) {
+            window_began = target;
+        }
         late_sum += late;
         late_max = std::max(late_max, late);
         late_over_1ms += late > 1000000 ? 1u : 0u;
-        if (++waits == 600u) {
+        ++waits;
+        if (target - window_began >= 10'000'000'000) {
             std::fprintf(stderr, "[pacing] frame wake-ups after their vsync: %.3f ms average, %.3f ms longest, %u of %u over 1 ms\n",
                          static_cast<double>(late_sum) / waits / 1e6, static_cast<double>(late_max) / 1e6, late_over_1ms, waits);
             late_sum = late_max = 0;
             late_over_1ms = waits = 0u;
+            window_began = target;
         }
     }
     last_ns = target;
@@ -223,6 +238,27 @@ double display_refresh_hz() noexcept {
     }
     const std::lock_guard<std::mutex> lock(g_mutex);
     return g_grid.interval_ns != 0 ? 1e9 / static_cast<double>(g_grid.interval_ns) : 0.0;
+}
+
+void set_display_clock_held(bool held) noexcept {
+    g_held.store(held, std::memory_order_relaxed);
+    // On the main queue, after the link's start (also queued there): the last word is the latest call's.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        const bool now_held = g_held.load(std::memory_order_relaxed);
+#if TARGET_OS_OSX
+        if (g_link != nullptr) {
+            if (now_held) {
+                CVDisplayLinkStop(g_link);
+            } else if (!CVDisplayLinkIsRunning(g_link)) {
+                CVDisplayLinkStart(g_link);
+            }
+        }
+#else
+        if (g_ios_link != nil) {
+            g_ios_link.paused = now_held;
+        }
+#endif
+    });
 }
 
 }  // namespace galaxy::sdl

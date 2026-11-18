@@ -7,6 +7,8 @@
 #include "galaxy/benchmark.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/display_aspect.h"
+#include "galaxy/render/present_clock.h"
+#include "galaxy/render/device_memory.h"
 #include "galaxy/launch_args.h"
 #include "galaxy/whole_lines.h"
 #include "galaxy/platform_time.h"
@@ -202,7 +204,8 @@ void RendererMtl::report_adapter() {
     const std::string& name = context.device_name();
     const unsigned vendor = vendor_of(name);
     host_window::rtx_adapter.store(false, std::memory_order_relaxed);
-    record_render_adapter(name.c_str(), vendor, 0u, 0u, false);
+    set_device_unified_memory(context.caps().unified_memory);
+    record_render_adapter(name.c_str(), vendor, 0u, 0u);
     RenderFeatureCaps caps{};
     caps.adapter_vendor_id = vendor;
     std::snprintf(caps.adapter_description.data(), caps.adapter_description.size(), "%s", name.c_str());
@@ -211,7 +214,6 @@ void RendererMtl::report_adapter() {
                                            msaa ? "the scene target is multisampled"
                                                 : "the GPU has no multisampled scene target formats");
     caps.taa = make_render_feature_status(false, false, false, false, "motion vectors, jitter, and history resources are not built");
-    caps.dxr = make_render_feature_status(false, false, false, false, "ray tracing runs on Direct3D 12");
     caps.streamline_bridge_built = false;
     caps.streamline = make_render_feature_status(false, false, false, false, "NVIDIA Streamline is not running");
     caps.reflex = make_render_feature_status(false, false, false, false, "Streamline Reflex integration is not built");
@@ -380,7 +382,7 @@ void RendererMtl::shutdown() {
         pictures_.clear();
         frame_pass_targets_.clear();
         capture_target_.reset();
-        scene_capture_ = backbuffer_capture_ = display_capture_ = Readback{};
+        backbuffer_capture_ = display_capture_ = Readback{};
         probe_slots_.clear();
         held_probe_slots_.clear();
         pass_visibility_.reset();
@@ -532,7 +534,7 @@ void pipeline_compile_stats(std::uint64_t out[5]) noexcept;  // pipelines_mtl.mm
 
 namespace {
 constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
-                                          "upscale", "ray tracing", "present", "camera", "ao distance", "ao occlusion",
+                                          "upscale", "present", "camera", "ao distance", "ao occlusion",
                                           "ao denoise", "ao upsample", "ao apply", "uploads"};
 }  // namespace
 
@@ -540,7 +542,8 @@ void RendererMtl::next_command_buffer(GpuPass pass) {
     @autoreleasepool {
         id<MTLCommandBuffer> const made = [queue() commandBuffer];
         if (made == nil) {
-            throw std::runtime_error("no command buffer");
+            // The queue gives none only when the device is gone (P-008).
+            throw std::runtime_error("device lost: the Metal queue gave no command buffer");
         }
         list_pass_ = pass == GpuPass::Count ? GpuPass::Scene : pass;
         if (profile_frame_) {
@@ -561,15 +564,20 @@ void RendererMtl::next_command_buffer(GpuPass pass) {
 }
 
 void RendererMtl::begin_frame() {
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     follow_window_and_resize();
     apply_window_size();
     grow_rings();
     prepare_temporal_upscaler();
     apply_dynamic_resolution();
-    if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
-        // The settings changed: decided again.
-        temporal_interp_suspended_ = false;
+    if (temporal_interp_hold_.held()) {
+        if (temporal_interp_key() != temporal_interp_key_) {
+            temporal_interp_hold_.settings_changed();  // the settings changed: decided again
+        } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+            // Its wait passed: the governor measures generated frames again, not by the cost that held it.
+            reset_generated_gpu_ema();
+            std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
+        }
     }
     sync_post_process();
     bloom_.poll_ready();
@@ -809,9 +817,6 @@ std::uint64_t RendererMtl::end_frame(bool present_swap_chain, SubmissionCallback
             probes.fence = fence;
         }
     }
-    if (scene_capture_.buffer && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {
-        scene_capture_.fence = fence;
-    }
     if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
         backbuffer_capture_.fence = fence;
     }
@@ -1025,6 +1030,7 @@ void RendererMtl::refresh_display_rate() {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         if (!variable) {
             std::cerr << "[display] refresh-hz=" << hz << '\n';

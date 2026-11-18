@@ -16,6 +16,7 @@
 
 #include "galaxy/platform_time.h"
 #include "galaxy/content_viewport.h"
+#include "galaxy/render/temporal_hold.h"
 #include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/frame_pass.h"
@@ -27,15 +28,13 @@
 #include "galaxy/render/mtl/draw_types.h"
 #include "galaxy/render/mtl/fx_mtl.h"
 #include "galaxy/render/mtl/mtl_context.h"
-#include "galaxy/render/rt/rt_backend.h"
-#include "galaxy/render/rt/rt_denoiser.h"
 #include "galaxy/render/mtl/temporal_upscaler_mtl.h"
 #include "galaxy/render/mtl/utility_msl.h"
 #include "galaxy/render/post_process_settings.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/present_slots.h"
 #include "galaxy/render/renderer_common.h"
-#include "galaxy/render/rt_types.h"
+#include "galaxy/render/scene_view.h"
 #include "galaxy/render/window_owner.h"
 #include "galaxy/render_api.h"
 #include "galaxy/render/mod_post.h"
@@ -92,7 +91,7 @@ public:
     void record_scene_aa();
     // Ambient occlusion of the opaque scene (mtl::AmbientOcclusion).
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ao_.ready(); }
-    void set_scene_ao_view(const RtView& view) noexcept { scene_ao_view_ = view; }
+    void set_scene_ao_view(const SceneView& view) noexcept { scene_ao_view_ = view; }
     void set_scene_ao_objects(std::vector<ao::ObjectOccluder>& objects) noexcept { scene_ao_objects_.swap(objects); }
     void record_scene_ao();
     // The game's bloom (mtl::GameBloom): `kind` a NEBULA_PASS_BLOOM_*, `a` and `b` its values.
@@ -122,7 +121,7 @@ public:
     [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
     // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (mtl::SceneCamera).
     bool begin_wide_scene(bool wanted, const SceneClearValues* initial_clear = nullptr);
-    void end_wide_scene(unsigned finish = 0u);  // finish: the traced relight's camera (none on Metal yet)
+    void end_wide_scene();
     [[nodiscard]] bool temporal_mode() const;
     // The upscaler reads the motion but no reactive mask (SGSR 2): every draw of the scene shares the motion pass.
     [[nodiscard]] bool motion_pass_only() const;
@@ -183,26 +182,6 @@ public:
     // GPU time by pass (render_api.h GpuPassTime): any thread.
     void set_gpu_timing(bool on) noexcept { gpu_timing_wanted_.store(on, std::memory_order_relaxed); }
     [[nodiscard]] bool gpu_timing_on() const noexcept { return gpu_timing_wanted_.load(std::memory_order_relaxed); }
-    // What the ray tracer records through on the other renderers (renderer_vk.h). There is no tracer on Metal yet
-    // (mtl/rt_backend_mtl.cpp: it never starts), so the render core never comes here; they say there is nothing.
-    struct RtCommands {
-        void* commands = nullptr;
-        void* descriptors = nullptr;
-    };
-    [[nodiscard]] RtCommands rt_commands_begin() { return {}; }
-    void rt_commands_end() {}
-    [[nodiscard]] bool rt_depth_begin(rt::TextureView&, unsigned&, unsigned&, rt::ImageFormat&) { return false; }
-    void rt_depth_end() {}
-    void rt_copy_to_scene(void*) {}
-    [[nodiscard]] bool rt_items_begin() { return false; }
-    [[nodiscard]] bool rt_light_begin(rt::TextureView&, rt::TextureView&, unsigned&, unsigned&) { return false; }
-    void rt_light_end() {}
-    [[nodiscard]] bool rt_reactive_begin(rt::TextureView&) { return false; }
-    void rt_reactive_end() {}
-    [[nodiscard]] rt::Denoiser* rt_denoiser() noexcept { return nullptr; }
-    [[nodiscard]] std::uint32_t rt_publish_light(void*, TextureStore&, unsigned = 0u) { return 0u; }
-    void rt_unpublish_lights(TextureStore&) {}
-    void rt_wait_idle() { wait_for_gpu_idle(); }
     [[nodiscard]] std::size_t gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept;
     void scene_jitter_info(unsigned& index, unsigned& phases) const noexcept {
         index = scene_jitter_index_;
@@ -294,13 +273,11 @@ public:
     [[nodiscard]] bool record_screen_probes(std::size_t slot, std::span<const ScreenProbe> probes, bool compared);
     [[nodiscard]] const float* screen_probes_finished(std::size_t slot);
 
-    // Test captures: the scene target and the presented picture as PPM files (paths from set_debug_capture_paths).
-    bool debug_copy_scene_to_readback();
-    void debug_log_readback();
+    // Test captures: the presented picture as PPM files (paths from set_debug_capture_paths).
     void debug_log_backbuffer_readback();
     bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
     void debug_log_display_readback();
-    void set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path);
+    void set_debug_capture_paths(std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return static_cast<gpu::Device*>(mtl::Context::get().device()); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
@@ -353,7 +330,7 @@ public:
     // For the renderer's own parts (post chain, bloom, occlusion, camera): the command buffer being recorded, with no
     // encoder open after end_scene_pass; and what to call after encoding with one of their own.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, Camera,
+        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, Present, Camera,
         AoDistance, AoOcclusion, AoDenoise, AoUpsample, AoApply, Count
     };
 
@@ -651,7 +628,7 @@ private:
         friend bool operator==(const TemporalInterpKey&, const TemporalInterpKey&) = default;
     };
     [[nodiscard]] TemporalInterpKey temporal_interp_key() const;
-    bool temporal_interp_suspended_ = false;
+    TemporalInterpHold temporal_interp_hold_;
     TemporalInterpKey temporal_interp_key_{};
     std::array<float, 12> scene_view_{};
     bool scene_view_known_ = false;
@@ -672,7 +649,7 @@ private:
     mtl::GameBloom bloom_;
     mtl::AmbientOcclusion ao_;
     mtl::SceneCamera scene_camera_;
-    RtView scene_ao_view_{};
+    SceneView scene_ao_view_{};
     std::vector<ao::ObjectOccluder> scene_ao_objects_;
     bool hdr_read_ = false;
     bool hdr_post_ready_ = false;
@@ -774,12 +751,7 @@ private:
     static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
 
     // Captures and telemetry.
-    std::string scene_capture_path_;
     std::string backbuffer_capture_path_;
-    Readback scene_capture_;
-    std::string scene_capture_pending_path_;
-    unsigned scene_capture_width_ = 0;
-    unsigned scene_capture_height_ = 0;
     Readback backbuffer_capture_;
     std::string backbuffer_capture_pending_path_;
     unsigned backbuffer_capture_width_ = 0;

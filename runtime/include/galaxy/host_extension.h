@@ -43,9 +43,11 @@ void sound(const float* samples, std::uint32_t frames, std::uint32_t channels, s
 // The process ends now (`again`: the game starts again after it): each extension's `ending`, once.
 void ending(bool again) noexcept;
 
-// The extensions' graphics memory budget in bytes (0: the card's own) and wait before each file read in microseconds.
+// The extensions' graphics memory budget in bytes (0: the card's own), wait before each file read and before each save
+// file write, in microseconds.
 [[nodiscard]] std::uint64_t vram_budget_bytes() noexcept;
 [[nodiscard]] std::uint32_t disc_read_delay_us() noexcept;
+[[nodiscard]] std::uint32_t save_write_delay_us() noexcept;
 // Each line the host logs, to every extension that listens ("<tag> <text>").
 void log_line(const char* tag, const char* text) noexcept;
 // A service an extension offers to mods by name, or null.

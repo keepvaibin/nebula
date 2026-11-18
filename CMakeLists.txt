@@ -371,13 +371,6 @@ if(NOT GALAXY_DXC)
     find_program(GALAXY_DXC dxc REQUIRED)
 endif()
 
-# The tracer's shaders, compiled by dxc at build with NEBULA_RAY_TRACING (cmake/rt_shaders.cmake).
-include(cmake/rt_shaders.cmake)
-set(galaxy_rt_dxil "")
-if(NEBULA_RAY_TRACING)
-    galaxy_rt_shaders(galaxy_rt_dxil dxil "${GALAXY_DXC}")
-endif()
-
 # The programs, compiled by dxc at build into one file (cmake/native_materials.cmake).
 include(cmake/native_materials.cmake)
 galaxy_program_blob(galaxy_programs_dxil dxil)
@@ -398,6 +391,7 @@ add_library(galaxy_render STATIC
     "${galaxy_utility_shader_dir}/utility_shaders_dxbc.h"
     runtime/src/render/render_api.cpp
     runtime/src/render/render_config.cpp
+    runtime/src/render/device_memory.cpp
     runtime/src/render/renderer_choice.cpp
     runtime/src/render/renderer_check_win32.cpp
 runtime/src/render/host_window_win32.cpp
@@ -449,13 +443,6 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/temporal_upscaler.cpp
     runtime/src/render/xess_library.cpp
     runtime/src/render/xess_upscaler.cpp
-    runtime/src/render/rt_materials.cpp
-    runtime/src/render/rt_caps.cpp
-    runtime/src/render/rt/rt_shaders.cpp
-    runtime/src/render/rt/rt_backend_d3d12.cpp
-    runtime/src/render/rt/rt_geometry.cpp
-    runtime/src/render/rt/rt_scene.cpp
-    ${galaxy_rt_dxil}
     runtime/src/render/streamline_bridge.cpp
     runtime/src/render/fsr_frame_generation.cpp
     runtime/src/render/frame_interpolation.cpp
@@ -465,17 +452,10 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/render/affine.cpp
     runtime/src/render/core/compose.cpp
     runtime/src/render/core/draw_walker.cpp
-    runtime/src/render/core/rt_walk.cpp
-    runtime/src/render/core/rt_bounce.cpp
-    runtime/src/render/core/rt_pass_indirect.cpp
-    runtime/src/render/core/rt_pass_reflect.cpp
-    runtime/src/render/core/rt_pass_transmit.cpp
-    runtime/src/render/core/rt_pass_volume.cpp
     runtime/src/render/core/pairing.cpp
     runtime/src/render/core/pipelines.cpp
     runtime/src/render/core/program_table.cpp
     runtime/src/render/core/registries.cpp
-    runtime/src/render/core/world_lights.cpp
     runtime/src/render/core/pipelines_d3d12.cpp
     runtime/src/frame_telemetry.cpp
     runtime/src/perf_hint.cpp
@@ -483,10 +463,7 @@ runtime/src/render/host_window_win32.cpp
     runtime/src/pacing_recorder.cpp
 )
 target_include_directories(galaxy_render PUBLIC runtime/src)
-target_include_directories(galaxy_render PRIVATE "${galaxy_utility_shader_dir}" "${galaxy_rt_shader_dir}" runtime/src/render)
-if(NEBULA_RAY_TRACING)
-    target_compile_definitions(galaxy_render PRIVATE GALAXY_RT_DXIL=1)
-endif()
+target_include_directories(galaxy_render PRIVATE "${galaxy_utility_shader_dir}" runtime/src/render)
 # AMD FSR 3 (cmake/fidelityfx.cmake).
 include(cmake/fidelityfx.cmake)
 target_link_libraries(galaxy_render PRIVATE nebula_fidelityfx)
@@ -611,9 +588,6 @@ galaxy_test(galaxy_core_pairing_tests SOURCES ${render_src}/core/pairing_tests.c
     ${render_src}/frame_interpolation.cpp ${render_src}/affine.cpp)
 target_include_directories(galaxy_core_pairing_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src" "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
-galaxy_test(galaxy_rt_geometry_tests SOURCES ${render_src}/rt/rt_geometry_tests.cpp ${render_src}/rt/rt_geometry.cpp
-    ${render_src}/rt/rt_scene.cpp ${render_src}/rt/rt_backend_fake.cpp)
-target_include_directories(galaxy_rt_geometry_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src")
 
 # Additions a build asks for at configure, as a list of CMake files (-DNEBULA_EXTRA_CMAKE=<file>;...), each included
 # here after the product's targets and galaxy_test. A build that passes none builds the product and its unit tests only.
@@ -624,8 +598,7 @@ foreach(extra IN LISTS NEBULA_EXTRA_CMAKE)
 endforeach()
 
 # Tests of the renderer library.
-foreach(name render_config gpu_sampler rt_materials texture_pack movie_playback frame_pass post_process
-        render_core_host rt_caps)
+foreach(name render_config gpu_sampler texture_pack movie_playback frame_pass post_process render_core_host)
     galaxy_test(galaxy_${name}_tests SOURCES ${render_src}/${name}_tests.cpp LIBS galaxy_render)
 endforeach()
 # The pictures the mod check reads with the same answers (crates/nebula-import cook/pack_texture.rs).
@@ -672,6 +645,7 @@ if(NEBULA_VULKAN)
     add_library(galaxy_render_vk STATIC
         runtime/src/render/render_api.cpp
             runtime/src/render/render_config.cpp
+            runtime/src/render/device_memory.cpp
             runtime/src/render/renderer_choice.cpp
             runtime/src/render/renderer_check_win32.cpp
 runtime/src/render/host_window_win32.cpp
@@ -704,17 +678,10 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/affine.cpp
         runtime/src/render/core/compose.cpp
         runtime/src/render/core/draw_walker.cpp
-        runtime/src/render/core/rt_walk.cpp
-        runtime/src/render/core/rt_bounce.cpp
-        runtime/src/render/core/rt_pass_indirect.cpp
-        runtime/src/render/core/rt_pass_reflect.cpp
-        runtime/src/render/core/rt_pass_transmit.cpp
-        runtime/src/render/core/rt_pass_volume.cpp
         runtime/src/render/core/pairing.cpp
         runtime/src/render/core/pipelines.cpp
         runtime/src/render/core/program_table.cpp
         runtime/src/render/core/registries.cpp
-        runtime/src/render/core/world_lights.cpp
         runtime/src/render/core/pipelines_vk.cpp
         runtime/src/render/core/encoder_vk.cpp
         runtime/src/render/galaxy_select.cpp
@@ -724,12 +691,6 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/benchmark_stats.cpp
         runtime/src/benchmark_results.cpp
         runtime/src/render/frame_interpolation.cpp
-        runtime/src/render/rt_materials.cpp
-        runtime/src/render/rt_caps.cpp
-        runtime/src/render/rt/rt_shaders.cpp
-        runtime/src/render/vk/rt_backend_vk.cpp
-        runtime/src/render/rt/rt_geometry.cpp
-        runtime/src/render/rt/rt_scene.cpp
         runtime/src/render/streamline_bridge.cpp
         runtime/src/frame_telemetry.cpp
         runtime/src/perf_hint.cpp
@@ -766,17 +727,6 @@ runtime/src/render/host_window_win32.cpp
     target_include_directories(galaxy_render_vk PUBLIC runtime/include)
     target_include_directories(galaxy_render_vk PUBLIC runtime/src)
     target_include_directories(galaxy_render_vk PRIVATE "${galaxy_utility_spirv_dir}")
-    # The tracer's SPIR-V, with NEBULA_RAY_TRACING where a dxc that writes it is named (cmake/rt_shaders.cmake).
-    set(galaxy_dxc_spirv "")
-    if(NEBULA_RAY_TRACING)
-        galaxy_find_dxc_spirv(galaxy_dxc_spirv)
-    endif()
-    if(galaxy_dxc_spirv)
-        galaxy_rt_shaders(galaxy_rt_spirv spirv "${galaxy_dxc_spirv}")
-        target_sources(galaxy_render_vk PRIVATE "${galaxy_rt_spirv}")
-        target_include_directories(galaxy_render_vk PRIVATE "${galaxy_rt_shader_dir}")
-        target_compile_definitions(galaxy_render_vk PRIVATE GALAXY_RT_SPIRV=1)
-    endif()
     target_include_directories(galaxy_render_vk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
     target_compile_features(galaxy_render_vk PUBLIC cxx_std_20)
@@ -838,6 +788,7 @@ if(NEBULA_D3D11)
     add_library(galaxy_render_d3d11 STATIC
         runtime/src/render/render_api.cpp
         runtime/src/render/render_config.cpp
+        runtime/src/render/device_memory.cpp
         runtime/src/render/renderer_choice.cpp
         runtime/src/render/renderer_check_win32.cpp
         runtime/src/render/host_window_win32.cpp
@@ -870,17 +821,10 @@ if(NEBULA_D3D11)
         runtime/src/render/affine.cpp
         runtime/src/render/core/compose.cpp
         runtime/src/render/core/draw_walker.cpp
-        runtime/src/render/core/rt_walk.cpp
-        runtime/src/render/core/rt_bounce.cpp
-        runtime/src/render/core/rt_pass_indirect.cpp
-        runtime/src/render/core/rt_pass_reflect.cpp
-        runtime/src/render/core/rt_pass_transmit.cpp
-        runtime/src/render/core/rt_pass_volume.cpp
         runtime/src/render/core/pairing.cpp
         runtime/src/render/core/pipelines.cpp
         runtime/src/render/core/program_table.cpp
         runtime/src/render/core/registries.cpp
-        runtime/src/render/core/world_lights.cpp
         runtime/src/render/core/pipelines_d3d11.cpp
         runtime/src/render/galaxy_select.cpp
         runtime/src/benchmark_recommend.cpp
@@ -889,10 +833,6 @@ if(NEBULA_D3D11)
         runtime/src/benchmark_stats.cpp
         runtime/src/benchmark_results.cpp
         runtime/src/render/frame_interpolation.cpp
-        runtime/src/render/rt_materials.cpp
-        runtime/src/render/rt_caps.cpp
-        runtime/src/render/rt/rt_geometry.cpp
-        runtime/src/render/rt/rt_scene.cpp
         runtime/src/render/streamline_bridge.cpp
         runtime/src/render/xess_library.cpp
         runtime/src/frame_telemetry.cpp

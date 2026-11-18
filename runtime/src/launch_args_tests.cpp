@@ -42,7 +42,6 @@ int main() {
     ok &= expect(refuses("timeline,frame", "frame"), "a prefix is not a name");
     ok &= expect(refuses("Timeline", "Timeline"), "names are lower case");
     ok &= expect(refuses("memory,", ""), "an empty name after a comma");
-    ok &= expect(parses("rt-no-geometry", kDiagnoseRtNoGeometry), "the no-geometry test");
     unsigned every = 0u;
     for (const DiagnosticName& entry : kDiagnosticNames) {
         every |= entry.what;

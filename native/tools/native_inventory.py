@@ -272,7 +272,7 @@ for rel in files:
             if area == "importer" and key in ("dol", "disc"):
                 continue
             # A test file is not in a release.
-            if key in ("env_read", "test_option") and re.search(r"(_tests?\.|/tests/)", rel):
+            if key in ("env_read", "test_option", "test_seam") and re.search(r"(_tests?\.|(?:^|/)tests/)", rel):
                 continue
             n = len(rx.findall(body))
             if n:

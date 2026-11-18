@@ -15,6 +15,11 @@ public:
     bool requestLoadSaveData(int index);
     // What the read found: taken into memory, or not usable.
     bool acceptLoaded();
+    // The save format of the file the last acceptLoaded refused because a newer Nebula wrote it (above the one this
+    // build writes); 0 when it was not that.
+    u32 getNewerFormat() const {
+        return mNewerFormat;
+    }
     void initializeUserFileMemory(int, const UserFile*);
     // Every user file in memory as `pUserFile` (a blank one: as the start holds them before the save is read).
     void initializeAllUserFileMemory(const UserFile* pUserFile);
@@ -99,4 +104,5 @@ private:
     u32 mMakeRoom;
     // The room a file takes without mods' values, and room beside it.
     u32 mBaseRoom;
+    u32 mNewerFormat = 0;
 };

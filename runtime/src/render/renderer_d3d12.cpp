@@ -1,4 +1,5 @@
 // RendererD3D12: device and swap chain, scene targets and copies, presentation.
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/utility_shaders.h"
 #include "dxgi_pacing.h"
 #include "galaxy/benchmark.h"
@@ -19,9 +20,7 @@
 #include "barriers_d3d12.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_choice.h"
-#include "galaxy/render/rt/rt_backend.h"
-#include "galaxy/render/rt/rt_shaders.h"
-#include "galaxy/render/rt_caps.h"
+#include "galaxy/render/device_memory.h"
 #include "galaxy/render/streamline_bridge.h"
 #include "galaxy/render/xess_library.h"
 #include "galaxy/render/texture_store.h"
@@ -108,12 +107,6 @@ static bool s_listing_live_objects = false;
 #if GALAXY_WITH_STREAMLINE_BRIDGE != 0 && !defined(GALAXY_STREAMLINE_BRIDGE_READY)
 #error "GALAXY_WITH_STREAMLINE_BRIDGE requires the real Streamline bridge to define GALAXY_STREAMLINE_BRIDGE_READY"
 #endif
-
-// The tier as major x 10 + minor (D3D12_RAYTRACING_TIER_1_1 is 11), 0 without ray tracing. The tiers are
-// enumerators, so later ones read the same way without naming them.
-unsigned raytracing_tier_code(D3D12_RAYTRACING_TIER tier) {
-    return tier >= D3D12_RAYTRACING_TIER_1_0 ? static_cast<unsigned>(tier) : 0u;
-}
 
 void copy_adapter_description(
     const DXGI_ADAPTER_DESC1& desc,
@@ -1106,9 +1099,6 @@ HRESULT create_draw_root_signature(
     tex_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     tex_range.NumDescriptors = UINT_MAX;
     tex_range.RegisterSpace = 1u;
-    // The same table as Texture3D (t0 space2, from the heap's start too): the light volume (program.hlsli traced_air).
-    D3D12_DESCRIPTOR_RANGE tex_ranges[2] = {tex_range, tex_range};
-    tex_ranges[1].RegisterSpace = 2u;
     D3D12_DESCRIPTOR_RANGE samp_range{};
     samp_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
     samp_range.NumDescriptors = UINT_MAX;
@@ -1125,8 +1115,8 @@ HRESULT create_draw_root_signature(
     params[3].Constants.Num32BitValues = gpu::kDrawRootWords;
     params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    params[4].DescriptorTable.NumDescriptorRanges = 2;
-    params[4].DescriptorTable.pDescriptorRanges = tex_ranges;
+    params[4].DescriptorTable.NumDescriptorRanges = 1;
+    params[4].DescriptorTable.pDescriptorRanges = &tex_range;
     params[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     params[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[5].DescriptorTable.NumDescriptorRanges = 1;
@@ -1804,9 +1794,6 @@ void RendererD3D12::apply_window_size() {
     for (auto& retired : retired_targets_) {
         retired.clear();
     }
-    readback_buf_.Reset();
-    readback_pending_ = false;
-    readback_fence_value_ = 0u;
     const FrameMap previous = scene_extent_;
     if (format_changes) {
         // The post chain first: a format it cannot take leaves everything as it was.
@@ -2303,48 +2290,16 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             }
             std::cerr << "[d3d12] barriers: " << (BarrierPath::enhanced() ? "enhanced" : "legacy") << '\n';
         }
-        ComPtr<ID3D12Device5> device5;
-        const bool dxr_device5_supported = SUCCEEDED(device_.As(&device5));
-        D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5{};
-        // --diagnostics rt-absent: taken as a device without ray tracing.
-        const bool rt_absent = ::galaxy::diagnosing(::galaxy::kDiagnoseRtAbsent);
-        const bool dxr_runtime_supported =
-            !rt_absent && dxr_device5_supported &&
-            SUCCEEDED(device_->CheckFeatureSupport(
-                D3D12_FEATURE_D3D12_OPTIONS5,
-                &options5,
-                sizeof(options5))) &&
-            options5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
         {
-            // What the tracer needs of the device (rt_caps.h): inline ray queries (DXR 1.1 with the shader model its
-            // shaders are compiled for, 6.5) and every texture in one table (resource binding tier 3).
-            D3D12_FEATURE_DATA_SHADER_MODEL shader_model{D3D_SHADER_MODEL_6_5};
-            D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
-            RtCaps rt{};
-            rt.acceleration_structures = dxr_runtime_supported;
-            rt.ray_queries = dxr_runtime_supported && options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1 &&
-                             SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shader_model,
-                                                                    sizeof(shader_model))) &&
-                             shader_model.HighestShaderModel >= D3D_SHADER_MODEL_6_5;
-            rt.bindless = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
-                          options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3;
-            rt.micromaps = !rt_absent && static_cast<int>(options5.RaytracingTier) >= 12;  // D3D12_RAYTRACING_TIER_1_2
+            // The GPU shares the system's memory (D3D12's own answer: UMA).
             D3D12_FEATURE_DATA_ARCHITECTURE1 architecture{};
-            rt.unified_memory = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE1, &architecture, sizeof(architecture))) &&
-                                architecture.UMA != FALSE;
-            rt.shaders = rt_shaders_present();
-            rt.enabled = true;  // Direct3D 12 enables nothing per device
-            set_rt_caps(rt);
-            log_rt_caps("d3d12", rt, get_render_config().ray_tracing_enabled);
-            if (get_render_config().ray_tracing_enabled && rt_capable(rt)) {
-                (void)rt::shaders_load(device_.Get());
-            }
-            const bool offered = kRayTracingRowOffered && rt_capable(rt);
-            host_window::ray_tracing_offered.store(offered, std::memory_order_relaxed);
+            set_device_unified_memory(
+                SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE1, &architecture, sizeof(architecture))) &&
+                architecture.UMA != FALSE);
             std::array<char, 128> description{};
             copy_adapter_description(adapter_desc, description);
             record_render_adapter(description.data(), adapter_desc.VendorId, adapter_desc.DeviceId,
-                                  adapter_desc.SubSysId, offered);
+                                  adapter_desc.SubSysId);
             record_render_driver(dxgi_driver_version(adapter.Get()));
         }
         RenderFeatureCaps caps{};
@@ -2360,9 +2315,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         caps.adapter_luid_high =
             static_cast<std::uint32_t>(adapter_desc.AdapterLuid.HighPart);
         copy_adapter_description(adapter_desc, caps.adapter_description);
-        caps.dxr_device5_supported = dxr_device5_supported;
-        caps.dxr_raytracing_tier =
-            rt_absent ? 0u : raytracing_tier_code(options5.RaytracingTier);
         const bool dlss_ready = streamline::active() &&
                                 streamline::attach_device(device_.Get(), adapter_desc.AdapterLuid);
         boot_step("streamline device");
@@ -2372,7 +2324,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             msaa_max_samples() > 1u,
             true,
             true,
-            msaa_max_samples() > 1u ? "scene target targets multisampled; off with DLSS, FSR 3 or ray tracing"
+            msaa_max_samples() > 1u ? "scene target targets multisampled; off with DLSS or FSR 3"
                                     : "the GPU has no multisampled scene target formats");
         caps.taa = make_render_feature_status(
             false,
@@ -2380,14 +2332,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             false,
             false,
             "motion vectors, jitter, and history resources are not built");
-        caps.dxr = make_render_feature_status(
-            true,
-            dxr_runtime_supported,
-            host_window::ray_tracing_offered.load(std::memory_order_relaxed),
-            host_window::ray_tracing_offered.load(std::memory_order_relaxed),
-            host_window::ray_tracing_offered.load(std::memory_order_relaxed) ? "ray tracing (GRAPHICS: RAY TRACING)"
-            : rt_refusal(rt_caps()) != nullptr                                ? rt_refusal(rt_caps())
-                                                                              : "ray tracing is not offered yet");
         caps.streamline = make_render_feature_status(
             caps.streamline_bridge_built,
             streamline::active(),
@@ -2944,7 +2888,7 @@ void RendererD3D12::list_live_objects(Kept& kept) {
 RendererD3D12::Kept RendererD3D12::take_apart_lost_device() {
     keep_window_ = true;
     device_gone_ = true;
-    readback_pending_ = backbuffer_readback_pending_ = selected_display_readback_pending_ = false;
+    backbuffer_readback_pending_ = selected_display_readback_pending_ = false;
     try {
         shutdown();
     } catch (const std::exception& error) {
@@ -2990,9 +2934,6 @@ void RendererD3D12::shutdown() {
     }
     // A diagnostic copy can be the last submitted list: its data goes to the
     // background PPM writers before any D3D resource is released.
-    retain_shutdown_failure("scene target diagnostic readback", [&] {
-        debug_log_readback();
-    });
     retain_shutdown_failure("backbuffer diagnostic readback", [&] {
         debug_log_backbuffer_readback();
     });
@@ -3064,11 +3005,6 @@ void RendererD3D12::shutdown() {
     timestamp_readback_.Reset();
     timestamp_pending_.fill(false);
     timestamp_frequency_ = 0;
-    readback_buf_.Reset();
-    readback_pending_ = false;
-    readback_fence_value_ = 0;
-    next_scene_capture_path_.clear();
-    readback_capture_path_.clear();
     backbuffer_readback_buf_.Reset();
     hdr_capture_target_.Reset();
     hdr_capture_rtv_heap_.Reset();
@@ -3385,9 +3321,7 @@ void RendererD3D12::invalidate_draw_bindings() {
 }
 
 void RendererD3D12::set_render_targets(ID3D12GraphicsCommandList* list, unsigned aux) const {
-    if (aux == kAuxPrepass) {
-        list->OMSetRenderTargets(1, &item_rtv_, FALSE, &scene_dsv_);
-    } else if (aux == 3u) {
+    if (aux == 3u) {
         const D3D12_CPU_DESCRIPTOR_HANDLE targets[4]{scene_rtv_, reactive_rtv_, layer_color_rtv_, layer_trans_rtv_};
         list->OMSetRenderTargets(4, targets, FALSE, &scene_dsv_);
     } else if (aux != 0u) {
@@ -3536,7 +3470,7 @@ gpu::Address RendererD3D12::zero_stream(std::uint32_t bytes) {
 
 namespace {
 constexpr const char* kPassTimeNames[] = {"scene", "resolve", "frame read", "display copy", "bloom", "scene aa", "scene ao",
-                                          "upscale", "ray tracing", "present", "camera"};
+                                          "upscale", "present", "camera"};
 }  // namespace
 
 std::size_t RendererD3D12::gpu_pass_times(GpuPassTime* out, std::size_t capacity) const noexcept {
@@ -3609,7 +3543,7 @@ void RendererD3D12::begin_frame() {
     // Display and size changes apply here, between command-list recordings.
     // They wait for the GPU themselves, so they come before any per-slot state
     // below is touched.
-    host_window::poll_render_config_file();
+    host_window::watch_render_config_file();
     reconcile_display_state();
     apply_pending_resize();
     if (const bool fsr = fsr_generation_wanted(); fsr != fsr_swap_chain_ && !streamline_frame_open_) {
@@ -3632,9 +3566,14 @@ void RendererD3D12::begin_frame() {
     apply_dynamic_resolution();
     sync_post_process_settings();
     {
-        if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
-            // The settings changed: decided again.
-            temporal_interp_suspended_ = false;
+        if (temporal_interp_hold_.held()) {
+            if (temporal_interp_key() != temporal_interp_key_) {
+                temporal_interp_hold_.settings_changed();  // the settings changed: decided again
+            } else if (temporal_interp_hold_.lift_if_due(galaxy::qpc_to_ns(galaxy::qpc_now()))) {
+                // Its wait passed: the governor measures generated frames again, not by the cost that held it.
+                reset_generated_gpu_ema();
+                std::cerr << "[interp] temporal upscaling of generated frames tried again\n";
+            }
         }
         // A ring whose frames took over half their budget (or spilled) grows before the next frame; one whose last 30 seconds
         // (and 600 frames) stayed under a quarter of it gives half of its memory back on a frame without the scene
@@ -3912,6 +3851,7 @@ void RendererD3D12::refresh_display_rate(bool read_mode) {
         }
     }
     variable_refresh_ = variable;
+    g_variable_refresh.store(variable, std::memory_order_relaxed);
     const double hz = variable ? variable_refresh_cap(mode_hz) : (timed ? measured_hz : mode_hz);
     if (hz <= 1.0) {
         return;
@@ -4153,11 +4093,17 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     if (hz <= 0.0) {
         return 1u;
     }
-    // EnumDisplaySettings reports whole hertz: 119 for 119.88, 239 for 239.76. A game frame without generated frames
-    // holds for its whole 60 Hz frame (4 refreshes at 240 Hz) rather than the next refresh after it is ready, which
-    // drifts against the display.
+    // EnumDisplaySettings reports whole hertz: 119 for 119.88, 239 for 239.76.
     const double rate = game_frame ? std::min(kGameStepRate, present_frame_rate(max_fps, configured, hz))
                                    : present_frame_rate(max_fps, configured, hz);
+    // A game frame at 60 (in-between pictures off, or a movie between them) goes out at once and the display repeats
+    // it until the next: the step clock keeps the frames on the display's grid where its rate is a multiple
+    // (galaxy/step_lock.h, frame_phase.h). A sync interval of a whole step held each frame back that long (file F, M1:
+    // at 240 Hz the present call was made 12.9 ms after its step and came back at 29.3 ms). A rate capped under 60
+    // (30), or of in-between pictures that is a part of the refresh, keeps whole refreshes per picture.
+    if ((game_frame || !interpolation_mode()) && rate >= kGameStepRate - 0.5) {
+        return 1u;
+    }
     const double multiple = std::round(hz / rate);
     if (multiple >= 2.0 && multiple <= 4.0 &&
         std::abs(hz - rate * multiple) <= 0.015 * hz) {
@@ -4289,7 +4235,9 @@ void RendererD3D12::present_to_swap_chain() {
                     statistics.PresentRefreshCount,
                 statistics.SyncRefreshCount);
         }
-        if (timeline_present_ordinal % 30u == 1u) {
+        // The compositor's timing twice a second, at any present rate.
+        static galaxy::ClockInterval dwm_look{500, true};
+        if (dwm_look.due()) {
             using DwmTimingFn = HRESULT(WINAPI*)(HWND, DWM_TIMING_INFO*);
             static const DwmTimingFn dwm_timing = [] {
                 const HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
@@ -4441,7 +4389,7 @@ void RendererD3D12::present_to_swap_chain() {
             }
             if (pass_query_heap_) {
                 static constexpr const char* kPassNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom",
-                                                             "scene-aa", "scene-ao", "upscale", "rt", "present",
+                                                             "scene-aa", "scene-ao", "upscale", "present",
                                                              "camera"};
                 static_assert(std::size(kPassNames) == static_cast<std::size_t>(GpuPass::Count));
                 message << " gpu-pass-ms=";
@@ -4589,9 +4537,6 @@ std::uint64_t RendererD3D12::end_frame(
         d3d_check(signal_hr, "Queue Signal");
     }
     // Readbacks recorded on this list complete at this signal; nothing waits for them here.
-    if (readback_pending_ && readback_fence_value_ == 0u) {
-        readback_fence_value_ = submitted_fence;
-    }
     if (backbuffer_readback_pending_ &&
         backbuffer_readback_fence_value_ == 0u) {
         backbuffer_readback_fence_value_ = submitted_fence;
@@ -4799,10 +4744,6 @@ bool RendererD3D12::ensure_motion_target() {
     }
     rd.Format = kReactiveMaskFormat;
     cv.Format = kReactiveMaskFormat;
-    // The tracer writes into it too where the device can trace (where the added light changed).
-    if (rt_capable(rt_caps())) {
-        rd.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    }
     if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite,
             &cv, IID_PPV_ARGS(&reactive_target_)))) {
         motion_target_.Reset();
@@ -4849,7 +4790,7 @@ bool RendererD3D12::interpolation_mode() const {
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
     // With a temporal upscaler every presented frame is upscaled, its motion from the frame presented before (any
     // rate: the slots' t need not divide the game frame evenly), unless the GPU could not afford it.
-    if (temporal_mode() && temporal_interp_suspended_) {
+    if (temporal_mode() && temporal_interp_hold_.held()) {
         return false;
     }
     return interpolated_frames_per_game_frame(rate) != 0u;
@@ -4869,13 +4810,13 @@ RendererD3D12::TemporalInterpKey RendererD3D12::temporal_interp_key() const {
 }
 
 void RendererD3D12::suspend_temporal_interpolation(double ms_per_frame) {
-    if (temporal_interp_suspended_) {
+    if (temporal_interp_hold_.held()) {
         return;
     }
-    temporal_interp_suspended_ = true;
+    temporal_interp_hold_.hold(galaxy::qpc_to_ns(galaxy::qpc_now()));
     temporal_interp_key_ = temporal_interp_key();
     std::cerr << "[interp] temporal upscaling of generated frames off: " << ms_per_frame
-              << " ms GPU per presented frame\n";
+              << " ms GPU per presented frame; tried again in " << temporal_interp_hold_.wait_ns() / 1000000000 << " s\n";
 }
 
 bool RendererD3D12::begin_motion_scene() {
@@ -4934,13 +4875,11 @@ void RendererD3D12::prepare_temporal_upscaler() {
     const RenderConfig cfg = get_render_config();
     const unsigned kind = cfg.upscaler;
     const unsigned quality = std::min(cfg.temporal_quality, 5u);
-    // DLSS as Ray Reconstruction while the tracer runs, where it is installed and supported.
-    const bool rr = kind == 3u && render_tracing() && streamline::dlss_rr_supported();
     // A failed creation is not retried until its sizes or mode change.
     const bool wide = float_scene_;
     if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ &&
         oh == temporal_output_h_ && kind == temporal_kind_ && wide == temporal_wide_ &&
-        (kind < 3u || (quality == temporal_quality_ && rr == temporal_rr_))) {
+        (kind < 3u || quality == temporal_quality_)) {
         if (temporal_pending_.valid() &&
             temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
             temporal_ = temporal_pending_.get();
@@ -4960,7 +4899,6 @@ void RendererD3D12::prepare_temporal_upscaler() {
     temporal_pending_ = {};
     temporal_kind_ = kind;
     temporal_quality_ = quality;
-    temporal_rr_ = rr;
     temporal_wide_ = wide;
     temporal_history_valid_ = false;
     temporal_render_w_ = rw;
@@ -4981,7 +4919,7 @@ void RendererD3D12::prepare_temporal_upscaler() {
         });
         return;
     }
-    temporal_ = create_dlss_upscaler(rw, rh, ow, oh, quality, rr, wide);
+    temporal_ = create_dlss_upscaler(rw, rh, ow, oh, quality, wide);
     if (temporal_) {
         std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh
                   << " -> " << ow << "x" << oh << "\n";
@@ -5094,14 +5032,6 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
         handed.texture(in.motion, gpu::Use::ColorWrite, gpu::Use::Common);
         handed.texture(in.reactive, gpu::Use::ColorWrite, gpu::Use::Common);
         handed.texture(in.output, gpu::Use::ColorWrite, gpu::Use::Common);
-        // An outside denoiser's guides (DLSS Ray Reconstruction), from the shader-read layout the tracer left them in.
-        if (const rt::Denoiser* denoiser = temporal_->denoiser()) {
-            if (const rt::DenoiseGuides guides = denoiser->pending_guides(); guides.valid) {
-                for (void* guide : {guides.diffuse_albedo, guides.specular_albedo, guides.normal_roughness, guides.hit_distance}) {
-                    handed.texture(static_cast<ID3D12Resource*>(guide), gpu::Use::ShaderRead, gpu::Use::Common);
-                }
-            }
-        }
         handed.issue();
     }
     const bool recorded = temporal_inputs_match(in) && temporal_->evaluate(in);
@@ -5871,14 +5801,14 @@ void RendererD3D12::record_hdr_begin() {
     bind_scene();
 }
 
-void RendererD3D12::end_wide_scene(unsigned finish) {
+void RendererD3D12::end_wide_scene() {
     if (!wide_live_) {
         return;
     }
-    record_hdr_end(finish);
+    record_hdr_end();
 }
 
-void RendererD3D12::record_hdr_end(unsigned finish) {
+void RendererD3D12::record_hdr_end() {
     if (!wide_live_) {
         return;
     }
@@ -5911,7 +5841,6 @@ void RendererD3D12::record_hdr_end(unsigned finish) {
     in.resolve = resolve_output;
     // After a load or a long pause the eye starts open.
     in.seconds = seconds > 1.0f ? -1.0f : seconds;
-    in.finish = finish;
     static_cast<void>(camera_pass_.record(command_list_.Get(), srv_ring_, in));
     if (scene_msaa_.samples > 1u) {
         scene_msaa_.color_dirty = true;
@@ -6101,174 +6030,6 @@ void RendererD3D12::end_layer_2d() {
     invalidate_draw_bindings();
     bound_rt_aux_ = 0xFFu;
     bind_scene();
-}
-
-RendererD3D12::RtCommands RendererD3D12::rt_commands_begin() {
-    rt_outer_pass_ = current_pass_;
-    gpu_pass(GpuPass::RayTracing);
-    return {command_list_.Get(), &srv_ring_};
-}
-
-// A pass leaves its own pipeline bound: the next draw binds the scene's again.
-void RendererD3D12::rt_commands_end() {
-    gpu_pass(rt_outer_pass_);
-    invalidate_draw_bindings();
-}
-
-bool RendererD3D12::rt_depth_begin(rt::TextureView& depth, unsigned& width, unsigned& height, rt::ImageFormat& color,
-                                   rt::TextureView* color_view) {
-    if (!scene_depth_ || !scene_color_ || scene_msaa_.samples > 1u) {
-        return false;
-    }
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::ShaderRead);
-    rt_color_read_ = color_view != nullptr;
-    if (rt_color_read_) {
-        uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::ComputeRead);
-        *color_view = {scene_color_.Get(), static_cast<std::uint32_t>(scene_color_->GetDesc().Format)};
-    }
-    uses.issue();
-    const D3D12_RESOURCE_DESC desc = scene_depth_->GetDesc();
-    depth = {scene_depth_.Get(), static_cast<std::uint32_t>(kSceneDepthSrvFormat)};
-    width = static_cast<unsigned>(desc.Width);
-    height = desc.Height;
-    color = scene_color_->GetDesc().Format == kSceneHdrColorFormat ? rt::ImageFormat::Rgba16f : rt::ImageFormat::Rgb10a2;
-    return true;
-}
-
-void RendererD3D12::rt_depth_end() {
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(scene_depth_.Get(), gpu::Use::ShaderRead, gpu::Use::DepthWrite);
-    if (rt_color_read_) {
-        uses.texture(scene_color_.Get(), gpu::Use::ComputeRead, gpu::Use::ColorWrite);
-        rt_color_read_ = false;
-    }
-    uses.issue();
-}
-
-void RendererD3D12::rt_copy_to_scene(void* image) {
-    auto* const source = static_cast<ID3D12Resource*>(image);
-    if (source == nullptr || !scene_color_) {
-        return;
-    }
-    const D3D12_RESOURCE_DESC from = source->GetDesc(), to = scene_color_->GetDesc();
-    if (from.Width != to.Width || from.Height != to.Height || from.Format != to.Format || to.SampleDesc.Count != 1u) {
-        return;
-    }
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::CopyDest);
-    uses.issue();
-    command_list_->CopyResource(scene_color_.Get(), source);
-    uses.undo();
-}
-
-bool RendererD3D12::rt_items_begin() {
-    if (!scene_depth_ || !scene_color_ || scene_msaa_.samples > 1u) {
-        return false;
-    }
-    const D3D12_RESOURCE_DESC depth = scene_depth_->GetDesc();
-    if (!item_target_ || item_target_->GetDesc().Width != depth.Width || item_target_->GetDesc().Height != depth.Height) {
-        if (item_target_) {
-            retired_targets_[frame_slot_].push_back(std::move(item_target_));  // this frame's commands may name it
-        }
-        item_target_.Reset();
-        if (!item_rtv_heap_) {
-            D3D12_DESCRIPTOR_HEAP_DESC heap{};
-            heap.NumDescriptors = 1;
-            heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-            if (FAILED(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&item_rtv_heap_)))) {
-                return false;
-            }
-        }
-        D3D12_HEAP_PROPERTIES hp{};
-        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
-        D3D12_RESOURCE_DESC rd{};
-        rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        rd.Width = depth.Width;
-        rd.Height = depth.Height;
-        rd.DepthOrArraySize = 1;
-        rd.MipLevels = 1;
-        rd.Format = kItemFormat;
-        rd.SampleDesc.Count = 1;
-        rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-        D3D12_CLEAR_VALUE cv{};
-        cv.Format = kItemFormat;
-        if (FAILED(create_texture(device_.Get(), &hp, D3D12_HEAP_FLAG_NONE, &rd, gpu::Use::ColorWrite, &cv,
-                                  IID_PPV_ARGS(&item_target_)))) {
-            return false;
-        }
-        item_target_->SetName(L"ray tracing item target");
-        item_rtv_ = item_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
-        device_->CreateRenderTargetView(item_target_.Get(), nullptr, item_rtv_);
-    }
-    const float none[4]{};
-    command_list_->ClearRenderTargetView(item_rtv_, none, 0u, nullptr);
-    return true;
-}
-
-bool RendererD3D12::rt_light_begin(rt::TextureView& depth, rt::TextureView& items, unsigned& width, unsigned& height) {
-    if (!scene_depth_ || !item_target_ || scene_msaa_.samples > 1u) {
-        return false;
-    }
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(scene_depth_.Get(), gpu::Use::DepthWrite, gpu::Use::ShaderRead);
-    uses.texture(item_target_.Get(), gpu::Use::ColorWrite, gpu::Use::ComputeRead);
-    uses.issue();
-    const D3D12_RESOURCE_DESC desc = scene_depth_->GetDesc();
-    depth = {scene_depth_.Get(), static_cast<std::uint32_t>(kSceneDepthSrvFormat)};
-    items = {item_target_.Get(), static_cast<std::uint32_t>(kItemFormat)};
-    width = static_cast<unsigned>(desc.Width);
-    height = desc.Height;
-    return true;
-}
-
-void RendererD3D12::rt_light_end() {
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(scene_depth_.Get(), gpu::Use::ShaderRead, gpu::Use::DepthWrite);
-    uses.texture(item_target_.Get(), gpu::Use::ComputeRead, gpu::Use::ColorWrite);
-    uses.issue();
-}
-
-bool RendererD3D12::rt_reactive_begin(rt::TextureView& reactive) {
-    if (!reactive_scene_ || !reactive_target_ ||
-        (reactive_target_->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == D3D12_RESOURCE_FLAG_NONE) {
-        return false;
-    }
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(reactive_target_.Get(), gpu::Use::ColorWrite, gpu::Use::ComputeWrite);
-    uses.issue();
-    reactive = {reactive_target_.Get(), static_cast<std::uint32_t>(kReactiveMaskFormat)};
-    return true;
-}
-
-void RendererD3D12::rt_reactive_end() {
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(reactive_target_.Get(), gpu::Use::ComputeWrite, gpu::Use::ColorWrite);
-    uses.issue();
-}
-
-void RendererD3D12::rt_unpublish_lights(TextureStore& textures) {
-    for (unsigned which = 0u; which < kRtLightPictures; ++which) {  // light, added, mirror, facing, volume, scatter, transmit, indirect, two guides
-        const auto found = pictures_.find(kRtLightPicture + which);
-        if (found == pictures_.end()) {
-            continue;
-        }
-        if (found->second.view != ~0u) {
-            textures.retire_view(found->second.view, std::move(found->second.viewed));
-        }
-        pictures_.erase(found);
-    }
-}
-
-std::uint32_t RendererD3D12::rt_publish_light(void* image, TextureStore& textures, unsigned which) {
-    auto* const resource = static_cast<ID3D12Resource*>(image);
-    if (resource == nullptr) {
-        return null_texture_slot_;
-    }
-    const D3D12_RESOURCE_DESC desc = resource->GetDesc();
-    static_cast<void>(publish_picture(kRtLightPicture + which, static_cast<std::uint32_t>(desc.Width), desc.Height,
-                                      gpu::TextureRef(resource), 0u, textures));
-    return pictures_[kRtLightPicture + which].view;
 }
 
 // The scene target's depth, single-sample (MSAA resolves it, sample 0), read by the occlusion; the product lands on the
@@ -6848,16 +6609,12 @@ void RendererD3D12::finish_pictures() {
     if (queue_ && fence_) {
         wait_for_gpu();
     }
-    debug_log_readback();
     debug_log_backbuffer_readback();
     debug_log_selected_display_readback();
     reap_debug_capture_writers(true);
 }
 
-void RendererD3D12::set_debug_capture_paths(
-    std::string scene_ppm_path,
-    std::string backbuffer_ppm_path) {
-    next_scene_capture_path_ = std::move(scene_ppm_path);
+void RendererD3D12::set_debug_capture_paths(std::string backbuffer_ppm_path) {
     next_backbuffer_capture_path_ = std::move(backbuffer_ppm_path);
 }
 
@@ -6969,162 +6726,6 @@ void RendererD3D12::queue_debug_ppm_capture(
             }
         });
     debug_ppm_writers_.push_back(std::move(writer));
-}
-
-bool RendererD3D12::debug_copy_scene_to_readback() {
-    // The scene target as it is: the 10-bit one (R10G10B10A2), or the wide one (RGBA16F, a traced scene's),
-    // whose halves debug_log_readback turns into the 10-bit target's words.
-    resolve_scene(false);
-    debug_log_readback();
-    if (readback_pending_) {
-        std::cerr << "[scene-dump] skipped=prior-readback-pending path="
-                  << next_scene_capture_path_ << '\n';
-        return false;
-    }
-    const UINT w = frame_.width;
-    const UINT h = frame_.height;
-    // 8 or 4 bytes a pixel from the target's own format (as the Vulkan side): any other is not read.
-    const DXGI_FORMAT format = scene_color_->GetDesc().Format;
-    const bool wide = format == kSceneHdrColorFormat;
-    if (!wide && format != kSceneColorFormat) {
-        std::cerr << "[scene-dump] skipped=scene-format-not-read format=" << static_cast<unsigned>(format)
-                  << " path=" << next_scene_capture_path_ << '\n';
-        return false;
-    }
-    const UINT row_pitch =
-        (w * (wide ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
-        ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
-
-    if (readback_buf_ && readback_buf_->GetDesc().Width < static_cast<UINT64>(row_pitch) * h) {
-        readback_buf_.Reset();  // made for the 10-bit target or a smaller frame: no copy is pending (checked above)
-    }
-    if (!readback_buf_) {
-        D3D12_HEAP_PROPERTIES hp{};
-        hp.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC rd{};
-        rd.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER;
-        rd.Width            = static_cast<UINT64>(row_pitch) * h;
-        rd.Height           = 1;
-        rd.DepthOrArraySize = 1;
-        rd.MipLevels        = 1;
-        rd.SampleDesc.Count = 1;
-        rd.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        if (FAILED(device_->CreateCommittedResource(
-                &hp, D3D12_HEAP_FLAG_NONE, &rd,
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                nullptr, IID_PPV_ARGS(&readback_buf_)))) {
-            std::cerr << "[scene-dump] skipped=readback-allocation-failed path="
-                      << next_scene_capture_path_ << '\n';
-            return false;
-        }
-    }
-
-    BarriersD3D12 uses{command_list_.Get()};
-    uses.texture(scene_color_.Get(), gpu::Use::ColorWrite, gpu::Use::CopySource);
-    uses.issue();
-
-    D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
-    src.pResource = scene_color_.Get();
-    src.Type      = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    dst.pResource = readback_buf_.Get();
-    dst.Type      = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    dst.PlacedFootprint.Footprint.Format   = wide ? kSceneHdrColorFormat : kSceneColorFormat;
-    dst.PlacedFootprint.Footprint.Width    = w;
-    dst.PlacedFootprint.Footprint.Height   = h;
-    dst.PlacedFootprint.Footprint.Depth    = 1;
-    dst.PlacedFootprint.Footprint.RowPitch = row_pitch;
-    command_list_->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
-
-    uses.undo();
-    readback_pending_ = true;
-    readback_wide_ = wide;
-    readback_fence_value_ = 0u;
-    readback_capture_path_ = next_scene_capture_path_;
-    return true;
-}
-
-void RendererD3D12::debug_log_readback() {
-    reap_debug_capture_writers(false);
-    if (!readback_pending_ || !readback_buf_) {
-        return;
-    }
-    if (readback_fence_value_ == 0u ||
-        completed_fence_value() < readback_fence_value_) {
-        return;
-    }
-    readback_pending_ = false;
-    readback_fence_value_ = 0u;
-
-    const UINT w = frame_.width;
-    const UINT h = frame_.height;
-    const UINT copied_pitch =
-        (w * (readback_wide_ ? 8u : 4u) + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
-        ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
-
-    void* mapped = nullptr;
-    D3D12_RANGE range{0, static_cast<SIZE_T>(copied_pitch) * h};
-    if (FAILED(readback_buf_->Map(0, &range, &mapped))) {
-        readback_capture_path_.clear();
-        return;
-    }
-    bool mapped_active = true;
-    const D3D12_RANGE no_write{0, 0};
-    const ScopeExit unmap_readback([&]() noexcept {
-        if (mapped_active) readback_buf_->Unmap(0, &no_write);
-    });
-    std::uint64_t nonblack = 0, alpha_hits = 0, rs = 0, gs = 0, bs = 0;
-    std::uint8_t rmax = 0, gmax = 0, bmax = 0, amax = 0;
-    // The wide target's halves as the 10-bit target's words; the rest reads words either way.
-    std::vector<std::uint8_t> words;
-    const auto* base = static_cast<const std::uint8_t*>(mapped);
-    UINT row_pitch = copied_pitch;
-    if (readback_wide_) {
-        row_pitch = w * 4u;
-        words.resize(static_cast<std::size_t>(row_pitch) * h);
-        half4_to_ten_bit(base, words.data(), w, h, copied_pitch, row_pitch);
-        base = words.data();
-    }
-    for (UINT y = 0; y < h; y += 4) {           // sample every 4th row/col
-        const std::uint8_t* row = base + static_cast<std::size_t>(y) * row_pitch;
-        for (UINT x = 0; x < w; x += 4) {
-            std::uint32_t word = 0u;
-            std::memcpy(&word, row + x * 4u, 4u);
-            const auto r = static_cast<std::uint8_t>((word & 1023u) >> 2u);
-            const auto g = static_cast<std::uint8_t>((word >> 10u & 1023u) >> 2u);
-            const auto bl = static_cast<std::uint8_t>((word >> 20u & 1023u) >> 2u);
-            const auto a = static_cast<std::uint8_t>((word >> 30u) * 85u);
-            rs += r; gs += g; bs += bl;
-            rmax = std::max(rmax, r); gmax = std::max(gmax, g);
-            bmax = std::max(bmax, bl); amax = std::max(amax, a);
-            if (r > 8 || g > 8 || bl > 8) ++nonblack;
-            if (a > 8) ++alpha_hits;
-        }
-    }
-    const std::uint64_t samples =
-        (static_cast<std::uint64_t>((h + 3) / 4)) * ((w + 3) / 4);
-
-    if (!readback_capture_path_.empty()) {
-        queue_debug_ppm_capture(
-            "scene-dump",
-            readback_capture_path_,
-            base,
-            w,
-            h,
-            row_pitch,
-            true);
-    }
-
-    readback_buf_->Unmap(0, &no_write);
-    mapped_active = false;
-    readback_capture_path_.clear();
-    std::cerr << "[scene-dump] nonblack=" << nonblack << "/" << samples
-              << " alpha=" << alpha_hits
-              << " mean=(" << rs / samples << "," << gs / samples << ","
-              << bs / samples << ") max=("
-              << static_cast<unsigned>(rmax) << ","
-              << static_cast<unsigned>(gmax) << ","
-              << static_cast<unsigned>(bmax) << ","
-              << static_cast<unsigned>(amax) << ")\n";
 }
 
 bool RendererD3D12::present(

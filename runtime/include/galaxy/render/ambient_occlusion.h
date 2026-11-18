@@ -9,7 +9,7 @@
 
 #include "galaxy/render/ambient_occlusion_objects.h"
 #include "galaxy/render/gpu_upload_ring.h"
-#include "galaxy/render/rt_types.h"
+#include "galaxy/render/scene_view.h"
 
 #include <array>
 #include <cstdint>
@@ -22,7 +22,7 @@ class DescriptorRing;
 // Ambient occlusion of the 3D scene (RenderConfig::ambient_occlusion; ambient_occlusion.hlsl): ground-truth ambient
 // occlusion from the scene target's depth, multiplied into its colour after the opaque phases, before the translucent ones
 // (glass, water, glows and effects stay as drawn). Every perspective scene gets it, the game's baked map geometry
-// included; ray-traced lighting has its own. Occlusion pixels: ambient_occlusion_shape.h.
+// included. Occlusion pixels: ambient_occlusion_shape.h.
 class AmbientOcclusion {
 public:
     AmbientOcclusion() = default;
@@ -49,7 +49,7 @@ public:
         bool ssao = false;                // SSAO instead of GTAO
         const std::vector<ao::ObjectOccluder>* objects = nullptr;  // the scene's models
         UploadRing* ring = nullptr;       // where their buffers go
-        RtView view{};                    // the scene's projection, depth range and viewport (scene target pixels)
+        SceneView view{};                    // the scene's projection, depth range and viewport (scene target pixels)
     };
     // Records the occlusion and multiplies it into `color_rtv`'s RGB. Leaves this pass's root signatures, pipeline
     // and render target bound. Returns false when nothing was recorded.

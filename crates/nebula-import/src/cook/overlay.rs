@@ -16,10 +16,41 @@ use std::path::{Path, PathBuf};
 /// Where the store keeps the disc's wave layout.
 pub const WAVE_LAYOUT: &str = "NebulaData/WaveLayout.txt";
 
-/// A pack's ray tracing tables in its merge/ folder, lower case: three class its models as they
-/// cook (read before them, kept out of the store; hit_record), two are rows the host reads, added to the game's.
-const RT_CLASSING: [&str; 3] = ["nebuladata/rtmaterials.tsv", "nebuladata/rtglow.tsv", "nebuladata/rtwater.tsv"];
-const RT_ROWS: [&str; 2] = ["nebuladata/rtstages.tsv", "nebuladata/rteffects.tsv"];
+/// Ray tracing's tables a pack's merge/ folder may hold (lower case), each with the header its rows were read by (none:
+/// RtGlow's rows have no header). This game has no ray tracing: a table is checked as before, so a .luma 1.0 file that was
+/// valid stays valid, and written nowhere (Cook.RayData).
+const RAY_TABLES: [(&str, Option<&str>); 5] = [
+    ("nebuladata/rtmaterials.tsv", Some("model\tmaterial\tclass\troughness\tmetal\tior\tthickness\ttint keep\tbody\tshine\temission\tnote\ttraced\tkind\tthrough")),
+    ("nebuladata/rtglow.tsv", None),
+    ("nebuladata/rtwater.tsv", Some("model\tmaterial")),
+    ("nebuladata/rtstages.tsv", Some("stage\tsun\tsun gain\tsun size\tambient gain\tsky gain\texposure low\texposure high\tair\twater clear\tshadow sets\tnote")),
+    ("nebuladata/rteffects.tsv", Some("effect\tclass\tluminance\tbehaviour")),
+];
+
+/// Why a pack's ray tracing table (`path` lower case, one of RAY_TABLES) is not one the game took; None: it is. RtMaterials
+/// names its model and material and only the game's columns; RtWater is exactly model, material; RtGlow's rows are model,
+/// colour or `own`, candela; RtStages and RtEffects add rows under the game's columns.
+fn ray_table_problem(path: &str, text: &str) -> Option<String> {
+    let rows = || text.lines().map(|l| l.trim_end_matches('\r')).filter(|l| !l.trim().is_empty() && !l.starts_with('#'));
+    let column = |c: &str| c.trim().to_ascii_lowercase().replace('_', " ");
+    let head: Vec<String> = rows().next().map(|h| h.split('\t').map(column).collect()).unwrap_or_default();
+    let game = |header: &str| header.split('\t').map(str::to_string).collect::<Vec<_>>();
+    match RAY_TABLES.iter().find(|(p, _)| *p == path)? {
+        ("nebuladata/rtmaterials.tsv", Some(header)) => {
+            let game = game(header);
+            if !head.iter().any(|h| h == "model") || !head.iter().any(|h| h == "material") {
+                return Some("its header row names no model or material column".to_string());
+            }
+            head.iter().find(|h| !game.contains(*h)).map(|h| format!("the column {h:?} is not one of the game's ({})", game.join(", ")))
+        }
+        ("nebuladata/rtwater.tsv", Some(_)) => (head.len() != 2 || head[0] != "model" || head[1] != "material").then(|| "its header row is not: model, material".to_string()),
+        (_, None) => rows().find_map(|line| {
+            let fields: Vec<&str> = line.split('\t').collect();
+            (fields.len() < 3 || fields[2].trim().parse::<f32>().is_err()).then(|| format!("the row {line:?} is not: model, colour or own, candela"))
+        }),
+        (_, Some(header)) => super::merge::add_rows(format!("{header}\n").as_bytes(), text.as_bytes()).err().map(|e| format!("{e:#}")),
+    }
+}
 
 pub struct Change {
     pub path: String,
@@ -597,28 +628,6 @@ fn write_overlay_locked(game_id: &str, changes: &[Change], patches: &PlanPatches
     }
     let mut placed = Vec::new();
     let mut failed = Vec::new();
-    // The packs' tables that class their models, before the models cook.
-    let mut tables = super::hit_record::PackTables::default();
-    for change in changes.iter().filter(|c| c.merge) {
-        let Some(kind) = RT_CLASSING.iter().position(|p| *p == change.path.to_ascii_lowercase()) else { continue };
-        let text = match fs::read_to_string(&change.source) {
-            Ok(text) => text,
-            Err(error) => {
-                failed.push((format!("merge/{}", change.path), format!("{} cannot be read: {error}", change.source.display())));
-                continue;
-            }
-        };
-        // A table with a fault is left out; apply_merges says why (run_merges reads it the same way).
-        if super::hit_record::pack_table_problem(kind, &text).is_some() {
-            continue;
-        }
-        match kind {
-            0 => tables.materials.push(text),
-            1 => tables.glow.push(text),
-            _ => tables.water.push(text),
-        }
-    }
-    let _tables = super::hit_record::PackTablesInUse::set(tables);
     // Two of the files may be one place in the game under two names (StageData/X.arc and StageData/S/X.arc, or two
     // mods' cases): the later one stands, the other is named, and the rest of the store is still written.
     let mut last_of: BTreeMap<String, usize> = BTreeMap::new();
@@ -768,13 +777,13 @@ fn run_merges<'c>(changes: &'c [Change], start: &mut dyn FnMut(&str) -> Result<V
             if !luma_validate::mergeable(&path) {
                 bail!("only tables (.json; ray tracing's NebulaData/Rt*.tsv), messages (message.bmg.json, messages.json) and particles (.jpc, .jpc.json) can be added to");
             }
-            // A pack's tables that class its models: read before they cooked (write_overlay), no file of the store. A
-            // table write_overlay leaves out for its fault is said here.
-            if let Some(kind) = RT_CLASSING.iter().position(|p| *p == path) {
+            // A pack's ray tracing table: checked, written nowhere, said.
+            if RAY_TABLES.iter().any(|(p, _)| *p == path) {
                 let text = fs::read_to_string(&change.source).with_context(|| format!("{} cannot be read", change.source.display()))?;
-                if let Some(problem) = super::hit_record::pack_table_problem(kind, &text) {
+                if let Some(problem) = ray_table_problem(&path, &text) {
                     bail!("{problem}");
                 }
+                super::refuse::note("Cook.RayData", &[]);
                 return Ok(());
             }
             let bytes = fs::read(&change.source).with_context(|| format!("{} cannot be read", change.source.display()))?;
@@ -844,14 +853,6 @@ fn run_merges<'c>(changes: &'c [Change], start: &mut dyn FnMut(&str) -> Result<V
                 };
                 let cooked = super::cook_file(&change.path, bytes, stats)?.context("not a particle file")?;
                 merged.insert(key, super::merge::add_particles(&current, &cooked, first)?);
-            } else if RT_ROWS.contains(&lower(&change.path).as_str()) {
-                // Ray tracing's rows the host reads (RtStages.tsv, RtEffects.tsv): after the game's and earlier mods'.
-                let key = place_of(&change.path);
-                let current = match merged.get(&key) {
-                    Some(current) => current.clone(),
-                    None => start(&change.path)?,
-                };
-                merged.insert(key, super::merge::add_rows(&current, &bytes)?);
             } else {
                 bail!("only tables (.json; ray tracing's NebulaData/Rt*.tsv), messages (message.bmg.json, messages.json) and particles (.jpc, .jpc.json) can be added to");
             }
@@ -1179,6 +1180,45 @@ fn cook_plan_inner(plan: &Path, output: &Path, facts: &mut Vec<Fact>) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A pack's ray tracing tables (merge/NebulaData/Rt*.tsv): checked as the game took them, then written nowhere and
+    /// said once each (Cook.RayData); one the game would not have taken is refused as before.
+    #[test]
+    fn a_packs_ray_tables_are_checked_and_written_nowhere() {
+        let _reading = super::super::refuse::reading();
+        let dir = tempfile::tempdir().unwrap();
+        let table = |name: &str, text: &str| {
+            let source = dir.path().join(name);
+            fs::write(&source, text).unwrap();
+            Change { path: format!("NebulaData/{name}"), source, merge: true }
+        };
+        let changes = vec![
+            table("RtMaterials.tsv", "model\tmaterial\troughness\nkuribo\tbody\t0.5\n"),
+            table("RtGlow.tsv", "kuribo\town\t40\n"),
+            table("RtWater.tsv", "model\tmaterial\nsea\twater\n"),
+            table("RtStages.tsv", "stage\tsun gain\nBattleShipGalaxy\t2\n"),
+            table("RtEffects.tsv", "effect\tluminance\nSpark\t3\n"),
+        ];
+        let mut start = |path: &str| -> Result<Vec<u8>> { bail!("{path} is not read") };
+        let (mut merged, mut cased) = (BTreeMap::new(), BTreeMap::new());
+        let outcomes = run_merges(&changes, &mut start, &|_| false, &mut merged, &mut cased, &mut Stats::default());
+        assert_eq!(outcomes.len(), 5);
+        for (change, outcome) in &outcomes {
+            let MergeOutcome::Applied(notes) = outcome else { panic!("{} refused", change.path) };
+            let said: Vec<bool> = notes.iter().map(|f| f.args.first().is_some_and(|(_, a)| *a == luma_validate::Arg::Phrase("Cook.RayData"))).collect();
+            assert_eq!(said, [true], "{}", change.path);
+        }
+        assert!(merged.is_empty(), "{:?}", merged.keys());
+        let bad = vec![
+            table("RtMaterials.tsv", "model\tmaterial\tsparkle\nkuribo\tbody\t1\n"),
+            table("RtWater.tsv", "model\nsea\n"),
+            table("RtGlow.tsv", "kuribo\town\tbright\n"),
+            table("RtStages.tsv", "stage\tsparkle\nA\t1\n"),
+        ];
+        for (change, outcome) in run_merges(&bad, &mut start, &|_| false, &mut merged, &mut cased, &mut Stats::default()) {
+            assert!(matches!(outcome, MergeOutcome::Refused(_)), "{} taken", change.path);
+        }
+    }
 
     /// A game store holding `files` (path, bytes) at their store paths.
     fn game_store(dir: &Path, files: &[(&str, &[u8])]) -> PathBuf {

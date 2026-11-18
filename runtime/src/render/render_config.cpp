@@ -130,16 +130,6 @@ static std::string frame_rate_text(float max_fps) {
     return text.str();
 }
 
-// A time in milliseconds: any finite number, at least 0.
-static float parse_milliseconds(const char* v, float def) {
-    std::istringstream input(v);
-    input.imbue(std::locale::classic());
-    float value = 0.0f;
-    if (!(input >> value)) return def;
-    input >> std::ws;
-    return input.eof() && std::isfinite(value) && value >= 0.0f ? value : def;
-}
-
 static bool parse_bool(const char* v, bool def) {
     if (std::strcmp(v, "1") == 0 || std::strcmp(v, "true") == 0) return true;
     if (std::strcmp(v, "0") == 0 || std::strcmp(v, "false") == 0) return false;
@@ -147,19 +137,6 @@ static bool parse_bool(const char* v, bool def) {
 }
 
 // A choice given by index or by name (case-insensitive): names[i] selects i.
-// config.ini's names of the presets and of a part's levels.
-constexpr const char* kRtPresetNames[] = {"medium", "high", "low", "reference", "custom"};
-constexpr const char* kRtLevelNames[] = {"off", "low", "medium", "high"};
-
-// config.ini's names of ray tracing's parts, in RtPart's order.
-constexpr const char* kRtPartKeys[] = {"rt_sun", "rt_lights", "rt_indirect", "rt_reflect", "rt_transmit", "rt_volume"};
-static_assert(std::size(kRtPartKeys) == static_cast<std::size_t>(RtPart::Count));
-static int rt_part_key(const char* key) {
-    for (std::size_t i = 0; i < std::size(kRtPartKeys); ++i) {
-        if (std::strcmp(key, kRtPartKeys[i]) == 0) return static_cast<int>(i);
-    }
-    return -1;
-}
 
 template <std::size_t N>
 static unsigned parse_choice(const char* v, const char* const (&names)[N], unsigned def) {
@@ -188,7 +165,6 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     if (std::strcmp(key, "vsync_interval") == 0) cfg.vsync_interval      = std::clamp(parse_uint(val, cfg.vsync_interval), 0u, 2u);
     else if (std::strcmp(key, "msaa_samples")   == 0) cfg.msaa_samples        = std::clamp(parse_uint(val, 1), 1u, 8u);
     else if (std::strcmp(key, "max_fps")        == 0) cfg.max_fps             = parse_frame_rate(val, cfg.max_fps);
-    else if (std::strcmp(key, "frame_rate_decouple") == 0) cfg.frame_rate_decouple = parse_bool(val, cfg.frame_rate_decouple);
     else if (std::strcmp(key, "texture_lod_bias") == 0) cfg.texture_lod_bias = std::clamp(parse_uint(val, 0), 0u, 8u);
     else if (std::strcmp(key, "anisotropic_filtering") == 0) cfg.anisotropic_filtering = std::clamp(parse_uint(val, cfg.anisotropic_filtering), 1u, 16u);
     else if (std::strcmp(key, "per_pixel_lighting") == 0) cfg.per_pixel_lighting = parse_bool(val, cfg.per_pixel_lighting);
@@ -228,24 +204,6 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         cfg.spatial_quality = parse_choice(val, kNames, cfg.spatial_quality);
     } else if (std::strcmp(key, "sharpness") == 0) {
         cfg.sharpness = std::min(parse_uint(val, cfg.sharpness), 100u);
-    }
-    else if (std::strcmp(key, "ray_tracing_enabled") == 0) cfg.ray_tracing_enabled = parse_bool(val, false);
-    else if (std::strcmp(key, "rt_quality") == 0) {
-        static constexpr const char* kNames[] = {"medium", "high", "low", "reference", "custom"};
-        cfg.rt_quality = parse_choice(val, kNames, cfg.rt_quality);
-    }
-    else if (const int part = rt_part_key(key); part >= 0) {
-        static constexpr const char* kLevels[] = {"off", "low", "medium", "high"};
-        cfg.rt_parts[static_cast<std::size_t>(part)] =
-            static_cast<std::uint8_t>(parse_choice(val, kLevels, cfg.rt_parts[static_cast<std::size_t>(part)]));
-    }
-    else if (std::strcmp(key, "rt_lens_bloom") == 0) cfg.rt_lens_bloom = parse_bool(val, cfg.rt_lens_bloom);
-    else if (std::strcmp(key, "rt_landing_shadow") == 0) cfg.rt_landing_shadow = parse_bool(val, cfg.rt_landing_shadow);
-    else if (std::strcmp(key, "rt_probe_ms") == 0) cfg.rt_probe_ms = parse_milliseconds(val, cfg.rt_probe_ms);
-    else if (std::strcmp(key, "rt_chosen") == 0) cfg.rt_chosen = parse_bool(val, cfg.rt_chosen);
-    else if (std::strcmp(key, "rt_light_style") == 0) {  // rt_style before the relight was the default: left behind
-        static constexpr const char* kNames[] = {"painted", "physical"};
-        cfg.rt_style = parse_choice(val, kNames, cfg.rt_style);
     }
     else if (std::strcmp(key, "texture_packs") == 0) cfg.texture_packs = parse_bool(val, cfg.texture_packs);
     else if (std::strcmp(key, "texture_pack_preload") == 0) cfg.texture_pack_preload = parse_bool(val, cfg.texture_pack_preload);
@@ -338,15 +296,6 @@ static void clamp_render_config(RenderConfig& cfg) {
     cfg.monitor.back() = '\0';
     cfg.gpu.back() = '\0';
     cfg.msaa_samples = std::bit_floor(std::clamp(cfg.msaa_samples, 1u, 8u));
-    cfg.rt_quality = std::min(cfg.rt_quality, kRtPresetCustom);
-    cfg.rt_style = std::min(cfg.rt_style, 1u);
-    cfg.rt_probe_ms = cfg.rt_probe_ms > 0.0f ? std::min(cfg.rt_probe_ms, 1000.0f) : 0.0f;  // NaN too: not measured
-    for (std::uint8_t& part : cfg.rt_parts) {
-        part = static_cast<std::uint8_t>(std::min<unsigned>(part, 3u));
-    }
-    rt_apply_preset(cfg);
-    // Ray tracing follows its setting in every build; Nebula Settings offers its row once it is finished
-    // (rt_caps.h kRayTracingRowOffered).
 }
 
 static void sanitize_feature_status(RenderFeatureStatus& status) {
@@ -360,9 +309,6 @@ static void sanitize_feature_status(RenderFeatureStatus& status) {
 
 static void clamp_feature_caps(RenderFeatureCaps& caps) {
     caps.adapter_description.back() = '\0';
-    if (!caps.dxr_device5_supported || caps.dxr_raytracing_tier == 0u) {
-        caps.dxr.runtime_supported = false;
-    }
     if (!caps.streamline_bridge_built) {
         caps.streamline.implemented = false;
         caps.streamline.runtime_supported = false;
@@ -371,7 +317,6 @@ static void clamp_feature_caps(RenderFeatureCaps& caps) {
 
     sanitize_feature_status(caps.msaa);
     sanitize_feature_status(caps.taa);
-    sanitize_feature_status(caps.dxr);
     sanitize_feature_status(caps.streamline);
     sanitize_feature_status(caps.reflex);
     sanitize_feature_status(caps.dlss_super_resolution);
@@ -400,8 +345,6 @@ static std::filesystem::path config_path() {
 }  // namespace
 
 namespace {
-// Bit 0: the tracer runs; bit 1: FSR 3 runs on the device.
-std::atomic<unsigned> s_tracing{0u};
 std::atomic<bool> s_present_waits_for_refresh{false};
 }  // namespace
 
@@ -429,25 +372,8 @@ RenderConfig get_render_config() {
     if (copy.vsync_interval == 0u && present_waits_for_refresh()) {
         copy.vsync_interval = 1u;
     }
-    const unsigned tracing = s_tracing.load(std::memory_order_relaxed);
-    if ((tracing & 1u) != 0u) {
-        copy.msaa_samples = 1u;
-#if !defined(NEBULA_GPU_METAL)
-        if ((tracing & 2u) != 0u && copy.upscaler <= 1u) {
-            // FSR 1's scales are the temporal modes' (1-5); 0, the output's size, is FSR 3's native anti-aliasing.
-            copy.temporal_quality = copy.upscaler == 1u ? copy.spatial_quality : 0u;
-            copy.upscaler = 2u;
-        }
-#endif
-    }
     return copy;
 }
-
-void set_render_tracing(bool tracing, bool fsr3) noexcept {
-    s_tracing.store((tracing ? 1u : 0u) | (tracing && fsr3 ? 2u : 0u), std::memory_order_relaxed);
-}
-
-bool render_tracing() noexcept { return (s_tracing.load(std::memory_order_relaxed) & 1u) != 0u; }
 
 namespace {
 std::atomic<bool> s_frame_generation_running{false};
@@ -467,22 +393,6 @@ void set_frame_generation_running(bool running) noexcept {
 }
 
 bool frame_generation_running() noexcept { return s_frame_generation_running.load(std::memory_order_relaxed); }
-
-namespace {
-std::atomic<float> s_camera_water{-1.0f};
-std::atomic<std::int64_t> s_camera_water_ms{0};
-}  // namespace
-
-void note_camera_water(float depth) noexcept {
-    s_camera_water.store(depth, std::memory_order_relaxed);
-    s_camera_water_ms.store(steady_ms(), std::memory_order_relaxed);
-}
-
-float camera_water_depth() noexcept {
-    const std::int64_t at = s_camera_water_ms.load(std::memory_order_relaxed);
-    return at != 0 && steady_ms() - at < kFrameGenerationReportMs ? s_camera_water.load(std::memory_order_relaxed)
-                                                                   : -1.0f;
-}
 
 void note_frame_generation_allowed(bool allowed) noexcept {
     s_frame_generation_allowed.store(allowed, std::memory_order_relaxed);
@@ -591,8 +501,6 @@ void load_render_config_from_file() {
     std::array<char, 32> file_gpu = cfg.gpu;
     file_gpu.back() = '\0';
 
-    // Frame-rate decoupling is not offered: its key is read but stays off.
-    cfg.frame_rate_decouple = false;
     clamp_render_config(cfg);
 
     s_lock.lock();
@@ -630,7 +538,6 @@ void apply_performance_preset(RenderConfig& cfg) noexcept {
     cfg.anisotropic_filtering = 1u;
     cfg.hud_output_resolution = false;
     cfg.hud_internal_resolution = true;
-    cfg.ray_tracing_enabled = false;
     cfg.hdr = false;
     cfg.max_fps = 0.0f;
 }
@@ -667,7 +574,6 @@ bool reload_render_config_if_changed() {
     const unsigned file_renderer = cfg.renderer;
     cfg.gpu = session_gpu;
     cfg.renderer = session_renderer;
-    cfg.frame_rate_decouple = false;
     clamp_render_config(cfg);
 
     s_lock.lock();
@@ -750,24 +656,10 @@ bool save_render_config_to_file() {
              << (cfg.hud_output_resolution ? 1u : 0u) << '\n'
              << "hud_internal_resolution="
              << (cfg.hud_internal_resolution ? 1u : 0u) << '\n'
-             << "ray_tracing_enabled="
-             << (cfg.ray_tracing_enabled ? 1u : 0u) << '\n'
              << "texture_packs=" << (cfg.texture_packs ? 1u : 0u) << '\n'
              << "texture_pack_preload=" << (cfg.texture_pack_preload ? 1u : 0u) << '\n'
              << "texture_dump=" << (cfg.texture_dump ? 1u : 0u) << '\n'
              << "texture_pack_budget_mb=" << cfg.texture_pack_budget_mb << '\n'
-             << "rt_quality=" << kRtPresetNames[std::min(cfg.rt_quality, kRtPresetCustom)] << '\n'
-             << "rt_sun=" << kRtLevelNames[cfg.rt_parts[0]] << '\n'
-             << "rt_lights=" << kRtLevelNames[cfg.rt_parts[1]] << '\n'
-             << "rt_indirect=" << kRtLevelNames[cfg.rt_parts[2]] << '\n'
-             << "rt_reflect=" << kRtLevelNames[cfg.rt_parts[3]] << '\n'
-             << "rt_transmit=" << kRtLevelNames[cfg.rt_parts[4]] << '\n'
-             << "rt_volume=" << kRtLevelNames[cfg.rt_parts[5]] << '\n'
-             << "rt_lens_bloom=" << (cfg.rt_lens_bloom ? 1u : 0u) << '\n'
-             << "rt_landing_shadow=" << (cfg.rt_landing_shadow ? 1u : 0u) << '\n'
-             << "rt_probe_ms=" << cfg.rt_probe_ms << '\n'
-             << "rt_chosen=" << (cfg.rt_chosen ? 1u : 0u) << '\n'
-             << "rt_light_style=" << (cfg.rt_style == 1u ? "physical" : "painted") << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'
@@ -878,7 +770,7 @@ void record_render_driver(std::string version) noexcept {
 }
 
 void record_render_adapter(const char* description, unsigned vendor_id, unsigned device_id,
-                           unsigned subsys_id, bool ray_tracing) noexcept {
+                           unsigned subsys_id) noexcept {
     // LumaCore's system facts (services-system 3): this build's renderer and its device, whatever the config.
 #if defined(NEBULA_GPU_METAL)
     constexpr std::uint32_t renderer = LUMA_SYSTEM_METAL;
@@ -907,8 +799,7 @@ void record_render_adapter(const char* description, unsigned vendor_id, unsigned
         contents << "description=" << name << '\n'
                  << "vendor_id=" << vendor_id << '\n'
                  << "device_id=" << device_id << '\n'
-                 << "id=" << gpu_identity(vendor_id, device_id, subsys_id) << '\n'
-                 << "ray_tracing=" << (ray_tracing ? 1 : 0) << '\n';
+                 << "id=" << gpu_identity(vendor_id, device_id, subsys_id) << '\n';
         static_cast<void>(io::write_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
     } catch (...) {
     }

@@ -9,11 +9,13 @@
    no soak; long has the soak, the sanitizer tour and every disc on every renderer, and no GitHub; final has both.
    --only keeps a check and what it needs.
 4. The tablet's part is owed, not failed, when the tablet does not answer.
-5. GitHub: green in any run counts, a red job ends the wait at once and fails, a job still running is waited for up
-   to the limit.
+5. GitHub (section 8, N-1047): every job of the candidate's run is required; a red, cancelled or skipped job ends the
+   wait at once and fails, a job planned.tsv names (github/<job>) does not count, a run not ended is waited for up to
+   120 minutes, and a failed question to GitHub is asked again, not taken for a red job.
 6. Main moves only through the gate: in a scratch repository with the guard as its pre-push hook, a plain push to main
-   and a deletion of main are refused, another branch's push goes, move_main moves main and writes MAIN-MOVED, and a
-   main that moved during the gate is not overwritten.
+   and a deletion of main are refused, another branch's push goes, move_main moves main and writes MAIN-MOVED, a
+   main that moved during the gate is not overwritten, a commit main already holds is a move done, and a candidate
+   still waiting for GitHub must be held by the next one.
 7. The rules main() enforces before it starts: the main level needs the tablet named, --move goes with --main alone.
 8. The status page names main, its colour, the runs, the ledger counts and the lists.
 9. Lanes (section 7): checks of lanes run side by side and their rows join in the lanes' order whichever ends first;
@@ -169,28 +171,52 @@ def main():
         check([r["state"] for r in g3.results] == ["owed"] * len(gate.TABLET_CHECKS)
               and [r["check"] for r in g3.results] == list(gate.TABLET_CHECKS), "a tablet away owes its whole part")
 
-        # 5. GitHub.
-        green = [{"name": n, "status": "completed", "conclusion": "success"} for n in gate.GITHUB_JOBS]
-        check(gate.judge_jobs(green)[:2] == (True, True), "all green")
-        again = green[:1] + [{"name": gate.GITHUB_JOBS[0], "status": "completed", "conclusion": "failure"}] + green[1:]
-        check(gate.judge_jobs(again)[:2] == (True, True), "green in any run counts")
-        red = green[:-1] + [{"name": gate.GITHUB_JOBS[-1], "status": "completed", "conclusion": "failure"}]
-        done, ok, detail = gate.judge_jobs(red + [{"name": "Mac", "status": "in_progress", "conclusion": None}][:0])
-        check(done and not ok and "failure" in detail, "a red job fails: %s" % detail)
-        running = green[:-1] + [{"name": gate.GITHUB_JOBS[-1], "status": "in_progress", "conclusion": None}]
-        check(gate.judge_jobs(running)[:2] == (False, False), "a running job is waited for")
-        check(gate.judge_jobs(green[:-1])[:2] == (False, False), "a job not started is waited for")
+        # 5. GitHub: every job of the candidate's run (section 8).
+        def job(name, state="completed", conclusion="success"):
+            return {"name": name, "status": state, "conclusion": conclusion}
+
+        names = ["Windows (three renderers, unit tests)", "Linux", "Mac", "Android (x86_64)", "Android start check"]
+        green = [job(n) for n in names]
+        check(gate.judge_run("completed", green)[:2] == (True, True), "every job green")
+        check(gate.judge_run("in_progress", green[:-1] + [job(names[-1], "queued", None)])[:2] == (False, False),
+              "a job still queued is waited for")
+        check(gate.judge_run("in_progress", green[:3])[:2] == (False, False),
+              "a run not ended is waited for, whatever its jobs so far say")
+        done, ok, detail = gate.judge_run("in_progress", green[:-1] + [job(names[-1], conclusion="failure")])
+        check(done and not ok and "Android start check failure" in detail, "a red job ends the wait at once: %s" % detail)
+        check(gate.judge_run("completed", green[:-1] + [job(names[-1], conclusion="cancelled")])[:2] == (True, False),
+              "a cancelled job stops the move")
+        check(gate.judge_run("completed", green[:-1] + [job(names[-1], conclusion="skipped")])[:2] == (True, False),
+              "a skipped job stops the move")
+        check(gate.judge_run("completed", green[:-1] + [job(names[-1], conclusion="failure")],
+                             planned_jobs={names[-1]})[:2] == (True, True), "a job planned.tsv names does not count")
+        check(gate.judge_run(None, [])[:2] == (False, False), "no run yet is waited for")
+        check(gate.judge_run("completed", [])[:2] == (True, False), "a run with no job is not green")
+        check(gate.planned_jobs({"github/Mac": {}, "fuzz": {}}) == {"Mac"}, "planned.tsv's github/<job> lines")
         now = [0.0]
-        answers = iter([running, running, green])
-        fn = gate.github_check(g2, 15, jobs_of=lambda sha: next(answers), sleep=lambda s: now.__setitem__(0, now[0] + s),
-                               clock=lambda: now[0])
-        ok, detail = fn(t / "gh.log")
-        check(ok and now[0] == 120.0, "waits while running, then green: %s after %s s" % (detail, now[0]))
+
+        def tick(seconds):
+            now[0] += seconds
+
+        answers = iter([(None, []), ("in_progress", green[:2]), ("completed", green)])
+        ok, detail = gate.github_wait("gate/x", "abc", state_of=lambda b, c: next(answers), sleep=tick,
+                                      clock=lambda: now[0], log=t / "gh.log")
+        check(ok and now[0] == 120.0, "waits while the run goes, then green: %s after %s s" % (detail, now[0]))
         now[0] = 0.0
-        fn = gate.github_check(g2, 15, jobs_of=lambda sha: running, sleep=lambda s: now.__setitem__(0, now[0] + s),
-                               clock=lambda: now[0])
-        ok, detail = fn(t / "gh2.log")
-        check(not ok and "after 15 minutes" in detail and now[0] >= 900, "the wait has a limit: %s" % detail)
+        ok, detail = gate.github_wait("gate/x", "abc", state_of=lambda b, c: ("in_progress", green[:2]), sleep=tick,
+                                      clock=lambda: now[0], log=t / "gh2.log")
+        check(not ok and "120 minutes" in detail and now[0] >= 7200, "the wait has a limit: %s" % detail)
+        asked = [0]
+
+        def flaky(branch, commit):
+            asked[0] += 1
+            if asked[0] == 1:
+                raise RuntimeError("gh run list: timeout")
+            return "completed", green
+
+        now[0] = 0.0
+        ok, detail = gate.github_wait("gate/x", "abc", state_of=flaky, sleep=tick, clock=lambda: now[0], log=t / "gh3.log")
+        check(ok and asked[0] == 2, "a failed question is asked again: %s" % detail)
 
         # 6. Main moves only through the gate.
         git = gate.GIT
@@ -235,6 +261,20 @@ def main():
         why = gate.move_main(c3, "run-2", t, str(board), "Agent 1", "", tree=clone)
         check(why is not None and "main moved during the gate" in why and
               sh(git, "rev-parse", "origin/main").stdout.strip() == c1, "a main that moved is not overwritten: %s" % why)
+        why = gate.move_main(c1, "run-3", t, str(board), "Agent 1", "", tree=clone)
+        check(why is None and "main already holds %s" % c1[:9] in board.read_text(encoding="utf-8"),
+              "a commit main already holds is a move done: %s" % why)
+        waiting = t / "waiting"
+        waiting.mkdir()
+        gate.add_waiting(waiting, c1, "gate/run-1", os.getpid())
+        gate.add_waiting(waiting, c0, "gate/run-0", 999999)
+        check(gate.unheld_candidates(waiting, c3, tree=clone) == ["gate/run-1"],
+              "a waiting candidate the next one does not hold is named; one whose gate has ended is not")
+        sh(git, "checkout", "-q", c1)
+        c4 = commit("c4")
+        check(gate.unheld_candidates(waiting, c4, tree=clone) == [], "a candidate that holds the waiting one may enter")
+        gate.drop_waiting(waiting, c1)
+        check(gate.unheld_candidates(waiting, c3, tree=clone) == [], "a candidate that moved or failed waits no more")
         stale = t / "old.txt"
         stale.write_text(c1 + "\n", encoding="utf-8")
         os.utime(stale, (1, 1))

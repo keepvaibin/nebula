@@ -10,6 +10,10 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <chrono>
+#include <thread>
+#include <future>
+#include <atomic>
 #include <span>
 #include <string>
 #include <vector>
@@ -387,8 +391,45 @@ bool library() {
 
 }  // namespace
 
+// An import does not hold the game's Mii requests while it reads, copies and merges its files (P-085).
+bool import_beside_the_game() {
+    bool ok = true;
+    const std::filesystem::path root = galaxy::test_temp_path("nebula_mii_import_beside");
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    std::filesystem::create_directories(root / "miis", error);
+    const std::filesystem::path file = root / "miis.txt";
+    const std::filesystem::path incoming = root / "c.mii";
+    write_file(incoming, mii(21u));
+    std::promise<void> entered, release;
+    std::shared_future<void> go = release.get_future().share();
+    std::atomic<bool> first{true};
+    galaxy::host::set_mii_library(file, {}, root / "miis", [&](MiiRecord&) {
+        if (first.exchange(false)) {
+            entered.set_value();
+            go.wait();  // the import stops here, as a slow file read would
+        }
+        return true;
+    });
+    const unsigned before = galaxy::host::mii_library_count();
+    std::thread import([&] {
+        std::string message;
+        (void)galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&incoming, 1u), &message);
+    });
+    entered.get_future().wait();
+    std::future<unsigned> count = std::async(std::launch::async, [] { return galaxy::host::mii_library_count(); });
+    ok &= expect(count.wait_for(std::chrono::seconds(2)) == std::future_status::ready, "the game's count answers during an import");
+    release.set_value();
+    import.join();
+    ok &= expect(count.get() == before, "the count before the import ends");
+    ok &= expect(galaxy::host::mii_library_count() == before + 1u, "the import's Mii after");
+    (void)galaxy::host::take_mii_installs();
+    std::filesystem::remove_all(root, error);
+    return ok;
+}
+
 int main() {
-    const bool ok = wii_formats() & newer_formats() & merging() & library();
+    const bool ok = wii_formats() & newer_formats() & merging() & library() & import_beside_the_game();
     std::cout << (ok ? "mii import tests passed" : "mii import tests FAILED") << '\n';
     return ok ? 0 : 1;
 }
