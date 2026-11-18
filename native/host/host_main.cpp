@@ -116,6 +116,7 @@
 #include "galaxy/update.h"
 #endif
 #endif
+#include "galaxy/bounded_call.h"
 #include "galaxy/save_transfer.h"
 #include <nebula_frame_list.h>
 #include "galaxy/render/rt_materials.h"
@@ -366,26 +367,17 @@ FILE* open_for_writing(const fs::path& file) {
 
 #if defined(NEBULA_HOST_RENDERER)
 // The unlocks and counts waiting out their write delay (galaxy::achievements 0.25 s, galaxy::stats 1.5 s) are written before a
-// process ends the hard way (a crash, a fatal error). On a thread of its own and waited for at most `wait_ms`: the thread that
-// failed may hold the lock of one of them, and the report must not wait on it for ever.
-#if defined(_WIN32)
-DWORD WINAPI flush_progress_thread(LPVOID) {
+// process ends the hard way (a crash, a fatal error). On a thread of its own and waited for at most `wait_ms`, on every
+// platform: the thread that failed may hold the lock of one of them, and the report must not wait on it for ever.
+void flush_progress() {
     galaxy::achievements::flush();
     galaxy::stats::flush();
-    return 0;
 }
-#endif
+galaxy::BoundedCall gFlushProgress{flush_progress};
 void flush_progress_bounded(unsigned wait_ms) {
-#if defined(_WIN32)
-    if (const HANDLE thread = CreateThread(nullptr, 0, flush_progress_thread, nullptr, 0, nullptr); thread != nullptr) {
-        WaitForSingleObject(thread, wait_ms);
-        CloseHandle(thread);
+    if (!galaxy::call_bounded(gFlushProgress, wait_ms)) {
+        log_line("host:", "the achievements and stats were not all written: their writer waited past its time");
     }
-#else
-    (void)wait_ms;
-    galaxy::achievements::flush();
-    galaxy::stats::flush();
-#endif
 }
 #endif
 
