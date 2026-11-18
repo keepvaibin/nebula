@@ -260,7 +260,7 @@ P-081	1	E1 data safety	fixed	7f30290ce; runtime/src/save_transfer_tests.cpp (the
 P-082	1	E1 data safety	open		wrong behaviour (suspected). The in-game import's write is not ordered against the game's own save worker. The merged file is built from the save as t	Withdrawn by the reader. Confirm by test and close.
 P-083	1	E10 audio, input, menus, text	open		performance (input stalls on Windows). The HID worker's own comment says it never stalls on a busy radio (controller_hid.cpp:1193-1196). Several paths	
 P-084	1	E10 audio, input, menus, text	open		wrong behaviour (it widens P-073 to every platform). On every host, every stick source goes through a second per-axis dead zone and per-axis clamp bef	
-P-085	1	E1 data safety	open		performance. A Mii import holds the library mutex while it reads every chosen file (up to 64 MB each), copies each into the Miis folder, and writes th	
+P-085	1	E1 data safety	fixed	9e6b6d12b; mii_import_tests import_beside_the_game (the old code fails it)	performance. A Mii import holds the library mutex while it reads every chosen file (up to 64 MB each), copies each into the Miis folder, and writes th	
 P-086	1	E10 audio, input, menus, text	open		wrong behaviour. Some host texts shown in the settings menu have no NebulaText entry, so they appear in English capitals in every language.	
 P-087	1	E9 upscalers, HDR and option parity	open		platform gap (the P-032 pattern; a complete list for the pages read so far). These options are offered where the active platform or renderer cannot do	
 P-088	1	E7 game step speed	open		performance: the open settings menu rebuilds its page twice a frame on the game thread, and the CONTROLS page rebuilds its row list several times per 	
