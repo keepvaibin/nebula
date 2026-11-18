@@ -58,6 +58,11 @@ target_include_directories(galaxy_render_mtl PUBLIC "${nebula_root}/runtime/src"
 target_include_directories(galaxy_render_mtl PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include"
     "${nebula_apple_utility_msl_dir}")
 target_link_libraries(galaxy_render_mtl PRIVATE nebula_msl)
+# AV1 movies (a mod's movie, NMOV codec 1) as every other renderer decodes them (P-116): platform/sdl's dav1d.
+if(TARGET nebula_dav1d)
+    target_link_libraries(galaxy_render_mtl PRIVATE nebula_dav1d)
+    target_compile_definitions(galaxy_render_mtl PRIVATE NEBULA_AV1=1)
+endif()
 # As platform/sdl gives galaxy_render_vk: TLS and gzip for the net services (luma_net.cpp), the save import's AES,
 # hashes and inflate (save_transfer.cpp), and the game's GameData.bin check (a source property is its folder's, so
 # platform/sdl's does not reach this folder's target).
