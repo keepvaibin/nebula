@@ -16,6 +16,7 @@
 #include "Game/Player/MarioConst.hpp"
 #include "Game/Player/MarioEffect.hpp"
 #include "Game/Player/MarioHolder.hpp"
+#include "Game/Player/MarioLife.hpp"
 #include "Game/Player/MarioMessenger.hpp"
 #include "Game/Player/MarioNullBck.hpp"
 #include "Game/Player/MarioParts.hpp"
@@ -1532,15 +1533,7 @@ void MarioActor::incLife(u32 amt) {
 
 void MarioActor::changeMaxLife(s32 max) {
     mMaxHealth = max;
-    while (mHealth != max) {
-        if (mHealth > max) {
-            decLife(0);
-        } else if (mHealth < max) {
-            incLife(1);
-        } else {
-            break;
-        }
-    }
+    MR::stepHealthTo(*this, static_cast< u32 >(max));
 }
 
 bool MarioActor::doPressing() {
