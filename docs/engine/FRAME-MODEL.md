@@ -105,3 +105,45 @@ The start check's wait for each list's release (:2070-2078) and its final `wait_
 Two of these hold the game for the whole render queue: the aspect latch (all queued frames, then the picture is fitted)
 and a render queue already at its depth. The asset read is the one wait on the drive inside a step; every other file the
 game touches goes through the save worker.
+
+### 1.6 The other threads, and what of the frame each touches
+
+| Thread | Touches | Hand-over |
+| --- | --- | --- |
+| Window owner (`window_owner.cpp:20`) | the window's size, focus, input | the size reaches the aspect latch (1.5) and the swap chain's resize (1.4, a whole-GPU wait) |
+| Display clock (`vblank_clock_win32.cpp:175`, started once by `vblank_grid`) | the vertical blank's time and period | under `g_mutex`, read by the step wait and the present slots |
+| Pipeline workers (`core/pipelines.cpp:104`, lowest priority) | compiling pipeline states | each published to an atomic cell (`cell` :145, `publish` :164); a draw whose pipeline is not there yet compiles it on the render thread (`create_now` :253; a quick link where pipelines link from parts, :271) |
+| Record workers (`core/draw_record.h`, `RecordPool`) | encoding a pass's chunks | fork and join inside the walk: the render thread takes a share and returns when all are done |
+| Texture pack workers (`texture_pack.cpp:176`) | reading and decoding replacements | decoded pixels picked up at `pump` once a frame; the upload is the render thread's |
+| Movie (`movie_playback.cpp:75`, :299, :720; :1016 prepares the decoder) | decoding a movie | pictures through the stager to the render thread |
+| Streamline start (`renderer_d3d12.cpp:2314`) | loading the vendor's library | joined at device creation, before any frame |
+| Picture writer (`renderer_common.cpp:427`) | writing a captured picture to disk | the pixels are copied out first; counted so the end waits for it |
+| HDR watcher (`os_hdr.cpp:393`) | the system's HDR state | read by the swap chain's HDR switch (1.4, a whole-GPU wait) |
+| Telemetry publisher (`frame_telemetry.cpp:104`) | the frame counts | samples them into shared memory for outside readers |
+| Texture categories index (`texture_categories.cpp:347`) | reading the store's index | `index_ready` (acquire) before any lookup |
+| Sound, save writers, host sampler, input (`host_main.cpp:3914`) | none of the frame | — |
+
+Not part of a frame: controllers (`controller_hid.cpp`, `wiimote_hid.cpp`, `switch2_ble_win.cpp`), mods' services
+(`luma_net.cpp`, `luma_fs.cpp`, `luma_mods.cpp`, `luma_assets.cpp`, `luma_capture.cpp`, `luma_input.cpp`), the settings
+screen's workers (`ui/native_settings.cpp`), updates (`update/update.cpp`), vendor downloads, Discord.
+
+### 1.7 What breaks the frame's rules today, or keeps the console's shape
+
+The rules (part 2): the render thread never compiles, never reads a file and never waits for the whole GPU inside a
+frame; the game thread waits for the render thread only at the points this file names. Each part with its row; a part
+with no row has a new one.
+
+| Part | Where | Row |
+| --- | --- | --- |
+| A draw whose pipeline is not ready compiles it on the render thread | `core/pipelines.cpp:253` (`create_now`) | P-010 |
+| Utility pipelines compiled on the render thread at first use, outside the cache | `core/pipelines.cpp` | P-052 |
+| A present waits for every pipeline creation in flight (Direct3D 12) | `core/present_gate.h` | N-1067 |
+| The sampler heap, full, drains the whole GPU | `renderer_d3d12.cpp:1410` (`reset_sampler_frame`) | P-048 |
+| Size changes drain the whole GPU inside a frame | `renderer_d3d12.cpp:5034`, :5067, :5229 (the temporal upscaler), :1955 | P-028 |
+| The game thread waits for frame F - 2's probe answers | `render_core.cpp:2032` | N-1068 |
+| The game thread waits for the whole render queue at an aspect change | `host_main.cpp:3236` | to be given |
+| A capture's readback waits for the GPU inside a frame | `renderer_d3d12.cpp:6904`, :6907 | to be given |
+| The game thread copies loads from the mapped store: a page not in memory is a drive read inside a step | `host_main.cpp:3152` (`svc_asset_read`) | to be given |
+
+The list grows with the files still to read (the post-process files for Vulkan and Metal, the upscaler and
+frame-generation bodies, `draw_walker.cpp`).
