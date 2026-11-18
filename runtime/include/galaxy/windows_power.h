@@ -123,6 +123,8 @@ inline void keep_display_on(bool keep) noexcept {
 
 }  // namespace galaxy::host
 #else
+#include "galaxy/crash_stack.h"
+
 #include <pthread.h>
 #include <thread>
 #if defined(__APPLE__)
@@ -147,6 +149,8 @@ inline void name_current_thread(const wchar_t* name) noexcept {
 #else
     (void)pthread_setname_np(pthread_self(), narrow);
 #endif
+    // Its fatal signals are reported even when its own stack ran out (crash_stack.h).
+    crash_stack_for_this_thread();
 }
 // Background work (the pipeline workers): the frame's threads run first wherever a core is contended. Apple: the class for
 // long work nobody waits on (the frame's threads are user-interactive, perf_hint.cpp). Linux and Android: nice 10 (Android's

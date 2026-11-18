@@ -838,6 +838,7 @@ void name_thread(const wchar_t* name) {
 #else
     pthread_setname_np(pthread_self(), narrow);
 #endif
+    galaxy::host::crash_stack_for_this_thread();  // a fatal signal is reported even when the stack ran out
 #endif
 }
 

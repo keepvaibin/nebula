@@ -37,6 +37,12 @@ galaxy_test(galaxy_pacing_tests SOURCES ${rt}/pacing_tests.cpp ${rt}/pacing.cpp 
 # Windows half looks at the power state, which needs the Windows host's power code).
 if(NOT WIN32)
     galaxy_test(galaxy_perf_hint_tests SOURCES ${rt}/perf_hint_tests.cpp ${rt}/perf_hint.cpp)
+    # A thread whose stack ran out is still reported (crash_stack.h, P-017); Windows reports from another process.
+    galaxy_test(galaxy_crash_stack_tests SOURCES ${rt}/crash_stack_tests.cpp)
+    # Where a start's output goes when nobody reads it (output_log.cpp, P-016 and P-015).
+    galaxy_test(galaxy_output_log_tests SOURCES "${galaxy_root}/platform/sdl/output_log_tests.cpp"
+        "${galaxy_root}/platform/sdl/output_log.cpp")
+    target_include_directories(galaxy_output_log_tests PRIVATE "${galaxy_root}/platform/sdl")
 endif()
 # The frame timeline (--diagnostics timeline): its clock, threads and file on every platform.
 galaxy_test(galaxy_frame_timeline_tests SOURCES ${rt}/frame_timeline_tests.cpp)

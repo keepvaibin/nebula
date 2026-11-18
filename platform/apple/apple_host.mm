@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The host on Apple's systems, outside SDL (apple_host.h).
 #include "apple_host.h"
+#include "sdl_host.h"
 
 #import <Foundation/Foundation.h>
 #include <TargetConditionals.h>
@@ -58,31 +59,6 @@ fs::path default_module() {
     }
     const fs::path program = path_of(bundle.executablePath);
     return program.empty() ? fs::path{} : program.parent_path() / "libsmg_game.dylib";
-}
-
-// The output to <data>/logs/game.log (the run before: game.previous.log) when no terminal, pipe or file takes it: an
-// app started from the Finder or the home screen writes to nothing anyone reads.
-void redirect_output(const fs::path& data) {
-    if (isatty(STDERR_FILENO) != 0 || data.empty()) {
-        return;
-    }
-#if TARGET_OS_OSX
-    // A shell or a test that sent the output to a pipe or a file keeps it; launchd gives an app /dev/null.
-    char target[1024]{};
-    if (fcntl(STDERR_FILENO, F_GETPATH, target) != 0 || std::strcmp(target, "/dev/null") != 0) {
-        return;
-    }
-#endif
-    std::error_code error;
-    const fs::path logs = data / "logs";
-    fs::create_directories(logs, error);
-    fs::rename(logs / "game.log", logs / "game.previous.log", error);
-    const std::string log = (logs / "game.log").string();
-    if (std::freopen(log.c_str(), "w", stdout) != nullptr) {
-        dup2(fileno(stdout), STDERR_FILENO);
-        setvbuf(stdout, nullptr, _IOLBF, 0);
-        setvbuf(stderr, nullptr, _IONBF, 0);
-    }
 }
 
 // The system's first language as LANG ("fr_CA.UTF-8"), which the game's language follows (runtime_settings.cpp): an app
@@ -186,7 +162,10 @@ void launch_arguments(int& argc, char**& argv) {
                 g_argument_text.insert(g_argument_text.end(), {"--module", module.string()});
             }
         }
-        redirect_output(data);
+        // The output in <data>/logs/game.log when the Finder or the home screen started the app, and a fatal signal's
+        // report in it (crash_log.cpp).
+        galaxy::sdl::keep_output_in_log(data);
+        galaxy::sdl::install_crash_log(-1);
         name_language();
 #if TARGET_OS_OSX
         check_audio_answers();

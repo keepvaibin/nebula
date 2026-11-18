@@ -1,36 +1,42 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// A fatal signal's report in the log (sdl_host.h, install_crash_log): the signal, the address it names, the thread, the
-// registers that locate the fault and the stack as library + offset (for addr2line), written straight to the log file
-// before the system's own handler runs (Android's debuggerd, which writes its tombstone; elsewhere the default action).
-// The log's reader thread is not relied on: a crash dump stops it. Windows has its own (host_main.cpp
+// A fatal signal's report in the log (sdl_host.h, install_crash_log; output_log.cpp keeps the output in a file): the
+// signal, the address it names, the thread, the registers that locate the fault and the stack as library + offset (for
+// addr2line or atos), written straight to the log file before the system's own handler runs (Android's debuggerd,
+// which writes its tombstone; Apple's crash reporter; elsewhere the default action). The log's reader thread is not
+// relied on: a crash dump stops it. Linux, Android, macOS, iOS and iPadOS; Windows has its own (host_main.cpp
 // install_crash_reporter).
 
 #include "sdl_host.h"
 
+#include "galaxy/crash_stack.h"
 #include "galaxy/mod_crash.h"
 
-#if defined(__linux__)
+#include <cstdio>
+
+#if defined(__linux__) || defined(__APPLE__)
 #include <dlfcn.h>
+#include <pthread.h>
 #include <signal.h>
+#include <unistd.h>
+#include <unwind.h>
+#if defined(__linux__)
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <ucontext.h>
-#include <unistd.h>
-#include <unwind.h>
+#endif
 #if defined(__ANDROID__)
 #include <android/log.h>
 #endif
 
 #include <atomic>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <iterator>
 #endif
 
 namespace galaxy::sdl {
 
-#if defined(__linux__)
+#if defined(__linux__) || defined(__APPLE__)
 
 namespace {
 
@@ -90,17 +96,49 @@ _Unwind_Reason_Code walk_frame(_Unwind_Context* context, void* data) {
 void report(int signal, const siginfo_t* info, const void* context) {
     char line[512];
     char place[320];
-    char thread[17]{};
+    char thread[64]{};
+#if defined(__APPLE__)
+    pthread_getname_np(pthread_self(), thread, sizeof(thread));
+    std::uint64_t tid = 0u;
+    pthread_threadid_np(nullptr, &tid);
+#else
     prctl(PR_GET_NAME, thread, 0, 0, 0);
-    std::snprintf(line, sizeof(line), "[crash] %s, code %d, address 0x%zx, thread \"%s\" (tid %ld)", signal_name(signal),
+    const auto tid = static_cast<std::uint64_t>(syscall(SYS_gettid));
+#endif
+    std::snprintf(line, sizeof(line), "[crash] %s, code %d, address 0x%zx, thread \"%s\" (tid %llu)", signal_name(signal),
                   info != nullptr ? info->si_code : 0,
                   info != nullptr ? reinterpret_cast<std::size_t>(info->si_addr) : std::size_t{0}, thread,
-                  static_cast<long>(syscall(SYS_gettid)));
+                  static_cast<unsigned long long>(tid));
     put(line);
     std::uintptr_t pc = 0u;
     if (context != nullptr) {
         const auto* uc = static_cast<const ucontext_t*>(context);
-#if defined(__aarch64__)
+#if defined(__APPLE__) && defined(__aarch64__)
+        const auto& state = uc->uc_mcontext->__ss;
+        pc = static_cast<std::uintptr_t>(state.__pc);
+        describe(pc, place, sizeof(place));
+        std::snprintf(line, sizeof(line), "[crash] pc %s", place);
+        put(line);
+        describe(static_cast<std::uintptr_t>(state.__lr), place, sizeof(place));
+        std::snprintf(line, sizeof(line), "[crash] lr %s", place);
+        put(line);
+        std::snprintf(line, sizeof(line), "[crash] sp 0x%zx x0 0x%zx x1 0x%zx x2 0x%zx x8 0x%zx x19 0x%zx x20 0x%zx",
+                      static_cast<std::size_t>(state.__sp), static_cast<std::size_t>(state.__x[0]),
+                      static_cast<std::size_t>(state.__x[1]), static_cast<std::size_t>(state.__x[2]),
+                      static_cast<std::size_t>(state.__x[8]), static_cast<std::size_t>(state.__x[19]),
+                      static_cast<std::size_t>(state.__x[20]));
+        put(line);
+#elif defined(__APPLE__) && defined(__x86_64__)
+        const auto& state = uc->uc_mcontext->__ss;
+        pc = static_cast<std::uintptr_t>(state.__rip);
+        describe(pc, place, sizeof(place));
+        std::snprintf(line, sizeof(line), "[crash] pc %s", place);
+        put(line);
+        std::snprintf(line, sizeof(line), "[crash] rsp 0x%zx rdi 0x%zx rsi 0x%zx rax 0x%zx",
+                      static_cast<std::size_t>(state.__rsp), static_cast<std::size_t>(state.__rdi),
+                      static_cast<std::size_t>(state.__rsi), static_cast<std::size_t>(state.__rax));
+        put(line);
+#elif defined(__aarch64__)
         pc = static_cast<std::uintptr_t>(uc->uc_mcontext.pc);
         describe(pc, place, sizeof(place));
         std::snprintf(line, sizeof(line), "[crash] pc %s", place);
@@ -178,6 +216,13 @@ void on_fatal(int signal, siginfo_t* info, void* context) {
 
 void install_crash_log(int fd) noexcept {
     g_log_fd = fd;
+    // The report runs on a stack of its own, so that a thread whose stack ran out is still reported (crash_stack.h).
+    galaxy::host::crash_stack_for_this_thread();
+    // Once: a second install (the SDL host on a Mac, after the Apple start) would take its own handler for the system's.
+    static std::atomic<bool> installed{false};
+    if (installed.exchange(true)) {
+        return;
+    }
     struct sigaction action {};
     action.sa_sigaction = on_fatal;
     action.sa_flags = SA_SIGINFO | SA_ONSTACK;
