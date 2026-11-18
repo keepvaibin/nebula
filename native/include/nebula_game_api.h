@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 160u
+#define NEBULA_GAME_API_VERSION 162u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -399,7 +399,7 @@ enum {
     NEBULA_OPTION_MENU_TEXT_SIZE,    /* the menus' text in percent; 0: as the screen's size calls for */
     NEBULA_OPTION_WINDOW_WIDTH_DP,   /* the window's width in density-independent units; 0: not known */
     NEBULA_OPTION_MODS_CHANGED,      /* the mods chosen differ from those this run started with: a reset starts the game again */
-    NEBULA_OPTION_PREPARE_KIND,      /* what the preparation screen is for: 0 ray tracing, 1 mods' files, 2 the pipeline list */
+    NEBULA_OPTION_PREPARE_KIND,      /* what the preparation screen is for: 1 mods' files, 2 the pipeline list */
     NEBULA_OPTION_PREPARATION,       /* a preparation the title waits for (NebulaPrepare): 0 none, 1 it opens, 2 it runs
                                         (the preparation screen shows) */
     NEBULA_OPTION_PREPARE_PROGRESS,  /* while NEBULA_OPTION_PREPARATION is 2: its progress, 0 to 10000, never going back */
@@ -407,7 +407,6 @@ enum {
     NEBULA_OPTION_TOUCH_POINTER,       /* 0 no touch screen, 1 one, 2 the finger has the pointer, 3 and the game is on a
                                           menu: no pointer shows under a finger there */
     NEBULA_OPTION_GRAPHICS_BACKEND,    /* the renderer's backend, the same all session: 1 D3D12, 2 Vulkan, 3 D3D11 (draw.native) */
-    NEBULA_OPTION_RAY_TRACING,         /* what ray tracing asks of the game now (NEBULA_RAY_TRACING_*); 0: nothing */
     NEBULA_OPTION_SCENE_TEXTURES,      /* 1 while texture packs' replacements of the textures a loaded scene made are still
                                           loading: the scene starts once this is 0 */
 };
@@ -417,17 +416,6 @@ enum {
     NEBULA_POST_OK = 0,        /* *program is the compiled program (never 0) */
     NEBULA_POST_COMPILE = 1,   /* the device's compiler refused the text: its first error in `error` */
     NEBULA_POST_NO_MOTION = 2, /* it reads motion and the frame has no motion vectors (temporal upscaling off) */
-};
-
-/* NEBULA_OPTION_RAY_TRACING's bits. */
-enum {
-    NEBULA_RAY_TRACING_ON = 1u << 0,          /* the renderer traces its shadows and lights */
-    NEBULA_RAY_TRACING_SHADOW_SETS = 1u << 1, /* a zone's shadow light set (the artists' darker lights for actors in a
-                                                 shade) gives way to the lit set it darkens: the traced shadow darkens
-                                                 them, once */
-    NEBULA_RAY_TRACING_MIRROR = 1u << 2,      /* reflections are traced at High: the game draws no mirror pass (a
-                                                 mirror's own view, captured for its surface); the surface's fetch of
-                                                 the capture takes the traced reflection in its place (12.5) */
 };
 
 /* The movie player's sound (movie_audio_control). */
@@ -617,8 +605,6 @@ enum {
     NEBULA_SETTINGS_STATUS_LEAVE,            /* leaving with changes not applied: apply them or discard them? */
     NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK, /* mod changes applied: restart now? yes: APPLY, later: CLOSE */
     NEBULA_SETTINGS_STATUS_JOYCON,           /* Pair Joy-Con: `status_number` NEBULA_JOYCON_* bits; CLOSE leaves */
-    NEBULA_SETTINGS_STATUS_RT_RESTART_ASK,   /* ray tracing turned on before its shaders are prepared (they are at the
-                                                next start): restart now? yes: APPLY, later: CLOSE */
     NEBULA_SETTINGS_STATUS_DIAGNOSTICS_ASK,  /* restart and record a diagnostics run (the launcher's recording)? yes:
                                                 APPLY, no: CLOSE */
     NEBULA_SETTINGS_STATUS_MODS_CODE_ASK,    /* a mod turned on brings code (`status_text`: its name): allow it? yes:

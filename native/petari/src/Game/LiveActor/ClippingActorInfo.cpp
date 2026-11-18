@@ -50,7 +50,7 @@ bool ClippingActorInfo::isJudgedToClip() const {
 // While the host traces, the judge's margin more: what stands just off screen stays drawn,
 // stopped, for the tracer's shadows and mirrors; the host leaves it out of its raster passes.
 bool ClippingActorInfo::isDrawnWhileClipped() const {
-    const f32 radius = (mActor->mFlag.mIsDrawnClipped ? mRadius + ::sClipLeaveMargin : mRadius) + MR::getClippingJudge()->getTracedDrawMargin();
+    const f32 radius = (mActor->mFlag.mIsDrawnClipped ? mRadius + ::sClipLeaveMargin : mRadius);
     return !mViewGroup->mIsHidden && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor, mActor->mFlag.mHasPose) &&
            !MR::getClippingJudge()->isJudgedToClipFrustum(*mCenter, radius, 0) && const_cast< ClippingActorInfo* >(this)->isGroundShown();
 }

@@ -2388,8 +2388,6 @@ static_assert(static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::Prepar
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModsRestartAsk) == NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::JoyCon) == NEBULA_SETTINGS_STATUS_JOYCON &&
-              static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::RtRestartAsk) ==
-                  NEBULA_SETTINGS_STATUS_RT_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::DiagnosticsAsk) ==
                   NEBULA_SETTINGS_STATUS_DIAGNOSTICS_ASK &&
               static_cast<uint32_t>(galaxy::render::NativeSettingsStatus::ModsCodeAsk) == NEBULA_SETTINGS_STATUS_MODS_CODE_ASK &&
@@ -3381,8 +3379,6 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 0u;
 #endif
-    case NEBULA_OPTION_RAY_TRACING:  // nothing traces: the game draws as it always has
-        return 0u;
     case NEBULA_OPTION_SCENE_TEXTURES:
 #if defined(NEBULA_HOST_RENDERER)
         return scene_textures_wait() ? 1u : 0u;

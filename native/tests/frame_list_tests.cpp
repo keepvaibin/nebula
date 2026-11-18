@@ -203,13 +203,6 @@ int main() {
     expect(Frame::camera(cView, 1) == Frame::camera(cView, 1), "an equal camera is one entry");
     expect(Frame::camera(cView, 1) != Frame::camera(cView, 2), "another role is another camera");
     expect(Frame::camera(cOtherView, 1) != Frame::camera(cView, 1), "another view is another camera");
-    NebulaFrameWorldLight light = {};
-    const u64 ids[] = {40, 10, 30, 10, 20};
-    for (u32 i = 0; i < 5; i++) {
-        light.id = ids[i];
-        light.color[0] = static_cast< f32 >(i);
-        Frame::worldLight(light);
-    }
     const NebulaScreenProbe probes[2] = {{0.5f, 0.25f, 0, 0, 0, 0}, {-1.0f, 0.0f, 0, 0, 0, 0}};
     const u32 asker = Frame::newProbeAsker();
     Frame::probeScreen(0, asker, probes, 2);
@@ -240,13 +233,6 @@ int main() {
     const u32 cat2 = (pFirst->items[2].flags & NEBULA_ITEM_CATEGORY_MASK) >> NEBULA_ITEM_CATEGORY_SHIFT;
     expect(cat0 == 2 && cat1 == 2 && cat2 == 3, "each item's category by its run");
     expect(pFirst->camera_count == 3, "three cameras");
-    expect(pFirst->world_light_count == 4, "each world light once");
-    bool ascending = true;
-    for (u32 i = 1; i < pFirst->world_light_count; i++) {
-        ascending = ascending && pFirst->world_lights[i - 1].id < pFirst->world_lights[i].id;
-    }
-    expect(ascending, "world lights ascending by id");
-    expect(pFirst->world_lights[0].id == 10 && pFirst->world_lights[0].color[0] == 3.0f, "the newest values of a light stand");
     expect(pFirst->probe_count == 3 && pFirst->probes[0].x == 0.5f * NEBULA_FRAME_UNITS &&
                pFirst->probes[0].y == 0.25f * NEBULA_FRAME_UNITS,
            "a probe in frame units");
@@ -282,7 +268,7 @@ int main() {
     NebulaFrameList* const pSecond = lastList();
     expect(pSecond != pFirst, "a held list is not written again");
     expect(pFirst->item_count == 3 && pFirst->items[0].mesh == 11, "the held list is as it was");
-    expect(pFirst->world_light_count == 4 && pFirst->probe_count == 3, "the held list's lights and probes stay");
+    expect(pFirst->probe_count == 3, "the held list's probes stay");
     expect((pSecond->flags & NEBULA_FRAME_CAMERA_CUT) == 0, "a cut is on one list only");
     expect(pSecond->ring_vertex_bytes == at2 + (3u << 20) && (at2 & 15) == 0, "ring vertices 16-byte aligned, counted");
     expect(static_cast< const u8* >(pSecond->ring_vertices)[at] == 0x5A, "earlier ring bytes survive the ring's growth");
@@ -298,7 +284,7 @@ int main() {
     expect(pThird == pFirst, "a released list is written again");
     expect(pThird->released == 0, "and is held again");
     expect(pThird->item_count == 1 && pThird->items[0].mesh == 31, "from empty");
-    expect(pThird->world_light_count == 0 && pThird->probe_count == 0 && pThird->camera_count == 0 &&
+    expect(pThird->probe_count == 0 && pThird->camera_count == 0 &&
                pThird->pass_count == 1,
            "nothing of its last frame left");
     expect(pAgain != nullptr, "frame memory again");

@@ -3,7 +3,7 @@
 #include "Game/System/NebulaLoadTrace.hpp"
 #include <nebula_module.h>
 #include "Game/Render/FrameList.hpp"
-#include "Game/Util/GameLightSignal.hpp"
+#include "Game/System/LumaDrawLight.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -528,7 +528,7 @@ void GameScene::draw3D() const {
     MotionSignal::sceneCamera(sceneCamera);
     NebulaHost::gameStage(MR::getCurrentStageName());
     Frame::sceneBegin(sceneCamera);
-    GameLightSignal::frame();
+    luma::draw::light::frame();  // the mods' lights (draw.light); one load while no mod has one
     CategoryList::execute(MR::DrawType_AstroDomeSkyClear);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
@@ -710,11 +710,6 @@ bool GameScene::isDrawMirror() const {
     }
 
     if (isPlayMovie()) {
-        return false;
-    }
-
-    // Reflections traced at High: the mirror's surface takes the traced reflection in its capture's place (12.5).
-    if ((NebulaHost::option(NEBULA_OPTION_RAY_TRACING) & static_cast< u32 >(NEBULA_RAY_TRACING_MIRROR)) != 0) {
         return false;
     }
 

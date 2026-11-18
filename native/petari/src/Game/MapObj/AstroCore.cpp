@@ -1,6 +1,5 @@
 #include "Game/MapObj/AstroCore.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "Game/Util/GameLightSignal.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/AstroDemoFunction.hpp"
@@ -40,7 +39,6 @@ void AstroCore::init(const TableIter& rIter) {
     info.setupNoAppearRiddleSE();
     initialize(rIter, info);
     AstroDemoFunction::tryRegisterGrandStarReturnWithFunctionAndSimpleCast(this, rIter, MR::Functor(this, &AstroCore::startDemo));
-    GameLightSignal::registerStarCore(this);
 }
 
 void AstroCore::exeWait() {

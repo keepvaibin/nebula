@@ -1,5 +1,4 @@
 #include "Game/Util/LightUtil.hpp"
-#include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -24,7 +23,6 @@ namespace MR {
         AreaLightInfo* inf = MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mDefaultAreaLight;
 
         if (inf != nullptr) {
-            GameLightSignal::actorLightType(type);
             if (type == MR::LightType_Strong) {
                 LightFunction::loadActorLightInfo(&inf->mStrongLight);
             } else if (type == MR::LightType_Weak) {
@@ -48,7 +46,6 @@ namespace MR {
     }
 
     void requestPointLight(const LiveActor* pActor, Vec3f pos, Color8 color, f32 intensity, s32 duration) {
-        GameLightSignal::pointRequest(pActor, pos, color, intensity);
         return MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mPointCtrl->requestPointLight(pActor, pos, color, intensity, duration);
     }
 };  // namespace MR
