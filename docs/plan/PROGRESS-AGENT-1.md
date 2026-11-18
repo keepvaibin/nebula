@@ -197,3 +197,21 @@ One dated entry per package step. Newest last.
 - N-1040: pictures/tablet wired in gate.py (main level, after the tablet's tour, --place tablet), uncommitted until
   the tablet's pictures are approved from two tours of one commit; the first tour (b4b11bbe1's main gate, 24
   pictures, Adreno 740 driver 512.676.1) is kept in D:/NebulaWork/build/n1040.
+
+## 2026-11-18, 06:00 to 07:00 (Nebula-A1h; the quick gate of fc36296a4)
+
+- The quick gate of fc36296a4: 21 pass, 4 failed, all pictures (engine, tour and both region tours on D3D12). Cause:
+  4eea5fc6d moves the frame's part of the level bias from the sampler to the programs (SampleBias), the same value
+  rounded at another point. Of 25 changed pictures nearly every changed pixel is 1 off; at most 74 pixels of a picture
+  are more, single and scattered (Honeyhive's pond, Surfing): level and alpha-test flips. Not a fault: approved after a
+  main-level run of pictures only (b865c09e8, which adds pictures/tablet, N-1040) on every renderer and the tablet.
+- N-1042 engine half (49a2127c4): Nebula.exe counted with clang-cl. The coverage program did not start at first:
+  lld-link appends manifests, and the host's trustInfo (asm.v2 prefixes) and a second longPathAware made Windows refuse
+  it (14001). nebula_host.manifest keeps the identity and OS; Microsoft's link gives the same manifest as before. The
+  boot test on the coverage bins: 12.52 % of 511955 lines, engine and game paths as the tree's.
+- 5985d9f35: renderer code clang names unused (pairing hashes, kGpuBudgetBusy, an unread config and request, two FSR
+  counters), each without a reader in the tree. 4f11d3b15: M-168 for Agent 2 (level bytes in 64 bits; test fails before).
+- A1h after these: 92 of 92 engine and 10 of 10 game unit tests, boot test on the normal bins.
+- P-052 second half written for Direct3D 12 and Vulkan (scratch scripts), to apply once the first half is proved. On
+  the way: Vulkan's scene camera keeps its pipelines by kind and samples while its pass changes with HDR output (a
+  pipeline of an incompatible render pass); keyed by pass in the second half.
