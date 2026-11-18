@@ -17,6 +17,7 @@ starts the game for a test goes through here.
          against the PC's, a sanitizer build's tour, the soak, every disc on every renderer.
 --final  level 4: the main and long levels on one commit. "Done" needs it passed with no check planned or known.
 --only CHECK[,CHECK]: only the checks those shell patterns name, and the checks they need (for tracing a red main).
+--serial: the parts that start the game one after another; by default they run side by side (section 7).
 
 Each check ends in one state:
   pass     it passed;
@@ -44,6 +45,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -206,6 +208,37 @@ class Gate:
         self.work.mkdir(parents=True, exist_ok=True)
         self.bin = str(pathlib.Path(args.build_root) / "bins")
         self.android_bin = str(pathlib.Path(args.build_root) / "android" / "test-bin-arm64-v8a")
+        self.lock = threading.Lock()
+        self.local = threading.local()
+
+    def rows(self):
+        """The rows of the lane this thread runs (lanes), else the run's."""
+        sink = getattr(self.local, "sink", None)
+        return self.results if sink is None else sink
+
+    def lanes(self, lanes):
+        """Runs each lane (a function that runs its checks in order) side by side, each in a thread of its own; the
+        checks are programs, so they run at once. Their rows join the results in the lanes' order, so a result reads the
+        same however the lanes interleaved. --serial runs them one after another (for the proof that both give the same
+        pictures and step hashes, section 7)."""
+        if self.dry or self.args.serial or len(lanes) < 2:
+            for lane in lanes:
+                lane()
+            return
+        sinks = [[] for _ in lanes]
+
+        def go(i):
+            self.local.sink = sinks[i]
+            try:
+                lanes[i]()
+            except Exception as e:  # noqa: BLE001 - a lane that breaks is a failed check, said plainly
+                self.record("lane/%d" % i, "fail", 0.0, "%s: %s" % (type(e).__name__, e))
+        threads = [threading.Thread(target=go, args=(i,), name="lane-%d" % i) for i in range(len(lanes))]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.results.extend(row for sink in sinks for row in sink)
 
     def wanted(self, name, needs=()):
         if self.dry:
@@ -215,8 +248,9 @@ class Gate:
     def record(self, name, state, seconds, detail, log=None):
         row = {"check": name, "state": state, "passed": state != "fail", "seconds": seconds, "detail": detail,
                "log": str(log) if log is not None and pathlib.Path(log).exists() else None}
-        self.results.append(row)
-        print("%-34s %-7s %7.1f s  %s" % (name, state if state != "fail" else "FAIL", seconds, detail), flush=True)
+        with self.lock:
+            self.rows().append(row)
+            print("%-34s %-7s %7.1f s  %s" % (name, state if state != "fail" else "FAIL", seconds, detail), flush=True)
 
     def check(self, name, fn, needs=()):
         """Runs one check. fn returns (passed, detail) or (passed, detail, {test: verdict}); an exception is a failure
@@ -224,7 +258,6 @@ class Gate:
         if not self.wanted(name, needs):
             return None
         if self.dry:
-            self.results.append({"check": name, "state": "pass", "passed": True})
             return True
         t0 = time.time()
         log = self.work / ("%s.log" % name.replace("/", "-").replace(" ", "-"))
@@ -253,7 +286,7 @@ class Gate:
 
     def owe_last(self, why):
         """The last check failed because the tablet left: owed."""
-        row = self.results[-1]
+        row = self.rows()[-1]
         if row["state"] == "fail":
             row["state"], row["passed"] = "owed", True
             row["detail"] = "%s; %s" % (why, row["detail"])
@@ -503,7 +536,7 @@ def harness(g, suite, renderer, label, device=None, bin_dir=None):
         work = g.work / ("runs-%s-%s" % (label, renderer))
         on_device = ["--device", device, "--bin", g.android_bin] if device else ["--bin", bin_dir or g.bin]
         code = run([sys.executable, "-X", "utf8", "-I", TREE / "tools/lumacore/luma_test.py", "run", suite]
-                   + on_device + ["--work", work, "--who", "gate", "--lock", g.work / "harness.lock",
+                   + on_device + ["--work", work, "--who", "gate", "--lock", g.work / ("harness-%s-%s.lock" % (label, renderer)),
                                   "--commit", g.commit, "--renderer", renderer], log, env={"LUMA_TEST_PAKS": g.args.paks},
                    cwd=g.args.build_root)
         # The run's copies of the programs are not evidence: removed so the drive does not fill.
@@ -755,7 +788,7 @@ def mod_tests(g, renderer):
         env = {"LUMALINK": g.args.lumalink} if g.args.lumalink else {}
         env["LUMA_TEST_PAKS"] = g.args.paks
         code = run([sys.executable, "-X", "utf8", "-I", MOD_TESTS, "--bin", g.bin, "--work", work,
-                    "--renderer", renderer, "--lock", g.work / "harness.lock", "--commit", g.commit], log, env=env,
+                    "--renderer", renderer, "--lock", g.work / ("harness-mods-%s.lock" % renderer), "--commit", g.commit], log, env=env,
                    cwd=g.args.build_root)
         for d in work.rglob("bin"):
             if d.is_dir():
@@ -934,9 +967,9 @@ def tablet_part(g, stops, device=None):
         return
     device = device or android_module().Device(g.args.tablet)
 
-    def owe_rest(why, done=()):
+    def owe_rest(why):
         for n in wanted:
-            if n not in done and not any(r["check"] == n for r in g.results):
+            if not any(r["check"] == n for r in g.rows()):
                 g.owe(n, why)
 
     if not device.answers():
@@ -948,10 +981,11 @@ def tablet_part(g, stops, device=None):
         return
     gone = None
     try:
-        if g.check("tablet/prepare", device_step(g, "prepare")) is False and not device.answers():
+        prepared = g.check("tablet/prepare", device_step(g, "prepare"))
+        if prepared is False and not device.answers():
             gone = "the tablet left adb"
             g.owe_last(gone)
-        elif any(r["check"] == "tablet/prepare" and r["state"] == "pass" for r in g.results):
+        elif prepared:
             g.check("android/tablet", harness(g, TREE / "tests" / "android" / "suite.json", "vulkan", "android",
                                               g.args.tablet))
             if not device.answers():
@@ -1015,40 +1049,55 @@ def unit_part(g, discs_proved):
             ("build/windows",))
 
 
-def mods_part(g, renderers):
-    if not MOD_TESTS.exists():
-        g.missing("mods", "the mod tests are not in the tree (tools/lumacore/mod_tests.py, mods M0)")
-        return
-    for r in renderers:
-        g.check("mods/%s" % r, mod_tests(g, r), ("build/windows",))
-
-
-def engine_part(g, renderers):
-    """The engine's own tests (tests/engine): start, device loss, window shapes and sizes, stage loads, save files."""
-    for r in renderers:
+def engine_lane(g, r):
+    """The engine's own tests (tests/engine) on one renderer: start, device loss, window shapes and sizes, stage
+    loads, save files."""
+    def lane():
         g.check("engine/%s" % r, harness(g, TREE / "tests" / "engine" / "suite.json", r, "engine"), ("build/windows",))
         g.check("pictures/engine/%s" % r, pictures(g, "engine", r), ("engine/%s" % r,))
+    return lane
 
 
-def tour_part(g, renderers, stops, region_renderers, region_stops):
-    """The tour on each renderer with pictures and step hashes (Direct3D 12's against the recordings, another
-    renderer's against Direct3D 12's), and the other discs' tours."""
-    tour = gate_tour.write(g.work / "tour", stops)
-    step_hash.with_hash(tour.parent)
+def tour_lane(g, tour, label, r):
+    """One tour on one renderer, with its pictures."""
+    def lane():
+        g.check("%s/%s" % (label, r), harness(g, tour, r, label), ("build/windows",))
+        g.check("pictures/%s/%s" % (label, r), pictures(g, label, r), ("%s/%s" % (label, r),))
+    return lane
+
+
+def mods_lane(g, r):
+    def lane():
+        g.check("mods/%s" % r, mod_tests(g, r), ("build/windows",))
+    return lane
+
+
+def write_tours(g, stops, region_stops):
+    """The tour and the other discs' tours: {label: suite.json}."""
+    tours = {"tour": gate_tour.write(g.work / "tour", stops)}
+    step_hash.with_hash(tours["tour"].parent)
+    for disc in REGION_DISCS:
+        tours["tour-%s" % disc] = gate_tour.write(g.work / ("tour-%s" % disc), region_stops, disc)
+    return tours
+
+
+def replay_part(g, renderers):
+    """The game's steps: Direct3D 12's against the recordings; another renderer's against Direct3D 12's."""
     for r in renderers:
-        g.check("tour/%s" % r, harness(g, tour, r, "tour"), ("build/windows",))
-        g.check("pictures/tour/%s" % r, pictures(g, "tour", r), ("tour/%s" % r,))
         g.check("replays/%s" % r, replays(g, "tour", r, None if r == "d3d12" else ("tour", "d3d12")),
                 ("tour/%s" % r,) + (() if r == "d3d12" else ("tour/d3d12",)))
-    for disc in REGION_DISCS:
-        region = gate_tour.write(g.work / ("tour-%s" % disc), region_stops, disc)
-        for r in region_renderers:
-            g.check("tour-%s/%s" % (disc, r), harness(g, region, r, "tour-%s" % disc), ("build/windows",))
-            g.check("pictures/tour-%s/%s" % (disc, r), pictures(g, "tour-%s" % disc, r), ("tour-%s/%s" % (disc, r),))
 
 
-def android_part(g):
-    g.android_built = g.args.no_build or g.check("build/android", build_android(g)) is not False
+def android_lane(g, stops):
+    """The Android build, then the tablet's part (its stops: the twelve quick ones at the main level, all after)."""
+    def lane():
+        g.android_built = g.args.no_build or g.check("build/android", build_android(g)) is not False
+        tablet_part(g, stops)
+    return lane
+
+
+def sanitizer_lane(g):
+    return lambda: sanitizer_part(g)
 
 
 def sanitizer_part(g):
@@ -1065,7 +1114,10 @@ def sanitizer_part(g):
 
 
 def run_checks(args, known=None, planned=None, selected=None, dry=False):
-    """The level's checks, in order. A dry run returns the Gate (its names and needs) without running any."""
+    """The level's checks. The build and the unit checks first, one after another; then the parts that start the game
+    side by side (section 7), each renderer's engine tests and tours in a lane of their own, each other disc's tour,
+    the mod tests per renderer, the Android build with the tablet; then what compares their runs. A dry run returns the
+    Gate (its names and needs) without running any."""
     g = Gate(args, dry=dry, known=known, planned=planned, selected=selected)
     level = args.mode
     if not build_part(g):
@@ -1073,37 +1125,41 @@ def run_checks(args, known=None, planned=None, selected=None, dry=False):
         return g
     quick = level == "quick"
     every = level in ("main", "final")
+    renderers = ("d3d12",) if quick else RENDERERS
     if level != "long":
         unit_part(g, ("RMGE01",) if quick else ("RMGE01",) + REGION_DISCS)
-        mods_part(g, ("d3d12",) if quick else RENDERERS)
-        engine_part(g, ("d3d12",) if quick else RENDERERS)
-    if quick:
-        tour_part(g, ("d3d12",), QUICK_STOPS, ("d3d12",), QUICK_REGION_STOPS)
-    elif every:
-        tour_part(g, RENDERERS, None, ("d3d12",), None)
-    soak = None
-    if level in ("long", "final"):
-        soak = None if g.dry else start_soak(g)
-        if level == "long":
-            # Every disc on every renderer.
-            tour_part(g, RENDERERS, None, RENDERERS, None)
-        else:
-            for disc in REGION_DISCS:
-                region = gate_tour.write(g.work / ("tour-%s" % disc), None, disc)
-                for r in RENDERERS[1:]:
-                    g.check("tour-%s/%s" % (disc, r), harness(g, region, r, "tour-%s" % disc), ("build/windows",))
-                    g.check("pictures/tour-%s/%s" % (disc, r), pictures(g, "tour-%s" % disc, r), ("tour-%s/%s" % (disc, r),))
+    if level != "long" and not MOD_TESTS.exists():
+        g.missing("mods", "the mod tests are not in the tree (tools/lumacore/mod_tests.py, mods M0)")
+    soak = start_soak(g) if level in ("long", "final") and not g.dry and g.wanted("soak", ("build/windows",)) else None
+    tours = write_tours(g, QUICK_STOPS if quick else None, QUICK_REGION_STOPS if quick else None)
+    # Region discs: Direct3D 12 at the quick and main levels; every renderer in the long run and the final check.
+    region_renderers = RENDERERS if level in ("long", "final") else ("d3d12",)
+    lanes = []
+    for r in renderers:
+        def renderer_lane(r=r):
+            if level != "long":
+                engine_lane(g, r)()
+            tour_lane(g, tours["tour"], "tour", r)()
+        lanes.append(renderer_lane)
+    for disc in REGION_DISCS:
+        def region_lane(disc=disc):
+            for r in region_renderers:
+                tour_lane(g, tours["tour-%s" % disc], "tour-%s" % disc, r)()
+        lanes.append(region_lane)
+    if level != "long" and MOD_TESTS.exists():
+        lanes += [mods_lane(g, r) for r in renderers]
     if not quick:
-        android_part(g)
         # The main level's tablet part is the twelve quick stops; the long run's (and the final check's) all of them.
-        tablet_part(g, QUICK_STOPS if level == "main" else None)
+        lanes.append(android_lane(g, QUICK_STOPS if level == "main" else None))
     if level in ("long", "final"):
-        sanitizer_part(g)
-        if g.wanted("soak", ("build/windows",)) and not g.dry:
-            if soak is None:
-                g.missing("soak", "it did not start")
-            else:
-                g.check("soak", soak_result(*soak))
+        lanes.append(sanitizer_lane(g))
+    g.lanes(lanes)
+    replay_part(g, renderers)
+    if level in ("long", "final") and g.wanted("soak", ("build/windows",)) and not g.dry:
+        if soak is None:
+            g.missing("soak", "it did not start")
+        else:
+            g.check("soak", soak_result(*soak))
     if every:
         g.check("github", github_check(g))
     g.plan_rows()
@@ -1167,6 +1223,8 @@ def parser():
     p.add_argument("--covers", default="", help="what the run answers for (commits, packages), for the board")
     p.add_argument("--soak-minutes", type=int, default=int(os.environ.get("NEBULA_GATE_SOAK_MINUTES", "120")),
                    help="the long run: the soak's minutes on each renderer")
+    p.add_argument("--serial", action="store_true",
+                   help="run the parts one after another, not side by side (the proof of section 7)")
     p.add_argument("--without-quick", action="store_true",
                    help="--main without --move: run without a passed quick gate of the same commit")
     return p

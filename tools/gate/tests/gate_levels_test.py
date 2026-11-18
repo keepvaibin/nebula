@@ -16,6 +16,8 @@
    main that moved during the gate is not overwritten.
 7. The rules main() enforces before it starts: the main level needs the tablet named, --move goes with --main alone.
 8. The status page names main, its colour, the runs, the ledger counts and the lists.
+9. Lanes (section 7): checks of lanes run side by side and their rows join in the lanes' order whichever ends first;
+   a lane that breaks is a failed row; --serial runs them in turn.
 """
 import os
 import pathlib
@@ -109,6 +111,31 @@ def main():
         history = (work / "history.tsv").read_text(encoding="utf-8").splitlines()
         check(len(history) == 3 and history[0].split("\t") == list(gate.HISTORY_COLUMNS)
               and history[2].split("\t")[4] == "pass" and "tour/d3d12=known/" in history[2], "history: %s" % history[-1:])
+
+        # 9. Lanes.
+        import threading
+        import time
+        g4 = gate.Gate(a)
+        both = threading.Barrier(2, timeout=10)
+
+        def slow():
+            both.wait()
+            time.sleep(0.3)
+            g4.check("first", lambda log: (True, "a"))
+
+        def fast():
+            both.wait()
+            g4.check("second", lambda log: (False, "b"))
+
+        def broken():
+            raise RuntimeError("broke")
+        g4.lanes([slow, fast, broken])
+        check([(r["check"], r["state"]) for r in g4.results] == [("first", "pass"), ("second", "fail"), ("lane/2", "fail")],
+              "lanes side by side, rows in lane order: %s" % [(r["check"], r["state"]) for r in g4.results])
+        g5 = gate.Gate(args_for("--main", "--tablet", "T", "--work", str(work), "--serial"))
+        order = []
+        g5.lanes([lambda: order.append(1), lambda: order.append(2)])
+        check(order == [1, 2], "--serial runs the lanes in turn")
 
         # 3. The levels.
         names = {}
