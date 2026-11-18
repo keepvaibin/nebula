@@ -27,7 +27,7 @@ Phones and tablets (Android and iOS) have no LumaLink. Nebula on these devices l
 | macOS on Apple silicon | `LumaLink-Setup-macos-arm64` |
 | macOS on Intel | `LumaLink-Setup-macos-x64` |
 
-On Windows on ARM, `lumalink test` is not available, because its test parts are built for Windows x64 and Linux x64 only. Every other command works.
+On Windows on ARM, Linux on ARM64 and macOS, `lumalink test` is not available, because its test parts are built for Windows x64 and Linux x64 only. Every other command works.
 
 ## Installing LumaLink on Windows
 
@@ -113,7 +113,7 @@ Uninstalling LumaLink leaves your mods where they are.
 With **Add LumaLink to PATH** on, a new terminal runs `lumalink` from any folder. Terminals that are already open do not see the change, so open a new one.
 
 * On Windows, Setup adds LumaLink's folder to your own PATH, not the system's.
-* On Linux and macOS, Setup writes `env` and `env.fish` in LumaLink's folder, and adds one line that reads it to each shell's startup file: `~/.profile`, `~/.bashrc` and `~/.bash_profile` for bash, `~/.zshenv` for zsh, and `~/.config/fish/conf.d/lumalink.fish` for fish. Each line ends with `# LumaLink Setup`, and uninstalling LumaLink removes them.
+* On Linux and macOS, Setup writes `env` and `env.fish` in LumaLink's folder, and adds one line that reads it to each shell's startup file: `~/.profile`; `~/.bash_profile`, `~/.bash_login` and `~/.bashrc` where you have them (`~/.bashrc` also when bash is your shell); `~/.zshenv` where zsh is installed; and `~/.config/fish/conf.d/lumalink.fish` where fish is installed. Each line ends with `# LumaLink Setup`, and uninstalling LumaLink removes them.
 
 Without PATH, run LumaLink by its full path, for example `~/.local/share/lumalink/lumalink --help`.
 

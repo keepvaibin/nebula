@@ -181,18 +181,14 @@ depends on another mod's), freestanding: no C library, no OS call, nothing impor
 
 ## Memory
 
-- Where it comes from: LumaCore has no allocator today, and a library that imports nothing imports none of the
-  system's allocators. LumaCore gives `void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align)` and
-  `void (*free)(const LumaMod* mod, void* p)` at the end of `LumaCore` (its `size` field makes the addition safe),
-  counted per mod so the **Mods** page can show each mod's memory and the kernel frees what is left when a mod is
-  taken out. Until then a LumaScript mod cannot be built: the compiler refuses with
-  "the game gives no memory to mods yet (lumascript-abi 7.1)".
-- `lumart` keeps its own small-block pools on top (sizes 16 to 512 bytes in steps), taking 64 KiB pages from
-  `alloc`; larger blocks go straight to `alloc`.
-- Out of memory (`alloc` returns null) is a script error ("out of memory: <n> bytes") at the line that asked;
-  inside `lumart` with no line to give (growing the scratch) it is reported against the hook or task
-  running, and if even the report cannot be made, `__builtin_trap`: a fault, which the guard catches and
-  turns into "the mod was switched off", naming it.
+- Where it comes from: a library that imports nothing imports none of the system's allocators. LumaCore gives
+  `void* (*alloc)(const LumaMod* mod, uint64_t size, uint64_t align)` and `void (*free)(const LumaMod* mod, void* p)`
+  (luma.h), counted per mod so the **Mods** page can show each mod's memory and the kernel frees what is left when
+  a mod is taken out.
+- `lumart` keeps its own small-block pools on top (16, 32, 48, 64, 96, 128, 192, 256, 384 and 512 bytes), taking
+  64 KiB pages from `alloc`; larger blocks go straight to `alloc`.
+- Out of memory (`alloc` returns null) is script error S0911 ("out of memory: <n> bytes") at the line that
+  asked, growing the scratch included; the mod goes on.
 - Counted values (text, bytes, containers): a count in the block; copy on write; no cycles can be
   made, so no collector.
 

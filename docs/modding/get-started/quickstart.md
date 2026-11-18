@@ -63,7 +63,7 @@ hook before Mario::tryJump() {
 ```
 
 * `on start` runs once, when the game starts with the mod turned on. It puts a counter showing 0 in the top-left corner.
-* `hook before Mario::tryJump()` runs each time the game is about to try a jump. It adds one to the count, shows the new number, and writes `jump 1`, `jump 2` and so on to the mod log.
+* `hook before Mario::tryJump()` runs each time the game is about to try a jump. It adds one to the count, shows the new number, and writes `jump 1`, `jump 2` and so on to the game's log.
 
 ## Building and checking the mod
 
@@ -102,7 +102,8 @@ hook before Mario::tryJump() {
        { "at": 130, "end": true }
      ],
      "expect": [
-       { "log": "jump 1" }
+       { "log": "jump 1" },
+       { "picture": "after", "box": [44, 43, 16, 22], "mean_rgb": [99, 109, 139], "within": 30 }
      ]
    }
    ```
@@ -113,10 +114,8 @@ hook before Mario::tryJump() {
    lumalink test jump-counter
    ```
 
-LumaLink starts the game hidden and silent with your mod, enters Good Egg Galaxy, presses <kbd>A</kbd> once, and takes a picture before and after the jump. The test passes when the mod log contains `jump 1`. The pictures are saved in the run folder that LumaLink prints.
+LumaLink starts the game hidden and silent with your mod, enters Good Egg Galaxy, presses <kbd>A</kbd> once, and takes a picture before and after the jump. The test passes when the game's log contains `jump 1` and the counter's corner of the second picture shows the 1: the average color of that 16 by 22 pixel box is within 30 of the color the 1 gives there. The pictures are saved in the run folder that LumaLink prints.
 
-> [!NOTE]
-> In the current version, a LumaKit HUD element created in `on start` stops the game at its first screen, so this test does not pass yet. The mod builds and checks without errors.
 
 For more information, see [Testing a mod](../how-tos/testing-a-mod.md).
 

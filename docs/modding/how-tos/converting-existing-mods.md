@@ -52,7 +52,7 @@ For more information on writing LumaScript, see [Creating a mod](creating-a-mod.
 1. Select the mod to open its screen.
 1. Click **Make a .luma**, then choose where to save the file.
 
-When the conversion works, LumaLink shows "Your .luma is ready." To add the mod to Nebula, open the `.luma` file, or drag it onto the game's window.
+When the conversion works, LumaLink says the `.luma` is ready and names the file. To add the mod to Nebula, open the `.luma` file, or drag it onto the game's window.
 
 ### When some files can't be used
 

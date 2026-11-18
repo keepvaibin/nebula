@@ -87,7 +87,7 @@ A sensitive service that a mod's code uses, such as the internet or the player's
 
 ## Platform
 
-A system that a mod's code is built for, such as `windows-x64` or `android-arm64`. By default, `lumalink build` builds all nine platforms.
+A system that a mod's code is built for, such as `windows-x64` or `android-arm64`. By default, `lumalink build` builds the seven platforms the game runs on, and any other the mod's `luma.json` lists.
 
 ## Script error
 

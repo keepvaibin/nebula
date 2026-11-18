@@ -146,7 +146,7 @@ Each item is read back from the game before frame 0. An item that did not take e
 
 The window is 1280 x 720 unless the test sets `"window": [width, height]`, for example `[1920, 360]` for 48:9.
 
-A test with `"disc"` runs only on that disc's game. When your game is another disc's, import that disc too and set `LUMA_TEST_PAKS` to its `game.pak`, as `RMGJ01=PATH` (pairs joined by `;`). Without it, the test's result is `not-run` and names the disc it needs.
+A test with `"disc"` runs only on that disc's game. When your game is another disc's, import that disc too and set `LUMA_TEST_PAKS` to its `game.pak`, as `RMGJ01=PATH` (pairs joined by `;` on Windows, `:` on Linux and macOS). Without it, the test's result is `not-run` and names the disc it needs.
 
 ## Pressing buttons in menus
 

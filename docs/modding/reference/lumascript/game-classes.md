@@ -24,6 +24,19 @@ class GoldBall : Kuribo {
   fields and functions are reached by name as on any game object.
 - `override` replaces a virtual of the base for this class only; `base.control` calls the base's version. Only
   virtuals the self-description lists can be overridden; anything else is a compile error naming it.
+- A class's own `fn` takes `self` first (`fn bump(self, by: int) -> int`): it runs on one object, reached as
+  `ball.bump(1)`, `self.bump(1)` or `bump(1)` inside the class. One without `self` is called by the class's name
+  (`GoldBall.count()`).
+- A hook written inside a class runs only for that class's objects. For any other object the game's function runs as
+  if the hook were not there. `self` is the object, with its fields.
+
+```lumascript
+class GoldBall : Kuribo {
+    var hits: int = 0
+    fn bump(self, by: int) -> int { hits += by; return hits }
+    hook before Kuribo::exeWander() { bump(1) }      // only a GoldBall's wandering
+}
+```
 
 ## Further reading
 

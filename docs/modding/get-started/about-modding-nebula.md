@@ -9,7 +9,7 @@ contentType: get-started
 
 A mod is a folder with a `luma.json` file that describes it. LumaLink packs the folder into one `.luma` file. Players import the `.luma` file on the **Mods** page in Nebula, or drop it on the game's window.
 
-One `.luma` file works on every platform Nebula runs on: Windows, Linux, macOS, Android and iOS. It holds the mod's content as sources, which Nebula prepares on the player's device, and the mod's code built for each platform.
+One `.luma` file works on every platform Nebula runs on: Windows, Linux, macOS and Android. It holds the mod's content as sources, which Nebula prepares on the player's device, and the mod's code built for each platform.
 
 ## What a mod can change
 

@@ -37,7 +37,8 @@ This page lists the types of LumaScript values.
   that a literal adapts as above.
 - Equality and order. `==` on every type but functions, views and service handles (for those, `same(a, b)`:
   the same object or the same stream); `<` on numbers and `text`.
-- Operators. `+ - * / %` (integer: overflow and division by zero are script errors; float: IEEE), `color * f32`
+- Operators. `+ - * / %` (integer: overflow and division by zero are script errors; float: IEEE; `%` keeps the
+  left side's sign, on floats exactly: `-7 % 2` is `-1`, `-7.5 % 2.0` is `-1.5`), `color * f32`
   and `color + color` (each channel, kept in 0..1), `and or not`,
   `& | ^ << >>` on integers, `vec * float`, `vec + vec`, `dot cross length normal` as functions, `x?.y` (none when x
   is none), `x ?? y` (y when x is none), `a..b` and `a..=b` ranges.

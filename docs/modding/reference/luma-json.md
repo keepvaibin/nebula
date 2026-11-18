@@ -77,7 +77,7 @@ A key not on this list is an error (L202), and a missing required key is an erro
 | Key | Required | Meaning and rules |
 |---|---|---|
 | `format` | Yes | The format version the mod needs, such as `"1.0"`. A game older than that refuses the mod (L205). |
-| `id` | Yes | 3 to 64 characters: lowercase letters, digits, `-` and `.`, starting with a letter (L206). |
+| `id` | Yes | 3 to 64 characters: lowercase letters, digits, `-` and `.`, starting with a letter, with no `..` and not ending in `.`; the part before the first `.` is not a name Windows keeps (`con`, `prn`, `aux`, `nul`, `com1` to `com9`, `lpt1` to `lpt9`) (L206). |
 | `version` | Yes | A semantic version, `MAJOR.MINOR.PATCH`, with an optional `-PRERELEASE`. Compared by semantic versioning rules. |
 | `name` | Yes | 1 to 64 characters on one line. |
 | `summary` | Yes | 1 to 200 characters on one line. |

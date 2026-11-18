@@ -40,7 +40,7 @@ Problems found while the game starts are not shown one by one. When the title sc
 
 A mod's own page on the **Mods** page shows that mod's entries under its options.
 
-An entry that happened more than once shows its count, such as "×12". The log keeps at most 256 entries for each mod. When a mod has more, the last line says how many were not kept.
+An entry that happened more than once shows its count, such as "×12". The log keeps at most 256 entries for each mod, and 1,024 for all mods together; past that, each mod still keeps its first 16. When entries were not kept, the last line says how many.
 
 ## Reading the game's log
 

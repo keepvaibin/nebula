@@ -12,6 +12,7 @@
     { "at": 130, "end": true }
   ],
   "expect": [
-    { "log": "jump 1" }
+    { "log": "jump 1" },
+    { "picture": "after", "box": [44, 43, 16, 22], "mean_rgb": [99, 109, 139], "within": 30 }
   ]
 }

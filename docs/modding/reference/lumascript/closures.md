@@ -13,6 +13,9 @@ A closure is a function written as a value. You pass closures to services and Lu
 never refers to a local that may end). A closure may be stored and called later. It may not capture a view of a
 game object; it captures a `ref` instead.
 
+`fn f(n: int) -> int { ... }` written in a body is a closure made at that line and bound to the local `f`. It
+copies what it uses as any closure does, and its body may call `f` itself.
+
 ## Further reading
 
 * [LumaScript reference](index.md)

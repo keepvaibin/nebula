@@ -33,7 +33,7 @@ lumalink new --id <ID> --name <NAME> --summary <TEXT> --author <AUTHOR>... [OPTI
 
 | Option | Description |
 |---|---|
-| `--id <ID>` | The mod's id: 3 to 64 of a-z, 0-9, '-' and '.', starting with a letter. |
+| `--id <ID>` | The mod's id: 3 to 64 of a-z, 0-9, '-' and '.', starting with a letter, with no '..' and not ending in '.'. |
 | `--name <NAME>` | The mod's name, as players see it. |
 | `--summary <TEXT>` | One line on what the mod does. |
 | `--author <AUTHOR>` | Who made it (repeat for several). |

@@ -179,6 +179,7 @@ Codes S0901 and above are script errors while the game runs, not build codes. Fo
 | S0157 | error | `svc.{found}` may not be given (`use optional`): test it first with `if {alias} != none` or `guard {alias} != none` |
 | S0158 | error | this match is too large to check that it covers every value: add `else` |
 | S0160 | error | {need} was built with another LumaLink (runtime layout {found}, this one {layout}); rebuild {need} with a current LumaLink |
+| S0161 | error | task `{found}` takes no `var` parameter: it runs on after the call, when the caller's value may be gone; give the value back as the task's result |
 | S0800 | error | LumaLink cannot build {what} yet |
 
 ## What S0800 names
@@ -187,7 +188,6 @@ S0800 is a construct that LumaScript has and LumaLink cannot build yet. These ar
 
 * `!`
 * ! on this type
-* % on floats
 * `( )`
 * `-`
 * \- on this type
@@ -253,7 +253,6 @@ S0800 is a construct that LumaScript has and LumaLink cannot build yet. These ar
 * a game result of type {type}
 * a global the types file does not give
 * a global whose type does not read
-* a hook in a class
 * a hook on a function returning {type}
 * a hook parameter of type {type}
 * a hook whose signature does not cross
@@ -261,7 +260,6 @@ S0800 is a construct that LumaScript has and LumaLink cannot build yet. These ar
 * a list literal of this type
 * a literal of this service struct
 * a literal pattern on {type}
-* a local fn
 * a local of type {type}
 * a map key of an enum with values in JSON
 * a map or set
@@ -289,7 +287,6 @@ S0800 is a construct that LumaScript has and LumaLink cannot build yet. These ar
 * a struct literal
 * a task giving a value of this type
 * a task with a parameter of this type
-* a task's var parameter
 * a text argument without its placeholder's name
 * a text key made at run time
 * a text struct passed this way
@@ -407,7 +404,6 @@ S0800 is a construct that LumaScript has and LumaLink cannot build yet. These ar
 * this value in JSON
 * {type} as text
 * `{type}.{name}()`
-* {type}.{name}() given a function value (a closure written in the call is compiled)
 * `wait`
 * wait here
 * wait on a pending of this type

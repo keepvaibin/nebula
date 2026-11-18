@@ -7,7 +7,7 @@ contentType: how-tos
 
 ## About .luma files
 
-A `.luma` file holds a whole mod: its `luma.json`, layers, files, assets and code for every platform. One `.luma` works on Windows, Linux, macOS, Android and iOS. Players never need LumaLink.
+A `.luma` file holds a whole mod: its `luma.json`, layers, files, assets and code for every platform. One `.luma` works on Windows, Linux, macOS and Android. Players never need LumaLink.
 
 ## Packing a mod
 

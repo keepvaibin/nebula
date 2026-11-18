@@ -18,7 +18,8 @@ This page describes how LumaScript source text is read: comments, names, stateme
 - Keywords: `use pub let var const fn return if else while for in break continue match struct enum class
   override hook before after wrap replace proceed skip state states go wait until frames seconds task stop on
   option true false none self result as is and or not extern export defer test expect`.
-- Literals: `12`, `0x1F`, `0b101`, `1_000_000`; `1.5`, `1e3`, `2.0f64`; `true`, `false`, `none`;
+- Literals: `12`, `0x1F`, `0b101`, `1_000_000`; `1.5`, `1e3`; a decimal with its type after it, one of `i8` to
+  `i64`, `u8` to `u64`, `f32` and `f64` (`7u8`, `300u16`, `2.0f64`); `true`, `false`, `none`;
   `"text {expression} more"` (interpolation; `{{` for a brace), `r"raw \ text"`; `b"\x00\x01"` (bytes);
   `#FFD700` and `#FFD700CC` (color); `[1, 2, 3]` (list); `{"a": 1}` (map); `vec3`.
 

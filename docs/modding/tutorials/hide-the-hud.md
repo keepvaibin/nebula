@@ -92,9 +92,6 @@ To run the tests, copy the `tests` folder from the finished mod into `hide-the-h
 lumalink test hide-the-hud
 ```
 
-> [!NOTE]
-> In the current version, the test harness cannot start a mod with an option set, so `tests/shown` ends with `harness-error`.
-
 ## Playing the mod
 
 1. Pack the mod.

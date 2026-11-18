@@ -52,8 +52,13 @@ lm_color spot_glow(Spot s, lm_vec3 from) {
 - Types across, by value: integers, floats, `bool`, `vec2` to `vec4`, `quat`, `mat34` and `color` (`lumart.h`'s
   `lm_vec3` and the rest), a `c struct` (the C struct of its name, in `lm_exports.h`; its fields any of these),
   and `ref<C>` (a `lumart_ref`, which C may keep; `lm_ref_get_C(r)` gives the object, or null once it is gone, on
-  the game thread). `text` and `bytes` cross as (pointer, length) for the call's duration; a result is any of
-  the others. No container crosses: LumaLink says S0800.
+  the game thread). `text`, `bytes` and a `list` of any of the by-value types cross as (pointer, length) for the
+  call's duration (`const int32_t*, uint64_t`; a `list<bool>` as `const bool*`); an `export c fn` gets its own
+  copy. A result is any of the by-value types. A map, a set and a list of texts or lists do not cross: LumaLink
+  says S0800.
+- A `var` parameter of a by-value type crosses as a pointer to the variable (`int32_t*`, `lm_vec3*`, `bool*`). An
+  `extern c fn` writes the script's variable (called `f(var n)`); an `export c fn` writes the C's, and a null
+  pointer runs nothing and gives the result's zero.
 - The C side links the same `luma.h` and may hook, call and read by name itself; its faults go to the guard.
 
 ## Further reading

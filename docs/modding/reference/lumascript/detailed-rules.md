@@ -14,19 +14,20 @@ This page holds the detailed rules of LumaScript that complete the other referen
 1. `if let`: takes the same list as `guard`: `if let r = room, not r.host, let p = r.peers.get() { }`
    checks each in order; the names bound are in scope in the `if` block only.
 2. container functions (each a compile error on the wrong type, never a run-time lookup):
-   - `list<T>`: `len -> int`, `push(T)`, `pop -> T?`, `insert(int, T)`, `remove(int) -> T` (out of range: a
+   - `list<T>`: `len() -> int`, `push(T)`, `pop() -> T?`, `insert(int, T)`, `remove(int) -> T` (out of range: a
      script error), `get(int) -> T?`, `[int]` (out of range: a script error), `contains(T) -> bool` (T with `==`),
-     `indexed -> list<(int, T)>`, `map(fn(T) -> U) -> list<U>`, `filter(fn(T) -> bool) -> list<T>`,
+     `indexed() -> list<(int, T)>`, `map(fn(T) -> U) -> list<U>`, `filter(fn(T) -> bool) -> list<T>`,
      `any(fn(T) -> bool) -> bool`, `all(fn(T) -> bool) -> bool`, `sum(fn(T) -> N) -> N` (N a number type),
-     `sort` (T with `<`), `sort_by(fn(T, T) -> bool)`, `first -> T?`, `last -> T?`.
-   - `map<K, V>`: `len`, `get(K) -> V?`, `[K]` (read: a missing key is a script error; write: adds or replaces),
-     `contains(K)`, `remove(K) -> V?`, `keys -> list<K>`, `values -> list<V>` (both in key order: integers and
+     `sort()` (T with `<`), `sort_by(fn(T, T) -> bool)`, `first() -> T?`, `last() -> T?`. The `fn` argument is a closure
+     written there or any function value.
+   - `map<K, V>`: `len()`, `get(K) -> V?`, `[K]` (read: a missing key is a script error; write: adds or replaces),
+     `contains(K)`, `remove(K) -> V?`, `keys() -> list<K>`, `values() -> list<V>` (both in key order: integers and
      enums by value, `text` by bytes, so the same on every platform); `for (k, v) in m`.
-   - `set<T>`: `len`, `add(T) -> bool`, `remove(T) -> bool`, `contains(T)`, `values -> list<T>` (in order).
-   - `text`: `len` (bytes), `chars`, `split(text) -> list<text>`, `starts_with`, `ends_with`, `find(text) -> int?`,
-     `slice(int, int)` (byte offsets on code point boundaries, else a script error), `lower`, `upper` (Unicode
-     simple case mapping), `parse_int -> i64?`, `parse_float -> f64?`.
-   - `bytes`: `len`, `[int]`, `slice`, `push(u8)`, `read_u16/u32/u64/f32/f64(at, big: bool)`,
+   - `set<T>`: `len()`, `add(T) -> bool`, `remove(T) -> bool`, `contains(T)`, `values() -> list<T>` (in order).
+   - `text`: `len()` (bytes), `chars()`, `split(text) -> list<text>`, `starts_with(text)`, `ends_with(text)`, `find(text) -> int?`,
+     `slice(int, int)` (byte offsets on code point boundaries, else a script error), `lower()`, `upper()` (Unicode
+     simple case mapping), `parse_int() -> i64?`, `parse_float() -> f64?`.
+   - `bytes`: `len()`, `[int]`, `slice(int, int)`, `push(u8)`, `read_u16/u32/u64/f32/f64(at, big: bool)`,
      `write_u16/...(at, value, big: bool)` (out of range: a script error).
 3. nerves by name: `nerve "DinoPackunVs1.BattleLv2"` is the game's `const Nerve *` for that class's
    step, usable where a game function takes `const Nerve *` (`self.setNerve(nerve "...")`) and comparable with
@@ -419,6 +420,8 @@ does, tested in tests/body.rs; codes S0047 to S0100 are worded in LumaLink's row
 | `and or not` | `bool` | `bool` |
 | `??` | a `T?` and a `T` (or a `T?`) | `T` (or `T?`) |
 
+- `%` is the remainder of a division rounded toward zero, so it keeps the left side's sign (`-7 % 2` is `-1`). On
+  floats it is exact, with no rounding (`-7.5 % 2.0` is `-1.5`); a zero right side gives NaN.
 - A literal side takes the other side's type (`x + 1` with `x: u8` is `u8`; `1.5 * v` is `f32 * vec3`); two literals
   are `int`, or `f32` when either is a float. A mismatch is S0065, a wrong single side S0066, said once.
 - What compares (`==`, `!=`, a list's `contains`): every type but functions, views, game arrays, service

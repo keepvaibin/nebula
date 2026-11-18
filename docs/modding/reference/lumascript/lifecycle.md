@@ -95,8 +95,7 @@ on layers -> list<text> { return [] }           // which `when.code` layers are 
   the mod, its bytes; `json.decode` reads it). A name that is not there is a compile error naming it.
 - `sound_named(name)`, `model_named(name)`, ...: the same lookup with a name made while running; `none` when the mod
   has no such content. The only content names the build cannot check, so each use is listed in the build's report.
-- `log "..."` writes to the game's log as the mod; `log fact "key" value` writes a fact for the harness
- .
+- `log "..."` writes to the game's log as the mod; `log fact "key" value` writes a fact for the harness.
 
 ## Further reading
 

@@ -22,7 +22,7 @@ contentType: how-tos
    Replace these values:
 
    * MOD-FOLDER: the folder to create. It must not exist yet.
-   * MOD-ID: the mod's ID, 3 to 64 characters of `a`-`z`, `0`-`9`, `-` and `.`, starting with a letter. The ID never changes once players have your mod.
+   * MOD-ID: the mod's ID, 3 to 64 characters of `a`-`z`, `0`-`9`, `-` and `.`, starting with a letter, with no `..` and not ending in `.`. The part before the first `.` can't be a name Windows keeps, such as `con` or `com1`. The ID never changes once players have your mod.
    * MOD NAME and ONE LINE ON WHAT IT DOES: what players see on the **Mods** page.
    * YOUR-NAME: your name. To list several authors, repeat `--author`.
 

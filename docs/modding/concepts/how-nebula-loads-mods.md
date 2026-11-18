@@ -36,13 +36,13 @@ The **Mods** page lists mods in load order, from top to bottom. When two mods ch
 | After hooks | The higher mod's hook runs last, so its result stands. |
 | Wrap hooks | The higher mod's wrap is outermost. It sees the call first and the result last. |
 
-Within one mod, `before` hooks run in the order the code declares them, `after` hooks in the reverse order, and the first `wrap` is outermost.
+Within one mod, LumaScript hooks of one kind on one function run in the order they are written, and the first `wrap` written is outermost. Hooks that a mod's C code adds with `hook` follow the game's order: `before` hooks in the order added, `after` hooks the last added first, and the first `wrap` added is outermost.
 
 A mod can ask to load after or before other mods with the `load` key in `luma.json`. A mod that needs another mod, such as LumaKit, always loads after it. For more information, see [luma.json](../reference/luma-json.md).
 
 ## A mod's code library
 
-A mod with code carries one library for each platform in its `code` folder. Nebula loads the library for the device it runs on. A mod with code but no library for the device is off on that device, with the reason on the **Mods** page. By default, `lumalink build` builds all nine platforms.
+A mod with code carries one library for each platform in its `code` folder. Nebula loads the library for the device it runs on. A mod with code but no library for the device is off on that device, with the reason on the **Mods** page. By default, `lumalink build` builds the seven platforms the game runs on: `windows-x64`, `linux-x64`, `linux-arm64`, `macos-arm64`, `macos-x64`, `android-arm64` and `android-x64`, and any other platform the mod's `luma.json` lists. `windows-arm64` and `ios-arm64` are built when you name them with `--platform`.
 
 When Nebula refuses a library, the reason is one of the validator's codes, shown in the player's language on the **Mods** page and in English in the game's log. For the list of codes, see [Validator rules](../reference/validator-rules.md).
 

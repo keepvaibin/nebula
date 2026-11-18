@@ -72,8 +72,33 @@ The LumaScript declaration must match the C one. These types cross between the t
 | A struct marked `c struct` | The C struct of the same name |
 | `ref<C>` | `lumart_ref`, a handle C may keep: `lm_ref_get_C(r)` gives the object, or null once it is gone |
 | `text`, `bytes` | A pointer and a length, valid until the call returns |
+| `list<T>`, `T` any type above but `text` and `bytes` | A pointer to the first item and a count (`const int32_t* xs, uint64_t n`), valid until the call returns |
 
-A result can be any of these but `text` and `bytes`. Containers don't cross: pass a list one item at a time or as `bytes`. LumaLink refuses a type that doesn't cross with S0800.
+A result can be any of these but `text`, `bytes` and lists. Maps, sets and lists of texts or lists don't cross: LumaLink refuses them with S0800.
+
+A `var` parameter of a number, vector, `bool`, `c struct` or `ref` crosses as a pointer to the variable:
+
+<!-- sample file: source/grow.c -->
+```c
+#include "lm_exports.h"
+
+void grow(int32_t* n, lm_vec3* at) {
+    *n += 1;
+    at->y += 100.0f;
+}
+```
+
+```lumascript
+extern c fn grow(var n: i32, var at: vec3)     // void grow(int32_t* n, lm_vec3* at);
+
+on start {
+    var n = 4
+    var at = vec3()
+    grow(var n, var at)                         // your C changes n and at
+}
+```
+
+In an `export c fn`, a `var` parameter writes your C's variable. A null pointer runs nothing, and the call gives back zero.
 
 Mark a struct `c struct` to share it with C. Its fields must be types from the table, but not `text` or `bytes`. LumaLink writes it into `lm_exports.h` under its own name, laid out as C lays it out:
 

@@ -605,9 +605,6 @@ lumalink check online-leaderboard
 
 The last line of the `check` output is `Errors: 0`.
 
-> [!NOTE]
-> In the current version, LumaLink cannot yet build a comparison of an optional service with `none` (`local == none`) or a call to `input.text_peek`, so this mod does not build.
-
 ## Testing the mod
 
 A test must not reach the internet. The finished mod's `tests/board/server/` folder contains a second small mod that listens on `127.0.0.1:47613` through `net.local` and answers as described in [Setting up a leaderboard server](#setting-up-a-leaderboard-server). It holds ten times for the first star of Good Egg Galaxy, from Rosalina's 0.10 seconds to Spike's 1.00 seconds, and writes each request it receives as facts.
