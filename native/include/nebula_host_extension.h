@@ -180,6 +180,9 @@ typedef struct NebulaHostExtension {
     uint32_t (*holds_menus)(void* user);
     /* Nonzero: each write of a save file waits this long first, slow storage (the longest of the extensions'). */
     uint32_t save_write_delay_us;
+    /* Nonzero: the process's worker threads (the game step's passes, the renderer's recording) are this count less one,
+       whatever the processor (1: none, every pass on its caller); the fewest of the extensions'. */
+    uint32_t worker_threads;
 } NebulaHostExtension;
 
 typedef const NebulaHostExtension* (*NebulaExtensionAttach)(const NebulaHostForExtension* host);

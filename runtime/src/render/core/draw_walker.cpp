@@ -1060,8 +1060,8 @@ void RenderCore::submit_recorded(unsigned workers) {
         }
         return;
     }
-    if (record_pool_ == nullptr || record_pool_->extra_threads() + 1u != workers) {
-        record_pool_ = std::make_unique<core::RecordPool>(workers - 1u);
+    if (record_pool_ == nullptr) {
+        record_pool_ = std::make_unique<core::RecordPool>();
     }
     record_pool_->run(static_cast<unsigned>(chunks.size()), [this, &chunks, &ops](unsigned chunk) {
         renderer_.parallel_record_chunk(chunk, ops.data() + chunks[chunk].first, chunks[chunk].count);

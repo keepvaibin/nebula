@@ -28,6 +28,26 @@ namespace NebulaHost {
         return nebula_host()->galaxy_travel(nebula_host()->user, pStage, capacity, pStar);
     }
 
+    // A pass of independent items on the host's step threads and this one (nebula_game_api.h parallel_for, P-040):
+    // work(context, first, last) over [0, count), each item once, all done on return. work writes only its own items'
+    // results; the caller applies them in its own order. A host without the service runs it here.
+    // A build made to measure the passes on one thread defines NEBULA_STEP_WORKERS_OFF.
+    inline void parallelFor(u32 count, u32 grain, void (*work)(void* context, u32 first, u32 last), void* context) {
+#if defined(NEBULA_STEP_WORKERS_OFF)
+        static_cast< void >(grain);
+        if (count != 0) {
+            work(context, 0, count);
+        }
+#else
+        const NebulaHostServices* const host = nebula_host();
+        if (host->parallel_for != nullptr) {
+            host->parallel_for(host->user, count, grain, work, context);
+        } else if (count != 0) {
+            work(context, 0, count);
+        }
+#endif
+    }
+
     // Nanoseconds on a steady clock: durations a person feels (a hold, a press), the same at any frame rate.
     inline u64 clockNs() {
         return nebula_host()->clock_ns(nebula_host()->user);

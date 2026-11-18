@@ -11,6 +11,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/System/LumaCore.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 #if defined(NEBULA_PLAIN_PATHS)
 namespace {
@@ -51,11 +52,37 @@ void ShadowControllerHolder::initAfterPlacement() {
     }
 }
 
+#if defined(NEBULA_PLAIN_PATHS)
+namespace {
+    // The requested shadows' first part on the step threads: a range of the request list.
+    void prepareShadows(void* pContext, u32 first, u32 last) {
+        ShadowController* const* const pRequested = static_cast< ShadowController* const* >(pContext);
+        for (u32 i = first; i < last; i++) {
+            pRequested[i]->prepareUpdate();
+        }
+    }
+
+    // Shadows a step thread takes at a time: a gravity search each.
+    const u32 sPrepareGrain = 16;
+}  // namespace
+#endif
+
 void ShadowControllerHolder::updateController() {
     const s32 count = mRequested.size();
+#if defined(NEBULA_PLAIN_PATHS)
+    // Each requested shadow's draw test, direction (its gravity search), line and kept answer on the step threads; then
+    // the projections in request order on this one. A shadow's first part reads nothing another's changes.
+    if (count > 0) {
+        NebulaHost::parallelFor(static_cast< u32 >(count), ::sPrepareGrain, &::prepareShadows, &mRequested[0]);
+    }
+    for (s32 i = 0; i < count; i++) {
+        mRequested[i]->finishUpdate();
+    }
+#else
     for (s32 i = 0; i < count; i++) {
         mRequested[i]->update();
     }
+#endif
 
     mRequested.clear();
 }
@@ -138,19 +165,38 @@ void ShadowController::updateProjection() {
         return;
     }
 
-    Triangle triangle;
+#if defined(NEBULA_PLAIN_PATHS)
     Vec3f position;
-    getDropPos(&position);
+    Vec3f line;
+    lineOf(&position, &line);
+    projectLine(position, line, isLineAnswerKept(position, line));
+}
+
+// The line a projection queries: from the drop point, moved back along the drop direction by the start offset, as long
+// as the drop length and the offset.
+void ShadowController::lineOf(Vec3f* pStart, Vec3f* pLine) const {
+    getDropPos(pStart);
     Vec3f direction;
     getDropDir(&direction);
-    position -= direction * mStartOffset;
+    *pStart -= direction * mStartOffset;
+    *pLine = direction * (mDropLength + mStartOffset);
+}
 
-    const Vec3f line = direction * (mDropLength + mStartOffset);
-#if defined(NEBULA_PLAIN_PATHS)
+// The same line as last time, nothing changed near it since: the last answer holds (P-140). Reads only this
+// controller's fields and the collision change log.
+bool ShadowController::isLineAnswerKept(const Vec3f& rStart, const Vec3f& rLine) const {
+    return mLineKept && mLineType == mDropType && mLineFilter == mCollisionPartsFilter && isSameBits(mLineStart, rStart) &&
+           isSameBits(mLine, rLine) && CollisionChanges::isLineUnchanged(mLineChanges, rStart, rLine);
+}
+
+// The projection of the line: the kept answer, or the query's (kept for the next time).
+void ShadowController::projectLine(const Vec3f& rStart, const Vec3f& rLine, bool kept) {
+    Triangle triangle;
+    const Vec3f position(rStart);
+    const Vec3f& line = rLine;
     // The same line as last time, nothing changed near it since: the same answer, without the query (P-140). A miss
     // leaves the projection's place and normal as they were, as the query does.
-    if (mLineKept && mLineType == mDropType && mLineFilter == mCollisionPartsFilter && isSameBits(mLineStart, position) &&
-        isSameBits(mLine, line) && CollisionChanges::isLineUnchanged(mLineChanges, position, line)) {
+    if (kept) {
         mIsProjected = mLineHit;
         if (mLineHit) {
             mProjectionPos = mLinePos;
@@ -193,7 +239,45 @@ void ShadowController::updateProjection() {
         mLineNormal = mProjectionNormal;
         mLineSensor = mProjectedSensor;
     }
+
+    if (mCollisionCalc == CollisionCalc::Once) {
+        mCollisionCount++;
+    }
+}
+
+// On a step thread: whether it draws, its direction, its line, and whether the last answer holds. Reads its actor, the
+// gravities and the collision change log, which nothing changes while the pass runs; writes only its own fields.
+void ShadowController::prepareUpdate() {
+    mPassDraw = isDraw();
+    mPassCollide = false;
+    mPassKept = false;
+    if (!mPassDraw) {
+        return;
+    }
+    updateDirection();
+    mPassCollide = isCalcCollision();
+    if (mPassCollide) {
+        lineOf(&mPassStart, &mPassLine);
+        mPassKept = isLineAnswerKept(mPassStart, mPassLine);
+    }
+}
+
+// On the game thread, in request order: the projection, as update makes it.
+void ShadowController::finishUpdate() {
+    if (mPassCollide) {
+        projectLine(mPassStart, mPassLine, mPassKept);
+    }
+    mIsRequested = false;
+}
 #else
+    Triangle triangle;
+    Vec3f position;
+    getDropPos(&position);
+    Vec3f direction;
+    getDropDir(&direction);
+    position -= direction * mStartOffset;
+
+    const Vec3f line = direction * (mDropLength + mStartOffset);
     if (mDropType == DropType::Map) {
         mIsProjected = MR::getFirstPolyOnLineToMap(&mProjectionPos, &triangle, position, line, mCollisionPartsFilter, nullptr);
     } else {
@@ -206,12 +290,12 @@ void ShadowController::updateProjection() {
     } else {
         mProjectedSensor = nullptr;
     }
-#endif
 
     if (mCollisionCalc == CollisionCalc::Once) {
         mCollisionCount++;
     }
 }
+#endif
 
 ShadowDrawer* ShadowController::getShadowDrawer() {
     return mDrawer;

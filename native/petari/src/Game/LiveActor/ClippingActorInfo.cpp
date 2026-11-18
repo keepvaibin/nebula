@@ -26,11 +26,32 @@ namespace {
 
 #if defined(NEBULA_PLAIN_PATHS)
 ClippingJudge* ClippingActorInfo::sPassJudge = nullptr;
+u32 ClippingActorInfo::sPassStamp = 0;
+
+// Reads only the judge's planes and this actor's sphere, level, view group and flags, which nothing changes while the
+// pass's tests run; writes only this info's results.
+void ClippingActorInfo::testFrustum(ClippingJudge* pJudge, u32 stamp) {
+    mTestStamp = stamp;
+    mTestClipped = MR::isClipped(mActor);
+    const f32 radius = mTestClipped ? mRadius : mRadius + ::sClipLeaveMargin;
+    mTestClip = pJudge->isJudgedToClipFrustum(*mCenter, radius, mViewGroup->mIsPlayerInside ? 0 : mFarClipLevel);
+    mTestedOut = mTestClip;
+    if (mTestClip) {
+        mTestDrawn = mActor->mFlag.mIsDrawnClipped;
+        const f32 drawn = (mTestDrawn ? mRadius + ::sClipLeaveMargin : mRadius) + pJudge->getTracedDrawMargin();
+        mTestOut = pJudge->isJudgedToClipFrustum(*mCenter, drawn, 0);
+    }
+}
 #endif
 
 ClippingActorInfo::ClippingActorInfo(LiveActor* pActor)
     : mActor(pActor), mCenter(), mRadius(0.0f), mInfo(), mFarClipLevel(6), mViewGroupId(-1), mViewGroup(), mGround(), mGroundFound(false), mList(),
-      mIndex(-1) {
+      mIndex(-1)
+#if defined(NEBULA_PLAIN_PATHS)
+      ,
+      mTestStamp(0), mTestClipped(false), mTestClip(false), mTestDrawn(false), mTestedOut(false), mTestOut(false)
+#endif
+{
     setTypeToSphere(300.0f, nullptr);
 }
 
@@ -50,7 +71,19 @@ void ClippingActorInfo::judgeClipping() {
 // With one test for both, a camera or actor moving by less than a unit across the edge started and stopped the actor's
 // effects every step (an emitter stopped and started leaves gaps, one deleted and made again restarts its particles).
 bool ClippingActorInfo::isJudgedToClip() const {
-    const f32 radius = MR::isClipped(mActor) ? mRadius : mRadius + ::sClipLeaveMargin;
+    const bool clipped = MR::isClipped(mActor);
+#if defined(NEBULA_PLAIN_PATHS)
+    if (sPassStamp != 0 && mTestStamp == sPassStamp && clipped == mTestClipped) {
+#if defined(NEBULA_CLIPPING_PASS_VERIFY)
+        const f32 radius = clipped ? mRadius : mRadius + ::sClipLeaveMargin;
+        if (::getJudge()->isJudgedToClipFrustum(*mCenter, radius, mViewGroup->mIsPlayerInside ? 0 : mFarClipLevel) != mTestClip) {
+            NEBULA_PANIC("clipping pass: the frustum test of an actor differs from the one made before the pass");
+        }
+#endif
+        return mTestClip;
+    }
+#endif
+    const f32 radius = clipped ? mRadius : mRadius + ::sClipLeaveMargin;
     return ::getJudge()->isJudgedToClipFrustum(*mCenter, radius, mViewGroup->mIsPlayerInside ? 0 : mFarClipLevel);
 }
 
@@ -65,6 +98,17 @@ bool ClippingActorInfo::isJudgedToClip() const {
 bool ClippingActorInfo::isDrawnWhileClipped() const {
     ClippingJudge* const pJudge = ::getJudge();
     const f32 radius = (mActor->mFlag.mIsDrawnClipped ? mRadius + ::sClipLeaveMargin : mRadius) + pJudge->getTracedDrawMargin();
+#if defined(NEBULA_PLAIN_PATHS)
+    if (sPassStamp != 0 && mTestStamp == sPassStamp && mTestedOut && mActor->mFlag.mIsDrawnClipped == mTestDrawn) {
+#if defined(NEBULA_CLIPPING_PASS_VERIFY)
+        if (pJudge->isJudgedToClipFrustum(*mCenter, radius, 0) != mTestOut) {
+            NEBULA_PANIC("clipping pass: the drawn test of an actor differs from the one made before the pass");
+        }
+#endif
+        return !mViewGroup->mIsHidden && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor, mActor->mFlag.mHasPose) &&
+               !mTestOut && const_cast< ClippingActorInfo* >(this)->isGroundShown();
+    }
+#endif
     return !mViewGroup->mIsHidden && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor, mActor->mFlag.mHasPose) &&
            !pJudge->isJudgedToClipFrustum(*mCenter, radius, 0) && const_cast< ClippingActorInfo* >(this)->isGroundShown();
 }

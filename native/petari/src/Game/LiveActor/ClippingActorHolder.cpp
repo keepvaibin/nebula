@@ -8,10 +8,33 @@
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/System/LumaCore.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     const s32 sListCapacity = 2560;
     const u32 sTableSize = 8192;
+
+#if defined(NEBULA_PLAIN_PATHS)
+    // The pass's frustum tests on the step threads: a range of the target list.
+    struct FrustumPass {
+        ClippingActorInfoList* mTargets;
+        ClippingJudge* mJudge;
+        u32 mStamp;
+    };
+
+    void testFrustums(void* pContext, u32 first, u32 last) {
+        const FrustumPass* const pPass = static_cast< const FrustumPass* >(pContext);
+        for (u32 i = first; i < last; i++) {
+            pPass->mTargets->mClippingActorList[i]->testFrustum(pPass->mJudge, pPass->mStamp);
+        }
+    }
+
+    // The last pass's stamp; never 0.
+    u32 sLastStamp = 0;
+
+    // Targets a step thread takes at a time: a few microseconds of tests.
+    const u32 sTestGrain = 128;
+#endif
 
     u32 hashActor(const LiveActor* pActor) {
         return static_cast< u32 >(reinterpret_cast< uintptr_t >(pActor) >> 4) * 0x9E3779B1u;
@@ -39,11 +62,18 @@ void ClippingActorHolder::movement() {
 
 #if defined(NEBULA_PLAIN_PATHS)
     ClippingActorInfo::sPassJudge = MR::getClippingJudge();
+    // Every target's frustum tests first, on the step threads; then the judgements in list order on this one, each
+    // taking its test while the state it was made for holds.
+    ::sLastStamp = ::sLastStamp == 0xFFFFFFFFu ? 1 : ::sLastStamp + 1;
+    const ::FrustumPass pass = {mTargets, ClippingActorInfo::sPassJudge, ::sLastStamp};
+    NebulaHost::parallelFor(static_cast< u32 >(mTargets->mCount), ::sTestGrain, &::testFrustums, const_cast< ::FrustumPass* >(&pass));
+    ClippingActorInfo::sPassStamp = ::sLastStamp;
 #endif
     for (s32 i = 0; i < mTargets->mCount; i++) {
         mTargets->mClippingActorList[i]->judgeClipping();
     }
 #if defined(NEBULA_PLAIN_PATHS)
+    ClippingActorInfo::sPassStamp = 0;
     ClippingActorInfo::sPassJudge = nullptr;
 #endif
 }

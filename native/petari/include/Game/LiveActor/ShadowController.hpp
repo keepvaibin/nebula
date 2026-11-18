@@ -106,6 +106,15 @@ public:
     void invalidate();
 
     void updateProjection();
+#if defined(NEBULA_PLAIN_PATHS)
+    // A step's update in two parts (P-040): prepareUpdate for every requested shadow on the step threads, then
+    // finishUpdate on the game thread in request order.
+    void prepareUpdate();
+    void finishUpdate();
+    void lineOf(Vec3f* pStart, Vec3f* pLine) const;
+    bool isLineAnswerKept(const Vec3f& rStart, const Vec3f& rLine) const;
+    void projectLine(const Vec3f& rStart, const Vec3f& rLine, bool kept);
+#endif
 
     LiveActor* mActor;
     const char* mName;
@@ -148,6 +157,14 @@ public:
     Vec3f mLinePos;
     Vec3f mLineNormal;
     HitSensor* mLineSensor;
+#if defined(NEBULA_PLAIN_PATHS)
+    // What prepareUpdate found for finishUpdate: it draws, it projects, its line, and whether the last answer holds.
+    bool mPassDraw;
+    bool mPassCollide;
+    bool mPassKept;
+    Vec3f mPassStart;
+    Vec3f mPassLine;
+#endif
 };
 
 namespace MR {

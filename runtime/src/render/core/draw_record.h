@@ -8,18 +8,17 @@
 // a command list (Direct3D 12) or a secondary command buffer (Vulkan) of their own; the renderer runs them in order after the
 // commands already recorded. replay_ops is also how the render thread replays a recorded pass itself (a small one, or one thread).
 
+#include "galaxy/worker_pool.h"
 #include "render/core/gpu_encoder.h"
 
 #include <algorithm>
 #include <atomic>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <exception>
 #include <functional>
 #include <mutex>
-#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -270,121 +269,37 @@ void replay_ops(E& encoder, const DrawOp* ops, std::size_t count, OnArrays&& on_
 
 namespace galaxy::render::core {
 
-// Threads that record chunks beside the render thread, which takes a share itself. Idle between passes.
+// Chunks recorded beside the render thread, which takes a share itself, on the process's worker threads
+// (galaxy/worker_pool.h, which the game step's passes share).
 class RecordPool {
 public:
-    explicit RecordPool(unsigned extra_threads) {
-        threads_.reserve(extra_threads);
-        for (unsigned i = 0; i < extra_threads; ++i) {
-            threads_.emplace_back([this] { loop(); });
-        }
-    }
-    RecordPool(const RecordPool&) = delete;
-    RecordPool& operator=(const RecordPool&) = delete;
-    ~RecordPool() {
-        {
-            const std::lock_guard lock(mutex_);
-            quit_ = true;
-        }
-        wake_.notify_all();
-        for (std::thread& thread : threads_) {
-            thread.join();
-        }
-    }
-    [[nodiscard]] unsigned extra_threads() const noexcept { return static_cast<unsigned>(threads_.size()); }
-
     // Runs task(0) to task(count - 1), the pool's threads and the caller taking them as they come, and returns when all are
-    // done. The first exception a task throws is thrown here once the rest have finished.
+    // done. The first exception a task throws is thrown here once the rest have finished. An urgent pass on the process's
+    // pool: a picture waits for it, so a thread inside a game step's pass takes its chunks between its own ranges.
     void run(unsigned count, const std::function<void(unsigned)>& task) {
-        if (count == 0u) {
-            return;
-        }
-        if (threads_.empty() || count == 1u) {
-            for (unsigned i = 0; i < count; ++i) {
-                task(i);
-            }
-            return;
-        }
-        std::uint64_t generation = 0u;
-        {
-            const std::lock_guard lock(mutex_);
-            task_ = &task;
-            count_ = count;
-            next_ = 0u;
-            finished_ = 0u;
-            error_ = nullptr;
-            generation = ++generation_;
-        }
-        wake_.notify_all();
-        work(generation, &task);
-        std::exception_ptr error;
-        {
-            std::unique_lock lock(mutex_);
-            done_.wait(lock, [this] { return finished_ == count_; });
-            task_ = nullptr;
-            error = std::exchange(error_, nullptr);
-        }
-        if (error) {
-            std::rethrow_exception(error);
-        }
-    }
-
-private:
-    bool claim(std::uint64_t generation, unsigned& index) {
-        const std::lock_guard lock(mutex_);
-        if (generation != generation_ || next_ >= count_) {
-            return false;
-        }
-        index = next_++;
-        return true;
-    }
-    void work(std::uint64_t generation, const std::function<void(unsigned)>* task) {
-        unsigned index = 0u;
-        while (claim(generation, index)) {
+        struct Pass {
+            const std::function<void(unsigned)>* task;
+            std::mutex mutex;
             std::exception_ptr error;
-            try {
-                (*task)(index);
-            } catch (...) {
-                error = std::current_exception();
-            }
-            const std::lock_guard lock(mutex_);
-            if (error && !error_) {
-                error_ = error;
-            }
-            if (++finished_ == count_) {
-                done_.notify_all();
-            }
-        }
-    }
-    void loop() {
-        std::uint64_t seen = 0u;
-        for (;;) {
-            std::uint64_t generation = 0u;
-            const std::function<void(unsigned)>* task = nullptr;
-            {
-                std::unique_lock lock(mutex_);
-                wake_.wait(lock, [&] { return quit_ || generation_ != seen; });
-                if (quit_) {
-                    return;
+        } pass{&task, {}, nullptr};
+        galaxy::process_workers().run(
+            count, 1u,
+            [](void* context, std::uint32_t first, std::uint32_t last) {
+                Pass& pass = *static_cast<Pass*>(context);
+                for (std::uint32_t i = first; i < last; ++i) {
+                    try {
+                        (*pass.task)(i);
+                    } catch (...) {
+                        const std::lock_guard lock(pass.mutex);
+                        if (!pass.error) pass.error = std::current_exception();
+                    }
                 }
-                seen = generation_;
-                generation = generation_;
-                task = task_;
-            }
-            if (task != nullptr) {
-                work(generation, task);
-            }
+            },
+            &pass, galaxy::WorkerPool::Lane::urgent);
+        if (pass.error) {
+            std::rethrow_exception(pass.error);
         }
     }
-
-    std::vector<std::thread> threads_;
-    std::mutex mutex_;
-    std::condition_variable wake_, done_;
-    const std::function<void(unsigned)>* task_ = nullptr;
-    std::uint64_t generation_ = 0u;
-    unsigned count_ = 0u, next_ = 0u, finished_ = 0u;
-    std::exception_ptr error_;
-    bool quit_ = false;
 };
 
 }  // namespace galaxy::render::core

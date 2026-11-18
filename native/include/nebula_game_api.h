@@ -24,7 +24,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 160u
+#define NEBULA_GAME_API_VERSION 161u
 
 /* The game's fixed step: nebula_game_run's loop runs this many steps a second (frame_wait paces them), whatever the
    display's rate; the host presents each or interpolates between them. */
@@ -1096,6 +1096,13 @@ typedef struct NebulaHostServices {
     /* Returns once a save_request's `status` has left NEBULA_SAVE_PENDING, the thread asleep meanwhile (an acquire
        load: the request's buffer and length are the host's result). Game thread. */
     void (*save_wait)(void* user, const int32_t* status);
+    /* The game step's worker threads (P-040): work(context, first, last) over items [0, count) in ranges of at least
+       `grain` items, on the host's step threads and on the calling thread, each item once; returns once every item is
+       done, with their writes visible to the caller. Items must be independent: work writes only its own items'
+       results, never allocates, never calls the host and never runs game code with effects (the game applies the
+       results in its own order after). A host may run it all on the caller. Game thread. */
+    void (*parallel_for)(void* user, uint32_t count, uint32_t grain, void (*work)(void* context, uint32_t first, uint32_t last),
+                         void* context);
 } NebulaHostServices;
 
 

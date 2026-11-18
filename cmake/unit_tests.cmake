@@ -31,6 +31,9 @@ set(render_src "${galaxy_rt}/render")
 galaxy_test(galaxy_whole_lines_tests SOURCES ${rt}/whole_lines_tests.cpp ${rt}/whole_lines.cpp)
 # The pacing measures (file 00 4.3) on synthetic runs, and the recorder that feeds them.
 galaxy_test(galaxy_pacing_tests SOURCES ${rt}/pacing_tests.cpp ${rt}/pacing.cpp ${rt}/pacing_recorder.cpp)
+# The game step's worker threads (worker_pool.h, P-040): every item of every pass once, none past its count, passes after
+# the threads slept, a slow pass shared.
+galaxy_test(galaxy_worker_pool_tests SOURCES ${rt}/worker_pool_tests.cpp)
 # The frame threads' CPU time by thread (the pacing line). Windows reads no thread's CPU time there (perf_hint.cpp's
 # Windows half looks at the power state, which needs the Windows host's power code).
 if(NOT WIN32)

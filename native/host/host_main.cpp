@@ -67,6 +67,7 @@
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/display_aspect.h"
 #include "galaxy/pacing_recorder.h"
+#include "galaxy/worker_pool.h"
 #include "galaxy/benchmark.h"
 #include "galaxy/calibration_scene.h"
 #include "galaxy/ui/benchmark_menu.h"
@@ -3456,6 +3457,19 @@ std::condition_variable gSavesDone;
 // The requests' status words: the worker stores each, the game's save_wait sleeps on its own.
 galaxy::saves::StatusBoard gSaveStatus;
 
+// The process's worker threads (galaxy/worker_pool.h; the game step's passes and the renderer's recording, P-040): each
+// named and given its crash stack as it starts; the first four sampled under --diagnostics profile.
+void worker_start(unsigned index) {
+    name_thread(L"Nebula Worker");
+    static const char* const profiled[] = {"worker-1", "worker-2", "worker-3", "worker-4"};
+    if (index < std::size(profiled)) galaxy::profiled_threads::add_current(profiled[index]);
+}
+
+// A pass of the game step on the process's worker threads.
+void svc_parallel_for(void*, uint32_t count, uint32_t grain, void (*work)(void*, uint32_t, uint32_t), void* context) {
+    galaxy::process_workers().run(count, grain, work, context);
+}
+
 // The game's wait for its last request (SaveDataHandler::waitRequest), asleep until the worker ends it.
 void svc_save_wait(void*, const int32_t* status) {
     if (gSaveStatus.wait(status, NEBULA_SAVE_PENDING)) {
@@ -6365,6 +6379,16 @@ int main(int argc, char** argv) {
     services.frame_begun = svc_frame_begun;
     services.save_request = svc_save_request;
     services.save_wait = svc_save_wait;
+    // The worker threads: the processor's count (galaxy::WorkerPool::threads_for), or a test extension's.
+    {
+        const std::uint32_t tested = galaxy::extensions::worker_threads();
+        const unsigned workers = tested != 0u ? tested - 1u : galaxy::WorkerPool::threads_for(std::thread::hardware_concurrency());
+        galaxy::configure_process_workers(workers, &worker_start);
+        char text[64];
+        std::snprintf(text, sizeof(text), "%u%s", workers, tested != 0u ? " (a test's)" : "");
+        log_line("workers:", text);
+    }
+    services.parallel_for = svc_parallel_for;
     services.system_setting = svc_system_setting;
     services.input_read = svc_input_read;
     services.input_control = svc_input_control;

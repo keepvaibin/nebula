@@ -231,7 +231,7 @@ GPU = None
 # from the environment): a test names them among its settings, and they go to the game's environment. Everything else a
 # test does is a step of its plan. harness_settings_test.py keeps this list equal to the extension's.
 TEST_HOOKS = ("GALAXY_TEST_VRAM_BUDGET_MB", "GALAXY_TEST_DISC_DELAY_US", "GALAXY_TEST_SAVE_DELAY_US",
-              "GALAXY_TEST_MODS_SCREEN", "GALAXY_TEST_MODS_CHANGED")
+              "GALAXY_TEST_MODS_SCREEN", "GALAXY_TEST_MODS_CHANGED", "GALAXY_TEST_WORKERS")
 
 
 def setting_names():

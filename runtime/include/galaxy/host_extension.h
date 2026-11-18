@@ -48,6 +48,8 @@ void ending(bool again) noexcept;
 [[nodiscard]] std::uint64_t vram_budget_bytes() noexcept;
 [[nodiscard]] std::uint32_t disc_read_delay_us() noexcept;
 [[nodiscard]] std::uint32_t save_write_delay_us() noexcept;
+// Nonzero: the worker threads an extension asks for, plus one (NebulaHostExtension.worker_threads).
+[[nodiscard]] std::uint32_t worker_threads() noexcept;
 // Each line the host logs, to every extension that listens ("<tag> <text>").
 void log_line(const char* tag, const char* text) noexcept;
 // A service an extension offers to mods by name, or null.

@@ -4,7 +4,7 @@
 // fixed-step clock, and keeps the run's sound (GALAXY_AUDIO_WAV_DUMP). Without a plan it declines, so a run never
 // goes on without the checks it was started for. A few test hooks stay in the environment because the host reads
 // them when it starts (GALAXY_TEST_VRAM_BUDGET_MB, GALAXY_TEST_DISC_DELAY_US, GALAXY_TEST_SAVE_DELAY_US,
-// GALAXY_TEST_MODS_SCREEN, GALAXY_TEST_MODS_CHANGED); luma_test.py's TEST_HOOKS lists them.
+// GALAXY_TEST_MODS_SCREEN, GALAXY_TEST_MODS_CHANGED, GALAXY_TEST_WORKERS); luma_test.py's TEST_HOOKS lists them.
 #include <nebula_host_extension.h>
 
 #include "harness.h"
@@ -400,6 +400,10 @@ NEBULA_EXTENSION_EXPORT const NebulaHostExtension* nebula_extension_attach(const
     e.vram_budget_mb = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_VRAM_BUDGET_MB", 0u));
     e.disc_read_delay_us = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_DISC_DELAY_US", 0u));
     e.save_write_delay_us = static_cast<std::uint32_t>(env_u64("GALAXY_TEST_SAVE_DELAY_US", 0u));
+    // The worker threads a run plays with (0: every pass on its caller), the field one more.
+    if (env("GALAXY_TEST_WORKERS").has_value()) {
+        e.worker_threads = static_cast<std::uint32_t>(std::min<std::uint64_t>(env_u64("GALAXY_TEST_WORKERS", 0u), 1024u)) + 1u;
+    }
     e.log_line = [](void*, const char* tag, const char* text) { harness::log_line(tag, text); };
     e.service = [](void*, const char* name, std::uint32_t major, std::uint32_t minor) { return harness::service(name, major, minor); };
     // The registry's test services (services/registry.md 14).
