@@ -1,6 +1,7 @@
 #include "Game/LiveActor/ClippingActorHolder.hpp"
 #include "Game/LiveActor/ClippingActorInfo.hpp"
 #include "Game/LiveActor/ClippingGroupHolder.hpp"
+#include "Game/LiveActor/ClippingJudge.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ViewGroupCtrl.hpp"
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
@@ -36,9 +37,15 @@ ClippingActorHolder::ClippingActorHolder()
 void ClippingActorHolder::movement() {
     mViewGroupCtrl->update();
 
+#if defined(NEBULA_PLAIN_MODULE)
+    ClippingActorInfo::sPassJudge = MR::getClippingJudge();
+#endif
     for (s32 i = 0; i < mTargets->mCount; i++) {
         mTargets->mClippingActorList[i]->judgeClipping();
     }
+#if defined(NEBULA_PLAIN_MODULE)
+    ClippingActorInfo::sPassJudge = nullptr;
+#endif
 }
 
 void ClippingActorHolder::moveTo(ClippingActorInfo* pInfo, ClippingActorInfoList* pList) {

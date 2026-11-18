@@ -8,9 +8,17 @@ class LiveActor;
 class ClippingActorInfoList;
 struct ViewGroupCtrlDataEntry;
 
+class ClippingJudge;
+
 class ClippingActorInfo {
 public:
     ClippingActorInfo(LiveActor*);
+
+#if defined(NEBULA_PLAIN_MODULE)
+    // The scene's judge for the length of a clipping pass, looked up once for all its actors (P-135); null between
+    // passes, when each test looks it up.
+    static ClippingJudge* sPassJudge;
+#endif
 
     void judgeClipping();
     bool isJudgedToClip() const;

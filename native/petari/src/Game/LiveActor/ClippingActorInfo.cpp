@@ -13,7 +13,20 @@ namespace {
     // Distance a clipping sphere must pass beyond the view volume before an actor that runs is clipped (or stops being
     // drawn while clipped); about the width of a large enemy, more than any camera or actor jitter at an edge.
     const f32 sClipLeaveMargin = 150.0f;
+
+    ClippingJudge* getJudge() {
+#if defined(NEBULA_PLAIN_MODULE)
+        if (ClippingActorInfo::sPassJudge != nullptr) {
+            return ClippingActorInfo::sPassJudge;
+        }
+#endif
+        return MR::getClippingJudge();
+    }
 };  // namespace
+
+#if defined(NEBULA_PLAIN_MODULE)
+ClippingJudge* ClippingActorInfo::sPassJudge = nullptr;
+#endif
 
 ClippingActorInfo::ClippingActorInfo(LiveActor* pActor)
     : mActor(pActor), mCenter(), mRadius(0.0f), mInfo(), mFarClipLevel(6), mViewGroupId(-1), mViewGroup(), mGround(), mGroundFound(false), mList(),
@@ -38,7 +51,7 @@ void ClippingActorInfo::judgeClipping() {
 // effects every step (an emitter stopped and started leaves gaps, one deleted and made again restarts its particles).
 bool ClippingActorInfo::isJudgedToClip() const {
     const f32 radius = MR::isClipped(mActor) ? mRadius : mRadius + ::sClipLeaveMargin;
-    return MR::getClippingJudge()->isJudgedToClipFrustum(*mCenter, radius, mViewGroup->mIsPlayerInside ? 0 : mFarClipLevel);
+    return ::getJudge()->isJudgedToClipFrustum(*mCenter, radius, mViewGroup->mIsPlayerInside ? 0 : mFarClipLevel);
 }
 
 // The level's distances say when an actor runs; the camera says whether it is seen. Past its distance and in view it
@@ -50,9 +63,10 @@ bool ClippingActorInfo::isJudgedToClip() const {
 // While the host traces, the judge's margin more: what stands just off screen stays drawn,
 // stopped, for the tracer's shadows and mirrors; the host leaves it out of its raster passes.
 bool ClippingActorInfo::isDrawnWhileClipped() const {
-    const f32 radius = (mActor->mFlag.mIsDrawnClipped ? mRadius + ::sClipLeaveMargin : mRadius) + MR::getClippingJudge()->getTracedDrawMargin();
+    ClippingJudge* const pJudge = ::getJudge();
+    const f32 radius = (mActor->mFlag.mIsDrawnClipped ? mRadius + ::sClipLeaveMargin : mRadius) + pJudge->getTracedDrawMargin();
     return !mViewGroup->mIsHidden && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor, mActor->mFlag.mHasPose) &&
-           !MR::getClippingJudge()->isJudgedToClipFrustum(*mCenter, radius, 0) && const_cast< ClippingActorInfo* >(this)->isGroundShown();
+           !pJudge->isJudgedToClipFrustum(*mCenter, radius, 0) && const_cast< ClippingActorInfo* >(this)->isGroundShown();
 }
 
 bool ClippingActorInfo::isGroundShown() {
