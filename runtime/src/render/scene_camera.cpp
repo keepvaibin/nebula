@@ -101,6 +101,7 @@ void SceneCamera::shutdown() {
     camera_ = {};
     camera_resolve_.Reset();
     widen_ = {};
+    failed_ = 0u;
     exposure_.Reset();
     device_ = nullptr;
 }
@@ -110,6 +111,10 @@ ID3D12PipelineState* SceneCamera::camera_pipeline(unsigned samples, bool resolve
     auto& output = resolve ? camera_resolve_ : camera_[index];
     if (output) {
         return output.Get();
+    }
+    const unsigned failed = resolve ? 1u << 4u : 1u << index;
+    if ((failed_ & failed) != 0u) {
+        return nullptr;
     }
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_signature_.Get();
@@ -128,6 +133,7 @@ ID3D12PipelineState* SceneCamera::camera_pipeline(unsigned samples, bool resolve
     pd.SampleDesc.Count = resolve ? 1u : 1u << index;
     if (FAILED(core::utility_pipeline(device_, pd, &output))) {
         std::cerr << "[scene-camera] pipeline failed for " << (1u << index) << " samples\n";
+        failed_ |= failed;
         return nullptr;
     }
     return output.Get();
@@ -137,6 +143,9 @@ ID3D12PipelineState* SceneCamera::widen_pipeline(unsigned samples) {
     const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u);
     if (widen_[index]) {
         return widen_[index].Get();
+    }
+    if ((failed_ & (1u << (5u + index))) != 0u) {
+        return nullptr;
     }
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_signature_.Get();
@@ -154,9 +163,20 @@ ID3D12PipelineState* SceneCamera::widen_pipeline(unsigned samples) {
     pd.SampleDesc.Count = 1u << index;
     if (FAILED(core::utility_pipeline(device_, pd, &widen_[index]))) {
         std::cerr << "[scene-camera] widen pipeline failed for " << (1u << index) << " samples\n";
+        failed_ |= 1u << (5u + index);
         return nullptr;
     }
     return widen_[index].Get();
+}
+
+void SceneCamera::prepare_pipelines(unsigned max_samples) {
+    for (unsigned samples = 1u; samples <= std::min(max_samples, 8u); samples *= 2u) {
+        (void)camera_pipeline(samples, false);
+        (void)widen_pipeline(samples);
+    }
+    if (max_samples > 1u) {
+        (void)camera_pipeline(2u, true);  // the multisampled scene resolved in the camera's pass
+    }
 }
 
 bool SceneCamera::record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in) {

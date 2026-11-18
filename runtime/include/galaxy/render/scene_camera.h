@@ -24,6 +24,10 @@ public:
 
     bool initialize(ID3D12Device* device);
     void shutdown();
+    // Every pipeline of the pass for each sample count up to `max_samples` (a power of two, at most 8) while the renderer
+    // starts (P-052), so a frame never makes one; one the device refuses is not tried again. On any thread, while no
+    // frame records with the pass.
+    void prepare_pipelines(unsigned max_samples);
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 
     struct Inputs {
@@ -55,6 +59,7 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 4> camera_{};
     Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_resolve_;
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 4> widen_{};
+    unsigned failed_ = 0u;  // the device would not make: bits 0-3 camera_, 4 camera_resolve_, 5-8 widen_ (not tried again)
     Microsoft::WRL::ComPtr<ID3D12Resource> exposure_;
     bool exposure_ready_ = false;
     bool ready_ = false;

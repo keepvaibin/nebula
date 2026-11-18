@@ -353,13 +353,15 @@ bool PostProcessor::set_wide(bool wide) {
     smaa_blend_rgb_ = std::move(smaa_blend_rgb);
     fxaa_ = std::move(fxaa);
     fxaa_rgb_ = std::move(fxaa_rgb);
-    // The multisampled scene passes are made again at their first use; the pictures between passes when next asked
-    // for (ensure_target makes a target of another format again).
+    // The multisampled scene passes are made again in the new format now (prepare_pipelines); the pictures between
+    // passes when next asked for (ensure_target makes a target of another format again).
     for (auto& pass : scene_pass_ms_) {
         for (auto& pipeline : pass) pipeline.Reset();
     }
+    scene_pass_failed_ = 0u;
     traded_.Reset();
     color_format_ = format;
+    prepare_pipelines(prepared_samples_);
     return true;
 }
 
@@ -385,6 +387,8 @@ void PostProcessor::shutdown() noexcept {
     for (auto& pass : scene_pass_ms_) {
         for (auto& pipeline : pass) pipeline.Reset();
     }
+    scene_pass_failed_ = 0u;
+    prepared_samples_ = 1u;
     easu_.Reset();
     rcas_.Reset();
     rcas_scaled_.Reset();
@@ -755,14 +759,16 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     return pass;
 }
 
-// The last pass of the scene's AA, into the scene target: over MSAA every sample takes the result. Those are made at
-// first use.
+// The last pass of the scene's AA, into the scene target: over MSAA every sample takes the result. Those are
+// prepare_pipelines'.
 ID3D12PipelineState* PostProcessor::scene_pass_pipeline(bool smaa, unsigned samples) {
     if (samples <= 1u) {
         return smaa ? smaa_blend_rgb_.Get() : fxaa_rgb_.Get();
     }
-    ComPtr<ID3D12PipelineState>& out = scene_pass_ms_[smaa ? 1u : 0u][std::min(std::countr_zero(samples), 3)];
-    if (!out) {
+    const unsigned index = static_cast<unsigned>(std::min(std::countr_zero(samples), 3));
+    ComPtr<ID3D12PipelineState>& out = scene_pass_ms_[smaa ? 1u : 0u][index];
+    const unsigned failed = 1u << ((smaa ? 4u : 0u) + index);
+    if (!out && (scene_pass_failed_ & failed) == 0u) {
         constexpr UINT8 kRgb = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
                                D3D12_COLOR_WRITE_ENABLE_BLUE;
         const bool made = smaa ? create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_keep_ps)),
@@ -770,10 +776,19 @@ ID3D12PipelineState* PostProcessor::scene_pass_pipeline(bool smaa, unsigned samp
                                : create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), color_format_,
                                                  0, out, kRgb, samples);
         if (!made) {
+            scene_pass_failed_ |= failed;
             return nullptr;
         }
     }
     return out.Get();
+}
+
+void PostProcessor::prepare_pipelines(unsigned max_samples) {
+    prepared_samples_ = std::min(std::max(max_samples, 1u), 8u);
+    for (unsigned samples = 2u; samples <= prepared_samples_; samples *= 2u) {
+        (void)scene_pass_pipeline(false, samples);
+        (void)scene_pass_pipeline(true, samples);
+    }
 }
 
 void PostProcessor::self_test(ID3D12CommandQueue* queue) {

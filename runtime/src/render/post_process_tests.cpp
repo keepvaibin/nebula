@@ -753,6 +753,57 @@ void utility_pipelines_on_warp() {
     expect(second.status().smaa_ok && second.status().fxaa_ok, "loaded pipelines pass the self-test");
 }
 
+// P-052: the multisampled scene passes are made by prepare_pipelines, before any frame: two (FXAA's, SMAA's) for each
+// sample count the device draws up to the count asked, none again when asked once more, and all again in the wide format.
+void prepared_pipelines_on_warp() {
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IDXGIFactory4> factory;
+    ComPtr<IDXGIAdapter> adapter;
+    ComPtr<ID3D12Device> device;
+    ComPtr<ID3D12CommandQueue> queue;
+    D3D12_COMMAND_QUEUE_DESC qd{};
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) ||
+        FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))) ||
+        FAILED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device))) ||
+        FAILED(device->CreateCommandQueue(&qd, IID_PPV_ARGS(&queue)))) {
+        std::cerr << "FAILED: WARP device\n";
+        ++failures;
+        return;
+    }
+    const auto drawn = [&](DXGI_FORMAT format) {
+        std::uint64_t counts = 0u;
+        for (UINT samples = 2u; samples <= 8u; samples *= 2u) {
+            D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS q{format, samples};
+            if (SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &q, sizeof(q))) &&
+                q.NumQualityLevels > 0u) {
+                ++counts;
+            }
+        }
+        return counts * 2u;
+    };
+    const auto total = [] {
+        const auto counts = galaxy::render::core::utility_pipeline_counts();
+        return counts.made + counts.loaded;
+    };
+    galaxy::render::PostProcessor post;
+    if (!post.initialize(device.Get(), queue.Get(), PostProcessSettings{})) {
+        expect(false, "post-processor on WARP");
+        return;
+    }
+    const std::uint64_t start = total();
+    post.prepare_pipelines(8u);
+    const std::uint64_t prepared = total();
+    expect(drawn(DXGI_FORMAT_R10G10B10A2_UNORM) > 0u, "WARP draws the scene's format multisampled");
+    expect(prepared - start == drawn(DXGI_FORMAT_R10G10B10A2_UNORM), "a scene pass per AA and sample count, made at once");
+    post.prepare_pipelines(8u);
+    expect(total() == prepared, "kept: none made again");
+    expect(post.set_wide(true), "the wide format");
+    const std::uint64_t wide = total();
+    const std::uint64_t chain = 6u;  // set_wide's own chain (easu, resample, the SMAA blends, FXAA's two)
+    expect(wide - prepared == chain + drawn(DXGI_FORMAT_R16G16B16A16_FLOAT),
+           "the scene passes made again in the wide format with it");
+}
+
 }  // namespace
 
 int main() {
@@ -771,6 +822,7 @@ int main() {
     self_test_on_warp();
     scene_aa_on_warp();
     view_cache_on_warp();
+    prepared_pipelines_on_warp();
     if (failures != 0) {
         std::cerr << failures << " post-process checks failed\n";
         return 1;

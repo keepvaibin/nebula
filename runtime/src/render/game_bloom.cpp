@@ -95,21 +95,6 @@ bool GameBloom::initialize(ID3D12Device* device) {
             return false;
         }
     }
-    // The composite for every sample count the device supports in each scene colour format, now rather than at a scene's
-    // first bloom in play.
-    for (const bool hdr : {false, true}) {
-        for (unsigned samples = 1u; samples <= 8u; samples *= 2u) {
-            D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS levels{};
-            levels.Format = hdr ? kSceneHdrColorFormat : kSceneColorFormat;
-            levels.SampleCount = samples;
-            if (samples > 1u && (FAILED(device_->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &levels,
-                                                                     sizeof(levels))) ||
-                                 levels.NumQualityLevels == 0u)) {
-                continue;
-            }
-            (void)composite_pipeline(samples, hdr);  // one that fails is not tried again (composite_failed_)
-        }
-    }
     ready_ = true;
     return true;
 }
@@ -164,6 +149,14 @@ ID3D12PipelineState* GameBloom::composite_pipeline(unsigned samples, bool hdr) {
         return nullptr;
     }
     return composite_[index].Get();
+}
+
+void GameBloom::prepare_pipelines(unsigned max_samples) {
+    for (const bool hdr : {false, true}) {
+        for (unsigned samples = 1u; samples <= std::min(max_samples, 8u); samples *= 2u) {
+            (void)composite_pipeline(samples, hdr);  // one that fails is not tried again (composite_failed_)
+        }
+    }
 }
 
 bool GameBloom::ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height, bool unordered,
