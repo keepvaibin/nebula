@@ -121,6 +121,8 @@ std::atomic<unsigned> s_layer_2d_lines{0u};
 
 // lose_gpu_device's request, taken at the renderer's next frame.
 std::atomic<bool> g_lose_device{false};
+// RenderCore::restart_device runs: a new graphics device is being made (device_rebuilding).
+std::atomic<bool> g_device_rebuilding{false};
 
 // Render thread: the game frame of the newest list drawn (NebulaFrameList.game_frame).
 std::uint32_t g_drawn_game_frame = 0u;
@@ -169,6 +171,10 @@ struct GameWaitTimer {
 
 void lose_gpu_device() noexcept {
     g_lose_device.store(true, std::memory_order_release);
+}
+
+bool device_rebuilding() noexcept {
+    return g_device_rebuilding.load(std::memory_order_acquire);
 }
 
 void RenderCore::reset_session_state() {
@@ -1681,8 +1687,15 @@ bool RenderCore::restart_renderer(const FrameMap& frame, bool same_card) {
 bool RenderCore::restart_device() {
     device_lost_ = false;
     const std::int64_t started = galaxy::qpc_now();
+    g_device_rebuilding.store(true, std::memory_order_release);
+    struct RebuildMark {
+        ~RebuildMark() { g_device_rebuilding.store(false, std::memory_order_release); }
+    } rebuild_mark;
     try {
         std::unique_lock<std::shared_mutex> rebuilding = device_gate_.begin_rebuild();
+        if (const std::uint32_t delay = galaxy::extensions::device_rebuild_delay_ms(); delay != 0u) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(delay));  // a test's slow driver
+        }
         const FrameMap frame = renderer_.frame_map();
         pipelines_.shutdown();
         movie_playback_.shutdown();
