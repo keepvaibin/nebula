@@ -457,9 +457,17 @@ pub fn bas(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// A chord's bytes (ChordData: the bass, four tones, three added notes), a scale's notes each way, and the note that
+/// stands for none (ChordInfo::NULL_NOTE).
+const CHORD_BYTES: usize = 8;
+const SCALE_NOTES: usize = 12;
+const NULL_NOTE: u8 = 0x7F;
+
 /// A chord table (CIT, "CITS", the rhythm library's JaiChord.arc members) in host order: the size word, the chord and
 /// scale counts, the chord and scale offset tables and each scale's up and down note offsets (all from the file's
-/// start); the first word (0) and the note bytes stay.
+/// start); the first word (0) and the note bytes stay. ChordInfo reads a chord's 8 bytes and a scale's 12 up and 12 down
+/// notes where the offsets say, so each must lie in the file, and a chord or scale must have a note: its note steps
+/// (ChordInfo::getUpperNoteOnChord and the others) read the note before the list when it has none (N-3028).
 pub fn cit(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() < 16 || &bytes[4..8] != b"CITS" {
         bail!("not a chord table");
@@ -469,14 +477,23 @@ pub fn cit(bytes: &[u8]) -> Result<Vec<u8>> {
     let chords = host16(bytes, &mut out, 12)? as usize;
     let scales = host16(bytes, &mut out, 14)? as usize;
     for i in 0..chords {
-        host32(bytes, &mut out, 16 + 4 * i)?;
+        let chord = host32(bytes, &mut out, 16 + 4 * i)? as usize;
+        let notes = bytes.get(chord..chord + CHORD_BYTES).with_context(|| format!("chord {i} at {chord:#x} past the table's end"))?;
+        if notes.iter().all(|&n| n == NULL_NOTE) {
+            bail!("chord {i} at {chord:#x} has no note");
+        }
     }
     let mut seen: HashSet<usize> = HashSet::new();
     for i in 0..scales {
         let scale = host32(bytes, &mut out, 16 + 4 * (chords + i))? as usize;
         if seen.insert(scale) {
-            host32(bytes, &mut out, scale)?;
-            host32(bytes, &mut out, scale + 4)?;
+            for (way, at) in [("up", scale), ("down", scale + 4)] {
+                let list = host32(bytes, &mut out, at)? as usize;
+                let notes = bytes.get(list..list + SCALE_NOTES).with_context(|| format!("scale {i}'s {way} notes at {list:#x} past the table's end"))?;
+                if notes.iter().all(|&n| n == NULL_NOTE) {
+                    bail!("scale {i}'s {way} notes at {list:#x} have no note");
+                }
+            }
         }
     }
     Ok(out)
@@ -727,6 +744,40 @@ mod tests {
         let spk = speaker(&table([[0, 7, 9, 100, 0, 40, 9, 9], [1, 0, 9, 50, 0, 80, 9, 9]]), "bct").unwrap();
         assert_eq!(&spk[12..24], &[7, 0, 40, 0, 100, 0, 0, 1, 80, 0, 50, 0]);
         assert_eq!(&spk[32..], b"ab\0cde\0");
+    }
+
+    /// A chord table of one chord and one scale: its chord's bytes and its scale's up and down notes.
+    fn chord_table(chord: [u8; 8], up: [u8; 12], down: [u8; 12]) -> Vec<u8> {
+        let mut out = vec![0, 0, 0, 0];
+        out.extend_from_slice(b"CITS");
+        out.extend_from_slice(&[0, 0, 0, 0, 0, 1, 0, 1]);
+        // The chord's offset, the scale's offset, the scale's up and down note offsets; then the chord and the notes.
+        for word in [0x20u32, 0x18, 0x28, 0x34] {
+            out.extend_from_slice(&word.to_be_bytes());
+        }
+        out.extend_from_slice(&chord);
+        out.extend_from_slice(&up);
+        out.extend_from_slice(&down);
+        out
+    }
+
+    #[test]
+    fn a_chord_table_holds_every_chord_and_scale_with_a_note() {
+        let scale = [0, 0x7F, 2, 0x7F, 4, 5, 0x7F, 7, 0x7F, 9, 0x7F, 11];
+        let table = chord_table([0x7F, 0, 4, 7, 0x7F, 0x7F, 0x7F, 0x7F], scale, scale);
+        let out = cit(&table).unwrap();
+        assert_eq!(&out[16..20], &0x20u32.to_le_bytes());
+        assert_eq!(&out[0x18..0x1C], &0x28u32.to_le_bytes());
+        assert_eq!(&out[0x20..], &table[0x20..]);
+        // A chord or a scale way with no note (N-3028).
+        assert!(cit(&chord_table([0x7F; 8], scale, scale)).is_err());
+        assert!(cit(&chord_table([0x7F, 0, 4, 7, 0x7F, 0x7F, 0x7F, 0x7F], [0x7F; 12], scale)).is_err());
+        assert!(cit(&chord_table([0x7F, 0, 4, 7, 0x7F, 0x7F, 0x7F, 0x7F], scale, [0x7F; 12])).is_err());
+        // Notes past the table's end.
+        assert!(cit(&table[..table.len() - 1]).is_err());
+        let mut far = table.clone();
+        far[16..20].copy_from_slice(&0x40u32.to_be_bytes());
+        assert!(cit(&far).is_err());
     }
 
     #[test]

@@ -10,6 +10,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
+#include "Game/Util/PlacementIndex.hpp"
 #include "Game/Util/PlacementUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LightUtil.hpp"
@@ -60,6 +61,11 @@ void Tico::initBase(s32 color) {
 }
 
 void Tico::initBase(const TableIter& rIter, s32 color) {
+    // A colour past the six lights is the first, as Tico::init takes it; RunawayTico passed its argument 0 as it was, and
+    // the light and the colour animation's frame were read past their tables (N-3033). -1 is the baby.
+    if (color != -1) {
+        color = MR::placementIndexOr< s32 >(color, ARRAY_SIZE(::hPointLight), 0);
+    }
     NPCActorCaps caps("Tico");
     caps.setDefault();
     caps.mMessage = 0;

@@ -6,6 +6,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/ShadowVolumeDrawer.hpp"
 #include "Game/MapObj/ElectricRailHolder.hpp"
+#include "Game/Util/PlacementIndex.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
@@ -216,6 +217,8 @@ ElectricRail::ElectricRail(const char* pName)
 void ElectricRail::init(const TableIter& rIter) {
     s32 railType = 0;
     MR::getPlacementArg3NoInit(rIter, &railType);
+    // Yellow or red; another colour is yellow, as an unset one (N-3032).
+    railType = MR::placementIndexOr< s32 >(railType, 2, 0);
     ElectricRailFunction::registerRail(this, static_cast< ElectricRailType >(railType));
 
     MR::connectToSceneMapObjMovement(this);
