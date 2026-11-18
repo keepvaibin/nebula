@@ -10,7 +10,7 @@ void nebula_game_main(void); /* Game/System/GameSystem.cpp: the game's main */
 
 static const NebulaHostServices* sHost;
 
-#if defined(_WIN32) && !defined(NEBULA_SANITIZE_BUILD)
+#if defined(_WIN32) && !defined(NEBULA_MODULE_WITH_CRT)
 void nebula_run_constructors(void);
 
 void* malloc(size_t size) {
@@ -52,7 +52,7 @@ NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host) {
         return 0;
     }
     sHost = host;
-#if defined(_WIN32) && !defined(NEBULA_SANITIZE_BUILD)
+#if defined(_WIN32) && !defined(NEBULA_MODULE_WITH_CRT)
     nebula_run_constructors();
 #endif
     return NEBULA_GAME_API_VERSION;

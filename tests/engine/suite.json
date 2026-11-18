@@ -3,6 +3,7 @@
   "tests": [
     "boot",
     "device-lost",
+    "device-lost-building",
     "window-small",
     "window-wide",
     "window-tall",

@@ -668,8 +668,9 @@ def suite_tests(suite):
 
 def start_soak(g):
     """The soak (tools/gate/soak.py, file 00 section 4.2): two hours of random input on each renderer, in processes of
-    its own, started so it runs beside the Android part. Returns the process and its log."""
-    log = g.work / "soak.log"
+    its own, started so it runs beside the Android part. Returns the process and its log (soak-run.log: the check's own
+    log is soak.log, N-1065)."""
+    log = g.work / "soak-run.log"
     out = log.open("wb")
     process = subprocess.Popen([sys.executable, "-X", "utf8", "-I", str(HERE / "soak.py"), "run", "--bin", str(g.bin),
                                 "--pak", g.args.pak, "--work", str(g.work / "soak"), "--minutes", str(g.args.soak_minutes),
@@ -683,7 +684,8 @@ def soak_result(process, soak_log):
     def fn(log):
         code = process.wait()
         text = soak_log.read_text(encoding="utf-8", errors="replace")
-        shutil.copyfile(soak_log, log)
+        if pathlib.Path(log).resolve() != pathlib.Path(soak_log).resolve():
+            shutil.copyfile(soak_log, log)
         lines = [l.strip() for l in text.splitlines() if l.strip()]
         return code == 0, "; ".join(lines[-3:]) if lines else "no output (exit %d)" % code
     return fn

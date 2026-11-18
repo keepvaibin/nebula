@@ -60,6 +60,7 @@ std::uint64_t available_physical_bytes() noexcept {
 }
 
 thread_local bool tl_out_of_memory = false;
+thread_local bool tl_device_lost = false;
 
 std::int64_t steady_ticks() noexcept {
     return std::chrono::steady_clock::now().time_since_epoch().count();
@@ -69,6 +70,10 @@ std::int64_t steady_ticks() noexcept {
 
 void note_pipeline_out_of_memory() noexcept {
     tl_out_of_memory = true;
+}
+
+void note_pipeline_device_lost() noexcept {
+    tl_device_lost = true;
 }
 
 void Pipelines::initialize(gpu::Device* device, RootLayout root, void* backend) {
@@ -120,7 +125,11 @@ void Pipelines::shutdown() noexcept {
     }
     destroy_all();
     save_targets(stored);
+    // What the driver refused belongs to this device: the next one is asked again (N-4024).
     refused_.clear();
+    refused_pairs_.clear();
+    memory_failed_.clear();
+    memory_wait_until_.store(0, std::memory_order_relaxed);
     for (auto& root : directories_) {
         if (Directory* directory = root.exchange(nullptr)) {
             for (auto& page : directory->pages) { delete page.load(); }
@@ -179,8 +188,11 @@ void Pipelines::refuse(std::uint64_t id, const PipelineEntry& entry, unsigned va
     }
 }
 
-void Pipelines::failed(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux, bool memory, const Job* job) {
-    if (memory) {
+void Pipelines::failed(std::uint64_t id, const PipelineEntry& entry, unsigned variant, unsigned aux, Failure why, const Job* job) {
+    if (why == Failure::device_lost) {
+        return;  // the device's loss, not the pipeline's: the renderer starts again on a new device
+    }
+    if (why == Failure::memory) {
         memory_failures_.fetch_add(1u, std::memory_order_relaxed);
         memory_wait_until_.store(steady_ticks() + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
                                                       std::chrono::milliseconds(kPipelineMemoryWaitMs)).count(),
@@ -210,11 +222,13 @@ void Pipelines::failed(std::uint64_t id, const PipelineEntry& entry, unsigned va
     refuse(id, entry, variant, aux);
 }
 
-gpu::Pipeline* Pipelines::build_noting(const PipelineEntry& entry, unsigned variant, unsigned aux, bool& memory) {
+gpu::Pipeline* Pipelines::build_noting(const PipelineEntry& entry, unsigned variant, unsigned aux, Failure& why) {
     tl_out_of_memory = false;
+    tl_device_lost = false;
     gpu::Pipeline* const built = build(entry, variant, aux);
-    memory = built == nullptr && tl_out_of_memory;
+    why = tl_device_lost ? Failure::device_lost : tl_out_of_memory ? Failure::memory : Failure::refused;
     tl_out_of_memory = false;
+    tl_device_lost = false;
     return built;
 }
 
@@ -253,12 +267,12 @@ gpu::Pipeline* Pipelines::create_now(std::uint64_t id, const PipelineEntry& entr
     // Where pipelines link from parts, the draw gets a quick link and a worker replaces it with the optimised one.
     gpu::Pipeline* built = build_fast(entry, variant, aux);
     const bool linked = built != nullptr;
-    bool memory = false;
+    Failure why = Failure::refused;
     if (built == nullptr) {
-        built = build_noting(entry, variant, aux, memory);
+        built = build_noting(entry, variant, aux, why);
     }
     if (built == nullptr) {
-        failed(id, entry, variant, aux, memory, nullptr);
+        failed(id, entry, variant, aux, why, nullptr);
         return nullptr;
     }
     if (!linked && target_form(variant, aux)) {
@@ -429,12 +443,12 @@ void Pipelines::worker() {
                     left_.fetch_add(1u, std::memory_order_relaxed);
                     defer(job);  // a load from the cache then, at this thread's priority, not the draw's
                 } else {
-                    bool memory = false;
-                    if (gpu::Pipeline* built = build_noting(*job.entry, job.variant, job.aux, memory); built != nullptr) {
+                    Failure why = Failure::refused;
+                    if (gpu::Pipeline* built = build_noting(*job.entry, job.variant, job.aux, why); built != nullptr) {
                         note_target_stored(form);
                         publish(*at, built);
                     } else {
-                        failed(job.id, *job.entry, job.variant, job.aux, memory, &job);
+                        failed(job.id, *job.entry, job.variant, job.aux, why, &job);
                     }
                 }
             }
@@ -442,7 +456,7 @@ void Pipelines::worker() {
             // Out of memory in our own code around the build: as the driver's (pipeline_workers.h).
             try {
                 if (!job.optimize) {
-                    failed(job.id, *job.entry, job.variant, job.aux, true, &job);
+                    failed(job.id, *job.entry, job.variant, job.aux, Failure::memory, &job);
                 }
             } catch (...) {
             }

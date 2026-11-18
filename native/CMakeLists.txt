@@ -191,11 +191,16 @@ endif()
 # plain one when no enabled mod has code (runtime/src/game_module.cpp). Everything else about them is the same, in
 # smg_game_common. OFF: one module, as before (a build that needs only the rows one).
 option(NEBULA_LUMA_PLAIN_MODULE "Also build smg_game_plain, the game without rows, for a start with no mod code" ON)
+# A sanitizer's runtime and the profile counters' need the C runtime in the module (below).
+set(nebula_module_with_crt OFF)
+if(WIN32 AND (NEBULA_SANITIZE OR CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate"))
+    set(nebula_module_with_crt ON)
+endif()
 set(game_runtime_sources
     math/src/nebula_math.c
     math/src/nebula_libm.c
     math/src/nebula_libc.c
-    $<$<PLATFORM_ID:Windows>:math/src/nebula_runtime_win.c>)
+    $<$<AND:$<PLATFORM_ID:Windows>,$<NOT:$<BOOL:${nebula_module_with_crt}>>>:math/src/nebula_runtime_win.c>)
 add_library(smg_game_common INTERFACE)
 add_library(smg_game SHARED ${module_sources} ${game_runtime_sources})
 target_link_libraries(smg_game PRIVATE smg_game_common)
@@ -332,8 +337,12 @@ endif()
 set_source_files_properties(math/src/nebula_libm.c math/src/nebula_libc.c math/src/nebula_runtime_win.c PROPERTIES COMPILE_OPTIONS "-fno-builtin;-fno-lto")
 target_compile_definitions(smg_game_common INTERFACE _USE_STD_VECTOR_ALGORITHMS=0 _ACRTIMP=)
 # No system library: everything the module uses it defines or asks the host for. A sanitizer's runtime and the profile counters' need the C runtime.
-if(WIN32 AND NOT NEBULA_SANITIZE AND NOT CMAKE_CXX_FLAGS MATCHES "fprofile-instr-generate")
+if(WIN32 AND NOT nebula_module_with_crt)
     target_link_options(smg_game_common INTERFACE -nostdlib "LINKER:/NOENTRY" "LINKER:/NODEFAULTLIB")
+elseif(WIN32)
+    # With the C runtime its DLL entry runs the static constructors and it defines what nebula_runtime_win.c does: the
+    # module runs none itself (NebulaModule.c), or each would run twice (N-1062).
+    target_compile_definitions(smg_game_common INTERFACE NEBULA_MODULE_WITH_CRT=1)
 endif()
 
 if(WIN32)
@@ -462,8 +471,12 @@ target_link_libraries(nebula_native_host PRIVATE nebula_bssl_ssl nebula_zinflate
 target_compile_definitions(nebula_native_host PRIVATE _CRT_SECURE_NO_WARNINGS)
 add_dependencies(nebula_native_host ${game_modules})
 if(NEBULA_SANITIZE)
-    target_compile_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE} -fno-sanitize-recover=all
-                           -fno-omit-frame-pointer)
+    # The host and the libraries it links are built alike: the C++ library's container annotations must agree between
+    # them (lld-link's /failifmismatch 'annotate_string'), and their code is checked too (N-1062).
+    foreach(target nebula_native_host nebula_bssl_crypto nebula_bssl_ssl nebula_zinflate)
+        target_compile_options(${target} PRIVATE $<$<COMPILE_LANGUAGE:C,CXX>:-fsanitize=${NEBULA_SANITIZE}
+                               -fno-sanitize-recover=all -fno-omit-frame-pointer>)
+    endforeach()
     target_link_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE})
 endif()
 
